@@ -74,6 +74,21 @@ PORT=8090 ./run.sh              # run on a different port
 2. Top-right user menu → **User API Keys** → **Create**.
 3. Copy the token. Use it as-is — `run.sh` adds the `Token ` prefix automatically.
 
+> **Interactive vs service keys:** an interactive *User API Key* carries your
+> user's full account list and enables the in-dashboard account switcher.
+> A *Service API Key* is bound to a single account — the dashboard works,
+> but the switcher stays hidden.
+
+### Account switching
+
+If your key's user belongs to more than one CSP account (the same list as the
+portal's account dropdown), the sidebar footer shows a **⇄ Switch account**
+menu with search. Switching mints a scoped session JWT via the CSP
+`account_switch` API — the dashboard reloads with that tenant's data and the
+JWT auto-refreshes before its ~1 h expiry. The home account always uses the
+long-lived key, so you can never be locked out. With a single-account key the
+footer shows `single-account key — switching off`.
+
 ### LLM key for the query box (optional)
 
 The natural-language query box uses an LLM with tool-calling to fetch live data and answer.
