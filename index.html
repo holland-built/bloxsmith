@@ -298,7 +298,10 @@ tr:hover .copy-btn{opacity:1}
 .sort-ind{margin-left:4px;opacity:.5;font-size:9px}
 @media(prefers-reduced-motion:reduce){
   .pulse,.t-dot{animation:none}
-  .chat-panel,.gauge-fill,.drag-card,.drill-panel{transition:none;animation:none}
+  .chat-panel,.gauge-fill,.drag-card,.drill-panel{transition:none}
+  .bento>.drag-card{animation:none}
+  .skel{animation:none;opacity:.7}
+  .toast{animation:none}
   .spin,.spinner{animation-duration:1.6s}
 }
 :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:3px}
@@ -371,6 +374,23 @@ tr:hover .copy-btn{opacity:1}
   .topbar{flex-wrap:wrap;gap:8px 6px}
   .main{padding:0 14px 40px}
 }
+/* tablet: let the topbar controls wrap instead of overflowing */
+@media(max-width:1100px){ .topbar{flex-wrap:wrap;gap:8px 6px} .topbar>div:last-child{flex-wrap:wrap;justify-content:flex-end} }
+/* ── skeleton loaders ── */
+.skel{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%);background-size:400% 100%;animation:skel 1.4s ease infinite;border-radius:5px}
+@keyframes skel{0%{background-position:100% 0}100%{background-position:-100% 0}}
+.skel-row{height:13px;margin:9px 0}
+/* ── overview card entrance (staggered) ── */
+@keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.bento>.drag-card{animation:cardIn .32s cubic-bezier(.2,.8,.2,1) both}
+.bento>.drag-card:nth-child(2){animation-delay:.04s}
+.bento>.drag-card:nth-child(3){animation-delay:.08s}
+.bento>.drag-card:nth-child(4){animation-delay:.12s}
+.bento>.drag-card:nth-child(5){animation-delay:.16s}
+.bento>.drag-card:nth-child(6){animation-delay:.2s}
+.bento>.drag-card:nth-child(7){animation-delay:.24s}
+/* clearer drag drop indicator */
+.drag-card.drag-over{outline:2px dashed var(--teal);outline-offset:4px;border-radius:10px;background:var(--hover)}
 .col-row .col-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 .col-iconbtn{background:none;border:none;color:var(--gray-600);cursor:pointer;font-size:11px;padding:1px 3px;line-height:1;border-radius:3px;flex-shrink:0}
 .col-iconbtn:hover{color:var(--teal);background:var(--hover-strong)}
@@ -1170,6 +1190,16 @@ function Toasts(){
     </div>
   );
 }
+function SkeletonTable({rows=8, cols=4}){
+  return (
+    <div style={{padding:'4px 0'}} aria-busy="true" aria-label="Loading">
+      <div style={{display:'flex',gap:12,marginBottom:12}}>{Array.from({length:cols}).map((_,i)=><div key={i} className="skel" style={{height:10,flex:1}}/>)}</div>
+      {Array.from({length:rows}).map((_,r)=>(
+        <div key={r} style={{display:'flex',gap:12}}>{Array.from({length:cols}).map((_,i)=><div key={i} className="skel skel-row" style={{flex:1,opacity:1-r*0.06}}/>)}</div>
+      ))}
+    </div>
+  );
+}
 function PanelError({onRetry, what='data'}){
   return (
     <div className="panel-error">
@@ -1308,7 +1338,7 @@ function WidgetViz({data=[], viz='table', columns=[], labelKey, valueKey, rowCol
 
 function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
   const [cf,setCf]=useState('');
-  if(!data) return <div className="spinner"/>;
+  if(!data) return <SkeletonTable/>;
   const {volume=[],top_clients=[],query_types=[]} = data;
   const total = top_clients.reduce((a,r)=>a+(Number(r['NstarDnsActivity.total_query_count'])||0),0);
   const fclients = cf ? top_clients.filter(r=>[r['NstarDnsActivity.device_name'],r['NstarDnsActivity.device_ip']].some(v=>String(v||'').toLowerCase().includes(cf.toLowerCase()))) : top_clients;
@@ -1404,7 +1434,7 @@ function InsightsPanel({data, rowLimit, setRowLimit}) {
     {key:'assets',label:'Assets',mono:true,size:11,sortVal:r=>Number(r[INS+'totalVerifiedAssets'])||0,render:r=>Number(r[INS+'totalVerifiedAssets'])||0},
     {key:'saved',label:'Time Saved',size:11,sortVal:r=>Number(r[INS+'timeSaved'])||0,render:r=>{const mins=Math.round((Number(r[INS+'timeSaved'])||0)/60);return <span style={{color:'var(--green)'}}>{mins>0?`${mins}m`:'—'}</span>;}},
   ]);
-  if(!data) return <div className="spinner"/>;
+  if(!data) return <SkeletonTable/>;
   const rows = data.data || [];
   const sevCount = rows.reduce((a,r)=>{
     const s=(r[INS+'severity']||'unknown').toLowerCase();
@@ -1458,7 +1488,7 @@ function ActionsPanel({data, rowLimit, setRowLimit}) {
     },
   }));
   const ctl=useColumns('actions', allCols.length?allCols:[{key:'_empty',label:'—'}]);
-  if(!data) return <div className="spinner"/>;
+  if(!data) return <SkeletonTable/>;
   if(!rows.length) return <div className="no-data">No IQ actions found{data._raw?` · ${data._raw}`:''}</div>;
   return (
     <>
@@ -1478,7 +1508,7 @@ function HostMetricsPanel({data}) {
     {key:'avg',label:'Avg (1h)',sortVal:r=>Number(r['HostMetrics.avg_value'])||0,render:r=>{const v=Number(r['HostMetrics.avg_value'])||0;return (<div style={{display:'flex',alignItems:'center',gap:8}}><div className="bar-track"><div className="bar-fill" style={{width:`${Math.round(v/max*100)}%`,background:'var(--teal)'}}/></div><span style={{fontFamily:'monospace',fontSize:11}}>{v.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>);}},
   ];
   const ctl=useColumns('hostmetrics',allCols);
-  if(!data) return <div className="spinner"/>;
+  if(!data) return <SkeletonTable/>;
   if(!rows.length) return <div className="no-data">No host metrics available for the last hour</div>;
   return <DataTable ctl={ctl} rows={rows} defaultRows={15} exportName="host-metrics" persistId="hostmetrics" initialSort={{key:'avg',dir:'desc'}}/>;
 }

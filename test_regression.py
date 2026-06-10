@@ -410,6 +410,21 @@ class FrontendStructureTests(unittest.TestCase):
     def test_account_switch_feedback(self):
         self.assertContains("Switched to", "account switch toast missing")
 
+    # ── Wave F polish ─────────────────────────────────────────────────────────
+
+    def test_skeleton_loaders(self):
+        self.assertContains("function SkeletonTable", "skeleton loader missing")
+        self.assertContains("@keyframes skel", "skeleton shimmer missing")
+        self.assertContains("if(!data) return <SkeletonTable/>", "panels still use a spinner instead of skeleton")
+
+    def test_card_entrance_motion(self):
+        self.assertContains("@keyframes cardIn", "overview card entrance animation missing")
+
+    def test_reduced_motion_covers_new_anims(self):
+        # reduced-motion block must neutralize the new animations
+        block = self.html.split("prefers-reduced-motion")[1][:400]
+        self.assertIn(".skel{animation:none", block)
+
     def test_threat_lookup_panel(self):
         self.assertContains("function ThreatLookupPanel")
 
