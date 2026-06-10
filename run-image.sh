@@ -8,6 +8,7 @@ set -euo pipefail
 IMAGE="${IMAGE:-ghcr.io/barney34/infoblox-noc-dashboard:latest}"
 NAME="infoblox-noc"
 PORT="${PORT:-8080}"
+BIND="${BIND:-127.0.0.1}"   # loopback by default; set BIND=0.0.0.0 to expose on the LAN
 INFOBLOX_URL="${INFOBLOX_URL:-https://csp.infoblox.com}"
 
 echo "── Infoblox NOC Dashboard (prebuilt image) ──────────────────────"
@@ -35,7 +36,7 @@ docker rm -f "$NAME" >/dev/null 2>&1 || true
 
 echo "Starting container '$NAME' on port $PORT…"
 docker run -d --name "$NAME" \
-  -p "${PORT}:8080" \
+  -p "${BIND}:${PORT}:8080" \
   -e INFOBLOX_API_KEY="$KEY" \
   -e INFOBLOX_URL="$INFOBLOX_URL" \
   ${GKEY:+-e GROQ_API_KEY="$GKEY"} \

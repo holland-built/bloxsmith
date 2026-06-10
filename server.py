@@ -509,8 +509,8 @@ RULES:
 2. Your FINAL response must be ONLY this JSON (no other text before or after):
    {"answer": "text with \\n and • bullets", "suggestions": ["q1","q2","q3"]}
 3. suggestions must be PLAIN ENGLISH QUESTIONS a human would type — never tool names like get_dns or search_entity.
-   GOOD: "show me DNS zones for test.holland"
-   BAD:  "get_dns" or "search_entity with query=sholland"
+   GOOD: "show me DNS zones for example.com"
+   BAD:  "get_dns" or "search_entity with query=host1"
 4. Always include 3-5 suggestions.
 5. Ambiguous term? Try multiple search_entity calls, get_subnets, get_dns, get_audit_logs.
 6. No data found? Suggest alternatives as plain English questions.

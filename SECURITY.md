@@ -29,8 +29,14 @@ CSP / BloxOne platform itself (report those to Infoblox) and third-party LLM pro
 
 ## Deployment warnings
 
-- **The bridge has no client auth** and sets `Access-Control-Allow-Origin: *`. Anyone
-  who can reach the port can use your Infoblox key indirectly.
-- **Bind to `localhost`** (the default) unless you front it with your own auth and TLS.
-  Setting `HOST=0.0.0.0` (as the Docker image does) exposes it on all interfaces — only
-  do this behind a trusted boundary.
+- **The bridge has no client auth on its read/query/account endpoints.** It reflects
+  CORS only for the same-origin loopback allowlist (`http://localhost:<port>` /
+  `127.0.0.1:<port>`), but CORS only restrains *browsers* — any local process (curl,
+  another container) that can reach the port can use your Infoblox key indirectly,
+  including switching CSP accounts. Only the destructive `block`/`unblock` writes are
+  gated, by the `DASHBOARD_TOKEN` (`X-Auth-Token`) shared secret.
+- **Publish on `127.0.0.1` (the default).** `run.sh`/`run-image.sh` map the container
+  to `127.0.0.1:<port>` so it is loopback-only; set `BIND=0.0.0.0` to expose it on the
+  LAN, and only do that behind your own auth/TLS boundary. (`HOST=0.0.0.0` inside the
+  image is correct — it lets the host port-mapping work; exposure is controlled by the
+  host-side `-p` bind, not the in-container bind.)

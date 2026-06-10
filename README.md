@@ -36,11 +36,11 @@ No source checkout, no build — just Docker. Every push to `master` and every
 [CI](.github/workflows/docker-publish.yml).
 
 ```bash
-docker run -d --name infoblox-noc -p 8080:8080 \
+docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 \
   -e INFOBLOX_API_KEY="Token <your-key>" \
   --restart unless-stopped \
   ghcr.io/barney34/infoblox-noc-dashboard:latest
-# → http://localhost:8080
+# → http://localhost:8080   (loopback only; drop the 127.0.0.1: prefix to expose on the LAN)
 ```
 
 Add `-e GROQ_API_KEY=...` to enable the AI query box. Pin a release with a tag
@@ -89,8 +89,8 @@ The API key is **never baked into the image** — it is injected at runtime as a
 ```bash
 cp .env.example .env        # then edit .env with your keys
 docker build -t infoblox-noc .
-docker run -d --name infoblox-noc -p 8080:8080 --env-file .env -e HOST=0.0.0.0 \
-  --restart unless-stopped infoblox-noc
+docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 --env-file .env -e HOST=0.0.0.0 \
+  --restart unless-stopped infoblox-noc   # loopback only; drop 127.0.0.1: to expose on the LAN
 ```
 
 ### Manage
@@ -219,9 +219,11 @@ Set `HOST=0.0.0.0` to expose beyond localhost (the Docker image does this for yo
 
 - **Never commit `.env`** (gitignored). Use `.env.example` as the template.
 - The image ships no secrets — `.dockerignore` excludes `.env`, `.mcp.json`, and local state.
-- The bridge has **no client auth** and sets `Access-Control-Allow-Origin: *`. Bind to
-  `localhost` (default) unless you front it with auth/TLS. Anyone who can reach the port can
-  use your Infoblox key indirectly.
+- The bridge has **no client auth** on its read/query/account endpoints (only `block`/
+  `unblock` writes are gated by `DASHBOARD_TOKEN`). CORS is restricted to the loopback
+  origin, but that only restrains browsers — anyone who can reach the port can use your
+  Infoblox key indirectly. `run.sh`/`run-image.sh` publish on **`127.0.0.1` by default**;
+  set `BIND=0.0.0.0` to expose on the LAN, and only behind your own auth/TLS.
 - If a token is ever exposed, **rotate it** in the CSP portal — scrubbing files does not revoke it.
 
 See [SECURITY.md](SECURITY.md) for the full policy and how to report a vulnerability, and
