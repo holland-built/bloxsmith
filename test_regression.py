@@ -383,6 +383,33 @@ class FrontendStructureTests(unittest.TestCase):
     def test_dns_client_filter(self):
         self.assertContains("Filter by device or IP", "DNS client filter input missing")
 
+    # ── Wave E UX ─────────────────────────────────────────────────────────────
+
+    def test_mobile_sidebar_drawer(self):
+        self.assertContains("sidebar-backdrop", "mobile sidebar backdrop missing")
+        self.assertContains("menu-btn", "mobile hamburger button missing")
+        self.assertContains("@media(max-width:760px)", "mobile breakpoint missing")
+
+    def test_toasts(self):
+        self.assertContains("function Toasts")
+        self.assertContains("noc-toast", "toast event bus missing")
+
+    def test_error_recovery(self):
+        self.assertContains("function PanelError")
+        self.assertContains("lazyFetch", "lazy fetch/retry helper missing")
+        self.assertContains("onRetry=", "retry wiring missing")
+
+    def test_demo_onboarding_banner(self):
+        self.assertContains("demo-banner", "demo banner missing")
+        self.assertContains("setUsingMock", "mock detection missing")
+
+    def test_a11y_live_region(self):
+        self.assertContains('role="status" aria-live="polite"', "aria-live status region missing")
+        self.assertContains('role="img" aria-label', "chart aria-label missing")
+
+    def test_account_switch_feedback(self):
+        self.assertContains("Switched to", "account switch toast missing")
+
     def test_threat_lookup_panel(self):
         self.assertContains("function ThreatLookupPanel")
 
