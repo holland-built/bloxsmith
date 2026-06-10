@@ -7,12 +7,13 @@ Usage:  python3 server.py
 Then open:  http://localhost:8080
 """
 
-import asyncio, hmac, json, os, re, sys
+import asyncio, base64, hashlib, hmac, json, os, re, secrets, sys, threading
 import groq as _groq
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.client.session import ClientSession
+from cryptography.fernet import Fernet, InvalidToken
 
 # ── credentials (load .env if present, never hardcode tokens) ─────────────────
 _env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -30,11 +31,11 @@ if os.path.exists(_env_file):
                 os.environ.setdefault(_k.strip(), _v)
 
 API_KEY  = os.environ.get("INFOBLOX_API_KEY", "")
-if not API_KEY:
-    print("ERROR: INFOBLOX_API_KEY not set.", file=sys.stderr)
-    print("  Set in environment or add to .env file:", file=sys.stderr)
-    print('  INFOBLOX_API_KEY=Token <your-token>', file=sys.stderr)
-    sys.exit(1)
+# No env key → run in encrypted-vault mode: the dashboard prompts for a
+# passphrase and manages one-or-more tenant keys, AES-encrypted at rest on a
+# mounted volume. An env key keeps the original single-key behavior (and all
+# existing deployments) working unchanged.
+VAULT_MODE = not API_KEY
 BASE_URL = os.environ.get("INFOBLOX_URL", "https://csp.infoblox.com")
 MCP_URL     = f"{BASE_URL}/mcp"
 MCP_HEADERS = {"Authorization": API_KEY}
@@ -164,6 +165,153 @@ def switch_account(account_id: str) -> dict:
     _active_account_id = account_id
     cache_invalidate()  # cached rows belong to the previous tenant
     return {"ok": True, "active": account_id, "name": known[account_id]}
+
+# ── encrypted vault (multi-tenant key store) ──────────────────────────────────
+# Keys are secrets the bridge must *replay* to Infoblox, so they're stored
+# reversibly — but encrypted at rest (Fernet/AES) under a key derived from a
+# user passphrase (scrypt). The passphrase is never stored; unlock re-derives
+# it after each restart. Persist on a mounted volume so it survives updates.
+
+def _resolve_vault_file():
+    for d in (os.environ.get("VAULT_DIR", "/vault"), DIR):
+        try:
+            os.makedirs(d, exist_ok=True)
+            t = os.path.join(d, ".wtest"); open(t, "w").close(); os.remove(t)
+            return os.path.join(d, "vault.json")
+        except Exception:
+            continue
+    return os.path.join(DIR, "vault.json")
+
+VAULT_FILE = _resolve_vault_file()
+_vault = {"unlocked": False, "tenants": [], "active": None, "groq": "", "_key": None, "_salt": ""}
+_vault_lock = threading.Lock()
+
+def vault_exists():
+    return os.path.exists(VAULT_FILE)
+
+def _derive_key(passphrase, salt):
+    dk = hashlib.scrypt(passphrase.encode(), salt=salt, n=2**15, r=8, p=1, dklen=32, maxmem=64*1024*1024)
+    return base64.urlsafe_b64encode(dk)
+
+def _vault_save():
+    payload = {"tenants": _vault["tenants"], "active": _vault["active"], "groq": _vault["groq"]}
+    token = Fernet(_vault["_key"]).encrypt(json.dumps(payload).encode())
+    tmp = VAULT_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump({"v": 1, "salt": _vault["_salt"], "data": token.decode()}, f)
+    os.replace(tmp, VAULT_FILE)
+    try: os.chmod(VAULT_FILE, 0o600)
+    except Exception: pass
+
+def _apply_active():
+    """Point the MCP proxy (and LLM) at the active tenant's key."""
+    global API_KEY, _HOME_ACCOUNT_ID, _active_account_id, LLM_API_KEY
+    t = next((x for x in _vault["tenants"] if x["id"] == _vault["active"]), None)
+    API_KEY = t["key"] if t else ""
+    MCP_HEADERS["Authorization"] = API_KEY
+    _HOME_ACCOUNT_ID = ""; _active_account_id = ""   # re-resolve accounts for this key
+    if _vault.get("groq"):
+        LLM_API_KEY = _vault["groq"]
+    cache_invalidate()
+
+def vault_init(passphrase):
+    with _vault_lock:
+        if vault_exists():
+            return {"ok": False, "error": "vault already exists — unlock instead"}
+        if not passphrase or len(passphrase) < 8:
+            return {"ok": False, "error": "passphrase must be at least 8 characters"}
+        salt = secrets.token_bytes(16)
+        _vault.update({"unlocked": True, "tenants": [], "active": None, "groq": "",
+                       "_key": _derive_key(passphrase, salt), "_salt": base64.b64encode(salt).decode()})
+        _vault_save()
+        return {"ok": True}
+
+def vault_unlock(passphrase):
+    with _vault_lock:
+        if not vault_exists():
+            return {"ok": False, "error": "no vault yet"}
+        with open(VAULT_FILE) as f:
+            raw = json.load(f)
+        key = _derive_key(passphrase, base64.b64decode(raw["salt"]))
+        try:
+            payload = json.loads(Fernet(key).decrypt(raw["data"].encode()))
+        except (InvalidToken, Exception):
+            return {"ok": False, "error": "wrong passphrase"}
+        _vault.update({"unlocked": True, "tenants": payload.get("tenants", []),
+                       "active": payload.get("active"), "groq": payload.get("groq", ""),
+                       "_key": key, "_salt": raw["salt"]})
+        _apply_active()
+        return {"ok": True}
+
+def _norm_key(k):
+    k = (k or "").strip()
+    if k and not (k.startswith("Token ") or k.startswith("Bearer ")):
+        k = "Token " + k
+    return k
+
+def vault_add_tenant(label, key, groq=None):
+    with _vault_lock:
+        if not _vault["unlocked"]:
+            return {"ok": False, "error": "locked"}
+        label = (label or "").strip(); key = _norm_key(key)
+        if not label or not key:
+            return {"ok": False, "error": "label and key required"}
+        tid = secrets.token_hex(6)
+        _vault["tenants"].append({"id": tid, "label": label, "key": key})
+        if groq is not None:
+            _vault["groq"] = (groq or "").strip()
+        if not _vault["active"]:
+            _vault["active"] = tid
+        _vault_save(); _apply_active()
+        return {"ok": True, "id": tid}
+
+def vault_remove_tenant(tid):
+    with _vault_lock:
+        if not _vault["unlocked"]:
+            return {"ok": False, "error": "locked"}
+        _vault["tenants"] = [t for t in _vault["tenants"] if t["id"] != tid]
+        if _vault["active"] == tid:
+            _vault["active"] = _vault["tenants"][0]["id"] if _vault["tenants"] else None
+        _vault_save(); _apply_active()
+        return {"ok": True}
+
+def vault_set_active(tid):
+    with _vault_lock:
+        if not _vault["unlocked"]:
+            return {"ok": False, "error": "locked"}
+        if not any(t["id"] == tid for t in _vault["tenants"]):
+            return {"ok": False, "error": "unknown tenant"}
+        _vault["active"] = tid
+        _vault_save(); _apply_active()
+        return {"ok": True, "active": tid}
+
+def vault_lock():
+    global API_KEY
+    with _vault_lock:
+        _vault.update({"unlocked": False, "tenants": [], "active": None, "groq": "", "_key": None})
+        API_KEY = ""; MCP_HEADERS["Authorization"] = ""
+        cache_invalidate()
+    return {"ok": True}
+
+def vault_set_groq(key):
+    global LLM_API_KEY
+    with _vault_lock:
+        if not _vault["unlocked"]:
+            return {"ok": False, "error": "locked"}
+        _vault["groq"] = (key or "").strip(); LLM_API_KEY = _vault["groq"]
+        _vault_save()
+        return {"ok": True}
+
+def vault_status():
+    return {
+        "vaultMode": VAULT_MODE,
+        "exists": vault_exists(),
+        "unlocked": (not VAULT_MODE) or _vault["unlocked"],
+        "ready": bool(MCP_HEADERS.get("Authorization")),
+        "tenants": [{"id": t["id"], "label": t["label"]} for t in _vault["tenants"]],
+        "active": _vault["active"],
+        "hasGroq": bool(_vault["groq"]),
+    }
 
 # ── MCP helpers ───────────────────────────────────────────────────────────────
 
@@ -941,6 +1089,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0]
+        if path == "/api/vault/status":
+            self._json(vault_status()); return
+        # In vault mode, no data leaves until a tenant key is unlocked + active.
+        if VAULT_MODE and not MCP_HEADERS.get("Authorization") and path.startswith("/api/"):
+            self._json({"error": "vault locked", "locked": True}, 503); return
         if path.startswith("/api/") and path not in ("/api/accounts",):
             _maybe_refresh_jwt()
         if path == "/":
@@ -1010,6 +1163,23 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(413, "Request Too Large")
             return
         body = json.loads(self.rfile.read(length) or b"{}") if length else {}
+        # vault control endpoints — reachable while locked (that's their purpose)
+        if self.path == "/api/vault/init":
+            self._json(vault_init(str(body.get("passphrase", "")))); return
+        if self.path == "/api/vault/unlock":
+            r = vault_unlock(str(body.get("passphrase", ""))); self._json(r, 200 if r.get("ok") else 401); return
+        if self.path == "/api/vault/tenant":
+            r = vault_add_tenant(body.get("label", ""), body.get("key", ""), body.get("groq")); self._json(r, 200 if r.get("ok") else 400); return
+        if self.path == "/api/vault/tenant-remove":
+            r = vault_remove_tenant(str(body.get("id", ""))); self._json(r, 200 if r.get("ok") else 400); return
+        if self.path == "/api/vault/active":
+            r = vault_set_active(str(body.get("id", ""))); self._json(r, 200 if r.get("ok") else 400); return
+        if self.path == "/api/vault/groq":
+            self._json(vault_set_groq(str(body.get("key", "")))); return
+        if self.path == "/api/vault/lock":
+            self._json(vault_lock()); return
+        if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
+            self._json({"error": "vault locked", "locked": True}, 503); return
         if self.path != "/api/switch-account":
             _maybe_refresh_jwt()
         if self.path == "/api/query":
@@ -1134,6 +1304,10 @@ if __name__ == "__main__":
     if not DASHBOARD_TOKEN:
         print("NOTE: DASHBOARD_TOKEN not set — the write endpoint POST /api/block-domain "
               "is disabled (returns 401). The read/LLM query box works normally.",
+              file=sys.stderr)
+    if VAULT_MODE:
+        print(f"VAULT MODE — no INFOBLOX_API_KEY set. Open the dashboard to set a "
+              f"passphrase and add tenant keys (encrypted at rest at {VAULT_FILE}).",
               file=sys.stderr)
     server = ThreadedHTTPServer((HOST, PORT), Handler)
     print(f"Infoblox NOC Dashboard → http://{HOST}:{PORT}")

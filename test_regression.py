@@ -426,6 +426,42 @@ class FrontendStructureTests(unittest.TestCase):
         block = self.html.split("prefers-reduced-motion")[1][:400]
         self.assertIn(".skel{animation:none", block)
 
+    # ── encrypted vault (multi-tenant key store) ──────────────────────────────
+
+    def _server(self):
+        with open(SERVER, encoding="utf-8") as f:
+            return f.read()
+
+    def test_vault_server_crypto(self):
+        s = self._server()
+        self.assertIn("from cryptography.fernet import Fernet, InvalidToken", s)
+        self.assertIn("hashlib.scrypt", s)                 # passphrase KDF
+        self.assertIn("VAULT_MODE", s)
+        self.assertIn("def vault_init", s)
+        self.assertIn("def vault_unlock", s)
+        self.assertIn("0o600", s)                          # vault file perms
+
+    def test_vault_no_exit_without_key(self):
+        # server must NOT sys.exit when no env key (enters vault mode instead)
+        s = self._server()
+        self.assertNotIn("INFOBLOX_API_KEY not set", s)
+
+    def test_vault_endpoints(self):
+        s = self._server()
+        for ep in ("/api/vault/status", "/api/vault/init", "/api/vault/unlock",
+                   "/api/vault/tenant", "/api/vault/active", "/api/vault/lock"):
+            self.assertIn(ep, s, f"vault endpoint {ep} missing")
+
+    def test_vault_locked_gate(self):
+        # data endpoints blocked while locked
+        self.assertIn('"locked": True', self._server())
+
+    def test_vault_ui_gate(self):
+        for comp in ("function VaultGate", "function VaultSetup", "function VaultUnlock",
+                     "function VaultAddTenant", "function TenantManager"):
+            self.assertContains(comp)
+        self.assertContains("render(<VaultGate/>)", "root no longer renders VaultGate")
+
     def test_threat_lookup_panel(self):
         self.assertContains("function ThreatLookupPanel")
 

@@ -37,14 +37,24 @@ No source checkout, no build — just Docker. Every push to `master` and every
 
 ```bash
 docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 \
-  -e INFOBLOX_API_KEY="Token <your-key>" \
+  -v noc-vault:/vault \
   --restart unless-stopped \
   ghcr.io/holland-built/infoblox-noc-dashboard:latest
 # → http://localhost:8080   (loopback only; drop the 127.0.0.1: prefix to expose on the LAN)
 ```
 
-Add `-e GROQ_API_KEY=...` to enable the AI query box. Pin a release with a tag
-(`:v1.0.0`, `:1.0.0`, or `:1.0`) instead of `:latest`.
+No keys on the command line. On first open the dashboard walks you through a
+quick **setup**: pick a passphrase, then add one or more **tenants** (a name +
+its Infoblox API key, with an optional Groq key for the AI box). Keys are
+**AES-encrypted at rest** in the `noc-vault` volume under your passphrase —
+which is never stored, so you re-enter it to unlock after a restart. Switch
+between tenants any time from the sidebar; add more as new ones spin up.
+
+Pin a release with a tag (`:v1.0.0`, `:1.0.0`, or `:1.0`) instead of `:latest`.
+
+> **Prefer a single key via env?** Pass `-e INFOBLOX_API_KEY="Token <key>"`
+> (and optionally `-e GROQ_API_KEY=...`) and the vault is bypassed entirely —
+> the dashboard loads straight to data. Drop `-v noc-vault:/vault` in that case.
 
 **Update to the latest published image:**
 
@@ -60,8 +70,9 @@ docker rm -f infoblox-noc           # then re-run the docker run command above
 > visibility is independent. (Otherwise each user must
 > `docker login ghcr.io` with a token that has `read:packages`.)
 
-The convenience script [`run-image.sh`](run-image.sh) wraps the pull + run +
-key prompt and re-pulls `:latest` on every run (handy for updating).
+The convenience script [`run-image.sh`](run-image.sh) wraps the pull + run (vault
+setup happens in the browser; mounts the `noc-vault` volume) and re-pulls
+`:latest` on every run (handy for updating).
 
 ---
 
@@ -77,7 +88,7 @@ git clone https://github.com/holland-built/infoblox-noc-dashboard infoblox-noc &
 ```
 
 `run.sh` will:
-1. Prompt for your **Infoblox API key** (hidden input; adds the `Token ` prefix for you).
+1. Prompt for an **Infoblox API key** (optional — press Enter to use the in-app encrypted vault instead).
 2. Prompt for a **Groq API key** (optional — press Enter to skip; only the AI query box needs it).
 3. Build the image and start the container.
 4. Print `→ http://localhost:8080`.
