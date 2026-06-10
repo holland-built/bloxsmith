@@ -495,6 +495,24 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("Test connection")
         self.assertContains("Test key")
 
+    # ── connection footer: rename, inline-confirm delete, live conn-test ──────
+    def test_connection_footer_rename(self):
+        # "Tenant" surfaced to the user is now "Connection"
+        self.assertContains(">Connection<", "footer caption should read 'Connection'")
+        self.assertContains("+ Add connection")
+
+    def test_connection_inline_confirm_delete(self):
+        # the ✕ no longer deletes immediately — it arms a two-step confirm
+        self.assertContains("confirmRm", "inline delete-confirm state missing")
+        self.assertContains("tenant-confirm")
+
+    def test_active_connection_test(self):
+        s = self._server()
+        self.assertIn("def vault_conn_test", s)
+        self.assertIn("/api/vault/conn-test", s)
+        self.assertContains("/api/vault/conn-test")
+        self.assertContains("Test Infoblox connection")
+
     def test_refresh_names(self):
         self.assertIn("def vault_refresh_names", self._server())
         self.assertIn("/api/vault/refresh-names", self._server())
