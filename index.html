@@ -1044,7 +1044,7 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
       const cmp=(typeof av==='number'&&typeof bv==='number')?av-bv:String(av).localeCompare(String(bv));
       return sd==='asc'?cmp:-cmp;
     });
-  },[rows,sk,sd,vcols]);
+  },[rows,sk,sd]); // vcols intentionally omitted: identity changes each render, sort result depends only on rows/key/dir
   const toggle=k=>{ const nd=(sk===k)?(sd==='asc'?'desc':'asc'):'asc'; setSk(k); setSd(nd); if(PK) LS.set(PK,{key:k,dir:nd}); };
   return (
     <>
@@ -1428,7 +1428,7 @@ const INS='InsightsSummaryView.';
 function InsightsPanel({data, rowLimit, setRowLimit}) {
   const ctl=useColumns('insights',[
     {key:'name',label:'Insight',fixed:true,render:r=><span title={r[INS+'name']||'—'}>{r[INS+'name']||'—'}</span>},
-    {key:'severity',label:'Severity',sortVal:r=>({critical:0,high:1,medium:2,low:3}[(r[INS+'severity']||'').toLowerCase()]??9),render:r=>{const sev=(r[INS+'severity']||'').toLowerCase();const cls={critical:'b-red',high:'b-amber',medium:'b-teal',low:'b-gray'}[sev]||'b-gray';return <span className={`badge ${cls}`}>{sev||'—'}</span>;}},
+    {key:'severity',label:'Severity',sortVal:r=>levelOrder[(r[INS+'severity']||'').toLowerCase()]??9,render:r=>{const sev=(r[INS+'severity']||'').toLowerCase();return <span className={`badge ${levelBadge(sev)}`}>{sev||'—'}</span>;}},
     {key:'status',label:'Status',size:11,sortVal:r=>r[INS+'currentStatus']||'',render:r=><span style={{color:'var(--gray-400)'}}>{r[INS+'currentStatus']||'—'}</span>},
     {key:'events',label:'Events',mono:true,size:11,sortVal:r=>Number(r[INS+'totalEvents'])||0,render:r=>(Number(r[INS+'totalEvents'])||0).toLocaleString()},
     {key:'assets',label:'Assets',mono:true,size:11,sortVal:r=>Number(r[INS+'totalVerifiedAssets'])||0,render:r=>Number(r[INS+'totalVerifiedAssets'])||0},
@@ -2332,8 +2332,12 @@ function App() {
 
   // browser notifications when an alert rule transitions into FIRING
   useEffect(()=>{
-    if(!notifyOn || typeof Notification==='undefined' || Notification.permission!=='granted'){ prevFiringRef.current=new Set(); return; }
-    const firing=evalAlerts(data,alertRules).filter(a=>a.firing);
+    const firingNow=evalAlerts(data,alertRules).filter(a=>a.firing);
+    if(!notifyOn || typeof Notification==='undefined' || Notification.permission!=='granted'){
+      // track current firing while disabled so re-enabling doesn't replay them
+      prevFiringRef.current=new Set(firingNow.map(a=>a.id)); return;
+    }
+    const firing=firingNow;
     firing.forEach(a=>{ if(!prevFiringRef.current.has(a.id)){
       try{ new Notification('Infoblox NOC — alert firing',{body:`${metricLabel(a.metric)} ${a.op} ${a.threshold} (now ${a.value})`,tag:'noc-'+a.id}); }catch(e){}
     }});
@@ -2367,6 +2371,15 @@ function App() {
     if(section==='actions'&&!actions&&!lazyErr.actions) lazyFetch('actions','/api/actions',setActions);
     if(section==='hosts'&&!hostMetrics&&!lazyErr.hostMetrics) lazyFetch('hostMetrics','/api/host-metrics',setHostMetrics);
   },[section]);
+
+  // Resolve + apply the theme during render (before children render) so chart
+  // colors (CK/isLight, baked into SVG fill attrs) use the CURRENT theme in the
+  // same commit as a toggle, not one render late. Effect below keeps the OS
+  // listener + persistence.
+  const resolvedTheme = theme==='system'
+    ? ((typeof window!=='undefined' && window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark')
+    : theme;
+  if(typeof document!=='undefined') document.documentElement.setAttribute('data-theme', resolvedTheme);
 
   if(loading&&!data) return (
     <div style={{display:'flex',height:'100vh',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:14}}>
