@@ -373,6 +373,57 @@ def vault_set_llm(key, base_url=None, model=None):
 def vault_set_groq(key):   # back-compat alias (key only)
     return vault_set_llm(key)
 
+def vault_test_key(key):
+    """Verify an Infoblox API key reaches CSP; return the resolved account name."""
+    from urllib.request import urlopen, Request
+    k = _norm_key(key)
+    if not k:
+        return {"ok": False, "error": "API key required"}
+    name = _portal_label_for_key(k)
+    if name:
+        return {"ok": True, "name": name}
+    try:
+        req = Request(f"{BASE_URL}/v2/current_user", headers={"Authorization": k})
+        with urlopen(req, timeout=12) as r:
+            r.read()
+        return {"ok": True, "name": ""}   # reachable, but no account name resolved
+    except Exception:
+        return {"ok": False, "error": "key rejected by Infoblox CSP"}
+
+def vault_llm_test(key, base_url=None, model=None):
+    """Send a tiny completion to verify the LLM provider key/base/model work."""
+    key = (key or "").strip() or _vault.get("groq", "")
+    base = (base_url if base_url is not None else _vault.get("llm_base", "")).strip()
+    mdl  = (model if model else _vault.get("llm_model", "")) or LLM_MODEL
+    if not key:
+        return {"ok": False, "error": "API key required"}
+    async def _run():
+        kw = {"api_key": key}
+        if base: kw["base_url"] = base
+        async with _groq.AsyncGroq(**kw) as c:
+            await c.chat.completions.create(model=mdl, max_tokens=4,
+                                            messages=[{"role": "user", "content": "ping"}])
+    try:
+        asyncio.run(_run()); return {"ok": True, "model": mdl}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+def vault_refresh_names():
+    """Re-resolve the CSP account name for any tenant still labelled 'Tenant N' or blank."""
+    if not _vault["unlocked"]:
+        return {"ok": False, "error": "locked"}
+    updated = 0
+    for t in _vault["tenants"]:
+        lbl = t.get("label", "")
+        if not lbl or re.match(r"^Tenant \d+$", lbl):
+            nm = _portal_label_for_key(t["key"])
+            if nm and nm != lbl:
+                t["label"] = nm; updated += 1
+    if updated:
+        with _vault_lock:
+            _vault_save()
+    return {"ok": True, "updated": updated}
+
 def vault_status():
     return {
         "vaultMode": VAULT_MODE,
@@ -1252,6 +1303,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json(vault_set_groq(str(body.get("key", "")))); return
         if self.path == "/api/vault/llm":
             self._json(vault_set_llm(str(body.get("key", "")), body.get("base_url"), body.get("model"))); return
+        if self.path == "/api/vault/test-key":
+            self._json(vault_test_key(str(body.get("key", "")))); return
+        if self.path == "/api/vault/llm-test":
+            self._json(vault_llm_test(str(body.get("key", "")), body.get("base_url"), body.get("model"))); return
+        if self.path == "/api/vault/refresh-names":
+            self._json(vault_refresh_names()); return
         if self.path == "/api/vault/lock":
             self._json(vault_lock()); return
         if self.path == "/api/vault/reset":

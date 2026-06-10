@@ -867,7 +867,7 @@ function SubnetBars({subnets,highlight,onBar}) {
           <div style={{color:'var(--teal)',fontWeight:700,marginBottom:3}}>{tip.name}</div>
           <div style={{color:utilColor(tip.util),fontWeight:700}}>{tip.util}% utilization</div>
           <div style={{color:'var(--gray-400)'}}>{tip.used} / {tip.total} IPs</div>
-          {tip.util>=90&&<div style={{color:'#FCA5A5',marginTop:3}}>⚠ Critical</div>}
+          {tip.util>=90&&<div style={{color:'#FCA5A5',marginTop:3}}>! Critical</div>}
         </div>
       )}
     </div>
@@ -1012,7 +1012,7 @@ function ColumnMenu({ctl}){
   return (
     <span style={{position:'relative',display:'inline-flex'}} onMouseDown={e=>e.stopPropagation()}>
       <button className="col-btn" title="Show, hide, drag to reorder, or expand columns"
-        onClick={()=>setOpen(o=>!o)} aria-label="Column controls" aria-expanded={open}>⚙ Columns</button>
+        onClick={()=>setOpen(o=>!o)} aria-label="Column controls" aria-expanded={open}> Columns</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" role="menu">
@@ -1079,7 +1079,7 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
       {(exportName||ctl)&&(
         <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginBottom:6}}>
           {exportName&&<button className="col-btn" title="Export visible columns as CSV"
-            onClick={()=>exportCols(exportName, vcols, sorted)}>⬇ CSV</button>}
+            onClick={()=>exportCols(exportName, vcols, sorted)}>CSV</button>}
           {ctl&&<ColumnMenu ctl={ctl}/>}
         </div>
       )}
@@ -1860,14 +1860,14 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
     fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})})
       .then(r=>r.ok?r.json():null)
       .then(json=>{
-        const ans=(json&&typeof json.answer==='string')?json.answer:'⚠ Query failed.';
+        const ans=(json&&typeof json.answer==='string')?json.answer:'! Query failed.';
         const sugs=(json&&Array.isArray(json.suggestions))?json.suggestions:[];
         const trace=(json&&Array.isArray(json.trace))?json.trace:[];
         setMessages(m=>[...m,{id:Date.now(),role:'a',content:ans,suggestions:sugs,trace}]);
         setThinking(false);
       })
       .catch(()=>{
-        setMessages(m=>[...m,{id:Date.now(),role:'a',content:'⚠ Server unavailable. Start with: python3 server.py'}]);
+        setMessages(m=>[...m,{id:Date.now(),role:'a',content:'! Server unavailable. Start with: python3 server.py'}]);
         setThinking(false);
       });
   };
@@ -1895,12 +1895,12 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
         body: JSON.stringify({question: q}),
       });
       const json = r.ok ? await r.json() : null;
-      const ans = (json && typeof json.answer === 'string') ? json.answer : '⚠ Query failed — server returned an error. Check server logs.';
+      const ans = (json && typeof json.answer === 'string') ? json.answer : '! Query failed — server returned an error. Check server logs.';
       const sugs = (json && Array.isArray(json.suggestions)) ? json.suggestions : [];
       const trace = (json && Array.isArray(json.trace)) ? json.trace : [];
       setMessages(m=>[...m,{id:Date.now(),role:'a',content:ans,suggestions:sugs,trace}]);
     } catch(e) {
-      setMessages(m=>[...m,{id:Date.now(),role:'a',content:'⚠ Server unavailable. Start with: python3 server.py'}]);
+      setMessages(m=>[...m,{id:Date.now(),role:'a',content:'! Server unavailable. Start with: python3 server.py'}]);
     }
     setThinking(false);
   };
@@ -2001,8 +2001,8 @@ const SECTIONS=[
   {id:'audit',    icon:'≡',  label:'Audit Logs'},
   {id:'dns-analytics', icon:'⊘', label:'DNS Analytics'},
   {id:'insights',      icon:'⊙', label:'SOC Insights'},
-  {id:'actions',       icon:'⚡', label:'IQ Actions'},
-  {id:'alerts',        icon:'⚑', label:'Alert Rules'},
+  {id:'actions',       icon:'◆', label:'IQ Actions'},
+  {id:'alerts',        icon:'▲', label:'Alert Rules'},
   {id:'threat-lookup', icon:'⊚', label:'Threat Lookup'},
   {id:'search',        icon:'⊕', label:'Search'},
 ];
@@ -2157,10 +2157,14 @@ function VaultUnlock({onDone}) {
 }
 
 function VaultAddTenant({onDone, onCancel, first}) {
-  const [key,setKey]=useState(''),[label,setLabel]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false);
+  const [key,setKey]=useState(''),[label,setLabel]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),[test,setTest]=useState('');
   const go=async()=>{ if(!key)return; setErr(''); setBusy(true);
     const {ok,data}=await vpost('/api/vault/tenant',{label,key}); setBusy(false);
     if(ok&&data.ok) onDone(); else setErr(data.error||'Could not add tenant.');
+  };
+  const doTest=async()=>{ if(!key)return; setTest('Testing…');
+    const {ok,data}=await vpost('/api/vault/test-key',{key});
+    setTest(ok&&data.ok ? ('Key valid'+(data.name?(' — '+data.name):' (no account name)')) : ('Invalid: '+(data.error||'rejected')));
   };
   useEffect(()=>{ if(!onCancel)return; const h=e=>{if(e.key==='Escape')onCancel();}; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onCancel]);
   return (<div className="vault-screen" onClick={onCancel?()=>onCancel():undefined}><div className="vault-card" onClick={e=>e.stopPropagation()}>
@@ -2168,11 +2172,13 @@ function VaultAddTenant({onDone, onCancel, first}) {
     <h2>{first?'Add your first tenant':'Add a tenant'}</h2>
     <p>Paste an Infoblox API key. The key is encrypted in your vault, and the tenant is named automatically from its CSP account.</p>
     <label>Infoblox API key</label>
-    <input className="vault-in" type="password" value={key} onChange={e=>setKey(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="paste token (any format — Token/Bearer prefix optional)" autoFocus/>
+    <input className="vault-in" type="password" value={key} onChange={e=>{setKey(e.target.value);setTest('');}} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="paste token (any format — Token/Bearer prefix optional)" autoFocus/>
     <label>Name (optional — auto-named from the portal if blank)</label>
     <input className="vault-in" value={label} onChange={e=>setLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="leave blank to use the CSP account name"/>
+    {test&&<div style={{fontSize:11,marginTop:8,color:test.startsWith('Key valid')?'var(--sev-green-t)':(test==='Testing…'?'var(--gray-400)':'var(--sev-red-t)')}}>{test}</div>}
     {err&&<div className="vault-err">{err}</div>}
     <button className="vault-btn" onClick={go} disabled={busy||!key}>{busy?'Adding…':'Add tenant'}</button>
+    <button className="vault-cancel" onClick={doTest} disabled={!key}>Test key</button>
     {onCancel&&<button className="vault-cancel" onClick={onCancel}>Cancel</button>}
   </div></div>);
 }
@@ -2180,35 +2186,48 @@ function VaultAddTenant({onDone, onCancel, first}) {
 /* AI/LLM provider settings — provider-agnostic (Groq / OpenAI / any OpenAI-compatible) */
 const LLM_PRESETS={
   Groq:{base_url:'',model:'qwen/qwen3-32b'},
-  OpenAI:{base_url:'https://api.openai.com/v1',model:'gpt-4o-mini'},
+  'OpenAI (GPT / Codex)':{base_url:'https://api.openai.com/v1',model:'gpt-4o-mini'},
+  'Anthropic (Claude)':{base_url:'https://api.anthropic.com/v1/',model:'claude-opus-4-8'},
+  'Google (Gemini)':{base_url:'https://generativelanguage.googleapis.com/v1beta/openai/',model:'gemini-2.5-flash'},
+  'OpenRouter (any model)':{base_url:'https://openrouter.ai/api/v1',model:'anthropic/claude-opus-4'},
+  Mistral:{base_url:'https://api.mistral.ai/v1',model:'mistral-large-latest'},
+  DeepSeek:{base_url:'https://api.deepseek.com',model:'deepseek-chat'},
+  'xAI (Grok)':{base_url:'https://api.x.ai/v1',model:'grok-2-latest'},
+  Perplexity:{base_url:'https://api.perplexity.ai',model:'sonar'},
   'Together.ai':{base_url:'https://api.together.xyz/v1',model:'meta-llama/Llama-3.3-70B-Instruct-Turbo'},
   'Ollama (local)':{base_url:'http://host.docker.internal:11434/v1',model:'llama3.1'},
 };
 function VaultSettings({llm, onDone, onCancel}) {
-  const [key,setKey]=useState(''),[base,setBase]=useState((llm&&llm.base_url)||''),[model,setModel]=useState((llm&&llm.model)||''),[busy,setBusy]=useState(false),[err,setErr]=useState('');
-  const applyPreset=name=>{ const p=LLM_PRESETS[name]; if(p){setBase(p.base_url);setModel(p.model);} };
+  const [key,setKey]=useState(''),[base,setBase]=useState((llm&&llm.base_url)||''),[model,setModel]=useState((llm&&llm.model)||''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[test,setTest]=useState('');
+  const applyPreset=name=>{ const p=LLM_PRESETS[name]; if(p){setBase(p.base_url);setModel(p.model);setTest('');} };
   const go=async()=>{ setErr(''); setBusy(true);
     const {ok,data}=await vpost('/api/vault/llm',{key,base_url:base,model}); setBusy(false);
     if(ok&&data.ok) onDone(); else setErr(data.error||'Could not save.');
+  };
+  const doTest=async()=>{ setTest('Testing…');
+    const {ok,data}=await vpost('/api/vault/llm-test',{key,base_url:base,model});
+    setTest(ok&&data.ok ? ('Connection OK — '+(data.model||'default model')) : ('Failed: '+(data.error||'error')));
   };
   useEffect(()=>{ const h=e=>{if(e.key==='Escape')onCancel();}; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onCancel]);
   return (<div className="vault-screen" onClick={()=>onCancel()}><div className="vault-card" onClick={e=>e.stopPropagation()}>
     <div className="vault-logo">AI query provider</div>
     <h2>AI / LLM provider</h2>
-    <p>Powers the natural-language query box. Works with Groq or any OpenAI-compatible provider. Leave the base URL blank for Groq. Stored encrypted in your vault.</p>
+    <p>Powers the natural-language query box. Works with any OpenAI-compatible provider. The query box uses tool-calling, so pick a provider/model that supports it (Claude and Gemini work via their OpenAI-compatible endpoints; OpenRouter exposes most models). Stored encrypted in your vault.</p>
     <label>Provider preset</label>
     <select className="vault-preset" defaultValue="" onChange={e=>applyPreset(e.target.value)}>
       <option value="" disabled>Choose a preset…</option>
       {Object.keys(LLM_PRESETS).map(n=><option key={n} value={n}>{n}</option>)}
     </select>
     <label>API key{llm&&llm.hasKey?' (leave blank to keep current)':''}</label>
-    <input className="vault-in" type="password" value={key} onChange={e=>setKey(e.target.value)} placeholder={llm&&llm.hasKey?'•••••••• (unchanged)':'gsk_… / sk-…'}/>
+    <input className="vault-in" type="password" value={key} onChange={e=>{setKey(e.target.value);setTest('');}} placeholder={llm&&llm.hasKey?'•••••••• (unchanged)':'gsk_… / sk-… / sk-ant-…'}/>
     <label>Base URL (blank = Groq)</label>
-    <input className="vault-in" value={base} onChange={e=>setBase(e.target.value)} placeholder="https://api.openai.com/v1"/>
+    <input className="vault-in" value={base} onChange={e=>{setBase(e.target.value);setTest('');}} placeholder="https://api.openai.com/v1"/>
     <label>Model</label>
-    <input className="vault-in" value={model} onChange={e=>setModel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="qwen/qwen3-32b"/>
+    <input className="vault-in" value={model} onChange={e=>{setModel(e.target.value);setTest('');}} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="qwen/qwen3-32b"/>
+    {test&&<div style={{fontSize:11,marginTop:8,color:test.startsWith('Connection OK')?'var(--sev-green-t)':(test==='Testing…'?'var(--gray-400)':'var(--sev-red-t)')}}>{test}</div>}
     {err&&<div className="vault-err">{err}</div>}
     <button className="vault-btn" onClick={go} disabled={busy}>{busy?'Saving…':'Save provider'}</button>
+    <button className="vault-cancel" onClick={doTest}>Test connection</button>
     <button className="vault-cancel" onClick={onCancel}>Cancel</button>
   </div></div>);
 }
@@ -2250,9 +2269,10 @@ function TenantManager({vault}) {
               <button className="tenant-rm" title="Remove tenant" onClick={()=>remove(t.id)}>✕</button>
             </div>
           ))}
-          <button className="acct-menu-item" onClick={()=>{setOpen(false);setAdding(true);}}>＋ Add tenant</button>
-          <button className="acct-menu-item" onClick={()=>{setOpen(false);setSettings(true);}}>⚙ AI provider</button>
-          <button className="acct-menu-item" onClick={async()=>{await vpost('/api/vault/lock',{});window.location.reload();}} title="Lock the vault (re-enter passphrase)">🔒 Lock vault</button>
+          <button className="acct-menu-item" onClick={()=>{setOpen(false);setAdding(true);}}>+ Add tenant</button>
+          <button className="acct-menu-item" onClick={async()=>{setOpen(false);await vpost('/api/vault/refresh-names',{});window.location.reload();}} title="Re-fetch CSP account names for all tenants">Refresh names</button>
+          <button className="acct-menu-item" onClick={()=>{setOpen(false);setSettings(true);}}>AI provider</button>
+          <button className="acct-menu-item" onClick={async()=>{await vpost('/api/vault/lock',{});window.location.reload();}} title="Lock the vault (re-enter passphrase)">Lock vault</button>
         </div>
       </>)}
     </div>
@@ -2504,7 +2524,7 @@ function App({vault, onVaultChange}={}) {
     if(theme==='system'){ mq.addEventListener('change', apply); return ()=>mq.removeEventListener('change', apply); }
   },[theme]);
   const THEME_CYCLE = {system:'light', light:'dark', dark:'system'};
-  const THEME_ICON  = {system:'◐', light:'☀', dark:'☾'};
+  const THEME_ICON  = {system:'◐', light:'○', dark:'●'};
   const THEME_LABEL = {system:'System theme', light:'Light theme', dark:'Dark theme'};
 
   useEffect(()=>{ document.documentElement.setAttribute('data-density', density); LS.set('noc.density', density); },[density]);
@@ -2535,7 +2555,7 @@ function App({vault, onVaultChange}={}) {
     const crit = data.subnets.filter(s=>s.util>=90).length;
     const errs = data.hosts.filter(h=>h.status==='error'||h.status==='offline').length;
     let title = 'Infoblox NOC';
-    if(crit>0) title += ' ⚠'+crit+' critical';
+    if(crit>0) title += ' !'+crit+' critical';
     if(errs>0) title += ' | '+errs+' errors';
     document.title = title;
   },[data]);
@@ -2599,7 +2619,7 @@ function App({vault, onVaultChange}={}) {
     {id:'theme',   icon:'◐', label:'Cycle theme (system / light / dark)',  keywords:'dark light mode', run:()=>setTheme(t=>THEME_CYCLE[t]||'system')},
     {id:'density', icon:'☰', label:'Toggle row density',                   keywords:'compact comfortable', run:()=>setDensity(d=>d==='compact'?'comfortable':'compact')},
     {id:'query',   icon:'⊕', label:'Open query assistant',                 keywords:'ai chat ask llm', run:()=>setChatOpen(true)},
-    {id:'notify',  icon:'🔔', label:(notifyOn?'Disable':'Enable')+' alert notifications', keywords:'alert notification', run:toggleNotify},
+    {id:'notify',  icon:'▲', label:(notifyOn?'Disable':'Enable')+' alert notifications', keywords:'alert notification', run:toggleNotify},
     {id:'share',   icon:'◳', label:'Copy link to this view',              keywords:'share url link', run:shareView},
   ];
 
@@ -2629,7 +2649,7 @@ function App({vault, onVaultChange}={}) {
             return (
               <button key={s.id} className={`nav-item${section===s.id?' active':''}`} onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>
                 <span className="nav-icon">{s.icon}</span>{s.label}{badge}
-                {firingHere&&<span className="badge-pill" title="Alert firing for this section">⚑</span>}
+                {firingHere&&<span className="badge-pill" title="Alert firing for this section">!</span>}
               </button>
             );
           })}
@@ -2731,14 +2751,14 @@ function App({vault, onVaultChange}={}) {
         )}
         {usingMock&&!demoDismiss&&(
           <div className="demo-banner">
-            <span aria-hidden="true">⚠</span>
+            <span aria-hidden="true">!</span>
             <span><b>Demo data</b> — the bridge couldn't reach Infoblox, so sample data is shown. Set <b>INFOBLOX_API_KEY</b> and restart the server to see live data (see the README).</span>
             <button className="demo-x" aria-label="Dismiss demo notice" onClick={()=>{setDemoDismiss(true);LS.set('noc.demoDismiss',true);}}>×</button>
           </div>
         )}
         {firingAlerts.length>0&&!alertsDismissed&&(
           <div className="alert-banner" role="status">
-            <span><span aria-hidden="true">⚑</span> <b>{firingAlerts.length} alert{firingAlerts.length>1?'s':''} firing</b> — {firingAlerts.slice(0,2).map(a=>`${metricLabel(a.metric)} (${a.value})`).join(', ')}{firingAlerts.length>2?`, +${firingAlerts.length-2} more`:''}</span>
+            <span><span aria-hidden="true">!</span> <b>{firingAlerts.length} alert{firingAlerts.length>1?'s':''} firing</b> — {firingAlerts.slice(0,2).map(a=>`${metricLabel(a.metric)} (${a.value})`).join(', ')}{firingAlerts.length>2?`, +${firingAlerts.length-2} more`:''}</span>
             <span style={{display:'flex',gap:6,flexShrink:0}}>
               {section!=='alerts'&&<button className="alert-banner-btn" onClick={()=>setSection('alerts')}>View</button>}
               <button className="demo-x" aria-label="Dismiss alerts" onClick={()=>setAlertsDismissed(true)}>×</button>
@@ -2753,12 +2773,12 @@ function App({vault, onVaultChange}={}) {
             {(()=>{
               const issues=[];
               const errHosts=hosts.filter(h=>h.status==='error'||h.status==='offline');
-              if(errHosts.length>0) issues.push({cls:'issue-row-crit',icon:'⚠',msg:`${errHosts.length} host${errHosts.length>1?'s':''} offline or in error state`,section:'hosts'});
+              if(errHosts.length>0) issues.push({cls:'issue-row-crit',icon:'!',msg:`${errHosts.length} host${errHosts.length>1?'s':''} offline or in error state`,section:'hosts'});
               const ttlIssues=zones.filter(z=>z.anomaly);
-              if(ttlIssues.length>0) issues.push({cls:'issue-row-warn',icon:'⚡',msg:`${ttlIssues.length} DNS zone${ttlIssues.length>1?'s':''} with TTL anomalies`,section:'dns'});
-              if(critSubs.length>0) issues.push({cls:'issue-row-warn',icon:'⚠',msg:`${critSubs.length} subnet${critSubs.length>1?'s':''} at ≥90% utilization: ${critSubs.map(s=>s.name).slice(0,3).join(', ')}${critSubs.length>3?'…':''}`,section:'ipam'});
+              if(ttlIssues.length>0) issues.push({cls:'issue-row-warn',icon:'!',msg:`${ttlIssues.length} DNS zone${ttlIssues.length>1?'s':''} with TTL anomalies`,section:'dns'});
+              if(critSubs.length>0) issues.push({cls:'issue-row-warn',icon:'!',msg:`${critSubs.length} subnet${critSubs.length>1?'s':''} at ≥90% utilization: ${critSubs.map(s=>s.name).slice(0,3).join(', ')}${critSubs.length>3?'…':''}`,section:'ipam'});
               const feedCrit=feeds.filter(f=>f.level==='critical'&&f.active);
-              if(feedCrit.length>0) issues.push({cls:'issue-row-warn',icon:'🛡',msg:`${feedCrit.length} active critical threat feeds`,section:'threats'});
+              if(feedCrit.length>0) issues.push({cls:'issue-row-warn',icon:'!',msg:`${feedCrit.length} active critical threat feeds`,section:'threats'});
               if(issues.length===0) return (
                 <div className="issue-row-ok issue-row" style={{marginBottom:18}}>
                   <span>✓ All systems normal — no critical issues detected</span>

@@ -480,6 +480,37 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("LLM_PRESETS")
         self.assertContains("AI provider")           # TenantManager menu item
 
+    def test_llm_provider_presets_expanded(self):
+        for p in ("Anthropic (Claude)", "Google (Gemini)", "OpenRouter (any model)",
+                  "Mistral", "DeepSeek", "xAI (Grok)", "Perplexity"):
+            self.assertContains(p, f"LLM preset {p} missing")
+        self.assertContains("claude-opus-4-8", "Claude model id missing")
+
+    def test_connection_test_buttons(self):
+        s = self._server()
+        self.assertIn("def vault_llm_test", s)
+        self.assertIn("def vault_test_key", s)
+        self.assertIn("/api/vault/llm-test", s)
+        self.assertIn("/api/vault/test-key", s)
+        self.assertContains("Test connection")
+        self.assertContains("Test key")
+
+    def test_refresh_names(self):
+        self.assertIn("def vault_refresh_names", self._server())
+        self.assertIn("/api/vault/refresh-names", self._server())
+        self.assertContains("Refresh names")
+
+    def test_no_emoji_in_code(self):
+        # pictographic emoji must be gone; monochrome UI glyphs (★ ☰ ◐ ✓ ✗, nav symbols) are allowed
+        import re as _re
+        # full 1F emoji planes + regional flags + VS16, plus the specific 2600-block emoji we removed
+        emoji = _re.compile('[\U0001F000-\U0001FAFF\U0001F1E6-\U0001F1FF️'
+                            '☀☾⚠⚡⚑⚙⬇\U0001F512\U0001F514\U0001F6E1]')
+        for path in (HTML, SERVER):
+            with open(path, encoding="utf-8") as f:
+                hits = sorted(set(emoji.findall(f.read())))
+            self.assertEqual(hits, [], f"emoji found in {path}: {hits}")
+
     # ── format-agnostic key ───────────────────────────────────────────────────
 
     def test_norm_key_agnostic(self):
