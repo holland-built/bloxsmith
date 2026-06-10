@@ -249,13 +249,37 @@ def _norm_key(k):
         k = "Token " + k
     return k
 
+def _portal_label_for_key(key):
+    """Resolve the CSP account name for a key, so a tenant auto-names itself
+    from the portal (the user shouldn't have to invent a label)."""
+    from urllib.request import urlopen, Request
+    def _g(path):
+        req = Request(f"{BASE_URL}{path}", headers={"Authorization": key})
+        with urlopen(req, timeout=12) as r:
+            return json.loads(r.read())
+    try:
+        cur = _g("/v2/current_user").get("result", {})
+        aid = cur.get("account_id", "")
+        accts = _g("/v2/current_user/accounts").get("results", [])
+        for a in accts:
+            if a.get("id") == aid:
+                return a.get("name", "")
+        return (accts[0].get("name", "") if accts else "") or cur.get("name", "")
+    except Exception:
+        return ""
+
 def vault_add_tenant(label, key, groq=None):
+    if not _vault["unlocked"]:
+        return {"ok": False, "error": "locked"}
+    key = _norm_key(key)
+    if not key:
+        return {"ok": False, "error": "API key required"}
+    label = (label or "").strip()
+    if not label:                       # auto-name from the portal account
+        label = _portal_label_for_key(key) or f"Tenant {len(_vault['tenants']) + 1}"
     with _vault_lock:
         if not _vault["unlocked"]:
             return {"ok": False, "error": "locked"}
-        label = (label or "").strip(); key = _norm_key(key)
-        if not label or not key:
-            return {"ok": False, "error": "label and key required"}
         tid = secrets.token_hex(6)
         _vault["tenants"].append({"id": tid, "label": label, "key": key})
         if groq is not None:
@@ -263,7 +287,7 @@ def vault_add_tenant(label, key, groq=None):
         if not _vault["active"]:
             _vault["active"] = tid
         _vault_save(); _apply_active()
-        return {"ok": True, "id": tid}
+        return {"ok": True, "id": tid, "label": label}
 
 def vault_remove_tenant(tid):
     with _vault_lock:
