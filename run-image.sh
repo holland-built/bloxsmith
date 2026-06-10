@@ -5,7 +5,7 @@
 # Re-run any time to update — it always pulls :latest first.
 set -euo pipefail
 
-IMAGE="${IMAGE:-ghcr.io/barney34/infoblox-noc-dashboard:latest}"
+IMAGE="${IMAGE:-ghcr.io/holland-built/infoblox-noc-dashboard:latest}"
 NAME="infoblox-noc"
 PORT="${PORT:-8080}"
 BIND="${BIND:-127.0.0.1}"   # loopback by default; set BIND=0.0.0.0 to expose on the LAN
