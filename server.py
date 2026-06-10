@@ -402,6 +402,12 @@ def vault_test_key(key):
     except Exception:
         return {"ok": False, "error": "key rejected by Infoblox CSP"}
 
+def vault_conn_test():
+    """Verify the ACTIVE connection's key reaches Infoblox CSP (read-only)."""
+    if not API_KEY:
+        return {"ok": False, "error": "no active connection"}
+    return vault_test_key(API_KEY)
+
 def vault_llm_test(key, base_url=None, model=None):
     """Send a tiny completion to verify the LLM provider key/base/model work."""
     key = (key or "").strip() or _vault.get("groq", "")
@@ -1317,6 +1323,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(vault_set_llm(str(body.get("key", "")), body.get("base_url"), body.get("model"))); return
         if self.path == "/api/vault/test-key":
             self._json(vault_test_key(str(body.get("key", "")))); return
+        if self.path == "/api/vault/conn-test":
+            self._json(vault_conn_test()); return
         if self.path == "/api/vault/llm-test":
             self._json(vault_llm_test(str(body.get("key", "")), body.get("base_url"), body.get("model"))); return
         if self.path == "/api/vault/refresh-names":
