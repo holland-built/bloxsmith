@@ -260,6 +260,7 @@ body.chat-open{padding-right:340px}
 .ctx-swap:disabled{opacity:.5;cursor:default}
 .ctx-note{font-size:9px;color:var(--gray-500);margin-top:2px;line-height:1.4}
 .ctx-acct{font-size:10px;color:var(--gray-500);margin-top:3px}
+.ver-badge{margin-left:auto;font-size:9px;font-weight:600;color:var(--gray-500);background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;letter-spacing:.02em}
 .tenant-confirm{display:flex;align-items:center;gap:6px;padding:5px 8px 5px 10px;border-radius:4px;background:var(--red-bg);border:1px solid var(--red-border)}
 .tenant-confirm-q{flex:1;font-size:11px;color:var(--sev-red-t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tenant-confirm-yes,.tenant-confirm-no{background:none;border:none;cursor:pointer;font-size:12px;line-height:1;padding:2px 4px}
@@ -2721,6 +2722,7 @@ function App({vault, onVaultChange}={}) {
         <div className="sidebar-foot">
           <div style={{color:'var(--green)',display:'flex',alignItems:'center',gap:5}}>
             <span className="pulse">●</span> API Connected
+            {vault&&vault.version&&<span className="ver-badge" title="App version — bumps on every build/deploy">v{vault.version}</span>}
           </div>
           <div className="ctx-panel">
           {vault&&vault.vaultMode

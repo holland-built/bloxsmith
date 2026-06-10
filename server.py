@@ -41,6 +41,17 @@ MCP_URL     = f"{BASE_URL}/mcp"
 MCP_HEADERS = {"Authorization": API_KEY}
 PORT        = int(os.environ.get("PORT", 8080))
 HOST        = os.environ.get("HOST", "localhost")  # keep loopback; for Docker publish with -p 127.0.0.1:8080:8080
+# App version shown in the UI footer. CI injects "1.0.<git-commit-count>" at build
+# time (bumps every commit); falls back to the local git count, else "dev".
+def _git_version():
+    try:
+        import subprocess
+        n = subprocess.check_output(["git", "rev-list", "--count", "HEAD"],
+                                    stderr=subprocess.DEVNULL, timeout=2).decode().strip()
+        return f"1.0.{n}" if n else "dev"
+    except Exception:
+        return "dev"
+APP_VERSION = os.environ.get("APP_VERSION") or _git_version()
 # Shared-secret for the state-changing write endpoint (/api/block-domain).
 # If unset, that write is disabled (401). Supply it via the X-Auth-Token header.
 DASHBOARD_TOKEN = os.environ.get("DASHBOARD_TOKEN", "")
@@ -444,6 +455,7 @@ def vault_refresh_names():
 
 def vault_status():
     return {
+        "version": APP_VERSION,
         "vaultMode": VAULT_MODE,
         "exists": vault_exists(),
         "unlocked": (not VAULT_MODE) or _vault["unlocked"],

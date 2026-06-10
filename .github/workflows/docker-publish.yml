@@ -20,6 +20,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so the commit count (app version) is correct
+
+      - name: Compute app version
+        id: ver
+        run: echo "version=1.0.$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU (for cross-arch builds)
         uses: docker/setup-qemu-action@v3
@@ -50,6 +56,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          build-args: |
+            APP_VERSION=${{ steps.ver.outputs.version }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

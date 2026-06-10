@@ -513,6 +513,13 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("/api/vault/conn-test")
         self.assertContains("Test Infoblox connection")
 
+    def test_app_version_badge(self):
+        s = self._server()
+        self.assertIn("APP_VERSION", s)
+        self.assertIn('"version": APP_VERSION', s)   # surfaced in status payload
+        self.assertContains("ver-badge")
+        self.assertContains("vault.version")
+
     def test_refresh_names(self):
         self.assertIn("def vault_refresh_names", self._server())
         self.assertIn("/api/vault/refresh-names", self._server())
