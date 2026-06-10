@@ -345,6 +345,17 @@ class FrontendStructureTests(unittest.TestCase):
     def test_insights_panel(self):
         self.assertContains("function InsightsPanel")
 
+    def test_iq_actions_section(self):
+        self.assertContains("function ActionsPanel")
+        self.assertContains("id:'actions'", "IQ Actions section not registered")
+        self.assertContains("/api/actions", "IQ Actions fetch missing")
+        self.assertContains("section==='actions'", "IQ Actions not rendered")
+
+    def test_host_metrics_panel(self):
+        self.assertContains("function HostMetricsPanel")
+        self.assertContains("/api/host-metrics", "host-metrics fetch missing")
+        self.assertContains("HostMetrics.avg_value", "host-metrics fields not read")
+
     def test_threat_lookup_panel(self):
         self.assertContains("function ThreatLookupPanel")
 

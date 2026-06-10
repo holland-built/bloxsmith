@@ -1252,6 +1252,54 @@ function InsightsPanel({data, rowLimit, setRowLimit}) {
   );
 }
 
+/* humanize a cube/raw key: "InsightsSummaryView.total_events" -> "Total Events" */
+function humanizeKey(k){ return String(k).replace(/^[^.]*\./,'').replace(/[_-]/g,' ').replace(/\b\w/g,m=>m.toUpperCase()); }
+
+/* IQ Actions — resilient to unknown shape: derives columns from the data */
+function ActionsPanel({data, rowLimit, setRowLimit}) {
+  const rows = !data ? [] : (Array.isArray(data) ? data : (data.actions||data.results||data.data||[]));
+  const keys = rows.length ? Object.keys(rows[0]).filter(k=>k[0]!=='_').slice(0,8) : [];
+  const allCols = keys.map((k,i)=>({
+    key:k, label:humanizeKey(k), fixed:i===0,
+    sortVal:r=>r[k],
+    render:r=>{
+      const v=r[k];
+      if(v==null) return '—';
+      if(/sever|status|level|state|result/i.test(k)){
+        const lv=String(v).toLowerCase();
+        const cls={critical:'b-red',high:'b-amber',active:'b-green',enabled:'b-green',completed:'b-green',success:'b-green',medium:'b-teal',low:'b-gray',failed:'b-red',error:'b-red',disabled:'b-gray',pending:'b-teal'}[lv];
+        if(cls) return <span className={`badge ${cls}`}>{String(v)}</span>;
+      }
+      if(typeof v==='object') return <span style={{color:'var(--gray-400)'}}>{JSON.stringify(v)}</span>;
+      return typeof v==='number'?v.toLocaleString():String(v);
+    },
+  }));
+  const ctl=useColumns('actions', allCols.length?allCols:[{key:'_empty',label:'—'}]);
+  if(!data) return <div className="spinner"/>;
+  if(!rows.length) return <div className="no-data">No IQ actions found{data._raw?` · ${data._raw}`:''}</div>;
+  return (
+    <>
+      <RowLimitBar limit={rowLimit} setLimit={setRowLimit}/>
+      <DataTable ctl={ctl} rows={rows} defaultRows={rowLimit} exportName="iq-actions" persistId="actions"/>
+    </>
+  );
+}
+
+/* Host performance metrics (avg over last hour, per host+metric) */
+function HostMetricsPanel({data}) {
+  const rows = !data ? [] : (data.metrics||[]);
+  const max = rows.reduce((m,r)=>Math.max(m, Number(r['HostMetrics.avg_value'])||0), 0) || 1;
+  const allCols=[
+    {key:'host',label:'Host',fixed:true,sortVal:r=>r['HostMetrics.host_name']||'',render:r=><span style={{fontWeight:500}}>{r['HostMetrics.host_name']||'—'}</span>},
+    {key:'metric',label:'Metric',sortVal:r=>r['HostMetrics.metric_name']||'',render:r=><span style={{color:'var(--gray-400)'}}>{r['HostMetrics.metric_name']||'—'}</span>},
+    {key:'avg',label:'Avg (1h)',sortVal:r=>Number(r['HostMetrics.avg_value'])||0,render:r=>{const v=Number(r['HostMetrics.avg_value'])||0;return (<div style={{display:'flex',alignItems:'center',gap:8}}><div className="bar-track"><div className="bar-fill" style={{width:`${Math.round(v/max*100)}%`,background:'var(--teal)'}}/></div><span style={{fontFamily:'monospace',fontSize:11}}>{v.toLocaleString(undefined,{maximumFractionDigits:2})}</span></div>);}},
+  ];
+  const ctl=useColumns('hostmetrics',allCols);
+  if(!data) return <div className="spinner"/>;
+  if(!rows.length) return <div className="no-data">No host metrics available for the last hour</div>;
+  return <DataTable ctl={ctl} rows={rows} defaultRows={15} exportName="host-metrics" persistId="hostmetrics" initialSort={{key:'avg',dir:'desc'}}/>;
+}
+
 function ThreatLookupPanel() {
   const [q,setQ]         = useState('');
   const [results,setRes] = useState(null);
@@ -1701,6 +1749,7 @@ const SECTIONS=[
   {id:'audit',    icon:'≡',  label:'Audit Logs'},
   {id:'dns-analytics', icon:'⊘', label:'DNS Analytics'},
   {id:'insights',      icon:'⊙', label:'SOC Insights'},
+  {id:'actions',       icon:'⚡', label:'IQ Actions'},
   {id:'alerts',        icon:'⚑', label:'Alert Rules'},
   {id:'threat-lookup', icon:'⊚', label:'Threat Lookup'},
   {id:'search',        icon:'⊕', label:'Search'},
@@ -1820,6 +1869,8 @@ function App() {
   const [messages,setMessages]       = useState([{id:0,role:'a',content:'Ask anything about your network in plain English:\n\n• "who is sending the most queries"\n• "show me offline hosts"\n• "any critical subnets"\n• "DNS TTL problems"\n• "what\'s the network status"\n• "who changed things recently"\n\nFor finding IPs or hostnames, use the Search tab.'}]);
   const [dnsAnalytics, setDnsAnalytics] = useState(null);
   const [insights, setInsights]         = useState(null);
+  const [actions, setActions]           = useState(null);
+  const [hostMetrics, setHostMetrics]   = useState(null);
   const [srchQ, setSrchQ]       = useState('');
   const [srchRes, setSrchRes]   = useState(null);
   const [srching, setSrching]   = useState(false);
@@ -2058,6 +2109,12 @@ function App() {
     }
     if(section==='insights'&&!insights) {
       fetch('/api/insights').then(r=>r.ok?r.json():null).then(d=>d&&setInsights(d)).catch(()=>{});
+    }
+    if(section==='actions'&&!actions) {
+      fetch('/api/actions').then(r=>r.ok?r.json():null).then(d=>d&&setActions(d)).catch(()=>{});
+    }
+    if(section==='hosts'&&!hostMetrics) {
+      fetch('/api/host-metrics').then(r=>r.ok?r.json():null).then(d=>d&&setHostMetrics(d)).catch(()=>{});
     }
   },[section]);
 
@@ -2627,6 +2684,10 @@ function App() {
               </div>
               <HostsTable hosts={filtHosts} rowLimit={rl('hosts')}/>
             </div>
+            <div className="card b-full">
+              <div className="card-title"><div className="dot"/>Host Performance Metrics — avg, last hour</div>
+              <HostMetricsPanel data={hostMetrics}/>
+            </div>
           </div>
         )}
 
@@ -2666,13 +2727,21 @@ function App() {
           <InsightsPanel data={insights} rowLimit={rl('insights')} setRowLimit={v=>setRl('insights',v)}/>
         )}
 
+        {/* ── IQ ACTIONS ── */}
+        {section==='actions'&&(
+          <div className="card">
+            <div className="card-title"><div className="dot"/>IQ Actions — recent automated actions</div>
+            <ActionsPanel data={actions} rowLimit={rl('actions')} setRowLimit={v=>setRl('actions',v)}/>
+          </div>
+        )}
+
         {/* ── THREAT LOOKUP ── */}
         {section==='alerts'&&(
           <AlertsPanel data={data} rules={alertRules} setRules={setAlertRules}/>
         )}
         {section==='threat-lookup'&&(
           <div className="card">
-            <div className="card-title"><div className="dot" style={{background:'#EF4444'}}/>Entity & Threat Lookup</div>
+            <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>Entity & Threat Lookup</div>
             <ThreatLookupPanel/>
           </div>
         )}
