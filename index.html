@@ -2301,6 +2301,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
       {open&&(<>
         <div className="acct-overlay" onClick={close}/>
         <div className="acct-menu">
+          <div className="acct-sec-label" title="Saved Infoblox API keys in your vault. The filled ● is active.">Connections</div>
           {tenants.map(t=>( confirmRm===t.id ? (
             <div key={t.id} className="tenant-confirm" title="This permanently removes the stored key from the vault.">
               <span className="tenant-confirm-q">Remove {t.label}?</span>
@@ -2332,6 +2333,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
             </div>
           </>)}
           <div className="acct-sec-divider"/>
+          <div className="acct-sec-label">Manage</div>
           <button className="acct-menu-item" title="Store another Infoblox API key in the encrypted vault." onClick={()=>{close();setAdding(true);}}>+ Add connection</button>
           <button className="acct-menu-item" disabled={testing} title="Check the active key actually reaches Infoblox CSP." onClick={testConn}>{testing?'Testing…':'Test Infoblox connection'}</button>
           <button className="acct-menu-item" onClick={async()=>{close();await vpost('/api/vault/refresh-names',{});window.location.reload();}} title="Re-fetch CSP account names for all stored connections">Refresh names</button>
