@@ -317,6 +317,21 @@ def vault_lock():
         cache_invalidate()
     return {"ok": True}
 
+def vault_reset():
+    """Forgot-passphrase escape hatch: permanently delete the encrypted vault
+    (all stored keys are unrecoverable by design) and return to first-run setup."""
+    global API_KEY
+    with _vault_lock:
+        try:
+            if os.path.exists(VAULT_FILE):
+                os.remove(VAULT_FILE)
+        except Exception:
+            pass
+        _vault.update({"unlocked": False, "tenants": [], "active": None, "groq": "", "_key": None, "_salt": ""})
+        API_KEY = ""; MCP_HEADERS["Authorization"] = ""
+        cache_invalidate()
+    return {"ok": True}
+
 def vault_set_groq(key):
     global LLM_API_KEY
     with _vault_lock:
@@ -1202,6 +1217,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(vault_set_groq(str(body.get("key", "")))); return
         if self.path == "/api/vault/lock":
             self._json(vault_lock()); return
+        if self.path == "/api/vault/reset":
+            self._json(vault_reset()); return
         if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
             self._json({"error": "vault locked", "locked": True}, 503); return
         if self.path != "/api/switch-account":
