@@ -249,6 +249,19 @@ body.chat-open{padding-right:340px}
 .acct-search{width:100%;background:var(--blue-dark);border:1px solid var(--border);border-radius:4px;color:var(--ink);font-size:11px;padding:5px 8px;margin-bottom:4px;outline:none;font-family:inherit}
 .acct-search:focus{border-color:var(--teal)}
 .acct-menu-item{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* compact context panel (tenant + account) */
+.ctx-panel{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.ctx-block{position:relative}
+.ctx-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.ctx-cap{font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--gray-500);font-weight:600}
+.ctx-val{font-size:12px;font-weight:600;color:var(--gray-200);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.ctx-swap{background:none;border:1px solid var(--border);border-radius:4px;color:var(--gray-400);cursor:pointer;font-size:11px;line-height:1;padding:3px 6px;transition:all .12s;flex-shrink:0}
+.ctx-swap:hover:not(:disabled){color:var(--teal);border-color:var(--teal);background:var(--hover-strong)}
+.ctx-swap:disabled{opacity:.5;cursor:default}
+.ctx-note{font-size:9px;color:var(--gray-500);margin-top:2px;line-height:1.4}
+.ctx-acct{font-size:10px;color:var(--gray-500);margin-top:3px}
+.acct-sec-divider{height:1px;background:var(--border);margin:4px 0}
+.acct-sec-label{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--gray-500);font-weight:600;padding:4px 10px 2px}
 /* ── new features ── */
 .auto-refresh-sel{background:var(--surface);border:1px solid var(--border);color:var(--gray-200);font-size:10px;border-radius:5px;padding:3px 6px;cursor:pointer;outline:none;margin-left:8px}
 .refresh-countdown{font-size:11px;color:var(--gray-400);margin-left:4px}
@@ -2244,22 +2257,34 @@ function VaultGate() {
   return <VaultAddTenant first onDone={refresh}/>;
 }
 
-/* sidebar control: switch active tenant, add another, or lock the vault */
-function TenantManager({vault}) {
+/* sidebar control: switch active tenant + (nested) CSP account, add tenants, lock vault */
+function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcct, acctSearch='', setAcctSearch}) {
   const [open,setOpen]=useState(false),[adding,setAdding]=useState(false),[settings,setSettings]=useState(false);
   const tenants=vault.tenants||[];
   const active=tenants.find(t=>t.id===vault.active);
+  const activeAcctName=(accounts.find(a=>a.id===activeAcct)||{}).name;
+  const multiAcct=accounts.length>1;
   const reload=()=>window.location.reload();
   const switchTo=async id=>{ if(id===vault.active){setOpen(false);return;} await vpost('/api/vault/active',{id}); reload(); };
   const remove=async id=>{ await vpost('/api/vault/tenant-remove',{id}); reload(); };
   if(adding) return <VaultAddTenant onCancel={()=>setAdding(false)} onDone={reload}/>;
   if(settings) return <VaultSettings llm={vault.llm} onCancel={()=>setSettings(false)} onDone={reload}/>;
   return (
-    <div style={{position:'relative',marginTop:8}}>
-      <div className="acct-name">Tenant: <b style={{color:'var(--gray-200)'}}>{active?active.label:'—'}</b></div>
-      <button className="acct-switch-btn" onClick={()=>setOpen(o=>!o)}>⇄ Tenants</button>
+    <div className="ctx-block">
+      <div className="ctx-head">
+        <span className="ctx-cap">Tenant</span>
+        <button className="ctx-swap" title={multiAcct?'Switch tenant / account · manage':'Switch / manage tenants'} disabled={switchingAcct} onClick={()=>setOpen(o=>!o)}>
+          {switchingAcct?'⟳':'⇄'}
+        </button>
+      </div>
+      <div className="ctx-val">{active?active.label:'—'}</div>
+      {accounts.length>0&&(
+        <div className="ctx-acct" title={multiAcct?'CSP account in view — switch in the ⇄ menu':'This key maps to a single CSP account'}>
+          Account: <b style={{color:'var(--gray-400)'}}>{activeAcctName||'—'}</b>
+        </div>
+      )}
       {open&&(<>
-        <div className="acct-overlay" onClick={()=>setOpen(false)}/>
+        <div className="acct-overlay" onClick={()=>{setOpen(false);setAcctSearch&&setAcctSearch('');}}/>
         <div className="acct-menu">
           {tenants.map(t=>(
             <div key={t.id} className="tenant-row">
@@ -2269,6 +2294,23 @@ function TenantManager({vault}) {
               <button className="tenant-rm" title="Remove tenant" onClick={()=>remove(t.id)}>✕</button>
             </div>
           ))}
+          {multiAcct&&(<>
+            <div className="acct-sec-divider"/>
+            <div className="acct-sec-label">CSP account</div>
+            {accounts.length>6&&(
+              <input className="acct-search" autoFocus placeholder="Search accounts…"
+                value={acctSearch} onChange={e=>setAcctSearch&&setAcctSearch(e.target.value)}/>
+            )}
+            <div style={{maxHeight:200,overflowY:'auto'}}>
+              {accounts.filter(a=>a.name.toLowerCase().includes(acctSearch.toLowerCase())).map(a=>(
+                <button key={a.id} className={`acct-menu-item${a.id===activeAcct?' active':''}`} title={a.name}
+                  onClick={()=>{setOpen(false);switchAcct&&switchAcct(a.id);}}>
+                  {a.id===activeAcct?'● ':'○ '}{a.name}
+                </button>
+              ))}
+            </div>
+          </>)}
+          <div className="acct-sec-divider"/>
           <button className="acct-menu-item" onClick={()=>{setOpen(false);setAdding(true);}}>+ Add tenant</button>
           <button className="acct-menu-item" onClick={async()=>{setOpen(false);await vpost('/api/vault/refresh-names',{});window.location.reload();}} title="Re-fetch CSP account names for all tenants">Refresh names</button>
           <button className="acct-menu-item" onClick={()=>{setOpen(false);setSettings(true);}}>AI provider</button>
@@ -2659,19 +2701,26 @@ function App({vault, onVaultChange}={}) {
           <div style={{color:'var(--green)',display:'flex',alignItems:'center',gap:5}}>
             <span className="pulse">●</span> API Connected
           </div>
-          {vault&&vault.vaultMode&&<TenantManager vault={vault}/>}
-          {accounts.length>0&&(
-            <div style={{position:'relative'}}>
-              <div className="acct-name">Account: <b style={{color:'var(--gray-200)'}}>{(accounts.find(a=>a.id===activeAcct)||{}).name||'—'}</b></div>
+          <div className="ctx-panel">
+          {vault&&vault.vaultMode
+            ? <TenantManager vault={vault} accounts={accounts} activeAcct={activeAcct}
+                switchAcct={switchAcct} switchingAcct={switchingAcct}
+                acctSearch={acctSearch} setAcctSearch={setAcctSearch}/>
+            : accounts.length>0&&(
+            <div className="ctx-block">
+              <div className="ctx-head">
+                <span className="ctx-cap">Account</span>
+                {accounts.length>1&&<button className="ctx-swap" title="Switch CSP account" disabled={switchingAcct} onClick={()=>setShowAcctMenu(m=>!m)}>
+                  {switchingAcct?'⟳':'⇄'}
+                </button>}
+              </div>
+              <div className="ctx-val">{(accounts.find(a=>a.id===activeAcct)||{}).name||'—'}</div>
               {accounts.length===1&&(
-                <div style={{fontSize:9,color:'var(--gray-400)',marginTop:3,lineHeight:1.4}}
+                <div className="ctx-note"
                   title="This API key's user belongs to a single CSP account. Use an interactive User API Key (portal → user menu → User API Keys) to enable switching.">
                   single-account key — switching off
                 </div>
               )}
-              {accounts.length>1&&<button className="acct-switch-btn" disabled={switchingAcct} onClick={()=>setShowAcctMenu(m=>!m)}>
-                {switchingAcct?'⟳ Switching…':'⇄ Switch account'}
-              </button>}
               {showAcctMenu&&(
                 <>
                   <div className="acct-overlay" onClick={()=>{setShowAcctMenu(false);setAcctSearch('');}}/>
@@ -2693,6 +2742,7 @@ function App({vault, onVaultChange}={}) {
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
 
