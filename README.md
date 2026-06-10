@@ -39,7 +39,7 @@ No source checkout, no build — just Docker. Every push to `master` and every
 docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 \
   -e INFOBLOX_API_KEY="Token <your-key>" \
   --restart unless-stopped \
-  ghcr.io/barney34/infoblox-noc-dashboard:latest
+  ghcr.io/holland-built/infoblox-noc-dashboard:latest
 # → http://localhost:8080   (loopback only; drop the 127.0.0.1: prefix to expose on the LAN)
 ```
 
@@ -49,13 +49,13 @@ Add `-e GROQ_API_KEY=...` to enable the AI query box. Pin a release with a tag
 **Update to the latest published image:**
 
 ```bash
-docker pull ghcr.io/barney34/infoblox-noc-dashboard:latest
+docker pull ghcr.io/holland-built/infoblox-noc-dashboard:latest
 docker rm -f infoblox-noc           # then re-run the docker run command above
 ```
 
 > **One-time, so SEs can pull without a login:** the GHCR package defaults to
 > private. Make it public at
-> `github.com/users/barney34/packages/container/infoblox-noc-dashboard/settings`
+> `github.com/users/holland-built/packages/container/infoblox-noc-dashboard/settings`
 > → *Change visibility* → **Public**. The source repo can stay private; package
 > visibility is independent. (Otherwise each user must
 > `docker login ghcr.io` with a token that has `read:packages`.)
@@ -71,7 +71,7 @@ Prereq: Docker installed and running. Use this if you're developing or want to
 build locally instead of pulling the published image.
 
 ```bash
-git clone https://github.com/barney34/infoblox-noc-dashboard infoblox-noc && cd infoblox-noc
+git clone https://github.com/holland-built/infoblox-noc-dashboard infoblox-noc && cd infoblox-noc
 ./run.sh
 # update later:  git pull && ./run.sh
 ```
