@@ -37,6 +37,8 @@ window.onerror = function(msg,src,line,col,err) {
   --green-bg:hsl(160,75%,7%);--green-border:hsl(160,75%,25%);--green-text:hsl(160,84%,70%);
   /* ── theme-flippable semantic tokens (dark defaults) ── */
   --ink:#fff;                        /* brightest text / input text */
+  /* type scale (current sizes, centralized) */
+  --fs-2xs:9px;--fs-xs:10px;--fs-sm:11px;--fs-base:12px;--fs-md:13px;--fs-lg:20px;--fs-2xl:30px;
   --hover:rgba(255,255,255,.04);     /* row + subtle hover tint */
   --hover-strong:rgba(255,255,255,.1);
   --tint:rgba(255,255,255,.1);       /* active nav, user msg, chips */
@@ -70,6 +72,7 @@ window.onerror = function(msg,src,line,col,err) {
   --svg-grid:rgba(40,35,30,.09);
   --focus-border:rgba(58,53,47,.55);
   --sev-red-t:#C0392F;--sev-amber-t:#9A6207;--sev-green-t:#0A7A56;
+  --red:#DC2626;--amber:#B7791F;--green:#0A7A56;   /* deepen base severity for ≥3:1 on white */
   --badge-red-bg:rgba(239,68,68,.12);--badge-red-bd:rgba(239,68,68,.4);
   --badge-amber-bg:rgba(245,158,11,.16);--badge-amber-bd:rgba(245,158,11,.45);
   --badge-green-bg:rgba(16,185,129,.13);--badge-green-bd:rgba(16,185,129,.45);
@@ -89,18 +92,19 @@ body.chat-open{padding-right:340px}
 .nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--gray-200);border:none;background:none;width:100%;text-align:left;transition:all .12s}
 .nav-item:hover{background:var(--hover-strong);color:var(--teal)}
 .nav-item.active{background:var(--tint);color:var(--teal);font-weight:600;border-left:2px solid var(--teal);padding-left:8px}
-.nav-icon{width:16px;text-align:center;color:var(--gray-600)}
+.nav-icon{width:16px;text-align:center;color:var(--gray-600);transition:color .12s}
+.nav-item:hover .nav-icon,.nav-item.active .nav-icon{color:var(--teal)}
 .sidebar-foot{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--gray-400)}
 .main{padding:0 20px 40px;flex:1;min-width:0;max-width:100%;width:100%}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;padding:18px 0 14px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;background:var(--blue-dark)}
-.page-title{font-size:20px;font-weight:700}
+.page-title{font-size:var(--fs-lg);font-weight:700}
 .page-sub{font-size:12px;color:var(--gray-400);margin-top:2px}
 .refresh-btn{display:flex;align-items:center;gap:7px;background:var(--blue-deep);border:1px solid var(--teal);color:var(--teal);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all .12s}
 .refresh-btn:hover{background:var(--hover-strong)}
 .spin{animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;box-shadow:var(--shadow-card)}
-.card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.card-title{font-size:var(--fs-sm);font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:14px;display:flex;align-items:center;gap:7px}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0}
 .g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
 .g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
@@ -320,6 +324,14 @@ tr:hover .copy-btn{opacity:1}
 .col-reset{background:none;border:none;color:var(--teal);font-size:10px;font-weight:600;cursor:pointer;padding:0}
 .tbl td.exp,.tbl th.exp{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word}
 .col-overlay{position:fixed;inset:0;z-index:309}
+/* ── density (compact mode), persisted ── */
+:root[data-density="compact"] .tbl td{padding:4px 8px}
+:root[data-density="compact"] .tbl th{padding:4px 8px}
+:root[data-density="compact"] .card{padding:13px}
+:root[data-density="compact"] .bento{gap:11px}
+:root[data-density="compact"] .g2,:root[data-density="compact"] .g3,:root[data-density="compact"] .g4{gap:10px}
+:root[data-density="compact"] .pol-item{padding:6px 0}
+:root[data-density="compact"] .nav-item{padding:5px 10px}
 </style>
 </head>
 <body>
@@ -508,12 +520,20 @@ const fmtTs = iso => {
     ' '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 };
 
+/* chart hexes deepen in light mode so fills/labels clear ≥3:1 on white */
+const isLight = () => typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')==='light';
+const CK = {
+  red:   () => isLight()?'#DC2626':'#EF4444',
+  amber: () => isLight()?'#B7791F':'#F59E0B',
+  green: () => isLight()?'#0A7A56':'#10B981',
+  slate: () => isLight()?'#6A655D':'#64748B',
+};
 const levelOrder = {critical:0,high:1,medium:2,low:3};
 const levelBadge = l => ({critical:'b-red',high:'b-amber',medium:'b-teal',low:'b-gray'})[l]||'b-gray';
-const levelColor = l => ({critical:'#FCA5A5',high:'#FCD34D',medium:'var(--teal)',low:'var(--gray-400)'})[l]||'var(--gray-400)';
-const actionColor = a => ({CREATE:'var(--teal)',UPDATE:'#F59E0B',DELETE:'#EF4444',READ:'var(--gray-400)',
-  LOGIN:'#10B981',LOGOUT:'var(--gray-400)',EXPORT:'#F59E0B',IMPORT:'var(--teal)',ENABLE:'#10B981',DISABLE:'#EF4444'})[a]||'var(--gray-200)';
-const utilColor = p => p>=90?'#EF4444':p>=75?'#F59E0B':'#10B981';
+const levelColor = l => ({critical:CK.red(),high:CK.amber(),medium:'var(--teal)',low:CK.slate()})[l]||'var(--gray-400)';
+const actionColor = a => ({CREATE:'var(--teal)',UPDATE:CK.amber(),DELETE:CK.red(),READ:'var(--gray-400)',
+  LOGIN:CK.green(),LOGOUT:'var(--gray-400)',EXPORT:CK.amber(),IMPORT:'var(--teal)',ENABLE:CK.green(),DISABLE:CK.red()})[a]||'var(--gray-200)';
+const utilColor = p => p>=90?CK.red():p>=75?CK.amber():CK.green();
 
 function mockMCPQuery(q, data) {
   const ql = q.toLowerCase();
@@ -625,10 +645,10 @@ function GaugeCard({value,max,label,sub,color,icon,onClick}) {
 function Donut({hosts,filter,onSlice}) {
   const counts = hosts.reduce((a,h)=>{a[h.status]=(a[h.status]||0)+1;return a},{});
   const slices=[
-    {name:'Online',  val:counts.online||0,   color:'#10B981'},
-    {name:'Degraded',val:counts.degraded||0, color:'#F59E0B'},
+    {name:'Online',  val:counts.online||0,   color:CK.green()},
+    {name:'Degraded',val:counts.degraded||0, color:CK.amber()},
     {name:'Offline', val:counts.offline||0,  color:'var(--gray-400)'},
-    {name:'Error',   val:counts.error||0,    color:'#EF4444'},
+    {name:'Error',   val:counts.error||0,    color:CK.red()},
     {name:'Pending', val:counts.pending||0,  color:'var(--teal)'},
   ].filter(d=>d.val>0);
 
@@ -1831,6 +1851,7 @@ function App() {
   const [alertRules, setAlertRules] = useState(()=>LS.get('noc.alertRules',[]));
   const [deltas, setDeltas] = useState(null);
   const [theme, setTheme]           = useState(()=>LS.get('noc.theme','system')); // 'system'|'light'|'dark'
+  const [density, setDensity]       = useState(()=>LS.get('noc.density','comfortable')); // 'comfortable'|'compact'
   const [accounts, setAccounts]     = useState([]);
   const [activeAcct, setActiveAcct] = useState('');   // CSP account id
   const [showAcctMenu, setShowAcctMenu] = useState(false);
@@ -2018,6 +2039,8 @@ function App() {
   const THEME_ICON  = {system:'◐', light:'☀', dark:'☾'};
   const THEME_LABEL = {system:'System theme', light:'Light theme', dark:'Dark theme'};
 
+  useEffect(()=>{ document.documentElement.setAttribute('data-density', density); LS.set('noc.density', density); },[density]);
+
   useEffect(()=>{
     if(!data) { document.title='Infoblox NOC Dashboard'; return; }
     const crit = data.subnets.filter(s=>s.util>=90).length;
@@ -2165,6 +2188,9 @@ function App() {
               ⊕ {chatOpen?'Close Query':'Query'}
             </button>
             <button className="chat-toggle-btn" onClick={shareView} title="Copy a deep link to this view">◳ Share</button>
+            <button className="theme-btn" onClick={()=>setDensity(d=>d==='compact'?'comfortable':'compact')}
+              title={density==='compact'?'Compact rows (click for comfortable)':'Comfortable rows (click for compact)'}
+              aria-label="Toggle row density">{density==='compact'?'⊟':'☰'}</button>
             <button className="theme-btn" onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')}
               title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
             <button style={{background:'none',border:'1px solid var(--border)',borderRadius:6,
@@ -2237,9 +2263,9 @@ function App() {
                 <div key="kpis" {...wrapProps('kpis','b-full')} style={{position:'relative'}}>
                   <div style={{position:'absolute',top:-2,right:2,zIndex:2}}><DragHandle id="kpis"/></div>
                   <div className="g4">
-                    <GaugeCard value={critSubs.length}  max={subnets.length}   label="Critical Subnets" sub={`of ${subnets.length} total`}    color={critSubs.length>0?'#EF4444':'#10B981'} icon="⊞" onClick={()=>setSection('ipam')}/>
-                    <GaugeCard value={onlineH.length}   max={hosts.length}     label="Hosts Online"     sub={`of ${hosts.length} total`}      color="#10B981"  icon="⊡" onClick={()=>setSection('hosts')}/>
-                    <GaugeCard value={ttlBad.length}    max={zones.length}     label="TTL Anomalies"    sub={`of ${zones.length} zones`}      color={ttlBad.length>0?'#F59E0B':'#10B981'} icon="⊕" onClick={()=>setSection('dns')}/>
+                    <GaugeCard value={critSubs.length}  max={subnets.length}   label="Critical Subnets" sub={`of ${subnets.length} total`}    color={critSubs.length>0?CK.red():CK.green()} icon="⊞" onClick={()=>setSection('ipam')}/>
+                    <GaugeCard value={onlineH.length}   max={hosts.length}     label="Hosts Online"     sub={`of ${hosts.length} total`}      color={CK.green()}  icon="⊡" onClick={()=>setSection('hosts')}/>
+                    <GaugeCard value={ttlBad.length}    max={zones.length}     label="TTL Anomalies"    sub={`of ${zones.length} zones`}      color={ttlBad.length>0?CK.amber():CK.green()} icon="⊕" onClick={()=>setSection('dns')}/>
                     <GaugeCard value={activeF.length}   max={feeds.length}     label="Active Feeds"     sub={`of ${feeds.length} total`}      color="var(--teal)"  icon="⊗" onClick={()=>setSection('threats')}/>
                   </div>
                 </div>
@@ -2258,11 +2284,11 @@ function App() {
                     </div>
                     {!collapsed['hosts']&&(()=>{
                       const filteredH = hostFilt ? hosts.filter(h=>h.status===hostFilt) : [];
-                      const statusColor = {online:'#10B981',degraded:'#F59E0B',offline:'var(--gray-400)',error:'#EF4444',pending:'var(--teal)'};
+                      const statusColor = {online:CK.green(),degraded:CK.amber(),offline:'var(--gray-400)',error:CK.red(),pending:'var(--teal)'};
                       const hv=getViz('hosts','donut');
                       const statusRows=['online','degraded','offline','error','pending']
                         .map(st=>({status:st,count:hosts.filter(h=>h.status===st).length})).filter(r=>r.count>0);
-                      const statusColors={online:'#10B981',degraded:'#F59E0B',offline:'var(--gray-400)',error:'#EF4444',pending:'var(--teal)'};
+                      const statusColors={online:CK.green(),degraded:CK.amber(),offline:'var(--gray-400)',error:CK.red(),pending:'var(--teal)'};
                       return (
                         <>
                           {hv==='donut'?<>
@@ -2594,7 +2620,7 @@ function App() {
                 {['online','degraded','offline','error','pending'].map(st=>{
                   const cnt=hosts.filter(h=>h.status===st).length;
                   if(!cnt) return null;
-                  const colors={online:'#10B981',degraded:'#F59E0B',offline:'var(--gray-400)',error:'#EF4444',pending:'var(--teal)'};
+                  const colors={online:CK.green(),degraded:CK.amber(),offline:'var(--gray-400)',error:CK.red(),pending:'var(--teal)'};
                   return (
                     <button key={st} className={`chip${hostChip===st?' on':''}`}
                       style={hostChip===st?{borderColor:colors[st],color:colors[st]}:{}}
