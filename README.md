@@ -143,6 +143,11 @@ footer shows `single-account key — switching off`.
 The natural-language query box uses an LLM with tool-calling to fetch live data and answer.
 Everything else in the dashboard works **without** it.
 
+> **In vault mode**, set the AI provider from the dashboard: sidebar → **⚙ AI provider**.
+> It's provider-agnostic (Groq / OpenAI / any OpenAI-compatible) with presets for key,
+> base URL, and model — stored encrypted in your vault. The env vars below still work for
+> single-key (env) mode.
+
 **Default provider: Groq — free tier (recommended for demos).**
 
 - Free, no credit card. Sign up at <https://console.groq.com>.

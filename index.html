@@ -307,7 +307,10 @@ tr:hover .copy-btn{opacity:1}
 :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:3px}
 .nav-item:focus-visible,.issue-row:focus-visible{outline-offset:-2px}
 /* ── vault auth screens ── */
-.vault-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.vault-screen{position:fixed;inset:0;z-index:550;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--blue-dark);overflow:auto}
+.vault-cancel{width:100%;background:none;border:1px solid var(--border);border-radius:7px;color:var(--gray-400);font-size:12px;font-weight:600;padding:9px;cursor:pointer;margin-top:8px}
+.vault-cancel:hover{border-color:var(--teal);color:var(--teal)}
+.vault-preset{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;color:var(--ink);font-size:12px;padding:9px 11px;outline:none;font-family:inherit}
 .vault-card{width:min(420px,94vw);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:26px 24px;box-shadow:var(--shadow-card)}
 .vault-card h2{font-size:18px;font-weight:700;color:var(--ink);margin-bottom:6px}
 .vault-card p{font-size:12px;color:var(--gray-400);line-height:1.5;margin-bottom:16px}
@@ -325,6 +328,11 @@ tr:hover .copy-btn{opacity:1}
 /* theme toggle */
 .theme-btn{display:flex;align-items:center;justify-content:center;background:var(--blue-deep);border:1px solid var(--border);color:var(--gray-200);border-radius:6px;cursor:pointer;font-size:14px;padding:7px 10px;margin-left:6px;transition:all .12s;line-height:1}
 .theme-btn:hover{border-color:var(--teal);color:var(--teal)}
+/* topbar grouping: primary actions | utility cluster */
+.topbar-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.topbar-group{display:flex;align-items:center;gap:6px}
+.topbar-group .theme-btn,.topbar-group .chat-toggle-btn{margin-left:0}
+.topbar-divider{width:1px;align-self:stretch;min-height:24px;background:var(--border)}
 /* ── column controls ── */
 .col-btn{background:none;border:1px solid var(--border);color:var(--gray-400);font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;flex-shrink:0;line-height:1.4;transition:all .12s}
 .col-btn:hover{border-color:var(--teal);color:var(--teal)}
@@ -371,6 +379,10 @@ tr:hover .copy-btn{opacity:1}
 /* ── onboarding / demo banner ── */
 .demo-banner{display:flex;align-items:center;gap:10px;background:var(--hover-strong);border:1px solid var(--tint-border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--gray-200);line-height:1.5}
 .demo-banner b{color:var(--teal)}
+.alert-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:9px 13px;margin-bottom:14px;font-size:12px;color:var(--sev-red-t);line-height:1.4}
+.alert-banner b{color:var(--sev-red-t)}
+.alert-banner-btn{background:none;border:1px solid var(--badge-red-bd);border-radius:5px;color:var(--sev-red-t);font-size:11px;font-weight:600;padding:3px 10px;cursor:pointer}
+.alert-banner-btn:hover{background:var(--badge-red-bg)}
 .demo-banner .demo-x{margin-left:auto;background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:15px;line-height:1;flex-shrink:0}
 .demo-banner .demo-x:hover{color:var(--ink)}
 /* ── panel error state ── */
@@ -2036,6 +2048,8 @@ const ALERT_METRICS = [
   {key:'total_hosts',      label:'Total hosts',                 get:d=>d.hosts.length},
 ];
 const ALERT_OPS = {'>=':(a,b)=>a>=b, '>':(a,b)=>a>b, '<=':(a,b)=>a<=b, '<':(a,b)=>a<b, '==':(a,b)=>a===b};
+// which section a firing alert metric points at (drives the nav badge)
+const ALERT_SECTION = {offline_hosts:'hosts', critical_subnets:'ipam', ttl_anomalies:'dns', audit_failures:'audit', active_feeds:'threats', total_hosts:'hosts'};
 const metricLabel = k => (ALERT_METRICS.find(m=>m.key===k)||{}).label || k;
 function evalAlerts(data, rules){
   if(!data) return [];
@@ -2083,7 +2097,7 @@ function AlertsPanel({data, rules, setRules}){
               <th style={{padding:'6px 8px'}}>Condition</th><th style={{padding:'6px 8px'}}>Current</th><th></th></tr></thead>
             <tbody>{evald.map(r=>(
               <tr key={r.id} style={{borderTop:'1px solid var(--border)'}}>
-                <td style={{padding:'6px 8px'}}><span style={{color:r.firing?'#EF4444':'#10B981',fontWeight:700}}>{r.firing?'● FIRING':'○ ok'}</span></td>
+                <td style={{padding:'6px 8px'}}><span style={{color:r.firing?'var(--red)':'var(--green)',fontWeight:700}}>{r.firing?'● FIRING':'○ ok'}</span></td>
                 <td style={{padding:'6px 8px'}}>{metricLabel(r.metric)}</td>
                 <td style={{padding:'6px 8px'}}>{r.op} {r.threshold}</td>
                 <td style={{padding:'6px 8px',fontWeight:700}}>{r.value}</td>
@@ -2142,24 +2156,60 @@ function VaultUnlock({onDone}) {
   </div></div>);
 }
 
-function VaultAddTenant({onDone, first}) {
-  const [key,setKey]=useState(''),[label,setLabel]=useState(''),[groq,setGroq]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false);
+function VaultAddTenant({onDone, onCancel, first}) {
+  const [key,setKey]=useState(''),[label,setLabel]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false);
   const go=async()=>{ if(!key)return; setErr(''); setBusy(true);
-    const {ok,data}=await vpost('/api/vault/tenant',{label,key,groq}); setBusy(false);
+    const {ok,data}=await vpost('/api/vault/tenant',{label,key}); setBusy(false);
     if(ok&&data.ok) onDone(); else setErr(data.error||'Could not add tenant.');
   };
-  return (<div className="vault-screen"><div className="vault-card">
+  useEffect(()=>{ if(!onCancel)return; const h=e=>{if(e.key==='Escape')onCancel();}; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onCancel]);
+  return (<div className="vault-screen" onClick={onCancel?()=>onCancel():undefined}><div className="vault-card" onClick={e=>e.stopPropagation()}>
     <div className="vault-logo">Infoblox NOC Dashboard</div>
     <h2>{first?'Add your first tenant':'Add a tenant'}</h2>
     <p>Paste an Infoblox API key. The key is encrypted in your vault, and the tenant is named automatically from its CSP account.</p>
     <label>Infoblox API key</label>
-    <input className="vault-in" type="password" value={key} onChange={e=>setKey(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="paste token (Token … prefix optional)" autoFocus/>
+    <input className="vault-in" type="password" value={key} onChange={e=>setKey(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="paste token (any format — Token/Bearer prefix optional)" autoFocus/>
     <label>Name (optional — auto-named from the portal if blank)</label>
-    <input className="vault-in" value={label} onChange={e=>setLabel(e.target.value)} placeholder="leave blank to use the CSP account name"/>
-    <label>Groq key (optional — enables AI query box)</label>
-    <input className="vault-in" type="password" value={groq} onChange={e=>setGroq(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="gsk_…"/>
+    <input className="vault-in" value={label} onChange={e=>setLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="leave blank to use the CSP account name"/>
     {err&&<div className="vault-err">{err}</div>}
     <button className="vault-btn" onClick={go} disabled={busy||!key}>{busy?'Adding…':'Add tenant'}</button>
+    {onCancel&&<button className="vault-cancel" onClick={onCancel}>Cancel</button>}
+  </div></div>);
+}
+
+/* AI/LLM provider settings — provider-agnostic (Groq / OpenAI / any OpenAI-compatible) */
+const LLM_PRESETS={
+  Groq:{base_url:'',model:'qwen/qwen3-32b'},
+  OpenAI:{base_url:'https://api.openai.com/v1',model:'gpt-4o-mini'},
+  'Together.ai':{base_url:'https://api.together.xyz/v1',model:'meta-llama/Llama-3.3-70B-Instruct-Turbo'},
+  'Ollama (local)':{base_url:'http://host.docker.internal:11434/v1',model:'llama3.1'},
+};
+function VaultSettings({llm, onDone, onCancel}) {
+  const [key,setKey]=useState(''),[base,setBase]=useState((llm&&llm.base_url)||''),[model,setModel]=useState((llm&&llm.model)||''),[busy,setBusy]=useState(false),[err,setErr]=useState('');
+  const applyPreset=name=>{ const p=LLM_PRESETS[name]; if(p){setBase(p.base_url);setModel(p.model);} };
+  const go=async()=>{ setErr(''); setBusy(true);
+    const {ok,data}=await vpost('/api/vault/llm',{key,base_url:base,model}); setBusy(false);
+    if(ok&&data.ok) onDone(); else setErr(data.error||'Could not save.');
+  };
+  useEffect(()=>{ const h=e=>{if(e.key==='Escape')onCancel();}; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onCancel]);
+  return (<div className="vault-screen" onClick={()=>onCancel()}><div className="vault-card" onClick={e=>e.stopPropagation()}>
+    <div className="vault-logo">AI query provider</div>
+    <h2>AI / LLM provider</h2>
+    <p>Powers the natural-language query box. Works with Groq or any OpenAI-compatible provider. Leave the base URL blank for Groq. Stored encrypted in your vault.</p>
+    <label>Provider preset</label>
+    <select className="vault-preset" defaultValue="" onChange={e=>applyPreset(e.target.value)}>
+      <option value="" disabled>Choose a preset…</option>
+      {Object.keys(LLM_PRESETS).map(n=><option key={n} value={n}>{n}</option>)}
+    </select>
+    <label>API key{llm&&llm.hasKey?' (leave blank to keep current)':''}</label>
+    <input className="vault-in" type="password" value={key} onChange={e=>setKey(e.target.value)} placeholder={llm&&llm.hasKey?'•••••••• (unchanged)':'gsk_… / sk-…'}/>
+    <label>Base URL (blank = Groq)</label>
+    <input className="vault-in" value={base} onChange={e=>setBase(e.target.value)} placeholder="https://api.openai.com/v1"/>
+    <label>Model</label>
+    <input className="vault-in" value={model} onChange={e=>setModel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="qwen/qwen3-32b"/>
+    {err&&<div className="vault-err">{err}</div>}
+    <button className="vault-btn" onClick={go} disabled={busy}>{busy?'Saving…':'Save provider'}</button>
+    <button className="vault-cancel" onClick={onCancel}>Cancel</button>
   </div></div>);
 }
 
@@ -2177,13 +2227,14 @@ function VaultGate() {
 
 /* sidebar control: switch active tenant, add another, or lock the vault */
 function TenantManager({vault}) {
-  const [open,setOpen]=useState(false),[adding,setAdding]=useState(false);
+  const [open,setOpen]=useState(false),[adding,setAdding]=useState(false),[settings,setSettings]=useState(false);
   const tenants=vault.tenants||[];
   const active=tenants.find(t=>t.id===vault.active);
   const reload=()=>window.location.reload();
   const switchTo=async id=>{ if(id===vault.active){setOpen(false);return;} await vpost('/api/vault/active',{id}); reload(); };
   const remove=async id=>{ await vpost('/api/vault/tenant-remove',{id}); reload(); };
-  if(adding) return <VaultAddTenant onDone={reload}/>;
+  if(adding) return <VaultAddTenant onCancel={()=>setAdding(false)} onDone={reload}/>;
+  if(settings) return <VaultSettings llm={vault.llm} onCancel={()=>setSettings(false)} onDone={reload}/>;
   return (
     <div style={{position:'relative',marginTop:8}}>
       <div className="acct-name">Tenant: <b style={{color:'var(--gray-200)'}}>{active?active.label:'—'}</b></div>
@@ -2200,6 +2251,7 @@ function TenantManager({vault}) {
             </div>
           ))}
           <button className="acct-menu-item" onClick={()=>{setOpen(false);setAdding(true);}}>＋ Add tenant</button>
+          <button className="acct-menu-item" onClick={()=>{setOpen(false);setSettings(true);}}>⚙ AI provider</button>
           <button className="acct-menu-item" onClick={async()=>{await vpost('/api/vault/lock',{});window.location.reload();}} title="Lock the vault (re-enter passphrase)">🔒 Lock vault</button>
         </div>
       </>)}
@@ -2260,6 +2312,7 @@ function App({vault, onVaultChange}={}) {
   const [density, setDensity]       = useState(()=>LS.get('noc.density','comfortable')); // 'comfortable'|'compact'
   const [cmdkOpen, setCmdkOpen]     = useState(false);
   const [notifyOn, setNotifyOn]     = useState(()=>LS.get('noc.notify',false));
+  const [alertsDismissed, setAlertsDismissed] = useState(false);  // session-only banner dismiss
   const prevFiringRef               = useRef(new Set());
   const [accounts, setAccounts]     = useState([]);
   const [activeAcct, setActiveAcct] = useState('');   // CSP account id
@@ -2536,6 +2589,7 @@ function App({vault, onVaultChange}={}) {
   const leaseCt   = leases.reduce((a,l)=>{a[l.subnet_id]=(a[l.subnet_id]||0)+1;return a},{});
   const filtHosts = (hostFilt||hostChip) ? s_hosts.filter(h=>h.status===(hostFilt||hostChip)) : s_hosts;
   const firingAlerts = evalAlerts(data, alertRules).filter(a=>a.firing);
+  const firingSecs = new Set(firingAlerts.map(a=>ALERT_SECTION[a.metric]).filter(Boolean));
   const shareView = () => { const url=location.origin+location.pathname+'#'+section;
     if(navigator.clipboard) navigator.clipboard.writeText(url).catch(()=>{}); };
 
@@ -2571,9 +2625,11 @@ function App({vault, onVaultChange}={}) {
             if(data&&s.id==='dns') { const c=data.zones.filter(z=>z.anomaly).length; if(c>0) badge=<span className="badge-pill badge-pill-amber">{c}</span>; }
             if(data&&s.id==='audit') { const c=data.auditLogs.filter(l=>l.result==='failure').length; if(c>0) badge=<span className="badge-pill badge-pill-amber">{c}</span>; }
             if(s.id==='alerts'&&firingAlerts.length>0) badge=<span className="badge-pill">{firingAlerts.length}</span>;
+            const firingHere = firingSecs.has(s.id);
             return (
               <button key={s.id} className={`nav-item${section===s.id?' active':''}`} onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>
                 <span className="nav-icon">{s.icon}</span>{s.label}{badge}
+                {firingHere&&<span className="badge-pill" title="Alert firing for this section">⚑</span>}
               </button>
             );
           })}
@@ -2635,33 +2691,36 @@ function App({vault, onVaultChange}={}) {
               </div>
             </div>
           </div>
-          <div style={{display:'flex',alignItems:'center'}}>
-            <select className="auto-refresh-sel" value={autoRefresh}
-              onChange={e=>{const v=Number(e.target.value);setAutoRefresh(v);LS.set('ar',v);}}>
-              <option value={0}>Auto-refresh: Off</option>
-              <option value={30}>Auto-refresh: 30s</option>
-              <option value={60}>Auto-refresh: 1m</option>
-              <option value={300}>Auto-refresh: 5m</option>
-            </select>
-            {autoRefresh>0&&<span className="refresh-countdown">{arCountdown}s</span>}
-            <button className="refresh-btn" onClick={()=>load(true)}>
-              <span className={refreshing?'spin':''} style={{display:'inline-block'}}>↻</span>
-              {refreshing?'Refreshing…':'Refresh All'}
-            </button>
-            <button className={`chat-toggle-btn${chatOpen?' on':''}`} onClick={()=>setChatOpen(o=>!o)}>
-              ⊕ {chatOpen?'Close Query':'Query'}
-            </button>
-            <button className="chat-toggle-btn" onClick={shareView} title="Copy a deep link to this view">◳ Share</button>
-            <button className="theme-btn" onClick={()=>setDensity(d=>d==='compact'?'comfortable':'compact')}
-              title={density==='compact'?'Compact rows (click for comfortable)':'Comfortable rows (click for compact)'}
-              aria-label="Toggle row density">{density==='compact'?'⊟':'☰'}</button>
-            <button className="theme-btn" onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')}
-              title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
-            <PresetMenu section={section}/>
-            <button className="theme-btn" onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
-            <button style={{background:'none',border:'1px solid var(--border)',borderRadius:6,
-              color:'var(--gray-400)',fontSize:12,fontWeight:700,padding:'7px 10px',cursor:'pointer',marginLeft:6}}
-              onClick={()=>setShowShortcuts(s=>!s)} title="Keyboard shortcuts">?</button>
+          <div className="topbar-controls">
+            <div className="topbar-group">
+              <select className="auto-refresh-sel" value={autoRefresh}
+                onChange={e=>{const v=Number(e.target.value);setAutoRefresh(v);LS.set('ar',v);}}>
+                <option value={0}>Auto-refresh: Off</option>
+                <option value={30}>Auto-refresh: 30s</option>
+                <option value={60}>Auto-refresh: 1m</option>
+                <option value={300}>Auto-refresh: 5m</option>
+              </select>
+              {autoRefresh>0&&<span className="refresh-countdown">{arCountdown}s</span>}
+              <button className="refresh-btn" onClick={()=>load(true)}>
+                <span className={refreshing?'spin':''} style={{display:'inline-block'}}>↻</span>
+                {refreshing?'Refreshing…':'Refresh All'}
+              </button>
+              <button className={`chat-toggle-btn${chatOpen?' on':''}`} onClick={()=>setChatOpen(o=>!o)}>
+                ⊕ {chatOpen?'Close Query':'Query'}
+              </button>
+              <button className="chat-toggle-btn" onClick={shareView} title="Copy a deep link to this view">◳ Share</button>
+            </div>
+            <span className="topbar-divider" aria-hidden="true"/>
+            <div className="topbar-group">
+              <button className="theme-btn" onClick={()=>setDensity(d=>d==='compact'?'comfortable':'compact')}
+                title={density==='compact'?'Compact rows (click for comfortable)':'Comfortable rows (click for compact)'}
+                aria-label="Toggle row density">{density==='compact'?'⊟':'☰'}</button>
+              <button className="theme-btn" onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')}
+                title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
+              <PresetMenu section={section}/>
+              <button className="theme-btn" onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
+              <button className="theme-btn" onClick={()=>setShowShortcuts(s=>!s)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts">?</button>
+            </div>
           </div>
         </div>
         {sq&&(
@@ -2675,6 +2734,15 @@ function App({vault, onVaultChange}={}) {
             <span aria-hidden="true">⚠</span>
             <span><b>Demo data</b> — the bridge couldn't reach Infoblox, so sample data is shown. Set <b>INFOBLOX_API_KEY</b> and restart the server to see live data (see the README).</span>
             <button className="demo-x" aria-label="Dismiss demo notice" onClick={()=>{setDemoDismiss(true);LS.set('noc.demoDismiss',true);}}>×</button>
+          </div>
+        )}
+        {firingAlerts.length>0&&!alertsDismissed&&(
+          <div className="alert-banner" role="status">
+            <span><span aria-hidden="true">⚑</span> <b>{firingAlerts.length} alert{firingAlerts.length>1?'s':''} firing</b> — {firingAlerts.slice(0,2).map(a=>`${metricLabel(a.metric)} (${a.value})`).join(', ')}{firingAlerts.length>2?`, +${firingAlerts.length-2} more`:''}</span>
+            <span style={{display:'flex',gap:6,flexShrink:0}}>
+              {section!=='alerts'&&<button className="alert-banner-btn" onClick={()=>setSection('alerts')}>View</button>}
+              <button className="demo-x" aria-label="Dismiss alerts" onClick={()=>setAlertsDismissed(true)}>×</button>
+            </span>
           </div>
         )}
 
@@ -2707,16 +2775,6 @@ function App({vault, onVaultChange}={}) {
                 </div>
               );
             })()}
-            {firingAlerts.length>0&&(
-              <div className="issue-strip" style={{marginBottom:14}}>
-                {firingAlerts.map(a=>(
-                  <button key={a.id} className="issue-row issue-row-crit" onClick={()=>setSection('alerts')}>
-                    <span>⚑ Alert: {metricLabel(a.metric)} {a.op} {a.threshold} (now {a.value})</span>
-                    <span className="issue-arrow">→ ALERTS</span>
-                  </button>
-                ))}
-              </div>
-            )}
             {deltas&&Object.keys(deltas).length>0&&(
               <div className="card mb14">
                 <div className="card-title"><div className="dot"/>Changes since last refresh</div>

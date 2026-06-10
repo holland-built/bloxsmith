@@ -462,6 +462,54 @@ class FrontendStructureTests(unittest.TestCase):
             self.assertContains(comp)
         self.assertContains("render(<VaultGate/>)", "root no longer renders VaultGate")
 
+    def test_vault_reset(self):
+        self.assertIn("def vault_reset", self._server())
+        self.assertIn("/api/vault/reset", self._server())
+        self.assertContains("Forgot passphrase? Reset vault")
+
+    # ── swappable LLM provider ────────────────────────────────────────────────
+
+    def test_llm_provider_server(self):
+        s = self._server()
+        self.assertIn("def vault_set_llm", s)
+        self.assertIn("/api/vault/llm", s)
+        self.assertIn("LLM_BASE_URL = _vault", s)   # vault drives the provider base URL
+
+    def test_llm_provider_ui(self):
+        self.assertContains("function VaultSettings")
+        self.assertContains("LLM_PRESETS")
+        self.assertContains("AI provider")           # TenantManager menu item
+
+    # ── format-agnostic key ───────────────────────────────────────────────────
+
+    def test_norm_key_agnostic(self):
+        s = self._server()
+        self.assertIn("authorization:", s)           # strips a pasted header
+        self.assertIn('k.startswith("eyJ")', s)      # bare JWT -> Bearer
+
+    # ── add-tenant modal + cancel ─────────────────────────────────────────────
+
+    def test_add_tenant_modal_cancel(self):
+        self.assertContains("onCancel", "VaultAddTenant cancel missing")
+        self.assertContains("vault-cancel", "cancel button style missing")
+        # vault overlay is fixed (not squished inside the sidebar)
+        self.assertContains(".vault-screen{position:fixed")
+
+    # ── topbar grouping ───────────────────────────────────────────────────────
+
+    def test_topbar_groups(self):
+        self.assertContains("topbar-controls")
+        self.assertContains("topbar-group")
+        self.assertContains("topbar-divider")
+
+    # ── alerts: inline badges + banner ────────────────────────────────────────
+
+    def test_alert_inline_badges_banner(self):
+        self.assertContains("ALERT_SECTION", "metric->section map missing")
+        self.assertContains("firingSecs", "per-section firing set missing")
+        self.assertContains("alert-banner", "cross-section alert banner missing")
+        self.assertContains("setAlertsDismissed", "alert banner dismiss missing")
+
     def test_threat_lookup_panel(self):
         self.assertContains("function ThreatLookupPanel")
 

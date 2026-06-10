@@ -183,7 +183,7 @@ def _resolve_vault_file():
     return os.path.join(DIR, "vault.json")
 
 VAULT_FILE = _resolve_vault_file()
-_vault = {"unlocked": False, "tenants": [], "active": None, "groq": "", "_key": None, "_salt": ""}
+_vault = {"unlocked": False, "tenants": [], "active": None, "groq": "", "llm_base": "", "llm_model": "", "_key": None, "_salt": ""}
 _vault_lock = threading.Lock()
 
 def vault_exists():
@@ -194,7 +194,8 @@ def _derive_key(passphrase, salt):
     return base64.urlsafe_b64encode(dk)
 
 def _vault_save():
-    payload = {"tenants": _vault["tenants"], "active": _vault["active"], "groq": _vault["groq"]}
+    payload = {"tenants": _vault["tenants"], "active": _vault["active"], "groq": _vault["groq"],
+               "llm_base": _vault.get("llm_base", ""), "llm_model": _vault.get("llm_model", "")}
     token = Fernet(_vault["_key"]).encrypt(json.dumps(payload).encode())
     tmp = VAULT_FILE + ".tmp"
     with open(tmp, "w") as f:
@@ -205,13 +206,14 @@ def _vault_save():
 
 def _apply_active():
     """Point the MCP proxy (and LLM) at the active tenant's key."""
-    global API_KEY, _HOME_ACCOUNT_ID, _active_account_id, LLM_API_KEY
+    global API_KEY, _HOME_ACCOUNT_ID, _active_account_id, LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
     t = next((x for x in _vault["tenants"] if x["id"] == _vault["active"]), None)
     API_KEY = t["key"] if t else ""
     MCP_HEADERS["Authorization"] = API_KEY
     _HOME_ACCOUNT_ID = ""; _active_account_id = ""   # re-resolve accounts for this key
-    if _vault.get("groq"):
-        LLM_API_KEY = _vault["groq"]
+    if _vault.get("groq"):      LLM_API_KEY  = _vault["groq"]
+    if _vault.get("llm_base"):  LLM_BASE_URL = _vault["llm_base"]
+    if _vault.get("llm_model"): LLM_MODEL    = _vault["llm_model"]
     cache_invalidate()
 
 def vault_init(passphrase):
@@ -239,15 +241,29 @@ def vault_unlock(passphrase):
             return {"ok": False, "error": "wrong passphrase"}
         _vault.update({"unlocked": True, "tenants": payload.get("tenants", []),
                        "active": payload.get("active"), "groq": payload.get("groq", ""),
+                       "llm_base": payload.get("llm_base", ""), "llm_model": payload.get("llm_model", ""),
                        "_key": key, "_salt": raw["salt"]})
         _apply_active()
         return {"ok": True}
 
 def _norm_key(k):
+    """Accept whatever Infoblox-shaped key the user pastes and normalize to the
+    Authorization value the bridge sends. Format-agnostic: handles surrounding
+    quotes, a pasted 'Authorization:' header, any case of token/bearer, a bare
+    JWT (-> Bearer), or a raw token (-> Token)."""
     k = (k or "").strip()
-    if k and not (k.startswith("Token ") or k.startswith("Bearer ")):
-        k = "Token " + k
-    return k
+    if len(k) >= 2 and k[0] == k[-1] and k[0] in ("'", '"'):
+        k = k[1:-1].strip()
+    if k.lower().startswith("authorization:"):
+        k = k.split(":", 1)[1].strip()
+    if not k:
+        return ""
+    scheme, sep, rest = k.partition(" ")
+    if sep and scheme.lower() in ("token", "bearer"):
+        return scheme.capitalize() + " " + rest.strip()
+    if k.startswith("eyJ"):            # unprefixed JWT
+        return "Bearer " + k
+    return "Token " + k
 
 def _portal_label_for_key(key):
     """Resolve the CSP account name for a key, so a tenant auto-names itself
@@ -258,14 +274,20 @@ def _portal_label_for_key(key):
         with urlopen(req, timeout=12) as r:
             return json.loads(r.read())
     try:
-        cur = _g("/v2/current_user").get("result", {})
-        aid = cur.get("account_id", "")
         accts = _g("/v2/current_user/accounts").get("results", [])
-        for a in accts:
-            if a.get("id") == aid:
-                return a.get("name", "")
-        return (accts[0].get("name", "") if accts else "") or cur.get("name", "")
-    except Exception:
+        active = [a for a in accts if a.get("state", "active") == "active"] or accts
+        try:
+            aid = _g("/v2/current_user").get("result", {}).get("account_id", "")
+        except Exception:
+            aid = ""
+        for a in active:
+            if a.get("id") == aid and a.get("name"):
+                return a["name"]
+        if active and active[0].get("name"):
+            return active[0]["name"]
+        return ""
+    except Exception as e:
+        print(f"  [warn] tenant auto-name lookup failed: {e}", file=sys.stderr)
         return ""
 
 def vault_add_tenant(label, key, groq=None):
@@ -332,14 +354,24 @@ def vault_reset():
         cache_invalidate()
     return {"ok": True}
 
-def vault_set_groq(key):
-    global LLM_API_KEY
+def vault_set_llm(key, base_url=None, model=None):
+    """Set the (provider-agnostic) LLM config: API key + optional OpenAI-compatible
+    base URL + model. Blank base URL = Groq default."""
+    global LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
     with _vault_lock:
         if not _vault["unlocked"]:
             return {"ok": False, "error": "locked"}
-        _vault["groq"] = (key or "").strip(); LLM_API_KEY = _vault["groq"]
+        _vault["groq"] = (key or "").strip()
+        if base_url is not None: _vault["llm_base"]  = (base_url or "").strip()
+        if model is not None:    _vault["llm_model"] = (model or "").strip()
+        LLM_API_KEY  = _vault["groq"]
+        if _vault.get("llm_base"):  LLM_BASE_URL = _vault["llm_base"]
+        if _vault.get("llm_model"): LLM_MODEL    = _vault["llm_model"]
         _vault_save()
         return {"ok": True}
+
+def vault_set_groq(key):   # back-compat alias (key only)
+    return vault_set_llm(key)
 
 def vault_status():
     return {
@@ -350,6 +382,9 @@ def vault_status():
         "tenants": [{"id": t["id"], "label": t["label"]} for t in _vault["tenants"]],
         "active": _vault["active"],
         "hasGroq": bool(_vault["groq"]),
+        "llm": {"hasKey": bool(_vault["groq"]),
+                "base_url": _vault.get("llm_base", ""),
+                "model": _vault.get("llm_model", "")},
     }
 
 # ── MCP helpers ───────────────────────────────────────────────────────────────
@@ -1215,6 +1250,8 @@ class Handler(BaseHTTPRequestHandler):
             r = vault_set_active(str(body.get("id", ""))); self._json(r, 200 if r.get("ok") else 400); return
         if self.path == "/api/vault/groq":
             self._json(vault_set_groq(str(body.get("key", "")))); return
+        if self.path == "/api/vault/llm":
+            self._json(vault_set_llm(str(body.get("key", "")), body.get("base_url"), body.get("model"))); return
         if self.path == "/api/vault/lock":
             self._json(vault_lock()); return
         if self.path == "/api/vault/reset":
