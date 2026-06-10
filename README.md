@@ -44,7 +44,7 @@ docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 \
 ```
 
 Add `-e GROQ_API_KEY=...` to enable the AI query box. Pin a release with a tag
-(`:v1.0.0` or `:1.0`) instead of `:latest`.
+(`:v1.0.0`, `:1.0.0`, or `:1.0`) instead of `:latest`.
 
 **Update to the latest published image:**
 
