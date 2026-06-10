@@ -25,6 +25,34 @@ docker rm -f "$NAME" >/dev/null 2>&1 || true
 KEY="${INFOBLOX_API_KEY:-}"
 if [[ -n "$KEY" && "$KEY" != Token\ * && "$KEY" != Bearer\ * ]]; then KEY="Token $KEY"; fi
 
+# ── optional: vault auto-unlock passphrase (vault mode only) ──────────
+# Stores the passphrase in a 0600 host file and mounts it read-only so the
+# container auto-unlocks the encrypted vault on every (re)start — you never
+# re-type it after an upgrade. Keys stay AES-encrypted at rest; whoever can
+# read this file (host root / docker users) can decrypt the vault.
+PASS_MOUNT=()
+if [[ -z "$KEY" ]]; then                       # vault mode only (no single key)
+  if [[ -n "${VAULT_PASSPHRASE_FILE:-}" ]]; then
+    PASS_FILE="$VAULT_PASSPHRASE_FILE"          # caller supplied their own secret file
+  else
+    PASS_FILE="${VAULT_PASS_FILE:-$HOME/.noc-vault-pass}"
+    PHRASE="${VAULT_PASSPHRASE:-}"
+    if [[ -z "$PHRASE" && -t 0 ]]; then         # prompt only when interactive
+      read -rsp "Vault auto-unlock passphrase (Enter to skip — you'll unlock in the browser): " PHRASE
+      echo
+    fi
+    if [[ -n "$PHRASE" ]]; then
+      ( umask 077; printf '%s' "$PHRASE" > "$PASS_FILE" ); chmod 600 "$PASS_FILE"
+      echo "  saved passphrase to $PASS_FILE (0600) for auto-unlock"
+    else
+      PASS_FILE=""                              # skipped → stay manual
+    fi
+  fi
+  if [[ -n "${PASS_FILE:-}" ]]; then
+    PASS_MOUNT=(-v "${PASS_FILE}:/run/secrets/vault_pass:ro" -e VAULT_PASSPHRASE_FILE=/run/secrets/vault_pass)
+  fi
+fi
+
 echo "Starting container '$NAME' on ${BIND}:${PORT}…"
 docker run -d --name "$NAME" \
   -p "${BIND}:${PORT}:8080" \
@@ -35,6 +63,7 @@ docker run -d --name "$NAME" \
   ${LLM_API_KEY:+-e LLM_API_KEY="$LLM_API_KEY"} \
   ${LLM_MODEL:+-e LLM_MODEL="$LLM_MODEL"} \
   ${LLM_BASE_URL:+-e LLM_BASE_URL="$LLM_BASE_URL"} \
+  ${PASS_MOUNT[@]+"${PASS_MOUNT[@]}"} \
   --restart unless-stopped \
   "$IMAGE" >/dev/null
 

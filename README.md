@@ -90,8 +90,9 @@ git clone https://github.com/holland-built/infoblox-noc-dashboard infoblox-noc &
 `run.sh` will:
 1. Prompt for an **Infoblox API key** (optional — press Enter to use the in-app encrypted vault instead).
 2. Prompt for a **Groq API key** (optional — press Enter to skip; only the AI query box needs it).
-3. Build the image and start the container.
-4. Print `→ http://localhost:8080`.
+3. In vault mode, prompt for a **vault auto-unlock passphrase** (optional — press Enter to keep unlocking in the browser). If given, it's saved to `~/.noc-vault-pass` (`0600`) and mounted read-only so the vault auto-unlocks on every restart/upgrade — see [Auto-unlock after an upgrade](#auto-unlock-after-an-upgrade).
+4. Build the image and start the container.
+5. Print `→ http://localhost:8080`.
 
 The API key is **never baked into the image** — it is injected at runtime as an env var.
 
@@ -226,8 +227,41 @@ Set `HOST=0.0.0.0` to expose beyond localhost (the Docker image does this for yo
 | `LLM_API_KEY`      |          | `GROQ_API_KEY`           | Overrides for any OpenAI-compatible provider |
 | `LLM_MODEL`        |          | `qwen/qwen3-32b`         | Model name                                   |
 | `LLM_BASE_URL`     |          | _(blank = Groq)_         | OpenAI-compatible endpoint                   |
+| `VAULT_DIR`        |          | `/vault`                 | Where `vault.json` is stored (mount a volume here) |
+| `VAULT_PASSPHRASE` |          | —                        | Vault-mode auto-unlock at boot (see below)   |
+| `VAULT_PASSPHRASE_FILE` |     | —                        | Path to a secret file holding the passphrase; preferred over `VAULT_PASSPHRASE` |
 | `HOST`             |          | `localhost` (`0.0.0.0` in Docker) | Bind address                       |
 | `PORT`             |          | `8080`                   | HTTP port                                    |
+
+### Auto-unlock after an upgrade
+
+The encrypted vault already survives upgrades **as long as you keep the volume
+mounted** (`-v noc-vault:/vault`) — `docker rm -f` removes the container, not the
+volume. What you'd otherwise re-type after each upgrade is the **passphrase** to
+decrypt it. Supply it at boot and the dashboard comes up live with no browser step:
+
+```bash
+# Preferred: a mounted secret file (kept out of `docker inspect` / process env)
+printf '%s' 'your-vault-passphrase' | docker secret create vault_pass -   # swarm
+docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 \
+  -v noc-vault:/vault \
+  -v /path/to/vault_pass:/run/secrets/vault_pass:ro \
+  -e VAULT_PASSPHRASE_FILE=/run/secrets/vault_pass \
+  --restart unless-stopped \
+  ghcr.io/holland-built/infoblox-noc-dashboard:latest
+
+# Simpler (less secure — visible in `docker inspect`):
+#   -e VAULT_PASSPHRASE='your-vault-passphrase'
+```
+
+**First run:** if no vault exists yet, the supplied passphrase **auto-creates**
+the vault and unlocks it — so a brand-new install never shows the passphrase
+screen; the browser only asks you to add your tenant key. On every later restart/
+upgrade the same passphrase auto-unlocks the existing vault.
+
+Keys stay AES-encrypted on disk; whoever can read the passphrase source can
+decrypt the vault, so a stolen `vault.json` alone is still useless. A wrong/
+missing passphrase just falls back to the normal manual unlock in the browser.
 
 ---
 

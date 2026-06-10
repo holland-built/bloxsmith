@@ -189,6 +189,18 @@ _vault_lock = threading.Lock()
 def vault_exists():
     return os.path.exists(VAULT_FILE)
 
+def _vault_passphrase_from_env():
+    """Optional auto-unlock secret. Prefer a mounted secret file over a raw
+    env var so the passphrase stays out of `docker inspect`/process env."""
+    p = os.environ.get("VAULT_PASSPHRASE_FILE", "").strip()
+    if p:
+        try:
+            with open(p) as f:
+                return f.read().strip()
+        except Exception as e:
+            print(f"  [warn] VAULT_PASSPHRASE_FILE unreadable: {e}", file=sys.stderr)
+    return os.environ.get("VAULT_PASSPHRASE", "")
+
 def _derive_key(passphrase, salt):
     dk = hashlib.scrypt(passphrase.encode(), salt=salt, n=2**15, r=8, p=1, dklen=32, maxmem=64*1024*1024)
     return base64.urlsafe_b64encode(dk)
@@ -1444,6 +1456,20 @@ if __name__ == "__main__":
         print(f"VAULT MODE — no INFOBLOX_API_KEY set. Open the dashboard to set a "
               f"passphrase and add tenant keys (encrypted at rest at {VAULT_FILE}).",
               file=sys.stderr)
+        pw = _vault_passphrase_from_env()
+        if pw and vault_exists():
+            r = vault_unlock(pw)
+            print("Vault auto-unlocked from environment." if r.get("ok")
+                  else f"  [warn] vault auto-unlock failed: {r.get('error')} — "
+                       "falling back to manual unlock in the browser.",
+                  file=sys.stderr)
+        elif pw:                       # first run, no vault yet → create + unlock it
+            r = vault_init(pw)
+            print("Vault created and unlocked from environment — add your tenant key in the browser."
+                  if r.get("ok")
+                  else f"  [warn] vault auto-create failed: {r.get('error')} — "
+                       "set it up manually in the browser.",
+                  file=sys.stderr)
     server = ThreadedHTTPServer((HOST, PORT), Handler)
     print(f"Infoblox NOC Dashboard → http://{HOST}:{PORT}")
     print(f"MCP: {MCP_URL}")
