@@ -316,6 +316,9 @@ tr:hover .copy-btn{opacity:1}
 .col-row:hover{background:var(--hover)}
 .col-row.col-hidden{opacity:.5}
 .col-row input[type=checkbox]{accent-color:var(--teal);cursor:pointer;width:13px;height:13px;flex-shrink:0}
+.col-row.col-dragging{opacity:.4}
+.col-grip{cursor:grab;color:var(--gray-600);font-size:11px;flex-shrink:0;user-select:none}
+.col-grip:active{cursor:grabbing}
 .col-row .col-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 .col-iconbtn{background:none;border:none;color:var(--gray-600);cursor:pointer;font-size:11px;padding:1px 3px;line-height:1;border-radius:3px;flex-shrink:0}
 .col-iconbtn:hover{color:var(--teal);background:var(--hover-strong)}
@@ -779,12 +782,7 @@ function TTLTable({zones}) {
     {key:'issues',label:'Issues',nosort:true,width:'30%',render:z=>z.issues.map((iss,i)=>(<span key={i} className={`badge ${iss.includes('High')||iss.includes('Too High')?'b-amber':'b-red'}`} style={{marginRight:3}}>{iss}</span>))},
   ]);
   if(!bad.length) return <div className="no-data">✓ No TTL anomalies detected</div>;
-  return (
-    <>
-      <div style={{display:'flex',justifyContent:'flex-end',marginBottom:6}}><ColumnMenu ctl={ctl}/></div>
-      <DataTable cols={ctl.visibleCols} rows={bad} defaultRows={10} rowKey={z=>z.id} initialSort={{key:'fqdn',dir:'asc'}}/>
-    </>
-  );
+  return <DataTable ctl={ctl} rows={bad} defaultRows={10} rowKey={z=>z.id} initialSort={{key:'fqdn',dir:'asc'}} exportName="ttl-anomalies" persistId="ttl"/>;
 }
 
 function FeedsTable({feeds}) {
@@ -796,12 +794,7 @@ function FeedsTable({feeds}) {
     {key:'entries',label:'Entries',mono:true,size:11,sortVal:f=>f.entries,render:f=><span style={{color:'var(--gray-200)'}}>{f.entries.toLocaleString()}</span>},
     {key:'active',label:'Status',sortVal:f=>f.active?1:0,render:f=>f.active?<span style={{color:'var(--green)',fontSize:10,fontWeight:700}}>● Active</span>:<span style={{color:'var(--gray-400)',fontSize:10}}>○ Off</span>},
   ]);
-  return (
-    <>
-      <div style={{display:'flex',justifyContent:'flex-end',marginBottom:6}}><ColumnMenu ctl={ctl}/></div>
-      <DataTable cols={ctl.visibleCols} rows={feeds} defaultRows={10} rowKey={f=>f.id} initialSort={{key:'level',dir:'asc'}}/>
-    </>
-  );
+  return <DataTable ctl={ctl} rows={feeds} defaultRows={10} rowKey={f=>f.id} initialSort={{key:'level',dir:'asc'}} exportName="threat-feeds" persistId="feeds"/>;
 }
 
 function PoliciesPanel({policies}) {
@@ -842,12 +835,7 @@ function AuditTable({logs,limit=10}) {
     {key:'resource',label:'Resource',mono:true,size:10,render:l=><span style={{color:'var(--gray-400)'}} title={l.resource}>{l.resource}</span>},
     {key:'result',label:'Result',render:l=>l.result==='success'?<span style={{color:'var(--green)',fontWeight:700,fontSize:11}}>✓</span>:<span style={{color:'var(--red)',fontWeight:700,fontSize:11}}>✗</span>},
   ]);
-  return (
-    <>
-      <div style={{display:'flex',justifyContent:'flex-end',marginBottom:6}}><ColumnMenu ctl={ctl}/></div>
-      <DataTable cols={ctl.visibleCols} rows={logs} defaultRows={limit} rowKey={l=>l.id} initialSort={{key:'ts',dir:'desc'}}/>
-    </>
-  );
+  return <DataTable ctl={ctl} rows={logs} defaultRows={limit} rowKey={l=>l.id} initialSort={{key:'ts',dir:'desc'}} exportName="audit-logs" persistId="audit"/>;
 }
 
 function DhcpTable({leases, rowLimit}) {
@@ -857,12 +845,7 @@ function DhcpTable({leases, rowLimit}) {
     {key:'subnet',label:'Subnet',size:11,render:l=><span style={{color:'var(--gray-400)'}}>{l.subnet}</span>},
     {key:'state',label:'State',render:l=><span className={`badge ${l.state==='active'?'b-green':'b-gray'}`}>{l.state}</span>},
   ]);
-  return (
-    <>
-      <div style={{display:'flex',justifyContent:'flex-end',marginBottom:6}}><ColumnMenu ctl={ctl}/></div>
-      <DataTable cols={ctl.visibleCols} rows={leases.slice(0,rowLimit)} defaultRows={rowLimit} rowKey={l=>l.addr} initialSort={{key:'addr',dir:'asc'}}/>
-    </>
-  );
+  return <DataTable ctl={ctl} rows={leases.slice(0,rowLimit)} defaultRows={rowLimit} rowKey={l=>l.addr} initialSort={{key:'addr',dir:'asc'}} exportName="dhcp-leases" persistId="dhcp"/>;
 }
 
 function RowLimitBar({limit, setLimit, options=[10,25,50,100]}) {
@@ -916,34 +899,40 @@ function useColumns(widgetId, allCols){
   const toggleHidden=k=>{ const c=byKey(k); if(c&&c.fixed) return; if(!hidden[k]&&shownCount<=1) return; save({order,hidden:{...hidden,[k]:!hidden[k]},expanded}); };
   const toggleExpand=k=>save({order,hidden,expanded:{...expanded,[k]:!expanded[k]}});
   const move=(k,dir)=>{ const i=order.indexOf(k),j=i+dir; if(i<0||j<0||j>=order.length) return; const n=order.slice(); const t=n[i]; n[i]=n[j]; n[j]=t; save({order:n,hidden,expanded}); };
+  const moveTo=(k,idx)=>{ const i=order.indexOf(k); if(i<0||idx<0||idx>=order.length||i===idx) return; const n=order.slice(); n.splice(i,1); n.splice(idx,0,k); save({order:n,hidden,expanded}); };
   const reset=()=>save(null);
-  return {allCols:ordered,visibleCols,hidden,expanded,toggleHidden,toggleExpand,move,reset,shownCount};
+  return {widgetId,allCols:ordered,visibleCols,hidden,expanded,toggleHidden,toggleExpand,move,moveTo,reset,shownCount};
 }
 
 function ColumnMenu({ctl}){
   const [open,setOpen]=React.useState(false);
+  const [drag,setDrag]=React.useState(null);
   return (
     <span style={{position:'relative',display:'inline-flex'}} onMouseDown={e=>e.stopPropagation()}>
-      <button className="col-btn" title="Show, hide, reorder or expand columns"
+      <button className="col-btn" title="Show, hide, drag to reorder, or expand columns"
         onClick={()=>setOpen(o=>!o)} aria-label="Column controls" aria-expanded={open}>⚙ Columns</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" role="menu">
           <div className="col-menu-head">
-            <span className="col-menu-title">Columns</span>
+            <span className="col-menu-title">Columns · drag to reorder</span>
             <button className="col-reset" onClick={()=>ctl.reset()}>Reset</button>
           </div>
           {ctl.allCols.map((c,i)=>{
             const hid=!!ctl.hidden[c.key];
+            const cid='col_'+ctl.widgetId+'_'+c.key;
             return (
-              <div key={c.key} className={`col-row${hid?' col-hidden':''}`}>
+              <div key={c.key} className={`col-row${hid?' col-hidden':''}${drag===c.key?' col-dragging':''}`}
+                draggable onDragStart={()=>setDrag(c.key)} onDragEnd={()=>setDrag(null)}
+                onDragOver={e=>{e.preventDefault();}} onDrop={e=>{e.preventDefault(); if(drag&&drag!==c.key) ctl.moveTo(drag,i); setDrag(null);}}>
+                <span className="col-grip" title="Drag to reorder" aria-hidden="true">⠿</span>
                 <input type="checkbox" checked={!hid} disabled={c.fixed||(!hid&&ctl.shownCount<=1)}
-                  id={'col_'+ctl.allCols.length+'_'+c.key} onChange={()=>ctl.toggleHidden(c.key)}/>
-                <label className="col-lbl" htmlFor={'col_'+ctl.allCols.length+'_'+c.key}>{c.label}{c.fixed&&<span style={{color:'var(--gray-600)',fontSize:9}}> · fixed</span>}</label>
-                <button className="col-iconbtn" title="Move up" disabled={i===0} onClick={()=>ctl.move(c.key,-1)}>↑</button>
-                <button className="col-iconbtn" title="Move down" disabled={i===ctl.allCols.length-1} onClick={()=>ctl.move(c.key,1)}>↓</button>
+                  id={cid} onChange={()=>ctl.toggleHidden(c.key)}/>
+                <label className="col-lbl" htmlFor={cid}>{c.label}{c.fixed&&<span style={{color:'var(--gray-600)',fontSize:9}}> · fixed</span>}</label>
+                <button className="col-iconbtn" title="Move up" disabled={i===0} onClick={()=>ctl.move(c.key,-1)} aria-label="Move up">↑</button>
+                <button className="col-iconbtn" title="Move down" disabled={i===ctl.allCols.length-1} onClick={()=>ctl.move(c.key,1)} aria-label="Move down">↓</button>
                 <button className={`col-iconbtn${ctl.expanded[c.key]?' on':''}`} title="Expand field (no truncation)" aria-pressed={!!ctl.expanded[c.key]}
-                  onClick={()=>ctl.toggleExpand(c.key)}>⤢</button>
+                  onClick={()=>ctl.toggleExpand(c.key)} aria-label="Expand field">⤢</button>
               </div>
             );
           })}
@@ -953,12 +942,25 @@ function ColumnMenu({ctl}){
   );
 }
 
+/* CSV from column descriptors; uses c.csv(row) ?? c.sortVal(row) ?? row[key] for raw values */
+function exportCols(name, cols, rows){
+  const raw=v=>(v==null?'':v);
+  downloadCSV((name||'export')+'.csv',
+    rows.map(r=>{ const o={}; cols.forEach(c=>{ o[c.key]=raw(c.csv?c.csv(r):(c.sortVal?c.sortVal(r):r[c.key])); }); return o; }),
+    cols.map(c=>({key:c.key,label:c.label})));
+}
+
 /* generic sortable table driven by column descriptors.
-   col: {key,label,fixed?,render?(row),sortVal?(row),mono?,size?,align?,width?,nosort?} */
-function DataTable({cols, rows, defaultRows=10, rowKey, initialSort}){
-  const [sk,setSk]=React.useState(initialSort?initialSort.key:'');
-  const [sd,setSd]=React.useState(initialSort?(initialSort.dir||'asc'):'asc');
-  const colOf=k=>cols.find(c=>c.key===k);
+   col: {key,label,fixed?,render?(row),sortVal?(row),csv?(row),mono?,size?,align?,width?,nosort?}
+   Pass `ctl` (a useColumns result) to render the column menu + use its visible cols,
+   `exportName` to show a CSV export button, `persistId` to remember sort across reloads. */
+function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, exportName, persistId}){
+  const vcols = ctl ? ctl.visibleCols : cols;
+  const PK = persistId ? 'noc.sort.'+persistId : null;
+  const saved = PK ? LS.get(PK, null) : null;
+  const [sk,setSk]=React.useState((saved&&saved.key)||(initialSort?initialSort.key:''));
+  const [sd,setSd]=React.useState((saved&&saved.dir)||(initialSort?(initialSort.dir||'asc'):'asc'));
+  const colOf=k=>vcols.find(c=>c.key===k);
   const valOf=(c,r)=>c.sortVal?c.sortVal(r):r[c.key];
   const sorted=React.useMemo(()=>{
     const c=colOf(sk); if(!c) return rows;
@@ -968,28 +970,37 @@ function DataTable({cols, rows, defaultRows=10, rowKey, initialSort}){
       const cmp=(typeof av==='number'&&typeof bv==='number')?av-bv:String(av).localeCompare(String(bv));
       return sd==='asc'?cmp:-cmp;
     });
-  },[rows,sk,sd,cols]);
-  const toggle=k=>{ if(sk===k) setSd(d=>d==='asc'?'desc':'asc'); else { setSk(k); setSd('asc'); } };
+  },[rows,sk,sd,vcols]);
+  const toggle=k=>{ const nd=(sk===k)?(sd==='asc'?'desc':'asc'):'asc'; setSk(k); setSd(nd); if(PK) LS.set(PK,{key:k,dir:nd}); };
   return (
-    <ShowMoreTable rows={sorted} defaultRows={defaultRows}
-      tableHead={<thead><tr>{cols.map(c=>(
-        <th key={c.key} className={`${c.expanded?'exp ':''}${c.nosort?'':'sort-th'}`}
-          onClick={c.nosort?undefined:()=>toggle(c.key)}
-          style={{whiteSpace:'nowrap',...(c.width&&!c.expanded?{width:c.width}:{}),...(c.align?{textAlign:c.align}:{})}}>
-          {c.label}{!c.nosort&&<span className="sort-ind">{sk===c.key?(sd==='asc'?'▲':'▼'):'⇅'}</span>}
-        </th>
-      ))}</tr></thead>}>
-      {visible=>visible.map((r,i)=>(
-        <tr key={rowKey?rowKey(r):(r.id||i)}>
-          {cols.map(c=>(
-            <td key={c.key} className={c.expanded?'exp':''}
-              style={{fontSize:c.size||12,...(c.mono?{fontFamily:'monospace'}:{}),...(c.align?{textAlign:c.align}:{})}}>
-              {c.render?c.render(r):(r[c.key]==null?'—':(typeof r[c.key]==='number'?r[c.key].toLocaleString():String(r[c.key])))}
-            </td>
-          ))}
-        </tr>
-      ))}
-    </ShowMoreTable>
+    <>
+      {(exportName||ctl)&&(
+        <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginBottom:6}}>
+          {exportName&&<button className="col-btn" title="Export visible columns as CSV"
+            onClick={()=>exportCols(exportName, vcols, sorted)}>⬇ CSV</button>}
+          {ctl&&<ColumnMenu ctl={ctl}/>}
+        </div>
+      )}
+      <ShowMoreTable rows={sorted} defaultRows={defaultRows}
+        tableHead={<thead><tr>{vcols.map(c=>(
+          <th key={c.key} className={`${c.expanded?'exp ':''}${c.nosort?'':'sort-th'}`}
+            onClick={c.nosort?undefined:()=>toggle(c.key)}
+            style={{whiteSpace:'nowrap',...(c.width&&!c.expanded?{width:c.width}:{}),...(c.align?{textAlign:c.align}:{})}}>
+            {c.label}{!c.nosort&&<span className="sort-ind">{sk===c.key?(sd==='asc'?'▲':'▼'):'⇅'}</span>}
+          </th>
+        ))}</tr></thead>}>
+        {visible=>visible.map((r,i)=>(
+          <tr key={rowKey?rowKey(r):(r.id||i)}>
+            {vcols.map(c=>(
+              <td key={c.key} className={c.expanded?'exp':''}
+                style={{fontSize:c.size||12,...(c.mono?{fontFamily:'monospace'}:{}),...(c.align?{textAlign:c.align}:{})}}>
+                {c.render?c.render(r):(r[c.key]==null?'—':(typeof r[c.key]==='number'?r[c.key].toLocaleString():String(r[c.key])))}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </ShowMoreTable>
+    </>
   );
 }
 
@@ -1233,11 +1244,9 @@ function InsightsPanel({data, rowLimit, setRowLimit}) {
         ))}
       </div>
       <div className="card">
-        <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>SOC Insights
-          <div style={{marginLeft:'auto'}}><ColumnMenu ctl={ctl}/></div>
-        </div>
+        <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>SOC Insights</div>
         <RowLimitBar limit={rowLimit} setLimit={setRowLimit}/>
-        <DataTable cols={ctl.visibleCols} rows={rows.slice(0,rowLimit)} defaultRows={rowLimit} initialSort={{key:'severity',dir:'asc'}}/>
+        <DataTable ctl={ctl} rows={rows.slice(0,rowLimit)} defaultRows={rowLimit} initialSort={{key:'severity',dir:'asc'}} exportName="soc-insights" persistId="insights"/>
       </div>
     </>
   );
@@ -1708,19 +1717,14 @@ function IPAMTable({subnets, ipamChip, rowLimit, leaseCt}) {
   });
   const allCols=[
     {key:'name',label:'Name',fixed:true,render:s=><span style={{fontWeight:500}} title={s.name!==s.addr?s.name:undefined}>{s.name!==s.addr?s.name:<span style={{color:'var(--gray-600)'}}>—</span>}</span>},
-    {key:'addr',label:'Network',mono:true,size:11,sortVal:s=>s.addr,render:s=>(<span style={{color:'var(--gray-200)'}} title={`${s.addr}/${s.cidr}`}>{s.addr}/{s.cidr}<button className="copy-btn" onClick={()=>copyToClip(s.addr)} title="Copy IP">⎘</button></span>)},
+    {key:'addr',label:'Network',mono:true,size:11,sortVal:s=>s.addr,csv:s=>`${s.addr}/${s.cidr}`,render:s=>(<span style={{color:'var(--gray-200)'}} title={`${s.addr}/${s.cidr}`}>{s.addr}/{s.cidr}<button className="copy-btn" onClick={()=>copyToClip(s.addr)} title="Copy IP">⎘</button></span>)},
     ...(hasSite?[{key:'site',label:'Site',size:11,render:s=><span style={{color:'var(--gray-400)'}}>{s.site}</span>}]:[]),
-    {key:'usedtotal',label:'Used / Total',mono:true,size:11,sortVal:s=>s.used,render:s=>`${s.used} / ${s.total}`},
+    {key:'usedtotal',label:'Used / Total',mono:true,size:11,sortVal:s=>s.used,csv:s=>`${s.used}/${s.total}`,render:s=>`${s.used} / ${s.total}`},
     {key:'util',label:'Utilization',sortVal:s=>s.util,render:s=>(<div style={{display:'flex',alignItems:'center',gap:8}}><div className="bar-track"><div className="bar-fill" style={{width:`${s.util}%`,background:utilColor(s.util)}}/></div><span style={{fontSize:11,fontWeight:700,color:utilColor(s.util)}}>{s.util}%</span></div>)},
     {key:'leases',label:'DHCP Leases',size:11,sortVal:s=>leaseCt[s.id]||0,render:s=><span style={{color:'var(--gray-400)'}}>{(leaseCt[s.id]||0).toLocaleString()}</span>},
   ];
   const ctl=useColumns('ipam',allCols);
-  return (
-    <>
-      <div style={{display:'flex',justifyContent:'flex-end',marginBottom:6}}><ColumnMenu ctl={ctl}/></div>
-      <DataTable cols={ctl.visibleCols} rows={rows} defaultRows={rowLimit} rowKey={s=>s.id} initialSort={{key:'util',dir:'desc'}}/>
-    </>
-  );
+  return <DataTable ctl={ctl} rows={rows} defaultRows={rowLimit} rowKey={s=>s.id} initialSort={{key:'util',dir:'desc'}} exportName="subnets" persistId="ipam"/>;
 }
 
 function HostsTable({hosts, rowLimit}) {
@@ -1730,12 +1734,7 @@ function HostsTable({hosts, rowLimit}) {
     {key:'type',label:'Type',size:10,render:h=><span style={{color:'var(--gray-400)'}}>{h.type}</span>},
     {key:'status',label:'Status',render:h=>(<span style={{display:'flex',alignItems:'center',gap:5}}><span className={`s-dot s-${h.status}`}/><span style={{fontSize:11,textTransform:'capitalize'}}>{h.status}</span></span>)},
   ]);
-  return (
-    <>
-      <div style={{display:'flex',justifyContent:'flex-end',marginBottom:6}}><ColumnMenu ctl={ctl}/></div>
-      <DataTable cols={ctl.visibleCols} rows={hosts} defaultRows={rowLimit} rowKey={h=>h.id} initialSort={{key:'name',dir:'asc'}}/>
-    </>
-  );
+  return <DataTable ctl={ctl} rows={hosts} defaultRows={rowLimit} rowKey={h=>h.id} initialSort={{key:'name',dir:'asc'}} exportName="hosts" persistId="hosts"/>;
 }
 
 // ── Alert-rules engine: fire when a live metric crosses a threshold ──────────
@@ -1827,8 +1826,8 @@ function App() {
   const [autoRefresh, setAutoRefresh] = useState(()=>LS.get('ar',0));
   const [arCountdown, setArCountdown] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [ipamChip, setIpamChip] = useState(null);
-  const [hostChip, setHostChip] = useState(null);
+  const [ipamChip, setIpamChip] = useState(()=>LS.get('noc.ipamChip',null));
+  const [hostChip, setHostChip] = useState(()=>LS.get('noc.hostChip',null));
   const [searchHistory, setSearchHistory] = useState(()=>LS.get('sh',[]));
   const [zoneFilt, setZoneFilt] = useState(null);
   const [rowLimits, setRowLimits]       = useState(()=>LS.get('rl',{}));
@@ -2040,6 +2039,8 @@ function App() {
   const THEME_LABEL = {system:'System theme', light:'Light theme', dark:'Dark theme'};
 
   useEffect(()=>{ document.documentElement.setAttribute('data-density', density); LS.set('noc.density', density); },[density]);
+  useEffect(()=>{ LS.set('noc.ipamChip', ipamChip); },[ipamChip]);
+  useEffect(()=>{ LS.set('noc.hostChip', hostChip); },[hostChip]);
 
   useEffect(()=>{
     if(!data) { document.title='Infoblox NOC Dashboard'; return; }
@@ -2500,13 +2501,6 @@ function App() {
           <div className="card">
             <div className="card-title"><div className="dot"/>All Subnets — DHCP Utilization ({s_subnets.length}{sq&&` of ${subnets.length}`})</div>
             <RowLimitBar limit={rl('ipam')} setLimit={v=>setRl('ipam',v)}/>
-              <div style={{textAlign:'right',marginBottom:6}}>
-                <button className="refresh-btn" style={{fontSize:10,padding:'4px 10px'}}
-                  onClick={()=>downloadCSV('subnets.csv',[...s_subnets].sort((a,b)=>b.util-a.util),[
-                    {key:'name',label:'Name'},{key:'addr',label:'Address'},{key:'cidr',label:'CIDR'},
-                    {key:'used',label:'Used'},{key:'total',label:'Total'},{key:'util',label:'Util%'},{key:'site',label:'Site'}
-                  ])}>⬇ Export CSV</button>
-              </div>
               <div className="chip-bar">
                 {[
                   {label:'All', val:null, count:s_subnets.length},

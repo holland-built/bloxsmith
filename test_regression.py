@@ -521,7 +521,23 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("new Blob", "CSV blob creation missing")
 
     def test_export_button_ipam(self):
-        self.assertContains("Export CSV", "Export CSV button missing")
+        # Export is now a per-table control wired through DataTable (exportName + exportCols)
+        self.assertContains("function exportCols", "shared CSV export helper missing")
+        self.assertContains('exportName="subnets"', "IPAM table export not wired")
+
+    def test_export_everywhere(self):
+        # every major table widget exposes CSV export
+        for name in ('hosts','subnets','threat-feeds','audit-logs','dhcp-leases','soc-insights','ttl-anomalies'):
+            self.assertContains(f'exportName="{name}"', f"export missing for {name}")
+
+    def test_column_drag_reorder(self):
+        self.assertContains("moveTo", "column drag-reorder (moveTo) missing")
+        self.assertContains("col-grip", "column drag handle missing")
+
+    def test_persist_sort_and_filters(self):
+        self.assertContains("'noc.sort.'+persistId", "per-table sort not persisted")
+        self.assertContains("LS.set('noc.ipamChip'", "IPAM filter chip not persisted")
+        self.assertContains("LS.set('noc.hostChip'", "host filter chip not persisted")
 
     # ── Feature 3: Quick Filter Chips ─────────────────────────────────────────
 
