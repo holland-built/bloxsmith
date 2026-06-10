@@ -2133,6 +2133,12 @@ function VaultUnlock({onDone}) {
     <input className="vault-in" type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} autoFocus/>
     {err&&<div className="vault-err">{err}</div>}
     <button className="vault-btn" onClick={go} disabled={busy||!p}>{busy?'Unlocking…':'Unlock'}</button>
+    <div style={{textAlign:'center',marginTop:14}}>
+      <button style={{background:'none',border:'none',color:'var(--gray-400)',fontSize:11,cursor:'pointer',textDecoration:'underline',textUnderlineOffset:'2px'}}
+        onClick={async()=>{ if(window.confirm('Forgot your passphrase?\n\nResetting permanently DELETES the vault and every stored tenant key — there is no recovery. You will set a new passphrase and re-add your keys.\n\nReset now?')){ await vpost('/api/vault/reset',{}); onDone(); } }}>
+        Forgot passphrase? Reset vault
+      </button>
+    </div>
   </div></div>);
 }
 
