@@ -46,9 +46,26 @@ docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 \
 No keys on the command line. On first open the dashboard walks you through a
 quick **setup**: pick a passphrase, then add one or more **tenants** (a name +
 its Infoblox API key, with an optional Groq key for the AI box). Keys are
-**AES-encrypted at rest** in the `noc-vault` volume under your passphrase —
-which is never stored, so you re-enter it to unlock after a restart. Switch
-between tenants any time from the sidebar; add more as new ones spin up.
+**AES-encrypted at rest** in the `noc-vault` volume under your passphrase.
+Switch between tenants any time from the sidebar; add more as new ones spin up.
+
+By default the passphrase is never stored, so you re-enter it to unlock after a
+restart. To skip that — auto-unlock on every restart/upgrade with no re-entry —
+supply the passphrase at boot via a mounted secret file (see
+[Auto-unlock after an upgrade](#auto-unlock-after-an-upgrade)):
+
+```bash
+printf '%s' 'your-vault-passphrase' > ~/.noc-vault-pass && chmod 600 ~/.noc-vault-pass
+docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 \
+  -v noc-vault:/vault \
+  -v ~/.noc-vault-pass:/run/secrets/vault_pass:ro \
+  -e VAULT_PASSPHRASE_FILE=/run/secrets/vault_pass \
+  --restart unless-stopped \
+  ghcr.io/holland-built/infoblox-noc-dashboard:latest
+```
+
+On a brand-new install this auto-creates the vault too, so the browser only asks
+for your tenant key — never the passphrase.
 
 Pin a release with a tag (`:v1.0.0`, `:1.0.0`, or `:1.0`) instead of `:latest`.
 
@@ -70,9 +87,16 @@ docker rm -f infoblox-noc           # then re-run the docker run command above
 > visibility is independent. (Otherwise each user must
 > `docker login ghcr.io` with a token that has `read:packages`.)
 
-The convenience script [`run-image.sh`](run-image.sh) wraps the pull + run (vault
-setup happens in the browser; mounts the `noc-vault` volume) and re-pulls
-`:latest` on every run (handy for updating).
+The convenience script [`run-image.sh`](run-image.sh) wraps the pull + run, and
+re-pulls `:latest` on every run (handy for updating). It prompts for an optional
+vault auto-unlock passphrase, saving it to `~/.noc-vault-pass` (`0600`) and
+mounting it so the vault auto-unlocks on every restart/upgrade. No clone needed:
+
+```bash
+curl -fsSL -O https://raw.githubusercontent.com/holland-built/infoblox-noc-dashboard/master/run-image.sh
+chmod +x run-image.sh
+./run-image.sh          # re-run any time to upgrade — keys persist, nothing to re-enter
+```
 
 ---
 
