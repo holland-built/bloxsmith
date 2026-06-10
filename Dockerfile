@@ -11,9 +11,15 @@ COPY server.py index.html ./
 COPY *.js ./
 
 # Bind to all interfaces inside the container so the host port mapping works.
-# API key is supplied at run time via -e INFOBLOX_API_KEY, never baked in.
+# Keys are supplied at run time (env -e INFOBLOX_API_KEY, or the in-app encrypted
+# vault), never baked in.
 ENV HOST=0.0.0.0 \
-    PORT=8080
+    PORT=8080 \
+    VAULT_DIR=/vault
+
+# Encrypted vault lives here; mount a named volume (-v noc-vault:/vault) so tenant
+# keys survive container restarts and image updates.
+VOLUME /vault
 
 EXPOSE 8080
 

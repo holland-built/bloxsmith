@@ -306,6 +306,22 @@ tr:hover .copy-btn{opacity:1}
 }
 :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:3px}
 .nav-item:focus-visible,.issue-row:focus-visible{outline-offset:-2px}
+/* ── vault auth screens ── */
+.vault-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.vault-card{width:min(420px,94vw);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:26px 24px;box-shadow:var(--shadow-card)}
+.vault-card h2{font-size:18px;font-weight:700;color:var(--ink);margin-bottom:6px}
+.vault-card p{font-size:12px;color:var(--gray-400);line-height:1.5;margin-bottom:16px}
+.vault-card label{display:block;font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 5px}
+.vault-in{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;color:var(--ink);font-size:13px;padding:10px 12px;outline:none;font-family:inherit}
+.vault-in:focus{border-color:var(--focus-border)}
+.vault-btn{width:100%;background:var(--teal);border:none;border-radius:7px;color:var(--blue-dark);font-size:13px;font-weight:700;padding:11px;cursor:pointer;margin-top:18px;transition:background .15s}
+.vault-btn:hover{background:var(--teal-bright)}
+.vault-btn:disabled{opacity:.45;cursor:default}
+.vault-err{color:var(--sev-red-t);font-size:12px;margin-top:10px}
+.vault-logo{font-size:13px;font-weight:700;color:var(--teal);letter-spacing:.06em;text-transform:uppercase;margin-bottom:18px}
+.tenant-row{display:flex;align-items:center;gap:6px;width:100%}
+.tenant-rm{background:none;border:none;color:var(--gray-600);cursor:pointer;font-size:11px;padding:0 3px}
+.tenant-rm:hover{color:var(--red)}
 /* theme toggle */
 .theme-btn{display:flex;align-items:center;justify-content:center;background:var(--blue-deep);border:1px solid var(--border);color:var(--gray-200);border-radius:6px;cursor:pointer;font-size:14px;padding:7px 10px;margin-left:6px;transition:all .12s;line-height:1}
 .theme-btn:hover{border-color:var(--teal);color:var(--teal)}
@@ -2079,7 +2095,113 @@ function AlertsPanel({data, rules, setRules}){
   );
 }
 
-function App() {
+/* ── encrypted-vault gate (only active when the server runs without an env key) ── */
+const vpost=(url,body)=>fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(async r=>({ok:r.ok,data:await r.json().catch(()=>({}))}));
+
+function VaultSetup({onDone}) {
+  const [p1,setP1]=useState(''),[p2,setP2]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false);
+  const go=async()=>{ setErr('');
+    if(p1.length<8){setErr('Passphrase must be at least 8 characters.');return;}
+    if(p1!==p2){setErr('Passphrases do not match.');return;}
+    setBusy(true); const {ok,data}=await vpost('/api/vault/init',{passphrase:p1}); setBusy(false);
+    if(ok&&data.ok) onDone(); else setErr(data.error||'Setup failed.');
+  };
+  return (<div className="vault-screen"><div className="vault-card">
+    <div className="vault-logo">Infoblox NOC Dashboard</div>
+    <h2>Create your vault</h2>
+    <p>Set a passphrase to encrypt your Infoblox tenant keys at rest. It is never stored — you re-enter it after a restart to unlock. There is no recovery if you forget it.</p>
+    <label>Passphrase</label>
+    <input className="vault-in" type="password" value={p1} onChange={e=>setP1(e.target.value)} autoFocus/>
+    <label>Confirm passphrase</label>
+    <input className="vault-in" type="password" value={p2} onChange={e=>setP2(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}}/>
+    {err&&<div className="vault-err">{err}</div>}
+    <button className="vault-btn" onClick={go} disabled={busy||!p1||!p2}>{busy?'Creating…':'Create vault'}</button>
+  </div></div>);
+}
+
+function VaultUnlock({onDone}) {
+  const [p,setP]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false);
+  const go=async()=>{ if(!p)return; setErr(''); setBusy(true);
+    const {ok,data}=await vpost('/api/vault/unlock',{passphrase:p}); setBusy(false);
+    if(ok&&data.ok) onDone(); else setErr(data.error||'Unlock failed.');
+  };
+  return (<div className="vault-screen"><div className="vault-card">
+    <div className="vault-logo">Infoblox NOC Dashboard</div>
+    <h2>Unlock vault</h2>
+    <p>Enter your passphrase to decrypt your saved tenant keys.</p>
+    <label>Passphrase</label>
+    <input className="vault-in" type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} autoFocus/>
+    {err&&<div className="vault-err">{err}</div>}
+    <button className="vault-btn" onClick={go} disabled={busy||!p}>{busy?'Unlocking…':'Unlock'}</button>
+  </div></div>);
+}
+
+function VaultAddTenant({onDone, first}) {
+  const [label,setLabel]=useState(''),[key,setKey]=useState(''),[groq,setGroq]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false);
+  const go=async()=>{ if(!label||!key)return; setErr(''); setBusy(true);
+    const {ok,data}=await vpost('/api/vault/tenant',{label,key,groq}); setBusy(false);
+    if(ok&&data.ok) onDone(); else setErr(data.error||'Could not add tenant.');
+  };
+  return (<div className="vault-screen"><div className="vault-card">
+    <div className="vault-logo">Infoblox NOC Dashboard</div>
+    <h2>{first?'Add your first tenant':'Add a tenant'}</h2>
+    <p>Give the tenant a name and paste its Infoblox API key. The key is encrypted in your vault.</p>
+    <label>Tenant name</label>
+    <input className="vault-in" value={label} onChange={e=>setLabel(e.target.value)} placeholder="e.g. Customer A" autoFocus/>
+    <label>Infoblox API key</label>
+    <input className="vault-in" type="password" value={key} onChange={e=>setKey(e.target.value)} placeholder="paste token (Token … prefix optional)"/>
+    <label>Groq key (optional — enables AI query box)</label>
+    <input className="vault-in" type="password" value={groq} onChange={e=>setGroq(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="gsk_…"/>
+    {err&&<div className="vault-err">{err}</div>}
+    <button className="vault-btn" onClick={go} disabled={busy||!label||!key}>{busy?'Adding…':'Add tenant'}</button>
+  </div></div>);
+}
+
+function VaultGate() {
+  const [st,setSt]=useState(null);
+  const refresh=useCallback(()=>fetch('/api/vault/status').then(r=>r.json()).then(setSt).catch(()=>setSt({vaultMode:false})),[]);
+  useEffect(()=>{refresh();},[refresh]);
+  if(!st) return <div style={{display:'flex',height:'100vh',alignItems:'center',justifyContent:'center'}}><div className="spinner" style={{width:44,height:44}}/></div>;
+  if(!st.vaultMode) return <App vault={st}/>;              // env-key mode — unchanged
+  if(st.ready)       return <App vault={st} onVaultChange={refresh}/>;
+  if(!st.exists)     return <VaultSetup onDone={refresh}/>;
+  if(!st.unlocked)   return <VaultUnlock onDone={refresh}/>;
+  return <VaultAddTenant first onDone={refresh}/>;
+}
+
+/* sidebar control: switch active tenant, add another, or lock the vault */
+function TenantManager({vault}) {
+  const [open,setOpen]=useState(false),[adding,setAdding]=useState(false);
+  const tenants=vault.tenants||[];
+  const active=tenants.find(t=>t.id===vault.active);
+  const reload=()=>window.location.reload();
+  const switchTo=async id=>{ if(id===vault.active){setOpen(false);return;} await vpost('/api/vault/active',{id}); reload(); };
+  const remove=async id=>{ await vpost('/api/vault/tenant-remove',{id}); reload(); };
+  if(adding) return <VaultAddTenant onDone={reload}/>;
+  return (
+    <div style={{position:'relative',marginTop:8}}>
+      <div className="acct-name">Tenant: <b style={{color:'var(--gray-200)'}}>{active?active.label:'—'}</b></div>
+      <button className="acct-switch-btn" onClick={()=>setOpen(o=>!o)}>⇄ Tenants</button>
+      {open&&(<>
+        <div className="acct-overlay" onClick={()=>setOpen(false)}/>
+        <div className="acct-menu">
+          {tenants.map(t=>(
+            <div key={t.id} className="tenant-row">
+              <button className={`acct-menu-item${t.id===vault.active?' active':''}`} style={{flex:1}} onClick={()=>switchTo(t.id)}>
+                {t.id===vault.active?'● ':'○ '}{t.label}
+              </button>
+              <button className="tenant-rm" title="Remove tenant" onClick={()=>remove(t.id)}>✕</button>
+            </div>
+          ))}
+          <button className="acct-menu-item" onClick={()=>{setOpen(false);setAdding(true);}}>＋ Add tenant</button>
+          <button className="acct-menu-item" onClick={async()=>{await vpost('/api/vault/lock',{});window.location.reload();}} title="Lock the vault (re-enter passphrase)">🔒 Lock vault</button>
+        </div>
+      </>)}
+    </div>
+  );
+}
+
+function App({vault, onVaultChange}={}) {
   const [data,setData]         = useState(null);
   const [loading,setLoading]   = useState(true);
   const [refreshing,setRefreshing] = useState(false);
@@ -2428,11 +2550,6 @@ function App() {
       {sidebarOpen&&<div className="sidebar-backdrop" onClick={()=>setSidebarOpen(false)}/>}
       <div className={`sidebar${sidebarOpen?' open':''}`}>
         <div className="logo">
-          <svg width="28" height="28" viewBox="0 0 28 28">
-            <rect width="28" height="28" rx="6" fill="#252321"/>
-            <path d="M7 20L14 8L21 20" stroke="#C8C4BE" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-            <circle cx="14" cy="8" r="2" fill="#C8C4BE"/>
-          </svg>
           <div>
             <div className="logo-text">Infoblox</div>
             <div className="logo-sub">NOC Dashboard</div>
@@ -2460,6 +2577,7 @@ function App() {
           <div style={{color:'var(--green)',display:'flex',alignItems:'center',gap:5}}>
             <span className="pulse">●</span> API Connected
           </div>
+          {vault&&vault.vaultMode&&<TenantManager vault={vault}/>}
           {accounts.length>0&&(
             <div style={{position:'relative'}}>
               <div className="acct-name">Account: <b style={{color:'var(--gray-200)'}}>{(accounts.find(a=>a.id===activeAcct)||{}).name||'—'}</b></div>
@@ -3086,7 +3204,7 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+ReactDOM.createRoot(document.getElementById('root')).render(<VaultGate/>);
 </script>
 </body>
 </html>

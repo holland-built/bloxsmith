@@ -8,25 +8,24 @@ IMAGE="infoblox-noc"
 NAME="infoblox-noc"
 PORT="${PORT:-8080}"
 BIND="${BIND:-127.0.0.1}"   # host interface to publish on; loopback by default. Set BIND=0.0.0.0 to expose on the LAN.
+VOLUME="${VOLUME:-noc-vault}"   # named volume holding the encrypted vault
 INFOBLOX_URL="${INFOBLOX_URL:-https://csp.infoblox.com}"
 
 cd "$(dirname "$0")"
 
 echo "── Infoblox NOC Dashboard installer ─────────────────────────────"
 
-# ── prompt for the Infoblox API key (hidden input) ───────────────────
+# ── Infoblox API key (optional) ──────────────────────────────────────
+# Leave blank to use the in-app encrypted vault (set a passphrase + add tenant
+# keys in the browser). Provide a key here to bypass the vault (single-key mode).
 if [[ -z "${INFOBLOX_API_KEY:-}" ]]; then
-  read -rsp "Infoblox API key (paste token, with or without 'Token ' prefix): " KEY
+  read -rsp "Infoblox API key (Enter to skip and use the in-app vault): " KEY
   echo
 else
   KEY="$INFOBLOX_API_KEY"
 fi
-if [[ -z "$KEY" ]]; then
-  echo "ERROR: no API key entered." >&2
-  exit 1
-fi
 # Normalise: server expects the full Authorization value, e.g. "Token <key>"
-if [[ "$KEY" != Token\ * && "$KEY" != Bearer\ * ]]; then
+if [[ -n "$KEY" && "$KEY" != Token\ * && "$KEY" != Bearer\ * ]]; then
   KEY="Token $KEY"
 fi
 
@@ -48,8 +47,9 @@ docker rm -f "$NAME" >/dev/null 2>&1 || true
 echo "Starting container '$NAME' on port $PORT…"
 docker run -d --name "$NAME" \
   -p "${BIND}:${PORT}:8080" \
-  -e INFOBLOX_API_KEY="$KEY" \
+  -v "${VOLUME}:/vault" \
   -e INFOBLOX_URL="$INFOBLOX_URL" \
+  ${KEY:+-e INFOBLOX_API_KEY="$KEY"} \
   ${GKEY:+-e GROQ_API_KEY="$GKEY"} \
   ${LLM_API_KEY:+-e LLM_API_KEY="$LLM_API_KEY"} \
   ${LLM_MODEL:+-e LLM_MODEL="$LLM_MODEL"} \
