@@ -409,6 +409,9 @@ tr:hover .copy-btn{opacity:1}
 .topbar-group{display:flex;align-items:center;gap:6px}
 .topbar-group .theme-btn,.topbar-group .chat-toggle-btn{margin-left:0}
 .topbar-divider{width:1px;align-self:stretch;min-height:24px;background:var(--border)}
+.refresh-split{display:inline-flex}
+.refresh-split .refresh-btn{border-top-right-radius:0;border-bottom-right-radius:0}
+.refresh-split .theme-btn{border-radius:0 6px 6px 0;margin-left:0;border-left:none;font-size:11px;padding:7px 8px}
 /* ── column controls ── */
 .col-btn{background:none;border:1px solid var(--border);color:var(--gray-400);font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;flex-shrink:0;line-height:1.4;transition:all .12s}
 .col-btn:hover{border-color:var(--teal);color:var(--teal)}
@@ -1196,6 +1199,67 @@ function applyViewLS(snap){
     Object.entries(snap||{}).forEach(([k,v])=>{ try{localStorage.setItem(k,v);}catch(e){} });
   }catch(e){}
 }
+// Refresh button with a caret that folds the auto-refresh interval + pause + countdown
+// into one compact split control. Reuses the .col-menu/.col-overlay dropdown pattern.
+function RefreshControl({autoRefresh,setAutoRefresh,refreshFrozen,setRefreshFrozen,arCountdown,refreshing,onRefresh}) {
+  const [open,setOpen]=React.useState(false);
+  const OPTS=[[0,'Off'],[30,'30s'],[60,'1m'],[300,'5m']];
+  const cd = autoRefresh===0 ? '' : (refreshFrozen?'Paused':arCountdown+'s');
+  return (
+    <span className="refresh-split" style={{position:'relative',display:'inline-flex'}}>
+      <button className="refresh-btn" onClick={onRefresh} title="Refresh all data">
+        <span className={refreshing?'spin':''} style={{display:'inline-block'}}>↻</span>
+        {refreshing?'Refreshing…':'Refresh'}
+        {cd&&<span className="refresh-countdown" style={{marginLeft:6}}>{cd}</span>}
+      </button>
+      <button className="theme-btn" aria-label="Auto-refresh options" aria-expanded={open}
+        title="Auto-refresh options" onClick={()=>setOpen(o=>!o)}>▾</button>
+      {open&&(<>
+        <div className="col-overlay" onClick={()=>setOpen(false)}/>
+        <div className="col-menu" style={{minWidth:180}} role="menu">
+          <div className="col-menu-head"><span className="col-menu-title">Auto-refresh</span></div>
+          {OPTS.map(([v,lbl])=>(
+            <div key={v} className="col-row" style={{cursor:'pointer'}} role="menuitemradio" aria-checked={autoRefresh===v}
+              onClick={()=>{setAutoRefresh(v);LS.set('ar',v);}}>
+              <span style={{width:14,flexShrink:0}}>{autoRefresh===v?'✓':''}</span><span className="col-lbl">{lbl}</span>
+            </div>
+          ))}
+          {autoRefresh>0&&(
+            <div className="col-row" style={{cursor:'pointer',borderTop:'1px solid var(--border)',marginTop:4,paddingTop:6}}
+              role="menuitem" onClick={()=>setRefreshFrozen(f=>!f)}>
+              <span style={{width:14,flexShrink:0}}>{refreshFrozen?'▶':'⏸'}</span>
+              <span className="col-lbl">{refreshFrozen?'Resume':'Pause'}</span>
+              <span className="refresh-countdown" style={{marginLeft:'auto'}}>{refreshFrozen?'Paused':arCountdown+'s'}</span>
+            </div>
+          )}
+        </div>
+      </>)}
+    </span>
+  );
+}
+
+// Overflow menu for low-frequency / set-once actions (also reachable via ⌘K / ? key).
+function MoreMenu({onShare,density,setDensity,onShortcuts}) {
+  const [open,setOpen]=React.useState(false);
+  const row=(label,hint,fn)=>(
+    <div className="col-row" style={{cursor:'pointer'}} role="menuitem" onClick={()=>{setOpen(false);fn();}}>
+      <span className="col-lbl">{label}</span>{hint&&<span className="refresh-countdown" style={{marginLeft:'auto'}}>{hint}</span>}
+    </div>);
+  return (
+    <span style={{position:'relative',display:'inline-flex'}}>
+      <button className="theme-btn" aria-label="More" aria-expanded={open} title="More" onClick={()=>setOpen(o=>!o)}>⋯</button>
+      {open&&(<>
+        <div className="col-overlay" onClick={()=>setOpen(false)}/>
+        <div className="col-menu" style={{minWidth:210}} role="menu">
+          {row('Copy link to this view','◳',onShare)}
+          {row('Row density',density==='compact'?'Compact':'Comfortable',()=>setDensity(d=>d==='compact'?'comfortable':'compact'))}
+          {row('Keyboard shortcuts','?',onShortcuts)}
+        </div>
+      </>)}
+    </span>
+  );
+}
+
 function PresetMenu({section}) {
   const [views,setViews]=React.useState(()=>LS.get('noc.views',{}));
   const [open,setOpen]=React.useState(false);
@@ -2960,36 +3024,17 @@ function App({vault, onVaultChange}={}) {
           </div>
           <div className="topbar-controls">
             <div className="topbar-group">
-              <select className="auto-refresh-sel" value={autoRefresh}
-                onChange={e=>{const v=Number(e.target.value);setAutoRefresh(v);LS.set('ar',v);}}>
-                <option value={0}>Auto-refresh: Off</option>
-                <option value={30}>Auto-refresh: 30s</option>
-                <option value={60}>Auto-refresh: 1m</option>
-                <option value={300}>Auto-refresh: 5m</option>
-              </select>
-              {autoRefresh>0&&<button className="refresh-pause" aria-pressed={refreshFrozen}
-                title={refreshFrozen?'Resume auto-refresh':'Pause auto-refresh (freeze data)'}
-                onClick={()=>setRefreshFrozen(f=>!f)}>{refreshFrozen?'▶':'⏸'}</button>}
-              {autoRefresh>0&&<span className="refresh-countdown">{refreshFrozen?'Paused':arCountdown+'s'}</span>}
-              <button className="refresh-btn" onClick={()=>load(true)}>
-                <span className={refreshing?'spin':''} style={{display:'inline-block'}}>↻</span>
-                {refreshing?'Refreshing…':'Refresh All'}
-              </button>
+              <RefreshControl autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh}
+                refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen}
+                arCountdown={arCountdown} refreshing={refreshing} onRefresh={()=>load(true)}/>
               <button className={`chat-toggle-btn${chatOpen?' on':''}`} onClick={()=>setChatOpen(o=>!o)}>
                 ⊕ {chatOpen?'Close Query':'Query'}
               </button>
-              <button className="chat-toggle-btn" onClick={shareView} title="Copy a deep link to this view">◳ Share</button>
-            </div>
-            <span className="topbar-divider" aria-hidden="true"/>
-            <div className="topbar-group">
-              <button className="theme-btn" onClick={()=>setDensity(d=>d==='compact'?'comfortable':'compact')}
-                title={density==='compact'?'Compact rows (click for comfortable)':'Comfortable rows (click for compact)'}
-                aria-label="Toggle row density">{density==='compact'?'⊟':'☰'}</button>
               <button className="theme-btn" onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')}
                 title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
               <PresetMenu section={section}/>
               <button className="theme-btn" onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
-              <button className="theme-btn" onClick={()=>setShowShortcuts(s=>!s)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts">?</button>
+              <MoreMenu onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)}/>
             </div>
           </div>
         </div>
