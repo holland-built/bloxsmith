@@ -459,6 +459,9 @@ tr:hover .copy-btn{opacity:1}
 .upd-actions button{flex:1;background:var(--blue-deep);border:1px solid var(--border);border-radius:5px;color:var(--teal);font-size:11px;font-weight:600;padding:5px 8px;cursor:pointer;font-family:inherit}
 .upd-actions button:hover{border-color:var(--teal)}
 .upd-actions button:disabled{opacity:.6;cursor:default}
+.upd-actions button.primary{background:var(--sev-amber-t);border-color:var(--sev-amber-t);color:var(--blue-dark)}
+.upd-actions button.primary:hover{background:var(--amber);border-color:var(--amber)}
+.upd-spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(0,0,0,.3);border-top-color:var(--blue-dark);border-radius:50%;vertical-align:-2px;margin-right:6px;animation:spin .8s linear infinite}
 .upd-note{font-size:10px;color:var(--gray-400);margin-top:6px}
 /* ── panel error state ── */
 .panel-error{text-align:center;padding:40px 24px;color:var(--gray-400);font-size:12px;line-height:1.6}
@@ -2472,6 +2475,7 @@ function App({vault, onVaultChange}={}) {
   const [updPop, setUpdPop]         = useState(false);            // version-chip popover
   const [updCopied, setUpdCopied]   = useState(false);
   const [updBusy, setUpdBusy]       = useState(false);            // "Check now" in flight
+  const [updApplying, setUpdApplying] = useState(false);          // "Update now" self-update in flight
   const [updInfo, setUpdInfo]       = useState(()=>(vault&&vault.update)||null);
   const prevFiringRef               = useRef(new Set());
   const [accounts, setAccounts]     = useState([]);
@@ -2752,6 +2756,26 @@ function App({vault, onVaultChange}={}) {
   const UPGRADE_CMD = 'docker pull ghcr.io/holland-built/infoblox-noc-dashboard:latest && docker rm -f infoblox-noc && docker run -d --name infoblox-noc -p 8080:8080 ghcr.io/holland-built/infoblox-noc-dashboard:latest';
   const checkUpdate = () => { setUpdBusy(true);
     fetch('/api/update/check').then(r=>r.json()).then(u=>setUpdInfo(u)).catch(()=>{}).finally(()=>setUpdBusy(false)); };
+  // one-click self-update: ask Watchtower to recreate us, then poll until the app
+  // returns on a newer build and reload. The container restarts mid-request, so a
+  // dropped fetch during polling is expected, not an error.
+  const verN = v => { const m=/(\d+)\.(\d+)\.(\d+)/.exec(v||''); return m?+m[3]:-1; };
+  const applyUpdate = () => {
+    setUpdApplying(true);
+    const from = verN(upd.current||(vault&&vault.version));
+    let stopped=false; const t0=Date.now();
+    // Poll independently of the apply response: the container is recreated
+    // mid-request, so that fetch may simply never resolve. Keep polling until
+    // the app comes back on a newer build, then reload.
+    const poll=()=>{ if(stopped) return;
+      fetch('/api/update/check',{cache:'no-store'}).then(r=>r.json())
+        .then(u=>{ if(verN(u.current)>from){ location.reload(); }
+          else if(Date.now()-t0<120000){ setTimeout(poll,2500); } else { setUpdApplying(false); } })
+        .catch(()=>{ if(Date.now()-t0<120000){ setTimeout(poll,2500); } else { setUpdApplying(false); } }); };
+    fetch('/api/update/apply',{method:'POST'}).then(r=>r.json()).catch(()=>null)
+      .then(res=>{ if(res&&res.ok===false){ stopped=true; setUpdApplying(false); alert('Update failed: '+(res.error||'unknown')); } });
+    setTimeout(poll,4000);   // give Watchtower a head start before polling
+  };
 
   const commands = [
     ...SECTIONS.map(s=>({id:'go-'+s.id, icon:s.icon, label:'Go to '+s.label, keywords:s.id, hint:'Section', run:()=>setSection(s.id)})),
@@ -2813,14 +2837,25 @@ function App({vault, onVaultChange}={}) {
                 ? <>v{vault.version} → <span className="to">{upd.latest} available</span></>
                 : <>v{vault.version} · {upd.checkDisabled?'update checks disabled':(upd.latest?'up to date':'version')}</>}</div>
               {upd.url&&<div><a href={upd.url} target="_blank" rel="noopener noreferrer">View release notes ↗</a></div>}
-              {upd.available&&<>
+              {upd.available&&(upd.selfUpdate ? (
+                updApplying ? <>
+                  <div className="upd-actions"><button className="primary" disabled><span className="upd-spin"/>Updating…</button></div>
+                  <div className="upd-note">Pulling the new image and restarting. Reconnecting when it's back…</div>
+                </> : <>
+                  <div className="upd-actions">
+                    <button className="primary" onClick={applyUpdate}>Update now</button>
+                    <button onClick={()=>copyToClip(UPGRADE_CMD,setUpdCopied)}>{updCopied?'Copied ✓':'Copy command'}</button>
+                  </div>
+                  <div className="upd-note">Pulls the new image and restarts automatically (~20s). Your vault stays intact.</div>
+                </>
+              ) : <>
                 <div className="upd-cmd">{UPGRADE_CMD}</div>
                 <div className="upd-actions">
                   <button onClick={()=>copyToClip(UPGRADE_CMD,setUpdCopied)}>{updCopied?'Copied ✓':'Copy command'}</button>
                   <button onClick={checkUpdate} disabled={updBusy||upd.checkDisabled}>{updBusy?'Checking…':'Check now'}</button>
                 </div>
                 <div className="upd-note">Pull the new image and recreate the container to update.</div>
-              </>}
+              </>)}
               {!upd.available&&(
                 <div className="upd-actions">
                   <button onClick={checkUpdate} disabled={updBusy||upd.checkDisabled}>{updBusy?'Checking…':'Check now'}</button>
