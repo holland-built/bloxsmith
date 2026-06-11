@@ -456,7 +456,6 @@ tr:hover .copy-btn{opacity:1}
 .upd-pop .ver-line .to{color:var(--sev-amber-t)}
 .upd-pop a{color:var(--teal);font-size:11px;text-decoration:none}
 .upd-pop a:hover{text-decoration:underline}
-.upd-cmd{background:var(--blue-dark);border:1px solid var(--border);border-radius:5px;padding:7px 8px;font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:var(--gray-200);white-space:pre-wrap;word-break:break-all;margin:8px 0;line-height:1.5}
 .upd-actions{display:flex;gap:6px;margin-top:8px}
 .upd-actions button{flex:1;background:var(--blue-deep);border:1px solid var(--border);border-radius:5px;color:var(--teal);font-size:11px;font-weight:600;padding:5px 8px;cursor:pointer;font-family:inherit}
 .upd-actions button:hover{border-color:var(--teal)}
@@ -2457,7 +2456,6 @@ function App({vault, onVaultChange}={}) {
   const [alertsDismissed, setAlertsDismissed] = useState(false);  // session-only banner dismiss
   const [noticesExpanded, setNoticesExpanded] = useState(false);  // collapse extras past the cap
   const [updPop, setUpdPop]         = useState(false);            // version-chip popover
-  const [updCopied, setUpdCopied]   = useState(false);
   const [updBusy, setUpdBusy]       = useState(false);            // "Check now" in flight
   const [updApplying, setUpdApplying] = useState(false);          // "Update now" self-update in flight
   const [updInfo, setUpdInfo]       = useState(()=>(vault&&vault.update)||null);
@@ -2767,9 +2765,6 @@ function App({vault, onVaultChange}={}) {
 
   // ── app-update (notify only; the server checks GitHub, the browser never does) ──
   const upd = updInfo || (vault&&vault.update) || {};
-  // Mounts the noc-vault volume so encrypted keys + passphrase survive the
-  // upgrade; matches run-image.sh defaults (loopback bind, restart policy).
-  const UPGRADE_CMD = 'docker pull ghcr.io/holland-built/infoblox-noc-dashboard:latest && docker rm -f infoblox-noc && docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 -v noc-vault:/vault --restart unless-stopped ghcr.io/holland-built/infoblox-noc-dashboard:latest';
   const checkUpdate = () => { setUpdBusy(true);
     fetch('/api/update/check').then(r=>r.json()).then(u=>setUpdInfo(u)).catch(()=>{}).finally(()=>setUpdBusy(false)); };
   // one-click self-update: ask Watchtower to recreate us, then poll until the app
@@ -2860,17 +2855,14 @@ function App({vault, onVaultChange}={}) {
                 </> : <>
                   <div className="upd-actions">
                     <button className="primary" onClick={applyUpdate}>Update now</button>
-                    <button onClick={()=>copyToClip(UPGRADE_CMD,setUpdCopied)}>{updCopied?'Copied ✓':'Copy command'}</button>
                   </div>
                   <div className="upd-note">Pulls the new image and restarts automatically (~20s). Your vault stays intact.</div>
                 </>
               ) : <>
-                <div className="upd-cmd">{UPGRADE_CMD}</div>
                 <div className="upd-actions">
-                  <button onClick={()=>copyToClip(UPGRADE_CMD,setUpdCopied)}>{updCopied?'Copied ✓':'Copy command'}</button>
                   <button onClick={checkUpdate} disabled={updBusy||upd.checkDisabled}>{updBusy?'Checking…':'Check now'}</button>
                 </div>
-                <div className="upd-note">Pull the new image and recreate the container to update.</div>
+                <div className="upd-note">One-click update isn't enabled on this install. Re-run the installer once to turn it on; updates then apply from here.</div>
               </>)}
               {!upd.available&&(
                 <div className="upd-actions">
