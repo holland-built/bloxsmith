@@ -30,7 +30,7 @@ window.onerror = function(msg,src,line,col,err) {
   --teal:#D6D2CB;--teal-bright:#EBE8E2;
   --surface:#1B1F28;--surface-2:#232834;--surface-3:#2E3440;
   --border:rgba(255,255,255,0.09);
-  --gray-100:#ECEAE7;--gray-200:#C5C1BB;--gray-400:#8F949C;--gray-600:#5C5954;
+  --gray-100:#ECEAE7;--gray-200:#C5C1BB;--gray-400:#8F949C;--gray-500:#82868E;--gray-600:#5C5954;
   --red:#EF4444;--amber:#F59E0B;--green:#10B981;
   --red-bg:hsl(0,72%,11%);--red-border:hsl(0,72%,28%);--red-text:hsl(0,86%,80%);
   --amber-bg:hsl(38,85%,9%);--amber-border:hsl(38,85%,30%);--amber-text:hsl(38,92%,76%);
@@ -61,7 +61,7 @@ window.onerror = function(msg,src,line,col,err) {
   --teal:#3A352F;--teal-bright:#211D18;          /* accent = dark warm ink (contrast on light) */
   --surface:#FAF8F4;--surface-2:#F2EFE9;--surface-3:#E5E1D9;
   --border:rgba(40,35,30,0.14);
-  --gray-100:#1A1714;--gray-200:#36322C;--gray-400:#6A655D;--gray-600:#8A857C;
+  --gray-100:#1A1714;--gray-200:#36322C;--gray-400:#6A655D;--gray-500:#6E6960;--gray-600:#8A857C;
   --ink:#1A1714;
   --hover:rgba(40,35,30,.04);
   --hover-strong:rgba(40,35,30,.08);
@@ -942,8 +942,8 @@ function TTLTable({zones}) {
   const ctl=useColumns('ttl',[
     {key:'fqdn',label:'Zone FQDN',fixed:true,mono:true,size:11,width:'30%'},
     {key:'view',label:'View',width:'14%',render:z=><span className="badge b-teal">{z.view}</span>},
-    {key:'ttl',label:'TTL',mono:true,size:11,width:'13%',sortVal:z=>z.ttl,render:z=><span style={{color:z.ttl<60||z.ttl>86400?'var(--sev-red-t)':'var(--gray-200)'}}>{z.ttl}s</span>},
-    {key:'neg_ttl',label:'Neg TTL',mono:true,size:11,width:'13%',sortVal:z=>z.neg_ttl,render:z=><span style={{color:z.neg_ttl>3600?'var(--sev-amber-t)':'var(--gray-200)'}}>{z.neg_ttl}s</span>},
+    {key:'ttl',label:'TTL',mono:true,size:11,width:'13%',sortVal:z=>z.ttl,render:z=><span style={{color:z.ttl<60||z.ttl>86400?'var(--sev-red-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.ttl}s</span>},
+    {key:'neg_ttl',label:'Neg TTL',mono:true,size:11,width:'13%',sortVal:z=>z.neg_ttl,render:z=><span style={{color:z.neg_ttl>3600?'var(--sev-amber-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.neg_ttl}s</span>},
     {key:'issues',label:'Issues',nosort:true,width:'30%',render:z=>z.issues.map((iss,i)=>(<span key={i} className={`badge ${iss.includes('High')||iss.includes('Too High')?'b-amber':'b-red'}`} style={{marginRight:3}}>{iss}</span>))},
   ]);
   if(!bad.length) return <div className="no-data">✓ No TTL anomalies detected</div>;
@@ -957,13 +957,13 @@ function FeedsTable({feeds}) {
     {key:'level',label:'Threat Level',sortVal:f=>levelOrder[f.level]??9,render:f=><span className={`badge ${levelBadge(f.level)}`}>{f.level}</span>},
     {key:'conf',label:'Confidence',size:11,render:f=><span style={{color:f.conf==='high'?'var(--sev-green-t)':f.conf==='medium'?'var(--sev-amber-t)':'var(--gray-400)',fontWeight:700}}>{f.conf}</span>},
     {key:'entries',label:'Entries',mono:true,size:11,sortVal:f=>f.entries,render:f=><span style={{color:'var(--gray-200)'}}>{f.entries.toLocaleString()}</span>},
-    {key:'active',label:'Status',sortVal:f=>f.active?1:0,render:f=>f.active?<span style={{color:'var(--green)',fontSize:10,fontWeight:700}}>● Active</span>:<span style={{color:'var(--gray-400)',fontSize:10}}>○ Off</span>},
+    {key:'active',label:'Status',sortVal:f=>f.active?1:0,render:f=>f.active?<span className="badge b-green">Active</span>:<span className="badge b-gray">Off</span>},
   ]);
   return <DataTable ctl={ctl} rows={feeds} defaultRows={10} rowKey={f=>f.id} initialSort={{key:'level',dir:'asc'}} exportName="threat-feeds" persistId="feeds"/>;
 }
 
 function PoliciesPanel({policies}) {
-  const actColor={block:'var(--red)',allow:'var(--green)',redirect:'var(--amber)',monitor:'var(--teal)'};
+  const actBadge={block:'b-red',allow:'b-green',redirect:'b-amber',monitor:'b-teal'};
   const activeCt=policies.filter(p=>p.active).length;
   const totalRules=policies.reduce((a,p)=>a+p.rules,0);
   return (
@@ -983,7 +983,7 @@ function PoliciesPanel({policies}) {
             <div style={{fontSize:10,color:'var(--gray-400)',marginTop:2}}>{p.rules} rules · {p.created}</div>
           </div>
           <div style={{display:'flex',gap:7,alignItems:'center'}}>
-            <span className="badge" style={{background:`${actColor[p.action]}22`,color:actColor[p.action],border:`1px solid ${actColor[p.action]}44`}}>{p.action}</span>
+            <span className={`badge ${actBadge[p.action]||'b-gray'}`}>{p.action}</span>
             {!p.active&&<span className="badge b-gray">off</span>}
           </div>
         </div>
@@ -1434,7 +1434,7 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
     {key:'device',label:'Device',fixed:true,sortVal:r=>r[NDA+'device_name']||'',csv:r=>r[NDA+'device_name']||'',render:r=><span style={{fontWeight:500}}>{r[NDA+'device_name']||'—'}</span>},
     {key:'ip',label:'IP',mono:true,size:10,sortVal:r=>r[NDA+'device_ip']||'',csv:r=>r[NDA+'device_ip']||'',render:r=><span style={{color:'var(--gray-400)'}}>{r[NDA+'device_ip']||'—'}</span>},
     {key:'queries',label:'Queries',mono:true,size:11,sortVal:r=>Number(r[NDA+'total_query_count'])||0,csv:r=>Number(r[NDA+'total_query_count'])||0,render:r=>(Number(r[NDA+'total_query_count'])||0).toLocaleString()},
-    {key:'share',label:'Share',sortVal:r=>Number(r[NDA+'total_query_count'])||0,csv:r=>{const c=Number(r[NDA+'total_query_count'])||0;const t=(data&&(data.top_clients||[]).reduce((a,x)=>a+(Number(x[NDA+'total_query_count'])||0),0))||0;return (t>0?Math.round(c/t*100):0)+'%';},render:r=>{const c=Number(r[NDA+'total_query_count'])||0;const t=(data&&(data.top_clients||[]).reduce((a,x)=>a+(Number(x[NDA+'total_query_count'])||0),0))||0;const pct=t>0?Math.round(c/t*100):0;return <div style={{display:'flex',alignItems:'center',gap:6}}><div className="bar-track"><div className="bar-fill" style={{width:`${pct}%`,background:'var(--teal)'}}/></div><span style={{fontSize:10,color:'var(--gray-400)'}}>{pct}%</span></div>;}},
+    {key:'share',label:'Share',sortVal:r=>Number(r[NDA+'total_query_count'])||0,csv:r=>{const c=Number(r[NDA+'total_query_count'])||0;const t=(data&&(data.top_clients||[]).reduce((a,x)=>a+(Number(x[NDA+'total_query_count'])||0),0))||0;return (t>0?Math.round(c/t*100):0)+'%';},render:r=>{const c=Number(r[NDA+'total_query_count'])||0;const t=(data&&(data.top_clients||[]).reduce((a,x)=>a+(Number(x[NDA+'total_query_count'])||0),0))||0;const pct=t>0?Math.round(c/t*100):0;return <div style={{display:'flex',alignItems:'center',gap:6}}><div className="bar-track"><div className="bar-fill" style={{width:`${pct}%`,background:'var(--teal)'}}/></div><span style={{fontSize:10,color:'var(--gray-400)',fontVariantNumeric:'tabular-nums'}}>{pct}%</span></div>;}},
   ]);
   if(!data) return <SkeletonTable/>;
   const {volume=[],top_clients=[],query_types=[]} = data;
@@ -1644,7 +1644,6 @@ function ThreatLookupPanel() {
           {loading?'…':'Search'}
         </button>
       </div>
-      {loading&&<div className="spinner"/>}
       {results&&!loading&&(
         entities.length===0
           ?<div className="no-data">No entities found for "{q}"</div>
@@ -2151,7 +2150,7 @@ function AlertsPanel({data, rules, setRules}){
                 <td style={{padding:'6px 8px'}}><span style={{color:r.firing?'var(--red)':'var(--green)',fontWeight:700}}>{r.firing?'● FIRING':'○ ok'}</span></td>
                 <td style={{padding:'6px 8px'}}>{metricLabel(r.metric)}</td>
                 <td style={{padding:'6px 8px'}}>{r.op} {r.threshold}</td>
-                <td style={{padding:'6px 8px',fontWeight:700}}>{r.value}</td>
+                <td style={{padding:'6px 8px',fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.value}</td>
                 <td style={{padding:'6px 8px'}}><button className="collapse-btn" style={{margin:0}} onClick={()=>del(r.id)} title="Delete rule">✕</button></td>
               </tr>
             ))}</tbody>
@@ -2453,6 +2452,7 @@ function App({vault, onVaultChange}={}) {
   const [refreshFrozen, setRefreshFrozen] = useState(false);   // pause auto-refresh (demos)
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [ipamChip, setIpamChip] = useState(()=>LS.get('noc.ipamChip',null));
+  const [ipamShowTiny, setIpamShowTiny] = useState(false);   // reveal single-IP /32 subnets (transient)
   const [hostChip, setHostChip] = useState(()=>LS.get('noc.hostChip',null));
   const [searchHistory, setSearchHistory] = useState(()=>LS.get('sh',[]));
   const [zoneFilt, setZoneFilt] = useState(null);
@@ -3103,7 +3103,7 @@ function App({vault, onVaultChange}={}) {
                             <div className="drill-panel">
                               <div className="drill-header">
                                 <span className="drill-title" style={{color:statusColor[hostFilt]||'var(--teal)'}}>
-                                  ⊡ {hostFilt.charAt(0).toUpperCase()+hostFilt.slice(1)} Hosts ({filteredH.length})
+                                  ⊞ {hostFilt.charAt(0).toUpperCase()+hostFilt.slice(1)} Hosts ({filteredH.length})
                                 </span>
                                 <div style={{display:'flex',gap:8,alignItems:'center'}}>
                                   <button className="drill-see-all" onClick={()=>setSection('hosts')}>See all in Hosts tab →</button>
@@ -3124,7 +3124,7 @@ function App({vault, onVaultChange}={}) {
                                     ))}
                                   </tbody>
                                 </table>
-                                {filteredH.length>15&&<div style={{textAlign:'center',fontSize:10,color:'var(--gray-400)',marginTop:4}}>{filteredH.length-15} more → <button className="drill-see-all" onClick={()=>setSection('hosts')}>Hosts tab</button></div>}
+                                {filteredH.length>15&&<div style={{textAlign:'center',fontSize:10,color:'var(--teal)',marginTop:4}}>{filteredH.length-15} more → <button className="drill-see-all" onClick={()=>setSection('hosts')}>Hosts tab</button></div>}
                               </div>
                             </div>
                           )}
@@ -3196,7 +3196,7 @@ function App({vault, onVaultChange}={}) {
                                       ))}
                                     </tbody>
                                   </table>
-                                  {drillLeases.length>20&&<div style={{textAlign:'center',fontSize:10,color:'var(--gray-400)',marginTop:4}}>{drillLeases.length-20} more — <button className="drill-see-all" onClick={()=>setSection('dhcp')}>See all in DHCP tab</button></div>}
+                                  {drillLeases.length>20&&<div style={{textAlign:'center',fontSize:10,color:'var(--teal)',marginTop:4}}>{drillLeases.length-20} more — <button className="drill-see-all" onClick={()=>setSection('dhcp')}>See all in DHCP tab</button></div>}
                                 </div>
                               ):(
                                 <div style={{fontSize:11,color:'var(--gray-400)'}}>No lease data loaded for this subnet. <button className="drill-see-all" onClick={()=>setSection('ipam')}>View in IPAM tab →</button></div>
@@ -3300,26 +3300,37 @@ function App({vault, onVaultChange}={}) {
         )}
 
         {/* ── IPAM ── */}
-        {section==='ipam'&&(
+        {section==='ipam'&&(()=>{
+          // Single-IP /32 subnets are trivially 100% and flood the table; hide them
+          // by default (revealable). One pool drives the title, chip counts, and rows.
+          const ipamPool = ipamShowTiny ? s_subnets : s_subnets.filter(s=>s.total>1);
+          const tinyCount = s_subnets.length - ipamPool.length;
+          return (
           <div className="card">
-            <div className="card-title"><div className="dot"/>All Subnets — DHCP Utilization ({s_subnets.length}{sq&&` of ${subnets.length}`})</div>
+            <div className="card-title"><div className="dot"/>All Subnets — DHCP Utilization ({ipamPool.length}{sq&&` of ${subnets.length}`})</div>
             <RowLimitBar limit={rl('ipam')} setLimit={v=>setRl('ipam',v)}/>
               <div className="chip-bar">
                 {[
-                  {label:'All', val:null, count:s_subnets.length},
-                  {label:'Critical ≥90%', val:'critical', count:s_subnets.filter(s=>s.util>=90).length},
-                  {label:'Warning 75–89%', val:'warning', count:s_subnets.filter(s=>s.util>=75&&s.util<90).length},
-                  {label:'Healthy <75%', val:'healthy', count:s_subnets.filter(s=>s.util<75).length},
+                  {label:'All', val:null, count:ipamPool.length},
+                  {label:'Critical ≥90%', val:'critical', count:ipamPool.filter(s=>s.util>=90).length},
+                  {label:'Warning 75–89%', val:'warning', count:ipamPool.filter(s=>s.util>=75&&s.util<90).length},
+                  {label:'Healthy <75%', val:'healthy', count:ipamPool.filter(s=>s.util<75).length},
                 ].map(c=>(
                   <button key={c.val} className={`chip${ipamChip===c.val?' on':''}`}
                     onClick={()=>setIpamChip(c.val)}>
                     {c.label} <span style={{opacity:.6}}>({c.count})</span>
                   </button>
                 ))}
+                {tinyCount>0&&(
+                  <button className="sr-toggle" style={{marginTop:0}} onClick={()=>setIpamShowTiny(v=>!v)}>
+                    {ipamShowTiny?`Hide ${tinyCount} single-IP`:`+ ${tinyCount} single-IP subnet${tinyCount>1?'s':''} hidden — show`}
+                  </button>
+                )}
               </div>
-            <IPAMTable subnets={s_subnets} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt}/>
+            <IPAMTable subnets={ipamPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt}/>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── DHCP ── */}
         {section==='dhcp'&&(
@@ -3368,7 +3379,7 @@ function App({vault, onVaultChange}={}) {
                   return drillZone&&(
                     <div className="drill-panel">
                       <div className="drill-header">
-                        <span className="drill-title" style={{fontFamily:'monospace'}}>⊕ {drillZone.fqdn}</span>
+                        <span className="drill-title" style={{fontFamily:'monospace'}}>⊞ {drillZone.fqdn}</span>
                         <button className="drill-close" onClick={()=>setZoneFilt(null)} aria-label="Close drill-down">×</button>
                       </div>
                       <div style={{display:'flex',gap:20,flexWrap:'wrap'}}>
