@@ -736,7 +736,7 @@ class FrontendStructureTests(unittest.TestCase):
     # ── drill-down hints ──────────────────────────────────────────────────────
 
     def test_subnet_chart_click_hint(self):
-        self.assertContains("Click a bar to drill down")
+        self.assertContains("Click a row to drill down")
 
     def test_host_donut_click_hint(self):
         self.assertContains("Click a segment to drill down")
