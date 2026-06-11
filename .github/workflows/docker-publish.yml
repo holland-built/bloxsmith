@@ -14,6 +14,12 @@ permissions:
   contents: write   # write: lets the master build cut a vX.Y.Z release
   packages: write
 
+# Run JS-based actions on Node 24 (Node 20 is deprecated on runners). Opt-in env
+# avoids churning every action's major version. Remove once the actions default
+# to Node 24 (mid-2026).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-push:
     runs-on: ubuntu-latest
