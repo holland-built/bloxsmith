@@ -520,6 +520,28 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("ver-badge")
         self.assertContains("vault.version")
 
+    # ── DHCP top-subnets redesigned as a compact ranked list ─────────────────
+    def test_subnet_rank_list(self):
+        self.assertContains("subnet-rank-row", "compact ranked list markup missing")
+        self.assertContains("subnet-rank-list")
+        self.assertContains("sr-fill")             # severity-colored bar fill
+
+    # ── universal CSV: DNS analytics top-clients now a DataTable ─────────────
+    def test_dns_clients_datatable(self):
+        self.assertContains('exportName="dns-top-clients"', "DNS clients CSV export missing")
+        self.assertContains("useColumns('dns-clients'")
+        self.assertContains('downloadCSV(`search-', "search-group CSV export missing")
+
+    # ── connection key health + replace-key flow ─────────────────────────────
+    def test_connection_key_repair(self):
+        s = self._server()
+        self.assertIn("def vault_update_tenant", s)
+        self.assertIn("/api/vault/tenant-update", s)
+        self.assertIn('"needsKey"', s)              # status surfaces unhealthy keys
+        self.assertContains("/api/vault/tenant-update")
+        self.assertContains("tenant-fix")           # Fix key affordance
+        self.assertContains("editId")               # VaultAddTenant edit mode
+
     def test_refresh_names(self):
         self.assertIn("def vault_refresh_names", self._server())
         self.assertIn("/api/vault/refresh-names", self._server())

@@ -182,6 +182,17 @@ body.chat-open{padding-right:340px}
 /* inline bar */
 .bar-track{width:72px;height:5px;background:var(--surface-3);border-radius:3px;display:inline-block;vertical-align:middle}
 .bar-fill{height:100%;border-radius:3px}
+/* top-subnets ranked list (compact, severity-colored) */
+.subnet-rank-list{display:flex;flex-direction:column;gap:2px}
+.subnet-rank-row{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:4px;text-align:left;transition:background .12s,opacity .12s}
+.subnet-rank-row:hover{background:var(--hover)}
+.subnet-rank-row.active{background:var(--tint)}
+.sr-num{flex:0 0 16px;text-align:right;font-size:10px;color:var(--gray-500);font-variant-numeric:tabular-nums}
+.sr-name{flex:0 0 118px;font-size:11px;color:var(--gray-200);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sr-ut{flex:0 0 72px;text-align:right;font-size:10px;color:var(--gray-400);font-family:monospace;font-variant-numeric:tabular-nums}
+.sr-bar{flex:1;height:6px;min-width:40px;background:var(--svg-track);border-radius:3px;overflow:hidden}
+.sr-fill{display:block;height:100%;border-radius:3px;transition:width .35s cubic-bezier(.22,1,.36,1)}
+.sr-pct{flex:0 0 38px;text-align:right;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
 /* tooltip */
 .tt{background:var(--blue-mid);border:1px solid var(--border);border-radius:6px;padding:9px 13px;font-size:12px}
 .tt-lbl{color:var(--teal);font-weight:600;margin-bottom:3px}
@@ -268,6 +279,9 @@ body.chat-open{padding-right:340px}
 .tenant-confirm-no{color:var(--gray-400)}
 .tenant-confirm-yes:hover{color:var(--red)}
 .tenant-confirm-no:hover{color:var(--gray-200)}
+.tenant-warn{color:var(--amber);font-weight:700}
+.tenant-fix{background:none;border:1px solid var(--border);border-radius:4px;color:var(--amber);font-size:9px;font-weight:600;padding:2px 6px;cursor:pointer;flex-shrink:0}
+.tenant-fix:hover{background:var(--hover-strong);border-color:var(--amber)}
 .acct-sec-divider{height:1px;background:var(--border);margin:4px 0}
 .acct-sec-label{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--gray-500);font-weight:600;padding:4px 10px 2px}
 /* ── new features ── */
@@ -319,7 +333,7 @@ tr:hover .copy-btn{opacity:1}
 .sort-ind{margin-left:4px;opacity:.5;font-size:9px}
 @media(prefers-reduced-motion:reduce){
   .pulse,.t-dot{animation:none}
-  .chat-panel,.gauge-fill,.drag-card,.drill-panel{transition:none}
+  .chat-panel,.gauge-fill,.drag-card,.drill-panel,.sr-fill{transition:none}
   .bento>.drag-card{animation:none}
   .skel{animation:none;opacity:.7}
   .toast{animation:none}
@@ -844,53 +858,28 @@ function Donut({hosts,filter,onSlice}) {
 
 /* SVG horizontal bars — no external deps */
 function SubnetBars({subnets,highlight,onBar}) {
+  // Compact ranked list (not giant bars): rank · name · used/total · severity bar · %.
+  // Reuses utilColor + the same bar vocabulary as the IPAM table — dense, glanceable.
   const top10=[...subnets].sort((a,b)=>b.util-a.util).slice(0,10);
-  const [tip,setTip]=useState(null);
-  const W=420,lw=112,rpad=46,bh=18,gap=8;
-  const chartW=W-lw-rpad;
-  const H=top10.length*(bh+gap)+4;
-
   return (
-    <div style={{position:'relative'}}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:'block'}}
-        role="img" aria-label={`Top subnets by utilization: ${top10.map(s=>`${s.name} ${s.util} percent`).join(', ')}`}>
-        {[0,25,50,75,100].map(v=>{
-          const x=lw+v/100*chartW;
-          return <g key={v}>
-            <line x1={x} y1={0} x2={x} y2={H} stroke="var(--svg-grid)" strokeWidth={1}/>
-            <text x={x} y={H} fill="var(--gray-400)" fontSize={8} textAnchor="middle" dominantBaseline="hanging">{v}%</text>
-          </g>;
-        })}
-        {top10.map((s,i)=>{
-          const y=i*(bh+gap);
-          const bw=Math.max(2,s.util/100*chartW);
-          const col=utilColor(s.util);
-          const hl=highlight===s.id;
-          const dim=highlight&&!hl;
-          const label=s.name.length>15?s.name.slice(0,14)+'…':s.name;
-          return (
-            <g key={s.id} style={{cursor:'pointer'}} onClick={()=>onBar(s.id)}
-              onMouseEnter={()=>setTip(s)} onMouseLeave={()=>setTip(null)}>
-              <text x={lw-6} y={y+bh/2} fill={hl?col:'var(--gray-200)'} fontSize={10}
-                textAnchor="end" dominantBaseline="central">{label}</text>
-              <rect x={lw} y={y} width={chartW} height={bh} fill="var(--svg-track)" rx={3}/>
-              <rect x={lw} y={y} width={bw} height={bh} fill={col} rx={3}
-                opacity={dim?0.35:1} stroke={hl?'var(--ink)':'none'} strokeWidth={1}/>
-              <text x={lw+bw+5} y={y+bh/2} fill={col} fontSize={10}
-                dominantBaseline="central" fontWeight={700}>{s.util}%</text>
-            </g>
-          );
-        })}
-      </svg>
-      {tip&&(
-        <div style={{position:'absolute',top:0,right:0,background:'var(--blue-mid)',border:'1px solid var(--border)',
-          borderRadius:6,padding:'8px 12px',fontSize:11,pointerEvents:'none',zIndex:10}}>
-          <div style={{color:'var(--teal)',fontWeight:700,marginBottom:3}}>{tip.name}</div>
-          <div style={{color:utilColor(tip.util),fontWeight:700}}>{tip.util}% utilization</div>
-          <div style={{color:'var(--gray-400)'}}>{tip.used} / {tip.total} IPs</div>
-          {tip.util>=90&&<div style={{color:'#FCA5A5',marginTop:3}}>! Critical</div>}
-        </div>
-      )}
+    <div className="subnet-rank-list" role="list"
+      aria-label={`Top subnets by utilization: ${top10.map(s=>`${s.name} ${s.util} percent`).join(', ')}`}>
+      {top10.map((s,i)=>{
+        const col=utilColor(s.util);
+        const hl=highlight===s.id;
+        const dim=highlight&&!hl;
+        return (
+          <button key={s.id} role="listitem" className={`subnet-rank-row${hl?' active':''}`}
+            style={{opacity:dim?0.4:1}} onClick={()=>onBar(s.id)}
+            title={`${s.name} · ${s.addr}/${s.cidr} · ${s.used}/${s.total} IPs · ${s.util}%${s.util>=90?' · critical':''}`}>
+            <span className="sr-num">{i+1}</span>
+            <span className="sr-name">{s.name}</span>
+            <span className="sr-ut">{s.used}/{s.total}</span>
+            <span className="sr-bar"><span className="sr-fill" style={{width:`${s.util}%`,background:col}}/></span>
+            <span className="sr-pct" style={{color:col}}>{s.util}%</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1385,8 +1374,15 @@ function WidgetViz({data=[], viz='table', columns=[], labelKey, valueKey, rowCol
   );
 }
 
+const NDA='NstarDnsActivity.';
 function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
   const [cf,setCf]=useState('');
+  const clientCtl=useColumns('dns-clients',[
+    {key:'device',label:'Device',fixed:true,sortVal:r=>r[NDA+'device_name']||'',csv:r=>r[NDA+'device_name']||'',render:r=><span style={{fontWeight:500}}>{r[NDA+'device_name']||'—'}</span>},
+    {key:'ip',label:'IP',mono:true,size:10,sortVal:r=>r[NDA+'device_ip']||'',csv:r=>r[NDA+'device_ip']||'',render:r=><span style={{color:'var(--gray-400)'}}>{r[NDA+'device_ip']||'—'}</span>},
+    {key:'queries',label:'Queries',mono:true,size:11,sortVal:r=>Number(r[NDA+'total_query_count'])||0,csv:r=>Number(r[NDA+'total_query_count'])||0,render:r=>(Number(r[NDA+'total_query_count'])||0).toLocaleString()},
+    {key:'share',label:'Share',sortVal:r=>Number(r[NDA+'total_query_count'])||0,csv:r=>{const c=Number(r[NDA+'total_query_count'])||0;const t=(data&&(data.top_clients||[]).reduce((a,x)=>a+(Number(x[NDA+'total_query_count'])||0),0))||0;return (t>0?Math.round(c/t*100):0)+'%';},render:r=>{const c=Number(r[NDA+'total_query_count'])||0;const t=(data&&(data.top_clients||[]).reduce((a,x)=>a+(Number(x[NDA+'total_query_count'])||0),0))||0;const pct=t>0?Math.round(c/t*100):0;return <div style={{display:'flex',alignItems:'center',gap:6}}><div className="bar-track"><div className="bar-fill" style={{width:`${pct}%`,background:'var(--teal)'}}/></div><span style={{fontSize:10,color:'var(--gray-400)'}}>{pct}%</span></div>;}},
+  ]);
   if(!data) return <SkeletonTable/>;
   const {volume=[],top_clients=[],query_types=[]} = data;
   const total = top_clients.reduce((a,r)=>a+(Number(r['NstarDnsActivity.total_query_count'])||0),0);
@@ -1441,32 +1437,11 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
           <div style={{marginLeft:'auto'}}><RowLimitBar limit={rowLimit} setLimit={setRowLimit}/></div>
         </div>
         <div className="scroll" style={{maxHeight:480}}>
-          <table className="tbl">
-            <thead><tr><th>#</th><th>Device</th><th>IP</th><th>Queries</th><th>Share</th></tr></thead>
-            <tbody>
-              {fclients.length===0&&<tr><td colSpan={5}><div className="no-data" style={{padding:'24px 0'}}>No clients match "{cf}"</div></td></tr>}
-              {fclients.slice(0,rowLimit).map((r,i)=>{
-                const cnt=Number(r['NstarDnsActivity.total_query_count'])||0;
-                const name=r['NstarDnsActivity.device_name']||'—';
-                const ip=r['NstarDnsActivity.device_ip']||'—';
-                const pct=total>0?Math.round(cnt/total*100):0;
-                return (
-                  <tr key={i}>
-                    <td style={{color:'var(--gray-400)',fontSize:10,width:28}}>{i+1}</td>
-                    <td style={{fontSize:12,fontWeight:500}}>{name}</td>
-                    <td style={{fontFamily:'monospace',fontSize:10,color:'var(--gray-400)'}}>{ip}</td>
-                    <td style={{fontFamily:'monospace',fontSize:11}}>{cnt.toLocaleString()}</td>
-                    <td>
-                      <div style={{display:'flex',alignItems:'center',gap:6}}>
-                        <div className="bar-track"><div className="bar-fill" style={{width:`${pct}%`,background:'var(--teal)'}}/></div>
-                        <span style={{fontSize:10,color:'var(--gray-400)'}}>{pct}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {fclients.length===0
+            ? <div className="no-data" style={{padding:'24px 0'}}>No clients match "{cf}"</div>
+            : <DataTable cols={clientCtl.allCols} ctl={clientCtl} rows={fclients}
+                defaultRows={rowLimit} rowKey={r=>r[NDA+'device_ip']||r[NDA+'device_name']}
+                initialSort={{key:'queries',dir:'desc'}} exportName="dns-top-clients" persistId="dns-clients"/>}
         </div>
       </div>
     </>
@@ -1810,6 +1785,8 @@ function SearchSection({data, srchQ, setSrchQ, srchRes, setSrchRes, srching, set
                 <span style={{marginLeft:6,background:'var(--surface-3)',borderRadius:4,padding:'1px 7px',fontSize:10,color:'var(--teal)',fontWeight:700}}>
                   {srchRes.local[g.key].length}
                 </span>
+                <button className="col-btn" style={{marginLeft:'auto'}} title="Export these matches as CSV"
+                  onClick={()=>downloadCSV(`search-${g.key}.csv`, srchRes.local[g.key], g.cols.map(k=>({key:k,label:k})))}>CSV</button>
               </div>
               <div className="scroll" style={{maxHeight:220}}>
                 <table className="tbl">
@@ -2177,11 +2154,15 @@ function VaultUnlock({onDone}) {
   </div></div>);
 }
 
-function VaultAddTenant({onDone, onCancel, first}) {
-  const [key,setKey]=useState(''),[label,setLabel]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),[test,setTest]=useState('');
+function VaultAddTenant({onDone, onCancel, first, editId, editLabel}) {
+  const isEdit=!!editId;
+  const [key,setKey]=useState(''),[label,setLabel]=useState(editLabel||''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),[test,setTest]=useState('');
   const go=async()=>{ if(!key)return; setErr(''); setBusy(true);
-    const {ok,data}=await vpost('/api/vault/tenant',{label,key}); setBusy(false);
-    if(ok&&data.ok) onDone(); else setErr(data.error||'Could not add connection.');
+    const {ok,data}=isEdit
+      ? await vpost('/api/vault/tenant-update',{id:editId,label,key})
+      : await vpost('/api/vault/tenant',{label,key});
+    setBusy(false);
+    if(ok&&data.ok) onDone(); else setErr(data.error||(isEdit?'Could not replace key.':'Could not add connection.'));
   };
   const doTest=async()=>{ if(!key)return; setTest('Testing…');
     const {ok,data}=await vpost('/api/vault/test-key',{key});
@@ -2190,15 +2171,17 @@ function VaultAddTenant({onDone, onCancel, first}) {
   useEffect(()=>{ if(!onCancel)return; const h=e=>{if(e.key==='Escape')onCancel();}; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onCancel]);
   return (<div className="vault-screen" onClick={onCancel?()=>onCancel():undefined}><div className="vault-card" onClick={e=>e.stopPropagation()}>
     <div className="vault-logo">Infoblox NOC Dashboard</div>
-    <h2>{first?'Add your first connection':'Add a connection'}</h2>
-    <p>Paste an Infoblox API key. The key is encrypted in your vault, and the connection is named automatically from its CSP account.</p>
+    <h2>{isEdit?`Replace key for ${editLabel||'connection'}`:(first?'Add your first connection':'Add a connection')}</h2>
+    <p>{isEdit
+      ? 'Paste a new Infoblox API key for this connection — e.g. when the old one was rejected or lacks account access. The connection re-names itself from the new key.'
+      : 'Paste an Infoblox API key. The key is encrypted in your vault, and the connection is named automatically from its CSP account.'}</p>
     <label>Infoblox API key</label>
     <input className="vault-in" type="password" value={key} onChange={e=>{setKey(e.target.value);setTest('');}} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="paste token (any format — Token/Bearer prefix optional)" autoFocus/>
     <label>Name (optional — auto-named from the portal if blank)</label>
     <input className="vault-in" value={label} onChange={e=>setLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="leave blank to use the CSP account name"/>
     {test&&<div style={{fontSize:11,marginTop:8,color:test.startsWith('Key valid')?'var(--sev-green-t)':(test==='Testing…'?'var(--gray-400)':'var(--sev-red-t)')}}>{test}</div>}
     {err&&<div className="vault-err">{err}</div>}
-    <button className="vault-btn" onClick={go} disabled={busy||!key}>{busy?'Adding…':'Add connection'}</button>
+    <button className="vault-btn" onClick={go} disabled={busy||!key}>{busy?(isEdit?'Replacing…':'Adding…'):(isEdit?'Replace key':'Add connection')}</button>
     <button className="vault-cancel" onClick={doTest} disabled={!key}>Test key</button>
     {onCancel&&<button className="vault-cancel" onClick={onCancel}>Cancel</button>}
   </div></div>);
@@ -2269,6 +2252,7 @@ function VaultGate() {
 function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcct, acctSearch='', setAcctSearch}) {
   const [open,setOpen]=useState(false),[adding,setAdding]=useState(false),[settings,setSettings]=useState(false);
   const [confirmRm,setConfirmRm]=useState(null);   // tenant id pending delete-confirm
+  const [editTenant,setEditTenant]=useState(null); // connection whose key is being replaced
   const [testing,setTesting]=useState(false);
   const tenants=vault.tenants||[];
   const active=tenants.find(t=>t.id===vault.active);
@@ -2283,6 +2267,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
     toast(ok&&data.ok ? ('Infoblox OK — '+(data.name||'connected')) : ('Infoblox connection failed: '+((data&&data.error)||'unreachable')), ok&&data.ok?'ok':'err');
   };
   if(adding) return <VaultAddTenant onCancel={()=>setAdding(false)} onDone={reload}/>;
+  if(editTenant) return <VaultAddTenant editId={editTenant.id} editLabel={editTenant.label} onCancel={()=>setEditTenant(null)} onDone={reload}/>;
   if(settings) return <VaultSettings llm={vault.llm} onCancel={()=>setSettings(false)} onDone={reload}/>;
   return (
     <div className="ctx-block">
@@ -2293,7 +2278,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
         </button>
       </div>
       <div className="ctx-val">{active?active.label:'—'}</div>
-      {accounts.length>0&&(
+      {accounts.length>0&&(multiAcct||(activeAcctName&&active&&activeAcctName!==active.label))&&(
         <div className="ctx-acct" title={multiAcct?'CSP account in view — switch in the ⇄ menu':'This key maps to a single CSP account'}>
           Account: <b style={{color:'var(--gray-400)'}}>{activeAcctName||'—'}</b>
         </div>
@@ -2311,8 +2296,11 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
           ) : (
             <div key={t.id} className="tenant-row">
               <button className={`acct-menu-item${t.id===vault.active?' active':''}`} style={{flex:1}} onClick={()=>switchTo(t.id)}>
-                {t.id===vault.active?'● ':'○ '}{t.label}
+                {t.id===vault.active?'● ':'○ '}
+                {t.needsKey&&<span className="tenant-warn" title="This key never resolved a CSP account — likely invalid or lacking access. Use Fix key.">! </span>}
+                {t.label}
               </button>
+              {t.needsKey&&<button className="tenant-fix" title="Replace this connection's API key" onClick={()=>{setOpen(false);setEditTenant(t);}}>Fix key</button>}
               <button className="tenant-rm" title="Remove connection" onClick={()=>setConfirmRm(t.id)}>✕</button>
             </div>
           )))}
@@ -2980,7 +2968,7 @@ function App({vault, onVaultChange}={}) {
                       return (
                         <>
                           {sv==='subnetbars'?<>
-                          <div style={{fontSize:9,color:'var(--gray-400)',marginBottom:6,textAlign:'right'}}>Click a bar to drill down</div>
+                          <div style={{fontSize:9,color:'var(--gray-400)',marginBottom:6,textAlign:'right'}}>Click a row to drill down</div>
                           <SubnetBars subnets={subnets} highlight={subFilt} onBar={id=>setSubFilt(f=>f===id?null:id)}/>
                           </>:<WidgetViz data={subRows} viz={sv}
                             columns={subCols}

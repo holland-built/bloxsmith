@@ -344,6 +344,28 @@ def vault_remove_tenant(tid):
         _vault_save(); _apply_active()
         return {"ok": True}
 
+def vault_update_tenant(tid, key, label=None):
+    """Replace the API key for an existing connection (the 'Fix key' flow) and
+    re-resolve its account name. Re-applies if it's the active connection."""
+    if not _vault["unlocked"]:
+        return {"ok": False, "error": "locked"}
+    key = _norm_key(key)
+    if not key:
+        return {"ok": False, "error": "API key required"}
+    with _vault_lock:
+        t = next((x for x in _vault["tenants"] if x["id"] == tid), None)
+        if not t:
+            return {"ok": False, "error": "unknown connection"}
+        t["key"] = key
+        lbl = (label or "").strip()
+        if not lbl:
+            lbl = _portal_label_for_key(key) or t.get("label") or f"Tenant {_vault['tenants'].index(t) + 1}"
+        t["label"] = lbl
+        _vault_save()
+        if _vault["active"] == tid:
+            _apply_active()
+        return {"ok": True, "id": tid, "label": lbl}
+
 def vault_set_active(tid):
     with _vault_lock:
         if not _vault["unlocked"]:
@@ -460,7 +482,9 @@ def vault_status():
         "exists": vault_exists(),
         "unlocked": (not VAULT_MODE) or _vault["unlocked"],
         "ready": bool(MCP_HEADERS.get("Authorization")),
-        "tenants": [{"id": t["id"], "label": t["label"]} for t in _vault["tenants"]],
+        "tenants": [{"id": t["id"], "label": t["label"],
+                     "needsKey": (not t["label"]) or bool(re.match(r"^Tenant \d+$", t["label"]))}
+                    for t in _vault["tenants"]],
         "active": _vault["active"],
         "hasGroq": bool(_vault["groq"]),
         "llm": {"hasKey": bool(_vault["groq"]),
@@ -1304,7 +1328,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(list_accounts())
             except Exception as e:
                 _log_exc("/api/accounts", e)
-                self._json({"accounts": [], "active": ""}, 500)
+                # Surface the real CSP reason so the UI can say "no access (403)"
+                # instead of an empty list with no explanation.
+                status = getattr(e, "code", None)
+                msg = f"CSP rejected this key ({status})" if status else "Infoblox CSP unreachable"
+                self._json({"accounts": [], "active": "", "error": msg, "status": status}, 200)
         elif path.lstrip("/") in _STATIC_FILES:
             self._file(path.lstrip("/"))  # _file validates realpath before serving
         else:
@@ -1327,6 +1355,8 @@ class Handler(BaseHTTPRequestHandler):
             r = vault_add_tenant(body.get("label", ""), body.get("key", ""), body.get("groq")); self._json(r, 200 if r.get("ok") else 400); return
         if self.path == "/api/vault/tenant-remove":
             r = vault_remove_tenant(str(body.get("id", ""))); self._json(r, 200 if r.get("ok") else 400); return
+        if self.path == "/api/vault/tenant-update":
+            r = vault_update_tenant(str(body.get("id", "")), body.get("key", ""), body.get("label")); self._json(r, 200 if r.get("ok") else 400); return
         if self.path == "/api/vault/active":
             r = vault_set_active(str(body.get("id", ""))); self._json(r, 200 if r.get("ok") else 400); return
         if self.path == "/api/vault/groq":
