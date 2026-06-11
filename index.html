@@ -279,9 +279,18 @@ body.chat-open{padding-right:340px}
 .tenant-confirm-no{color:var(--gray-400)}
 .tenant-confirm-yes:hover{color:var(--red)}
 .tenant-confirm-no:hover{color:var(--gray-200)}
-.tenant-warn{color:var(--amber);font-weight:700}
-.tenant-fix{background:none;border:1px solid var(--border);border-radius:4px;color:var(--amber);font-size:9px;font-weight:600;padding:2px 6px;cursor:pointer;flex-shrink:0}
-.tenant-fix:hover{background:var(--hover-strong);border-color:var(--amber)}
+.tenant-mini{background:none;border:1px solid var(--border);border-radius:4px;color:var(--gray-400);font-size:9px;font-weight:600;padding:2px 6px;cursor:pointer;flex-shrink:0}
+.tenant-mini:hover{background:var(--hover-strong);border-color:var(--teal);color:var(--teal-bright)}
+.keys-back{font-size:11px;color:var(--gray-400);padding:6px 10px;cursor:pointer;border-radius:4px}
+.keys-back:hover{background:var(--hover);color:var(--gray-200)}
+/* manage/AI menu items with an inline description */
+.menu-item{display:block;width:100%;text-align:left;background:none;border:none;padding:6px 10px;border-radius:4px;cursor:pointer}
+.menu-item:hover{background:var(--hover-strong)}
+.menu-item:hover .menu-lbl{color:var(--teal-bright)}
+.menu-item:disabled{opacity:.6;cursor:default}
+.menu-lbl{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-200)}
+.menu-chev{margin-left:auto;color:var(--gray-500)}
+.menu-desc{display:block;font-size:9px;color:var(--gray-500);margin-top:1px;line-height:1.4}
 .acct-sec-divider{height:1px;background:var(--border);margin:4px 0}
 .acct-sec-label{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--gray-500);font-weight:600;padding:4px 10px 2px}
 /* ── new features ── */
@@ -2251,17 +2260,24 @@ function VaultGate() {
 /* sidebar control: switch active connection (stored key) + (nested) CSP account, add/test/lock */
 function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcct, acctSearch='', setAcctSearch}) {
   const [open,setOpen]=useState(false),[adding,setAdding]=useState(false),[settings,setSettings]=useState(false);
-  const [confirmRm,setConfirmRm]=useState(null);   // tenant id pending delete-confirm
-  const [editTenant,setEditTenant]=useState(null); // connection whose key is being replaced
+  const [view,setView]=useState('main');            // 'main' | 'keys'
+  const [confirmRm,setConfirmRm]=useState(null);    // tenant id pending delete-confirm
+  const [editTenant,setEditTenant]=useState(null);  // connection whose key is being replaced
+  const [renameId,setRenameId]=useState(null),[renameVal,setRenameVal]=useState('');
   const [testing,setTesting]=useState(false);
   const tenants=vault.tenants||[];
   const active=tenants.find(t=>t.id===vault.active);
   const activeAcctName=(accounts.find(a=>a.id===activeAcct)||{}).name;
   const multiAcct=accounts.length>1;
+  const headline=activeAcctName||(active&&active.label)||'—';        // account-first: account is the headline
+  const keyDiffers=active&&active.label&&activeAcctName&&active.label!==activeAcctName;
   const reload=()=>window.location.reload();
-  const close=()=>{ setOpen(false); setConfirmRm(null); setAcctSearch&&setAcctSearch(''); };
-  const switchTo=async id=>{ if(id===vault.active){close();return;} await vpost('/api/vault/active',{id}); reload(); };
+  const close=()=>{ setOpen(false); setView('main'); setConfirmRm(null); setRenameId(null); setAcctSearch&&setAcctSearch(''); };
+  const switchAccount=id=>{ close(); switchAcct&&switchAcct(id); };
+  const switchKey=async id=>{ if(id===vault.active){setView('main');return;} await vpost('/api/vault/active',{id}); reload(); };
   const remove=async (id,label)=>{ await vpost('/api/vault/tenant-remove',{id}); toast('Removed '+label,'ok'); reload(); };
+  const doRename=async (id)=>{ const lbl=renameVal.trim(); if(!lbl){setRenameId(null);return;} await vpost('/api/vault/tenant-update',{id,label:lbl,key:''}); reload(); };
+  const refreshNames=async()=>{ close(); await vpost('/api/vault/refresh-names',{}); window.location.reload(); };
   const testConn=async()=>{ setTesting(true);
     const {ok,data}=await vpost('/api/vault/conn-test',{}); setTesting(false); close();
     toast(ok&&data.ok ? ('Infoblox OK — '+(data.name||'connected')) : ('Infoblox connection failed: '+((data&&data.error)||'unreachable')), ok&&data.ok?'ok':'err');
@@ -2272,61 +2288,93 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   return (
     <div className="ctx-block">
       <div className="ctx-head">
-        <span className="ctx-cap" title="A saved Infoblox API key, named after its CSP account. Switch or manage with ⇄.">Connection</span>
-        <button className="ctx-swap" title={multiAcct?'Switch connection / account · manage':'Switch / manage connections'} disabled={switchingAcct} onClick={()=>open?close():setOpen(true)}>
+        <span className="ctx-cap" title="The CSP account you're viewing. Switch accounts (and manage keys) with ⇄.">Account</span>
+        <button className="ctx-swap" title="Switch account · manage keys" disabled={switchingAcct} onClick={()=>open?close():setOpen(true)}>
           {switchingAcct?'⟳':'⇄'}
         </button>
       </div>
-      <div className="ctx-val">{active?active.label:'—'}</div>
-      {activeAcctName&&active&&activeAcctName!==active.label&&(
-        <div className="ctx-acct" title={multiAcct?'CSP account in view — switch in the ⇄ menu':'This key maps to a single CSP account'}>
-          Account: <b style={{color:'var(--gray-400)'}}>{activeAcctName||'—'}</b>
-        </div>
+      <div className="ctx-val">{headline}</div>
+      {keyDiffers&&(
+        <div className="ctx-acct" title="The stored key (login) backing this account">via <b style={{color:'var(--gray-400)'}}>{active.label}</b></div>
       )}
       {open&&(<>
         <div className="acct-overlay" onClick={close}/>
         <div className="acct-menu">
-          <div className="acct-sec-label" title="Saved Infoblox API keys in your vault. The filled ● is active.">Connections</div>
-          {tenants.map(t=>( confirmRm===t.id ? (
-            <div key={t.id} className="tenant-confirm" title="This permanently removes the stored key from the vault.">
-              <span className="tenant-confirm-q">Remove {t.label}?</span>
-              <button className="tenant-confirm-yes" title="Remove permanently" onClick={()=>remove(t.id,t.label)}>✓</button>
-              <button className="tenant-confirm-no" title="Keep" onClick={()=>setConfirmRm(null)}>✕</button>
-            </div>
-          ) : (
-            <div key={t.id} className="tenant-row">
-              <button className={`acct-menu-item${t.id===vault.active?' active':''}`} style={{flex:1}} onClick={()=>switchTo(t.id)}>
-                {t.id===vault.active?'● ':'○ '}
-                {t.needsKey&&<span className="tenant-warn" title="This key never resolved a CSP account — likely invalid or lacking access. Use Fix key.">! </span>}
-                {t.label}
-              </button>
-              {t.needsKey&&<button className="tenant-fix" title="Replace this connection's API key" onClick={()=>{setOpen(false);setEditTenant(t);}}>Fix key</button>}
-              <button className="tenant-rm" title="Remove connection" onClick={()=>setConfirmRm(t.id)}>✕</button>
-            </div>
-          )))}
-          {multiAcct&&(<>
+          {view==='keys' ? (<>
+            {/* ── Keys sub-view: stored logins (identities) ── */}
+            <div className="keys-back" onClick={()=>{setView('main');setConfirmRm(null);setRenameId(null);}}>‹ Keys</div>
             <div className="acct-sec-divider"/>
-            <div className="acct-sec-label">CSP account</div>
-            {accounts.length>6&&(
-              <input className="acct-search" autoFocus placeholder="Search accounts…"
-                value={acctSearch} onChange={e=>setAcctSearch&&setAcctSearch(e.target.value)}/>
-            )}
-            <div style={{maxHeight:200,overflowY:'auto'}}>
-              {accounts.filter(a=>a.name.toLowerCase().includes(acctSearch.toLowerCase())).map(a=>(
-                <button key={a.id} className={`acct-menu-item${a.id===activeAcct?' active':''}`} title={a.name}
-                  onClick={()=>{close();switchAcct&&switchAcct(a.id);}}>
-                  {a.id===activeAcct?'● ':'○ '}{a.name}
+            {tenants.map(t=>( confirmRm===t.id ? (
+              <div key={t.id} className="tenant-confirm" title="This permanently removes the stored key from the vault.">
+                <span className="tenant-confirm-q">Remove {t.label}?</span>
+                <button className="tenant-confirm-yes" title="Remove permanently" onClick={()=>remove(t.id,t.label)}>✓</button>
+                <button className="tenant-confirm-no" title="Keep" onClick={()=>setConfirmRm(null)}>✕</button>
+              </div>
+            ) : renameId===t.id ? (
+              <div key={t.id} className="tenant-row">
+                <input className="acct-search" autoFocus style={{flex:1,marginBottom:0}} value={renameVal}
+                  onChange={e=>setRenameVal(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')doRename(t.id);if(e.key==='Escape')setRenameId(null);}}/>
+                <button className="tenant-confirm-yes" title="Save name" onClick={()=>doRename(t.id)}>✓</button>
+                <button className="tenant-confirm-no" title="Cancel" onClick={()=>setRenameId(null)}>✕</button>
+              </div>
+            ) : (
+              <div key={t.id} className="tenant-row">
+                <button className={`acct-menu-item${t.id===vault.active?' active':''}`} style={{flex:1}} title="Make this the active login" onClick={()=>switchKey(t.id)}>
+                  {t.id===vault.active?'● ':'○ '}{t.label}
                 </button>
-              ))}
-            </div>
+                <button className="tenant-mini" title="Rename" onClick={()=>{setRenameId(t.id);setRenameVal(t.label);}}>Aa</button>
+                <button className="tenant-mini" title="Replace this key (e.g. if expired)" onClick={()=>{setOpen(false);setEditTenant(t);}}>key</button>
+                <button className="tenant-rm" title="Remove key" onClick={()=>setConfirmRm(t.id)}>✕</button>
+              </div>
+            )))}
+            <div className="acct-sec-divider"/>
+            <button className="menu-item" onClick={()=>{close();setAdding(true);}}>
+              <span className="menu-lbl">+ Add key</span>
+              <span className="menu-desc">Store another Infoblox API key (a separate login)</span>
+            </button>
+            <button className="menu-item" onClick={refreshNames}>
+              <span className="menu-lbl">Refresh names</span>
+              <span className="menu-desc">Re-fetch CSP account names for all stored keys</span>
+            </button>
+          </>) : (<>
+            {/* ── Main view: account-first ── */}
+            <div className="acct-sec-label" title="CSP accounts the active key can act in. The filled ● is in view.">Account</div>
+            {accounts.length===0
+              ? <div className="menu-desc" style={{padding:'4px 10px 8px'}}>No accounts resolved — the active key may be invalid. Open Keys to test or replace it.</div>
+              : <>
+                {accounts.length>6&&(
+                  <input className="acct-search" autoFocus placeholder="Search accounts…"
+                    value={acctSearch} onChange={e=>setAcctSearch&&setAcctSearch(e.target.value)}/>
+                )}
+                <div style={{maxHeight:220,overflowY:'auto'}}>
+                  {accounts.filter(a=>a.name.toLowerCase().includes(acctSearch.toLowerCase())).map(a=>(
+                    <button key={a.id} className={`acct-menu-item${a.id===activeAcct?' active':''}`} title={a.name} onClick={()=>switchAccount(a.id)}>
+                      {a.id===activeAcct?'● ':'○ '}{a.name}
+                    </button>
+                  ))}
+                </div>
+              </>}
+            <div className="acct-sec-divider"/>
+            <div className="acct-sec-label">Manage</div>
+            <button className="menu-item" onClick={()=>setView('keys')}>
+              <span className="menu-lbl">Keys ({tenants.length})<span className="menu-chev">›</span></span>
+              <span className="menu-desc">Stored API logins — one key reaches all its accounts</span>
+            </button>
+            <button className="menu-item" disabled={testing} onClick={testConn}>
+              <span className="menu-lbl">{testing?'Testing…':'Test Infoblox connection'}</span>
+              <span className="menu-desc">Check the active key actually reaches Infoblox CSP</span>
+            </button>
+            <button className="menu-item" onClick={async()=>{await vpost('/api/vault/lock',{});window.location.reload();}}>
+              <span className="menu-lbl">Lock vault</span>
+              <span className="menu-desc">Clear keys from memory; require your passphrase. Nothing is deleted</span>
+            </button>
+            <div className="acct-sec-divider"/>
+            <div className="acct-sec-label">AI</div>
+            <button className="menu-item" onClick={()=>{close();setSettings(true);}}>
+              <span className="menu-lbl">AI provider</span>
+              <span className="menu-desc">LLM for the query box — global to this vault, separate from Infoblox keys</span>
+            </button>
           </>)}
-          <div className="acct-sec-divider"/>
-          <div className="acct-sec-label">Manage</div>
-          <button className="acct-menu-item" title="Store another Infoblox API key in the encrypted vault." onClick={()=>{close();setAdding(true);}}>+ Add connection</button>
-          <button className="acct-menu-item" disabled={testing} title="Check the active key actually reaches Infoblox CSP." onClick={testConn}>{testing?'Testing…':'Test Infoblox connection'}</button>
-          <button className="acct-menu-item" onClick={async()=>{close();await vpost('/api/vault/refresh-names',{});window.location.reload();}} title="Re-fetch CSP account names for all stored connections">Refresh names</button>
-          <button className="acct-menu-item" title="LLM that powers the query box — global to this vault, not per connection." onClick={()=>{close();setSettings(true);}}>AI provider</button>
-          <button className="acct-menu-item" onClick={async()=>{await vpost('/api/vault/lock',{});window.location.reload();}} title="Clear keys from memory and require your passphrase again. Nothing is deleted.">Lock vault</button>
         </div>
       </>)}
     </div>

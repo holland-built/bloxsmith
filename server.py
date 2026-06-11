@@ -267,7 +267,13 @@ def vault_unlock(passphrase):
                        "llm_base": payload.get("llm_base", ""), "llm_model": payload.get("llm_model", ""),
                        "_key": key, "_salt": raw["salt"]})
         _apply_active()
-        return {"ok": True}
+    # lock released — best-effort: auto-resolve any 'Tenant N'/blank key names so a
+    # valid-but-unnamed key shows its real CSP account (not a 'Tenant 2' fallback).
+    try:
+        vault_refresh_names()
+    except Exception:
+        pass
+    return {"ok": True}
 
 def _norm_key(k):
     """Accept whatever Infoblox-shaped key the user pastes and normalize to the
@@ -345,26 +351,28 @@ def vault_remove_tenant(tid):
         return {"ok": True}
 
 def vault_update_tenant(tid, key, label=None):
-    """Replace the API key for an existing connection (the 'Fix key' flow) and
-    re-resolve its account name. Re-applies if it's the active connection."""
+    """Update a stored connection: replace its API key, rename it, or both.
+    A blank key keeps the existing key (rename-only). Re-applies if active."""
     if not _vault["unlocked"]:
         return {"ok": False, "error": "locked"}
-    key = _norm_key(key)
-    if not key:
-        return {"ok": False, "error": "API key required"}
+    key = _norm_key(key)                         # may be "" for rename-only
+    lbl = (label or "").strip()
+    if not key and not lbl:
+        return {"ok": False, "error": "nothing to update"}
     with _vault_lock:
         t = next((x for x in _vault["tenants"] if x["id"] == tid), None)
         if not t:
             return {"ok": False, "error": "unknown connection"}
-        t["key"] = key
-        lbl = (label or "").strip()
-        if not lbl:
-            lbl = _portal_label_for_key(key) or t.get("label") or f"Tenant {_vault['tenants'].index(t) + 1}"
-        t["label"] = lbl
+        if key:
+            t["key"] = key
+            if not lbl:                          # new key, no explicit name → auto-resolve
+                lbl = _portal_label_for_key(key) or t.get("label") or f"Tenant {_vault['tenants'].index(t) + 1}"
+        if lbl:
+            t["label"] = lbl
         _vault_save()
-        if _vault["active"] == tid:
+        if _vault["active"] == tid and key:
             _apply_active()
-        return {"ok": True, "id": tid, "label": lbl}
+        return {"ok": True, "id": tid, "label": t["label"]}
 
 def vault_set_active(tid):
     with _vault_lock:
@@ -482,9 +490,7 @@ def vault_status():
         "exists": vault_exists(),
         "unlocked": (not VAULT_MODE) or _vault["unlocked"],
         "ready": bool(MCP_HEADERS.get("Authorization")),
-        "tenants": [{"id": t["id"], "label": t["label"],
-                     "needsKey": (not t["label"]) or bool(re.match(r"^Tenant \d+$", t["label"]))}
-                    for t in _vault["tenants"]],
+        "tenants": [{"id": t["id"], "label": t["label"]} for t in _vault["tenants"]],
         "active": _vault["active"],
         "hasGroq": bool(_vault["groq"]),
         "llm": {"hasKey": bool(_vault["groq"]),
