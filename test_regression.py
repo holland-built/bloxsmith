@@ -495,11 +495,17 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("Test connection")
         self.assertContains("Test key")
 
-    # ── connection footer: rename, inline-confirm delete, live conn-test ──────
-    def test_connection_footer_rename(self):
-        # "Tenant" surfaced to the user is now "Connection"
-        self.assertContains(">Connection<", "footer caption should read 'Connection'")
-        self.assertContains("+ Add connection")
+    # ── account-first switcher: footer + menu IA ──────────────────────────────
+    def test_account_first_footer(self):
+        # footer headline is now the CSP Account; keys live behind a sub-view
+        self.assertContains(">Account<", "footer caption should read 'Account'")
+        self.assertContains("Keys (")              # "Keys (N) ›" entry to the sub-view
+        self.assertContains("+ Add key")
+
+    def test_account_first_sections(self):
+        # AI provider is its own section, separate from Infoblox actions
+        self.assertContains("menu-desc", "Manage items should have inline descriptions")
+        self.assertContains("view==='keys'", "keys sub-view missing")
 
     def test_connection_inline_confirm_delete(self):
         # the ✕ no longer deletes immediately — it arms a two-step confirm
@@ -532,15 +538,14 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("useColumns('dns-clients'")
         self.assertContains('downloadCSV(`search-', "search-group CSV export missing")
 
-    # ── connection key health + replace-key flow ─────────────────────────────
+    # ── connection key management: rename + replace-key ──────────────────────
     def test_connection_key_repair(self):
         s = self._server()
         self.assertIn("def vault_update_tenant", s)
         self.assertIn("/api/vault/tenant-update", s)
-        self.assertIn('"needsKey"', s)              # status surfaces unhealthy keys
         self.assertContains("/api/vault/tenant-update")
-        self.assertContains("tenant-fix")           # Fix key affordance
-        self.assertContains("editId")               # VaultAddTenant edit mode
+        self.assertContains("editId")               # VaultAddTenant replace-key mode
+        self.assertContains("doRename")             # inline rename in the Keys sub-view
 
     def test_refresh_names(self):
         self.assertIn("def vault_refresh_names", self._server())
