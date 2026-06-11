@@ -198,6 +198,12 @@ body.chat-open{padding-right:340px}
 .sr-bar{flex:1;height:6px;min-width:40px;background:var(--svg-track);border-radius:3px;overflow:hidden}
 .sr-fill{display:block;height:100%;border-radius:3px;transition:width .35s cubic-bezier(.22,1,.36,1)}
 .sr-pct{flex:0 0 38px;text-align:right;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.sr-collapse{display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:var(--surface-2);border:1px dashed var(--border);border-radius:6px;padding:6px 8px;margin-bottom:4px;font-size:11px;color:var(--gray-400);cursor:pointer;font-family:inherit}
+.sr-collapse b{color:var(--gray-200);font-weight:600}
+.sr-collapse:hover{border-color:var(--gray-600)}
+.sr-toggle{background:none;border:1px solid var(--border);border-radius:5px;color:var(--teal);font-size:10px;padding:3px 8px;margin-top:8px;cursor:pointer;font-family:inherit}
+.sr-toggle:hover{border-color:var(--teal)}
+.sr-empty{font-size:11px;color:var(--gray-400);padding:12px 4px;text-align:center}
 /* tooltip */
 .tt{background:var(--blue-mid);border:1px solid var(--border);border-radius:6px;padding:9px 13px;font-size:12px}
 .tt-lbl{color:var(--teal);font-weight:600;margin-bottom:3px}
@@ -887,10 +893,24 @@ function Donut({hosts,filter,onSlice}) {
 function SubnetBars({subnets,highlight,onBar}) {
   // Compact ranked list (not giant bars): rank · name · used/total · severity bar · %.
   // Reuses utilColor + the same bar vocabulary as the IPAM table — dense, glanceable.
-  const top10=[...subnets].sort((a,b)=>b.util-a.util).slice(0,10);
+  // Single-IP (/32) subnets are trivially 100% and flood the ranking, so hide them
+  // by default and collapse any 100%-saturated run — each revealable via a toggle.
+  const [showTiny,setShowTiny]=useState(false);
+  const [show100,setShow100]=useState(false);
+  const tinyCount=subnets.filter(s=>s.total<=1).length;
+  const pool=showTiny?subnets:subnets.filter(s=>s.total>1);
+  const sorted=[...pool].sort((a,b)=>b.util-a.util);
+  const hundreds=sorted.filter(s=>s.util>=100);
+  const top10=(show100?sorted:sorted.filter(s=>s.util<100)).slice(0,10);
   return (
     <div className="subnet-rank-list" role="list"
       aria-label={`Top subnets by utilization: ${top10.map(s=>`${s.name} ${s.util} percent`).join(', ')}`}>
+      {hundreds.length>0&&(
+        <button className="sr-collapse" onClick={()=>setShow100(v=>!v)}
+          title={show100?'Collapse the 100% subnets':'Show the subnets at 100%'}>
+          {show100?'▾':'▸'} <b>{hundreds.length} subnet{hundreds.length>1?'s':''} at 100%</b>{show100?' — hide':' — show'}
+        </button>
+      )}
       {top10.map((s,i)=>{
         const col=utilColor(s.util);
         const hl=highlight===s.id;
@@ -907,6 +927,12 @@ function SubnetBars({subnets,highlight,onBar}) {
           </button>
         );
       })}
+      {top10.length===0&&!hundreds.length&&<div className="sr-empty">No multi-IP subnets with usage.</div>}
+      {tinyCount>0&&(
+        <button className="sr-toggle" onClick={()=>setShowTiny(v=>!v)}>
+          {showTiny?`Hide ${tinyCount} single-IP`:`+ ${tinyCount} single-IP subnet${tinyCount>1?'s':''} hidden — show`}
+        </button>
+      )}
     </div>
   );
 }
@@ -3113,7 +3139,7 @@ function App({vault, onVaultChange}={}) {
                   <div className={`card${fullscreen==='subnets'?' fs':''}`}>
                     <div className="card-title">
                       <DragHandle id="subnets"/>
-                      <div className="dot"/>Top 10 Subnets by DHCP Utilization
+                      <div className="dot"/>Top Subnets by DHCP Utilization
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="subnets" def="subnetbars" opts={[['subnetbars','Bars'],['table','Table'],['line','Line'],['raw','Raw']]}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('subnets')} title={collapsed['subnets']?'Expand':'Collapse'}>{collapsed['subnets']?'▶':'▼'}</button>
@@ -3124,7 +3150,7 @@ function App({vault, onVaultChange}={}) {
                       const drillSub = subFilt ? subnets.find(s=>s.id===subFilt) : null;
                       const drillLeases = drillSub ? leasesInSubnet(leases, drillSub) : [];
                       const sv=getViz('subnets','subnetbars');
-                      const subRows=[...subnets].sort((a,b)=>b.util-a.util).slice(0,10)
+                      const subRows=[...subnets].filter(s=>s.total>1).sort((a,b)=>b.util-a.util).slice(0,10)
                         .map(s=>({...s, name: s.name!==s.addr?s.name:'—', addr: `${s.addr}/${s.cidr}`}));
                       const subHasSite=subRows.some(s=>s.site&&s.site!=='–'&&s.site!=='—');
                       const subCols=[{key:'name',label:'Subnet'},{key:'addr',label:'Network'},{key:'util',label:'Util %'},{key:'used',label:'Used'},
