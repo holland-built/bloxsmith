@@ -2368,8 +2368,8 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               <span className="menu-desc">Verify the active key reaches CSP</span>
             </button>
             <button className="menu-item" onClick={async()=>{await vpost('/api/vault/lock',{});window.location.reload();}}>
-              <span className="menu-lbl">Lock (sign out)</span>
-              <span className="menu-desc">Clears keys; passphrase to return. Nothing deleted</span>
+              <span className="menu-lbl">Lock vault</span>
+              <span className="menu-desc">Hide your saved keys behind the passphrase. Use when you step away</span>
             </button>
             <div className="acct-sec-divider"/>
             <div className="acct-sec-label">AI</div>
