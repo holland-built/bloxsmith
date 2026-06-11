@@ -123,10 +123,6 @@ body.chat-open{padding-right:340px}
 .mb20{margin-bottom:20px}
 .mb24{margin-bottom:24px}
 /* gauges */
-.gauge-val{font-size:30px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
-.gauge-lbl{font-size:11px;color:var(--gray-400);margin-top:5px}
-.gauge-track{height:4px;background:var(--surface-3);border-radius:2px;margin-top:12px}
-.gauge-fill{height:100%;border-radius:2px;transition:width .8s ease}
 /* tables */
 .tbl{width:100%;border-collapse:collapse}
 .tbl th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);padding:7px 10px;border-bottom:1px solid var(--border)}
@@ -171,6 +167,9 @@ body.chat-open{padding-right:340px}
 .stile-st{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px}
 .stile-big{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
 .stile-desc{font-size:11px;color:var(--gray-500)}
+.stile-of{font-size:13px;font-weight:600;color:var(--gray-500)}
+.stile-track{height:4px;background:var(--surface-3);border-radius:2px;margin-top:2px}
+.stile-fill{height:100%;border-radius:2px;transition:width .8s ease}
 .stile.crit{background:rgba(239,68,68,.08);border-color:var(--badge-red-bd)}.stile.crit .stile-big{color:var(--sev-red-t)}.stile.crit .stile-st{background:var(--badge-red-bg);color:var(--sev-red-t)}
 .stile.warn{background:rgba(245,158,11,.07);border-color:var(--badge-amber-bd)}.stile.warn .stile-big{color:var(--sev-amber-t)}.stile.warn .stile-st{background:var(--badge-amber-bg);color:var(--sev-amber-t)}
 .stile.ok{background:var(--surface-2);border-color:var(--border)}.stile.ok .stile-big{color:var(--sev-green-t)}.stile.ok .stile-st{background:var(--badge-green-bg);color:var(--sev-green-t)}
@@ -366,7 +365,7 @@ tr:hover .copy-btn{opacity:1}
 .sort-ind{margin-left:4px;opacity:.5;font-size:9px}
 @media(prefers-reduced-motion:reduce){
   .pulse,.t-dot{animation:none}
-  .chat-panel,.gauge-fill,.drag-card,.drill-panel,.sr-fill{transition:none}
+  .chat-panel,.stile-fill,.drag-card,.drill-panel,.sr-fill{transition:none}
   .bento>.drag-card{animation:none}
   .skel{animation:none;opacity:.7}
   .toast{animation:none}
@@ -804,25 +803,6 @@ function mockMCPQuery(q, data) {
 }
 
 /* ─── SUBCOMPONENTS ─────────────────────────────────────────────────────────*/
-
-function GaugeCard({value,max,label,sub,color,icon,onClick}) {
-  const pct = max>0 ? Math.min(value/max*100,100):0;
-  return (
-    <div className="card" style={{cursor:onClick?'pointer':'default'}} onClick={onClick}
-      role={onClick?'button':undefined} tabIndex={onClick?0:undefined}
-      onKeyDown={onClick?(e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onClick();}}):undefined}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}>
-        <span style={{fontSize:18,opacity:.65}}>{icon}</span>
-        <span style={{fontSize:9,color:'var(--gray-400)',textTransform:'uppercase',letterSpacing:'.1em'}}>{label}</span>
-      </div>
-      <div className="gauge-val" style={{color}}>{value}</div>
-      <div className="gauge-lbl">{sub}</div>
-      <div className="gauge-track" style={{marginTop:10}}>
-        <div className="gauge-fill" style={{width:`${pct}%`,background:color}}/>
-      </div>
-    </div>
-  );
-}
 
 /* SVG donut — no external deps */
 function Donut({hosts,filter,onSlice}) {
@@ -2449,7 +2429,7 @@ function App({vault, onVaultChange}={}) {
   const [zoneFilt, setZoneFilt] = useState(null);
   const [rowLimits, setRowLimits]       = useState(()=>LS.get('rl',{}));
   const [collapsed, setCollapsed]       = useState(()=>LS.get('cl',{}));
-  const DEFAULT_ORDER=['kpis','hosts','subnets','ttl','audit','pols','feeds'];
+  const DEFAULT_ORDER=['hosts','subnets','ttl','audit','pols','feeds'];
   const [overviewOrder, setOverviewOrder] = useState(()=>{
     const saved=LS.get('noc.widgetOrder', null) || LS.get('oo', null) || DEFAULT_ORDER;
     // keep only known ids + append any missing defaults (forward-compatible)
@@ -2753,7 +2733,9 @@ function App({vault, onVaultChange}={}) {
 
   // ── app-update (notify only; the server checks GitHub, the browser never does) ──
   const upd = updInfo || (vault&&vault.update) || {};
-  const UPGRADE_CMD = 'docker pull ghcr.io/holland-built/infoblox-noc-dashboard:latest && docker rm -f infoblox-noc && docker run -d --name infoblox-noc -p 8080:8080 ghcr.io/holland-built/infoblox-noc-dashboard:latest';
+  // Mounts the noc-vault volume so encrypted keys + passphrase survive the
+  // upgrade; matches run-image.sh defaults (loopback bind, restart policy).
+  const UPGRADE_CMD = 'docker pull ghcr.io/holland-built/infoblox-noc-dashboard:latest && docker rm -f infoblox-noc && docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 -v noc-vault:/vault --restart unless-stopped ghcr.io/holland-built/infoblox-noc-dashboard:latest';
   const checkUpdate = () => { setUpdBusy(true);
     fetch('/api/update/check').then(r=>r.json()).then(u=>setUpdInfo(u)).catch(()=>{}).finally(()=>setUpdBusy(false)); };
   // one-click self-update: ask Watchtower to recreate us, then poll until the app
@@ -3000,21 +2982,23 @@ function App({vault, onVaultChange}={}) {
               const feedCrit = feeds.filter(f=>f.level==='critical'&&f.active).length;
               const auditFail = auditLogs.filter(l=>l.result==='failure').length;
               const tiles = [
-                {cat:'Hosts',   n:errHosts,       sev:errHosts>0 ?'crit':'ok', desc:'offline / error',  section:'hosts'},
-                {cat:'Subnets', n:critSubs.length,sev:critSubs.length>0?'warn':'ok', desc:'≥90% utilization', section:'ipam'},
-                {cat:'DNS',     n:ttlBad.length,  sev:ttlBad.length>0?'warn':'ok', desc:'TTL anomalies',    section:'dns'},
-                {cat:'Threats', n:feedCrit,       sev:feedCrit>0 ?'warn':'ok', desc:'critical feeds',   section:'threats'},
-                {cat:'Audit',   n:auditFail,      sev:auditFail>0?'crit':'ok', desc:'failed events',    section:'audit'},
+                {cat:'Hosts',   n:errHosts,       tot:hosts.length,    sev:errHosts>0 ?'crit':'ok', desc:'offline / error',  section:'hosts'},
+                {cat:'Subnets', n:critSubs.length,tot:subnets.length,  sev:critSubs.length>0?'warn':'ok', desc:'≥90% utilization', section:'ipam'},
+                {cat:'DNS',     n:ttlBad.length,  tot:zones.length,    sev:ttlBad.length>0?'warn':'ok', desc:'TTL anomalies',    section:'dns'},
+                {cat:'Threats', n:feedCrit,       tot:feeds.length,    sev:feedCrit>0 ?'warn':'ok', desc:'critical feeds',   section:'threats'},
+                {cat:'Audit',   n:auditFail,      tot:auditLogs.length,sev:auditFail>0?'crit':'ok', desc:'failed events',    section:'audit'},
               ];
               const ST={crit:'CRIT',warn:'WARN',ok:'OK'};
+              const BAR={crit:'var(--red)',warn:'var(--amber)',ok:'var(--green)'};
               return (
                 <div className="stiles" role="group" aria-label="Tenant status by domain">
                   {tiles.map(t=>(
                     <button key={t.cat} className={`stile ${t.sev}`} onClick={()=>setSection(t.section)}
-                            title={`${t.cat}: ${t.n} ${t.desc} — open ${t.section.toUpperCase()}`}>
+                            title={`${t.cat}: ${t.n}${t.tot>0?(' of '+t.tot):''} ${t.desc} — open ${t.section.toUpperCase()}`}>
                       <div className="stile-top"><span className="stile-cat">{t.cat}</span><span className="stile-st">{ST[t.sev]}</span></div>
-                      <span className="stile-big">{t.n}</span>
+                      <span className="stile-big">{t.n}{t.tot>0&&<span className="stile-of"> / {t.tot}</span>}</span>
                       <span className="stile-desc">{t.desc}</span>
+                      {t.tot>0&&<div className="stile-track"><div className="stile-fill" style={{width:`${Math.min(t.n/t.tot*100,100)}%`,background:BAR[t.sev]}}/></div>}
                     </button>
                   ))}
                 </div>
@@ -3035,17 +3019,6 @@ function App({vault, onVaultChange}={}) {
             )}
             <div className="bento">
             {overviewOrder.map(id=>{
-              if(id==='kpis') return (
-                <div key="kpis" {...wrapProps('kpis','b-full')} style={{position:'relative'}}>
-                  <div style={{position:'absolute',top:-2,right:2,zIndex:2}}><DragHandle id="kpis"/></div>
-                  <div className="g4">
-                    <GaugeCard value={critSubs.length}  max={subnets.length}   label="Critical Subnets" sub={`of ${subnets.length} total`}    color={critSubs.length>0?CK.red():CK.green()} icon="⊞" onClick={()=>setSection('ipam')}/>
-                    <GaugeCard value={onlineH.length}   max={hosts.length}     label="Hosts Online"     sub={`of ${hosts.length} total`}      color={CK.green()}  icon="⊡" onClick={()=>setSection('hosts')}/>
-                    <GaugeCard value={ttlBad.length}    max={zones.length}     label="TTL Anomalies"    sub={`of ${zones.length} zones`}      color={ttlBad.length>0?CK.amber():CK.green()} icon="⊕" onClick={()=>setSection('dns')}/>
-                    <GaugeCard value={activeF.length}   max={feeds.length}     label="Active Feeds"     sub={`of ${feeds.length} total`}      color="var(--teal)"  icon="⊗" onClick={()=>setSection('threats')}/>
-                  </div>
-                </div>
-              );
               if(id==='hosts') return (
                 <div key="hosts" {...wrapProps('hosts')}>
                   <div className={`card${fullscreen==='hosts'?' fs':''}`}>
