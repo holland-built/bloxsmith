@@ -98,6 +98,7 @@ if [[ "$WT_RUN" == "1" ]]; then
   docker run -d --name "$WT_NAME" \
     --network "$NET" \
     -v /var/run/docker.sock:/var/run/docker.sock \
+    -e DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}" \
     -e WATCHTOWER_HTTP_API_UPDATE=true \
     -e WATCHTOWER_HTTP_API_TOKEN="$WT_TOKEN" \
     -e WATCHTOWER_LABEL_ENABLE=true \
