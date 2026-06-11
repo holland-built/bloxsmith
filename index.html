@@ -162,14 +162,19 @@ body.chat-open{padding-right:340px}
 .no-data{text-align:center;padding:48px 36px;color:var(--gray-400);font-size:12px;line-height:1.6}
 /* alert banner */
 .alert{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--sev-red-t);display:flex;align-items:center;gap:7px}
-.issue-strip{display:flex;flex-direction:column;gap:6px;margin-bottom:18px}
-.issue-row{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-radius:7px;font-size:12px;cursor:pointer;transition:opacity .12s;width:100%;font-family:inherit;text-align:left;background:none;border:none}
-.issue-row:hover{opacity:.85}
-.issue-row-crit{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:var(--sev-red-t)}
-.issue-row-warn{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:var(--sev-amber-t)}
-.issue-row-ok{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.15);color:var(--sev-green-t)}
-:root[data-theme="light"] .issue-row-warn{background:rgba(245,158,11,.14)}
-.issue-arrow{font-size:10px;opacity:.6}
+/* status-tile matrix — one tile per domain, tinted by worst severity, glanceable across a room */
+.stiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.stile{padding:12px 14px;border-radius:9px;border:1px solid;cursor:pointer;display:flex;flex-direction:column;gap:6px;text-align:left;font-family:inherit;background:none;transition:opacity .12s}
+.stile:hover{opacity:.85}
+.stile-top{display:flex;align-items:center;justify-content:space-between}
+.stile-cat{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-400);font-weight:600}
+.stile-st{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px}
+.stile-big{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.stile-desc{font-size:11px;color:var(--gray-500)}
+.stile.crit{background:rgba(239,68,68,.08);border-color:var(--badge-red-bd)}.stile.crit .stile-big{color:var(--sev-red-t)}.stile.crit .stile-st{background:var(--badge-red-bg);color:var(--sev-red-t)}
+.stile.warn{background:rgba(245,158,11,.07);border-color:var(--badge-amber-bd)}.stile.warn .stile-big{color:var(--sev-amber-t)}.stile.warn .stile-st{background:var(--badge-amber-bg);color:var(--sev-amber-t)}
+.stile.ok{background:var(--surface-2);border-color:var(--border)}.stile.ok .stile-big{color:var(--sev-green-t)}.stile.ok .stile-st{background:var(--badge-green-bg);color:var(--sev-green-t)}
+.stile:focus-visible{outline:2px solid var(--focus-border);outline-offset:-2px}
 /* policy items */
 .pol-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)}
 .pol-item:last-child{border-bottom:none}
@@ -367,7 +372,7 @@ tr:hover .copy-btn{opacity:1}
   .spin,.spinner{animation-duration:1.6s}
 }
 :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:3px}
-.nav-item:focus-visible,.issue-row:focus-visible{outline-offset:-2px}
+.nav-item:focus-visible{outline-offset:-2px}
 /* ── vault auth screens ── */
 .vault-screen{position:fixed;inset:0;z-index:550;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--blue-dark);overflow:auto}
 .vault-cancel{width:100%;background:none;border:1px solid var(--border);border-radius:7px;color:var(--gray-400);font-size:12px;font-weight:600;padding:9px;cursor:pointer;margin-top:8px}
@@ -2941,27 +2946,27 @@ function App({vault, onVaultChange}={}) {
         {/* ── OVERVIEW ── */}
         {section==='overview'&&(
           <>
-            {/* Priority Issue Strip */}
+            {/* Status-tile matrix — one tile per domain, tinted by worst severity */}
             {(()=>{
-              const issues=[];
-              const errHosts=hosts.filter(h=>h.status==='error'||h.status==='offline');
-              if(errHosts.length>0) issues.push({cls:'issue-row-crit',icon:'!',msg:`${errHosts.length} host${errHosts.length>1?'s':''} offline or in error state`,section:'hosts'});
-              const ttlIssues=zones.filter(z=>z.anomaly);
-              if(ttlIssues.length>0) issues.push({cls:'issue-row-warn',icon:'!',msg:`${ttlIssues.length} DNS zone${ttlIssues.length>1?'s':''} with TTL anomalies`,section:'dns'});
-              if(critSubs.length>0) issues.push({cls:'issue-row-warn',icon:'!',msg:`${critSubs.length} subnet${critSubs.length>1?'s':''} at ≥90% utilization: ${critSubs.map(s=>s.name).slice(0,3).join(', ')}${critSubs.length>3?'…':''}`,section:'ipam'});
-              const feedCrit=feeds.filter(f=>f.level==='critical'&&f.active);
-              if(feedCrit.length>0) issues.push({cls:'issue-row-warn',icon:'!',msg:`${feedCrit.length} active critical threat feeds`,section:'threats'});
-              if(issues.length===0) return (
-                <div className="issue-row-ok issue-row" style={{marginBottom:18}}>
-                  <span>✓ All systems normal — no critical issues detected</span>
-                </div>
-              );
+              const errHosts = hosts.filter(h=>h.status==='error'||h.status==='offline').length;
+              const feedCrit = feeds.filter(f=>f.level==='critical'&&f.active).length;
+              const auditFail = auditLogs.filter(l=>l.result==='failure').length;
+              const tiles = [
+                {cat:'Hosts',   n:errHosts,       sev:errHosts>0 ?'crit':'ok', desc:'offline / error',  section:'hosts'},
+                {cat:'Subnets', n:critSubs.length,sev:critSubs.length>0?'warn':'ok', desc:'≥90% utilization', section:'ipam'},
+                {cat:'DNS',     n:ttlBad.length,  sev:ttlBad.length>0?'warn':'ok', desc:'TTL anomalies',    section:'dns'},
+                {cat:'Threats', n:feedCrit,       sev:feedCrit>0 ?'warn':'ok', desc:'critical feeds',   section:'threats'},
+                {cat:'Audit',   n:auditFail,      sev:auditFail>0?'crit':'ok', desc:'failed events',    section:'audit'},
+              ];
+              const ST={crit:'CRIT',warn:'WARN',ok:'OK'};
               return (
-                <div className="issue-strip">
-                  {issues.map((iss,i)=>(
-                    <button key={i} className={`issue-row ${iss.cls}`} onClick={()=>setSection(iss.section)}>
-                      <span>{iss.icon} {iss.msg}</span>
-                      <span className="issue-arrow">→ {iss.section.toUpperCase()}</span>
+                <div className="stiles" role="group" aria-label="Tenant status by domain">
+                  {tiles.map(t=>(
+                    <button key={t.cat} className={`stile ${t.sev}`} onClick={()=>setSection(t.section)}
+                            title={`${t.cat}: ${t.n} ${t.desc} — open ${t.section.toUpperCase()}`}>
+                      <div className="stile-top"><span className="stile-cat">{t.cat}</span><span className="stile-st">{ST[t.sev]}</span></div>
+                      <span className="stile-big">{t.n}</span>
+                      <span className="stile-desc">{t.desc}</span>
                     </button>
                   ))}
                 </div>
