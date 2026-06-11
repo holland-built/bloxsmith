@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # write: lets the master build cut a vX.Y.Z release
   packages: write
 
 jobs:
@@ -64,3 +64,19 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Auto-publish a GitHub Release for this build so the in-app update check
+      # (which polls the Releases API) sees every master push. Runs only on the
+      # default branch; the tag it creates re-triggers this workflow once, but
+      # that run skips this step (not on master) and the release already exists.
+      - name: Cut release
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.ver.outputs.version }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — skipping."
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes --target "$GITHUB_SHA"
+          fi

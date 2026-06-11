@@ -63,6 +63,15 @@ _UPDATE_TTL = 24 * 3600  # seconds between checks
 _update_cache = {"checked_at": 0.0, "latest": None, "available": False, "html_url": None}
 _update_lock = threading.Lock()
 
+# One-click self-update via a Watchtower sidecar. run-image.sh starts Watchtower
+# with its HTTP API enabled, on a shared network, and passes us the URL + token.
+# When both are set we expose an "Update now" button that asks Watchtower to pull
+# :latest and recreate this container. No Docker socket is mounted here — only
+# Watchtower touches the daemon.
+WATCHTOWER_URL   = os.environ.get("WATCHTOWER_URL")    # e.g. http://watchtower:8080/v1/update
+WATCHTOWER_TOKEN = os.environ.get("WATCHTOWER_TOKEN")
+SELF_UPDATE = bool(WATCHTOWER_URL and WATCHTOWER_TOKEN)
+
 def _ver_n(v):
     """Extract the integer <n> from a '1.0.<n>' / 'v1.0.<n>' version; None if unparseable."""
     if not v:
@@ -109,7 +118,23 @@ def update_status(force=False):
     with _update_lock:
         return {"current": APP_VERSION, "latest": _update_cache["latest"],
                 "available": _update_cache["available"], "url": _update_cache["html_url"],
-                "checkDisabled": UPDATE_CHECK_DISABLED}
+                "checkDisabled": UPDATE_CHECK_DISABLED, "selfUpdate": SELF_UPDATE}
+
+def trigger_self_update():
+    """Ask the Watchtower sidecar to pull :latest and recreate this container.
+    Watchtower replaces us mid-request, so the caller should expect the connection
+    to drop, then poll until the app returns reporting a newer version."""
+    if not SELF_UPDATE:
+        return {"ok": False, "error": "self-update not configured (no Watchtower sidecar)"}
+    from urllib.request import urlopen, Request
+    try:
+        req = Request(WATCHTOWER_URL, method="POST",
+                      headers={"Authorization": f"Bearer {WATCHTOWER_TOKEN}"})
+        with urlopen(req, timeout=8) as r:
+            r.read()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 # Shared-secret for the state-changing write endpoint (/api/block-domain).
 # If unset, that write is disabled (401). Supply it via the X-Auth-Token header.
@@ -1443,6 +1468,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(vault_lock()); return
         if self.path == "/api/vault/reset":
             self._json(vault_reset()); return
+        if self.path == "/api/update/apply":
+            self._json(trigger_self_update()); return
         if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
             self._json({"error": "vault locked", "locked": True}, 503); return
         if self.path != "/api/switch-account":
