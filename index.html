@@ -95,7 +95,7 @@ body.chat-open{padding-right:340px}
 .nav-item.active{background:var(--tint);color:var(--teal);font-weight:600;border-left:2px solid var(--teal);padding-left:8px}
 .nav-icon{width:16px;text-align:center;color:var(--gray-600);transition:color .12s}
 .nav-item:hover .nav-icon,.nav-item.active .nav-icon{color:var(--teal)}
-.sidebar-foot{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--gray-400)}
+.sidebar-foot{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--gray-400);position:relative}
 .main{padding:0 20px 40px;flex:1;min-width:0;max-width:100%;width:100%}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;padding:18px 0 14px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;background:var(--blue-dark)}
 .page-title{font-size:var(--fs-lg);font-weight:700}
@@ -229,8 +229,25 @@ body.chat-open{padding-right:340px}
 .send-b:disabled{opacity:.35;cursor:default}
 .chat-toggle-btn{display:flex;align-items:center;gap:7px;background:var(--blue-deep);border:1px solid var(--border);color:var(--gray-200);padding:7px 13px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;margin-left:8px;transition:all .12s}
 .chat-toggle-btn:hover,.chat-toggle-btn.on{border-color:var(--teal);color:var(--teal);background:var(--hover-strong)}
-.filter-banner{background:var(--hover-strong);border:1px solid var(--tint-border);border-radius:6px;padding:7px 13px;font-size:11px;color:var(--teal);display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.filter-clear{background:none;border:none;color:#FCA5A5;cursor:pointer;font-size:11px;font-weight:700;padding:0}
+/* unified notice rail — one vocabulary for alerts / demo / filter (severity-sorted) */
+.notice-rail{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.notice{display:flex;align-items:center;gap:10px;border-radius:8px;padding:8px 12px;font-size:12px;line-height:1.4;border:1px solid}
+.notice .n-ico{flex-shrink:0;width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border-radius:50%}
+.notice .n-msg{flex:1;min-width:0}
+.notice .n-acts{display:flex;gap:6px;flex-shrink:0;align-items:center}
+.notice b{font-weight:700}
+.n-btn{background:none;border:1px solid;border-radius:5px;font-size:11px;font-weight:600;padding:3px 10px;cursor:pointer;color:inherit;font-family:inherit}
+.n-x{background:none;border:none;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0;color:var(--gray-400);padding:0 2px}
+.n-x:hover{color:var(--ink)}
+.notice.n-red{background:rgba(239,68,68,.1);border-color:var(--badge-red-bd);color:var(--sev-red-t)}
+.notice.n-red .n-ico{background:var(--badge-red-bg);color:var(--sev-red-t)}
+.notice.n-red .n-btn{border-color:var(--badge-red-bd)}.notice.n-red .n-btn:hover{background:var(--badge-red-bg)}
+.notice.n-info{background:var(--hover-strong);border-color:var(--tint-border);color:var(--gray-200)}
+.notice.n-info .n-ico{background:var(--surface-3);color:var(--gray-200)}
+.notice.n-info b{color:var(--teal)}
+.notice.n-info .n-btn{border-color:var(--tint-border);color:var(--teal)}.notice.n-info .n-btn:hover{background:var(--hover-strong)}
+.n-more{align-self:flex-start;background:none;border:none;color:var(--gray-400);font-size:11px;font-weight:600;cursor:pointer;padding:2px 0;font-family:inherit}
+.n-more:hover{color:var(--teal)}
 .thinking{display:flex;gap:5px;align-items:center;padding:4px 2px}
 .t-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:tbounce .9s ease-in-out infinite}
 .t-dot:nth-child(2){animation-delay:.15s}.t-dot:nth-child(3){animation-delay:.3s}
@@ -422,14 +439,21 @@ tr:hover .copy-btn{opacity:1}
 .toast-close:hover{color:var(--ink)}
 @keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 /* ── onboarding / demo banner ── */
-.demo-banner{display:flex;align-items:center;gap:10px;background:var(--hover-strong);border:1px solid var(--tint-border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--gray-200);line-height:1.5}
-.demo-banner b{color:var(--teal)}
-.alert-banner{display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:9px 13px;margin-bottom:14px;font-size:12px;color:var(--sev-red-t);line-height:1.4}
-.alert-banner b{color:var(--sev-red-t)}
-.alert-banner-btn{background:none;border:1px solid var(--badge-red-bd);border-radius:5px;color:var(--sev-red-t);font-size:11px;font-weight:600;padding:3px 10px;cursor:pointer}
-.alert-banner-btn:hover{background:var(--badge-red-bg)}
-.demo-banner .demo-x{margin-left:auto;background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:15px;line-height:1;flex-shrink:0}
-.demo-banner .demo-x:hover{color:var(--ink)}
+/* version chip: amber when a newer build is available (notify only, no self-update) */
+.ver-badge.upd{color:var(--sev-amber-t);background:var(--badge-amber-bg);border-color:var(--badge-amber-bd);cursor:pointer}
+.ver-badge.upd:hover{background:rgba(245,158,11,.22)}
+.ver-up-arrow{font-weight:700;margin:0 2px}
+.upd-pop{position:absolute;bottom:calc(100% - 4px);left:14px;width:268px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;z-index:300;box-shadow:0 4px 16px rgba(0,0,0,.5)}
+.upd-pop .ver-line{font-size:12px;font-weight:600;color:var(--gray-100);margin-bottom:6px}
+.upd-pop .ver-line .to{color:var(--sev-amber-t)}
+.upd-pop a{color:var(--teal);font-size:11px;text-decoration:none}
+.upd-pop a:hover{text-decoration:underline}
+.upd-cmd{background:var(--blue-dark);border:1px solid var(--border);border-radius:5px;padding:7px 8px;font-family:ui-monospace,Menlo,monospace;font-size:9.5px;color:var(--gray-200);white-space:pre-wrap;word-break:break-all;margin:8px 0;line-height:1.5}
+.upd-actions{display:flex;gap:6px;margin-top:8px}
+.upd-actions button{flex:1;background:var(--blue-deep);border:1px solid var(--border);border-radius:5px;color:var(--teal);font-size:11px;font-weight:600;padding:5px 8px;cursor:pointer;font-family:inherit}
+.upd-actions button:hover{border-color:var(--teal)}
+.upd-actions button:disabled{opacity:.6;cursor:default}
+.upd-note{font-size:10px;color:var(--gray-400);margin-top:6px}
 /* ── panel error state ── */
 .panel-error{text-align:center;padding:40px 24px;color:var(--gray-400);font-size:12px;line-height:1.6}
 .panel-error .retry-btn{margin-top:12px;background:var(--blue-deep);border:1px solid var(--teal);color:var(--teal);border-radius:6px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer}
@@ -2438,6 +2462,11 @@ function App({vault, onVaultChange}={}) {
   const [cmdkOpen, setCmdkOpen]     = useState(false);
   const [notifyOn, setNotifyOn]     = useState(()=>LS.get('noc.notify',false));
   const [alertsDismissed, setAlertsDismissed] = useState(false);  // session-only banner dismiss
+  const [noticesExpanded, setNoticesExpanded] = useState(false);  // collapse extras past the cap
+  const [updPop, setUpdPop]         = useState(false);            // version-chip popover
+  const [updCopied, setUpdCopied]   = useState(false);
+  const [updBusy, setUpdBusy]       = useState(false);            // "Check now" in flight
+  const [updInfo, setUpdInfo]       = useState(()=>(vault&&vault.update)||null);
   const prevFiringRef               = useRef(new Set());
   const [accounts, setAccounts]     = useState([]);
   const [activeAcct, setActiveAcct] = useState('');   // CSP account id
@@ -2712,6 +2741,12 @@ function App({vault, onVaultChange}={}) {
   const shareView = () => { const url=location.origin+location.pathname+'#'+section;
     if(navigator.clipboard) navigator.clipboard.writeText(url).catch(()=>{}); };
 
+  // ── app-update (notify only; the server checks GitHub, the browser never does) ──
+  const upd = updInfo || (vault&&vault.update) || {};
+  const UPGRADE_CMD = 'docker pull ghcr.io/holland-built/infoblox-noc-dashboard:latest && docker rm -f infoblox-noc && docker run -d --name infoblox-noc -p 8080:8080 ghcr.io/holland-built/infoblox-noc-dashboard:latest';
+  const checkUpdate = () => { setUpdBusy(true);
+    fetch('/api/update/check').then(r=>r.json()).then(u=>setUpdInfo(u)).catch(()=>{}).finally(()=>setUpdBusy(false)); };
+
   const commands = [
     ...SECTIONS.map(s=>({id:'go-'+s.id, icon:s.icon, label:'Go to '+s.label, keywords:s.id, hint:'Section', run:()=>setSection(s.id)})),
     {id:'refresh', icon:'↻', label:'Refresh data',                         keywords:'reload update', run:()=>load(true)},
@@ -2758,8 +2793,24 @@ function App({vault, onVaultChange}={}) {
         <div className="sidebar-foot">
           <div style={{color:'var(--green)',display:'flex',alignItems:'center',gap:5}}>
             <span className="pulse">●</span> API Connected
-            {vault&&vault.version&&<span className="ver-badge" title="App version — bumps on every build/deploy">v{vault.version}</span>}
+            {vault&&vault.version&&(upd.available
+              ? <span className="ver-badge upd" title={`Update available: v${upd.latest}`} role="button" tabIndex={0}
+                  onClick={()=>setUpdPop(v=>!v)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setUpdPop(v=>!v);}}}
+                  style={{marginLeft:'auto'}}>v{vault.version}<span className="ver-up-arrow">↑</span>{String(upd.latest||'').replace(/^v/,'')}</span>
+              : <span className="ver-badge" title="App version — bumps on every build/deploy">v{vault.version}</span>)}
           </div>
+          {updPop&&(
+            <div className="upd-pop" role="dialog" aria-label="Update available">
+              <div className="ver-line">v{vault.version} → <span className="to">{upd.latest} available</span></div>
+              {upd.url&&<div><a href={upd.url} target="_blank" rel="noopener noreferrer">View release notes ↗</a></div>}
+              <div className="upd-cmd">{UPGRADE_CMD}</div>
+              <div className="upd-actions">
+                <button onClick={()=>copyToClip(UPGRADE_CMD,setUpdCopied)}>{updCopied?'Copied ✓':'Copy command'}</button>
+                <button onClick={checkUpdate} disabled={updBusy}>{updBusy?'Checking…':'Check now'}</button>
+              </div>
+              <div className="upd-note">Pull the new image and recreate the container to update.</div>
+            </div>
+          )}
           <div className="ctx-panel">
           {vault&&vault.vaultMode
             ? <TenantManager vault={vault} accounts={accounts} activeAcct={activeAcct}
@@ -2852,28 +2903,40 @@ function App({vault, onVaultChange}={}) {
             </div>
           </div>
         </div>
-        {sq&&(
-          <div className="filter-banner">
-            <span>Filtering: "<b>{searchQuery}</b>" — results narrowed in all sections</span>
-            <button className="filter-clear" onClick={()=>setSearchQuery('')}>✕ Clear</button>
-          </div>
-        )}
-        {usingMock&&!demoDismiss&&(
-          <div className="demo-banner">
-            <span aria-hidden="true">!</span>
-            <span><b>Demo data</b> — the bridge couldn't reach Infoblox, so sample data is shown. Set <b>INFOBLOX_API_KEY</b> and restart the server to see live data (see the README).</span>
-            <button className="demo-x" aria-label="Dismiss demo notice" onClick={()=>{setDemoDismiss(true);LS.set('noc.demoDismiss',true);}}>×</button>
-          </div>
-        )}
-        {firingAlerts.length>0&&!alertsDismissed&&(
-          <div className="alert-banner" role="status">
-            <span><span aria-hidden="true">!</span> <b>{firingAlerts.length} alert{firingAlerts.length>1?'s':''} firing</b> — {firingAlerts.slice(0,2).map(a=>`${metricLabel(a.metric)} (${a.value})`).join(', ')}{firingAlerts.length>2?`, +${firingAlerts.length-2} more`:''}</span>
-            <span style={{display:'flex',gap:6,flexShrink:0}}>
-              {section!=='alerts'&&<button className="alert-banner-btn" onClick={()=>setSection('alerts')}>View</button>}
-              <button className="demo-x" aria-label="Dismiss alerts" onClick={()=>setAlertsDismissed(true)}>×</button>
-            </span>
-          </div>
-        )}
+        {/* ── unified notice rail (one vocabulary; severity-sorted; collapses past 2) ── */}
+        {(()=>{
+          const notices=[];
+          if(firingAlerts.length>0&&!alertsDismissed) notices.push({
+            id:'alerts', sev:'n-red', ico:'!',
+            msg:<><b>{firingAlerts.length} alert{firingAlerts.length>1?'s':''} firing</b> — {firingAlerts.slice(0,2).map(a=>`${metricLabel(a.metric)} (${a.value})`).join(', ')}{firingAlerts.length>2?`, +${firingAlerts.length-2} more`:''}</>,
+            acts:<>{section!=='alerts'&&<button className="n-btn" onClick={()=>setSection('alerts')}>View</button>}<button className="n-x" aria-label="Dismiss alerts" onClick={()=>setAlertsDismissed(true)}>×</button></>,
+          });
+          if(usingMock&&!demoDismiss) notices.push({
+            id:'demo', sev:'n-info', ico:'i',
+            msg:<><b>Demo data</b> — the bridge couldn't reach Infoblox, so sample data is shown. Set <b>INFOBLOX_API_KEY</b> and restart the server to see live data (see the README).</>,
+            acts:<button className="n-x" aria-label="Dismiss demo notice" onClick={()=>{setDemoDismiss(true);LS.set('noc.demoDismiss',true);}}>×</button>,
+          });
+          if(sq) notices.push({
+            id:'filter', sev:'n-info', ico:'i',
+            msg:<>Filtering: "<b>{searchQuery}</b>" — results narrowed in all sections</>,
+            acts:<button className="n-btn" onClick={()=>setSearchQuery('')}>Clear</button>,
+          });
+          if(!notices.length) return null;
+          const CAP=2, hidden=notices.length-CAP;
+          const shown=noticesExpanded?notices:notices.slice(0,CAP);
+          return (
+            <div className="notice-rail" role="status">
+              {shown.map(n=>(
+                <div key={n.id} className={`notice ${n.sev}`}>
+                  <span className="n-ico" aria-hidden="true">{n.ico}</span>
+                  <span className="n-msg">{n.msg}</span>
+                  <span className="n-acts">{n.acts}</span>
+                </div>
+              ))}
+              {hidden>0&&<button className="n-more" onClick={()=>setNoticesExpanded(v=>!v)}>{noticesExpanded?'Show fewer ⌃':`+${hidden} more notice${hidden>1?'s':''} ⌄`}</button>}
+            </div>
+          );
+        })()}
 
         {/* ── OVERVIEW ── */}
         {section==='overview'&&(

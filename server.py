@@ -52,6 +52,65 @@ def _git_version():
     except Exception:
         return "dev"
 APP_VERSION = os.environ.get("APP_VERSION") or _git_version()
+
+# ── GitHub update check ─────────────────────────────────────────────────────
+# Server-side, cached, opt-out. The browser never calls GitHub (avoids CORS,
+# per-tab rate-limit burn, and leaking viewer IPs). We poll the Releases API at
+# most once per day in a background thread; the status endpoint never waits on it.
+APP_REPO = os.environ.get("APP_REPO", "holland-built/infoblox-noc-dashboard")
+UPDATE_CHECK_DISABLED = bool(os.environ.get("DISABLE_UPDATE_CHECK"))
+_UPDATE_TTL = 24 * 3600  # seconds between checks
+_update_cache = {"checked_at": 0.0, "latest": None, "available": False, "html_url": None}
+_update_lock = threading.Lock()
+
+def _ver_n(v):
+    """Extract the integer <n> from a '1.0.<n>' / 'v1.0.<n>' version; None if unparseable."""
+    if not v:
+        return None
+    m = re.search(r"(\d+)\.(\d+)\.(\d+)", str(v))
+    return int(m.group(3)) if m else None
+
+def _do_update_fetch():
+    """Hit the GitHub Releases API once; update the cache. Never raises."""
+    from urllib.request import urlopen, Request
+    try:
+        req = Request(f"https://api.github.com/repos/{APP_REPO}/releases/latest",
+                      headers={"User-Agent": "infoblox-noc-dashboard",
+                               "Accept": "application/vnd.github+json"})
+        with urlopen(req, timeout=3) as r:
+            rel = json.loads(r.read().decode())
+        latest, url = rel.get("tag_name"), rel.get("html_url")
+        cur_n, latest_n = _ver_n(APP_VERSION), _ver_n(latest)
+        available = bool(cur_n is not None and latest_n is not None and latest_n > cur_n)
+        with _update_lock:
+            _update_cache.update(latest=latest, html_url=url, available=available)
+    except Exception:
+        pass  # offline / rate-limited / no release yet — keep last-known, never block
+    finally:
+        with _update_lock:
+            _update_cache["checked_at"] = _time.monotonic()
+
+def _maybe_check_update():
+    """Kick a background refresh if disabled is off and the cache is stale. Returns immediately."""
+    if UPDATE_CHECK_DISABLED:
+        return
+    with _update_lock:
+        fresh = (_time.monotonic() - _update_cache["checked_at"]) < _UPDATE_TTL
+        if fresh and _update_cache["checked_at"]:
+            return
+        _update_cache["checked_at"] = _time.monotonic()  # debounce concurrent kicks
+    threading.Thread(target=_do_update_fetch, daemon=True).start()
+
+def update_status(force=False):
+    if force and not UPDATE_CHECK_DISABLED:
+        _do_update_fetch()
+    else:
+        _maybe_check_update()
+    with _update_lock:
+        return {"current": APP_VERSION, "latest": _update_cache["latest"],
+                "available": _update_cache["available"], "url": _update_cache["html_url"],
+                "checkDisabled": UPDATE_CHECK_DISABLED}
+
 # Shared-secret for the state-changing write endpoint (/api/block-domain).
 # If unset, that write is disabled (401). Supply it via the X-Auth-Token header.
 DASHBOARD_TOKEN = os.environ.get("DASHBOARD_TOKEN", "")
@@ -496,6 +555,7 @@ def vault_status():
         "llm": {"hasKey": bool(_vault["groq"]),
                 "base_url": _vault.get("llm_base", ""),
                 "model": _vault.get("llm_model", "")},
+        "update": update_status(),
     }
 
 # ── MCP helpers ───────────────────────────────────────────────────────────────
@@ -1276,6 +1336,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         if path == "/api/vault/status":
             self._json(vault_status()); return
+        if path == "/api/update/check":
+            self._json(update_status(force=True)); return
         # In vault mode, no data leaves until a tenant key is unlocked + active.
         if VAULT_MODE and not MCP_HEADERS.get("Authorization") and path.startswith("/api/"):
             self._json({"error": "vault locked", "locked": True}, 503); return
