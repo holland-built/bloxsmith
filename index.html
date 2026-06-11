@@ -319,6 +319,9 @@ body.chat-open{padding-right:340px}
 /* ── new features ── */
 .auto-refresh-sel{background:var(--surface);border:1px solid var(--border);color:var(--gray-200);font-size:10px;border-radius:5px;padding:3px 6px;cursor:pointer;outline:none;margin-left:8px}
 .refresh-countdown{font-size:11px;color:var(--gray-400);margin-left:4px}
+.refresh-pause{background:var(--surface);border:1px solid var(--border);color:var(--gray-200);font-size:10px;line-height:1;border-radius:5px;padding:3px 6px;margin-left:6px;cursor:pointer}
+.refresh-pause:hover{border-color:var(--gray-600);color:var(--ink)}
+.refresh-pause[aria-pressed="true"]{color:var(--sev-amber-t);border-color:var(--badge-amber-bd);background:var(--badge-amber-bg)}
 .chip-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .chip{padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--gray-400);font-size:10px;font-weight:600;cursor:pointer;transition:all .12s}
 .chip.on{background:var(--surface-3);color:var(--teal);border-color:var(--teal)}
@@ -2422,6 +2425,7 @@ function App({vault, onVaultChange}={}) {
   const [srching, setSrching]   = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(()=>LS.get('ar',0));
   const [arCountdown, setArCountdown] = useState(0);
+  const [refreshFrozen, setRefreshFrozen] = useState(false);   // pause auto-refresh (demos)
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [ipamChip, setIpamChip] = useState(()=>LS.get('noc.ipamChip',null));
   const [hostChip, setHostChip] = useState(()=>LS.get('noc.hostChip',null));
@@ -2581,17 +2585,40 @@ function App({vault, onVaultChange}={}) {
     setSwitchingAcct(false);
   };
 
-  // deep-link: section <-> URL hash (shareable views)
+  // deep-link: section + open drill-down <-> URL hash (shareable, Back-able).
+  // Hash format: #<section> or #overview?host=<status> / ?sub=<id>.
+  const buildHash=(sec,hf,sf)=>{ const p=[]; if(sec==='overview'){ if(hf)p.push('host='+encodeURIComponent(hf)); if(sf)p.push('sub='+encodeURIComponent(sf)); } return '#'+sec+(p.length?('?'+p.join('&')):''); };
   useEffect(()=>{
-    const apply=()=>{ const id=decodeURIComponent(location.hash.replace(/^#/,'')).split('?')[0];
-      if(id && SECTIONS.some(s=>s.id===id)) setSection(id); };
+    const apply=()=>{ const h=location.hash.replace(/^#/,''); const qi=h.indexOf('?');
+      const id=decodeURIComponent(qi>=0?h.slice(0,qi):h);
+      if(id && SECTIONS.some(s=>s.id===id)){ setSection(id);
+        const q=new URLSearchParams(qi>=0?h.slice(qi+1):'');
+        setHostFilt(id==='overview'?(q.get('host')||null):null);
+        setSubFilt(id==='overview'?(q.get('sub')||null):null); } };
     apply();
     window.addEventListener('hashchange',apply);
     return ()=>window.removeEventListener('hashchange',apply);
   },[]);
+  // Push each section / drill change as a history entry so the browser & mouse
+  // Back button navigate within the app (close a drill, then step back through
+  // sections) instead of leaving it. The hashchange handler above restores state
+  // on Back; that path already matches the hash, so it won't re-push. First
+  // render uses replaceState so Back never lands on a blank entry.
+  const navInitRef = useRef(false);
   useEffect(()=>{
-    if(location.hash.replace(/^#/,'')!==section) history.replaceState(null,'','#'+section);
-  },[section]);
+    const target=buildHash(section,hostFilt,subFilt);
+    if(location.hash!==target){
+      if(navInitRef.current) history.pushState(null,'',target);
+      else history.replaceState(null,'',target);
+    }
+    navInitRef.current=true;
+  },[section,hostFilt,subFilt]);
+  // Close a drill via history when it's reflected in the URL, so Back/forward
+  // stay clean (no stranded "reopen on Back" entry); otherwise just clear it.
+  const closeDrill=which=>{
+    if(navInitRef.current && new RegExp('[?&]'+which+'=').test(location.hash)) history.back();
+    else (which==='host'?setHostFilt(null):setSubFilt(null));
+  };
 
   // auto-tooltip: set title=full value on any table cell/badge that is actually truncated
   useEffect(()=>{
@@ -2606,6 +2633,7 @@ function App({vault, onVaultChange}={}) {
 
   useEffect(()=>{
     if(!autoRefresh) { setArCountdown(0); return; }
+    if(refreshFrozen) return;            // paused: hold the countdown, no fetch
     setArCountdown(autoRefresh);
     const tick = setInterval(()=>{
       setArCountdown(c=>{
@@ -2614,14 +2642,20 @@ function App({vault, onVaultChange}={}) {
       });
     },1000);
     return ()=>clearInterval(tick);
-  },[autoRefresh]);
+  },[autoRefresh,refreshFrozen]);
 
   useEffect(()=>{
     const handler = e => {
       if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault(); setCmdkOpen(o=>!o); return; }
       if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.isContentEditable) return;
       if(e.key==='?') { setShowShortcuts(s=>!s); return; }
-      if(e.key==='Escape') { setChatOpen(false); setSubFilt(null); setHostFilt(null); setShowShortcuts(false); setCmdkOpen(false); return; }
+      if(e.key==='Escape') {
+        setChatOpen(false); setShowShortcuts(false); setCmdkOpen(false);
+        setUpdPop(false); setSidebarOpen(false); setFullscreen(null); setShowAcctMenu(false);
+        if(/[?&](host|sub)=/.test(location.hash)) history.back();   // close an open drill via history
+        else { setSubFilt(null); setHostFilt(null); }
+        return;
+      }
       if(e.key==='r'&&!e.metaKey&&!e.ctrlKey) { load(); return; }
       if(e.key==='/'){ e.preventDefault(); setSection('search'); return; }
       const idx = parseInt(e.key);
@@ -2755,7 +2789,7 @@ function App({vault, onVaultChange}={}) {
           else if(Date.now()-t0<120000){ setTimeout(poll,2500); } else { setUpdApplying(false); } })
         .catch(()=>{ if(Date.now()-t0<120000){ setTimeout(poll,2500); } else { setUpdApplying(false); } }); };
     fetch('/api/update/apply',{method:'POST'}).then(r=>r.json()).catch(()=>null)
-      .then(res=>{ if(res&&res.ok===false){ stopped=true; setUpdApplying(false); alert('Update failed: '+(res.error||'unknown')); } });
+      .then(res=>{ if(res&&res.ok===false){ stopped=true; setUpdApplying(false); toast('Update failed: '+(res.error||'unknown'),'err'); } });
     setTimeout(poll,4000);   // give Watchtower a head start before polling
   };
 
@@ -2915,7 +2949,10 @@ function App({vault, onVaultChange}={}) {
                 <option value={60}>Auto-refresh: 1m</option>
                 <option value={300}>Auto-refresh: 5m</option>
               </select>
-              {autoRefresh>0&&<span className="refresh-countdown">{arCountdown}s</span>}
+              {autoRefresh>0&&<button className="refresh-pause" aria-pressed={refreshFrozen}
+                title={refreshFrozen?'Resume auto-refresh':'Pause auto-refresh (freeze data)'}
+                onClick={()=>setRefreshFrozen(f=>!f)}>{refreshFrozen?'▶':'⏸'}</button>}
+              {autoRefresh>0&&<span className="refresh-countdown">{refreshFrozen?'Paused':arCountdown+'s'}</span>}
               <button className="refresh-btn" onClick={()=>load(true)}>
                 <span className={refreshing?'spin':''} style={{display:'inline-block'}}>↻</span>
                 {refreshing?'Refreshing…':'Refresh All'}
@@ -3042,7 +3079,7 @@ function App({vault, onVaultChange}={}) {
                         <>
                           {hv==='donut'?<>
                           <div style={{fontSize:9,color:'var(--gray-400)',marginBottom:6,textAlign:'right'}}>Click a segment to drill down</div>
-                          <Donut hosts={hosts} filter={hostFilt} onSlice={s=>setHostFilt(f=>f===s?null:s)}/>
+                          <Donut hosts={hosts} filter={hostFilt} onSlice={s=>{hostFilt===s?closeDrill('host'):setHostFilt(s);}}/>
                           </>:<WidgetViz data={statusRows} viz={hv==='line'?'bar':hv} columns={[{key:'status',label:'Status'},{key:'count',label:'Hosts'}]} labelKey="status" valueKey="count" rowColor={r=>statusColors[r.status]} defaultRows={6}/>}
                           {hostFilt&&(
                             <div className="drill-panel">
@@ -3052,7 +3089,7 @@ function App({vault, onVaultChange}={}) {
                                 </span>
                                 <div style={{display:'flex',gap:8,alignItems:'center'}}>
                                   <button className="drill-see-all" onClick={()=>setSection('hosts')}>See all in Hosts tab →</button>
-                                  <button className="drill-close" onClick={()=>setHostFilt(null)} aria-label="Close drill-down">×</button>
+                                  <button className="drill-close" onClick={()=>closeDrill('host')} aria-label="Close drill-down">×</button>
                                 </div>
                               </div>
                               <div className="scroll" style={{maxHeight:220}}>
@@ -3104,7 +3141,7 @@ function App({vault, onVaultChange}={}) {
                         <>
                           {sv==='subnetbars'?<>
                           <div style={{fontSize:9,color:'var(--gray-400)',marginBottom:6,textAlign:'right'}}>Click a row to drill down</div>
-                          <SubnetBars subnets={subnets} highlight={subFilt} onBar={id=>setSubFilt(f=>f===id?null:id)}/>
+                          <SubnetBars subnets={subnets} highlight={subFilt} onBar={id=>{subFilt===id?closeDrill('sub'):setSubFilt(id);}}/>
                           </>:<WidgetViz data={subRows} viz={sv}
                             columns={subCols}
                             labelKey="name" valueKey="util" rowColor={r=>utilColor(r.util)} defaultRows={10}/>}
@@ -3112,7 +3149,7 @@ function App({vault, onVaultChange}={}) {
                             <div className="drill-panel">
                               <div className="drill-header">
                                 <span className="drill-title">⊞ {drillSub.name} — {drillSub.addr}/{drillSub.cidr}</span>
-                                <button className="drill-close" onClick={()=>setSubFilt(null)} aria-label="Close drill-down">×</button>
+                                <button className="drill-close" onClick={()=>closeDrill('sub')} aria-label="Close drill-down">×</button>
                               </div>
                               <div style={{display:'flex',gap:16,marginBottom:10,flexWrap:'wrap'}}>
                                 {[
