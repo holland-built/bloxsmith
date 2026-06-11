@@ -294,7 +294,8 @@ body.chat-open{padding-right:340px}
 .ctx-swap:disabled{opacity:.5;cursor:default}
 .ctx-note{font-size:9px;color:var(--gray-500);margin-top:2px;line-height:1.4}
 .ctx-acct{font-size:10px;color:var(--gray-500);margin-top:3px}
-.ver-badge{margin-left:auto;font-size:9px;font-weight:600;color:var(--gray-500);background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;letter-spacing:.02em}
+.ver-badge{margin-left:auto;font-size:9px;font-weight:600;color:var(--gray-500);background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;letter-spacing:.02em;cursor:pointer}
+.ver-badge:hover{border-color:var(--gray-600);color:var(--gray-200)}
 .tenant-confirm{display:flex;align-items:center;gap:6px;padding:5px 8px 5px 10px;border-radius:4px;background:var(--red-bg);border:1px solid var(--red-border)}
 .tenant-confirm-q{flex:1;font-size:11px;color:var(--sev-red-t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tenant-confirm-yes,.tenant-confirm-no{background:none;border:none;cursor:pointer;font-size:12px;line-height:1;padding:2px 4px}
@@ -2798,22 +2799,31 @@ function App({vault, onVaultChange}={}) {
         <div className="sidebar-foot">
           <div style={{color:'var(--green)',display:'flex',alignItems:'center',gap:5}}>
             <span className="pulse">●</span> API Connected
-            {vault&&vault.version&&(upd.available
-              ? <span className="ver-badge upd" title={`Update available: v${upd.latest}`} role="button" tabIndex={0}
-                  onClick={()=>setUpdPop(v=>!v)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setUpdPop(v=>!v);}}}
-                  style={{marginLeft:'auto'}}>v{vault.version}<span className="ver-up-arrow">↑</span>{String(upd.latest||'').replace(/^v/,'')}</span>
-              : <span className="ver-badge" title="App version — bumps on every build/deploy">v{vault.version}</span>)}
+            {vault&&vault.version&&(
+              <span className={`ver-badge${upd.available?' upd':''}`} role="button" tabIndex={0}
+                title={upd.available?`Update available: v${upd.latest}`:'App version — click to check for updates'}
+                onClick={()=>setUpdPop(v=>!v)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setUpdPop(v=>!v);}}}
+                style={{marginLeft:'auto'}}>v{vault.version}{upd.available&&<><span className="ver-up-arrow">↑</span>{String(upd.latest||'').replace(/^v/,'')}</>}</span>)}
           </div>
           {updPop&&(
-            <div className="upd-pop" role="dialog" aria-label="Update available">
-              <div className="ver-line">v{vault.version} → <span className="to">{upd.latest} available</span></div>
+            <div className="upd-pop" role="dialog" aria-label="App version">
+              <div className="ver-line">{upd.available
+                ? <>v{vault.version} → <span className="to">{upd.latest} available</span></>
+                : <>v{vault.version} · {upd.checkDisabled?'update checks disabled':(upd.latest?'up to date':'version')}</>}</div>
               {upd.url&&<div><a href={upd.url} target="_blank" rel="noopener noreferrer">View release notes ↗</a></div>}
-              <div className="upd-cmd">{UPGRADE_CMD}</div>
-              <div className="upd-actions">
-                <button onClick={()=>copyToClip(UPGRADE_CMD,setUpdCopied)}>{updCopied?'Copied ✓':'Copy command'}</button>
-                <button onClick={checkUpdate} disabled={updBusy}>{updBusy?'Checking…':'Check now'}</button>
-              </div>
-              <div className="upd-note">Pull the new image and recreate the container to update.</div>
+              {upd.available&&<>
+                <div className="upd-cmd">{UPGRADE_CMD}</div>
+                <div className="upd-actions">
+                  <button onClick={()=>copyToClip(UPGRADE_CMD,setUpdCopied)}>{updCopied?'Copied ✓':'Copy command'}</button>
+                  <button onClick={checkUpdate} disabled={updBusy||upd.checkDisabled}>{updBusy?'Checking…':'Check now'}</button>
+                </div>
+                <div className="upd-note">Pull the new image and recreate the container to update.</div>
+              </>}
+              {!upd.available&&(
+                <div className="upd-actions">
+                  <button onClick={checkUpdate} disabled={updBusy||upd.checkDisabled}>{updBusy?'Checking…':'Check now'}</button>
+                </div>
+              )}
             </div>
           )}
           <div className="ctx-panel">
