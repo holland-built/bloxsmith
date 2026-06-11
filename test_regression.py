@@ -833,8 +833,8 @@ class FrontendStructureTests(unittest.TestCase):
     def test_live_page_title(self):
         self.assertContains("document.title", "document.title assignment missing")
 
-    def test_page_title_shows_noc(self):
-        self.assertContains("Infoblox NOC", "Page title NOC text missing")
+    def test_page_title_shows_app_name(self):
+        self.assertContains("Infoblox MCP", "Page title app name missing")
 
     # ── Feature 8: Sidebar Nav Badges ─────────────────────────────────────────
 
