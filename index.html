@@ -2806,6 +2806,8 @@ function App({vault, onVaultChange}={}) {
                 style={{marginLeft:'auto'}}>v{vault.version}{upd.available&&<><span className="ver-up-arrow">↑</span>{String(upd.latest||'').replace(/^v/,'')}</>}</span>)}
           </div>
           {updPop&&(
+            <>
+            <div className="acct-overlay" onClick={()=>setUpdPop(false)}/>
             <div className="upd-pop" role="dialog" aria-label="App version">
               <div className="ver-line">{upd.available
                 ? <>v{vault.version} → <span className="to">{upd.latest} available</span></>
@@ -2825,6 +2827,7 @@ function App({vault, onVaultChange}={}) {
                 </div>
               )}
             </div>
+            </>
           )}
           <div className="ctx-panel">
           {vault&&vault.vaultMode
