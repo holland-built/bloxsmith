@@ -2278,7 +2278,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
         </button>
       </div>
       <div className="ctx-val">{active?active.label:'—'}</div>
-      {accounts.length>0&&(multiAcct||(activeAcctName&&active&&activeAcctName!==active.label))&&(
+      {activeAcctName&&active&&activeAcctName!==active.label&&(
         <div className="ctx-acct" title={multiAcct?'CSP account in view — switch in the ⇄ menu':'This key maps to a single CSP account'}>
           Account: <b style={{color:'var(--gray-400)'}}>{activeAcctName||'—'}</b>
         </div>
