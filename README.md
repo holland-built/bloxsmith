@@ -139,7 +139,7 @@ chmod +x run-image.sh
 
 ---
 
-## Quick start (Docker, from source)
+## Build from source (dev)
 
 Prereq: Docker installed and running. Use this if you're developing or want to
 build locally instead of pulling the published image.
@@ -284,7 +284,7 @@ Set `HOST=0.0.0.0` to expose beyond localhost (the Docker image does this for yo
 
 | Var                | Required | Default                  | Notes                                        |
 |--------------------|----------|--------------------------|----------------------------------------------|
-| `INFOBLOX_API_KEY` | ✅       | —                        | `Token <key>`; bridge sends as `Authorization`|
+| `INFOBLOX_API_KEY` |          | —                        | `Token <key>`, sent as `Authorization`. Optional — leave blank to use the in-app encrypted vault |
 | `INFOBLOX_URL`     |          | `https://csp.infoblox.com` | Portal base URL                            |
 | `GROQ_API_KEY`     |          | _(empty)_                | Enables the AI query box (Groq)              |
 | `LLM_API_KEY`      |          | `GROQ_API_KEY`           | Overrides for any OpenAI-compatible provider |
