@@ -24,13 +24,18 @@ browser ──HTTP──▶ bridge (server.py) ──MCP──▶ csp.infoblox.c
 
 Prereq: **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows) or Docker Engine (Linux: `curl -fsSL https://get.docker.com | sh`).
 
-Grab the one script (no clone needed — it pulls the published image):
+**Compose path (recommended for servers and always-on installs)** — Watchtower wiring persists across Docker restarts automatically:
+
+```bash
+git clone https://github.com/holland-built/infoblox-noc-dashboard && cd infoblox-noc-dashboard
+cp .env.example .env   # fill in INFOBLOX_API_KEY (and optionally GROQ_API_KEY)
+docker compose up -d   # → http://localhost:8080
+```
+
+**No-clone path (desktop / SE demo)** — no git required, just Docker:
 
 ```bash
 curl -fsSL -O https://raw.githubusercontent.com/holland-built/infoblox-noc-dashboard/master/run-image.sh && chmod +x run-image.sh
-```
-
-```bash
 ./run-image.sh             # on your machine → http://localhost:8080
 LAN=1 ./run-image.sh       # on a server → prints http://<server-ip>:8080
 ```
@@ -41,7 +46,11 @@ First open: pick a passphrase, add your [Infoblox API key](#get-your-infoblox-ap
 
 ## Updating
 
-Click the version badge → **Update now**. A Watchtower sidecar (started by the script) pulls the new image and restarts — no shell, no re-pull. Your vault survives.
+Click the version badge → **Update now**. A Watchtower sidecar pulls the new image and restarts — no shell, no re-pull. Your vault survives. Or update manually:
+
+```bash
+docker compose pull && docker compose up -d
+```
 
 ## Get your Infoblox API key
 

@@ -52,9 +52,33 @@ Pin a release with a tag (`:v1.0.0`, `:1.0.0`, or `:1.0`) instead of `:latest`.
 
 ## Deploy options
 
-The convenience script [`run-image.sh`](../run-image.sh) wraps pull + run, starts a
-**Watchtower** self-update sidecar (so the in-app **Update now** button works), and
-re-pulls `:latest` on every run. No clone needed:
+**Compose** is recommended for servers and always-on installs — env vars (including
+Watchtower wiring) survive Docker restarts automatically.
+
+Clone the repo, copy the env template, and start:
+
+```bash
+git clone https://github.com/holland-built/infoblox-noc-dashboard infoblox-noc && cd infoblox-noc
+cp .env.example .env        # fill in INFOBLOX_API_KEY; WATCHTOWER_TOKEN is pre-set
+docker compose up -d                       # dashboard + self-update sidecar (loopback)
+BIND=0.0.0.0 docker compose up -d          # expose on the LAN
+docker compose --profile secure up -d      # + Caddy reverse proxy (TLS + basic-auth)
+```
+
+> **Updating `.env`:** after `git pull`, compare `.env` with `.env.example` — add any
+> new variables shown in the example; your existing values are preserved.
+
+For the `secure` profile set `BIND=127.0.0.1` (dashboard stays loopback, all access
+goes through Caddy on `:8443`) and a basic-auth hash in `.env`:
+
+```bash
+docker run --rm caddy caddy hash-password -p 'yourpassword'   # paste into BASIC_AUTH_HASH
+```
+
+### Alternative: `run-image.sh` (no clone needed)
+
+Wraps pull + run, starts a Watchtower sidecar, and re-pulls `:latest` on every run.
+Use this for desktop or SE demo setups where you don't want a git checkout:
 
 ```bash
 curl -fsSL -O https://raw.githubusercontent.com/holland-built/infoblox-noc-dashboard/master/run-image.sh
@@ -66,30 +90,19 @@ LAN=1 ./run-image.sh        # LAN → binds 0.0.0.0, prints http://<host-ip>:808
 It also prompts for an optional vault auto-unlock passphrase, saving it to
 `~/.noc-vault-pass` (`0600`) and mounting it (see [Auto-unlock](#auto-unlock-after-an-upgrade)).
 
-**Compose** (always-on servers / Proxmox VMs) — [`docker-compose.yml`](../docker-compose.yml):
-
-```bash
-docker compose up -d                       # dashboard + self-update sidecar (loopback)
-BIND=0.0.0.0 docker compose up -d          # expose on the LAN
-docker compose --profile secure up -d      # + Caddy reverse proxy (TLS + basic-auth)
-```
-
-For the `secure` profile set `BIND=127.0.0.1` (dashboard stays loopback, all access
-goes through Caddy on `:8443`) and a basic-auth hash in `.env`:
-
-```bash
-docker run --rm caddy caddy hash-password -p 'yourpassword'   # paste into BASIC_AUTH_HASH
-```
-
 | Scenario | Command | URL |
 |----------|---------|-----|
-| Localhost | `./run-image.sh` | http://localhost:8080 |
-| Server (LAN) | `LAN=1 ./run-image.sh` | http://host-ip:8080 |
-| Server (compose) | `BIND=0.0.0.0 docker compose up -d` | http://host-ip:8080 |
+| Localhost (compose) | `docker compose up -d` | http://localhost:8080 |
+| Server (LAN, compose) | `BIND=0.0.0.0 docker compose up -d` | http://host-ip:8080 |
 | Server (secure) | `docker compose --profile secure up -d` | https://host-ip:8443 (login) |
+| Desktop / no-clone | `./run-image.sh` | http://localhost:8080 |
 
 **Updating:** click the version badge → **Update now** (Watchtower pulls `:latest`
-and recreates the container; the vault volume survives). Or re-run `./run-image.sh`.
+and recreates the container; the vault volume survives). Or pull and restart manually:
+
+```bash
+docker compose pull && docker compose up -d
+```
 
 > ⚠️ **No login on LAN.** Anyone who can reach the port can use the dashboard.
 > On a trusted LAN, keep the vault **locked** when not presenting (don't set an
