@@ -476,6 +476,13 @@ tr:hover .copy-btn{opacity:1}
 .upd-actions button.primary:hover{background:var(--amber);border-color:var(--amber)}
 .upd-spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(0,0,0,.3);border-top-color:var(--blue-dark);border-radius:50%;vertical-align:-2px;margin-right:6px;animation:spin .8s linear infinite}
 .upd-note{font-size:10px;color:var(--gray-400);margin-top:6px}
+.upd-bar{position:fixed;top:0;left:0;right:0;z-index:9999;height:36px;background:rgba(245,158,11,.15);border-bottom:1px solid rgba(245,158,11,.3);display:flex;align-items:center;gap:10px;padding:0 16px;font-size:12px;color:var(--ink)}
+.upd-bar-spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(245,158,11,.3);border-top-color:var(--amber);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+.upd-bar-phase{font-weight:600;color:var(--amber)}
+.upd-bar-elapsed{color:var(--gray-400);font-variant-numeric:tabular-nums;margin-left:2px}
+.upd-bar-cancel{margin-left:auto;background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:14px;line-height:1;padding:4px}
+.upd-bar-cancel:hover{color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.upd-bar-spin{animation:none;border-top-color:var(--amber)}}
 /* ── panel error state ── */
 .panel-error{text-align:center;padding:40px 24px;color:var(--gray-400);font-size:12px;line-height:1.6}
 .panel-error .retry-btn{margin-top:12px;background:var(--blue-deep);border:1px solid var(--teal);color:var(--teal);border-radius:6px;padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer}
@@ -2511,6 +2518,24 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   );
 }
 
+function UpdateBar({phase, startTs, onCancel}) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(()=>{
+    const id=setInterval(()=>setElapsed(Math.floor((Date.now()-startTs)/1000)),1000);
+    return ()=>clearInterval(id);
+  },[startTs]);
+  const fmt=s=>s<60?`${s}s`:`${Math.floor(s/60)}m ${s%60}s`;
+  const labels={triggered:'Triggered update…',pulling:'Pulling new image…',offline:'Restarting container…',reconnecting:'Coming back up…'};
+  return (
+    <div className="upd-bar">
+      <span className="upd-bar-spin"/>
+      <span className="upd-bar-phase">{labels[phase]||'Updating…'}</span>
+      <span className="upd-bar-elapsed">{fmt(elapsed)}</span>
+      <button className="upd-bar-cancel" title="Cancel tracking (update continues in background)" onClick={onCancel}>✕</button>
+    </div>
+  );
+}
+
 function App({vault, onVaultChange}={}) {
   const [data,setData]         = useState(null);
   const [loading,setLoading]   = useState(true);
@@ -2571,7 +2596,8 @@ function App({vault, onVaultChange}={}) {
   const [updPop, setUpdPop]         = useState(false);            // version-chip popover
   const [updBusy, setUpdBusy]       = useState(false);            // "Check now" in flight
   const [updApplying, setUpdApplying] = useState(false);          // "Update now" self-update in flight
-  const [updPhase, setUpdPhase]     = useState('');               // 'restarting' | 'downloading' | 'timeout'
+  const [updPhase, setUpdPhase]     = useState('');               // 'triggered'|'pulling'|'offline'|'reconnecting'
+  const [updStart, setUpdStart]     = useState(0);                // Date.now() when update kicked off
   const [updInfo, setUpdInfo]       = useState(()=>(vault&&vault.update)||null);
   const prevFiringRef               = useRef(new Set());
   const [accounts, setAccounts]     = useState([]);
@@ -2886,26 +2912,30 @@ function App({vault, onVaultChange}={}) {
   // dropped fetch during polling is expected, not an error.
   const verN = v => { const m=/(\d+)\.(\d+)\.(\d+)/.exec(v||''); return m?+m[3]:-1; };
   const applyUpdate = () => {
-    setUpdApplying(true); setUpdPhase('restarting');
+    setUpdPop(false);                              // dismiss popover immediately
+    setUpdApplying(true); setUpdPhase('triggered'); setUpdStart(Date.now());
     const from = verN(upd.current||(vault&&vault.version));
-    let stopped=false; const t0=Date.now();
-    // Poll independently of the apply response: the container is recreated
-    // mid-request, so that fetch may simply never resolve. Keep polling until
-    // the app comes back on a newer build, then reload.
-    // Timeout 300s: first pull can take 2-3 min on slow connections (image ~200 MB).
-    const TIMEOUT=300000;
+    const t0=Date.now(); let stopped=false, wasOffline=false;
+    // State machine: track server liveness transitions, not just version number.
+    // pulling = server up, same version (Watchtower still downloading)
+    // offline = connection error (container going down)
+    // reconnecting = back online after offline (new container starting)
     const poll=()=>{ if(stopped) return;
-      const elapsed=Date.now()-t0;
-      if(elapsed>30000) setUpdPhase('downloading');
       fetch('/api/update/check',{cache:'no-store'}).then(r=>r.json())
-        .then(u=>{ if(verN(u.current)>from){ location.reload(); }
-          else if(elapsed<TIMEOUT){ setTimeout(poll,2500); }
-          else { setUpdApplying(false); setUpdPhase('timeout'); } })
-        .catch(()=>{ if(elapsed<TIMEOUT){ setTimeout(poll,2500); }
-          else { setUpdApplying(false); setUpdPhase('timeout'); } }); };
+        .then(u=>{
+          if(verN(u.current)>from){ location.reload(); return; }
+          const phase=wasOffline?'reconnecting':(Date.now()-t0>8000?'pulling':'triggered');
+          wasOffline=false; setUpdPhase(phase);
+          setTimeout(poll,2000);
+        })
+        .catch(()=>{
+          wasOffline=true; setUpdPhase('offline');
+          setTimeout(poll,2000);
+        });
+    };
     fetch('/api/update/apply',{method:'POST'}).then(r=>r.json()).catch(()=>null)
-      .then(res=>{ if(res&&res.ok===false){ stopped=true; setUpdApplying(false); setUpdPhase(''); toast('Update failed: '+(res.error||'unknown'),'err'); } });
-    setTimeout(poll,4000);   // give Watchtower a head start before polling
+      .then(res=>{ if(res&&res.ok===false){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); toast('Update failed: '+(res.error||'unknown'),'err'); } });
+    setTimeout(poll,4000);
   };
 
   const commands = [
@@ -2918,8 +2948,10 @@ function App({vault, onVaultChange}={}) {
     {id:'share',   icon:'◳', label:'Copy link to this view',              keywords:'share url link', run:shareView},
   ];
 
+  const cancelUpdate=()=>{ setUpdApplying(false); setUpdPhase(''); setUpdStart(0); };
   return (
     <div style={{display:'flex',minHeight:'100vh'}}>
+      {updApplying&&updPhase&&<UpdateBar phase={updPhase} startTs={updStart} onCancel={cancelUpdate}/>}
 
       {/* SIDEBAR */}
       {sidebarOpen&&<div className="sidebar-backdrop" onClick={()=>setSidebarOpen(false)}/>}
@@ -2970,20 +3002,12 @@ function App({vault, onVaultChange}={}) {
               {upd.url&&<div><a href={upd.url} target="_blank" rel="noopener noreferrer">View release notes ↗</a></div>}
               {upd.available&&(upd.selfUpdate ? (
                 updApplying ? <>
-                  <div className="upd-actions"><button className="primary" disabled><span className="upd-spin"/>
-                    {updPhase==='downloading'?'Downloading…':'Updating…'}
-                  </button></div>
-                  <div className="upd-note">{updPhase==='downloading'
-                    ? 'Pulling image — first update can take 2–3 min. Hang tight…'
-                    : 'Pulling the new image and restarting. Reconnecting when it\'s back…'}</div>
-                </> : updPhase==='timeout' ? <>
-                  <div className="upd-actions"><button className="primary" onClick={applyUpdate}>Try again</button></div>
-                  <div className="upd-note">Timed out waiting for restart. Watchtower may still be downloading — try again or run: <code>docker compose pull &amp;&amp; docker compose up -d</code></div>
+                  <div className="upd-note" style={{marginTop:4}}>Update in progress — see the bar at the top of the page.</div>
                 </> : <>
                   <div className="upd-actions">
                     <button className="primary" onClick={applyUpdate}>Update now</button>
                   </div>
-                  <div className="upd-note">Pulls the new image and restarts automatically. Your vault stays intact.</div>
+                  <div className="upd-note">Pulls the new image and restarts. Vault stays intact. Progress shown in a bar at the top.</div>
                 </>
               ) : <>
                 <div className="upd-actions">
