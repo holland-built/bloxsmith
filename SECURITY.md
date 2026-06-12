@@ -15,7 +15,7 @@ handled on a best-effort basis.
 
 In scope: the Python bridge (`server.py`), the bundled dashboard (`index.html`), the
 Docker packaging, and the documented configuration surface. Out of scope: the Infoblox
-CSP / BloxOne platform itself (report those to Infoblox) and third-party LLM providers.
+CSP / Infoblox Portal platform itself (report those to Infoblox) and third-party LLM providers.
 
 ## Token handling — read this
 

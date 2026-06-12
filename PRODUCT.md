@@ -8,14 +8,14 @@ product
 
 Network operations engineers and Infoblox sales engineers. Two contexts:
 
-- **NOC operator**: monitoring a BloxOne/CSP tenant across a shift, often on a wall display or a side monitor in a dim room. Scans for anomalies (lease spikes, threat events, unhealthy hosts), drills into one entity, moves on.
+- **NOC operator**: monitoring an Infoblox Portal/CSP tenant across a shift, often on a wall display or a side monitor in a dim room. Scans for anomalies (lease spikes, threat events, unhealthy hosts), drills into one entity, moves on.
 - **Demo presenter**: an SE walking a prospect through live tenant data on a projector. Needs the dashboard to look credible and read from across a room, with zero awkward waits.
 
 Job to be done: answer "is anything wrong in this tenant, and where?" in under ten seconds, then drill down without leaving the page.
 
 ## Product Purpose
 
-A local, single-page NOC dashboard for the Infoblox BloxOne/CSP portal. A Python bridge speaks MCP to csp.infoblox.com, normalizes the data, and serves a React dashboard: subnets, DHCP leases, DNS zones, hosts, security policies, threat feeds, audit logs, plus an optional natural-language query box (LLM tool-calling) and in-dashboard CSP account switching. Success: an operator or presenter trusts the numbers at a glance and never has to open the CSP portal mid-session.
+A local, single-page NOC dashboard for the Infoblox Portal/CSP.  A Python bridge speaks MCP to csp.infoblox.com, normalizes the data, and serves a React dashboard: subnets, DHCP leases, DNS zones, hosts, security policies, threat feeds, audit logs, plus an optional natural-language query box (LLM tool-calling) and in-dashboard CSP account switching. Success: an operator or presenter trusts the numbers at a glance and never has to open the CSP portal mid-session.
 
 ## Brand Personality
 

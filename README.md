@@ -4,14 +4,12 @@
 [![Python](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
 [![Docker ready](https://img.shields.io/badge/Docker-ready-2496ED.svg)](Dockerfile)
 
-A local, browser-based NOC dashboard for the Infoblox **BloxOne / CSP** portal —
+A local, browser-based NOC dashboard for the **Infoblox Portal / CSP** —
 subnets, DHCP leases, DNS zones, hosts, security policies, threat feeds, audit logs,
 plus an optional natural-language query box. A small Python bridge talks to the
 Infoblox cloud over **MCP** and serves a React dashboard at `http://localhost:8080`.
 
 ![NOC Dashboard](docs/dashboard.png)
-
-> Screenshot placeholder — add `docs/dashboard.png` on the mock-data view (no real data).
 
 ```
 browser ──HTTP──▶ bridge (server.py) ──MCP──▶ csp.infoblox.com/mcp
