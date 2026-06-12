@@ -2571,6 +2571,7 @@ function App({vault, onVaultChange}={}) {
   const [updPop, setUpdPop]         = useState(false);            // version-chip popover
   const [updBusy, setUpdBusy]       = useState(false);            // "Check now" in flight
   const [updApplying, setUpdApplying] = useState(false);          // "Update now" self-update in flight
+  const [updPhase, setUpdPhase]     = useState('');               // 'restarting' | 'downloading' | 'timeout'
   const [updInfo, setUpdInfo]       = useState(()=>(vault&&vault.update)||null);
   const prevFiringRef               = useRef(new Set());
   const [accounts, setAccounts]     = useState([]);
@@ -2884,7 +2885,6 @@ function App({vault, onVaultChange}={}) {
   // returns on a newer build and reload. The container restarts mid-request, so a
   // dropped fetch during polling is expected, not an error.
   const verN = v => { const m=/(\d+)\.(\d+)\.(\d+)/.exec(v||''); return m?+m[3]:-1; };
-  const [updPhase, setUpdPhase] = useState('');   // 'restarting' | 'downloading' | 'timeout'
   const applyUpdate = () => {
     setUpdApplying(true); setUpdPhase('restarting');
     const from = verN(upd.current||(vault&&vault.version));
