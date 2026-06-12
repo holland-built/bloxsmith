@@ -1492,8 +1492,14 @@ class Handler(BaseHTTPRequestHandler):
                 res = switch_account(account_id)
                 self._json(res, 200 if res.get("ok") else 400)
             except Exception as e:
+                from urllib.error import HTTPError
                 _log_exc("/api/switch-account", e)
-                self._json({"ok": False, "error": "internal error"}, 500)
+                if isinstance(e, HTTPError) and e.code == 403:
+                    self._json({"ok": False, "error": "Account switching requires an interactive User API key with multi-account access (CSP returned 403)"}, 403)
+                elif isinstance(e, HTTPError):
+                    self._json({"ok": False, "error": f"CSP error {e.code}"}, 502)
+                else:
+                    self._json({"ok": False, "error": "internal error"}, 500)
         elif self.path == "/api/block-domain":
             # State-changing write to Infoblox config — require the shared secret.
             if not self._authed():
