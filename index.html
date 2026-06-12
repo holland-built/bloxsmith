@@ -2377,6 +2377,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   const [editTenant,setEditTenant]=useState(null);  // connection whose key is being replaced
   const [renameId,setRenameId]=useState(null),[renameVal,setRenameVal]=useState('');
   const [testing,setTesting]=useState(false);
+  const [switchingKey,setSwitchingKey]=useState(null);   // tenant id being activated
   const tenants=vault.tenants||[];
   const active=tenants.find(t=>t.id===vault.active);
   const activeAcctName=(accounts.find(a=>a.id===activeAcct)||{}).name;
@@ -2386,7 +2387,13 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   const reload=()=>window.location.reload();
   const close=()=>{ setOpen(false); setView('main'); setConfirmRm(null); setRenameId(null); setAcctSearch&&setAcctSearch(''); };
   const switchAccount=id=>{ close(); switchAcct&&switchAcct(id); };
-  const switchKey=async id=>{ if(id===vault.active){setView('main');return;} await vpost('/api/vault/active',{id}); reload(); };
+  const switchKey=async id=>{
+    if(id===vault.active){setView('main');return;}
+    setSwitchingKey(id);
+    const {ok,data}=await vpost('/api/vault/active',{id});
+    if(!ok||!data.ok){ setSwitchingKey(null); toast('Switch failed: '+(data.error||'unknown'),'err'); return; }
+    reload();
+  };
   const remove=async (id,label)=>{ await vpost('/api/vault/tenant-remove',{id}); toast('Removed '+label,'ok'); reload(); };
   const doRename=async (id)=>{ const lbl=renameVal.trim(); if(!lbl){setRenameId(null);return;} await vpost('/api/vault/tenant-update',{id,label:lbl,key:''}); reload(); };
   const refreshNames=async()=>{ close(); await vpost('/api/vault/refresh-names',{}); window.location.reload(); };
@@ -2431,8 +2438,8 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               </div>
             ) : (
               <div key={t.id} className="tenant-row">
-                <button className={`acct-menu-item${t.id===vault.active?' active':''}`} style={{flex:1}} title="Make this the active login" onClick={()=>switchKey(t.id)}>
-                  {t.id===vault.active?'● ':'○ '}{t.label}
+                <button className={`acct-menu-item${t.id===vault.active?' active':''}`} style={{flex:1}} title="Make this the active login" disabled={!!switchingKey} onClick={()=>switchKey(t.id)}>
+                  {switchingKey===t.id?'⟳ ':(t.id===vault.active?'● ':'○ ')}{t.label}
                 </button>
                 <button className="tenant-mini" title="Rename" onClick={()=>{setRenameId(t.id);setRenameVal(t.label);}}>Aa</button>
                 <button className="tenant-mini" title="Replace this key (e.g. if expired)" onClick={()=>{setOpen(false);setEditTenant(t);}}>key</button>
@@ -2454,8 +2461,8 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               <div className="acct-sec-label" title="Switch between stored Infoblox connections (each uses its own API key).">Connection</div>
               <div style={{maxHeight:220,overflowY:'auto'}}>
                 {tenants.map(t=>(
-                  <button key={t.id} className={`acct-menu-item${t.id===vault.active?' active':''}`} title={t.label} onClick={()=>switchKey(t.id)}>
-                    {t.id===vault.active?'● ':'○ '}{t.label}
+                  <button key={t.id} className={`acct-menu-item${t.id===vault.active?' active':''}`} title={t.label} disabled={!!switchingKey} onClick={()=>switchKey(t.id)}>
+                    {switchingKey===t.id?'⟳ ':(t.id===vault.active?'● ':'○ ')}{t.label}
                   </button>
                 ))}
               </div>
