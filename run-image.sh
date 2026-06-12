@@ -13,6 +13,7 @@ IMAGE="${IMAGE:-ghcr.io/holland-built/infoblox-noc-dashboard:latest}"
 NAME="infoblox-noc"
 PORT="${PORT:-8080}"
 BIND="${BIND:-127.0.0.1}"      # loopback by default; set BIND=0.0.0.0 to expose on the LAN
+[[ "${LAN:-0}" == "1" ]] && BIND=0.0.0.0   # LAN=1 shortcut: expose on the local network
 VOLUME="${VOLUME:-noc-vault}"  # named volume holding the encrypted vault
 INFOBLOX_URL="${INFOBLOX_URL:-https://csp.infoblox.com}"
 
@@ -111,6 +112,11 @@ fi
 
 echo
 echo "✓ Running → http://localhost:${PORT}"
+if [[ "$BIND" == "0.0.0.0" ]]; then
+  HOSTIP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')
+  [[ -n "$HOSTIP" ]] && echo "  LAN     → http://${HOSTIP}:${PORT}   (reachable by other devices on this network)"
+  echo "  ⚠ no login — keep the vault LOCKED when not presenting (skip auto-unlock on shared networks)."
+fi
 if [[ -z "$KEY" ]]; then
   echo "  Open it and set a passphrase + add your Infoblox tenant key (vault mode)."
 fi

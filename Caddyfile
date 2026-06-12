@@ -1,0 +1,13 @@
+# Reverse proxy for the `secure` compose profile: TLS + basic-auth in front of
+# the dashboard. SITE_ADDRESS / BASIC_AUTH_USER / BASIC_AUTH_HASH come from .env.
+# Generate a hash:  docker run --rm caddy caddy hash-password -p 'yourpassword'
+# `tls internal` issues a self-signed cert from Caddy's local CA (browsers warn
+# unless you trust that CA) — fine for LAN. Use a real domain for a public cert.
+
+{$SITE_ADDRESS:-:443} {
+	tls internal
+	basic_auth {
+		{$BASIC_AUTH_USER:-admin} {$BASIC_AUTH_HASH}
+	}
+	reverse_proxy infoblox-noc:8080
+}
