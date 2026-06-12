@@ -2449,11 +2449,21 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               <span className="menu-desc">Re-fetch account names from CSP</span>
             </button>
           </>) : (<>
-            {/* ── Main view: account-first ── */}
-            <div className="acct-sec-label" title="CSP accounts the active key can act in. The filled ● is in view.">Account</div>
-            {accounts.length===0
-              ? <div className="menu-desc" style={{padding:'4px 10px 8px'}}>No accounts resolved — the active key may be invalid. Open Keys to test or replace it.</div>
-              : <>
+            {/* ── Main view: vault tenants first (when >1 key stored), then CSP sub-accounts ── */}
+            {tenants.length>1&&(<>
+              <div className="acct-sec-label" title="Switch between stored Infoblox connections (each uses its own API key).">Connection</div>
+              <div style={{maxHeight:220,overflowY:'auto'}}>
+                {tenants.map(t=>(
+                  <button key={t.id} className={`acct-menu-item${t.id===vault.active?' active':''}`} title={t.label} onClick={()=>switchKey(t.id)}>
+                    {t.id===vault.active?'● ':'○ '}{t.label}
+                  </button>
+                ))}
+              </div>
+              <div className="acct-sec-divider"/>
+            </>)}
+            {multiAcct&&(<>
+              <div className="acct-sec-label" title="CSP accounts the active key can act in. The filled ● is in view.">Account</div>
+              <>
                 {accounts.length>6&&(
                   <input className="acct-search" autoFocus placeholder="Search accounts…"
                     value={acctSearch} onChange={e=>setAcctSearch&&setAcctSearch(e.target.value)}/>
@@ -2465,8 +2475,9 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
                     </button>
                   ))}
                 </div>
-              </>}
-            <div className="acct-sec-divider"/>
+              </>
+              <div className="acct-sec-divider"/>
+            </>)}
             <div className="acct-sec-label">Manage</div>
             <button className="menu-item" onClick={()=>setView('keys')}>
               <span className="menu-lbl">Keys ({tenants.length})<span className="menu-chev">›</span></span>
