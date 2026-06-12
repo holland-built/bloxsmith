@@ -26,6 +26,9 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
+      # vault auto-unlock (optional) — skips passphrase prompt after restarts/updates
+      VAULT_PASSPHRASE: ${VAULT_PASSPHRASE:-}
+      VAULT_PASSPHRASE_FILE: ${VAULT_PASSPHRASE_FILE:-}
       # wires the in-app "Update now" button to the Watchtower sidecar
       WATCHTOWER_URL: http://noc-watchtower:8080/v1/update
       WATCHTOWER_TOKEN: ${WATCHTOWER_TOKEN:-noc-local-update-token}
