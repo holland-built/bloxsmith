@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- build marker: self-update test release v1.0.55 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1002,7 +1001,7 @@ function AuditTable({logs,limit=10}) {
     {key:'user',label:'User',size:11,render:l=><span style={{overflowWrap:'anywhere'}}>{l.user}</span>},
     {key:'action',label:'Action',render:l=><span style={{fontSize:10,fontWeight:700,color:actionColor(l.action)}}>{l.action}</span>},
     {key:'resource',label:'Resource',mono:true,size:10,render:l=><span style={{color:'var(--gray-400)'}} title={l.resource}>{l.resource}</span>},
-    {key:'result',label:'Result',render:l=>l.result==='success'?<span style={{color:'var(--green)',fontWeight:700,fontSize:11}}>✓</span>:<span style={{color:'var(--red)',fontWeight:700,fontSize:11}}>✗</span>},
+    {key:'result',label:'Result',sortVal:l=>l.result==='success'?1:0,render:l=>l.result==='success'?<span className="badge b-green">OK</span>:<span className="badge b-red">Fail</span>},
   ]);
   return <DataTable ctl={ctl} rows={logs} defaultRows={limit} rowKey={l=>l.id} initialSort={{key:'ts',dir:'desc'}} exportName="audit-logs" persistId="audit"/>;
 }
@@ -2212,7 +2211,7 @@ function AlertsPanel({data, rules, setRules}){
               <th style={{padding:'6px 8px'}}>Condition</th><th style={{padding:'6px 8px'}}>Current</th><th></th></tr></thead>
             <tbody>{evald.map(r=>(
               <tr key={r.id} style={{borderTop:'1px solid var(--border)'}}>
-                <td style={{padding:'6px 8px'}}><span style={{color:r.firing?'var(--red)':'var(--green)',fontWeight:700}}>{r.firing?'● FIRING':'○ ok'}</span></td>
+                <td style={{padding:'6px 8px'}}>{r.firing?<span className="badge b-red">Firing</span>:<span className="badge b-green">OK</span>}</td>
                 <td style={{padding:'6px 8px'}}>{metricLabel(r.metric)}</td>
                 <td style={{padding:'6px 8px'}}>{r.op} {r.threshold}</td>
                 <td style={{padding:'6px 8px',fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.value}</td>

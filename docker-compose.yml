@@ -1,0 +1,70 @@
+# Infoblox NOC Dashboard — Docker Compose deploy.
+#
+#   docker compose up -d            # dashboard + self-update sidecar (loopback)
+#   BIND=0.0.0.0 docker compose up -d   # expose on the LAN (no login — keep vault locked)
+#   docker compose --profile secure up -d   # add a TLS + basic-auth reverse proxy
+#
+# Self-update: click "Update now" in the app — Watchtower pulls :latest and
+# recreates the labeled dashboard service. Same mechanism as run-image.sh.
+# Copy .env.example to .env to set BIND/PORT/token/auth.
+
+services:
+  infoblox-noc:
+    image: ghcr.io/holland-built/infoblox-noc-dashboard:latest
+    container_name: infoblox-noc
+    restart: unless-stopped
+    ports:
+      - "${BIND:-127.0.0.1}:${PORT:-8080}:8080"
+    volumes:
+      - noc-vault:/vault
+    environment:
+      INFOBLOX_URL: ${INFOBLOX_URL:-https://csp.infoblox.com}
+      # single-key mode (optional) — leave unset to use the in-app encrypted vault
+      INFOBLOX_API_KEY: ${INFOBLOX_API_KEY:-}
+      # wires the in-app "Update now" button to the Watchtower sidecar
+      WATCHTOWER_URL: http://noc-watchtower:8080/v1/update
+      WATCHTOWER_TOKEN: ${WATCHTOWER_TOKEN:-noc-local-update-token}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    networks: [noc-net]
+
+  noc-watchtower:
+    image: containrrr/watchtower
+    container_name: noc-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      DOCKER_API_VERSION: "1.44"          # modern daemons reject Watchtower's old default
+      WATCHTOWER_HTTP_API_UPDATE: "true"  # update only on button press, no polling
+      WATCHTOWER_HTTP_API_TOKEN: ${WATCHTOWER_TOKEN:-noc-local-update-token}
+      WATCHTOWER_LABEL_ENABLE: "true"     # only touch the labeled dashboard
+      WATCHTOWER_CLEANUP: "true"
+    networks: [noc-net]
+
+  # Opt-in reverse proxy: TLS (self-signed local CA) + basic-auth in front of the
+  # dashboard. Use when exposing on an untrusted LAN. Set BIND=127.0.0.1 so the
+  # dashboard itself stays loopback-only and all external access goes through Caddy.
+  #   docker compose --profile secure up -d
+  caddy:
+    image: caddy:2
+    container_name: noc-caddy
+    profiles: [secure]
+    restart: unless-stopped
+    ports:
+      - "${HTTPS_BIND:-0.0.0.0}:${HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:443}
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER:-admin}
+      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH:-}   # docker run caddy caddy hash-password -p 'yourpass'
+    networks: [noc-net]
+
+volumes:
+  noc-vault:
+  caddy-data:
+
+networks:
+  noc-net:
