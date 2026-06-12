@@ -21,6 +21,11 @@ services:
       INFOBLOX_URL: ${INFOBLOX_URL:-https://csp.infoblox.com}
       # single-key mode (optional) — leave unset to use the in-app encrypted vault
       INFOBLOX_API_KEY: ${INFOBLOX_API_KEY:-}
+      # LLM natural-language query box (optional)
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
       # wires the in-app "Update now" button to the Watchtower sidecar
       WATCHTOWER_URL: http://noc-watchtower:8080/v1/update
       WATCHTOWER_TOKEN: ${WATCHTOWER_TOKEN:-noc-local-update-token}
@@ -64,6 +69,7 @@ services:
 
 volumes:
   noc-vault:
+    name: noc-vault      # match run-image.sh volume name; vault survives run-image.sh ↔ compose switches
   caddy-data:
 
 networks:
