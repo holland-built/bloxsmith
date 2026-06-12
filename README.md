@@ -29,6 +29,45 @@ MCP is JSON-RPC/SSE, not REST). The bridge is the server-side hop that holds you
 
 ---
 
+## Quick start
+
+Prereq: **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) on
+macOS/Windows, or Docker Engine on Linux (`curl -fsSL https://get.docker.com | sh`).
+
+Grab the one script (no clone needed — it pulls the published image):
+
+```bash
+curl -fsSL -O https://raw.githubusercontent.com/holland-built/infoblox-noc-dashboard/master/run-image.sh && chmod +x run-image.sh
+```
+
+**On your own machine (localhost only):**
+
+```bash
+./run-image.sh                 # → http://localhost:8080
+```
+
+**On a server (reachable by other machines on the LAN):**
+
+```bash
+LAN=1 ./run-image.sh           # binds 0.0.0.0 and prints http://<server-ip>:8080
+```
+
+First open walks you through setup: pick a passphrase, then add your Infoblox API key
+(AES-encrypted in the `noc-vault` volume). The script also starts a small **Watchtower**
+sidecar, so **updating later = click the version badge → "Update now"** — no shell, no
+re-pull. ⚠️ LAN mode has **no login** — keep the vault locked when you're not presenting.
+
+Prefer Compose (always-on servers / Proxmox VMs)? Use [`docker-compose.yml`](docker-compose.yml):
+
+```bash
+BIND=0.0.0.0 docker compose up -d          # dashboard + self-update sidecar on the LAN
+docker compose --profile secure up -d      # add a Caddy TLS + basic-auth reverse proxy
+```
+
+The sections below are the full reference (single-key mode, auto-unlock, pinning, env vars).
+
+---
+
 ## Install from the prebuilt image (recommended)
 
 No source checkout, no build — just Docker. Every push to `master` and every
