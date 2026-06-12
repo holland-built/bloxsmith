@@ -159,8 +159,11 @@ body.chat-open{padding-right:340px}
 /* alert banner */
 .alert{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--sev-red-t);display:flex;align-items:center;gap:7px}
 /* status-tile matrix — one tile per domain, tinted by worst severity, glanceable across a room */
-.stiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
-.stile{padding:12px 14px;border-radius:9px;border:1px solid;cursor:pointer;display:flex;flex-direction:column;gap:6px;text-align:left;font-family:inherit;background:none;transition:opacity .12s}
+.stiles{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
+@media(max-width:1100px){.stiles{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:760px){.stiles{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.stiles{grid-template-columns:1fr}}
+.stile{min-height:104px;padding:12px 14px;border-radius:9px;border:1px solid;cursor:pointer;display:flex;flex-direction:column;gap:6px;text-align:left;font-family:inherit;background:none;transition:opacity .12s}
 .stile:hover{opacity:.85}
 .stile-top{display:flex;align-items:center;justify-content:space-between}
 .stile-cat{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-400);font-weight:600}
@@ -168,7 +171,7 @@ body.chat-open{padding-right:340px}
 .stile-big{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
 .stile-desc{font-size:11px;color:var(--gray-500)}
 .stile-of{font-size:13px;font-weight:600;color:var(--gray-500)}
-.stile-track{height:4px;background:var(--surface-3);border-radius:2px;margin-top:2px}
+.stile-track{height:4px;background:var(--surface-3);border-radius:2px;margin-top:auto}
 .stile-fill{height:100%;border-radius:2px;transition:width .8s ease}
 .stile.crit{background:rgba(239,68,68,.08);border-color:var(--badge-red-bd)}.stile.crit .stile-big{color:var(--sev-red-t)}.stile.crit .stile-st{background:var(--badge-red-bg);color:var(--sev-red-t)}
 .stile.warn{background:rgba(245,158,11,.07);border-color:var(--badge-amber-bd)}.stile.warn .stile-big{color:var(--sev-amber-t)}.stile.warn .stile-st{background:var(--badge-amber-bg);color:var(--sev-amber-t)}
@@ -338,8 +341,8 @@ body.chat-open{padding-right:340px}
 .copy-btn:focus-visible{opacity:1}
 tr:hover .copy-btn{opacity:1}
 .copy-btn.done{color:var(--green)}
-.badge-pill{display:inline-block;background:rgba(239,68,68,.2);color:#FCA5A5;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle}
-.badge-pill-amber{background:rgba(245,158,11,.2);color:#FCD34D}
+.badge-pill{display:inline-block;background:rgba(239,68,68,.2);color:var(--sev-red-t);border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle}
+.badge-pill-amber{background:rgba(245,158,11,.2);color:var(--sev-amber-t)}
 .row-limit-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;justify-content:flex-end}
 .row-limit-btn{padding:2px 9px;border-radius:4px;border:1px solid var(--border);background:none;color:var(--gray-400);font-size:10px;cursor:pointer;font-weight:600;transition:all .12s}
 .row-limit-btn.on{background:var(--surface-3);color:var(--teal);border-color:var(--teal)}
@@ -365,7 +368,7 @@ tr:hover .copy-btn{opacity:1}
 .lookup-in:focus{border-color:var(--focus-border)}
 .lookup-btn{background:var(--teal);border:none;border-radius:6px;color:var(--blue-dark);font-size:12px;font-weight:700;padding:8px 16px;cursor:pointer}
 .lookup-btn:hover{background:var(--teal-bright)}
-.block-btn{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.35);border-radius:5px;color:#FCA5A5;font-size:10px;font-weight:700;padding:3px 9px;cursor:pointer;margin-top:6px}
+.block-btn{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.35);border-radius:5px;color:var(--sev-red-t);font-size:10px;font-weight:700;padding:3px 9px;cursor:pointer;margin-top:6px}
 .block-btn:hover{background:rgba(239,68,68,.3)}
 .sev-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
 .sev-card{border-radius:8px;padding:14px;text-align:center;border:1px solid}
@@ -523,6 +526,8 @@ tr:hover .copy-btn{opacity:1}
 :root[data-density="compact"] .g2,:root[data-density="compact"] .g3,:root[data-density="compact"] .g4{gap:10px}
 :root[data-density="compact"] .pol-item{padding:6px 0}
 :root[data-density="compact"] .nav-item{padding:5px 10px}
+:root[data-density="compact"] .stiles{gap:8px}
+:root[data-density="compact"] .stile{min-height:92px;padding:10px 12px}
 </style>
 </head>
 <body>
@@ -862,7 +867,7 @@ function Donut({hosts,filter,onSlice}) {
               onMouseEnter={()=>setTip(a)} onMouseLeave={()=>setTip(null)}/>
           ))}
           {arcs.map(a=>a.pct>=7&&(
-            <text key={a.key} x={a.lrx} y={a.lry} fill="#fff" textAnchor="middle"
+            <text key={a.key} x={a.lrx} y={a.lry} fill="var(--ink)" textAnchor="middle"
               dominantBaseline="central" fontSize={9} fontWeight={700} style={{pointerEvents:'none'}}>
               {a.pct}%
             </text>
@@ -1730,7 +1735,7 @@ function ThreatLookupPanel() {
                   {isDomain&&(
                     blocked[name]
                       ?<div style={{display:'flex',gap:8,alignItems:'center',marginTop:6}}>
-                         <span style={{fontSize:10,color:'#FCA5A5'}}>✓ Block request sent</span>
+                         <span style={{fontSize:10,color:'var(--sev-red-t)'}}>✓ Block request sent</span>
                          <button className="collapse-btn" style={{margin:0}} onClick={()=>unblock(name)} title="Roll back this block">↶ Undo</button>
                        </div>
                       :<button className="block-btn" onClick={()=>block(name)}>⊗ Block Domain</button>
@@ -1750,8 +1755,8 @@ function ThreatLookupPanel() {
           <div className="card-title"><div className="dot"/>Action audit trail</div>
           {actionLog.map(a=>(
             <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid var(--border)',fontSize:11}}>
-              <span><b style={{color:a.act==='block'?'#FCA5A5':'var(--teal)'}}>{a.act}</b> {a.domain}{' '}
-                <span style={{color:a.ok?'#10B981':'#EF4444'}}>{a.ok?'✓':'✗ '+a.err}</span></span>
+              <span><b style={{color:a.act==='block'?'var(--sev-red-t)':'var(--teal)'}}>{a.act}</b> {a.domain}{' '}
+                <span style={{color:a.ok?'var(--green)':'var(--red)'}}>{a.ok?'✓':'✗ '+a.err}</span></span>
               <span style={{display:'flex',gap:8,alignItems:'center'}}>
                 <span style={{color:'var(--gray-400)'}}>{new Date(a.ts).toLocaleTimeString()}</span>
                 {a.act==='block'&&a.ok&&<button className="collapse-btn" style={{margin:0}} onClick={()=>unblock(a.domain)} title="Roll back">↶ Undo</button>}
@@ -1830,7 +1835,7 @@ function SearchSection({data, srchQ, setSrchQ, srchRes, setSrchRes, srching, set
             {searchHistory.map((q,i)=>(
               <button key={i} className="chip" onClick={()=>run(q)}>{q}</button>
             ))}
-            <button className="chip" style={{color:'#FCA5A5'}} onClick={()=>{setSearchHistory([]); LS.set('sh',[]);}}>✕ clear</button>
+            <button className="chip" style={{color:'var(--sev-red-t)'}} onClick={()=>{setSearchHistory([]); LS.set('sh',[]);}}>✕ clear</button>
           </div>
         </div>
       )}
@@ -1931,9 +1936,9 @@ function SearchSection({data, srchQ, setSrchQ, srchRes, setSrchRes, srching, set
           {srchRes.entities.length>0&&(
             <div className="card">
               <div className="card-title">
-                <div className="dot" style={{background:'#10B981'}}/>
+                <div className="dot" style={{background:'var(--green)'}}/>
                 Network Entities
-                <span style={{marginLeft:6,background:'var(--surface-3)',borderRadius:4,padding:'1px 7px',fontSize:10,color:'#10B981',fontWeight:700}}>
+                <span style={{marginLeft:6,background:'var(--surface-3)',borderRadius:4,padding:'1px 7px',fontSize:10,color:'var(--green)',fontWeight:700}}>
                   {srchRes.entities.length}
                 </span>
               </div>
@@ -3098,7 +3103,7 @@ function App({vault, onVaultChange}={}) {
                       <div className="stile-top"><span className="stile-cat">{t.cat}</span><span className="stile-st">{ST[t.sev]}</span></div>
                       <span className="stile-big">{t.n}{t.tot>0&&<span className="stile-of"> / {t.tot}</span>}</span>
                       <span className="stile-desc">{t.desc}</span>
-                      {t.tot>0&&<div className="stile-track"><div className="stile-fill" style={{width:`${Math.min(t.n/t.tot*100,100)}%`,background:BAR[t.sev]}}/></div>}
+                      <div className="stile-track"><div className="stile-fill" style={{width:t.tot>0?`${Math.min(t.n/t.tot*100,100)}%`:'0%',background:BAR[t.sev]}}/></div>
                     </button>
                   ))}
                 </div>
@@ -3111,7 +3116,7 @@ function App({vault, onVaultChange}={}) {
                   {Object.entries(deltas).map(([k,v])=>(
                     <div key={k} style={{fontSize:12,color:'var(--gray-200)'}}>
                       {({total_subnets:'Total subnets',total_zones:'Total zones',total_leases:'Total leases'}[k])||metricLabel(k)}:{' '}
-                      <span style={{fontWeight:700,color:v>0?'#EF4444':'#10B981'}}>{v>0?('▲ +'+v):('▼ '+v)}</span>
+                      <span style={{fontWeight:700,color:v>0?'var(--red)':'var(--green)'}}>{v>0?('▲ +'+v):('▼ '+v)}</span>
                     </div>
                   ))}
                 </div>
@@ -3259,7 +3264,7 @@ function App({vault, onVaultChange}={}) {
                   <div className={`card${fullscreen==='ttl'?' fs':''}`}>
                     <div className="card-title">
                       <DragHandle id="ttl"/>
-                      <div className="dot" style={{background:'#F59E0B'}}/>Zones with TTL Issues
+                      <div className="dot" style={{background:'var(--amber)'}}/>Zones with TTL Issues
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="ttl"/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('ttl')} title={collapsed['ttl']?'Expand':'Collapse'}>{collapsed['ttl']?'▶':'▼'}</button>
@@ -3303,7 +3308,7 @@ function App({vault, onVaultChange}={}) {
                   <div className={`card${fullscreen==='pols'?' fs':''}`}>
                     <div className="card-title">
                       <DragHandle id="pols"/>
-                      <div className="dot" style={{background:'#C8C4BE'}}/>Security Policies
+                      <div className="dot" style={{background:'var(--gray-400)'}}/>Security Policies
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="pols" def="panel" opts={[['panel','Panel'],['table','Table'],['bar','Bar'],['raw','Raw']]}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('pols')} title={collapsed['pols']?'Expand':'Collapse'}>{collapsed['pols']?'▶':'▼'}</button>
@@ -3323,7 +3328,7 @@ function App({vault, onVaultChange}={}) {
                   <div className={`card${fullscreen==='feeds'?' fs':''}`}>
                     <div className="card-title">
                       <DragHandle id="feeds"/>
-                      <div className="dot" style={{background:'#EF4444'}}/>Top Threat Feeds by Severity
+                      <div className="dot" style={{background:'var(--red)'}}/>Top Threat Feeds by Severity
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="feeds"/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('feeds')} title={collapsed['feeds']?'Expand':'Collapse'}>{collapsed['feeds']?'▶':'▼'}</button>
@@ -3417,7 +3422,7 @@ function App({vault, onVaultChange}={}) {
             </div>
             <div className="g2">
               <div className="card">
-                <div className="card-title"><div className="dot" style={{background:'#F59E0B'}}/>Zones with TTL Issues</div>
+                <div className="card-title"><div className="dot" style={{background:'var(--amber)'}}/>Zones with TTL Issues</div>
                 <TTLTable zones={s_zones}/>
                 {(()=>{
                   const drillZone = zoneFilt ? (s_zones.find(z=>z.id===zoneFilt)||zones.find(z=>z.id===zoneFilt)) : null;
@@ -3430,10 +3435,10 @@ function App({vault, onVaultChange}={}) {
                       <div style={{display:'flex',gap:20,flexWrap:'wrap'}}>
                         {[
                           {l:'View', v:drillZone.view},
-                          {l:'TTL', v:drillZone.ttl+'s', c:drillZone.ttl<60||drillZone.ttl>86400?'#FCA5A5':'var(--gray-200)'},
-                          {l:'Neg TTL', v:drillZone.neg_ttl+'s', c:drillZone.neg_ttl>3600?'#FCD34D':'var(--gray-200)'},
+                          {l:'TTL', v:drillZone.ttl+'s', c:drillZone.ttl<60||drillZone.ttl>86400?'var(--sev-red-t)':'var(--gray-200)'},
+                          {l:'Neg TTL', v:drillZone.neg_ttl+'s', c:drillZone.neg_ttl>3600?'var(--sev-amber-t)':'var(--gray-200)'},
                           {l:'Records', v:drillZone.records},
-                          {l:'Anomaly', v:drillZone.anomaly?'Yes':'No', c:drillZone.anomaly?'#FCA5A5':'#10B981'},
+                          {l:'Anomaly', v:drillZone.anomaly?'Yes':'No', c:drillZone.anomaly?'var(--sev-red-t)':'var(--green)'},
                         ].map((x,i)=>(
                           <div key={i} style={{fontSize:11}}>
                             <div style={{color:'var(--gray-400)',fontSize:9,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:2}}>{x.l}</div>
@@ -3506,7 +3511,7 @@ function App({vault, onVaultChange}={}) {
         {/* ── THREATS ── */}
         {section==='threats'&&(
           <div className="card">
-            <div className="card-title"><div className="dot" style={{background:'#EF4444'}}/>All Threat Feeds by Severity{sq&&` (${s_feeds.length} of ${feeds.length})`}</div>
+            <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>All Threat Feeds by Severity{sq&&` (${s_feeds.length} of ${feeds.length})`}</div>
             <RowLimitBar limit={rl('threats')} setLimit={v=>setRl('threats',v)}/>
             <FeedsTable feeds={s_feeds.slice(0,rl('threats'))}/>
           </div>
