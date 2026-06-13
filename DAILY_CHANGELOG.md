@@ -8,6 +8,14 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
 ---
 
+## 2026-06-13 — fix /admin 404 (SPA fallback)
+
+| File | Line(s) | Change |
+|------|---------|--------|
+| `server.py` | do_GET | Added SPA fallback: non-API paths that aren't static files now serve `index.html` instead of 404 |
+
+---
+
 ## 2026-06-13 — drill-down completeness: feed + policy rows
 
 | File | Line(s) | Change |

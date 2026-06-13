@@ -1429,6 +1429,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"accounts": [], "active": "", "error": msg, "status": status}, 200)
         elif path.lstrip("/") in _STATIC_FILES:
             self._file(path.lstrip("/"))  # _file validates realpath before serving
+        elif not path.startswith("/api/"):
+            self._file("index.html")  # SPA fallback — all non-API routes serve the app
         else:
             self.send_error(404)
 
