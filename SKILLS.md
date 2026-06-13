@@ -26,6 +26,19 @@
 | `deep-research` | Multi-source, fact-checked research report |
 | `graphify` | Any input → knowledge graph |
 
+## When to invoke (daily drivers)
+
+| Skill | Trigger |
+|---|---|
+| `/grill-me` | Before any non-trivial feature — extracts design decisions before code |
+| `/diagnose` | Any unexpected behavior — never trust the symptom description |
+| `/tdd` | Every bug fix or new server.py/test_regression.py behavior |
+| `/prove` | Before claiming any feature "done" — screenshot + real server |
+| `/layout-stress` | Any sidebar/panel/bento overlap report; after index.html layout changes |
+| `/impeccable` | UI polish pass — density, hierarchy, color discipline, spacing |
+| `/code-review` | Before committing a non-trivial change |
+| `/security-review` | Any change touching .env, auth, API keys, or server.py endpoints |
+
 ## Invocation
 
 ```
@@ -36,3 +49,10 @@
 /layout-stress     # layout bug hunting
 /impeccable        # UI design audit/polish
 ```
+
+## learnings.md pattern
+
+For any skill you customize, add a `learnings.md` next to its `SKILL.md`.
+After each session where the skill needed correction, log the correction dated.
+Example: `2026-06-13: /prove was skipping docker restart step — added explicit check.`
+This is the only pattern that compounds with use.

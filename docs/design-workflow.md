@@ -19,6 +19,33 @@ colors, charts, menus, copy in the interface). Not required for pure backend/log
    variants, multiple files, states A/B/C, etc.). Pick whatever communicates the choice best.
 4. Clean up scratch mockup files (`_mockup*.html/.png`) once the direction is locked.
 
+## Variation dimensions (pick 4–6 per campaign)
+
+- **Layout** — sidebar position, card vs table, grid vs list
+- **Density** — compact (operator) vs spacious (executive)
+- **Hierarchy** — visual weight of severity vs entity vs count
+- **Color use** — severity-only vs accent-highlighted CTA
+- **Borders** — none vs subtle (current) vs strong
+- **Motion** — static vs live-pulse vs loading states
+- **Copy** — verbose labels vs short labels vs icon-only
+
+## Required output format
+
+Every time a mockup is created or updated, output this table:
+
+```
+| File | How to view |
+|---|---|
+| `_mockup-<slug>.html` | `open _mockup-<slug>.html` |
+| Screenshot | `--screenshot=_mockup-<slug>.png "file://$PWD/_mockup-<slug>.html"` |
+```
+
+## After direction is locked
+
+1. Delete or archive the mockup file.
+2. Write production code matching chosen variation exactly.
+3. Hotpatch + screenshot to verify (per `docs/TESTING.md`).
+
 ## Why
 The dashboard is a single-file React app served from a Docker image; visual changes are
 easy to get subtly wrong and slow to redeploy. A mockup + browser check catches layout,
