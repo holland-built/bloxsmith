@@ -535,6 +535,17 @@ tr:hover .copy-btn{opacity:1}
 :root[data-density="compact"] .nav-item{padding:5px 10px}
 :root[data-density="compact"] .stiles{gap:8px}
 :root[data-density="compact"] .stile{min-height:92px;padding:10px 12px}
+[data-wall="on"] .bento{grid-template-columns:repeat(3,minmax(0,1fr))}
+[data-wall="on"] .tbl td{font-size:14px}
+[data-wall="on"] .tbl th{font-size:11px}
+[data-wall="on"] .stile-big{font-size:30px}
+[data-wall="on"] .stile-desc,[data-wall="on"] .stile-of{font-size:13px}
+[data-wall="on"] .card-title{font-size:14px}
+[data-wall="on"] .badge{font-size:11px}
+[data-wall="on"] .bento>.drag-card>.card{max-height:640px}
+@media(max-width:1100px){[data-wall="on"] .bento{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.wall-span-btn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--gray-400);font-size:10px;line-height:1;padding:2px 5px;cursor:pointer;margin-left:4px}
+.wall-span-btn:hover{color:var(--teal);border-color:var(--teal)}
 </style>
 </head>
 <body>
@@ -998,7 +1009,7 @@ function FeedsTable({feeds}) {
   return <DataTable ctl={ctl} rows={feeds} defaultRows={10} rowKey={f=>f.id} initialSort={{key:'level',dir:'asc'}} exportName="threat-feeds" persistId="feeds"/>;
 }
 
-function PoliciesPanel({policies}) {
+function PoliciesPanel({policies, diff={}}) {
   const actBadge={block:'b-red',allow:'b-green',redirect:'b-amber',monitor:'b-teal'};
   const activeCt=policies.filter(p=>p.active).length;
   const totalRules=policies.reduce((a,p)=>a+p.rules,0);
@@ -1019,6 +1030,9 @@ function PoliciesPanel({policies}) {
             <div style={{fontSize:10,color:'var(--gray-400)',marginTop:2}}>{p.rules} rules · {p.created}</div>
           </div>
           <div style={{display:'flex',gap:7,alignItems:'center'}}>
+            {diff[p.id]!=null&&diff[p.id]!==0&&(
+              <span className={`badge ${diff[p.id]>0?'b-green':'b-red'}`} title={`Rule count changed ${diff[p.id]>0?'+':''}${diff[p.id]} since last refresh`}>Δ {diff[p.id]>0?'+':''}{diff[p.id]}</span>
+            )}
             <span className={`badge ${actBadge[p.action]||'b-gray'}`}>{p.action}</span>
             {!p.active&&<span className="badge b-gray">off</span>}
           </div>
@@ -1261,10 +1275,10 @@ function applyViewLS(snap){
 }
 // Refresh button with a caret that folds the auto-refresh interval + pause + countdown
 // into one compact split control. Reuses the .col-menu/.col-overlay dropdown pattern.
-function RefreshControl({autoRefresh,setAutoRefresh,refreshFrozen,setRefreshFrozen,arCountdown,refreshing,onRefresh}) {
+function RefreshControl({autoRefresh,setAutoRefresh,refreshFrozen,setRefreshFrozen,hoverPause,arCountdown,refreshing,onRefresh}) {
   const [open,setOpen]=React.useState(false);
   const OPTS=[[0,'Off'],[30,'30s'],[60,'1m'],[300,'5m']];
-  const cd = autoRefresh===0 ? '' : (refreshFrozen?'Paused':arCountdown+'s');
+  const cd = autoRefresh===0 ? '' : (refreshFrozen?'Paused':hoverPause?'Hover ⏸':arCountdown+'s');
   return (
     <span className="refresh-split" style={{position:'relative',display:'inline-flex'}}>
       <button className="refresh-btn" onClick={onRefresh} title="Refresh all data">
@@ -1299,7 +1313,7 @@ function RefreshControl({autoRefresh,setAutoRefresh,refreshFrozen,setRefreshFroz
 }
 
 // Overflow menu for low-frequency / set-once actions (also reachable via ⌘K / ? key).
-function MoreMenu({onShare,density,setDensity,onShortcuts}) {
+function MoreMenu({onShare,density,setDensity,onShortcuts,wallMode,onWall}) {
   const [open,setOpen]=React.useState(false);
   const row=(label,hint,fn)=>(
     <div className="col-row" style={{cursor:'pointer'}} role="menuitem" onClick={()=>{setOpen(false);fn();}}>
@@ -1313,6 +1327,7 @@ function MoreMenu({onShare,density,setDensity,onShortcuts}) {
         <div className="col-menu" style={{minWidth:210}} role="menu">
           {row('Copy link to this view','◳',onShare)}
           {row('Row density',density==='compact'?'Compact':'Comfortable',()=>setDensity(d=>d==='compact'?'comfortable':'compact'))}
+          {onWall&&row('Wall display mode',wallMode?'On':'Off',onWall)}
           {row('Keyboard shortcuts','?',onShortcuts)}
         </div>
       </>)}
@@ -1554,8 +1569,28 @@ function WidgetViz({data=[], viz='table', columns=[], labelKey, valueKey, rowCol
 const NDA='NstarDnsActivity.';
 function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
   const [cf,setCf]=useState('');
+  const spikes = React.useMemo(()=>{
+    if(!data||!data.top_clients) return {};
+    const cur={};
+    data.top_clients.forEach(r=>{const ip=r[NDA+'device_ip'];if(ip)cur[ip]=Number(r[NDA+'total_query_count'])||0;});
+    let snaps=LS.get('noc.dnsSnapshots',[]);
+    const today=new Date().toISOString().slice(0,10);
+    const last=snaps[snaps.length-1];
+    if(!last||last.ts!==today){
+      snaps=[...snaps,{ts:today,clients:cur}].slice(-7);
+      LS.set('noc.dnsSnapshots',snaps);
+    }
+    const hist=snaps.slice(0,-1);
+    const out={};
+    Object.keys(cur).forEach(ip=>{
+      const vals=hist.map(s=>s.clients[ip]).filter(v=>v!=null);
+      if(vals.length>=2){const avg=vals.reduce((a,b)=>a+b,0)/vals.length;if(avg>0&&cur[ip]>3*avg)out[ip]={avg:Math.round(avg),series:[...vals,cur[ip]]};}
+    });
+    return out;
+  },[data]);
+  const sparkPath=series=>{const mx=Math.max(...series,1),n=series.length;return series.map((v,i)=>`${(i/(n-1||1)*36).toFixed(1)},${(14-v/mx*12).toFixed(1)}`).join(' ');};
   const clientCtl=useColumns('dns-clients',[
-    {key:'device',label:'Device',fixed:true,sortVal:r=>r[NDA+'device_name']||'',csv:r=>r[NDA+'device_name']||'',render:r=><span style={{fontWeight:500}}>{r[NDA+'device_name']||'—'}</span>},
+    {key:'device',label:'Device',fixed:true,sortVal:r=>r[NDA+'device_name']||'',csv:r=>r[NDA+'device_name']||'',render:r=>{const sp=spikes[r[NDA+'device_ip']];return <span style={{fontWeight:500,display:'inline-flex',alignItems:'center',gap:6}}>{r[NDA+'device_name']||'—'}{sp&&<span className="badge b-amber" title={`Query spike vs ${sp.avg}/day avg`}>🔥 spike</span>}{sp&&<svg width="38" height="14" style={{flexShrink:0}}><polyline points={sparkPath(sp.series)} fill="none" stroke="var(--sev-amber-t)" strokeWidth="1.2"/></svg>}</span>;}},
     {key:'ip',label:'IP',mono:true,size:10,sortVal:r=>r[NDA+'device_ip']||'',csv:r=>r[NDA+'device_ip']||'',render:r=><span style={{color:'var(--gray-400)'}}>{r[NDA+'device_ip']||'—'}</span>},
     {key:'queries',label:'Queries',mono:true,size:11,sortVal:r=>Number(r[NDA+'total_query_count'])||0,csv:r=>Number(r[NDA+'total_query_count'])||0,render:r=>(Number(r[NDA+'total_query_count'])||0).toLocaleString()},
     {key:'share',label:'Share',sortVal:r=>Number(r[NDA+'total_query_count'])||0,csv:r=>{const c=Number(r[NDA+'total_query_count'])||0;const t=(data&&(data.top_clients||[]).reduce((a,x)=>a+(Number(x[NDA+'total_query_count'])||0),0))||0;return (t>0?Math.round(c/t*100):0)+'%';},render:r=>{const c=Number(r[NDA+'total_query_count'])||0;const t=(data&&(data.top_clients||[]).reduce((a,x)=>a+(Number(x[NDA+'total_query_count'])||0),0))||0;const pct=t>0?Math.round(c/t*100):0;return <div style={{display:'flex',alignItems:'center',gap:6}}><div className="bar-track"><div className="bar-fill" style={{width:`${pct}%`,background:'var(--teal)'}}/></div><span style={{fontSize:10,color:'var(--gray-400)',fontVariantNumeric:'tabular-nums'}}>{pct}%</span></div>;}},
@@ -1714,7 +1749,7 @@ function HostMetricsPanel({data}) {
   return <DataTable ctl={ctl} rows={rows} defaultRows={15} exportName="host-metrics" persistId="hostmetrics" initialSort={{key:'avg',dir:'desc'}}/>;
 }
 
-function ThreatLookupPanel() {
+function ThreatLookupPanel({subnets=[], leases=[]}) {
   const [q,setQ]         = useState('');
   const [results,setRes] = useState(null);
   const [loading,setLd]  = useState(false);
@@ -1795,6 +1830,20 @@ function ThreatLookupPanel() {
                        </div>
                       :<button className="block-btn" onClick={()=>block(name)}>⊗ Block Domain</button>
                   )}
+                  {(()=>{
+                    const ip=(addr&&/^\d+\.\d+\.\d+\.\d+/.test(addr))?addr:(/^\d+\.\d+\.\d+\.\d+/.test(q.trim())?q.trim():'');
+                    if(!ip) return null;
+                    const lease=leases.find(l=>l.addr===ip);
+                    const sub=lease?subnets.find(s=>s.id===lease.subnet_id):null;
+                    return (
+                      <div style={{marginTop:8,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:4,fontSize:11}}>
+                        <div style={{fontSize:9,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--gray-400)'}}>Network context</div>
+                        <div><span style={{color:'var(--gray-400)'}}>IP:</span> <span style={{fontFamily:'monospace',color:'var(--ink)'}}>{ip}</span></div>
+                        <div><span style={{color:'var(--gray-400)'}}>Host:</span> {lease&&lease.host?<span style={{color:'var(--gray-200)'}}>{lease.host}</span>:<span style={{color:'var(--gray-600)'}}>— no active lease</span>}</div>
+                        <div><span style={{color:'var(--gray-400)'}}>Subnet:</span> {sub?<span style={{color:'var(--gray-200)'}}>{sub.name!==sub.addr?sub.name:`${sub.addr}/${sub.cidr}`} <span className="badge b-gray">{sub.site||'—'}</span> <span style={{color:utilColor(sub.util),fontWeight:700}}>{sub.util}%</span></span>:<span style={{color:'var(--gray-600)'}}>— not found in IPAM</span>}</div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -2202,12 +2251,18 @@ function IPAMTable({subnets, ipamChip, rowLimit, leaseCt}) {
   return <DataTable ctl={ctl} rows={rows} defaultRows={rowLimit} rowKey={s=>s.id} initialSort={{key:'util',dir:'desc'}} exportName="subnets" persistId="ipam"/>;
 }
 
-function HostsTable({hosts, rowLimit}) {
+function HostsTable({hosts, rowLimit, hostSeen={}}) {
   const ctl=useColumns('hosts',[
     {key:'name',label:'Hostname',fixed:true,render:h=><span style={{fontWeight:500}} title={h.name}>{h.name}</span>},
     {key:'ip',label:'IP',mono:true,size:10,render:h=>(<span style={{color:'var(--gray-400)'}} title={h.ip}>{h.ip}{h.ip&&<button className="copy-btn" onClick={()=>copyToClip(h.ip)} title="Copy IP">⎘</button>}</span>)},
     {key:'type',label:'Type',size:10,render:h=><span style={{color:'var(--gray-400)'}}>{h.type}</span>},
     {key:'status',label:'Status',render:h=>(<span style={{display:'flex',alignItems:'center',gap:5}}><span className={`s-dot s-${h.status}`}/><span style={{fontSize:11,textTransform:'capitalize'}}>{h.status}</span></span>)},
+    {key:'lastonline',label:'Last Online',size:11,sortVal:h=>hostSeen[h.id]?new Date(hostSeen[h.id]).getTime():(h.status==='online'?Infinity:-1),render:h=>{
+      if(h.status==='online') return <span style={{color:'var(--sev-green-t)',fontSize:11}}>now</span>;
+      const t=hostSeen[h.id];
+      if(!t) return <span style={{color:'var(--gray-600)'}}>—</span>;
+      return <span style={{color:'var(--gray-400)',fontSize:11}} title={fmtTs(t)}>{timeAgo(t)}</span>;
+    }},
   ]);
   return <DataTable ctl={ctl} rows={hosts} defaultRows={rowLimit} rowKey={h=>h.id} initialSort={{key:'name',dir:'asc'}} exportName="hosts" persistId="hosts"/>;
 }
@@ -2630,6 +2685,12 @@ function App({vault, onVaultChange}={}) {
   const [dragOver, setDragOver]         = useState(null);
   const [dragging, setDragging]         = useState(null);
   const [dragArmed, setDragArmed]       = useState(null);
+  const [dhcpWarn, setDhcpWarn]         = useState(()=>LS.get('noc.dhcpWarn',80));
+  const [dhcpCrit, setDhcpCrit]         = useState(()=>LS.get('noc.dhcpCrit',95));
+  const [policyDiff, setPolicyDiff]     = useState({});
+  const [wallMode, setWallMode]         = useState(()=>LS.get('noc.wall',false));
+  const [wallSpans, setWallSpans]       = useState(()=>LS.get('noc.wallSpans',{}));
+  const [hoverPause, setHoverPause]     = useState(false);
 
   const getViz = (id, def='table') => vizMode[id] || def;
   const setViz = (id, v) => { const n={...vizMode,[id]:v}; setVizMode(n); LS.set('noc.viz',n); };
@@ -2675,17 +2736,26 @@ function App({vault, onVaultChange}={}) {
 
   // props for a draggable bento wrapper; whole card is the drop target but
   // dragging only initiates from the handle (so inner buttons/text still work)
-  const wrapProps = (id, extra='') => ({
-    draggable: dragArmed===id,
-    className:`drag-card${extra?' '+extra:''}${dragging===id?' dragging':''}${dragOver===id?' drag-over':''}`,
-    onDragStart:e=>onDragStart(e,id),
-    onDragOver:e=>onDragOver(e,id),
-    onDrop:e=>onDrop(e,id),
-    onDragEnd:()=>{onDragEnd(); setDragArmed(null);}
-  });
+  const SPAN_CLS={1:'',2:'b-wide',3:'b-full'};
+  const cycleSpan=id=>{ const cur=wallSpans[id]||1; const next=cur>=3?1:cur+1; const n={...wallSpans,[id]:next}; setWallSpans(n); LS.set('noc.wallSpans',n); };
+  const wrapProps = (id, extra='') => {
+    const span = wallMode ? SPAN_CLS[wallSpans[id]||1] : '';
+    const cls = [extra, span].filter(Boolean).join(' ');
+    return {
+      draggable: dragArmed===id,
+      className:`drag-card${cls?' '+cls:''}${dragging===id?' dragging':''}${dragOver===id?' drag-over':''}`,
+      onDragStart:e=>onDragStart(e,id),
+      onDragOver:e=>onDragOver(e,id),
+      onDrop:e=>onDrop(e,id),
+      onDragEnd:()=>{onDragEnd(); setDragArmed(null);}
+    };
+  };
   const DragHandle = ({id}) => (
-    <span className="drag-handle" title="Drag to reorder" aria-label="Drag to reorder"
-      onMouseDown={()=>setDragArmed(id)} onMouseUp={()=>setDragArmed(null)}>⠿</span>
+    <>
+      <span className="drag-handle" title="Drag to reorder" aria-label="Drag to reorder"
+        onMouseDown={()=>setDragArmed(id)} onMouseUp={()=>setDragArmed(null)}>⠿</span>
+      {wallMode&&<button className="wall-span-btn" title="Cycle width: 1 / 2 / full" onClick={()=>cycleSpan(id)}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>}
+    </>
   );
   const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['raw','Raw']];
   const VizSelect = ({id, def='table', opts=VIZ_OPTS}) => (
@@ -2819,7 +2889,7 @@ function App({vault, onVaultChange}={}) {
 
   useEffect(()=>{
     if(!autoRefresh) { setArCountdown(0); return; }
-    if(refreshFrozen) return;            // paused: hold the countdown, no fetch
+    if(refreshFrozen||hoverPause) return;  // paused (manual or hover): hold countdown, no fetch
     setArCountdown(autoRefresh);
     const tick = setInterval(()=>{
       setArCountdown(c=>{
@@ -2828,7 +2898,7 @@ function App({vault, onVaultChange}={}) {
       });
     },1000);
     return ()=>clearInterval(tick);
-  },[autoRefresh,refreshFrozen]);
+  },[autoRefresh,refreshFrozen,hoverPause]);
 
   useEffect(()=>{
     const handler = e => {
@@ -2898,6 +2968,24 @@ function App({vault, onVaultChange}={}) {
     document.title = 'Infoblox MCP · Portal (CSP)';   // static name, no count
   },[data]);
 
+  useEffect(()=>{
+    if(!data) return;
+    const seen = LS.get('noc.hostSeen',{});
+    const now = new Date().toISOString();
+    let changed=false;
+    data.hosts.forEach(h=>{ if(h.status==='online'){ seen[h.id]=now; changed=true; } });
+    if(changed) LS.set('noc.hostSeen',seen);
+  },[data]);
+
+  useEffect(()=>{
+    if(!data) return;
+    const prev = LS.get('noc.prevPolicies',{});
+    const diff = {};
+    data.secPolicies.forEach(p=>{ if(prev[p.id]!=null && prev[p.id]!==p.rules) diff[p.id]=p.rules-prev[p.id]; });
+    setPolicyDiff(diff);
+    const cur={}; data.secPolicies.forEach(p=>{cur[p.id]=p.rules;}); LS.set('noc.prevPolicies',cur);
+  },[data]);
+
   const lazyFetch = useCallback((key,url,set)=>{
     setLazyErr(e=>({...e,[key]:false}));
     fetch(url).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
@@ -2940,12 +3028,14 @@ function App({vault, onVaultChange}={}) {
   const s_feeds    = sq ? feeds.filter(f=>[f.name,f.cat,f.level].some(v=>v.toLowerCase().includes(sq)))    : feeds;
   const s_logs     = sq ? auditLogs.filter(l=>[l.user,l.action,l.resource].some(v=>v.toLowerCase().includes(sq))) : auditLogs;
 
-  const critSubs  = subnets.filter(s=>s.util>=90);
+  const critSubs  = subnets.filter(s=>s.util>=dhcpCrit);
+  const warnSubs  = subnets.filter(s=>s.util>=dhcpWarn&&s.util<dhcpCrit);
   const onlineH   = hosts.filter(h=>h.status==='online');
   const ttlBad    = zones.filter(z=>z.anomaly);
   const activeF   = feeds.filter(f=>f.active);
   const leaseCt   = leases.reduce((a,l)=>{a[l.subnet_id]=(a[l.subnet_id]||0)+1;return a},{});
   const filtHosts = (hostFilt||hostChip) ? s_hosts.filter(h=>h.status===(hostFilt||hostChip)) : s_hosts;
+  const hostSeen  = LS.get('noc.hostSeen',{});
   const firingAlerts = evalAlerts(data, alertRules).filter(a=>a.firing);
   const firingSecs = new Set(firingAlerts.map(a=>ALERT_SECTION[a.metric]).filter(Boolean));
   const shareView = () => { const url=location.origin+location.pathname+'#'+section;
@@ -2998,7 +3088,7 @@ function App({vault, onVaultChange}={}) {
 
   const cancelUpdate=()=>{ setUpdApplying(false); setUpdPhase(''); setUpdStart(0); };
   return (
-    <div style={{display:'flex',minHeight:'100vh'}}>
+    <div style={{display:'flex',minHeight:'100vh'}} data-wall={wallMode?'on':undefined}>
       {updApplying&&updPhase&&<UpdateBar phase={updPhase} startTs={updStart} onCancel={cancelUpdate}/>}
 
       {/* SIDEBAR */}
@@ -3117,7 +3207,9 @@ function App({vault, onVaultChange}={}) {
       </div>
 
       {/* MAIN */}
-      <div className="main">
+      <div className="main"
+        onMouseEnter={()=>{ if(autoRefresh>0) setHoverPause(true); }}
+        onMouseLeave={()=>setHoverPause(false)}>
         <div className="sr-only" role="status" aria-live="polite">
           {refreshing?'Refreshing data':(lastUpd?`Data updated ${lastUpd.toLocaleTimeString()}`:'')}{firingAlerts.length>0?`. ${firingAlerts.length} alert${firingAlerts.length>1?'s':''} firing`:''}
         </div>
@@ -3134,7 +3226,7 @@ function App({vault, onVaultChange}={}) {
           <div className="topbar-controls">
             <div className="topbar-group">
               <RefreshControl autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh}
-                refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen}
+                refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen} hoverPause={hoverPause}
                 arCountdown={arCountdown} refreshing={refreshing} onRefresh={()=>load(true)}/>
               <button className={`chat-toggle-btn${chatOpen?' on':''}`} onClick={()=>setChatOpen(o=>!o)}>
                 ⊕ {chatOpen?'Close Query':'Query'}
@@ -3143,7 +3235,7 @@ function App({vault, onVaultChange}={}) {
                 title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
               <PresetMenu section={section}/>
               <button className="theme-btn" onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
-              <MoreMenu onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)}/>
+              <MoreMenu onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}}/>
             </div>
           </div>
         </div>
@@ -3165,6 +3257,21 @@ function App({vault, onVaultChange}={}) {
             msg:<>Filtering: "<b>{searchQuery}</b>" — results narrowed in all sections</>,
             acts:<button className="n-btn" onClick={()=>setSearchQuery('')}>Clear</button>,
           });
+          if(critSubs.length>0) notices.push({
+            id:'dhcp-crit', sev:'n-red', ico:'!',
+            msg:<><b>{critSubs.length} subnet{critSubs.length>1?'s':''} ≥{dhcpCrit}%</b> DHCP utilization — {critSubs.slice(0,3).map(s=>s.name!==s.addr?s.name:s.addr).join(', ')}{critSubs.length>3?`, +${critSubs.length-3} more`:''}</>,
+            acts:section!=='ipam'&&<button className="n-btn" onClick={()=>setSection('ipam')}>Open IPAM</button>,
+          });
+          if(warnSubs.length>0) notices.push({
+            id:'dhcp-warn', sev:'n-info', ico:'i',
+            msg:<><b>{warnSubs.length} subnet{warnSubs.length>1?'s':''} {dhcpWarn}–{dhcpCrit-1}%</b> DHCP utilization</>,
+            acts:section!=='ipam'&&<button className="n-btn" onClick={()=>setSection('ipam')}>Open IPAM</button>,
+          });
+          if(Object.keys(policyDiff).length>0){ const ch=Object.keys(policyDiff).length; notices.push({
+            id:'pol-diff', sev:'n-info', ico:'i',
+            msg:<><b>{ch} security polic{ch>1?'ies':'y'} changed</b> — rule counts differ since last refresh</>,
+            acts:section!=='security'&&<button className="n-btn" onClick={()=>setSection('security')}>Review</button>,
+          }); }
           if(!notices.length) return null;
           const CAP=2, hidden=notices.length-CAP;
           const shown=noticesExpanded?notices:notices.slice(0,CAP);
@@ -3192,7 +3299,7 @@ function App({vault, onVaultChange}={}) {
               const auditFail = auditLogs.filter(l=>l.result==='failure').length;
               const tiles = [
                 {cat:'Hosts',   n:errHosts,       tot:hosts.length,    sev:errHosts>0 ?'crit':'ok', desc:'offline / error',  section:'hosts'},
-                {cat:'Subnets', n:critSubs.length,tot:subnets.length,  sev:critSubs.length>0?'warn':'ok', desc:'≥90% utilization', section:'ipam'},
+                {cat:'Subnets', n:critSubs.length,tot:subnets.length,  sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':'ok', desc:`≥${dhcpCrit}% utilization`, section:'ipam'},
                 {cat:'DNS',     n:ttlBad.length,  tot:zones.length,    sev:ttlBad.length>0?'warn':'ok', desc:'TTL anomalies',    section:'dns'},
                 {cat:'Threats', n:feedCrit,       tot:feeds.length,    sev:feedCrit>0 ?'warn':'ok', desc:'critical feeds',   section:'threats'},
                 {cat:'Audit',   n:auditFail,      tot:auditLogs.length,sev:auditFail>0?'crit':'ok', desc:'failed events',    section:'audit'},
@@ -3420,7 +3527,7 @@ function App({vault, onVaultChange}={}) {
                       </div>
                     </div>
                     {!collapsed['pols']&&(getViz('pols','panel')==='panel'
-                      ?<PoliciesPanel policies={secPolicies}/>
+                      ?<PoliciesPanel policies={secPolicies} diff={policyDiff}/>
                       :<WidgetViz data={secPolicies} viz={getViz('pols','panel')}
                         columns={[{key:'name',label:'Policy'},{key:'action',label:'Action'},{key:'rules',label:'Rules'},{key:'active',label:'Active',render:p=>p.active?'Yes':'No'}]}
                         labelKey="name" valueKey="rules" defaultRows={10}/>)}
@@ -3480,6 +3587,15 @@ function App({vault, onVaultChange}={}) {
                     {ipamShowTiny?`Hide ${tinyCount} single-IP`:`+ ${tinyCount} single-IP subnet${tinyCount>1?'s':''} hidden — show`}
                   </button>
                 )}
+                <span style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center',fontSize:10,color:'var(--gray-400)'}}>
+                  Thresholds:
+                  <label style={{color:'var(--sev-amber-t)'}}>warn <input type="number" min="1" max="99" value={dhcpWarn}
+                    onChange={e=>{const v=Math.max(1,Math.min(99,+e.target.value||0));setDhcpWarn(v);LS.set('noc.dhcpWarn',v);}}
+                    style={{width:46,background:'var(--surface-3)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',padding:'2px 4px',fontSize:10}}/>%</label>
+                  <label style={{color:'var(--sev-red-t)'}}>crit <input type="number" min="1" max="100" value={dhcpCrit}
+                    onChange={e=>{const v=Math.max(1,Math.min(100,+e.target.value||0));setDhcpCrit(v);LS.set('noc.dhcpCrit',v);}}
+                    style={{width:46,background:'var(--surface-3)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',padding:'2px 4px',fontSize:10}}/>%</label>
+                </span>
               </div>
             <IPAMTable subnets={ipamPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt}/>
           </div>
@@ -3593,7 +3709,7 @@ function App({vault, onVaultChange}={}) {
                 })}
                 {hostChip&&<button className="chip" onClick={()=>setHostChip(null)}>✕ clear</button>}
               </div>
-              <HostsTable hosts={filtHosts} rowLimit={rl('hosts')}/>
+              <HostsTable hosts={filtHosts} rowLimit={rl('hosts')} hostSeen={hostSeen}/>
             </div>
             <div className="card b-full">
               <div className="card-title"><div className="dot"/>Host Performance Metrics — avg, last hour</div>
@@ -3608,7 +3724,7 @@ function App({vault, onVaultChange}={}) {
         {section==='security'&&(
           <div className="card">
             <div className="card-title"><div className="dot"/>Security Policies ({s_policies.length}{sq&&` of ${secPolicies.length}`})</div>
-            <PoliciesPanel policies={s_policies}/>
+            <PoliciesPanel policies={s_policies} diff={policyDiff}/>
           </div>
         )}
 
@@ -3661,7 +3777,7 @@ function App({vault, onVaultChange}={}) {
         {section==='threat-lookup'&&(
           <div className="card">
             <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>Entity & Threat Lookup</div>
-            <ThreatLookupPanel/>
+            <ThreatLookupPanel subnets={subnets} leases={leases}/>
           </div>
         )}
 
