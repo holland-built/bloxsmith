@@ -1360,6 +1360,27 @@ function RefreshControl({autoRefresh,setAutoRefresh,refreshFrozen,setRefreshFroz
 }
 
 // Overflow menu for low-frequency / set-once actions (also reachable via ⌘K / ? key).
+function AckMenu({id, onAck}) {
+  const [open, setOpen] = React.useState(false);
+  const opts = [{label:'1h', ms:3600*1000},{label:'4h', ms:4*3600*1000},{label:'8h', ms:8*3600*1000},{label:'Mute', ms:30*24*3600*1000}];
+  return (
+    <span style={{position:'relative',display:'inline-flex'}}>
+      <button className="n-btn" onClick={()=>setOpen(o=>!o)}>Ack ▾</button>
+      {open&&(<>
+        <div className="col-overlay" onClick={()=>setOpen(false)}/>
+        <div className="col-menu" style={{minWidth:90,top:'100%',right:0,left:'auto'}} role="menu">
+          {opts.map(o=>(
+            <div key={o.label} className="col-row" style={{cursor:'pointer'}} role="menuitem"
+              onClick={()=>{setOpen(false);onAck(id,o.ms);}}>
+              <span className="col-lbl">{o.label}</span>
+            </div>
+          ))}
+        </div>
+      </>)}
+    </span>
+  );
+}
+
 function MoreMenu({onShare,density,setDensity,onShortcuts,wallMode,onWall,demoMode,onDemo}) {
   const [open,setOpen]=React.useState(false);
   const row=(label,hint,fn)=>(
@@ -2922,7 +2943,7 @@ function App({vault, onVaultChange}={}) {
   const [switchingAcct, setSwitchingAcct] = useState(false);
   const [acctSearch, setAcctSearch] = useState('');
 
-  const ackAlert  = id => { const n={...ackedAlerts,[id]:Date.now()+4*3600*1000}; setAckedAlerts(n); LS.set('noc.acked',n); };
+  const ackAlert  = (id, ms) => { const n={...ackedAlerts,[id]:Date.now()+ms}; setAckedAlerts(n); LS.set('noc.acked',n); };
   const isAcked   = id => { const s=LS.get('noc.acked',{}); return (ackedAlerts[id]||s[id]||0)>Date.now(); };
   const rl = (key, def=25) => rowLimits[key]||def;
   const setRl = (key, val) => { const n={...rowLimits,[key]:val}; setRowLimits(n); LS.set('rl',n); };
@@ -3454,7 +3475,7 @@ function App({vault, onVaultChange}={}) {
           if(firingAlerts.length>0&&!alertsDismissed&&!isAcked('alerts')) notices.push({
             id:'alerts', sev:'n-red', ico:'!',
             msg:<><b>{firingAlerts.length} alert{firingAlerts.length>1?'s':''} firing</b> — {firingAlerts.slice(0,2).map(a=>`${metricLabel(a.metric)} (${a.value})`).join(', ')}{firingAlerts.length>2?`, +${firingAlerts.length-2} more`:''}</>,
-            acts:<>{section!=='alerts'&&<button className="n-btn" onClick={()=>setSection('alerts')}>View</button>}<button className="n-btn" onClick={()=>ackAlert('alerts')}>Ack 4h</button><button className="n-x" aria-label="Dismiss alerts" onClick={()=>setAlertsDismissed(true)}>×</button></>,
+            acts:<>{section!=='alerts'&&<button className="n-btn" onClick={()=>setSection('alerts')}>View</button>}<AckMenu id="alerts" onAck={ackAlert}/><button className="n-x" aria-label="Dismiss alerts" onClick={()=>setAlertsDismissed(true)}>×</button></>,
           });
           if(usingMock&&!demoDismiss) notices.push({
             id:'demo', sev:'n-info', ico:'i',
@@ -3469,17 +3490,17 @@ function App({vault, onVaultChange}={}) {
           if(critSubs.length>0&&!isAcked('dhcp-crit')) notices.push({
             id:'dhcp-crit', sev:'n-red', ico:'!',
             msg:<><b>{critSubs.length} subnet{critSubs.length>1?'s':''} ≥{dhcpCrit}%</b> DHCP utilization — {critSubs.slice(0,3).map(s=>s.name!==s.addr?s.name:s.addr).join(', ')}{critSubs.length>3?`, +${critSubs.length-3} more`:''}</>,
-            acts:<>{section!=='ipam'&&<button className="n-btn" onClick={()=>setSection('ipam')}>Open IPAM</button>}<button className="n-btn" onClick={()=>ackAlert('dhcp-crit')}>Ack 4h</button></>,
+            acts:<>{section!=='ipam'&&<button className="n-btn" onClick={()=>setSection('ipam')}>Open IPAM</button>}<AckMenu id="dhcp-crit" onAck={ackAlert}/></>,
           });
           if(warnSubs.length>0&&!isAcked('dhcp-warn')) notices.push({
             id:'dhcp-warn', sev:'n-info', ico:'i',
             msg:<><b>{warnSubs.length} subnet{warnSubs.length>1?'s':''} {dhcpWarn}–{dhcpCrit-1}%</b> DHCP utilization</>,
-            acts:<>{section!=='ipam'&&<button className="n-btn" onClick={()=>setSection('ipam')}>Open IPAM</button>}<button className="n-btn" onClick={()=>ackAlert('dhcp-warn')}>Ack 4h</button></>,
+            acts:<>{section!=='ipam'&&<button className="n-btn" onClick={()=>setSection('ipam')}>Open IPAM</button>}<AckMenu id="dhcp-warn" onAck={ackAlert}/></>,
           });
           if(Object.keys(policyDiff).length>0&&!isAcked('pol-diff')){ const ch=Object.keys(policyDiff).length; notices.push({
             id:'pol-diff', sev:'n-info', ico:'i',
             msg:<><b>{ch} security polic{ch>1?'ies':'y'} changed</b> — rule counts differ since last refresh</>,
-            acts:<>{section!=='security'&&<button className="n-btn" onClick={()=>setSection('security')}>Review</button>}<button className="n-btn" onClick={()=>ackAlert('pol-diff')}>Ack 4h</button></>,
+            acts:<>{section!=='security'&&<button className="n-btn" onClick={()=>setSection('security')}>Review</button>}<AckMenu id="pol-diff" onAck={ackAlert}/></>,
           }); }
           if(!notices.length) return null;
           const CAP=2, hidden=notices.length-CAP;
