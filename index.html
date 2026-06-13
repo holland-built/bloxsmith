@@ -1013,7 +1013,7 @@ function TTLTable({zones, onDrill}) {
 
 const THREAT_CATS = new Set(['dga','threat_insight','zero_day_dns','threat_insight_nde','c2','ransomware','exploit','phishing']);
 
-function FeedsTable({feeds, rowLimit, demoMode}) {
+function FeedsTable({feeds, rowLimit, demoMode, onDrill}) {
   const [feedTab, setFeedTab] = useState('intel');
   const [deltas, setDeltas] = useState({});
   useEffect(()=>{
@@ -1058,12 +1058,12 @@ function FeedsTable({feeds, rowLimit, demoMode}) {
           <button className={`chip${tab==='all'?' on':''}`} onClick={()=>setFeedTab('all')}>All ({feeds.length})</button>
         </div>
       )}
-      <DataTable ctl={ctl} rows={limited} defaultRows={10} rowKey={f=>f.id} initialSort={{key:'level',dir:'asc'}} exportName="threat-feeds" persistId="feeds"/>
+      <DataTable ctl={ctl} rows={limited} defaultRows={10} rowKey={f=>f.id} initialSort={{key:'level',dir:'asc'}} exportName="threat-feeds" persistId="feeds" onRowClick={onDrill?f=>onDrill({type:'feed',data:f}):undefined}/>
     </>
   );
 }
 
-function PoliciesPanel({policies, diff={}, demoMode}) {
+function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
   const [testExpanded, setTestExpanded] = useState(false);
   const actBadge={block:'b-red',allow:'b-green',redirect:'b-amber',monitor:'b-teal'};
   const activeCt=policies.filter(p=>p.active).length;
@@ -1072,7 +1072,7 @@ function PoliciesPanel({policies, diff={}, demoMode}) {
   const realPolicies = demoMode ? policies.filter(p=>!(p.action==='allow'&&p.rules<=1)) : policies;
   const testPolicies = demoMode ? policies.filter(p=>p.action==='allow'&&p.rules<=1) : [];
   const renderPol = (p) => (
-    <div key={p.id} className="pol-item">
+    <div key={p.id} className="pol-item" style={onDrill?{cursor:'pointer'}:undefined} onClick={onDrill?()=>onDrill({type:'policy',data:p}):undefined}>
       <div>
         <div style={{fontSize:12,fontWeight:500,color:p.active?'var(--ink)':'var(--gray-400)'}}>{p.name}</div>
         <div style={{fontSize:10,color:'var(--gray-400)',marginTop:2}}>{p.rules} rules · {p.created}</div>
@@ -2476,6 +2476,30 @@ function DrillSheet({entity, onClose, leases=[], subnets=[]}) {
             {z.issues.map((iss,i)=><span key={i} className={`badge ${iss.includes('High')||iss.includes('Too High')?'b-amber':'b-red'}`}>{iss}</span>)}
           </div>
         )}
+      </>
+    );
+  } else if(entity.type==='feed') {
+    const f = entity.data;
+    title = f.name;
+    body = (
+      <>
+        {kv('Category', f.cat)}
+        <div className="drill-kv"><span className="k">Threat Level</span><span className={`badge ${levelBadge(f.level)}`}>{f.level}</span></div>
+        {kv('Confidence', f.conf)}
+        {kv('Entries', f.entries!=null?f.entries.toLocaleString():'—')}
+        <div className="drill-kv"><span className="k">Status</span><span className={`badge ${f.active?'b-green':'b-gray'}`}>{f.active?'Active':'Off'}</span></div>
+      </>
+    );
+  } else if(entity.type==='policy') {
+    const p = entity.data;
+    const actBadge={block:'b-red',allow:'b-green',redirect:'b-amber',monitor:'b-teal'};
+    title = p.name;
+    body = (
+      <>
+        <div className="drill-kv"><span className="k">Action</span><span className={`badge ${actBadge[p.action]||'b-gray'}`}>{p.action}</span></div>
+        {kv('Rules', p.rules)}
+        {kv('Created', p.created)}
+        <div className="drill-kv"><span className="k">Status</span><span className={`badge ${p.active?'b-green':'b-gray'}`}>{p.active?'Active':'Off'}</span></div>
       </>
     );
   }
@@ -3895,7 +3919,7 @@ function App({vault, onVaultChange}={}) {
                       </div>
                     </div>
                     {!collapsed['pols']&&(getViz('pols','panel')==='panel'
-                      ?<PoliciesPanel policies={secPolicies} diff={policyDiff} demoMode={demoMode}/>
+                      ?<PoliciesPanel policies={secPolicies} diff={policyDiff} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
                       :<WidgetViz data={secPolicies} viz={getViz('pols','panel')}
                         columns={[{key:'name',label:'Policy'},{key:'action',label:'Action'},{key:'rules',label:'Rules'},{key:'active',label:'Active',render:p=>p.active?'Yes':'No'}]}
                         labelKey="name" valueKey="rules" defaultRows={10}/>)}
@@ -3915,7 +3939,7 @@ function App({vault, onVaultChange}={}) {
                       </div>
                     </div>
                     {!collapsed['feeds']&&(getViz('feeds')==='table'
-                      ?<FeedsTable feeds={feeds} demoMode={demoMode}/>
+                      ?<FeedsTable feeds={feeds} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
                       :<WidgetViz data={[...feeds].sort((a,b)=>b.entries-a.entries)} viz={getViz('feeds')}
                         columns={[{key:'name',label:'Feed'},{key:'cat',label:'Category'},{key:'level',label:'Level'},{key:'entries',label:'Entries'}]}
                         labelKey="name" valueKey="entries" rowColor={r=>levelColor(r.level)} defaultRows={10}/>)}
@@ -4093,7 +4117,7 @@ function App({vault, onVaultChange}={}) {
         {section==='security'&&(
           <div className="card">
             <div className="card-title"><div className="dot"/>Security Policies ({s_policies.length}{sq&&` of ${secPolicies.length}`})</div>
-            <PoliciesPanel policies={s_policies} diff={policyDiff} demoMode={demoMode}/>
+            <PoliciesPanel policies={s_policies} diff={policyDiff} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
           </div>
         )}
 
@@ -4102,7 +4126,7 @@ function App({vault, onVaultChange}={}) {
           <div className="card">
             <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>All Threat Feeds by Severity{sq&&` (${s_feeds.length} of ${feeds.length})`}</div>
             <RowLimitBar limit={rl('threats')} setLimit={v=>setRl('threats',v)}/>
-            <FeedsTable feeds={s_feeds} rowLimit={rl('threats')} demoMode={demoMode}/>
+            <FeedsTable feeds={s_feeds} rowLimit={rl('threats')} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
           </div>
         )}
 
