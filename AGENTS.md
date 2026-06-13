@@ -75,6 +75,31 @@ Before claiming done on any UI change:
 - No layout regression? Sidebar + bento grid + chat panel at 1280px+.
 - Evidence observed? Screenshot or curl output — not "should work".
 
+## Model split (Opus plans, Sonnet codes)
+
+Always split by phase:
+
+```
+Agent(subagent_type="Plan", model="opus", prompt="Design approach for X...")  → plan
+Agent(model="sonnet", prompt="Implement: <plan step>")                        → code
+```
+
+**Auto-fire Opus planner when:** user says "plan X", task is multi-file, or getting it wrong
+means significant rework. Never plan inline — delegate planning to an Opus agent.
+
+## When to delegate to subagents
+
+- **Independent searches** across 2+ areas → parallel `Explore` agents (max 3)
+- **Large tool output** (full index.html read, long curl response) → subagent returns digest
+- **Multi-perspective design** → 2–3 `Plan` agents in parallel (model: "opus")
+- **Approved plan execution** → Sonnet subagents per phase
+
+## When NOT to delegate
+
+- Single known file edit → use Read/Edit directly
+- Trivial question → answer from working context
+- Already have full context for the task
+
 ## Agent teams
 
 | Team | Use for |

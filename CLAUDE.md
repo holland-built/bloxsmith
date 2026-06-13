@@ -10,9 +10,12 @@
 | Deployment / Docker | `docs/DEPLOYMENT.md` — Docker, compose, env vars, Watchtower |
 | Any design/GUI change | `docs/design-workflow.md` — mockup workflow (required before any UI change) |
 | After each change | `docs/change-reporting.md` — required markdown table summary |
-| Skills | `SKILLS.md` — all installed skills + invocation reference |
+| Skills | `SKILLS.md` — all installed skills + when-to-invoke table |
 | MCP servers | `MCP.md` — available MCP servers + auth notes |
 | Color decisions | `COLOR_CONTRACT.md` — 3-bucket palette rule (neutral / accent / status) |
+| Testing | `docs/TESTING.md` — TDD, pytest commands, UI verification, drift checks |
+| Planning | `docs/PLANNING.md` — when to plan, grill-me flow, feature template |
+| Context hygiene | `docs/CONTEXT.md` — token budget, compaction, cache discipline |
 
 Do NOT read files not required by the task.
 
