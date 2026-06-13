@@ -1085,13 +1085,14 @@ def _trim_tool_result(s: str) -> str:
     return s[:_MAX_TOOL_CHARS] + ("…[truncated]" if len(s) > _MAX_TOOL_CHARS else "")
 
 
-async def _handle_query_async(question: str, trace: list) -> str:
+async def _handle_query_async(question: str, trace: list, context: str = "") -> str:
     if not LLM_API_KEY:
         return "AI query requires LLM_API_KEY (or GROQ_API_KEY) in .env — add it and restart the server."
 
+    user_msg = (context.strip() + "\n\n" + question) if context.strip() else question
     messages = [
         {"role": "system", "content": _AI_SYSTEM},
-        {"role": "user",   "content": question},
+        {"role": "user",   "content": user_msg},
     ]
     last = None
     try:
@@ -1179,9 +1180,9 @@ def _parse_ai_response(raw: str) -> dict:
         return {"answer": parts[0].strip(), "suggestions": sugs[:5]}
     return {"answer": raw, "suggestions": []}
 
-def handle_query(question: str) -> dict:
+def handle_query(question: str, context: str = "") -> dict:
     trace: list = []
-    raw = asyncio.run(_handle_query_async(question, trace))
+    raw = asyncio.run(_handle_query_async(question, trace, context))
     out = _parse_ai_response(raw)
     if trace:
         out["trace"] = trace  # ordered list of {tool, args} the LLM invoked
@@ -1479,7 +1480,7 @@ class Handler(BaseHTTPRequestHandler):
             # blocked by the same-origin CORS allowlist, so no token is required
             # (keeps the AI query box working out of the box).
             try:
-                result = handle_query(body.get("question", ""))
+                result = handle_query(body.get("question", ""), body.get("context", ""))
                 self._json(result)
             except Exception as e:
                 _log_exc("/api/query", e)

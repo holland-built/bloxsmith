@@ -546,6 +546,14 @@ tr:hover .copy-btn{opacity:1}
 @media(max-width:1100px){[data-wall="on"] .bento{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .wall-span-btn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--gray-400);font-size:10px;line-height:1;padding:2px 5px;cursor:pointer;margin-left:4px}
 .wall-span-btn:hover{color:var(--teal);border-color:var(--teal)}
+.drill-sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:499}
+.drill-sheet{position:fixed;top:0;right:0;bottom:0;width:360px;max-width:90vw;background:var(--surface-2);border-left:1px solid var(--border);z-index:500;display:flex;flex-direction:column;box-shadow:-8px 0 24px rgba(0,0,0,.35);animation:drillIn .2s cubic-bezier(.4,0,.2,1)}
+@keyframes drillIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.drill-sheet-hd{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.drill-sheet-bd{padding:16px;overflow-y:auto;flex:1;font-size:12px}
+.drill-kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+.drill-kv .k{color:var(--gray-400);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+@media(prefers-reduced-motion:reduce){.drill-sheet{animation:none}}
 </style>
 </head>
 <body>
@@ -976,7 +984,10 @@ function TTLTable({zones}) {
   return <DataTable ctl={ctl} rows={bad} defaultRows={10} rowKey={z=>z.id} initialSort={{key:'fqdn',dir:'asc'}} exportName="ttl-anomalies" persistId="ttl"/>;
 }
 
-function FeedsTable({feeds}) {
+const THREAT_CATS = new Set(['dga','threat_insight','zero_day_dns','threat_insight_nde','c2','ransomware','exploit','phishing']);
+
+function FeedsTable({feeds, rowLimit, demoMode}) {
+  const [feedTab, setFeedTab] = useState('intel');
   const [deltas, setDeltas] = useState({});
   useEffect(()=>{
     const prev = LS.get('noc.prevFeeds', null);
@@ -987,6 +998,11 @@ function FeedsTable({feeds}) {
     }
     const snap = {}; feeds.forEach(f=>{ snap[f.id]=f.entries; }); LS.set('noc.prevFeeds', snap);
   },[feeds]);
+  const intelFeeds  = feeds.filter(f=>THREAT_CATS.has(f.cat));
+  const customFeeds = feeds.filter(f=>!THREAT_CATS.has(f.cat));
+  const tab = demoMode ? 'intel' : feedTab;
+  const shown = tab==='intel'?intelFeeds : tab==='custom'?customFeeds : feeds;
+  const limited = rowLimit ? shown.slice(0,rowLimit) : shown;
   const ctl=useColumns('feeds',[
     {key:'name',label:'Feed Name',fixed:true,render:f=><span style={{fontWeight:500}} title={f.name}>{f.name}</span>},
     {key:'cat',label:'Category',size:11,render:f=><span style={{color:'var(--gray-400)'}}>{f.cat}</span>},
@@ -1006,13 +1022,43 @@ function FeedsTable({feeds}) {
     )},
     {key:'active',label:'Status',sortVal:f=>f.active?1:0,render:f=>f.active?<span className="badge b-green">Active</span>:<span className="badge b-gray">Off</span>},
   ]);
-  return <DataTable ctl={ctl} rows={feeds} defaultRows={10} rowKey={f=>f.id} initialSort={{key:'level',dir:'asc'}} exportName="threat-feeds" persistId="feeds"/>;
+  return (
+    <>
+      {!demoMode&&(
+        <div className="chip-bar" style={{marginBottom:8}}>
+          <button className={`chip${tab==='intel'?' on':''}`} onClick={()=>setFeedTab('intel')}>Threat Intel ({intelFeeds.length})</button>
+          <button className={`chip${tab==='custom'?' on':''}`} onClick={()=>setFeedTab('custom')}>Custom Lists ({customFeeds.length})</button>
+          <button className={`chip${tab==='all'?' on':''}`} onClick={()=>setFeedTab('all')}>All ({feeds.length})</button>
+        </div>
+      )}
+      <DataTable ctl={ctl} rows={limited} defaultRows={10} rowKey={f=>f.id} initialSort={{key:'level',dir:'asc'}} exportName="threat-feeds" persistId="feeds"/>
+    </>
+  );
 }
 
-function PoliciesPanel({policies, diff={}}) {
+function PoliciesPanel({policies, diff={}, demoMode}) {
+  const [testExpanded, setTestExpanded] = useState(false);
   const actBadge={block:'b-red',allow:'b-green',redirect:'b-amber',monitor:'b-teal'};
   const activeCt=policies.filter(p=>p.active).length;
   const totalRules=policies.reduce((a,p)=>a+p.rules,0);
+  // In demo mode (SE accounts), collapse trivial allow/1-rule policies under a summary row
+  const realPolicies = demoMode ? policies.filter(p=>!(p.action==='allow'&&p.rules<=1)) : policies;
+  const testPolicies = demoMode ? policies.filter(p=>p.action==='allow'&&p.rules<=1) : [];
+  const renderPol = (p) => (
+    <div key={p.id} className="pol-item">
+      <div>
+        <div style={{fontSize:12,fontWeight:500,color:p.active?'var(--ink)':'var(--gray-400)'}}>{p.name}</div>
+        <div style={{fontSize:10,color:'var(--gray-400)',marginTop:2}}>{p.rules} rules · {p.created}</div>
+      </div>
+      <div style={{display:'flex',gap:7,alignItems:'center'}}>
+        {diff[p.id]!=null&&diff[p.id]!==0&&(
+          <span className={`badge ${diff[p.id]>0?'b-green':'b-red'}`} title={`Rule count changed ${diff[p.id]>0?'+':''}${diff[p.id]} since last refresh`}>Δ {diff[p.id]>0?'+':''}{diff[p.id]}</span>
+        )}
+        <span className={`badge ${actBadge[p.action]||'b-gray'}`}>{p.action}</span>
+        {!p.active&&<span className="badge b-gray">off</span>}
+      </div>
+    </div>
+  );
   return (
     <>
       <div style={{display:'flex',gap:12,marginBottom:14}}>
@@ -1023,21 +1069,20 @@ function PoliciesPanel({policies, diff={}}) {
           </div>
         ))}
       </div>
-      {policies.map(p=>(
-        <div key={p.id} className="pol-item">
-          <div>
-            <div style={{fontSize:12,fontWeight:500,color:p.active?'var(--ink)':'var(--gray-400)'}}>{p.name}</div>
-            <div style={{fontSize:10,color:'var(--gray-400)',marginTop:2}}>{p.rules} rules · {p.created}</div>
+      {realPolicies.map(renderPol)}
+      {testPolicies.length>0&&(
+        <>
+          <div className="pol-item" style={{cursor:'pointer',opacity:.7}} onClick={()=>setTestExpanded(v=>!v)}>
+            <div>
+              <div style={{fontSize:12,fontWeight:500,color:'var(--gray-400)'}}>
+                {testExpanded?'▼':'▶'} {testPolicies.length} test / allow-all {testPolicies.length>1?'policies':'policy'} (collapsed)
+              </div>
+              <div style={{fontSize:10,color:'var(--gray-600)',marginTop:2}}>Click to {testExpanded?'collapse':'expand'}</div>
+            </div>
           </div>
-          <div style={{display:'flex',gap:7,alignItems:'center'}}>
-            {diff[p.id]!=null&&diff[p.id]!==0&&(
-              <span className={`badge ${diff[p.id]>0?'b-green':'b-red'}`} title={`Rule count changed ${diff[p.id]>0?'+':''}${diff[p.id]} since last refresh`}>Δ {diff[p.id]>0?'+':''}{diff[p.id]}</span>
-            )}
-            <span className={`badge ${actBadge[p.action]||'b-gray'}`}>{p.action}</span>
-            {!p.active&&<span className="badge b-gray">off</span>}
-          </div>
-        </div>
-      ))}
+          {testExpanded&&testPolicies.map(renderPol)}
+        </>
+      )}
     </>
   );
 }
@@ -1056,7 +1101,7 @@ function AuditTable({logs,limit=10}) {
   };
   const ctl=useColumns('audit',[
     {key:'ts',label:'Time',fixed:true,mono:true,size:10,sortVal:l=>new Date(l.ts).getTime(),render:l=><span style={{color:'var(--gray-400)',whiteSpace:'nowrap'}} title={fmtTs(l.ts)}>{timeAgo(l.ts)}</span>},
-    {key:'user',label:'User',size:11,render:l=><span style={{overflowWrap:'anywhere'}}>{l.user}</span>},
+    {key:'user',label:'User',size:11,render:l=>{const su=u=>u.length>40?(u.split('.')[0]||u.slice(-20)):u;return <span style={{overflowWrap:'anywhere'}} title={l.user}>{su(l.user)}</span>;}},
     {key:'action',label:'Action',render:l=><span style={{fontSize:10,fontWeight:700,color:actionColor(l.action)}}>{l.action}</span>},
     {key:'resource',label:'Resource',mono:true,size:10,render:l=><span style={{color:'var(--gray-400)'}} title={l.resource}>{l.resource}</span>},
     {key:'result',label:'Result',sortVal:l=>l.result==='success'?1:0,render:l=>l.result==='success'?<span className="badge b-green">OK</span>:<span className="badge b-red">Fail</span>},
@@ -1196,7 +1241,7 @@ function exportCols(name, cols, rows){
    col: {key,label,fixed?,render?(row),sortVal?(row),csv?(row),mono?,size?,align?,width?,nosort?}
    Pass `ctl` (a useColumns result) to render the column menu + use its visible cols,
    `exportName` to show a CSV export button, `persistId` to remember sort across reloads. */
-function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, exportName, persistId}){
+function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, exportName, persistId, onRowClick}){
   const vcols = ctl ? ctl.visibleCols : cols;
   const PK = persistId ? 'noc.sort.'+persistId : null;
   const saved = PK ? LS.get(PK, null) : null;
@@ -1232,7 +1277,9 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
           </th>
         ))}</tr></thead>}>
         {visible=>visible.map((r,i)=>(
-          <tr key={rowKey?rowKey(r):(r.id||i)}>
+          <tr key={rowKey?rowKey(r):(r.id||i)}
+            onClick={onRowClick?()=>onRowClick(r):undefined}
+            style={onRowClick?{cursor:'pointer'}:undefined}>
             {vcols.map(c=>(
               <td key={c.key} className={c.expanded?'exp':''}
                 style={{fontSize:c.size||12,...(c.mono?{fontFamily:'monospace'}:{}),...(c.align?{textAlign:c.align}:{})}}>
@@ -1313,7 +1360,7 @@ function RefreshControl({autoRefresh,setAutoRefresh,refreshFrozen,setRefreshFroz
 }
 
 // Overflow menu for low-frequency / set-once actions (also reachable via ⌘K / ? key).
-function MoreMenu({onShare,density,setDensity,onShortcuts,wallMode,onWall}) {
+function MoreMenu({onShare,density,setDensity,onShortcuts,wallMode,onWall,demoMode,onDemo}) {
   const [open,setOpen]=React.useState(false);
   const row=(label,hint,fn)=>(
     <div className="col-row" style={{cursor:'pointer'}} role="menuitem" onClick={()=>{setOpen(false);fn();}}>
@@ -1328,6 +1375,7 @@ function MoreMenu({onShare,density,setDensity,onShortcuts,wallMode,onWall}) {
           {row('Copy link to this view','◳',onShare)}
           {row('Row density',density==='compact'?'Compact':'Comfortable',()=>setDensity(d=>d==='compact'?'comfortable':'compact'))}
           {onWall&&row('Wall display mode',wallMode?'On':'Off',onWall)}
+          {onDemo&&row('Demo mode',demoMode?'On':'Off',onDemo)}
           {row('Keyboard shortcuts','?',onShortcuts)}
         </div>
       </>)}
@@ -2069,7 +2117,18 @@ function SearchSection({data, srchQ, setSrchQ, srchRes, setSrchRes, srching, set
   );
 }
 
-function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQueryMode, searchQuery, setSearchQuery}) {
+const STARTER_CHIPS = {
+  overview:['What needs attention?','Summarize network health','Which subnets are critical?'],
+  triage:['What needs attention?','Which subnets are critical?','Which hosts are offline?'],
+  ipam:['Which subnets are near capacity?','Find subnets with >90% utilization','Any subnets near exhaustion?'],
+  hosts:['Which hosts are offline?','List degraded infrastructure','Any hosts with errors?'],
+  threats:['What are the active threat categories?','Any new threat intel today?','Show critical feeds'],
+  audit:['Who made changes in the last hour?','Show recent failures','Any unauthorized changes?'],
+  security:['Which policies are blocking traffic?','Any policy changes recently?'],
+  dns:['Any DNS zones with anomalies?','Show zones with TTL issues'],
+};
+
+function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQueryMode, searchQuery, setSearchQuery, section}) {
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [cmdHistory, setCmdHistory] = useState([]);
@@ -2080,7 +2139,8 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
   const fillAndSend = (q) => {
     setMessages(m=>[...m,{id:Date.now(),role:'u',content:q}]);
     setThinking(true);
-    fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})})
+    const ctx = section ? `The operator is currently viewing the ${section} section.` : '';
+    fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:ctx})})
       .then(r=>r.ok?r.json():null)
       .then(json=>{
         const ans=(json&&typeof json.answer==='string')?json.answer:'! Query failed.';
@@ -2112,10 +2172,11 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
     setMessages(m=>[...m,{id:Date.now(),role:'u',content:q}]);
     setThinking(true);
     try {
+      const ctx = section ? `The operator is currently viewing the ${section} section.` : '';
       const r = await fetch('/api/query', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({question: q}),
+        body: JSON.stringify({question: q, context: ctx}),
       });
       const json = r.ok ? await r.json() : null;
       const ans = (json && typeof json.answer === 'string') ? json.answer : '! Query failed — server returned an error. Check server logs.';
@@ -2162,6 +2223,16 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
       </div>
 
       <div className="chat-msgs">
+        {messages.length<=1&&STARTER_CHIPS[section]&&(
+          <div style={{padding:'8px 0 4px'}}>
+            <div style={{fontSize:10,color:'var(--gray-400)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.07em'}}>Suggested</div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+              {STARTER_CHIPS[section].map((chip,i)=>(
+                <button key={i} className="suggestion-chip" onClick={()=>fillAndSend(chip)}>{chip}</button>
+              ))}
+            </div>
+          </div>
+        )}
         {messages.map(m=>(
           <div key={m.id}>
             <div className={m.role==='u'?'msg-u':'msg-a'}>{m.content}</div>
@@ -2211,10 +2282,128 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
   );
 }
 
+/* ─── DRILL SHEET ────────────────────────────────────────────────────────────*/
+function DrillSheet({entity, onClose, leases=[], subnets=[]}) {
+  useEffect(()=>{
+    const h = e => { if(e.key==='Escape') onClose(); };
+    document.addEventListener('keydown', h);
+    return ()=>document.removeEventListener('keydown', h);
+  },[onClose]);
+  if(!entity) return null;
+  const kv = (k,v) => <div className="drill-kv"><span className="k">{k}</span><span style={{color:'var(--gray-200)',fontFamily:'monospace',fontSize:11}}>{v||'—'}</span></div>;
+  let title='', body=null;
+  if(entity.type==='subnet') {
+    const sub = entity.data;
+    const subLeases = leases.filter(l=>l.subnet===sub.id||l.network===sub.addr);
+    title = sub.name!==sub.addr ? sub.name : sub.addr;
+    body = (
+      <>
+        {kv('Network', `${sub.addr}/${sub.cidr}`)}
+        {kv('Utilization', `${sub.util}% (${sub.used}/${sub.total})`)}
+        {kv('Site', sub.site)}
+        {kv('DHCP Leases', subLeases.length)}
+        {subLeases.length>0&&(
+          <div style={{marginTop:12}}>
+            <div style={{fontSize:10,color:'var(--gray-400)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Active Leases</div>
+            {subLeases.slice(0,15).map((l,i)=>(
+              <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:'1px solid var(--border)',fontSize:11}}>
+                <span style={{color:'var(--gray-200)',fontFamily:'monospace'}}>{l.ip}</span>
+                <span style={{color:'var(--gray-400)'}}>{l.hostname||'—'}</span>
+              </div>
+            ))}
+            {subLeases.length>15&&<div style={{fontSize:10,color:'var(--teal)',marginTop:4}}>+{subLeases.length-15} more</div>}
+          </div>
+        )}
+      </>
+    );
+  } else if(entity.type==='host') {
+    const h = entity.data;
+    const hostLease = leases.find(l=>l.hostname===h.name||l.ip===h.ip);
+    const hostSub = hostLease ? subnets.find(s=>s.addr===hostLease.network||s.id===hostLease.subnet) : null;
+    title = h.name;
+    body = (
+      <>
+        {kv('IP', h.ip)}
+        {kv('Type', h.type)}
+        {kv('Status', h.status)}
+        {hostSub&&kv('Subnet', `${hostSub.addr}/${hostSub.cidr} (${hostSub.util}% util)`)}
+        {hostLease&&kv('Lease expires', hostLease.ends||hostLease.end||'—')}
+      </>
+    );
+  } else if(entity.type==='zone') {
+    const z = entity.data;
+    title = z.name||z.fqdn;
+    body = (
+      <>
+        {kv('FQDN', z.fqdn||z.name)}
+        {kv('Type', z.type)}
+        {kv('TTL', z.ttl!=null?`${z.ttl}s`:'—')}
+        {kv('Anomaly', z.anomaly?'Yes':'No')}
+        {z.issues&&z.issues.length>0&&(
+          <div style={{marginTop:8,display:'flex',gap:5,flexWrap:'wrap'}}>
+            {z.issues.map((iss,i)=><span key={i} className={`badge ${iss.includes('High')||iss.includes('Too High')?'b-amber':'b-red'}`}>{iss}</span>)}
+          </div>
+        )}
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="drill-sheet-overlay" onClick={onClose}/>
+      <div className="drill-sheet" role="dialog" aria-label={`Details: ${title}`}>
+        <div className="drill-sheet-hd">
+          <div style={{fontSize:13,fontWeight:700,color:'var(--gray-200)'}}>{title}</div>
+          <button className="close-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="drill-sheet-bd">{body}</div>
+      </div>
+    </>
+  );
+}
+
+/* ─── TRIAGE PANEL ──────────────────────────────────────────────────────────*/
+function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection, dhcpCrit, dhcpWarn}) {
+  const errHosts  = hosts.filter(h=>h.status==='error'||h.status==='offline');
+  const critSubs  = subnets.filter(s=>s.util>=dhcpCrit);
+  const warnSubs  = subnets.filter(s=>s.util>=dhcpWarn&&s.util<dhcpCrit);
+  const ttlBad    = zones.filter(z=>z.anomaly);
+  const auditFail = auditLogs.filter(l=>l.result==='failure');
+  const rows = [];
+  if(errHosts.length>0)  rows.push({sev:'crit',count:errHosts.length,  desc:`host${errHosts.length>1?'s':''} offline / error`,sec:'hosts',items:errHosts.slice(0,3).map(h=>h.name)});
+  if(critSubs.length>0)  rows.push({sev:'crit',count:critSubs.length,  desc:`subnet${critSubs.length>1?'s':''} ≥${dhcpCrit}% utilization`,sec:'ipam',items:critSubs.slice(0,3).map(s=>s.name!==s.addr?s.name:s.addr)});
+  if(auditFail.length>0) rows.push({sev:'crit',count:auditFail.length, desc:`audit failure${auditFail.length>1?'s':''}`,sec:'audit',items:auditFail.slice(0,3).map(l=>l.action)});
+  if(firingAlerts.length>0) rows.push({sev:'warn',count:firingAlerts.length, desc:`alert rule${firingAlerts.length>1?'s':''} firing`,sec:'alerts',items:firingAlerts.slice(0,3).map(a=>a.metric)});
+  if(warnSubs.length>0)  rows.push({sev:'warn',count:warnSubs.length,  desc:`subnet${warnSubs.length>1?'s':''} ${dhcpWarn}–${dhcpCrit-1}% utilization`,sec:'ipam',items:warnSubs.slice(0,3).map(s=>s.name!==s.addr?s.name:s.addr)});
+  if(ttlBad.length>0)    rows.push({sev:'warn',count:ttlBad.length,    desc:`DNS zone${ttlBad.length>1?'s':''} with TTL anomalies`,sec:'dns',items:ttlBad.slice(0,3).map(z=>z.name)});
+  const sevDot = {crit:'var(--red)',warn:'var(--amber)',info:'var(--teal)'};
+  return (
+    <div className="card">
+      <div className="card-title"><div className="dot" style={{background:'var(--amber)'}}/>Triage — items needing attention</div>
+      {rows.length===0
+        ? <div className="no-data" style={{padding:24}}>No issues detected — all metrics within normal thresholds.</div>
+        : rows.map((r,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:sevDot[r.sev],flexShrink:0}}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:600}}>
+                  <span style={{color:r.sev==='crit'?'var(--red)':'var(--amber)',marginRight:6}}>{r.count}</span>
+                  {r.desc}
+                </div>
+                {r.items.length>0&&<div style={{fontSize:10,color:'var(--gray-400)',marginTop:2}}>{r.items.join(', ')}</div>}
+              </div>
+              <button className="n-btn" onClick={()=>setSection(r.sec)}>View →</button>
+            </div>
+          ))
+      }
+    </div>
+  );
+}
+
 /* ─── MAIN APP ───────────────────────────────────────────────────────────────*/
 
 const SECTIONS=[
   {id:'overview', icon:'◉', label:'Overview'},
+  {id:'triage',   icon:'⚠', label:'Triage'},
   {id:'ipam',     icon:'⊞', label:'IPAM / Subnets'},
   {id:'dhcp',     icon:'⊃', label:'DHCP Leases'},
   {id:'dns',      icon:'⊕', label:'DNS Zones'},
@@ -2230,7 +2419,7 @@ const SECTIONS=[
   {id:'search',        icon:'⊕', label:'Search'},
 ];
 
-function IPAMTable({subnets, ipamChip, rowLimit, leaseCt}) {
+function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
   const hasSite = subnets.some(s=>s.site&&s.site!=='–'&&s.site!=='—');
   const rows = subnets.filter(s=>{
     if(!ipamChip) return true;
@@ -2248,10 +2437,10 @@ function IPAMTable({subnets, ipamChip, rowLimit, leaseCt}) {
     {key:'leases',label:'DHCP Leases',size:11,sortVal:s=>leaseCt[s.id]||0,render:s=><span style={{color:'var(--gray-400)'}}>{(leaseCt[s.id]||0).toLocaleString()}</span>},
   ];
   const ctl=useColumns('ipam',allCols);
-  return <DataTable ctl={ctl} rows={rows} defaultRows={rowLimit} rowKey={s=>s.id} initialSort={{key:'util',dir:'desc'}} exportName="subnets" persistId="ipam"/>;
+  return <DataTable ctl={ctl} rows={rows} defaultRows={rowLimit} rowKey={s=>s.id} initialSort={{key:'util',dir:'desc'}} exportName="subnets" persistId="ipam" onRowClick={onDrill?s=>onDrill({type:'subnet',data:s}):undefined}/>;
 }
 
-function HostsTable({hosts, rowLimit, hostSeen={}}) {
+function HostsTable({hosts, rowLimit, hostSeen={}, onDrill}) {
   const ctl=useColumns('hosts',[
     {key:'name',label:'Hostname',fixed:true,render:h=><span style={{fontWeight:500}} title={h.name}>{h.name}</span>},
     {key:'ip',label:'IP',mono:true,size:10,render:h=>(<span style={{color:'var(--gray-400)'}} title={h.ip}>{h.ip}{h.ip&&<button className="copy-btn" onClick={()=>copyToClip(h.ip)} title="Copy IP">⎘</button>}</span>)},
@@ -2264,7 +2453,7 @@ function HostsTable({hosts, rowLimit, hostSeen={}}) {
       return <span style={{color:'var(--gray-400)',fontSize:11}} title={fmtTs(t)}>{timeAgo(t)}</span>;
     }},
   ]);
-  return <DataTable ctl={ctl} rows={hosts} defaultRows={rowLimit} rowKey={h=>h.id} initialSort={{key:'name',dir:'asc'}} exportName="hosts" persistId="hosts"/>;
+  return <DataTable ctl={ctl} rows={hosts} defaultRows={rowLimit} rowKey={h=>h.id} initialSort={{key:'name',dir:'asc'}} exportName="hosts" persistId="hosts" onRowClick={onDrill?h=>onDrill({type:'host',data:h}):undefined}/>;
 }
 
 // ── Alert-rules engine: fire when a live metric crosses a threshold ──────────
@@ -2696,6 +2885,9 @@ function App({vault, onVaultChange}={}) {
   const setViz = (id, v) => { const n={...vizMode,[id]:v}; setVizMode(n); LS.set('noc.viz',n); };
   const [alertRules, setAlertRules] = useState(()=>LS.get('noc.alertRules',[]));
   const [deltas, setDeltas] = useState(null);
+  const [demoMode, setDemoMode]       = useState(()=>LS.get('noc.demoMode',false));
+  const [ackedAlerts, setAckedAlerts] = useState(()=>LS.get('noc.acked',{}));
+  const [drillEntity, setDrillEntity] = useState(null);
   const [theme, setTheme]           = useState(()=>LS.get('noc.theme','system')); // 'system'|'light'|'dark'
   const [density, setDensity]       = useState(()=>LS.get('noc.density','comfortable')); // 'comfortable'|'compact'
   const [cmdkOpen, setCmdkOpen]     = useState(false);
@@ -2715,6 +2907,8 @@ function App({vault, onVaultChange}={}) {
   const [switchingAcct, setSwitchingAcct] = useState(false);
   const [acctSearch, setAcctSearch] = useState('');
 
+  const ackAlert  = id => { const n={...ackedAlerts,[id]:Date.now()+4*3600*1000}; setAckedAlerts(n); LS.set('noc.acked',n); };
+  const isAcked   = id => ackedAlerts[id]&&ackedAlerts[id]>Date.now();
   const rl = (key, def=25) => rowLimits[key]||def;
   const setRl = (key, val) => { const n={...rowLimits,[key]:val}; setRowLimits(n); LS.set('rl',n); };
   const toggleCollapse = (key) => { const n={...collapsed,[key]:!collapsed[key]}; setCollapsed(n); LS.set('cl',n); };
@@ -3235,17 +3429,17 @@ function App({vault, onVaultChange}={}) {
                 title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
               <PresetMenu section={section}/>
               <button className="theme-btn" onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
-              <MoreMenu onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}}/>
+              <MoreMenu onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);}}/>
             </div>
           </div>
         </div>
         {/* ── unified notice rail (one vocabulary; severity-sorted; collapses past 2) ── */}
         {(()=>{
           const notices=[];
-          if(firingAlerts.length>0&&!alertsDismissed) notices.push({
+          if(firingAlerts.length>0&&!alertsDismissed&&!isAcked('alerts')) notices.push({
             id:'alerts', sev:'n-red', ico:'!',
             msg:<><b>{firingAlerts.length} alert{firingAlerts.length>1?'s':''} firing</b> — {firingAlerts.slice(0,2).map(a=>`${metricLabel(a.metric)} (${a.value})`).join(', ')}{firingAlerts.length>2?`, +${firingAlerts.length-2} more`:''}</>,
-            acts:<>{section!=='alerts'&&<button className="n-btn" onClick={()=>setSection('alerts')}>View</button>}<button className="n-x" aria-label="Dismiss alerts" onClick={()=>setAlertsDismissed(true)}>×</button></>,
+            acts:<>{section!=='alerts'&&<button className="n-btn" onClick={()=>setSection('alerts')}>View</button>}<button className="n-btn" onClick={()=>ackAlert('alerts')}>Ack 4h</button><button className="n-x" aria-label="Dismiss alerts" onClick={()=>setAlertsDismissed(true)}>×</button></>,
           });
           if(usingMock&&!demoDismiss) notices.push({
             id:'demo', sev:'n-info', ico:'i',
@@ -3257,20 +3451,20 @@ function App({vault, onVaultChange}={}) {
             msg:<>Filtering: "<b>{searchQuery}</b>" — results narrowed in all sections</>,
             acts:<button className="n-btn" onClick={()=>setSearchQuery('')}>Clear</button>,
           });
-          if(critSubs.length>0) notices.push({
+          if(critSubs.length>0&&!isAcked('dhcp-crit')) notices.push({
             id:'dhcp-crit', sev:'n-red', ico:'!',
             msg:<><b>{critSubs.length} subnet{critSubs.length>1?'s':''} ≥{dhcpCrit}%</b> DHCP utilization — {critSubs.slice(0,3).map(s=>s.name!==s.addr?s.name:s.addr).join(', ')}{critSubs.length>3?`, +${critSubs.length-3} more`:''}</>,
-            acts:section!=='ipam'&&<button className="n-btn" onClick={()=>setSection('ipam')}>Open IPAM</button>,
+            acts:<>{section!=='ipam'&&<button className="n-btn" onClick={()=>setSection('ipam')}>Open IPAM</button>}<button className="n-btn" onClick={()=>ackAlert('dhcp-crit')}>Ack 4h</button></>,
           });
-          if(warnSubs.length>0) notices.push({
+          if(warnSubs.length>0&&!isAcked('dhcp-warn')) notices.push({
             id:'dhcp-warn', sev:'n-info', ico:'i',
             msg:<><b>{warnSubs.length} subnet{warnSubs.length>1?'s':''} {dhcpWarn}–{dhcpCrit-1}%</b> DHCP utilization</>,
-            acts:section!=='ipam'&&<button className="n-btn" onClick={()=>setSection('ipam')}>Open IPAM</button>,
+            acts:<>{section!=='ipam'&&<button className="n-btn" onClick={()=>setSection('ipam')}>Open IPAM</button>}<button className="n-btn" onClick={()=>ackAlert('dhcp-warn')}>Ack 4h</button></>,
           });
-          if(Object.keys(policyDiff).length>0){ const ch=Object.keys(policyDiff).length; notices.push({
+          if(Object.keys(policyDiff).length>0&&!isAcked('pol-diff')){ const ch=Object.keys(policyDiff).length; notices.push({
             id:'pol-diff', sev:'n-info', ico:'i',
             msg:<><b>{ch} security polic{ch>1?'ies':'y'} changed</b> — rule counts differ since last refresh</>,
-            acts:section!=='security'&&<button className="n-btn" onClick={()=>setSection('security')}>Review</button>,
+            acts:<>{section!=='security'&&<button className="n-btn" onClick={()=>setSection('security')}>Review</button>}<button className="n-btn" onClick={()=>ackAlert('pol-diff')}>Ack 4h</button></>,
           }); }
           if(!notices.length) return null;
           const CAP=2, hidden=notices.length-CAP;
@@ -3289,6 +3483,13 @@ function App({vault, onVaultChange}={}) {
           );
         })()}
 
+        {/* ── TRIAGE ── */}
+        {section==='triage'&&(
+          <TriagePanel subnets={subnets} hosts={hosts} zones={zones} auditLogs={auditLogs}
+            firingAlerts={firingAlerts} setSection={setSection}
+            dhcpCrit={dhcpCrit} dhcpWarn={dhcpWarn}/>
+        )}
+
         {/* ── OVERVIEW ── */}
         {section==='overview'&&(
           <>
@@ -3298,11 +3499,11 @@ function App({vault, onVaultChange}={}) {
               const feedCrit = feeds.filter(f=>f.level==='critical'&&f.active).length;
               const auditFail = auditLogs.filter(l=>l.result==='failure').length;
               const tiles = [
-                {cat:'Hosts',   n:errHosts,       tot:hosts.length,    sev:errHosts>0 ?'crit':'ok', desc:'offline / error',  section:'hosts'},
-                {cat:'Subnets', n:critSubs.length,tot:subnets.length,  sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':'ok', desc:`≥${dhcpCrit}% utilization`, section:'ipam'},
-                {cat:'DNS',     n:ttlBad.length,  tot:zones.length,    sev:ttlBad.length>0?'warn':'ok', desc:'TTL anomalies',    section:'dns'},
-                {cat:'Threats', n:feedCrit,       tot:feeds.length,    sev:feedCrit>0 ?'warn':'ok', desc:'critical feeds',   section:'threats'},
-                {cat:'Audit',   n:auditFail,      tot:auditLogs.length,sev:auditFail>0?'crit':'ok', desc:'failed events',    section:'audit'},
+                {cat:'Hosts',   n:errHosts,       tot:hosts.length,    sev:errHosts>0 ?'crit':'ok', desc:'offline / error',  section:'hosts',   dk:'offline_hosts'},
+                {cat:'Subnets', n:critSubs.length,tot:subnets.length,  sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':'ok', desc:`≥${dhcpCrit}% utilization`, section:'ipam', dk:'critical_subnets'},
+                {cat:'DNS',     n:ttlBad.length,  tot:zones.length,    sev:ttlBad.length>0?'warn':'ok', desc:'TTL anomalies',    section:'dns',     dk:'ttl_anomalies'},
+                {cat:'Threats', n:feedCrit,       tot:feeds.length,    sev:feedCrit>0 ?'warn':'ok', desc:'critical feeds',   section:'threats', dk:'active_feeds'},
+                {cat:'Audit',   n:auditFail,      tot:auditLogs.length,sev:auditFail>0?'crit':'ok', desc:'failed events',    section:'audit',   dk:'audit_failures'},
               ];
               const ST={crit:'CRIT',warn:'WARN',ok:'OK'};
               const BAR={crit:'var(--red)',warn:'var(--amber)',ok:'var(--green)'};
@@ -3313,7 +3514,7 @@ function App({vault, onVaultChange}={}) {
                             title={`${t.cat}: ${t.n}${t.tot>0?(' of '+t.tot):''} ${t.desc} — open ${t.section.toUpperCase()}`}>
                       <div className="stile-top"><span className="stile-cat">{t.cat}</span><span className="stile-st">{ST[t.sev]}</span></div>
                       <span className="stile-big">{t.n}{t.tot>0&&<span className="stile-of"> / {t.tot}</span>}</span>
-                      <span className="stile-desc">{t.desc}</span>
+                      <span className="stile-desc">{t.desc}{deltas&&t.dk&&deltas[t.dk]!=null&&deltas[t.dk]!==0&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,borderRadius:3,padding:'1px 4px',color:deltas[t.dk]>0?'var(--sev-red-t)':'var(--sev-green-t)',background:deltas[t.dk]>0?'rgba(239,68,68,.18)':'rgba(34,197,94,.18)'}}>Δ{deltas[t.dk]>0?'+':''}{deltas[t.dk]}</span>}</span>
                       <div className="stile-track"><div className="stile-fill" style={{width:t.tot>0?`${Math.min(t.n/t.tot*100,100)}%`:'0%',background:BAR[t.sev]}}/></div>
                     </button>
                   ))}
@@ -3527,7 +3728,7 @@ function App({vault, onVaultChange}={}) {
                       </div>
                     </div>
                     {!collapsed['pols']&&(getViz('pols','panel')==='panel'
-                      ?<PoliciesPanel policies={secPolicies} diff={policyDiff}/>
+                      ?<PoliciesPanel policies={secPolicies} diff={policyDiff} demoMode={demoMode}/>
                       :<WidgetViz data={secPolicies} viz={getViz('pols','panel')}
                         columns={[{key:'name',label:'Policy'},{key:'action',label:'Action'},{key:'rules',label:'Rules'},{key:'active',label:'Active',render:p=>p.active?'Yes':'No'}]}
                         labelKey="name" valueKey="rules" defaultRows={10}/>)}
@@ -3547,7 +3748,7 @@ function App({vault, onVaultChange}={}) {
                       </div>
                     </div>
                     {!collapsed['feeds']&&(getViz('feeds')==='table'
-                      ?<FeedsTable feeds={feeds}/>
+                      ?<FeedsTable feeds={feeds} demoMode={demoMode}/>
                       :<WidgetViz data={[...feeds].sort((a,b)=>b.entries-a.entries)} viz={getViz('feeds')}
                         columns={[{key:'name',label:'Feed'},{key:'cat',label:'Category'},{key:'level',label:'Level'},{key:'entries',label:'Entries'}]}
                         labelKey="name" valueKey="entries" rowColor={r=>levelColor(r.level)} defaultRows={10}/>)}
@@ -3597,7 +3798,7 @@ function App({vault, onVaultChange}={}) {
                     style={{width:46,background:'var(--surface-3)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',padding:'2px 4px',fontSize:10}}/>%</label>
                 </span>
               </div>
-            <IPAMTable subnets={ipamPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt}/>
+            <IPAMTable subnets={ipamPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
           </div>
           );
         })()}
@@ -3686,6 +3887,19 @@ function App({vault, onVaultChange}={}) {
         {/* ── HOSTS ── */}
         {section==='hosts'&&(
           <div className="g2">
+            {(()=>{
+              const errRate = hosts.length ? hosts.filter(h=>h.status==='error'||h.status==='offline').length/hosts.length : 0;
+              const bannerKey = 'noc.hostBannerDismissed';
+              const [dismissed, setDismissed] = useState(()=>LS.get(bannerKey,false));
+              if(errRate>0.4&&!dismissed&&!demoMode) return (
+                <div className="notice n-red b-full" style={{marginBottom:0}}>
+                  <span className="n-ico" aria-hidden="true">!</span>
+                  <span className="n-msg"><b>{Math.round(errRate*100)}% of hosts offline or in error</b> — {hosts.filter(h=>h.status==='error'||h.status==='offline').length} of {hosts.length} hosts affected</span>
+                  <span className="n-acts"><button className="n-x" aria-label="Dismiss" onClick={()=>{setDismissed(true);LS.set(bannerKey,true);}}>×</button></span>
+                </div>
+              );
+              return null;
+            })()}
             <div className="card">
               <div className="card-title"><div className="dot"/>Status Breakdown</div>
               <Donut hosts={hosts} filter={hostFilt} onSlice={s=>setHostFilt(f=>f===s?null:s)}/>
@@ -3709,7 +3923,7 @@ function App({vault, onVaultChange}={}) {
                 })}
                 {hostChip&&<button className="chip" onClick={()=>setHostChip(null)}>✕ clear</button>}
               </div>
-              <HostsTable hosts={filtHosts} rowLimit={rl('hosts')} hostSeen={hostSeen}/>
+              <HostsTable hosts={filtHosts} rowLimit={rl('hosts')} hostSeen={hostSeen} onDrill={setDrillEntity}/>
             </div>
             <div className="card b-full">
               <div className="card-title"><div className="dot"/>Host Performance Metrics — avg, last hour</div>
@@ -3724,7 +3938,7 @@ function App({vault, onVaultChange}={}) {
         {section==='security'&&(
           <div className="card">
             <div className="card-title"><div className="dot"/>Security Policies ({s_policies.length}{sq&&` of ${secPolicies.length}`})</div>
-            <PoliciesPanel policies={s_policies} diff={policyDiff}/>
+            <PoliciesPanel policies={s_policies} diff={policyDiff} demoMode={demoMode}/>
           </div>
         )}
 
@@ -3733,7 +3947,7 @@ function App({vault, onVaultChange}={}) {
           <div className="card">
             <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>All Threat Feeds by Severity{sq&&` (${s_feeds.length} of ${feeds.length})`}</div>
             <RowLimitBar limit={rl('threats')} setLimit={v=>setRl('threats',v)}/>
-            <FeedsTable feeds={s_feeds.slice(0,rl('threats'))}/>
+            <FeedsTable feeds={s_feeds} rowLimit={rl('threats')} demoMode={demoMode}/>
           </div>
         )}
 
@@ -3817,7 +4031,9 @@ function App({vault, onVaultChange}={}) {
         messages={messages} setMessages={setMessages}
         queryMode={queryMode} setQueryMode={setQueryMode}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+        section={section}
       />
+      {drillEntity&&<DrillSheet entity={drillEntity} onClose={()=>setDrillEntity(null)} leases={leases} subnets={subnets}/>}
     </div>
   );
 }
