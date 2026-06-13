@@ -10,7 +10,9 @@
 | Deployment / Docker | `docs/DEPLOYMENT.md` — Docker, compose, env vars, Watchtower |
 | Any design/GUI change | `docs/design-workflow.md` — mockup workflow (required before any UI change) |
 | After each change | `docs/change-reporting.md` — required markdown table summary |
-| Skills | `.claude/skills/` — diagnose, grill-me, prove, tdd, layout-stress |
+| Skills | `SKILLS.md` — all installed skills + invocation reference |
+| MCP servers | `MCP.md` — available MCP servers + auth notes |
+| Color decisions | `COLOR_CONTRACT.md` — 3-bucket palette rule (neutral / accent / status) |
 
 Do NOT read files not required by the task.
 
