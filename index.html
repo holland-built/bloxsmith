@@ -966,12 +966,33 @@ function TTLTable({zones}) {
 }
 
 function FeedsTable({feeds}) {
+  const [deltas, setDeltas] = useState({});
+  useEffect(()=>{
+    const prev = LS.get('noc.prevFeeds', null);
+    if(prev) {
+      const d = {};
+      feeds.forEach(f=>{ if(prev[f.id]!=null && prev[f.id]!==f.entries) d[f.id]=f.entries-prev[f.id]; });
+      setDeltas(d);
+    }
+    const snap = {}; feeds.forEach(f=>{ snap[f.id]=f.entries; }); LS.set('noc.prevFeeds', snap);
+  },[feeds]);
   const ctl=useColumns('feeds',[
     {key:'name',label:'Feed Name',fixed:true,render:f=><span style={{fontWeight:500}} title={f.name}>{f.name}</span>},
     {key:'cat',label:'Category',size:11,render:f=><span style={{color:'var(--gray-400)'}}>{f.cat}</span>},
     {key:'level',label:'Threat Level',sortVal:f=>levelOrder[f.level]??9,render:f=><span className={`badge ${levelBadge(f.level)}`}>{f.level}</span>},
     {key:'conf',label:'Confidence',size:11,render:f=><span style={{color:f.conf==='high'?'var(--sev-green-t)':f.conf==='medium'?'var(--sev-amber-t)':'var(--gray-400)',fontWeight:700}}>{f.conf}</span>},
-    {key:'entries',label:'Entries',mono:true,size:11,sortVal:f=>f.entries,render:f=><span style={{color:'var(--gray-200)'}}>{f.entries.toLocaleString()}</span>},
+    {key:'entries',label:'Entries',mono:true,size:11,sortVal:f=>f.entries,render:f=>(
+      <span style={{display:'flex',alignItems:'center',gap:4}}>
+        <span style={{color:'var(--gray-200)'}}>{f.entries.toLocaleString()}</span>
+        {deltas[f.id]!=null&&deltas[f.id]!==0&&(
+          <span style={{fontSize:9,fontWeight:700,borderRadius:3,padding:'1px 4px',
+            color:deltas[f.id]>0?'var(--sev-red-t)':'var(--sev-green-t)',
+            background:deltas[f.id]>0?'rgba(239,68,68,.18)':'rgba(34,197,94,.18)'}}>
+            {deltas[f.id]>0?'+':''}{deltas[f.id].toLocaleString()}
+          </span>
+        )}
+      </span>
+    )},
     {key:'active',label:'Status',sortVal:f=>f.active?1:0,render:f=>f.active?<span className="badge b-green">Active</span>:<span className="badge b-gray">Off</span>},
   ]);
   return <DataTable ctl={ctl} rows={feeds} defaultRows={10} rowKey={f=>f.id} initialSort={{key:'level',dir:'asc'}} exportName="threat-feeds" persistId="feeds"/>;
@@ -1008,6 +1029,17 @@ function PoliciesPanel({policies}) {
 }
 
 function AuditTable({logs,limit=10}) {
+  const [actionF, setActionF] = useState('');
+  const [resultF, setResultF] = useState('');
+  const uniqueActions = React.useMemo(()=>[...new Set(logs.map(l=>l.action))].sort(),[logs]);
+  const filtered = React.useMemo(()=>logs.filter(l=>
+    (!actionF||l.action===actionF)&&(!resultF||l.result===resultF)
+  ),[logs,actionF,resultF]);
+  const copyTSV = ()=>{
+    const rows = filtered.map(l=>[l.ts,l.user,l.action,l.resource,l.result].join('\t'));
+    navigator.clipboard.writeText(['Time\tUser\tAction\tResource\tResult',...rows].join('\n'))
+      .then(()=>toast('Copied '+filtered.length+' rows to clipboard','ok'));
+  };
   const ctl=useColumns('audit',[
     {key:'ts',label:'Time',fixed:true,mono:true,size:10,sortVal:l=>new Date(l.ts).getTime(),render:l=><span style={{color:'var(--gray-400)',whiteSpace:'nowrap'}} title={fmtTs(l.ts)}>{timeAgo(l.ts)}</span>},
     {key:'user',label:'User',size:11,render:l=><span style={{overflowWrap:'anywhere'}}>{l.user}</span>},
@@ -1015,7 +1047,23 @@ function AuditTable({logs,limit=10}) {
     {key:'resource',label:'Resource',mono:true,size:10,render:l=><span style={{color:'var(--gray-400)'}} title={l.resource}>{l.resource}</span>},
     {key:'result',label:'Result',sortVal:l=>l.result==='success'?1:0,render:l=>l.result==='success'?<span className="badge b-green">OK</span>:<span className="badge b-red">Fail</span>},
   ]);
-  return <DataTable ctl={ctl} rows={logs} defaultRows={limit} rowKey={l=>l.id} initialSort={{key:'ts',dir:'desc'}} exportName="audit-logs" persistId="audit"/>;
+  return (
+    <>
+      <div className="chip-bar" style={{marginBottom:8,alignItems:'center'}}>
+        <button className={`chip${!actionF?' on':''}`} onClick={()=>setActionF('')}>All</button>
+        {uniqueActions.map(a=>(
+          <button key={a} className={`chip${actionF===a?' on':''}`}
+            onClick={()=>setActionF(v=>v===a?'':a)}
+            style={{color:actionF===a?undefined:actionColor(a)}}>{a}</button>
+        ))}
+        <span style={{flex:1,minWidth:8}}/>
+        <button className={`chip${resultF==='success'?' on':''}`} onClick={()=>setResultF(v=>v==='success'?'':'success')}>OK only</button>
+        <button className={`chip${resultF==='failure'?' on':''}`} onClick={()=>setResultF(v=>v==='failure'?'':'failure')}>Fail only</button>
+        <button className="chip" title="Copy filtered rows as tab-separated values" onClick={copyTSV}>⎘ TSV</button>
+      </div>
+      <DataTable ctl={ctl} rows={filtered} defaultRows={limit} rowKey={l=>l.id} initialSort={{key:'ts',dir:'desc'}} exportName="audit-logs" persistId="audit"/>
+    </>
+  );
 }
 
 function DhcpTable({leases, rowLimit}) {
