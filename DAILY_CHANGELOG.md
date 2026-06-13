@@ -8,6 +8,18 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
 ---
 
+## 2026-06-13 — drill-down completeness: feed + policy rows
+
+| File | Line(s) | Change |
+|------|---------|--------|
+| `index.html` | DrillSheet | Added `type:'feed'` case — name, category, threat level badge, confidence, entries, status badge |
+| `index.html` | DrillSheet | Added `type:'policy'` case — name, action badge, rules count, created, status badge |
+| `index.html` | FeedsTable | Added `onDrill` prop; wired `onRowClick` on DataTable |
+| `index.html` | PoliciesPanel | Added `onDrill` prop; wired `onClick`+`cursor:pointer` on `renderPol` div |
+| `index.html` | 4 call sites | Passed `onDrill={d=>setDrillEntity(d)}` to both PoliciesPanel and FeedsTable usages |
+
+---
+
 ## 2026-06-12 — Sprint: wizard, update bar, severity ribbon removal
 
 | File | Line(s) | Change |
