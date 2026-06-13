@@ -2282,6 +2282,21 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
   );
 }
 
+/* ─── HOST BANNER ────────────────────────────────────────────────────────────*/
+function HostBanner({hosts, demoMode}) {
+  const [dismissed, setDismissed] = useState(()=>LS.get('noc.hostBannerDismissed',false));
+  const errHosts = hosts.filter(h=>h.status==='error'||h.status==='offline');
+  const errRate = hosts.length ? errHosts.length/hosts.length : 0;
+  if(errRate<=0.4||dismissed||demoMode) return null;
+  return (
+    <div className="notice n-red b-full" style={{marginBottom:0}}>
+      <span className="n-ico" aria-hidden="true">!</span>
+      <span className="n-msg"><b>{Math.round(errRate*100)}% of hosts offline or in error</b> — {errHosts.length} of {hosts.length} hosts affected</span>
+      <span className="n-acts"><button className="n-x" aria-label="Dismiss" onClick={()=>{setDismissed(true);LS.set('noc.hostBannerDismissed',true);}}>×</button></span>
+    </div>
+  );
+}
+
 /* ─── DRILL SHEET ────────────────────────────────────────────────────────────*/
 function DrillSheet({entity, onClose, leases=[], subnets=[]}) {
   useEffect(()=>{
@@ -2908,7 +2923,7 @@ function App({vault, onVaultChange}={}) {
   const [acctSearch, setAcctSearch] = useState('');
 
   const ackAlert  = id => { const n={...ackedAlerts,[id]:Date.now()+4*3600*1000}; setAckedAlerts(n); LS.set('noc.acked',n); };
-  const isAcked   = id => ackedAlerts[id]&&ackedAlerts[id]>Date.now();
+  const isAcked   = id => { const s=LS.get('noc.acked',{}); return (ackedAlerts[id]||s[id]||0)>Date.now(); };
   const rl = (key, def=25) => rowLimits[key]||def;
   const setRl = (key, val) => { const n={...rowLimits,[key]:val}; setRowLimits(n); LS.set('rl',n); };
   const toggleCollapse = (key) => { const n={...collapsed,[key]:!collapsed[key]}; setCollapsed(n); LS.set('cl',n); };
@@ -3887,19 +3902,7 @@ function App({vault, onVaultChange}={}) {
         {/* ── HOSTS ── */}
         {section==='hosts'&&(
           <div className="g2">
-            {(()=>{
-              const errRate = hosts.length ? hosts.filter(h=>h.status==='error'||h.status==='offline').length/hosts.length : 0;
-              const bannerKey = 'noc.hostBannerDismissed';
-              const [dismissed, setDismissed] = useState(()=>LS.get(bannerKey,false));
-              if(errRate>0.4&&!dismissed&&!demoMode) return (
-                <div className="notice n-red b-full" style={{marginBottom:0}}>
-                  <span className="n-ico" aria-hidden="true">!</span>
-                  <span className="n-msg"><b>{Math.round(errRate*100)}% of hosts offline or in error</b> — {hosts.filter(h=>h.status==='error'||h.status==='offline').length} of {hosts.length} hosts affected</span>
-                  <span className="n-acts"><button className="n-x" aria-label="Dismiss" onClick={()=>{setDismissed(true);LS.set(bannerKey,true);}}>×</button></span>
-                </div>
-              );
-              return null;
-            })()}
+            <HostBanner hosts={hosts} demoMode={demoMode}/>
             <div className="card">
               <div className="card-title"><div className="dot"/>Status Breakdown</div>
               <Donut hosts={hosts} filter={hostFilt} onSlice={s=>setHostFilt(f=>f===s?null:s)}/>
