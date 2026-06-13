@@ -1362,19 +1362,33 @@ function RefreshControl({autoRefresh,setAutoRefresh,refreshFrozen,setRefreshFroz
 // Overflow menu for low-frequency / set-once actions (also reachable via ⌘K / ? key).
 function AckMenu({id, onAck}) {
   const [open, setOpen] = React.useState(false);
+  const [custom, setCustom] = React.useState('');
   const opts = [{label:'1h', ms:3600*1000},{label:'4h', ms:4*3600*1000},{label:'8h', ms:8*3600*1000},{label:'Mute', ms:30*24*3600*1000}];
+  const applyCustom = () => {
+    const h = parseFloat(custom);
+    if(!h||h<=0) return;
+    setOpen(false); setCustom('');
+    onAck(id, h*3600*1000);
+  };
   return (
     <span style={{position:'relative',display:'inline-flex'}}>
       <button className="n-btn" onClick={()=>setOpen(o=>!o)}>Ack ▾</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
-        <div className="col-menu" style={{minWidth:90,top:'100%',right:0,left:'auto'}} role="menu">
+        <div className="col-menu" style={{minWidth:120,top:'100%',right:0,left:'auto'}} role="menu">
           {opts.map(o=>(
             <div key={o.label} className="col-row" style={{cursor:'pointer'}} role="menuitem"
               onClick={()=>{setOpen(false);onAck(id,o.ms);}}>
               <span className="col-lbl">{o.label}</span>
             </div>
           ))}
+          <div className="col-row" style={{gap:4,padding:'6px 8px'}}>
+            <input type="number" min="0.25" step="0.25" placeholder="hrs"
+              value={custom} onChange={e=>setCustom(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter')applyCustom();e.stopPropagation();}}
+              style={{width:52,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--gray-200)',padding:'3px 5px',fontSize:11}}/>
+            <button className="col-reset" onClick={applyCustom}>OK</button>
+          </div>
         </div>
       </>)}
     </span>
