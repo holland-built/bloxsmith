@@ -546,6 +546,21 @@ tr:hover .copy-btn{opacity:1}
 @media(max-width:1100px){[data-wall="on"] .bento{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .wall-span-btn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--gray-400);font-size:10px;line-height:1;padding:2px 5px;cursor:pointer;margin-left:4px}
 .wall-span-btn:hover{color:var(--teal);border-color:var(--teal)}
+.sev-ribbon{display:flex;align-items:center;gap:8px;width:100%;border:none;border-radius:0;padding:5px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer}
+.sev-ribbon.ok{background:var(--green);color:#04181c}
+.sev-ribbon.warn{background:var(--amber);color:#04181c}
+.sev-ribbon.crit{background:var(--red);color:#fff}
+.sev-ribbon-dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.85;flex-shrink:0}
+.sev-ribbon-cta{font-weight:600;text-transform:none;letter-spacing:0}
+.wall-clock{margin-left:18px;font-family:monospace;font-size:20px;font-weight:700;color:var(--gray-200);font-variant-numeric:tabular-nums;letter-spacing:.04em;white-space:nowrap}
+.tile-spark{display:block;margin-top:4px;color:var(--gray-400);opacity:.65}
+.sec-changed{margin-left:8px;font-size:10px;color:var(--gray-400)}
+.demo-banner{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:8px 12px;border:1px solid var(--amber);border-left:3px solid var(--amber);border-radius:6px;background:rgba(245,158,11,.10);color:var(--gray-200);font-size:12px}
+.demo-banner-ico{color:var(--amber);font-size:13px}
+.triage-pill{display:inline-flex;align-items:center;gap:8px;margin-bottom:14px;padding:5px 12px;border:1px solid var(--red);border-radius:14px;background:rgba(239,68,68,.10);color:var(--gray-200);font-size:12px;cursor:pointer;transition:background .12s}
+.triage-pill:hover{background:rgba(239,68,68,.18)}
+.triage-pill-dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0}
+.triage-pill-x{margin-left:4px;color:var(--gray-400);font-size:14px;line-height:1}
 .drill-sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:499}
 .drill-sheet{position:fixed;top:0;right:0;bottom:0;width:360px;max-width:90vw;background:var(--surface-2);border-left:1px solid var(--border);z-index:500;display:flex;flex-direction:column;box-shadow:-8px 0 24px rgba(0,0,0,.35);animation:drillIn .2s cubic-bezier(.4,0,.2,1)}
 @keyframes drillIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
@@ -554,6 +569,24 @@ tr:hover .copy-btn{opacity:1}
 .drill-kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
 .drill-kv .k{color:var(--gray-400);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
 @media(prefers-reduced-motion:reduce){.drill-sheet{animation:none}}
+.wiz-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:120}
+.wiz-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(440px,92vw);max-height:84vh;overflow:auto;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;z-index:121;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.wiz-hd{padding:16px 18px;border-bottom:1px solid var(--border)}
+.wiz-title{font-size:15px;font-weight:700;color:var(--ink)}
+.wiz-sub{font-size:11px;color:var(--gray-400);margin-top:4px;line-height:1.4}
+.wiz-list{padding:8px 10px}
+.wiz-row{display:flex;align-items:center;gap:10px;padding:7px 8px;border-bottom:1px solid var(--border)}
+.wiz-ord{display:flex;flex-direction:column;gap:1px}
+.wiz-ordbtn{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:9px;line-height:1;padding:1px}
+.wiz-ordbtn:disabled{opacity:.25;cursor:default}
+.wiz-ordbtn:hover:not(:disabled){color:var(--teal)}
+.wiz-nav-icon{font-size:14px;color:var(--gray-400);width:18px;text-align:center}
+.wiz-lbl{flex:1;font-size:13px;color:var(--gray-200)}
+.wiz-vis{font-size:10px;font-weight:700;border-radius:4px;padding:3px 9px;border:1px solid var(--border);background:none;color:var(--gray-400);cursor:pointer;text-transform:uppercase;letter-spacing:.05em}
+.wiz-vis.on{color:var(--sev-green-t);border-color:var(--green);background:rgba(34,197,94,.10)}
+.wiz-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)}
+.wiz-skip{background:none;border:1px solid var(--border);color:var(--gray-400);border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer}
+.wiz-done{background:var(--teal);border:none;color:#04181c;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
@@ -971,7 +1004,7 @@ function SubnetBars({subnets,highlight,onBar}) {
   );
 }
 
-function TTLTable({zones}) {
+function TTLTable({zones, onDrill}) {
   const bad=zones.filter(z=>z.anomaly);
   const ctl=useColumns('ttl',[
     {key:'fqdn',label:'Zone FQDN',fixed:true,mono:true,size:11,width:'30%'},
@@ -981,7 +1014,7 @@ function TTLTable({zones}) {
     {key:'issues',label:'Issues',nosort:true,width:'30%',render:z=>z.issues.map((iss,i)=>(<span key={i} className={`badge ${iss.includes('High')||iss.includes('Too High')?'b-amber':'b-red'}`} style={{marginRight:3}}>{iss}</span>))},
   ]);
   if(!bad.length) return <div className="no-data">✓ No TTL anomalies detected</div>;
-  return <DataTable ctl={ctl} rows={bad} defaultRows={10} rowKey={z=>z.id} initialSort={{key:'fqdn',dir:'asc'}} exportName="ttl-anomalies" persistId="ttl"/>;
+  return <DataTable ctl={ctl} rows={bad} defaultRows={10} rowKey={z=>z.id} initialSort={{key:'fqdn',dir:'asc'}} exportName="ttl-anomalies" persistId="ttl" onRowClick={onDrill?z=>onDrill({type:'zone',data:z}):undefined}/>;
 }
 
 const THREAT_CATS = new Set(['dga','threat_insight','zero_day_dns','threat_insight_nde','c2','ransomware','exploit','phishing']);
@@ -1382,6 +1415,10 @@ function AckMenu({id, onAck}) {
               <span className="col-lbl">{o.label}</span>
             </div>
           ))}
+          <div className="col-row" style={{cursor:'pointer'}} role="menuitem"
+            onClick={()=>{setOpen(false);onAck(id,0);}}>
+            <span className="col-lbl" style={{color:'var(--gray-400)'}}>Clear</span>
+          </div>
           <div className="col-row" style={{gap:4,padding:'6px 8px'}}>
             <input type="number" min="0.25" step="0.25" placeholder="hrs"
               value={custom} onChange={e=>setCustom(e.target.value)}
@@ -1395,7 +1432,7 @@ function AckMenu({id, onAck}) {
   );
 }
 
-function MoreMenu({onShare,density,setDensity,onShortcuts,wallMode,onWall,demoMode,onDemo}) {
+function MoreMenu({onShare,density,setDensity,onShortcuts,wallMode,onWall,demoMode,onDemo,onReset,frozen,onFreeze}) {
   const [open,setOpen]=React.useState(false);
   const row=(label,hint,fn)=>(
     <div className="col-row" style={{cursor:'pointer'}} role="menuitem" onClick={()=>{setOpen(false);fn();}}>
@@ -1411,6 +1448,8 @@ function MoreMenu({onShare,density,setDensity,onShortcuts,wallMode,onWall,demoMo
           {row('Row density',density==='compact'?'Compact':'Comfortable',()=>setDensity(d=>d==='compact'?'comfortable':'compact'))}
           {onWall&&row('Wall display mode',wallMode?'On':'Off',onWall)}
           {onDemo&&row('Demo mode',demoMode?'On':'Off',onDemo)}
+          {onFreeze&&row('Freeze data',frozen?'Frozen':'Live',onFreeze)}
+          {onReset&&row('Reset dashboard','↺',onReset)}
           {row('Keyboard shortcuts','?',onShortcuts)}
         </div>
       </>)}
@@ -2317,6 +2356,55 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
   );
 }
 
+/* ─── DASHBOARD WIZARD ───────────────────────────────────────────────────────*/
+const PROTECTED_SECTIONS = new Set(['overview']);
+function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone}) {
+  const [tab, setTab] = useState('widgets');
+  const navSections = SECTIONS.filter(s=>!PROTECTED_SECTIONS.has(s.id));
+  return (
+    <>
+      <div className="wiz-overlay" onClick={onDone}/>
+      <div className="wiz-modal" role="dialog" aria-label="Set up your dashboard">
+        <div className="wiz-hd">
+          <div>
+            <div className="wiz-title">Set up your dashboard</div>
+            <div className="wiz-sub">Choose which panels and sections appear. Reset any time from ⋯ → Reset dashboard.</div>
+          </div>
+          <div className="chip-bar" style={{marginTop:10,gap:4}}>
+            <button className={`chip${tab==='widgets'?' on':''}`} onClick={()=>setTab('widgets')}>Overview Widgets</button>
+            <button className={`chip${tab==='nav'?' on':''}`} onClick={()=>setTab('nav')}>Nav Sections</button>
+          </div>
+        </div>
+        <div className="wiz-list">
+          {tab==='widgets'&&overviewOrder.map((id,i)=>(
+            <div key={id} className="wiz-row">
+              <div className="wiz-ord">
+                <button className="wiz-ordbtn" disabled={i===0} aria-label="Move up" onClick={()=>moveWidget(id,-1)}>▲</button>
+                <button className="wiz-ordbtn" disabled={i===overviewOrder.length-1} aria-label="Move down" onClick={()=>moveWidget(id,1)}>▼</button>
+              </div>
+              <span className="wiz-lbl">{widgetLabels[id]||id}</span>
+              <button className={`wiz-vis${collapsed[id]?'':' on'}`} role="switch" aria-checked={!collapsed[id]}
+                onClick={()=>toggleCollapse(id)}>{collapsed[id]?'Hidden':'Visible'}</button>
+            </div>
+          ))}
+          {tab==='nav'&&navSections.map(s=>(
+            <div key={s.id} className="wiz-row">
+              <span className="wiz-nav-icon">{s.icon}</span>
+              <span className="wiz-lbl">{s.label}</span>
+              <button className={`wiz-vis${hiddenSections.includes(s.id)?'':' on'}`} role="switch" aria-checked={!hiddenSections.includes(s.id)}
+                onClick={()=>toggleHideSection(s.id)}>{hiddenSections.includes(s.id)?'Hidden':'Visible'}</button>
+            </div>
+          ))}
+        </div>
+        <div className="wiz-foot">
+          <button className="wiz-skip" onClick={onDone}>Skip</button>
+          <button className="wiz-done" onClick={onDone}>Done</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ─── HOST BANNER ────────────────────────────────────────────────────────────*/
 function HostBanner({hosts, demoMode}) {
   const [dismissed, setDismissed] = useState(()=>LS.get('noc.hostBannerDismissed',false));
@@ -2904,6 +2992,7 @@ function App({vault, onVaultChange}={}) {
   const [autoRefresh, setAutoRefresh] = useState(()=>LS.get('ar',0));
   const [arCountdown, setArCountdown] = useState(0);
   const [refreshFrozen, setRefreshFrozen] = useState(false);   // pause auto-refresh (demos)
+  const [now, setNow] = useState(()=>new Date());
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [ipamChip, setIpamChip] = useState(()=>LS.get('noc.ipamChip',null));
   const [ipamShowTiny, setIpamShowTiny] = useState(false);   // reveal single-IP /32 subnets (transient)
@@ -2936,8 +3025,13 @@ function App({vault, onVaultChange}={}) {
   const [alertRules, setAlertRules] = useState(()=>LS.get('noc.alertRules',[]));
   const [deltas, setDeltas] = useState(null);
   const [demoMode, setDemoMode]       = useState(()=>LS.get('noc.demoMode',false));
+  const [demoBannerDismissed, setDemoBannerDismissed] = useState(false);
+  const [triagePromptDismissed, setTriagePromptDismissed] = useState(false);
   const [ackedAlerts, setAckedAlerts] = useState(()=>LS.get('noc.acked',{}));
   const [drillEntity, setDrillEntity] = useState(null);
+  const WIDGET_LABELS={hosts:'Host Status',subnets:'Top Subnets',ttl:'DNS TTL Issues',audit:'Audit Log',pols:'Security Policies',feeds:'Threat Feeds'};
+  const [hiddenSections, setHiddenSections] = useState(()=>LS.get('noc.hiddenSections',[]));
+  const [showWizard, setShowWizard] = useState(()=>!LS.get('noc.wizardDone',false));
   const [theme, setTheme]           = useState(()=>LS.get('noc.theme','system')); // 'system'|'light'|'dark'
   const [density, setDensity]       = useState(()=>LS.get('noc.density','comfortable')); // 'comfortable'|'compact'
   const [cmdkOpen, setCmdkOpen]     = useState(false);
@@ -2957,11 +3051,15 @@ function App({vault, onVaultChange}={}) {
   const [switchingAcct, setSwitchingAcct] = useState(false);
   const [acctSearch, setAcctSearch] = useState('');
 
-  const ackAlert  = (id, ms) => { const n={...ackedAlerts,[id]:Date.now()+ms}; setAckedAlerts(n); LS.set('noc.acked',n); };
+  const ackAlert  = (id, ms) => { const n={...ackedAlerts}; if(ms<=0){delete n[id];}else{n[id]=Date.now()+ms;} setAckedAlerts(n); LS.set('noc.acked',n); };
   const isAcked   = id => { const s=LS.get('noc.acked',{}); return (ackedAlerts[id]||s[id]||0)>Date.now(); };
   const rl = (key, def=25) => rowLimits[key]||def;
   const setRl = (key, val) => { const n={...rowLimits,[key]:val}; setRowLimits(n); LS.set('rl',n); };
   const toggleCollapse = (key) => { const n={...collapsed,[key]:!collapsed[key]}; setCollapsed(n); LS.set('cl',n); };
+  const moveWidget = (id,dir) => { const arr=[...overviewOrder]; const i=arr.indexOf(id); const j=i+dir; if(j<0||j>=arr.length) return; [arr[i],arr[j]]=[arr[j],arr[i]]; setOverviewOrder(arr); LS.set('noc.widgetOrder',arr); };
+  const toggleHideSection = (id) => { const n=hiddenSections.includes(id)?hiddenSections.filter(x=>x!==id):[...hiddenSections,id]; setHiddenSections(n); LS.set('noc.hiddenSections',n); };
+  const finishWizard = () => { setShowWizard(false); LS.set('noc.wizardDone',true); };
+  const resetDashboard = () => { setOverviewOrder([...DEFAULT_ORDER]); LS.set('noc.widgetOrder',[...DEFAULT_ORDER]); setCollapsed({}); LS.set('cl',{}); setHiddenSections([]); LS.set('noc.hiddenSections',[]); setShowWizard(true); };
   const toggleFs = (key) => setFullscreen(f=>f===key?null:key);
 
   const onDragStart = (e, id) => { e.dataTransfer.setData('card',id); e.dataTransfer.effectAllowed='move'; setDragging(id); };
@@ -3052,6 +3150,10 @@ function App({vault, onVaultChange}={}) {
   },[]);
 
   useEffect(()=>{load();},[]);
+  useEffect(()=>{ if(!wallMode) return; const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t); },[wallMode]);
+  const SEC_DELTA_KEY={ipam:'total_subnets',dns:'total_zones',dhcp:'total_leases'};
+  useEffect(()=>{ if(!data||!lastUpd) return; const h=LS.get('noc.tileHist',{}); const tn={Hosts:errHosts.length,Subnets:critSubs.length,DNS:ttlBad.length,Audit:auditLogs.filter(l=>l.result==='failure').length}; Object.entries(tn).forEach(([k,v])=>{ const a=(h[k]||[]).slice(-11); a.push(v); h[k]=a; }); LS.set('noc.tileHist',h); },[lastUpd]);
+  useEffect(()=>{ if(!deltas) return; const t=LS.get('noc.secChanged',{}); Object.entries(SEC_DELTA_KEY).forEach(([sec,k])=>{ if(deltas[k]!=null&&deltas[k]!==0) t[sec]=Date.now(); }); LS.set('noc.secChanged',t); },[deltas]);
 
   // CSP accounts this API key's user can act in (portal-style sandbox switch)
   useEffect(()=>{
@@ -3274,6 +3376,7 @@ function App({vault, onVaultChange}={}) {
 
   const critSubs  = subnets.filter(s=>s.util>=dhcpCrit);
   const warnSubs  = subnets.filter(s=>s.util>=dhcpWarn&&s.util<dhcpCrit);
+  const errHosts  = hosts.filter(h=>h.status==='error'||h.status==='offline');
   const onlineH   = hosts.filter(h=>h.status==='online');
   const ttlBad    = zones.filter(z=>z.anomaly);
   const activeF   = feeds.filter(f=>f.active);
@@ -3348,13 +3451,14 @@ function App({vault, onVaultChange}={}) {
 
         <nav className="sidebar-nav">
           <div className="nav-sec">Navigation</div>
-          {SECTIONS.map(s=>{
+          {SECTIONS.filter(s=>!hiddenSections.includes(s.id)).map(s=>{
             let badge = null;
             if(data&&s.id==='ipam') { const c=data.subnets.filter(x=>x.util>=90).length; if(c>0) badge=<span className="badge-pill">{c}</span>; }
             if(data&&s.id==='hosts') { const c=data.hosts.filter(h=>h.status==='error'||h.status==='offline').length; if(c>0) badge=<span className="badge-pill">{c}</span>; }
             if(data&&s.id==='dns') { const c=data.zones.filter(z=>z.anomaly).length; if(c>0) badge=<span className="badge-pill badge-pill-amber">{c}</span>; }
             if(data&&s.id==='audit') { const c=data.auditLogs.filter(l=>l.result==='failure').length; if(c>0) badge=<span className="badge-pill badge-pill-amber">{c}</span>; }
             if(s.id==='alerts'&&firingAlerts.length>0) badge=<span className="badge-pill">{firingAlerts.length}</span>;
+            if(data&&s.id==='triage'){ const auditF=auditLogs.filter(l=>l.result==='failure').length; const crit=errHosts.length+critSubs.length+auditF; const warn=firingAlerts.length+warnSubs.length+ttlBad.length; const t=crit+warn; if(t>0) badge=<span className={`badge-pill${crit===0?' badge-pill-amber':''}`} title={`${crit} critical, ${warn} warning`}>{t}</span>; }
             const firingHere = firingSecs.has(s.id);
             return (
               <button key={s.id} className={`nav-item${section===s.id?' active':''}`} onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>
@@ -3457,6 +3561,7 @@ function App({vault, onVaultChange}={}) {
         <div className="sr-only" role="status" aria-live="polite">
           {refreshing?'Refreshing data':(lastUpd?`Data updated ${lastUpd.toLocaleTimeString()}`:'')}{firingAlerts.length>0?`. ${firingAlerts.length} alert${firingAlerts.length>1?'s':''} firing`:''}
         </div>
+        {(()=>{ const crit=errHosts.length+critSubs.length; const warn=firingAlerts.length+warnSubs.length+ttlBad.length; const sev=crit>0?'crit':warn>0?'warn':'ok'; const txt=crit>0?`${crit} critical`:warn>0?`${warn} warning`:'All systems nominal'; return <button className={`sev-ribbon ${sev}`} onClick={()=>setSection(sev==='ok'?'overview':'triage')} aria-label={`Status: ${txt}`}><span className="sev-ribbon-dot"/>{txt}{sev!=='ok'&&<span className="sev-ribbon-cta"> — view triage →</span>}</button>; })()}
         <div className="topbar">
           <div style={{display:'flex',alignItems:'center',minWidth:0}}>
             <button className="menu-btn" aria-label="Open navigation" onClick={()=>setSidebarOpen(o=>!o)}>☰</button>
@@ -3464,8 +3569,10 @@ function App({vault, onVaultChange}={}) {
               <h1 className="page-title">{SECTIONS.find(s=>s.id===section)?.label}</h1>
               <div className="page-sub" style={{display:'flex',alignItems:'center'}}>
                 {refreshing?'Refreshing…':'Live data'}<FreshnessPill lastUpd={lastUpd}/>
+                {(()=>{ const k=SEC_DELTA_KEY[section]; const ts=k&&LS.get('noc.secChanged',{})[k]; return ts?<span className="sec-changed" title={fmtTs(ts)}>· changed {timeAgo(ts)}</span>:null; })()}
               </div>
             </div>
+            {wallMode&&<div className="wall-clock" aria-live="off">{now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>}
           </div>
           <div className="topbar-controls">
             <div className="topbar-group">
@@ -3479,10 +3586,24 @@ function App({vault, onVaultChange}={}) {
                 title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
               <PresetMenu section={section}/>
               <button className="theme-btn" onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
-              <MoreMenu onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);}}/>
+              <MoreMenu onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
             </div>
           </div>
         </div>
+        {demoMode&&!demoBannerDismissed&&(
+          <div className="demo-banner" role="status">
+            <span className="demo-banner-ico" aria-hidden="true">◆</span>
+            <span><b>Demo mode active</b> — test/allow-all policies hidden, threat-intel feeds prioritized.</span>
+            <button className="n-x" style={{marginLeft:'auto'}} aria-label="Dismiss demo banner" onClick={()=>setDemoBannerDismissed(true)}>×</button>
+          </div>
+        )}
+        {section!=='triage'&&!triagePromptDismissed&&(critSubs.length+errHosts.length)>0&&(
+          <button className="triage-pill" onClick={()=>setSection('triage')}>
+            <span className="triage-pill-dot" aria-hidden="true"/>
+            <b>{critSubs.length+errHosts.length} critical</b> — view triage →
+            <span className="triage-pill-x" role="button" aria-label="Dismiss" onClick={e=>{e.stopPropagation();setTriagePromptDismissed(true);}}>×</span>
+          </button>
+        )}
         {/* ── unified notice rail (one vocabulary; severity-sorted; collapses past 2) ── */}
         {(()=>{
           const notices=[];
@@ -3545,16 +3666,18 @@ function App({vault, onVaultChange}={}) {
           <>
             {/* Status-tile matrix — one tile per domain, tinted by worst severity */}
             {(()=>{
-              const errHosts = hosts.filter(h=>h.status==='error'||h.status==='offline').length;
+              const errHostsN = errHosts.length;
               const feedCrit = feeds.filter(f=>f.level==='critical'&&f.active).length;
               const auditFail = auditLogs.filter(l=>l.result==='failure').length;
               const tiles = [
-                {cat:'Hosts',   n:errHosts,       tot:hosts.length,    sev:errHosts>0 ?'crit':'ok', desc:'offline / error',  section:'hosts',   dk:'offline_hosts'},
+                {cat:'Hosts',   n:errHostsN,      tot:hosts.length,    sev:errHostsN>0 ?'crit':'ok', desc:'offline / error',  section:'hosts',   dk:'offline_hosts'},
                 {cat:'Subnets', n:critSubs.length,tot:subnets.length,  sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':'ok', desc:`≥${dhcpCrit}% utilization`, section:'ipam', dk:'critical_subnets'},
                 {cat:'DNS',     n:ttlBad.length,  tot:zones.length,    sev:ttlBad.length>0?'warn':'ok', desc:'TTL anomalies',    section:'dns',     dk:'ttl_anomalies'},
                 {cat:'Threats', n:feedCrit,       tot:feeds.length,    sev:feedCrit>0 ?'warn':'ok', desc:'critical feeds',   section:'threats', dk:'active_feeds'},
                 {cat:'Audit',   n:auditFail,      tot:auditLogs.length,sev:auditFail>0?'crit':'ok', desc:'failed events',    section:'audit',   dk:'audit_failures'},
               ];
+              const tileHist=LS.get('noc.tileHist',{});
+              const spark=(cat)=>{ const vals=tileHist[cat]; if(!vals||vals.length<2) return null; const mx=Math.max(...vals,1),mn=Math.min(...vals,0),rng=mx-mn||1,W=46,H=12; const pts=vals.map((v,i)=>`${(i/(vals.length-1)*W).toFixed(1)},${(H-(v-mn)/rng*H).toFixed(1)}`).join(' '); return <svg width={W} height={H} className="tile-spark" aria-hidden="true"><polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>; };
               const ST={crit:'CRIT',warn:'WARN',ok:'OK'};
               const BAR={crit:'var(--red)',warn:'var(--amber)',ok:'var(--green)'};
               return (
@@ -3566,6 +3689,7 @@ function App({vault, onVaultChange}={}) {
                       <span className="stile-big">{t.n}{t.tot>0&&<span className="stile-of"> / {t.tot}</span>}</span>
                       <span className="stile-desc">{t.desc}{deltas&&t.dk&&deltas[t.dk]!=null&&deltas[t.dk]!==0&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,borderRadius:3,padding:'1px 4px',color:deltas[t.dk]>0?'var(--sev-red-t)':'var(--sev-green-t)',background:deltas[t.dk]>0?'rgba(239,68,68,.18)':'rgba(34,197,94,.18)'}}>Δ{deltas[t.dk]>0?'+':''}{deltas[t.dk]}</span>}</span>
                       <div className="stile-track"><div className="stile-fill" style={{width:t.tot>0?`${Math.min(t.n/t.tot*100,100)}%`:'0%',background:BAR[t.sev]}}/></div>
+                      {spark(t.cat)}
                     </button>
                   ))}
                 </div>
@@ -3734,7 +3858,7 @@ function App({vault, onVaultChange}={}) {
                       </div>
                     </div>
                     {!collapsed['ttl']&&(getViz('ttl')==='table'
-                      ?<TTLTable zones={zones}/>
+                      ?<TTLTable zones={zones} onDrill={setDrillEntity}/>
                       :<WidgetViz data={zones.filter(z=>z.anomaly)} viz={getViz('ttl')}
                         columns={[{key:'fqdn',label:'Zone'},{key:'view',label:'View'},{key:'ttl',label:'TTL'},{key:'neg_ttl',label:'Neg TTL'},{key:'records',label:'Records'}]}
                         labelKey="fqdn" valueKey="ttl" defaultRows={10}/>)}
@@ -3894,7 +4018,7 @@ function App({vault, onVaultChange}={}) {
             <div className="g2">
               <div className="card">
                 <div className="card-title"><div className="dot" style={{background:'var(--amber)'}}/>Zones with TTL Issues</div>
-                <TTLTable zones={s_zones}/>
+                <TTLTable zones={s_zones} onDrill={setDrillEntity}/>
                 {(()=>{
                   const drillZone = zoneFilt ? (s_zones.find(z=>z.id===zoneFilt)||zones.find(z=>z.id===zoneFilt)) : null;
                   return drillZone&&(
@@ -4072,6 +4196,7 @@ function App({vault, onVaultChange}={}) {
         section={section}
       />
       {drillEntity&&<DrillSheet entity={drillEntity} onClose={()=>setDrillEntity(null)} leases={leases} subnets={subnets}/>}
+      {showWizard&&<DashboardWizard overviewOrder={overviewOrder} collapsed={collapsed} hiddenSections={hiddenSections} widgetLabels={WIDGET_LABELS} moveWidget={moveWidget} toggleCollapse={toggleCollapse} toggleHideSection={toggleHideSection} onDone={finishWizard}/>}
     </div>
   );
 }
