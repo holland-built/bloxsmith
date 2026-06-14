@@ -3,6 +3,20 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-14 — header-update-ux: inline ver-badge replaces UpdateBar strip
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~479–499 | Deleted `.upd-bar` through `@media prefers-reduced-motion upd-bar-spin` CSS (21 lines) |
+| `index.html` | ~479 | Added `.ver-badge.updating`, `.ver-badge.updating .upd-spin`, `.ver-badge.upd-done`, `.ver-upd-elapsed` CSS rules |
+| `index.html` | ~3114 | Added `updDone` and `updElapsed` useState after `updApplying` |
+| `index.html` | ~3319 | Added `useEffect` for per-second elapsed ticker keyed on `updApplying` + `updStart` |
+| `index.html` | ~3483 | `s.phase==='live'` → `setUpdDone(true); setUpdApplying(false); setTimeout(reload,3000)` |
+| `index.html` | ~3504–3507 | Deleted `cancelUpdate` const and `<UpdateBar …/>` JSX |
+| `index.html` | ~2984–3038 | Deleted entire `function UpdateBar(…)` component |
+| `index.html` | ~3543–3547 | Replaced static ver-badge span with 3-state IIFE: `updDone` → green chip; `updApplying&&updPhase` → amber spinning chip with stepName + elapsed; idle → original clickable badge |
+| `index.html` | ~3559, ~3564 | Updated popover copy: "bar at the top" → "version chip below" / "version chip" |
+
 ## 2026-06-14 — Alert rules editor (inline-edit + default rules)
 
 | File | Line(s) | Change |
