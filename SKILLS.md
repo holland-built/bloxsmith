@@ -17,6 +17,7 @@
 
 | Skill | Purpose |
 |---|---|
+| `forge` | Full pipeline: grill-me → Opus plan → approval gate → TDD → Sonnet build → prove |
 | `caveman:caveman` | Ultra-compressed communication mode (~75% token cut) |
 | `caveman:caveman-review` | Code review in caveman mode |
 | `code-review` | Review current diff for correctness + simplification |

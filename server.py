@@ -63,14 +63,27 @@ _UPDATE_TTL = 24 * 3600  # seconds between checks
 _update_cache = {"checked_at": 0.0, "latest": None, "available": False, "html_url": None}
 _update_lock = threading.Lock()
 
-# One-click self-update via a Watchtower sidecar. run-image.sh starts Watchtower
-# with its HTTP API enabled, on a shared network, and passes us the URL + token.
-# When both are set we expose an "Update now" button that asks Watchtower to pull
-# :latest and recreate this container. No Docker socket is mounted here — only
-# Watchtower touches the daemon.
-WATCHTOWER_URL   = os.environ.get("WATCHTOWER_URL")    # e.g. http://watchtower:8080/v1/update
-WATCHTOWER_TOKEN = os.environ.get("WATCHTOWER_TOKEN")
-SELF_UPDATE = bool(WATCHTOWER_URL and WATCHTOWER_TOKEN)
+# Docker SDK self-update. The socket is mounted by run-image.sh unless
+# NO_DOCKER_SOCKET=1. If unavailable, DOCKER_OK stays False and the
+# "Update now" button is hidden.
+def _docker_client():
+    try:
+        import docker as _docker
+        return _docker.from_env(), True
+    except Exception:
+        return None, False
+
+_pull_lock = threading.Lock()
+_pull_state = {
+    "phase": "idle",
+    "pct": 0,
+    "layer_current": 0,
+    "layer_total": 0,
+    "stalled": False,
+    "error": None,
+}
+# Test Docker availability once at startup
+_, DOCKER_OK = _docker_client()
 
 def _ver_n(v):
     """Extract the integer <n> from a '1.0.<n>' / 'v1.0.<n>' version; None if unparseable."""
@@ -116,25 +129,120 @@ def update_status(force=False):
     else:
         _maybe_check_update()
     with _update_lock:
-        return {"current": APP_VERSION, "latest": _update_cache["latest"],
-                "available": _update_cache["available"], "url": _update_cache["html_url"],
-                "checkDisabled": UPDATE_CHECK_DISABLED, "selfUpdate": SELF_UPDATE}
+        result = {"current": APP_VERSION, "latest": _update_cache["latest"],
+                  "available": _update_cache["available"], "url": _update_cache["html_url"],
+                  "checkDisabled": UPDATE_CHECK_DISABLED, "selfUpdate": DOCKER_OK}
+    # Auto-kick background pre-pull when update is available and idle
+    with _update_lock:
+        avail = _update_cache["available"]
+    if avail and DOCKER_OK:
+        with _pull_lock:
+            current_phase = _pull_state["phase"]
+        if current_phase == "idle":
+            with _update_lock:
+                img = f"ghcr.io/{APP_REPO}:latest"
+            threading.Thread(target=_run_prepull, args=(img,), daemon=True).start()
+    return result
 
-def trigger_self_update():
-    """Ask the Watchtower sidecar to pull :latest and recreate this container.
-    Watchtower replaces us mid-request, so the caller should expect the connection
-    to drop, then poll until the app returns reporting a newer version."""
-    if not SELF_UPDATE:
-        return {"ok": False, "error": "self-update not configured (no Watchtower sidecar)"}
-    from urllib.request import urlopen, Request
+def _run_prepull(image_ref):
+    """Background thread: pull the new image while the container stays live.
+    Updates _pull_state with real layer progress from the Docker events stream."""
+    import time as _t
+    client, ok = _docker_client()
+    if not ok:
+        return
+    with _pull_lock:
+        _pull_state.update(phase="prepulling", pct=0, layer_current=0,
+                           layer_total=0, stalled=False, error=None)
+    layers_total = {}
+    layers_done = {}
+    last_event = _t.monotonic()
     try:
-        req = Request(WATCHTOWER_URL, method="POST",
-                      headers={"Authorization": f"Bearer {WATCHTOWER_TOKEN}"})
-        with urlopen(req, timeout=8) as r:
-            r.read()
-        return {"ok": True}
+        for event in client.api.pull(image_ref, stream=True, decode=True):
+            last_event = _t.monotonic()
+            layer = event.get("id", "")
+            status = event.get("status", "")
+            detail = event.get("progressDetail") or {}
+            if status in ("Pulling fs layer", "Waiting"):
+                layers_total.setdefault(layer, 0)
+            elif status == "Pull complete":
+                if layer:
+                    layers_done[layer] = True
+                    layers_total.setdefault(layer, 1)
+            elif status == "Downloading" and detail:
+                cur = detail.get("current", 0)
+                tot = detail.get("total", 0) or 1
+                layers_total[layer] = tot
+                layers_done[layer] = cur
+            stalled = (_t.monotonic() - last_event) > 20
+            total_bytes = sum(layers_total.values()) or 1
+            done_bytes = sum(v if isinstance(v, int) else 0
+                             for v in layers_done.values())
+            pct = min(int(done_bytes * 100 / total_bytes), 99)
+            nl = len(layers_total)
+            nd = sum(1 for v in layers_done.values() if v is True)
+            with _pull_lock:
+                _pull_state.update(phase="prepulling", pct=pct,
+                                   layer_current=nd, layer_total=nl,
+                                   stalled=stalled, error=None)
+        with _pull_lock:
+            _pull_state.update(phase="pulled", pct=100,
+                               layer_current=len(layers_total),
+                               layer_total=len(layers_total),
+                               stalled=False, error=None)
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        with _pull_lock:
+            _pull_state.update(phase="error", error=str(e))
+
+
+def apply_self_update():
+    """Inspect self, return HTTP response, then recreate in a detached thread."""
+    if not DOCKER_OK:
+        return {"ok": False, "error": "docker socket not available"}
+    client, _ = _docker_client()
+    try:
+        container = client.containers.get(os.environ.get("HOSTNAME", ""))
+    except Exception as e:
+        return {"ok": False, "error": f"cannot inspect self: {e}"}
+
+    def _do_recreate():
+        import time as _t
+        _t.sleep(0.3)  # let HTTP response flush
+        with _pull_lock:
+            _pull_state.update(phase="recreating", error=None)
+        try:
+            attrs = container.attrs
+            cfg = attrs.get("HostConfig", {})
+            ports = cfg.get("PortBindings") or {}
+            vols = cfg.get("Binds") or []
+            env = attrs.get("Config", {}).get("Env") or []
+            name = attrs.get("Name", "").lstrip("/")
+            image = attrs.get("Config", {}).get("Image", "")
+            restart = cfg.get("RestartPolicy", {}).get("Name", "unless-stopped")
+            labels = attrs.get("Config", {}).get("Labels") or {}
+            networks = list((attrs.get("NetworkSettings") or {})
+                            .get("Networks", {}).keys())
+            container.stop(timeout=5)
+            container.remove()
+            new = client.containers.run(
+                image,
+                detach=True,
+                name=name,
+                environment=env,
+                ports={k: [b["HostPort"] for b in v] for k, v in ports.items() if v},
+                volumes=vols,
+                restart_policy={"Name": restart},
+                labels=labels,
+                network=networks[0] if networks else None,
+            )
+            with _pull_lock:
+                _pull_state.update(phase="live", error=None)
+        except Exception as e:
+            with _pull_lock:
+                _pull_state.update(phase="error", error=str(e))
+
+    threading.Thread(target=_do_recreate, daemon=True).start()
+    return {"ok": True}
 
 # Shared-secret for the state-changing write endpoint (/api/block-domain).
 # If unset, that write is disabled (401). Supply it via the X-Auth-Token header.
@@ -1364,6 +1472,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(vault_status()); return
         if path == "/api/update/check":
             self._json(update_status(force=True)); return
+        if path == "/api/update/status":
+            with _pull_lock:
+                self._json(dict(_pull_state)); return
         # In vault mode, no data leaves until a tenant key is unlocked + active.
         if VAULT_MODE and not MCP_HEADERS.get("Authorization") and path.startswith("/api/"):
             self._json({"error": "vault locked", "locked": True}, 503); return
@@ -1472,7 +1583,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/vault/reset":
             self._json(vault_reset()); return
         if self.path == "/api/update/apply":
-            self._json(trigger_self_update()); return
+            self._json(apply_self_update()); return
         if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
             self._json({"error": "vault locked", "locked": True}, 503); return
         if self.path != "/api/switch-account":

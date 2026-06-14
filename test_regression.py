@@ -298,6 +298,28 @@ class BackendTests(unittest.TestCase):
                         "lookup took longer than data — threading may be broken")
 
 
+    # ── docker self-update tests ──────────────────────────────────────────────
+
+    def test_api_update_status_shape(self):
+        """GET /api/update/status returns 200 with required phase/pct/layer fields."""
+        status, data = get_json("/api/update/status")
+        self.assertEqual(status, 200)
+        for key in ("phase", "pct", "layer_current", "layer_total", "stalled", "error"):
+            self.assertIn(key, data, f"missing field: {key}")
+        self.assertIn(data["phase"], (
+            "idle", "prepulling", "pulled", "recreating", "health", "live", "error"
+        ))
+        self.assertIsInstance(data["pct"], int)
+        self.assertIsInstance(data["stalled"], bool)
+
+    def test_api_update_check_has_self_update_field(self):
+        """GET /api/update/check still returns selfUpdate bool (now reflects DOCKER_OK)."""
+        status, data = get_json("/api/update/check")
+        self.assertEqual(status, 200)
+        self.assertIn("selfUpdate", data)
+        self.assertIsInstance(data["selfUpdate"], bool)
+
+
 # ── frontend structure tests ──────────────────────────────────────────────────
 
 class FrontendStructureTests(unittest.TestCase):

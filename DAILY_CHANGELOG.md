@@ -3,8 +3,41 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-14 — Docker SDK self-update (drop Watchtower)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `requirements.txt` | 7 | Added `docker==7.1.0` |
+| `server.py` | 66-86 | Replaced Watchtower globals with `_docker_client()`, `DOCKER_OK`, `_pull_state` dict, `_pull_lock` |
+| `server.py` | 113-145 | `update_status()` — uses `DOCKER_OK`, auto-kicks `_run_prepull` when update available + phase idle |
+| `server.py` | 147-213 | New `_run_prepull()` — background Docker pull with real layer progress streaming |
+| `server.py` | 215-257 | New `apply_self_update()` — inspect self, return HTTP, recreate in detached thread |
+| `server.py` | 1365-1367 | New `GET /api/update/status` route returning `_pull_state` |
+| `server.py` | 1474-1475 | `trigger_self_update()` → `apply_self_update()` |
+| `run-image.sh` | 57-65 | Replaced Watchtower block with `DOCKER_SOCK_MOUNT` gate (`NO_DOCKER_SOCKET=1` opt-out) |
+| `run-image.sh` | ~90 | `SELF_UPDATE_ENV` → `DOCKER_SOCK_MOUNT` in `docker run` |
+| `run-image.sh` | 94-111 | Deleted Watchtower sidecar launch block |
+| `index.html` | 479-499 | Replaced flat `.upd-bar` CSS with 21-line stepper CSS (V5 variant) |
+| `index.html` | 2969-3010 | Rewrote `UpdateBar` as 4-step stepper (Pull→Recreate→Health→Live), icons + spinner |
+| `index.html` | ~3062 | Added `updStatus` state |
+| `index.html` | 3417-3442 | `applyUpdate()` — polls `/api/update/status` for real phases, drops elapsed-time heuristics |
+| `index.html` | ~3457 | `<UpdateBar>` passes `pct`, `layer_current`, `layer_total`, `stalled` from `updStatus` |
+| `test_regression.py` | 302-320 | Added `test_api_update_status_shape` + `test_api_update_check_has_self_update_field` |
+
 | File | Line(s) | Change |
 |------|---------|--------|
+
+---
+
+## 2026-06-14 — UpdateBar 4-step stepper + /api/update/status polling
+
+| File | Line(s) | Change |
+|------|---------|--------|
+| `index.html` | 479–484 | Replaced flat `.upd-bar` CSS with stepper CSS (`.upd-bar-steps`, `.upd-bar-step`, `.upd-bar-step-icon`, `.upd-bar-conn`, `.upd-bar-right`, `.upd-bar-stalled`, etc.) |
+| `index.html` | 2969–2985 | Rewrote `UpdateBar` component as 4-step stepper (Pull → Recreate → Health → Live) with spinner on active step, ✓ on done steps, detail/stalled callouts |
+| `index.html` | ~3062 | Added `const [updStatus, setUpdStatus] = useState({})` state |
+| `index.html` | 3417–3442 | Rewrote `applyUpdate()` to poll `/api/update/status` (replaces elapsed-time heuristics), wires `setUpdStatus(s)` for pct/layer/stalled props |
+| `index.html` | ~3457 | Updated `UpdateBar` render call to pass `pct`, `layer_current`, `layer_total`, `stalled` from `updStatus` |
 
 ---
 
