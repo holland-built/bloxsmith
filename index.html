@@ -476,12 +476,26 @@ tr:hover .copy-btn{opacity:1}
 .upd-actions button.primary:hover{background:var(--amber);border-color:var(--amber)}
 .upd-spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(0,0,0,.3);border-top-color:var(--blue-dark);border-radius:50%;vertical-align:-2px;margin-right:6px;animation:spin .8s linear infinite}
 .upd-note{font-size:10px;color:var(--gray-400);margin-top:6px}
-.upd-bar{position:fixed;top:0;left:0;right:0;z-index:9999;height:36px;background:rgba(245,158,11,.15);border-bottom:1px solid rgba(245,158,11,.3);display:flex;align-items:center;gap:10px;padding:0 16px;font-size:12px;color:var(--ink)}
-.upd-bar-spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(245,158,11,.3);border-top-color:var(--amber);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
-.upd-bar-phase{font-weight:600;color:var(--amber)}
-.upd-bar-elapsed{color:var(--gray-400);font-variant-numeric:tabular-nums;margin-left:2px}
-.upd-bar-cancel{margin-left:auto;background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:14px;line-height:1;padding:4px}
+.upd-bar{position:fixed;top:0;left:0;right:0;z-index:9999;height:36px;background:rgba(245,158,11,.10);border-bottom:1px solid rgba(245,158,11,.25);display:flex;align-items:center;gap:0;padding:0 16px;font-size:11px;color:var(--ink)}
+.upd-bar-steps{display:flex;align-items:center;gap:0;flex:1}
+.upd-bar-step{display:flex;align-items:center;gap:5px;padding:0 6px}
+.upd-bar-step-icon{width:16px;text-align:center;font-size:11px;flex-shrink:0}
+.upd-bar-step-icon .upd-spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(245,158,11,.25);border-top-color:var(--amber);border-radius:50%;animation:spin .8s linear infinite}
+.upd-bar-step.done .upd-bar-step-icon{color:var(--green-text)}
+.upd-bar-step.active .upd-bar-step-icon{color:var(--amber)}
+.upd-bar-step.pending .upd-bar-step-icon{color:rgba(255,255,255,.18)}
+.upd-bar-step-name{font-size:11px;font-weight:600}
+.upd-bar-step.done .upd-bar-step-name{color:var(--green-text)}
+.upd-bar-step.active .upd-bar-step-name{color:var(--amber)}
+.upd-bar-step.pending .upd-bar-step-name{color:rgba(255,255,255,.2)}
+.upd-bar-detail{font-size:10px;color:var(--gray-400);margin-left:3px;font-variant-numeric:tabular-nums}
+.upd-bar-conn{width:16px;height:1px;background:rgba(255,255,255,.1);margin:0 4px;flex-shrink:0}
+.upd-bar-conn.done{background:rgba(16,185,129,.35)}
+.upd-bar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.upd-bar-elapsed{font-size:10px;color:var(--gray-400);font-variant-numeric:tabular-nums}
+.upd-bar-cancel{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:13px;line-height:1;padding:4px}
 .upd-bar-cancel:hover{color:var(--ink)}
+.upd-bar-stalled{font-size:10px;color:var(--amber);opacity:.7;margin-left:4px}
 @media(prefers-reduced-motion:reduce){.upd-bar-spin{animation:none;border-top-color:var(--amber)}}
 /* ── panel error state ── */
 .panel-error{text-align:center;padding:40px 24px;color:var(--gray-400);font-size:12px;line-height:1.6}
@@ -2966,20 +2980,58 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   );
 }
 
-function UpdateBar({phase, startTs, onCancel}) {
+function UpdateBar({phase, pct, layer_current, layer_total, stalled, startTs, onCancel}) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(()=>{
     const id=setInterval(()=>setElapsed(Math.floor((Date.now()-startTs)/1000)),1000);
     return ()=>clearInterval(id);
   },[startTs]);
   const fmt=s=>s<60?`${s}s`:`${Math.floor(s/60)}m ${s%60}s`;
-  const labels={triggered:'Triggered update…',pulling:'Pulling new image…',offline:'Restarting container…',reconnecting:'Coming back up…'};
+  // Map server phase → which step is active
+  const stepOf = p => p==='prepulling'?0:p==='pulled'?1:p==='recreating'?1:p==='health'?2:p==='live'?3:0;
+  const activeStep = stepOf(phase);
+  const steps = [
+    {icon:'↓', doneIcon:'✓', name:'Pull'},
+    {icon:'↺', doneIcon:'✓', name:'Recreate'},
+    {icon:'◎', doneIcon:'✓', name:'Health'},
+    {icon:'●', doneIcon:'✓', name:'Live'},
+  ];
   return (
     <div className="upd-bar">
-      <span className="upd-bar-spin"/>
-      <span className="upd-bar-phase">{labels[phase]||'Updating…'}</span>
-      <span className="upd-bar-elapsed">{fmt(elapsed)}</span>
-      <button className="upd-bar-cancel" title="Cancel tracking (update continues in background)" onClick={onCancel}>✕</button>
+      <div className="upd-bar-steps">
+        {steps.map((s,i)=>{
+          const state = i<activeStep?'done':i===activeStep?'active':'pending';
+          const isConn = i < steps.length-1;
+          return [
+            <div key={i} className={`upd-bar-step ${state}`}>
+              <span className="upd-bar-step-icon">
+                {state==='done'
+                  ? s.doneIcon
+                  : state==='active'
+                    ? <span className="upd-spin"/>
+                    : s.icon}
+              </span>
+              <span className="upd-bar-step-name">{s.name}</span>
+              {state==='active' && i===0 && pct>0 && (
+                <span className="upd-bar-detail">
+                  {pct}%{layer_total>0?` · layer ${layer_current}/${layer_total}`:''}
+                </span>
+              )}
+              {state==='active' && i===1 && (
+                <span className="upd-bar-detail">~5s</span>
+              )}
+              {state==='active' && stalled && (
+                <span className="upd-bar-stalled">still working…</span>
+              )}
+            </div>,
+            isConn && <div key={`c${i}`} className={`upd-bar-conn${state==='done'?' done':''}`}/>,
+          ];
+        })}
+      </div>
+      <div className="upd-bar-right">
+        <span className="upd-bar-elapsed">{fmt(elapsed)}</span>
+        <button className="upd-bar-cancel" title="Cancel tracking (update continues in background)" onClick={onCancel}>✕</button>
+      </div>
     </div>
   );
 }
@@ -3059,7 +3111,8 @@ function App({vault, onVaultChange}={}) {
   const [updPop, setUpdPop]         = useState(false);            // version-chip popover
   const [updBusy, setUpdBusy]       = useState(false);            // "Check now" in flight
   const [updApplying, setUpdApplying] = useState(false);          // "Update now" self-update in flight
-  const [updPhase, setUpdPhase]     = useState('');               // 'triggered'|'pulling'|'offline'|'reconnecting'
+  const [updPhase, setUpdPhase]       = useState('');
+  const [updStatus, setUpdStatus]     = useState({});
   const [updStart, setUpdStart]     = useState(0);                // Date.now() when update kicked off
   const [updInfo, setUpdInfo]       = useState(()=>(vault&&vault.update)||null);
   const prevFiringRef               = useRef(new Set());
@@ -3415,30 +3468,26 @@ function App({vault, onVaultChange}={}) {
   // dropped fetch during polling is expected, not an error.
   const verN = v => { const m=/(\d+)\.(\d+)\.(\d+)/.exec(v||''); return m?+m[3]:-1; };
   const applyUpdate = () => {
-    setUpdPop(false);                              // dismiss popover immediately
-    setUpdApplying(true); setUpdPhase('triggered'); setUpdStart(Date.now());
+    setUpdPop(false);
+    setUpdApplying(true); setUpdStart(Date.now());
     const from = verN(upd.current||(vault&&vault.version));
-    const t0=Date.now(); let stopped=false, wasOffline=false;
-    // State machine: track server liveness transitions, not just version number.
-    // pulling = server up, same version (Watchtower still downloading)
-    // offline = connection error (container going down)
-    // reconnecting = back online after offline (new container starting)
+    let stopped=false;
+    // Poll /api/update/status for real phase/progress. Container goes offline
+    // during recreate — treat fetch errors as expected (keep polling).
     const poll=()=>{ if(stopped) return;
-      fetch('/api/update/check',{cache:'no-store'}).then(r=>r.json())
-        .then(u=>{
-          if(verN(u.current)>from){ location.reload(); return; }
-          const phase=wasOffline?'reconnecting':(Date.now()-t0>8000?'pulling':'triggered');
-          wasOffline=false; setUpdPhase(phase);
-          setTimeout(poll,2000);
+      fetch('/api/update/status',{cache:'no-store'}).then(r=>r.json())
+        .then(s=>{
+          setUpdPhase(s.phase||'prepulling');
+          setUpdStatus(s);
+          if(s.phase==='live'){ location.reload(); return; }
+          if(s.phase==='error'){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); toast('Update failed: '+(s.error||'unknown'),'err'); return; }
+          setTimeout(poll,1500);
         })
-        .catch(()=>{
-          wasOffline=true; setUpdPhase('offline');
-          setTimeout(poll,2000);
-        });
+        .catch(()=>{ setTimeout(poll,2000); }); // container offline — keep polling
     };
     fetch('/api/update/apply',{method:'POST'}).then(r=>r.json()).catch(()=>null)
-      .then(res=>{ if(res&&res.ok===false){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); toast('Update failed: '+(res.error||'unknown'),'err'); } });
-    setTimeout(poll,4000);
+      .then(res=>{ if(res&&res.ok===false){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); toast('Update failed: '+(res.error||'unknown'),'err'); return; }
+        setTimeout(poll,2000); });
   };
 
   const commands = [
@@ -3454,7 +3503,7 @@ function App({vault, onVaultChange}={}) {
   const cancelUpdate=()=>{ setUpdApplying(false); setUpdPhase(''); setUpdStart(0); };
   return (
     <div style={{display:'flex',minHeight:'100vh'}} data-wall={wallMode?'on':undefined}>
-      {updApplying&&updPhase&&<UpdateBar phase={updPhase} startTs={updStart} onCancel={cancelUpdate}/>}
+      {updApplying&&updPhase&&<UpdateBar phase={updPhase} pct={updStatus.pct||0} layer_current={updStatus.layer_current||0} layer_total={updStatus.layer_total||0} stalled={!!updStatus.stalled} startTs={updStart} onCancel={cancelUpdate}/>}
 
       {/* SIDEBAR */}
       {sidebarOpen&&<div className="sidebar-backdrop" onClick={()=>setSidebarOpen(false)}/>}
