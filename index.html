@@ -1363,9 +1363,7 @@ function applyViewLS(snap){
 }
 // Refresh button with a caret that folds the auto-refresh interval + pause + countdown
 // into one compact split control. Reuses the .col-menu/.col-overlay dropdown pattern.
-function RefreshControl({autoRefresh,setAutoRefresh,refreshFrozen,setRefreshFrozen,hoverPause,arCountdown,refreshing,onRefresh}) {
-  const [open,setOpen]=React.useState(false);
-  const OPTS=[[0,'Off'],[30,'30s'],[60,'1m'],[300,'5m']];
+function RefreshControl({autoRefresh,refreshFrozen,setRefreshFrozen,hoverPause,arCountdown,refreshing,onRefresh}) {
   const cd = autoRefresh===0 ? '' : (refreshFrozen?'Paused':hoverPause?'Hover ⏸':arCountdown+'s');
   return (
     <span className="refresh-split" style={{position:'relative',display:'inline-flex'}}>
@@ -1374,28 +1372,7 @@ function RefreshControl({autoRefresh,setAutoRefresh,refreshFrozen,setRefreshFroz
         {refreshing?'Refreshing…':'Refresh'}
         {cd&&<span className="refresh-countdown" style={{marginLeft:6}}>{cd}</span>}
       </button>
-      <button className="theme-btn" aria-label="Auto-refresh options" aria-expanded={open}
-        title="Auto-refresh options" onClick={()=>setOpen(o=>!o)}>▾</button>
-      {open&&(<>
-        <div className="col-overlay" onClick={()=>setOpen(false)}/>
-        <div className="col-menu" style={{minWidth:180}} role="menu">
-          <div className="col-menu-head"><span className="col-menu-title">Auto-refresh</span></div>
-          {OPTS.map(([v,lbl])=>(
-            <div key={v} className="col-row" style={{cursor:'pointer'}} role="menuitemradio" aria-checked={autoRefresh===v}
-              onClick={()=>{setAutoRefresh(v);LS.set('ar',v);}}>
-              <span style={{width:14,flexShrink:0}}>{autoRefresh===v?'✓':''}</span><span className="col-lbl">{lbl}</span>
-            </div>
-          ))}
-          {autoRefresh>0&&(
-            <div className="col-row" style={{cursor:'pointer',borderTop:'1px solid var(--border)',marginTop:4,paddingTop:6}}
-              role="menuitem" onClick={()=>setRefreshFrozen(f=>!f)}>
-              <span style={{width:14,flexShrink:0}}>{refreshFrozen?'▶':'⏸'}</span>
-              <span className="col-lbl">{refreshFrozen?'Resume':'Pause'}</span>
-              <span className="refresh-countdown" style={{marginLeft:'auto'}}>{refreshFrozen?'Paused':arCountdown+'s'}</span>
-            </div>
-          )}
-        </div>
-      </>)}
+      {autoRefresh>0&&<button className="theme-btn refresh-pause" aria-pressed={refreshFrozen} title={refreshFrozen?'Resume auto-refresh':'Pause auto-refresh'} onClick={()=>setRefreshFrozen(f=>!f)}>{refreshFrozen?'▶':'⏸'}</button>}
     </span>
   );
 }
@@ -1440,8 +1417,11 @@ function AckMenu({id, onAck}) {
   );
 }
 
-function MoreMenu({onShare,density,setDensity,onShortcuts,wallMode,onWall,demoMode,onDemo,onReset,frozen,onFreeze}) {
+function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShortcuts,wallMode,onWall,demoMode,onDemo,onReset,frozen,onFreeze}) {
   const [open,setOpen]=React.useState(false);
+  const arOpts=[[0,'Off'],[30,'30s'],[60,'1m'],[300,'5m']];
+  const nextAr=()=>{const i=arOpts.findIndex(([v])=>v===autoRefresh);const [nv]=arOpts[(i+1)%arOpts.length];setAutoRefresh(nv);LS.set('ar',nv);};
+  const arLbl=arOpts.find(([v])=>v===autoRefresh)?.[1]||'Off';
   const row=(label,hint,fn)=>(
     <div className="col-row" style={{cursor:'pointer'}} role="menuitem" onClick={()=>{setOpen(false);fn();}}>
       <span className="col-lbl">{label}</span>{hint&&<span className="refresh-countdown" style={{marginLeft:'auto'}}>{hint}</span>}
@@ -1452,6 +1432,10 @@ function MoreMenu({onShare,density,setDensity,onShortcuts,wallMode,onWall,demoMo
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" style={{minWidth:210}} role="menu">
+          <div className="col-row" style={{cursor:'pointer'}} role="menuitem" onClick={nextAr}>
+            <span className="col-lbl">Auto-refresh</span>
+            <span style={{background:'var(--tint)',border:'1px solid var(--border)',borderRadius:4,padding:'1px 6px',fontSize:10,color:'var(--gray-200)',marginLeft:'auto'}}>{arLbl} ▾</span>
+          </div>
           {row('Copy link to this view','◳',onShare)}
           {row('Row density',density==='compact'?'Compact':'Comfortable',()=>setDensity(d=>d==='compact'?'comfortable':'compact'))}
           {onWall&&row('Wall display mode',wallMode?'On':'Off',onWall)}
@@ -3642,7 +3626,7 @@ function App({vault, onVaultChange}={}) {
           </div>
           <div className="topbar-controls">
             <div className="topbar-group">
-              <RefreshControl autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh}
+              <RefreshControl autoRefresh={autoRefresh}
                 refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen} hoverPause={hoverPause}
                 arCountdown={arCountdown} refreshing={refreshing} onRefresh={()=>load(true)}/>
               <button className={`chat-toggle-btn${chatOpen?' on':''}`} onClick={()=>setChatOpen(o=>!o)}>
@@ -3652,7 +3636,7 @@ function App({vault, onVaultChange}={}) {
                 title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
               <PresetMenu section={section}/>
               <button className="theme-btn" onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
-              <MoreMenu onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
+              <MoreMenu autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
             </div>
           </div>
         </div>
