@@ -788,8 +788,15 @@ class FrontendStructureTests(unittest.TestCase):
     def test_auto_refresh_interval(self):
         self.assertContains("setInterval", "setInterval for auto-refresh missing")
 
-    def test_auto_refresh_selector(self):
-        self.assertContains("auto-refresh-sel", "auto-refresh selector CSS missing")
+    def test_auto_refresh_in_more_menu(self):
+        import re
+        m = re.search(r'function MoreMenu\(\{([^}]+)\}', self.html)
+        self.assertIsNotNone(m, "MoreMenu function signature not found")
+        self.assertIn("autoRefresh", m.group(1), "MoreMenu must include autoRefresh prop")
+
+    def test_auto_refresh_pill_cycles_in_more_menu(self):
+        # MoreMenu body must contain the arOpts cycling array and render the active label
+        self.assertContains("arOpts", "arOpts cycling array missing from MoreMenu")
 
     def test_auto_refresh_persisted(self):
         self.assertContains("LS.set('ar'", "autoRefresh not persisted to localStorage")
