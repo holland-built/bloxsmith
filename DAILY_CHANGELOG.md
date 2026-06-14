@@ -3,6 +3,19 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-14 — Move auto-refresh interval picker into ⋯ menu
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~1366 | `RefreshControl`: removed `setAutoRefresh` prop, `open` state, `OPTS` array, caret button, dropdown panel |
+| `index.html` | ~1395 | `RefreshControl`: added standalone ⏸/▶ pause button (shown only when `autoRefresh>0`) |
+| `index.html` | ~1443 | `MoreMenu`: added `autoRefresh`, `setAutoRefresh` props; added `arOpts`, `nextAr`, `arLbl` helpers |
+| `index.html` | ~1454 | `MoreMenu`: added cycling-pill "Auto-refresh · {value} ▾" row as first menu item |
+| `index.html` | ~3645 | `<RefreshControl>` call: removed `setAutoRefresh` prop |
+| `index.html` | ~3655 | `<MoreMenu>` call: added `autoRefresh` + `setAutoRefresh` props |
+| `test_regression.py` | ~791 | Replaced `test_auto_refresh_selector` (checked removed `.auto-refresh-sel` class) with `test_auto_refresh_in_more_menu` (checks MoreMenu signature) |
+| `test_regression.py` | ~796 | Added `test_auto_refresh_pill_cycles_in_more_menu` (checks `arOpts` present) |
+
 ## 2026-06-14 — Docker SDK self-update (drop Watchtower)
 
 | File | Line(s) | Change |
