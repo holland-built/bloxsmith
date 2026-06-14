@@ -3,6 +3,16 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-14 — Alert rules editor (inline-edit + default rules)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~2626 | Added `DEFAULT_ALERT_RULES` const (3 seeded rules: offline_hosts, critical_subnets, audit_failures ≥ 1) |
+| `index.html` | ~3084 | Root `alertRules` useState fallback `[]` → `DEFAULT_ALERT_RULES` |
+| `index.html` | ~2649 | `AlertsPanel`: added `editId`, `editVals` state; updated `del` to clear editId; added `startEdit`, `saveEdit`, `cancelEdit` helpers |
+| `index.html` | ~2681 | Table row: conditional render — edit mode shows inline selects + input with teal left-border + hover bg (v2); read mode shows ✎ button before ✕ |
+| `test_regression.py` | ~623 | Added 4 new tests: `test_default_alert_rules_const`, `test_default_alert_rules_seeded`, `test_alert_rules_inline_edit_state`, `test_alert_rules_edit_button` |
+
 ## 2026-06-14 — Move auto-refresh interval picker into ⋯ menu
 
 | File | Line(s) | Change |

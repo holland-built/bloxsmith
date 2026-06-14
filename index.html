@@ -2623,6 +2623,11 @@ const ALERT_OPS = {'>=':(a,b)=>a>=b, '>':(a,b)=>a>b, '<=':(a,b)=>a<=b, '<':(a,b)
 // which section a firing alert metric points at (drives the nav badge)
 const ALERT_SECTION = {offline_hosts:'hosts', critical_subnets:'ipam', ttl_anomalies:'dns', audit_failures:'audit', active_feeds:'threats', total_hosts:'hosts'};
 const metricLabel = k => (ALERT_METRICS.find(m=>m.key===k)||{}).label || k;
+const DEFAULT_ALERT_RULES = [
+  {id:'def-offline',  metric:'offline_hosts',    op:'>=', threshold:1},
+  {id:'def-critical', metric:'critical_subnets', op:'>=', threshold:1},
+  {id:'def-audit',    metric:'audit_failures',   op:'>=', threshold:1},
+];
 function evalAlerts(data, rules){
   if(!data) return [];
   return rules.map(r=>{
@@ -2644,8 +2649,13 @@ function AlertsPanel({data, rules, setRules}){
   const [metric,setMetric]=useState(ALERT_METRICS[0].key);
   const [op,setOp]=useState('>=');
   const [thr,setThr]=useState(1);
+  const [editId,setEditId]=useState(null);
+  const [editVals,setEditVals]=useState({});
   const add=()=>{ const n=[...rules,{id:Date.now(),metric,op,threshold:Number(thr)}]; setRules(n); LS.set('noc.alertRules',n); };
-  const del=id=>{ const n=rules.filter(r=>r.id!==id); setRules(n); LS.set('noc.alertRules',n); };
+  const del=id=>{ const n=rules.filter(r=>r.id!==id); setRules(n); LS.set('noc.alertRules',n); if(editId===id) setEditId(null); };
+  const startEdit=r=>{ setEditId(r.id); setEditVals({metric:r.metric,op:r.op,threshold:r.threshold}); };
+  const saveEdit=id=>{ const n=rules.map(r=>r.id===id?{...r,...editVals,threshold:Number(editVals.threshold)}:r); setRules(n); LS.set('noc.alertRules',n); setEditId(null); };
+  const cancelEdit=()=>setEditId(null);
   const evald=evalAlerts(data,rules);
   const inStyle={background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--gray-200)',padding:'6px 8px'};
   return (
@@ -2668,12 +2678,19 @@ function AlertsPanel({data, rules, setRules}){
               <th style={{padding:'6px 8px'}}>Status</th><th style={{padding:'6px 8px'}}>Metric</th>
               <th style={{padding:'6px 8px'}}>Condition</th><th style={{padding:'6px 8px'}}>Current</th><th></th></tr></thead>
             <tbody>{evald.map(r=>(
-              <tr key={r.id} style={{borderTop:'1px solid var(--border)'}}>
+              <tr key={r.id} style={{borderTop:'1px solid var(--border)',borderLeft:editId===r.id?'2px solid var(--teal)':'2px solid transparent',background:editId===r.id?'var(--hover)':''}}>
                 <td style={{padding:'6px 8px'}}>{r.firing?<span className="badge b-red">Firing</span>:<span className="badge b-green">OK</span>}</td>
-                <td style={{padding:'6px 8px'}}>{metricLabel(r.metric)}</td>
-                <td style={{padding:'6px 8px'}}>{r.op} {r.threshold}</td>
-                <td style={{padding:'6px 8px',fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.value}</td>
-                <td style={{padding:'6px 8px'}}><button className="collapse-btn" style={{margin:0}} onClick={()=>del(r.id)} title="Delete rule">✕</button></td>
+                {editId===r.id ? (<>
+                  <td style={{padding:'4px 6px'}}><select className="viz-sel" value={editVals.metric} onChange={e=>setEditVals(v=>({...v,metric:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}}>{ALERT_METRICS.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}</select></td>
+                  <td style={{padding:'4px 6px',display:'flex',gap:4,alignItems:'center'}}><select className="viz-sel" value={editVals.op} onChange={e=>setEditVals(v=>({...v,op:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}}>{Object.keys(ALERT_OPS).map(o=><option key={o} value={o}>{o}</option>)}</select><input type="number" value={editVals.threshold} onChange={e=>setEditVals(v=>({...v,threshold:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}} style={{width:60,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--gray-200)',padding:'3px 6px',fontSize:11}}/></td>
+                  <td style={{padding:'6px 8px',fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.value}</td>
+                  <td style={{padding:'6px 8px',whiteSpace:'nowrap'}}><button className="collapse-btn" style={{margin:0}} onClick={()=>del(r.id)} title="Delete rule">✕</button></td>
+                </>) : (<>
+                  <td style={{padding:'6px 8px'}}>{metricLabel(r.metric)}</td>
+                  <td style={{padding:'6px 8px'}}>{r.op} {r.threshold}</td>
+                  <td style={{padding:'6px 8px',fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.value}</td>
+                  <td style={{padding:'6px 8px',whiteSpace:'nowrap'}}><button className="collapse-btn" style={{margin:0,color:'var(--gray-500)'}} onClick={()=>startEdit(r)} title="Edit rule">✎</button><button className="collapse-btn" style={{margin:0}} onClick={()=>del(r.id)} title="Delete rule">✕</button></td>
+                </>)}
               </tr>
             ))}</tbody>
           </table></div>}
@@ -3076,7 +3093,7 @@ function App({vault, onVaultChange}={}) {
 
   const getViz = (id, def='table') => vizMode[id] || def;
   const setViz = (id, v) => { const n={...vizMode,[id]:v}; setVizMode(n); LS.set('noc.viz',n); };
-  const [alertRules, setAlertRules] = useState(()=>LS.get('noc.alertRules',[]));
+  const [alertRules, setAlertRules] = useState(()=>LS.get('noc.alertRules', DEFAULT_ALERT_RULES));
   const [deltas, setDeltas] = useState(null);
   const [demoMode, setDemoMode]       = useState(()=>LS.get('noc.demoMode',false));
   const [demoBannerDismissed, setDemoBannerDismissed] = useState(false);

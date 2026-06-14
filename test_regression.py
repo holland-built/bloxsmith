@@ -446,6 +446,33 @@ class FrontendStructureTests(unittest.TestCase):
     def test_account_switch_feedback(self):
         self.assertContains("Switched to", "account switch toast missing")
 
+    # ── header-update-ux ─────────────────────────────────────────────────────
+
+    def test_update_bar_removed(self):
+        """Full-width UpdateBar strip replaced by inline ver-badge expansion."""
+        self.assertNotIn("function UpdateBar", self.html,
+                         "UpdateBar component must be removed")
+        self.assertNotIn("upd-bar-steps", self.html,
+                         "upd-bar-steps CSS class must be removed")
+
+    def test_friendly_step_names(self):
+        """Step names use plain English, not Docker jargon."""
+        self.assertContains("Downloading", "Friendly step name 'Downloading' missing")
+        self.assertContains("Restarting",  "Friendly step name 'Restarting' missing")
+        self.assertContains("Checking",    "Friendly step name 'Checking' missing")
+        self.assertNotIn("'Recreate'", self.html,
+                         "'Recreate' Docker jargon must not appear as step name")
+
+    def test_no_bar_at_top_copy(self):
+        """Popover copy must not reference the old top-strip bar."""
+        self.assertNotIn("bar at the top", self.html,
+                         "Stale 'bar at the top' popover copy must be removed")
+
+    def test_ver_badge_update_state(self):
+        """ver-badge must render inline update progress (spinner + step via updApplying)."""
+        self.assertContains("updApplying", "updApplying state missing")
+        self.assertContains("ver-badge", "ver-badge chip missing")
+
     # ── Wave F polish ─────────────────────────────────────────────────────────
 
     def test_skeleton_loaders(self):
@@ -619,6 +646,24 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("topbar-controls")
         self.assertContains("topbar-group")
         self.assertContains("topbar-divider")
+
+    # ── alert rules editor ────────────────────────────────────────────────────
+
+    def test_default_alert_rules_const(self):
+        self.assertContains("DEFAULT_ALERT_RULES", "DEFAULT_ALERT_RULES constant missing")
+
+    def test_default_alert_rules_seeded(self):
+        self.assertContains("'noc.alertRules', DEFAULT_ALERT_RULES", "root state must seed with DEFAULT_ALERT_RULES")
+
+    def test_alert_rules_inline_edit_state(self):
+        import re
+        m = re.search(r'function AlertsPanel\(', self.html)
+        self.assertIsNotNone(m, "AlertsPanel missing")
+        panel_src = self.html[m.start():m.start()+3000]
+        self.assertIn("editId", panel_src, "editId state missing from AlertsPanel")
+
+    def test_alert_rules_edit_button(self):
+        self.assertContains("setEditId(r.id)", "edit trigger missing from row")
 
     # ── alerts: inline badges + banner ────────────────────────────────────────
 
