@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Alert Rules Editor — All Variants</title>
+<style>
+:root {
+  --blue-deep:#262B36; --blue-mid:#171A21; --blue-dark:#10131A;
+  --teal:#D6D2CB; --teal-bright:#EBE8E2;
+  --surface:#1B1F28; --surface-2:#232834; --surface-3:#2E3440;
+  --border:rgba(255,255,255,0.09);
+  --gray-100:#ECEAE7; --gray-200:#C5C1BB; --gray-400:#8F949C; --gray-500:#82868E; --gray-600:#5C5954;
+  --red:#EF4444; --amber:#F59E0B; --green:#10B981;
+  --ink:#F1F2F4;
+  --hover:rgba(255,255,255,.045);
+  --hover-strong:rgba(255,255,255,.1);
+  --tint:rgba(255,255,255,.11);
+  --row-border:rgba(255,255,255,.07);
+  --sev-red-t:#FCA5A5; --sev-green-t:#6EE7B7;
+  --badge-red-bg:rgba(239,68,68,.15); --badge-red-bd:rgba(239,68,68,.3);
+  --badge-green-bg:rgba(16,185,129,.15); --badge-green-bd:rgba(16,185,129,.3);
+  --badge-amber-bg:rgba(245,158,11,.15); --badge-amber-bd:rgba(245,158,11,.3); --sev-amber-t:#FCD34D;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:var(--blue-dark);
+  padding:32px;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  color:var(--ink);
+  min-width:900px;
+}
+h1{
+  font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--gray-400);margin-bottom:4px;
+}
+.page-desc{font-size:11px;color:var(--gray-600);margin-bottom:28px;}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:32px;
+}
+.variant-cell{display:flex;flex-direction:column;gap:10px;}
+.variant-label{
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--gray-400);
+}
+.variant-label strong{color:var(--gray-200);margin-right:4px;}
+/* === Shared card styles === */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;}
+.card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:14px;display:flex;align-items:center;gap:7px;}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0;}
+.add-row{display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);padding:6px 8px;border-bottom:1px solid var(--border);}
+.tbl td{padding:7px 8px;font-size:11px;border-bottom:1px solid var(--row-border);color:var(--gray-200);}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:600;letter-spacing:.04em;}
+.b-red{background:var(--badge-red-bg);border:1px solid var(--badge-red-bd);color:var(--sev-red-t);}
+.b-green{background:var(--badge-green-bg);border:1px solid var(--badge-green-bd);color:var(--sev-green-t);}
+.b-amber{background:var(--badge-amber-bg);border:1px solid var(--badge-amber-bd);color:var(--sev-amber-t);}
+.viz-sel{background:var(--surface);border:1px solid var(--border);color:var(--gray-200);font-size:10px;border-radius:5px;padding:2px 5px;}
+.lookup-btn{background:var(--teal);border:none;border-radius:6px;color:var(--blue-dark);font-size:10px;font-weight:700;padding:4px 10px;cursor:pointer;}
+.action-btn{background:none;border:none;cursor:pointer;font-size:12px;padding:1px 4px;color:var(--gray-400);}
+/* standard edit inputs */
+.edit-sel{background:var(--surface-3);border:1px solid var(--border);color:var(--gray-200);font-size:11px;border-radius:4px;padding:2px 5px;width:100%;}
+.edit-num{background:var(--surface-3);border:1px solid var(--border);color:var(--gray-200);font-size:11px;border-radius:4px;padding:2px 5px;width:52px;}
+.save-btn{background:var(--teal);border:none;border-radius:4px;color:var(--blue-dark);font-size:10px;font-weight:700;padding:2px 7px;cursor:pointer;}
+.cancel-btn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--gray-400);font-size:10px;padding:2px 6px;cursor:pointer;margin-left:3px;}
+
+/* === v2: teal left-border + hover bg === */
+.v2-editing td{background:var(--hover);}
+.v2-editing td:first-child{box-shadow:inset 2px 0 0 0 var(--teal);padding-left:6px;}
+
+/* === v3: surface-2 elevated bg === */
+.v3-editing td{background:var(--surface-2);}
+
+/* === v4: ✎ hidden until row hover === */
+.edit-reveal{opacity:0;transition:opacity .15s;}
+tr:hover .edit-reveal{opacity:1;}
+.tbl tr:hover td{background:var(--hover);}
+
+/* === v5: amber editing badge === */
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.edit-dot{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--amber);margin-right:4px;animation:pulse 1.4s ease-in-out infinite;}
+
+/* === v6: amber-outlined inputs === */
+.edit-sel-amber{
+  background:var(--surface-3);border:1px solid var(--amber);
+  outline:1px solid rgba(245,158,11,.25);
+  color:var(--gray-200);font-size:11px;border-radius:4px;padding:2px 5px;width:100%;
+}
+.edit-num-amber{
+  background:var(--surface-3);border:1px solid var(--amber);
+  outline:1px solid rgba(245,158,11,.25);
+  color:var(--gray-200);font-size:11px;border-radius:4px;padding:2px 5px;width:52px;
+}
+</style>
+</head>
+<body>
+<h1>Alert Rules Editor — Inline Edit Variants</h1>
+<p class="page-desc">All 6 variants side-by-side. Row 2 (Subnets ≥90%, Firing) shown in edit mode in each variant.</p>
+
+<div class="grid">
+
+  <!-- ==================== V1 ==================== -->
+  <div class="variant-cell">
+    <div class="variant-label"><strong>v1</strong> Plain inline, no row highlight</div>
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>Alert Rules</div>
+      <div class="add-row">
+        <select class="viz-sel"><option>Offline / error hosts</option><option>Subnets ≥90%</option><option>Failed audit events</option></select>
+        <select class="viz-sel"><option>≥</option><option>&gt;</option><option>&lt;</option><option>≤</option></select>
+        <input type="number" class="viz-sel" value="1" style="width:46px;">
+        <button class="lookup-btn">+ Add</button>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Status</th><th>Metric</th><th>Cond.</th><th>Now</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Offline hosts</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+          <tr>
+            <td><span class="badge b-red">Firing</span></td>
+            <td><select class="edit-sel"><option>Offline hosts</option><option selected>Subnets ≥90%</option><option>Failed audit</option></select></td>
+            <td><div style="display:flex;gap:3px;align-items:center;"><select class="edit-sel" style="width:40px;"><option selected>≥</option></select><input type="number" class="edit-num" value="1"></div></td>
+            <td>3</td>
+            <td style="white-space:nowrap;"><button class="save-btn">Save</button><button class="cancel-btn">✕</button></td>
+          </tr>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Failed audit</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ==================== V2 ==================== -->
+  <div class="variant-cell">
+    <div class="variant-label"><strong>v2</strong> Teal left-border + subtle bg tint</div>
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>Alert Rules</div>
+      <div class="add-row">
+        <select class="viz-sel"><option>Offline / error hosts</option><option>Subnets ≥90%</option><option>Failed audit events</option></select>
+        <select class="viz-sel"><option>≥</option><option>&gt;</option><option>&lt;</option><option>≤</option></select>
+        <input type="number" class="viz-sel" value="1" style="width:46px;">
+        <button class="lookup-btn">+ Add</button>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Status</th><th>Metric</th><th>Cond.</th><th>Now</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Offline hosts</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+          <tr class="v2-editing">
+            <td><span class="badge b-red">Firing</span></td>
+            <td><select class="edit-sel"><option>Offline hosts</option><option selected>Subnets ≥90%</option><option>Failed audit</option></select></td>
+            <td><div style="display:flex;gap:3px;align-items:center;"><select class="edit-sel" style="width:40px;"><option selected>≥</option></select><input type="number" class="edit-num" value="1"></div></td>
+            <td>3</td>
+            <td style="white-space:nowrap;"><button class="save-btn">Save</button><button class="cancel-btn">✕</button></td>
+          </tr>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Failed audit</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ==================== V3 ==================== -->
+  <div class="variant-cell">
+    <div class="variant-label"><strong>v3</strong> surface-2 bg tint (elevated, clean)</div>
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>Alert Rules</div>
+      <div class="add-row">
+        <select class="viz-sel"><option>Offline / error hosts</option><option>Subnets ≥90%</option><option>Failed audit events</option></select>
+        <select class="viz-sel"><option>≥</option><option>&gt;</option><option>&lt;</option><option>≤</option></select>
+        <input type="number" class="viz-sel" value="1" style="width:46px;">
+        <button class="lookup-btn">+ Add</button>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Status</th><th>Metric</th><th>Cond.</th><th>Now</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Offline hosts</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+          <tr class="v3-editing">
+            <td><span class="badge b-red">Firing</span></td>
+            <td><select class="edit-sel"><option>Offline hosts</option><option selected>Subnets ≥90%</option><option>Failed audit</option></select></td>
+            <td><div style="display:flex;gap:3px;align-items:center;"><select class="edit-sel" style="width:40px;"><option selected>≥</option></select><input type="number" class="edit-num" value="1"></div></td>
+            <td>3</td>
+            <td style="white-space:nowrap;"><button class="save-btn">Save</button><button class="cancel-btn">✕</button></td>
+          </tr>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Failed audit</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ==================== V4 ==================== -->
+  <div class="variant-cell">
+    <div class="variant-label"><strong>v4</strong> ✎ hidden until row hover</div>
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>Alert Rules</div>
+      <div class="add-row">
+        <select class="viz-sel"><option>Offline / error hosts</option><option>Subnets ≥90%</option><option>Failed audit events</option></select>
+        <select class="viz-sel"><option>≥</option><option>&gt;</option><option>&lt;</option><option>≤</option></select>
+        <input type="number" class="viz-sel" value="1" style="width:46px;">
+        <button class="lookup-btn">+ Add</button>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Status</th><th>Metric</th><th>Cond.</th><th>Now</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Offline hosts</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn edit-reveal">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+          <tr>
+            <td><span class="badge b-red">Firing</span></td>
+            <td><select class="edit-sel"><option>Offline hosts</option><option selected>Subnets ≥90%</option><option>Failed audit</option></select></td>
+            <td><div style="display:flex;gap:3px;align-items:center;"><select class="edit-sel" style="width:40px;"><option selected>≥</option></select><input type="number" class="edit-num" value="1"></div></td>
+            <td>3</td>
+            <td style="white-space:nowrap;"><button class="save-btn">Save</button><button class="cancel-btn">✕</button></td>
+          </tr>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Failed audit</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn edit-reveal">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ==================== V5 ==================== -->
+  <div class="variant-cell">
+    <div class="variant-label"><strong>v5</strong> Amber "Editing…" badge in status cell</div>
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>Alert Rules</div>
+      <div class="add-row">
+        <select class="viz-sel"><option>Offline / error hosts</option><option>Subnets ≥90%</option><option>Failed audit events</option></select>
+        <select class="viz-sel"><option>≥</option><option>&gt;</option><option>&lt;</option><option>≤</option></select>
+        <input type="number" class="viz-sel" value="1" style="width:46px;">
+        <button class="lookup-btn">+ Add</button>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Status</th><th>Metric</th><th>Cond.</th><th>Now</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Offline hosts</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+          <tr>
+            <td>
+              <span class="badge b-amber" style="display:inline-flex;align-items:center;">
+                <span class="edit-dot"></span>Editing
+              </span>
+            </td>
+            <td><select class="edit-sel"><option>Offline hosts</option><option selected>Subnets ≥90%</option><option>Failed audit</option></select></td>
+            <td><div style="display:flex;gap:3px;align-items:center;"><select class="edit-sel" style="width:40px;"><option selected>≥</option></select><input type="number" class="edit-num" value="1"></div></td>
+            <td>3</td>
+            <td style="white-space:nowrap;"><button class="save-btn">Save</button><button class="cancel-btn">✕</button></td>
+          </tr>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Failed audit</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ==================== V6 ==================== -->
+  <div class="variant-cell">
+    <div class="variant-label"><strong>v6</strong> Amber outline on each editable input</div>
+    <div class="card">
+      <div class="card-title"><span class="dot"></span>Alert Rules</div>
+      <div class="add-row">
+        <select class="viz-sel"><option>Offline / error hosts</option><option>Subnets ≥90%</option><option>Failed audit events</option></select>
+        <select class="viz-sel"><option>≥</option><option>&gt;</option><option>&lt;</option><option>≤</option></select>
+        <input type="number" class="viz-sel" value="1" style="width:46px;">
+        <button class="lookup-btn">+ Add</button>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Status</th><th>Metric</th><th>Cond.</th><th>Now</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Offline hosts</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+          <tr>
+            <td><span class="badge b-red">Firing</span></td>
+            <td><select class="edit-sel-amber"><option>Offline hosts</option><option selected>Subnets ≥90%</option><option>Failed audit</option></select></td>
+            <td><div style="display:flex;gap:3px;align-items:center;"><select class="edit-sel-amber" style="width:40px;"><option selected>≥</option></select><input type="number" class="edit-num-amber" value="1"></div></td>
+            <td>3</td>
+            <td style="white-space:nowrap;"><button class="save-btn">Save</button><button class="cancel-btn">✕</button></td>
+          </tr>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>Failed audit</td><td>≥ 1</td><td>0</td>
+            <td style="white-space:nowrap;"><button class="action-btn">✎</button><button class="action-btn" style="color:var(--gray-500);">✕</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /grid -->
+</body></html>
