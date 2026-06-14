@@ -9,9 +9,9 @@
 # Copy .env.example to .env to set BIND/PORT/token/auth.
 
 services:
-  infoblox-noc:
+  infoblox-mcp:
     image: ghcr.io/holland-built/infoblox-noc-dashboard:latest
-    container_name: infoblox-noc
+    container_name: infoblox-mcp
     restart: unless-stopped
     ports:
       - "${BIND:-127.0.0.1}:${PORT:-8080}:8080"

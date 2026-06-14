@@ -23,7 +23,7 @@ No source checkout, no build — just Docker. Every push to `master` and every
 release via [CI](../.github/workflows/docker-publish.yml).
 
 ```bash
-docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 \
+docker run -d --name infoblox-mcp -p 127.0.0.1:8080:8080 \
   -v noc-vault:/vault \
   --restart unless-stopped \
   ghcr.io/holland-built/infoblox-noc-dashboard:latest
@@ -134,17 +134,17 @@ The API key is **never baked into the image** — injected at runtime as an env 
 
 ```bash
 cp .env.example .env        # then edit .env with your keys
-docker build -t infoblox-noc .
-docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 --env-file .env -e HOST=0.0.0.0 \
-  --restart unless-stopped infoblox-noc   # loopback only; drop 127.0.0.1: to expose on the LAN
+docker build -t infoblox-mcp .
+docker run -d --name infoblox-mcp -p 127.0.0.1:8080:8080 --env-file .env -e HOST=0.0.0.0 \
+  --restart unless-stopped infoblox-mcp   # loopback only; drop 127.0.0.1: to expose on the LAN
 ```
 
 ### Manage
 
 ```bash
-docker logs -f infoblox-noc     # watch logs
-docker rm -f infoblox-noc       # stop + remove
-docker start infoblox-noc       # restart existing
+docker logs -f infoblox-mcp     # watch logs
+docker rm -f infoblox-mcp       # stop + remove
+docker start infoblox-mcp       # restart existing
 PORT=8090 ./run.sh              # run on a different port
 ```
 
@@ -266,7 +266,7 @@ Supply it at boot and the dashboard comes up live with no browser step:
 ```bash
 # Preferred: a mounted secret file (kept out of `docker inspect` / process env)
 printf '%s' 'your-vault-passphrase' > ~/.noc-vault-pass && chmod 600 ~/.noc-vault-pass
-docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 \
+docker run -d --name infoblox-mcp -p 127.0.0.1:8080:8080 \
   -v noc-vault:/vault \
   -v ~/.noc-vault-pass:/run/secrets/vault_pass:ro \
   -e VAULT_PASSPHRASE_FILE=/run/secrets/vault_pass \

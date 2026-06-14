@@ -4,8 +4,8 @@
 # The key is NEVER baked into the image; it is passed as a runtime env var.
 set -euo pipefail
 
-IMAGE="infoblox-noc"
-NAME="infoblox-noc"
+IMAGE="infoblox-mcp"
+NAME="infoblox-mcp"
 PORT="${PORT:-8080}"
 BIND="${BIND:-127.0.0.1}"   # host interface to publish on; loopback by default. Set BIND=0.0.0.0 to expose on the LAN.
 VOLUME="${VOLUME:-noc-vault}"   # named volume holding the encrypted vault

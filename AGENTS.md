@@ -51,7 +51,7 @@ Do NOT read files not required by the task.
 ## Hotpatch (fast test without Docker rebuild)
 
 ```bash
-docker cp index.html infoblox-noc:/app/index.html && docker restart infoblox-noc
+docker cp index.html infoblox-mcp:/app/index.html && docker restart infoblox-mcp
 sleep 4 && open http://localhost:8080
 ```
 

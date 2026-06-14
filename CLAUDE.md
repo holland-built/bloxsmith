@@ -27,7 +27,7 @@ Format: markdown table with columns `File`, `Line(s)`, `Change`. Group under a `
 ## Verify after every change
 
 Every code change ends with evidence before "done":
-- Hotpatch container: `docker cp index.html infoblox-noc:/app/index.html && docker restart infoblox-noc`
+- Hotpatch container: `docker cp index.html infoblox-mcp:/app/index.html && docker restart infoblox-mcp`
 - Screenshot: headless Chrome `--screenshot=_proof.png "http://localhost:8080"`
 - Or run tests: `python -m pytest test_regression.py -v`
 - If verify is skipped, the task is NOT complete.

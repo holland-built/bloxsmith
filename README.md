@@ -63,7 +63,7 @@ docker compose pull && docker compose up -d
 
 ```bash
 # Single key, skip the vault:
-docker run -d --name infoblox-noc -p 127.0.0.1:8080:8080 \
+docker run -d --name infoblox-mcp -p 127.0.0.1:8080:8080 \
   -e INFOBLOX_API_KEY="Token <key>" ghcr.io/holland-built/infoblox-noc-dashboard:latest
 
 # Compose (always-on servers / Proxmox):

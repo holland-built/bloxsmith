@@ -34,7 +34,7 @@ curl -s http://localhost:8080/api/notices | python3 -m json.tool | head -40
 **After production code (hotpatch + verify):**
 ```bash
 # 1. Patch container
-docker cp index.html infoblox-noc:/app/index.html && docker restart infoblox-noc
+docker cp index.html infoblox-mcp:/app/index.html && docker restart infoblox-mcp
 
 # 2. Screenshot (headless — renders light theme; verify dark by construction)
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
