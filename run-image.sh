@@ -10,7 +10,7 @@
 set -euo pipefail
 
 IMAGE="${IMAGE:-ghcr.io/holland-built/infoblox-noc-dashboard:latest}"
-NAME="infoblox-noc"
+NAME="infoblox-mcp"
 PORT="${PORT:-8080}"
 BIND="${BIND:-127.0.0.1}"      # loopback by default; set BIND=0.0.0.0 to expose on the LAN
 [[ "${LAN:-0}" == "1" ]] && BIND=0.0.0.0   # LAN=1 shortcut: expose on the local network
