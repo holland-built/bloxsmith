@@ -137,8 +137,8 @@ body.chat-open{padding-right:340px}
 .bento>.drag-card>.card>.card-title::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--border)}
 /* ── tables FIT the card: fixed columns divide the width, no sideways scroll ── */
 .tbl{table-layout:fixed;width:100%}
-/* headers stay single-line; cells wrap instead of truncating */
-.tbl th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* headers wrap; cells also wrap; tooltip reveals full label on hover */
+.tbl th{overflow:hidden;text-overflow:ellipsis;white-space:normal}
 .tbl td{overflow-wrap:anywhere;word-break:break-word}
 /* badges size to their full content */
 .tbl td .badge{display:inline-block;vertical-align:middle}
@@ -1355,7 +1355,8 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
           <th key={c.key} className={`${c.expanded?'exp ':''}${c.nosort?'':'sort-th'}`}
             aria-sort={!c.nosort?(sk===c.key?(sd==='asc'?'ascending':'descending'):'none'):undefined}
             onClick={c.nosort?undefined:()=>toggle(c.key)}
-            style={{whiteSpace:'nowrap',...(c.width&&!c.expanded?{width:c.width}:{}),...(c.align?{textAlign:c.align}:{})}}>
+            title={c.label}
+            style={{...(c.width&&!c.expanded?{width:c.width}:{}),...(c.align?{textAlign:c.align}:{})}}>
             {c.label}{!c.nosort&&<span className="sort-ind">{sk===c.key?(sd==='asc'?'▲':'▼'):'⇅'}</span>}
           </th>
         ))}</tr></thead>}>
@@ -1780,7 +1781,7 @@ function WidgetViz({data=[], viz='table', columns=[], labelKey, valueKey, rowCol
   if(persistId) return <WidgetVizTable data={data} columns={cols} defaultRows={defaultRows} persistId={persistId}/>;
   return (
     <ShowMoreTable rows={data} defaultRows={defaultRows}
-      tableHead={<thead><tr>{cols.map(c=><th key={c.key} style={{whiteSpace:'nowrap'}}>{c.label}</th>)}</tr></thead>}>
+      tableHead={<thead><tr>{cols.map(c=><th key={c.key} title={c.label}>{c.label}</th>)}</tr></thead>}>
       {visible=>visible.map((r,i)=>(
         <tr key={r.id||i}>
           {cols.map(c=>{
