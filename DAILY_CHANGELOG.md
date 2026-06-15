@@ -3,6 +3,13 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — self-update-ports-tuple-fix: restore (ip,port) tuples in helper after JSON round-trip
+
+| File | Line(s) | Change |
+|---|---|---|
+| `server.py` | ~243–249 | `ports_map`: store `[ip, port]` lists (JSON-safe); helper converts back to tuples via `tuple(b)` |
+| `server.py` | ~267 | Helper script: `p={k:[tuple(b) if isinstance(b,list) else b ...]}` before calling `containers.run` |
+
 ## 2026-06-15 — self-update-ports-fix: ip:port string format + named helper container
 
 | File | Line(s) | Change |

@@ -238,13 +238,14 @@ def apply_self_update():
             networks = list((attrs.get("NetworkSettings") or {})
                             .get("Networks", {}).keys())
             import json as _json, os as _os
-            # Preserve HostIp via "ip:port" strings — docker-py splits these correctly,
-            # and the format survives JSON round-trip into the helper container.
+            # Store as [ip, port] lists — JSON round-trips tuples to lists.
+            # Helper script converts them back to tuples before calling docker-py.
             ports_map = {}
             for _k, _bindings in ports.items():
                 if _bindings:
                     ports_map[_k] = [
-                        f"{b['HostIp']}:{b['HostPort']}" if b.get("HostIp") else int(b["HostPort"])
+                        [b.get("HostIp") or "", b["HostPort"]] if b.get("HostIp")
+                        else int(b["HostPort"])
                         for b in _bindings
                     ]
             tmp_name = name + "-retiring"
@@ -264,9 +265,12 @@ def apply_self_update():
                 "time.sleep(3)\n"
                 "try: c.containers.get(cfg['old']).remove(force=True)\n"
                 "except Exception: pass\n"
+                # JSON gives lists for tuples; docker-py needs tuples for (ip,port) bindings
+                "p={k:[tuple(b) if isinstance(b,list) else b for b in v]"
+                " for k,v in cfg['ports'].items()}\n"
                 "kw={'network':cfg['net']} if cfg.get('net') else {}\n"
                 "c.containers.run(cfg['img'],detach=True,name=cfg['name'],"
-                "environment=cfg['env'],ports=cfg['ports'],volumes=cfg['vols'],"
+                "environment=cfg['env'],ports=p,volumes=cfg['vols'],"
                 "restart_policy={'Name':cfg['restart']},labels=cfg['labels'],**kw)\n"
             )
             cfg_json = _json.dumps({
