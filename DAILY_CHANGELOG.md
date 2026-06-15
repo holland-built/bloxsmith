@@ -3,6 +3,17 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — stuck-spinner-fix: instance_id restart detection + 120s hard reload
+
+| File | Line(s) | Change |
+|---|---|---|
+| `server.py` | 63–64 | Added `import uuid as _uuid` + `_INSTANCE_ID = str(_uuid.uuid4())[:8]` — unique per process |
+| `server.py` | ~1492 | `/api/update/status` response: `{**dict(_pull_state), "instance_id": _INSTANCE_ID}` |
+| `server.py` | 145 | `update_status()` result dict: added `"instance_id": _INSTANCE_ID` key |
+| `index.html` | ~3540 | `applyUpdate` poll: added `let firstId=null;`; detect `instance_id` change → reload in 2s |
+| `index.html` | ~3379 | Elapsed timer: capture `el`, call `setUpdElapsed(el)`, `if(el>=120) location.reload()` |
+| `test_regression.py` | added | 3 new TDD tests: `test_api_update_status_has_instance_id`, `test_api_update_check_has_instance_id`, `test_api_update_instance_id_stable` — all GREEN |
+
 ## 2026-06-14 — header-update-ux: inline ver-badge replaces UpdateBar strip
 
 | File | Line(s) | Change |

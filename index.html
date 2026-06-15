@@ -3376,7 +3376,7 @@ function App({vault, onVaultChange}={}) {
   },[autoRefresh,refreshFrozen,hoverPause]);
   useEffect(()=>{
     if(!updApplying||!updStart){setUpdElapsed(0);return;}
-    const id=setInterval(()=>setUpdElapsed(Math.floor((Date.now()-updStart)/1000)),1000);
+    const id=setInterval(()=>{const el=Math.floor((Date.now()-updStart)/1000);setUpdElapsed(el);if(el>=120)location.reload();},1000);
     return ()=>clearInterval(id);
   },[updApplying,updStart]);
 
@@ -3537,7 +3537,7 @@ function App({vault, onVaultChange}={}) {
     setUpdPop(false);
     setUpdApplying(true); setUpdStart(Date.now());
     const from = verN(upd.current||(vault&&vault.version));
-    let stopped=false;
+    let stopped=false; let firstId=null;
     // Poll /api/update/status for real phase/progress. Container goes offline
     // during recreate — treat fetch errors as expected (keep polling).
     const poll=()=>{ if(stopped) return;
@@ -3545,6 +3545,7 @@ function App({vault, onVaultChange}={}) {
         .then(s=>{
           setUpdPhase(s.phase||'prepulling');
           setUpdStatus(s);
+          if(s.instance_id){if(firstId===null){firstId=s.instance_id;}else if(s.instance_id!==firstId){setUpdDone(true);setUpdApplying(false);setTimeout(()=>location.reload(),2000);return;}}
           if(s.phase==='live'){ setUpdDone(true); setUpdApplying(false); setTimeout(()=>location.reload(),3000); return; }
           if(s.phase==='error'){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); toast('Update failed: '+(s.error||'unknown'),'err'); return; }
           setTimeout(poll,1500);

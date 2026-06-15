@@ -319,6 +319,29 @@ class BackendTests(unittest.TestCase):
         self.assertIn("selfUpdate", data)
         self.assertIsInstance(data["selfUpdate"], bool)
 
+    def test_api_update_status_has_instance_id(self):
+        """GET /api/update/status returns instance_id string (used to detect container restart)."""
+        status, data = get_json("/api/update/status")
+        self.assertEqual(status, 200)
+        self.assertIn("instance_id", data, "instance_id missing from /api/update/status")
+        self.assertIsInstance(data["instance_id"], str)
+        self.assertGreater(len(data["instance_id"]), 0)
+
+    def test_api_update_check_has_instance_id(self):
+        """GET /api/update/check returns instance_id string."""
+        status, data = get_json("/api/update/check")
+        self.assertEqual(status, 200)
+        self.assertIn("instance_id", data, "instance_id missing from /api/update/check")
+        self.assertIsInstance(data["instance_id"], str)
+        self.assertGreater(len(data["instance_id"]), 0)
+
+    def test_api_update_instance_id_stable(self):
+        """instance_id is the same across two calls to the same live server."""
+        _, d1 = get_json("/api/update/status")
+        _, d2 = get_json("/api/update/status")
+        self.assertEqual(d1.get("instance_id"), d2.get("instance_id"),
+                         "instance_id changed between calls — must be stable per process")
+
 
 # ── frontend structure tests ──────────────────────────────────────────────────
 
