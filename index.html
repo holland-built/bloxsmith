@@ -137,8 +137,8 @@ body.chat-open{padding-right:340px}
 .bento>.drag-card>.card>.card-title::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--border)}
 /* ── tables FIT the card: fixed columns divide the width, no sideways scroll ── */
 .tbl{table-layout:fixed;width:100%}
-/* headers wrap; cells also wrap; tooltip reveals full label on hover */
-.tbl th{overflow:hidden;text-overflow:ellipsis;white-space:normal}
+/* headers wrap naturally; title attr provides tooltip for long labels */
+.tbl th{white-space:normal}
 .tbl td{overflow-wrap:anywhere;word-break:break-word}
 /* badges size to their full content */
 .tbl td .badge{display:inline-block;vertical-align:middle}
