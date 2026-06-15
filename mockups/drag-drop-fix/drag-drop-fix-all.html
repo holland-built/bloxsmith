@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Drag-Drop Fix — Variants</title>
+<style>
+:root{
+  --teal:#4FD1C5;--teal-bright:#81E6D9;
+  --surface:#1E2535;--surface-2:#242D42;--surface-3:#2D3650;
+  --border:rgba(255,255,255,.09);
+  --gray-200:#CBD5E1;--gray-400:#64748B;
+  --ink:#F1F2F4;--shadow-card:0 1px 3px rgba(0,0,0,.4);
+  --hover:rgba(255,255,255,.045);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0F1523;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px;font-size:13px}
+h1{font-size:18px;font-weight:700;margin-bottom:6px;color:var(--teal)}
+.sub{color:var(--gray-400);font-size:12px;margin-bottom:36px}
+.variant{margin-bottom:48px}
+.label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--gray-400);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.rec{background:var(--teal);color:#0F1523;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800}
+.scene{display:flex;gap:16px;align-items:flex-start;position:relative;padding:24px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border);max-width:700px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;width:180px;flex-shrink:0;box-shadow:var(--shadow-card)}
+.card-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0}
+.drag-handle{color:var(--gray-400);font-size:13px;margin-right:4px;cursor:grab}
+.card-body{height:60px;background:var(--surface-2);border-radius:6px;opacity:.5}
+
+/* v1 — current: browser ghost (simulated as blurry full card), .35 opacity on source */
+.v1 .dragging{opacity:.35}
+.v1 .drop-target{outline:2px dashed rgba(214,210,203,.45);outline-offset:4px;border-radius:10px;background:rgba(214,210,203,.04)}
+.v1 .browser-ghost{width:180px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;filter:blur(1px);opacity:.7;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.v1 .ghost-label{font-size:10px;color:var(--gray-400);margin-top:8px;font-style:italic}
+
+/* v2 — recommended: custom ghost 160x36, .5 opacity source */
+.v2 .dragging{opacity:.5}
+.v2 .drop-target{outline:2px dashed var(--teal);outline-offset:4px;border-radius:10px;background:var(--hover)}
+.custom-ghost{width:160px;height:36px;display:flex;align-items:center;padding:0 12px;font:600 12px system-ui;color:var(--teal);background:var(--surface-3);border:1px solid var(--teal);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.ghost-label{font-size:10px;color:var(--gray-400);margin-top:8px;font-style:italic}
+.cursor{font-size:18px;margin-bottom:4px}
+.ghost-wrap{display:flex;flex-direction:column;align-items:center}
+
+.summary-tbl{width:100%;border-collapse:collapse;font-size:12px;max-width:700px;margin-top:32px}
+.summary-tbl th{text-align:left;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400);border-bottom:1px solid var(--border)}
+.summary-tbl td{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--gray-200)}
+.summary-tbl tr.rec-row td{background:rgba(79,209,197,.06);color:var(--teal)}
+</style>
+</head>
+<body>
+<h1>Drag-Drop Fix — Variants</h1>
+<p class="sub">Shows drag ghost image + source card opacity. Drop-position bug fix (off-by-one) applies to all variants.</p>
+
+<!-- v1 Current -->
+<div class="variant">
+  <div class="label">v1 — Current: browser auto-ghost (blurry full card), opacity .35</div>
+  <div class="scene v1">
+    <div class="card dragging">
+      <div class="card-title"><span class="drag-handle">⠿</span><div class="dot"></div>DNS Analytics</div>
+      <div class="card-body"></div>
+    </div>
+    <div class="card drop-target">
+      <div class="card-title"><div class="dot"></div>Threat Feeds</div>
+      <div class="card-body"></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Audit Log</div>
+      <div class="card-body"></div>
+    </div>
+    <div class="ghost-wrap" style="position:absolute;top:12px;right:16px">
+      <div class="cursor">↖</div>
+      <div class="browser-ghost">
+        <div class="card-title"><div class="dot"></div>DNS Analytics</div>
+        <div class="card-body"></div>
+      </div>
+      <div class="ghost-label">browser auto-ghost (full card snapshot)</div>
+    </div>
+  </div>
+</div>
+
+<!-- v2 Recommended -->
+<div class="variant">
+  <div class="label">v2 — Fix: custom 160×36 ghost, opacity .5 <span class="rec">★ RECOMMENDED</span></div>
+  <div class="scene v2">
+    <div class="card dragging">
+      <div class="card-title"><span class="drag-handle">⠿</span><div class="dot"></div>DNS Analytics</div>
+      <div class="card-body"></div>
+    </div>
+    <div class="card drop-target">
+      <div class="card-title"><div class="dot"></div>Threat Feeds</div>
+      <div class="card-body"></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Audit Log</div>
+      <div class="card-body"></div>
+    </div>
+    <div class="ghost-wrap" style="position:absolute;top:12px;right:16px">
+      <div class="cursor">↖</div>
+      <div class="custom-ghost">⠿ DNS Analytics</div>
+      <div class="ghost-label">custom ghost — compact label only</div>
+    </div>
+  </div>
+</div>
+
+<!-- Summary -->
+<table class="summary-tbl">
+  <thead><tr><th>Variant</th><th>Ghost</th><th>Source opacity</th><th>Pick</th></tr></thead>
+  <tbody>
+    <tr><td>v1</td><td>Browser auto (full card snapshot, blurry)</td><td>.35 — nearly invisible</td><td></td></tr>
+    <tr class="rec-row"><td>v2</td><td>Custom 160×36px compact label</td><td>.5 — visible but "lifted"</td><td>★ recommended</td></tr>
+  </tbody>
+</table>
+</body>
+</html>

@@ -3,6 +3,15 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — Drag-drop fix: off-by-one + custom ghost + opacity
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 366 | `.drag-card.dragging` opacity `.35` → `.5` |
+| `index.html` | 3215 | `onDragStart` builds 160×36 custom ghost via `WIDGET_LABELS[id]`, calls `setDragImage` |
+| `index.html` | 3225 | `arr.splice(ti,0,from)` → `arr.splice(fi<ti?ti-1:ti,0,from)` — fix off-by-one forward drag |
+| `test_regression.py` | 1209–1237 | 5 new tests: reorder forward/backward algo + 3 grep tests |
+
 ## 2026-06-15 — Fix column header truncation: remove sort-th nowrap
 
 | File | Line(s) | Change |
