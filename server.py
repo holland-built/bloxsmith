@@ -60,6 +60,8 @@ APP_VERSION = os.environ.get("APP_VERSION") or _git_version()
 APP_REPO = os.environ.get("APP_REPO", "holland-built/infoblox-noc-dashboard")
 UPDATE_CHECK_DISABLED = bool(os.environ.get("DISABLE_UPDATE_CHECK"))
 _UPDATE_TTL = 24 * 3600  # seconds between checks
+_APPLY_COOLDOWN = 60              # seconds after startup before apply is allowed
+
 _update_cache = {"checked_at": 0.0, "latest": None, "available": False, "html_url": None}
 _update_lock = threading.Lock()
 
@@ -132,9 +134,12 @@ def update_status(force=False):
     else:
         _maybe_check_update()
     with _update_lock:
+        elapsed = _time.monotonic() - _START_TIME
+        cooling = elapsed < _APPLY_COOLDOWN
         result = {"current": APP_VERSION, "latest": _update_cache["latest"],
                   "available": _update_cache["available"], "url": _update_cache["html_url"],
-                  "checkDisabled": UPDATE_CHECK_DISABLED, "selfUpdate": DOCKER_OK}
+                  "checkDisabled": UPDATE_CHECK_DISABLED, "selfUpdate": DOCKER_OK,
+                  "cooldown": int(max(0, _APPLY_COOLDOWN - elapsed)) if cooling else 0}
     # Auto-kick background pre-pull when update is available and idle
     with _update_lock:
         avail = _update_cache["available"]
@@ -202,6 +207,10 @@ def apply_self_update():
     """Inspect self, return HTTP response, then recreate in a detached thread."""
     if not DOCKER_OK:
         return {"ok": False, "error": "docker socket not available"}
+    elapsed = _time.monotonic() - _START_TIME
+    if elapsed < _APPLY_COOLDOWN:
+        remaining = int(_APPLY_COOLDOWN - elapsed)
+        return {"ok": False, "error": "cooldown", "retry_after": remaining}
     client, _ = _docker_client()
     try:
         container = client.containers.get(os.environ.get("HOSTNAME", ""))
@@ -279,6 +288,7 @@ _FQDN_RE = re.compile(
 
 # ── Server-side TTL cache (5 min) ────────────────────────────────────────────
 import time as _time
+_START_TIME = _time.monotonic()   # used for post-restart apply cooldown
 _cache: dict = {}
 CACHE_TTL = 300  # seconds
 CACHE_MAX = 256  # cap entries to bound memory
