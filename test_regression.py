@@ -1125,6 +1125,23 @@ class FrontendStructureTests(unittest.TestCase):
     def test_health_banner_aria(self):
         self.assertContains('role="status"', "health-banner role=status aria attr missing")
 
+    # ── Feature 9: Drill-down for Audit + DHCP ───────────────────────────────
+
+    def test_audit_table_ondrill_prop(self):
+        self.assertContains("function AuditTable({logs,limit=10,onDrill})", "AuditTable missing onDrill prop")
+
+    def test_dhcp_table_ondrill_prop(self):
+        self.assertContains("function DhcpTable({leases, rowLimit, onDrill})", "DhcpTable missing onDrill prop")
+
+    def test_drill_lease_branch(self):
+        self.assertContains("entity.type==='lease'", "DrillSheet missing lease branch")
+
+    def test_drill_audit_branch(self):
+        self.assertContains("entity.type==='audit'", "DrillSheet missing audit branch")
+
+    def test_audit_call_site_ondrill(self):
+        self.assertContains("onDrill={setDrillEntity}/>\n", "Audit or DHCP call site missing onDrill")
+
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
