@@ -271,3 +271,15 @@ All three update bugs resolved this session:
 | `index.html` | ~2509 | DrillSheet `kv`: `fontFamily:'monospace'` → `fontVariantNumeric:'tabular-nums'` (one font vocabulary) |
 | `index.html` | ~3845 | Stile delta chip: `rgba(239,68,68,.18)` / `rgba(34,197,94,.18)` → `--badge-red-bg` / `--badge-green-bg` tokens |
 | `index.html` | ~3841 | Stile `<button>`: added `aria-label` with clean "{cat}: {sev}, {n} of {tot} — {desc}" string |
+
+## 2026-06-15 — self-update pipeline end-to-end fix
+
+| File | Line(s) | Change |
+|---|---|---|
+| `server.py` | 63–65 | Added `_INSTANCE_ID = str(uuid.uuid4())[:8]` — unique per process, changes on container recreate |
+| `server.py` | 141 | `update_status()` result includes `instance_id: _INSTANCE_ID` |
+| `server.py` | 1492 | `/api/update/status` handler includes `instance_id` in pull-state response |
+| `server.py` | 223–297 | `_do_recreate()` rewritten: helper container pattern (rename→spawn helper→kill self); fixes port-already-allocated, stale updater, image pull, APP_VERSION env var override |
+| `index.html` | ~3540 | `applyUpdate` poll detects `instance_id` change → sets done + reloads |
+| `index.html` | ~3379 | 120s hard fallback timer in update polling loop |
+| `test_regression.py` | — | 3 new TDD tests: `test_api_update_status_has_instance_id`, `test_api_update_check_has_instance_id`, `test_api_update_instance_id_stable` |
