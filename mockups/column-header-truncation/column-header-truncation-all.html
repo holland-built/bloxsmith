@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Column Header Truncation — Variants</title>
+<style>
+:root {
+  --blue-deep:#1E2535;--blue-mid:#1A2033;--blue-dark:#151C2E;
+  --teal:#4FD1C5;--teal-bright:#81E6D9;
+  --surface:#1E2535;--surface-2:#242D42;--surface-3:#2D3650;
+  --border:rgba(255,255,255,.09);
+  --gray-100:#F1F2F4;--gray-200:#CBD5E1;--gray-400:#64748B;--gray-500:#475569;--gray-600:#334155;
+  --ink:#F1F2F4;
+  --hover:rgba(255,255,255,.045);
+  --row-border:rgba(255,255,255,.07);
+  --sev-green-t:#6EE7B7;--sev-amber-t:#FCD34D;--sev-red-t:#FCA5A5;
+  --shadow-card:0 1px 3px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0F1523;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px;font-size:13px}
+h1{font-size:18px;font-weight:700;margin-bottom:8px;color:var(--teal)}
+.subtitle{color:var(--gray-400);font-size:12px;margin-bottom:36px}
+.variant{margin-bottom:48px}
+.variant-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--gray-400);margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.rec-badge{background:var(--teal);color:#0F1523;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;letter-spacing:.05em}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;box-shadow:var(--shadow-card);max-width:700px}
+.card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0}
+.scroll{overflow-y:auto;overflow-x:auto;max-width:100%}
+.tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.tbl th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);padding:7px 10px;border-bottom:1px solid var(--border)}
+.tbl td{padding:7px 10px;font-size:12px;border-bottom:1px solid var(--row-border);color:var(--gray-200)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--hover)}
+.sort-ind{margin-left:4px;opacity:.5;font-size:9px}
+.badge{display:inline-flex;align-items:center;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:600;border:1px solid}
+.b-green{background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.3);color:var(--sev-green-t)}
+.b-red{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:var(--sev-red-t)}
+.b-amber{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:var(--sev-amber-t)}
+
+/* v1 — current bug: truncated, no tooltip */
+.v1 .tbl th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* v2 — truncate + title tooltip only */
+.v2 .tbl th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help}
+
+/* v3 — wrap only, no tooltip */
+.v3 .tbl th{overflow:hidden;text-overflow:ellipsis;white-space:normal}
+
+/* v4 — wrap + title tooltip (RECOMMENDED) */
+.v4 .tbl th{overflow:hidden;text-overflow:ellipsis;white-space:normal;cursor:help}
+
+/* v5 — wrap clamped 2 lines + tooltip */
+.v5 .tbl th{overflow:hidden;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;cursor:help}
+</style>
+</head>
+<body>
+<h1>Column Header Truncation — Variants</h1>
+<p class="subtitle">Table: Alert Rules (5 cols competing for width) — simulates the "POLIC… ACTIO… RULES… ACTIV…" bug</p>
+
+<!-- v1 — current bug -->
+<div class="variant">
+  <div class="variant-label">v1 — Current (bug): truncate, no tooltip</div>
+  <div class="card v1">
+    <div class="card-title"><div class="dot"></div>Alert Rules</div>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr>
+          <th>Status <span class="sort-ind">⇅</span></th>
+          <th>Metric Name <span class="sort-ind">⇅</span></th>
+          <th>Condition Expr <span class="sort-ind">⇅</span></th>
+          <th>Current Value <span class="sort-ind">⇅</span></th>
+          <th>Activity Rules</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><span class="badge b-red">Firing</span></td><td>CPU Usage %</td><td>&gt; 90</td><td>94.2</td><td>✎ ✕</td></tr>
+          <tr><td><span class="badge b-green">OK</span></td><td>DNS Query Rate</td><td>&gt; 500</td><td>312</td><td>✎ ✕</td></tr>
+          <tr><td><span class="badge b-amber">Firing</span></td><td>Lease Pool Used</td><td>&gt; 80</td><td>83</td><td>✎ ✕</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- v2 — truncate + tooltip -->
+<div class="variant">
+  <div class="variant-label">v2 — Truncate + title tooltip (hover to reveal)</div>
+  <div class="card v2">
+    <div class="card-title"><div class="dot"></div>Alert Rules</div>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr>
+          <th title="Status">Status <span class="sort-ind">⇅</span></th>
+          <th title="Metric Name">Metric Name <span class="sort-ind">⇅</span></th>
+          <th title="Condition Expr">Condition Expr <span class="sort-ind">⇅</span></th>
+          <th title="Current Value">Current Value <span class="sort-ind">⇅</span></th>
+          <th title="Activity Rules">Activity Rules</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><span class="badge b-red">Firing</span></td><td>CPU Usage %</td><td>&gt; 90</td><td>94.2</td><td>✎ ✕</td></tr>
+          <tr><td><span class="badge b-green">OK</span></td><td>DNS Query Rate</td><td>&gt; 500</td><td>312</td><td>✎ ✕</td></tr>
+          <tr><td><span class="badge b-amber">Firing</span></td><td>Lease Pool Used</td><td>&gt; 80</td><td>83</td><td>✎ ✕</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- v3 — wrap only -->
+<div class="variant">
+  <div class="variant-label">v3 — Wrap only, no tooltip</div>
+  <div class="card v3">
+    <div class="card-title"><div class="dot"></div>Alert Rules</div>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr>
+          <th>Status <span class="sort-ind">⇅</span></th>
+          <th>Metric Name <span class="sort-ind">⇅</span></th>
+          <th>Condition Expr <span class="sort-ind">⇅</span></th>
+          <th>Current Value <span class="sort-ind">⇅</span></th>
+          <th>Activity Rules</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><span class="badge b-red">Firing</span></td><td>CPU Usage %</td><td>&gt; 90</td><td>94.2</td><td>✎ ✕</td></tr>
+          <tr><td><span class="badge b-green">OK</span></td><td>DNS Query Rate</td><td>&gt; 500</td><td>312</td><td>✎ ✕</td></tr>
+          <tr><td><span class="badge b-amber">Firing</span></td><td>Lease Pool Used</td><td>&gt; 80</td><td>83</td><td>✎ ✕</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- v4 — wrap + tooltip (RECOMMENDED) -->
+<div class="variant">
+  <div class="variant-label">v4 — Wrap + title tooltip <span class="rec-badge">★ RECOMMENDED</span></div>
+  <div class="card v4">
+    <div class="card-title"><div class="dot"></div>Alert Rules</div>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr>
+          <th title="Status">Status <span class="sort-ind">⇅</span></th>
+          <th title="Metric Name">Metric Name <span class="sort-ind">⇅</span></th>
+          <th title="Condition Expr">Condition Expr <span class="sort-ind">⇅</span></th>
+          <th title="Current Value">Current Value <span class="sort-ind">⇅</span></th>
+          <th title="Activity Rules">Activity Rules</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><span class="badge b-red">Firing</span></td><td>CPU Usage %</td><td>&gt; 90</td><td>94.2</td><td>✎ ✕</td></tr>
+          <tr><td><span class="badge b-green">OK</span></td><td>DNS Query Rate</td><td>&gt; 500</td><td>312</td><td>✎ ✕</td></tr>
+          <tr><td><span class="badge b-amber">Firing</span></td><td>Lease Pool Used</td><td>&gt; 80</td><td>83</td><td>✎ ✕</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- v5 — 2-line clamp + tooltip -->
+<div class="variant">
+  <div class="variant-label">v5 — 2-line max clamp + tooltip</div>
+  <div class="card v5">
+    <div class="card-title"><div class="dot"></div>Alert Rules</div>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr>
+          <th title="Status">Status <span class="sort-ind">⇅</span></th>
+          <th title="Metric Name">Metric Name <span class="sort-ind">⇅</span></th>
+          <th title="Condition Expression">Condition Expression <span class="sort-ind">⇅</span></th>
+          <th title="Current Value">Current Value <span class="sort-ind">⇅</span></th>
+          <th title="Activity Rules">Activity Rules</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><span class="badge b-red">Firing</span></td><td>CPU Usage %</td><td>&gt; 90</td><td>94.2</td><td>✎ ✕</td></tr>
+          <tr><td><span class="badge b-green">OK</span></td><td>DNS Query Rate</td><td>&gt; 500</td><td>312</td><td>✎ ✕</td></tr>
+          <tr><td><span class="badge b-amber">Firing</span></td><td>Lease Pool Used</td><td>&gt; 80</td><td>83</td><td>✎ ✕</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:32px;padding:16px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border);max-width:700px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:8px">Variant Summary</div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="color:var(--gray-400)"><th style="text-align:left;padding:4px 8px">Variant</th><th style="text-align:left;padding:4px 8px">Description</th><th style="text-align:left;padding:4px 8px">Pick</th></tr>
+    <tr><td style="padding:4px 8px">v1</td><td style="padding:4px 8px">Current bug — truncated, no tooltip</td><td style="padding:4px 8px"></td></tr>
+    <tr><td style="padding:4px 8px">v2</td><td style="padding:4px 8px">Truncate + hover tooltip reveals full label</td><td style="padding:4px 8px"></td></tr>
+    <tr><td style="padding:4px 8px">v3</td><td style="padding:4px 8px">Wrap to multiple lines, no tooltip</td><td style="padding:4px 8px"></td></tr>
+    <tr style="background:rgba(79,209,197,.08)"><td style="padding:4px 8px;color:var(--teal);font-weight:700">v4</td><td style="padding:4px 8px">Wrap + title tooltip — full text always visible</td><td style="padding:4px 8px;color:var(--teal);font-weight:700">★ recommended</td></tr>
+    <tr><td style="padding:4px 8px">v5</td><td style="padding:4px 8px">2-line max clamp + tooltip — bounded height</td><td style="padding:4px 8px"></td></tr>
+  </table>
+</div>
+</body>
+</html>
