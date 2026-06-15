@@ -38,7 +38,7 @@ window.onerror = function(msg,src,line,col,err) {
   /* ── theme-flippable semantic tokens (dark defaults) ── */
   --ink:#F1F2F4;                     /* brightest text / input text */
   /* type scale (current sizes, centralized) */
-  --fs-2xs:9px;--fs-xs:10px;--fs-sm:11px;--fs-base:12px;--fs-md:13px;--fs-lg:20px;--fs-2xl:30px;
+  --fs-2xs:10px;--fs-xs:10px;--fs-sm:11px;--fs-base:12px;--fs-md:13px;--fs-lg:20px;--fs-2xl:30px;
   --hover:rgba(255,255,255,.045);    /* row + subtle hover tint */
   --hover-strong:rgba(255,255,255,.1);
   --tint:rgba(255,255,255,.11);      /* active nav, user msg, chips */
@@ -176,7 +176,7 @@ body.chat-open{padding-right:340px}
 .stile-cat{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-400);font-weight:600}
 .stile-st{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px}
 .stile-big{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
-.stile-desc{font-size:11px;color:var(--gray-500)}
+.stile-desc{font-size:11px;color:var(--gray-400)}
 .stile-of{font-size:13px;font-weight:600;color:var(--gray-500)}
 .stile-track{height:4px;background:var(--surface-3);border-radius:2px;margin-top:auto}
 .stile-fill{height:100%;border-radius:2px;transition:width .8s ease}
@@ -391,6 +391,7 @@ tr:hover .copy-btn{opacity:1}
 .sort-th:hover{color:var(--teal-bright)}
 .sort-ind{margin-left:4px;opacity:.5;font-size:9px}
 @media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition-duration:.01ms!important}
   .pulse,.t-dot{animation:none}
   .chat-panel,.stile-fill,.drag-card,.drill-panel,.sr-fill{transition:none}
   .bento>.drag-card{animation:none}
@@ -1314,6 +1315,7 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
       <ShowMoreTable rows={sorted} defaultRows={defaultRows}
         tableHead={<thead><tr>{vcols.map(c=>(
           <th key={c.key} className={`${c.expanded?'exp ':''}${c.nosort?'':'sort-th'}`}
+            aria-sort={!c.nosort?(sk===c.key?(sd==='asc'?'ascending':'descending'):'none'):undefined}
             onClick={c.nosort?undefined:()=>toggle(c.key)}
             style={{whiteSpace:'nowrap',...(c.width&&!c.expanded?{width:c.width}:{}),...(c.align?{textAlign:c.align}:{})}}>
             {c.label}{!c.nosort&&<span className="sort-ind">{sk===c.key?(sd==='asc'?'▲':'▼'):'⇅'}</span>}
@@ -1322,6 +1324,8 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
         {visible=>visible.map((r,i)=>(
           <tr key={rowKey?rowKey(r):(r.id||i)}
             onClick={onRowClick?()=>onRowClick(r):undefined}
+            tabIndex={onRowClick?0:undefined}
+            onKeyDown={onRowClick?(e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onRowClick(r);}}):undefined}
             style={onRowClick?{cursor:'pointer'}:undefined}>
             {vcols.map(c=>(
               <td key={c.key} className={c.expanded?'exp':''}
@@ -1594,7 +1598,7 @@ function Toasts(){
     <div className="toasts" aria-live="polite">
       {items.map(t=>(
         <div key={t.id} className={`toast ${t.kind||''}`}>
-          <span className="toast-dot"/><span>{t.msg}</span>
+          <span className="toast-dot"/><span className="sr-only">{t.kind==='ok'?'OK':t.kind==='err'?'Error':t.kind==='warn'?'Warning':'Info'}</span><span>{t.msg}</span>
           <button className="toast-close" aria-label="Dismiss notification" onClick={()=>setItems(x=>x.filter(i=>i.id!==t.id))}>×</button>
         </div>
       ))}
@@ -2481,10 +2485,25 @@ function HostBanner({hosts, demoMode}) {
 
 /* ─── DRILL SHEET ────────────────────────────────────────────────────────────*/
 function DrillSheet({entity, onClose, leases=[], subnets=[]}) {
+  const panelRef = useRef(null);
   useEffect(()=>{
-    const h = e => { if(e.key==='Escape') onClose(); };
+    const prev = document.activeElement;
+    const panel = panelRef.current;
+    const sel = 'button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const focusables = () => panel ? Array.from(panel.querySelectorAll(sel)) : [];
+    const first = focusables()[0];
+    if(first) first.focus();
+    const h = e => {
+      if(e.key==='Escape'){ onClose(); return; }
+      if(e.key==='Tab'){
+        const f = focusables(); if(!f.length) return;
+        const a = f[0], z = f[f.length-1];
+        if(e.shiftKey && document.activeElement===a){ e.preventDefault(); z.focus(); }
+        else if(!e.shiftKey && document.activeElement===z){ e.preventDefault(); a.focus(); }
+      }
+    };
     document.addEventListener('keydown', h);
-    return ()=>document.removeEventListener('keydown', h);
+    return ()=>{ document.removeEventListener('keydown', h); if(prev && prev.focus) prev.focus(); };
   },[onClose]);
   if(!entity) return null;
   const kv = (k,v) => <div className="drill-kv"><span className="k">{k}</span><span style={{color:'var(--gray-200)',fontFamily:'monospace',fontSize:11}}>{v||'—'}</span></div>;
@@ -2596,7 +2615,7 @@ function DrillSheet({entity, onClose, leases=[], subnets=[]}) {
   return (
     <>
       <div className="drill-sheet-overlay" onClick={onClose}/>
-      <div className="drill-sheet" role="dialog" aria-label={`Details: ${title}`}>
+      <div className="drill-sheet" role="dialog" aria-modal="true" aria-label={`Details: ${title}`} ref={panelRef}>
         <div className="drill-sheet-hd">
           <div style={{fontSize:13,fontWeight:700,color:'var(--gray-200)'}}>{title}</div>
           <button className="close-btn" onClick={onClose} aria-label="Close">✕</button>
