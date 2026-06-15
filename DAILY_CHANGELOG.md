@@ -27,6 +27,17 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `index.html` | ~2681 | Table row: conditional render — edit mode shows inline selects + input with teal left-border + hover bg (v2); read mode shows ✎ button before ✕ |
 | `test_regression.py` | ~623 | Added 4 new tests: `test_default_alert_rules_const`, `test_default_alert_rules_seeded`, `test_alert_rules_inline_edit_state`, `test_alert_rules_edit_button` |
 
+## 2026-06-15 — Health summary banner mockups (v1–v6)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `mockups/health-summary-card/health-summary-card-v1.html` | 1–54 | New — thin flat strip, green/red tint, single text line |
+| `mockups/health-summary-card/health-summary-card-v2.html` | 1–68 | New — strip + domain pills, flex justify-content:space-between |
+| `mockups/health-summary-card/health-summary-card-v3.html` | 1–57 | New — left-border accent, 4px severity-colored border, no tint |
+| `mockups/health-summary-card/health-summary-card-v4.html` | 1–72 | New — inline dot indicators per domain, colored circles |
+| `mockups/health-summary-card/health-summary-card-v5.html` | 1–62 | New — two-zone: 48px icon block + body text block |
+| `mockups/health-summary-card/health-summary-card-v6.html` | 1–65 | New — segmented bar, 5-column chip grid, chips ARE the banner |
+
 ## 2026-06-15 — Multi-tenant switcher toolbar pill
 
 | File | Line(s) | Change |
@@ -153,3 +164,11 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 |---|---|---|
 | `.claude/skills/ui-ux/` | — | Copied from `~/.claude/skills/ui-ux-pro-max/`; renamed dir to `ui-ux` so `/ui-ux` resolves |
 | `SKILLS.md` | 9, 41, 54 | Updated all `ui-ux-pro-max` references to `ui-ux` |
+
+## 2026-06-15 — Health summary banner
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 162–169 | Added `.health-banner`, `.hb-label`, `.hb-pills`, `.hb-pill` CSS with ok/warn/crit variants |
+| `index.html` | 3781–3797 | Added v2-style banner above stiles — verdict left, severity pills right; wrapped stile IIFE return in `<>` fragment |
+| `test_regression.py` | 1108–1128 | Added 7 health banner tests (css, ok/warn/crit variants, text, pills, aria) |

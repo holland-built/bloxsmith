@@ -1102,6 +1102,29 @@ class FrontendStructureTests(unittest.TestCase):
     def test_acct_pill_in_toolbar(self):
         self.assertContains("<AcctPill", "AcctPill not rendered in toolbar")
 
+    # ── Feature 8: Health summary banner ──────────────────────────────────────
+
+    def test_health_banner_css_class(self):
+        self.assertContains(".health-banner{", "health-banner CSS class missing")
+
+    def test_health_banner_variant_ok(self):
+        self.assertContains(".health-banner.ok ", "health-banner ok variant missing")
+
+    def test_health_banner_variant_warn(self):
+        self.assertContains(".health-banner.issues-warn ", "health-banner issues-warn variant missing")
+
+    def test_health_banner_variant_crit(self):
+        self.assertContains(".health-banner.issues-crit ", "health-banner issues-crit variant missing")
+
+    def test_health_banner_ok_text(self):
+        self.assertContains("✓ All systems OK", "health-banner all-OK text missing")
+
+    def test_health_banner_pills(self):
+        self.assertContains("hb-pills", "health-banner pills container missing")
+
+    def test_health_banner_aria(self):
+        self.assertContains('role="status"', "health-banner role=status aria attr missing")
+
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
