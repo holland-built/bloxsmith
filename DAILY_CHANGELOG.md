@@ -146,3 +146,10 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | File | Line(s) | Change |
 |---|---|---|
 | `mockups/multi-tenant-switcher/multi-tenant-switcher-all.html` | all | Replaced 5-variant pill comparison page with focused 3-scenario V4 + two-section popover mockup: vault multi-key (S1, with search + THIS LOGIN / OTHER LOGINS sections), vault single-key (S2, no OTHER LOGINS), non-vault env key (S3, flat list only). Added `--sev-red-t` / `--sev-green-t` tokens. Scenario cards with thin rgba dividers, independent click-to-toggle popovers. |
+
+## 2026-06-15 — Restore /ui-ux skill
+
+| File | Line(s) | Change |
+|---|---|---|
+| `.claude/skills/ui-ux/` | — | Copied from `~/.claude/skills/ui-ux-pro-max/`; renamed dir to `ui-ux` so `/ui-ux` resolves |
+| `SKILLS.md` | 9, 41, 54 | Updated all `ui-ux-pro-max` references to `ui-ux` |

@@ -6,7 +6,7 @@
 | Skill | Purpose |
 |---|---|
 | `impeccable` | UI design enforcement — visual hierarchy, spacing, density, color discipline |
-| `ui-ux-pro-max` | Design intelligence — 67 styles, 96 palettes, 57 font pairings, 99 UX guidelines, accessibility rules, chart types |
+| `ui-ux` | Design intelligence — 67 styles, 96 palettes, 57 font pairings, 99 UX guidelines, accessibility rules, chart types |
 | `layout-stress` | Runtime layout-composition fixer — panel overlap, clipping, bleed, truncation, min-width starvation across viewport widths |
 | `diagnose` | 6-phase systematic bug diagnosis — never trust the problem description |
 | `grill-me` | Pre-build planning interview — extracts design decisions, edge cases, constraints before any code |
@@ -38,7 +38,7 @@
 | `/prove` | Before claiming any feature "done" — screenshot + real server |
 | `/layout-stress` | Any sidebar/panel/bento overlap report; after index.html layout changes |
 | `/impeccable` | UI polish pass — density, hierarchy, color discipline, spacing |
-| `/ui-ux-pro-max` | Design decisions — palette, typography, accessibility, chart type, UX guidelines |
+| `/ui-ux` | Design decisions — palette, typography, accessibility, chart type, UX guidelines |
 | `/code-review` | Before committing a non-trivial change |
 | `/security-review` | Any change touching .env, auth, API keys, or server.py endpoints |
 
@@ -51,7 +51,7 @@
 /tdd               # test-driven development
 /layout-stress     # layout bug hunting
 /impeccable        # UI design audit/polish
-/ui-ux-pro-max     # design intelligence — palette, UX rules, accessibility
+/ui-ux             # design intelligence — palette, UX rules, accessibility
 ```
 
 ## learnings.md pattern
