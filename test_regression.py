@@ -1206,6 +1206,44 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn("title={c.label}", html,
             "DataTable <th> must have title={c.label} for header tooltip")
 
+    def test_drag_drop_reorder_forward(self):
+        # Mirror the splice logic: drag forward should land at target, not one past it
+        def reorder(arr, frm, to):
+            a = list(arr)
+            fi, ti = a.index(frm), a.index(to)
+            a.pop(fi)
+            a.insert(ti - 1 if fi < ti else ti, frm)
+            return a
+        result = reorder(['a','b','c','d'], 'a', 'c')
+        self.assertEqual(result, ['b','a','c','d'],
+            "Forward drag off-by-one: 'a'→'c' should yield ['b','a','c','d']")
+
+    def test_drag_drop_reorder_backward(self):
+        def reorder(arr, frm, to):
+            a = list(arr)
+            fi, ti = a.index(frm), a.index(to)
+            a.pop(fi)
+            a.insert(ti - 1 if fi < ti else ti, frm)
+            return a
+        result = reorder(['a','b','c','d'], 'd', 'b')
+        self.assertEqual(result, ['a','d','b','c'],
+            "Backward drag: 'd'→'b' should yield ['a','d','b','c']")
+
+    def test_drag_drop_has_fi_ti_fix(self):
+        html = open(HTML).read()
+        self.assertIn("fi<ti?ti-1:ti", html,
+            "onDrop must use fi<ti?ti-1:ti to fix off-by-one reorder bug")
+
+    def test_drag_drop_has_set_drag_image(self):
+        html = open(HTML).read()
+        self.assertIn("setDragImage", html,
+            "onDragStart must call setDragImage for custom ghost")
+
+    def test_drag_card_dragging_opacity(self):
+        html = open(HTML).read()
+        self.assertIn(".drag-card.dragging{opacity:.5}", html,
+            ".drag-card.dragging opacity must be .5 (not .35)")
+
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
