@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uniform Table Controls — All Variants</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue-deep:#262B36;--blue-mid:#171A21;--blue-dark:#10131A;
+  --teal:#D6D2CB;--teal-bright:#EBE8E2;
+  --surface:#1B1F28;--surface-2:#232834;--surface-3:#2E3440;
+  --border:rgba(255,255,255,0.09);
+  --gray-100:#ECEAE7;--gray-200:#C5C1BB;--gray-400:#8F949C;--gray-500:#82868E;--gray-600:#5C5954;
+  --ink:#F1F2F4;
+  --fs-sm:11px;--fs-base:12px;
+  --hover:rgba(255,255,255,.045);
+  --row-border:rgba(255,255,255,.07);
+  --sev-red-t:#FCA5A5;--sev-amber-t:#FCD34D;--sev-green-t:#6EE7B7;
+  --badge-red-bg:rgba(239,68,68,.15);--badge-red-bd:rgba(239,68,68,.3);
+  --badge-green-bg:rgba(16,185,129,.15);--badge-green-bd:rgba(16,185,129,.3);
+  --badge-gray-bg:rgba(148,163,184,.12);--badge-gray-bd:rgba(148,163,184,.2);
+  --badge-teal-bg:rgba(214,210,203,.1);--badge-teal-bd:rgba(214,210,203,.25);
+  color-scheme:dark;
+}
+body{background:var(--blue-dark);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px;line-height:1.4}
+.page-title{font-size:22px;font-weight:700;color:var(--teal);margin-bottom:8px}
+.page-sub{font-size:12px;color:var(--gray-400);margin-bottom:40px}
+
+.variant{margin-bottom:48px}
+.variant-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.variant-label{font-size:18px;font-weight:700;color:var(--teal)}
+.variant-badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.08em}
+.badge-rec{background:rgba(214,210,203,.15);border:1px solid rgba(214,210,203,.3);color:var(--teal)}
+.badge-new{background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:var(--sev-green-t)}
+.variant-desc{font-size:12px;color:var(--gray-400);margin-bottom:16px}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;position:relative}
+.card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0}
+.dot-red{background:#EF4444}
+.dot-amber{background:#F59E0B}
+.dot-green{background:#10B981}
+
+.col-btn{background:none;border:1px solid var(--border);color:var(--gray-400);font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;flex-shrink:0;line-height:1.4;transition:all .12s}
+.col-btn:hover{border-color:var(--teal);color:var(--teal)}
+.col-btn.active{border-color:var(--teal);color:var(--teal);background:rgba(214,210,203,.07)}
+
+.tbl{width:100%;border-collapse:collapse;font-size:11px}
+.tbl th{color:var(--gray-400);font-weight:600;text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;border-bottom:1px solid var(--border)}
+.tbl td{padding:6px 8px;border-bottom:1px solid var(--row-border);overflow-wrap:anywhere;word-break:break-word}
+.tbl tr:hover td{background:var(--hover)}
+.scroll{overflow-x:auto}
+
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;vertical-align:middle}
+.b-green{background:var(--badge-green-bg);border:1px solid var(--badge-green-bd);color:var(--sev-green-t)}
+.b-red{background:var(--badge-red-bg);border:1px solid var(--badge-red-bd);color:var(--sev-red-t)}
+.b-gray{background:var(--badge-gray-bg);border:1px solid var(--badge-gray-bd);color:var(--gray-200)}
+.b-teal{background:var(--badge-teal-bg);border:1px solid var(--badge-teal-bd);color:var(--teal)}
+.b-amber{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:var(--sev-amber-t)}
+
+.table-controls{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.table-controls-label{font-size:10px;color:var(--gray-600);flex:1}
+
+.show-more{width:100%;background:none;border:none;color:var(--gray-400);font-size:11px;padding:8px;cursor:pointer;border-top:1px solid var(--border);margin-top:4px;text-align:center}
+.show-more:hover{color:var(--teal)}
+
+.col-menu-demo{position:relative;display:inline-block}
+.col-menu-popup{position:absolute;right:0;top:calc(100% + 4px);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px;min-width:200px;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.col-menu-head{display:flex;justify-content:space-between;align-items:center;padding:4px 6px 8px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.col-menu-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400)}
+.col-row{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:5px;font-size:12px;color:var(--gray-200)}
+.col-row:hover{background:var(--hover)}
+.col-row input{accent-color:var(--teal);cursor:pointer;width:13px;height:13px}
+.col-lbl{flex:1;font-size:12px}
+.col-arrow{background:none;border:none;color:var(--gray-600);cursor:pointer;font-size:11px;padding:1px 3px;border-radius:3px}
+.col-arrow:hover{color:var(--teal);background:var(--hover)}
+
+.before-after{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ba-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-600);margin-bottom:8px}
+.ba-label.after{color:var(--sev-green-t)}
+
+.drill-panel{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:12px}
+.drill-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.drill-title{font-size:11px;font-weight:600;color:var(--teal);flex:1}
+.drill-close{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:16px;line-height:1}
+.drill-see-all{background:none;border:none;color:var(--teal);font-size:10px;cursor:pointer;padding:0}
+
+.search-group{margin-bottom:16px}
+.search-group-header{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surface-2);border-radius:6px 6px 0 0;border:1px solid var(--border);border-bottom:none}
+.search-group-name{font-size:11px;font-weight:600;color:var(--gray-200)}
+.search-count{background:var(--surface-3);border-radius:4px;padding:1px 7px;font-size:10px;color:var(--teal);font-weight:700}
+.search-group-body{border:1px solid var(--border);border-radius:0 0 6px 6px;overflow:hidden}
+
+.tag-new{display:inline-block;font-size:9px;font-weight:700;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:var(--sev-green-t);border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:middle}
+.tag-same{display:inline-block;font-size:9px;font-weight:700;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.2);color:var(--gray-400);border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:middle}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.annotation{font-size:11px;color:var(--gray-400);margin-top:8px;padding-left:4px;border-left:2px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="page-title">Uniform Table Controls — Design Variants</div>
+<div class="page-sub">5 variants showing column controls + CSV export applied uniformly across all table types. Currently 10 tables have this; 5 table groups need it.</div>
+
+<!-- V1: Recommended — Consistent placement across all table types -->
+<div class="variant">
+  <div class="variant-header">
+    <span class="variant-label">v1</span>
+    <span class="variant-badge badge-rec">★ Recommended</span>
+    <span style="font-size:13px;color:var(--gray-200)">Uniform pattern — Columns + CSV buttons above every table</span>
+  </div>
+  <div class="variant-desc">All tables get the same two-button control strip: <strong>Columns</strong> (show/hide/reorder) and <strong>CSV</strong> export. Drill panels included. Identical to existing DataTable tables.</div>
+
+  <div class="two-col">
+    <div>
+      <div class="ba-label">Before (ShowMoreTable — no controls)</div>
+      <div class="card">
+        <div class="card-title"><div class="dot dot-red"></div>Security Policies</div>
+        <div class="scroll">
+          <table class="tbl">
+            <thead><tr><th>Policy</th><th>Action</th><th>Rules</th><th>Active</th></tr></thead>
+            <tbody>
+              <tr><td>199.Niobrara_Default</td><td><span class="badge b-teal">monitor</span></td><td>47</td><td>Yes</td></tr>
+              <tr><td>AAguila-IT-BLOCK</td><td><span class="badge b-red">block</span></td><td>12</td><td>Yes</td></tr>
+              <tr><td>ALopez-Default</td><td><span class="badge b-green">allow</span></td><td>3</td><td>No</td></tr>
+              <tr><td>amcnaught_policy</td><td><span class="badge b-teal">monitor</span></td><td>8</td><td>Yes</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <button class="show-more">▼ Show 18 more (22 total)</button>
+      </div>
+    </div>
+    <div>
+      <div class="ba-label after">After (DataTable + useColumns — full controls)</div>
+      <div class="card">
+        <div class="card-title"><div class="dot dot-red"></div>Security Policies</div>
+        <div class="table-controls">
+          <span class="table-controls-label">22 policies</span>
+          <button class="col-btn active">⊞ Columns</button>
+          <button class="col-btn">CSV</button>
+        </div>
+        <div class="scroll">
+          <table class="tbl">
+            <thead><tr><th>Policy</th><th>Action</th><th>Rules</th><th>Active</th></tr></thead>
+            <tbody>
+              <tr><td>199.Niobrara_Default</td><td><span class="badge b-teal">monitor</span></td><td>47</td><td>Yes</td></tr>
+              <tr><td>AAguila-IT-BLOCK</td><td><span class="badge b-red">block</span></td><td>12</td><td>Yes</td></tr>
+              <tr><td>ALopez-Default</td><td><span class="badge b-green">allow</span></td><td>3</td><td>No</td></tr>
+              <tr><td>amcnaught_policy</td><td><span class="badge b-teal">monitor</span></td><td>8</td><td>Yes</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <button class="show-more">▼ Show 18 more (22 total)</button>
+      </div>
+    </div>
+  </div>
+  <div class="annotation">Same two-button strip on every table: WidgetViz table mode, drill panels, alert rules, search results.</div>
+</div>
+
+<!-- V2: WidgetViz table mode -->
+<div class="variant">
+  <div class="variant-header">
+    <span class="variant-label">v2</span>
+    <span class="variant-badge badge-new">New</span>
+    <span style="font-size:13px;color:var(--gray-200)">WidgetViz — table view gains controls</span>
+  </div>
+  <div class="variant-desc">Widgets switched to "Table" view (Subnets, Hosts, Audit, etc.) get the same column controls + CSV as the dedicated table tabs.</div>
+
+  <div class="card">
+    <div class="card-title">
+      <div class="dot"></div>Top Subnets by DHCP Utilization
+      <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+        <select class="col-btn" style="padding:2px 6px;appearance:none">Table ▾</select>
+        <button class="col-btn">▼</button>
+        <button class="col-btn">⤢</button>
+      </div>
+    </div>
+    <div class="table-controls">
+      <span class="table-controls-label">10 subnets</span>
+      <button class="col-btn active">⊞ Columns</button>
+      <button class="col-btn">CSV</button>
+    </div>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr><th>Subnet</th><th>Network</th><th>Util %</th><th>Used</th><th>Site</th></tr></thead>
+        <tbody>
+          <tr><td>Corp-Main</td><td style="font-family:monospace;font-size:10px">10.0.1.0/24</td><td style="color:var(--sev-red-t);font-weight:700">94%</td><td>240/256</td><td>HQ</td></tr>
+          <tr><td>Dev-Lab</td><td style="font-family:monospace;font-size:10px">172.16.0.0/20</td><td style="color:var(--sev-amber-t)">78%</td><td>3200/4096</td><td>DC1</td></tr>
+          <tr><td>Guest-WiFi</td><td style="font-family:monospace;font-size:10px">192.168.50.0/24</td><td style="color:var(--sev-green-t)">42%</td><td>107/256</td><td>HQ</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="annotation">WidgetVizTable sub-component wraps useColumns + DataTable. Each widget has a unique persistId (e.g. widget-subnets-tbl).</div>
+</div>
+
+<!-- V3: Drill panels with controls -->
+<div class="variant">
+  <div class="variant-header">
+    <span class="variant-label">v3</span>
+    <span class="variant-badge badge-new">New</span>
+    <span style="font-size:13px;color:var(--gray-200)">Drill-down panels — full controls</span>
+  </div>
+  <div class="variant-desc">The inline drill panels (Overview host list, Subnet lease list) extract to proper components with DataTable + useColumns. Controls appear in the drill panel body, not the header.</div>
+
+  <div class="drill-panel">
+    <div class="drill-header">
+      <span class="drill-title">⊞ Offline Hosts (7)</span>
+      <button class="drill-see-all">See all in Hosts tab →</button>
+      <button class="drill-close">×</button>
+    </div>
+    <div class="table-controls">
+      <span class="table-controls-label">7 hosts</span>
+      <button class="col-btn active">⊞ Columns</button>
+      <button class="col-btn">CSV</button>
+    </div>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr><th>Hostname</th><th>IP</th><th>Type</th></tr></thead>
+        <tbody>
+          <tr><td style="font-weight:500">dns-primary.corp</td><td style="font-family:monospace;font-size:10px;color:var(--gray-400)">10.0.1.5</td><td style="font-size:10px;color:var(--gray-400)">A</td></tr>
+          <tr><td style="font-weight:500">mail.corp.local</td><td style="font-family:monospace;font-size:10px;color:var(--gray-400)">10.0.1.12</td><td style="font-size:10px;color:var(--gray-400)">CNAME</td></tr>
+          <tr><td style="font-weight:500">backup-02</td><td style="font-family:monospace;font-size:10px;color:var(--gray-400)">10.0.2.44</td><td style="font-size:10px;color:var(--gray-400)">A</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="annotation">Extracted to HostDrillTable + LeaseDrillTable components (hooks require top-level component context, can't live in IIFEs).</div>
+</div>
+
+<!-- V4: Alert Rules with controls -->
+<div class="variant">
+  <div class="variant-header">
+    <span class="variant-label">v4</span>
+    <span class="variant-badge badge-new">New</span>
+    <span style="font-size:13px;color:var(--gray-200)">Alert Rules — DataTable with inline edit preserved</span>
+  </div>
+  <div class="variant-desc">Alert rules table converts to DataTable + useColumns. The Actions column (edit/delete) is marked noexport so it's excluded from CSV. Inline row-edit state preserved via render functions.</div>
+
+  <div class="card">
+    <div class="card-title"><div class="dot dot-amber"></div>Alert Rules</div>
+    <div class="table-controls">
+      <span class="table-controls-label">3 rules</span>
+      <button class="col-btn active">⊞ Columns</button>
+      <button class="col-btn">CSV</button>
+    </div>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr><th>Status</th><th>Metric</th><th>Condition</th><th>Current</th><th style="color:var(--gray-600);font-style:italic">Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-red">Firing</span></td>
+            <td>Offline hosts</td>
+            <td>≥ 1</td>
+            <td style="font-weight:700;font-variant-numeric:tabular-nums">7</td>
+            <td style="white-space:nowrap">
+              <button class="col-btn" style="font-size:10px;padding:1px 6px;margin-right:4px">✎</button>
+              <button class="col-btn" style="font-size:10px;padding:1px 6px;color:var(--sev-red-t);border-color:var(--badge-red-bd)">✕</button>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="badge b-green">OK</span></td>
+            <td>DHCP utilization</td>
+            <td>≥ 90%</td>
+            <td style="font-weight:700;font-variant-numeric:tabular-nums">67%</td>
+            <td style="white-space:nowrap">
+              <button class="col-btn" style="font-size:10px;padding:1px 6px;margin-right:4px">✎</button>
+              <button class="col-btn" style="font-size:10px;padding:1px 6px;color:var(--sev-red-t);border-color:var(--badge-red-bd)">✕</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:10px;color:var(--gray-600);margin-top:8px;padding-left:4px">* Actions column excluded from CSV export (noexport:true flag)</div>
+  </div>
+</div>
+
+<!-- V5: Search results with DataTable per group -->
+<div class="variant">
+  <div class="variant-header">
+    <span class="variant-label">v5</span>
+    <span class="variant-badge badge-new">New</span>
+    <span style="font-size:13px;color:var(--gray-200)">Search results — DataTable per group with actual columns</span>
+  </div>
+  <div class="variant-desc">Each search result group converts from a 1-column highlight display to a full DataTable using the entity's actual fields (g.cols). Column controls + CSV per group.</div>
+
+  <div class="search-group">
+    <div class="search-group-header">
+      <span class="search-group-name">DNS Zones</span>
+      <span class="search-count">4</span>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="col-btn active">⊞ Columns</button>
+        <button class="col-btn">CSV</button>
+      </div>
+    </div>
+    <div class="search-group-body">
+      <table class="tbl">
+        <thead><tr><th>fqdn</th><th>view</th><th>ttl</th></tr></thead>
+        <tbody>
+          <tr>
+            <td style="font-family:monospace;font-size:11px"><mark style="background:rgba(214,210,203,.25);color:var(--teal-bright);border-radius:2px">demo</mark>.infoblox.com</td>
+            <td><span class="badge b-teal">DEFAULT</span></td>
+            <td style="font-family:monospace;font-size:10px;color:var(--gray-400)">3600s</td>
+          </tr>
+          <tr>
+            <td style="font-family:monospace;font-size:11px"><mark style="background:rgba(214,210,203,.25);color:var(--teal-bright);border-radius:2px">demo</mark>-internal.corp</td>
+            <td><span class="badge b-teal">INTERNAL</span></td>
+            <td style="font-family:monospace;font-size:10px;color:var(--gray-400)">7200s</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="search-group">
+    <div class="search-group-header">
+      <span class="search-group-name">Hosts</span>
+      <span class="search-count">2</span>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="col-btn active">⊞ Columns</button>
+        <button class="col-btn">CSV</button>
+      </div>
+    </div>
+    <div class="search-group-body">
+      <table class="tbl">
+        <thead><tr><th>name</th><th>ip</th><th>type</th></tr></thead>
+        <tbody>
+          <tr>
+            <td style="font-weight:500"><mark style="background:rgba(214,210,203,.25);color:var(--teal-bright);border-radius:2px">demo</mark>-server-01</td>
+            <td style="font-family:monospace;font-size:10px;color:var(--gray-400)">10.0.5.20</td>
+            <td style="font-size:10px;color:var(--gray-400)">A</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="annotation">Each group uses persistId: search-{g.key} so column preferences are saved per entity type. Highlight applied to each cell value individually.</div>
+</div>
+
+</body>
+</html>
