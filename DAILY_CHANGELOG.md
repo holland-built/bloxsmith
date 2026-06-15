@@ -3,6 +3,14 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — session-summary: full update pipeline fixed end-to-end
+
+All three update bugs resolved this session:
+1. GitHub API timeout → 10s + 3-attempt retry
+2. Restart loop → 60s post-startup cooldown on apply
+3. Stuck spinner → instance_id restart detection + 120s hard reload
+4. Update button dead → rename+run+remove(force) recreate sequence
+
 ## 2026-06-15 — self-update-recreate-fix: rename+run+remove instead of stop+remove+run
 
 | File | Line(s) | Change |
