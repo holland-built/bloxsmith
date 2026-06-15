@@ -93,24 +93,27 @@ def _ver_n(v):
     return int(m.group(3)) if m else None
 
 def _do_update_fetch():
-    """Hit the GitHub Releases API once; update the cache. Never raises."""
+    """Hit the GitHub Releases API with retries; update the cache. Never raises."""
     from urllib.request import urlopen, Request
-    try:
-        req = Request(f"https://api.github.com/repos/{APP_REPO}/releases/latest",
-                      headers={"User-Agent": "infoblox-noc-dashboard",
-                               "Accept": "application/vnd.github+json"})
-        with urlopen(req, timeout=10) as r:
-            rel = json.loads(r.read().decode())
-        latest, url = rel.get("tag_name"), rel.get("html_url")
-        cur_n, latest_n = _ver_n(APP_VERSION), _ver_n(latest)
-        available = bool(cur_n is not None and latest_n is not None and latest_n > cur_n)
-        with _update_lock:
-            _update_cache.update(latest=latest, html_url=url, available=available)
-    except Exception:
-        pass  # offline / rate-limited / no release yet — keep last-known, never block
-    finally:
-        with _update_lock:
-            _update_cache["checked_at"] = _time.monotonic()
+    req = Request(f"https://api.github.com/repos/{APP_REPO}/releases/latest",
+                  headers={"User-Agent": "infoblox-noc-dashboard",
+                           "Accept": "application/vnd.github+json"})
+    for attempt in range(3):
+        try:
+            with urlopen(req, timeout=10) as r:
+                rel = json.loads(r.read().decode())
+            latest, url = rel.get("tag_name"), rel.get("html_url")
+            cur_n, latest_n = _ver_n(APP_VERSION), _ver_n(latest)
+            available = bool(cur_n is not None and latest_n is not None and latest_n > cur_n)
+            with _update_lock:
+                _update_cache.update(latest=latest, html_url=url, available=available,
+                                     checked_at=_time.monotonic())
+            return  # success — do not stamp checked_at again below
+        except Exception:
+            if attempt < 2:
+                _time.sleep(2 ** attempt)  # 1s, 2s between retries
+    # all attempts failed — leave latest as last-known, do NOT stamp checked_at
+    # so _maybe_check_update retries on the next request instead of waiting the full TTL
 
 def _maybe_check_update():
     """Kick a background refresh if disabled is off and the cache is stale. Returns immediately."""
