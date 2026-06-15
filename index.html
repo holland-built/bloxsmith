@@ -159,6 +159,13 @@ body.chat-open{padding-right:340px}
 /* alert banner */
 .alert{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--sev-red-t);display:flex;align-items:center;gap:7px}
 /* status-tile matrix — one tile per domain, tinted by worst severity, glanceable across a room */
+.health-banner{display:flex;justify-content:space-between;align-items:center;border-radius:6px;padding:7px 14px;background:var(--surface-2);border:1px solid var(--border);margin-bottom:10px}
+.health-banner.ok .hb-label{color:var(--sev-green-t)}.health-banner.issues-warn .hb-label{color:var(--sev-amber-t)}.health-banner.issues-crit .hb-label{color:var(--sev-red-t)}
+.hb-label{font-size:12px;font-weight:600}.hb-pills{display:flex;gap:5px;flex-wrap:wrap}
+.hb-pill{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;border-radius:4px}
+.hb-pill.ok{background:var(--badge-green-bg);border:1px solid var(--badge-green-bd);color:var(--sev-green-t)}
+.hb-pill.warn{background:var(--badge-amber-bg);border:1px solid var(--badge-amber-bd);color:var(--sev-amber-t)}
+.hb-pill.crit{background:var(--badge-red-bg);border:1px solid var(--badge-red-bd);color:var(--sev-red-t)}
 .stiles{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
 @media(max-width:1100px){.stiles{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:760px){.stiles{grid-template-columns:repeat(2,1fr)}}
@@ -3771,7 +3778,20 @@ function App({vault, onVaultChange}={}) {
               const spark=(cat)=>{ const vals=tileHist[cat]; if(!vals||vals.length<2) return null; const mx=Math.max(...vals,1),mn=Math.min(...vals,0),rng=mx-mn||1,W=46,H=12; const pts=vals.map((v,i)=>`${(i/(vals.length-1)*W).toFixed(1)},${(H-(v-mn)/rng*H).toFixed(1)}`).join(' '); return <svg width={W} height={H} className="tile-spark" aria-hidden="true"><polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>; };
               const ST={crit:'CRIT',warn:'WARN',ok:'OK'};
               const BAR={crit:'var(--red)',warn:'var(--amber)',ok:'var(--green)'};
+              const hbIssues=tiles.filter(t=>t.sev!=='ok');
+              const hbWorst=hbIssues.some(t=>t.sev==='crit')?'crit':hbIssues.length?'warn':'ok';
+              const hbCls=hbWorst==='ok'?'ok':hbWorst==='crit'?'issues-crit':'issues-warn';
+              const hbLabel=hbWorst==='ok'?'✓ All systems OK':`⚠ ${hbIssues.length} issue${hbIssues.length>1?'s':''}`;
               return (
+                <>
+                <div className={`health-banner ${hbCls}`} role="status" aria-live="polite">
+                  <span className="hb-label">{hbLabel}</span>
+                  <div className="hb-pills">
+                    {hbWorst==='ok'
+                      ? tiles.map(t=><span key={t.cat} className="hb-pill ok">{t.cat}</span>)
+                      : hbIssues.map(t=><span key={t.cat} className={`hb-pill ${t.sev}`}>{t.cat} {ST[t.sev]}</span>)}
+                  </div>
+                </div>
                 <div className="stiles" role="group" aria-label="Tenant status by domain">
                   {tiles.map(t=>(
                     <button key={t.cat} className={`stile ${t.sev}`} onClick={()=>setSection(t.section)}
@@ -3784,6 +3804,7 @@ function App({vault, onVaultChange}={}) {
                     </button>
                   ))}
                 </div>
+                </>
               );
             })()}
             {deltas&&Object.keys(deltas).length>0&&(
