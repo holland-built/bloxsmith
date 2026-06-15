@@ -2506,7 +2506,7 @@ function DrillSheet({entity, onClose, leases=[], subnets=[]}) {
     return ()=>{ document.removeEventListener('keydown', h); if(prev && prev.focus) prev.focus(); };
   },[onClose]);
   if(!entity) return null;
-  const kv = (k,v) => <div className="drill-kv"><span className="k">{k}</span><span style={{color:'var(--gray-200)',fontFamily:'monospace',fontSize:11}}>{v||'—'}</span></div>;
+  const kv = (k,v) => <div className="drill-kv"><span className="k">{k}</span><span style={{color:'var(--gray-200)',fontVariantNumeric:'tabular-nums',fontSize:11}}>{v||'—'}</span></div>;
   let title='', body=null;
   if(entity.type==='subnet') {
     const sub = entity.data;
@@ -3825,7 +3825,7 @@ function App({vault, onVaultChange}={}) {
               const hbIssues=tiles.filter(t=>t.sev!=='ok');
               const hbWorst=hbIssues.some(t=>t.sev==='crit')?'crit':hbIssues.length?'warn':'ok';
               const hbCls=hbWorst==='ok'?'ok':hbWorst==='crit'?'issues-crit':'issues-warn';
-              const hbLabel=hbWorst==='ok'?'✓ All systems OK':`⚠ ${hbIssues.length} issue${hbIssues.length>1?'s':''}`;
+              const hbLabel=hbWorst==='ok'?'✓ All systems OK':`! ${hbIssues.length} issue${hbIssues.length>1?'s':''}`;
               return (
                 <>
                 <div className={`health-banner ${hbCls}`} role="status" aria-live="polite">
@@ -3839,10 +3839,11 @@ function App({vault, onVaultChange}={}) {
                 <div className="stiles" role="group" aria-label="Tenant status by domain">
                   {tiles.map(t=>(
                     <button key={t.cat} className={`stile ${t.sev}`} onClick={()=>setSection(t.section)}
+                            aria-label={`${t.cat}: ${ST[t.sev]}, ${t.n}${t.tot>0?` of ${t.tot}`:''} — ${t.desc}`}
                             title={`${t.cat}: ${t.n}${t.tot>0?(' of '+t.tot):''} ${t.desc} — open ${t.section.toUpperCase()}`}>
                       <div className="stile-top"><span className="stile-cat">{t.cat}</span><span className="stile-st">{ST[t.sev]}</span></div>
                       <span className="stile-big">{t.n}{t.tot>0&&<span className="stile-of"> / {t.tot}</span>}</span>
-                      <span className="stile-desc">{t.desc}{deltas&&t.dk&&deltas[t.dk]!=null&&deltas[t.dk]!==0&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,borderRadius:3,padding:'1px 4px',color:deltas[t.dk]>0?'var(--sev-red-t)':'var(--sev-green-t)',background:deltas[t.dk]>0?'rgba(239,68,68,.18)':'rgba(34,197,94,.18)'}}>Δ{deltas[t.dk]>0?'+':''}{deltas[t.dk]}</span>}</span>
+                      <span className="stile-desc">{t.desc}{deltas&&t.dk&&deltas[t.dk]!=null&&deltas[t.dk]!==0&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,borderRadius:3,padding:'1px 4px',color:deltas[t.dk]>0?'var(--sev-red-t)':'var(--sev-green-t)',background:deltas[t.dk]>0?'var(--badge-red-bg)':'var(--badge-green-bg)'}}>Δ{deltas[t.dk]>0?'+':''}{deltas[t.dk]}</span>}</span>
                       <div className="stile-track"><div className="stile-fill" style={{width:t.tot>0?`${Math.min(t.n/t.tot*100,100)}%`:'0%',background:BAR[t.sev]}}/></div>
                       {spark(t.cat)}
                     </button>
