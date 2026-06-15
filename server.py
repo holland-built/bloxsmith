@@ -230,7 +230,10 @@ def apply_self_update():
             cfg = attrs.get("HostConfig", {})
             ports = cfg.get("PortBindings") or {}
             vols = cfg.get("Binds") or []
-            env = attrs.get("Config", {}).get("Env") or []
+            # Strip image-baked vars so the new image's values are used
+            env = [e for e in (attrs.get("Config", {}).get("Env") or [])
+                   if not e.startswith(("APP_VERSION=", "PATH=", "PYTHON_VERSION=",
+                                        "PYTHON_SHA256=", "GPG_KEY="))]
             name = attrs.get("Name", "").lstrip("/")
             image = attrs.get("Config", {}).get("Image", "")
             restart = cfg.get("RestartPolicy", {}).get("Name", "unless-stopped")

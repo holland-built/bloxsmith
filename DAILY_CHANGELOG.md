@@ -3,6 +3,12 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — self-update-env-strip: don't inherit APP_VERSION from old container
+
+| File | Line(s) | Change |
+|---|---|---|
+| `server.py` | ~233 | Strip image-baked env vars (APP_VERSION, PATH, PYTHON_VERSION, PYTHON_SHA256, GPG_KEY) from inherited env — new container uses new image's values |
+
 ## 2026-06-15 — self-update-stale-updater: remove existing updater container before spawning
 
 | File | Line(s) | Change |
