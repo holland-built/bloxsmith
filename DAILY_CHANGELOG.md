@@ -3,6 +3,12 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — Fix column header truncation: remove sort-th nowrap
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 391 | Remove `white-space:nowrap` from `.sort-th` — was overriding `.tbl th{white-space:normal}` in practice |
+
 ## 2026-06-15 — Fix column header truncation (wrap + title tooltip)
 
 | File | Line(s) | Change |
