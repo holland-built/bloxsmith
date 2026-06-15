@@ -237,8 +237,11 @@ def apply_self_update():
             labels = attrs.get("Config", {}).get("Labels") or {}
             networks = list((attrs.get("NetworkSettings") or {})
                             .get("Networks", {}).keys())
-            container.stop(timeout=5)
-            container.remove()
+            # Rename self so the new container can take our name immediately.
+            # Start new container BEFORE stopping self — avoids killing the thread
+            # that does the recreation (old bug: container.stop killed this thread).
+            tmp_name = name + "-retiring"
+            container.rename(tmp_name)
             new = client.containers.run(
                 image,
                 detach=True,
@@ -252,7 +255,14 @@ def apply_self_update():
             )
             with _pull_lock:
                 _pull_state.update(phase="live", error=None)
+            _t.sleep(0.5)
+            # Force-remove self (SIGKILL + rm). We die here — new container already live.
+            container.remove(force=True)
         except Exception as e:
+            try:
+                container.rename(name)  # restore name if rename succeeded but run failed
+            except Exception:
+                pass
             with _pull_lock:
                 _pull_state.update(phase="error", error=str(e))
 
