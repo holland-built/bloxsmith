@@ -99,7 +99,7 @@ def _do_update_fetch():
         req = Request(f"https://api.github.com/repos/{APP_REPO}/releases/latest",
                       headers={"User-Agent": "infoblox-noc-dashboard",
                                "Accept": "application/vnd.github+json"})
-        with urlopen(req, timeout=3) as r:
+        with urlopen(req, timeout=10) as r:
             rel = json.loads(r.read().decode())
         latest, url = rel.get("tag_name"), rel.get("html_url")
         cur_n, latest_n = _ver_n(APP_VERSION), _ver_n(latest)
