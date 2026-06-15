@@ -238,11 +238,15 @@ def apply_self_update():
             networks = list((attrs.get("NetworkSettings") or {})
                             .get("Networks", {}).keys())
             import json as _json, os as _os
-            # Preserve HostIp so macOS Docker Desktop proxies on the right interface
-            ports_map = {
-                k: [(b.get("HostIp") or "0.0.0.0", b["HostPort"]) for b in v]
-                for k, v in ports.items() if v
-            }
+            # Preserve HostIp via "ip:port" strings — docker-py splits these correctly,
+            # and the format survives JSON round-trip into the helper container.
+            ports_map = {}
+            for _k, _bindings in ports.items():
+                if _bindings:
+                    ports_map[_k] = [
+                        f"{b['HostIp']}:{b['HostPort']}" if b.get("HostIp") else int(b["HostPort"])
+                        for b in _bindings
+                    ]
             tmp_name = name + "-retiring"
             net = networks[0] if networks else None
 
@@ -273,10 +277,11 @@ def apply_self_update():
             sock_vols = [v for v in vols if '.sock' in v]
             client.containers.run(
                 image,
+                name=name + "-updater",
                 command=['python3', '-c', helper_script, cfg_json],
                 volumes=sock_vols,
                 detach=True,
-                remove=True,
+                remove=False,  # keep so logs are readable if it fails
             )
 
             # Mark live, then kill PID 1 so port is freed for the helper.

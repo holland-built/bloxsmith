@@ -3,6 +3,13 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — self-update-ports-fix: ip:port string format + named helper container
+
+| File | Line(s) | Change |
+|---|---|---|
+| `server.py` | ~242–248 | `ports_map`: tuple format → `"ip:port"` strings — survives JSON round-trip, docker-py parses correctly |
+| `server.py` | ~278–284 | Helper container: `name=name+"-updater"`, `remove=False` — logs readable on failure |
+
 ## 2026-06-15 — self-update-helper-container: port-safe recreate via one-shot sidecar
 
 | File | Line(s) | Change |
