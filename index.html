@@ -1130,7 +1130,7 @@ function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
   );
 }
 
-function AuditTable({logs,limit=10}) {
+function AuditTable({logs,limit=10,onDrill}) {
   const [actionF, setActionF] = useState('');
   const [resultF, setResultF] = useState('');
   const uniqueActions = React.useMemo(()=>[...new Set(logs.map(l=>l.action))].sort(),[logs]);
@@ -1163,19 +1163,19 @@ function AuditTable({logs,limit=10}) {
         <button className={`chip${resultF==='failure'?' on':''}`} onClick={()=>setResultF(v=>v==='failure'?'':'failure')}>Fail only</button>
         <button className="chip" title="Copy filtered rows as tab-separated values" onClick={copyTSV}>⎘ TSV</button>
       </div>
-      <DataTable ctl={ctl} rows={filtered} defaultRows={limit} rowKey={l=>l.id} initialSort={{key:'ts',dir:'desc'}} exportName="audit-logs" persistId="audit"/>
+      <DataTable ctl={ctl} rows={filtered} defaultRows={limit} rowKey={l=>l.id} initialSort={{key:'ts',dir:'desc'}} exportName="audit-logs" persistId="audit" onRowClick={onDrill?l=>onDrill({type:'audit',data:l}):undefined}/>
     </>
   );
 }
 
-function DhcpTable({leases, rowLimit}) {
+function DhcpTable({leases, rowLimit, onDrill}) {
   const ctl=useColumns('dhcp',[
     {key:'addr',label:'IP Address',fixed:true,mono:true,size:11},
     {key:'host',label:'Hostname',size:11,render:l=><span style={{color:'var(--gray-200)'}}>{l.host||'—'}</span>},
     {key:'subnet',label:'Subnet',size:11,render:l=><span style={{color:'var(--gray-400)'}}>{l.subnet}</span>},
     {key:'state',label:'State',render:l=><span className={`badge ${l.state==='active'?'b-green':'b-gray'}`}>{l.state}</span>},
   ]);
-  return <DataTable ctl={ctl} rows={leases.slice(0,rowLimit)} defaultRows={rowLimit} rowKey={l=>l.addr} initialSort={{key:'addr',dir:'asc'}} exportName="dhcp-leases" persistId="dhcp"/>;
+  return <DataTable ctl={ctl} rows={leases.slice(0,rowLimit)} defaultRows={rowLimit} rowKey={l=>l.addr} initialSort={{key:'addr',dir:'asc'}} exportName="dhcp-leases" persistId="dhcp" onRowClick={onDrill?l=>onDrill({type:'lease',data:l}):undefined}/>;
 }
 
 function RowLimitBar({limit, setLimit, options=[10,25,50,100]}) {
@@ -2565,6 +2565,31 @@ function DrillSheet({entity, onClose, leases=[], subnets=[]}) {
         {kv('Rules', p.rules)}
         {kv('Created', p.created)}
         <div className="drill-kv"><span className="k">Status</span><span className={`badge ${p.active?'b-green':'b-gray'}`}>{p.active?'Active':'Off'}</span></div>
+      </>
+    );
+  } else if(entity.type==='lease') {
+    const l = entity.data;
+    const lSub = subnets.find(s=>s.id===l.subnet_id||s.name===l.subnet);
+    title = l.addr;
+    body = (
+      <>
+        {kv('IP Address', l.addr)}
+        {kv('Hostname', l.host)}
+        <div className="drill-kv"><span className="k">State</span><span className={`badge ${l.state==='active'?'b-green':'b-gray'}`}>{l.state}</span></div>
+        {kv('Subnet', l.subnet)}
+        {lSub&&kv('Utilization', `${lSub.util}% (${lSub.used}/${lSub.total})`)}
+      </>
+    );
+  } else if(entity.type==='audit') {
+    const a = entity.data;
+    title = a.action;
+    body = (
+      <>
+        {kv('Time', fmtTs(a.ts))}
+        {kv('User', a.user)}
+        <div className="drill-kv"><span className="k">Action</span><span style={{fontSize:11,fontWeight:700,color:actionColor(a.action)}}>{a.action}</span></div>
+        {kv('Resource', a.resource)}
+        <div className="drill-kv"><span className="k">Result</span><span className={`badge ${a.result==='success'?'b-green':'b-red'}`}>{a.result==='success'?'OK':'Fail'}</span></div>
       </>
     );
   }
@@ -4107,7 +4132,7 @@ function App({vault, onVaultChange}={}) {
             <div className="card">
               <div className="card-title"><div className="dot"/>DHCP Leases{sq?` — filtered (${s_leases.length})`:` (showing ${rl('dhcp')} of ${s_leases.length})`}</div>
               <RowLimitBar limit={rl('dhcp')} setLimit={v=>setRl('dhcp',v)}/>
-              <DhcpTable leases={s_leases} rowLimit={rl('dhcp')}/>
+              <DhcpTable leases={s_leases} rowLimit={rl('dhcp')} onDrill={setDrillEntity}/>
             </div>
           </>
         )}
@@ -4230,7 +4255,7 @@ function App({vault, onVaultChange}={}) {
           <div className="card">
             <div className="card-title"><div className="dot"/>Audit Log — {sq?`${s_logs.length} of `:'Last '}{auditLogs.length} Entries</div>
             <RowLimitBar limit={rl('audit')} setLimit={v=>setRl('audit',v)}/>
-            <AuditTable logs={s_logs} limit={rl('audit')}/>
+            <AuditTable logs={s_logs} limit={rl('audit')} onDrill={setDrillEntity}/>
           </div>
         )}
 

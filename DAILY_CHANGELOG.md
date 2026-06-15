@@ -172,3 +172,16 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `index.html` | 162–169 | Added `.health-banner`, `.hb-label`, `.hb-pills`, `.hb-pill` CSS with ok/warn/crit variants |
 | `index.html` | 3781–3797 | Added v2-style banner above stiles — verdict left, severity pills right; wrapped stile IIFE return in `<>` fragment |
 | `test_regression.py` | 1108–1128 | Added 7 health banner tests (css, ok/warn/crit variants, text, pills, aria) |
+
+## 2026-06-15 — Drill-down for Audit + DHCP sections
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 1133 | `AuditTable` — added `onDrill` prop |
+| `index.html` | 1166 | `AuditTable` DataTable — wired `onRowClick` to `onDrill` |
+| `index.html` | 1171 | `DhcpTable` — added `onDrill` prop |
+| `index.html` | 1178 | `DhcpTable` DataTable — wired `onRowClick` to `onDrill` |
+| `index.html` | 2570–2594 | `DrillSheet` — added `lease` and `audit` entity branches |
+| `index.html` | 4110 | DHCP section — pass `onDrill={setDrillEntity}` to `DhcpTable` |
+| `index.html` | 4233 | Audit section — pass `onDrill={setDrillEntity}` to `AuditTable` |
+| `test_regression.py` | 1131–1145 | 5 drill-down tests (AuditTable prop, DhcpTable prop, lease branch, audit branch, call site) |
