@@ -198,3 +198,12 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `index.html` | ~2484 | `DrillSheet` — added `panelRef`, focus trap (Tab/Shift-Tab), auto-focus first element, restore focus on close |
 | `index.html` | ~2613 | `DrillSheet` div — added `aria-modal="true"` and `ref={panelRef}` |
 | `index.html` | ~1598 | Toast — added `<span class="sr-only">` severity label (OK/Error/Warning/Info) before message |
+
+## 2026-06-15 — LOW polish: emoji, monospace, token, aria-label
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~3828 | Health banner warning: `⚠` emoji → `!` text (no emoji icons) |
+| `index.html` | ~2509 | DrillSheet `kv`: `fontFamily:'monospace'` → `fontVariantNumeric:'tabular-nums'` (one font vocabulary) |
+| `index.html` | ~3845 | Stile delta chip: `rgba(239,68,68,.18)` / `rgba(34,197,94,.18)` → `--badge-red-bg` / `--badge-green-bg` tokens |
+| `index.html` | ~3841 | Stile `<button>`: added `aria-label` with clean "{cat}: {sev}, {n} of {tot} — {desc}" string |
