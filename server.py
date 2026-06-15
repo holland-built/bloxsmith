@@ -60,6 +60,8 @@ APP_VERSION = os.environ.get("APP_VERSION") or _git_version()
 APP_REPO = os.environ.get("APP_REPO", "holland-built/infoblox-noc-dashboard")
 UPDATE_CHECK_DISABLED = bool(os.environ.get("DISABLE_UPDATE_CHECK"))
 _UPDATE_TTL = 24 * 3600  # seconds between checks
+import uuid as _uuid
+_INSTANCE_ID = str(_uuid.uuid4())[:8]  # unique per process; changes on container recreate
 _APPLY_COOLDOWN = 60              # seconds after startup before apply is allowed
 
 _update_cache = {"checked_at": 0.0, "latest": None, "available": False, "html_url": None}
@@ -139,7 +141,8 @@ def update_status(force=False):
         result = {"current": APP_VERSION, "latest": _update_cache["latest"],
                   "available": _update_cache["available"], "url": _update_cache["html_url"],
                   "checkDisabled": UPDATE_CHECK_DISABLED, "selfUpdate": DOCKER_OK,
-                  "cooldown": int(max(0, _APPLY_COOLDOWN - elapsed)) if cooling else 0}
+                  "cooldown": int(max(0, _APPLY_COOLDOWN - elapsed)) if cooling else 0,
+                  "instance_id": _INSTANCE_ID}
     # Auto-kick background pre-pull when update is available and idle
     with _update_lock:
         avail = _update_cache["available"]
@@ -1487,7 +1490,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(update_status(force=True)); return
         if path == "/api/update/status":
             with _pull_lock:
-                self._json(dict(_pull_state)); return
+                self._json({**dict(_pull_state), "instance_id": _INSTANCE_ID}); return
         # In vault mode, no data leaves until a tenant key is unlocked + active.
         if VAULT_MODE and not MCP_HEADERS.get("Authorization") and path.startswith("/api/"):
             self._json({"error": "vault locked", "locked": True}, 503); return
