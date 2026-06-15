@@ -27,6 +27,15 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `index.html` | ~2681 | Table row: conditional render — edit mode shows inline selects + input with teal left-border + hover bg (v2); read mode shows ✎ button before ✕ |
 | `test_regression.py` | ~623 | Added 4 new tests: `test_default_alert_rules_const`, `test_default_alert_rules_seeded`, `test_alert_rules_inline_edit_state`, `test_alert_rules_edit_button` |
 
+## 2026-06-15 — Multi-tenant switcher toolbar pill
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~294 | Added `.acct-pill`, `.acct-pill-cap`, `.acct-pill-name`, `.acct-menu.down`, `.acct-pill-prefix` CSS (8 rules) |
+| `index.html` | ~1415 | Added `AcctPill` component: V4 labeled pill, two-section popover (This login / Other logins), vault/non-vault modes, hide guard |
+| `index.html` | ~3679 | Inserted `<AcctPill .../>` immediately before `<MoreMenu .../>` in toolbar |
+| `test_regression.py` | ~1082 | Added 8 tests: `test_acct_pill_component_exists`, `test_acct_pill_hide_guard`, `test_acct_pill_cap_label`, `test_acct_pill_this_login_section`, `test_acct_pill_other_logins_section`, `test_acct_pill_manage_keys_link`, `test_acct_pill_switch_key_api`, `test_acct_pill_in_toolbar` |
+
 ## 2026-06-14 — Keyboard shortcuts + CSV export
 
 | File | Line(s) | Change |
@@ -131,3 +140,9 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `.claude/skills/tdd/SKILL.md` | new | Vertical-slice TDD skill (adapted for pytest + headless Chrome) |
 | `.claude/skills/layout-stress/SKILL.md` | new | Layout-composition robustness testing skill |
 | `CLAUDE.md` | all | Added lazy-read table, log-every-change rule, verify rule, drift checks, skills reference |
+
+## 2026-06-15 — Multi-Tenant Switcher V4 two-section popover mockup
+
+| File | Line(s) | Change |
+|---|---|---|
+| `mockups/multi-tenant-switcher/multi-tenant-switcher-all.html` | all | Replaced 5-variant pill comparison page with focused 3-scenario V4 + two-section popover mockup: vault multi-key (S1, with search + THIS LOGIN / OTHER LOGINS sections), vault single-key (S2, no OTHER LOGINS), non-vault env key (S3, flat list only). Added `--sev-red-t` / `--sev-green-t` tokens. Scenario cards with thin rgba dividers, independent click-to-toggle popovers. |
