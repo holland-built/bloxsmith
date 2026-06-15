@@ -3,6 +3,15 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — Fix column header truncation (wrap + title tooltip)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 140–141 | Change `.tbl th` `white-space:nowrap` → `white-space:normal`; update comment |
+| `index.html` | 1355–1360 | Remove `whiteSpace:'nowrap'` from DataTable `<th>` inline style; add `title={c.label}` |
+| `index.html` | 1784 | Remove `whiteSpace:'nowrap'` from WidgetViz fallback `<th>`; add `title={c.label}` |
+| `test_regression.py` | 1196–1204 | Add `test_th_header_no_inline_nowrap` + `test_th_header_title_attr` |
+
 ## 2026-06-15 — Uniform table controls: fix Babel SyntaxError (extra brace in search IIFE)
 
 | File | Line(s) | Change |

@@ -1191,6 +1191,21 @@ class FrontendStructureTests(unittest.TestCase):
         snippet = html[max(0,idx-200):idx+200]
         self.assertIn("useColumns(", snippet, "Alert rules must use useColumns")
 
+    def test_th_header_no_inline_nowrap(self):
+        html = open(HTML).read()
+        # DataTable <th> (sort-th) must not force nowrap via inline style
+        idx = html.find("sort-th'}")
+        self.assertGreater(idx, 0, "DataTable sort-th pattern not found")
+        snippet = html[max(0,idx-20):idx+300]
+        self.assertNotIn("whiteSpace:'nowrap'", snippet,
+            "DataTable <th> inline whiteSpace:nowrap must be removed to allow header wrapping")
+
+    def test_th_header_title_attr(self):
+        html = open(HTML).read()
+        # DataTable <th> must include title={c.label} for accessibility tooltip
+        self.assertIn("title={c.label}", html,
+            "DataTable <th> must have title={c.label} for header tooltip")
+
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
