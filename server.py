@@ -281,6 +281,11 @@ def apply_self_update():
                 'restart': restart, 'labels': labels, 'net': net,
             })
             sock_vols = [v for v in vols if '.sock' in v]
+            # Remove stale updater from a previous run so name doesn't conflict
+            try:
+                client.containers.get(name + "-updater").remove(force=True)
+            except Exception:
+                pass
             client.containers.run(
                 image,
                 name=name + "-updater",
