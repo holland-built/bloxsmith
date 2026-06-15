@@ -3,6 +3,30 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — Uniform table controls: fix Babel SyntaxError (extra brace in search IIFE)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 2246 | Remove extra `}` in search-results IIFE closing sequence — was `));}})()}` (9 chars), fixed to `));})()}` (8 chars); extra brace caused Babel parse error and full dashboard crash |
+
+## 2026-06-15 — Search results DataTable migration (SearchGroupTable)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~2215 | Added `SearchGroupTable({g,items,q})` component inside IIFE to satisfy Rules of Hooks (calls `useColumns` at top level, returns `DataTable`) |
+| `index.html` | ~2215 | Wrapped local-groups array in IIFE `(()=>{ ... })()` to house `SearchGroupTable` definition |
+| `index.html` | ~2230 | Removed per-group CSV `<button>` (DataTable provides its own export) |
+| `index.html` | ~2233 | Replaced `<div className="scroll"><table>...</table></div>` raw render with `<SearchGroupTable g={g} items={...} q={srchRes.q}/>` |
+
+## 2026-06-15 — exportCols noexport + AlertRulesPanel DataTable migration
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~1302 | `exportCols`: filter `cols` to `ecols` excluding `noexport:true` columns before CSV generation |
+| `index.html` | ~1310 | DataTable col descriptor comment: add `noexport?` field |
+| `index.html` | ~2801 | `AlertRulesPanel`: define `alertCols` + `alertCtl=useColumns('alert-rules',alertCols)` above return |
+| `index.html` | ~2820 | Replace raw `<table>` conditional with `<DataTable ctl={alertCtl} rows={evald} defaultRows={20} exportName="alert-rules" persistId="alert-rules"/>` |
+
 ## 2026-06-15 — self-update-env-strip: don't inherit APP_VERSION from old container
 
 | File | Line(s) | Change |

@@ -621,7 +621,7 @@ class FrontendStructureTests(unittest.TestCase):
     def test_dns_clients_datatable(self):
         self.assertContains('exportName="dns-top-clients"', "DNS clients CSV export missing")
         self.assertContains("useColumns('dns-clients'")
-        self.assertContains('downloadCSV(`search-', "search-group CSV export missing")
+        self.assertContains("SearchGroupTable", "search-group DataTable component missing")
 
     # ── connection key management: rename + replace-key ──────────────────────
     def test_connection_key_repair(self):
@@ -1164,6 +1164,32 @@ class FrontendStructureTests(unittest.TestCase):
 
     def test_audit_call_site_ondrill(self):
         self.assertContains("onDrill={setDrillEntity}/>\n", "Audit or DHCP call site missing onDrill")
+
+    def test_widget_viz_table_component_exists(self):
+        self.assertContains("function WidgetVizTable(", "WidgetVizTable sub-component missing")
+
+    def test_widget_viz_table_uses_usecolumns(self):
+        html = open(HTML).read()
+        idx = html.find("function WidgetVizTable(")
+        self.assertGreater(idx, 0, "WidgetVizTable not found")
+        snippet = html[idx:idx+300]
+        self.assertIn("useColumns(", snippet, "WidgetVizTable must call useColumns")
+
+    def test_host_drill_table_component_exists(self):
+        self.assertContains("function HostDrillTable(", "HostDrillTable component missing")
+
+    def test_lease_drill_table_component_exists(self):
+        self.assertContains("function LeaseDrillTable(", "LeaseDrillTable component missing")
+
+    def test_datatable_noexport_flag(self):
+        self.assertContains("noexport", "DataTable noexport flag missing")
+
+    def test_alert_rules_datatable(self):
+        html = open(HTML).read()
+        idx = html.find("alert-rules")
+        self.assertGreater(idx, 0, "alert-rules persistId missing")
+        snippet = html[max(0,idx-200):idx+200]
+        self.assertIn("useColumns(", snippet, "Alert rules must use useColumns")
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
