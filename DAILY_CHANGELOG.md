@@ -185,3 +185,16 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `index.html` | 4110 | DHCP section — pass `onDrill={setDrillEntity}` to `DhcpTable` |
 | `index.html` | 4233 | Audit section — pass `onDrill={setDrillEntity}` to `AuditTable` |
 | `test_regression.py` | 1131–1145 | 5 drill-down tests (AuditTable prop, DhcpTable prop, lease branch, audit branch, call site) |
+
+## 2026-06-15 — a11y + polish pass (8 fixes from /ui-ux audit)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 41 | `--fs-2xs` bumped 9px → 10px (below-readable threshold on wall display) |
+| `index.html` | 179 | `.stile-desc` color `--gray-500` → `--gray-400` (contrast just below WCAG AA) |
+| `index.html` | 393 | `prefers-reduced-motion` block — added `*,*::before,*::after{transition-duration:.01ms!important}` |
+| `index.html` | ~1317 | `DataTable <th>` — added `aria-sort` attribute (ascending/descending/none) |
+| `index.html` | ~1325 | `DataTable <tr>` — added `tabIndex={0}` + `onKeyDown` Enter/Space for keyboard drill-down |
+| `index.html` | ~2484 | `DrillSheet` — added `panelRef`, focus trap (Tab/Shift-Tab), auto-focus first element, restore focus on close |
+| `index.html` | ~2613 | `DrillSheet` div — added `aria-modal="true"` and `ref={panelRef}` |
+| `index.html` | ~1598 | Toast — added `<span class="sr-only">` severity label (OK/Error/Warning/Info) before message |
