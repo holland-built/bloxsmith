@@ -237,30 +237,57 @@ def apply_self_update():
             labels = attrs.get("Config", {}).get("Labels") or {}
             networks = list((attrs.get("NetworkSettings") or {})
                             .get("Networks", {}).keys())
-            # Rename self so the new container can take our name immediately.
-            # Start new container BEFORE stopping self — avoids killing the thread
-            # that does the recreation (old bug: container.stop killed this thread).
+            import json as _json, os as _os
+            # Preserve HostIp so macOS Docker Desktop proxies on the right interface
+            ports_map = {
+                k: [(b.get("HostIp") or "0.0.0.0", b["HostPort"]) for b in v]
+                for k, v in ports.items() if v
+            }
             tmp_name = name + "-retiring"
+            net = networks[0] if networks else None
+
+            # Rename self so new container can take our name.
             container.rename(tmp_name)
-            new = client.containers.run(
-                image,
-                detach=True,
-                name=name,
-                environment=env,
-                ports={k: [b["HostPort"] for b in v] for k, v in ports.items() if v},
-                volumes=vols,
-                restart_policy={"Name": restart},
-                labels=labels,
-                network=networks[0] if networks else None,
+
+            # Spawn a one-shot helper container (same image — has docker-py installed).
+            # It waits 3 s for us to stop (freeing the port), removes the retired
+            # container, then starts the replacement. We kill ourselves immediately
+            # after so the port is available when the helper wakes.
+            helper_script = (
+                "import json,sys,time,docker\n"
+                "c=docker.from_env()\n"
+                "cfg=json.loads(sys.argv[1])\n"
+                "time.sleep(3)\n"
+                "try: c.containers.get(cfg['old']).remove(force=True)\n"
+                "except Exception: pass\n"
+                "kw={'network':cfg['net']} if cfg.get('net') else {}\n"
+                "c.containers.run(cfg['img'],detach=True,name=cfg['name'],"
+                "environment=cfg['env'],ports=cfg['ports'],volumes=cfg['vols'],"
+                "restart_policy={'Name':cfg['restart']},labels=cfg['labels'],**kw)\n"
             )
+            cfg_json = _json.dumps({
+                'old': tmp_name, 'img': image, 'name': name,
+                'env': env, 'ports': ports_map, 'vols': vols,
+                'restart': restart, 'labels': labels, 'net': net,
+            })
+            sock_vols = [v for v in vols if '.sock' in v]
+            client.containers.run(
+                image,
+                command=['python3', '-c', helper_script, cfg_json],
+                volumes=sock_vols,
+                detach=True,
+                remove=True,
+            )
+
+            # Mark live, then kill PID 1 so port is freed for the helper.
             with _pull_lock:
                 _pull_state.update(phase="live", error=None)
             _t.sleep(0.5)
-            # Force-remove self (SIGKILL + rm). We die here — new container already live.
-            container.remove(force=True)
+            _os.kill(1, 9)  # SIGKILL — container exits, port freed, helper takes over
+
         except Exception as e:
             try:
-                container.rename(name)  # restore name if rename succeeded but run failed
+                container.rename(name)  # restore name if rename succeeded but helper launch failed
             except Exception:
                 pass
             with _pull_lock:

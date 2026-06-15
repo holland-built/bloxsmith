@@ -3,6 +3,13 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — self-update-helper-container: port-safe recreate via one-shot sidecar
+
+| File | Line(s) | Change |
+|---|---|---|
+| `server.py` | ~240–275 | `_do_recreate`: rename self → spawn one-shot helper container (same image + Docker socket) that waits 3s, removes retired container, starts new one; kill PID 1 so port is freed before helper wakes |
+| `server.py` | ~242 | `ports_map` now preserves `HostIp` via tuple `(ip, port)` — fixes `127.0.0.1` vs `0.0.0.0` binding on macOS Docker Desktop |
+
 ## 2026-06-15 — session-summary: full update pipeline fixed end-to-end
 
 All three update bugs resolved this session:
