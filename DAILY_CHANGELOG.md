@@ -283,3 +283,9 @@ All three update bugs resolved this session:
 | `index.html` | ~3540 | `applyUpdate` poll detects `instance_id` change → sets done + reloads |
 | `index.html` | ~3379 | 120s hard fallback timer in update polling loop |
 | `test_regression.py` | — | 3 new TDD tests: `test_api_update_status_has_instance_id`, `test_api_update_check_has_instance_id`, `test_api_update_instance_id_stable` |
+
+## 2026-06-15 — update UX flash fix
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~3545 | Move `instance_id` check before `setUpdStatus` — prevents `available:false` flash during update completion |
