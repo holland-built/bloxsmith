@@ -95,6 +95,8 @@ body.chat-open{padding-right:340px}
 .nav-item.active{background:var(--tint);color:var(--teal);font-weight:600;border-left:2px solid var(--teal);padding-left:8px}
 .nav-icon{width:16px;text-align:center;color:var(--gray-600);transition:color .12s}
 .nav-item:hover .nav-icon,.nav-item.active .nav-icon{color:var(--teal)}
+.sidebar-icon-strip{display:flex;gap:4px;padding:6px 0 2px}
+.sidebar-icon-strip .theme-btn{margin-left:0}
 .sidebar-foot{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--gray-400);position:relative}
 .main{padding:0 20px 40px;flex:1;min-width:0;max-width:100%;width:100%}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;padding:18px 0 14px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;background:var(--blue-dark)}
@@ -1532,27 +1534,27 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
   const arOpts=[[0,'Off'],[30,'30s'],[60,'1m'],[300,'5m']];
   const nextAr=()=>{const i=arOpts.findIndex(([v])=>v===autoRefresh);const [nv]=arOpts[(i+1)%arOpts.length];setAutoRefresh(nv);LS.set('ar',nv);};
   const arLbl=arOpts.find(([v])=>v===autoRefresh)?.[1]||'Off';
-  const row=(label,hint,fn)=>(
-    <div className="col-row" style={{cursor:'pointer'}} role="menuitem" onClick={()=>{setOpen(false);fn();}}>
+  const row=(label,hint,fn,tip)=>(
+    <div className="col-row" style={{cursor:'pointer'}} role="menuitem" title={tip} onClick={()=>{setOpen(false);fn();}}>
       <span className="col-lbl">{label}</span>{hint&&<span className="refresh-countdown" style={{marginLeft:'auto'}}>{hint}</span>}
     </div>);
   return (
     <span style={{position:'relative',display:'inline-flex'}}>
-      <button className="theme-btn" aria-label="More" aria-expanded={open} title="More" onClick={()=>setOpen(o=>!o)}>⋯</button>
+      <button className="theme-btn" aria-label="More" aria-expanded={open} title="More options" onClick={()=>setOpen(o=>!o)}>⋯</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" style={{minWidth:210}} role="menu">
-          <div className="col-row" style={{cursor:'pointer'}} role="menuitem" onClick={nextAr}>
+          <div className="col-row" style={{cursor:'pointer'}} role="menuitem" title="Cycle polling interval: Off → 30s → 1m → 5m" onClick={nextAr}>
             <span className="col-lbl">Auto-refresh</span>
             <span style={{background:'var(--tint)',border:'1px solid var(--border)',borderRadius:4,padding:'1px 6px',fontSize:10,color:'var(--gray-200)',marginLeft:'auto'}}>{arLbl} ▾</span>
           </div>
-          {row('Copy link to this view','◳',onShare)}
-          {row('Row density',density==='compact'?'Compact':'Comfortable',()=>setDensity(d=>d==='compact'?'comfortable':'compact'))}
-          {onWall&&row('Wall display mode',wallMode?'On':'Off',onWall)}
-          {onDemo&&row('Demo mode',demoMode?'On':'Off',onDemo)}
-          {onFreeze&&row('Freeze data',frozen?'Frozen':'Live',onFreeze)}
-          {onReset&&row('Reset dashboard','↺',onReset)}
-          {row('Keyboard shortcuts','?',onShortcuts)}
+          {row('Copy link to this view','◳',onShare,'Copy a shareable URL for the current section')}
+          {row('Row density',density==='compact'?'Compact':'Comfortable',()=>setDensity(d=>d==='compact'?'comfortable':'compact'),'Toggle table row height between Comfortable and Compact')}
+          {onWall&&row('Wall display mode',wallMode?'On':'Off',onWall,'Fullscreen TV/wall mode — shows live clock, hides navigation')}
+          {onDemo&&row('Demo mode',demoMode?'On':'Off',onDemo,'Hides test/allow-all policies; prioritizes threat intel feeds')}
+          {onFreeze&&row('Freeze data',frozen?'Frozen':'Live',onFreeze,'Pause all live data refresh — data stays at last snapshot')}
+          {onReset&&row('Reset dashboard','↺',onReset,'Restore default widget order and unhide all sections')}
+          {row('Keyboard shortcuts','?',onShortcuts,'Open the keyboard shortcuts reference panel')}
         </div>
       </>)}
     </span>
@@ -3206,7 +3208,7 @@ function App({vault, onVaultChange}={}) {
   const rl = (key, def=25) => rowLimits[key]||def;
   const setRl = (key, val) => { const n={...rowLimits,[key]:val}; setRowLimits(n); LS.set('rl',n); };
   const toggleCollapse = (key) => { const n={...collapsed,[key]:!collapsed[key]}; setCollapsed(n); LS.set('cl',n); };
-  const moveWidget = (id,dir) => { const arr=[...overviewOrder]; const i=arr.indexOf(id); const j=i+dir; if(j<0||j>=arr.length) return; [arr[i],arr[j]]=[arr[j],arr[i]]; setOverviewOrder(arr); LS.set('noc.widgetOrder',arr); };
+  const moveWidget = (id,dir) => { const arr=[...overviewOrder]; const i=arr.indexOf(id); const j=i+dir; if(j<0||j>=arr.length) return; [arr[i],arr[j]]=[arr[j],arr[i]]; setOverviewOrder(arr); LS.set('noc.widgetOrder',arr); toast('Layout saved ✓','ok'); };
   const toggleHideSection = (id) => { const n=hiddenSections.includes(id)?hiddenSections.filter(x=>x!==id):[...hiddenSections,id]; setHiddenSections(n); LS.set('noc.hiddenSections',n); };
   const finishWizard = () => { setShowWizard(false); LS.set('noc.wizardDone',true); };
   const resetDashboard = () => { setOverviewOrder([...DEFAULT_ORDER]); LS.set('noc.widgetOrder',[...DEFAULT_ORDER]); setCollapsed({}); LS.set('cl',{}); setHiddenSections([]); LS.set('noc.hiddenSections',[]); setShowWizard(true); };
@@ -3232,7 +3234,7 @@ function App({vault, onVaultChange}={}) {
     const fi=arr.indexOf(from), ti=arr.indexOf(id);
     if(fi<0||ti<0) return;
     arr.splice(fi,1); arr.splice(fi<ti?ti-1:ti,0,from);
-    setOverviewOrder(arr); LS.set('noc.widgetOrder',arr);
+    setOverviewOrder(arr); LS.set('noc.widgetOrder',arr); toast('Layout saved ✓','ok');
   };
 
   // props for a draggable bento wrapper; whole card is the drop target but
@@ -3651,6 +3653,12 @@ function App({vault, onVaultChange}={}) {
                     style={{marginLeft:'auto'}}>v{vault.version}{upd.available&&<><span className="ver-up-arrow">↑</span>{String(upd.latest||'').replace(/^v/,'')}</>}</span>
             )}
           </div>
+          <div className="sidebar-icon-strip">
+            <button className="theme-btn" style={{marginLeft:0}} onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')} title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
+            <button className="theme-btn" style={{marginLeft:0}} onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
+            <PresetMenu section={section}/>
+            <MoreMenu autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
+          </div>
           {updPop&&(
             <>
             <div className="acct-overlay" onClick={()=>setUpdPop(false)}/>
@@ -3695,7 +3703,6 @@ function App({vault, onVaultChange}={}) {
                   {switchingAcct?'⟳':'⇄'}
                 </button>}
               </div>
-              <div className="ctx-val">{(accounts.find(a=>a.id===activeAcct)||{}).name||'—'}</div>
               {accounts.length===1&&(
                 <div className="ctx-note"
                   title="This API key's user belongs to a single CSP account. Use an interactive User API Key (portal → user menu → User API Keys) to enable switching.">
@@ -3754,12 +3761,8 @@ function App({vault, onVaultChange}={}) {
               <button className={`chat-toggle-btn${chatOpen?' on':''}`} onClick={()=>setChatOpen(o=>!o)}>
                 ⊕ {chatOpen?'Close Query':'Query'}
               </button>
-              <button className="theme-btn" onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')}
-                title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
-              <PresetMenu section={section}/>
-              <button className="theme-btn" onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
               <AcctPill vault={vault} accounts={accounts} activeAcct={activeAcct} switchAcct={switchAcct} switchingAcct={switchingAcct} acctSearch={acctSearch} setAcctSearch={setAcctSearch} onManageKeys={()=>{}}/>
-              <MoreMenu autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
+
             </div>
           </div>
         </div>

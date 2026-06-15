@@ -3,6 +3,26 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — Topbar overhaul (v2)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~3757–3762 | Removed `theme-btn`, `PresetMenu`, `⌘K` button, `MoreMenu` from topbar-group |
+| `index.html` | ~3656 | Inserted `.sidebar-icon-strip` div after API Connected block with all 4 moved controls |
+| `index.html` | ~98 | Added `.sidebar-icon-strip` + `.sidebar-icon-strip .theme-btn` CSS rules |
+| `index.html` | ~3706 | Removed duplicate `ctx-val` account name from sidebar footer |
+| `index.html` | ~3211 | `moveWidget`: added `toast('Layout saved ✓','ok')` after LS.set |
+| `index.html` | ~3237 | `onDrop`: added `toast('Layout saved ✓','ok')` after LS.set |
+
+## 2026-06-15 — MoreMenu hover tooltips
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 1535–1538 | `row()` helper: added `tip` 4th param + `title={tip}` on div |
+| `index.html` | 1541 | More button title changed to "More options" |
+| `index.html` | 1545 | Auto-refresh row: added `title="Cycle polling interval..."` |
+| `index.html` | 1549–1555 | All `row()` calls: added tooltip string as 4th argument |
+
 ## 2026-06-15 — Drag-drop fix: off-by-one + custom ghost + opacity
 
 | File | Line(s) | Change |
