@@ -3,6 +3,12 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — self-update-stale-updater: remove existing updater container before spawning
+
+| File | Line(s) | Change |
+|---|---|---|
+| `server.py` | ~278–281 | Before `containers.run(updater)`: `client.containers.get(name+"-updater").remove(force=True)` — stale exited updater blocked name reuse |
+
 ## 2026-06-15 — self-update-helper-pull: updater pulls image before starting new container
 
 | File | Line(s) | Change |
