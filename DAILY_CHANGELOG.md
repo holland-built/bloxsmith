@@ -3,6 +3,12 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — self-update-recreate-fix: rename+run+remove instead of stop+remove+run
+
+| File | Line(s) | Change |
+|---|---|---|
+| `server.py` | 240–257 | `_do_recreate`: replace `container.stop()+remove()+run()` with `container.rename(tmp)+run()+remove(force=True)` — new container starts before old dies; error path restores name on failure |
+
 ## 2026-06-15 — stuck-spinner-fix: instance_id restart detection + 120s hard reload
 
 | File | Line(s) | Change |
