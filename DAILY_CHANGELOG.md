@@ -3,6 +3,12 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-15 — self-update-helper-pull: updater pulls image before starting new container
+
+| File | Line(s) | Change |
+|---|---|---|
+| `server.py` | ~267 | Helper script: `c.images.pull(cfg['img'])` before `containers.run()` — prepull thread dies with old container on SIGKILL; updater must re-pull to get the new image |
+
 ## 2026-06-15 — self-update-ports-tuple-fix: restore (ip,port) tuples in helper after JSON round-trip
 
 | File | Line(s) | Change |

@@ -265,6 +265,8 @@ def apply_self_update():
                 "time.sleep(3)\n"
                 "try: c.containers.get(cfg['old']).remove(force=True)\n"
                 "except Exception: pass\n"
+                # Pull the new image — prepull thread died with the old container
+                "c.images.pull(cfg['img'])\n"
                 # JSON gives lists for tuples; docker-py needs tuples for (ip,port) bindings
                 "p={k:[tuple(b) if isinstance(b,list) else b for b in v]"
                 " for k,v in cfg['ports'].items()}\n"
