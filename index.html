@@ -1085,6 +1085,10 @@ function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
   );
   return (
     <>
+      <div style={{display:'flex',justifyContent:'flex-end',marginBottom:8}}>
+        <button className="col-btn" data-export-section="security-policies"
+          onClick={()=>downloadCSV('security-policies',[...realPolicies,...testPolicies].map(p=>({name:p.name,action:p.action,rules:p.rules,active:p.active,created:p.created})),Object.keys({name:'',action:'',rules:'',active:'',created:''}))}>CSV</button>
+      </div>
       <div style={{display:'flex',gap:12,marginBottom:14}}>
         {[{v:activeCt,l:'Active Policies',c:'var(--teal)'},{v:totalRules,l:'Total Rules',c:'var(--amber)'}].map((x,i)=>(
           <div key={i} className="card" style={{flex:1,textAlign:'center',padding:14}}>
@@ -1287,7 +1291,7 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
     <>
       {(exportName||ctl)&&(
         <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginBottom:6}}>
-          {exportName&&<button className="col-btn" title="Export visible columns as CSV"
+          {exportName&&<button className="col-btn" data-export-section={exportName} title="Export visible columns as CSV"
             onClick={()=>exportCols(exportName, vcols, sorted)}>CSV</button>}
           {ctl&&<ColumnMenu ctl={ctl}/>}
         </div>
@@ -3252,6 +3256,7 @@ function App({vault, onVaultChange}={}) {
     return ()=>clearInterval(id);
   },[updApplying,updStart]);
 
+  const SECTION_EXPORT_MAP = {ipam:'subnets',dhcp:'dhcp-leases',dns:'ttl-anomalies',security:'security-policies',threats:'threat-feeds',audit:'audit-logs',hosts:'hosts',insights:'soc-insights',actions:'iq-actions'};
   useEffect(()=>{
     const handler = e => {
       if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault(); setCmdkOpen(o=>!o); return; }
@@ -3265,6 +3270,8 @@ function App({vault, onVaultChange}={}) {
         return;
       }
       if(e.key==='r'&&!e.metaKey&&!e.ctrlKey) { load(); return; }
+      if(e.key==='t'&&!e.metaKey&&!e.ctrlKey) { setTheme(t=>THEME_CYCLE[t]||'system'); return; }
+      if(e.key==='e'&&!e.metaKey&&!e.ctrlKey) { const n=SECTION_EXPORT_MAP[section]; if(n) document.querySelector(`[data-export-section="${n}"]`)?.click(); return; }
       if(e.key==='/'){ e.preventDefault(); setSection('search'); return; }
       const idx = parseInt(e.key);
       if(idx>=1&&idx<=9) { const s=SECTIONS[idx-1]; if(s) setSection(s.id); }
@@ -4181,17 +4188,27 @@ function App({vault, onVaultChange}={}) {
 
       {showShortcuts&&(
         <div className="shortcut-overlay" onClick={()=>setShowShortcuts(false)}>
-          <div className="shortcut-box" onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:14,fontWeight:700,color:'var(--teal)',marginBottom:14}}>Keyboard Shortcuts</div>
-            {[
-              ['⌘K','Command palette'],['1–9','Navigate sections'],['r','Refresh data'],['/','Jump to Search'],
-              ['?','Toggle this help'],['Esc','Close panels / clear filters'],
-            ].map(([k,d])=>(
-              <div key={k} style={{display:'flex',alignItems:'center',marginBottom:8,fontSize:12}}>
-                <span className="kbd">{k}</span><span style={{color:'var(--gray-200)'}}>{d}</span>
+          <div className="shortcut-box" style={{minWidth:420}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:14,fontWeight:700,color:'var(--teal)',marginBottom:16}}>Keyboard Shortcuts</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 24px'}}>
+              <div>
+                <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--gray-400)',marginBottom:8}}>Navigation</div>
+                {[['1–9','Switch section'],['/','Jump to Search']].map(([k,d])=>(
+                  <div key={k} style={{display:'flex',alignItems:'center',marginBottom:7,fontSize:12}}><span className="kbd">{k}</span><span style={{color:'var(--gray-200)'}}>{d}</span></div>
+                ))}
+                <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--gray-400)',margin:'12px 0 8px'}}>UI</div>
+                {[['?','Toggle this panel'],['Esc','Close panels']].map(([k,d])=>(
+                  <div key={k} style={{display:'flex',alignItems:'center',marginBottom:7,fontSize:12}}><span className="kbd">{k}</span><span style={{color:'var(--gray-200)'}}>{d}</span></div>
+                ))}
               </div>
-            ))}
-            <div style={{marginTop:12,fontSize:10,color:'var(--gray-400)'}}>Click anywhere to close</div>
+              <div>
+                <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--gray-400)',marginBottom:8}}>Actions</div>
+                {[['r','Refresh data'],['⌘K','Command palette'],['e','Export CSV'],['t','Cycle theme']].map(([k,d])=>(
+                  <div key={k} style={{display:'flex',alignItems:'center',marginBottom:7,fontSize:12}}><span className="kbd">{k}</span><span style={{color:'var(--gray-200)'}}>{d}</span></div>
+                ))}
+              </div>
+            </div>
+            <div style={{marginTop:14,fontSize:10,color:'var(--gray-400)'}}>Click anywhere to close</div>
           </div>
         </div>
       )}

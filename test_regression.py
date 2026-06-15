@@ -903,6 +903,25 @@ class FrontendStructureTests(unittest.TestCase):
     def test_keyboard_shortcut_help_button(self):
         self.assertContains("showShortcuts", "showShortcuts state missing")
 
+    def test_shortcuts_section_export_map(self):
+        self.assertContains("SECTION_EXPORT_MAP", "SECTION_EXPORT_MAP const missing")
+
+    def test_shortcuts_t_key_theme(self):
+        self.assertContains("key==='t'", "t key theme toggle missing from keydown handler")
+
+    def test_shortcuts_e_key_export(self):
+        self.assertContains("key==='e'", "e key CSV export missing from keydown handler")
+
+    def test_shortcuts_data_export_attr(self):
+        self.assertContains("data-export-section={exportName}", "data-export-section attr missing from DataTable CSV button")
+
+    def test_shortcuts_policies_csv(self):
+        self.assertContains('data-export-section="security-policies"', "PoliciesPanel CSV button missing data-export-section")
+
+    def test_shortcuts_panel_grouped(self):
+        self.assertContains("Navigation", "Navigation group missing from shortcuts panel")
+        self.assertContains("Actions", "Actions group missing from shortcuts panel")
+
     # ── Feature 6: Copy to Clipboard ──────────────────────────────────────────
 
     def test_copy_to_clipboard_helper(self):
