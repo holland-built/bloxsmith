@@ -27,6 +27,18 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `index.html` | ~2681 | Table row: conditional render — edit mode shows inline selects + input with teal left-border + hover bg (v2); read mode shows ✎ button before ✕ |
 | `test_regression.py` | ~623 | Added 4 new tests: `test_default_alert_rules_const`, `test_default_alert_rules_seeded`, `test_alert_rules_inline_edit_state`, `test_alert_rules_edit_button` |
 
+## 2026-06-14 — Keyboard shortcuts + CSV export
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~3255 | Added `SECTION_EXPORT_MAP` const mapping 9 section ids → export names |
+| `index.html` | ~3270 | Added `t` key handler → theme cycle (with input-focus guard) |
+| `index.html` | ~3274 | Added `e` key handler → section-aware CSV export via `data-export-section` DOM attr |
+| `index.html` | ~1290 | DataTable CSV button: added `data-export-section={exportName}` attr |
+| `index.html` | ~1086 | PoliciesPanel: added CSV header button with `data-export-section="security-policies"` |
+| `index.html` | ~4184 | Shortcuts panel: rewrote flat list → 2-column grid (Navigation+UI left, Actions right) with `t`/`e` bindings documented |
+| `test_regression.py` | ~820 | Added 6 new tests: `test_shortcuts_section_export_map`, `test_shortcuts_t_key_theme`, `test_shortcuts_e_key_export`, `test_shortcuts_data_export_attr`, `test_shortcuts_policies_csv`, `test_shortcuts_panel_grouped` |
+
 ## 2026-06-14 — Move auto-refresh interval picker into ⋯ menu
 
 | File | Line(s) | Change |
