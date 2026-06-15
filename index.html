@@ -291,6 +291,14 @@ body.chat-open{padding-right:340px}
 .acct-search{width:100%;background:var(--blue-dark);border:1px solid var(--border);border-radius:4px;color:var(--ink);font-size:11px;padding:5px 8px;margin-bottom:4px;outline:none;font-family:inherit}
 .acct-search:focus{border-color:var(--teal)}
 .acct-menu-item{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct-pill{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:1px;transition:border-color .12s,color .12s;flex-shrink:0}
+.acct-pill:hover:not(:disabled){border-color:var(--teal)}
+.acct-pill:disabled{opacity:.5;cursor:default}
+.acct-pill-cap{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);font-weight:600;line-height:1.2}
+.acct-pill-name{font-size:12px;font-weight:600;color:var(--gray-200);line-height:1.2;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct-pill:hover:not(:disabled) .acct-pill-cap,.acct-pill:hover:not(:disabled) .acct-pill-name{color:var(--teal)}
+.acct-menu.down{top:calc(100% + 6px);bottom:auto;left:auto;right:0;margin-bottom:0;margin-top:0;position:absolute;min-width:220px}
+.acct-pill-prefix{color:var(--gray-500);margin-right:4px;font-size:10px}
 /* compact context panel (tenant + account) */
 .ctx-panel{margin-top:10px;display:flex;flex-direction:column;gap:8px}
 .ctx-block{position:relative}
@@ -1401,6 +1409,71 @@ function AckMenu({id, onAck}) {
         </div>
       </>)}
     </span>
+  );
+}
+
+function AcctPill({accounts=[], activeAcct, switchAcct, switchingAcct, vault={}, onManageKeys, acctSearch='', setAcctSearch}) {
+  const [open, setOpen] = React.useState(false);
+  const [switchingKey, setSwitchingKey] = React.useState(null);
+  if (!accounts.length || (vault.vaultMode && !vault.unlocked)) return null;
+  const active = accounts.find(a => a.id === activeAcct) || {};
+  const otherTenants = vault.vaultMode ? (vault.tenants || []).filter(t => t.id !== vault.active) : [];
+  const totalItems = accounts.length + otherTenants.length;
+  const showSearch = totalItems > 6;
+  const filteredAccts = acctSearch ? accounts.filter(a => a.name.toLowerCase().includes(acctSearch.toLowerCase())) : accounts;
+  const filteredTenants = acctSearch ? otherTenants.filter(t => t.label.toLowerCase().includes(acctSearch.toLowerCase())) : otherTenants;
+  const close = () => { setOpen(false); setAcctSearch && setAcctSearch(''); };
+  const switchKey = async id => {
+    setSwitchingKey(id);
+    const {ok, data} = await vpost('/api/vault/active', {id});
+    if (!ok || !data.ok) { setSwitchingKey(null); toast('Switch failed: ' + ((data && data.error) || 'unknown'), 'err'); return; }
+    window.location.reload();
+  };
+  const handleSwitchAcct = id => { close(); switchAcct && switchAcct(id); };
+  const handleManageKeys = () => { close(); onManageKeys && onManageKeys(); };
+  return (
+    <div style={{position:'relative',flexShrink:0}}>
+      <button className="acct-pill" disabled={!!switchingAcct || !!switchingKey} onClick={() => open ? close() : setOpen(true)}>
+        <span className="acct-pill-cap">Account</span>
+        <span className="acct-pill-name">{active.name || '—'}</span>
+      </button>
+      {open && (<>
+        <div className="acct-overlay" onClick={close}/>
+        <div className="acct-menu down">
+          {showSearch && (
+            <input className="acct-search" autoFocus placeholder="Search accounts…"
+              value={acctSearch} onChange={e => setAcctSearch && setAcctSearch(e.target.value)}/>
+          )}
+          {vault.vaultMode && <div className="acct-sec-label">This login</div>}
+          <div style={{maxHeight:200,overflowY:'auto'}}>
+            {filteredAccts.map(a => (
+              <button key={a.id} className={`acct-menu-item${a.id === activeAcct ? ' active' : ''}`}
+                onClick={() => handleSwitchAcct(a.id)}>
+                {a.id === activeAcct ? '● ' : '○ '}{a.name}
+              </button>
+            ))}
+          </div>
+          {vault.vaultMode && otherTenants.length > 0 && (<>
+            <div className="acct-sec-divider"/>
+            <div className="acct-sec-label">Other logins</div>
+            <div style={{maxHeight:160,overflowY:'auto'}}>
+              {filteredTenants.map(t => (
+                <button key={t.id} className="acct-menu-item" disabled={!!switchingKey}
+                  onClick={() => switchKey(t.id)}>
+                  <span className="acct-pill-prefix">⇄</span>{switchingKey === t.id ? '⟳ ' : ''}{t.label}
+                </button>
+              ))}
+            </div>
+          </>)}
+          {vault.vaultMode && (<>
+            <div className="acct-sec-divider"/>
+            <button className="acct-menu-item" style={{color:'var(--gray-400)'}} onClick={handleManageKeys}>
+              Manage keys ›
+            </button>
+          </>)}
+        </div>
+      </>)}
+    </div>
   );
 }
 
@@ -3603,6 +3676,7 @@ function App({vault, onVaultChange}={}) {
                 title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
               <PresetMenu section={section}/>
               <button className="theme-btn" onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
+              <AcctPill vault={vault} accounts={accounts} activeAcct={activeAcct} switchAcct={switchAcct} switchingAcct={switchingAcct} acctSearch={acctSearch} setAcctSearch={setAcctSearch} onManageKeys={()=>{}}/>
               <MoreMenu autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
             </div>
           </div>

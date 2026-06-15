@@ -1076,6 +1076,32 @@ class FrontendStructureTests(unittest.TestCase):
             srv = f.read()
         self.assertIn("str(sorted(", srv, "Cache key missing str() conversion")
 
+    # ── Feature 7: Multi-tenant switcher toolbar pill ─────────────────────────
+
+    def test_acct_pill_component_exists(self):
+        self.assertContains("function AcctPill(", "AcctPill component not found")
+
+    def test_acct_pill_hide_guard(self):
+        self.assertContains("!accounts.length", "AcctPill hide guard missing")
+
+    def test_acct_pill_cap_label(self):
+        self.assertContains("acct-pill-cap", "AcctPill ACCOUNT cap label CSS class missing")
+
+    def test_acct_pill_this_login_section(self):
+        self.assertContains("This login", "AcctPill 'This login' section label missing")
+
+    def test_acct_pill_other_logins_section(self):
+        self.assertContains("Other logins", "AcctPill 'Other logins' section label missing")
+
+    def test_acct_pill_manage_keys_link(self):
+        self.assertContains("Manage keys", "AcctPill 'Manage keys' link missing")
+
+    def test_acct_pill_switch_key_api(self):
+        self.assertContains("api/vault/active", "AcctPill switchKey missing /api/vault/active call")
+
+    def test_acct_pill_in_toolbar(self):
+        self.assertContains("<AcctPill", "AcctPill not rendered in toolbar")
+
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
