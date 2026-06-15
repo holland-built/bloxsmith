@@ -137,10 +137,11 @@ body.chat-open{padding-right:340px}
 .bento>.drag-card>.card>.card-title::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--border)}
 /* ── tables FIT the card: fixed columns divide the width, no sideways scroll ── */
 .tbl{table-layout:fixed;width:100%}
-/* every cell = one line, ellipsis when too long; full value shown via hover tooltip (set in JS) */
-.tbl th,.tbl td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* the view/status/category pill truncates inside its column instead of fragmenting/overflowing */
-.tbl td .badge{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+/* headers stay single-line; cells wrap instead of truncating */
+.tbl th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbl td{overflow-wrap:anywhere;word-break:break-word}
+/* badges size to their full content */
+.tbl td .badge{display:inline-block;vertical-align:middle}
 /* fixed layout means no horizontal scroll is needed; keep the header row visible while scrolling */
 .scroll{overflow-x:hidden}
 .scroll .tbl thead th{position:sticky;top:0;background:var(--surface);z-index:1}
@@ -1015,7 +1016,7 @@ function TTLTable({zones, onDrill}) {
   const bad=zones.filter(z=>z.anomaly);
   const ctl=useColumns('ttl',[
     {key:'fqdn',label:'Zone FQDN',fixed:true,mono:true,size:11,width:'30%'},
-    {key:'view',label:'View',width:'14%',render:z=><span className="badge b-teal">{z.view}</span>},
+    {key:'view',label:'View',width:'20%',render:z=><span className="badge b-teal">{z.view}</span>},
     {key:'ttl',label:'TTL',mono:true,size:11,width:'13%',sortVal:z=>z.ttl,render:z=><span style={{color:z.ttl<60||z.ttl>86400?'var(--sev-red-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.ttl}s</span>},
     {key:'neg_ttl',label:'Neg TTL',mono:true,size:11,width:'13%',sortVal:z=>z.neg_ttl,render:z=><span style={{color:z.neg_ttl>3600?'var(--sev-amber-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.neg_ttl}s</span>},
     {key:'issues',label:'Issues',nosort:true,width:'30%',render:z=>z.issues.map((iss,i)=>(<span key={i} className={`badge ${iss.includes('High')||iss.includes('Too High')?'b-amber':'b-red'}`} style={{marginRight:3}}>{iss}</span>))},
