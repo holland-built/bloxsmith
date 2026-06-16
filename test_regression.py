@@ -620,6 +620,20 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertNotIn("view==='keys'", tm_body, "Keys sub-view still present — should be removed")
         self.assertNotIn("doRename", tm_body, "doRename still present — names come from CSP, rename not allowed")
 
+    def test_manage_polish(self):
+        """MANAGE section: chg label, conditional + Add key, AI section header removed, Lock vault at bottom."""
+        tm_start = self.html.index('function TenantManager(')
+        tm_end = self.html.index('\nfunction ', tm_start + 1)
+        tm_body = self.html[tm_start:tm_end]
+        self.assertIn(">chg<", tm_body, "keyed-row button should say 'chg' not 'key'")
+        self.assertNotIn(">key<", tm_body, "old 'key' label still present on keyed-row button")
+        self.assertIn("!hasNoKey", tm_body, "+ Add key must be conditional on !hasNoKey")
+        self.assertNotIn('acct-sec-label">AI', tm_body, "AI section header must be removed — fold into MANAGE")
+        # Lock vault must appear AFTER AI provider in source order
+        ai_pos = tm_body.find("AI provider")
+        lock_pos = tm_body.find("Lock vault")
+        self.assertGreater(lock_pos, ai_pos, "Lock vault must appear after AI provider in MANAGE")
+
     def test_connection_inline_confirm_delete(self):
         # the ✕ no longer deletes immediately — it arms a two-step confirm
         self.assertContains("confirmRm", "inline delete-confirm state missing")

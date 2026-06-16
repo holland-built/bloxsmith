@@ -14,6 +14,15 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `index.html` | ~3705 | Sidebar ctx-panel guard: `vault&&vault.vaultMode` → `accounts&&accounts.length>0` |
 | `test_regression.py` | — | Added 4 tests: `test_tenant_manager_trigger_shows_headline`, `test_tenant_manager_has_account_list`, `test_acct_pill_removed_from_topbar`, `test_acct_pill_not_in_toolbar`; replaced `test_acct_pill_in_toolbar` |
 
+## 2026-06-16 — manage-polish (V1 mockup)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~3059 | Keyed-row button label `key` → `chg` (action vs noun) |
+| `index.html` | ~3078–3101 | MANAGE reorder: Test → `+ Add key` (only if `!hasNoKey`) → Refresh names → AI provider → Lock vault (bottom) |
+| `index.html` | ~3095–3096 | Deleted `acct-sec-divider` + `acct-sec-label>AI` — AI provider folded into MANAGE section |
+| `test_regression.py` | ~623 | Added `test_manage_polish` — asserts `chg` label, `!hasNoKey` conditional, AI header gone, Lock vault after AI provider |
+
 ## 2026-06-16 — inline-key-actions (V1 mockup, no rename)
 
 | File | Line(s) | Change |
