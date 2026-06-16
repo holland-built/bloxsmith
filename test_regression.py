@@ -615,6 +615,27 @@ class FrontendStructureTests(unittest.TestCase):
     def test_connection_inline_confirm_delete(self):
         # the ✕ no longer deletes immediately — it arms a two-step confirm
         self.assertContains("confirmRm", "inline delete-confirm state missing")
+
+    def test_tenant_manager_trigger_shows_headline(self):
+        """TenantManager collapsed trigger shows active account name via headline variable, not 'Vault'."""
+        tm_start = self.html.index('function TenantManager(')
+        tm_end = self.html.index('\nfunction ', tm_start + 1)
+        tm_body = self.html[tm_start:tm_end]
+        self.assertIn('headline', tm_body, "headline variable missing from TenantManager body")
+        self.assertIn('ctx-cap', tm_body, "ctx-cap missing from TenantManager trigger")
+        self.assertNotIn('>Vault<', tm_body, "TenantManager ctx-cap must show account name, not 'Vault'")
+
+    def test_tenant_manager_has_account_list(self):
+        """TenantManager expanded panel has unified account list (hasKey + + key affordance)."""
+        tm_start = self.html.index('function TenantManager(')
+        tm_end = self.html.index('\nfunction ', tm_start + 1)
+        tm_body = self.html[tm_start:tm_end]
+        self.assertIn('hasKey', tm_body, "TenantManager missing unified account list (hasKey field)")
+        self.assertIn('+ key', tm_body, "TenantManager missing '+ key' affordance for no-key accounts")
+
+    def test_acct_pill_removed_from_topbar(self):
+        """AcctPill no-op onManageKeys usage removed from topbar."""
+        self.assertNotIn('onManageKeys={()=>{}}', self.html, "AcctPill topbar usage with no-op onManageKeys still present")
         self.assertContains("tenant-confirm")
 
     def test_active_connection_test(self):
@@ -1145,8 +1166,10 @@ class FrontendStructureTests(unittest.TestCase):
     def test_acct_pill_switch_key_api(self):
         self.assertContains("api/vault/active", "AcctPill switchKey missing /api/vault/active call")
 
-    def test_acct_pill_in_toolbar(self):
-        self.assertContains("<AcctPill", "AcctPill not rendered in toolbar")
+    def test_acct_pill_not_in_toolbar(self):
+        """AcctPill removed from topbar — only function definition remains."""
+        self.assertNotIn('<AcctPill', self.html, "AcctPill still rendered in toolbar — should be removed")
+        self.assertContains("function AcctPill(", "AcctPill function definition must be retained")
 
     # ── Feature 8: Health summary banner ──────────────────────────────────────
 

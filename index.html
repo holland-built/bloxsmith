@@ -2996,6 +2996,12 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   const multiAcct=accounts.length>1;
   const headline=activeAcctName||(active&&active.label)||'—';        // account-first: account is the headline
   const keyDiffers=active&&active.label&&activeAcctName&&active.label!==activeAcctName;
+  const allTenants=vault.vaultMode?(vault.tenants||[]):[];
+  const unified=accounts.map(a=>{const t=allTenants.find(t=>t.label===a.name);return{name:a.name,accountId:a.id,tenantId:t?t.id:null,hasKey:!!t,isActive:a.id===activeAcct};}).sort((x,y)=>(y.isActive-x.isActive)||(y.hasKey-x.hasKey)||x.name.localeCompare(y.name));
+  const filteredAccts=acctSearch?unified.filter(u=>u.name.toLowerCase().includes(acctSearch.toLowerCase())):unified;
+  const showAcctSearch=unified.length>6;
+  const hasNoKey=filteredAccts.some(u=>!u.hasKey);
+  const hasWithKey=filteredAccts.some(u=>u.hasKey);
   const reload=()=>window.location.reload();
   const close=()=>{ setOpen(false); setView('main'); setConfirmRm(null); setRenameId(null); setAcctSearch&&setAcctSearch(''); };
   const switchAccount=id=>{ close(); switchAcct&&switchAcct(id); };
@@ -3019,8 +3025,11 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   return (
     <div className="ctx-block">
       <div className="ctx-head">
-        <span className="ctx-cap" title="Vault settings: manage stored keys, test connection, AI provider">Vault</span>
-        <button className="ctx-swap" title="Vault settings & key management" disabled={switchingAcct} onClick={()=>open?close():setOpen(true)}>
+        <div style={{minWidth:0,flex:1}}>
+          <span className="ctx-cap" title="Infoblox Portal — account &amp; vault">Infoblox Portal</span>
+          <div className="ctx-val">{'● '}{headline}</div>
+        </div>
+        <button className="ctx-swap" title="Switch account or manage vault" disabled={switchingAcct} onClick={()=>open?close():setOpen(true)}>
           {switchingAcct?'⟳':'⇄'}
         </button>
       </div>
@@ -3064,8 +3073,33 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               <span className="menu-desc">Re-fetch account names from CSP</span>
             </button>
           </>) : (<>
-            {/* ── Main view: manage keys + AI (account/connection switching is AcctPill's job) ── */}
+            {/* ── Main view: accounts + manage ── */}
+            <div className="acct-sec-label">Accounts</div>
+            {showAcctSearch&&<input className="acct-search" autoFocus placeholder="Search accounts…" value={acctSearch} onChange={e=>setAcctSearch&&setAcctSearch(e.target.value)}/>}
+            <div style={{maxHeight:200,overflowY:'auto'}}>
+              {filteredAccts.filter(u=>u.hasKey).map(u=>(
+                <button key={u.accountId}
+                  style={{borderLeft:`2px solid ${u.hasKey?'var(--teal)':'var(--border)'}`,paddingLeft:'8px',borderRadius:'0 4px 4px 0',display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%'}}
+                  className={`acct-menu-item${u.isActive?' active':''}`}
+                  disabled={u.isActive||!!switchingKey}
+                  onClick={()=>u.isActive?undefined:(u.tenantId&&u.tenantId!==vault.active?switchKey(u.tenantId):switchAccount(u.accountId))}>
+                  <span>{u.isActive?'● ':(switchingKey===u.tenantId?'⟳ ':'○ ')}{u.name}</span>
+                  <span style={{fontSize:'9px',background:'rgba(214,210,203,0.12)',color:'var(--teal)',border:'1px solid rgba(214,210,203,0.25)',borderRadius:'3px',padding:'1px 5px',fontWeight:600,flexShrink:0,marginLeft:6}}>KEY</span>
+                </button>
+              ))}
+              {hasWithKey&&hasNoKey&&<div className="acct-sec-divider" style={{margin:'4px 10px'}}/>}
+              {filteredAccts.filter(u=>!u.hasKey).map(u=>(
+                <div key={u.accountId} style={{display:'flex',alignItems:'center'}}>
+                  <button style={{borderLeft:'2px solid var(--border)',paddingLeft:'8px',borderRadius:'0 4px 4px 0',flex:1,color:'var(--gray-500)',cursor:'default'}} className="acct-menu-item" disabled>
+                    {'○ '}{u.name}
+                  </button>
+                  {vault.vaultMode&&<button style={{fontSize:'9px',padding:'1px 5px',marginRight:'6px',borderRadius:'3px',border:'1px solid var(--border)',background:'none',color:'var(--gray-400)',cursor:'pointer',flexShrink:0}} onClick={e=>{e.stopPropagation();setAdding(true);}}>+ key</button>}
+                </div>
+              ))}
+            </div>
+            <div className="acct-sec-divider"/>
             <div className="acct-sec-label">Manage</div>
+            {vault.vaultMode&&vault.unlocked&&(<>
             <button className="menu-item" onClick={()=>setView('keys')}>
               <span className="menu-lbl">Keys ({tenants.length})<span className="menu-chev">›</span></span>
               <span className="menu-desc">Stored logins — one reaches all its accounts</span>
@@ -3084,6 +3118,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               <span className="menu-lbl">AI provider</span>
               <span className="menu-desc">LLM for the query box (vault-wide)</span>
             </button>
+            </>)}
           </>)}
         </div>
       </>)}
@@ -3667,7 +3702,7 @@ function App({vault, onVaultChange}={}) {
             </>
           )}
           <div className="ctx-panel">
-          {vault&&vault.vaultMode&&(
+          {accounts&&accounts.length>0&&(
             <TenantManager vault={vault} accounts={accounts} activeAcct={activeAcct}
               switchAcct={switchAcct} switchingAcct={switchingAcct}
               acctSearch={acctSearch} setAcctSearch={setAcctSearch}/>
@@ -3703,7 +3738,6 @@ function App({vault, onVaultChange}={}) {
               <button className={`chat-toggle-btn${chatOpen?' on':''}`} onClick={()=>setChatOpen(o=>!o)}>
                 ⊕ {chatOpen?'Close Query':'Query'}
               </button>
-              <AcctPill vault={vault} accounts={accounts} activeAcct={activeAcct} switchAcct={switchAcct} switchingAcct={switchingAcct} acctSearch={acctSearch} setAcctSearch={setAcctSearch} onManageKeys={()=>{}}/>
 
             </div>
           </div>
