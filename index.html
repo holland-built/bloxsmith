@@ -1467,13 +1467,19 @@ function AckMenu({id, onAck}) {
 function AcctPill({accounts=[], activeAcct, switchAcct, switchingAcct, vault={}, onManageKeys, acctSearch='', setAcctSearch}) {
   const [open, setOpen] = React.useState(false);
   const [switchingKey, setSwitchingKey] = React.useState(null);
+  const [adding, setAdding] = React.useState(false);
   if (!accounts.length || (vault.vaultMode && !vault.unlocked)) return null;
   const active = accounts.find(a => a.id === activeAcct) || {};
-  const otherTenants = vault.vaultMode ? (vault.tenants || []).filter(t => t.id !== vault.active) : [];
-  const totalItems = accounts.length + otherTenants.length;
-  const showSearch = totalItems > 6;
-  const filteredAccts = acctSearch ? accounts.filter(a => a.name.toLowerCase().includes(acctSearch.toLowerCase())) : accounts;
-  const filteredTenants = acctSearch ? otherTenants.filter(t => t.label.toLowerCase().includes(acctSearch.toLowerCase())) : otherTenants;
+  const allTenants = vault.vaultMode ? (vault.tenants || []) : [];
+  // Build unified flat list: each account, cross-ref with stored keys by name
+  const unified = accounts.map(a => {
+    const t = allTenants.find(t => t.label === a.name);
+    return { name: a.name, accountId: a.id, tenantId: t ? t.id : null, hasKey: !!t, isActive: a.id === activeAcct };
+  }).sort((x,y) => (y.isActive - x.isActive) || (y.hasKey - x.hasKey) || x.name.localeCompare(y.name));
+  const filtered = acctSearch ? unified.filter(u => u.name.toLowerCase().includes(acctSearch.toLowerCase())) : unified;
+  const showSearch = unified.length > 6;
+  const hasNoKey = filtered.some(u => !u.hasKey);
+  const hasWithKey = filtered.some(u => u.hasKey);
   const close = () => { setOpen(false); setAcctSearch && setAcctSearch(''); };
   const switchKey = async id => {
     setSwitchingKey(id);
@@ -1483,8 +1489,11 @@ function AcctPill({accounts=[], activeAcct, switchAcct, switchingAcct, vault={},
   };
   const handleSwitchAcct = id => { close(); switchAcct && switchAcct(id); };
   const handleManageKeys = () => { close(); onManageKeys && onManageKeys(); };
+  const keyedStyle = {borderLeft:'2px solid var(--teal)',paddingLeft:'8px',borderRadius:'0 4px 4px 0'};
+  const grayStyle  = {borderLeft:'2px solid var(--border)',paddingLeft:'8px',borderRadius:'0 4px 4px 0',color:'var(--gray-500)',cursor:'default'};
   return (
     <div style={{position:'relative',flexShrink:0}}>
+      {adding && <VaultAddTenant onDone={()=>{setAdding(false);setOpen(false);window.location.reload();}} onCancel={()=>setAdding(false)}/>}
       <button className="acct-pill" disabled={!!switchingAcct || !!switchingKey} onClick={() => open ? close() : setOpen(true)}>
         <span className="acct-pill-cap">Account</span>
         <span className="acct-pill-name">{active.name || '—'}</span>
@@ -1496,27 +1505,26 @@ function AcctPill({accounts=[], activeAcct, switchAcct, switchingAcct, vault={},
             <input className="acct-search" autoFocus placeholder="Search accounts…"
               value={acctSearch} onChange={e => setAcctSearch && setAcctSearch(e.target.value)}/>
           )}
-          {vault.vaultMode && <div className="acct-sec-label">This login</div>}
-          <div style={{maxHeight:200,overflowY:'auto'}}>
-            {filteredAccts.map(a => (
-              <button key={a.id} className={`acct-menu-item${a.id === activeAcct ? ' active' : ''}`}
-                onClick={() => handleSwitchAcct(a.id)}>
-                {a.id === activeAcct ? '● ' : '○ '}{a.name}
+          <div style={{maxHeight:280,overflowY:'auto'}}>
+            {filtered.filter(u => u.hasKey).map(u => (
+              <button key={u.accountId} style={keyedStyle}
+                className={`acct-menu-item${u.isActive ? ' active' : ''}`}
+                disabled={u.isActive || !!switchingKey}
+                onClick={() => u.isActive ? undefined : (u.tenantId && u.tenantId !== vault.active ? switchKey(u.tenantId) : handleSwitchAcct(u.accountId))}>
+                {u.isActive ? '● ' : (switchingKey === u.tenantId ? '⟳ ' : '○ ')}{u.name}
               </button>
             ))}
-          </div>
-          {vault.vaultMode && otherTenants.length > 0 && (<>
-            <div className="acct-sec-divider"/>
-            <div className="acct-sec-label">Other logins</div>
-            <div style={{maxHeight:160,overflowY:'auto'}}>
-              {filteredTenants.map(t => (
-                <button key={t.id} className="acct-menu-item" disabled={!!switchingKey}
-                  onClick={() => switchKey(t.id)}>
-                  <span className="acct-pill-prefix">⇄</span>{switchingKey === t.id ? '⟳ ' : ''}{t.label}
+            {hasWithKey && hasNoKey && <div className="acct-sec-divider" style={{margin:'4px 10px'}}/>}
+            {filtered.filter(u => !u.hasKey).map(u => (
+              <div key={u.accountId} style={{display:'flex',alignItems:'center'}}>
+                <button style={{...grayStyle,flex:1}} className="acct-menu-item" disabled>
+                  {'○ '}{u.name}
                 </button>
-              ))}
-            </div>
-          </>)}
+                {vault.vaultMode && <button style={{fontSize:'9px',padding:'1px 5px',marginRight:'6px',borderRadius:'3px',border:'1px solid var(--border)',background:'none',color:'var(--gray-400)',cursor:'pointer',flexShrink:0}}
+                  onClick={e=>{e.stopPropagation();setAdding(true);}}>+ key</button>}
+              </div>
+            ))}
+          </div>
           {vault.vaultMode && (<>
             <div className="acct-sec-divider"/>
             <button className="acct-menu-item" style={{color:'var(--gray-400)'}} onClick={handleManageKeys}>
