@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Unified Tenant Picker — All Variants</title>
+<style>
+:root {
+  --blue-deep:#262B36;--blue-mid:#171A21;--blue-dark:#10131A;
+  --teal:#D6D2CB;--teal-bright:#EBE8E2;
+  --surface:#1B1F28;--surface-2:#232834;--surface-3:#2E3440;
+  --border:rgba(255,255,255,0.09);
+  --gray-100:#ECEAE7;--gray-200:#C5C1BB;--gray-400:#8F949C;--gray-500:#82868E;--gray-600:#5C5954;
+  --ink:#F1F2F4;
+  --hover:rgba(255,255,255,.045);
+  --hover-strong:rgba(255,255,255,.1);
+  --tint:rgba(255,255,255,.11);
+  --tint-border:rgba(255,255,255,.3);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--blue-dark);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  padding: 32px;
+}
+h1 { font-size: 18px; color: var(--teal); margin-bottom: 8px; font-weight: 700; letter-spacing: .04em; }
+.subtitle { font-size: 12px; color: var(--gray-400); margin-bottom: 40px; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+.variant { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.variant-label {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.recommended-badge {
+  background: var(--tint);
+  color: var(--teal);
+  border: 1px solid var(--tint-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .05em;
+}
+.variant-desc { font-size: 10px; color: var(--gray-500); padding: 6px 14px 8px; border-bottom: 1px solid var(--border); line-height: 1.5; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.dropdown {
+  padding: 6px;
+  min-width: 220px;
+}
+/* Shared acct-menu styles */
+.acct-search {
+  width: 100%; background: var(--blue-dark); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--ink); font-size: 11px; padding: 5px 8px;
+  margin-bottom: 4px; outline: none; font-family: inherit;
+}
+.acct-search:focus { border-color: var(--teal); }
+.acct-sec-label {
+  font-size: 9px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--gray-500); font-weight: 600; padding: 4px 10px 2px;
+}
+.acct-sec-divider { height: 1px; background: var(--border); margin: 4px 0; }
+.item {
+  display: flex; align-items: center; width: 100%; text-align: left;
+  background: none; border: none; color: var(--gray-200); font-size: 11px;
+  padding: 6px 10px; border-radius: 4px; cursor: pointer; transition: all .12s;
+  gap: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.item:hover { background: var(--hover-strong); color: var(--teal); }
+.item.active { color: var(--teal); font-weight: 700; }
+.item.grayed { color: var(--gray-500); cursor: default; }
+.item.grayed:hover { background: none; color: var(--gray-500); }
+.item-prefix { flex-shrink: 0; margin-right: 5px; }
+.item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.item-suffix { flex-shrink: 0; margin-left: auto; padding-left: 8px; }
+.key-badge {
+  font-size: 9px; padding: 1px 5px; border-radius: 3px;
+  border: 1px solid var(--border); color: var(--gray-400);
+  background: var(--surface-3);
+}
+.add-key-btn {
+  font-size: 9px; padding: 1px 5px; border-radius: 3px;
+  border: 1px solid var(--border); color: var(--gray-400);
+  background: none; cursor: pointer; transition: all .12s;
+}
+.add-key-btn:hover { border-color: var(--teal); color: var(--teal); }
+.manage-link {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  color: var(--gray-400); font-size: 11px; padding: 6px 10px; border-radius: 4px;
+  cursor: pointer; transition: all .12s;
+}
+.manage-link:hover { color: var(--teal); background: var(--hover); }
+.pill-wrap {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--blue-dark);
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  align-items: center;
+}
+.acct-pill {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; cursor: pointer; display: flex; flex-direction: column;
+  align-items: flex-start; gap: 1px;
+}
+.acct-pill-cap { font-size: 9px; text-transform: uppercase; letter-spacing: .07em; color: var(--gray-500); font-weight: 600; line-height: 1.2; }
+.acct-pill-name { font-size: 12px; font-weight: 600; color: var(--gray-200); line-height: 1.2; }
+
+/* V5: inline key indicator as colored dot */
+.key-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--teal); flex-shrink: 0; margin-left: 6px;
+}
+.no-key-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--gray-600); flex-shrink: 0; margin-left: 6px;
+}
+/* V6: two-line item */
+.item-two-line {
+  display: flex; flex-direction: column; width: 100%;
+  background: none; border: none; padding: 6px 10px; border-radius: 4px;
+  cursor: pointer; text-align: left; transition: all .12s;
+}
+.item-two-line:hover { background: var(--hover-strong); }
+.item-two-line .main-row { display: flex; align-items: center; gap: 5px; }
+.item-two-line .sub-row { font-size: 9px; color: var(--gray-500); margin-top: 1px; padding-left: 14px; }
+</style>
+</head>
+<body>
+<h1>Unified Tenant Picker — Mockup Variants</h1>
+<p class="subtitle">Data: 3 keys stored (PM Demo, Infoblox SE AMS ×2); 5 accounts under active key; 2 accounts have no stored key</p>
+
+<div class="grid">
+
+  <!-- V1: Flat list, no section labels, key badge on right -->
+  <div class="variant">
+    <div class="variant-label">v1 — Flat list + key badge (right)</div>
+    <div class="variant-desc">All tenants in one list. "key" badge right-aligned on entries with stored API key. No-key entries grayed with "+ key" badge.</div>
+    <div class="pill-wrap">
+      <button class="acct-pill"><span class="acct-pill-cap">Account</span><span class="acct-pill-name">Infoblox SE AMS</span></button>
+    </div>
+    <div class="dropdown">
+      <input class="acct-search" placeholder="Search accounts…" readonly>
+      <div style="max-height:240px;overflow-y:auto">
+        <button class="item active"><span class="item-prefix">●</span><span class="item-name">Infoblox SE AMS</span><span class="item-suffix"><span class="key-badge">key</span></span></button>
+        <button class="item"><span class="item-prefix">○</span><span class="item-name">PM Demo</span><span class="item-suffix"><span class="key-badge">key</span></span></button>
+        <button class="item"><span class="item-prefix">○</span><span class="item-name">Infoblox SE AMS #2</span><span class="item-suffix"><span class="key-badge">key</span></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">DELTA AIRLINES</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">Here Holding Corporation</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">Infoblox Sales</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">PM Demo</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+      </div>
+      <div class="acct-sec-divider"></div>
+      <button class="manage-link">Manage keys ›</button>
+    </div>
+  </div>
+
+  <!-- V2: Flat list, ⇄ prefix for key-backed items -->
+  <div class="variant">
+    <div class="variant-label">v2 — Flat list, ⇄ prefix for key-backed</div>
+    <div class="variant-desc">Key-backed entries show ⇄ prefix (switch indicator). No-key grayed. Simple, minimal chrome.</div>
+    <div class="pill-wrap">
+      <button class="acct-pill"><span class="acct-pill-cap">Account</span><span class="acct-pill-name">Infoblox SE AMS</span></button>
+    </div>
+    <div class="dropdown">
+      <input class="acct-search" placeholder="Search accounts…" readonly>
+      <div style="max-height:240px;overflow-y:auto">
+        <button class="item active"><span class="item-prefix" style="color:var(--teal)">●</span><span class="item-name">Infoblox SE AMS</span></button>
+        <button class="item"><span class="item-prefix" style="color:var(--gray-400)">⇄</span><span class="item-name" style="margin-left:3px">PM Demo</span></button>
+        <button class="item"><span class="item-prefix" style="color:var(--gray-400)">⇄</span><span class="item-name" style="margin-left:3px">Infoblox SE AMS #2</span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">DELTA AIRLINES</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">Here Holding Corporation</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">Infoblox Sales</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">PM Demo</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+      </div>
+      <div class="acct-sec-divider"></div>
+      <button class="manage-link">Manage keys ›</button>
+    </div>
+  </div>
+
+  <!-- V3: Two soft sections "With API key" / "No key stored" -->
+  <div class="variant">
+    <div class="variant-label">v3 — Two sections: API key / No key</div>
+    <div class="variant-desc">Soft divider separates "API key stored" from "No key" — replaces old CONNECTION/ACCOUNT with a clearer framing.</div>
+    <div class="pill-wrap">
+      <button class="acct-pill"><span class="acct-pill-cap">Account</span><span class="acct-pill-name">Infoblox SE AMS</span></button>
+    </div>
+    <div class="dropdown">
+      <input class="acct-search" placeholder="Search accounts…" readonly>
+      <div class="acct-sec-label">API key stored</div>
+      <div style="max-height:160px;overflow-y:auto">
+        <button class="item active"><span class="item-prefix">●</span><span class="item-name">Infoblox SE AMS</span></button>
+        <button class="item"><span class="item-prefix">○</span><span class="item-name">PM Demo</span></button>
+        <button class="item"><span class="item-prefix">○</span><span class="item-name">Infoblox SE AMS #2</span></button>
+      </div>
+      <div class="acct-sec-divider"></div>
+      <div class="acct-sec-label">No key stored</div>
+      <div style="max-height:120px;overflow-y:auto">
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">DELTA AIRLINES</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">Here Holding Corporation</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">Infoblox Sales</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">PM Demo</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+      </div>
+      <div class="acct-sec-divider"></div>
+      <button class="manage-link">Manage keys ›</button>
+    </div>
+  </div>
+
+  <!-- V4: Flat list, colored left border for key-backed -->
+  <div class="variant">
+    <div class="variant-label">v4 — Left accent border for key-backed <span class="recommended-badge">★ Recommended</span></div>
+    <div class="variant-desc">Thin teal left border on clickable (key-backed) rows. No-key rows plain gray. Most scannable — color distinguishes access without a badge taking up space.</div>
+    <div class="pill-wrap">
+      <button class="acct-pill"><span class="acct-pill-cap">Account</span><span class="acct-pill-name">Infoblox SE AMS</span></button>
+    </div>
+    <div class="dropdown">
+      <input class="acct-search" placeholder="Search accounts…" readonly>
+      <div style="max-height:240px;overflow-y:auto">
+        <button class="item active" style="border-left:2px solid var(--teal);padding-left:8px;border-radius:0 4px 4px 0"><span class="item-prefix">●</span><span class="item-name">Infoblox SE AMS</span></button>
+        <button class="item" style="border-left:2px solid var(--teal);padding-left:8px;border-radius:0 4px 4px 0"><span class="item-prefix">○</span><span class="item-name">PM Demo</span></button>
+        <button class="item" style="border-left:2px solid var(--teal);padding-left:8px;border-radius:0 4px 4px 0"><span class="item-prefix">○</span><span class="item-name">Infoblox SE AMS #2</span></button>
+        <div class="acct-sec-divider" style="margin:2px 0 2px 10px"></div>
+        <button class="item grayed" style="border-left:2px solid var(--border);padding-left:8px;border-radius:0 4px 4px 0"><span class="item-prefix">○</span><span class="item-name">DELTA AIRLINES</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed" style="border-left:2px solid var(--border);padding-left:8px;border-radius:0 4px 4px 0"><span class="item-prefix">○</span><span class="item-name">Here Holding Corp.</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed" style="border-left:2px solid var(--border);padding-left:8px;border-radius:0 4px 4px 0"><span class="item-prefix">○</span><span class="item-name">Infoblox Sales</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+        <button class="item grayed" style="border-left:2px solid var(--border);padding-left:8px;border-radius:0 4px 4px 0"><span class="item-prefix">○</span><span class="item-name">PM Demo</span><span class="item-suffix"><button class="add-key-btn">+ key</button></span></button>
+      </div>
+      <div class="acct-sec-divider"></div>
+      <button class="manage-link">Manage keys ›</button>
+    </div>
+  </div>
+
+  <!-- V5: Dot indicator column (teal = key, gray = no key) -->
+  <div class="variant">
+    <div class="variant-label">v5 — Dot column (teal = key, gray = no key)</div>
+    <div class="variant-desc">Small colored dot after name: teal = API key stored, gray = no key. Compact, no text overhead.</div>
+    <div class="pill-wrap">
+      <button class="acct-pill"><span class="acct-pill-cap">Account</span><span class="acct-pill-name">Infoblox SE AMS</span></button>
+    </div>
+    <div class="dropdown">
+      <input class="acct-search" placeholder="Search accounts…" readonly>
+      <div style="max-height:240px;overflow-y:auto">
+        <button class="item active"><span class="item-prefix">●</span><span class="item-name">Infoblox SE AMS</span><span class="key-dot"></span></button>
+        <button class="item"><span class="item-prefix">○</span><span class="item-name">PM Demo</span><span class="key-dot"></span></button>
+        <button class="item"><span class="item-prefix">○</span><span class="item-name">Infoblox SE AMS #2</span><span class="key-dot"></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">DELTA AIRLINES</span><span class="no-key-dot"></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">Here Holding Corporation</span><span class="no-key-dot"></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">Infoblox Sales</span><span class="no-key-dot"></span></button>
+        <button class="item grayed"><span class="item-prefix">○</span><span class="item-name">PM Demo</span><span class="no-key-dot"></span></button>
+      </div>
+      <div class="acct-sec-divider"></div>
+      <button class="manage-link">Manage keys ›</button>
+    </div>
+  </div>
+
+  <!-- V6: Two-line rows with sub-text for key status -->
+  <div class="variant">
+    <div class="variant-label">v6 — Two-line rows with key status sub-text</div>
+    <div class="variant-desc">Each row has a name line + a smaller status line ("API key stored" or "No key — add one"). More verbose but fully self-explanatory.</div>
+    <div class="pill-wrap">
+      <button class="acct-pill"><span class="acct-pill-cap">Account</span><span class="acct-pill-name">Infoblox SE AMS</span></button>
+    </div>
+    <div class="dropdown" style="min-width:240px">
+      <input class="acct-search" placeholder="Search accounts…" readonly>
+      <div style="max-height:300px;overflow-y:auto">
+        <button class="item-two-line" style="color:var(--teal)">
+          <div class="main-row"><span style="margin-right:5px">●</span>Infoblox SE AMS</div>
+          <div class="sub-row">Active — API key stored</div>
+        </button>
+        <button class="item-two-line" style="color:var(--gray-200)">
+          <div class="main-row"><span style="margin-right:5px;color:var(--gray-400)">○</span>PM Demo</div>
+          <div class="sub-row">API key stored — click to switch</div>
+        </button>
+        <button class="item-two-line" style="color:var(--gray-200)">
+          <div class="main-row"><span style="margin-right:5px;color:var(--gray-400)">○</span>Infoblox SE AMS #2</div>
+          <div class="sub-row">API key stored — click to switch</div>
+        </button>
+        <button class="item-two-line" style="color:var(--gray-500);cursor:default">
+          <div class="main-row"><span style="margin-right:5px">○</span>DELTA AIRLINES</div>
+          <div class="sub-row" style="display:flex;gap:6px;align-items:center">No key — <button class="add-key-btn">+ add key</button></div>
+        </button>
+        <button class="item-two-line" style="color:var(--gray-500);cursor:default">
+          <div class="main-row"><span style="margin-right:5px">○</span>Here Holding Corporation</div>
+          <div class="sub-row" style="display:flex;gap:6px;align-items:center">No key — <button class="add-key-btn">+ add key</button></div>
+        </button>
+      </div>
+      <div class="acct-sec-divider"></div>
+      <button class="manage-link">Manage keys ›</button>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:40px;padding:16px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--gray-400);line-height:1.7">
+  <b style="color:var(--teal)">Legend:</b> ● = active account &nbsp;|&nbsp; ○ = switchable (click) &nbsp;|&nbsp; ○ grayed = visible but no API key stored &nbsp;|&nbsp; + key = opens Add Key flow
+</div>
+</body>
+</html>

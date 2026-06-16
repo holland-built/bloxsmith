@@ -469,6 +469,26 @@ class FrontendStructureTests(unittest.TestCase):
     def test_account_switch_feedback(self):
         self.assertContains("Switched to", "account switch toast missing")
 
+    # ── unified-tenant-picker ─────────────────────────────────────────────────
+
+    def test_no_other_logins_label(self):
+        """Old 'Other logins' section label replaced by unified flat list."""
+        self.assertNotIn("Other logins", self.html,
+                         "'Other logins' label must be removed — unified list has no section labels")
+
+    def test_no_this_login_label(self):
+        """Old 'This login' section label replaced by unified flat list."""
+        self.assertNotIn("This login", self.html,
+                         "'This login' label must be removed — unified list has no section labels")
+
+    def test_unified_list_builds_haskey(self):
+        """AcctPill builds unified list with hasKey per entry."""
+        self.assertContains("hasKey", "unified list 'hasKey' field missing from AcctPill")
+
+    def test_no_key_add_key_affordance(self):
+        """No-key entries show '+ key' affordance in AcctPill."""
+        self.assertContains("+ key", "no-key '+ key' affordance missing from AcctPill")
+
     # ── header-update-ux ─────────────────────────────────────────────────────
 
     def test_update_bar_removed(self):
@@ -1110,11 +1130,14 @@ class FrontendStructureTests(unittest.TestCase):
     def test_acct_pill_cap_label(self):
         self.assertContains("acct-pill-cap", "AcctPill ACCOUNT cap label CSS class missing")
 
-    def test_acct_pill_this_login_section(self):
-        self.assertContains("This login", "AcctPill 'This login' section label missing")
+    def test_acct_pill_unified_haskey(self):
+        """AcctPill uses unified flat list with hasKey per entry (replaces This login/Other logins)."""
+        self.assertContains("hasKey", "AcctPill unified list 'hasKey' field missing")
 
-    def test_acct_pill_other_logins_section(self):
-        self.assertContains("Other logins", "AcctPill 'Other logins' section label missing")
+    def test_acct_pill_no_section_labels(self):
+        """Old 'This login'/'Other logins' section labels removed in favour of unified flat list."""
+        self.assertNotIn("This login", self.html, "'This login' label must not appear — unified list has no section labels")
+        self.assertNotIn("Other logins", self.html, "'Other logins' label must not appear — unified list has no section labels")
 
     def test_acct_pill_manage_keys_link(self):
         self.assertContains("Manage keys", "AcctPill 'Manage keys' link missing")
