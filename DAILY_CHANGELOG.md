@@ -14,6 +14,22 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `index.html` | ~3705 | Sidebar ctx-panel guard: `vault&&vault.vaultMode` → `accounts&&accounts.length>0` |
 | `test_regression.py` | — | Added 4 tests: `test_tenant_manager_trigger_shows_headline`, `test_tenant_manager_has_account_list`, `test_acct_pill_removed_from_topbar`, `test_acct_pill_not_in_toolbar`; replaced `test_acct_pill_in_toolbar` |
 
+## 2026-06-16 — inline-key-actions (V1 mockup, no rename)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~2987 | Removed `view` state (`'main'`\|`'keys'`) from TenantManager |
+| `index.html` | ~2990 | Removed `renameId`/`renameVal` state — names from CSP, cannot rename |
+| `index.html` | ~3006 | `close()`: removed `setView('main')` + `setRenameId(null)` |
+| `index.html` | ~3009 | `switchKey()`: removed `setView('main')` from early-return guard |
+| `index.html` | ~3016 | Removed `doRename` function |
+| `index.html` | ~3039–3122 | Collapsed `view==='keys'?...:...` conditional → flat main-view only; keys sub-view deleted |
+| `index.html` | ~3080–3089 | Keyed account rows: button+KEY-badge → `div.tenant-row` with inline `confirmRm` dialog + `[key][✕]` mini-buttons |
+| `index.html` | ~3103–3106 | MANAGE: removed `Keys (N) ›`; added `+ Add key` + `Refresh names` after Lock vault |
+| `test_regression.py` | ~604–613 | `test_account_first_footer`: removed `assertContains("Keys (")` → `assertContains("Refresh names")`; `test_account_first_sections`: `assertContains("view==='keys'")` → `assertNotIn` |
+| `test_regression.py` | ~667–674 | `test_connection_key_repair`: replaced stale `doRename` assertion → `tenant-rm` |
+| `test_regression.py` | ~615 | Added `test_keys_subview_removed` — asserts keys sub-view + doRename gone |
+
 ## 2026-06-16 — AcctPill unified tenant picker (v4 mockup)
 
 | File | Line(s) | Change |

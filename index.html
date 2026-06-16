@@ -2984,10 +2984,8 @@ function VaultGate() {
 /* sidebar control: switch active connection (stored key) + (nested) CSP account, add/test/lock */
 function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcct, acctSearch='', setAcctSearch}) {
   const [open,setOpen]=useState(false),[adding,setAdding]=useState(false),[settings,setSettings]=useState(false);
-  const [view,setView]=useState('main');            // 'main' | 'keys'
   const [confirmRm,setConfirmRm]=useState(null);    // tenant id pending delete-confirm
   const [editTenant,setEditTenant]=useState(null);  // connection whose key is being replaced
-  const [renameId,setRenameId]=useState(null),[renameVal,setRenameVal]=useState('');
   const [testing,setTesting]=useState(false);
   const [switchingKey,setSwitchingKey]=useState(null);   // tenant id being activated
   const tenants=vault.tenants||[];
@@ -3003,17 +3001,16 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   const hasNoKey=filteredAccts.some(u=>!u.hasKey);
   const hasWithKey=filteredAccts.some(u=>u.hasKey);
   const reload=()=>window.location.reload();
-  const close=()=>{ setOpen(false); setView('main'); setConfirmRm(null); setRenameId(null); setAcctSearch&&setAcctSearch(''); };
+  const close=()=>{ setOpen(false); setConfirmRm(null); setAcctSearch&&setAcctSearch(''); };
   const switchAccount=id=>{ close(); switchAcct&&switchAcct(id); };
   const switchKey=async id=>{
-    if(id===vault.active){setView('main');return;}
+    if(id===vault.active){return;}
     setSwitchingKey(id);
     const {ok,data}=await vpost('/api/vault/active',{id});
     if(!ok||!data.ok){ setSwitchingKey(null); toast('Switch failed: '+(data.error||'unknown'),'err'); return; }
     reload();
   };
   const remove=async (id,label)=>{ await vpost('/api/vault/tenant-remove',{id}); toast('Removed '+label,'ok'); reload(); };
-  const doRename=async (id)=>{ const lbl=renameVal.trim(); if(!lbl){setRenameId(null);return;} await vpost('/api/vault/tenant-update',{id,label:lbl,key:''}); reload(); };
   const refreshNames=async()=>{ close(); await vpost('/api/vault/refresh-names',{}); window.location.reload(); };
   const testConn=async()=>{ setTesting(true);
     const {ok,data}=await vpost('/api/vault/conn-test',{}); setTesting(false); close();
@@ -3036,56 +3033,35 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
       {open&&(<>
         <div className="acct-overlay" onClick={close}/>
         <div className="acct-menu">
-          {view==='keys' ? (<>
-            {/* ── Keys sub-view: stored logins (identities) ── */}
-            <div className="keys-back" onClick={()=>{setView('main');setConfirmRm(null);setRenameId(null);}}>‹ Keys</div>
-            <div className="acct-sec-divider"/>
-            {tenants.map(t=>( confirmRm===t.id ? (
-              <div key={t.id} className="tenant-confirm" title="This permanently removes the stored key from the vault.">
-                <span className="tenant-confirm-q">Remove {t.label}?</span>
-                <button className="tenant-confirm-yes" title="Remove permanently" onClick={()=>remove(t.id,t.label)}>✓</button>
-                <button className="tenant-confirm-no" title="Keep" onClick={()=>setConfirmRm(null)}>✕</button>
-              </div>
-            ) : renameId===t.id ? (
-              <div key={t.id} className="tenant-row">
-                <input className="acct-search" autoFocus style={{flex:1,marginBottom:0}} value={renameVal}
-                  onChange={e=>setRenameVal(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')doRename(t.id);if(e.key==='Escape')setRenameId(null);}}/>
-                <button className="tenant-confirm-yes" title="Save name" onClick={()=>doRename(t.id)}>✓</button>
-                <button className="tenant-confirm-no" title="Cancel" onClick={()=>setRenameId(null)}>✕</button>
-              </div>
-            ) : (
-              <div key={t.id} className="tenant-row">
-                <button className={`acct-menu-item${t.id===vault.active?' active':''}`} style={{flex:1}} title="Make this the active login" disabled={!!switchingKey} onClick={()=>switchKey(t.id)}>
-                  {switchingKey===t.id?'⟳ ':(t.id===vault.active?'● ':'○ ')}{t.label}
-                </button>
-                <button className="tenant-mini" title="Rename" onClick={()=>{setRenameId(t.id);setRenameVal(t.label);}}>Aa</button>
-                <button className="tenant-mini" title="Replace this key (e.g. if expired)" onClick={()=>{setOpen(false);setEditTenant(t);}}>key</button>
-                <button className="tenant-rm" title="Remove key" onClick={()=>setConfirmRm(t.id)}>✕</button>
-              </div>
-            )))}
-            <div className="acct-sec-divider"/>
-            <button className="menu-item" onClick={()=>{close();setAdding(true);}}>
-              <span className="menu-lbl">+ Add key</span>
-              <span className="menu-desc">Store another Infoblox login</span>
-            </button>
-            <button className="menu-item" onClick={refreshNames}>
-              <span className="menu-lbl">Refresh names</span>
-              <span className="menu-desc">Re-fetch account names from CSP</span>
-            </button>
-          </>) : (<>
+          <>
             {/* ── Main view: accounts + manage ── */}
             <div className="acct-sec-label">Accounts</div>
             {showAcctSearch&&<input className="acct-search" autoFocus placeholder="Search accounts…" value={acctSearch} onChange={e=>setAcctSearch&&setAcctSearch(e.target.value)}/>}
             <div style={{maxHeight:200,overflowY:'auto'}}>
               {filteredAccts.filter(u=>u.hasKey).map(u=>(
-                <button key={u.accountId}
-                  style={{borderLeft:`2px solid ${u.hasKey?'var(--teal)':'var(--border)'}`,paddingLeft:'8px',borderRadius:'0 4px 4px 0',display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%'}}
-                  className={`acct-menu-item${u.isActive?' active':''}`}
-                  disabled={u.isActive||!!switchingKey}
-                  onClick={()=>u.isActive?undefined:(u.tenantId&&u.tenantId!==vault.active?switchKey(u.tenantId):switchAccount(u.accountId))}>
-                  <span>{u.isActive?'● ':(switchingKey===u.tenantId?'⟳ ':'○ ')}{u.name}</span>
-                  <span style={{fontSize:'9px',background:'rgba(214,210,203,0.12)',color:'var(--teal)',border:'1px solid rgba(214,210,203,0.25)',borderRadius:'3px',padding:'1px 5px',fontWeight:600,flexShrink:0,marginLeft:6}}>KEY</span>
-                </button>
+                <div key={u.accountId} className="tenant-row" style={{display:'flex',alignItems:'center',gap:'4px',padding:'0 4px'}}>
+                  { confirmRm===u.tenantId ? (
+                    <div className="tenant-confirm" style={{flex:1,display:'flex',alignItems:'center',gap:'6px',padding:'4px 8px',borderRadius:'4px',background:'hsl(0,72%,11%)',border:'1px solid hsl(0,72%,28%)'}}>
+                      <span className="tenant-confirm-q" style={{flex:1,fontSize:'11px',color:'hsl(0,86%,80%)'}}>Remove {u.name}?</span>
+                      <button className="tenant-confirm-yes" title="Remove permanently" onClick={()=>remove(u.tenantId,u.name)}>✓</button>
+                      <button className="tenant-confirm-no" title="Keep" onClick={()=>setConfirmRm(null)}>✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        style={{borderLeft:`2px solid var(--teal)`,paddingLeft:'8px',borderRadius:'0 4px 4px 0',flex:1,textAlign:'left',background:'none',border:'none',fontSize:'11px',cursor:u.isActive?'default':'pointer'}}
+                        className={`acct-menu-item${u.isActive?' active':''}`}
+                        disabled={u.isActive||!!switchingKey}
+                        onClick={()=>u.isActive?undefined:(u.tenantId&&u.tenantId!==vault.active?switchKey(u.tenantId):switchAccount(u.accountId))}>
+                        <span>{u.isActive?'● ':(switchingKey===u.tenantId?'⟳ ':'○ ')}{u.name}</span>
+                      </button>
+                      {vault.vaultMode&&<>
+                        <button className="tenant-mini" title="Replace this key (e.g. if expired)" onClick={()=>{setOpen(false);setEditTenant({id:u.tenantId,label:u.name});}}>key</button>
+                        <button className="tenant-rm" title="Remove key" onClick={()=>setConfirmRm(u.tenantId)}>✕</button>
+                      </>}
+                    </>
+                  )}
+                </div>
               ))}
               {hasWithKey&&hasNoKey&&<div className="acct-sec-divider" style={{margin:'4px 10px'}}/>}
               {filteredAccts.filter(u=>!u.hasKey).map(u=>(
@@ -3100,10 +3076,6 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
             <div className="acct-sec-divider"/>
             <div className="acct-sec-label">Manage</div>
             {vault.vaultMode&&vault.unlocked&&(<>
-            <button className="menu-item" onClick={()=>setView('keys')}>
-              <span className="menu-lbl">Keys ({tenants.length})<span className="menu-chev">›</span></span>
-              <span className="menu-desc">Stored logins — one reaches all its accounts</span>
-            </button>
             <button className="menu-item" disabled={testing} onClick={testConn}>
               <span className="menu-lbl">{testing?'Testing…':'Test Infoblox connection'}</span>
               <span className="menu-desc">Verify the active key reaches CSP</span>
@@ -3112,6 +3084,14 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               <span className="menu-lbl">Lock vault</span>
               <span className="menu-desc">Hide your saved keys behind the passphrase. Use when you step away</span>
             </button>
+            <button className="menu-item" onClick={()=>{close();setAdding(true);}}>
+              <span className="menu-lbl">+ Add key</span>
+              <span className="menu-desc">Store another Infoblox login</span>
+            </button>
+            <button className="menu-item" onClick={refreshNames}>
+              <span className="menu-lbl">Refresh names</span>
+              <span className="menu-desc">Re-fetch account names from CSP</span>
+            </button>
             <div className="acct-sec-divider"/>
             <div className="acct-sec-label">AI</div>
             <button className="menu-item" onClick={()=>{close();setSettings(true);}}>
@@ -3119,7 +3099,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               <span className="menu-desc">LLM for the query box (vault-wide)</span>
             </button>
             </>)}
-          </>)}
+          </>
         </div>
       </>)}
     </div>
