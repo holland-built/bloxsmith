@@ -3,6 +3,12 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-16 — AcctPill unified tenant picker (v4 mockup)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 1467–1530 | Replaced `AcctPill` body: unified flat list (accounts × vault keys by name); teal left-border on keyed rows; gray border + grayed text on no-key rows; `+ key` button (vault mode only) opens `VaultAddTenant`; thin divider between groups; removed "This login"/"Other logins" section labels; `adding` state + `VaultAddTenant` rendered in pill wrapper; sort: active first, keyed before un-keyed, then alpha |
+
 ## 2026-06-15 — Topbar overhaul (v2)
 
 | File | Line(s) | Change |
