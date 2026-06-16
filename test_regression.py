@@ -674,6 +674,18 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("ver-badge")
         self.assertContains("vault.version")
 
+    def test_light_mode_tokens(self):
+        """Light mode CSS block uses official Infoblox brand tokens."""
+        start = self.html.index(':root[data-theme="light"]')
+        end = self.html.index('}', start) + 1
+        block = self.html[start:end]
+        self.assertIn('--teal:#007B30', block, "light --teal must be darkened ib-green #007B30 (AA contrast)")
+        self.assertIn('--blue-mid:#F0EFE9', block, "light --blue-mid must be ib-offwhite #F0EFE9")
+        self.assertIn('--border:#D9E1E2', block, "light --border must be ib-steel #D9E1E2")
+        self.assertIn('--ink:#101820', block, "light --ink must be ib-black #101820")
+        self.assertIn('color-scheme:light', block, "light block must declare color-scheme:light")
+        self.assertNotIn('--teal:#00BD4D', block, "raw ib-green #00BD4D must not be used as --teal (fails WCAG AA)")
+
     # ── DHCP top-subnets redesigned as a compact ranked list ─────────────────
     def test_subnet_rank_list(self):
         self.assertContains("subnet-rank-row", "compact ranked list markup missing")
