@@ -32,6 +32,16 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `index.html` | 3225 | `arr.splice(ti,0,from)` → `arr.splice(fi<ti?ti-1:ti,0,from)` — fix off-by-one forward drag |
 | `test_regression.py` | 1209–1237 | 5 new tests: reorder forward/backward algo + 3 grep tests |
 
+## 2026-06-15 — MoreMenu pos fix + sidebar dedup
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~98 | `.sidebar-icon-strip`: added `width:100%;justify-content:flex-end` — buttons right-aligned so `right:0` menu anchors correctly |
+| `index.html` | ~1546 | `MoreMenu` col-menu: added `top:'auto',bottom:'calc(100% + 4px)'` — opens upward, no off-screen clip |
+| `index.html` | ~3012–3022 | `TenantManager` ctx-block header: removed `ctx-val`/`keyDiffers` lines; changed cap "Account"→"Vault", swap icon `⇄`→`⚙` |
+| `index.html` | ~3064–3091 | `TenantManager` main dropdown: removed CONNECTION + ACCOUNT sections (now AcctPill's job) |
+| `index.html` | ~3661–3701 | Sidebar ctx-panel: removed non-vault `ctx-block` account switcher (redundant with AcctPill) |
+
 ## 2026-06-15 — Fix column header truncation: remove sort-th nowrap
 
 | File | Line(s) | Change |
