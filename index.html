@@ -95,7 +95,7 @@ body.chat-open{padding-right:340px}
 .nav-item.active{background:var(--tint);color:var(--teal);font-weight:600;border-left:2px solid var(--teal);padding-left:8px}
 .nav-icon{width:16px;text-align:center;color:var(--gray-600);transition:color .12s}
 .nav-item:hover .nav-icon,.nav-item.active .nav-icon{color:var(--teal)}
-.sidebar-icon-strip{display:flex;gap:4px;padding:6px 0 2px}
+.sidebar-icon-strip{display:flex;gap:4px;padding:6px 0 2px;width:100%;justify-content:flex-end}
 .sidebar-icon-strip .theme-btn{margin-left:0}
 .sidebar-foot{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--gray-400);position:relative}
 .main{padding:0 20px 40px;flex:1;min-width:0;max-width:100%;width:100%}
@@ -1543,7 +1543,7 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
       <button className="theme-btn" aria-label="More" aria-expanded={open} title="More options" onClick={()=>setOpen(o=>!o)}>⋯</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
-        <div className="col-menu" style={{minWidth:210}} role="menu">
+        <div className="col-menu" style={{minWidth:210,top:'auto',bottom:'calc(100% + 4px)'}} role="menu">
           <div className="col-row" style={{cursor:'pointer'}} role="menuitem" title="Cycle polling interval: Off → 30s → 1m → 5m" onClick={nextAr}>
             <span className="col-lbl">Auto-refresh</span>
             <span style={{background:'var(--tint)',border:'1px solid var(--border)',borderRadius:4,padding:'1px 6px',fontSize:10,color:'var(--gray-200)',marginLeft:'auto'}}>{arLbl} ▾</span>
@@ -3011,15 +3011,11 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   return (
     <div className="ctx-block">
       <div className="ctx-head">
-        <span className="ctx-cap" title="The CSP account you're viewing. Switch accounts (and manage keys) with ⇄.">Account</span>
-        <button className="ctx-swap" title="Switch account · manage keys" disabled={switchingAcct} onClick={()=>open?close():setOpen(true)}>
+        <span className="ctx-cap" title="Vault settings: manage stored keys, test connection, AI provider">Vault</span>
+        <button className="ctx-swap" title="Vault settings & key management" disabled={switchingAcct} onClick={()=>open?close():setOpen(true)}>
           {switchingAcct?'⟳':'⇄'}
         </button>
       </div>
-      <div className="ctx-val">{headline}</div>
-      {keyDiffers&&(
-        <div className="ctx-acct" title="The stored key (login) backing this account">via <b style={{color:'var(--gray-400)'}}>{active.label}</b></div>
-      )}
       {open&&(<>
         <div className="acct-overlay" onClick={close}/>
         <div className="acct-menu">
@@ -3060,35 +3056,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               <span className="menu-desc">Re-fetch account names from CSP</span>
             </button>
           </>) : (<>
-            {/* ── Main view: vault tenants first (when >1 key stored), then CSP sub-accounts ── */}
-            {tenants.length>1&&(<>
-              <div className="acct-sec-label" title="Switch between stored Infoblox connections (each uses its own API key).">Connection</div>
-              <div style={{maxHeight:220,overflowY:'auto'}}>
-                {tenants.map(t=>(
-                  <button key={t.id} className={`acct-menu-item${t.id===vault.active?' active':''}`} title={t.label} disabled={!!switchingKey} onClick={()=>switchKey(t.id)}>
-                    {switchingKey===t.id?'⟳ ':(t.id===vault.active?'● ':'○ ')}{t.label}
-                  </button>
-                ))}
-              </div>
-              <div className="acct-sec-divider"/>
-            </>)}
-            {multiAcct&&(<>
-              <div className="acct-sec-label" title="CSP accounts the active key can act in. The filled ● is in view.">Account</div>
-              <>
-                {accounts.length>6&&(
-                  <input className="acct-search" autoFocus placeholder="Search accounts…"
-                    value={acctSearch} onChange={e=>setAcctSearch&&setAcctSearch(e.target.value)}/>
-                )}
-                <div style={{maxHeight:220,overflowY:'auto'}}>
-                  {accounts.filter(a=>a.name.toLowerCase().includes(acctSearch.toLowerCase())).map(a=>(
-                    <button key={a.id} className={`acct-menu-item${a.id===activeAcct?' active':''}`} title={a.name} onClick={()=>switchAccount(a.id)}>
-                      {a.id===activeAcct?'● ':'○ '}{a.name}
-                    </button>
-                  ))}
-                </div>
-              </>
-              <div className="acct-sec-divider"/>
-            </>)}
+            {/* ── Main view: manage keys + AI (account/connection switching is AcctPill's job) ── */}
             <div className="acct-sec-label">Manage</div>
             <button className="menu-item" onClick={()=>setView('keys')}>
               <span className="menu-lbl">Keys ({tenants.length})<span className="menu-chev">›</span></span>
@@ -3691,44 +3659,10 @@ function App({vault, onVaultChange}={}) {
             </>
           )}
           <div className="ctx-panel">
-          {vault&&vault.vaultMode
-            ? <TenantManager vault={vault} accounts={accounts} activeAcct={activeAcct}
-                switchAcct={switchAcct} switchingAcct={switchingAcct}
-                acctSearch={acctSearch} setAcctSearch={setAcctSearch}/>
-            : accounts.length>0&&(
-            <div className="ctx-block">
-              <div className="ctx-head">
-                <span className="ctx-cap">Account</span>
-                {accounts.length>1&&<button className="ctx-swap" title="Switch CSP account" disabled={switchingAcct} onClick={()=>setShowAcctMenu(m=>!m)}>
-                  {switchingAcct?'⟳':'⇄'}
-                </button>}
-              </div>
-              {accounts.length===1&&(
-                <div className="ctx-note"
-                  title="This API key's user belongs to a single CSP account. Use an interactive User API Key (portal → user menu → User API Keys) to enable switching.">
-                  single-account key — switching off
-                </div>
-              )}
-              {showAcctMenu&&(
-                <>
-                  <div className="acct-overlay" onClick={()=>{setShowAcctMenu(false);setAcctSearch('');}}/>
-                  <div className="acct-menu">
-                    {accounts.length>6&&(
-                      <input className="acct-search" autoFocus placeholder="Search accounts…"
-                        value={acctSearch} onChange={e=>setAcctSearch(e.target.value)}/>
-                    )}
-                    <div style={{maxHeight:240,overflowY:'auto'}}>
-                      {accounts.filter(a=>a.name.toLowerCase().includes(acctSearch.toLowerCase())).map(a=>(
-                        <button key={a.id} className={`acct-menu-item${a.id===activeAcct?' active':''}`}
-                          title={a.name} onClick={()=>switchAcct(a.id)}>
-                          {a.id===activeAcct?'● ':'○ '}{a.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+          {vault&&vault.vaultMode&&(
+            <TenantManager vault={vault} accounts={accounts} activeAcct={activeAcct}
+              switchAcct={switchAcct} switchingAcct={switchingAcct}
+              acctSearch={acctSearch} setAcctSearch={setAcctSearch}/>
           )}
           </div>
         </div>
