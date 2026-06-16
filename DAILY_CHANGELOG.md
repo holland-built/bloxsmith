@@ -3,6 +3,17 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-16 — Consolidate account + key UI (v5 status-badge)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | ~3021–3026 | TenantManager trigger: `>Vault<` → two-line `INFOBLOX PORTAL` cap + `● {headline}` ctx-val |
+| `index.html` | ~2999–3004 | TenantManager: added `allTenants/unified/filteredAccts/showAcctSearch/hasNoKey/hasWithKey` consts |
+| `index.html` | ~3067–3092 | TenantManager main view: added ACCOUNTS section with unified list (KEY badge / `+ key` button) above MANAGE section; wrapped MANAGE+AI in `vault.vaultMode&&vault.unlocked` guard |
+| `index.html` | ~3741 | Removed `<AcctPill ... onManageKeys={()=>{}}/>` from topbar; function definition retained |
+| `index.html` | ~3705 | Sidebar ctx-panel guard: `vault&&vault.vaultMode` → `accounts&&accounts.length>0` |
+| `test_regression.py` | — | Added 4 tests: `test_tenant_manager_trigger_shows_headline`, `test_tenant_manager_has_account_list`, `test_acct_pill_removed_from_topbar`, `test_acct_pill_not_in_toolbar`; replaced `test_acct_pill_in_toolbar` |
+
 ## 2026-06-16 — AcctPill unified tenant picker (v4 mockup)
 
 | File | Line(s) | Change |
