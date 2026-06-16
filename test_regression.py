@@ -602,15 +602,23 @@ class FrontendStructureTests(unittest.TestCase):
 
     # ── account-first switcher: footer + menu IA ──────────────────────────────
     def test_account_first_footer(self):
-        # footer headline is now the CSP Account; keys live behind a sub-view
+        # footer headline is now the CSP Account; inline actions on account rows
         self.assertContains(">Account<", "footer caption should read 'Account'")
-        self.assertContains("Keys (")              # "Keys (N) ›" entry to the sub-view
+        self.assertContains("Refresh names")       # moved from keys sub-view into MANAGE
         self.assertContains("+ Add key")
 
     def test_account_first_sections(self):
         # AI provider is its own section, separate from Infoblox actions
         self.assertContains("menu-desc", "Manage items should have inline descriptions")
-        self.assertContains("view==='keys'", "keys sub-view missing")
+        self.assertNotIn("view==='keys'", self.html, "keys sub-view still present — should be removed")
+
+    def test_keys_subview_removed(self):
+        """Keys sub-view eliminated; inline [key][✕] actions live on account rows; names from CSP (no rename)."""
+        tm_start = self.html.index('function TenantManager(')
+        tm_end = self.html.index('\nfunction ', tm_start + 1)
+        tm_body = self.html[tm_start:tm_end]
+        self.assertNotIn("view==='keys'", tm_body, "Keys sub-view still present — should be removed")
+        self.assertNotIn("doRename", tm_body, "doRename still present — names come from CSP, rename not allowed")
 
     def test_connection_inline_confirm_delete(self):
         # the ✕ no longer deletes immediately — it arms a two-step confirm
@@ -664,14 +672,14 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("useColumns('dns-clients'")
         self.assertContains("SearchGroupTable", "search-group DataTable component missing")
 
-    # ── connection key management: rename + replace-key ──────────────────────
+    # ── connection key management: replace-key (rename removed — names from CSP) ──
     def test_connection_key_repair(self):
         s = self._server()
         self.assertIn("def vault_update_tenant", s)
         self.assertIn("/api/vault/tenant-update", s)
         self.assertContains("/api/vault/tenant-update")
         self.assertContains("editId")               # VaultAddTenant replace-key mode
-        self.assertContains("doRename")             # inline rename in the Keys sub-view
+        self.assertContains("tenant-rm")            # inline delete-confirm on account rows
 
     def test_refresh_names(self):
         self.assertIn("def vault_refresh_names", self._server())
