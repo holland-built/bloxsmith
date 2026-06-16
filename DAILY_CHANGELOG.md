@@ -14,6 +14,13 @@ Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 | `index.html` | ~3705 | Sidebar ctx-panel guard: `vault&&vault.vaultMode` → `accounts&&accounts.length>0` |
 | `test_regression.py` | — | Added 4 tests: `test_tenant_manager_trigger_shows_headline`, `test_tenant_manager_has_account_list`, `test_acct_pill_removed_from_topbar`, `test_acct_pill_not_in_toolbar`; replaced `test_acct_pill_in_toolbar` |
 
+## 2026-06-16 — light-dark-mode (V1 Infoblox brand)
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 59–82 | Replaced `[data-theme="light"]` block with official Infoblox brand tokens: `#F0EFE9` off-white base, `#007B30` darkened green accent (4.6:1 AA), `#D9E1E2` ib-steel border, `#101820` ib-black text |
+| `test_regression.py` | ~677 | Added `test_light_mode_tokens` — asserts 5 brand token values + rejects raw `#00BD4D` as `--teal` |
+
 ## 2026-06-16 — manage-polish (V1 mockup)
 
 | File | Line(s) | Change |
