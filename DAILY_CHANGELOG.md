@@ -3,6 +3,29 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-17 — ui-ux audit: 30-finding accessibility + performance pass
+
+| File | Line(s) | Change |
+|---|---|---|
+| `index.html` | 33 | `--gray-400` dark mode `#8F949C` → `#A5AAB3` (4.6:1 contrast, was 3.4:1) |
+| `index.html` | 85 | `body` — added `line-height:1.5` |
+| `index.html` | 105 | `.page-title` — added `line-height:1.15` |
+| `index.html` | 133 | `.tbl td` — added `line-height:1.4` |
+| `index.html` | 183 | `.stile-big` — `line-height:1` → `line-height:1.2` |
+| `index.html` | 95,107,246,252,255,281,296,299,320,355,367,429,440 | 13× `transition:all` → explicit `background/color/border-color` only |
+| `index.html` | 250,382,387 | Removed `outline:none` from `.chat-in`, `.global-search`, `.lookup-in` |
+| `index.html` | 226–227 | `.pulse` — opacity floor `.45` → `.65`; cycle `2.2s` → `3s` |
+| `index.html` | 179 | `.stile:hover` — added `border-color:var(--teal)` |
+| `index.html` | 389–391 | Added `.lookup-btn:disabled{opacity:.45;cursor:default}` |
+| `index.html` | 398–406 | `prefers-reduced-motion` block — strip skel shimmer gradient; collapse all `cardIn` delays to 0 |
+| `index.html` | 407–411 | Added `@media(pointer:coarse)` 44px min touch targets for `.close-btn`, `.drill-close`, `.n-x`, `.collapse-btn`, `.fs-btn`, `.copy-btn`, `.col-iconbtn`, `.toast-close` |
+| `index.html` | 601 | `.wiz-done` — `color:#04181c` → `color:var(--blue-dark)` |
+| `index.html` | 1621 | `cmdk-box` — added `role="dialog" aria-modal="true" aria-label="Command palette"` |
+| `index.html` | 1695 | `MiniLineChart` SVG — added `role="img" aria-label` |
+| `index.html` | 1737 | `VizBars` SVG — added `role="img" aria-label` |
+| `index.html` | 2467 | `wiz-modal` — added `aria-modal="true"` |
+| `index.html` | 4292 | `shortcut-box` — added `role="dialog" aria-modal="true" aria-label="Keyboard shortcuts"` |
+
 ## 2026-06-17 — fix: auth guards on /api/vault/reset and /api/update/apply
 
 | File | Line(s) | Change |
