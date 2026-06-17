@@ -1581,23 +1581,23 @@ function PresetMenu({section}) {
   const [views,setViews]=React.useState(()=>LS.get('noc.views',{}));
   const [open,setOpen]=React.useState(false);
   const names=Object.keys(views);
-  const save=()=>{ const name=(window.prompt('Save current view as:')||'').trim(); if(!name) return; const next={...views,[name]:{section,ls:snapshotViewLS()}}; setViews(next); LS.set('noc.views',next); setOpen(false); };
+  const save=()=>{ const name=(window.prompt('Save current snapshot as:')||'').trim(); if(!name) return; const next={...views,[name]:{section,ls:snapshotViewLS()}}; setViews(next); LS.set('noc.views',next); setOpen(false); };
   const apply=name=>{ const v=views[name]; if(!v) return; applyViewLS(v.ls); location.hash=v.section||section; location.reload(); };
   const del=name=>{ const next={...views}; delete next[name]; setViews(next); LS.set('noc.views',next); };
   return (
     <span style={{position:'relative',display:'inline-flex'}}>
-      <button className="theme-btn" style={{gap:5,fontSize:12.5}} title="Saved views" aria-label="Saved views" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>★ Views</button>
+      <button className="theme-btn" style={{gap:5,fontSize:12.5}} title="Saved snapshots" aria-label="Saved snapshots" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>★ Snapshots</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
-        <div className="col-menu" style={{minWidth:210}} role="menu">
-          <div className="col-menu-head"><span className="col-menu-title">Saved views</span>
+        <div className="col-menu" style={{minWidth:210,top:'auto',bottom:'calc(100% + 4px)'}} role="menu">
+          <div className="col-menu-head"><span className="col-menu-title">Saved snapshots</span>
             <button className="col-reset" onClick={save}>+ Save current</button></div>
           {names.length===0
-            ? <div className="col-row" style={{color:'var(--gray-400)'}}>No saved views yet</div>
+            ? <div className="col-row" style={{color:'var(--gray-400)'}}>No saved snapshots yet</div>
             : names.map(n=>(
                 <div key={n} className="col-row">
                   <button className="col-lbl" style={{background:'none',border:'none',color:'inherit',textAlign:'left',cursor:'pointer',font:'inherit',padding:0}} onClick={()=>apply(n)} title={`Apply "${n}"`}>{n}</button>
-                  <button className="col-iconbtn" title="Delete view" aria-label={`Delete ${n}`} onClick={()=>del(n)}>✕</button>
+                  <button className="col-iconbtn" title="Delete snapshot" aria-label={`Delete ${n}`} onClick={()=>del(n)}>✕</button>
                 </div>
               ))}
         </div>
@@ -3652,7 +3652,7 @@ function App({vault, onVaultChange}={}) {
           </div>
           <div className="sidebar-icon-strip">
             <button className="theme-btn" style={{marginLeft:0}} onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')} title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
-            <button className="theme-btn" style={{marginLeft:0,gap:5,fontSize:12.5}} onClick={()=>setCmdkOpen(true)} title="Command palette (Ctrl/⌘ K)" aria-label="Open command palette">⌕ Search</button>
+            <button className="theme-btn" style={{marginLeft:0,gap:5,fontSize:12.5}} onClick={()=>setCmdkOpen(true)} title="Commands (Ctrl/⌘ K)" aria-label="Open commands">⌘ Commands</button>
             <PresetMenu section={section}/>
             <MoreMenu autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
           </div>
