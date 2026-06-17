@@ -1564,12 +1564,20 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
             <span className="col-lbl">Auto-refresh</span>
             <span style={{background:'var(--tint)',border:'1px solid var(--border)',borderRadius:4,padding:'1px 6px',fontSize:10,color:'var(--gray-200)',marginLeft:'auto'}}>{arLbl} ▾</span>
           </div>
-          {row('Copy link to this view','◳',onShare,'Copy a shareable URL for the current section')}
           {row('Row density',density==='compact'?'Compact':'Comfortable',()=>setDensity(d=>d==='compact'?'comfortable':'compact'),'Toggle table row height between Comfortable and Compact')}
           {onWall&&row('Wall display mode',wallMode?'On':'Off',onWall,'Fullscreen TV/wall mode — shows live clock, hides navigation')}
           {onDemo&&row('Demo mode',demoMode?'On':'Off',onDemo,'Hides test/allow-all policies; prioritizes threat intel feeds')}
-          {onFreeze&&row('Freeze data',frozen?'Frozen':'Live',onFreeze,'Pause all live data refresh — data stays at last snapshot')}
-          {onReset&&row('Reset dashboard','↺',onReset,'Restore default widget order and unhide all sections')}
+          {onFreeze&&row('Data feed',frozen?'Frozen':'Live',onFreeze,'Pause all live data refresh — data stays at last snapshot')}
+          <div className="acct-sec-divider"/>
+          {row('Copy link to this view','◳',onShare,'Copy a shareable URL for the current section')}
+          {onReset&&<div className="acct-sec-divider"/>}
+          {onReset&&(
+            <div className="col-row" style={{cursor:'pointer'}} role="menuitem" title="Restore default widget order and unhide all sections" onClick={()=>{setOpen(false); if(window.confirm('Reset dashboard?\n\nThis restores the default widget order and unhides all sections. Your saved snapshots are not affected.')) onReset();}}>
+              <span className="col-lbl" style={{color:'var(--red-text)'}}>Reset dashboard</span>
+              <span className="refresh-countdown" style={{marginLeft:'auto',color:'var(--red-text)'}}>↺</span>
+            </div>
+          )}
+          <div className="acct-sec-divider"/>
           {row('Keyboard shortcuts','?',onShortcuts,'Open the keyboard shortcuts reference panel')}
         </div>
       </>)}
@@ -1838,7 +1846,7 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
   },[data]);
   const sparkPath=series=>{const mx=Math.max(...series,1),n=series.length;return series.map((v,i)=>`${(i/(n-1||1)*36).toFixed(1)},${(14-v/mx*12).toFixed(1)}`).join(' ');};
   const clientCtl=useColumns('dns-clients',[
-    {key:'device',label:'Device',fixed:true,sortVal:r=>r[NDA+'device_name']||'',csv:r=>r[NDA+'device_name']||'',render:r=>{const sp=spikes[r[NDA+'device_ip']];return <span style={{fontWeight:500,display:'inline-flex',alignItems:'center',gap:6}}>{r[NDA+'device_name']||'—'}{sp&&<span className="badge b-amber" title={`Query spike vs ${sp.avg}/day avg`}>🔥 spike</span>}{sp&&<svg width="38" height="14" style={{flexShrink:0}}><polyline points={sparkPath(sp.series)} fill="none" stroke="var(--sev-amber-t)" strokeWidth="1.2"/></svg>}</span>;}},
+    {key:'device',label:'Device',fixed:true,sortVal:r=>r[NDA+'device_name']||'',csv:r=>r[NDA+'device_name']||'',render:r=>{const sp=spikes[r[NDA+'device_ip']];return <span style={{fontWeight:500,display:'inline-flex',alignItems:'center',gap:6}}>{r[NDA+'device_name']||'—'}{sp&&<span className="badge b-amber" title={`Query spike vs ${sp.avg}/day avg`}>▲ spike</span>}{sp&&<svg width="38" height="14" style={{flexShrink:0}}><polyline points={sparkPath(sp.series)} fill="none" stroke="var(--sev-amber-t)" strokeWidth="1.2"/></svg>}</span>;}},
     {key:'ip',label:'IP',mono:true,size:10,sortVal:r=>r[NDA+'device_ip']||'',csv:r=>r[NDA+'device_ip']||'',render:r=><span style={{color:'var(--gray-400)'}}>{r[NDA+'device_ip']||'—'}</span>},
     {key:'queries',label:'Queries',mono:true,size:11,sortVal:r=>Number(r[NDA+'total_query_count'])||0,csv:r=>Number(r[NDA+'total_query_count'])||0,render:r=>(Number(r[NDA+'total_query_count'])||0).toLocaleString()},
     {key:'share',label:'Share',sortVal:r=>Number(r[NDA+'total_query_count'])||0,csv:r=>{const c=Number(r[NDA+'total_query_count'])||0;const t=(data&&(data.top_clients||[]).reduce((a,x)=>a+(Number(x[NDA+'total_query_count'])||0),0))||0;return (t>0?Math.round(c/t*100):0)+'%';},render:r=>{const c=Number(r[NDA+'total_query_count'])||0;const t=(data&&(data.top_clients||[]).reduce((a,x)=>a+(Number(x[NDA+'total_query_count'])||0),0))||0;const pct=t>0?Math.round(c/t*100):0;return <div style={{display:'flex',alignItems:'center',gap:6}}><div className="bar-track"><div className="bar-fill" style={{width:`${pct}%`,background:'var(--teal)'}}/></div><span style={{fontSize:10,color:'var(--gray-400)',fontVariantNumeric:'tabular-nums'}}>{pct}%</span></div>;}},
@@ -2711,7 +2719,7 @@ function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection
 
 const SECTIONS=[
   {id:'overview', icon:'◉', label:'Overview'},
-  {id:'triage',   icon:'⚠', label:'Triage'},
+  {id:'triage',   icon:'△', label:'Triage'},
   {id:'ipam',     icon:'⊞', label:'IPAM / Subnets'},
   {id:'dhcp',     icon:'⊃', label:'DHCP Leases'},
   {id:'dns',      icon:'⊕', label:'DNS Zones'},
