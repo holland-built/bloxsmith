@@ -85,6 +85,9 @@ _pull_state = {
     "layer_total": 0,
     "stalled": False,
     "error": None,
+    "rolledback": False,
+    "rollback_from": None,
+    "rollback_to": None,
 }
 # Test Docker availability once at startup
 _, DOCKER_OK = _docker_client()
@@ -186,6 +189,10 @@ def _run_prepull(image_ref):
                 layers_total[layer] = tot
                 layers_done[layer] = cur
             stalled = (_t.monotonic() - last_event) > 20
+            if stalled:
+                with _pull_lock:
+                    _pull_state.update(phase="error", error="pull stalled (no progress for 20 s)")
+                return
             total_bytes = sum(layers_total.values()) or 1
             done_bytes = sum(v if isinstance(v, int) else 0
                              for v in layers_done.values())
@@ -221,8 +228,9 @@ def apply_self_update():
         return {"ok": False, "error": f"cannot inspect self: {e}"}
 
     def _do_recreate():
-        import time as _t
-        _t.sleep(0.3)  # let HTTP response flush
+        import time as _t, socket as _sock, json as _json, os as _os
+        from urllib.request import urlopen as _urlopen
+        _t.sleep(0.3)
         with _pull_lock:
             _pull_state.update(phase="recreating", error=None)
         try:
@@ -230,7 +238,6 @@ def apply_self_update():
             cfg = attrs.get("HostConfig", {})
             ports = cfg.get("PortBindings") or {}
             vols = cfg.get("Binds") or []
-            # Strip image-baked vars so the new image's values are used
             env = [e for e in (attrs.get("Config", {}).get("Env") or [])
                    if not e.startswith(("APP_VERSION=", "PATH=", "PYTHON_VERSION=",
                                         "PYTHON_SHA256=", "GPG_KEY="))]
@@ -238,11 +245,16 @@ def apply_self_update():
             image = attrs.get("Config", {}).get("Image", "")
             restart = cfg.get("RestartPolicy", {}).get("Name", "unless-stopped")
             labels = attrs.get("Config", {}).get("Labels") or {}
-            networks = list((attrs.get("NetworkSettings") or {})
-                            .get("Networks", {}).keys())
-            import json as _json, os as _os
-            # Store as [ip, port] lists — JSON round-trips tuples to lists.
-            # Helper script converts them back to tuples before calling docker-py.
+            networks = list((attrs.get("NetworkSettings") or {}).get("Networks", {}).keys())
+
+            rollback_from = APP_VERSION
+            with _update_lock:
+                rollback_to = _update_cache.get("latest") or ""
+            try:
+                client.images.get(image).tag("infoblox-mcp", "rollback")
+            except Exception:
+                pass
+
             ports_map = {}
             for _k, _bindings in ports.items():
                 if _bindings:
@@ -254,63 +266,149 @@ def apply_self_update():
             tmp_name = name + "-retiring"
             net = networks[0] if networks else None
 
-            # Rename self so new container can take our name.
-            container.rename(tmp_name)
+            def _free_port():
+                with _sock.socket() as s:
+                    s.bind(("127.0.0.1", 0))
+                    return s.getsockname()[1]
 
-            # Spawn a one-shot helper container (same image — has docker-py installed).
-            # It waits 3 s for us to stop (freeing the port), removes the retired
-            # container, then starts the replacement. We kill ourselves immediately
-            # after so the port is available when the helper wakes.
-            helper_script = (
-                "import json,sys,time,docker\n"
-                "c=docker.from_env()\n"
-                "cfg=json.loads(sys.argv[1])\n"
-                "time.sleep(3)\n"
-                "try: c.containers.get(cfg['old']).remove(force=True)\n"
-                "except Exception: pass\n"
-                # Pull the new image — prepull thread died with the old container
-                "c.images.pull(cfg['img'])\n"
-                # JSON gives lists for tuples; docker-py needs tuples for (ip,port) bindings
-                "p={k:[tuple(b) if isinstance(b,list) else b for b in v]"
-                " for k,v in cfg['ports'].items()}\n"
-                "kw={'network':cfg['net']} if cfg.get('net') else {}\n"
-                "c.containers.run(cfg['img'],detach=True,name=cfg['name'],"
-                "environment=cfg['env'],ports=p,volumes=cfg['vols'],"
-                "restart_policy={'Name':cfg['restart']},labels=cfg['labels'],**kw)\n"
-            )
-            cfg_json = _json.dumps({
-                'old': tmp_name, 'img': image, 'name': name,
-                'env': env, 'ports': ports_map, 'vols': vols,
-                'restart': restart, 'labels': labels, 'net': net,
-            })
-            sock_vols = [v for v in vols if '.sock' in v]
-            # Remove stale updater from a previous run so name doesn't conflict
+            free_port = _free_port()
+            candidate_ports = {}
+            for _k in ports_map:
+                candidate_ports[_k] = [["127.0.0.1", str(free_port)]]
+                break
+
+            candidate_name = name + "-candidate"
             try:
-                client.containers.get(name + "-updater").remove(force=True)
+                client.containers.get(candidate_name).remove(force=True)
             except Exception:
                 pass
-            client.containers.run(
+            with _pull_lock:
+                _pull_state.update(phase="checking", error=None)
+
+            candidate = client.containers.run(
                 image,
-                name=name + "-updater",
-                command=['python3', '-c', helper_script, cfg_json],
-                volumes=sock_vols,
+                name=candidate_name,
+                environment=env,
+                ports=candidate_ports,
+                volumes=vols,
+                restart_policy={},
+                labels=labels,
                 detach=True,
-                remove=False,  # keep so logs are readable if it fails
             )
 
-            # Mark live, then kill PID 1 so port is freed for the helper.
-            with _pull_lock:
-                _pull_state.update(phase="live", error=None)
-            _t.sleep(0.5)
-            _os.kill(1, 9)  # SIGKILL — container exits, port freed, helper takes over
+            def _wait_healthy(port, deadline=30, interval=2):
+                end = _t.monotonic() + deadline
+                while _t.monotonic() < end:
+                    try:
+                        with _urlopen(f"http://127.0.0.1:{port}/api/vault/status", timeout=3) as r:
+                            if r.status == 200:
+                                return True
+                    except Exception:
+                        pass
+                    _t.sleep(interval)
+                try:
+                    result = candidate.exec_run(
+                        ["python3", "-c",
+                         "from urllib.request import urlopen; r=urlopen('http://127.0.0.1:8080/api/vault/status',timeout=3); exit(0 if r.status==200 else 1)"],
+                        timeout=5,
+                    )
+                    if result.exit_code == 0:
+                        return True
+                except Exception:
+                    pass
+                return False
+
+            healthy = _wait_healthy(free_port)
+
+            if healthy:
+                try:
+                    candidate.stop(timeout=3)
+                    candidate.remove(force=True)
+                except Exception:
+                    pass
+                container.rename(tmp_name)
+                helper_script = (
+                    "import json,sys,time,docker\n"
+                    "c=docker.from_env()\n"
+                    "cfg=json.loads(sys.argv[1])\n"
+                    "time.sleep(3)\n"
+                    "try: c.containers.get(cfg['old']).remove(force=True)\n"
+                    "except Exception: pass\n"
+                    "c.images.pull(cfg['img'])\n"
+                    "p={k:[tuple(b) if isinstance(b,list) else b for b in v]"
+                    " for k,v in cfg['ports'].items()}\n"
+                    "kw={'network':cfg['net']} if cfg.get('net') else {}\n"
+                    "c.containers.run(cfg['img'],detach=True,name=cfg['name'],"
+                    "environment=cfg['env'],ports=p,volumes=cfg['vols'],"
+                    "restart_policy={'Name':cfg['restart']},labels=cfg['labels'],**kw)\n"
+                )
+                cfg_json = _json.dumps({
+                    'old': tmp_name, 'img': image, 'name': name,
+                    'env': env, 'ports': ports_map, 'vols': vols,
+                    'restart': restart, 'labels': labels, 'net': net,
+                })
+                sock_vols = [v for v in vols if '.sock' in v]
+                try:
+                    client.containers.get(name + "-updater").remove(force=True)
+                except Exception:
+                    pass
+                client.containers.run(
+                    image,
+                    name=name + "-updater",
+                    command=['python3', '-c', helper_script, cfg_json],
+                    volumes=sock_vols,
+                    detach=True,
+                    remove=False,
+                )
+                with _pull_lock:
+                    _pull_state.update(phase="live", error=None)
+                _t.sleep(0.5)
+                _os.kill(1, 9)
+
+            else:
+                try:
+                    candidate.stop(timeout=3)
+                    candidate.remove(force=True)
+                except Exception:
+                    pass
+                try:
+                    orig = client.containers.get(name)
+                    if orig.status != "running":
+                        orig.start()
+                except Exception:
+                    pass
+                with _pull_lock:
+                    _pull_state.update(
+                        phase="rolledback",
+                        error="new image failed health check after 30 s",
+                        rolledback=True,
+                        rollback_from=rollback_from,
+                        rollback_to=rollback_to,
+                    )
 
         except Exception as e:
             try:
-                container.rename(name)  # restore name if rename succeeded but helper launch failed
+                client.containers.get(name + "-candidate").remove(force=True)
+            except Exception:
+                pass
+            try:
+                container.rename(name)
+            except Exception:
+                pass
+            try:
+                orig = client.containers.get(name)
+                if orig.status != "running":
+                    orig.start()
             except Exception:
                 pass
             with _pull_lock:
-                _pull_state.update(phase="error", error=str(e))
+                _pull_state.update(
+                    phase="rolledback",
+                    error=str(e),
+                    rolledback=True,
+                    rollback_from=APP_VERSION,
+                    rollback_to="",
+                )
 
     threading.Thread(target=_do_recreate, daemon=True).start()
     return {"ok": True}
@@ -1547,6 +1645,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/update/status":
             with _pull_lock:
                 self._json({**dict(_pull_state), "instance_id": _INSTANCE_ID}); return
+        if path == "/api/update/rollback-status":
+            with _pull_lock:
+                self._json({
+                    "rolledback": _pull_state["rolledback"],
+                    "rollback_from": _pull_state["rollback_from"],
+                    "rollback_to": _pull_state["rollback_to"],
+                }); return
         # In vault mode, no data leaves until a tenant key is unlocked + active.
         if VAULT_MODE and not MCP_HEADERS.get("Authorization") and path.startswith("/api/"):
             self._json({"error": "vault locked", "locked": True}, 503); return
@@ -1659,6 +1764,10 @@ class Handler(BaseHTTPRequestHandler):
             if not MCP_HEADERS.get("Authorization") and not self._authed():
                 self._json({"ok": False, "error": "unauthorized"}, 401); return
             self._json(vault_reset()); return
+        if self.path == "/api/update/rollback-clear":
+            with _pull_lock:
+                _pull_state.update(rolledback=False, rollback_from=None, rollback_to=None)
+            self._json({"ok": True}); return
         if self.path == "/api/update/apply":
             if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
                 self._json({"error": "vault locked", "locked": True}, 503); return
