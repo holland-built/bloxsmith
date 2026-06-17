@@ -266,17 +266,6 @@ def apply_self_update():
             tmp_name = name + "-retiring"
             net = networks[0] if networks else None
 
-            def _free_port():
-                with _sock.socket() as s:
-                    s.bind(("127.0.0.1", 0))
-                    return s.getsockname()[1]
-
-            free_port = _free_port()
-            candidate_ports = {}
-            for _k in ports_map:
-                candidate_ports[_k] = [["127.0.0.1", str(free_port)]]
-                break
-
             candidate_name = name + "-candidate"
             try:
                 client.containers.get(candidate_name).remove(force=True)
@@ -285,11 +274,12 @@ def apply_self_update():
             with _pull_lock:
                 _pull_state.update(phase="checking", error=None)
 
+            # No port mapping — health probe uses docker exec (in-container),
+            # so no host port is needed and no conflict is possible.
             candidate = client.containers.run(
                 image,
                 name=candidate_name,
                 environment=env,
-                ports=candidate_ports,
                 volumes=vols,
                 restart_policy={},
                 labels=labels,
@@ -308,7 +298,6 @@ def apply_self_update():
                              "from urllib.request import urlopen;"
                              "r=urlopen('http://127.0.0.1:8080/api/vault/status',timeout=3);"
                              "exit(0 if r.status==200 else 1)"],
-                            timeout=6,
                         )
                         if result.exit_code == 0:
                             return True
@@ -333,7 +322,8 @@ def apply_self_update():
                     "time.sleep(3)\n"
                     "try: c.containers.get(cfg['old']).remove(force=True)\n"
                     "except Exception: pass\n"
-                    "c.images.pull(cfg['img'])\n"
+                    "try: c.images.pull(cfg['img'])\n"
+                    "except Exception: pass\n"
                     "p={k:[tuple(b) if isinstance(b,list) else b for b in v]"
                     " for k,v in cfg['ports'].items()}\n"
                     "kw={'network':cfg['net']} if cfg.get('net') else {}\n"
