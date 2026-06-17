@@ -3,6 +3,13 @@
 Append-only. Every code change gets an entry here before the task is marked done.
 Format: markdown table under a `## YYYY-MM-DD — <title>` heading.
 
+## 2026-06-17 — fix: auth guards on /api/vault/reset and /api/update/apply
+
+| File | Line(s) | Change |
+|---|---|---|
+| `server.py` | 1655–1661 | `/api/vault/reset` now requires vault unlocked OR `DASHBOARD_TOKEN`; returns 401 if neither |
+| `server.py` | 1662–1665 | `/api/update/apply` now returns 503 when vault is locked (vault mode); prevents unauthenticated LAN trigger |
+
 ## 2026-06-16 — Consolidate account + key UI (v5 status-badge)
 
 | File | Line(s) | Change |
