@@ -11,8 +11,9 @@ NAME=infoblox-mcp
 PORT="${PORT:-8080}"
 BIND="${BIND:-127.0.0.1}"   # loopback by default; BIND=0.0.0.0 to expose on the LAN
 
-echo "Building image from current source…"
-docker build -t "$NAME" .
+VER="1.0.$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+echo "Building image from current source… (version ${VER})"
+docker build -t "$NAME" --build-arg APP_VERSION="${VER}" .
 
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 echo "Starting container on ${BIND}:${PORT}…"
