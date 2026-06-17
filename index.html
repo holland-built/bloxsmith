@@ -1561,7 +1561,7 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
   const nextAr=()=>{const i=arOpts.findIndex(([v])=>v===autoRefresh);const [nv]=arOpts[(i+1)%arOpts.length];setAutoRefresh(nv);LS.set('ar',nv);};
   const arLbl=arOpts.find(([v])=>v===autoRefresh)?.[1]||'Off';
   const row=(label,hint,fn,tip)=>(
-    <div className="col-row" style={{cursor:'pointer'}} role="menuitem" title={tip} onClick={()=>{setOpen(false);fn();}}>
+    <div className="col-row" style={{cursor:'pointer'}} role="menuitem" data-tip={tip} data-tip-dir="left" onClick={()=>{setOpen(false);fn();}}>
       <span className="col-lbl">{label}</span>{hint&&<span className="refresh-countdown" style={{marginLeft:'auto'}}>{hint}</span>}
     </div>);
   return (
@@ -1572,7 +1572,7 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" style={{minWidth:210,top:'auto',bottom:'calc(100% + 4px)'}} role="menu">
-          <div className="col-row" style={{cursor:'pointer'}} role="menuitem" title="Cycle polling interval: Off → 30s → 1m → 5m" onClick={nextAr}>
+          <div className="col-row" style={{cursor:'pointer'}} role="menuitem" data-tip="Cycle polling interval: Off → 30s → 1m → 5m" data-tip-dir="left" onClick={nextAr}>
             <span className="col-lbl">Auto-refresh</span>
             <span style={{background:'var(--tint)',border:'1px solid var(--border)',borderRadius:4,padding:'1px 6px',fontSize:10,color:'var(--gray-200)',marginLeft:'auto'}}>{arLbl} ▾</span>
           </div>
@@ -1584,7 +1584,7 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
           {row('Copy link to this view','◳',onShare,'Copy a shareable URL for the current section')}
           {onReset&&<div className="acct-sec-divider"/>}
           {onReset&&(
-            <div className="col-row" style={{cursor:'pointer'}} role="menuitem" title="Restore default widget order and unhide all sections" onClick={()=>{setOpen(false); if(window.confirm('Reset dashboard?\n\nThis restores the default widget order and unhides all sections. Your saved snapshots are not affected.')) onReset();}}>
+            <div className="col-row" style={{cursor:'pointer'}} role="menuitem" data-tip="Restore default widget order and unhide all sections. Snapshots are not affected." data-tip-dir="left" onClick={()=>{setOpen(false); if(window.confirm('Reset dashboard?\n\nThis restores the default widget order and unhides all sections. Your saved snapshots are not affected.')) onReset();}}>
               <span className="col-lbl" style={{color:'var(--red-text)'}}>Reset dashboard</span>
               <span className="refresh-countdown" style={{marginLeft:'auto',color:'var(--red-text)'}}>↺</span>
             </div>
