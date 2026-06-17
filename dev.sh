@@ -17,12 +17,17 @@ docker build -t "$NAME" --build-arg APP_VERSION="${VER}" .
 
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 echo "Starting container on ${BIND}:${PORT}…"
+SOCK_MOUNT=()
+[[ "${NO_DOCKER_SOCKET:-0}" != "1" ]] && [[ -S /var/run/docker.sock ]] && \
+  SOCK_MOUNT=(-v /var/run/docker.sock:/var/run/docker.sock)
+
 docker run -d --name "$NAME" \
   -p "${BIND}:${PORT}:8080" \
   --env-file .env \
   -e HOST=0.0.0.0 \
   -e INFOBLOX_URL="${INFOBLOX_URL:-https://csp.infoblox.com}" \
   -v noc-vault:/vault \
+  ${SOCK_MOUNT[@]+"${SOCK_MOUNT[@]}"} \
   --restart unless-stopped \
   "$NAME" >/dev/null
 
