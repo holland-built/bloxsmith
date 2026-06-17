@@ -22,6 +22,7 @@ docker run -d --name "$NAME" \
   --env-file .env \
   -e HOST=0.0.0.0 \
   -e INFOBLOX_URL="${INFOBLOX_URL:-https://csp.infoblox.com}" \
+  -v noc-vault:/vault \
   --restart unless-stopped \
   "$NAME" >/dev/null
 
