@@ -1586,7 +1586,7 @@ function PresetMenu({section}) {
   const del=name=>{ const next={...views}; delete next[name]; setViews(next); LS.set('noc.views',next); };
   return (
     <span style={{position:'relative',display:'inline-flex'}}>
-      <button className="theme-btn" title="Saved views" aria-label="Saved views" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>★</button>
+      <button className="theme-btn" style={{gap:5,fontSize:12.5}} title="Saved views" aria-label="Saved views" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>★ Views</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" style={{minWidth:210}} role="menu">
@@ -3652,7 +3652,7 @@ function App({vault, onVaultChange}={}) {
           </div>
           <div className="sidebar-icon-strip">
             <button className="theme-btn" style={{marginLeft:0}} onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')} title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
-            <button className="theme-btn" style={{marginLeft:0}} onClick={()=>setCmdkOpen(true)} title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
+            <button className="theme-btn" style={{marginLeft:0,gap:5,fontSize:12.5}} onClick={()=>setCmdkOpen(true)} title="Command palette (Ctrl/⌘ K)" aria-label="Open command palette">⌕ Search</button>
             <PresetMenu section={section}/>
             <MoreMenu autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
           </div>
