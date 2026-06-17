@@ -1653,8 +1653,15 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/vault/lock":
             self._json(vault_lock()); return
         if self.path == "/api/vault/reset":
+            # Destructive + irreversible: require vault unlocked OR DASHBOARD_TOKEN.
+            # Blocks unauthenticated LAN/CSRF callers; preserves logged-in reset and
+            # admin recovery via token.
+            if not MCP_HEADERS.get("Authorization") and not self._authed():
+                self._json({"ok": False, "error": "unauthorized"}, 401); return
             self._json(vault_reset()); return
         if self.path == "/api/update/apply":
+            if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
+                self._json({"error": "vault locked", "locked": True}, 503); return
             self._json(apply_self_update()); return
         if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
             self._json({"error": "vault locked", "locked": True}, 503); return
