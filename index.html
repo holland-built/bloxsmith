@@ -222,6 +222,10 @@ body.chat-open{padding-right:340px}
 /* tooltip */
 .tt{background:var(--blue-mid);border:1px solid var(--border);border-radius:6px;padding:9px 13px;font-size:12px}
 .tt-lbl{color:var(--teal);font-weight:600;margin-bottom:3px}
+/* global tooltip layer */
+.gtip{position:fixed;pointer-events:none;z-index:10000;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:11px;color:var(--gray-100);line-height:1.45;max-width:240px;white-space:normal;box-shadow:0 4px 16px rgba(0,0,0,.45);animation:gtipIn .12s ease;font-weight:400;text-transform:none;letter-spacing:normal}
+@keyframes gtipIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.gtip b{color:var(--teal);font-weight:600}
 /* pulse */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.65}}
 .pulse{animation:pulse 3s ease-in-out infinite}
@@ -1397,7 +1401,9 @@ function FreshnessPill({lastUpd}) {
   const sec=Math.floor((Date.now()-lastUpd.getTime())/1000);
   const stale=sec>120;
   const txt=sec<60?'just now':sec<3600?Math.floor(sec/60)+'m ago':Math.floor(sec/3600)+'h ago';
-  return <span className={`fresh-pill${stale?' fresh-stale':''}`} title={`Data last refreshed ${lastUpd.toLocaleTimeString()}`}>
+  return <span className={`fresh-pill${stale?' fresh-stale':''}`}
+    title={`Data last refreshed ${lastUpd.toLocaleTimeString()}`}
+    data-tip={stale ? `<b>Data may be stale</b><br>Last refreshed ${lastUpd.toLocaleTimeString()}` : `Data is current · refreshed ${lastUpd.toLocaleTimeString()}`}>
     <span className={`fresh-dot${stale?'':' pulse'}`}/>Updated {txt}</span>;
 }
 
@@ -1422,12 +1428,16 @@ function RefreshControl({autoRefresh,refreshFrozen,setRefreshFrozen,hoverPause,a
   const cd = autoRefresh===0 ? '' : (refreshFrozen?'Paused':hoverPause?'Hover ⏸':arCountdown+'s');
   return (
     <span className="refresh-split" style={{position:'relative',display:'inline-flex'}}>
-      <button className="refresh-btn" onClick={onRefresh} title="Refresh all data">
+      <button className="refresh-btn" onClick={onRefresh} title="Refresh all data"
+        data-tip="Pull fresh data from the Infoblox API right now (shortcut: <b>R</b>)">
         <span className={refreshing?'spin':''} style={{display:'inline-block'}}>↻</span>
         {refreshing?'Refreshing…':'Refresh'}
         {cd&&<span className="refresh-countdown" style={{marginLeft:6}}>{cd}</span>}
       </button>
-      {autoRefresh>0&&<button className="theme-btn refresh-pause" aria-pressed={refreshFrozen} title={refreshFrozen?'Resume auto-refresh':'Pause auto-refresh'} onClick={()=>setRefreshFrozen(f=>!f)}>{refreshFrozen?'▶':'⏸'}</button>}
+      {autoRefresh>0&&<button className="theme-btn refresh-pause" aria-pressed={refreshFrozen}
+        title={refreshFrozen?'Resume auto-refresh':'Pause auto-refresh'}
+        data-tip={refreshFrozen?'Auto-refresh is paused — click to resume':'Pause the auto-refresh timer temporarily'}
+        onClick={()=>setRefreshFrozen(f=>!f)}>{refreshFrozen?'▶':'⏸'}</button>}
     </span>
   );
 }
@@ -1556,7 +1566,9 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
     </div>);
   return (
     <span style={{position:'relative',display:'inline-flex'}}>
-      <button className="theme-btn" aria-label="More" aria-expanded={open} title="More options" onClick={()=>setOpen(o=>!o)}>⋯</button>
+      <button className="theme-btn" aria-label="More" aria-expanded={open} title="More options"
+        data-tip="<b>More options</b> — auto-refresh interval, density, wall mode, demo data, share link, reset layout"
+        onClick={()=>setOpen(o=>!o)}>⋯</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" style={{minWidth:210,top:'auto',bottom:'calc(100% + 4px)'}} role="menu">
@@ -1594,7 +1606,9 @@ function PresetMenu({section}) {
   const del=name=>{ const next={...views}; delete next[name]; setViews(next); LS.set('noc.views',next); };
   return (
     <span style={{position:'static',display:'inline-flex'}}>
-      <button className="theme-btn" style={{gap:5,fontSize:12.5}} title="Saved snapshots" aria-label="Saved snapshots" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>★ Snapshots</button>
+      <button className="theme-btn" style={{gap:5,fontSize:12.5}} title="Saved snapshots" aria-label="Saved snapshots" aria-expanded={open}
+        data-tip="<b>Snapshots</b> — save &amp; restore the current filter + section state. Like bookmarks for dashboard views."
+        onClick={()=>setOpen(o=>!o)}>★ Snapshots</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" style={{minWidth:210,top:'auto',bottom:'calc(100% + 4px)'}} role="menu">
@@ -2718,21 +2732,21 @@ function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection
 /* ─── MAIN APP ───────────────────────────────────────────────────────────────*/
 
 const SECTIONS=[
-  {id:'overview', icon:'◉', label:'Overview'},
-  {id:'triage',   icon:'△', label:'Triage'},
-  {id:'ipam',     icon:'⊞', label:'IPAM / Subnets'},
-  {id:'dhcp',     icon:'⊃', label:'DHCP Leases'},
-  {id:'dns',      icon:'⊕', label:'DNS Zones'},
-  {id:'hosts',    icon:'⊡', label:'Hosts'},
-  {id:'security', icon:'⊛', label:'Security'},
-  {id:'threats',  icon:'⊗', label:'Threat Feeds'},
-  {id:'audit',    icon:'≡',  label:'Audit Logs'},
-  {id:'dns-analytics', icon:'⊘', label:'DNS Analytics'},
-  {id:'insights',      icon:'⊙', label:'SOC Insights'},
-  {id:'actions',       icon:'◆', label:'IQ Actions'},
-  {id:'alerts',        icon:'▲', label:'Alert Rules'},
-  {id:'threat-lookup', icon:'⊚', label:'Threat Lookup'},
-  {id:'search',        icon:'⊕', label:'Search'},
+  {id:'overview',      icon:'◉', label:'Overview',       tip:'Health tiles + per-domain status at a glance. Drag widgets to reorder.'},
+  {id:'triage',        icon:'△', label:'Triage',          tip:'Consolidated view of all critical &amp; warning issues across every domain.'},
+  {id:'ipam',          icon:'⊞', label:'IPAM / Subnets',  tip:'IP address space — subnets, utilization bars, and allocation detail.'},
+  {id:'dhcp',          icon:'⊃', label:'DHCP Leases',     tip:'Active and expired DHCP leases with IP, host name, and subnet.'},
+  {id:'dns',           icon:'⊕', label:'DNS Zones',       tip:'Authoritative DNS zones with TTL, record counts, and anomaly flags.'},
+  {id:'hosts',         icon:'⊡', label:'Hosts',           tip:'Infrastructure hosts — routers, switches, servers — with status dots.'},
+  {id:'security',      icon:'⊛', label:'Security',        tip:'BloxOne security policies: active/inactive, action, and rule counts.'},
+  {id:'threats',       icon:'⊗', label:'Threat Feeds',    tip:'Threat intelligence feeds (DGA, C2, phishing …) with entry counts.'},
+  {id:'audit',         icon:'≡',  label:'Audit Logs',      tip:'Timestamped record of every API action — who did what and when.'},
+  {id:'dns-analytics', icon:'⊘', label:'DNS Analytics',   tip:'Query volume trends, top clients, and per-device spike detection.'},
+  {id:'insights',      icon:'⊙', label:'SOC Insights',    tip:'AI-surfaced threat indicators and anomalies for SOC investigation.'},
+  {id:'actions',       icon:'◆', label:'IQ Actions',      tip:'DNS Firewall enforcement: block/redirect domains and review audit trail.'},
+  {id:'alerts',        icon:'▲', label:'Alert Rules',     tip:'Define threshold-based alerts (e.g. DHCP &gt; 90%) with notifications.'},
+  {id:'threat-lookup', icon:'⊚', label:'Threat Lookup',   tip:'Point-in-time lookup of any IP, domain, or hash against threat intel.'},
+  {id:'search',        icon:'⊕', label:'Search',          tip:'Full-text search across subnets, hosts, leases, zones, and logs.'},
 ];
 
 function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
@@ -3260,9 +3274,9 @@ function App({vault, onVaultChange}={}) {
   };
   const DragHandle = ({id}) => (
     <>
-      <span className="drag-handle" title="Drag to reorder" aria-label="Drag to reorder"
+      <span className="drag-handle" title="Drag to reorder" aria-label="Drag to reorder" data-tip="Drag to reorder this widget on the dashboard"
         onMouseDown={()=>setDragArmed(id)} onMouseUp={()=>setDragArmed(null)}>⠿</span>
-      {wallMode&&<button className="wall-span-btn" title="Cycle width: 1 / 2 / full" onClick={()=>cycleSpan(id)}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>}
+      {wallMode&&<button className="wall-span-btn" title="Cycle width: 1 / 2 / full" data-tip="Cycle widget width: 1 column → 2 columns → full width" onClick={()=>cycleSpan(id)}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>}
     </>
   );
   const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['raw','Raw']];
@@ -3630,7 +3644,9 @@ function App({vault, onVaultChange}={}) {
             if(data&&s.id==='triage'){ const auditF=auditLogs.filter(l=>l.result==='failure').length; const crit=errHosts.length+critSubs.length+auditF; const warn=firingAlerts.length+warnSubs.length+ttlBad.length; const t=crit+warn; if(t>0) badge=<span className={`badge-pill${crit===0?' badge-pill-amber':''}`} title={`${crit} critical, ${warn} warning`}>{t}</span>; }
             const firingHere = firingSecs.has(s.id);
             return (
-              <button key={s.id} className={`nav-item${section===s.id?' active':''}`} onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>
+              <button key={s.id} className={`nav-item${section===s.id?' active':''}`}
+                data-tip={s.tip} data-tip-dir="right"
+                onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>
                 <span className="nav-icon">{s.icon}</span>{s.label}{badge}
                 {firingHere&&<span className="badge-pill" title="Alert firing for this section">!</span>}
               </button>
@@ -3659,8 +3675,16 @@ function App({vault, onVaultChange}={}) {
             )}
           </div>
           <div className="sidebar-icon-strip">
-            <button className="theme-btn" style={{marginLeft:0}} onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')} title={`${THEME_LABEL[theme]} (click to change)`} aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
-            <button className="theme-btn" style={{marginLeft:0,gap:5,fontSize:12.5}} onClick={()=>setCmdkOpen(true)} title="Commands (Ctrl/⌘ K)" aria-label="Open commands">⌘ Commands</button>
+            <button className="theme-btn" style={{marginLeft:0}}
+              onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')}
+              title={`${THEME_LABEL[theme]} (click to change)`}
+              data-tip={`Theme: <b>${THEME_LABEL[theme]}</b> · click to cycle system → light → dark`}
+              aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
+            <button className="theme-btn" style={{marginLeft:0,gap:5,fontSize:12.5}}
+              onClick={()=>setCmdkOpen(true)}
+              title="Commands (Ctrl/⌘ K)"
+              data-tip="<b>Command palette</b> — navigate, refresh, export, change theme, and more (shortcut: <b>⌘K</b>)"
+              aria-label="Open commands">⌘ Commands</button>
             <PresetMenu section={section}/>
             <MoreMenu autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
           </div>
@@ -3729,7 +3753,9 @@ function App({vault, onVaultChange}={}) {
               <RefreshControl autoRefresh={autoRefresh}
                 refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen} hoverPause={hoverPause}
                 arCountdown={arCountdown} refreshing={refreshing} onRefresh={()=>load(true)}/>
-              <button className={`chat-toggle-btn${chatOpen?' on':''}`} onClick={()=>setChatOpen(o=>!o)}>
+              <button className={`chat-toggle-btn${chatOpen?' on':''}`}
+                data-tip="AI query assistant — ask questions about your network data in plain English"
+                onClick={()=>setChatOpen(o=>!o)}>
                 ⊕ {chatOpen?'Close Query':'Query'}
               </button>
 
@@ -3836,15 +3862,15 @@ function App({vault, onVaultChange}={}) {
                   <span className="hb-label">{hbLabel}</span>
                   <div className="hb-pills">
                     {hbWorst==='ok'
-                      ? tiles.map(t=><span key={t.cat} className="hb-pill ok">{t.cat}</span>)
-                      : hbIssues.map(t=><span key={t.cat} className={`hb-pill ${t.sev}`}>{t.cat} {ST[t.sev]}</span>)}
+                      ? tiles.map(t=><span key={t.cat} className="hb-pill ok" data-tip={`${t.cat}: all OK`}>{t.cat}</span>)
+                      : hbIssues.map(t=><span key={t.cat} className={`hb-pill ${t.sev}`} data-tip={`${t.cat}: ${t.n}${t.tot>0?' of '+t.tot:''} ${t.desc}`}>{t.cat} {ST[t.sev]}</span>)}
                   </div>
                 </div>
                 <div className="stiles" role="group" aria-label="Tenant status by domain">
                   {tiles.map(t=>(
                     <button key={t.cat} className={`stile ${t.sev}`} onClick={()=>setSection(t.section)}
                             aria-label={`${t.cat}: ${ST[t.sev]}, ${t.n}${t.tot>0?` of ${t.tot}`:''} — ${t.desc}`}
-                            title={`${t.cat}: ${t.n}${t.tot>0?(' of '+t.tot):''} ${t.desc} — open ${t.section.toUpperCase()}`}>
+                            data-tip={`<b>${t.cat}</b> — ${t.n}${t.tot>0?(' of '+t.tot):''} ${t.desc}<br>Status: <b>${ST[t.sev]}</b> · Click to open ${t.section}`}>
                       <div className="stile-top"><span className="stile-cat">{t.cat}</span><span className="stile-st">{ST[t.sev]}</span></div>
                       <span className="stile-big">{t.n}{t.tot>0&&<span className="stile-of"> / {t.tot}</span>}</span>
                       <span className="stile-desc">{t.desc}{deltas&&t.dk&&deltas[t.dk]!=null&&deltas[t.dk]!==0&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,borderRadius:3,padding:'1px 4px',color:deltas[t.dk]>0?'var(--sev-red-t)':'var(--sev-green-t)',background:deltas[t.dk]>0?'var(--badge-red-bg)':'var(--badge-green-bg)'}}>Δ{deltas[t.dk]>0?'+':''}{deltas[t.dk]}</span>}</span>
@@ -3879,8 +3905,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot"/>Host Status Distribution
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="hosts" def="donut" opts={[['donut','Donut'],['table','Table'],['bar','Bar'],['raw','Raw']]}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('hosts')} title={collapsed['hosts']?'Expand':'Collapse'}>{collapsed['hosts']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('hosts')} title="Fullscreen">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('hosts')} title={collapsed['hosts']?'Expand':'Collapse'} data-tip={collapsed['hosts']?'Expand this section':'Collapse this section to save space'}>{collapsed['hosts']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('hosts')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['hosts']&&(()=>{
@@ -3924,8 +3950,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot"/>Top Subnets by DHCP Utilization
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="subnets" def="subnetbars" opts={[['subnetbars','Bars'],['table','Table'],['line','Line'],['raw','Raw']]}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('subnets')} title={collapsed['subnets']?'Expand':'Collapse'}>{collapsed['subnets']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('subnets')} title="Fullscreen">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('subnets')} title={collapsed['subnets']?'Expand':'Collapse'} data-tip={collapsed['subnets']?'Expand this section':'Collapse this section to save space'}>{collapsed['subnets']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('subnets')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['subnets']&&(()=>{
@@ -3985,8 +4011,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot" style={{background:'var(--amber)'}}/>Zones with TTL Issues
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="ttl"/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('ttl')} title={collapsed['ttl']?'Expand':'Collapse'}>{collapsed['ttl']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('ttl')} title="Fullscreen">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('ttl')} title={collapsed['ttl']?'Expand':'Collapse'} data-tip={collapsed['ttl']?'Expand this section':'Collapse this section to save space'}>{collapsed['ttl']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('ttl')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['ttl']&&(getViz('ttl')==='table'
@@ -4005,8 +4031,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot"/>Recent Audit Activity
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="audit"/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('audit')} title={collapsed['audit']?'Expand':'Collapse'}>{collapsed['audit']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('audit')} title="Fullscreen">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('audit')} title={collapsed['audit']?'Expand':'Collapse'} data-tip={collapsed['audit']?'Expand this section':'Collapse this section to save space'}>{collapsed['audit']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('audit')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['audit']&&(getViz('audit')==='table'
@@ -4029,8 +4055,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot" style={{background:'var(--gray-400)'}}/>Security Policies
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="pols" def="panel" opts={[['panel','Panel'],['table','Table'],['bar','Bar'],['raw','Raw']]}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('pols')} title={collapsed['pols']?'Expand':'Collapse'}>{collapsed['pols']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('pols')} title="Fullscreen">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('pols')} title={collapsed['pols']?'Expand':'Collapse'} data-tip={collapsed['pols']?'Expand this section':'Collapse this section to save space'}>{collapsed['pols']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('pols')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['pols']&&(getViz('pols','panel')==='panel'
@@ -4049,8 +4075,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot" style={{background:'var(--red)'}}/>Top Threat Feeds by Severity
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="feeds"/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('feeds')} title={collapsed['feeds']?'Expand':'Collapse'}>{collapsed['feeds']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('feeds')} title="Fullscreen">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('feeds')} title={collapsed['feeds']?'Expand':'Collapse'} data-tip={collapsed['feeds']?'Expand this section':'Collapse this section to save space'}>{collapsed['feeds']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('feeds')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['feeds']&&(getViz('feeds')==='table'
@@ -4343,7 +4369,65 @@ function App({vault, onVaultChange}={}) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<VaultGate/>);
+/* ── Global tooltip layer ──────────────────────────────────────────────────
+   Add data-tip="…" to any element for an up-tooltip.
+   Add data-tip-dir="right|left|down" to change direction.
+   Rendered into document.body via portal — immune to overflow:hidden ancestors.
+   ────────────────────────────────────────────────────────────────────────── */
+function TooltipLayer() {
+  const [tip, setTip] = useState(null);
+  useEffect(() => {
+    let timer, active = null;
+    const show = (el) => {
+      const text = el.dataset.tip;
+      if(!text) return;
+      const dir = el.dataset.tipDir || 'up';
+      const r = el.getBoundingClientRect();
+      let x, y;
+      if(dir === 'right') { x = r.right + 9; y = r.top + r.height / 2; }
+      else if(dir === 'left') { x = r.left - 9; y = r.top + r.height / 2; }
+      else if(dir === 'down') { x = r.left + r.width / 2; y = r.bottom + 9; }
+      else { x = r.left + r.width / 2; y = r.top - 9; } // up
+      setTip({ text, dir, x, y });
+    };
+    const onOver = (e) => {
+      const el = e.target.closest('[data-tip]');
+      if(el === active) return;
+      clearTimeout(timer);
+      active = el;
+      if(!el) { setTip(null); return; }
+      timer = setTimeout(() => show(el), 220);
+    };
+    const onOut = (e) => {
+      const el = e.target.closest('[data-tip]');
+      if(!el) return;
+      clearTimeout(timer);
+      active = null;
+      setTip(null);
+    };
+    const onScroll = () => { clearTimeout(timer); active = null; setTip(null); };
+    document.addEventListener('mouseover', onOver);
+    document.addEventListener('mouseout', onOut);
+    document.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mouseover', onOver);
+      document.removeEventListener('mouseout', onOut);
+      document.removeEventListener('scroll', onScroll, true);
+    };
+  }, []);
+  if(!tip) return null;
+  const style = { left: tip.x, top: tip.y };
+  if(tip.dir === 'right') style.transform = 'translateY(-50%)';
+  else if(tip.dir === 'left') style.transform = 'translate(-100%,-50%)';
+  else if(tip.dir === 'down') style.transform = 'translateX(-50%)';
+  else style.transform = 'translateX(-50%) translateY(-100%)'; // up
+  return ReactDOM.createPortal(
+    <div className="gtip" style={style} dangerouslySetInnerHTML={{__html: tip.text}}/>,
+    document.body
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<><VaultGate/><TooltipLayer/></>);
 </script>
 </body>
 </html>
