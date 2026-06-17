@@ -1585,7 +1585,7 @@ function PresetMenu({section}) {
   const apply=name=>{ const v=views[name]; if(!v) return; applyViewLS(v.ls); location.hash=v.section||section; location.reload(); };
   const del=name=>{ const next={...views}; delete next[name]; setViews(next); LS.set('noc.views',next); };
   return (
-    <span style={{position:'relative',display:'inline-flex'}}>
+    <span style={{position:'static',display:'inline-flex'}}>
       <button className="theme-btn" style={{gap:5,fontSize:12.5}} title="Saved snapshots" aria-label="Saved snapshots" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>★ Snapshots</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
