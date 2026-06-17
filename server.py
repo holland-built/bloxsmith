@@ -296,29 +296,28 @@ def apply_self_update():
                 detach=True,
             )
 
-            def _wait_healthy(port, deadline=30, interval=2):
+            # Health probe via docker exec (in-container, network-agnostic).
+            # The server runs inside a container so 127.0.0.1:<host-port> is
+            # unreachable from here; exec runs inside the candidate instead.
+            def _wait_healthy(deadline=30, interval=2):
                 end = _t.monotonic() + deadline
                 while _t.monotonic() < end:
                     try:
-                        with _urlopen(f"http://127.0.0.1:{port}/api/vault/status", timeout=3) as r:
-                            if r.status == 200:
-                                return True
+                        result = candidate.exec_run(
+                            ["python3", "-c",
+                             "from urllib.request import urlopen;"
+                             "r=urlopen('http://127.0.0.1:8080/api/vault/status',timeout=3);"
+                             "exit(0 if r.status==200 else 1)"],
+                            timeout=6,
+                        )
+                        if result.exit_code == 0:
+                            return True
                     except Exception:
                         pass
                     _t.sleep(interval)
-                try:
-                    result = candidate.exec_run(
-                        ["python3", "-c",
-                         "from urllib.request import urlopen; r=urlopen('http://127.0.0.1:8080/api/vault/status',timeout=3); exit(0 if r.status==200 else 1)"],
-                        timeout=5,
-                    )
-                    if result.exit_code == 0:
-                        return True
-                except Exception:
-                    pass
                 return False
 
-            healthy = _wait_healthy(free_port)
+            healthy = _wait_healthy()
 
             if healthy:
                 try:
