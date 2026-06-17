@@ -14,10 +14,29 @@ __pycache__/
 
 # OS / editor cruft
 .DS_Store
-.claude/
-!.claude/skills/
-!.claude/skills/**
-.claude/skills/**/__pycache__/
-.claude/skills/**/*.pyc
 .playwright-mcp/
-90%
+
+# Claude Code / AI tooling (local only)
+.claude/
+.impeccable/
+.mcp.json
+
+# Internal AI training / planning docs (not for end users)
+CLAUDE.md
+AGENTS.md
+DESIGN.md
+COLOR_CONTRACT.md
+SKILLS.md
+MCP.md
+PRODUCT.md
+DAILY_CHANGELOG.md
+brainstorms/
+mockups/
+docs/change-reporting.md
+docs/CONTEXT.md
+docs/design-workflow.md
+docs/PLANNING.md
+docs/TESTING.md
+
+# Proof/screenshot artifacts
+_proof.png
