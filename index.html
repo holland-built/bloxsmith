@@ -4401,6 +4401,7 @@ function TooltipLayer() {
     const onOut = (e) => {
       const el = e.target.closest('[data-tip]');
       if(!el) return;
+      if(el.contains(e.relatedTarget)) return; // moving to a child — same element, don't reset
       clearTimeout(timer);
       active = null;
       setTip(null);
