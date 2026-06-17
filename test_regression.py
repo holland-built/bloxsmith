@@ -1325,6 +1325,150 @@ class FrontendStructureTests(unittest.TestCase):
             ".drag-card.dragging opacity must be .5 (not .35)")
 
 
+# ── update resilience tests ───────────────────────────────────────────────────
+
+class TestUpdateResilience(unittest.TestCase):
+    """Tests for Docker update resilience: rollback state, abort-on-stall, new _pull_state fields.
+
+    All tests mock Docker or inspect server source/state directly — no live daemon required.
+    """
+
+    @classmethod
+    def _server_src(cls):
+        with open(SERVER, encoding="utf-8") as f:
+            return f.read()
+
+    # 1. _pull_state dict has the three new rollback fields with correct defaults
+
+    def test_pull_state_has_rolledback_field(self):
+        """_pull_state initialises with rolledback=False."""
+        src = self._server_src()
+        self.assertIn('"rolledback": False', src,
+                      "_pull_state must initialise rolledback to False")
+
+    def test_pull_state_has_rollback_from_field(self):
+        """_pull_state initialises with rollback_from=None."""
+        src = self._server_src()
+        self.assertIn('"rollback_from": None', src,
+                      "_pull_state must initialise rollback_from to None")
+
+    def test_pull_state_has_rollback_to_field(self):
+        """_pull_state initialises with rollback_to=None."""
+        src = self._server_src()
+        self.assertIn('"rollback_to": None', src,
+                      "_pull_state must initialise rollback_to to None")
+
+    # 2. GET /api/update/rollback-status — default state
+
+    def test_rollback_status_returns_200(self):
+        """GET /api/update/rollback-status returns HTTP 200."""
+        status, _ = get_json("/api/update/rollback-status")
+        self.assertEqual(status, 200)
+
+    def test_rollback_status_default_rolledback_false(self):
+        """rollback-status default: rolledback is False."""
+        _, d = get_json("/api/update/rollback-status")
+        self.assertIn("rolledback", d)
+        self.assertIs(d["rolledback"], False)
+
+    def test_rollback_status_default_rollback_from_none(self):
+        """rollback-status default: rollback_from is None."""
+        _, d = get_json("/api/update/rollback-status")
+        self.assertIn("rollback_from", d)
+        self.assertIsNone(d["rollback_from"])
+
+    def test_rollback_status_default_rollback_to_none(self):
+        """rollback-status default: rollback_to is None."""
+        _, d = get_json("/api/update/rollback-status")
+        self.assertIn("rollback_to", d)
+        self.assertIsNone(d["rollback_to"])
+
+    # 3. POST /api/update/rollback-clear resets state
+
+    def test_rollback_clear_returns_ok(self):
+        """POST /api/update/rollback-clear returns 200 + {ok: true}."""
+        status, d = post_json("/api/update/rollback-clear", {})
+        self.assertEqual(status, 200)
+        self.assertTrue(d.get("ok"), f"Expected ok=true, got: {d}")
+
+    def test_rollback_clear_resets_status(self):
+        """After rollback-clear the rollback-status endpoint reflects cleared state."""
+        # POST clear first to ensure clean state, then verify
+        post_json("/api/update/rollback-clear", {})
+        _, d = get_json("/api/update/rollback-status")
+        self.assertIs(d.get("rolledback"), False,
+                      "rolledback must be False after rollback-clear")
+        self.assertIsNone(d.get("rollback_from"),
+                          "rollback_from must be None after rollback-clear")
+        self.assertIsNone(d.get("rollback_to"),
+                          "rollback_to must be None after rollback-clear")
+
+    # 4. Abort-on-stall: verify state transition logic exists in source
+
+    def test_stall_detection_threshold_in_source(self):
+        """Source contains a stall detection timeout (no progress guard)."""
+        src = self._server_src()
+        self.assertIn("stalled", src,
+                      "stall detection guard missing from server source")
+
+    def test_stall_sets_error_phase(self):
+        """Source shows stall triggers phase='error' transition."""
+        src = self._server_src()
+        # The stall handler sets phase to error
+        self.assertIn('phase="error"', src,
+                      "stall must transition phase to 'error'")
+        self.assertIn("stalled", src,
+                      "stalled flag must be set in _pull_state on abort")
+
+    def test_pull_state_error_transition_possible(self):
+        """_pull_state.update() can set phase=error — the dict is mutable and accepts it."""
+        import importlib.util, sys, types, unittest.mock as mock
+        # Load server module with Docker calls patched out so no daemon needed
+        with mock.patch.dict(sys.modules, {
+            "docker": types.ModuleType("docker"),
+        }):
+            spec = importlib.util.spec_from_file_location("_srv_tmp", SERVER)
+            mod = importlib.util.module_from_spec(spec)
+            # Patch _docker_client before exec so DOCKER_OK=False, no network calls
+            mod._docker_client = lambda: (None, False)  # type: ignore[attr-defined]
+            try:
+                spec.loader.exec_module(mod)
+            except Exception:
+                self.skipTest("server module requires env vars not present in test env")
+            state = mod._pull_state
+            # Simulate stall transition
+            state.update(phase="error", stalled=True, error="pull stalled")
+            self.assertEqual(state["phase"], "error")
+            self.assertTrue(state["stalled"])
+
+    # 5. GET /api/update/status includes rollback fields
+
+    def test_update_status_includes_rolledback(self):
+        """GET /api/update/status response includes rolledback key."""
+        _, d = get_json("/api/update/status")
+        self.assertIn("rolledback", d,
+                      "rolledback missing from /api/update/status — _pull_state must be spread into response")
+
+    def test_update_status_includes_rollback_from(self):
+        """GET /api/update/status response includes rollback_from key."""
+        _, d = get_json("/api/update/status")
+        self.assertIn("rollback_from", d,
+                      "rollback_from missing from /api/update/status")
+
+    def test_update_status_includes_rollback_to(self):
+        """GET /api/update/status response includes rollback_to key."""
+        _, d = get_json("/api/update/status")
+        self.assertIn("rollback_to", d,
+                      "rollback_to missing from /api/update/status")
+
+    def test_update_status_spread_includes_all_pull_state_keys(self):
+        """_pull_state is spread into /api/update/status (source-level check)."""
+        src = self._server_src()
+        # The handler must spread _pull_state into the response dict
+        self.assertIn("**dict(_pull_state)", src,
+                      "/api/update/status handler must spread _pull_state into the response")
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

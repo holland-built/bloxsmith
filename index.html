@@ -100,6 +100,16 @@ body.chat-open{padding-right:340px}
 .sidebar-icon-strip{display:flex;gap:4px;padding:6px 0 2px;width:100%;justify-content:flex-end}
 .sidebar-icon-strip .theme-btn{margin-left:0}
 .sidebar-foot{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--gray-400);position:relative}
+.rb-badge{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--red-bg);border:1px solid var(--red-border);border-left:3px solid var(--red);border-radius:6px;margin-top:6px}
+.rb-badge-ico{font-size:11px;color:var(--red);flex-shrink:0}
+.rb-badge-body{flex:1;min-width:0}
+.rb-badge-title{font-size:10px;font-weight:600;color:var(--red-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rb-badge-sub{font-size:10px;color:var(--gray-400);margin-top:1px}
+.rb-badge-actions{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.rb-btn-retry{font-size:10px;padding:2px 6px;border-radius:3px;border:1px solid var(--red-border);background:rgba(239,68,68,.15);color:var(--red-text);cursor:pointer;transition:background .12s}
+.rb-btn-retry:hover{background:rgba(239,68,68,.25)}
+.rb-btn-x{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;display:flex;align-items:center;transition:color .12s}
+.rb-btn-x:hover{color:var(--gray-200)}
 .main{padding:0 20px 40px;flex:1;min-width:0;max-width:100%;width:100%}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;padding:18px 0 14px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;background:var(--blue-dark)}
 .page-title{font-size:var(--fs-lg);font-weight:700;line-height:1.15}
@@ -3215,6 +3225,7 @@ function App({vault, onVaultChange}={}) {
   const [updStatus, setUpdStatus]     = useState({});
   const [updStart, setUpdStart]     = useState(0);                // Date.now() when update kicked off
   const [updInfo, setUpdInfo]       = useState(()=>(vault&&vault.update)||null);
+  const [rbInfo, setRbInfo]         = useState(()=>LS.get('noc.updRollback', null));
   const prevFiringRef               = useRef(new Set());
   const [accounts, setAccounts]     = useState([]);
   const [activeAcct, setActiveAcct] = useState('');   // CSP account id
@@ -3430,6 +3441,14 @@ function App({vault, onVaultChange}={}) {
     const id=setInterval(()=>{const el=Math.floor((Date.now()-updStart)/1000);setUpdElapsed(el);if(el>=120)location.reload();},1000);
     return ()=>clearInterval(id);
   },[updApplying,updStart]);
+  useEffect(()=>{
+    fetch('/api/update/rollback-status').then(r=>r.json()).then(d=>{
+      if(d.rolledback&&d.rollback_from){
+        const rb={from:d.rollback_from, to:d.rollback_to};
+        setRbInfo(rb); LS.set('noc.updRollback', rb);
+      }
+    }).catch(()=>{});
+  },[]);
 
   const SECTION_EXPORT_MAP = {ipam:'subnets',dhcp:'dhcp-leases',dns:'ttl-anomalies',security:'security-policies',threats:'threat-feeds',audit:'audit-logs',hosts:'hosts',insights:'soc-insights',actions:'iq-actions'};
   useEffect(()=>{
@@ -3598,6 +3617,7 @@ function App({vault, onVaultChange}={}) {
           setUpdPhase(s.phase||'prepulling');
           setUpdStatus(s);
           if(s.phase==='live'){ setUpdDone(true); setUpdApplying(false); setTimeout(()=>location.reload(),3000); return; }
+          if(s.phase==='rolledback'){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); const rb={from:s.rollback_from, to:s.rollback_to}; setRbInfo(rb); LS.set('noc.updRollback', rb); return; }
           if(s.phase==='error'){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); toast('Update failed: '+(s.error||'unknown'),'err'); return; }
           setTimeout(poll,1500);
         })
@@ -3665,7 +3685,7 @@ function App({vault, onVaultChange}={}) {
                     const stepName=updPhase==='prepulling'||updPhase==='pulling'
                       ?('Downloading'+(updStatus.pct>0?` ${updStatus.pct}%`+(updStatus.layer_total>0?` · ${updStatus.layer_current}/${updStatus.layer_total}`:''):'…'))
                       :updPhase==='pulled'||updPhase==='recreating'?'Restarting'
-                      :updPhase==='health'?'Checking':'Live';
+                      :updPhase==='checking'?'Checking':'Live';
                     return <span className="ver-badge updating" aria-live="polite"><span className="upd-spin"/>{stepName}<span className="ver-upd-elapsed">{fmtEl(updElapsed)}</span></span>;
                   })()
                 : <span className={`ver-badge${upd.available?' upd':''}`} role="button" tabIndex={0}
@@ -3674,6 +3694,17 @@ function App({vault, onVaultChange}={}) {
                     style={{marginLeft:'auto'}}>v{vault.version}{upd.available&&<><span className="ver-up-arrow">↑</span>{String(upd.latest||'').replace(/^v/,'')}</>}</span>
             )}
           </div>
+          {rbInfo&&<div className="rb-badge">
+            <span className="rb-badge-ico">&#9888;</span>
+            <div className="rb-badge-body">
+              <div className="rb-badge-title">Rollback {rbInfo.from?`v${String(rbInfo.from).replace(/^v/,'')}`:'active'}</div>
+              <div className="rb-badge-sub">{rbInfo.to?`v${String(rbInfo.to).replace(/^v/,'')} failed`:'update failed'}</div>
+            </div>
+            <div className="rb-badge-actions">
+              <button className="rb-btn-retry" onClick={()=>{fetch('/api/update/rollback-clear',{method:'POST'}).catch(()=>{}); setRbInfo(null); LS.set('noc.updRollback',null); applyUpdate();}}>retry</button>
+              <button className="rb-btn-x" title="Dismiss" onClick={()=>{fetch('/api/update/rollback-clear',{method:'POST'}).catch(()=>{}); setRbInfo(null); LS.set('noc.updRollback',null);}}>&#215;</button>
+            </div>
+          </div>}
           <div className="sidebar-icon-strip">
             <button className="theme-btn" style={{marginLeft:0}}
               onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')}
