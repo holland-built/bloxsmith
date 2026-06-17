@@ -4377,8 +4377,11 @@ function App({vault, onVaultChange}={}) {
 function TooltipLayer() {
   const [tip, setTip] = useState(null);
   useEffect(() => {
-    let timer, active = null;
+    let showTimer, hideTimer, active = null;
+    const cancelHide = () => clearTimeout(hideTimer);
+    const scheduleHide = () => { hideTimer = setTimeout(() => { active = null; setTip(null); }, 120); };
     const show = (el) => {
+      if(!el || !el.isConnected) return;
       const text = el.dataset.tip;
       if(!text) return;
       const dir = el.dataset.tipDir || 'up';
@@ -4387,26 +4390,26 @@ function TooltipLayer() {
       if(dir === 'right') { x = r.right + 9; y = r.top + r.height / 2; }
       else if(dir === 'left') { x = r.left - 9; y = r.top + r.height / 2; }
       else if(dir === 'down') { x = r.left + r.width / 2; y = r.bottom + 9; }
-      else { x = r.left + r.width / 2; y = r.top - 9; } // up
+      else { x = r.left + r.width / 2; y = r.top - 9; }
       setTip({ text, dir, x, y });
     };
     const onOver = (e) => {
       const el = e.target.closest('[data-tip]');
+      cancelHide();
       if(el === active) return;
-      clearTimeout(timer);
+      clearTimeout(showTimer);
       active = el;
       if(!el) { setTip(null); return; }
-      timer = setTimeout(() => show(el), 220);
+      showTimer = setTimeout(() => show(el), 80);
     };
     const onOut = (e) => {
       const el = e.target.closest('[data-tip]');
       if(!el) return;
-      if(el.contains(e.relatedTarget)) return; // moving to a child — same element, don't reset
-      clearTimeout(timer);
-      active = null;
-      setTip(null);
+      if(el.contains(e.relatedTarget)) return;
+      clearTimeout(showTimer);
+      scheduleHide();
     };
-    const onScroll = () => { clearTimeout(timer); active = null; setTip(null); };
+    const onScroll = () => { clearTimeout(showTimer); cancelHide(); active = null; setTip(null); };
     document.addEventListener('mouseover', onOver);
     document.addEventListener('mouseout', onOut);
     document.addEventListener('scroll', onScroll, true);
