@@ -21,6 +21,14 @@ SOCK_MOUNT=()
 [[ "${NO_DOCKER_SOCKET:-0}" != "1" ]] && [[ -S /var/run/docker.sock ]] && \
   SOCK_MOUNT=(-v /var/run/docker.sock:/var/run/docker.sock)
 
+# Auto-unlock vault on container start if .vault-passphrase exists locally.
+# Create it once:  echo 'your-passphrase' > .vault-passphrase
+# It is gitignored — never committed.
+PASS_MOUNT=()
+[[ -f .vault-passphrase ]] && \
+  PASS_MOUNT=(-v "$PWD/.vault-passphrase:/vault-passphrase:ro" \
+              -e VAULT_PASSPHRASE_FILE=/vault-passphrase)
+
 docker run -d --name "$NAME" \
   -p "${BIND}:${PORT}:8080" \
   --env-file .env \
@@ -28,6 +36,7 @@ docker run -d --name "$NAME" \
   -e INFOBLOX_URL="${INFOBLOX_URL:-https://csp.infoblox.com}" \
   -v noc-vault:/vault \
   ${SOCK_MOUNT[@]+"${SOCK_MOUNT[@]}"} \
+  ${PASS_MOUNT[@]+"${PASS_MOUNT[@]}"} \
   --restart unless-stopped \
   "$NAME" >/dev/null
 

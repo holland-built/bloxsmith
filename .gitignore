@@ -1,5 +1,6 @@
 # Secrets / local state — never publish
 .env
+.vault-passphrase
 dns_clients_cache.json
 ruvector.db
 server.log
