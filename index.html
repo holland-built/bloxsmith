@@ -1620,8 +1620,8 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
       <span className="col-lbl">{label}</span>{hint&&<span className="refresh-countdown" style={{marginLeft:'auto'}}>{hint}</span>}
     </div>);
   return (
-    <span style={{position:'relative',display:'inline-flex'}}>
-      <button className="theme-btn" aria-label="More" aria-expanded={open} title="More options"
+    <span style={{position:'static',display:'inline-flex'}}>
+      <button className="theme-btn" aria-label="More options" aria-expanded={open} title="More options"
         data-tip="<b>More options</b> — auto-refresh interval, density, wall mode, demo data, share link, reset layout"
         onClick={()=>setOpen(o=>!o)}>⋯</button>
       {open&&(<>
@@ -3755,7 +3755,7 @@ function App({vault, onVaultChange}={}) {
   const sq = (queryMode==='filter'&&searchQuery) ? searchQuery.toLowerCase() : '';
   const s_subnets  = sq ? subnets.filter(s=>[s.name,s.addr,s.site].some(v=>v.toLowerCase().includes(sq)))  : subnets;
   const s_leases   = (sq ? leases.filter(l=>[l.addr,l.host,l.subnet].some(v=>(v||'').toLowerCase().includes(sq))) : leases)
-    .filter(l=>!dhcpSubFilt || l.subnet===dhcpSubFilt);
+    .filter(l=>{ if(!dhcpSubFilt) return true; const sub=subnets.find(s=>s.id===dhcpSubFilt); return sub?leasesInSubnet([l],sub).length>0:true; });
   const s_zones    = sq ? zones.filter(z=>[z.fqdn,z.view].some(v=>v.toLowerCase().includes(sq)))           : zones;
   const s_hosts    = sq ? hosts.filter(h=>[h.name,h.ip,h.type,h.status].some(v=>v.toLowerCase().includes(sq))) : hosts;
   const s_policies = sq ? secPolicies.filter(p=>[p.name,p.action].some(v=>v.toLowerCase().includes(sq)))   : secPolicies;
@@ -3768,7 +3768,7 @@ function App({vault, onVaultChange}={}) {
   const onlineH   = hosts.filter(h=>h.status==='online');
   const ttlBad    = zones.filter(z=>z.anomaly);
   const activeF   = feeds.filter(f=>f.active);
-  const leaseCt   = leases.reduce((a,l)=>{if(l.subnet){a[l.subnet]=(a[l.subnet]||0)+1;}return a},{});
+  const leaseCt   = subnets.reduce((a,s)=>{a[s.name]=leasesInSubnet(leases,s).length;return a},{});
   const filtHosts = (hostFilt||hostChip) ? s_hosts.filter(h=>h.status===(hostFilt||hostChip)) : s_hosts;
   const hostSeen  = LS.get('noc.hostSeen',{});
   const firingAlerts = evalAlerts(data, alertRules).filter(a=>a.firing);
@@ -4316,8 +4316,8 @@ function App({vault, onVaultChange}={}) {
         {section==='ipam'&&(()=>{
           // Single-IP /32 subnets are trivially 100% and flood the table; hide them
           // by default (revealable). One pool drives the title, chip counts, and rows.
+          const tinyCount = s_subnets.filter(s=>s.total<=1).length;
           const ipamPool = ipamShowTiny ? s_subnets : s_subnets.filter(s=>s.total>1);
-          const tinyCount = s_subnets.length - ipamPool.length;
           return (
           <div className="card">
             <div className="card-title"><div className="dot"/>All Subnets — DHCP Utilization ({ipamPool.length}{sq&&` of ${subnets.length}`})</div>
@@ -4373,12 +4373,12 @@ function App({vault, onVaultChange}={}) {
               <div className="card-title">
                 <div className="dot"/>DHCP Leases
                 <span style={{fontWeight:400,color:'var(--gray-600)',fontSize:10}}>
-                  {dhcpSubFilt?` — ${dhcpSubFilt} (${s_leases.length})`:sq?` — filtered (${s_leases.length})`:` (${s_leases.length})`}
+                  {dhcpSubFilt?` — ${subnets.find(s=>s.id===dhcpSubFilt)?.name||'subnet'} (${s_leases.length})`:sq?` — filtered (${s_leases.length})`:` (${s_leases.length})`}
                 </span>
                 <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                   <select className="viz-sel" value={dhcpSubFilt||''} onChange={e=>setDhcpSubFilt(e.target.value||null)} aria-label="Filter leases by subnet" title="Filter by subnet" style={{maxWidth:160}}>
                     <option value="">All Subnets</option>
-                    {subnets.filter(s=>leaseCt[s.name]>0).sort((a,b)=>a.name.localeCompare(b.name)).map(s=><option key={s.id} value={s.name}>{s.name} ({s.addr}/{s.cidr})</option>)}
+                    {subnets.filter(s=>leaseCt[s.name]>0).sort((a,b)=>a.name.localeCompare(b.name)).map(s=><option key={s.id} value={s.id}>{s.name} ({s.addr}/{s.cidr})</option>)}
                   </select>
                   {dhcpSubFilt&&<button className="drill-close" onClick={()=>setDhcpSubFilt(null)} aria-label="Clear subnet filter" title="Clear filter">×</button>}
                 </div>
