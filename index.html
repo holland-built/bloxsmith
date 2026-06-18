@@ -100,7 +100,7 @@ body.chat-open{padding-right:340px}
 .sidebar-icon-strip{display:flex;gap:4px;padding:6px 0 2px;width:100%;justify-content:flex-end}
 .sidebar-icon-strip .theme-btn{margin-left:0}
 .sidebar-foot{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--gray-400);position:relative}
-.rb-badge{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--red-bg);border:1px solid var(--red-border);border-left:3px solid var(--red);border-radius:6px;margin-top:6px}
+.rb-badge{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:6px;margin-top:6px}
 .rb-badge-ico{font-size:11px;color:var(--red);flex-shrink:0}
 .rb-badge-body{flex:1;min-width:0}
 .rb-badge-title{font-size:10px;font-weight:600;color:var(--red-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -194,7 +194,7 @@ body.chat-open{padding-right:340px}
 .stile-desc{font-size:11px;color:var(--gray-400)}
 .stile-of{font-size:13px;font-weight:600;color:var(--gray-500)}
 .stile-track{height:4px;background:var(--surface-3);border-radius:2px;margin-top:auto}
-.stile-fill{height:100%;border-radius:2px;transition:width .8s ease}
+.stile-fill{height:100%;border-radius:2px;width:100%;transform-origin:left;transform:scaleX(0);transition:transform .8s ease}
 .stile.crit{background:rgba(239,68,68,.08);border-color:var(--badge-red-bd)}.stile.crit .stile-big{color:var(--sev-red-t)}.stile.crit .stile-st{background:var(--badge-red-bg);color:var(--sev-red-t)}
 .stile.warn{background:rgba(245,158,11,.07);border-color:var(--badge-amber-bd)}.stile.warn .stile-big{color:var(--sev-amber-t)}.stile.warn .stile-st{background:var(--badge-amber-bg);color:var(--sev-amber-t)}
 .stile.ok{background:var(--surface-2);border-color:var(--border)}.stile.ok .stile-big{color:var(--sev-green-t)}.stile.ok .stile-st{background:var(--badge-green-bg);color:var(--sev-green-t)}
@@ -221,7 +221,7 @@ body.chat-open{padding-right:340px}
 .sr-name{flex:0 0 118px;font-size:11px;color:var(--gray-200);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sr-ut{flex:0 0 72px;text-align:right;font-size:10px;color:var(--gray-400);font-family:monospace;font-variant-numeric:tabular-nums}
 .sr-bar{flex:1;height:6px;min-width:40px;background:var(--svg-track);border-radius:3px;overflow:hidden}
-.sr-fill{display:block;height:100%;border-radius:3px;transition:width .35s cubic-bezier(.22,1,.36,1)}
+.sr-fill{display:block;height:100%;border-radius:3px;width:100%;transform-origin:left;transform:scaleX(0);transition:transform .35s cubic-bezier(.22,1,.36,1)}
 .sr-pct{flex:0 0 38px;text-align:right;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
 .sr-collapse{display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:var(--surface-2);border:1px dashed var(--border);border-radius:6px;padding:6px 8px;margin-bottom:4px;font-size:11px;color:var(--gray-400);cursor:pointer;font-family:inherit}
 .sr-collapse b{color:var(--gray-200);font-weight:600}
@@ -587,7 +587,7 @@ tr:hover .copy-btn{opacity:1}
 .wall-clock{margin-left:18px;font-family:monospace;font-size:20px;font-weight:700;color:var(--gray-200);font-variant-numeric:tabular-nums;letter-spacing:.04em;white-space:nowrap}
 .tile-spark{display:block;margin-top:4px;color:var(--gray-400);opacity:.65}
 .sec-changed{margin-left:8px;font-size:10px;color:var(--gray-400)}
-.demo-banner{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:8px 12px;border:1px solid var(--amber);border-left:3px solid var(--amber);border-radius:6px;background:rgba(245,158,11,.10);color:var(--gray-200);font-size:12px}
+.demo-banner{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:8px 12px;border:1px solid var(--amber);border-radius:6px;background:rgba(245,158,11,.10);color:var(--gray-200);font-size:12px}
 .demo-banner-ico{color:var(--amber);font-size:13px}
 .triage-pill{display:inline-flex;align-items:center;gap:8px;margin-bottom:14px;padding:5px 12px;border:1px solid var(--red);border-radius:14px;background:rgba(239,68,68,.10);color:var(--gray-200);font-size:12px;cursor:pointer;transition:background .12s}
 .triage-pill:hover{background:rgba(239,68,68,.18)}
@@ -1021,7 +1021,7 @@ function SubnetBars({subnets,highlight,onBar}) {
             <span className="sr-num">{i+1}</span>
             <span className="sr-name">{s.name}</span>
             <span className="sr-ut">{s.used}/{s.total}</span>
-            <span className="sr-bar"><span className="sr-fill" style={{width:`${s.util}%`,background:col}}/></span>
+            <span className="sr-bar"><span className="sr-fill" style={{transform:`scaleX(${s.util/100})`,background:col}}/></span>
             <span className="sr-pct" style={{color:col}}>{s.util}%</span>
           </button>
         );
@@ -3913,7 +3913,7 @@ function App({vault, onVaultChange}={}) {
                       <div className="stile-top"><span className="stile-cat">{t.cat}</span><span className="stile-st">{ST[t.sev]}</span></div>
                       <span className="stile-big">{t.n}{t.tot>0&&<span className="stile-of"> / {t.tot}</span>}</span>
                       <span className="stile-desc">{t.desc}{deltas&&t.dk&&deltas[t.dk]!=null&&deltas[t.dk]!==0&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,borderRadius:3,padding:'1px 4px',color:deltas[t.dk]>0?'var(--sev-red-t)':'var(--sev-green-t)',background:deltas[t.dk]>0?'var(--badge-red-bg)':'var(--badge-green-bg)'}}>Δ{deltas[t.dk]>0?'+':''}{deltas[t.dk]}</span>}</span>
-                      <div className="stile-track"><div className="stile-fill" style={{width:t.tot>0?`${Math.min(t.n/t.tot*100,100)}%`:'0%',background:BAR[t.sev]}}/></div>
+                      <div className="stile-track"><div className="stile-fill" style={{transform:`scaleX(${t.tot>0?Math.min(t.n/t.tot*100,100)/100:0})`,background:BAR[t.sev]}}/></div>
                       {spark(t.cat)}
                     </button>
                   ))}
@@ -4472,5 +4472,8 @@ function TooltipLayer() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(<><VaultGate/><TooltipLayer/></>);
 </script>
+<!-- impeccable-live-start -->
+<script src="http://localhost:8400/live.js"></script>
+<!-- impeccable-live-end -->
 </body>
 </html>
