@@ -239,7 +239,6 @@ body.chat-open{padding-right:340px}
 /* pulse */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.65}}
 .pulse{animation:pulse 3s ease-in-out infinite}
-.mb14{margin-bottom:14px}.mb20{margin-bottom:20px}.mb24{margin-bottom:24px}
 /* scrollbar */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:var(--surface-2)}
@@ -426,6 +425,7 @@ tr:hover .copy-btn{opacity:1}
 .block-btn{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.35);border-radius:5px;color:var(--sev-red-t);font-size:10px;font-weight:700;padding:3px 9px;cursor:pointer;margin-top:6px}
 .block-btn:hover{background:rgba(239,68,68,.3)}
 .sev-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+@media(max-width:480px){.sev-grid{grid-template-columns:repeat(2,1fr)}}
 .sev-card{border-radius:8px;padding:14px;text-align:center;border:1px solid}
 .sort-th{cursor:pointer;user-select:none}
 .sort-th:hover{color:var(--teal-bright)}
@@ -1143,7 +1143,10 @@ function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
   const realPolicies = demoMode ? policies.filter(p=>!(p.action==='allow'&&p.rules<=1)) : policies;
   const testPolicies = demoMode ? policies.filter(p=>p.action==='allow'&&p.rules<=1) : [];
   const renderPol = (p) => (
-    <div key={p.id} className="pol-item" style={onDrill?{cursor:'pointer'}:undefined} onClick={onDrill?()=>onDrill({type:'policy',data:p}):undefined}>
+    <div key={p.id} className="pol-item" style={onDrill?{cursor:'pointer'}:undefined}
+      tabIndex={onDrill?0:undefined}
+      onKeyDown={onDrill?(e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onDrill({type:'policy',data:p});}}):undefined}
+      onClick={onDrill?()=>onDrill({type:'policy',data:p}):undefined}>
       <div>
         <div style={{fontSize:12,fontWeight:500,color:p.active?'var(--ink)':'var(--gray-400)'}}>{p.name}</div>
         <div style={{fontSize:10,color:'var(--gray-400)',marginTop:2}}>{p.rules} rules · {p.created}</div>
@@ -1174,7 +1177,9 @@ function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
       {realPolicies.map(renderPol)}
       {testPolicies.length>0&&(
         <>
-          <div className="pol-item" style={{cursor:'pointer',opacity:.7}} onClick={()=>setTestExpanded(v=>!v)}>
+          <div className="pol-item" style={{cursor:'pointer',opacity:.7}} tabIndex={0}
+            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setTestExpanded(v=>!v);}}}
+            onClick={()=>setTestExpanded(v=>!v)}>
             <div>
               <div style={{fontSize:12,fontWeight:500,color:'var(--gray-400)'}}>
                 {testExpanded?'▼':'▶'} {testPolicies.length} test / allow-all {testPolicies.length>1?'policies':'policy'} (collapsed)
@@ -1516,7 +1521,7 @@ function AckMenu({id, onAck}) {
             <span className="col-lbl" style={{color:'var(--gray-400)'}}>Clear</span>
           </div>
           <div className="col-row" style={{gap:4,padding:'6px 8px'}}>
-            <input type="number" min="0.25" step="0.25" placeholder="hrs"
+            <input type="number" aria-label="Custom snooze duration in hours" min="0.25" step="0.25" placeholder="hrs"
               value={custom} onChange={e=>setCustom(e.target.value)}
               onKeyDown={e=>{if(e.key==='Enter')applyCustom();e.stopPropagation();}}
               style={{width:52,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--gray-200)',padding:'3px 5px',fontSize:11}}/>
@@ -2593,10 +2598,28 @@ const PROTECTED_SECTIONS = new Set(['overview']);
 function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone}) {
   const [tab, setTab] = useState('widgets');
   const navSections = SECTIONS.filter(s=>!PROTECTED_SECTIONS.has(s.id));
+  const modalRef = useRef(null);
+  useEffect(()=>{
+    const prev = document.activeElement;
+    const sel = 'button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const focusables = () => modalRef.current ? Array.from(modalRef.current.querySelectorAll(sel)) : [];
+    const first = focusables()[0]; if(first) first.focus();
+    const h = e => {
+      if(e.key==='Escape'){ onDone(); return; }
+      if(e.key==='Tab'){
+        const f = focusables(); if(!f.length) return;
+        const a = f[0], z = f[f.length-1];
+        if(e.shiftKey && document.activeElement===a){ e.preventDefault(); z.focus(); }
+        else if(!e.shiftKey && document.activeElement===z){ e.preventDefault(); a.focus(); }
+      }
+    };
+    document.addEventListener('keydown', h);
+    return ()=>{ document.removeEventListener('keydown', h); if(prev && prev.focus) prev.focus(); };
+  },[onDone]);
   return (
     <>
       <div className="wiz-overlay" onClick={onDone}/>
-      <div className="wiz-modal" role="dialog" aria-modal="true" aria-label="Set up your dashboard">
+      <div className="wiz-modal" role="dialog" aria-modal="true" aria-label="Set up your dashboard" ref={modalRef}>
         <div className="wiz-hd">
           <div>
             <div className="wiz-title">Set up your dashboard</div>
@@ -2965,8 +2988,8 @@ function AlertsPanel({data, rules, setRules}){
     {key:'metric',label:'Metric',render:r=>metricLabel(r.metric)},
     {key:'condition',label:'Condition',nosort:true,render:r=>editId===r.id
       ?<span style={{display:'flex',gap:4}}>
-          <select className="viz-sel" value={editVals.metric} onChange={e=>setEditVals(v=>({...v,metric:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}}>{ALERT_METRICS.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}</select>
-          <select className="viz-sel" value={editVals.op} onChange={e=>setEditVals(v=>({...v,op:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}}>{Object.keys(ALERT_OPS).map(o=><option key={o} value={o}>{o}</option>)}</select>
+          <select className="viz-sel" aria-label="Alert metric" value={editVals.metric} onChange={e=>setEditVals(v=>({...v,metric:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}}>{ALERT_METRICS.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}</select>
+          <select className="viz-sel" aria-label="Alert operator" value={editVals.op} onChange={e=>setEditVals(v=>({...v,op:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}}>{Object.keys(ALERT_OPS).map(o=><option key={o} value={o}>{o}</option>)}</select>
           <input type="number" aria-label="Alert threshold value" value={editVals.threshold} onChange={e=>setEditVals(v=>({...v,threshold:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}} style={{width:60,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--gray-200)',padding:'3px 6px',fontSize:11}}/>
         </span>
       :`${r.op} ${r.threshold}`},
@@ -3434,7 +3457,7 @@ function App({vault, onVaultChange}={}) {
   );
   const VizSelect = ({id, def='table', opts=VIZ_OPTS}) => (
     <select className="viz-sel" value={getViz(id,def)} onChange={e=>setViz(id,e.target.value)}
-      onMouseDown={e=>e.stopPropagation()} title="Change visualization">
+      onMouseDown={e=>e.stopPropagation()} title="Change visualization" aria-label="Change visualization type">
       {opts.map(([v,l])=><option key={v} value={v}>{l}</option>)}
     </select>
   );
@@ -3598,7 +3621,7 @@ function App({vault, onVaultChange}={}) {
       if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.isContentEditable) return;
       if(e.key==='?') { setShowShortcuts(s=>!s); return; }
       if(e.key==='Escape') {
-        setChatOpen(false); setShowShortcuts(false); setCmdkOpen(false);
+        setChatOpen(false); setShowShortcuts(false); setCmdkOpen(false); setShowWizard(false);
         setUpdPop(false); setSidebarOpen(false); setFullscreen(null); setShowAcctMenu(false);
         if(/[?&](host|sub)=/.test(location.hash)) history.back();   // close an open drill via history
         else { setSubFilt(null); setHostFilt(null); }
