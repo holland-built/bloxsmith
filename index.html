@@ -194,7 +194,7 @@ body.chat-open{padding-right:340px}
 .stile-desc{font-size:11px;color:var(--gray-400)}
 .stile-of{font-size:13px;font-weight:600;color:var(--gray-500)}
 .stile-track{height:4px;background:var(--surface-3);border-radius:2px;margin-top:auto}
-.stile-fill{height:100%;border-radius:2px;width:100%;transform-origin:left;transform:scaleX(0);transition:transform .8s ease}
+.stile-fill{height:100%;border-radius:2px;width:100%;transform-origin:left;transform:scaleX(0);transition:transform .8s ease;will-change:transform}
 .stile.crit{background:rgba(239,68,68,.08);border-color:var(--badge-red-bd)}.stile.crit .stile-big{color:var(--sev-red-t)}.stile.crit .stile-st{background:var(--badge-red-bg);color:var(--sev-red-t)}
 .stile.warn{background:rgba(245,158,11,.07);border-color:var(--badge-amber-bd)}.stile.warn .stile-big{color:var(--sev-amber-t)}.stile.warn .stile-st{background:var(--badge-amber-bg);color:var(--sev-amber-t)}
 .stile.ok{background:var(--surface-2);border-color:var(--border)}.stile.ok .stile-big{color:var(--sev-green-t)}.stile.ok .stile-st{background:var(--badge-green-bg);color:var(--sev-green-t)}
@@ -221,7 +221,7 @@ body.chat-open{padding-right:340px}
 .sr-name{flex:0 0 118px;font-size:11px;color:var(--gray-200);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sr-ut{flex:0 0 72px;text-align:right;font-size:10px;color:var(--gray-400);font-family:monospace;font-variant-numeric:tabular-nums}
 .sr-bar{flex:1;height:6px;min-width:40px;background:var(--svg-track);border-radius:3px;overflow:hidden}
-.sr-fill{display:block;height:100%;border-radius:3px;width:100%;transform-origin:left;transform:scaleX(0);transition:transform .35s cubic-bezier(.22,1,.36,1)}
+.sr-fill{display:block;height:100%;border-radius:3px;width:100%;transform-origin:left;transform:scaleX(0);transition:transform .35s cubic-bezier(.22,1,.36,1);will-change:transform}
 .sr-pct{flex:0 0 38px;text-align:right;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
 .sr-collapse{display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:var(--surface-2);border:1px dashed var(--border);border-radius:6px;padding:6px 8px;margin-bottom:4px;font-size:11px;color:var(--gray-400);cursor:pointer;font-family:inherit}
 .sr-collapse b{color:var(--gray-200);font-weight:600}
@@ -289,6 +289,11 @@ body.chat-open{padding-right:340px}
 .notice.n-amber .n-ico{background:rgba(245,158,11,.15);color:var(--sev-amber-t)}
 .notice.n-amber b{color:var(--sev-amber-t)}
 .notice.n-amber .n-btn{border-color:rgba(245,158,11,.4);color:var(--sev-amber-t)}.notice.n-amber .n-btn:hover{background:rgba(245,158,11,.15)}
+[data-theme="light"] .notice.n-amber{background:rgba(183,121,31,.08);border-color:rgba(183,121,31,.35);color:var(--sev-amber-t)}
+[data-theme="light"] .notice.n-amber .n-ico{background:rgba(183,121,31,.12);color:var(--sev-amber-t)}
+[data-theme="light"] .notice.n-amber b{color:var(--sev-amber-t)}
+[data-theme="light"] .notice.n-amber .n-btn{border-color:rgba(183,121,31,.35);color:var(--sev-amber-t)}
+[data-theme="light"] .notice.n-amber .n-btn:hover{background:rgba(183,121,31,.12)}
 .n-more{align-self:flex-start;background:none;border:none;color:var(--gray-400);font-size:11px;font-weight:600;cursor:pointer;padding:2px 0;font-family:inherit}
 .n-more:hover{color:var(--teal)}
 .thinking{display:flex;gap:5px;align-items:center;padding:4px 2px}
@@ -428,6 +433,7 @@ tr:hover .copy-btn{opacity:1}
 .nav-item:focus-visible{outline-offset:-2px}
 @media(pointer:coarse){
   .close-btn,.drill-close,.n-x,.collapse-btn,.fs-btn,.copy-btn,.col-iconbtn{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+  .nav-item{min-height:44px}
   .toast-close{padding:8px}
 }
 /* ── vault auth screens ── */
@@ -531,6 +537,7 @@ tr:hover .copy-btn{opacity:1}
 .panel-error .retry-btn:hover{background:var(--hover-strong)}
 /* ── a11y + mobile ── */
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.sr-only-focusable:focus{position:fixed;top:8px;left:8px;z-index:9999;width:auto;height:auto;padding:8px 16px;clip:auto;white-space:normal;background:var(--surface);color:var(--ink);border:2px solid var(--teal);border-radius:6px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.4)}
 .menu-btn{display:none;background:var(--blue-deep);border:1px solid var(--border);color:var(--gray-200);border-radius:6px;cursor:pointer;font-size:16px;padding:6px 11px;margin-right:8px;line-height:1}
 .sidebar-backdrop{display:none}
 @media(max-width:760px){
@@ -626,6 +633,7 @@ tr:hover .copy-btn{opacity:1}
 </style>
 </head>
 <body>
+<a href="#main-content" class="sr-only sr-only-focusable">Skip to main content</a>
 <div id="root"></div>
 <script type="text/babel" data-presets="env,react">
 const IB_LOGO="data:image/png;base64,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";
@@ -1534,7 +1542,7 @@ function AcctPill({accounts=[], activeAcct, switchAcct, switchingAcct, vault={},
         <div className="acct-overlay" onClick={close}/>
         <div className="acct-menu down">
           {showSearch && (
-            <input className="acct-search" autoFocus placeholder="Search accounts…"
+            <input className="acct-search" aria-label="Search accounts" autoFocus placeholder="Search accounts…"
               value={acctSearch} onChange={e => setAcctSearch && setAcctSearch(e.target.value)}/>
           )}
           <div style={{maxHeight:280,overflowY:'auto'}}>
@@ -1927,8 +1935,8 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
       <div className="card">
         <div className="card-title"><div className="dot"/>Top DNS Clients — Last 7 Days</div>
         <div style={{display:'flex',gap:10,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
-          <input className="global-search" style={{width:220}} placeholder="Filter by device or IP…"
-            value={cf} onChange={e=>setCf(e.target.value)} aria-label="Filter DNS clients"/>
+          <input className="global-search" aria-label="Filter by device or IP" style={{width:220}} placeholder="Filter by device or IP…"
+            value={cf} onChange={e=>setCf(e.target.value)}/>
           {cf&&<span style={{fontSize:10,color:'var(--gray-400)'}}>{fclients.length} of {top_clients.length}</span>}
           <div style={{marginLeft:'auto'}}><RowLimitBar limit={rowLimit} setLimit={setRowLimit}/></div>
         </div>
@@ -2081,7 +2089,7 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
   return (
     <>
       <div className="lookup-input-row">
-        <input className="lookup-in" placeholder="Search IP, hostname, or domain…"
+        <input className="lookup-in" aria-label="Search IP, hostname, or domain" placeholder="Search IP, hostname, or domain…"
           value={q} onChange={e=>setQ(e.target.value)} onKeyDown={onKey}/>
         <button className="lookup-btn" onClick={lookup} disabled={loading||!q.trim()}>
           {loading?'…':'Search'}
@@ -2921,12 +2929,12 @@ function VaultSetup({onDone}) {
   };
   return (<div className="vault-screen"><div className="vault-card">
     <div className="vault-logo">Infoblox MCP</div>
-    <h2>Create your vault</h2>
+    <h1>Create your vault</h1>
     <p>Set a passphrase to encrypt your Infoblox tenant keys at rest. It is never stored — you re-enter it after a restart to unlock. There is no recovery if you forget it.</p>
-    <label>Passphrase</label>
-    <input className="vault-in" type="password" value={p1} onChange={e=>setP1(e.target.value)} autoFocus/>
-    <label>Confirm passphrase</label>
-    <input className="vault-in" type="password" value={p2} onChange={e=>setP2(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}}/>
+    <label htmlFor="vs-pass">Passphrase</label>
+    <input id="vs-pass" className="vault-in" type="password" value={p1} onChange={e=>setP1(e.target.value)} autoFocus/>
+    <label htmlFor="vs-confirm">Confirm passphrase</label>
+    <input id="vs-confirm" className="vault-in" type="password" value={p2} onChange={e=>setP2(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}}/>
     {err&&<div className="vault-err">{err}</div>}
     <button className="vault-btn" onClick={go} disabled={busy||!p1||!p2}>{busy?'Creating…':'Create vault'}</button>
   </div></div>);
@@ -2940,10 +2948,10 @@ function VaultUnlock({onDone}) {
   };
   return (<div className="vault-screen"><div className="vault-card">
     <div className="vault-logo">Infoblox MCP</div>
-    <h2>Unlock vault</h2>
+    <h1>Unlock vault</h1>
     <p>Enter your passphrase to decrypt your saved tenant keys.</p>
-    <label>Passphrase</label>
-    <input className="vault-in" type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} autoFocus/>
+    <label htmlFor="vu-pass">Passphrase</label>
+    <input id="vu-pass" className="vault-in" type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} autoFocus/>
     {err&&<div className="vault-err">{err}</div>}
     <button className="vault-btn" onClick={go} disabled={busy||!p}>{busy?'Unlocking…':'Unlock'}</button>
     <div style={{textAlign:'center',marginTop:14}}>
@@ -2972,14 +2980,14 @@ function VaultAddTenant({onDone, onCancel, first, editId, editLabel}) {
   useEffect(()=>{ if(!onCancel)return; const h=e=>{if(e.key==='Escape')onCancel();}; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onCancel]);
   return (<div className="vault-screen" onClick={onCancel?()=>onCancel():undefined}><div className="vault-card" onClick={e=>e.stopPropagation()}>
     <div className="vault-logo">Infoblox MCP</div>
-    <h2>{isEdit?`Replace key for ${editLabel||'connection'}`:(first?'Add your first connection':'Add a connection')}</h2>
+    <h1>{isEdit?`Replace key for ${editLabel||'connection'}`:(first?'Add your first connection':'Add a connection')}</h1>
     <p>{isEdit
       ? 'Paste a new Infoblox API key for this connection — e.g. when the old one was rejected or lacks account access. The connection re-names itself from the new key.'
       : 'Paste an Infoblox API key. The key is encrypted in your vault, and the connection is named automatically from its CSP account.'}</p>
-    <label>Infoblox API key</label>
-    <input className="vault-in" type="password" value={key} onChange={e=>{setKey(e.target.value);setTest('');}} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="paste token (any format — Token/Bearer prefix optional)" autoFocus/>
-    <label>Name (optional — auto-named from the portal if blank)</label>
-    <input className="vault-in" value={label} onChange={e=>setLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="leave blank to use the CSP account name"/>
+    <label htmlFor="vat-key">Infoblox API key</label>
+    <input id="vat-key" className="vault-in" type="password" value={key} onChange={e=>{setKey(e.target.value);setTest('');}} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="paste token (any format — Token/Bearer prefix optional)" autoFocus/>
+    <label htmlFor="vat-name">Name (optional — auto-named from the portal if blank)</label>
+    <input id="vat-name" className="vault-in" value={label} onChange={e=>setLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="leave blank to use the CSP account name"/>
     {test&&<div style={{fontSize:11,marginTop:8,color:test.startsWith('Key valid')?'var(--sev-green-t)':(test==='Testing…'?'var(--gray-400)':'var(--sev-red-t)')}}>{test}</div>}
     {err&&<div className="vault-err">{err}</div>}
     <button className="vault-btn" onClick={go} disabled={busy||!key}>{busy?(isEdit?'Replacing…':'Adding…'):(isEdit?'Replace key':'Add connection')}</button>
@@ -3016,19 +3024,19 @@ function VaultSettings({llm, onDone, onCancel}) {
   useEffect(()=>{ const h=e=>{if(e.key==='Escape')onCancel();}; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onCancel]);
   return (<div className="vault-screen" onClick={()=>onCancel()}><div className="vault-card" onClick={e=>e.stopPropagation()}>
     <div className="vault-logo">AI query provider</div>
-    <h2>AI / LLM provider</h2>
+    <h1>AI / LLM provider</h1>
     <p>Powers the natural-language query box. Works with any OpenAI-compatible provider. The query box uses tool-calling, so pick a provider/model that supports it (Claude and Gemini work via their OpenAI-compatible endpoints; OpenRouter exposes most models). Stored encrypted in your vault.</p>
     <label>Provider preset</label>
     <select className="vault-preset" defaultValue="" onChange={e=>applyPreset(e.target.value)}>
       <option value="" disabled>Choose a preset…</option>
       {Object.keys(LLM_PRESETS).map(n=><option key={n} value={n}>{n}</option>)}
     </select>
-    <label>API key{llm&&llm.hasKey?' (leave blank to keep current)':''}</label>
-    <input className="vault-in" type="password" value={key} onChange={e=>{setKey(e.target.value);setTest('');}} placeholder={llm&&llm.hasKey?'•••••••• (unchanged)':'gsk_… / sk-… / sk-ant-…'}/>
-    <label>Base URL (blank = Groq)</label>
-    <input className="vault-in" value={base} onChange={e=>{setBase(e.target.value);setTest('');}} placeholder="https://api.openai.com/v1"/>
-    <label>Model</label>
-    <input className="vault-in" value={model} onChange={e=>{setModel(e.target.value);setTest('');}} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="qwen/qwen3-32b"/>
+    <label htmlFor="llm-key">API key{llm&&llm.hasKey?' (leave blank to keep current)':''}</label>
+    <input id="llm-key" className="vault-in" type="password" value={key} onChange={e=>{setKey(e.target.value);setTest('');}} placeholder={llm&&llm.hasKey?'•••••••• (unchanged)':'gsk_… / sk-… / sk-ant-…'}/>
+    <label htmlFor="llm-url">Base URL (blank = Groq)</label>
+    <input id="llm-url" className="vault-in" value={base} onChange={e=>{setBase(e.target.value);setTest('');}} placeholder="https://api.openai.com/v1"/>
+    <label htmlFor="llm-model">Model</label>
+    <input id="llm-model" className="vault-in" value={model} onChange={e=>{setModel(e.target.value);setTest('');}} onKeyDown={e=>{if(e.key==='Enter')go();}} placeholder="qwen/qwen3-32b"/>
     {test&&<div style={{fontSize:11,marginTop:8,color:test.startsWith('Connection OK')?'var(--sev-green-t)':(test==='Testing…'?'var(--gray-400)':'var(--sev-red-t)')}}>{test}</div>}
     {err&&<div className="vault-err">{err}</div>}
     <button className="vault-btn" onClick={go} disabled={busy}>{busy?'Saving…':'Save provider'}</button>
@@ -3104,7 +3112,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
           <>
             {/* ── Main view: accounts + manage ── */}
             <div className="acct-sec-label">Accounts</div>
-            {showAcctSearch&&<input className="acct-search" autoFocus placeholder="Search accounts…" value={acctSearch} onChange={e=>setAcctSearch&&setAcctSearch(e.target.value)}/>}
+            {showAcctSearch&&<input className="acct-search" aria-label="Search accounts" autoFocus placeholder="Search accounts…" value={acctSearch} onChange={e=>setAcctSearch&&setAcctSearch(e.target.value)}/>}
             <div style={{maxHeight:200,overflowY:'auto'}}>
               {filteredAccts.filter(u=>u.hasKey).map(u=>(
                 <div key={u.accountId} className="tenant-row" style={{display:'flex',alignItems:'center',gap:'4px',padding:'0 4px'}}>
@@ -3797,7 +3805,7 @@ function App({vault, onVaultChange}={}) {
       </div>
 
       {/* MAIN */}
-      <div className="main"
+      <main id="main-content" className="main"
         onMouseEnter={()=>{ if(autoRefresh>0) setHoverPause(true); }}
         onMouseLeave={()=>setHoverPause(false)}>
         <div className="sr-only" role="status" aria-live="polite">
@@ -4388,7 +4396,7 @@ function App({vault, onVaultChange}={}) {
           />
         )}
 
-      </div>
+      </main>
 
       {showShortcuts&&(
         <div className="shortcut-overlay" onClick={()=>setShowShortcuts(false)}>
