@@ -243,6 +243,15 @@ def apply_self_update():
                                         "PYTHON_SHA256=", "GPG_KEY="))]
             name = attrs.get("Name", "").lstrip("/")
             image = attrs.get("Config", {}).get("Image", "")
+            # Prefer the pre-pulled GHCR image so updates on locally-tagged
+            # containers (e.g. dev builds named 'infoblox-mcp') actually land
+            # on the new version rather than re-running the old local image.
+            ghcr_image = f"ghcr.io/{APP_REPO}:latest"
+            try:
+                client.images.get(ghcr_image)
+                image = ghcr_image
+            except Exception:
+                pass  # No GHCR image locally — use current container's image
             restart = cfg.get("RestartPolicy", {}).get("Name", "unless-stopped")
             labels = attrs.get("Config", {}).get("Labels") or {}
             networks = list((attrs.get("NetworkSettings") or {}).get("Networks", {}).keys())
