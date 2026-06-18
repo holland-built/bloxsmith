@@ -1504,12 +1504,14 @@ function AckMenu({id, onAck}) {
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" style={{minWidth:120,top:'100%',right:0,left:'auto'}} role="menu">
           {opts.map(o=>(
-            <div key={o.label} className="col-row" style={{cursor:'pointer'}} role="menuitem"
+            <div key={o.label} className="col-row" style={{cursor:'pointer'}} role="menuitem" tabIndex={0}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.currentTarget.click();}}}
               onClick={()=>{setOpen(false);onAck(id,o.ms);}}>
               <span className="col-lbl">{o.label}</span>
             </div>
           ))}
-          <div className="col-row" style={{cursor:'pointer'}} role="menuitem"
+          <div className="col-row" style={{cursor:'pointer'}} role="menuitem" tabIndex={0}
+            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.currentTarget.click();}}}
             onClick={()=>{setOpen(false);onAck(id,0);}}>
             <span className="col-lbl" style={{color:'var(--gray-400)'}}>Clear</span>
           </div>
@@ -1607,7 +1609,9 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
   const nextAr=()=>{const i=arOpts.findIndex(([v])=>v===autoRefresh);const [nv]=arOpts[(i+1)%arOpts.length];setAutoRefresh(nv);LS.set('ar',nv);};
   const arLbl=arOpts.find(([v])=>v===autoRefresh)?.[1]||'Off';
   const row=(label,hint,fn,tip)=>(
-    <div className="col-row" style={{cursor:'pointer'}} role="menuitem" data-tip={tip} data-tip-dir="left" onClick={()=>{setOpen(false);fn();}}>
+    <div className="col-row" style={{cursor:'pointer'}} role="menuitem" tabIndex={0} data-tip={tip} data-tip-dir="left"
+      onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.currentTarget.click();}}}
+      onClick={()=>{setOpen(false);fn();}}>
       <span className="col-lbl">{label}</span>{hint&&<span className="refresh-countdown" style={{marginLeft:'auto'}}>{hint}</span>}
     </div>);
   return (
@@ -1618,7 +1622,7 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" style={{minWidth:210,top:'auto',bottom:'calc(100% + 4px)'}} role="menu">
-          <div className="col-row" style={{cursor:'pointer'}} role="menuitem" data-tip="Cycle polling interval: Off → 30s → 1m → 5m" data-tip-dir="left" onClick={nextAr}>
+          <div className="col-row" style={{cursor:'pointer'}} role="menuitem" tabIndex={0} data-tip="Cycle polling interval: Off → 30s → 1m → 5m" data-tip-dir="left" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.currentTarget.click();}}} onClick={nextAr}>
             <span className="col-lbl">Auto-refresh</span>
             <span style={{background:'var(--tint)',border:'1px solid var(--border)',borderRadius:4,padding:'1px 6px',fontSize:10,color:'var(--gray-200)',marginLeft:'auto'}}>{arLbl} ▾</span>
           </div>
@@ -1630,7 +1634,7 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
           {row('Copy link to this view','◳',onShare,'Copy a shareable URL for the current section')}
           {onReset&&<div className="acct-sec-divider"/>}
           {onReset&&(
-            <div className="col-row" style={{cursor:'pointer'}} role="menuitem" data-tip="Restore default widget order and unhide all sections. Snapshots are not affected." data-tip-dir="left" onClick={()=>{setOpen(false);setConfirmReset(true);}}>
+            <div className="col-row" style={{cursor:'pointer'}} role="menuitem" tabIndex={0} data-tip="Restore default widget order and unhide all sections. Snapshots are not affected." data-tip-dir="left" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.currentTarget.click();}}} onClick={()=>{setOpen(false);setConfirmReset(true);}}>
               <span className="col-lbl" style={{color:'var(--red-text)'}}>Reset dashboard</span>
               <span className="refresh-countdown" style={{marginLeft:'auto',color:'var(--red-text)'}}>↺</span>
             </div>
@@ -2176,7 +2180,7 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
                     blocked[name]
                       ?<div style={{display:'flex',gap:8,alignItems:'center',marginTop:6}}>
                          <span style={{fontSize:10,color:'var(--sev-red-t)'}}>✓ Block request sent</span>
-                         <button className="collapse-btn" style={{margin:0}} onClick={()=>unblock(name)} title="Roll back this block">↶ Undo</button>
+                         <button className="collapse-btn" style={{margin:0}} onClick={()=>unblock(name)} title="Roll back this block" aria-label="Roll back block">↶ Undo</button>
                        </div>
                       :<button className="block-btn" onClick={()=>block(name)}>⊗ Block Domain</button>
                   )}
@@ -2213,7 +2217,7 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
                 <span style={{color:a.ok?'var(--green)':'var(--red)'}}>{a.ok?'✓':'✗ '+a.err}</span></span>
               <span style={{display:'flex',gap:8,alignItems:'center'}}>
                 <span style={{color:'var(--gray-400)'}}>{new Date(a.ts).toLocaleTimeString()}</span>
-                {a.act==='block'&&a.ok&&<button className="collapse-btn" style={{margin:0}} onClick={()=>unblock(a.domain)} title="Roll back">↶ Undo</button>}
+                {a.act==='block'&&a.ok&&<button className="collapse-btn" style={{margin:0}} onClick={()=>unblock(a.domain)} title="Roll back" aria-label="Roll back block">↶ Undo</button>}
               </span>
             </div>
           ))}
@@ -2334,7 +2338,7 @@ function SearchSection({data, srchQ, setSrchQ, srchRes, setSrchRes, srching, set
       {/* Empty state */}
       {!srchRes&&!srching&&(
         <div className="no-data" style={{paddingTop:80}}>
-          <div style={{fontSize:32,marginBottom:12,opacity:.3}}>⊕</div>
+          <div style={{fontSize:32,marginBottom:12,opacity:.3}} aria-hidden="true">⊕</div>
           <div style={{color:'var(--gray-400)',fontSize:13}}>Enter a search term and press Search or Enter</div>
           <div style={{color:'var(--gray-400)',fontSize:11,marginTop:6}}>Searches subnets, hosts, zones, feeds, policies, leases, and network entities</div>
         </div>
@@ -2515,7 +2519,7 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
               <button className={`mode-btn${queryMode==='ask'?' on':''}`} onClick={()=>setQueryMode('ask')}>Ask</button>
               <button className={`mode-btn${queryMode==='filter'?' on':''}`}
                 onClick={()=>setQueryMode('filter')}
-                style={queryMode==='filter'?{background:'rgba(245,158,11,.2)',color:'var(--sev-amber-t)'}:{}}>Filter</button>
+                style={queryMode==='filter'?{background:'var(--badge-amber-bg)',color:'var(--sev-amber-t)'}:{}}>Filter</button>
             </div>
             <button style={{background:'none',border:'1px solid var(--border)',borderRadius:5,color:'var(--gray-400)',cursor:'pointer',fontSize:10,fontWeight:600,padding:'3px 8px',letterSpacing:'.04em'}}
               onClick={()=>setMessages([{id:0,role:'a',content:'Cleared. Ask anything about your network.'}])}>Clear</button>
@@ -2563,8 +2567,8 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
           </div>
         ))}
         {thinking&&(
-          <div className="msg-a">
-            <div className="thinking">
+          <div className="msg-a" role="status" aria-label="Thinking…">
+            <div className="thinking" aria-hidden="true">
               <div className="t-dot"/><div className="t-dot"/><div className="t-dot"/>
             </div>
           </div>
@@ -2883,7 +2887,7 @@ function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
   });
   const allCols=[
     {key:'name',label:'Name',fixed:true,render:s=><span style={{fontWeight:500}} title={s.name!==s.addr?s.name:undefined}>{s.name!==s.addr?s.name:<span style={{color:'var(--gray-600)'}}>—</span>}</span>},
-    {key:'addr',label:'Network',mono:true,size:11,sortVal:s=>s.addr,csv:s=>`${s.addr}/${s.cidr}`,render:s=>(<span style={{color:'var(--gray-200)'}} title={`${s.addr}/${s.cidr}`}>{s.addr}/{s.cidr}<button className="copy-btn" tabIndex={0} onClick={()=>copyToClip(s.addr)} title="Copy IP">⎘</button></span>)},
+    {key:'addr',label:'Network',mono:true,size:11,sortVal:s=>s.addr,csv:s=>`${s.addr}/${s.cidr}`,render:s=>(<span style={{color:'var(--gray-200)'}} title={`${s.addr}/${s.cidr}`}>{s.addr}/{s.cidr}<button className="copy-btn" tabIndex={0} onClick={()=>copyToClip(s.addr)} title="Copy IP" aria-label="Copy IP address">⎘</button></span>)},
     ...(hasSite?[{key:'site',label:'Site',size:11,render:s=><span style={{color:'var(--gray-400)'}}>{s.site}</span>}]:[]),
     {key:'usedtotal',label:'Used / Total',mono:true,size:11,sortVal:s=>s.used,csv:s=>`${s.used}/${s.total}`,render:s=>`${s.used} / ${s.total}`},
     {key:'util',label:'Utilization',sortVal:s=>s.util,render:s=>(<div style={{display:'flex',alignItems:'center',gap:8}}><div className="bar-track"><div className="bar-fill" style={{width:`${s.util}%`,background:utilColor(s.util)}}/></div><span style={{fontSize:11,fontWeight:700,color:utilColor(s.util)}}>{s.util}%</span></div>)},
@@ -2896,7 +2900,7 @@ function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
 function HostsTable({hosts, rowLimit, hostSeen={}, onDrill}) {
   const ctl=useColumns('hosts',[
     {key:'name',label:'Hostname',fixed:true,render:h=><span style={{fontWeight:500}} title={h.name}>{h.name}</span>},
-    {key:'ip',label:'IP',mono:true,size:10,render:h=>(<span style={{color:'var(--gray-400)'}} title={h.ip}>{h.ip}{h.ip&&<button className="copy-btn" onClick={()=>copyToClip(h.ip)} title="Copy IP">⎘</button>}</span>)},
+    {key:'ip',label:'IP',mono:true,size:10,render:h=>(<span style={{color:'var(--gray-400)'}} title={h.ip}>{h.ip}{h.ip&&<button className="copy-btn" onClick={()=>copyToClip(h.ip)} title="Copy IP" aria-label="Copy IP address">⎘</button>}</span>)},
     {key:'type',label:'Type',size:10,render:h=><span style={{color:'var(--gray-400)'}}>{h.type}</span>},
     {key:'status',label:'Status',render:h=>(<span style={{display:'flex',alignItems:'center',gap:5}}><span className={`s-dot s-${h.status}`}/><span style={{fontSize:11,textTransform:'capitalize'}}>{h.status}</span></span>)},
     {key:'lastonline',label:'Last Online',size:11,sortVal:h=>hostSeen[h.id]?new Date(hostSeen[h.id]).getTime():(h.status==='online'?Infinity:-1),render:h=>{
@@ -2963,13 +2967,13 @@ function AlertsPanel({data, rules, setRules}){
       ?<span style={{display:'flex',gap:4}}>
           <select className="viz-sel" value={editVals.metric} onChange={e=>setEditVals(v=>({...v,metric:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}}>{ALERT_METRICS.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}</select>
           <select className="viz-sel" value={editVals.op} onChange={e=>setEditVals(v=>({...v,op:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}}>{Object.keys(ALERT_OPS).map(o=><option key={o} value={o}>{o}</option>)}</select>
-          <input type="number" value={editVals.threshold} onChange={e=>setEditVals(v=>({...v,threshold:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}} style={{width:60,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--gray-200)',padding:'3px 6px',fontSize:11}}/>
+          <input type="number" aria-label="Alert threshold value" value={editVals.threshold} onChange={e=>setEditVals(v=>({...v,threshold:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}} style={{width:60,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--gray-200)',padding:'3px 6px',fontSize:11}}/>
         </span>
       :`${r.op} ${r.threshold}`},
     {key:'value',label:'Current',nosort:true,render:r=><span style={{fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.value}</span>},
     {key:'_actions',label:'',nosort:true,noexport:true,render:r=>editId===r.id
-      ?<button className="collapse-btn" style={{margin:0}} onClick={()=>saveEdit(r.id)} title="Save">✓</button>
-      :<span style={{whiteSpace:'nowrap'}}><button className="collapse-btn" style={{margin:0,color:'var(--gray-500)'}} onClick={()=>startEdit(r)} title="Edit rule">✎</button><button className="collapse-btn" style={{margin:0}} onClick={()=>del(r.id)} title="Delete rule">✕</button></span>},
+      ?<button className="collapse-btn" style={{margin:0}} onClick={()=>saveEdit(r.id)} title="Save" aria-label="Save rule">✓</button>
+      :<span style={{whiteSpace:'nowrap'}}><button className="collapse-btn" style={{margin:0,color:'var(--gray-500)'}} onClick={()=>startEdit(r)} title="Edit rule" aria-label="Edit rule">✎</button><button className="collapse-btn" style={{margin:0}} onClick={()=>del(r.id)} title="Delete rule" aria-label="Delete rule">✕</button></span>},
   ];
   const alertCtl=useColumns('alert-rules',alertCols);
   const inStyle={background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--gray-200)',padding:'6px 8px'};
@@ -2983,7 +2987,7 @@ function AlertsPanel({data, rules, setRules}){
         <select className="viz-sel" value={op} onChange={e=>setOp(e.target.value)}>
           {Object.keys(ALERT_OPS).map(o=><option key={o} value={o}>{o}</option>)}
         </select>
-        <input type="number" value={thr} onChange={e=>setThr(e.target.value)} style={{...inStyle,width:80}}/>
+        <input type="number" value={thr} onChange={e=>setThr(e.target.value)} aria-label="Alert threshold value" style={{...inStyle,width:80}}/>
         <button className="lookup-btn" onClick={add}>+ Add rule</button>
       </div>
       {evald.length===0
@@ -3115,8 +3119,8 @@ function VaultSettings({llm, onDone, onCancel}) {
     <div className="vault-logo">AI query provider</div>
     <h1>AI / LLM provider</h1>
     <p>Powers the natural-language query box. Works with any OpenAI-compatible provider. The query box uses tool-calling, so pick a provider/model that supports it (Claude and Gemini work via their OpenAI-compatible endpoints; OpenRouter exposes most models). Stored encrypted in your vault.</p>
-    <label>Provider preset</label>
-    <select className="vault-preset" defaultValue="" onChange={e=>applyPreset(e.target.value)}>
+    <label htmlFor="llm-preset">Provider preset</label>
+    <select id="llm-preset" className="vault-preset" defaultValue="" onChange={e=>applyPreset(e.target.value)}>
       <option value="" disabled>Choose a preset…</option>
       {Object.keys(LLM_PRESETS).map(n=><option key={n} value={n}>{n}</option>)}
     </select>
@@ -3208,8 +3212,8 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               {filteredAccts.filter(u=>u.hasKey).map(u=>(
                 <div key={u.accountId} className="tenant-row" style={{display:'flex',alignItems:'center',gap:'4px',padding:'0 4px'}}>
                   { confirmRm===u.tenantId ? (
-                    <div className="tenant-confirm" style={{flex:1,display:'flex',alignItems:'center',gap:'6px',padding:'4px 8px',borderRadius:'4px',background:'hsl(0,72%,11%)',border:'1px solid hsl(0,72%,28%)'}}>
-                      <span className="tenant-confirm-q" style={{flex:1,fontSize:'11px',color:'hsl(0,86%,80%)'}}>Remove {u.name}?</span>
+                    <div className="tenant-confirm" style={{flex:1,display:'flex',alignItems:'center',gap:'6px',padding:'4px 8px',borderRadius:'4px',background:'var(--red-bg)',border:'1px solid var(--red-border)'}}>
+                      <span className="tenant-confirm-q" style={{flex:1,fontSize:'11px',color:'var(--sev-red-t)'}}>Remove {u.name}?</span>
                       <button className="tenant-confirm-yes" title="Remove permanently" onClick={()=>remove(u.tenantId,u.name)}>✓</button>
                       <button className="tenant-confirm-no" title="Keep" onClick={()=>setConfirmRm(null)}>✕</button>
                     </div>
@@ -3270,6 +3274,8 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
     </div>
   );
 }
+
+const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['raw','Raw']];
 
 function App({vault, onVaultChange}={}) {
   const [data,setData]         = useState(null);
@@ -3426,7 +3432,6 @@ function App({vault, onVaultChange}={}) {
       {wallMode&&<button className="wall-span-btn" title="Cycle width: 1 / 2 / full" data-tip="Cycle widget width: 1 column → 2 columns → full width" onClick={()=>cycleSpan(id)}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>}
     </>
   );
-  const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['raw','Raw']];
   const VizSelect = ({id, def='table', opts=VIZ_OPTS}) => (
     <select className="viz-sel" value={getViz(id,def)} onChange={e=>setViz(id,e.target.value)}
       onMouseDown={e=>e.stopPropagation()} title="Change visualization">
@@ -3558,7 +3563,7 @@ function App({vault, onVaultChange}={}) {
       });
     },120);
     return ()=>clearTimeout(t);
-  });
+  },[section, data, density]);
 
   useEffect(()=>{
     if(!autoRefresh) { setArCountdown(0); return; }
@@ -4079,8 +4084,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot"/>Host Status Distribution
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="hosts" def="donut" opts={[['donut','Donut'],['table','Table'],['bar','Bar'],['raw','Raw']]}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('hosts')} title={collapsed['hosts']?'Expand':'Collapse'} data-tip={collapsed['hosts']?'Expand this section':'Collapse this section to save space'}>{collapsed['hosts']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('hosts')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('hosts')} title={collapsed['hosts']?'Expand':'Collapse'} aria-label={collapsed['hosts']?'Expand Hosts widget':'Collapse Hosts widget'} data-tip={collapsed['hosts']?'Expand this section':'Collapse this section to save space'}>{collapsed['hosts']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('hosts')} title="Fullscreen" aria-label="Fullscreen Hosts widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['hosts']&&(()=>{
@@ -4124,8 +4129,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot"/>Top Subnets by DHCP Utilization
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="subnets" def="subnetbars" opts={[['subnetbars','Bars'],['table','Table'],['line','Line'],['raw','Raw']]}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('subnets')} title={collapsed['subnets']?'Expand':'Collapse'} data-tip={collapsed['subnets']?'Expand this section':'Collapse this section to save space'}>{collapsed['subnets']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('subnets')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('subnets')} title={collapsed['subnets']?'Expand':'Collapse'} aria-label={collapsed['subnets']?'Expand IPAM / Subnets widget':'Collapse IPAM / Subnets widget'} data-tip={collapsed['subnets']?'Expand this section':'Collapse this section to save space'}>{collapsed['subnets']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('subnets')} title="Fullscreen" aria-label="Fullscreen IPAM / Subnets widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['subnets']&&(()=>{
@@ -4185,8 +4190,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot" style={{background:'var(--amber)'}}/>Zones with TTL Issues
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="ttl"/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('ttl')} title={collapsed['ttl']?'Expand':'Collapse'} data-tip={collapsed['ttl']?'Expand this section':'Collapse this section to save space'}>{collapsed['ttl']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('ttl')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('ttl')} title={collapsed['ttl']?'Expand':'Collapse'} aria-label={collapsed['ttl']?'Expand DNS Zones widget':'Collapse DNS Zones widget'} data-tip={collapsed['ttl']?'Expand this section':'Collapse this section to save space'}>{collapsed['ttl']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('ttl')} title="Fullscreen" aria-label="Fullscreen DNS Zones widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['ttl']&&(getViz('ttl')==='table'
@@ -4205,8 +4210,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot"/>Recent Audit Activity
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="audit"/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('audit')} title={collapsed['audit']?'Expand':'Collapse'} data-tip={collapsed['audit']?'Expand this section':'Collapse this section to save space'}>{collapsed['audit']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('audit')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('audit')} title={collapsed['audit']?'Expand':'Collapse'} aria-label={collapsed['audit']?'Expand Audit Logs widget':'Collapse Audit Logs widget'} data-tip={collapsed['audit']?'Expand this section':'Collapse this section to save space'}>{collapsed['audit']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('audit')} title="Fullscreen" aria-label="Fullscreen Audit Logs widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['audit']&&(getViz('audit')==='table'
@@ -4229,8 +4234,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot" style={{background:'var(--gray-400)'}}/>Security Policies
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="pols" def="panel" opts={[['panel','Panel'],['table','Table'],['bar','Bar'],['raw','Raw']]}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('pols')} title={collapsed['pols']?'Expand':'Collapse'} data-tip={collapsed['pols']?'Expand this section':'Collapse this section to save space'}>{collapsed['pols']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('pols')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('pols')} title={collapsed['pols']?'Expand':'Collapse'} aria-label={collapsed['pols']?'Expand Policies widget':'Collapse Policies widget'} data-tip={collapsed['pols']?'Expand this section':'Collapse this section to save space'}>{collapsed['pols']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('pols')} title="Fullscreen" aria-label="Fullscreen Policies widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['pols']&&(getViz('pols','panel')==='panel'
@@ -4249,8 +4254,8 @@ function App({vault, onVaultChange}={}) {
                       <div className="dot" style={{background:'var(--red)'}}/>Top Threat Feeds by Severity
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="feeds"/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('feeds')} title={collapsed['feeds']?'Expand':'Collapse'} data-tip={collapsed['feeds']?'Expand this section':'Collapse this section to save space'}>{collapsed['feeds']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('feeds')} title="Fullscreen" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
+                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('feeds')} title={collapsed['feeds']?'Expand':'Collapse'} aria-label={collapsed['feeds']?'Expand Threat Feeds widget':'Collapse Threat Feeds widget'} data-tip={collapsed['feeds']?'Expand this section':'Collapse this section to save space'}>{collapsed['feeds']?'▶':'▼'}</button>
+                        <button className="fs-btn" onClick={()=>toggleFs('feeds')} title="Fullscreen" aria-label="Fullscreen Threat Feeds widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
                     </div>
                     {!collapsed['feeds']&&(getViz('feeds')==='table'
@@ -4296,10 +4301,10 @@ function App({vault, onVaultChange}={}) {
                 )}
                 <span style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center',fontSize:10,color:'var(--gray-400)'}}>
                   Thresholds:
-                  <label style={{color:'var(--sev-amber-t)'}}>warn <input type="number" min="1" max="99" value={dhcpWarn}
+                  <label style={{color:'var(--sev-amber-t)'}}>warn <input type="number" aria-label="DHCP warning threshold percent" min="1" max="99" value={dhcpWarn}
                     onChange={e=>{const v=Math.max(1,Math.min(dhcpCrit-1,+e.target.value||0));setDhcpWarn(v);LS.set('noc.dhcpWarn',v);}}
                     style={{width:46,background:'var(--surface-3)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',padding:'2px 4px',fontSize:10}}/>%</label>
-                  <label style={{color:'var(--sev-red-t)'}}>crit <input type="number" min="1" max="100" value={dhcpCrit}
+                  <label style={{color:'var(--sev-red-t)'}}>crit <input type="number" aria-label="DHCP critical threshold percent" min="1" max="100" value={dhcpCrit}
                     onChange={e=>{const v=Math.max(dhcpWarn+1,Math.min(100,+e.target.value||0));setDhcpCrit(v);LS.set('noc.dhcpCrit',v);}}
                     style={{width:46,background:'var(--surface-3)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',padding:'2px 4px',fontSize:10}}/>%</label>
                 </span>
@@ -4504,9 +4509,12 @@ function App({vault, onVaultChange}={}) {
 
       {showShortcuts&&(
         <div className="shortcut-overlay" onClick={()=>setShowShortcuts(false)}>
-          <div className="shortcut-box" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" style={{minWidth:420}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:14,fontWeight:700,color:'var(--teal)',marginBottom:16}}>Keyboard Shortcuts</div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 24px'}}>
+          <div className="shortcut-box" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" style={{width:'min(420px,92vw)'}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',alignItems:'center',marginBottom:16}}>
+              <div style={{fontSize:14,fontWeight:700,color:'var(--teal)',flex:1}}>Keyboard Shortcuts</div>
+              <button autoFocus className="close-btn" style={{fontSize:16,margin:0}} onClick={()=>setShowShortcuts(false)} aria-label="Close shortcuts">✕</button>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'0 24px'}}>
               <div>
                 <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--gray-400)',marginBottom:8}}>Navigation</div>
                 {[['1–9','Switch section'],['/','Jump to Search']].map(([k,d])=>(
