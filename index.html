@@ -402,16 +402,17 @@ tr:hover .copy-btn{opacity:1}
 .drag-card{transition:opacity .15s}
 .drag-card.dragging{opacity:.5}
 .drag-over{outline:2px dashed rgba(214,210,203,.45);outline-offset:4px;border-radius:10px;background:rgba(214,210,203,.04)}
-.drag-handle{cursor:grab;color:var(--gray-600);font-size:13px;line-height:1;padding:0 4px;user-select:none;flex-shrink:0;transition:color .12s}
-.drag-handle:hover{color:var(--teal)}
+.drag-handle{cursor:grab;color:var(--gray-600);font-size:13px;line-height:1;padding:0 4px;user-select:none;flex-shrink:0;transition:color .12s,opacity .12s;opacity:.35}
+.drag-handle:hover{color:var(--teal);opacity:1}
 .drag-handle:active{cursor:grabbing}
 .viz-sel{background:var(--surface);border:1px solid var(--border);color:var(--gray-200);font-size:10px;border-radius:5px;padding:2px 5px;cursor:pointer;outline:none;flex-shrink:0}
 .viz-sel:hover{border-color:var(--teal);color:var(--teal)}
 .collapse-btn{margin-left:auto;background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:14px;padding:0 3px;line-height:1;flex-shrink:0}
 .collapse-btn:hover{color:var(--ink)}
 .card.fs{position:fixed;inset:0;z-index:300;border-radius:0;overflow-y:auto;padding:24px 32px}
-.fs-btn{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:12px;padding:0 3px;flex-shrink:0}
-.fs-btn:hover{color:var(--ink)}
+.fs-btn{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:12px;padding:0 3px;flex-shrink:0;transition:color .12s,opacity .12s;opacity:.35}
+.fs-btn:hover{color:var(--ink);opacity:1}
+.card:hover .drag-handle,.card:focus-within .drag-handle,.card:hover .fs-btn,.card:focus-within .fs-btn{opacity:1}
 .global-search{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--ink);font-size:12px;padding:6px 11px;width:190px;transition:border-color .12s}
 .global-search:focus{border-color:var(--focus-border)}
 .global-search::placeholder,.chat-in::placeholder,.lookup-in::placeholder,.acct-search::placeholder{color:var(--gray-400)}
@@ -1546,6 +1547,7 @@ function AcctPill({accounts=[], activeAcct, switchAcct, switchingAcct, vault={},
     setSwitchingKey(id);
     const {ok, data} = await vpost('/api/vault/active', {id});
     if (!ok || !data.ok) { setSwitchingKey(null); toast('Switch failed: ' + ((data && data.error) || 'unknown'), 'err'); return; }
+    toast('Switching account…', 'ok');
     window.location.reload();
   };
   const handleSwitchAcct = id => { close(); switchAcct && switchAcct(id); };
@@ -1600,6 +1602,7 @@ function AcctPill({accounts=[], activeAcct, switchAcct, switchingAcct, vault={},
 
 function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShortcuts,wallMode,onWall,demoMode,onDemo,onReset,frozen,onFreeze}) {
   const [open,setOpen]=React.useState(false);
+  const [confirmReset,setConfirmReset]=React.useState(false);
   const arOpts=[[0,'Off'],[30,'30s'],[60,'1m'],[300,'5m']];
   const nextAr=()=>{const i=arOpts.findIndex(([v])=>v===autoRefresh);const [nv]=arOpts[(i+1)%arOpts.length];setAutoRefresh(nv);LS.set('ar',nv);};
   const arLbl=arOpts.find(([v])=>v===autoRefresh)?.[1]||'Off';
@@ -1627,7 +1630,7 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
           {row('Copy link to this view','◳',onShare,'Copy a shareable URL for the current section')}
           {onReset&&<div className="acct-sec-divider"/>}
           {onReset&&(
-            <div className="col-row" style={{cursor:'pointer'}} role="menuitem" data-tip="Restore default widget order and unhide all sections. Snapshots are not affected." data-tip-dir="left" onClick={()=>{setOpen(false); if(window.confirm('Reset dashboard?\n\nThis restores the default widget order and unhides all sections. Your saved snapshots are not affected.')) onReset();}}>
+            <div className="col-row" style={{cursor:'pointer'}} role="menuitem" data-tip="Restore default widget order and unhide all sections. Snapshots are not affected." data-tip-dir="left" onClick={()=>{setOpen(false);setConfirmReset(true);}}>
               <span className="col-lbl" style={{color:'var(--red-text)'}}>Reset dashboard</span>
               <span className="refresh-countdown" style={{marginLeft:'auto',color:'var(--red-text)'}}>↺</span>
             </div>
@@ -1636,6 +1639,17 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
           {row('Keyboard shortcuts','?',onShortcuts,'Open the keyboard shortcuts reference panel')}
         </div>
       </>)}
+      {confirmReset&&<>
+        <div className="col-overlay" onClick={()=>setConfirmReset(false)}/>
+        <div className="col-menu" style={{minWidth:220}} role="dialog" aria-label="Confirm reset">
+          <div className="col-menu-head"><span className="col-menu-title">Reset dashboard?</span></div>
+          <div style={{padding:'6px 10px',fontSize:11,color:'var(--gray-400)',lineHeight:1.5}}>Restores default widget order and unhides all sections. Snapshots are not affected.</div>
+          <div style={{padding:'6px 10px',display:'flex',gap:6}}>
+            <button className="col-reset" onClick={()=>{setConfirmReset(false);onReset();}}>Reset</button>
+            <button className="col-iconbtn" onClick={()=>setConfirmReset(false)} aria-label="Cancel">Cancel</button>
+          </div>
+        </div>
+      </>}
     </span>
   );
 }
@@ -2090,6 +2104,7 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
   const [loading,setLd]  = useState(false);
   const [blocked,setBlocked] = useState({});
   const [actionLog,setActionLog] = useState(()=>LS.get('noc.actionLog',[]));
+  const [confirmBlock,setConfirmBlock] = useState(null);
   const logAction = (entry)=>{ const n=[entry,...actionLog].slice(0,50); setActionLog(n); LS.set('noc.actionLog',n); };
 
   const lookup = async () => {
@@ -2103,8 +2118,7 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
     setLd(false);
   };
 
-  const block = async (domain) => {
-    if(!window.confirm(`Block "${domain}"?\n\nThis adds it to the Infoblox block list and denies DNS resolution network-wide. Requires DASHBOARD_TOKEN to be configured on the server.`)) return;
+  const doBlock = async (domain) => {
     let ok=false, err='';
     try {
       const r = await fetch('/api/block-domain', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
@@ -2114,6 +2128,7 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
     toast(ok?`Blocked ${domain} network-wide`:`Block failed: ${err}`, ok?'ok':'err');
     logAction({id:Date.now(),act:'block',domain,ok,err,ts:new Date().toISOString()});
   };
+  const block = (domain) => { setConfirmBlock(domain); };
   const unblock = async (domain) => {
     let ok=false, err='';
     try {
@@ -2204,6 +2219,17 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
           ))}
         </div>
       )}
+      {confirmBlock&&<>
+        <div className="col-overlay" onClick={()=>setConfirmBlock(null)}/>
+        <div className="col-menu" style={{minWidth:240,position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)'}} role="dialog" aria-label="Confirm block">
+          <div className="col-menu-head"><span className="col-menu-title">Block "{confirmBlock}"?</span></div>
+          <div style={{padding:'6px 10px',fontSize:11,color:'var(--gray-400)',lineHeight:1.5}}>Adds to Infoblox block list — denies DNS resolution network-wide. Requires DASHBOARD_TOKEN.</div>
+          <div style={{padding:'6px 10px',display:'flex',gap:6}}>
+            <button className="col-reset" onClick={async()=>{const d=confirmBlock;setConfirmBlock(null);await doBlock(d);}}>Block</button>
+            <button className="col-iconbtn" onClick={()=>setConfirmBlock(null)} aria-label="Cancel">Cancel</button>
+          </div>
+        </div>
+      </>}
     </>
   );
 }
@@ -2985,6 +3011,7 @@ function VaultSetup({onDone}) {
 
 function VaultUnlock({onDone}) {
   const [p,setP]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false);
+  const [confirmVaultReset,setConfirmVaultReset]=useState(false);
   const go=async()=>{ if(!p)return; setErr(''); setBusy(true);
     const {ok,data}=await vpost('/api/vault/unlock',{passphrase:p}); setBusy(false);
     if(ok&&data.ok) onDone(); else setErr(data.error||'Unlock failed.');
@@ -2999,10 +3026,21 @@ function VaultUnlock({onDone}) {
     <button className="vault-btn" onClick={go} disabled={busy||!p}>{busy?'Unlocking…':'Unlock'}</button>
     <div style={{textAlign:'center',marginTop:14}}>
       <button style={{background:'none',border:'none',color:'var(--gray-400)',fontSize:11,cursor:'pointer',textDecoration:'underline',textUnderlineOffset:'2px'}}
-        onClick={async()=>{ if(window.confirm('Forgot your passphrase?\n\nResetting permanently DELETES the vault and every stored tenant key — there is no recovery. You will set a new passphrase and re-add your keys.\n\nReset now?')){ await vpost('/api/vault/reset',{}); onDone(); } }}>
+        onClick={()=>setConfirmVaultReset(true)}>
         Forgot passphrase? Reset vault
       </button>
     </div>
+    {confirmVaultReset&&<>
+      <div className="col-overlay" onClick={()=>setConfirmVaultReset(false)}/>
+      <div className="col-menu" style={{minWidth:240}} role="dialog" aria-label="Confirm vault reset">
+        <div className="col-menu-head"><span className="col-menu-title">Reset vault?</span></div>
+        <div style={{padding:'6px 10px',fontSize:11,color:'var(--gray-400)',lineHeight:1.5}}>Permanently deletes the vault and all stored keys. No recovery. You will set a new passphrase.</div>
+        <div style={{padding:'6px 10px',display:'flex',gap:6}}>
+          <button className="col-reset" style={{color:'var(--red)'}} onClick={async()=>{setConfirmVaultReset(false);await vpost('/api/vault/reset',{});onDone();}}>Reset vault</button>
+          <button className="col-iconbtn" onClick={()=>setConfirmVaultReset(false)} aria-label="Cancel">Cancel</button>
+        </div>
+      </div>
+    </>}
   </div></div>);
 }
 
@@ -3128,6 +3166,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
     setSwitchingKey(id);
     const {ok,data}=await vpost('/api/vault/active',{id});
     if(!ok||!data.ok){ setSwitchingKey(null); toast('Switch failed: '+(data.error||'unknown'),'err'); return; }
+    toast('Switching account…','ok');
     reload();
   };
   const remove=async (id,label)=>{ await vpost('/api/vault/tenant-remove',{id}); toast('Removed '+label,'ok'); reload(); };
@@ -4537,13 +4576,32 @@ function TooltipLayer() {
       clearTimeout(showTimer);
       scheduleHide();
     };
+    const onFocusIn = (e) => {
+      const el = e.target.closest('[data-tip]');
+      if(!el) return;
+      cancelHide();
+      if(el === active) return;
+      clearTimeout(showTimer);
+      active = el;
+      showTimer = setTimeout(() => show(el), 80);
+    };
+    const onFocusOut = (e) => {
+      const el = e.target.closest('[data-tip]');
+      if(!el) return;
+      clearTimeout(showTimer);
+      scheduleHide();
+    };
     const onScroll = () => { clearTimeout(showTimer); cancelHide(); active = null; setTip(null); };
     document.addEventListener('mouseover', onOver);
     document.addEventListener('mouseout', onOut);
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
     document.addEventListener('scroll', onScroll, true);
     return () => {
       document.removeEventListener('mouseover', onOver);
       document.removeEventListener('mouseout', onOut);
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
       document.removeEventListener('scroll', onScroll, true);
     };
   }, []);
