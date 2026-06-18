@@ -1004,8 +1004,11 @@ function Donut({hosts,filter,onSlice}) {
       </div>
       <div style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',justifyContent:'center',marginTop:4}}>
         {slices.map((d,i)=>(
-          <div key={i} style={{display:'flex',alignItems:'center',gap:5,fontSize:11,cursor:'pointer'}}
-            onClick={()=>onSlice(d.name.toLowerCase())}>
+          <div key={i} role="button" tabIndex={0}
+            aria-pressed={filter===d.name.toLowerCase()}
+            style={{display:'flex',alignItems:'center',gap:5,fontSize:11,cursor:'pointer'}}
+            onClick={()=>onSlice(d.name.toLowerCase())}
+            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSlice(d.name.toLowerCase());}}}>
             <div style={{width:7,height:7,borderRadius:'50%',background:d.color,opacity:filter&&filter!==d.name.toLowerCase()?0.4:1}}/>
             <span style={{color:filter===d.name.toLowerCase()?d.color:'var(--gray-200)'}}>{d.name}</span>
             <span style={{color:'var(--gray-400)'}}>{d.val}</span>
@@ -1666,6 +1669,7 @@ function PresetMenu({section}) {
               <input autoFocus className="vault-in"
                 style={{flex:1,fontSize:11,padding:'4px 8px',height:28}}
                 placeholder="Snapshot name…"
+                maxLength={50}
                 value={nameVal}
                 onChange={e=>setNameVal(e.target.value)}
                 onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();commitSave();} if(e.key==='Escape'){e.preventDefault();cancelSave();} }}
