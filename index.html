@@ -1417,6 +1417,7 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
             onClick={onRowClick?()=>onRowClick(r):undefined}
             tabIndex={onRowClick?0:undefined}
             onKeyDown={onRowClick?(e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onRowClick(r);}}):undefined}
+            aria-haspopup={onRowClick?"dialog":undefined}
             style={onRowClick?{cursor:'pointer'}:undefined}>
             {vcols.map(c=>(
               <td key={c.key} className={c.expanded?'exp':''}
@@ -1638,20 +1639,41 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
 function PresetMenu({section}) {
   const [views,setViews]=React.useState(()=>LS.get('noc.views',{}));
   const [open,setOpen]=React.useState(false);
+  const [saving,setSaving]=React.useState(false);
+  const [nameVal,setNameVal]=React.useState('');
   const names=Object.keys(views);
-  const save=()=>{ const name=(window.prompt('Save current snapshot as:')||'').trim(); if(!name) return; const next={...views,[name]:{section,ls:snapshotViewLS()}}; setViews(next); LS.set('noc.views',next); setOpen(false); };
+  const commitSave=()=>{
+    const name=nameVal.trim(); if(!name) return;
+    const next={...views,[name]:{section,ls:snapshotViewLS()}}; setViews(next); LS.set('noc.views',next);
+    setSaving(false); setNameVal('');
+  };
+  const cancelSave=()=>{ setSaving(false); setNameVal(''); };
   const apply=name=>{ const v=views[name]; if(!v) return; applyViewLS(v.ls); location.hash=v.section||section; location.reload(); };
   const del=name=>{ const next={...views}; delete next[name]; setViews(next); LS.set('noc.views',next); };
   return (
     <span style={{position:'static',display:'inline-flex'}}>
       <button className="theme-btn" style={{gap:5,fontSize:12.5}} title="Saved snapshots" aria-label="Saved snapshots" aria-expanded={open}
         data-tip="<b>Snapshots</b> — save &amp; restore the current filter + section state. Like bookmarks for dashboard views."
-        onClick={()=>setOpen(o=>!o)}>★ Snapshots</button>
+        onClick={()=>{ setOpen(o=>!o); setSaving(false); setNameVal(''); }}>★ Snapshots</button>
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" style={{minWidth:210,top:'auto',bottom:'calc(100% + 4px)'}} role="menu">
           <div className="col-menu-head"><span className="col-menu-title">Saved snapshots</span>
-            <button className="col-reset" onClick={save}>+ Save current</button></div>
+            {!saving&&<button className="col-reset" onClick={()=>{ setSaving(true); setNameVal(''); }}>+ Save current</button>}
+          </div>
+          {saving&&(
+            <div style={{padding:'6px 10px',display:'flex',gap:6,alignItems:'center'}}>
+              <input autoFocus className="vault-in"
+                style={{flex:1,fontSize:11,padding:'4px 8px',height:28}}
+                placeholder="Snapshot name…"
+                value={nameVal}
+                onChange={e=>setNameVal(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();commitSave();} if(e.key==='Escape'){e.preventDefault();cancelSave();} }}
+                aria-label="Snapshot name"/>
+              <button className="col-reset" onClick={commitSave} disabled={!nameVal.trim()}>Save</button>
+              <button className="col-iconbtn" onClick={cancelSave} aria-label="Cancel">✕</button>
+            </div>
+          )}
           {names.length===0
             ? <div className="col-row" style={{color:'var(--gray-400)'}}>No saved snapshots yet</div>
             : names.map(n=>(
@@ -1692,7 +1714,7 @@ function CommandPalette({open, onClose, commands}) {
             ? <div className="cmdk-empty">No matches for "{q}"</div>
             : filtered.map((c,i)=>(
                 <div key={c.id} className={`cmdk-item${i===sel?' sel':''}`} onMouseEnter={()=>setSel(i)} onClick={()=>run(c)} role="option" aria-selected={i===sel}>
-                  <span className="cmdk-icon">{c.icon||'▸'}</span>{c.label}{c.hint&&<span className="cmdk-hint">{c.hint}</span>}
+                  <span className="cmdk-icon">{NAV_ICONS[c.icon]?<NavIcon id={c.icon} size={13}/>:(c.icon||'▸')}</span>{c.label}{c.hint&&<span className="cmdk-hint">{c.hint}</span>}
                 </div>
               ))}
         </div>
@@ -2794,21 +2816,21 @@ function NavIcon({id,size=16}){
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,display:'block'}} aria-hidden="true"><path d={d}/></svg>;
 }
 const SECTIONS=[
-  {id:'overview',      icon:'◉', label:'Overview',       tip:'Health tiles + per-domain status at a glance. Drag widgets to reorder.'},
-  {id:'triage',        icon:'△', label:'Triage',          tip:'Consolidated view of all critical &amp; warning issues across every domain.'},
-  {id:'ipam',          icon:'⊞', label:'IPAM / Subnets',  tip:'IP address space — subnets, utilization bars, and allocation detail.'},
-  {id:'dhcp',          icon:'⊃', label:'DHCP Leases',     tip:'Active and expired DHCP leases with IP, host name, and subnet.'},
-  {id:'dns',           icon:'⊕', label:'DNS Zones',       tip:'Authoritative DNS zones with TTL, record counts, and anomaly flags.'},
-  {id:'hosts',         icon:'⊡', label:'Hosts',           tip:'Infrastructure hosts — routers, switches, servers — with status dots.'},
-  {id:'security',      icon:'⊛', label:'Security',        tip:'BloxOne security policies: active/inactive, action, and rule counts.'},
-  {id:'threats',       icon:'⊗', label:'Threat Feeds',    tip:'Threat intelligence feeds (DGA, C2, phishing …) with entry counts.'},
-  {id:'audit',         icon:'≡',  label:'Audit Logs',      tip:'Timestamped record of every API action — who did what and when.'},
-  {id:'dns-analytics', icon:'⊘', label:'DNS Analytics',   tip:'Query volume trends, top clients, and per-device spike detection.'},
-  {id:'insights',      icon:'⊙', label:'SOC Insights',    tip:'AI-surfaced threat indicators and anomalies for SOC investigation.'},
-  {id:'actions',       icon:'◆', label:'IQ Actions',      tip:'DNS Firewall enforcement: block/redirect domains and review audit trail.'},
-  {id:'alerts',        icon:'▲', label:'Alert Rules',     tip:'Define threshold-based alerts (e.g. DHCP &gt; 90%) with notifications.'},
-  {id:'threat-lookup', icon:'⊚', label:'Threat Lookup',   tip:'Point-in-time lookup of any IP, domain, or hash against threat intel.'},
-  {id:'search',        icon:'⊕', label:'Search',          tip:'Full-text search across subnets, hosts, leases, zones, and logs.'},
+  {id:'overview',      icon:'overview',      label:'Overview',       tip:'Health tiles + per-domain status at a glance. Drag widgets to reorder.'},
+  {id:'triage',        icon:'triage',        label:'Triage',          tip:'Consolidated view of all critical &amp; warning issues across every domain.'},
+  {id:'ipam',          icon:'ipam',          label:'IPAM / Subnets',  tip:'IP address space — subnets, utilization bars, and allocation detail.'},
+  {id:'dhcp',          icon:'dhcp',          label:'DHCP Leases',     tip:'Active and expired DHCP leases with IP, host name, and subnet.'},
+  {id:'dns',           icon:'dns',           label:'DNS Zones',       tip:'Authoritative DNS zones with TTL, record counts, and anomaly flags.'},
+  {id:'hosts',         icon:'hosts',         label:'Hosts',           tip:'Infrastructure hosts — routers, switches, servers — with status dots.'},
+  {id:'security',      icon:'security',      label:'Security',        tip:'BloxOne security policies: active/inactive, action, and rule counts.'},
+  {id:'threats',       icon:'threats',       label:'Threat Feeds',    tip:'Threat intelligence feeds (DGA, C2, phishing …) with entry counts.'},
+  {id:'audit',         icon:'audit',         label:'Audit Logs',      tip:'Timestamped record of every API action — who did what and when.'},
+  {id:'dns-analytics', icon:'dns-analytics', label:'DNS Analytics',   tip:'Query volume trends, top clients, and per-device spike detection.'},
+  {id:'insights',      icon:'insights',      label:'SOC Insights',    tip:'AI-surfaced threat indicators and anomalies for SOC investigation.'},
+  {id:'actions',       icon:'actions',       label:'IQ Actions',      tip:'DNS Firewall enforcement: block/redirect domains and review audit trail.'},
+  {id:'alerts',        icon:'alerts',        label:'Alert Rules',     tip:'Define threshold-based alerts (e.g. DHCP &gt; 90%) with notifications.'},
+  {id:'threat-lookup', icon:'threat-lookup', label:'Threat Lookup',   tip:'Point-in-time lookup of any IP, domain, or hash against threat intel.'},
+  {id:'search',        icon:'search',        label:'Search',          tip:'Full-text search across subnets, hosts, leases, zones, and logs.'},
 ];
 
 function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
