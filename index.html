@@ -1641,12 +1641,12 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
       </>)}
       {confirmReset&&<>
         <div className="col-overlay" onClick={()=>setConfirmReset(false)}/>
-        <div className="col-menu" style={{minWidth:220}} role="dialog" aria-label="Confirm reset">
+        <div className="col-menu" style={{minWidth:220}} role="dialog" aria-label="Confirm reset" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setConfirmReset(false);}}}>
           <div className="col-menu-head"><span className="col-menu-title">Reset dashboard?</span></div>
           <div style={{padding:'6px 10px',fontSize:11,color:'var(--gray-400)',lineHeight:1.5}}>Restores default widget order and unhides all sections. Snapshots are not affected.</div>
           <div style={{padding:'6px 10px',display:'flex',gap:6}}>
             <button className="col-reset" onClick={()=>{setConfirmReset(false);onReset();}}>Reset</button>
-            <button className="col-iconbtn" onClick={()=>setConfirmReset(false)} aria-label="Cancel">Cancel</button>
+            <button autoFocus className="col-iconbtn" onClick={()=>setConfirmReset(false)} aria-label="Cancel">Cancel</button>
           </div>
         </div>
       </>}
@@ -2221,12 +2221,12 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
       )}
       {confirmBlock&&<>
         <div className="col-overlay" onClick={()=>setConfirmBlock(null)}/>
-        <div className="col-menu" style={{minWidth:240,position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)'}} role="dialog" aria-label="Confirm block">
+        <div className="col-menu" style={{minWidth:240,position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)'}} role="dialog" aria-label="Confirm block" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setConfirmBlock(null);}}}>
           <div className="col-menu-head"><span className="col-menu-title">Block "{confirmBlock}"?</span></div>
           <div style={{padding:'6px 10px',fontSize:11,color:'var(--gray-400)',lineHeight:1.5}}>Adds to Infoblox block list — denies DNS resolution network-wide. Requires DASHBOARD_TOKEN.</div>
           <div style={{padding:'6px 10px',display:'flex',gap:6}}>
             <button className="col-reset" onClick={async()=>{const d=confirmBlock;setConfirmBlock(null);await doBlock(d);}}>Block</button>
-            <button className="col-iconbtn" onClick={()=>setConfirmBlock(null)} aria-label="Cancel">Cancel</button>
+            <button autoFocus className="col-iconbtn" onClick={()=>setConfirmBlock(null)} aria-label="Cancel">Cancel</button>
           </div>
         </div>
       </>}
@@ -3040,12 +3040,12 @@ function VaultUnlock({onDone}) {
     </div>
     {confirmVaultReset&&<>
       <div className="col-overlay" onClick={()=>setConfirmVaultReset(false)}/>
-      <div className="col-menu" style={{minWidth:240}} role="dialog" aria-label="Confirm vault reset">
+      <div className="col-menu" style={{minWidth:240}} role="dialog" aria-label="Confirm vault reset" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setConfirmVaultReset(false);}}}>
         <div className="col-menu-head"><span className="col-menu-title">Reset vault?</span></div>
         <div style={{padding:'6px 10px',fontSize:11,color:'var(--gray-400)',lineHeight:1.5}}>Permanently deletes the vault and all stored keys. No recovery. You will set a new passphrase.</div>
         <div style={{padding:'6px 10px',display:'flex',gap:6}}>
           <button className="col-reset" style={{color:'var(--red)'}} onClick={async()=>{setConfirmVaultReset(false);await vpost('/api/vault/reset',{});onDone();}}>Reset vault</button>
-          <button className="col-iconbtn" onClick={()=>setConfirmVaultReset(false)} aria-label="Cancel">Cancel</button>
+          <button autoFocus className="col-iconbtn" onClick={()=>setConfirmVaultReset(false)} aria-label="Cancel">Cancel</button>
         </div>
       </div>
     </>}
@@ -3986,7 +3986,7 @@ function App({vault, onVaultChange}={}) {
           const CAP=2, hidden=notices.length-CAP;
           const shown=noticesExpanded?notices:notices.slice(0,CAP);
           return (
-            <div className="notice-rail" role={notices.some(n=>n.sev==='n-red')?'alert':'status'} aria-live={notices.some(n=>n.sev==='n-red')?'assertive':'polite'}>
+            <div className="notice-rail" role="status" aria-live={notices.some(n=>n.sev==='n-red')?'assertive':'polite'}>
               {shown.map(n=>(
                 <div key={n.id} className={`notice ${n.sev}`}>
                   <span className="n-ico" aria-hidden="true">{n.ico}</span>
