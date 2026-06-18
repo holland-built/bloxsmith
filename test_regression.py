@@ -51,6 +51,17 @@ def _needs_llm_key(answer):
     """True when /api/query short-circuits because no LLM key is configured."""
     return "LLM_API_KEY" in (answer or "") or "GROQ_API_KEY" in (answer or "")
 
+def _server_src():
+    with open(SERVER, encoding="utf-8") as f:
+        return f.read()
+
+def _reorder(arr, frm, to):
+    a = list(arr)
+    fi, ti = a.index(frm), a.index(to)
+    a.pop(fi)
+    a.insert(ti - 1 if fi < ti else ti, frm)
+    return a
+
 # ── backend tests ─────────────────────────────────────────────────────────────
 
 class BackendTests(unittest.TestCase):
@@ -533,12 +544,8 @@ class FrontendStructureTests(unittest.TestCase):
 
     # ── encrypted vault (multi-tenant key store) ──────────────────────────────
 
-    def _server(self):
-        with open(SERVER, encoding="utf-8") as f:
-            return f.read()
-
     def test_vault_server_crypto(self):
-        s = self._server()
+        s = _server_src()
         self.assertIn("from cryptography.fernet import Fernet, InvalidToken", s)
         self.assertIn("hashlib.scrypt", s)                 # passphrase KDF
         self.assertIn("VAULT_MODE", s)
@@ -548,18 +555,18 @@ class FrontendStructureTests(unittest.TestCase):
 
     def test_vault_no_exit_without_key(self):
         # server must NOT sys.exit when no env key (enters vault mode instead)
-        s = self._server()
+        s = _server_src()
         self.assertNotIn("INFOBLOX_API_KEY not set", s)
 
     def test_vault_endpoints(self):
-        s = self._server()
+        s = _server_src()
         for ep in ("/api/vault/status", "/api/vault/init", "/api/vault/unlock",
                    "/api/vault/tenant", "/api/vault/active", "/api/vault/lock"):
             self.assertIn(ep, s, f"vault endpoint {ep} missing")
 
     def test_vault_locked_gate(self):
         # data endpoints blocked while locked
-        self.assertIn('"locked": True', self._server())
+        self.assertIn('"locked": True', _server_src())
 
     def test_vault_ui_gate(self):
         for comp in ("function VaultGate", "function VaultSetup", "function VaultUnlock",
@@ -568,14 +575,14 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("render(<VaultGate/>)", "root no longer renders VaultGate")
 
     def test_vault_reset(self):
-        self.assertIn("def vault_reset", self._server())
-        self.assertIn("/api/vault/reset", self._server())
+        self.assertIn("def vault_reset", _server_src())
+        self.assertIn("/api/vault/reset", _server_src())
         self.assertContains("Forgot passphrase? Reset vault")
 
     # ── swappable LLM provider ────────────────────────────────────────────────
 
     def test_llm_provider_server(self):
-        s = self._server()
+        s = _server_src()
         self.assertIn("def vault_set_llm", s)
         self.assertIn("/api/vault/llm", s)
         self.assertIn("LLM_BASE_URL = _vault", s)   # vault drives the provider base URL
@@ -592,7 +599,7 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("claude-opus-4-8", "Claude model id missing")
 
     def test_connection_test_buttons(self):
-        s = self._server()
+        s = _server_src()
         self.assertIn("def vault_llm_test", s)
         self.assertIn("def vault_test_key", s)
         self.assertIn("/api/vault/llm-test", s)
@@ -661,14 +668,14 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("tenant-confirm")
 
     def test_active_connection_test(self):
-        s = self._server()
+        s = _server_src()
         self.assertIn("def vault_conn_test", s)
         self.assertIn("/api/vault/conn-test", s)
         self.assertContains("/api/vault/conn-test")
         self.assertContains("Test Infoblox connection")
 
     def test_app_version_badge(self):
-        s = self._server()
+        s = _server_src()
         self.assertIn("APP_VERSION", s)
         self.assertIn('"version": APP_VERSION', s)   # surfaced in status payload
         self.assertContains("ver-badge")
@@ -700,7 +707,7 @@ class FrontendStructureTests(unittest.TestCase):
 
     # ── connection key management: replace-key (rename removed — names from CSP) ──
     def test_connection_key_repair(self):
-        s = self._server()
+        s = _server_src()
         self.assertIn("def vault_update_tenant", s)
         self.assertIn("/api/vault/tenant-update", s)
         self.assertContains("/api/vault/tenant-update")
@@ -708,8 +715,8 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("tenant-rm")            # inline delete-confirm on account rows
 
     def test_refresh_names(self):
-        self.assertIn("def vault_refresh_names", self._server())
-        self.assertIn("/api/vault/refresh-names", self._server())
+        self.assertIn("def vault_refresh_names", _server_src())
+        self.assertIn("/api/vault/refresh-names", _server_src())
         self.assertContains("Refresh names")
 
     def test_no_emoji_in_code(self):
@@ -726,7 +733,7 @@ class FrontendStructureTests(unittest.TestCase):
     # ── format-agnostic key ───────────────────────────────────────────────────
 
     def test_norm_key_agnostic(self):
-        s = self._server()
+        s = _server_src()
         self.assertIn("authorization:", s)           # strips a pasted header
         self.assertIn('k.startswith("eyJ")', s)      # bare JWT -> Bearer
 
@@ -1287,25 +1294,12 @@ class FrontendStructureTests(unittest.TestCase):
             "DataTable <th> must have title={c.label} for header tooltip")
 
     def test_drag_drop_reorder_forward(self):
-        # Mirror the splice logic: drag forward should land at target, not one past it
-        def reorder(arr, frm, to):
-            a = list(arr)
-            fi, ti = a.index(frm), a.index(to)
-            a.pop(fi)
-            a.insert(ti - 1 if fi < ti else ti, frm)
-            return a
-        result = reorder(['a','b','c','d'], 'a', 'c')
+        result = _reorder(['a','b','c','d'], 'a', 'c')
         self.assertEqual(result, ['b','a','c','d'],
             "Forward drag off-by-one: 'a'→'c' should yield ['b','a','c','d']")
 
     def test_drag_drop_reorder_backward(self):
-        def reorder(arr, frm, to):
-            a = list(arr)
-            fi, ti = a.index(frm), a.index(to)
-            a.pop(fi)
-            a.insert(ti - 1 if fi < ti else ti, frm)
-            return a
-        result = reorder(['a','b','c','d'], 'd', 'b')
+        result = _reorder(['a','b','c','d'], 'd', 'b')
         self.assertEqual(result, ['a','d','b','c'],
             "Backward drag: 'd'→'b' should yield ['a','d','b','c']")
 
@@ -1333,28 +1327,23 @@ class TestUpdateResilience(unittest.TestCase):
     All tests mock Docker or inspect server source/state directly — no live daemon required.
     """
 
-    @classmethod
-    def _server_src(cls):
-        with open(SERVER, encoding="utf-8") as f:
-            return f.read()
-
     # 1. _pull_state dict has the three new rollback fields with correct defaults
 
     def test_pull_state_has_rolledback_field(self):
         """_pull_state initialises with rolledback=False."""
-        src = self._server_src()
+        src = _server_src()
         self.assertIn('"rolledback": False', src,
                       "_pull_state must initialise rolledback to False")
 
     def test_pull_state_has_rollback_from_field(self):
         """_pull_state initialises with rollback_from=None."""
-        src = self._server_src()
+        src = _server_src()
         self.assertIn('"rollback_from": None', src,
                       "_pull_state must initialise rollback_from to None")
 
     def test_pull_state_has_rollback_to_field(self):
         """_pull_state initialises with rollback_to=None."""
-        src = self._server_src()
+        src = _server_src()
         self.assertIn('"rollback_to": None', src,
                       "_pull_state must initialise rollback_to to None")
 
@@ -1407,13 +1396,13 @@ class TestUpdateResilience(unittest.TestCase):
 
     def test_stall_detection_threshold_in_source(self):
         """Source contains a stall detection timeout (no progress guard)."""
-        src = self._server_src()
+        src = _server_src()
         self.assertIn("stalled", src,
                       "stall detection guard missing from server source")
 
     def test_stall_sets_error_phase(self):
         """Source shows stall triggers phase='error' transition."""
-        src = self._server_src()
+        src = _server_src()
         # The stall handler sets phase to error
         self.assertIn('phase="error"', src,
                       "stall must transition phase to 'error'")
@@ -1463,7 +1452,7 @@ class TestUpdateResilience(unittest.TestCase):
 
     def test_update_status_spread_includes_all_pull_state_keys(self):
         """_pull_state is spread into /api/update/status (source-level check)."""
-        src = self._server_src()
+        src = _server_src()
         # The handler must spread _pull_state into the response dict
         self.assertIn("**dict(_pull_state)", src,
                       "/api/update/status handler must spread _pull_state into the response")

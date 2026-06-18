@@ -8,6 +8,7 @@ Then open:  http://localhost:8080
 """
 
 import asyncio, base64, hashlib, hmac, json, os, re, secrets, sys, threading
+from contextlib import asynccontextmanager
 import groq as _groq
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -783,9 +784,6 @@ def vault_set_llm(key, base_url=None, model=None):
         _vault_save()
         return {"ok": True}
 
-def vault_set_groq(key):   # back-compat alias (key only)
-    return vault_set_llm(key)
-
 def vault_test_key(key):
     """Verify an Infoblox API key reaches CSP; return the resolved account name."""
     from urllib.request import urlopen, Request
@@ -860,6 +858,13 @@ def vault_status():
     }
 
 # ── MCP helpers ───────────────────────────────────────────────────────────────
+
+@asynccontextmanager
+async def _mcp_session():
+    async with streamablehttp_client(MCP_URL, headers=MCP_HEADERS) as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            yield session
 
 def _tool_text(result) -> str:
     return result.content[0].text if result.content else "{}"
@@ -1140,55 +1145,53 @@ def norm_audit(raw):
 # ── fetch all dashboard data ──────────────────────────────────────────────────
 
 async def _fetch_dashboard_async() -> dict:
-    async with streamablehttp_client(MCP_URL, headers=MCP_HEADERS) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            print("  MCP session established, fetching 8 data sources in parallel…")
+    async with _mcp_session() as session:
+        print("  MCP session established, fetching 8 data sources in parallel…")
 
-            (subnets_d, leases_d, views_d, zones_d,
-             hosts_d, policies_d, feeds_d, audit_d) = await asyncio.gather(
-                _mcp_get(session, "Ipamsvc", "/ipam/subnet",
-                         {"_fields": "id,name,address,cidr,utilization,tags"}, fetch_all=True),
-                _mcp_get(session, "DhcpLeases", "/dhcp/lease",
-                         {"_fields": "address,hostname,state,client_id"}, fetch_all=True),
-                _mcp_get(session, "DnsConfig", "/dns/view",
-                         {"_fields": "id,name,comment"}, fetch_all=True),
-                _mcp_get(session, "DnsConfig", "/dns/auth_zone",
-                         {"_fields": "id,fqdn,view,zone_authority,primary_type"}, fetch_all=True),
-                _mcp_get(session, "Infrastructure", "/detail_hosts",
-                         {"_fields": "id,display_name,ip_address,composite_status,host_type,configs"}, fetch_all=True),
-                _mcp_get(session, "Atcfw", "/security_policies",
-                         {"_fields": "id,name,default_action,rule_names,network_lists,created_time,is_default"}, fetch_all=True),
-                _mcp_get(session, "Atcfw", "/named_lists",
-                         {"_fields": "id,name,confidence_level,threat_level,type,item_count"}, fetch_all=True),
-                _mcp_get(session, "AuditLog", "/logs",
-                         {"_limit": 100, "_order_by": "created_at desc"}),
-            )
+        (subnets_d, leases_d, views_d, zones_d,
+         hosts_d, policies_d, feeds_d, audit_d) = await asyncio.gather(
+            _mcp_get(session, "Ipamsvc", "/ipam/subnet",
+                     {"_fields": "id,name,address,cidr,utilization,tags"}, fetch_all=True),
+            _mcp_get(session, "DhcpLeases", "/dhcp/lease",
+                     {"_fields": "address,hostname,state,client_id"}, fetch_all=True),
+            _mcp_get(session, "DnsConfig", "/dns/view",
+                     {"_fields": "id,name,comment"}, fetch_all=True),
+            _mcp_get(session, "DnsConfig", "/dns/auth_zone",
+                     {"_fields": "id,fqdn,view,zone_authority,primary_type"}, fetch_all=True),
+            _mcp_get(session, "Infrastructure", "/detail_hosts",
+                     {"_fields": "id,display_name,ip_address,composite_status,host_type,configs"}, fetch_all=True),
+            _mcp_get(session, "Atcfw", "/security_policies",
+                     {"_fields": "id,name,default_action,rule_names,network_lists,created_time,is_default"}, fetch_all=True),
+            _mcp_get(session, "Atcfw", "/named_lists",
+                     {"_fields": "id,name,confidence_level,threat_level,type,item_count"}, fetch_all=True),
+            _mcp_get(session, "AuditLog", "/logs",
+                     {"_limit": 100, "_order_by": "created_at desc"}),
+        )
 
-            view_map = {v.get("id", ""): v.get("name", "") for v in _results(views_d)}
+        view_map = {v.get("id", ""): v.get("name", "") for v in _results(views_d)}
 
-            subnets  = norm_subnets(_results(subnets_d))
-            leases   = norm_leases(_results(leases_d))
-            views    = norm_views(_results(views_d))
-            zones    = norm_zones(_results(zones_d), view_map)
-            hosts    = norm_hosts(_results(hosts_d))
-            policies = norm_policies(_results(policies_d))
-            feeds    = norm_feeds(_results(feeds_d))
-            audit    = norm_audit(_results(audit_d))
+        subnets  = norm_subnets(_results(subnets_d))
+        leases   = norm_leases(_results(leases_d))
+        views    = norm_views(_results(views_d))
+        zones    = norm_zones(_results(zones_d), view_map)
+        hosts    = norm_hosts(_results(hosts_d))
+        policies = norm_policies(_results(policies_d))
+        feeds    = norm_feeds(_results(feeds_d))
+        audit    = norm_audit(_results(audit_d))
 
-            print(f"  subnets={len(subnets)} leases={len(leases)} zones={len(zones)} "
-                  f"hosts={len(hosts)} policies={len(policies)} feeds={len(feeds)} audit={len(audit)}")
+        print(f"  subnets={len(subnets)} leases={len(leases)} zones={len(zones)} "
+              f"hosts={len(hosts)} policies={len(policies)} feeds={len(feeds)} audit={len(audit)}")
 
-            return {
-                "subnets":    subnets,
-                "leases":     leases,
-                "dnsViews":   views,
-                "zones":      zones,
-                "hosts":      hosts,
-                "secPolicies": policies,
-                "feeds":      feeds,
-                "auditLogs":  audit,
-            }
+        return {
+            "subnets":    subnets,
+            "leases":     leases,
+            "dnsViews":   views,
+            "zones":      zones,
+            "hosts":      hosts,
+            "secPolicies": policies,
+            "feeds":      feeds,
+            "auditLogs":  audit,
+        }
 
 def fetch_dashboard_data() -> dict:
     print("Fetching dashboard data via MCP…")
@@ -1272,99 +1275,94 @@ async def _run_tool(name: str, args: dict) -> str:
     """Execute one tool call against MCP — opens its own session to avoid anyio/httpx conflicts."""
     print(f"  [AI tool] {name}({args})", flush=True)
     try:
-        async with streamablehttp_client(MCP_URL, headers=MCP_HEADERS) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
+        async with _mcp_session() as session:
 
-                if name == "search_entity":
-                    hits = await _mcp_search(session, args.get("query", ""))
-                    return json.dumps(hits[:10], default=str) if hits else "No entities found."
+            if name == "search_entity":
+                hits = await _mcp_search(session, args.get("query", ""))
+                return json.dumps(hits[:10], default=str) if hits else "No entities found."
 
-                if name == "get_subnets":
-                    params = {"_fields": "name,address,cidr,utilization"}
-                    if args.get("address"):
-                        addr = str(args["address"])
-                        # constrain to an IP/CIDR-ish filter before forwarding upstream
-                        if re.fullmatch(r'[0-9a-fA-F:.]{1,45}(/\d{1,3})?', addr):
-                            params["address"] = addr
-                    if args.get("cidr") is not None:
-                        try:
-                            _c = int(args["cidr"])
-                            if 0 <= _c <= 128:
-                                params["cidr"] = str(_c)
-                        except (TypeError, ValueError):
-                            pass
-                    raw = await _mcp_get(session, "Ipamsvc", "/ipam/subnet", params,
-                                         fetch_all=not args.get("address"))
-                    data = norm_subnets(_results(raw))
-                    return json.dumps(data[:100], default=str) if data else "No subnet data."
+            if name == "get_subnets":
+                params = {"_fields": "name,address,cidr,utilization"}
+                if args.get("address"):
+                    addr = str(args["address"])
+                    # constrain to an IP/CIDR-ish filter before forwarding upstream
+                    if re.fullmatch(r'[0-9a-fA-F:.]{1,45}(/\d{1,3})?', addr):
+                        params["address"] = addr
+                if args.get("cidr") is not None:
+                    try:
+                        _c = int(args["cidr"])
+                        if 0 <= _c <= 128:
+                            params["cidr"] = str(_c)
+                    except (TypeError, ValueError):
+                        pass
+                raw = await _mcp_get(session, "Ipamsvc", "/ipam/subnet", params,
+                                     fetch_all=not args.get("address"))
+                data = norm_subnets(_results(raw))
+                return json.dumps(data[:100], default=str) if data else "No subnet data."
 
-                if name == "get_hosts":
-                    raw = await _mcp_get(session, "Infrastructure", "/detail_hosts",
-                                         {"_fields": "display_name,ip_address,composite_status,host_type"},
-                                         fetch_all=True)
-                    data = norm_hosts(_results(raw))
-                    if args.get("status"):
-                        data = [h for h in data if h["status"] == args["status"]]
-                    return json.dumps(data[:100], default=str) if data else "No host data."
+            if name == "get_hosts":
+                raw = await _mcp_get(session, "Infrastructure", "/detail_hosts",
+                                     {"_fields": "display_name,ip_address,composite_status,host_type"},
+                                     fetch_all=True)
+                data = norm_hosts(_results(raw))
+                if args.get("status"):
+                    data = [h for h in data if h["status"] == args["status"]]
+                return json.dumps(data[:100], default=str) if data else "No host data."
 
-                if name == "get_dns":
-                    views_d = await _mcp_get(session, "DnsConfig", "/dns/view",
-                                             {"_fields": "id,name,comment"}, fetch_all=True)
-                    zones_d = await _mcp_get(session, "DnsConfig", "/dns/auth_zone",
-                                             {"_fields": "fqdn,view,zone_authority"}, fetch_all=True)
-                    vm = {v.get("id", ""): v.get("name", "") for v in _results(views_d)}
-                    return json.dumps({
-                        "views": norm_views(_results(views_d)),
-                        "zones": norm_zones(_results(zones_d), vm)[:200],
-                    }, default=str)
+            if name == "get_dns":
+                views_d = await _mcp_get(session, "DnsConfig", "/dns/view",
+                                         {"_fields": "id,name,comment"}, fetch_all=True)
+                zones_d = await _mcp_get(session, "DnsConfig", "/dns/auth_zone",
+                                         {"_fields": "fqdn,view,zone_authority"}, fetch_all=True)
+                vm = {v.get("id", ""): v.get("name", "") for v in _results(views_d)}
+                return json.dumps({
+                    "views": norm_views(_results(views_d)),
+                    "zones": norm_zones(_results(zones_d), vm)[:200],
+                }, default=str)
 
-                if name == "get_dhcp_leases":
-                    raw = await _mcp_get(session, "DhcpLeases", "/dhcp/lease",
-                                         {"_fields": "address,hostname,state"}, fetch_all=True)
-                    data = norm_leases(_results(raw))
-                    if args.get("subnet"):
-                        data = [l for l in data if l.get("ip", "").startswith(args["subnet"])]
-                    return json.dumps(data[:200], default=str) if data else "No lease data."
+            if name == "get_dhcp_leases":
+                raw = await _mcp_get(session, "DhcpLeases", "/dhcp/lease",
+                                     {"_fields": "address,hostname,state"}, fetch_all=True)
+                data = norm_leases(_results(raw))
+                if args.get("subnet"):
+                    data = [l for l in data if l.get("addr", "").startswith(args["subnet"])]
+                return json.dumps(data[:200], default=str) if data else "No lease data."
 
-                if name == "get_threat_feeds":
-                    raw = await _mcp_get(session, "Atcfw", "/named_lists",
-                                         {"_fields": "name,threat_level,item_count"}, fetch_all=True)
-                    data = norm_feeds(_results(raw))
-                    return json.dumps(data, default=str) if data else "No threat feed data."
+            if name == "get_threat_feeds":
+                raw = await _mcp_get(session, "Atcfw", "/named_lists",
+                                     {"_fields": "name,threat_level,item_count"}, fetch_all=True)
+                data = norm_feeds(_results(raw))
+                return json.dumps(data, default=str) if data else "No threat feed data."
 
-                if name == "get_audit_logs":
-                    limit = int(args.get("limit", 20))
-                    raw = await _mcp_get(session, "AuditLog", "/logs",
-                                         {"_limit": limit, "_order_by": "created_at desc"})
-                    data = norm_audit(_results(raw))
-                    return json.dumps(data, default=str) if data else "No audit log data."
+            if name == "get_audit_logs":
+                limit = int(args.get("limit", 20))
+                raw = await _mcp_get(session, "AuditLog", "/logs",
+                                     {"_limit": limit, "_order_by": "created_at desc"})
+                data = norm_audit(_results(raw))
+                return json.dumps(data, default=str) if data else "No audit log data."
 
-                if name == "get_dns_analytics":
-                    cube = await _mcp_query_cube(
-                        session, "NstarDnsActivity",
-                        measures=["NstarDnsActivity.total_query_count"],
-                        dimensions=["NstarDnsActivity.device_name", "NstarDnsActivity.device_ip"],
-                        time_dims=[{"dimension": "NstarDnsActivity.timestamp",
-                                    "dateRange": f"{int(args.get('days', 7))} days"}],
-                        order={"NstarDnsActivity.total_query_count": "desc"},
-                        limit=int(args.get("limit", 10)),
-                    )
-                    rows = _results(cube)
-                    return json.dumps(rows, default=str) if rows else "No DNS analytics data."
+            if name == "get_dns_analytics":
+                cube = await _mcp_query_cube(
+                    session, "NstarDnsActivity",
+                    measures=["NstarDnsActivity.total_query_count"],
+                    dimensions=["NstarDnsActivity.device_name", "NstarDnsActivity.device_ip"],
+                    time_dims=[{"dimension": "NstarDnsActivity.timestamp",
+                                "dateRange": f"{int(args.get('days', 7))} days"}],
+                    order={"NstarDnsActivity.total_query_count": "desc"},
+                    limit=int(args.get("limit", 10)),
+                )
+                rows = _results(cube)
+                return json.dumps(rows, default=str) if rows else "No DNS analytics data."
 
-                return f"Unknown tool: {name}"
+            return f"Unknown tool: {name}"
     except Exception as e:
         return f"Tool error: {e}"
-
-def _trim_tool_result(s: str) -> str:
-    return s[:_MAX_TOOL_CHARS] + ("…[truncated]" if len(s) > _MAX_TOOL_CHARS else "")
-
 
 async def _handle_query_async(question: str, trace: list, context: str = "") -> str:
     if not LLM_API_KEY:
         return "AI query requires LLM_API_KEY (or GROQ_API_KEY) in .env — add it and restart the server."
 
+    context = (context or "")[:2000]
     user_msg = (context.strip() + "\n\n" + question) if context.strip() else question
     messages = [
         {"role": "system", "content": _AI_SYSTEM},
@@ -1393,7 +1391,8 @@ async def _handle_query_async(question: str, trace: list, context: str = "") -> 
                     # record the tool call for the client-side trace (transparency)
                     trace.append({"tool": tc.function.name,
                                   "args": {k: str(v)[:80] for k, v in (args or {}).items()}})
-                    result = _trim_tool_result(await _run_tool(tc.function.name, args))
+                    result = await _run_tool(tc.function.name, args)
+                    result = result[:_MAX_TOOL_CHARS] + ("…[truncated]" if len(result) > _MAX_TOOL_CHARS else "")
                     messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
     except Exception as e:
         err = str(e)[:300].replace('"', "'")
@@ -1467,17 +1466,15 @@ def handle_query(question: str, context: str = "") -> dict:
 # ── IQ Actions handler ────────────────────────────────────────────────────────
 
 async def _fetch_actions_async() -> dict:
-    async with streamablehttp_client(MCP_URL, headers=MCP_HEADERS) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool(
-                "iq-actions_list_actions",
-                {"limit": 50, "sort_field": "last_activity", "sort_order": "desc", "format": "json"},
-            )
-            try:
-                return json.loads(_tool_text(result))
-            except json.JSONDecodeError:
-                return {"actions": [], "_raw": _tool_text(result)[:200]}
+    async with _mcp_session() as session:
+        result = await session.call_tool(
+            "iq-actions_list_actions",
+            {"limit": 50, "sort_field": "last_activity", "sort_order": "desc", "format": "json"},
+        )
+        try:
+            return json.loads(_tool_text(result))
+        except json.JSONDecodeError:
+            return {"actions": [], "_raw": _tool_text(result)[:200]}
 
 def fetch_actions() -> dict:
     return asyncio.run(_fetch_actions_async())
@@ -1485,24 +1482,22 @@ def fetch_actions() -> dict:
 # ── SOC Insights handler ──────────────────────────────────────────────────────
 
 async def _fetch_insights_async() -> dict:
-    async with streamablehttp_client(MCP_URL, headers=MCP_HEADERS) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            return await _mcp_query_cube(
-                session, "InsightsSummaryView",
-                measures=[
-                    "InsightsSummaryView.totalEvents",
-                    "InsightsSummaryView.totalVerifiedAssets",
-                    "InsightsSummaryView.timeSaved",
-                ],
-                dimensions=[
-                    "InsightsSummaryView.name",
-                    "InsightsSummaryView.severity",
-                    "InsightsSummaryView.currentStatus",
-                ],
-                order={"InsightsSummaryView.totalEvents": "desc"},
-                limit=20,
-            )
+    async with _mcp_session() as session:
+        return await _mcp_query_cube(
+            session, "InsightsSummaryView",
+            measures=[
+                "InsightsSummaryView.totalEvents",
+                "InsightsSummaryView.totalVerifiedAssets",
+                "InsightsSummaryView.timeSaved",
+            ],
+            dimensions=[
+                "InsightsSummaryView.name",
+                "InsightsSummaryView.severity",
+                "InsightsSummaryView.currentStatus",
+            ],
+            order={"InsightsSummaryView.totalEvents": "desc"},
+            limit=20,
+        )
 
 def fetch_insights() -> dict:
     return asyncio.run(_fetch_insights_async())
@@ -1510,30 +1505,28 @@ def fetch_insights() -> dict:
 # ── DNS Analytics handler ─────────────────────────────────────────────────────
 
 async def _fetch_dns_analytics_async() -> dict:
-    async with streamablehttp_client(MCP_URL, headers=MCP_HEADERS) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            vol_d, clients_d, types_d = await asyncio.gather(
-                _mcp_query_cube(session, "NstarDnsActivity",
-                    measures=["NstarDnsActivity.total_query_count"],
-                    time_dims=[{"dimension": "NstarDnsActivity.timestamp",
-                                "dateRange": "7 days", "granularity": "day"}]),
-                _mcp_query_cube(session, "NstarDnsActivity",
-                    measures=["NstarDnsActivity.total_query_count"],
-                    dimensions=["NstarDnsActivity.device_name", "NstarDnsActivity.device_ip"],
-                    time_dims=[{"dimension": "NstarDnsActivity.timestamp", "dateRange": "7 days"}],
-                    order={"NstarDnsActivity.total_query_count": "desc"}, limit=50),
-                _mcp_query_cube(session, "NstarDnsActivity",
-                    measures=["NstarDnsActivity.total_query_count"],
-                    dimensions=["NstarDnsActivity.query_type"],
-                    time_dims=[{"dimension": "NstarDnsActivity.timestamp", "dateRange": "7 days"}],
-                    order={"NstarDnsActivity.total_query_count": "desc"}, limit=10),
-            )
-            return {
-                "volume":      _results(vol_d),
-                "top_clients": _results(clients_d),
-                "query_types": _results(types_d),
-            }
+    async with _mcp_session() as session:
+        vol_d, clients_d, types_d = await asyncio.gather(
+            _mcp_query_cube(session, "NstarDnsActivity",
+                measures=["NstarDnsActivity.total_query_count"],
+                time_dims=[{"dimension": "NstarDnsActivity.timestamp",
+                            "dateRange": "7 days", "granularity": "day"}]),
+            _mcp_query_cube(session, "NstarDnsActivity",
+                measures=["NstarDnsActivity.total_query_count"],
+                dimensions=["NstarDnsActivity.device_name", "NstarDnsActivity.device_ip"],
+                time_dims=[{"dimension": "NstarDnsActivity.timestamp", "dateRange": "7 days"}],
+                order={"NstarDnsActivity.total_query_count": "desc"}, limit=50),
+            _mcp_query_cube(session, "NstarDnsActivity",
+                measures=["NstarDnsActivity.total_query_count"],
+                dimensions=["NstarDnsActivity.query_type"],
+                time_dims=[{"dimension": "NstarDnsActivity.timestamp", "dateRange": "7 days"}],
+                order={"NstarDnsActivity.total_query_count": "desc"}, limit=10),
+        )
+        return {
+            "volume":      _results(vol_d),
+            "top_clients": _results(clients_d),
+            "query_types": _results(types_d),
+        }
 
 def fetch_dns_analytics() -> dict:
     return asyncio.run(_fetch_dns_analytics_async())
@@ -1541,18 +1534,16 @@ def fetch_dns_analytics() -> dict:
 # ── Host Metrics handler ──────────────────────────────────────────────────────
 
 async def _fetch_host_metrics_async() -> dict:
-    async with streamablehttp_client(MCP_URL, headers=MCP_HEADERS) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            data = await _mcp_query_cube(
-                session, "HostMetrics",
-                measures=["HostMetrics.avg_value"],
-                dimensions=["HostMetrics.host_name", "HostMetrics.metric_name"],
-                time_dims=[{"dimension": "HostMetrics.timestamp", "dateRange": "1 hours"}],
-                order={"HostMetrics.avg_value": "desc"},
-                limit=100,
-            )
-            return {"metrics": _results(data)}
+    async with _mcp_session() as session:
+        data = await _mcp_query_cube(
+            session, "HostMetrics",
+            measures=["HostMetrics.avg_value"],
+            dimensions=["HostMetrics.host_name", "HostMetrics.metric_name"],
+            time_dims=[{"dimension": "HostMetrics.timestamp", "dateRange": "1 hours"}],
+            order={"HostMetrics.avg_value": "desc"},
+            limit=100,
+        )
+        return {"metrics": _results(data)}
 
 def fetch_host_metrics() -> dict:
     return asyncio.run(_fetch_host_metrics_async())
@@ -1560,11 +1551,9 @@ def fetch_host_metrics() -> dict:
 # ── Threat Lookup handler ─────────────────────────────────────────────────────
 
 async def _threat_lookup_async(query: str) -> dict:
-    async with streamablehttp_client(MCP_URL, headers=MCP_HEADERS) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            hits = await _mcp_search(session, query)
-            return {"entities": hits, "query": query}
+    async with _mcp_session() as session:
+        hits = await _mcp_search(session, query)
+        return {"entities": hits, "query": query}
 
 def threat_lookup(query: str) -> dict:
     return asyncio.run(_threat_lookup_async(query))
@@ -1580,16 +1569,14 @@ async def _block_domain_async(domain: str) -> dict:
         return {"ok": False, "error": "block list not configured (set BLOCK_LIST_ID)"}
     if not _TABLE_RE.match(BLOCK_LIST_ID):
         return {"ok": False, "error": "invalid block list id"}
-    async with streamablehttp_client(MCP_URL, headers=MCP_HEADERS) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool("infoblox-portal_make_patch_request", {
-                "task_description": f"Block domain {domain}",
-                "service_name": "Atcfw",
-                "endpoint": f"/named_lists/{BLOCK_LIST_ID}",
-                "body": {"items_described": [{"item": domain, "description": "Blocked via NOC dashboard"}]},
-            })
-            return {"ok": True, "domain": domain, "list": BLOCK_LIST_ID}
+    async with _mcp_session() as session:
+        result = await session.call_tool("infoblox-portal_make_patch_request", {
+            "task_description": f"Block domain {domain}",
+            "service_name": "Atcfw",
+            "endpoint": f"/named_lists/{BLOCK_LIST_ID}",
+            "body": {"items_described": [{"item": domain, "description": "Blocked via NOC dashboard"}]},
+        })
+        return {"ok": True, "domain": domain, "list": BLOCK_LIST_ID}
 
 def block_domain(domain: str) -> dict:
     return asyncio.run(_block_domain_async(domain))
@@ -1600,16 +1587,14 @@ async def _unblock_domain_async(domain: str) -> dict:
         return {"ok": False, "error": "invalid domain"}
     if not BLOCK_LIST_ID or not _TABLE_RE.match(BLOCK_LIST_ID):
         return {"ok": False, "error": "block list not configured (set BLOCK_LIST_ID)"}
-    async with streamablehttp_client(MCP_URL, headers=MCP_HEADERS) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            await session.call_tool("infoblox-portal_make_delete_request", {
-                "task_description": f"Unblock domain {domain}",
-                "service_name": "Atcfw",
-                "endpoint": f"/named_lists/{BLOCK_LIST_ID}/items",
-                "body": {"items": [domain]},
-            })
-            return {"ok": True, "domain": domain, "list": BLOCK_LIST_ID}
+    async with _mcp_session() as session:
+        await session.call_tool("infoblox-portal_make_delete_request", {
+            "task_description": f"Unblock domain {domain}",
+            "service_name": "Atcfw",
+            "endpoint": f"/named_lists/{BLOCK_LIST_ID}/items",
+            "body": {"items": [domain]},
+        })
+        return {"ok": True, "domain": domain, "list": BLOCK_LIST_ID}
 
 def unblock_domain(domain: str) -> dict:
     return asyncio.run(_unblock_domain_async(domain))
@@ -1742,7 +1727,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/vault/active":
             r = vault_set_active(str(body.get("id", ""))); self._json(r, 200 if r.get("ok") else 400); return
         if self.path == "/api/vault/groq":
-            self._json(vault_set_groq(str(body.get("key", "")))); return
+            self._json(vault_set_llm(str(body.get("key", "")))); return
         if self.path == "/api/vault/llm":
             self._json(vault_set_llm(str(body.get("key", "")), body.get("base_url"), body.get("model"))); return
         if self.path == "/api/vault/test-key":
