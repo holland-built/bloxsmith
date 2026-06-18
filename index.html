@@ -447,6 +447,7 @@ tr:hover .copy-btn{opacity:1}
   .close-btn,.drill-close,.n-x,.collapse-btn,.fs-btn,.copy-btn,.col-iconbtn{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
   .nav-item{min-height:44px}
   .toast-close{padding:8px}
+  .ver-badge{font-size:10px;min-height:24px;padding:2px 8px;display:inline-flex;align-items:center}
 }
 /* ── vault auth screens ── */
 .vault-screen{position:fixed;inset:0;z-index:550;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--blue-dark);overflow:auto}
@@ -3251,6 +3252,7 @@ function App({vault, onVaultChange}={}) {
   const [refreshFrozen, setRefreshFrozen] = useState(false);   // pause auto-refresh (demos)
   const [now, setNow] = useState(()=>new Date());
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [onboardSeen, setOnboardSeen] = useState(()=>!!LS.get('noc.onboard.seen',false));
   const [ipamChip, setIpamChip] = useState(()=>LS.get('noc.ipamChip',null));
   const [ipamShowTiny, setIpamShowTiny] = useState(false);   // reveal single-IP /32 subnets (transient)
   const [hostChip, setHostChip] = useState(()=>LS.get('noc.hostChip',null));
@@ -3803,6 +3805,11 @@ function App({vault, onVaultChange}={}) {
               title="Commands (Ctrl/⌘ K)"
               data-tip="<b>Command palette</b> — navigate, refresh, export, change theme, and more (shortcut: <b>⌘K</b>)"
               aria-label="Open commands">⌘ Commands</button>
+            <button className="theme-btn" style={{marginLeft:0,fontSize:14,fontWeight:700,letterSpacing:0}}
+              onClick={()=>setShowShortcuts(true)}
+              title="Keyboard shortcuts (?)"
+              data-tip="<b>Keyboard shortcuts</b> — all shortcuts at a glance (shortcut: <b>?</b>)"
+              aria-label="Keyboard shortcuts">?</button>
             <PresetMenu section={section}/>
             <MoreMenu autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
           </div>
@@ -3902,6 +3909,11 @@ function App({vault, onVaultChange}={}) {
             id:'demo', sev:'n-info', ico:'i',
             msg:<><b>Demo data</b> — the bridge couldn't reach Infoblox, so sample data is shown. Set <b>INFOBLOX_API_KEY</b> and restart the server to see live data (see the README).</>,
             acts:<button className="n-x" aria-label="Dismiss demo notice" onClick={()=>{setDemoDismiss(true);LS.set('noc.demoDismiss',true);}}>×</button>,
+          });
+          if(!onboardSeen&&vault?.unlocked&&!demoMode&&!usingMock) notices.push({
+            id:'onboard-tip', sev:'n-info', ico:'?',
+            msg:<>New here? Press <b>?</b> for shortcuts, <b>/</b> to search, or <b>⌘K</b> for all commands.</>,
+            acts:<><button className="n-btn" onClick={()=>{setOnboardSeen(true);LS.set('noc.onboard.seen',true);setShowShortcuts(true);}}>Show shortcuts</button><button className="n-x" aria-label="Dismiss tip" onClick={()=>{setOnboardSeen(true);LS.set('noc.onboard.seen',true);}}>×</button></>,
           });
           if(sq) notices.push({
             id:'filter', sev:'n-amber', ico:'!',
