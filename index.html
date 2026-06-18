@@ -3953,6 +3953,20 @@ function App({vault, onVaultChange}={}) {
               <span className="sf-lbl">Data feed</span>
               <span className="sf-val">{refreshFrozen?'Frozen':'Live'}</span>
             </button>
+            <button className="sf-row" onClick={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}}
+              aria-label={`Wall display mode: ${wallMode?'On':'Off'} — click to toggle`}
+              data-tip="Fullscreen TV/wall mode — shows live clock, hides navigation">
+              <span className="sf-ico">◻</span>
+              <span className="sf-lbl">Wall mode</span>
+              <span className="sf-val">{wallMode?'On':'Off'}</span>
+            </button>
+            <button className="sf-row" onClick={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}}
+              aria-label={`Demo mode: ${demoMode?'On':'Off'} — click to toggle`}
+              data-tip="Hides test/allow-all policies; prioritizes threat intel feeds">
+              <span className="sf-ico">◎</span>
+              <span className="sf-lbl">Demo mode</span>
+              <span className="sf-val">{demoMode?'On':'Off'}</span>
+            </button>
             <button className="sf-row" onClick={shareView}
               aria-label="Copy link to this view"
               data-tip="Copy a shareable URL for the current section">
