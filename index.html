@@ -270,7 +270,7 @@ body.chat-open{padding-right:340px}
 .chat-toggle-btn:hover,.chat-toggle-btn.on{border-color:var(--teal);color:var(--teal);background:var(--hover-strong)}
 /* unified notice rail — one vocabulary for alerts / demo / filter (severity-sorted) */
 .notice-rail{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
-.notice{display:flex;align-items:center;gap:10px;border-radius:8px;padding:8px 12px;font-size:12px;line-height:1.4;border:1px solid}
+.notice{display:flex;align-items:center;gap:10px;border-radius:8px;padding:8px 12px;font-size:12px;line-height:1.4;border:1px solid;animation:noticeIn .2s cubic-bezier(.16,1,.3,1) both}
 .notice .n-ico{flex-shrink:0;width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border-radius:50%}
 .notice .n-msg{flex:1;min-width:0}
 .notice .n-acts{display:flex;gap:6px;flex-shrink:0;align-items:center}
@@ -285,6 +285,7 @@ body.chat-open{padding-right:340px}
 .notice.n-info .n-ico{background:var(--surface-3);color:var(--gray-200)}
 .notice.n-info b{color:var(--teal)}
 .notice.n-info .n-btn{border-color:var(--tint-border);color:var(--teal)}.notice.n-info .n-btn:hover{background:var(--hover-strong)}
+.notice.n-red .n-ico{animation:noticeRedGlow 2.5s ease-in-out infinite}
 .notice.n-amber{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.4);color:var(--sev-amber-t)}
 .notice.n-amber .n-ico{background:rgba(245,158,11,.15);color:var(--sev-amber-t)}
 .notice.n-amber b{color:var(--sev-amber-t)}
@@ -306,6 +307,14 @@ body.chat-open{padding-right:340px}
 /* ── drill-down panels ── */
 .drill-panel{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;animation:fadeIn .15s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+/* ── purposeful motion ─────────────────────────────────────────────── */
+@keyframes sectionIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.section-view{animation:sectionIn .18s cubic-bezier(.25,1,.5,1) both}
+@keyframes noticeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@keyframes noticeRedGlow{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}60%{box-shadow:0 0 0 5px rgba(239,68,68,.18)}}
+@keyframes cmkdOverlayIn{from{opacity:0}to{opacity:1}}
+@keyframes cmkdBoxIn{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes wizardIn{from{opacity:0;transform:translate(-50%,-50%) scale(.96)}to{opacity:1;transform:translate(-50%,-50%)}}
 .drill-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .drill-title{font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.08em}
 .drill-close{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:16px;padding:0 2px;line-height:1}
@@ -375,7 +384,8 @@ body.chat-open{padding-right:340px}
 .refresh-pause:hover{border-color:var(--gray-600);color:var(--ink)}
 .refresh-pause[aria-pressed="true"]{color:var(--sev-amber-t);border-color:var(--badge-amber-bd);background:var(--badge-amber-bg)}
 .chip-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
-.chip{padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--gray-400);font-size:10px;font-weight:600;cursor:pointer;transition:background .12s,border-color .12s,color .12s}
+.chip{padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--gray-400);font-size:10px;font-weight:600;cursor:pointer;transition:background .12s,border-color .12s,color .12s,transform .08s}
+.chip:active{transform:scale(.96)}
 .chip.on{background:var(--surface-3);color:var(--teal);border-color:var(--teal)}
 .shortcut-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:500;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .shortcut-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px 28px;min-width:280px;cursor:default}
@@ -428,6 +438,8 @@ tr:hover .copy-btn{opacity:1}
   .toast{animation:none}
   .spin,.spinner{animation-duration:1.6s}
   .bento>.drag-card:nth-child(n){animation-delay:0ms}
+  .section-view,.notice,.cmdk-overlay,.cmdk-box,.wiz-modal{animation:none!important}
+  .notice.n-red .n-ico{animation:none}
 }
 :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:3px}
 .nav-item:focus-visible{outline-offset:-2px}
@@ -447,7 +459,8 @@ tr:hover .copy-btn{opacity:1}
 .vault-card label{display:block;font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 5px}
 .vault-in{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;color:var(--ink);font-size:13px;padding:10px 12px;outline:none;font-family:inherit}
 .vault-in:focus{border-color:var(--focus-border)}
-.vault-btn{width:100%;background:var(--teal);border:none;border-radius:7px;color:var(--blue-dark);font-size:13px;font-weight:700;padding:11px;cursor:pointer;margin-top:18px;transition:background .15s}
+.vault-btn{width:100%;background:var(--teal);border:none;border-radius:7px;color:var(--blue-dark);font-size:13px;font-weight:700;padding:11px;cursor:pointer;margin-top:18px;transition:background .15s,transform .08s}
+.vault-btn:active{transform:scale(.98)}
 .vault-btn:hover{background:var(--teal-bright)}
 .vault-btn:disabled{opacity:.45;cursor:default}
 .vault-err{color:var(--sev-red-t);font-size:12px;margin-top:10px}
@@ -480,8 +493,8 @@ tr:hover .copy-btn{opacity:1}
 .col-grip{cursor:grab;color:var(--gray-600);font-size:11px;flex-shrink:0;user-select:none}
 .col-grip:active{cursor:grabbing}
 /* ── command palette ── */
-.cmdk-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:flex;align-items:flex-start;justify-content:center;padding-top:12vh}
-.cmdk-box{width:min(560px,92vw);background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.45);overflow:hidden}
+.cmdk-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;animation:cmkdOverlayIn .15s ease}
+.cmdk-box{width:min(560px,92vw);background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.45);overflow:hidden;animation:cmkdBoxIn .2s cubic-bezier(.25,1,.5,1) both}
 .cmdk-input{width:100%;background:none;border:none;border-bottom:1px solid var(--border);color:var(--ink);font-size:15px;padding:15px 18px;outline:none;font-family:inherit}
 .cmdk-list{max-height:50vh;overflow-y:auto;padding:6px}
 .cmdk-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--gray-200)}
@@ -613,7 +626,7 @@ tr:hover .copy-btn{opacity:1}
 .drill-kv .k{color:var(--gray-400);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
 @media(prefers-reduced-motion:reduce){.drill-sheet{animation:none}}
 .wiz-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:120}
-.wiz-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(440px,92vw);max-height:84vh;overflow:auto;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;z-index:121;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.wiz-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(440px,92vw);max-height:84vh;overflow:auto;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;z-index:121;box-shadow:0 12px 40px rgba(0,0,0,.5);animation:wizardIn .22s cubic-bezier(.16,1,.3,1) both}
 .wiz-hd{padding:16px 18px;border-bottom:1px solid var(--border)}
 .wiz-title{font-size:15px;font-weight:700;color:var(--ink)}
 .wiz-sub{font-size:11px;color:var(--gray-400);margin-top:4px;line-height:1.4}
@@ -3897,6 +3910,7 @@ function App({vault, onVaultChange}={}) {
           );
         })()}
 
+        <div key={section} className="section-view">
         {/* ── TRIAGE ── */}
         {section==='triage'&&(
           <TriagePanel subnets={subnets} hosts={hosts} zones={zones} auditLogs={auditLogs}
@@ -4395,6 +4409,7 @@ function App({vault, onVaultChange}={}) {
             searchHistory={searchHistory} setSearchHistory={setSearchHistory}
           />
         )}
+        </div>{/* /section-view */}
 
       </main>
 
