@@ -1159,7 +1159,7 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("console.warn", "localStorage write failure not logged")
 
     def test_mock_fallback_server_unavailable_hint(self):
-        self.assertContains("temporarily unavailable", "No server-unavailable hint in mock fallback")
+        self.assertContains("Connection error", "No server-unavailable hint in mock fallback")
 
     def test_static_files_set_at_module_level(self):
         with open(SERVER, encoding="utf-8") as f:

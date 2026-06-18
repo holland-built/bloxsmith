@@ -2434,16 +2434,19 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
     setThinking(true);
     const ctx = section ? `The operator is currently viewing the ${section} section.` : '';
     fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:ctx})})
-      .then(r=>r.ok?r.json():null)
+      .then(r=>r.ok?r.json():Promise.reject(r.status))
       .then(json=>{
-        const ans=(json&&typeof json.answer==='string')?json.answer:'! Query failed.';
+        const ans=(json&&typeof json.answer==='string')?json.answer:'Query returned an unexpected response.';
         const sugs=(json&&Array.isArray(json.suggestions))?json.suggestions:[];
         const trace=(json&&Array.isArray(json.trace))?json.trace:[];
         setMessages(m=>[...m,{id:Date.now(),role:'a',content:ans,suggestions:sugs,trace}]);
         setThinking(false);
       })
-      .catch(()=>{
-        setMessages(m=>[...m,{id:Date.now(),role:'a',content:'Server temporarily unavailable — the backend may be restarting. Try again in a moment.'}]);
+      .catch(status=>{
+        const msg=typeof status==='number'
+          ?(status>=500?`Server error (${status}) — backend may be restarting. Try again.`:`Query failed (${status}).`)
+          :'Connection error — check network and try again.';
+        setMessages(m=>[...m,{id:Date.now(),role:'a',content:msg}]);
         setThinking(false);
       });
   };
@@ -2471,13 +2474,18 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({question: q, context: ctx}),
       });
-      const json = r.ok ? await r.json() : null;
-      const ans = (json && typeof json.answer === 'string') ? json.answer : 'Query returned an unexpected response. Try again or contact support if the issue persists.';
+      if(!r.ok){
+        const msg=r.status>=500?`Server error (${r.status}) — backend may be restarting. Try again.`:`Query failed (${r.status}).`;
+        setMessages(m=>[...m,{id:Date.now(),role:'a',content:msg}]);
+        setThinking(false); return;
+      }
+      const json = await r.json();
+      const ans = (json && typeof json.answer === 'string') ? json.answer : 'Query returned an unexpected response.';
       const sugs = (json && Array.isArray(json.suggestions)) ? json.suggestions : [];
       const trace = (json && Array.isArray(json.trace)) ? json.trace : [];
       setMessages(m=>[...m,{id:Date.now(),role:'a',content:ans,suggestions:sugs,trace}]);
     } catch(e) {
-      setMessages(m=>[...m,{id:Date.now(),role:'a',content:'Server temporarily unavailable — the backend may be restarting. Try again in a moment.'}]);
+      setMessages(m=>[...m,{id:Date.now(),role:'a',content:'Connection error — check network and try again.'}]);
     }
     setThinking(false);
   };
@@ -3978,7 +3986,7 @@ function App({vault, onVaultChange}={}) {
           const CAP=2, hidden=notices.length-CAP;
           const shown=noticesExpanded?notices:notices.slice(0,CAP);
           return (
-            <div className="notice-rail" role="status">
+            <div className="notice-rail" role={notices.some(n=>n.sev==='n-red')?'alert':'status'} aria-live={notices.some(n=>n.sev==='n-red')?'assertive':'polite'}>
               {shown.map(n=>(
                 <div key={n.id} className={`notice ${n.sev}`}>
                   <span className="n-ico" aria-hidden="true">{n.ico}</span>
@@ -4619,8 +4627,5 @@ function TooltipLayer() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(<><VaultGate/><TooltipLayer/></>);
 </script>
-<!-- impeccable-live-start -->
-<script src="http://localhost:8400/live.js"></script>
-<!-- impeccable-live-end -->
 </body>
 </html>
