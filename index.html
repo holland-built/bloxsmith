@@ -3300,6 +3300,19 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
 
 const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['raw','Raw']];
 
+// Poll until the server responds 200, then call onReady().
+// Prevents the "page can't be displayed" flash when reloading right after a container restart.
+function waitForServer(onReady, maxAttempts=40, interval=500) {
+  let attempts=0;
+  const probe=()=>{
+    fetch('/api/vault/status',{cache:'no-store',method:'GET'})
+      .then(r=>{ if(r.ok) onReady(); else retry(); })
+      .catch(retry);
+  };
+  const retry=()=>{ attempts++; if(attempts<maxAttempts) setTimeout(probe,interval); else onReady(); };
+  setTimeout(probe,interval);
+}
+
 function VizSelect({id, def='table', opts=VIZ_OPTS, getViz, setViz}) {
   return (
     <select className="viz-sel" value={getViz(id,def)} onChange={e=>setViz(id,e.target.value)}
@@ -3605,7 +3618,7 @@ function App({vault, onVaultChange}={}) {
   },[autoRefresh,refreshFrozen,hoverPause]);
   useEffect(()=>{
     if(!updApplying||!updStart){setUpdElapsed(0);return;}
-    const id=setInterval(()=>{const el=Math.floor((Date.now()-updStart)/1000);setUpdElapsed(el);if(el>=120)location.reload();},1000);
+    const id=setInterval(()=>{const el=Math.floor((Date.now()-updStart)/1000);setUpdElapsed(el);if(el>=120){clearInterval(id);waitForServer(()=>location.reload());}},1000);
     return ()=>clearInterval(id);
   },[updApplying,updStart]);
   useEffect(()=>{
@@ -3781,10 +3794,10 @@ function App({vault, onVaultChange}={}) {
     const poll=()=>{ if(stopped) return;
       fetch('/api/update/status',{cache:'no-store'}).then(r=>r.json())
         .then(s=>{
-          if(s.instance_id){if(firstId===null){firstId=s.instance_id;}else if(s.instance_id!==firstId){setUpdDone(true);setUpdApplying(false);setTimeout(()=>location.reload(),2000);return;}}
+          if(s.instance_id){if(firstId===null){firstId=s.instance_id;}else if(s.instance_id!==firstId){setUpdDone(true);setUpdApplying(false);waitForServer(()=>location.reload());return;}}
           setUpdPhase(s.phase||'prepulling');
           setUpdStatus(s);
-          if(s.phase==='live'){ setUpdDone(true); setUpdApplying(false); setRbInfo(null); LS.set('noc.updRollback',null); fetch('/api/update/rollback-clear',{method:'POST'}).catch(()=>{}); setTimeout(()=>location.reload(),3000); return; }
+          if(s.phase==='live'){ setUpdDone(true); setUpdApplying(false); setRbInfo(null); LS.set('noc.updRollback',null); fetch('/api/update/rollback-clear',{method:'POST'}).catch(()=>{}); waitForServer(()=>location.reload()); return; }
           if(s.phase==='rolledback'){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); const rb={from:s.rollback_from, to:s.rollback_to}; setRbInfo(rb); LS.set('noc.updRollback', rb); return; }
           if(s.phase==='error'){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); toast('Update failed: '+(s.error||'unknown'),'err'); return; }
           setTimeout(poll,1500);
