@@ -99,7 +99,17 @@ body.chat-open{padding-right:340px}
 .nav-item:hover .nav-icon,.nav-item.active .nav-icon{color:var(--teal)}
 .sidebar-icon-strip{display:flex;gap:4px;padding:6px 0 2px;width:100%;justify-content:flex-start;flex-wrap:wrap}
 .sidebar-icon-strip .theme-btn{margin-left:0}
-.sidebar-foot{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--gray-400);position:relative}
+.sf-menu{padding:4px 0}
+.sf-row{display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;font-size:11px;color:var(--gray-200);background:none;border:none;width:100%;text-align:left;font-family:inherit;line-height:1}
+.sf-row:hover{background:var(--hover)}
+.sf-row:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
+.sf-ico{width:14px;text-align:center;font-size:12px;color:var(--gray-400);flex-shrink:0}
+.sf-lbl{flex:1}
+.sf-val{font-size:9px;color:var(--gray-500);background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;white-space:nowrap}
+.sf-hint{font-size:9px;color:var(--gray-600)}
+.sf-sep{height:1px;background:var(--border);margin:3px 0}
+.sidebar-foot{padding:10px 0 4px;border-top:1px solid var(--border);font-size:11px;color:var(--gray-400);position:relative}
+.sf-status{padding:0 14px 8px;}
 .rb-badge{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:6px;margin-top:6px}
 .rb-badge-ico{font-size:11px;color:var(--red);flex-shrink:0}
 .rb-badge-body{flex:1;min-width:0}
@@ -1663,9 +1673,11 @@ function MoreMenu({autoRefresh,setAutoRefresh,onShare,density,setDensity,onShort
   );
 }
 
-function PresetMenu({section}) {
+function PresetMenu({section, openProp, setOpenProp}) {
   const [views,setViews]=React.useState(()=>LS.get('noc.views',{}));
-  const [open,setOpen]=React.useState(false);
+  const [_open,_setOpen]=React.useState(false);
+  const open = openProp !== undefined ? openProp : _open;
+  const setOpen = setOpenProp || _setOpen;
   const [saving,setSaving]=React.useState(false);
   const [nameVal,setNameVal]=React.useState('');
   const names=Object.keys(views);
@@ -1679,9 +1691,9 @@ function PresetMenu({section}) {
   const del=name=>{ const next={...views}; delete next[name]; setViews(next); LS.set('noc.views',next); };
   return (
     <span style={{position:'static',display:'inline-flex'}}>
-      <button className="theme-btn" style={{gap:5,fontSize:12.5}} title="Saved snapshots" aria-label="Saved snapshots" aria-expanded={open}
+      {openProp===undefined&&<button className="theme-btn" style={{gap:5,fontSize:12.5}} title="Saved snapshots" aria-label="Saved snapshots" aria-expanded={open}
         data-tip="<b>Snapshots</b> — save &amp; restore the current filter + section state. Like bookmarks for dashboard views."
-        onClick={()=>{ setOpen(o=>!o); setSaving(false); setNameVal(''); }}>★</button>
+        onClick={()=>{ setOpen(o=>!o); setSaving(false); setNameVal(''); }}>★</button>}
       {open&&(<>
         <div className="col-overlay" onClick={()=>setOpen(false)}/>
         <div className="col-menu" style={{minWidth:210,top:'auto',bottom:'calc(100% + 4px)'}} role="menu">
@@ -3351,6 +3363,8 @@ function App({vault, onVaultChange}={}) {
   const [refreshFrozen, setRefreshFrozen] = useState(false);   // pause auto-refresh (demos)
   const [now, setNow] = useState(()=>new Date());
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [sfPresetOpen, setSfPresetOpen] = useState(false);
+  const [sfConfirmReset, setSfConfirmReset] = useState(false);
   const [onboardSeen, setOnboardSeen] = useState(()=>!!LS.get('noc.onboard.seen',false));
   const [ipamChip, setIpamChip] = useState(()=>LS.get('noc.ipamChip',null));
   const [ipamShowTiny, setIpamShowTiny] = useState(false);   // reveal single-IP /32 subnets (transient)
@@ -3672,7 +3686,10 @@ function App({vault, onVaultChange}={}) {
   },[theme]);
   const THEME_CYCLE = {system:'light', light:'dark', dark:'system'};
   const THEME_ICON  = {system:'◐', light:'○', dark:'●'};
-  const THEME_LABEL = {system:'System theme', light:'Light theme', dark:'Dark theme'};
+  const THEME_LABEL = {system:'System', light:'Light', dark:'Dark'};
+  const arOpts=[[0,'Off'],[30,'30s'],[60,'1m'],[300,'5m']];
+  const nextAr=()=>{const i=arOpts.findIndex(([v])=>v===autoRefresh);const [nv]=arOpts[(i+1)%arOpts.length];setAutoRefresh(nv);LS.set('ar',nv);};
+  const arLbl=arOpts.find(([v])=>v===autoRefresh)?.[1]||'Off';
 
   useEffect(()=>{ document.documentElement.setAttribute('data-density', density); LS.set('noc.density', density); },[density]);
   useEffect(()=>{ LS.set('noc.ipamChip', ipamChip); },[ipamChip]);
@@ -3856,7 +3873,7 @@ function App({vault, onVaultChange}={}) {
         </nav>
 
         <div className="sidebar-foot">
-          <div style={{color:'var(--green)',display:'flex',alignItems:'center',gap:5}}>
+          <div className="sf-status" style={{color:'var(--green)',display:'flex',alignItems:'center',gap:5}}>
             <span className="pulse">●</span> API Connected
             {vault&&vault.version&&(updDone
               ? <span className="ver-badge upd-done" aria-live="polite">✓ Updated to v{String(upd.latest||vault.version).replace(/^v/,'')}</span>
@@ -3875,7 +3892,7 @@ function App({vault, onVaultChange}={}) {
                     style={{marginLeft:'auto'}}>v{vault.version}{upd.available&&<><span className="ver-up-arrow">↑</span>{String(upd.latest||'').replace(/^v/,'')}</>}</span>
             )}
           </div>
-          {rbInfo&&<div className="rb-badge">
+          {rbInfo&&<div className="rb-badge" style={{margin:'0 14px 6px'}}>
             <span className="rb-badge-ico">&#9888;</span>
             <div className="rb-badge-body">
               <div className="rb-badge-title">Rollback {rbInfo.from?`v${String(rbInfo.from).replace(/^v/,'')}`:'active'}</div>
@@ -3886,25 +3903,82 @@ function App({vault, onVaultChange}={}) {
               <button className="rb-btn-x" title="Dismiss" onClick={()=>{fetch('/api/update/rollback-clear',{method:'POST'}).catch(()=>{}); setRbInfo(null); LS.set('noc.updRollback',null);}}>&#215;</button>
             </div>
           </div>}
-          <div className="sidebar-icon-strip">
-            <button className="theme-btn" style={{marginLeft:0}}
-              onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')}
-              title={`${THEME_LABEL[theme]} (click to change)`}
-              data-tip={`Theme: <b>${THEME_LABEL[theme]}</b> · click to cycle system → light → dark`}
-              aria-label={THEME_LABEL[theme]}>{THEME_ICON[theme]}</button>
-            <button className="theme-btn" style={{marginLeft:0,gap:5,fontSize:12.5}}
-              onClick={()=>setCmdkOpen(true)}
-              title="Command palette (Ctrl/⌘ K)"
-              data-tip="<b>Command palette</b> — navigate, refresh, export, change theme, and more (shortcut: <b>⌘K</b>)"
-              aria-label="Open command palette">⌘K</button>
-            <button className="theme-btn" style={{marginLeft:0,fontSize:14,fontWeight:700,letterSpacing:0}}
-              onClick={()=>setShowShortcuts(true)}
-              title="Keyboard shortcuts (?)"
-              data-tip="<b>Keyboard shortcuts</b> — all shortcuts at a glance (shortcut: <b>?</b>)"
-              aria-label="Keyboard shortcuts">?</button>
-            <PresetMenu section={section}/>
-            <MoreMenu autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh} onShare={shareView} density={density} setDensity={setDensity} onShortcuts={()=>setShowShortcuts(true)} wallMode={wallMode} onWall={()=>{const v=!wallMode;setWallMode(v);LS.set('noc.wall',v);}} demoMode={demoMode} onDemo={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}} onReset={resetDashboard} frozen={refreshFrozen} onFreeze={()=>setRefreshFrozen(v=>!v)}/>
+          <div className="sf-menu">
+            <button className="sf-row" onClick={()=>setTheme(t=>THEME_CYCLE[t]||'system')}
+              aria-label={`Theme: ${THEME_LABEL[theme]} — click to cycle`}
+              data-tip={`Theme: <b>${THEME_LABEL[theme]}</b> · click to cycle system → light → dark`}>
+              <span className="sf-ico">{THEME_ICON[theme]}</span>
+              <span className="sf-lbl">Theme</span>
+              <span className="sf-val">{THEME_LABEL[theme]}</span>
+            </button>
+            <button className="sf-row" onClick={nextAr}
+              aria-label={`Auto-refresh: ${arLbl} — click to cycle`}
+              data-tip="Cycle polling interval: Off → 30s → 1m → 5m">
+              <span className="sf-ico">↻</span>
+              <span className="sf-lbl">Auto-refresh</span>
+              <span className="sf-val">{arLbl}</span>
+            </button>
+            <button className="sf-row" onClick={()=>setDensity(d=>d==='compact'?'comfortable':'compact')}
+              aria-label={`Row density: ${density==='compact'?'Compact':'Cozy'} — click to toggle`}
+              data-tip="Toggle table row height between Comfortable and Compact">
+              <span className="sf-ico">▤</span>
+              <span className="sf-lbl">Row density</span>
+              <span className="sf-val">{density==='compact'?'Compact':'Cozy'}</span>
+            </button>
+            <div className="sf-sep"/>
+            <button className="sf-row" onClick={()=>setCmdkOpen(true)}
+              aria-label="Open command palette (⌘K)"
+              data-tip="<b>Command palette</b> — navigate, refresh, export, change theme, and more (shortcut: <b>⌘K</b>)">
+              <span className="sf-ico">⌘</span>
+              <span className="sf-lbl">Commands</span>
+              <span className="sf-hint">⌘K</span>
+            </button>
+            <button className="sf-row" onClick={()=>setSfPresetOpen(true)}
+              aria-label="Saved snapshots — save and restore dashboard views"
+              data-tip="<b>Snapshots</b> — save &amp; restore the current filter + section state. Like bookmarks for dashboard views.">
+              <span className="sf-ico">★</span>
+              <span className="sf-lbl">Views</span>
+            </button>
+            <button className="sf-row" onClick={()=>setShowShortcuts(true)}
+              aria-label="Keyboard shortcuts"
+              data-tip="<b>Keyboard shortcuts</b> — all shortcuts at a glance (shortcut: <b>?</b>)">
+              <span className="sf-ico">?</span>
+              <span className="sf-lbl">Shortcuts</span>
+            </button>
+            <div className="sf-sep"/>
+            <button className="sf-row" onClick={()=>setRefreshFrozen(v=>!v)}
+              aria-label={`Data feed: ${refreshFrozen?'Frozen':'Live'} — click to toggle`}
+              data-tip="Pause all live data refresh — data stays at last snapshot">
+              <span className="sf-ico">{refreshFrozen?'⏸':'▶'}</span>
+              <span className="sf-lbl">Data feed</span>
+              <span className="sf-val">{refreshFrozen?'Frozen':'Live'}</span>
+            </button>
+            <button className="sf-row" onClick={shareView}
+              aria-label="Copy link to this view"
+              data-tip="Copy a shareable URL for the current section">
+              <span className="sf-ico">◳</span>
+              <span className="sf-lbl">Copy link</span>
+            </button>
+            <div className="sf-sep"/>
+            <button className="sf-row" onClick={()=>setSfConfirmReset(true)}
+              aria-label="Reset dashboard layout"
+              data-tip="Restore default widget order and unhide all sections. Snapshots are not affected.">
+              <span className="sf-ico" style={{color:'var(--red-text)'}}>↺</span>
+              <span className="sf-lbl" style={{color:'var(--red-text)'}}>Reset dashboard</span>
+            </button>
+            <PresetMenu section={section} openProp={sfPresetOpen} setOpenProp={setSfPresetOpen}/>
           </div>
+          {sfConfirmReset&&<>
+            <div className="col-overlay" onClick={()=>setSfConfirmReset(false)}/>
+            <div className="col-menu" style={{minWidth:220,top:'auto',bottom:'calc(100% + 4px)'}} role="dialog" aria-label="Confirm reset" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setSfConfirmReset(false);}}}>
+              <div className="col-menu-head"><span className="col-menu-title">Reset dashboard?</span></div>
+              <div style={{padding:'6px 10px',fontSize:11,color:'var(--gray-400)',lineHeight:1.5}}>Restores default widget order and unhides all sections. Snapshots are not affected.</div>
+              <div style={{padding:'6px 10px',display:'flex',gap:6}}>
+                <button className="col-reset" onClick={()=>{setSfConfirmReset(false);resetDashboard();}}>Reset</button>
+                <button autoFocus className="col-iconbtn" onClick={()=>setSfConfirmReset(false)} aria-label="Cancel">Cancel</button>
+              </div>
+            </div>
+          </>}
           {updPop&&(
             <>
             <div className="acct-overlay" onClick={()=>setUpdPop(false)}/>
