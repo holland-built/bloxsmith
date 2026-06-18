@@ -95,7 +95,7 @@ body.chat-open{padding-right:340px}
 .nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--gray-200);border:none;background:none;width:100%;text-align:left;transition:background .12s,color .12s,border-color .12s}
 .nav-item:hover{background:var(--hover-strong);color:var(--teal)}
 .nav-item.active{background:var(--tint);color:var(--teal);font-weight:600;border-left:2px solid var(--teal);padding-left:8px}
-.nav-icon{width:16px;text-align:center;color:var(--gray-600);transition:color .12s}
+.nav-icon{width:16px;display:flex;align-items:center;justify-content:center;color:var(--gray-600);transition:color .12s;flex-shrink:0}
 .nav-item:hover .nav-icon,.nav-item.active .nav-icon{color:var(--teal)}
 .sidebar-icon-strip{display:flex;gap:4px;padding:6px 0 2px;width:100%;justify-content:flex-end}
 .sidebar-icon-strip .theme-btn{margin-left:0}
@@ -285,6 +285,10 @@ body.chat-open{padding-right:340px}
 .notice.n-info .n-ico{background:var(--surface-3);color:var(--gray-200)}
 .notice.n-info b{color:var(--teal)}
 .notice.n-info .n-btn{border-color:var(--tint-border);color:var(--teal)}.notice.n-info .n-btn:hover{background:var(--hover-strong)}
+.notice.n-amber{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.4);color:var(--sev-amber-t)}
+.notice.n-amber .n-ico{background:rgba(245,158,11,.15);color:var(--sev-amber-t)}
+.notice.n-amber b{color:var(--sev-amber-t)}
+.notice.n-amber .n-btn{border-color:rgba(245,158,11,.4);color:var(--sev-amber-t)}.notice.n-amber .n-btn:hover{background:rgba(245,158,11,.15)}
 .n-more{align-self:flex-start;background:none;border:none;color:var(--gray-400);font-size:11px;font-weight:600;cursor:pointer;padding:2px 0;font-family:inherit}
 .n-more:hover{color:var(--teal)}
 .thinking{display:flex;gap:5px;align-items:center;padding:4px 2px}
@@ -612,7 +616,7 @@ tr:hover .copy-btn{opacity:1}
 .wiz-ordbtn{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:9px;line-height:1;padding:1px}
 .wiz-ordbtn:disabled{opacity:.25;cursor:default}
 .wiz-ordbtn:hover:not(:disabled){color:var(--teal)}
-.wiz-nav-icon{font-size:14px;color:var(--gray-400);width:18px;text-align:center}
+.wiz-nav-icon{color:var(--gray-400);width:18px;display:flex;align-items:center;justify-content:center}
 .wiz-lbl{flex:1;font-size:13px;color:var(--gray-200)}
 .wiz-vis{font-size:10px;font-weight:700;border-radius:4px;padding:3px 9px;border:1px solid var(--border);background:none;color:var(--gray-400);cursor:pointer;text-transform:uppercase;letter-spacing:.05em}
 .wiz-vis.on{color:var(--sev-green-t);border-color:var(--green);background:rgba(34,197,94,.10)}
@@ -2362,7 +2366,7 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
         setThinking(false);
       })
       .catch(()=>{
-        setMessages(m=>[...m,{id:Date.now(),role:'a',content:'! Server unavailable. Start with: python3 server.py'}]);
+        setMessages(m=>[...m,{id:Date.now(),role:'a',content:'Server temporarily unavailable — the backend may be restarting. Try again in a moment.'}]);
         setThinking(false);
       });
   };
@@ -2391,12 +2395,12 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
         body: JSON.stringify({question: q, context: ctx}),
       });
       const json = r.ok ? await r.json() : null;
-      const ans = (json && typeof json.answer === 'string') ? json.answer : '! Query failed — server returned an error. Check server logs.';
+      const ans = (json && typeof json.answer === 'string') ? json.answer : 'Query returned an unexpected response. Try again or contact support if the issue persists.';
       const sugs = (json && Array.isArray(json.suggestions)) ? json.suggestions : [];
       const trace = (json && Array.isArray(json.trace)) ? json.trace : [];
       setMessages(m=>[...m,{id:Date.now(),role:'a',content:ans,suggestions:sugs,trace}]);
     } catch(e) {
-      setMessages(m=>[...m,{id:Date.now(),role:'a',content:'! Server unavailable. Start with: python3 server.py'}]);
+      setMessages(m=>[...m,{id:Date.now(),role:'a',content:'Server temporarily unavailable — the backend may be restarting. Try again in a moment.'}]);
     }
     setThinking(false);
   };
@@ -2419,18 +2423,19 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
   return (
     <div className={`chat-panel${open?' open':''}`}>
       <div className="chat-head">
-        <div>
-          <div className="chat-head-title">⊕ Query Assistant</div>
-          {searchQuery&&queryMode==='filter'&&(
-            <div style={{fontSize:10,color:'var(--teal)',marginTop:2}}>
-              Filter active: "{searchQuery}"
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',gap:6}}>
+          <div className="chat-head-title">Query Assistant</div>
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            <div className="mode-row" style={{marginBottom:0}}>
+              <button className={`mode-btn${queryMode==='ask'?' on':''}`} onClick={()=>setQueryMode('ask')}>Ask</button>
+              <button className={`mode-btn${queryMode==='filter'?' on':''}`}
+                onClick={()=>setQueryMode('filter')}
+                style={queryMode==='filter'?{background:'rgba(245,158,11,.2)',color:'var(--sev-amber-t)'}:{}}>Filter</button>
             </div>
-          )}
-        </div>
-        <div style={{display:'flex',gap:6,alignItems:'center'}}>
-          <button style={{background:'none',border:'1px solid var(--border)',borderRadius:5,color:'var(--gray-400)',cursor:'pointer',fontSize:10,fontWeight:600,padding:'3px 8px',letterSpacing:'.04em'}}
-            onClick={()=>setMessages([{id:0,role:'a',content:'Cleared. Ask anything about your network.'}])}>Clear</button>
-          <button className="close-btn" onClick={onClose} aria-label="Close query panel">✕</button>
+            <button style={{background:'none',border:'1px solid var(--border)',borderRadius:5,color:'var(--gray-400)',cursor:'pointer',fontSize:10,fontWeight:600,padding:'3px 8px',letterSpacing:'.04em'}}
+              onClick={()=>setMessages([{id:0,role:'a',content:'Cleared. Ask anything about your network.'}])}>Clear</button>
+            <button className="close-btn" onClick={onClose} aria-label="Close query panel">✕</button>
+          </div>
         </div>
       </div>
 
@@ -2527,7 +2532,7 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
           ))}
           {tab==='nav'&&navSections.map(s=>(
             <div key={s.id} className="wiz-row">
-              <span className="wiz-nav-icon">{s.icon}</span>
+              <span className="wiz-nav-icon"><NavIcon id={s.id} size={14}/></span>
               <span className="wiz-lbl">{s.label}</span>
               <button className={`wiz-vis${hiddenSections.includes(s.id)?'':' on'}`} role="switch" aria-checked={!hiddenSections.includes(s.id)}
                 onClick={()=>toggleHideSection(s.id)}>{hiddenSections.includes(s.id)?'Hidden':'Visible'}</button>
@@ -2741,6 +2746,29 @@ function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection
 
 /* ─── MAIN APP ───────────────────────────────────────────────────────────────*/
 
+/* ── nav SVG icons — Lucide 1.5px stroke, 24-unit viewBox ── */
+const NAV_ICONS={
+  overview:      'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+  triage:        'M22 12h-4l-3 9L9 3l-3 9H2',
+  ipam:          'M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z',
+  dhcp:          'M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01',
+  dns:           'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z',
+  hosts:         'M2 2h20v8H2zM2 14h20v8H2zM6 6h.01M6 18h.01',
+  security:      'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  threats:       'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01',
+  audit:         'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8',
+  'dns-analytics':'M18 20V10M12 20V4M6 20v-6',
+  insights:      'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z',
+  actions:       'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+  alerts:        'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0',
+  'threat-lookup':'M11 17.25a6.25 6.25 0 1 1 0-12.5 6.25 6.25 0 0 1 0 12.5zM16 16l4.5 4.5',
+  search:        'M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0',
+};
+function NavIcon({id,size=16}){
+  const d=NAV_ICONS[id];
+  if(!d) return null;
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,display:'block'}} aria-hidden="true"><path d={d}/></svg>;
+}
 const SECTIONS=[
   {id:'overview',      icon:'◉', label:'Overview',       tip:'Health tiles + per-domain status at a glance. Drag widgets to reorder.'},
   {id:'triage',        icon:'△', label:'Triage',          tip:'Consolidated view of all critical &amp; warning issues across every domain.'},
@@ -2770,7 +2798,7 @@ function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
   });
   const allCols=[
     {key:'name',label:'Name',fixed:true,render:s=><span style={{fontWeight:500}} title={s.name!==s.addr?s.name:undefined}>{s.name!==s.addr?s.name:<span style={{color:'var(--gray-600)'}}>—</span>}</span>},
-    {key:'addr',label:'Network',mono:true,size:11,sortVal:s=>s.addr,csv:s=>`${s.addr}/${s.cidr}`,render:s=>(<span style={{color:'var(--gray-200)'}} title={`${s.addr}/${s.cidr}`}>{s.addr}/{s.cidr}<button className="copy-btn" onClick={()=>copyToClip(s.addr)} title="Copy IP">⎘</button></span>)},
+    {key:'addr',label:'Network',mono:true,size:11,sortVal:s=>s.addr,csv:s=>`${s.addr}/${s.cidr}`,render:s=>(<span style={{color:'var(--gray-200)'}} title={`${s.addr}/${s.cidr}`}>{s.addr}/{s.cidr}<button className="copy-btn" tabIndex={0} onClick={()=>copyToClip(s.addr)} title="Copy IP">⎘</button></span>)},
     ...(hasSite?[{key:'site',label:'Site',size:11,render:s=><span style={{color:'var(--gray-400)'}}>{s.site}</span>}]:[]),
     {key:'usedtotal',label:'Used / Total',mono:true,size:11,sortVal:s=>s.used,csv:s=>`${s.used}/${s.total}`,render:s=>`${s.used} / ${s.total}`},
     {key:'util',label:'Utilization',sortVal:s=>s.util,render:s=>(<div style={{display:'flex',alignItems:'center',gap:8}}><div className="bar-track"><div className="bar-fill" style={{width:`${s.util}%`,background:utilColor(s.util)}}/></div><span style={{fontSize:11,fontWeight:700,color:utilColor(s.util)}}>{s.util}%</span></div>)},
@@ -3675,7 +3703,7 @@ function App({vault, onVaultChange}={}) {
               <button key={s.id} className={`nav-item${section===s.id?' active':''}`}
                 data-tip={s.tip} data-tip-dir="right"
                 onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>
-                <span className="nav-icon">{s.icon}</span>{s.label}{badge}
+                <span className="nav-icon"><NavIcon id={s.id}/></span>{s.label}{badge}
                 {firingHere&&<span className="badge-pill" title="Alert firing for this section">!</span>}
               </button>
             );
@@ -3801,23 +3829,19 @@ function App({vault, onVaultChange}={}) {
             </div>
           </div>
         </div>
-        {demoMode&&!demoBannerDismissed&&(
-          <div className="demo-banner" role="status">
-            <span className="demo-banner-ico" aria-hidden="true">◆</span>
-            <span><b>Demo mode active</b> — test/allow-all policies hidden, threat-intel feeds prioritized.</span>
-            <button className="n-x" style={{marginLeft:'auto'}} aria-label="Dismiss demo banner" onClick={()=>setDemoBannerDismissed(true)}>×</button>
-          </div>
-        )}
-        {section!=='triage'&&!triagePromptDismissed&&(critSubs.length+errHosts.length)>0&&(
-          <button className="triage-pill" onClick={()=>setSection('triage')}>
-            <span className="triage-pill-dot" aria-hidden="true"/>
-            <b>{critSubs.length+errHosts.length} critical</b> — view triage →
-            <span className="triage-pill-x" role="button" aria-label="Dismiss" onClick={e=>{e.stopPropagation();setTriagePromptDismissed(true);}}>×</span>
-          </button>
-        )}
         {/* ── unified notice rail (one vocabulary; severity-sorted; collapses past 2) ── */}
         {(()=>{
           const notices=[];
+          if(demoMode&&!demoBannerDismissed) notices.push({
+            id:'demo-mode', sev:'n-info', ico:'i',
+            msg:<><b>Demo mode active</b> — test/allow-all policies hidden, threat-intel feeds prioritized.</>,
+            acts:<button className="n-x" aria-label="Dismiss demo banner" onClick={()=>setDemoBannerDismissed(true)}>×</button>,
+          });
+          if(section!=='triage'&&!triagePromptDismissed&&(critSubs.length+errHosts.length)>0) notices.push({
+            id:'triage-crit', sev:'n-red', ico:'!',
+            msg:<><b>{critSubs.length+errHosts.length} critical issue{(critSubs.length+errHosts.length)>1?'s':''}</b> — {critSubs.length>0?`${critSubs.length} subnet${critSubs.length>1?'s':''} over capacity`:''}{ critSubs.length>0&&errHosts.length>0?', ':''}{ errHosts.length>0?`${errHosts.length} host${errHosts.length>1?'s':''} offline`:''}</>,
+            acts:<><button className="n-btn" onClick={()=>setSection('triage')}>View triage</button><button className="n-x" aria-label="Dismiss" onClick={()=>setTriagePromptDismissed(true)}>×</button></>,
+          });
           if(firingAlerts.length>0&&!alertsDismissed&&!isAcked('alerts')) notices.push({
             id:'alerts', sev:'n-red', ico:'!',
             msg:<><b>{firingAlerts.length} alert{firingAlerts.length>1?'s':''} firing</b> — {firingAlerts.slice(0,2).map(a=>`${metricLabel(a.metric)} (${a.value})`).join(', ')}{firingAlerts.length>2?`, +${firingAlerts.length-2} more`:''}</>,
@@ -3829,9 +3853,9 @@ function App({vault, onVaultChange}={}) {
             acts:<button className="n-x" aria-label="Dismiss demo notice" onClick={()=>{setDemoDismiss(true);LS.set('noc.demoDismiss',true);}}>×</button>,
           });
           if(sq) notices.push({
-            id:'filter', sev:'n-info', ico:'i',
-            msg:<>Filtering: "<b>{searchQuery}</b>" — results narrowed in all sections</>,
-            acts:<button className="n-btn" onClick={()=>setSearchQuery('')}>Clear</button>,
+            id:'filter', sev:'n-amber', ico:'!',
+            msg:<><b>Filter active:</b> "{searchQuery}" — all sections narrowed. <b>Clear to see full data.</b></>,
+            acts:<button className="n-btn" onClick={()=>{setSearchQuery('');setQueryMode('ask');}}>Clear filter</button>,
           });
           if(critSubs.length>0&&!isAcked('dhcp-crit')) notices.push({
             id:'dhcp-crit', sev:'n-red', ico:'!',
@@ -4162,10 +4186,10 @@ function App({vault, onVaultChange}={}) {
                 <span style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center',fontSize:10,color:'var(--gray-400)'}}>
                   Thresholds:
                   <label style={{color:'var(--sev-amber-t)'}}>warn <input type="number" min="1" max="99" value={dhcpWarn}
-                    onChange={e=>{const v=Math.max(1,Math.min(99,+e.target.value||0));setDhcpWarn(v);LS.set('noc.dhcpWarn',v);}}
+                    onChange={e=>{const v=Math.max(1,Math.min(dhcpCrit-1,+e.target.value||0));setDhcpWarn(v);LS.set('noc.dhcpWarn',v);}}
                     style={{width:46,background:'var(--surface-3)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',padding:'2px 4px',fontSize:10}}/>%</label>
                   <label style={{color:'var(--sev-red-t)'}}>crit <input type="number" min="1" max="100" value={dhcpCrit}
-                    onChange={e=>{const v=Math.max(1,Math.min(100,+e.target.value||0));setDhcpCrit(v);LS.set('noc.dhcpCrit',v);}}
+                    onChange={e=>{const v=Math.max(dhcpWarn+1,Math.min(100,+e.target.value||0));setDhcpCrit(v);LS.set('noc.dhcpCrit',v);}}
                     style={{width:46,background:'var(--surface-3)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',padding:'2px 4px',fontSize:10}}/>%</label>
                 </span>
               </div>
@@ -4248,7 +4272,7 @@ function App({vault, onVaultChange}={}) {
                 })()}
               </div>
               <div className="card">
-                <div className="card-title"><div className="dot"/>Top NXDOMAINs</div>
+                <div className="card-title"><div className="dot"/>DNS Zones — Empty Records</div>
                 <NXProxy zones={s_zones}/>
               </div>
             </div>

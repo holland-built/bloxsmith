@@ -890,12 +890,12 @@ class FrontendStructureTests(unittest.TestCase):
 
     # ── query assistant ───────────────────────────────────────────────────────
 
-    def test_no_filter_mode_toggle(self):
-        # mode-btn toggle removed — only CSS definition should remain, not the button renders
+    def test_filter_mode_toggle_rendered(self):
+        # mode-btn toggle now rendered in chat-head (P1 fix: was dead UI, now wired)
         import re
         btn_renders = re.findall(r'<button[^>]*mode-btn', self.html)
-        self.assertEqual(len(btn_renders), 0,
-                         f"Filter mode toggle buttons still present: {btn_renders}")
+        self.assertGreater(len(btn_renders), 0,
+                           "Filter mode toggle buttons missing from ChatPanel header")
 
     def test_query_panel_useful_placeholder(self):
         self.assertContains("who is sending the most queries")
@@ -1159,7 +1159,7 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("console.warn", "localStorage write failure not logged")
 
     def test_mock_fallback_server_unavailable_hint(self):
-        self.assertContains("Server unavailable", "No server-unavailable hint in mock fallback")
+        self.assertContains("temporarily unavailable", "No server-unavailable hint in mock fallback")
 
     def test_static_files_set_at_module_level(self):
         with open(SERVER, encoding="utf-8") as f:
