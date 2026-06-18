@@ -385,7 +385,7 @@ body.chat-open{padding-right:340px}
 .refresh-pause[aria-pressed="true"]{color:var(--sev-amber-t);border-color:var(--badge-amber-bd);background:var(--badge-amber-bg)}
 .chip-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .chip{padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--gray-400);font-size:10px;font-weight:600;cursor:pointer;transition:background .12s,border-color .12s,color .12s,transform .08s}
-.chip:active{transform:scale(.96)}
+.chip:active,.suggestion-chip:active{transform:scale(.96)}
 .chip.on{background:var(--surface-3);color:var(--teal);border-color:var(--teal)}
 .shortcut-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:500;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .shortcut-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px 28px;min-width:280px;cursor:default}
@@ -611,7 +611,7 @@ tr:hover .copy-btn{opacity:1}
 @media(max-width:1100px){[data-wall="on"] .bento{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .wall-span-btn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--gray-400);font-size:10px;line-height:1;padding:2px 5px;cursor:pointer;margin-left:4px}
 .wall-span-btn:hover{color:var(--teal);border-color:var(--teal)}
-.wall-clock{margin-left:18px;font-family:monospace;font-size:20px;font-weight:700;color:var(--gray-200);font-variant-numeric:tabular-nums;letter-spacing:.04em;white-space:nowrap}
+.wall-clock{margin-left:18px;font-family:monospace;font-size:20px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:.04em;white-space:nowrap}
 .tile-spark{display:block;margin-top:4px;color:var(--gray-400);opacity:.65}
 .sec-changed{margin-left:8px;font-size:10px;color:var(--gray-400)}
 .demo-banner{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:8px 12px;border:1px solid var(--amber);border-radius:6px;background:rgba(245,158,11,.10);color:var(--gray-200);font-size:12px}
@@ -3101,6 +3101,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   const [confirmRm,setConfirmRm]=useState(null);    // tenant id pending delete-confirm
   const [editTenant,setEditTenant]=useState(null);  // connection whose key is being replaced
   const [testing,setTesting]=useState(false);
+  const [locking,setLocking]=useState(false);
   const [switchingKey,setSwitchingKey]=useState(null);   // tenant id being activated
   const tenants=vault.tenants||[];
   const active=tenants.find(t=>t.id===vault.active);
@@ -3206,8 +3207,8 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               <span className="menu-lbl">AI provider</span>
               <span className="menu-desc">LLM for the query box (vault-wide)</span>
             </button>
-            <button className="menu-item" onClick={async()=>{await vpost('/api/vault/lock',{});window.location.reload();}}>
-              <span className="menu-lbl">Lock vault</span>
+            <button className="menu-item" disabled={locking} onClick={async()=>{setLocking(true);await vpost('/api/vault/lock',{});window.location.reload();}}>
+              <span className="menu-lbl">{locking?'Locking…':'Lock vault'}</span>
               <span className="menu-desc">Hide your saved keys behind the passphrase. Use when you step away</span>
             </button>
             </>)}
@@ -3900,7 +3901,7 @@ function App({vault, onVaultChange}={}) {
           });
           if(sq) notices.push({
             id:'filter', sev:'n-amber', ico:'!',
-            msg:<><b>Filter active:</b> "{searchQuery}" — all sections narrowed. <b>Clear to see full data.</b></>,
+            msg:<><b>Filter active:</b> "{searchQuery}" — visible dashboard sections narrowed. <b>Clear to see full data.</b></>,
             acts:<button className="n-btn" onClick={()=>{setSearchQuery('');setQueryMode('ask');}}>Clear filter</button>,
           });
           if(critSubs.length>0&&!isAcked('dhcp-crit')) notices.push({
