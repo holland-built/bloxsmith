@@ -2914,7 +2914,7 @@ function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
     ...(hasSite?[{key:'site',label:'Site',size:11,render:s=><span style={{color:'var(--gray-400)'}}>{s.site}</span>}]:[]),
     {key:'usedtotal',label:'Used / Total',mono:true,size:11,sortVal:s=>s.used,csv:s=>`${s.used}/${s.total}`,render:s=>`${s.used} / ${s.total}`},
     {key:'util',label:'Utilization',sortVal:s=>s.util,render:s=>(<div style={{display:'flex',alignItems:'center',gap:8}}><div className="bar-track"><div className="bar-fill" style={{width:`${s.util}%`,background:utilColor(s.util)}}/></div><span style={{fontSize:11,fontWeight:700,color:utilColor(s.util)}}>{s.util}%</span></div>)},
-    {key:'leases',label:'DHCP Leases',size:11,sortVal:s=>leaseCt[s.id]||0,render:s=><span style={{color:'var(--gray-400)'}}>{(leaseCt[s.id]||0).toLocaleString()}</span>},
+    {key:'leases',label:'DHCP Leases',size:11,sortVal:s=>leaseCt[s.name]||0,render:s=><span style={{color:'var(--gray-400)'}}>{(leaseCt[s.name]||0).toLocaleString()}</span>},
   ];
   const ctl=useColumns('ipam',allCols);
   return <DataTable ctl={ctl} rows={rows} defaultRows={rowLimit} rowKey={s=>s.id} initialSort={{key:'util',dir:'desc'}} exportName="subnets" persistId="ipam" onRowClick={onDrill?s=>onDrill({type:'subnet',data:s}):undefined}/>;
@@ -3755,7 +3755,7 @@ function App({vault, onVaultChange}={}) {
   const sq = (queryMode==='filter'&&searchQuery) ? searchQuery.toLowerCase() : '';
   const s_subnets  = sq ? subnets.filter(s=>[s.name,s.addr,s.site].some(v=>v.toLowerCase().includes(sq)))  : subnets;
   const s_leases   = (sq ? leases.filter(l=>[l.addr,l.host,l.subnet].some(v=>(v||'').toLowerCase().includes(sq))) : leases)
-    .filter(l=>!dhcpSubFilt || l.subnet_id===dhcpSubFilt);
+    .filter(l=>!dhcpSubFilt || l.subnet===dhcpSubFilt);
   const s_zones    = sq ? zones.filter(z=>[z.fqdn,z.view].some(v=>v.toLowerCase().includes(sq)))           : zones;
   const s_hosts    = sq ? hosts.filter(h=>[h.name,h.ip,h.type,h.status].some(v=>v.toLowerCase().includes(sq))) : hosts;
   const s_policies = sq ? secPolicies.filter(p=>[p.name,p.action].some(v=>v.toLowerCase().includes(sq)))   : secPolicies;
@@ -3768,7 +3768,7 @@ function App({vault, onVaultChange}={}) {
   const onlineH   = hosts.filter(h=>h.status==='online');
   const ttlBad    = zones.filter(z=>z.anomaly);
   const activeF   = feeds.filter(f=>f.active);
-  const leaseCt   = leases.reduce((a,l)=>{a[l.subnet_id]=(a[l.subnet_id]||0)+1;return a},{});
+  const leaseCt   = leases.reduce((a,l)=>{if(l.subnet){a[l.subnet]=(a[l.subnet]||0)+1;}return a},{});
   const filtHosts = (hostFilt||hostChip) ? s_hosts.filter(h=>h.status===(hostFilt||hostChip)) : s_hosts;
   const hostSeen  = LS.get('noc.hostSeen',{});
   const firingAlerts = evalAlerts(data, alertRules).filter(a=>a.firing);
@@ -4373,12 +4373,12 @@ function App({vault, onVaultChange}={}) {
               <div className="card-title">
                 <div className="dot"/>DHCP Leases
                 <span style={{fontWeight:400,color:'var(--gray-600)',fontSize:10}}>
-                  {dhcpSubFilt?` — ${subnets.find(s=>s.id===dhcpSubFilt)?.name||'subnet'} (${s_leases.length})`:sq?` — filtered (${s_leases.length})`:` (${s_leases.length})`}
+                  {dhcpSubFilt?` — ${dhcpSubFilt} (${s_leases.length})`:sq?` — filtered (${s_leases.length})`:` (${s_leases.length})`}
                 </span>
                 <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                   <select className="viz-sel" value={dhcpSubFilt||''} onChange={e=>setDhcpSubFilt(e.target.value||null)} aria-label="Filter leases by subnet" title="Filter by subnet" style={{maxWidth:160}}>
                     <option value="">All Subnets</option>
-                    {subnets.filter(s=>leaseCt[s.id]>0).sort((a,b)=>a.name.localeCompare(b.name)).map(s=><option key={s.id} value={s.id}>{s.name} ({s.addr}/{s.cidr})</option>)}
+                    {subnets.filter(s=>leaseCt[s.name]>0).sort((a,b)=>a.name.localeCompare(b.name)).map(s=><option key={s.id} value={s.name}>{s.name} ({s.addr}/{s.cidr})</option>)}
                   </select>
                   {dhcpSubFilt&&<button className="drill-close" onClick={()=>setDhcpSubFilt(null)} aria-label="Clear subnet filter" title="Clear filter">×</button>}
                 </div>
