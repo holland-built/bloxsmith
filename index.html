@@ -3300,14 +3300,24 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
 
 const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['raw','Raw']];
 
+function VizSelect({id, def='table', opts=VIZ_OPTS, getViz, setViz}) {
+  return (
+    <select className="viz-sel" value={getViz(id,def)} onChange={e=>setViz(id,e.target.value)}
+      onMouseDown={e=>e.stopPropagation()} title="Change visualization" aria-label="Change visualization type">
+      {opts.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+    </select>
+  );
+}
+
 function App({vault, onVaultChange}={}) {
   const [data,setData]         = useState(null);
   const [loading,setLoading]   = useState(true);
   const [refreshing,setRefreshing] = useState(false);
   const [lastUpd,setLastUpd]   = useState(null);
   const [section,setSection]   = useState('overview');
-  const [hostFilt,setHostFilt] = useState(null);
-  const [subFilt,setSubFilt]   = useState(null);
+  const [hostFilt,setHostFilt]       = useState(null);
+  const [subFilt,setSubFilt]         = useState(null);
+  const [dhcpSubFilt,setDhcpSubFilt] = useState(null);
   const [chatOpen,setChatOpen]       = useState(false);
   const [queryMode,setQueryMode]     = useState('ask');
   const [searchQuery,setSearchQuery] = useState('');
@@ -3455,13 +3465,6 @@ function App({vault, onVaultChange}={}) {
       {wallMode&&<button className="wall-span-btn" title="Cycle width: 1 / 2 / full" data-tip="Cycle widget width: 1 column → 2 columns → full width" onClick={()=>cycleSpan(id)}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>}
     </>
   );
-  const VizSelect = ({id, def='table', opts=VIZ_OPTS}) => (
-    <select className="viz-sel" value={getViz(id,def)} onChange={e=>setViz(id,e.target.value)}
-      onMouseDown={e=>e.stopPropagation()} title="Change visualization" aria-label="Change visualization type">
-      {opts.map(([v,l])=><option key={v} value={v}>{l}</option>)}
-    </select>
-  );
-
   const load = useCallback(async (bustCache=false)=>{
     // Show stale data immediately so UI isn't blank
     if(!data) {
@@ -3738,7 +3741,8 @@ function App({vault, onVaultChange}={}) {
   /* search filter — only active when queryMode==='filter' and searchQuery set */
   const sq = (queryMode==='filter'&&searchQuery) ? searchQuery.toLowerCase() : '';
   const s_subnets  = sq ? subnets.filter(s=>[s.name,s.addr,s.site].some(v=>v.toLowerCase().includes(sq)))  : subnets;
-  const s_leases   = sq ? leases.filter(l=>[l.addr,l.host,l.subnet].some(v=>v.toLowerCase().includes(sq))) : leases;
+  const s_leases   = (sq ? leases.filter(l=>[l.addr,l.host,l.subnet].some(v=>(v||'').toLowerCase().includes(sq))) : leases)
+    .filter(l=>!dhcpSubFilt || l.subnet_id===dhcpSubFilt);
   const s_zones    = sq ? zones.filter(z=>[z.fqdn,z.view].some(v=>v.toLowerCase().includes(sq)))           : zones;
   const s_hosts    = sq ? hosts.filter(h=>[h.name,h.ip,h.type,h.status].some(v=>v.toLowerCase().includes(sq))) : hosts;
   const s_policies = sq ? secPolicies.filter(p=>[p.name,p.action].some(v=>v.toLowerCase().includes(sq)))   : secPolicies;
@@ -4106,7 +4110,7 @@ function App({vault, onVaultChange}={}) {
                       <DragHandle id="hosts"/>
                       <div className="dot"/>Host Status Distribution
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="hosts" def="donut" opts={[['donut','Donut'],['table','Table'],['bar','Bar'],['raw','Raw']]}/>
+                        <VizSelect id="hosts" def="donut" opts={[['donut','Donut'],['table','Table'],['bar','Bar'],['raw','Raw']]} getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('hosts')} title={collapsed['hosts']?'Expand':'Collapse'} aria-label={collapsed['hosts']?'Expand Hosts widget':'Collapse Hosts widget'} data-tip={collapsed['hosts']?'Expand this section':'Collapse this section to save space'}>{collapsed['hosts']?'▶':'▼'}</button>
                         <button className="fs-btn" onClick={()=>toggleFs('hosts')} title="Fullscreen" aria-label="Fullscreen Hosts widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
@@ -4151,7 +4155,7 @@ function App({vault, onVaultChange}={}) {
                       <DragHandle id="subnets"/>
                       <div className="dot"/>Top Subnets by DHCP Utilization
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="subnets" def="subnetbars" opts={[['subnetbars','Bars'],['table','Table'],['line','Line'],['raw','Raw']]}/>
+                        <VizSelect id="subnets" def="subnetbars" opts={[['subnetbars','Bars'],['table','Table'],['line','Line'],['raw','Raw']]} getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('subnets')} title={collapsed['subnets']?'Expand':'Collapse'} aria-label={collapsed['subnets']?'Expand IPAM / Subnets widget':'Collapse IPAM / Subnets widget'} data-tip={collapsed['subnets']?'Expand this section':'Collapse this section to save space'}>{collapsed['subnets']?'▶':'▼'}</button>
                         <button className="fs-btn" onClick={()=>toggleFs('subnets')} title="Fullscreen" aria-label="Fullscreen IPAM / Subnets widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
@@ -4212,7 +4216,7 @@ function App({vault, onVaultChange}={}) {
                       <DragHandle id="ttl"/>
                       <div className="dot" style={{background:'var(--amber)'}}/>Zones with TTL Issues
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="ttl"/>
+                        <VizSelect id="ttl" getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('ttl')} title={collapsed['ttl']?'Expand':'Collapse'} aria-label={collapsed['ttl']?'Expand DNS Zones widget':'Collapse DNS Zones widget'} data-tip={collapsed['ttl']?'Expand this section':'Collapse this section to save space'}>{collapsed['ttl']?'▶':'▼'}</button>
                         <button className="fs-btn" onClick={()=>toggleFs('ttl')} title="Fullscreen" aria-label="Fullscreen DNS Zones widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
@@ -4232,7 +4236,7 @@ function App({vault, onVaultChange}={}) {
                       <DragHandle id="audit"/>
                       <div className="dot"/>Recent Audit Activity
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="audit"/>
+                        <VizSelect id="audit" getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('audit')} title={collapsed['audit']?'Expand':'Collapse'} aria-label={collapsed['audit']?'Expand Audit Logs widget':'Collapse Audit Logs widget'} data-tip={collapsed['audit']?'Expand this section':'Collapse this section to save space'}>{collapsed['audit']?'▶':'▼'}</button>
                         <button className="fs-btn" onClick={()=>toggleFs('audit')} title="Fullscreen" aria-label="Fullscreen Audit Logs widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
@@ -4256,7 +4260,7 @@ function App({vault, onVaultChange}={}) {
                       <DragHandle id="pols"/>
                       <div className="dot" style={{background:'var(--gray-400)'}}/>Security Policies
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="pols" def="panel" opts={[['panel','Panel'],['table','Table'],['bar','Bar'],['raw','Raw']]}/>
+                        <VizSelect id="pols" def="panel" opts={[['panel','Panel'],['table','Table'],['bar','Bar'],['raw','Raw']]} getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('pols')} title={collapsed['pols']?'Expand':'Collapse'} aria-label={collapsed['pols']?'Expand Policies widget':'Collapse Policies widget'} data-tip={collapsed['pols']?'Expand this section':'Collapse this section to save space'}>{collapsed['pols']?'▶':'▼'}</button>
                         <button className="fs-btn" onClick={()=>toggleFs('pols')} title="Fullscreen" aria-label="Fullscreen Policies widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
@@ -4276,7 +4280,7 @@ function App({vault, onVaultChange}={}) {
                       <DragHandle id="feeds"/>
                       <div className="dot" style={{background:'var(--red)'}}/>Top Threat Feeds by Severity
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="feeds"/>
+                        <VizSelect id="feeds" getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('feeds')} title={collapsed['feeds']?'Expand':'Collapse'} aria-label={collapsed['feeds']?'Expand Threat Feeds widget':'Collapse Threat Feeds widget'} data-tip={collapsed['feeds']?'Expand this section':'Collapse this section to save space'}>{collapsed['feeds']?'▶':'▼'}</button>
                         <button className="fs-btn" onClick={()=>toggleFs('feeds')} title="Fullscreen" aria-label="Fullscreen Threat Feeds widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
                       </div>
@@ -4353,7 +4357,19 @@ function App({vault, onVaultChange}={}) {
               ))}
             </div>
             <div className="card">
-              <div className="card-title"><div className="dot"/>DHCP Leases{sq?` — filtered (${s_leases.length})`:` (showing ${rl('dhcp')} of ${s_leases.length})`}</div>
+              <div className="card-title">
+                <div className="dot"/>DHCP Leases
+                <span style={{fontWeight:400,color:'var(--gray-600)',fontSize:10}}>
+                  {dhcpSubFilt?` — ${subnets.find(s=>s.id===dhcpSubFilt)?.name||'subnet'} (${s_leases.length})`:sq?` — filtered (${s_leases.length})`:` (${s_leases.length})`}
+                </span>
+                <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+                  <select className="viz-sel" value={dhcpSubFilt||''} onChange={e=>setDhcpSubFilt(e.target.value||null)} aria-label="Filter leases by subnet" title="Filter by subnet" style={{maxWidth:160}}>
+                    <option value="">All Subnets</option>
+                    {subnets.filter(s=>leaseCt[s.id]>0).sort((a,b)=>a.name.localeCompare(b.name)).map(s=><option key={s.id} value={s.id}>{s.name} ({s.addr}/{s.cidr})</option>)}
+                  </select>
+                  {dhcpSubFilt&&<button className="drill-close" onClick={()=>setDhcpSubFilt(null)} aria-label="Clear subnet filter" title="Clear filter">×</button>}
+                </div>
+              </div>
               <RowLimitBar limit={rl('dhcp')} setLimit={v=>setRl('dhcp',v)}/>
               <DhcpTable leases={s_leases} rowLimit={rl('dhcp')} onDrill={setDrillEntity}/>
             </div>
