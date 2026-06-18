@@ -3225,7 +3225,15 @@ function App({vault, onVaultChange}={}) {
   const [updStatus, setUpdStatus]     = useState({});
   const [updStart, setUpdStart]     = useState(0);                // Date.now() when update kicked off
   const [updInfo, setUpdInfo]       = useState(()=>(vault&&vault.update)||null);
-  const [rbInfo, setRbInfo]         = useState(()=>LS.get('noc.updRollback', null));
+  const [rbInfo, setRbInfo]         = useState(()=>{
+    const rb = LS.get('noc.updRollback', null);
+    if(!rb) return null;
+    // Auto-clear stale badge: if current version is already newer than the failed target
+    const cur = (vault&&vault.update&&vault.update.current)||'';
+    const ver = v => { const m=String(v).match(/(\d+)$/); return m?parseInt(m[1],10):-1; };
+    if(cur && ver(cur) >= ver(rb.to||'')){ LS.set('noc.updRollback',null); return null; }
+    return rb;
+  });
   const prevFiringRef               = useRef(new Set());
   const [accounts, setAccounts]     = useState([]);
   const [activeAcct, setActiveAcct] = useState('');   // CSP account id
