@@ -3616,7 +3616,7 @@ function App({vault, onVaultChange}={}) {
           if(s.instance_id){if(firstId===null){firstId=s.instance_id;}else if(s.instance_id!==firstId){setUpdDone(true);setUpdApplying(false);setTimeout(()=>location.reload(),2000);return;}}
           setUpdPhase(s.phase||'prepulling');
           setUpdStatus(s);
-          if(s.phase==='live'){ setUpdDone(true); setUpdApplying(false); setTimeout(()=>location.reload(),3000); return; }
+          if(s.phase==='live'){ setUpdDone(true); setUpdApplying(false); setRbInfo(null); LS.set('noc.updRollback',null); fetch('/api/update/rollback-clear',{method:'POST'}).catch(()=>{}); setTimeout(()=>location.reload(),3000); return; }
           if(s.phase==='rolledback'){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); const rb={from:s.rollback_from, to:s.rollback_to}; setRbInfo(rb); LS.set('noc.updRollback', rb); return; }
           if(s.phase==='error'){ stopped=true; setUpdApplying(false); setUpdPhase(''); setUpdStart(0); toast('Update failed: '+(s.error||'unknown'),'err'); return; }
           setTimeout(poll,1500);
