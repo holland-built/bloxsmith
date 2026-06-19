@@ -167,7 +167,7 @@ body.chat-open{padding-right:340px}
 .g3-2{display:grid;grid-template-columns:minmax(200px,1fr) minmax(350px,2fr);gap:14px}
 @media(max-width:900px){.g3-2{grid-template-columns:1fr}}
 .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
-.kpi-val{font-family:var(--font-mono);font-size:clamp(22px,2.6vw,34px);font-weight:400;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.1;letter-spacing:-.01em;margin-bottom:6px}
+.kpi-val{font-family:var(--font-mono);font-size:28px;font-weight:400;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.1;letter-spacing:-.01em;margin-bottom:6px}
 .kpi-val.crit{color:var(--red);font-weight:700}
 .kpi-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .kpi-delta{font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:4px}
@@ -244,6 +244,7 @@ body.chat-open{padding-right:340px}
 .stile-cat{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-400);font-weight:600}
 .stile-st{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px}
 .stile-big{font-size:clamp(22px,2.2vw,32px);font-weight:400;font-variant-numeric:tabular-nums;font-family:var(--font-mono);line-height:1.1;letter-spacing:-.01em}
+.stiles{display:none!important}
 .stile-desc{font-size:11px;color:var(--gray-400)}
 .stile-of{font-size:13px;font-weight:600;color:var(--gray-500)}
 .stile-track{height:4px;background:var(--surface-3);border-radius:2px;margin-top:auto}
@@ -4109,7 +4110,7 @@ function App({vault, onVaultChange}={}) {
               <span className="nav-breadcrumb">DNS<span>·</span>DHCP<span>·</span>IPAM Overview</span>
             </div>
             <div style={{minWidth:0}}>
-              <h1 className="page-title">{SECTIONS.find(s=>s.id===section)?.label}</h1>
+              <h1 className="page-title" style={{display:'none'}}>{SECTIONS.find(s=>s.id===section)?.label}</h1>
               <div className="page-sub" style={{display:'flex',alignItems:'center'}}>
                 {refreshing?'Refreshing…':'Live data'}<FreshnessPill lastUpd={lastUpd}/>
                 {(()=>{ const k=SEC_DELTA_KEY[section]; const ts=k&&LS.get('noc.secChanged',{})[k]; return ts?<span className="sec-changed" title={fmtTs(ts)}>· changed {timeAgo(ts)}</span>:null; })()}
@@ -4233,7 +4234,7 @@ function App({vault, onVaultChange}={}) {
                 {v:zones.length, l:'DNS Zones', delta:`${ttlBad.length} TTL anomalies`, sev:ttlBad.length>0?'warn':null},
               ].map((k,i)=>(
                 <div key={i} className={`card${k.sev==='crit'?' crit-state':k.sev==='warn'?' warn-state':' dim'}`}>
-                  <div className={`kpi-val${k.sev?' '+k.sev:''}`}>{k.v}</div>
+                  <div className="kpi-val" style={i===2&&k.sev?{color:k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--ink)'}:{}}>{k.v}</div>
                   <div className="kpi-lbl">{k.l}</div>
                   <div className="kpi-delta">→ {k.delta}</div>
                 </div>
