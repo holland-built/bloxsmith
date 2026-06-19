@@ -4751,55 +4751,40 @@ function App({vault, onVaultChange}={}) {
                 <div className="card" style={{padding:12,overflowX:'auto'}}>
                   <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:400}}>
                     {/* header row */}
-                    <div style={{display:'grid',gridTemplateColumns:'200px 60px 1fr 60px',gap:8,paddingBottom:6,borderBottom:'1px solid var(--border)'}}>
+                    <div style={{display:'grid',gridTemplateColumns:'220px 55px 1fr 70px 70px',gap:8,paddingBottom:6,borderBottom:'1px solid var(--border)'}}>
                       <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em'}}>Subnet</span>
                       <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'center'}}>Util</span>
-                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em'}}>Hosts</span>
-                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>Count</span>
+                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em'}}>Utilization</span>
+                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>Used / Total</span>
+                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>Leases</span>
                     </div>
-                    {s_subnets.filter(s=>s.util>=75).sort((a,b)=>b.util-a.util).slice(0,12).map((s,i)=>{
+                    {s_subnets.filter(s=>s.util>=75).sort((a,b)=>b.util-a.util).slice(0,15).map((s,i)=>{
                       const clr=s.util>=90?'var(--red)':s.util>=75?'var(--amber)':'var(--green)';
-                      const pfx=ipPrefix(s.addr);
-                      const subHosts=hosts.filter(h=>ipPrefix(h.ip)===pfx);
                       const isScoped=scopeSubnet===s.id;
+                      const leases=leaseCt&&(leaseCt[s.name]||leaseCt[s.addr]||0);
                       return (
                         <div key={s.id||i}
                           onClick={()=>setScopeSubnet(isScoped?null:s.id)}
-                          style={{display:'grid',gridTemplateColumns:'200px 60px 1fr 60px',gap:8,alignItems:'center',
+                          style={{display:'grid',gridTemplateColumns:'220px 55px 1fr 70px 70px',gap:8,alignItems:'center',
                             cursor:'pointer',padding:'4px 6px',borderRadius:3,
                             background:isScoped?'rgba(88,166,255,.08)':'transparent',
                             border:isScoped?'1px solid rgba(88,166,255,.3)':'1px solid transparent'}}>
-                          {/* subnet label */}
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:clr,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}
-                            title={`${s.name||s.addr}/${s.cidr} · ${s.util}%`}>
+                            title={`${s.name||s.addr}/${s.cidr} · site: ${s.site||'–'}`}>
                             {s.util>=90?'█':'▲'} {s.addr}/{s.cidr}
                           </span>
-                          {/* util pct */}
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:clr,textAlign:'center'}}>{s.util}%</span>
-                          {/* host pill row */}
-                          <div style={{display:'flex',flexWrap:'wrap',gap:3}}>
-                            {subHosts.slice(0,8).map((h,j)=>{
-                              const hClr=h.status==='online'||h.status==='active'?'var(--green)':h.status==='error'||h.status==='offline'?'var(--red)':'var(--amber)';
-                              return (
-                                <span key={h.id||j}
-                                  style={{fontSize:9,fontFamily:'var(--font-mono)',color:hClr,
-                                    border:'1px solid currentColor',borderRadius:2,padding:'0 4px',opacity:.8}}
-                                  title={`${h.name||h.ip} · ${h.status||'?'}`}>
-                                  {h.name||h.ip}
-                                </span>
-                              );
-                            })}
-                            {subHosts.length>8&&<span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>+{subHosts.length-8}</span>}
-                            {subHosts.length===0&&<span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>no hosts matched</span>}
+                          <div style={{height:5,background:'var(--surface-3)',borderRadius:3}}>
+                            <div style={{width:`${Math.min(s.util,100)}%`,height:'100%',background:clr,borderRadius:3}}/>
                           </div>
-                          {/* host count */}
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',textAlign:'right'}}>{subHosts.length}</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)',textAlign:'right'}}>{s.used||0} / {s.total||0}</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:leases>0?'var(--teal)':'var(--muted)',textAlign:'right'}}>{leases}</span>
                         </div>
                       );
                     })}
                   </div>
                   <div style={{marginTop:8,fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>
-                    Showing {Math.min(12,s_subnets.filter(s=>s.util>=75).length)} of {s_subnets.filter(s=>s.util>=75).length} at-risk subnets · host match by /24 prefix
+                    Showing {Math.min(15,s_subnets.filter(s=>s.util>=75).length)} of {s_subnets.filter(s=>s.util>=75).length} at-risk subnets · click to scope
                   </div>
                 </div>
               </div>
