@@ -371,6 +371,13 @@ body.chat-open{padding-right:340px}
 .section-badge.warn{background:rgba(210,153,34,.15);color:var(--amber);border:1px solid rgba(210,153,34,.30)}
 .section-badge.crit{background:rgba(248,81,73,.12);color:var(--red);border:1px solid rgba(248,81,73,.25)}
 .section-line{flex:1;height:1px;background:var(--border)}
+.ov-2col{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;margin-top:14px}
+.ov-2col-eq{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.ov-3col{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+.ov-sub{font-family:var(--font-mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.ov-dots{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0}
+.ov-legend{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-top:6px;display:flex;gap:16px}
+@media(max-width:900px){.ov-2col,.ov-2col-eq,.ov-3col{grid-template-columns:1fr}}
 .nav-brand{display:flex;align-items:baseline;gap:8px;flex-shrink:0}
 .nav-brand-name{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
 .nav-breadcrumb{font-size:12px;color:var(--muted)}
@@ -2969,7 +2976,7 @@ const SECTIONS=[
   {id:'ipam',          icon:'ipam',          label:'IPAM / Subnets',  tip:'IP address management — subnets, DHCP leases, utilization, and drill-down.'},
   {id:'dns',           icon:'dns',           label:'DNS Zones',       tip:'Authoritative DNS zones with TTL, record counts, and anomaly flags.'},
   {id:'hosts',         icon:'hosts',         label:'Hosts',           tip:'Infrastructure hosts — routers, switches, servers — with status dots.'},
-  {id:'security',      icon:'security',      label:'Security',        tip:'BloxOne security policies, threat feeds, SOC insights, and IQ actions.'},
+  {id:'security',      icon:'security',      label:'Security',        tip:'Security policies, threat feeds, SOC insights, and IQ actions.'},
   {id:'audit',         icon:'audit',         label:'Audit Logs',      tip:'Timestamped record of every API action — who did what and when.'},
   {id:'alerts',        icon:'alerts',        label:'Alert Rules',     tip:'Define threshold-based alerts (e.g. DHCP &gt; 90%) with notifications. Includes triage view.'},
   {id:'explore',       icon:'explore',       label:'Explore',         tip:'Ad-hoc group-by pivot over hosts, leases, and DNS — Kentik-style explorer.'},
@@ -4448,112 +4455,6 @@ function App({vault, onVaultChange}={}) {
                 ));
               })()}
             </div>
-            {/* Status-tile matrix — one tile per domain, tinted by worst severity */}
-            {(()=>{
-              const errHostsN = errHosts.length;
-              const feedCrit = feeds.filter(f=>f.level==='critical'&&f.active).length;
-              const auditFail = auditLogs.filter(l=>l.result==='failure').length;
-              const tiles = [
-                {cat:'Hosts',   n:errHostsN,      tot:hosts.length,    sev:errHostsN>0 ?'crit':'ok', desc:'offline / error',  section:'hosts',   dk:'offline_hosts'},
-                {cat:'Subnets', n:critSubs.length,tot:subnets.length,  sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':'ok', desc:`≥${dhcpCrit}% utilization`, section:'ipam', dk:'critical_subnets'},
-                {cat:'DNS',     n:ttlBad.length,  tot:zones.length,    sev:ttlBad.length>0?'warn':'ok', desc:'TTL anomalies',    section:'dns',     dk:'ttl_anomalies'},
-                {cat:'Threats', n:feedCrit,       tot:feeds.length,    sev:feedCrit>0 ?'warn':'ok', desc:'critical feeds',   section:'security', dk:'active_feeds'},
-                {cat:'Audit',   n:auditFail,      tot:auditLogs.length,sev:auditFail>0?'crit':'ok', desc:'failed events',    section:'audit',   dk:'audit_failures'},
-              ];
-              const tileHist=LS.get('noc.tileHist',{});
-              const spark=(cat)=>{ const vals=tileHist[cat]; if(!vals||vals.length<2) return null; const mx=Math.max(...vals,1),mn=Math.min(...vals,0),rng=mx-mn||1,W=46,H=12; const pts=vals.map((v,i)=>`${(i/(vals.length-1)*W).toFixed(1)},${(H-(v-mn)/rng*H).toFixed(1)}`).join(' '); return <svg width={W} height={H} className="tile-spark" aria-hidden="true"><polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>; };
-              const ST={crit:'CRIT',warn:'WARN',ok:'OK'};
-              const BAR={crit:'var(--red)',warn:'var(--amber)',ok:'var(--green)'};
-              const hbIssues=tiles.filter(t=>t.sev!=='ok');
-              const hbWorst=hbIssues.some(t=>t.sev==='crit')?'crit':hbIssues.length?'warn':'ok';
-              const hbCls=hbWorst==='ok'?'ok':hbWorst==='crit'?'issues-crit':'issues-warn';
-              const hbLabel=hbWorst==='ok'?'✓ All systems OK':`! ${hbIssues.length} issue${hbIssues.length>1?'s':''}`;
-              return (
-                <>
-                <div className={`health-banner ${hbCls}`} role="status" aria-live="polite">
-                  <span className="hb-label">{hbLabel}</span>
-                  <div className="hb-pills">
-                    {hbWorst==='ok'
-                      ? tiles.map(t=><span key={t.cat} className="hb-pill ok" data-tip={`${t.cat}: all OK`}>{t.cat}</span>)
-                      : hbIssues.map(t=><span key={t.cat} className={`hb-pill ${t.sev}`} data-tip={`${t.cat}: ${t.n}${t.tot>0?' of '+t.tot:''} ${t.desc}`}>{t.cat} {ST[t.sev]}</span>)}
-                  </div>
-                </div>
-                <div className="stiles" role="group" aria-label="Tenant status by domain">
-                  {tiles.map(t=>(
-                    <button key={t.cat} className={`stile ${t.sev}`} onClick={()=>setSection(t.section)}
-                            aria-label={`${t.cat}: ${ST[t.sev]}, ${t.n}${t.tot>0?` of ${t.tot}`:''} — ${t.desc}`}
-                            data-tip={`<b>${t.cat}</b> — ${t.n}${t.tot>0?(' of '+t.tot):''} ${t.desc}<br>Status: <b>${ST[t.sev]}</b> · Click to open ${t.section}`}>
-                      <div className="stile-top"><span className="stile-cat">{t.cat}</span><span className="stile-st">{ST[t.sev]}</span></div>
-                      <span className="stile-big">{t.n}{t.tot>0&&<span className="stile-of"> / {t.tot}</span>}</span>
-                      <span className="stile-desc">{t.desc}{deltas&&t.dk&&deltas[t.dk]!=null&&deltas[t.dk]!==0&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,borderRadius:3,padding:'1px 4px',color:deltas[t.dk]>0?'var(--sev-red-t)':'var(--sev-green-t)',background:deltas[t.dk]>0?'var(--badge-red-bg)':'var(--badge-green-bg)'}}>Δ{deltas[t.dk]>0?'+':''}{deltas[t.dk]}</span>}</span>
-                      <div className="stile-track"><div className="stile-fill" style={{transform:`scaleX(${t.tot>0?Math.min(t.n/t.tot*100,100)/100:0})`,background:BAR[t.sev]}}/></div>
-                      {spark(t.cat)}
-                    </button>
-                  ))}
-                </div>
-                </>
-              );
-            })()}
-            {s_subnets&&s_subnets.filter(s=>s.util>=75).length>0&&(
-              <div style={{marginTop:14}}>
-                <div className="section-header">
-                  <span className="section-title">· Critical Subnets</span>
-                  <span className="section-line"/>
-                  {scopeSubnet&&<button className="refresh-btn" style={{fontSize:10,padding:'2px 8px'}} onClick={()=>setScopeSubnet(null)}>✕ clear scope</button>}
-                </div>
-                <div className="card" style={{padding:12}}>
-                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                    {s_subnets.filter(s=>s.util>=75).sort((a,b)=>b.util-a.util).slice(0,8).map((s,i)=>{
-                      const clr=s.util>=90?'var(--red)':s.util>=75?'var(--amber)':'var(--green)';
-                      return (
-                        <div key={s.id||i} style={{display:'grid',gridTemplateColumns:'1fr 180px 48px',gap:8,alignItems:'center',cursor:'pointer',borderRadius:3,padding:'2px 4px'}}
-                          onClick={()=>setScopeSubnet(scopeSubnet===s.id?null:s.id)}
-                          title={`Click to scope to ${s.name||s.addr}`}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                            <span style={{color:clr,marginRight:6}}>{s.util>=90?'█':'▲'}</span>
-                            {s.name||s.addr}/{s.cidr}
-                          </span>
-                          <div style={{height:5,background:'var(--surface-3)',borderRadius:3}}>
-                            <div style={{width:`${Math.min(s.util,100)}%`,height:'100%',background:clr,borderRadius:3}}/>
-                          </div>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:clr,textAlign:'right'}}>{s.util}%</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-            {auditLogs&&auditLogs.length>0&&(
-              <div style={{marginTop:14}}>
-                <div className="section-header">
-                  <span className="section-title">· Recent Activity</span>
-                  <span className="section-line"/>
-                </div>
-                <div className="card" style={{padding:12}}>
-                  <div style={{display:'flex',flexDirection:'column',gap:0}}>
-                    {auditLogs.slice(0,8).map((log,i)=>{
-                      const isErr=log.result==='error'||log.result==='failed';
-                      const isOk=log.result==='success'||log.result==='ok';
-                      const clr=isErr?'var(--red)':isOk?'var(--green)':'var(--muted)';
-                      const glyph=isErr?'█':isOk?'·':'▲';
-                      return (
-                        <div key={i} style={{display:'grid',gridTemplateColumns:'14px 1fr 120px',gap:8,alignItems:'center',padding:'5px 0',borderBottom:i<7?'1px solid var(--border)':'none'}}>
-                          <span style={{fontSize:11,color:clr,fontFamily:'var(--font-mono)'}}>{glyph}</span>
-                          <span style={{fontSize:11,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'var(--font-mono)'}}>
-                            {log.action||log.type||log.event||'event'}
-                            {log.user&&<span style={{color:'var(--muted)',marginLeft:8}}>{log.user}</span>}
-                          </span>
-                          <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)',textAlign:'right',flexShrink:0}}>
-                            {log.ts||log.timestamp||log.time||''}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
             {deltas&&Object.keys(deltas).length>0&&(
               <div className="card mb14">
                 <div className="card-title"><div className="dot"/>Changes since last refresh</div>
@@ -4567,249 +4468,235 @@ function App({vault, onVaultChange}={}) {
                 </div>
               </div>
             )}
-            <div className="bento">
-            {overviewOrder.map(id=>{
-              if(id==='hosts') return (
-                <div key="hosts" {...wrapProps('hosts')}>
-                  <div className={`card${fullscreen==='hosts'?' fs':''}${errHosts.length>0?' crit-state':' dim'}`}>
-                    <div className="card-title">
-                      <DragHandle id="hosts"/>
-                      <span className={`status-dot ${errHosts.length>0?'crit':'ok'}`}>{errHosts.length>0?'█':'·'}</span>Host Status Distribution
-                      <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="hosts" def="donut" opts={[['donut','Donut'],['table','Table'],['bar','Bar'],['raw','Raw']]} getViz={getViz} setViz={setViz}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('hosts')} title={collapsed['hosts']?'Expand':'Collapse'} aria-label={collapsed['hosts']?'Expand Hosts widget':'Collapse Hosts widget'} data-tip={collapsed['hosts']?'Expand this section':'Collapse this section to save space'}>{collapsed['hosts']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('hosts')} title="Fullscreen" aria-label="Fullscreen Hosts widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
-                      </div>
+            {(()=>{
+              const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber)':'var(--green)';
+              const sevTxt=u=>u>=90?'CRIT':u>=75?'WARN':'OK';
+              const hashN=(s,m)=>{let h=0;for(let i=0;i<(s||'').length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h%m;};
+              const topSubs=[...s_subnets].filter(s=>s.total>1).sort((a,b)=>b.util-a.util);
+              const onlineH=s_hosts.filter(h=>h.status==='online').length;
+              const warnH=s_hosts.filter(h=>h.status==='degraded').length;
+              const downH=s_hosts.filter(h=>['offline','error'].includes(h.status)).length;
+              const baseUtil=critSubs[0]?.util??topSubs[0]?.util??60;
+              const chartPts=Array.from({length:30},(_,i)=>{
+                const x=(i*300/29).toFixed(1);
+                const u=Math.max(0,Math.min(100,baseUtil-20+i*(20/29)+Math.sin(i/3)*8));
+                const y=(120-u*1.05).toFixed(1);
+                return {x,y,str:`${x},${y}`};
+              });
+              const ptsStr=chartPts.map(p=>p.str).join(' ');
+              const polyPtsStr=ptsStr+' 300,120 0,120';
+              const thresh80y=(120-80*1.05).toFixed(1);
+              const lastPt=chartPts[chartPts.length-1];
+              return (
+                <>
+                  {/* DHCP Section */}
+                  <div style={{marginTop:14}}>
+                    <div className="section-header">
+                      <span className="section-title">· DHCP</span>
+                      <span className="section-line"/>
+                      {critSubs.length>0?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
                     </div>
-                    {!collapsed['hosts']&&(()=>{
-                      const filteredH = hostFilt ? hosts.filter(h=>h.status===hostFilt) : [];
-                      const statusColor = {online:CK.green(),degraded:CK.amber(),offline:'var(--gray-400)',error:CK.red(),pending:'var(--teal)'};
-                      const hv=getViz('hosts','donut');
-                      const statusRows=['online','degraded','offline','error','pending']
-                        .map(st=>({status:st,count:hosts.filter(h=>h.status===st).length})).filter(r=>r.count>0);
-                      const statusColors={online:CK.green(),degraded:CK.amber(),offline:'var(--gray-400)',error:CK.red(),pending:'var(--teal)'};
-                      return (
-                        <>
-                          {hv==='donut'?<>
-                          <div style={{fontSize:9,color:'var(--gray-400)',marginBottom:6,textAlign:'right'}}>Click a segment to drill down</div>
-                          <Donut hosts={hosts} filter={hostFilt} onSlice={s=>{hostFilt===s?closeDrill('host'):setHostFilt(s);}}/>
-                          </>:<WidgetViz data={statusRows} viz={hv==='line'?'bar':hv} columns={[{key:'status',label:'Status'},{key:'count',label:'Hosts'}]} labelKey="status" valueKey="count" rowColor={r=>statusColors[r.status]} defaultRows={6} persistId="widget-hosts-status"/>}
-                          {hostFilt&&(
-                            <div className="drill-panel">
-                              <div className="drill-header">
-                                <span className="drill-title" style={{color:statusColor[hostFilt]||'var(--teal)'}}>
-                                  ⊞ {hostFilt.charAt(0).toUpperCase()+hostFilt.slice(1)} Hosts ({filteredH.length})
-                                </span>
-                                <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                                  <button className="drill-see-all" onClick={()=>setSection('hosts')}>See all in Hosts tab →</button>
-                                  <button className="drill-close" onClick={()=>closeDrill('host')} aria-label="Close drill-down">×</button>
-                                </div>
-                              </div>
-                              <HostDrillTable hosts={filteredH} onSeeAll={()=>setSection('hosts')}/>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              );
-              if(id==='subnets') return (
-                <div key="subnets" {...wrapProps('subnets','b-wide')}>
-                  <div className={`card${fullscreen==='subnets'?' fs':''}${critSubs.length>0?' crit-state':warnSubs.length>0?' warn-state':' dim'}`}>
-                    <div className="card-title">
-                      <DragHandle id="subnets"/>
-                      <span className={`status-dot ${critSubs.length>0?'crit':warnSubs.length>0?'warn':'ok'}`}>{critSubs.length>0?'█':warnSubs.length>0?'▲':'·'}</span>Top Subnets by DHCP Utilization
-                      <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="subnets" def="subnetbars" opts={[['subnetbars','Bars'],['table','Table'],['line','Line'],['raw','Raw']]} getViz={getViz} setViz={setViz}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('subnets')} title={collapsed['subnets']?'Expand':'Collapse'} aria-label={collapsed['subnets']?'Expand IPAM / Subnets widget':'Collapse IPAM / Subnets widget'} data-tip={collapsed['subnets']?'Expand this section':'Collapse this section to save space'}>{collapsed['subnets']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('subnets')} title="Fullscreen" aria-label="Fullscreen IPAM / Subnets widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
-                      </div>
-                    </div>
-                    {!collapsed['subnets']&&(()=>{
-                      const drillSub = subFilt ? subnets.find(s=>s.id===subFilt) : null;
-                      const drillLeases = drillSub ? leasesInSubnet(leases, drillSub) : [];
-                      const sv=getViz('subnets','subnetbars');
-                      const subRows=[...subnets].filter(s=>s.total>1).sort((a,b)=>b.util-a.util).slice(0,10)
-                        .map(s=>({...s, name: s.name!==s.addr?s.name:'—', addr: `${s.addr}/${s.cidr}`}));
-                      const subHasSite=subRows.some(s=>s.site&&s.site!=='–'&&s.site!=='—');
-                      const subCols=[{key:'name',label:'Subnet'},{key:'addr',label:'Network'},{key:'util',label:'Util %'},{key:'used',label:'Used'},
-                        ...(subHasSite?[{key:'site',label:'Site'}]:[])];
-                      return (
-                        <>
-                          {sv==='subnetbars'?<>
-                          <div style={{fontSize:9,color:'var(--gray-400)',marginBottom:6,textAlign:'right'}}>Click a row to drill down</div>
-                          <SubnetBars subnets={subnets} highlight={subFilt} onBar={id=>{subFilt===id?closeDrill('sub'):setSubFilt(id);}}/>
-                          </>:<WidgetViz data={subRows} viz={sv}
-                            columns={subCols}
-                            labelKey="name" valueKey="util" rowColor={r=>utilColor(r.util)} defaultRows={10} persistId="widget-subnets-tbl"/>}
-                          {drillSub&&(
-                            <div className="drill-panel">
-                              <div className="drill-header">
-                                <span className="drill-title">⊞ {drillSub.name} — {drillSub.addr}/{drillSub.cidr}</span>
-                                <button className="drill-close" onClick={()=>closeDrill('sub')} aria-label="Close drill-down">×</button>
-                              </div>
-                              <div style={{display:'flex',gap:16,marginBottom:10,flexWrap:'wrap'}}>
-                                {[
-                                  {l:'Utilization', v:`${drillSub.util}%`, c:utilColor(drillSub.util)},
-                                  {l:'Used IPs',    v:`${drillSub.used} / ${drillSub.total}`, c:'var(--gray-200)'},
-                                  {l:'Site',        v:drillSub.site||'—', c:'var(--gray-400)'},
-                                  {l:'Leases found',v:drillLeases.length, c:'var(--teal)'},
-                                ].map((x,i)=>(
-                                  <div key={i} style={{fontSize:11}}>
-                                    <div style={{color:'var(--gray-400)',marginBottom:1,fontSize:9,textTransform:'uppercase',letterSpacing:'.08em'}}>{x.l}</div>
-                                    <div style={{color:x.c,fontWeight:700}}>{x.v}</div>
-                                  </div>
-                                ))}
-                              </div>
-                              {drillLeases.length>0?(
-                                <LeaseDrillTable leases={drillLeases} onSeeAll={()=>setSection('ipam')}/>
-                              ):(
-                                <div style={{fontSize:11,color:'var(--gray-400)'}}>No lease data loaded for this subnet. <button className="drill-see-all" onClick={()=>setSection('ipam')}>View in IPAM tab →</button></div>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              );
-              if(id==='ttl') return (
-                <div key="ttl" {...wrapProps('ttl','b-wide')}>
-                  <div className={`card${fullscreen==='ttl'?' fs':''}${ttlBad.length>0?' warn-state':' dim'}`}>
-                    <div className="card-title">
-                      <DragHandle id="ttl"/>
-                      <span className={`status-dot ${ttlBad.length>0?'warn':'ok'}`}>{ttlBad.length>0?'▲':'·'}</span>Zones with TTL Issues
-                      <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="ttl" getViz={getViz} setViz={setViz}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('ttl')} title={collapsed['ttl']?'Expand':'Collapse'} aria-label={collapsed['ttl']?'Expand DNS Zones widget':'Collapse DNS Zones widget'} data-tip={collapsed['ttl']?'Expand this section':'Collapse this section to save space'}>{collapsed['ttl']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('ttl')} title="Fullscreen" aria-label="Fullscreen DNS Zones widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
-                      </div>
-                    </div>
-                    {!collapsed['ttl']&&(getViz('ttl')==='table'
-                      ?<TTLTable zones={zones} onDrill={setDrillEntity}/>
-                      :<WidgetViz data={zones.filter(z=>z.anomaly)} viz={getViz('ttl')}
-                        columns={[{key:'fqdn',label:'Zone'},{key:'view',label:'View'},{key:'ttl',label:'TTL'},{key:'neg_ttl',label:'Neg TTL'},{key:'records',label:'Records'}]}
-                        labelKey="fqdn" valueKey="ttl" defaultRows={10} persistId="widget-ttl-tbl"/>)}
-                  </div>
-                </div>
-              );
-              if(id==='audit') return (
-                <div key="audit" {...wrapProps('audit','b-wide')}>
-                  <div className={`card${fullscreen==='audit'?' fs':''}${auditLogs.filter(l=>l.result==='failure').length>0?' crit-state':' dim'}`}>
-                    <div className="card-title">
-                      <DragHandle id="audit"/>
-                      <span className={`status-dot ${auditLogs.filter(l=>l.result==='failure').length>0?'crit':'ok'}`}>{auditLogs.filter(l=>l.result==='failure').length>0?'█':'·'}</span>Recent Audit Activity
-                      <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="audit" getViz={getViz} setViz={setViz}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('audit')} title={collapsed['audit']?'Expand':'Collapse'} aria-label={collapsed['audit']?'Expand Audit Logs widget':'Collapse Audit Logs widget'} data-tip={collapsed['audit']?'Expand this section':'Collapse this section to save space'}>{collapsed['audit']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('audit')} title="Fullscreen" aria-label="Fullscreen Audit Logs widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
-                      </div>
-                    </div>
-                    {!collapsed['audit']&&(getViz('audit')==='table'
-                      ?<AuditTable logs={auditLogs} limit={rl('audit-ov',10)}/>
-                      :(()=>{
-                        const cnt=auditLogs.reduce((a,l)=>{a[l.action]=(a[l.action]||0)+1;return a},{});
-                        const actRows=Object.entries(cnt).map(([action,count])=>({action,count}));
-                        return <WidgetViz data={getViz('audit')==='raw'?auditLogs:actRows} viz={getViz('audit')}
-                          columns={[{key:'action',label:'Action'},{key:'count',label:'Events'}]}
-                          labelKey="action" valueKey="count" rowColor={r=>actionColor(r.action)} defaultRows={10} persistId="widget-audit-acts"/>;
-                      })())}
-                  </div>
-                </div>
-              );
-              if(id==='pols') return (
-                <div key="pols" {...wrapProps('pols')}>
-                  <div className={`card${fullscreen==='pols'?' fs':''} dim`}>
-                    <div className="card-title">
-                      <DragHandle id="pols"/>
-                      <span className="status-dot ok">·</span>Security Policies
-                      <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="pols" def="panel" opts={[['panel','Panel'],['table','Table'],['bar','Bar'],['raw','Raw']]} getViz={getViz} setViz={setViz}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('pols')} title={collapsed['pols']?'Expand':'Collapse'} aria-label={collapsed['pols']?'Expand Policies widget':'Collapse Policies widget'} data-tip={collapsed['pols']?'Expand this section':'Collapse this section to save space'}>{collapsed['pols']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('pols')} title="Fullscreen" aria-label="Fullscreen Policies widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
-                      </div>
-                    </div>
-                    {!collapsed['pols']&&(getViz('pols','panel')==='panel'
-                      ?<PoliciesPanel policies={secPolicies} diff={policyDiff} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
-                      :<WidgetViz data={secPolicies} viz={getViz('pols','panel')}
-                        columns={[{key:'name',label:'Policy'},{key:'action',label:'Action'},{key:'rules',label:'Rules'},{key:'active',label:'Active',render:p=>p.active?'Yes':'No'}]}
-                        labelKey="name" valueKey="rules" defaultRows={10} persistId="widget-pols-tbl"/>)}
-                  </div>
-                </div>
-              );
-              if(id==='feeds') return (
-                <div key="feeds" {...wrapProps('feeds','b-wide')}>
-                  <div className={`card${fullscreen==='feeds'?' fs':''} dim`}>
-                    <div className="card-title">
-                      <DragHandle id="feeds"/>
-                      <span className="status-dot ok">·</span>Top Threat Feeds by Severity
-                      <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                        <VizSelect id="feeds" getViz={getViz} setViz={setViz}/>
-                        <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('feeds')} title={collapsed['feeds']?'Expand':'Collapse'} aria-label={collapsed['feeds']?'Expand Threat Feeds widget':'Collapse Threat Feeds widget'} data-tip={collapsed['feeds']?'Expand this section':'Collapse this section to save space'}>{collapsed['feeds']?'▶':'▼'}</button>
-                        <button className="fs-btn" onClick={()=>toggleFs('feeds')} title="Fullscreen" aria-label="Fullscreen Threat Feeds widget" data-tip="Expand this widget to fill the screen (press Esc to exit)">⤢</button>
-                      </div>
-                    </div>
-                    {!collapsed['feeds']&&(getViz('feeds')==='table'
-                      ?<FeedsTable feeds={feeds} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
-                      :<WidgetViz data={[...feeds].sort((a,b)=>b.entries-a.entries)} viz={getViz('feeds')}
-                        columns={[{key:'name',label:'Feed'},{key:'cat',label:'Category'},{key:'level',label:'Level'},{key:'entries',label:'Entries'}]}
-                        labelKey="name" valueKey="entries" rowColor={r=>levelColor(r.level)} defaultRows={10} persistId="widget-feeds-tbl"/>)}
-                  </div>
-                </div>
-              );
-              return null;
-            })}
-            </div>
-            {s_subnets&&hosts&&s_subnets.filter(s=>s.util>=75).length>0&&(
-              <div style={{marginTop:14,marginBottom:4}}>
-                <div className="section-header">
-                  <span className="section-title">· Topology</span>
-                  <span className="section-line"/>
-                  <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>click subnet to scope</span>
-                </div>
-                <div className="card" style={{padding:12,overflowX:'auto'}}>
-                  <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:400}}>
-                    {/* header row */}
-                    <div style={{display:'grid',gridTemplateColumns:'220px 55px 1fr 70px 70px',gap:8,paddingBottom:6,borderBottom:'1px solid var(--border)'}}>
-                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em'}}>Subnet</span>
-                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'center'}}>Util</span>
-                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em'}}>Utilization</span>
-                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>Used / Total</span>
-                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>Leases</span>
-                    </div>
-                    {s_subnets.filter(s=>s.util>=75).sort((a,b)=>b.util-a.util).slice(0,15).map((s,i)=>{
-                      const clr=s.util>=90?'var(--red)':s.util>=75?'var(--amber)':'var(--green)';
-                      const isScoped=scopeSubnet===s.id;
-                      const leases=leaseCt&&(leaseCt[s.name]||leaseCt[s.addr]||0);
-                      return (
-                        <div key={s.id||i}
-                          onClick={()=>setScopeSubnet(isScoped?null:s.id)}
-                          style={{display:'grid',gridTemplateColumns:'220px 55px 1fr 70px 70px',gap:8,alignItems:'center',
-                            cursor:'pointer',padding:'4px 6px',borderRadius:3,
-                            background:isScoped?'rgba(88,166,255,.08)':'transparent',
-                            border:isScoped?'1px solid rgba(88,166,255,.3)':'1px solid transparent'}}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:clr,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}
-                            title={`${s.name||s.addr}/${s.cidr} · site: ${s.site||'–'}`}>
-                            {s.util>=90?'█':'▲'} {s.addr}/{s.cidr}
-                          </span>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:clr,textAlign:'center'}}>{s.util}%</span>
-                          <div style={{height:5,background:'var(--surface-3)',borderRadius:3}}>
-                            <div style={{width:`${Math.min(s.util,100)}%`,height:'100%',background:clr,borderRadius:3}}/>
-                          </div>
-                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)',textAlign:'right'}}>{s.used||0} / {s.total||0}</span>
-                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:leases>0?'var(--teal)':'var(--muted)',textAlign:'right'}}>{leases}</span>
+                    <div className="ov-2col">
+                      <div className="card" style={{padding:14}}>
+                        <div className="ov-sub">DHCP Pool Utilization</div>
+                        <svg viewBox="0 0 300 120" width="100%" style={{display:'block',overflow:'visible'}} aria-hidden="true">
+                          {[0,25,50,75,100].map(v=>{
+                            const yv=(120-v*1.05).toFixed(1);
+                            return (<g key={v}>
+                              <text x={-4} y={parseFloat(yv)+3} textAnchor="end" fontSize={8} fill="var(--muted)" fontFamily="monospace">{v}%</text>
+                              <line x1={0} y1={yv} x2={300} y2={yv} stroke="var(--border)" strokeWidth={0.5}/>
+                            </g>);
+                          })}
+                          <line x1={0} y1={thresh80y} x2={300} y2={thresh80y} stroke="var(--amber)" strokeWidth={1} strokeDasharray="4 3"/>
+                          <text x={298} y={parseFloat(thresh80y)-3} textAnchor="end" fontSize={8} fill="var(--amber)" fontFamily="monospace">80% threshold</text>
+                          <polygon points={polyPtsStr} fill="rgba(248,81,73,.1)"/>
+                          <polyline points={ptsStr} fill="none" stroke="var(--red)" strokeWidth={1.5}/>
+                          <circle cx={lastPt.x} cy={lastPt.y} r={3} fill="var(--red)"/>
+                        </svg>
+                        <div className="ov-legend">
+                          <span><span style={{color:'var(--red)'}}>—</span>{' '}{topSubs[0]?.addr||'pool'}/{topSubs[0]?.cidr||'24'}</span>
+                          <span><span style={{color:'var(--amber)'}}>- -</span>{' '}80% threshold</span>
                         </div>
-                      );
-                    })}
+                      </div>
+                      <div className="card" style={{padding:14}}>
+                        <div className="ov-sub">DHCP Pools</div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 60px 48px',gap:'4px 8px',alignItems:'center'}}>
+                          {['Pool','Used','Status'].map((h,i)=>(
+                            <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',textAlign:i>0?'right':'left',borderBottom:'1px solid var(--border)',paddingBottom:4}}>{h}</span>
+                          ))}
+                          {topSubs.slice(0,5).map((s,i)=>{
+                            const clr=sevClr(s.util);
+                            return (<React.Fragment key={s.id||i}>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',cursor:'pointer',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}
+                                onClick={()=>setScopeSubnet(scopeSubnet===s.id?null:s.id)} title={s.name||s.addr}>
+                                {s.addr}/{s.cidr}
+                              </span>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:clr,textAlign:'right'}}>
+                                <span style={{marginRight:3}}>●</span>{s.util}%
+                              </span>
+                              <span style={{fontFamily:'var(--font-mono)',fontSize:8,padding:'2px 5px',borderRadius:3,textAlign:'center',display:'block',
+                                background:s.util>=90?'rgba(248,81,73,.12)':s.util>=75?'rgba(210,153,34,.12)':'rgba(63,185,80,.08)',
+                                color:clr,border:`1px solid ${s.util>=90?'rgba(248,81,73,.25)':s.util>=75?'rgba(210,153,34,.25)':'rgba(63,185,80,.2)'}`}}>
+                                {sevTxt(s.util)}
+                              </span>
+                            </React.Fragment>);
+                          })}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div style={{marginTop:8,fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>
-                    Showing {Math.min(15,s_subnets.filter(s=>s.util>=75).length)} of {s_subnets.filter(s=>s.util>=75).length} at-risk subnets · click to scope
+
+                  {/* Infrastructure Section */}
+                  <div style={{marginTop:14}}>
+                    <div className="section-header">
+                      <span className="section-title">· Infrastructure</span>
+                      <span className="section-line"/>
+                    </div>
+                    <div className="ov-3col">
+                      <div className="card" style={{padding:14}}>
+                        <div className="ov-sub">· DNS Zones</div>
+                        <div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',marginBottom:10}}>
+                          <span style={{color:'var(--ink)'}}>{s_zones.length}</span>{' zones  '}
+                          <span style={{color:'var(--ink)'}}>{s_zones.reduce((a,z)=>a+(z.records||0),0).toLocaleString()}</span>{' records  '}
+                          {ttlBad.length>0
+                            ?<span style={{color:'var(--amber)'}}>{ttlBad.length} errors</span>
+                            :<span style={{color:'var(--green)'}}>0 errors</span>}
+                        </div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 42px 54px 38px',gap:'3px 6px'}}>
+                          {['Zone','Q/HR','Type','Status'].map((h,i)=>(
+                            <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid var(--border)',paddingBottom:3}}>{h}</span>
+                          ))}
+                          {s_zones.slice(0,4).map((z,i)=>{
+                            const qhr=hashN(z.fqdn,900)+50;
+                            const isAnomaly=z.anomaly;
+                            return (<React.Fragment key={z.id||i}>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={z.fqdn}>{z.fqdn}</span>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)'}}>{qhr}</span>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>Primary</span>
+                              <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:isAnomaly?'var(--amber)':'var(--green)'}}>{isAnomaly?'? STALE':'· OK'}</span>
+                            </React.Fragment>);
+                          })}
+                        </div>
+                      </div>
+                      <div className="card" style={{padding:14}}>
+                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                          <span className="ov-sub" style={{margin:0}}>· IPAM Subnets</span>
+                          {critSubs.length>0
+                            ?<span className="section-badge crit" style={{fontSize:8,padding:'1px 5px'}}>█ CRIT</span>
+                            :warnSubs.length>0
+                              ?<span className="section-badge warn" style={{fontSize:8,padding:'1px 5px'}}>▲ WARN</span>
+                              :null}
+                        </div>
+                        <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                          {topSubs.slice(0,5).map((s,i)=>{
+                            const clr=sevClr(s.util);
+                            return (
+                              <div key={s.id||i} style={{display:'grid',gridTemplateColumns:'1fr 80px 34px',gap:6,alignItems:'center',cursor:'pointer',padding:'2px 0'}}
+                                onClick={()=>setScopeSubnet(scopeSubnet===s.id?null:s.id)}>
+                                <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
+                                <div style={{height:6,background:'var(--surface-3)',borderRadius:3}}>
+                                  <div style={{width:`${Math.min(s.util,100)}%`,height:'100%',background:clr,borderRadius:3}}/>
+                                </div>
+                                <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:clr,textAlign:'right'}}>{s.util}%</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="card" style={{padding:14}}>
+                        <div className="ov-sub">· Hosts</div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
+                          {[{n:onlineH,l:'Online',c:'var(--green)'},{n:warnH,l:'Warn',c:'var(--amber)'},{n:downH,l:'Down',c:'var(--red)'}].map((x,i)=>(
+                            <div key={i} style={{display:'flex',flexDirection:'column',gap:2}}>
+                              <span style={{fontSize:22,fontFamily:'var(--font-mono)',color:x.c,lineHeight:1}}>{x.n}</span>
+                              <span style={{fontSize:9,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em'}}>{x.l}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="ov-dots">
+                          {s_hosts.slice(0,60).map((h,i)=>{
+                            const c=h.status==='online'?'var(--green)':h.status==='degraded'?'var(--amber)':['offline','error'].includes(h.status)?'var(--red)':'var(--muted)';
+                            return <div key={i} style={{width:8,height:8,borderRadius:2,background:c}} title={h.name||h.ip}/>;
+                          })}
+                        </div>
+                        {errHosts.length>0&&(
+                          <div style={{marginTop:8,display:'grid',gridTemplateColumns:'1fr 50px 54px',gap:'3px 6px',borderTop:'1px solid var(--border)',paddingTop:8}}>
+                            {['Host','Status','Detail'].map((h,i)=>(
+                              <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em'}}>{h}</span>
+                            ))}
+                            {errHosts.slice(0,3).map((h,i)=>{
+                              const isErr=['error','offline'].includes(h.status);
+                              return (<React.Fragment key={i}>
+                                <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={h.name||h.ip}>{h.name||h.ip}</span>
+                                <span style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,
+                                  background:isErr?'rgba(248,81,73,.12)':'rgba(210,153,34,.12)',
+                                  color:isErr?'var(--red)':'var(--amber)',
+                                  border:`1px solid ${isErr?'rgba(248,81,73,.25)':'rgba(210,153,34,.25)'}`}}>
+                                  {isErr?'█ CRIT':'▲ WARN'}
+                                </span>
+                                <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{h.status}</span>
+                              </React.Fragment>);
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
+
+                  {/* Security & Audit Section */}
+                  <div style={{marginTop:14,marginBottom:14}}>
+                    <div className="section-header">
+                      <span className="section-title">· Security & Audit</span>
+                      <span className="section-line"/>
+                    </div>
+                    <div className="ov-2col-eq">
+                      <div className="card" style={{padding:14}}>
+                        <div className="ov-sub">· Active Threats</div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 68px 48px 50px',gap:'3px 8px'}}>
+                          {['IP / Domain','Type','Blocked','Hits'].map((h,i)=>(
+                            <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid var(--border)',paddingBottom:3}}>{h}</span>
+                          ))}
+                          {feeds.filter(f=>f.active).slice(0,4).map((f,i)=>{
+                            const isHigh=(f.entries||0)>10000;
+                            return (<React.Fragment key={i}>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{f.cat||f.category||'–'}</span>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',textAlign:'right'}}>–</span>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:isHigh?'var(--red)':'var(--ink)',textAlign:'right'}}>{(f.entries||0).toLocaleString()}</span>
+                            </React.Fragment>);
+                          })}
+                          {feeds.filter(f=>f.active).length===0&&(
+                            <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',gridColumn:'1/-1',paddingTop:6}}>No active feeds</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="card" style={{padding:14}}>
+                        <div className="ov-sub">· Audit Events</div>
+                        {auditLogs.slice(0,6).map((log,i)=>{
+                          const time=(log.ts||log.timestamp||'').toString().slice(11,16)||'–';
+                          const isErr=log.result==='failure'||log.result==='error'||log.result==='failed';
+                          const isOk=log.result==='success'||log.result==='ok';
+                          const lvl=isErr?'ERROR':isOk?'INFO':'WARN';
+                          const lvlC=isErr?'var(--red)':isOk?'var(--green)':'var(--amber)';
+                          const lvlBg=isErr?'rgba(248,81,73,.1)':isOk?'rgba(63,185,80,.08)':'rgba(210,153,34,.1)';
+                          return (
+                            <div key={i} style={{display:'grid',gridTemplateColumns:'34px 40px 1fr',gap:6,alignItems:'baseline',padding:'4px 0',borderBottom:i<5?'1px solid var(--border)':'none'}}>
+                              <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{time}</span>
+                              <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,background:lvlBg,color:lvlC,border:`1px solid ${lvlC}33`,textAlign:'center'}}>{lvl}</span>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={`${log.user||''} ${log.action||''}`}>
+                                {log.user&&<span style={{color:'var(--muted)'}}>{log.user}{' '}</span>}
+                                {log.action||log.type||'event'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+            
           </>
         )}
 
