@@ -108,7 +108,7 @@ body.chat-open{padding-right:340px}
 .nav-item.active{background:transparent;color:var(--ink);font-weight:600}
 .nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:2px;height:24px;background:var(--teal);border-radius:0 2px 2px 0}
 .nav-lbl{display:none}
-.nav-badge-wrap{position:absolute;top:6px;right:6px;font-size:10px}
+.nav-badge-wrap{position:absolute;top:3px;right:3px;font-size:9px}
 .nav-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;color:var(--gray-400);transition:color .12s;flex-shrink:0;font-size:16px}
 .nav-item:hover .nav-icon,.nav-item.active .nav-icon{color:var(--teal)}
 .sidebar-foot{display:none}
@@ -166,6 +166,11 @@ body.chat-open{padding-right:340px}
 .g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
 .g3-2{display:grid;grid-template-columns:minmax(200px,1fr) minmax(350px,2fr);gap:14px}
 @media(max-width:900px){.g3-2{grid-template-columns:1fr}}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.kpi-val{font-family:var(--font-mono);font-size:clamp(22px,2.6vw,34px);font-weight:400;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.1;letter-spacing:-.01em;margin-bottom:6px}
+.kpi-val.crit{color:var(--red);font-weight:700}
+.kpi-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.kpi-delta{font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:4px}
 .bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start}
 .bento>*{min-width:0}
 .b-wide{grid-column:span 2}
@@ -238,7 +243,7 @@ body.chat-open{padding-right:340px}
 .stile-top{display:flex;align-items:center;justify-content:space-between}
 .stile-cat{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-400);font-weight:600}
 .stile-st{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px}
-.stile-big{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;font-family:var(--font-mono);line-height:1.2}
+.stile-big{font-size:clamp(22px,2.2vw,32px);font-weight:400;font-variant-numeric:tabular-nums;font-family:var(--font-mono);line-height:1.1;letter-spacing:-.01em}
 .stile-desc{font-size:11px;color:var(--gray-400)}
 .stile-of{font-size:13px;font-weight:600;color:var(--gray-500)}
 .stile-track{height:4px;background:var(--surface-3);border-radius:2px;margin-top:auto}
@@ -357,6 +362,23 @@ body.chat-open{padding-right:340px}
 /* ── purposeful motion ─────────────────────────────────────────────── */
 @keyframes sectionIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .section-view{animation:sectionIn .18s cubic-bezier(.25,1,.5,1) both}
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;user-select:none}
+.section-title{font-family:var(--font-serif);font-size:13px;font-weight:normal;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.section-badge{font-family:var(--font-mono);font-size:10px;font-weight:500;padding:2px 7px;border-radius:3px;letter-spacing:.04em}
+.section-badge.ok{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.25)}
+.section-badge.warn{background:rgba(210,153,34,.15);color:var(--amber);border:1px solid rgba(210,153,34,.30)}
+.section-badge.crit{background:rgba(248,81,73,.12);color:var(--red);border:1px solid rgba(248,81,73,.25)}
+.section-line{flex:1;height:1px;background:var(--border)}
+.nav-brand{display:flex;align-items:baseline;gap:8px;flex-shrink:0}
+.nav-brand-name{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.nav-breadcrumb{font-size:12px;color:var(--muted)}
+.nav-breadcrumb span{margin:0 3px;opacity:.5}
+.pill-select{background:var(--surface-2);border:1px solid var(--border);border-radius:4px;color:var(--ink);font-size:12px;padding:4px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none;white-space:nowrap;transition:border-color .12s}
+.pill-select:hover{border-color:rgba(240,246,252,.20)}
+.pill-select .arrow{color:var(--muted);font-size:10px}
+.nav-icon-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:15px;border-radius:4px;position:relative;border:1px solid transparent;transition:color .12s,background .12s}
+.nav-icon-btn:hover{color:var(--ink);background:var(--surface-2);border-color:var(--border)}
+.nav-divider{width:1px;height:20px;background:var(--border)}
 @keyframes noticeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 @keyframes noticeRedGlow{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}60%{box-shadow:0 0 0 5px rgba(239,68,68,.18)}}
 @keyframes cmkdOverlayIn{from{opacity:0}to{opacity:1}}
@@ -4080,8 +4102,12 @@ function App({vault, onVaultChange}={}) {
           {refreshing?'Refreshing data':(lastUpd?`Data updated ${lastUpd.toLocaleTimeString()}`:'')}{firingAlerts.length>0?`. ${firingAlerts.length} alert${firingAlerts.length>1?'s':''} firing`:''}
         </div>
         <div className="topbar">
-          <div style={{display:'flex',alignItems:'center',minWidth:0}}>
+          <div style={{display:'flex',alignItems:'center',minWidth:0,gap:16}}>
             <button className="menu-btn" aria-label={sidebarOpen?'Close navigation':'Open navigation'} aria-expanded={sidebarOpen} aria-controls="sidebar-nav" onClick={()=>setSidebarOpen(o=>!o)}>☰</button>
+            <div className="nav-brand">
+              <span className="nav-brand-name">Infoblox NOC</span>
+              <span className="nav-breadcrumb">DNS<span>·</span>DHCP<span>·</span>IPAM Overview</span>
+            </div>
             <div style={{minWidth:0}}>
               <h1 className="page-title">{SECTIONS.find(s=>s.id===section)?.label}</h1>
               <div className="page-sub" style={{display:'flex',alignItems:'center'}}>
@@ -4093,6 +4119,8 @@ function App({vault, onVaultChange}={}) {
           </div>
           <div className="topbar-controls">
             <div className="topbar-group">
+              <div className="pill-select" data-tip="Filter by site">Site: All <span className="arrow">▾</span></div>
+              <div className="pill-select" data-tip="Auto-refresh interval">Interval: 5m <span className="arrow">▾</span></div>
               <span className="nav-clock" aria-live="off">{now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
               <RefreshControl autoRefresh={autoRefresh}
                 refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen} hoverPause={hoverPause}
@@ -4192,6 +4220,25 @@ function App({vault, onVaultChange}={}) {
         {/* ── OVERVIEW ── */}
         {section==='overview'&&(
           <>
+            <div className="section-header">
+              <span className="section-title">· Overview</span>
+              <span className="section-line"/>
+              {(errHosts.length>0||critSubs.length>0)?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0||ttlBad.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
+            </div>
+            <div className="kpi-row">
+              {[
+                {v:hosts.length, l:'Total Hosts', delta:`${errHosts.length} offline / error`, sev: errHosts.length>0?'crit':null},
+                {v:subnets.length, l:'Total Subnets', delta:`${critSubs.length} critical`, sev: critSubs.length>0?'crit':null},
+                {v:`${critSubs[0]?.util??warnSubs[0]?.util??0}%`, l:'Peak DHCP Util', delta:critSubs.length>0?`${critSubs.length} over threshold`:'within threshold', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null},
+                {v:zones.length, l:'DNS Zones', delta:`${ttlBad.length} TTL anomalies`, sev:ttlBad.length>0?'warn':null},
+              ].map((k,i)=>(
+                <div key={i} className={`card${k.sev==='crit'?' crit-state':k.sev==='warn'?' warn-state':' dim'}`}>
+                  <div className={`kpi-val${k.sev?' '+k.sev:''}`}>{k.v}</div>
+                  <div className="kpi-lbl">{k.l}</div>
+                  <div className="kpi-delta">→ {k.delta}</div>
+                </div>
+              ))}
+            </div>
             {/* Status-tile matrix — one tile per domain, tinted by worst severity */}
             {(()=>{
               const errHostsN = errHosts.length;
@@ -4456,6 +4503,12 @@ function App({vault, onVaultChange}={}) {
           const tinyCount = s_subnets.filter(s=>s.total<=1).length;
           const ipamPool = ipamShowTiny ? s_subnets : s_subnets.filter(s=>s.total>1);
           return (
+          <>
+          <div className="section-header">
+            <span className="section-title">· IPAM</span>
+            <span className="section-line"/>
+            {critSubs.length>0?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
+          </div>
           <div className="card">
             <div className="card-title"><div className="dot"/>All Subnets — DHCP Utilization ({ipamPool.length}{sq&&` of ${subnets.length}`})</div>
             <RowLimitBar limit={rl('ipam')} setLimit={v=>setRl('ipam',v)}/>
@@ -4488,12 +4541,18 @@ function App({vault, onVaultChange}={}) {
               </div>
             <IPAMTable subnets={ipamPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
           </div>
+          </>
           );
         })()}
 
         {/* ── DHCP ── */}
         {section==='dhcp'&&(
           <>
+            <div className="section-header">
+              <span className="section-title">· DHCP</span>
+              <span className="section-line"/>
+              {critSubs.length>0?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
+            </div>
             <div className="g3 mb20">
               {[
                 {v:s_leases.filter(l=>l.state==='active').length, l:'Active Leases',  c:'var(--teal)'},
@@ -4529,6 +4588,11 @@ function App({vault, onVaultChange}={}) {
         {/* ── DNS ── */}
         {section==='dns'&&(
           <>
+            <div className="section-header">
+              <span className="section-title">· DNS</span>
+              <span className="section-line"/>
+              {ttlBad.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
+            </div>
             <div className="g3 mb20">
               {[
                 {v:dnsViews.length,  l:'DNS Views',     c:'var(--teal)'},
@@ -4586,6 +4650,12 @@ function App({vault, onVaultChange}={}) {
 
         {/* ── HOSTS ── */}
         {section==='hosts'&&(
+          <>
+            <div className="section-header">
+              <span className="section-title">· Hosts</span>
+              <span className="section-line"/>
+              {errHosts.length>0?<span className="section-badge crit">█ CRIT</span>:<span className="section-badge ok">· OK</span>}
+            </div>
           <div className="g2">
             <HostBanner hosts={hosts} demoMode={demoMode}/>
             <div className="card">
@@ -4620,14 +4690,22 @@ function App({vault, onVaultChange}={}) {
                 : <HostMetricsPanel data={hostMetrics}/>}
             </div>
           </div>
+          </>
         )}
 
         {/* ── SECURITY ── */}
         {section==='security'&&(
+          <>
+            <div className="section-header">
+              <span className="section-title">· Security</span>
+              <span className="section-line"/>
+              <span className="section-badge ok">· OK</span>
+            </div>
           <div className="card">
             <div className="card-title"><div className="dot"/>Security Policies ({s_policies.length}{sq&&` of ${secPolicies.length}`})</div>
             <PoliciesPanel policies={s_policies} diff={policyDiff} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
           </div>
+          </>
         )}
 
         {/* ── THREATS ── */}
