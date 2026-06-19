@@ -381,6 +381,12 @@ body.chat-open{padding-right:340px}
 .nav-icon-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:15px;border-radius:4px;position:relative;border:1px solid transparent;transition:color .12s,background .12s}
 .nav-icon-btn:hover{color:var(--ink);background:var(--surface-2);border-color:var(--border)}
 .nav-divider{width:1px;height:20px;background:var(--border)}
+.scope-bar{display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--surface-2);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto}
+.scope-bar-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
+.scope-select{background:var(--surface-3);border:1px solid var(--border);border-radius:4px;color:var(--ink);font-size:12px;padding:3px 8px;cursor:pointer;font-family:var(--font-mono)}
+.scope-select:focus{outline:none;border-color:var(--teal)}
+.scope-clear{font-size:10px;color:var(--muted);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:3px}
+.scope-clear:hover{color:var(--ink);background:var(--surface-3)}
 @keyframes noticeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 @keyframes noticeRedGlow{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}60%{box-shadow:0 0 0 5px rgba(239,68,68,.18)}}
 @keyframes cmkdOverlayIn{from{opacity:0}to{opacity:1}}
@@ -1148,6 +1154,7 @@ function TTLTable({zones, onDrill}) {
     {key:'view',label:'View',width:'20%',render:z=><span className="badge b-teal">{z.view}</span>},
     {key:'ttl',label:'TTL',mono:true,size:11,width:'13%',sortVal:z=>z.ttl,render:z=><span style={{color:z.ttl<60||z.ttl>86400?'var(--sev-red-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.ttl}s</span>},
     {key:'neg_ttl',label:'Neg TTL',mono:true,size:11,width:'13%',sortVal:z=>z.neg_ttl,render:z=><span style={{color:z.neg_ttl>3600?'var(--sev-amber-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.neg_ttl}s</span>},
+    {key:'records',label:'Records',mono:true,size:11,sortVal:z=>z.records||0,render:z=><span style={{fontFamily:'var(--font-mono)',color:z.records===0?'var(--amber)':'var(--ink)'}}>{(z.records||0).toLocaleString()}</span>},
     {key:'issues',label:'Issues',nosort:true,width:'30%',render:z=>z.issues.map((iss,i)=>(<span key={i} className={`badge ${iss.includes('High')||iss.includes('Too High')?'b-amber':'b-red'}`} style={{marginRight:3}}>{iss}</span>))},
   ]);
   if(!bad.length) return <div className="no-data">✓ No TTL anomalies detected</div>;
@@ -1180,7 +1187,7 @@ function FeedsTable({feeds, rowLimit, demoMode, onDrill}) {
     {key:'conf',label:'Confidence',size:11,render:f=><span style={{color:f.conf==='high'?'var(--sev-green-t)':f.conf==='medium'?'var(--sev-amber-t)':'var(--gray-400)',fontWeight:700}}>{f.conf}</span>},
     {key:'entries',label:'Entries',mono:true,size:11,sortVal:f=>f.entries,render:f=>(
       <span style={{display:'flex',alignItems:'center',gap:4}}>
-        <span style={{color:'var(--gray-200)'}}>{f.entries.toLocaleString()}</span>
+        <span style={{color:'var(--gray-200)',fontFamily:'var(--font-mono)'}}>{f.entries.toLocaleString()}</span>
         {deltas[f.id]!=null&&deltas[f.id]!==0&&(
           <span style={{fontSize:9,fontWeight:700,borderRadius:3,padding:'1px 4px',
             color:deltas[f.id]>0?'var(--sev-red-t)':'var(--sev-green-t)',
@@ -2060,7 +2067,7 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
                 const type=r['NstarDnsActivity.query_type']||'?';
                 return (
                   <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:7}}>
-                    <span style={{fontSize:11,width:40,color:'var(--gray-200)',fontFamily:'monospace'}}>{type}</span>
+                    <span style={{fontSize:11,width:40,color:'var(--gray-200)',fontFamily:'var(--font-mono)'}}>{type}</span>
                     <div style={{flex:1,height:6,background:'var(--surface-3)',borderRadius:3}}>
                       <div style={{width:`${pct}%`,height:'100%',background:'var(--teal)',borderRadius:3}}/>
                     </div>
@@ -2949,6 +2956,7 @@ const NAV_ICONS={
   alerts:        'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0',
   'threat-lookup':'M11 17.25a6.25 6.25 0 1 1 0-12.5 6.25 6.25 0 0 1 0 12.5zM16 16l4.5 4.5',
   search:        'M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0',
+  explore:       'M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3zM13 13l6 6',
 };
 function NavIcon({id,size=16}){
   const d=NAV_ICONS[id];
@@ -2957,20 +2965,13 @@ function NavIcon({id,size=16}){
 }
 const SECTIONS=[
   {id:'overview',      icon:'overview',      label:'Overview',       tip:'Health tiles + per-domain status at a glance. Drag widgets to reorder.'},
-  {id:'triage',        icon:'triage',        label:'Triage',          tip:'Consolidated view of all critical &amp; warning issues across every domain.'},
-  {id:'ipam',          icon:'ipam',          label:'IPAM / Subnets',  tip:'IP address space — subnets, utilization bars, and allocation detail.'},
-  {id:'dhcp',          icon:'dhcp',          label:'DHCP Leases',     tip:'Active and expired DHCP leases with IP, host name, and subnet.'},
+  {id:'ipam',          icon:'ipam',          label:'IPAM / Subnets',  tip:'IP address management — subnets, DHCP leases, utilization, and drill-down.'},
   {id:'dns',           icon:'dns',           label:'DNS Zones',       tip:'Authoritative DNS zones with TTL, record counts, and anomaly flags.'},
   {id:'hosts',         icon:'hosts',         label:'Hosts',           tip:'Infrastructure hosts — routers, switches, servers — with status dots.'},
-  {id:'security',      icon:'security',      label:'Security',        tip:'BloxOne security policies: active/inactive, action, and rule counts.'},
-  {id:'threats',       icon:'threats',       label:'Threat Feeds',    tip:'Threat intelligence feeds (DGA, C2, phishing …) with entry counts.'},
+  {id:'security',      icon:'security',      label:'Security',        tip:'BloxOne security policies, threat feeds, SOC insights, and IQ actions.'},
   {id:'audit',         icon:'audit',         label:'Audit Logs',      tip:'Timestamped record of every API action — who did what and when.'},
-  {id:'dns-analytics', icon:'dns-analytics', label:'DNS Analytics',   tip:'Query volume trends, top clients, and per-device spike detection.'},
-  {id:'insights',      icon:'insights',      label:'SOC Insights',    tip:'AI-surfaced threat indicators and anomalies for SOC investigation.'},
-  {id:'actions',       icon:'actions',       label:'IQ Actions',      tip:'DNS Firewall enforcement: block/redirect domains and review audit trail.'},
-  {id:'alerts',        icon:'alerts',        label:'Alert Rules',     tip:'Define threshold-based alerts (e.g. DHCP &gt; 90%) with notifications.'},
-  {id:'threat-lookup', icon:'threat-lookup', label:'Threat Lookup',   tip:'Point-in-time lookup of any IP, domain, or hash against threat intel.'},
-  {id:'search',        icon:'search',        label:'Search',          tip:'Full-text search across subnets, hosts, leases, zones, and logs.'},
+  {id:'alerts',        icon:'alerts',        label:'Alert Rules',     tip:'Define threshold-based alerts (e.g. DHCP &gt; 90%) with notifications. Includes triage view.'},
+  {id:'explore',       icon:'explore',       label:'Explore',         tip:'Ad-hoc group-by pivot over hosts, leases, and DNS — Kentik-style explorer.'},
 ];
 
 function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
@@ -3396,6 +3397,178 @@ function VizSelect({id, def='table', opts=VIZ_OPTS, getViz, setViz}) {
   );
 }
 
+function ScopeBar({subnets, zones, scopeSubnet, setScopeSubnet, scopeZone, setScopeZone}){
+  const hasScope = scopeSubnet||scopeZone;
+  return (
+    <div className="scope-bar" role="search" aria-label="Scope filters">
+      <span className="scope-bar-label">Scope</span>
+      <select className="scope-select" value={scopeSubnet||''} onChange={e=>setScopeSubnet(e.target.value||null)}
+        aria-label="Filter by subnet">
+        <option value="">All Subnets</option>
+        {subnets.slice(0,200).map(s=><option key={s.id} value={s.id}>{s.name!==s.addr?s.name:s.addr}/{s.cidr} ({s.util}%)</option>)}
+      </select>
+      <select className="scope-select" value={scopeZone||''} onChange={e=>setScopeZone(e.target.value||null)}
+        aria-label="Filter by zone">
+        <option value="">All Zones</option>
+        {zones.slice(0,200).map(z=><option key={z.id} value={z.id}>{z.fqdn}</option>)}
+      </select>
+      {hasScope&&<button className="scope-clear" onClick={()=>{setScopeSubnet(null);setScopeZone(null);}}>✕ Clear scope</button>}
+      {hasScope&&<span className="scope-bar-label" style={{color:'var(--teal)'}}>· scoped</span>}
+    </div>
+  );
+}
+
+function PivotExplorer({data, hosts, subnets, zones}){
+  const [groupBy, setGroupBy] = React.useState('subnet');
+  const [metric, setMetric]   = React.useState('count');
+  const [filterTxt, setFilterTxt] = React.useState('');
+
+  // Build pivot rows based on groupBy + metric
+  const rows = React.useMemo(()=>{
+    let items = [];
+    if(groupBy==='subnet'){
+      items = (subnets||[]).map(s=>({
+        key: s.addr ? `${s.addr}/${s.cidr}` : s.name,
+        label: s.name || s.addr,
+        val: metric==='util' ? (s.util||0) :
+             metric==='leases' ? (s.leaseCt||0) :
+             (s.total||0),
+        sub: `${s.leaseCt||0} leases · ${s.util||0}% util`,
+      }));
+    } else if(groupBy==='view'){
+      const byView = {};
+      (zones||[]).forEach(z=>{ byView[z.view]=(byView[z.view]||0)+1; });
+      items = Object.entries(byView).map(([k,v])=>({key:k,label:k,val:v,sub:`${v} zones`}));
+    } else if(groupBy==='host'){
+      items = (hosts||[]).slice(0,200).map(h=>({
+        key: h.name,
+        label: h.name,
+        val: metric==='count' ? 1 : 0,
+        sub: h.ip || '',
+      }));
+    } else if(groupBy==='zone'){
+      items = (zones||[]).map(z=>({
+        key: z.fqdn,
+        label: z.fqdn,
+        val: z.records||0,
+        sub: `${z.records||0} records · ${z.view}`,
+      }));
+    }
+    if(filterTxt) items = items.filter(r=>r.label.toLowerCase().includes(filterTxt.toLowerCase()));
+    items.sort((a,b)=>b.val-a.val);
+    return items.slice(0,50);
+  },[groupBy,metric,filterTxt,subnets,zones,hosts]);
+
+  const maxVal = rows.length ? Math.max(...rows.map(r=>r.val),1) : 1;
+
+  return (
+    <div className="card" style={{padding:16}}>
+      <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
+        <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>GROUP BY</span>
+        {['subnet','view','zone','host'].map(g=>(
+          <button key={g} onClick={()=>setGroupBy(g)}
+            style={{fontFamily:'var(--font-mono)',fontSize:11,padding:'3px 10px',borderRadius:3,border:'1px solid var(--border)',
+              background:groupBy===g?'var(--teal)':'var(--surface-3)',
+              color:groupBy===g?'var(--blue-dark)':'var(--ink)',cursor:'pointer'}}>
+            {g}
+          </button>
+        ))}
+        <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)',marginLeft:12}}>METRIC</span>
+        {['count','util','leases'].map(m=>(
+          <button key={m} onClick={()=>setMetric(m)}
+            style={{fontFamily:'var(--font-mono)',fontSize:11,padding:'3px 10px',borderRadius:3,border:'1px solid var(--border)',
+              background:metric===m?'var(--blue)':'var(--surface-3)',
+              color:metric===m?'#fff':'var(--ink)',cursor:'pointer'}}>
+            {m}
+          </button>
+        ))}
+        <input value={filterTxt} onChange={e=>setFilterTxt(e.target.value)}
+          placeholder="filter…"
+          style={{fontFamily:'var(--font-mono)',fontSize:11,padding:'3px 8px',borderRadius:3,border:'1px solid var(--border)',
+            background:'var(--surface-2)',color:'var(--ink)',marginLeft:'auto',width:160}}/>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        {rows.map((r,i)=>{
+          const pct = maxVal>0 ? Math.round(r.val/maxVal*100) : 0;
+          const barColor = (metric==='util'?r.val:pct)>=90?'var(--red)':(metric==='util'?r.val:pct)>=70?'var(--amber)':'var(--teal)';
+          return (
+            <div key={r.key} style={{display:'grid',gridTemplateColumns:'180px 1fr 60px',gap:8,alignItems:'center'}}>
+              <span style={{fontSize:11,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'var(--font-mono)'}} title={r.label}>{r.label}</span>
+              <div style={{height:6,background:'var(--surface-3)',borderRadius:3}}>
+                <div style={{width:`${pct}%`,height:'100%',background:barColor,borderRadius:3,transition:'width .3s'}}/>
+              </div>
+              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',textAlign:'right'}}>{r.val.toLocaleString()}</span>
+            </div>
+          );
+        })}
+        {rows.length===0&&<div style={{fontSize:11,color:'var(--muted)',padding:20,textAlign:'center'}}>No data — select a group + metric above</div>}
+      </div>
+      <div style={{marginTop:10,fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>Showing top {rows.length} of {subnets?.length||0} subnets · {zones?.length||0} zones · {hosts?.length||0} hosts</div>
+    </div>
+  );
+}
+
+function PerfStack({data}){
+  if(!data) return null;
+  // data shape: {hosts: [{name, cpu, mem, dns_qps, uptime, ...}]} or array
+  const items = Array.isArray(data) ? data : (data.hosts||data.metrics||[]);
+  if(!items.length) return <div className="card" style={{padding:24,color:'var(--muted)',fontSize:12,textAlign:'center'}}>No host metrics available</div>;
+
+  const METRICS = [
+    {key:'cpu',    label:'CPU %',    max:100, color:'var(--blue)'},
+    {key:'mem',    label:'Mem %',    max:100, color:'var(--teal)'},
+    {key:'dns_qps',label:'DNS QPS',  max:null, color:'var(--amber)'},
+  ];
+
+  // auto-max for unbounded metrics
+  const autoMax = {};
+  METRICS.filter(m=>!m.max).forEach(m=>{
+    autoMax[m.key] = Math.max(...items.map(h=>Number(h[m.key])||0), 1);
+  });
+
+  return (
+    <div className="card" style={{padding:16,overflowX:'auto'}}>
+      <div style={{display:'grid',gridTemplateColumns:`160px repeat(${METRICS.length},1fr)`,gap:0,minWidth:500}}>
+        {/* header */}
+        <div style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)',paddingBottom:8}}>HOST</div>
+        {METRICS.map(m=>(
+          <div key={m.key} style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)',paddingBottom:8,paddingLeft:8}}>
+            <span style={{display:'inline-block',width:8,height:8,borderRadius:1,background:m.color,marginRight:4}}/>
+            {m.label}
+          </div>
+        ))}
+        {/* rows */}
+        {items.slice(0,20).map((h,i)=>(
+          <React.Fragment key={h.name||i}>
+            <div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',padding:'6px 0',borderTop:'1px solid var(--border)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={h.name||h.host}>
+              {h.name||h.host||`host-${i}`}
+            </div>
+            {METRICS.map(m=>{
+              const val = Number(h[m.key])||0;
+              const max = m.max || autoMax[m.key];
+              const pct = Math.min(100, Math.round(val/max*100));
+              const clr = m.key==='cpu'||m.key==='mem' ? (pct>=90?'var(--red)':pct>=70?'var(--amber)':m.color) : m.color;
+              return (
+                <div key={m.key} style={{padding:'6px 0 6px 8px',borderTop:'1px solid var(--border)'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <div style={{flex:1,height:6,background:'var(--surface-3)',borderRadius:3}}>
+                      <div style={{width:`${pct}%`,height:'100%',background:clr,borderRadius:3}}/>
+                    </div>
+                    <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)',width:36,textAlign:'right',flexShrink:0}}>
+                      {m.key==='dns_qps'?val.toLocaleString():`${val}%`}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </React.Fragment>
+        ))}
+      </div>
+      {items.length>20&&<div style={{fontSize:10,color:'var(--muted)',marginTop:8,fontFamily:'var(--font-mono)'}}>Showing 20 of {items.length} hosts</div>}
+    </div>
+  );
+}
+
 function App({vault, onVaultChange}={}) {
   const [data,setData]         = useState(null);
   const [loading,setLoading]   = useState(true);
@@ -3404,6 +3577,8 @@ function App({vault, onVaultChange}={}) {
   const [section,setSection]   = useState('overview');
   const [hostFilt,setHostFilt]       = useState(null);
   const [subFilt,setSubFilt]         = useState(null);
+  const [scopeSubnet, setScopeSubnet] = useState(null);
+  const [scopeZone,   setScopeZone]   = useState(null);
   const [dhcpSubFilt,setDhcpSubFilt] = useState(null);
   const [chatOpen,setChatOpen]       = useState(false);
   const [queryMode,setQueryMode]     = useState('ask');
@@ -3598,7 +3773,7 @@ function App({vault, onVaultChange}={}) {
 
   useEffect(()=>{load();},[]);
   useEffect(()=>{ if(!wallMode) return; const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t); },[wallMode]);
-  const SEC_DELTA_KEY={ipam:'total_subnets',dns:'total_zones',dhcp:'total_leases'};
+  const SEC_DELTA_KEY={ipam:'total_subnets',dns:'total_zones'};
   useEffect(()=>{ if(!data||!lastUpd) return; const h=LS.get('noc.tileHist',{}); const tn={Hosts:errHosts.length,Subnets:critSubs.length,DNS:ttlBad.length,Audit:auditLogs.filter(l=>l.result==='failure').length}; Object.entries(tn).forEach(([k,v])=>{ const a=(h[k]||[]).slice(-11); a.push(v); h[k]=a; }); LS.set('noc.tileHist',h); },[lastUpd]);
   useEffect(()=>{ if(!deltas) return; const t=LS.get('noc.secChanged',{}); Object.entries(SEC_DELTA_KEY).forEach(([sec,k])=>{ if(deltas[k]!=null&&deltas[k]!==0) t[sec]=Date.now(); }); LS.set('noc.secChanged',t); },[deltas]);
 
@@ -3722,7 +3897,7 @@ function App({vault, onVaultChange}={}) {
       if(e.key==='r'&&!e.metaKey&&!e.ctrlKey) { load(); return; }
       if(e.key==='t'&&!e.metaKey&&!e.ctrlKey) { setTheme(t=>THEME_CYCLE[t]||'system'); return; }
       if(e.key==='e'&&!e.metaKey&&!e.ctrlKey) { const n=SECTION_EXPORT_MAP[section]; if(n) document.querySelector(`[data-export-section="${n}"]`)?.click(); return; }
-      if(e.key==='/'){ e.preventDefault(); setSection('search'); return; }
+      if(e.key==='/'){ e.preventDefault(); setSection('explore'); return; }
       const idx = parseInt(e.key);
       if(idx>=1&&idx<=9) { const s=SECTIONS[idx-1]; if(s) setSection(s.id); }
     };
@@ -3805,9 +3980,9 @@ function App({vault, onVaultChange}={}) {
       .catch(()=>setLazyErr(e=>({...e,[key]:true})));
   },[]);
   useEffect(()=>{
-    if(section==='dns-analytics'&&!dnsAnalytics&&!lazyErr['dns-analytics']) lazyFetch('dns-analytics','/api/dns-analytics',setDnsAnalytics);
-    if(section==='insights'&&!insights&&!lazyErr.insights) lazyFetch('insights','/api/insights',setInsights);
-    if(section==='actions'&&!actions&&!lazyErr.actions) lazyFetch('actions','/api/actions',setActions);
+    if(section==='dns'&&!dnsAnalytics&&!lazyErr['dns-analytics']) lazyFetch('dns-analytics','/api/dns-analytics',setDnsAnalytics);
+    if(section==='security'&&!insights&&!lazyErr.insights) lazyFetch('insights','/api/insights',setInsights);
+    if(section==='security'&&!actions&&!lazyErr.actions) lazyFetch('actions','/api/actions',setActions);
     if(section==='hosts'&&!hostMetrics&&!lazyErr.hostMetrics) lazyFetch('hostMetrics','/api/host-metrics',setHostMetrics);
   },[section]);
 
@@ -3921,7 +4096,6 @@ function App({vault, onVaultChange}={}) {
             if(data&&s.id==='dns') { const c=data.zones.filter(z=>z.anomaly).length; if(c>0) badge=<span className="badge-pill badge-pill-amber">{c}</span>; }
             if(data&&s.id==='audit') { const c=data.auditLogs.filter(l=>l.result==='failure').length; if(c>0) badge=<span className="badge-pill badge-pill-amber">{c}</span>; }
             if(s.id==='alerts'&&firingAlerts.length>0) badge=<span className="badge-pill">{firingAlerts.length}</span>;
-            if(data&&s.id==='triage'){ const auditF=auditLogs.filter(l=>l.result==='failure').length; const crit=errHosts.length+critSubs.length+auditF; const warn=firingAlerts.length+warnSubs.length+ttlBad.length; const t=crit+warn; if(t>0) badge=<span className={`badge-pill${crit===0?' badge-pill-amber':''}`} title={`${crit} critical, ${warn} warning`}>{t}</span>; }
             const firingHere = firingSecs.has(s.id);
             return (
               <button key={s.id} className={`nav-item${section===s.id?' active':''}`}
@@ -4136,6 +4310,9 @@ function App({vault, onVaultChange}={}) {
             </div>
           </div>
         </div>
+        {data&&<ScopeBar subnets={subnets} zones={zones}
+          scopeSubnet={scopeSubnet} setScopeSubnet={setScopeSubnet}
+          scopeZone={scopeZone} setScopeZone={setScopeZone}/>}
         {/* ── ATC latch strip — read-only CRIT highlight, gated on critSubs ── */}
         {critSubs.length>0&&<div className="latch-strip" aria-live="polite">
           <div className="latch-text">
@@ -4154,10 +4331,10 @@ function App({vault, onVaultChange}={}) {
             msg:<><b>Demo mode active</b> — test/allow-all policies hidden, threat-intel feeds prioritized.</>,
             acts:<button className="n-x" aria-label="Dismiss demo banner" onClick={()=>setDemoBannerDismissed(true)}>×</button>,
           });
-          if(section!=='triage'&&!triagePromptDismissed&&(critSubs.length+errHosts.length)>0) notices.push({
+          if(section!=='alerts'&&!triagePromptDismissed&&(critSubs.length+errHosts.length)>0) notices.push({
             id:'triage-crit', sev:'n-red', ico:'!',
             msg:<><b>{critSubs.length+errHosts.length} critical issue{(critSubs.length+errHosts.length)>1?'s':''}</b> — {critSubs.length>0?`${critSubs.length} subnet${critSubs.length>1?'s':''} over capacity`:''}{ critSubs.length>0&&errHosts.length>0?', ':''}{ errHosts.length>0?`${errHosts.length} host${errHosts.length>1?'s':''} offline`:''}</>,
-            acts:<><button className="n-btn" onClick={()=>setSection('triage')}>View triage</button><button className="n-x" aria-label="Dismiss" onClick={()=>setTriagePromptDismissed(true)}>×</button></>,
+            acts:<><button className="n-btn" onClick={()=>setSection('alerts')}>View triage</button><button className="n-x" aria-label="Dismiss" onClick={()=>setTriagePromptDismissed(true)}>×</button></>,
           });
           if(firingAlerts.length>0&&!alertsDismissed&&!isAcked('alerts')) notices.push({
             id:'alerts', sev:'n-red', ico:'!',
@@ -4171,7 +4348,7 @@ function App({vault, onVaultChange}={}) {
           });
           if(!onboardSeen&&vault?.unlocked&&!demoMode&&!usingMock) notices.push({
             id:'onboard-tip', sev:'n-info', ico:'?',
-            msg:<>New here? Press <b>?</b> for shortcuts, <b>/</b> to search, or <b>⌘K</b> for all commands.</>,
+            msg:<>New here? Press <b>?</b> for shortcuts, <b>/</b> to explore, or <b>⌘K</b> for all commands.</>,
             acts:<><button className="n-btn" onClick={()=>{setOnboardSeen(true);LS.set('noc.onboard.seen',true);setShowShortcuts(true);}}>Show shortcuts</button><button className="n-x" aria-label="Dismiss tip" onClick={()=>{setOnboardSeen(true);LS.set('noc.onboard.seen',true);}}>×</button></>,
           });
           if(sq) notices.push({
@@ -4212,13 +4389,6 @@ function App({vault, onVaultChange}={}) {
         })()}
 
         <div key={section} className="section-view">
-        {/* ── TRIAGE ── */}
-        {section==='triage'&&(
-          <TriagePanel subnets={subnets} hosts={hosts} zones={zones} auditLogs={auditLogs}
-            firingAlerts={firingAlerts} setSection={setSection}
-            dhcpCrit={dhcpCrit} dhcpWarn={dhcpWarn}/>
-        )}
-
         {/* ── OVERVIEW ── */}
         {section==='overview'&&(
           <>
@@ -4256,7 +4426,7 @@ function App({vault, onVaultChange}={}) {
                 {cat:'Hosts',   n:errHostsN,      tot:hosts.length,    sev:errHostsN>0 ?'crit':'ok', desc:'offline / error',  section:'hosts',   dk:'offline_hosts'},
                 {cat:'Subnets', n:critSubs.length,tot:subnets.length,  sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':'ok', desc:`≥${dhcpCrit}% utilization`, section:'ipam', dk:'critical_subnets'},
                 {cat:'DNS',     n:ttlBad.length,  tot:zones.length,    sev:ttlBad.length>0?'warn':'ok', desc:'TTL anomalies',    section:'dns',     dk:'ttl_anomalies'},
-                {cat:'Threats', n:feedCrit,       tot:feeds.length,    sev:feedCrit>0 ?'warn':'ok', desc:'critical feeds',   section:'threats', dk:'active_feeds'},
+                {cat:'Threats', n:feedCrit,       tot:feeds.length,    sev:feedCrit>0 ?'warn':'ok', desc:'critical feeds',   section:'security', dk:'active_feeds'},
                 {cat:'Audit',   n:auditFail,      tot:auditLogs.length,sev:auditFail>0?'crit':'ok', desc:'failed events',    section:'audit',   dk:'audit_failures'},
               ];
               const tileHist=LS.get('noc.tileHist',{});
@@ -4402,7 +4572,7 @@ function App({vault, onVaultChange}={}) {
                                 ))}
                               </div>
                               {drillLeases.length>0?(
-                                <LeaseDrillTable leases={drillLeases} onSeeAll={()=>setSection('dhcp')}/>
+                                <LeaseDrillTable leases={drillLeases} onSeeAll={()=>setSection('ipam')}/>
                               ):(
                                 <div style={{fontSize:11,color:'var(--gray-400)'}}>No lease data loaded for this subnet. <button className="drill-see-all" onClick={()=>setSection('ipam')}>View in IPAM tab →</button></div>
                               )}
@@ -4549,15 +4719,9 @@ function App({vault, onVaultChange}={}) {
               </div>
             <IPAMTable subnets={ipamPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
           </div>
-          </>
-          );
-        })()}
-
-        {/* ── DHCP ── */}
-        {section==='dhcp'&&(
-          <>
+          <div style={{marginTop:20}}>
             <div className="section-header">
-              <span className="section-title">· DHCP</span>
+              <span className="section-title">· DHCP Leases</span>
               <span className="section-line"/>
               {critSubs.length>0?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
             </div>
@@ -4590,8 +4754,10 @@ function App({vault, onVaultChange}={}) {
               <RowLimitBar limit={rl('dhcp')} setLimit={v=>setRl('dhcp',v)}/>
               <DhcpTable leases={s_leases} rowLimit={rl('dhcp')} onDrill={setDrillEntity}/>
             </div>
+          </div>
           </>
-        )}
+          );
+        })()}
 
         {/* ── DNS ── */}
         {section==='dns'&&(
@@ -4653,6 +4819,20 @@ function App({vault, onVaultChange}={}) {
                 <NXProxy zones={s_zones}/>
               </div>
             </div>
+            <div style={{marginTop:16}}>
+              <div className="section-header">
+                <span className="section-title">· DNS Analytics</span>
+                <span className="section-line"/>
+              </div>
+              {!dnsAnalytics&&!lazyErr['dns-analytics']
+                ? <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}>
+                    <button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}} onClick={()=>lazyFetch('dns-analytics','/api/dns-analytics',setDnsAnalytics)}>Load DNS Analytics</button>
+                  </div>
+                : lazyErr['dns-analytics']
+                  ? <div className="card" style={{padding:24,color:'var(--red)',fontSize:12}}>Analytics unavailable</div>
+                  : <DnsAnalyticsPanel data={dnsAnalytics} rowLimit={rl('dns-clients')} setRowLimit={v=>setRl('dns-clients',v)}/>
+              }
+            </div>
           </>
         )}
 
@@ -4698,6 +4878,23 @@ function App({vault, onVaultChange}={}) {
                 : <HostMetricsPanel data={hostMetrics}/>}
             </div>
           </div>
+          <div style={{marginTop:20}}>
+            <div className="section-header">
+              <span className="section-title">· Performance Stack</span>
+              <span className="section-line"/>
+            </div>
+            {!hostMetrics&&!lazyErr?.hostMetrics
+              ? <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}>
+                  <button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}}
+                    onClick={()=>lazyFetch('hostMetrics','/api/host-metrics',setHostMetrics)}>
+                    Load Host Metrics
+                  </button>
+                </div>
+              : lazyErr?.hostMetrics
+                ? <div className="card" style={{padding:24,color:'var(--red)',fontSize:12}}>Host metrics unavailable</div>
+                : <PerfStack data={hostMetrics}/>
+            }
+          </div>
           </>
         )}
 
@@ -4713,16 +4910,53 @@ function App({vault, onVaultChange}={}) {
             <div className="card-title"><div className="dot"/>Security Policies ({s_policies.length}{sq&&` of ${secPolicies.length}`})</div>
             <PoliciesPanel policies={s_policies} diff={policyDiff} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
           </div>
-          </>
-        )}
-
-        {/* ── THREATS ── */}
-        {section==='threats'&&(
-          <div className="card">
-            <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>All Threat Feeds by Severity{sq&&` (${s_feeds.length} of ${feeds.length})`}</div>
-            <RowLimitBar limit={rl('threats')} setLimit={v=>setRl('threats',v)}/>
-            <FeedsTable feeds={s_feeds} rowLimit={rl('threats')} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
+          <div style={{marginTop:16}}>
+            <div className="section-header">
+              <span className="section-title">· Threat Feeds</span>
+              <span className="section-line"/>
+            </div>
+            <div className="card">
+              <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>All Threat Feeds by Severity{sq&&` (${s_feeds.length} of ${feeds.length})`}</div>
+              <RowLimitBar limit={rl('threats')} setLimit={v=>setRl('threats',v)}/>
+              <FeedsTable feeds={s_feeds} rowLimit={rl('threats')} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
+            </div>
           </div>
+          <div style={{marginTop:16}}>
+            <div className="section-header">
+              <span className="section-title">· SOC Insights</span>
+              <span className="section-line"/>
+            </div>
+            {lazyErr.insights
+              ? <div className="card"><PanelError what="SOC insights" onRetry={()=>lazyFetch('insights','/api/insights',setInsights)}/></div>
+              : insights
+                ? <InsightsPanel data={insights} rowLimit={rl('insights')} setRowLimit={v=>setRl('insights',v)}/>
+                : <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}><button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}} onClick={()=>lazyFetch('insights','/api/insights',setInsights)}>Load SOC Insights</button></div>}
+          </div>
+          <div style={{marginTop:16}}>
+            <div className="section-header">
+              <span className="section-title">· IQ Actions</span>
+              <span className="section-line"/>
+            </div>
+            <div className="card">
+              <div className="card-title"><div className="dot"/>IQ Actions — recent automated actions</div>
+              {lazyErr.actions
+                ? <PanelError what="IQ actions" onRetry={()=>lazyFetch('actions','/api/actions',setActions)}/>
+                : actions
+                  ? <ActionsPanel data={actions} rowLimit={rl('actions')} setRowLimit={v=>setRl('actions',v)}/>
+                  : <div style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}><button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}} onClick={()=>lazyFetch('actions','/api/actions',setActions)}>Load IQ Actions</button></div>}
+            </div>
+          </div>
+          <div style={{marginTop:16}}>
+            <div className="section-header">
+              <span className="section-title">· Threat Lookup</span>
+              <span className="section-line"/>
+            </div>
+            <div className="card">
+              <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>Entity &amp; Threat Lookup</div>
+              <ThreatLookupPanel subnets={subnets} leases={leases}/>
+            </div>
+          </div>
+          </>
         )}
 
         {/* ── AUDIT ── */}
@@ -4734,50 +4968,33 @@ function App({vault, onVaultChange}={}) {
           </div>
         )}
 
-        {/* ── DNS ANALYTICS ── */}
-        {section==='dns-analytics'&&(
-          lazyErr['dns-analytics']
-            ? <div className="card"><PanelError what="DNS analytics" onRetry={()=>lazyFetch('dns-analytics','/api/dns-analytics',setDnsAnalytics)}/></div>
-            : <DnsAnalyticsPanel data={dnsAnalytics} rowLimit={rl('dns-clients')} setRowLimit={v=>setRl('dns-clients',v)}/>
-        )}
-
-        {/* ── SOC INSIGHTS ── */}
-        {section==='insights'&&(
-          lazyErr.insights
-            ? <div className="card"><PanelError what="SOC insights" onRetry={()=>lazyFetch('insights','/api/insights',setInsights)}/></div>
-            : <InsightsPanel data={insights} rowLimit={rl('insights')} setRowLimit={v=>setRl('insights',v)}/>
-        )}
-
-        {/* ── IQ ACTIONS ── */}
-        {section==='actions'&&(
-          <div className="card">
-            <div className="card-title"><div className="dot"/>IQ Actions — recent automated actions</div>
-            {lazyErr.actions
-              ? <PanelError what="IQ actions" onRetry={()=>lazyFetch('actions','/api/actions',setActions)}/>
-              : <ActionsPanel data={actions} rowLimit={rl('actions')} setRowLimit={v=>setRl('actions',v)}/>}
-          </div>
-        )}
-
-        {/* ── THREAT LOOKUP ── */}
         {section==='alerts'&&(
-          <AlertsPanel data={data} rules={alertRules} setRules={setAlertRules}/>
-        )}
-        {section==='threat-lookup'&&(
-          <div className="card">
-            <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>Entity & Threat Lookup</div>
-            <ThreatLookupPanel subnets={subnets} leases={leases}/>
-          </div>
+          <>
+            <AlertsPanel data={data} rules={alertRules} setRules={setAlertRules}/>
+            <div style={{marginTop:20}}>
+              <div className="section-header">
+                <span className="section-title">· Triage</span>
+                <span className="section-line"/>
+              </div>
+              <TriagePanel subnets={subnets} hosts={hosts} zones={zones} auditLogs={auditLogs}
+                firingAlerts={firingAlerts} setSection={setSection}
+                dhcpCrit={dhcpCrit} dhcpWarn={dhcpWarn}/>
+            </div>
+          </>
         )}
 
-        {section==='search'&&(
-          <SearchSection
-            data={data}
-            srchQ={srchQ} setSrchQ={setSrchQ}
-            srchRes={srchRes} setSrchRes={setSrchRes}
-            srching={srching} setSrching={setSrching}
-            searchHistory={searchHistory} setSearchHistory={setSearchHistory}
-          />
-        )}
+        {section==='explore'&&(()=>{
+          return (
+            <>
+              <div className="section-header">
+                <span className="section-title">· Explore</span>
+                <span className="section-line"/>
+                <span className="section-badge ok">· LIVE</span>
+              </div>
+              <PivotExplorer data={data} hosts={hosts} subnets={subnets} zones={zones}/>
+            </>
+          );
+        })()}
         </div>{/* /section-view */}
 
       </main>
@@ -4792,7 +5009,7 @@ function App({vault, onVaultChange}={}) {
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'0 24px'}}>
               <div>
                 <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--gray-400)',marginBottom:8}}>Navigation</div>
-                {[['1–9','Switch section'],['/','Jump to Search']].map(([k,d])=>(
+                {[['1–9','Switch section'],['/','Jump to Explore']].map(([k,d])=>(
                   <div key={k} style={{display:'flex',alignItems:'center',marginBottom:7,fontSize:12}}><span className="kbd">{k}</span><span style={{color:'var(--gray-200)'}}>{d}</span></div>
                 ))}
                 <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--gray-400)',margin:'12px 0 8px'}}>UI</div>
