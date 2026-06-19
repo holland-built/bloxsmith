@@ -3052,6 +3052,8 @@ function AlertsPanel({data, rules, setRules}){
   const [thr,setThr]=useState(1);
   const [editId,setEditId]=useState(null);
   const [editVals,setEditVals]=useState({});
+  const [snoozed,setSnoozed]=React.useState({});
+  const nowMs=Date.now();
   const add=()=>{ const n=[...rules,{id:Date.now(),metric,op,threshold:Number(thr)}]; setRules(n); LS.set('noc.alertRules',n); };
   const del=id=>{ const n=rules.filter(r=>r.id!==id); setRules(n); LS.set('noc.alertRules',n); if(editId===id) setEditId(null); };
   const startEdit=r=>{ setEditId(r.id); setEditVals({metric:r.metric,op:r.op,threshold:r.threshold}); };
@@ -3068,10 +3070,11 @@ function AlertsPanel({data, rules, setRules}){
           <input type="number" aria-label="Alert threshold value" value={editVals.threshold} onChange={e=>setEditVals(v=>({...v,threshold:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')saveEdit(r.id);if(e.key==='Escape')cancelEdit();}} style={{width:60,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--gray-200)',padding:'3px 6px',fontSize:11}}/>
         </span>
       :`${r.op} ${r.threshold}`},
-    {key:'value',label:'Current',nosort:true,render:r=><span style={{fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.value}</span>},
+    {key:'value',label:'Current',nosort:true,render:r=>{const snoozeExp=snoozed[r.id];if(snoozeExp&&snoozeExp>nowMs){const exp=new Date(snoozeExp);const hhmm=exp.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});return <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--muted)'}}>SNOOZED until {hhmm}</span>;}return <span style={{fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.value}</span>;}},
     {key:'_actions',label:'',nosort:true,noexport:true,render:r=>editId===r.id
       ?<button className="collapse-btn" style={{margin:0}} onClick={()=>saveEdit(r.id)} title="Save" aria-label="Save rule">✓</button>
       :<span style={{whiteSpace:'nowrap'}}><button className="collapse-btn" style={{margin:0,color:'var(--gray-500)'}} onClick={()=>startEdit(r)} title="Edit rule" aria-label="Edit rule">✎</button><button className="collapse-btn" style={{margin:0}} onClick={()=>del(r.id)} title="Delete rule" aria-label="Delete rule">✕</button></span>},
+    {key:'_snooze',label:'Snooze',size:11,nosort:true,noexport:true,render:r=>{const snoozeExp=snoozed[r.id];const isActive=snoozeExp&&snoozeExp>nowMs;if(isActive){return <button style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 8px',borderRadius:3,border:'1px solid var(--border)',background:'none',color:'var(--amber)',cursor:'pointer'}} onClick={()=>setSnoozed(s=>({...s,[r.id]:0}))} title="Cancel snooze">✕ unsnooze</button>;}return(<div style={{position:'relative',display:'inline-block'}}><select style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 6px',borderRadius:3,border:'1px solid var(--border)',background:'var(--surface-2)',color:'var(--muted)',cursor:'pointer'}} value="" onChange={e=>{const mins=Number(e.target.value);if(mins)setSnoozed(s=>({...s,[r.id]:Date.now()+mins*60000}));}}><option value="">Snooze…</option><option value="30">30 min</option><option value="60">1 hour</option><option value="120">2 hours</option></select></div>);}},
   ];
   const alertCtl=useColumns('alert-rules',alertCols);
   const inStyle={background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--gray-200)',padding:'6px 8px'};
@@ -4893,6 +4896,30 @@ function App({vault, onVaultChange}={}) {
               <span className="section-line"/>
               {ttlBad.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
             </div>
+            {scopeZone&&s_zones.length===1&&(()=>{
+              const z=s_zones[0];
+              const issueCount=z.issues?.length||0;
+              return (
+                <div className="drill-panel" style={{marginBottom:14}}>
+                  <div className="drill-header" style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+                    <span style={{fontFamily:'var(--font-mono)',fontSize:14,color:'var(--ink)',fontWeight:600}}>{z.fqdn}</span>
+                    <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>view: {z.view}</span>
+                    <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>TTL: {z.ttl}s</span>
+                    <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>neg TTL: {z.neg_ttl||0}s</span>
+                    <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:z.records===0?'var(--amber)':'var(--green)'}}>{(z.records||0).toLocaleString()} records</span>
+                    {issueCount>0&&<span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--red)'}}>⚠ {issueCount} issue{issueCount>1?'s':''}</span>}
+                    <button className="drill-close" style={{marginLeft:'auto'}} onClick={()=>setScopeZone(null)} aria-label="Clear zone scope" title="Clear zone scope">×</button>
+                  </div>
+                  {z.anomaly&&z.issues&&z.issues.length>0&&(
+                    <div style={{padding:'6px 12px',display:'flex',flexWrap:'wrap',gap:6}}>
+                      {z.issues.map((iss,i)=>(
+                        <span key={i} style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--amber)',border:'1px solid var(--border)',borderRadius:3,padding:'1px 6px'}}>{iss}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div className="g3 mb20">
               {[
                 {v:dnsViews.length,  l:'DNS Views',     c:'var(--teal)'},
