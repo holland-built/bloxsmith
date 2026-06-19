@@ -31,7 +31,7 @@ window.onerror = function(msg,src,line,col,err) {
 :root{
   --blue-deep:#21262D;--blue-mid:#161B22;--blue-dark:#0D1117;
   --teal:#58A6FF;--teal-bright:#79C0FF;
-  --surface:#1C2128;--surface-2:#21262D;--surface-3:#30363D;
+  --surface:#161B22;--surface-2:#1C2128;--surface-3:#21262D;
   --border:rgba(240,246,252,0.10);
   --gray-100:#E6EDF3;--gray-200:#C9D1D9;--gray-400:#8B949E;--gray-500:#6E7681;--gray-600:#484F58;
   --red:#F85149;--amber:#D29922;--green:#3FB950;
@@ -39,7 +39,7 @@ window.onerror = function(msg,src,line,col,err) {
   --amber-bg:hsl(38,85%,9%);--amber-border:hsl(38,85%,30%);--amber-text:hsl(38,92%,76%);
   --green-bg:hsl(160,75%,7%);--green-border:hsl(160,75%,25%);--green-text:hsl(160,84%,70%);
   /* ── theme-flippable semantic tokens (dark defaults) ── */
-  --ink:#E6EDF3;                     /* brightest text / input text */
+  --ink:#D8D9DA;                     /* brightest text / input text */
   /* type scale (current sizes, centralized) */
   --fs-2xs:10px;--fs-xs:10px;--fs-sm:11px;--fs-base:12px;--fs-md:13px;--fs-lg:20px;--fs-2xl:30px;
   --hover:rgba(255,255,255,.045);    /* row + subtle hover tint */
@@ -57,7 +57,7 @@ window.onerror = function(msg,src,line,col,err) {
   --badge-green-bg:rgba(16,185,129,.15);--badge-green-bd:rgba(16,185,129,.3);
   --badge-gray-bg:rgba(148,163,184,.12);--badge-gray-bd:rgba(148,163,184,.2);--badge-gray-tx:var(--gray-200);
   --shadow-card:0 1px 3px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.3);
-  --brand:#238636;--muted:rgba(230,237,243,0.45);--ink-dim:rgba(230,237,243,0.28);
+  --brand:#238636;--muted:rgba(216,217,218,0.50);--ink-dim:rgba(230,237,243,0.28);
   --latch-bg:rgba(248,81,73,0.08);--latch-border:rgba(248,81,73,0.35);
   --font-mono:"IBM Plex Mono","SF Mono",ui-monospace,monospace;
   --font-serif:Georgia,"Times New Roman",serif;
@@ -168,9 +168,12 @@ body.chat-open{padding-right:340px}
 .spin{animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px;box-shadow:var(--shadow-card);transition:border-color .15s,opacity .15s}
+.card:not(.crit-state):not(.warn-state):hover{border-color:rgba(88,166,255,.4);box-shadow:0 0 0 1px rgba(88,166,255,.15),0 2px 12px rgba(88,166,255,.08),var(--shadow-card)}
 .card.dim{opacity:.70}.card.dim:hover{opacity:.85}
-.card.warn-state{opacity:.85}
-.card.crit-state{opacity:1;border-color:var(--latch-border)}.card.crit-state:hover{border-color:rgba(248,81,73,.55)}
+.card.warn-state{opacity:1;background:linear-gradient(135deg,rgba(210,153,34,.18) 0%,rgba(210,153,34,.06) 100%);box-shadow:inset 0 0 0 1px rgba(210,153,34,.35),var(--shadow-card)}
+.card.warn-state:hover{border-color:rgba(210,153,34,.55)}
+.card.crit-state{opacity:1;border-color:var(--latch-border);background:linear-gradient(135deg,rgba(248,81,73,.18) 0%,rgba(248,81,73,.06) 100%);box-shadow:inset 0 0 0 1px rgba(248,81,73,.35),var(--shadow-card)}
+.card.crit-state:hover{border-color:rgba(248,81,73,.55)}
 .status-dot{font-size:13px;line-height:1;margin-right:2px}.status-dot.ok{color:var(--green)}.status-dot.warn{color:var(--amber)}.status-dot.crit{color:var(--red)}
 .card-title{font-size:var(--fs-sm);font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:14px;display:flex;align-items:center;gap:7px}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0}
@@ -253,7 +256,7 @@ body.chat-open{padding-right:340px}
 @media(max-width:760px){.stiles{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:480px){.stiles{grid-template-columns:1fr}}
 .stile{min-height:104px;padding:12px 14px;border-radius:9px;border:1px solid;cursor:pointer;display:flex;flex-direction:column;gap:6px;text-align:left;font-family:inherit;background:none;transition:opacity .12s}
-.stile:hover{opacity:.85;border-color:var(--teal)}
+.stile:hover{opacity:.85;border-color:var(--teal);box-shadow:0 0 0 1px rgba(88,166,255,.15),0 2px 8px rgba(88,166,255,.08)}
 .stile-top{display:flex;align-items:center;justify-content:space-between}
 .stile-cat{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-400);font-weight:600}
 .stile-st{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px}
@@ -3497,7 +3500,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   );
 }
 
-const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['heatmap','Heat'],['raw','Raw']];
+const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['heatmap','Heat'],['timeline','Timeline'],['raw','Raw']];
 
 // Poll until the server responds 200, then call onReady().
 // Prevents the "page can't be displayed" flash when reloading right after a container restart.
@@ -3512,6 +3515,38 @@ function waitForServer(onReady, maxAttempts=40, interval=500) {
   setTimeout(probe,interval);
 }
 
+function StateTimeline({subnets, onDrill}){
+  const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber)':'var(--green)';
+  const sevLbl=u=>u>=90?'CRIT':u>=75?'WARN':'OK';
+  if(!subnets||!subnets.length) return <div className="no-data">No subnet data</div>;
+  const sorted=[...subnets].sort((a,b)=>(b.util||0)-(a.util||0));
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:1,padding:'4px 0'}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,padding:'0 0 6px',borderBottom:'1px solid var(--border)',marginBottom:4}}>
+        <span style={{width:140,fontSize:9,fontFamily:'var(--font-mono)',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',flexShrink:0}}>Subnet</span>
+        <span style={{flex:1,fontSize:9,fontFamily:'var(--font-mono)',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em'}}>Utilization</span>
+        <span style={{width:36,fontSize:9,fontFamily:'var(--font-mono)',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'right'}}>Status</span>
+      </div>
+      {sorted.map(s=>{
+        const lbl=s.name&&s.name!==s.addr?s.name:`${s.addr}/${s.cidr||''}`;
+        const u=s.util||0;
+        const clr=sevClr(u);
+        return (
+          <div key={s.id} onClick={()=>onDrill&&onDrill({type:'subnet',data:s})}
+            style={{display:'flex',alignItems:'center',gap:8,padding:'3px 4px',borderRadius:3,cursor:'pointer',transition:'background .1s'}}
+            onMouseEnter={e=>e.currentTarget.style.background='var(--hover)'}
+            onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+            <span style={{width:140,fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flexShrink:0}}>{lbl}</span>
+            <div style={{flex:1,height:14,background:'var(--surface-3)',borderRadius:2,overflow:'hidden'}}>
+              <div style={{width:`${u}%`,height:'100%',background:clr,borderRadius:2,transition:'width .3s'}}/>
+            </div>
+            <span style={{width:36,fontSize:9,fontFamily:'var(--font-mono)',color:clr,fontWeight:700,textAlign:'right',flexShrink:0}}>{sevLbl(u)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 function VizSelect({id, def='table', opts=VIZ_OPTS, getViz, setViz}) {
   return (
     <select className="viz-sel" value={getViz(id,def)} onChange={e=>setViz(id,e.target.value)}
@@ -3961,6 +3996,7 @@ function App({vault, onVaultChange}={}) {
   const [scopeZone,   setScopeZone]   = useState(null);
   const [siteFilt,    setSiteFilt]    = useState(null);
   const [timeRange,   setTimeRange]   = useState(()=>LS.get('noc.timeRange','all'));
+  const [chartCursor, setChartCursor] = React.useState(null);
   const [dhcpSubFilt,setDhcpSubFilt] = useState(null);
   const [chatOpen,setChatOpen]       = useState(false);
   const [queryMode,setQueryMode]     = useState('ask');
@@ -4866,22 +4902,42 @@ function App({vault, onVaultChange}={}) {
                     return `${x},${y}`;
                   }).join(' ');
                 };
+                const _sparkArr=(histKey)=>(_tileHist[histKey]||[]).slice(-20);
                 const kpis=[
                   {v:s_hosts.length.toLocaleString(), l:scopeSubnet||scopeZone?'Hosts in Scope':'Total Hosts', delta:`${errHosts.length} offline / error`, sev:errHosts.length>0?'crit':null, histKey:'Hosts'},
                   {v:s_subnets.length.toLocaleString(), l:scopeSubnet||scopeZone?'Subnets in Scope':'Total Subnets', delta:`${critSubs.length} critical`, sev:critSubs.length>0?'crit':null, histKey:'Subnets'},
                   {v:`${critSubs[0]?.util??warnSubs[0]?.util??0}%`, l:'Peak DHCP Util', delta:critSubs.length>0?`${critSubs.length} over threshold`:'within threshold', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null, histKey:null},
                   {v:zones.length.toLocaleString(), l:'DNS Zones', delta:`${ttlBad.length} TTL anomalies`, sev:ttlBad.length>0?'warn':null, histKey:'DNS'},
                 ];
-                return kpis.map((k,i)=>(
-                  <div key={i} className={`card${k.sev==='crit'?' crit-state':k.sev==='warn'?' warn-state':' dim'}`} style={{display:'flex',flexDirection:'column',gap:0}}>
-                    <div className="kpi-val" style={i===2&&k.sev?{color:k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--ink)'}:{}}>{k.v}</div>
-                    <svg width="100%" height="28" style={{margin:'6px 0',opacity:.6}} aria-hidden="true">
-                      <polyline points={_sparkPts(k.histKey)} fill="none" stroke={k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--green)'} strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
+                return kpis.map((k,i)=>{
+                  const arr=_sparkArr(k.histKey);
+                  const cursorVal=chartCursor!==null&&arr.length>1?arr[Math.round(chartCursor*(arr.length-1))]:null;
+                  return (
+                  <div key={i} className={`card${k.sev==='crit'?' crit-state':k.sev==='warn'?' warn-state':' dim'}`}
+                    style={{display:'flex',flexDirection:'column',gap:0,position:'relative',overflow:'hidden'}}>
+                    <svg width="100%" height="100%" viewBox="0 0 160 28" preserveAspectRatio="none"
+                      style={{position:'absolute',inset:0,opacity:.18,pointerEvents:k.histKey?'auto':'none',cursor:'crosshair'}}
+                      aria-hidden="true"
+                      onMouseMove={k.histKey?e=>{const r=e.currentTarget.getBoundingClientRect();setChartCursor((e.clientX-r.left)/r.width);}:null}
+                      onMouseLeave={k.histKey?()=>setChartCursor(null):null}>
+                      <polyline points={_sparkPts(k.histKey)} fill="none"
+                        stroke={k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--teal)'}
+                        strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
+                      {chartCursor!==null&&<line x1={chartCursor*160} y1={0} x2={chartCursor*160} y2={28}
+                        stroke="var(--teal)" strokeWidth=".75" vectorEffect="non-scaling-stroke" opacity=".7"/>}
                     </svg>
-                    <div className="kpi-lbl">{k.l}</div>
-                    <div className="kpi-delta">→ {k.delta}</div>
+                    {cursorVal!==null&&(
+                      <div style={{position:'absolute',top:4,right:6,zIndex:2,fontSize:9,fontFamily:'var(--font-mono)',
+                        color:'var(--ink)',background:'var(--surface-3)',padding:'1px 4px',borderRadius:2,pointerEvents:'none'}}>
+                        {cursorVal}
+                      </div>
+                    )}
+                    <div className="kpi-val" style={{position:'relative',zIndex:1,...(i===2&&k.sev?{color:k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--ink)'}:{})}}>{k.v}</div>
+                    <div className="kpi-lbl" style={{position:'relative',zIndex:1,marginTop:6}}>{k.l}</div>
+                    <div className="kpi-delta" style={{position:'relative',zIndex:1}}>{`→ ${k.delta}`}</div>
                   </div>
-                ));
+                  );
+                });
               })()}
             </div>
             {deltas&&Object.keys(deltas).length>0&&(
@@ -5185,7 +5241,9 @@ function App({vault, onVaultChange}={}) {
               </div>
             {getViz('ipam-subnets')==='table'
               ? <IPAMTable subnets={ipamPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
-              : <WidgetViz data={ipamPool.map(s=>({subnet:`${s.addr}/${s.cidr}`,util:s.util,free:s.free}))} viz={getViz('ipam-subnets')} labelKey="subnet" valueKey="util" color="var(--teal)" defaultRows={10}/>}
+              : getViz('ipam-subnets')==='timeline'
+                ? <StateTimeline subnets={ipamPool} onDrill={setDrillEntity}/>
+                : <WidgetViz data={ipamPool.map(s=>({subnet:`${s.addr}/${s.cidr}`,util:s.util,free:s.free}))} viz={getViz('ipam-subnets')} labelKey="subnet" valueKey="util" color="var(--teal)" defaultRows={10}/>}
           </div>
           <div style={{marginTop:20}}>
             <div className="section-header">
