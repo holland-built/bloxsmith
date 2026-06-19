@@ -379,15 +379,19 @@ class FrontendStructureTests(unittest.TestCase):
     # ── sections ──────────────────────────────────────────────────────────────
 
     def test_all_nav_sections_defined(self):
-        for sid in ("overview", "ipam", "dhcp", "dns", "hosts", "security",
-                    "threats", "audit", "dns-analytics", "insights",
-                    "threat-lookup", "search"):
+        # NMS overhaul: 15→8 sections; merged: dhcp→ipam, dns-analytics→dns,
+        # threats/insights/actions/threat-lookup→security, triage→alerts, search→explore
+        for sid in ("overview", "ipam", "dns", "hosts", "security",
+                    "audit", "alerts", "explore"):
             self.assertContains(f"id:'{sid}'", f"Section '{sid}' missing from SECTIONS array")
+        # removed sections must not appear as standalone nav entries
+        for sid in ("dhcp", "triage", "threats", "dns-analytics", "search"):
+            self.assertNotIn(f"id:'{sid}'", self.html, f"Removed section '{sid}' still in SECTIONS array")
 
     def test_all_sections_rendered(self):
-        for sid in ("overview", "ipam", "dhcp", "dns", "hosts", "security",
-                    "threats", "audit", "dns-analytics", "insights",
-                    "threat-lookup", "search"):
+        # NMS overhaul: 8 sections; merged content now lives inside parent sections
+        for sid in ("overview", "ipam", "dns", "hosts", "security",
+                    "audit", "alerts", "explore"):
             self.assertContains(f"section==='{sid}'", f"Section '{sid}' not rendered")
 
     def test_account_switcher_present(self):
@@ -415,10 +419,9 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("function InsightsPanel")
 
     def test_iq_actions_section(self):
+        # NMS overhaul: ActionsPanel merged into Security section (no standalone tab)
         self.assertContains("function ActionsPanel")
-        self.assertContains("id:'actions'", "IQ Actions section not registered")
         self.assertContains("/api/actions", "IQ Actions fetch missing")
-        self.assertContains("section==='actions'", "IQ Actions not rendered")
 
     def test_host_metrics_panel(self):
         self.assertContains("function HostMetricsPanel")
@@ -916,11 +919,12 @@ class FrontendStructureTests(unittest.TestCase):
     # ── lazy loading ──────────────────────────────────────────────────────────
 
     def test_dns_analytics_lazy_loaded(self):
-        # Should fetch on tab click, not on page load
-        self.assertContains("section==='dns-analytics'&&!dnsAnalytics")
+        # NMS overhaul: dns-analytics merged into dns section; triggers on section==='dns'
+        self.assertContains("section==='dns'&&!dnsAnalytics")
 
     def test_insights_lazy_loaded(self):
-        self.assertContains("section==='insights'&&!insights")
+        # NMS overhaul: insights merged into security section
+        self.assertContains("section==='security'&&!insights")
 
     # ── drill-down hints ──────────────────────────────────────────────────────
 
