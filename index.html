@@ -3797,6 +3797,7 @@ function App({vault, onVaultChange}={}) {
   const [scopeSubnet, setScopeSubnet] = useState(null);
   const [scopeZone,   setScopeZone]   = useState(null);
   const [siteFilt,    setSiteFilt]    = useState(null);
+  const [timeRange,   setTimeRange]   = useState(()=>LS.get('noc.timeRange','all'));
   const [dhcpSubFilt,setDhcpSubFilt] = useState(null);
   const [chatOpen,setChatOpen]       = useState(false);
   const [queryMode,setQueryMode]     = useState('ask');
@@ -4253,7 +4254,10 @@ function App({vault, onVaultChange}={}) {
   const s_hosts    = (sq ? hosts.filter(h=>[h.name,h.ip,h.type,h.status].some(v=>v.toLowerCase().includes(sq))) : hosts).filter(h=>!scopeSubnet||(()=>{ const sc=subnets.find(s=>s.id===scopeSubnet); return !sc||ipPrefix(h.ip)===ipPrefix(sc.addr); })());
   const s_policies = sq ? secPolicies.filter(p=>[p.name,p.action].some(v=>v.toLowerCase().includes(sq)))   : secPolicies;
   const s_feeds    = sq ? feeds.filter(f=>[f.name,f.cat,f.level].some(v=>v.toLowerCase().includes(sq)))    : feeds;
-  const s_logs     = sq ? auditLogs.filter(l=>[l.user,l.action,l.resource].some(v=>v.toLowerCase().includes(sq))) : auditLogs;
+  const TR_OPTS=[['1h','1h'],['6h','6h'],['24h','24h'],['7d','7d'],['all','All']];
+  const cutoffMs=timeRange==='all'?0:Date.now()-({'1h':3600,'6h':21600,'24h':86400,'7d':604800}[timeRange]||0)*1000;
+  const trFilter=l=>{if(!cutoffMs) return true; const ts=(l.ts||l.timestamp||''); if(!ts) return true; const ms=new Date(ts).getTime(); return isNaN(ms)||ms>=cutoffMs;};
+  const s_logs     = (sq ? auditLogs.filter(l=>[l.user,l.action,l.resource].some(v=>v.toLowerCase().includes(sq))) : auditLogs).filter(trFilter);
 
   const critSubs  = s_subnets.filter(s=>s.util>=dhcpCrit);
   const warnSubs  = s_subnets.filter(s=>s.util>=dhcpWarn&&s.util<dhcpCrit);
@@ -4560,6 +4564,9 @@ function App({vault, onVaultChange}={}) {
               <select className="pill-select" data-tip="Filter by site" value={siteFilt||''} onChange={e=>setSiteFilt(e.target.value||null)} aria-label="Filter by site" style={{appearance:'none',WebkitAppearance:'none',paddingRight:24,backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23768390'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center'}}>
                 <option value="">Site: All</option>
                 {[...new Set((subnets||[]).map(s=>s.site).filter(Boolean).filter(s=>s!=='–'&&s!=='—'))].sort().map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+              <select className="pill-select" data-tip="Time range filter — applies to audit logs" value={timeRange} onChange={e=>{setTimeRange(e.target.value);LS.set('noc.timeRange',e.target.value);}} aria-label="Time range" style={{appearance:'none',WebkitAppearance:'none',paddingRight:24,backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23768390'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center'}}>
+                {TR_OPTS.map(([v,l])=><option key={v} value={v}>Range: {l}</option>)}
               </select>
               <div className="pill-select" data-tip="Auto-refresh interval">Interval: 5m <span className="arrow">▾</span></div>
               <span className="nav-clock" aria-live="off">{now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
