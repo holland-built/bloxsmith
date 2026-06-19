@@ -383,8 +383,9 @@ body.chat-open{padding-right:340px}
 .nav-divider{width:1px;height:20px;background:var(--border)}
 .scope-bar{display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--surface-2);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto}
 .scope-bar-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
-.scope-select{background:var(--surface-3);border:1px solid var(--border);border-radius:4px;color:var(--ink);font-size:12px;padding:3px 8px;cursor:pointer;font-family:var(--font-mono)}
+.scope-select{background:var(--surface-2);border:1px solid var(--border);border-radius:4px;color:var(--ink);font-size:12px;padding:4px 10px;cursor:pointer;font-family:var(--font-mono);min-width:120px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23768390'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px}
 .scope-select:focus{outline:none;border-color:var(--teal)}
+.scope-select:hover{border-color:rgba(240,246,252,.20)}
 .scope-clear{font-size:10px;color:var(--muted);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:3px}
 .scope-clear:hover{color:var(--ink);background:var(--surface-3)}
 @keyframes noticeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
@@ -3046,13 +3047,12 @@ function snapMetrics(data){
   return o;
 }
 
-function AlertsPanel({data, rules, setRules}){
+function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
   const [metric,setMetric]=useState(ALERT_METRICS[0].key);
   const [op,setOp]=useState('>=');
   const [thr,setThr]=useState(1);
   const [editId,setEditId]=useState(null);
   const [editVals,setEditVals]=useState({});
-  const [snoozed,setSnoozed]=React.useState({});
   const nowMs=Date.now();
   const add=()=>{ const n=[...rules,{id:Date.now(),metric,op,threshold:Number(thr)}]; setRules(n); LS.set('noc.alertRules',n); };
   const del=id=>{ const n=rules.filter(r=>r.id!==id); setRules(n); LS.set('noc.alertRules',n); if(editId===id) setEditId(null); };
@@ -3636,6 +3636,7 @@ function App({vault, onVaultChange}={}) {
   const getViz = (id, def='table') => vizMode[id] || def;
   const setViz = (id, v) => { const n={...vizMode,[id]:v}; setVizMode(n); LS.set('noc.viz',n); };
   const [alertRules, setAlertRules] = useState(()=>LS.get('noc.alertRules', DEFAULT_ALERT_RULES));
+  const [snoozedAlerts, setSnoozedAlerts] = useState({});
   const [deltas, setDeltas] = useState(null);
   const [demoMode, setDemoMode]       = useState(()=>LS.get('noc.demoMode',false));
   const [demoBannerDismissed, setDemoBannerDismissed] = useState(false);
@@ -4032,7 +4033,7 @@ function App({vault, onVaultChange}={}) {
   const leaseCt   = subnets.reduce((a,s)=>{a[s.name]=leasesInSubnet(leases,s).length;return a},{});
   const filtHosts = (hostFilt||hostChip) ? s_hosts.filter(h=>h.status===(hostFilt||hostChip)) : s_hosts;
   const hostSeen  = LS.get('noc.hostSeen',{});
-  const firingAlerts = evalAlerts(data, alertRules).filter(a=>a.firing);
+  const firingAlerts = evalAlerts(data, alertRules).filter(a=>a.firing).filter(a=>!(snoozedAlerts[a.id]&&snoozedAlerts[a.id]>Date.now()));
   const firingSecs = new Set(firingAlerts.map(a=>ALERT_SECTION[a.metric]).filter(Boolean));
   const shareView = () => { const url=location.origin+location.pathname+'#'+section;
     if(navigator.clipboard) navigator.clipboard.writeText(url).catch(()=>{}); };
@@ -4302,7 +4303,7 @@ function App({vault, onVaultChange}={}) {
           </div>
           <div className="topbar-controls">
             <div className="topbar-group">
-              <select className="pill-select" data-tip="Filter by site" value={siteFilt||''} onChange={e=>setSiteFilt(e.target.value||null)} aria-label="Filter by site">
+              <select className="pill-select" data-tip="Filter by site" value={siteFilt||''} onChange={e=>setSiteFilt(e.target.value||null)} aria-label="Filter by site" style={{appearance:'none',WebkitAppearance:'none',paddingRight:24,backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23768390'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center'}}>
                 <option value="">Site: All</option>
                 {[...new Set((subnets||[]).map(s=>s.site).filter(Boolean).filter(s=>s!=='–'&&s!=='—'))].sort().map(s=><option key={s} value={s}>{s}</option>)}
               </select>
@@ -4407,6 +4408,26 @@ function App({vault, onVaultChange}={}) {
               <span className="section-line"/>
               {(errHosts.length>0||critSubs.length>0)?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0||ttlBad.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
             </div>
+            {(()=>{
+  const total = s_subnets.length||1;
+  const critPct = Math.round((critSubs.length/total)*100);
+  const warnPct = Math.round((warnSubs.length/total)*100);
+  const healthScore = Math.max(0, 100 - critPct*2 - warnPct);
+  const scoreClr = healthScore>=80?'var(--green)':healthScore>=50?'var(--amber)':'var(--red)';
+  const scoreLabel = healthScore>=80?'HEALTHY':healthScore>=50?'DEGRADED':'CRITICAL';
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12,padding:'8px 14px',
+      background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6}}>
+      <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',flexShrink:0}}>Network Health</span>
+      <div style={{flex:1,height:6,background:'var(--surface-3)',borderRadius:3}}>
+        <div style={{width:`${healthScore}%`,height:'100%',background:scoreClr,borderRadius:3,transition:'width .4s'}}/>
+      </div>
+      <span style={{fontFamily:'var(--font-mono)',fontSize:20,fontWeight:400,color:scoreClr,flexShrink:0,minWidth:40,textAlign:'right'}}>{healthScore}</span>
+      <span style={{fontFamily:'var(--font-mono)',fontSize:9,color:scoreClr,textTransform:'uppercase',letterSpacing:'.1em',flexShrink:0}}>{scoreLabel}</span>
+      {scopeSubnet||scopeZone||siteFilt?<span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',flexShrink:0}}>· scoped</span>:null}
+    </div>
+  );
+})()}
             <div className="kpi-row">
               {(()=>{
                 const kpis=[
@@ -4896,7 +4917,7 @@ function App({vault, onVaultChange}={}) {
                     <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>TTL: {z.ttl}s</span>
                     <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>neg TTL: {z.neg_ttl||0}s</span>
                     <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:z.records===0?'var(--amber)':'var(--green)'}}>{(z.records||0).toLocaleString()} records</span>
-                    {issueCount>0&&<span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--red)'}}>⚠ {issueCount} issue{issueCount>1?'s':''}</span>}
+                    {issueCount>0&&<span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--red)'}}>▲ {issueCount} issue{issueCount>1?'s':''}</span>}
                     <button className="drill-close" style={{marginLeft:'auto'}} onClick={()=>setScopeZone(null)} aria-label="Clear zone scope" title="Clear zone scope">×</button>
                   </div>
                   {z.anomaly&&z.issues&&z.issues.length>0&&(
@@ -5112,7 +5133,7 @@ function App({vault, onVaultChange}={}) {
 
         {section==='alerts'&&(
           <>
-            <AlertsPanel data={data} rules={alertRules} setRules={setAlertRules}/>
+            <AlertsPanel data={data} rules={alertRules} setRules={setAlertRules} snoozed={snoozedAlerts} setSnoozed={setSnoozedAlerts}/>
             <div style={{marginTop:20}}>
               <div className="section-header">
                 <span className="section-title">· Triage</span>
