@@ -3099,6 +3099,7 @@ function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
     {key:'usedtotal',label:'Used / Total',mono:true,size:11,sortVal:s=>s.used,csv:s=>`${s.used}/${s.total}`,render:s=>`${s.used} / ${s.total}`},
     {key:'util',label:'Utilization',sortVal:s=>s.util,render:s=>(<div style={{display:'flex',alignItems:'center',gap:8}}><div className="bar-track"><div className="bar-fill" style={{width:`${s.util}%`,background:utilColor(s.util)}}/></div><span style={{fontSize:11,fontWeight:700,color:utilColor(s.util)}}>{s.util}%</span></div>)},
     {key:'leases',label:'DHCP Leases',size:11,sortVal:s=>leaseCt[s.name]||0,render:s=><span style={{color:'var(--gray-400)'}}>{(leaseCt[s.name]||0).toLocaleString()}</span>},
+    {key:'anomaly',label:'Risk',size:11,nosort:false,sortVal:s=>{let sc=0;if(s.util>=90)sc+=3;else if(s.util>=75)sc+=2;if(s.free===0)sc+=2;if((leaseCt[s.name]||0)===0&&s.util===0)sc-=1;return sc;},csv:s=>{let sc=0;if(s.util>=90)sc+=3;else if(s.util>=75)sc+=2;if(s.free===0)sc+=2;return sc>0?sc:'OK';},render:s=>{let sc=0;if(s.util>=90)sc+=3;else if(s.util>=75)sc+=2;if(s.free===0)sc+=2;if(sc===0)return <span style={{color:'var(--green)',fontSize:10}}>OK</span>;if(sc>=4)return <span style={{color:'var(--red)',fontSize:10,fontWeight:700}}>HIGH</span>;if(sc>=2)return <span style={{color:'var(--amber)',fontSize:10,fontWeight:600}}>WARN</span>;return <span style={{color:'var(--amber)',fontSize:10}}>LOW</span>;}},
   ];
   const ctl=useColumns('ipam',allCols);
   return <DataTable ctl={ctl} rows={rows} defaultRows={rowLimit} rowKey={s=>s.id} initialSort={{key:'util',dir:'desc'}} exportName="subnets" persistId="ipam" onRowClick={onDrill?s=>onDrill({type:'subnet',data:s}):undefined}/>;
@@ -3612,6 +3613,7 @@ function PivotExplorer({data, hosts, subnets, zones}){
   const [groupBy, setGroupBy] = React.useState('subnet');
   const [metric, setMetric]   = React.useState('count');
   const [filterTxt, setFilterTxt] = React.useState('');
+  const [viewMode, setViewMode] = React.useState('bars');
 
   // Build pivot rows based on groupBy + metric
   const rows = React.useMemo(()=>{
@@ -3643,6 +3645,10 @@ function PivotExplorer({data, hosts, subnets, zones}){
         val: z.records||0,
         sub: `${z.records||0} records · ${z.view}`,
       }));
+    } else if(groupBy==='site'){
+      const bySite={};
+      (subnets||[]).forEach(s=>{const site=s.site&&s.site!=='–'&&s.site!=='—'?s.site:'(no site)';if(!bySite[site])bySite[site]={count:0,util:0,leases:0};bySite[site].count++;bySite[site].util+=s.util||0;bySite[site].leases+=s.leaseCt||0;});
+      items=Object.entries(bySite).map(([k,v])=>({key:k,label:k,val:metric==='util'?Math.round(v.util/v.count):metric==='leases'?v.leases:v.count,sub:`${v.count} subnets · avg ${Math.round(v.util/v.count)}% util`}));
     }
     if(filterTxt) items = items.filter(r=>r.label.toLowerCase().includes(filterTxt.toLowerCase()));
     items.sort((a,b)=>b.val-a.val);
@@ -3655,7 +3661,7 @@ function PivotExplorer({data, hosts, subnets, zones}){
     <div className="card" style={{padding:16}}>
       <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
         <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>GROUP BY</span>
-        {['subnet','view','zone','host'].map(g=>(
+        {['subnet','view','zone','host','site'].map(g=>(
           <button key={g} onClick={()=>setGroupBy(g)}
             style={{fontFamily:'var(--font-mono)',fontSize:11,padding:'3px 10px',borderRadius:3,border:'1px solid var(--border)',
               background:groupBy===g?'var(--teal)':'var(--surface-3)',
@@ -3676,7 +3682,27 @@ function PivotExplorer({data, hosts, subnets, zones}){
           placeholder="filter…"
           style={{fontFamily:'var(--font-mono)',fontSize:11,padding:'3px 8px',borderRadius:3,border:'1px solid var(--border)',
             background:'var(--surface-2)',color:'var(--ink)',marginLeft:'auto',width:160}}/>
+        {['bars','heat'].map(v=>(
+          <button key={v} onClick={()=>setViewMode(v)}
+            style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 8px',borderRadius:3,border:'1px solid var(--border)',
+              background:viewMode===v?'var(--surface-3)':'none',color:'var(--muted)',cursor:'pointer'}}>
+            {v}
+          </button>
+        ))}
       </div>
+      {viewMode==='heat'?(
+        <div style={{display:'flex',flexWrap:'wrap',gap:3}}>
+          {rows.map((r,i)=>{
+            const pct=maxVal>0?Math.round(r.val/maxVal*100):0;
+            const bg=(metric==='util'?r.val:pct)>=90?'var(--red)':(metric==='util'?r.val:pct)>=70?'var(--amber)':'var(--teal)';
+            return <div key={r.key} title={`${r.label}: ${r.val}`}
+              style={{width:56,height:32,borderRadius:3,background:bg,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',border:'1px solid rgba(0,0,0,.2)'}}>
+              <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:'rgba(0,0,0,.85)',fontWeight:700}}>{r.val}</span>
+              <span style={{fontSize:7,color:'rgba(0,0,0,.6)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:52,padding:'0 2px'}}>{r.label}</span>
+            </div>;
+          })}
+        </div>
+      ):(
       <div style={{display:'flex',flexDirection:'column',gap:4}}>
         {rows.map((r,i)=>{
           const pct = maxVal>0 ? Math.round(r.val/maxVal*100) : 0;
@@ -3693,6 +3719,7 @@ function PivotExplorer({data, hosts, subnets, zones}){
         })}
         {rows.length===0&&<div style={{fontSize:11,color:'var(--muted)',padding:20,textAlign:'center'}}>No data — select a group + metric above</div>}
       </div>
+      )}
       <div style={{marginTop:10,fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>Showing top {rows.length} of {subnets?.length||0} subnets · {zones?.length||0} zones · {hosts?.length||0} hosts</div>
     </div>
   );
