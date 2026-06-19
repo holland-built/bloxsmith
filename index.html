@@ -158,7 +158,7 @@ body.chat-open{padding-right:340px}
 .card.dim{opacity:.70}.card.dim:hover{opacity:.85}
 .card.warn-state{opacity:.85}
 .card.crit-state{opacity:1;border-color:var(--latch-border)}.card.crit-state:hover{border-color:rgba(248,81,73,.55)}
-.status-dot{font-size:13px;line-height:1}.status-dot.ok{color:var(--green)}.status-dot.warn{color:var(--amber)}.status-dot.crit{color:var(--red)}
+.status-dot{font-size:13px;line-height:1;margin-right:2px}.status-dot.ok{color:var(--green)}.status-dot.warn{color:var(--amber)}.status-dot.crit{color:var(--red)}
 .card-title{font-size:var(--fs-sm);font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:14px;display:flex;align-items:center;gap:7px}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0}
 .g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
@@ -238,7 +238,7 @@ body.chat-open{padding-right:340px}
 .stile-top{display:flex;align-items:center;justify-content:space-between}
 .stile-cat{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-400);font-weight:600}
 .stile-st{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px}
-.stile-big{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.2}
+.stile-big{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;font-family:var(--font-mono);line-height:1.2}
 .stile-desc{font-size:11px;color:var(--gray-400)}
 .stile-of{font-size:13px;font-weight:600;color:var(--gray-500)}
 .stile-track{height:4px;background:var(--surface-3);border-radius:2px;margin-top:auto}
@@ -2016,7 +2016,7 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
           {v:query_types.length, l:'Query Types', c:'var(--amber)'},
         ].map((x,i)=>(
           <div key={i} className="card" style={{textAlign:'center'}}>
-            <div style={{fontSize:26,fontWeight:800,color:x.c}}>{x.v}</div>
+            <div style={{fontSize:26,fontWeight:800,color:x.c,fontFamily:'var(--font-mono)'}}>{x.v}</div>
             <div style={{fontSize:10,color:'var(--gray-400)',marginTop:4,textTransform:'uppercase',letterSpacing:'.1em'}}>{x.l}</div>
           </div>
         ))}
@@ -4255,10 +4255,10 @@ function App({vault, onVaultChange}={}) {
             {overviewOrder.map(id=>{
               if(id==='hosts') return (
                 <div key="hosts" {...wrapProps('hosts')}>
-                  <div className={`card${fullscreen==='hosts'?' fs':''}`}>
+                  <div className={`card${fullscreen==='hosts'?' fs':''}${errHosts.length>0?' crit-state':' dim'}`}>
                     <div className="card-title">
                       <DragHandle id="hosts"/>
-                      <div className="dot"/>Host Status Distribution
+                      <span className={`status-dot ${errHosts.length>0?'crit':'ok'}`}>{errHosts.length>0?'█':'·'}</span>Host Status Distribution
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="hosts" def="donut" opts={[['donut','Donut'],['table','Table'],['bar','Bar'],['raw','Raw']]} getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('hosts')} title={collapsed['hosts']?'Expand':'Collapse'} aria-label={collapsed['hosts']?'Expand Hosts widget':'Collapse Hosts widget'} data-tip={collapsed['hosts']?'Expand this section':'Collapse this section to save space'}>{collapsed['hosts']?'▶':'▼'}</button>
@@ -4300,10 +4300,10 @@ function App({vault, onVaultChange}={}) {
               );
               if(id==='subnets') return (
                 <div key="subnets" {...wrapProps('subnets','b-wide')}>
-                  <div className={`card${fullscreen==='subnets'?' fs':''}`}>
+                  <div className={`card${fullscreen==='subnets'?' fs':''}${critSubs.length>0?' crit-state':warnSubs.length>0?' warn-state':' dim'}`}>
                     <div className="card-title">
                       <DragHandle id="subnets"/>
-                      <div className="dot"/>Top Subnets by DHCP Utilization
+                      <span className={`status-dot ${critSubs.length>0?'crit':warnSubs.length>0?'warn':'ok'}`}>{critSubs.length>0?'█':warnSubs.length>0?'▲':'·'}</span>Top Subnets by DHCP Utilization
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="subnets" def="subnetbars" opts={[['subnetbars','Bars'],['table','Table'],['line','Line'],['raw','Raw']]} getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('subnets')} title={collapsed['subnets']?'Expand':'Collapse'} aria-label={collapsed['subnets']?'Expand IPAM / Subnets widget':'Collapse IPAM / Subnets widget'} data-tip={collapsed['subnets']?'Expand this section':'Collapse this section to save space'}>{collapsed['subnets']?'▶':'▼'}</button>
@@ -4361,10 +4361,10 @@ function App({vault, onVaultChange}={}) {
               );
               if(id==='ttl') return (
                 <div key="ttl" {...wrapProps('ttl','b-wide')}>
-                  <div className={`card${fullscreen==='ttl'?' fs':''}`}>
+                  <div className={`card${fullscreen==='ttl'?' fs':''}${ttlBad.length>0?' warn-state':' dim'}`}>
                     <div className="card-title">
                       <DragHandle id="ttl"/>
-                      <div className="dot" style={{background:'var(--amber)'}}/>Zones with TTL Issues
+                      <span className={`status-dot ${ttlBad.length>0?'warn':'ok'}`}>{ttlBad.length>0?'▲':'·'}</span>Zones with TTL Issues
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="ttl" getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('ttl')} title={collapsed['ttl']?'Expand':'Collapse'} aria-label={collapsed['ttl']?'Expand DNS Zones widget':'Collapse DNS Zones widget'} data-tip={collapsed['ttl']?'Expand this section':'Collapse this section to save space'}>{collapsed['ttl']?'▶':'▼'}</button>
@@ -4381,10 +4381,10 @@ function App({vault, onVaultChange}={}) {
               );
               if(id==='audit') return (
                 <div key="audit" {...wrapProps('audit','b-wide')}>
-                  <div className={`card${fullscreen==='audit'?' fs':''}`}>
+                  <div className={`card${fullscreen==='audit'?' fs':''}${auditLogs.filter(l=>l.result==='failure').length>0?' crit-state':' dim'}`}>
                     <div className="card-title">
                       <DragHandle id="audit"/>
-                      <div className="dot"/>Recent Audit Activity
+                      <span className={`status-dot ${auditLogs.filter(l=>l.result==='failure').length>0?'crit':'ok'}`}>{auditLogs.filter(l=>l.result==='failure').length>0?'█':'·'}</span>Recent Audit Activity
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="audit" getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('audit')} title={collapsed['audit']?'Expand':'Collapse'} aria-label={collapsed['audit']?'Expand Audit Logs widget':'Collapse Audit Logs widget'} data-tip={collapsed['audit']?'Expand this section':'Collapse this section to save space'}>{collapsed['audit']?'▶':'▼'}</button>
@@ -4405,10 +4405,10 @@ function App({vault, onVaultChange}={}) {
               );
               if(id==='pols') return (
                 <div key="pols" {...wrapProps('pols')}>
-                  <div className={`card${fullscreen==='pols'?' fs':''}`}>
+                  <div className={`card${fullscreen==='pols'?' fs':''} dim`}>
                     <div className="card-title">
                       <DragHandle id="pols"/>
-                      <div className="dot" style={{background:'var(--gray-400)'}}/>Security Policies
+                      <span className="status-dot ok">·</span>Security Policies
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="pols" def="panel" opts={[['panel','Panel'],['table','Table'],['bar','Bar'],['raw','Raw']]} getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('pols')} title={collapsed['pols']?'Expand':'Collapse'} aria-label={collapsed['pols']?'Expand Policies widget':'Collapse Policies widget'} data-tip={collapsed['pols']?'Expand this section':'Collapse this section to save space'}>{collapsed['pols']?'▶':'▼'}</button>
@@ -4425,10 +4425,10 @@ function App({vault, onVaultChange}={}) {
               );
               if(id==='feeds') return (
                 <div key="feeds" {...wrapProps('feeds','b-wide')}>
-                  <div className={`card${fullscreen==='feeds'?' fs':''}`}>
+                  <div className={`card${fullscreen==='feeds'?' fs':''} dim`}>
                     <div className="card-title">
                       <DragHandle id="feeds"/>
-                      <div className="dot" style={{background:'var(--red)'}}/>Top Threat Feeds by Severity
+                      <span className="status-dot ok">·</span>Top Threat Feeds by Severity
                       <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                         <VizSelect id="feeds" getViz={getViz} setViz={setViz}/>
                         <button className="collapse-btn" style={{margin:0}} onClick={()=>toggleCollapse('feeds')} title={collapsed['feeds']?'Expand':'Collapse'} aria-label={collapsed['feeds']?'Expand Threat Feeds widget':'Collapse Threat Feeds widget'} data-tip={collapsed['feeds']?'Expand this section':'Collapse this section to save space'}>{collapsed['feeds']?'▶':'▼'}</button>
