@@ -4012,7 +4012,7 @@ function App({vault, onVaultChange}={}) {
   const sq = (queryMode==='filter'&&searchQuery) ? searchQuery.toLowerCase() : '';
   const s_subnets  = (sq ? subnets.filter(s=>[s.name,s.addr,s.site].some(v=>v.toLowerCase().includes(sq)))  : subnets).filter(s=>!scopeSubnet||s.id===scopeSubnet);
   const s_leases   = (sq ? leases.filter(l=>[l.addr,l.host,l.subnet].some(v=>(v||'').toLowerCase().includes(sq))) : leases)
-    .filter(l=>{ if(!dhcpSubFilt) return true; const sub=subnets.find(s=>s.id===dhcpSubFilt); return sub?leasesInSubnet([l],sub).length>0:true; });
+    .filter(l=>{ const ef=dhcpSubFilt||scopeSubnet; if(!ef) return true; const sub=subnets.find(s=>s.id===ef); return sub?leasesInSubnet([l],sub).length>0:true; });
   const s_zones    = (sq ? zones.filter(z=>[z.fqdn,z.view].some(v=>v.toLowerCase().includes(sq)))           : zones).filter(z=>!scopeZone||z.id===scopeZone);
   const s_hosts    = (sq ? hosts.filter(h=>[h.name,h.ip,h.type,h.status].some(v=>v.toLowerCase().includes(sq))) : hosts).filter(h=>!scopeSubnet||(()=>{ const sc=subnets.find(s=>s.id===scopeSubnet); return !sc||ipPrefix(h.ip)===ipPrefix(sc.addr); })());
   const s_policies = sq ? secPolicies.filter(p=>[p.name,p.action].some(v=>v.toLowerCase().includes(sq)))   : secPolicies;
@@ -4870,7 +4870,7 @@ function App({vault, onVaultChange}={}) {
                   {dhcpSubFilt?` — ${subnets.find(s=>s.id===dhcpSubFilt)?.name||'subnet'} (${s_leases.length})`:sq?` — filtered (${s_leases.length})`:` (${s_leases.length})`}
                 </span>
                 <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
-                  <select className="viz-sel" value={dhcpSubFilt||''} onChange={e=>setDhcpSubFilt(e.target.value||null)} aria-label="Filter leases by subnet" title="Filter by subnet" style={{maxWidth:160}}>
+                  <select className="viz-sel" value={dhcpSubFilt||scopeSubnet||''} onChange={e=>setDhcpSubFilt(e.target.value||null)} aria-label="Filter leases by subnet" title="Filter by subnet" style={{maxWidth:160}}>
                     <option value="">All Subnets</option>
                     {subnets.filter(s=>leaseCt[s.name]>0).sort((a,b)=>a.name.localeCompare(b.name)).map(s=><option key={s.id} value={s.id}>{s.name} ({s.addr}/{s.cidr})</option>)}
                   </select>
