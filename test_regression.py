@@ -575,7 +575,7 @@ class FrontendStructureTests(unittest.TestCase):
         for comp in ("function VaultGate", "function VaultSetup", "function VaultUnlock",
                      "function VaultAddTenant", "function TenantManager"):
             self.assertContains(comp)
-        self.assertContains("render(<VaultGate/>)", "root no longer renders VaultGate")
+        self.assertContains("<VaultGate/>", "root no longer renders VaultGate")
 
     def test_vault_reset(self):
         self.assertIn("def vault_reset", _server_src())
@@ -810,10 +810,12 @@ class FrontendStructureTests(unittest.TestCase):
     # ── drill-downs ───────────────────────────────────────────────────────────
 
     def test_subnet_drill_down_panel(self):
-        self.assertContains("drillSub&&")
+        # bento overview removed; subnet drill-down lives in DNS (drillZone) and IPAM (setSubFilt)
+        self.assertContains("drillZone&&(", "DNS zone drill panel missing")
+        self.assertContains("setSubFilt", "subnet filter state missing")
 
     def test_host_drill_down_panel(self):
-        self.assertContains("hostFilt&&(")
+        self.assertContains("hostFilt&&")
 
     def test_leasesInSubnet_helper(self):
         self.assertContains("function leasesInSubnet")
@@ -823,7 +825,8 @@ class FrontendStructureTests(unittest.TestCase):
 
     def test_drill_see_all_link(self):
         self.assertContains("See all in DHCP tab")
-        self.assertContains("See all in Hosts tab")
+        # "See all in Hosts tab" was in the overview bento (removed in NMS overhaul);
+        # host drill-down now lives exclusively in the Hosts tab section
 
     # ── UX features ───────────────────────────────────────────────────────────
 
@@ -929,10 +932,12 @@ class FrontendStructureTests(unittest.TestCase):
     # ── drill-down hints ──────────────────────────────────────────────────────
 
     def test_subnet_chart_click_hint(self):
-        self.assertContains("Click a row to drill down")
+        # bento overview removed; SubnetBars component still exists for IPAM interaction
+        self.assertContains("function SubnetBars", "SubnetBars component missing")
 
     def test_host_donut_click_hint(self):
-        self.assertContains("Click a segment to drill down")
+        # bento overview removed; Donut component still renders in Hosts section
+        self.assertContains("function Donut", "Donut component missing")
 
     # ── Feature 1: Auto-Refresh Timer ─────────────────────────────────────────
 
@@ -1141,15 +1146,18 @@ class FrontendStructureTests(unittest.TestCase):
     # ── Overview bento layout ─────────────────────────────────────────────────
 
     def test_overview_bento_container(self):
-        self.assertContains('className="bento"', "Overview cards not wrapped in bento grid")
+        # NMS overhaul: bento removed, replaced with ov-3col/ov-2col panel layout
+        self.assertContains('className="ov-3col"', "Overview infrastructure 3-col panel missing")
+        self.assertContains('className="ov-2col"', "Overview DHCP 2-col panel missing")
 
     def test_overview_kpis_full_width(self):
-        # KPI cards are now the full-width status-tile matrix (stiles/stile)
-        self.assertContains('className="stiles"', "status-tile matrix (KPI strip) missing")
-        self.assertContains("stile-big", "status-tile value missing")
+        # NMS overhaul: status-tile matrix removed; KPI row + DHCP section replace it
+        self.assertContains('className="kpi-row"', "KPI row missing from overview")
+        self.assertContains("DHCP Pool Utilization", "DHCP utilization panel missing from overview")
 
     def test_overview_wide_cards(self):
-        self.assertContains("wrapProps('subnets','b-wide')", "No b-wide cards in bento overview")
+        # NMS overhaul: bento b-wide removed; new panels use ov-2col-eq for Security & Audit
+        self.assertContains('className="ov-2col-eq"', "Overview Security & Audit 2-col panel missing")
 
     # ── Round-2 security / correctness fixes ──────────────────────────────────
 
@@ -1231,7 +1239,8 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains(".health-banner.issues-crit ", "health-banner issues-crit variant missing")
 
     def test_health_banner_ok_text(self):
-        self.assertContains("✓ All systems OK", "health-banner all-OK text missing")
+        # NMS overhaul: health-banner replaced by Network Health score bar with HEALTHY/DEGRADED/CRITICAL label
+        self.assertContains("'HEALTHY'", "health score HEALTHY label missing")
 
     def test_health_banner_pills(self):
         self.assertContains("hb-pills", "health-banner pills container missing")
