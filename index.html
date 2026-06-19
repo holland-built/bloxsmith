@@ -2027,6 +2027,51 @@ function WidgetViz({data=[], viz='table', columns=[], labelKey, valueKey, rowCol
   );
 }
 
+function QueryTypeChart({queryTypes}){
+  if(!queryTypes||queryTypes.length===0) return null;
+  const NDA='NstarDnsActivity.';
+  const items=queryTypes.map(r=>({
+    type:r[NDA+'query_type']||'?',
+    cnt:Number(r[NDA+'total_query_count'])||0,
+  })).filter(r=>r.cnt>0);
+  if(!items.length) return null;
+  const total=items.reduce((a,r)=>a+r.cnt,0);
+  const COLORS=['var(--teal)','var(--amber)','var(--green)','var(--red)','var(--gray-400)','var(--teal-bright)'];
+  const R=52, r=28, cx=64, cy=64;
+  let angle=-Math.PI/2;
+  const slices=items.map((it,i)=>{
+    const sweep=total>0?(it.cnt/total)*Math.PI*2:0;
+    const x1=cx+R*Math.cos(angle), y1=cy+R*Math.sin(angle);
+    angle+=sweep;
+    const x2=cx+R*Math.cos(angle), y2=cy+R*Math.sin(angle);
+    const large=sweep>Math.PI?1:0;
+    const xi=cx+r*Math.cos(angle-sweep/2), yi=cy+r*Math.sin(angle-sweep/2);
+    const xo=cx+R*Math.cos(angle-sweep/2), yo=cy+R*Math.sin(angle-sweep/2);
+    return {it, i, x1,y1,x2,y2,large,xi,yi,xo,yo,sweep,color:COLORS[i%COLORS.length]};
+  });
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:8}}>
+      <svg width={128} height={128} viewBox="0 0 128 128" aria-hidden="true">
+        {slices.map((s,i)=>(
+          <path key={i} d={`M ${cx} ${cy} L ${s.x1} ${s.y1} A ${R} ${R} 0 ${s.large} 1 ${s.x2} ${s.y2} Z`}
+            fill={s.color} opacity={0.85}/>
+        ))}
+        <circle cx={cx} cy={cy} r={r} fill="var(--surface)"/>
+        <text x={cx} y={cy+1} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill="var(--muted)" fontFamily="var(--font-mono)">{items.length} types</text>
+      </svg>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        {slices.map((s,i)=>(
+          <div key={i} style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
+            <div style={{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0}}/>
+            <span style={{fontFamily:'var(--font-mono)',color:'var(--ink)',minWidth:36}}>{s.it.type}</span>
+            <span style={{color:'var(--muted)'}}>{total>0?Math.round(s.it.cnt/total*100):0}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const NDA='NstarDnsActivity.';
 function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
   const [cf,setCf]=useState('');
@@ -2083,6 +2128,7 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
           <div className="card-title"><div className="dot"/>Query Types</div>
           {query_types.length===0?<div className="no-data">No data</div>:(
             <div style={{marginTop:4}}>
+              <QueryTypeChart queryTypes={query_types}/>
               {query_types.map((r,i)=>{
                 const cnt=Number(r['NstarDnsActivity.total_query_count'])||0;
                 const pct=total>0?Math.round(cnt/total*100):0;
@@ -2993,6 +3039,7 @@ const NAV_ICONS={
   'threat-lookup':'M11 17.25a6.25 6.25 0 1 1 0-12.5 6.25 6.25 0 0 1 0 12.5zM16 16l4.5 4.5',
   search:        'M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0',
   explore:       'M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3zM13 13l6 6',
+  map:           'M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 16l4.553 2.276A1 1 0 0021 24.382V13.618a1 1 0 00-1.447-.894L15 15m0 8V15m0 0L9 7',
 };
 function NavIcon({id,size=16}){
   const d=NAV_ICONS[id];
@@ -3001,6 +3048,7 @@ function NavIcon({id,size=16}){
 }
 const SECTIONS=[
   {id:'overview',      icon:'overview',      label:'Overview',       tip:'Health tiles + per-domain status at a glance. Drag widgets to reorder.'},
+  {id:'map',           icon:'map',           label:'Topology Map',    tip:'Subnets grouped by site with host status — Auvik-style topology view.'},
   {id:'ipam',          icon:'ipam',          label:'IPAM / Subnets',  tip:'IP address management — subnets, DHCP leases, utilization, and drill-down.'},
   {id:'dns',           icon:'dns',           label:'DNS Zones',       tip:'Authoritative DNS zones with TTL, record counts, and anomaly flags.'},
   {id:'hosts',         icon:'hosts',         label:'Hosts',           tip:'Infrastructure hosts — routers, switches, servers — with status dots.'},
@@ -3459,6 +3507,73 @@ function ScopeBar({subnets, zones, scopeSubnet, setScopeSubnet, scopeZone, setSc
       </select>
       {hasScope&&<button className="scope-clear" onClick={()=>{setScopeSubnet(null);setScopeZone(null);}}>✕ Clear scope</button>}
       {hasScope&&<span className="scope-bar-label" style={{color:'var(--teal)'}}>· scoped</span>}
+    </div>
+  );
+}
+
+function TopoMap({subnets, hosts, zones, onDrill}){
+  const [hover, setHover] = React.useState(null);
+  const bySite = React.useMemo(()=>{
+    const m={};
+    (subnets||[]).forEach(s=>{
+      const site=s.site&&s.site!=='–'&&s.site!=='—'?s.site:'(no site)';
+      if(!m[site]) m[site]=[];
+      m[site].push(s);
+    });
+    return Object.entries(m).sort((a,b)=>b[1].length-a[1].length);
+  },[subnets]);
+  const hostsBySub = React.useMemo(()=>{
+    const m={};
+    (hosts||[]).forEach(h=>{
+      if(!h.ip) return;
+      const oct=h.ip.split('.').slice(0,3).join('.');
+      (subnets||[]).forEach(s=>{
+        if(s.addr&&s.addr.startsWith(oct)) { m[s.id]=(m[s.id]||[]); m[s.id].push(h); }
+      });
+    });
+    return m;
+  },[hosts,subnets]);
+  const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber)':'var(--green)';
+  const hostClr=hs=>{if(!hs||!hs.length)return'var(--border)';if(hs.some(h=>h.status==='down'))return'var(--red)';if(hs.some(h=>h.status==='degraded'))return'var(--amber)';return'var(--green)';};
+  if(!subnets||!subnets.length) return <div className="no-data">No subnet data</div>;
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:16}}>
+      {bySite.map(([site, snets])=>(
+        <div key={site} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,padding:14}}>
+          <div style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:10}}>
+            ◈ {site} <span style={{color:'var(--border)'}}>·</span> {snets.length} subnet{snets.length!==1?'s':''}
+          </div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+            {snets.map(s=>{
+              const hs=hostsBySub[s.id]||[];
+              const lbl=s.name&&s.name!==s.addr?s.name:`${s.addr}/${s.cidr}`;
+              const isHov=hover===s.id;
+              return (
+                <div key={s.id}
+                  onMouseEnter={()=>setHover(s.id)} onMouseLeave={()=>setHover(null)}
+                  onClick={()=>onDrill&&onDrill({type:'subnet',data:s})}
+                  title={`${lbl} — ${s.util||0}% util · ${hs.length} hosts`}
+                  style={{
+                    width:100,padding:'8px 10px',borderRadius:5,cursor:'pointer',
+                    background:isHov?'var(--surface-3)':'var(--surface)',
+                    border:`1px solid ${sevClr(s.util||0)}44`,
+                    borderLeft:`3px solid ${sevClr(s.util||0)}`,
+                    transition:'background .12s',
+                  }}>
+                  <div style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:4}}>{lbl}</div>
+                  <div style={{display:'flex',alignItems:'center',gap:4}}>
+                    <div style={{flex:1,height:3,background:'var(--surface-3)',borderRadius:2}}>
+                      <div style={{width:`${s.util||0}%`,height:'100%',background:sevClr(s.util||0),borderRadius:2}}/>
+                    </div>
+                    <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:sevClr(s.util||0)}}>{s.util||0}%</span>
+                  </div>
+                  {hs.length>0&&<div style={{marginTop:4,fontSize:9,color:hostClr(hs)}}>{hs.length} host{hs.length!==1?'s':''}</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -5121,6 +5236,33 @@ function App({vault, onVaultChange}={}) {
               <TriagePanel subnets={subnets} hosts={hosts} zones={zones} auditLogs={auditLogs}
                 firingAlerts={firingAlerts} setSection={setSection}
                 dhcpCrit={dhcpCrit} dhcpWarn={dhcpWarn}/>
+            </div>
+          </>
+        )}
+
+        {section==='map'&&(
+          <>
+            <div className="section-header">
+              <span className="section-title">· Topology Map</span>
+              <span className="section-line"/>
+              {critSubs.length>0?<span className="section-badge crit">▲ CRIT</span>:<span className="section-badge ok">· OK</span>}
+            </div>
+            <div className="g3 mb20">
+              {[
+                {v:subnets.length, l:'Subnets', c:'var(--teal)'},
+                {v:hosts.length,   l:'Hosts',   c:'var(--gray-200)'},
+                {v:zones.length,   l:'Zones',   c:'var(--amber)'},
+                {v:critSubs.length,l:'Critical', c:'var(--red)'},
+              ].map((x,i)=>(
+                <div key={i} className="card" style={{textAlign:'center'}}>
+                  <div style={{fontSize:30,fontWeight:800,color:x.c}}>{x.v}</div>
+                  <div style={{fontSize:10,color:'var(--gray-400)',marginTop:4,textTransform:'uppercase',letterSpacing:'.1em'}}>{x.l}</div>
+                </div>
+              ))}
+            </div>
+            <div className="card">
+              <div className="card-title"><div className="dot"/>Subnet Topology — by Site</div>
+              <TopoMap subnets={subnets} hosts={hosts} zones={zones} onDrill={setDrillEntity}/>
             </div>
           </>
         )}
