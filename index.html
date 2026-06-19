@@ -3542,8 +3542,64 @@ function ScopeBar({subnets, zones, scopeSubnet, setScopeSubnet, scopeZone, setSc
   );
 }
 
+function RunbookPanel({critSubs, errHosts}){
+  const [open, setOpen] = React.useState(false);
+  const [acks, setAcks] = React.useState(()=>LS.get('noc.runbookAcks',{}));
+  const ack=(key)=>{const n={...acks,[key]:true};setAcks(n);LS.set('noc.runbookAcks',n);};
+  const HIGH_UTIL=[
+    'Check DHCP lease expiry times — unexpired leases reduce available pool',
+    'Identify top-consuming hosts via DHCP lease list',
+    'Consider expanding the subnet range or splitting into smaller subnets',
+    'Alert network admin if utilization sustained above 90% for >30 min',
+  ];
+  const HOST_DOWN=[
+    'Ping host from NOC station to confirm reachability',
+    'Check last DHCP lease assignment in IPAM',
+    'Verify DNS A-record resolves to the expected IP',
+    'Escalate to on-call if host unreachable for more than 5 minutes',
+  ];
+  const items=[
+    ...(critSubs||[]).map(s=>({key:`sub-${s.id}`,label:`${s.name||s.addr} — ${s.util}% utilization`,steps:HIGH_UTIL})),
+    ...(errHosts||[]).map(h=>({key:`host-${h.name||h.ip}`,label:`${h.name||h.ip} — offline/error`,steps:HOST_DOWN})),
+  ].filter(it=>!acks[it.key]);
+  React.useEffect(()=>{
+    if(items.length>0) setOpen(true);
+  },[items.length]);
+  if(items.length===0) return null;
+  return (
+    <div className="card" style={{marginTop:12,borderLeft:'3px solid var(--amber)'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',padding:'2px 0',marginBottom:open?10:0}}
+        onClick={()=>setOpen(o=>!o)}>
+        <div className="card-title" style={{margin:0}}>
+          <div className="dot" style={{background:'var(--amber)'}}/>
+          Runbook — {items.length} active condition{items.length!==1?'s':''}
+        </div>
+        <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>{open?'▲ collapse':'▼ expand'}</span>
+      </div>
+      {open&&items.map(it=>(
+        <div key={it.key} style={{marginBottom:12,paddingBottom:12,borderBottom:'1px solid var(--border)'}}>
+          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:6}}>
+            <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--amber)'}}>{it.label}</span>
+            <button className="col-btn" onClick={()=>ack(it.key)} style={{fontSize:9,padding:'2px 8px',flexShrink:0,marginLeft:8}}>Acknowledge</button>
+          </div>
+          <ol style={{margin:0,paddingLeft:18,fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)',lineHeight:1.6}}>
+            {it.steps.map((s,i)=><li key={i}>{s}</li>)}
+          </ol>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TopoMap({subnets, hosts, zones, onDrill}){
   const [hover, setHover] = React.useState(null);
+  const [filter, setFilter] = React.useState('');
+  const [view, setView] = React.useState('tiles');
+  const [collapsed, setCollapsed] = React.useState({});
+  const [focus, setFocus] = React.useState(null);
+  const [annotations, setAnnotations] = React.useState(()=>LS.get('noc.annotations',{}));
+  const [editingAnnot, setEditingAnnot] = React.useState(null);
+  const [annotText, setAnnotText] = React.useState('');
   const bySite = React.useMemo(()=>{
     const m={};
     (subnets||[]).forEach(s=>{
@@ -3566,43 +3622,150 @@ function TopoMap({subnets, hosts, zones, onDrill}){
   },[hosts,subnets]);
   const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber)':'var(--green)';
   const hostClr=hs=>{if(!hs||!hs.length)return'var(--border)';if(hs.some(h=>h.status==='down'))return'var(--red)';if(hs.some(h=>h.status==='degraded'))return'var(--amber)';return'var(--green)';};
+  const saveAnnotation=(sid,txt)=>{
+    const n={...annotations,[sid]:{text:txt,ts:Date.now(),author:'NOC'}};
+    setAnnotations(n);
+    LS.set('noc.annotations',n);
+    setEditingAnnot(null);
+    setAnnotText('');
+  };
   if(!subnets||!subnets.length) return <div className="no-data">No subnet data</div>;
+  const filteredBySite = React.useMemo(()=>{
+    if(!filter.trim()) return bySite;
+    const q = filter.toLowerCase();
+    return bySite
+      .map(([site, snets]) => {
+        if(site.toLowerCase().includes(q)) return [site, snets];
+        const f = snets.filter(s =>
+          (s.name||'').toLowerCase().includes(q) ||
+          (s.addr||'').toLowerCase().includes(q)
+        );
+        return f.length ? [site, f] : null;
+      })
+      .filter(Boolean);
+  }, [bySite, filter]);
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
-      {bySite.map(([site, snets])=>(
+      {focus&&(
+        <button className="col-btn" onClick={()=>setFocus(null)} style={{marginBottom:8,alignSelf:'flex-start'}}>
+          ← all sites
+        </button>
+      )}
+      <div style={{display:'flex',gap:8,marginBottom:12,alignItems:'center'}}>
+        <input
+          type="text"
+          placeholder="Filter sites or subnets…"
+          value={filter}
+          onChange={e=>setFilter(e.target.value)}
+          style={{flex:1,background:'var(--surface-2)',border:'1px solid var(--border)',
+            borderRadius:4,padding:'4px 8px',color:'var(--ink)',fontFamily:'var(--font-mono)',
+            fontSize:11,outline:'none'}}
+        />
+        {['tiles','list'].map(v=>(
+          <button key={v} className="col-btn"
+            onClick={()=>setView(v)}
+            style={view===v?{background:'var(--surface-3)',borderColor:'var(--teal)'}:{}}>
+            {v==='tiles'?'⊞ Tiles':'≡ List'}
+          </button>
+        ))}
+      </div>
+      {(focus ? filteredBySite.filter(([site])=>site===focus) : filteredBySite).map(([site, snets])=>(
         <div key={site} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,padding:14}}>
-          <div style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:10}}>
-            ◈ {site} <span style={{color:'var(--border)'}}>·</span> {snets.length} subnet{snets.length!==1?'s':''}
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:collapsed[site]?0:10}}>
+            <button onClick={e=>{e.stopPropagation();setCollapsed(c=>({...c,[site]:!c[site]}));}}
+              style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:10,padding:'0 2px',fontFamily:'var(--font-mono)'}}>
+              {collapsed[site]?'▶':'▼'}
+            </button>
+            <button onClick={e=>{e.stopPropagation();setFocus(focus===site?null:site);}}
+              style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:10,fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.08em',textAlign:'left',flex:1}}>
+              ◈ {site} <span style={{color:'var(--border)'}}>·</span> {snets.length} subnet{snets.length!==1?'s':''}
+            </button>
           </div>
-          <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
-            {snets.map(s=>{
-              const hs=hostsBySub[s.id]||[];
-              const lbl=s.name&&s.name!==s.addr?s.name:`${s.addr}/${s.cidr}`;
-              const isHov=hover===s.id;
-              return (
-                <div key={s.id}
-                  onMouseEnter={()=>setHover(s.id)} onMouseLeave={()=>setHover(null)}
-                  onClick={()=>onDrill&&onDrill({type:'subnet',data:s})}
-                  title={`${lbl} — ${s.util||0}% util · ${hs.length} hosts`}
-                  style={{
-                    width:100,padding:'8px 10px',borderRadius:5,cursor:'pointer',
-                    background:isHov?'var(--surface-3)':'var(--surface)',
-                    border:`1px solid ${sevClr(s.util||0)}44`,
-                    borderLeft:`3px solid ${sevClr(s.util||0)}`,
-                    transition:'background .12s',
-                  }}>
-                  <div style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:4}}>{lbl}</div>
-                  <div style={{display:'flex',alignItems:'center',gap:4}}>
-                    <div style={{flex:1,height:3,background:'var(--surface-3)',borderRadius:2}}>
+          {!collapsed[site]&&(view==='tiles'?(
+            <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+              {snets.map(s=>{
+                const hs=hostsBySub[s.id]||[];
+                const lbl=s.name&&s.name!==s.addr?s.name:`${s.addr}/${s.cidr}`;
+                const isHov=hover===s.id;
+                return (
+                  <div key={s.id}
+                    onMouseEnter={()=>setHover(s.id)} onMouseLeave={()=>setHover(null)}
+                    onClick={()=>onDrill&&onDrill({type:'subnet',data:s})}
+                    title={`${lbl} — ${s.util||0}% util · ${hs.length} hosts`}
+                    style={{
+                      width:100,padding:'8px 10px',borderRadius:5,cursor:'pointer',
+                      background:isHov?'var(--surface-3)':'var(--surface)',
+                      border:`1px solid ${sevClr(s.util||0)}44`,
+                      borderLeft:`3px solid ${sevClr(s.util||0)}`,
+                      transition:'background .12s',
+                    }}>
+                    <div style={{display:'flex',alignItems:'center',gap:3,marginBottom:4}}>
+                      <span style={{flex:1,fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lbl}</span>
+                      {annotations[s.id]&&(
+                        <span title={annotations[s.id].text}
+                          style={{width:6,height:6,borderRadius:'50%',background:'var(--teal)',flexShrink:0,display:'inline-block'}}/>
+                      )}
+                      {isHov&&(
+                        <span onClick={e=>{e.stopPropagation();setEditingAnnot(s.id);setAnnotText((annotations[s.id]&&annotations[s.id].text)||'');}}
+                          title="Add note" style={{cursor:'pointer',color:'var(--muted)',fontSize:9,flexShrink:0}}>✎</span>
+                      )}
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:4}}>
+                      <div style={{flex:1,height:3,background:'var(--surface-3)',borderRadius:2}}>
+                        <div style={{width:`${s.util||0}%`,height:'100%',background:sevClr(s.util||0),borderRadius:2}}/>
+                      </div>
+                      <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:sevClr(s.util||0)}}>{s.util||0}%</span>
+                    </div>
+                    {hs.length>0&&<div style={{marginTop:4,fontSize:9,color:hostClr(hs)}}>{hs.length} host{hs.length!==1?'s':''}</div>}
+                    {editingAnnot===s.id&&(
+                      <div onClick={e=>e.stopPropagation()} style={{marginTop:6}}>
+                        <textarea maxLength={120} value={annotText} onChange={e=>setAnnotText(e.target.value)}
+                          onClick={e=>e.stopPropagation()}
+                          style={{width:'100%',resize:'none',background:'var(--surface-2)',border:'1px solid var(--teal)',
+                            borderRadius:3,color:'var(--ink)',fontFamily:'var(--font-mono)',fontSize:9,padding:'3px 4px',outline:'none',boxSizing:'border-box'}}
+                          rows={2} placeholder="Note…"/>
+                        <div style={{display:'flex',gap:4,marginTop:3}}>
+                          <button onClick={e=>{e.stopPropagation();saveAnnotation(s.id,annotText);}}
+                            className="col-btn" style={{fontSize:9,padding:'2px 6px'}}>Save</button>
+                          <button onClick={e=>{e.stopPropagation();setEditingAnnot(null);}}
+                            className="col-btn" style={{fontSize:9,padding:'2px 6px'}}>✕</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ):(
+            <div style={{display:'flex',flexDirection:'column',gap:2}}>
+              {snets.map(s=>{
+                const hs=hostsBySub[s.id]||[];
+                const lbl=s.name&&s.name!==s.addr?s.name:`${s.addr}/${s.cidr}`;
+                return (
+                  <div key={s.id}
+                    onClick={()=>onDrill&&onDrill({type:'subnet',data:s})}
+                    onMouseEnter={()=>setHover(s.id)} onMouseLeave={()=>setHover(null)}
+                    style={{display:'flex',alignItems:'center',gap:8,padding:'4px 8px',borderRadius:3,
+                      cursor:'pointer',background:hover===s.id?'var(--surface-3)':'transparent',
+                      borderLeft:`3px solid ${sevClr(s.util||0)}`}}>
+                    <span style={{width:140,display:'flex',alignItems:'center',gap:3}}>
+                      <span style={{flex:1,fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',
+                        overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lbl}</span>
+                      {annotations[s.id]&&(
+                        <span title={annotations[s.id].text}
+                          style={{width:5,height:5,borderRadius:'50%',background:'var(--teal)',flexShrink:0,display:'inline-block'}}/>
+                      )}
+                    </span>
+                    <div style={{width:60,height:3,background:'var(--surface-3)',borderRadius:2}}>
                       <div style={{width:`${s.util||0}%`,height:'100%',background:sevClr(s.util||0),borderRadius:2}}/>
                     </div>
-                    <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:sevClr(s.util||0)}}>{s.util||0}%</span>
+                    <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:sevClr(s.util||0),width:28}}>{s.util||0}%</span>
+                    {hs.length>0&&<span style={{fontSize:9,color:hostClr(hs)}}>{hs.length}h</span>}
                   </div>
-                  {hs.length>0&&<div style={{marginTop:4,fontSize:9,color:hostClr(hs)}}>{hs.length} host{hs.length!==1?'s':''}</div>}
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       ))}
     </div>
@@ -5342,6 +5505,7 @@ function App({vault, onVaultChange}={}) {
               <div className="card-title"><div className="dot"/>Subnet Topology — by Site</div>
               <TopoMap subnets={subnets} hosts={hosts} zones={zones} onDrill={setDrillEntity}/>
             </div>
+            <RunbookPanel critSubs={critSubs} errHosts={errHosts}/>
           </>
         )}
 
