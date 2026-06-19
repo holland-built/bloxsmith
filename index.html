@@ -93,34 +93,47 @@ window.onerror = function(msg,src,line,col,err) {
   --font-serif:Georgia,"Times New Roman",serif;
   color-scheme:light;
 }
-body{background:var(--blue-dark);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding-left:48px;padding-top:48px;overflow-x:hidden;line-height:1.5;transition:background .2s,color .2s}
+body{background:var(--blue-dark);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding-left:var(--sbw,224px);padding-top:48px;overflow-x:hidden;line-height:1.5;transition:background .2s,color .2s,padding-left .2s}
 body.chat-open{padding-right:340px}
 @media(max-width:760px){body.chat-open{padding-right:0}}
-.sidebar{width:48px;min-width:48px;background:var(--blue-mid);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;position:fixed;top:48px;left:0;bottom:0;height:calc(100vh - 48px);z-index:100;overflow:hidden;transition:width .2s cubic-bezier(.4,0,.2,1)}
-.logo{padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
+.sidebar{width:224px;min-width:224px;background:var(--blue-mid);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:stretch;position:fixed;top:48px;left:0;bottom:0;height:calc(100vh - 48px);z-index:100;overflow:hidden;transition:width .2s cubic-bezier(.4,0,.2,1)}
+.logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:flex-start;gap:10px;width:100%}
 .logo-mark{width:26px;height:26px;border-radius:5px;background:#fff;padding:1px;flex-shrink:0}
-.logo-text{font-size:12px;font-weight:700;color:var(--teal);letter-spacing:.04em;display:none}
-.logo-sub{font-size:10px;color:var(--gray-400);letter-spacing:.1em;margin-top:1px;display:none}
+.logo-text{font-size:12px;font-weight:700;color:var(--teal);letter-spacing:.04em}
+.logo-sub{font-size:10px;color:var(--gray-400);letter-spacing:.1em;margin-top:1px}
 .sidebar-nav{flex:1;padding:6px 0;overflow-y:auto;width:100%}
-.nav-sec{font-size:9px;font-weight:500;color:var(--gray-400);text-transform:uppercase;letter-spacing:.15em;padding:14px 8px 4px;margin-top:0;display:none}
-.nav-item{display:flex;align-items:center;justify-content:center;gap:0;padding:0;border-radius:0;cursor:pointer;font-size:0;color:var(--gray-200);border:none;background:none;width:48px;height:48px;text-align:left;transition:background .12s,color .12s;position:relative}
+.nav-sec{font-size:9px;font-weight:500;color:var(--gray-400);text-transform:uppercase;letter-spacing:.15em;padding:14px 8px 4px;margin-top:0}
+.nav-item{display:flex;align-items:center;justify-content:flex-start;gap:9px;padding:7px 10px;border-radius:0;cursor:pointer;font-size:13px;color:var(--gray-200);border:none;background:none;width:100%;height:auto;text-align:left;transition:background .12s,color .12s;position:relative}
 .nav-item:hover{background:var(--hover-strong);color:var(--teal)}
 .nav-item.active{background:transparent;color:var(--ink);font-weight:600}
 .nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:2px;height:24px;background:var(--teal);border-radius:0 2px 2px 0}
-.nav-lbl{display:none}
-.nav-badge-wrap{position:absolute;top:3px;right:3px;font-size:9px}
+.nav-lbl{display:inline}
+.nav-badge-wrap{position:static;font-size:9px}
 .nav-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;color:var(--gray-400);transition:color .12s;flex-shrink:0;font-size:16px}
 .nav-item:hover .nav-icon,.nav-item.active .nav-icon{color:var(--teal)}
-.sidebar-foot{display:none}
-/* hover expand + mobile/open drawer */
-.sidebar:hover,.sidebar.open{width:224px;min-width:224px;align-items:stretch}
-.sidebar:hover .logo,.sidebar.open .logo{padding:18px 16px;justify-content:flex-start}
-.sidebar:hover .logo-text,.sidebar:hover .logo-sub,.sidebar.open .logo-text,.sidebar.open .logo-sub{display:block}
-.sidebar:hover .nav-sec,.sidebar.open .nav-sec{display:block}
-.sidebar:hover .nav-item,.sidebar.open .nav-item{width:100%;height:auto;padding:7px 10px;gap:9px;justify-content:flex-start;font-size:13px}
-.sidebar:hover .nav-lbl,.sidebar.open .nav-lbl{display:inline}
-.sidebar:hover .nav-badge-wrap,.sidebar.open .nav-badge-wrap{position:static}
-.sidebar:hover .sidebar-foot,.sidebar.open .sidebar-foot{display:block}
+.sidebar-foot{display:block}
+/* collapsed state */
+.sidebar.collapsed{width:48px;min-width:48px;align-items:center}
+.sidebar.collapsed .logo{padding:10px 0;justify-content:center}
+.sidebar.collapsed .logo-text,.sidebar.collapsed .logo-sub{display:none}
+.sidebar.collapsed .nav-sec{display:none}
+.sidebar.collapsed .nav-item{justify-content:center;gap:0;padding:10px 0;font-size:0;width:48px}
+.sidebar.collapsed .nav-lbl{display:none}
+.sidebar.collapsed .nav-badge-wrap{position:absolute;top:3px;right:3px}
+.sidebar.collapsed .sidebar-foot{display:none}
+/* collapse toggle button */
+.sidebar-collapse-btn{display:flex;align-items:center;justify-content:center;width:100%;padding:8px;background:none;border:none;border-top:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:18px;line-height:1;flex-shrink:0;transition:color .12s,background .12s}
+.sidebar-collapse-btn:hover{color:var(--ink);background:var(--hover)}
+.sidebar.collapsed .sidebar-collapse-btn{padding:8px 0;width:48px}
+/* mobile drawer — sidebar slides in at full 224px */
+.sidebar.open{width:224px;min-width:224px;align-items:stretch}
+.sidebar.open .logo{padding:18px 16px;justify-content:flex-start}
+.sidebar.open .logo-text,.sidebar.open .logo-sub{display:block}
+.sidebar.open .nav-sec{display:block}
+.sidebar.open .nav-item{justify-content:flex-start;gap:9px;padding:7px 10px;font-size:13px;width:100%}
+.sidebar.open .nav-lbl{display:inline}
+.sidebar.open .nav-badge-wrap{position:static}
+.sidebar.open .sidebar-foot{display:block}
 .sidebar-icon-strip{display:flex;gap:4px;padding:6px 0 2px;width:100%;justify-content:flex-start;flex-wrap:wrap}
 .sidebar-icon-strip .theme-btn{margin-left:0}
 .sf-menu{padding:4px 0}
@@ -642,7 +655,7 @@ tr:hover .copy-btn{opacity:1}
 .menu-btn{display:none;background:var(--blue-deep);border:1px solid var(--border);color:var(--gray-200);border-radius:6px;cursor:pointer;font-size:16px;padding:6px 11px;margin-right:8px;line-height:1}
 .sidebar-backdrop{display:none}
 @media(max-width:760px){
-  body{padding-left:0;padding-left:env(safe-area-inset-left,0)}
+  body{padding-left:0!important;padding-left:env(safe-area-inset-left,0)!important}
   .sidebar{transform:translateX(-100%);transition:transform .22s cubic-bezier(.25,1,.5,1);box-shadow:0 0 40px rgba(0,0,0,.5);padding-bottom:env(safe-area-inset-bottom,0)}
   .sidebar.open{transform:translateX(0)}
   .sidebar-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
@@ -3602,7 +3615,8 @@ function App({vault, onVaultChange}={}) {
   const [lazyErr, setLazyErr]           = useState({}); // per-panel fetch error flags
   const [usingMock, setUsingMock]       = useState(false);
   const [demoDismiss, setDemoDismiss]   = useState(()=>LS.get('noc.demoDismiss',false));
-  const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [sidebarOpen, setSidebarOpen]       = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(()=>LS.get('noc.sidebarCollapsed',false));
   const [srchQ, setSrchQ]       = useState('');
   const [srchRes, setSrchRes]   = useState(null);
   const [srching, setSrching]   = useState(false);
@@ -3784,6 +3798,7 @@ function App({vault, onVaultChange}={}) {
   },[]);
 
   useEffect(()=>{load();},[]);
+  useEffect(()=>{ document.documentElement.style.setProperty('--sbw', sidebarCollapsed?'48px':'224px'); },[sidebarCollapsed]);
   useEffect(()=>{ if(!wallMode) return; const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t); },[wallMode]);
   const SEC_DELTA_KEY={ipam:'total_subnets',dns:'total_zones'};
   useEffect(()=>{ if(!data||!lastUpd) return; const h=LS.get('noc.tileHist',{}); const tn={Hosts:errHosts.length,Subnets:critSubs.length,DNS:ttlBad.length,Audit:auditLogs.filter(l=>l.result==='failure').length}; Object.entries(tn).forEach(([k,v])=>{ const a=(h[k]||[]).slice(-11); a.push(v); h[k]=a; }); LS.set('noc.tileHist',h); },[lastUpd]);
@@ -4093,7 +4108,7 @@ function App({vault, onVaultChange}={}) {
 
       {/* SIDEBAR */}
       {sidebarOpen&&<div className="sidebar-backdrop" onClick={()=>setSidebarOpen(false)}/>}
-      <div className={`sidebar${sidebarOpen?' open':''}`}>
+      <div className={`sidebar${sidebarCollapsed?' collapsed':''}${sidebarOpen?' open':''}`}>
         <div className="logo">
           <img className="logo-mark" src={IB_LOGO} alt="Infoblox" width="26" height="26"/>
           <div>
@@ -4283,6 +4298,12 @@ function App({vault, onVaultChange}={}) {
           )}
           </div>
         </div>
+        <button className="sidebar-collapse-btn"
+          aria-label={sidebarCollapsed?'Expand sidebar':'Collapse sidebar'}
+          title={sidebarCollapsed?'Expand sidebar':'Collapse sidebar'}
+          onClick={()=>{ const v=!sidebarCollapsed; setSidebarCollapsed(v); LS.set('noc.sidebarCollapsed',v); }}>
+          {sidebarCollapsed?'›':'‹'}
+        </button>
       </div>
 
       {/* MAIN */}
