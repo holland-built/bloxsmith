@@ -3582,6 +3582,7 @@ function App({vault, onVaultChange}={}) {
   const [subFilt,setSubFilt]         = useState(null);
   const [scopeSubnet, setScopeSubnet] = useState(null);
   const [scopeZone,   setScopeZone]   = useState(null);
+  const [siteFilt,    setSiteFilt]    = useState(null);
   const [dhcpSubFilt,setDhcpSubFilt] = useState(null);
   const [chatOpen,setChatOpen]       = useState(false);
   const [queryMode,setQueryMode]     = useState('ask');
@@ -4013,7 +4014,7 @@ function App({vault, onVaultChange}={}) {
 
   /* search filter — only active when queryMode==='filter' and searchQuery set */
   const sq = (queryMode==='filter'&&searchQuery) ? searchQuery.toLowerCase() : '';
-  const s_subnets  = (sq ? subnets.filter(s=>[s.name,s.addr,s.site].some(v=>v.toLowerCase().includes(sq)))  : subnets).filter(s=>!scopeSubnet||s.id===scopeSubnet);
+  const s_subnets  = (sq ? subnets.filter(s=>[s.name,s.addr,s.site].some(v=>v.toLowerCase().includes(sq)))  : subnets).filter(s=>!scopeSubnet||s.id===scopeSubnet).filter(s=>!siteFilt||s.site===siteFilt);
   const s_leases   = (sq ? leases.filter(l=>[l.addr,l.host,l.subnet].some(v=>(v||'').toLowerCase().includes(sq))) : leases)
     .filter(l=>{ const ef=dhcpSubFilt||scopeSubnet; if(!ef) return true; const sub=subnets.find(s=>s.id===ef); return sub?leasesInSubnet([l],sub).length>0:true; });
   const s_zones    = (sq ? zones.filter(z=>[z.fqdn,z.view].some(v=>v.toLowerCase().includes(sq)))           : zones).filter(z=>!scopeZone||z.id===scopeZone);
@@ -4301,7 +4302,10 @@ function App({vault, onVaultChange}={}) {
           </div>
           <div className="topbar-controls">
             <div className="topbar-group">
-              <div className="pill-select" data-tip="Filter by site">Site: All <span className="arrow">▾</span></div>
+              <select className="pill-select" data-tip="Filter by site" value={siteFilt||''} onChange={e=>setSiteFilt(e.target.value||null)} aria-label="Filter by site">
+                <option value="">Site: All</option>
+                {[...new Set((subnets||[]).map(s=>s.site).filter(Boolean).filter(s=>s!=='–'&&s!=='—'))].sort().map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
               <div className="pill-select" data-tip="Auto-refresh interval">Interval: 5m <span className="arrow">▾</span></div>
               <span className="nav-clock" aria-live="off">{now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
               <RefreshControl autoRefresh={autoRefresh}
