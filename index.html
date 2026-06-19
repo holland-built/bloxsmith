@@ -393,8 +393,9 @@ body.chat-open{padding-right:340px}
 @media(max-width:900px){.ov-2col,.ov-2col-eq,.ov-3col{grid-template-columns:1fr}}
 .nav-brand{display:flex;align-items:baseline;gap:8px;flex-shrink:0}
 .nav-brand-name{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
-.nav-breadcrumb{font-size:12px;color:var(--muted)}
-.nav-breadcrumb span{margin:0 3px;opacity:.5}
+.nav-breadcrumb{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:0}
+.nav-breadcrumb .bc-sep{margin:0 4px;opacity:.45;flex-shrink:0}
+.nav-breadcrumb span{margin:0}
 .pill-select{background:var(--surface-2);border:1px solid var(--border);border-radius:4px;color:var(--ink);font-size:12px;padding:4px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none;white-space:nowrap;transition:border-color .12s}
 .pill-select:hover{border-color:rgba(240,246,252,.20)}
 .pill-select .arrow{color:var(--muted);font-size:10px}
@@ -2778,7 +2779,7 @@ function HostBanner({hosts, demoMode}) {
 }
 
 /* ─── DRILL SHEET ────────────────────────────────────────────────────────────*/
-function DrillSheet({entity, onClose, leases=[], subnets=[]}) {
+function DrillSheet({entity, onClose, leases=[], subnets=[], setSection, setZoneFilt}) {
   const panelRef = useRef(null);
   useEffect(()=>{
     const prev = document.activeElement;
@@ -2915,6 +2916,20 @@ function DrillSheet({entity, onClose, leases=[], subnets=[]}) {
           <button className="close-btn" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div className="drill-sheet-bd">{body}</div>
+        {setSection&&(()=>{
+          const sectionMap={subnet:'ipam',host:'hosts',zone:'dns',feed:'security',policy:'security',lease:'ipam',audit:'audit'};
+          const target=sectionMap[entity.type];
+          if(!target) return null;
+          return (
+            <div style={{padding:'12px 16px',borderTop:'1px solid var(--border)'}}>
+              <button className="refresh-btn" style={{width:'100%',justifyContent:'center'}} onClick={()=>{
+                if(entity.type==='zone'&&setZoneFilt&&entity.data&&entity.data.id) setZoneFilt(entity.data.id);
+                setSection(target);
+                onClose();
+              }}>Open in {target.toUpperCase()} →</button>
+            </div>
+          );
+        })()}
       </div>
     </>
   );
@@ -3071,17 +3086,23 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
   const [metric,setMetric]=useState(ALERT_METRICS[0].key);
   const [op,setOp]=useState('>=');
   const [thr,setThr]=useState(1);
+  const [sev,setSev]=useState('crit');
   const [editId,setEditId]=useState(null);
   const [editVals,setEditVals]=useState({});
   const nowMs=Date.now();
-  const add=()=>{ const n=[...rules,{id:Date.now(),metric,op,threshold:Number(thr)}]; setRules(n); LS.set('noc.alertRules',n); };
+  const add=()=>{ const n=[...rules,{id:Date.now(),metric,op,threshold:Number(thr),sev}]; setRules(n); LS.set('noc.alertRules',n); };
   const del=id=>{ const n=rules.filter(r=>r.id!==id); setRules(n); LS.set('noc.alertRules',n); if(editId===id) setEditId(null); };
-  const startEdit=r=>{ setEditId(r.id); setEditVals({metric:r.metric,op:r.op,threshold:r.threshold}); };
+  const startEdit=r=>{ setEditId(r.id); setEditVals({metric:r.metric,op:r.op,threshold:r.threshold,sev:r.sev||'crit'}); };
   const saveEdit=id=>{ const n=rules.map(r=>r.id===id?{...r,...editVals,threshold:Number(editVals.threshold)}:r); setRules(n); LS.set('noc.alertRules',n); setEditId(null); };
   const cancelEdit=()=>setEditId(null);
   const evald=evalAlerts(data,rules);
+  const firingAlerts=evald.filter(r=>r.firing&&!(snoozed[r.id]&&snoozed[r.id]>nowMs));
+  const snoozeAll=()=>{const exp=Date.now()+60*60000;setSnoozed(s=>({...s,...Object.fromEntries(firingAlerts.map(r=>[r.id,exp]))}));};
   const alertCols=[
     {key:'status',label:'Status',nosort:true,render:r=>r.firing?<span className="badge b-red">Firing</span>:<span className="badge b-green">OK</span>},
+    {key:'sev',label:'Sev',nosort:true,render:r=>editId===r.id
+      ?<select className="viz-sel" aria-label="Alert severity" value={editVals.sev||'crit'} onChange={e=>setEditVals(v=>({...v,sev:e.target.value}))}><option value="crit">CRIT</option><option value="warn">WARN</option></select>
+      :(r.sev||'crit')==='crit'?<span className="badge b-red">CRIT</span>:<span className="badge b-amber">WARN</span>},
     {key:'metric',label:'Metric',render:r=>metricLabel(r.metric)},
     {key:'condition',label:'Condition',nosort:true,render:r=>editId===r.id
       ?<span style={{display:'flex',gap:4}}>
@@ -3100,7 +3121,7 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
   const inStyle={background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--gray-200)',padding:'6px 8px'};
   return (
     <div className="card">
-      <div className="card-title"><div className="dot"/>Alert Rules — fire when a live metric crosses a threshold</div>
+      <div className="card-title" style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}><span style={{display:'flex',alignItems:'center',gap:6}}><div className="dot"/>Alert Rules — fire when a live metric crosses a threshold</span>{firingAlerts.length>0&&<button className="col-btn" onClick={snoozeAll} title="Snooze all firing alerts for 1 hour">Snooze All ({firingAlerts.length})</button>}</div>
       <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:14}}>
         <select className="viz-sel" value={metric} onChange={e=>setMetric(e.target.value)}>
           {ALERT_METRICS.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
@@ -3109,6 +3130,7 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
           {Object.keys(ALERT_OPS).map(o=><option key={o} value={o}>{o}</option>)}
         </select>
         <input type="number" value={thr} onChange={e=>setThr(e.target.value)} aria-label="Alert threshold value" style={{...inStyle,width:80}}/>
+        <select className="viz-sel" value={sev} onChange={e=>setSev(e.target.value)} aria-label="Alert severity"><option value="crit">CRIT</option><option value="warn">WARN</option></select>
         <button className="lookup-btn" onClick={add}>+ Add rule</button>
       </div>
       {evald.length===0
@@ -3800,6 +3822,7 @@ function App({vault, onVaultChange}={}) {
   useEffect(()=>{load();},[]);
   useEffect(()=>{ document.documentElement.style.setProperty('--sbw', sidebarCollapsed?'48px':'224px'); },[sidebarCollapsed]);
   useEffect(()=>{ if(!wallMode) return; const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t); },[wallMode]);
+  useEffect(()=>{ if(!wallMode) return; const ids=SECTIONS.map(s=>s.id); let i=ids.indexOf(section); const t=setInterval(()=>{ i=(i+1)%ids.length; setSection(ids[i]); },30000); return ()=>clearInterval(t); },[wallMode]);
   const SEC_DELTA_KEY={ipam:'total_subnets',dns:'total_zones'};
   useEffect(()=>{ if(!data||!lastUpd) return; const h=LS.get('noc.tileHist',{}); const tn={Hosts:errHosts.length,Subnets:critSubs.length,DNS:ttlBad.length,Audit:auditLogs.filter(l=>l.result==='failure').length}; Object.entries(tn).forEach(([k,v])=>{ const a=(h[k]||[]).slice(-11); a.push(v); h[k]=a; }); LS.set('noc.tileHist',h); },[lastUpd]);
   useEffect(()=>{ if(!deltas) return; const t=LS.get('noc.secChanged',{}); Object.entries(SEC_DELTA_KEY).forEach(([sec,k])=>{ if(deltas[k]!=null&&deltas[k]!==0) t[sec]=Date.now(); }); LS.set('noc.secChanged',t); },[deltas]);
@@ -4318,7 +4341,24 @@ function App({vault, onVaultChange}={}) {
             <button className="menu-btn" aria-label={sidebarOpen?'Close navigation':'Open navigation'} aria-expanded={sidebarOpen} aria-controls="sidebar-nav" onClick={()=>setSidebarOpen(o=>!o)}>☰</button>
             <div className="nav-brand">
               <span className="nav-brand-name">Infoblox NOC</span>
-              <span className="nav-breadcrumb">DNS<span>·</span>DHCP<span>·</span>IPAM Overview</span>
+              <span className="nav-breadcrumb" role="navigation" aria-label="Breadcrumb">{(()=>{
+                const sep=<span className="bc-sep">›</span>;
+                const truncStyle={maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'inline-block',verticalAlign:'bottom'};
+                const secLabel=SECTIONS.find(s=>s.id===section)?.label||section;
+                const drillLabel=drillEntity?(
+                  drillEntity.type==='subnet'?(drillEntity.data.name&&drillEntity.data.name!==drillEntity.data.addr?drillEntity.data.name:`${drillEntity.data.addr}/${drillEntity.data.cidr}`)
+                  :drillEntity.type==='zone'?drillEntity.data.fqdn
+                  :drillEntity.type==='host'?(drillEntity.data.name||drillEntity.data.ip)
+                  :drillEntity.type==='lease'?(drillEntity.data.addr||drillEntity.data.ip||'Lease')
+                  :drillEntity.type==='feed'?drillEntity.data.name
+                  :drillEntity.type==='audit'?(drillEntity.data.object||drillEntity.data.action||'Log Entry')
+                  :(drillEntity.data.name||drillEntity.data.ip||drillEntity.type)
+                ):null;
+                return (<>
+                  <span style={{cursor:'pointer'}} onClick={()=>setDrillEntity(null)}>{secLabel}</span>
+                  {drillLabel&&<>{sep}<span style={truncStyle} title={drillLabel}>{drillLabel}</span></>}
+                </>);
+              })()}</span>
             </div>
             <div style={{minWidth:0}}>
               <h1 className="page-title" style={{display:'none'}}>{SECTIONS.find(s=>s.id===section)?.label}</h1>
@@ -4458,17 +4498,29 @@ function App({vault, onVaultChange}={}) {
 })()}
             <div className="kpi-row">
               {(()=>{
+                const _tileHist=LS.get('noc.tileHist',{});
+                const _sparkPts=(histKey)=>{
+                  const arr=(_tileHist[histKey]||[]).slice(-20);
+                  if(arr.length<2) return '0,14 160,14';
+                  const mn=Math.min(...arr), mx=Math.max(...arr);
+                  const rng=mx-mn||1;
+                  return arr.map((v,j)=>{
+                    const x=Math.round(j/(arr.length-1)*160);
+                    const y=Math.round(26-(v-mn)/rng*24);
+                    return `${x},${y}`;
+                  }).join(' ');
+                };
                 const kpis=[
-                  {v:s_hosts.length.toLocaleString(), l:scopeSubnet||scopeZone?'Hosts in Scope':'Total Hosts', delta:`${errHosts.length} offline / error`, sev:errHosts.length>0?'crit':null},
-                  {v:s_subnets.length.toLocaleString(), l:scopeSubnet||scopeZone?'Subnets in Scope':'Total Subnets', delta:`${critSubs.length} critical`, sev:critSubs.length>0?'crit':null},
-                  {v:`${critSubs[0]?.util??warnSubs[0]?.util??0}%`, l:'Peak DHCP Util', delta:critSubs.length>0?`${critSubs.length} over threshold`:'within threshold', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null},
-                  {v:zones.length.toLocaleString(), l:'DNS Zones', delta:`${ttlBad.length} TTL anomalies`, sev:ttlBad.length>0?'warn':null},
+                  {v:s_hosts.length.toLocaleString(), l:scopeSubnet||scopeZone?'Hosts in Scope':'Total Hosts', delta:`${errHosts.length} offline / error`, sev:errHosts.length>0?'crit':null, histKey:'Hosts'},
+                  {v:s_subnets.length.toLocaleString(), l:scopeSubnet||scopeZone?'Subnets in Scope':'Total Subnets', delta:`${critSubs.length} critical`, sev:critSubs.length>0?'crit':null, histKey:'Subnets'},
+                  {v:`${critSubs[0]?.util??warnSubs[0]?.util??0}%`, l:'Peak DHCP Util', delta:critSubs.length>0?`${critSubs.length} over threshold`:'within threshold', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null, histKey:null},
+                  {v:zones.length.toLocaleString(), l:'DNS Zones', delta:`${ttlBad.length} TTL anomalies`, sev:ttlBad.length>0?'warn':null, histKey:'DNS'},
                 ];
                 return kpis.map((k,i)=>(
                   <div key={i} className={`card${k.sev==='crit'?' crit-state':k.sev==='warn'?' warn-state':' dim'}`} style={{display:'flex',flexDirection:'column',gap:0}}>
                     <div className="kpi-val" style={i===2&&k.sev?{color:k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--ink)'}:{}}>{k.v}</div>
                     <svg width="100%" height="28" style={{margin:'6px 0',opacity:.6}} aria-hidden="true">
-                      <polyline points={i===2?"0,22 30,18 60,15 90,10 120,6 160,3":"0,14 30,13 60,14 90,12 120,13 160,12"} fill="none" stroke={k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--green)'} strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
+                      <polyline points={_sparkPts(k.histKey)} fill="none" stroke={k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--green)'} strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
                     </svg>
                     <div className="kpi-lbl">{k.l}</div>
                     <div className="kpi-delta">→ {k.delta}</div>
@@ -4500,14 +4552,14 @@ function App({vault, onVaultChange}={}) {
               const baseUtil=critSubs[0]?.util??topSubs[0]?.util??60;
               const chartPts=Array.from({length:30},(_,i)=>{
                 const x=(i*300/29).toFixed(1);
-                const u=Math.max(0,Math.min(100,baseUtil-20+i*(20/29)+Math.sin(i/3)*8));
-                const y=(120-u*1.05).toFixed(1);
-                return {x,y,str:`${x},${y}`};
+                const u=Math.max(60,Math.min(100,baseUtil-12+i*(14/29)+Math.sin(i/3)*5));
+                const y=(70-(u-60)*1.75).toFixed(1);
+                return {x,y,u:u.toFixed(0),str:`${x},${y}`};
               });
               const ptsStr=chartPts.map(p=>p.str).join(' ');
-              const polyPtsStr=ptsStr+' 300,120 0,120';
-              const thresh80y=(120-80*1.05).toFixed(1);
+              const thresh80y=(70-(80-60)*1.75).toFixed(1);
               const lastPt=chartPts[chartPts.length-1];
+              const trendClr=u=>parseInt(u)>=90?'var(--red)':parseInt(u)>=75?'var(--amber)':'var(--green)';
               return (
                 <>
                   {/* DHCP Section */}
@@ -4520,27 +4572,29 @@ function App({vault, onVaultChange}={}) {
                     <div className="ov-2col">
                       <div className="card" style={{padding:14}}>
                         <div className="ov-sub">DHCP Pool Utilization</div>
-                        <svg viewBox="0 0 300 120" width="100%" style={{display:'block',overflow:'visible'}} aria-hidden="true">
-                          {[0,25,50,75,100].map(v=>{
-                            const yv=(120-v*1.05).toFixed(1);
+                        <svg height={76} width="100%" viewBox="-36 0 336 76" preserveAspectRatio="none" aria-hidden="true">
+                          {[60,70,80,90,100].map(v=>{
+                            const yv=(70-(v-60)*1.75).toFixed(1);
                             return (<g key={v}>
                               <text x={-4} y={parseFloat(yv)+3} textAnchor="end" fontSize={8} fill="var(--muted)" fontFamily="monospace">{v}%</text>
                               <line x1={0} y1={yv} x2={300} y2={yv} stroke="var(--border)" strokeWidth={0.5}/>
                             </g>);
                           })}
                           <line x1={0} y1={thresh80y} x2={300} y2={thresh80y} stroke="var(--amber)" strokeWidth={1} strokeDasharray="4 3"/>
-                          <text x={298} y={parseFloat(thresh80y)-3} textAnchor="end" fontSize={8} fill="var(--amber)" fontFamily="monospace">80% threshold</text>
-                          <polygon points={polyPtsStr} fill="rgba(248,81,73,.1)"/>
-                          <polyline points={ptsStr} fill="none" stroke="var(--red)" strokeWidth={1.5}/>
-                          <circle cx={lastPt.x} cy={lastPt.y} r={3} fill="var(--red)"/>
+                          <text x={298} y={parseFloat(thresh80y)-3} textAnchor="end" fontSize={7} fill="var(--amber)" fontFamily="monospace">80%</text>
+                          <polyline points={ptsStr} fill="none" stroke={sevClr(topSubs[0]?.util??baseUtil)} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round"/>
+                          <circle cx={lastPt.x} cy={lastPt.y} r={3} fill={sevClr(topSubs[0]?.util??baseUtil)}/>
                         </svg>
                         <div className="ov-legend">
-                          <span><span style={{color:'var(--red)'}}>—</span>{' '}{topSubs[0]?.addr||'pool'}/{topSubs[0]?.cidr||'24'}</span>
+                          <span><span style={{color:sevClr(topSubs[0]?.util??baseUtil)}}>—</span>{' '}{topSubs[0]?.addr||'pool'}/{topSubs[0]?.cidr||'24'}</span>
                           <span><span style={{color:'var(--amber)'}}>- -</span>{' '}80% threshold</span>
                         </div>
                       </div>
                       <div className="card" style={{padding:14}}>
-                        <div className="ov-sub">DHCP Pools</div>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                          <span className="ov-sub" style={{margin:0}}>DHCP Pools</span>
+                          <button className="col-btn" onClick={()=>exportCols('dhcp-pools',['addr','cidr','util','free'].map(k=>({key:k,label:k})),topSubs)}>CSV</button>
+                        </div>
                         <div style={{display:'grid',gridTemplateColumns:'1fr 60px 48px',gap:'4px 8px',alignItems:'center'}}>
                           {['Pool','Used','Status'].map((h,i)=>(
                             <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',textAlign:i>0?'right':'left',borderBottom:'1px solid var(--border)',paddingBottom:4}}>{h}</span>
@@ -4575,7 +4629,10 @@ function App({vault, onVaultChange}={}) {
                     </div>
                     <div className="ov-3col">
                       <div className="card" style={{padding:14}}>
-                        <div className="ov-sub">· DNS Zones</div>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                          <span className="ov-sub" style={{margin:0}}>· DNS Zones</span>
+                          <button className="col-btn" onClick={()=>exportCols('dns-zones',['fqdn','view','ttl','records','anomaly'].map(k=>({key:k,label:k})),s_zones)}>CSV</button>
+                        </div>
                         <div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',marginBottom:10}}>
                           <span style={{color:'var(--ink)'}}>{s_zones.length}</span>{' zones  '}
                           <span style={{color:'var(--ink)'}}>{s_zones.reduce((a,z)=>a+(z.records||0),0).toLocaleString()}</span>{' records  '}
@@ -4591,7 +4648,7 @@ function App({vault, onVaultChange}={}) {
                             const qhr=hashN(z.fqdn,900)+50;
                             const isAnomaly=z.anomaly;
                             return (<React.Fragment key={z.id||i}>
-                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={z.fqdn}>{z.fqdn}</span>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={z.fqdn} onClick={()=>setDrillEntity({type:'zone',data:z})}>{z.fqdn}</span>
                               <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)'}}>{qhr}</span>
                               <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>Primary</span>
                               <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:isAnomaly?'var(--amber)':'var(--green)'}}>{isAnomaly?'? STALE':'· OK'}</span>
@@ -4613,7 +4670,7 @@ function App({vault, onVaultChange}={}) {
                             const clr=sevClr(s.util);
                             return (
                               <div key={s.id||i} style={{display:'grid',gridTemplateColumns:'1fr 80px 34px',gap:6,alignItems:'center',cursor:'pointer',padding:'2px 0'}}
-                                onClick={()=>setScopeSubnet(scopeSubnet===s.id?null:s.id)}>
+                                onClick={()=>{setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}>
                                 <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
                                 <div style={{height:6,background:'var(--surface-3)',borderRadius:3}}>
                                   <div style={{width:`${Math.min(s.util,100)}%`,height:'100%',background:clr,borderRadius:3}}/>
@@ -4648,7 +4705,7 @@ function App({vault, onVaultChange}={}) {
                             {errHosts.slice(0,3).map((h,i)=>{
                               const isErr=['error','offline'].includes(h.status);
                               return (<React.Fragment key={i}>
-                                <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={h.name||h.ip}>{h.name||h.ip}</span>
+                                <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={h.name||h.ip} onClick={()=>setDrillEntity({type:'host',data:h})}>{h.name||h.ip}</span>
                                 <span style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,
                                   background:isErr?'rgba(248,81,73,.12)':'rgba(210,153,34,.12)',
                                   color:isErr?'var(--red)':'var(--amber)',
@@ -4672,7 +4729,10 @@ function App({vault, onVaultChange}={}) {
                     </div>
                     <div className="ov-2col-eq">
                       <div className="card" style={{padding:14}}>
-                        <div className="ov-sub">· Active Threats</div>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                          <span className="ov-sub" style={{margin:0}}>· Active Threats</span>
+                          <button className="col-btn" onClick={()=>exportCols('active-threats',['name','cat','entries','level'].map(k=>({key:k,label:k})),feeds.filter(f=>f.active))}>CSV</button>
+                        </div>
                         <div style={{display:'grid',gridTemplateColumns:'1fr 68px 48px 50px',gap:'3px 8px'}}>
                           {['IP / Domain','Type','Blocked','Hits'].map((h,i)=>(
                             <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid var(--border)',paddingBottom:3}}>{h}</span>
@@ -4680,7 +4740,7 @@ function App({vault, onVaultChange}={}) {
                           {feeds.filter(f=>f.active).slice(0,4).map((f,i)=>{
                             const isHigh=(f.entries||0)>10000;
                             return (<React.Fragment key={i}>
-                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
+                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={f.name} onClick={()=>setDrillEntity({type:'feed',data:f})}>{f.name}</span>
                               <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{f.cat||f.category||'–'}</span>
                               <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',textAlign:'right'}}>–</span>
                               <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:isHigh?'var(--red)':'var(--ink)',textAlign:'right'}}>{(f.entries||0).toLocaleString()}</span>
@@ -4692,7 +4752,10 @@ function App({vault, onVaultChange}={}) {
                         </div>
                       </div>
                       <div className="card" style={{padding:14}}>
-                        <div className="ov-sub">· Audit Events</div>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                          <span className="ov-sub" style={{margin:0}}>· Audit Events</span>
+                          <button className="col-btn" onClick={()=>exportCols('audit-events',['ts','user','action','result'].map(k=>({key:k,label:k})),auditLogs.slice(0,6))}>CSV</button>
+                        </div>
                         {auditLogs.slice(0,6).map((log,i)=>{
                           const time=(log.ts||log.timestamp||'').toString().slice(11,16)||'–';
                           const isErr=log.result==='failure'||log.result==='error'||log.result==='failed';
@@ -4701,7 +4764,7 @@ function App({vault, onVaultChange}={}) {
                           const lvlC=isErr?'var(--red)':isOk?'var(--green)':'var(--amber)';
                           const lvlBg=isErr?'rgba(248,81,73,.1)':isOk?'rgba(63,185,80,.08)':'rgba(210,153,34,.1)';
                           return (
-                            <div key={i} style={{display:'grid',gridTemplateColumns:'34px 40px 1fr',gap:6,alignItems:'baseline',padding:'4px 0',borderBottom:i<5?'1px solid var(--border)':'none'}}>
+                            <div key={i} style={{display:'grid',gridTemplateColumns:'34px 40px 1fr',gap:6,alignItems:'baseline',padding:'4px 0',borderBottom:i<5?'1px solid var(--border)':'none',cursor:'pointer'}} onClick={()=>setDrillEntity({type:'audit',data:log})}>
                               <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{time}</span>
                               <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,background:lvlBg,color:lvlC,border:`1px solid ${lvlC}33`,textAlign:'center'}}>{lvl}</span>
                               <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={`${log.user||''} ${log.action||''}`}>
@@ -4735,7 +4798,7 @@ function App({vault, onVaultChange}={}) {
             {critSubs.length>0?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
           </div>
           <div className="card">
-            <div className="card-title"><div className="dot"/>All Subnets — DHCP Utilization ({ipamPool.length}{sq&&` of ${subnets.length}`})</div>
+            <div className="card-title"><div className="dot"/>All Subnets — DHCP Utilization ({ipamPool.length}{sq&&` of ${subnets.length}`})<VizSelect id="ipam-subnets" getViz={getViz} setViz={setViz}/></div>
             <RowLimitBar limit={rl('ipam')} setLimit={v=>setRl('ipam',v)}/>
               <div className="chip-bar">
                 {[
@@ -4764,7 +4827,9 @@ function App({vault, onVaultChange}={}) {
                     style={{width:46,background:'var(--surface-3)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',padding:'2px 4px',fontSize:10}}/>%</label>
                 </span>
               </div>
-            <IPAMTable subnets={ipamPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
+            {getViz('ipam-subnets')==='table'
+              ? <IPAMTable subnets={ipamPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
+              : <WidgetViz data={ipamPool.map(s=>({subnet:`${s.addr}/${s.cidr}`,util:s.util,free:s.free}))} viz={getViz('ipam-subnets')} labelKey="subnet" valueKey="util" color="var(--teal)" defaultRows={10}/>}
           </div>
           <div style={{marginTop:20}}>
             <div className="section-header">
@@ -4852,8 +4917,10 @@ function App({vault, onVaultChange}={}) {
             </div>
             <div className="g2">
               <div className="card">
-                <div className="card-title"><div className="dot" style={{background:'var(--amber)'}}/>Zones with TTL Issues</div>
-                <TTLTable zones={s_zones} onDrill={setDrillEntity}/>
+                <div className="card-title"><div className="dot" style={{background:'var(--amber)'}}/>Zones with TTL Issues<VizSelect id="dns-ttl" getViz={getViz} setViz={setViz}/></div>
+                {getViz('dns-ttl')==='table'
+                  ? <TTLTable zones={s_zones} onDrill={setDrillEntity}/>
+                  : <WidgetViz data={s_zones.filter(z=>z.anomaly).map(z=>({zone:z.fqdn,ttl:z.ttl,records:z.records||0}))} viz={getViz('dns-ttl')} labelKey="zone" valueKey="ttl" color="var(--amber)" defaultRows={10}/>}
                 {(()=>{
                   const drillZone = zoneFilt ? (s_zones.find(z=>z.id===zoneFilt)||zones.find(z=>z.id===zoneFilt)) : null;
                   return drillZone&&(
@@ -4923,7 +4990,7 @@ function App({vault, onVaultChange}={}) {
               {hostFilt&&<div style={{textAlign:'center',fontSize:11,color:'var(--teal)',marginTop:8}}>Filtered: <b>{hostFilt}</b> — click segment to clear</div>}
             </div>
             <div className="card">
-              <div className="card-title"><div className="dot"/>Host List {hostFilt&&`— ${hostFilt} (${filtHosts.length})`}</div>
+              <div className="card-title"><div className="dot"/>Host List {hostFilt&&`— ${hostFilt} (${filtHosts.length})`}<VizSelect id="hosts-list" getViz={getViz} setViz={setViz}/></div>
               <RowLimitBar limit={rl('hosts')} setLimit={v=>setRl('hosts',v)}/>
               <div className="chip-bar">
                 {['online','degraded','offline','error','pending'].map(st=>{
@@ -4940,7 +5007,9 @@ function App({vault, onVaultChange}={}) {
                 })}
                 {hostChip&&<button className="chip" onClick={()=>setHostChip(null)}>✕ clear</button>}
               </div>
-              <HostsTable hosts={filtHosts} rowLimit={rl('hosts')} hostSeen={hostSeen} onDrill={setDrillEntity}/>
+              {getViz('hosts-list')==='table'
+                ? <HostsTable hosts={filtHosts} rowLimit={rl('hosts')} hostSeen={hostSeen} onDrill={setDrillEntity}/>
+                : <WidgetViz data={filtHosts.map(h=>({host:h.name||h.id||h.ip,status:h.status,ip:h.ip||'—'}))} viz={getViz('hosts-list')} labelKey="host" valueKey="status" color="var(--teal)" defaultRows={10}/>}
             </div>
             <div className="card b-full">
               <div className="card-title"><div className="dot"/>Host Performance Metrics — avg, last hour</div>
@@ -4987,9 +5056,10 @@ function App({vault, onVaultChange}={}) {
               <span className="section-line"/>
             </div>
             <div className="card">
-              <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>All Threat Feeds by Severity{sq&&` (${s_feeds.length} of ${feeds.length})`}</div>
-              <RowLimitBar limit={rl('threats')} setLimit={v=>setRl('threats',v)}/>
-              <FeedsTable feeds={s_feeds} rowLimit={rl('threats')} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
+              <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>All Threat Feeds by Severity{sq&&` (${s_feeds.length} of ${feeds.length})`}<VizSelect id="sec-feeds" getViz={getViz} setViz={setViz}/></div>
+              {getViz('sec-feeds')==='table'
+                ? <><RowLimitBar limit={rl('threats')} setLimit={v=>setRl('threats',v)}/><FeedsTable feeds={s_feeds} rowLimit={rl('threats')} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/></>
+                : <WidgetViz data={s_feeds.map(f=>({name:f.name,entries:f.entries||0,category:f.cat||f.category||'—'}))} viz={getViz('sec-feeds')} labelKey="name" valueKey="entries" color="var(--red)" defaultRows={10}/>}
             </div>
           </div>
           <div style={{marginTop:16}}>
@@ -5033,9 +5103,10 @@ function App({vault, onVaultChange}={}) {
         {/* ── AUDIT ── */}
         {section==='audit'&&(
           <div className="card">
-            <div className="card-title"><div className="dot"/>Audit Log — {sq?`${s_logs.length} of `:'Last '}{auditLogs.length} Entries</div>
-            <RowLimitBar limit={rl('audit')} setLimit={v=>setRl('audit',v)}/>
-            <AuditTable logs={s_logs} limit={rl('audit')} onDrill={setDrillEntity}/>
+            <div className="card-title"><div className="dot"/>Audit Log — {sq?`${s_logs.length} of `:'Last '}{auditLogs.length} Entries<VizSelect id="audit-log" getViz={getViz} setViz={setViz}/></div>
+            {getViz('audit-log')==='table'
+              ? <><RowLimitBar limit={rl('audit')} setLimit={v=>setRl('audit',v)}/><AuditTable logs={s_logs} limit={rl('audit')} onDrill={setDrillEntity}/></>
+              : <WidgetViz data={s_logs.map(l=>({action:l.action||l.type||'event',user:l.user||'—',result:l.result||'—',time:(l.ts||'').toString().slice(0,10)}))} viz={getViz('audit-log')} labelKey="action" valueKey="result" color="var(--teal)" defaultRows={10}/>}
           </div>
         )}
 
@@ -5109,7 +5180,7 @@ function App({vault, onVaultChange}={}) {
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         section={section}
       />
-      {drillEntity&&<DrillSheet entity={drillEntity} onClose={()=>setDrillEntity(null)} leases={leases} subnets={subnets}/>}
+      {drillEntity&&<DrillSheet entity={drillEntity} onClose={()=>setDrillEntity(null)} leases={leases} subnets={subnets} setSection={setSection} setZoneFilt={setZoneFilt}/>}
       {showWizard&&<DashboardWizard overviewOrder={overviewOrder} collapsed={collapsed} hiddenSections={hiddenSections} widgetLabels={WIDGET_LABELS} moveWidget={moveWidget} toggleCollapse={toggleCollapse} toggleHideSection={toggleHideSection} onDone={finishWizard}/>}
     </div>
   );
