@@ -2007,6 +2007,31 @@ function WidgetViz({data=[], viz='table', columns=[], labelKey, valueKey, rowCol
     return <VizBars rows={rows} color={color}/>;
   }
 
+  if(viz==='heatmap'){
+    const lk=labelKey||(columns[0]&&columns[0].key);
+    const vk=valueKey||(columns.find(c=>data.some(r=>typeof r[c.key]==='number'))||{}).key||(columns[1]&&columns[1].key);
+    const sevClr=v=>v>=90?'var(--red)':v>=75?'var(--amber)':v>=50?'var(--green)':'var(--surface-3)';
+    return (
+      <div style={{display:'flex',flexWrap:'wrap',gap:3,padding:'4px 0'}}>
+        {[...data].sort((a,b)=>(Number(b[vk])||0)-(Number(a[vk])||0)).map((r,i)=>{
+          const val=Number(r[vk])||0;
+          const lbl=String(r[lk]??'—');
+          return (
+            <div key={i} title={`${lbl}: ${val}`}
+              style={{width:52,height:28,borderRadius:3,background:sevClr(val),display:'flex',flexDirection:'column',
+                alignItems:'center',justifyContent:'center',cursor:'pointer',overflow:'hidden',
+                border:'1px solid rgba(0,0,0,.2)',transition:'opacity .1s'}}
+              onMouseEnter={e=>e.currentTarget.style.opacity='.7'}
+              onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+              <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:'rgba(0,0,0,.8)',fontWeight:700,lineHeight:1}}>{val}%</span>
+              <span style={{fontSize:7,color:'rgba(0,0,0,.6)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:48,lineHeight:1.2,padding:'0 2px'}}>{lbl}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   /* table (default) */
   const cols=columns.length?columns:Object.keys(data[0]).slice(0,5).map(k=>({key:k,label:k}));
   if(persistId) return <WidgetVizTable data={data} columns={cols} defaultRows={defaultRows} persistId={persistId}/>;
@@ -3135,12 +3160,13 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
   const [op,setOp]=useState('>=');
   const [thr,setThr]=useState(1);
   const [sev,setSev]=useState('crit');
+  const [notifyUrl,setNotifyUrl]=useState('');
   const [editId,setEditId]=useState(null);
   const [editVals,setEditVals]=useState({});
   const nowMs=Date.now();
-  const add=()=>{ const n=[...rules,{id:Date.now(),metric,op,threshold:Number(thr),sev}]; setRules(n); LS.set('noc.alertRules',n); };
+  const add=()=>{ const n=[...rules,{id:Date.now(),metric,op,threshold:Number(thr),sev,notify_url:notifyUrl.trim()||null}]; setRules(n); LS.set('noc.alertRules',n); setNotifyUrl(''); };
   const del=id=>{ const n=rules.filter(r=>r.id!==id); setRules(n); LS.set('noc.alertRules',n); if(editId===id) setEditId(null); };
-  const startEdit=r=>{ setEditId(r.id); setEditVals({metric:r.metric,op:r.op,threshold:r.threshold,sev:r.sev||'crit'}); };
+  const startEdit=r=>{ setEditId(r.id); setEditVals({metric:r.metric,op:r.op,threshold:r.threshold,sev:r.sev||'crit',notify_url:r.notify_url||''}); };
   const saveEdit=id=>{ const n=rules.map(r=>r.id===id?{...r,...editVals,threshold:Number(editVals.threshold)}:r); setRules(n); LS.set('noc.alertRules',n); setEditId(null); };
   const cancelEdit=()=>setEditId(null);
   const evald=evalAlerts(data,rules);
@@ -3163,6 +3189,9 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
     {key:'_actions',label:'',nosort:true,noexport:true,render:r=>editId===r.id
       ?<button className="collapse-btn" style={{margin:0}} onClick={()=>saveEdit(r.id)} title="Save" aria-label="Save rule">✓</button>
       :<span style={{whiteSpace:'nowrap'}}><button className="collapse-btn" style={{margin:0,color:'var(--gray-500)'}} onClick={()=>startEdit(r)} title="Edit rule" aria-label="Edit rule">✎</button><button className="collapse-btn" style={{margin:0}} onClick={()=>del(r.id)} title="Delete rule" aria-label="Delete rule">✕</button></span>},
+    {key:'notify_url',label:'Webhook',nosort:true,render:r=>editId===r.id
+      ?<input type="url" aria-label="Webhook URL" placeholder="https://…" value={editVals.notify_url||''} onChange={e=>setEditVals(v=>({...v,notify_url:e.target.value}))} style={{width:160,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--gray-200)',padding:'3px 6px',fontSize:10,fontFamily:'var(--font-mono)'}}/>
+      :r.notify_url?<span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--teal)'}} title={r.notify_url}>wired</span>:<span style={{color:'var(--muted)',fontSize:10}}>—</span>},
     {key:'_snooze',label:'Snooze',size:11,nosort:true,noexport:true,render:r=>{const snoozeExp=snoozed[r.id];const isActive=snoozeExp&&snoozeExp>nowMs;if(isActive){return <button style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 8px',borderRadius:3,border:'1px solid var(--border)',background:'none',color:'var(--amber)',cursor:'pointer'}} onClick={()=>setSnoozed(s=>({...s,[r.id]:0}))} title="Cancel snooze">✕ unsnooze</button>;}return(<div style={{position:'relative',display:'inline-block'}}><select style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 6px',borderRadius:3,border:'1px solid var(--border)',background:'var(--surface-2)',color:'var(--muted)',cursor:'pointer'}} value="" onChange={e=>{const mins=Number(e.target.value);if(mins)setSnoozed(s=>({...s,[r.id]:Date.now()+mins*60000}));}}><option value="">Snooze…</option><option value="30">30 min</option><option value="60">1 hour</option><option value="120">2 hours</option></select></div>);}},
   ];
   const alertCtl=useColumns('alert-rules',alertCols);
@@ -3179,6 +3208,7 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
         </select>
         <input type="number" value={thr} onChange={e=>setThr(e.target.value)} aria-label="Alert threshold value" style={{...inStyle,width:80}}/>
         <select className="viz-sel" value={sev} onChange={e=>setSev(e.target.value)} aria-label="Alert severity"><option value="crit">CRIT</option><option value="warn">WARN</option></select>
+        <input type="url" value={notifyUrl} onChange={e=>setNotifyUrl(e.target.value)} aria-label="Webhook URL (optional)" placeholder="Webhook URL (optional)" style={{...inStyle,width:200,fontSize:11}}/>
         <button className="lookup-btn" onClick={add}>+ Add rule</button>
       </div>
       {evald.length===0
@@ -3466,7 +3496,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   );
 }
 
-const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['raw','Raw']];
+const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['heatmap','Heat'],['raw','Raw']];
 
 // Poll until the server responds 200, then call onReady().
 // Prevents the "page can't be displayed" flash when reloading right after a container restart.
@@ -4110,6 +4140,20 @@ function App({vault, onVaultChange}={}) {
     }});
     prevFiringRef.current=new Set(firing.map(a=>a.id));
   },[data,alertRules,notifyOn]);
+  // webhook fire when alert transitions into FIRING
+  const webhookFiredRef=React.useRef(new Set());
+  useEffect(()=>{
+    const firingNow=evalAlerts(data,alertRules).filter(a=>a.firing&&a.notify_url);
+    firingNow.forEach(a=>{
+      if(!webhookFiredRef.current.has(a.id)){
+        webhookFiredRef.current.add(a.id);
+        try{fetch(a.notify_url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({metric:metricLabel(a.metric),value:a.value,op:a.op,threshold:a.threshold,sev:a.sev||'crit',timestamp:new Date().toISOString()})}).catch(()=>{});}catch(e){}
+      }
+    });
+    // reset fired set when rule stops firing
+    const firingIds=new Set(firingNow.map(a=>a.id));
+    webhookFiredRef.current.forEach(id=>{if(!firingIds.has(id))webhookFiredRef.current.delete(id);});
+  },[data,alertRules]);
   const toggleNotify=()=>{
     if(notifyOn){ setNotifyOn(false); LS.set('noc.notify',false); return; }
     if(typeof Notification==='undefined'){ alert('This browser does not support notifications.'); return; }
