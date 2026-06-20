@@ -1823,14 +1823,19 @@ function PresetMenu({section, openProp, setOpenProp}) {
 }
 
 /* ── command palette (⌘K / Ctrl-K) ── */
-function CommandPalette({open, onClose, commands}) {
+function CommandPalette({open, onClose, commands, data, onDrill}) {
   const [q,setQ]=React.useState('');
   const [sel,setSel]=React.useState(0);
   const inputRef=React.useRef(null);
   React.useEffect(()=>{ if(open){ setQ(''); setSel(0); setTimeout(()=>inputRef.current&&inputRef.current.focus(),0);} },[open]);
   if(!open) return null;
   const ql=q.toLowerCase().trim();
-  const filtered=commands.filter(c=>!ql||c.label.toLowerCase().includes(ql)||(c.keywords||'').toLowerCase().includes(ql));
+  const dataMatches = data && ql.length>=2 ? [
+    ...(data.subnets||[]).filter(s=>[s.name,s.addr].some(v=>String(v||'').toLowerCase().includes(ql))).slice(0,6).map(s=>({id:'sub-'+s.id, icon:'◈', label:s.name&&s.name!==s.addr?s.name:s.addr+'/'+s.cidr, keywords:s.addr, hint:'Subnet', run:()=>onDrill&&onDrill({type:'subnet',data:s})})),
+    ...(data.hosts||[]).filter(h=>[h.name,h.ip].some(v=>String(v||'').toLowerCase().includes(ql))).slice(0,6).map(h=>({id:'host-'+h.name, icon:'○', label:h.name||h.ip||'?', keywords:h.ip||'', hint:'Host', run:()=>onDrill&&onDrill({type:'host',data:h})})),
+    ...(data.zones||[]).filter(z=>String(z.fqdn||'').toLowerCase().includes(ql)).slice(0,4).map(z=>({id:'zone-'+z.id, icon:'⊛', label:z.fqdn, keywords:z.fqdn, hint:'Zone', run:()=>onDrill&&onDrill({type:'zone',data:z})})),
+  ] : [];
+  const filtered=[...dataMatches, ...commands.filter(c=>!ql||c.label.toLowerCase().includes(ql)||(c.keywords||'').toLowerCase().includes(ql))];
   const run=c=>{ if(!c) return; onClose(); c.run(); };
   const onKey=e=>{
     if(e.key==='ArrowDown'){e.preventDefault();setSel(s=>Math.min(s+1,filtered.length-1));}
@@ -2035,6 +2040,46 @@ function WidgetViz({data=[], viz='table', columns=[], labelKey, valueKey, rowCol
     );
   }
 
+  if(viz==='pie') {
+    const lk=labelKey||(columns[0]&&columns[0].key);
+    const vk=valueKey||(columns.find(c=>data.some(r=>typeof r[c.key]==='number'))||{}).key||(columns[1]&&columns[1].key);
+    if(!vk) return <div className="no-data">No numeric column to chart</div>;
+    const pieCols=['var(--teal)','var(--amber)','var(--green)','var(--red)','var(--gray-400)'];
+    const sorted=[...data].filter(r=>Number(r[vk])>0).sort((a,b)=>Number(b[vk])-Number(a[vk])).slice(0,8);
+    const total=sorted.reduce((s,r)=>s+Number(r[vk]),0)||1;
+    const R=52, ri=28, cx=64, cy=64;
+    let ang=-Math.PI/2;
+    const slices=sorted.map((r,i)=>{
+      const sweep=(Number(r[vk])/total)*Math.PI*2;
+      const x1=cx+R*Math.cos(ang), y1=cy+R*Math.sin(ang);
+      ang+=sweep;
+      const x2=cx+R*Math.cos(ang), y2=cy+R*Math.sin(ang);
+      const large=sweep>Math.PI?1:0;
+      return {r, i, x1,y1,x2,y2,large,color:pieCols[i%pieCols.length],val:Number(r[vk]),label:String(r[lk]??'—')};
+    });
+    return (
+      <div style={{display:'flex',alignItems:'center',gap:16,padding:'4px 0'}}>
+        <svg width={128} height={128} viewBox="0 0 128 128" aria-hidden="true" style={{flexShrink:0}}>
+          {slices.map((s,i)=>(
+            <path key={i} d={`M ${cx} ${cy} L ${s.x1} ${s.y1} A ${R} ${R} 0 ${s.large} 1 ${s.x2} ${s.y2} Z`}
+              fill={s.color} opacity={0.85}/>
+          ))}
+          <circle cx={cx} cy={cy} r={ri} fill="var(--surface)"/>
+          <text x={cx} y={cy+1} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill="var(--muted)" fontFamily="var(--font-mono)">{sorted.length} items</text>
+        </svg>
+        <div style={{display:'flex',flexDirection:'column',gap:4}}>
+          {slices.map((s,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
+              <div style={{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0}}/>
+              <span style={{fontFamily:'var(--font-mono)',color:'var(--ink)',minWidth:60,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.label}</span>
+              <span style={{color:'var(--muted)'}}>{Math.round(s.val/total*100)}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   /* table (default) */
   const cols=columns.length?columns:Object.keys(data[0]).slice(0,5).map(k=>({key:k,label:k}));
   if(persistId) return <WidgetVizTable data={data} columns={cols} defaultRows={defaultRows} persistId={persistId}/>;
@@ -2101,8 +2146,10 @@ function QueryTypeChart({queryTypes}){
 }
 
 const NDA='NstarDnsActivity.';
-function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
+function DnsAnalyticsPanel({data, rowLimit, setRowLimit, cutoffMs=0}) {
   const [cf,setCf]=useState('');
+  const [topN,setTopN]=React.useState(10);
+  const linReg=pts=>{const n=pts.length;if(n<2)return{m:0,b:pts[0]||0};const mx=pts.reduce((a,_,i)=>a+i,0)/n,my=pts.reduce((a,v)=>a+v,0)/n;const num=pts.reduce((a,v,i)=>a+(i-mx)*(v-my),0);const den=pts.reduce((a,_,i)=>a+(i-mx)**2,0);const m=den?num/den:0;return{m,b:my-m*mx};};
   const spikes = React.useMemo(()=>{
     if(!data||!data.top_clients) return {};
     const cur={};
@@ -2131,6 +2178,7 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
   ]);
   if(!data) return <SkeletonTable/>;
   const {volume=[],top_clients=[],query_types=[]} = data;
+  const filtVolume = cutoffMs>0 ? volume.filter(r=>{const ts=r['NstarDnsActivity.timestamp']||r.timestamp||'';const ms=new Date(ts).getTime();return isNaN(ms)||ms>=cutoffMs;}) : volume;
   const total = top_clients.reduce((a,r)=>a+(Number(r['NstarDnsActivity.total_query_count'])||0),0);
   const fclients = cf ? top_clients.filter(r=>[r['NstarDnsActivity.device_name'],r['NstarDnsActivity.device_ip']].some(v=>String(v||'').toLowerCase().includes(cf.toLowerCase()))) : top_clients;
   return (
@@ -2150,7 +2198,43 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
       <div className="g2 mb20">
         <div className="card">
           <div className="card-title"><div className="dot"/>Query Volume — Last 7 Days</div>
-          <MiniLineChart data={volume} valueKey="NstarDnsActivity.total_query_count" labelKey="NstarDnsActivity.timestamp" height={100}/>
+          {(()=>{
+            if(!filtVolume||!filtVolume.length) return <div className="no-data">No data</div>;
+            const vk='NstarDnsActivity.total_query_count';
+            const lk='NstarDnsActivity.timestamp';
+            const vals=filtVolume.map(d=>Number(d[vk])||0);
+            const maxV=Math.max(...vals,1);
+            const W=420,H=100,pad=8;
+            const pts=vals.map((v,i)=>({x:pad+i*(W-2*pad)/(vals.length-1||1),y:H-pad-(v/maxV)*(H-2*pad)}));
+            const line=pts.map((p,i)=>`${i?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+            const area=line+` L${pts[pts.length-1].x.toFixed(1)},${H} L${pts[0].x.toFixed(1)},${H} Z`;
+            const labels=filtVolume.map(d=>(d[lk]||'').toString().slice(0,10));
+            const fVals=filtVolume.slice(-6).map(r=>Number(r[vk])||0);
+            const forecastEl=(()=>{
+              if(fVals.length<3) return null;
+              const {m,b}=linReg(fVals);
+              const totalPts=filtVolume.length+3;
+              const sx=i=>pad+i*(W-2*pad)/(totalPts-1||1);
+              const sy=v=>H-pad-(Math.max(0,v)/maxV)*(H-2*pad);
+              const forecastPts=[0,1,2].map(d=>{const i=filtVolume.length+d;return `${sx(i).toFixed(1)},${sy(m*i+b).toFixed(1)}`;});
+              const bandTop=[0,1,2].map(d=>{const i=filtVolume.length+d;return `${sx(i).toFixed(1)},${sy((m*i+b)*1.15).toFixed(1)}`;});
+              const bandBot=[2,1,0].map(d=>{const i=filtVolume.length+d;return `${sx(i).toFixed(1)},${sy((m*i+b)*0.85).toFixed(1)}`;});
+              return (<>
+                <polygon points={[...bandTop,...bandBot].join(' ')} fill="var(--amber)" opacity="0.12"/>
+                <polyline points={forecastPts.join(' ')} fill="none" stroke="var(--amber)" strokeWidth="1.5" strokeDasharray="3,2" opacity="0.7"/>
+              </>);
+            })();
+            return (<div style={{position:'relative'}}>
+              <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:'block'}} role="img" aria-label={`DNS volume trend over ${filtVolume.length} data points`}>
+                <path d={area} fill="var(--teal)" opacity="0.12"/>
+                <path d={line} fill="none" stroke="var(--teal)" strokeWidth="1.8"/>
+                {forecastEl}
+              </svg>
+              <div style={{display:'flex',justifyContent:'space-between',marginTop:2}}>
+                {labels.map((l,i)=>i===0||i===labels.length-1||i===Math.floor(labels.length/2)?(<span key={i} style={{fontSize:9,color:'var(--gray-400)'}}>{l.slice(5)}</span>):null)}
+              </div>
+            </div>);
+          })()}
         </div>
         <div className="card">
           <div className="card-title"><div className="dot"/>Query Types</div>
@@ -2176,20 +2260,28 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit}) {
         </div>
       </div>
       <div className="card">
-        <div className="card-title"><div className="dot"/>Top DNS Clients — Last 7 Days</div>
+        <div className="card-title" style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+          <div className="dot"/>Top DNS Clients — Last 7 Days
+          <select value={topN} onChange={e=>setTopN(e.target.value==='all'?'all':Number(e.target.value))}
+            style={{fontSize:10,background:'var(--surface-2)',color:'var(--ink)',border:'1px solid var(--border)',borderRadius:3,padding:'1px 4px',fontFamily:'var(--font-mono)',marginLeft:4}}>
+            {[5,10,25,'all'].map(n=><option key={n} value={n}>Top {n==='all'?'All':n}</option>)}
+          </select>
+        </div>
         <div style={{display:'flex',gap:10,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
           <input className="global-search" aria-label="Filter by device or IP" style={{width:220,maxWidth:'100%'}} placeholder="Filter by device or IP…"
             value={cf} onChange={e=>setCf(e.target.value)}/>
           {cf&&<span style={{fontSize:10,color:'var(--gray-400)'}}>{fclients.length} of {top_clients.length}</span>}
           <div style={{marginLeft:'auto'}}><RowLimitBar limit={rowLimit} setLimit={setRowLimit}/></div>
         </div>
+        {(()=>{const visClients=topN==='all'?fclients:fclients.slice(0,topN);return(
         <div className="scroll" style={{maxHeight:480}}>
-          {fclients.length===0
+          {visClients.length===0
             ? <div className="no-data" style={{padding:'24px 0'}}>No clients match "{cf}"</div>
-            : <DataTable cols={clientCtl.allCols} ctl={clientCtl} rows={fclients}
+            : <DataTable cols={clientCtl.allCols} ctl={clientCtl} rows={visClients}
                 defaultRows={rowLimit} rowKey={r=>r[NDA+'device_ip']||r[NDA+'device_name']}
                 initialSort={{key:'queries',dir:'desc'}} exportName="dns-top-clients" persistId="dns-clients"/>}
         </div>
+        );})()}
       </div>
     </>
   );
@@ -2270,8 +2362,8 @@ function ActionsPanel({data, rowLimit, setRowLimit}) {
 }
 
 /* Host performance metrics (avg over last hour, per host+metric) */
-function HostMetricsPanel({data}) {
-  const rows = !data ? [] : (data.metrics||[]);
+function HostMetricsPanel({data, cutoffMs=0}) {
+  const rows = !data ? [] : (cutoffMs>0 ? (data.metrics||[]).filter(r=>{const ts=r['HostMetrics.timestamp']||r.timestamp||'';const ms=new Date(ts).getTime();return isNaN(ms)||ms>=cutoffMs;}) : (data.metrics||[]));
   const max = rows.reduce((m,r)=>Math.max(m, Number(r['HostMetrics.avg_value'])||0), 0) || 1;
   const allCols=[
     {key:'host',label:'Host',fixed:true,sortVal:r=>r['HostMetrics.host_name']||'',render:r=><span style={{fontWeight:500}}>{r['HostMetrics.host_name']||'—'}</span>},
@@ -2282,6 +2374,189 @@ function HostMetricsPanel({data}) {
   if(!data) return <SkeletonTable/>;
   if(!rows.length) return <div className="no-data">No host metrics available for the last hour</div>;
   return <DataTable ctl={ctl} rows={rows} defaultRows={15} exportName="host-metrics" persistId="hostmetrics" initialSort={{key:'avg',dir:'desc'}}/>;
+}
+
+function PercentileCards({data}) {
+  if(!data||!data.metrics||!data.metrics.length) return null;
+  const byMetric = {};
+  data.metrics.forEach(r=>{
+    const m=(r['HostMetrics.metric_name']||'').toLowerCase();
+    const v=Number(r['HostMetrics.avg_value'])||0;
+    if(!byMetric[m]) byMetric[m]=[];
+    byMetric[m].push(v);
+  });
+  const pct=(arr,p)=>{const s=[...arr].sort((a,b)=>a-b);return s[Math.floor(s.length*p/100)]??0;};
+  const fmt=v=>v<1?v.toFixed(3):v<100?v.toFixed(1):Math.round(v).toLocaleString();
+  const metrics=[
+    {key:'cpu',label:'CPU %',unit:'%'},
+    {key:'memory',label:'Memory %',unit:'%'},
+    {key:'disk',label:'Disk %',unit:'%'},
+    {key:'latency',label:'Latency',unit:'ms'},
+  ].filter(m=>byMetric[m.key]?.length);
+  if(!metrics.length) return null;
+  return (
+    <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+      {metrics.map(m=>{
+        const vals=byMetric[m.key];
+        const p50=pct(vals,50), p95=pct(vals,95), p99=pct(vals,99);
+        const crit=p95>90;
+        return (
+          <div key={m.key} className={`card${crit?' warn-state':''}`} style={{flex:1,minWidth:120,padding:10}}>
+            <div style={{fontSize:9,fontFamily:'var(--font-mono)',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>{m.label}</div>
+            {[['p50',p50],['p95',p95],['p99',p99]].map(([lbl,v])=>(
+              <div key={lbl} style={{display:'flex',justifyContent:'space-between',fontSize:11,fontFamily:'var(--font-mono)',padding:'1px 0'}}>
+                <span style={{color:'var(--muted)'}}>{lbl}</span>
+                <span style={{color:lbl==='p99'&&v>90?'var(--red)':lbl==='p95'&&v>85?'var(--amber)':'var(--ink)',fontWeight:lbl==='p50'?400:600}}>{fmt(v)}{m.unit}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ContentionMatrix({data, hosts}) {
+  if(!data||!data.metrics||!data.metrics.length||!hosts||!hosts.length) return null;
+  const METRICS=['cpu','memory','disk','latency'];
+  const sevClr=v=>v>=90?'var(--red)':v>=75?'var(--amber)':v>=50?'var(--teal)':'var(--surface-3)';
+  const byHost={};
+  data.metrics.forEach(r=>{
+    const h=r['HostMetrics.host_name']||'?';
+    const m=(r['HostMetrics.metric_name']||'').toLowerCase();
+    const v=Number(r['HostMetrics.avg_value'])||0;
+    if(!byHost[h]) byHost[h]={};
+    byHost[h][m]=v;
+  });
+  const hostNames=Object.keys(byHost).slice(0,20);
+  if(!hostNames.length) return null;
+  return (
+    <div className="card" style={{marginBottom:14,overflowX:'auto'}}>
+      <div className="card-title"><div className="dot"/>Resource Contention Matrix</div>
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:10,fontFamily:'var(--font-mono)'}}>
+        <thead>
+          <tr>
+            <th style={{textAlign:'left',padding:'2px 8px',color:'var(--muted)',fontWeight:400,borderBottom:'1px solid var(--border)'}}>Host</th>
+            {METRICS.map(m=><th key={m} style={{textAlign:'center',padding:'2px 6px',color:'var(--muted)',fontWeight:400,width:52,borderBottom:'1px solid var(--border)',textTransform:'uppercase',letterSpacing:'.06em'}}>{m}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {hostNames.map(h=>(
+            <tr key={h}>
+              <td style={{padding:'2px 8px',color:'var(--ink)',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h}</td>
+              {METRICS.map(m=>{
+                const v=byHost[h][m]??null;
+                return (
+                  <td key={m} style={{textAlign:'center',padding:2}}>
+                    {v!==null
+                      ? <div style={{width:44,height:20,margin:'0 auto',borderRadius:3,background:sevClr(v),display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'rgba(0,0,0,.75)',fontWeight:700}} title={`${h} ${m}: ${v.toFixed(1)}`}>{v.toFixed(0)}%</div>
+                      : <div style={{width:44,height:20,margin:'0 auto',borderRadius:3,background:'var(--surface-3)',opacity:.3}}/>}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function HealthScorecards({data, hosts}) {
+  if(!data||!data.metrics||!hosts||!hosts.length) return null;
+  const byHost={};
+  data.metrics.forEach(r=>{
+    const h=r['HostMetrics.host_name']||'?';
+    const m=(r['HostMetrics.metric_name']||'').toLowerCase();
+    const v=Number(r['HostMetrics.avg_value'])||0;
+    if(!byHost[h]) byHost[h]={};
+    byHost[h][m]=v;
+  });
+  const score=(hostName, status)=>{
+    const m=byHost[hostName]||{};
+    if(status==='offline'||status==='error') return 0;
+    let s=100;
+    if(m.cpu>90) s-=30; else if(m.cpu>75) s-=15;
+    if(m.memory>90) s-=25; else if(m.memory>75) s-=12;
+    if(m.disk>90) s-=20; else if(m.disk>75) s-=10;
+    if(m.latency>200) s-=15; else if(m.latency>100) s-=8;
+    if(status==='degraded') s-=20;
+    return Math.max(0,s);
+  };
+  const grade=s=>s>=90?'A':s>=75?'B':s>=60?'C':s>=40?'D':'F';
+  const gradeClr=s=>s>=90?'var(--green)':s>=60?'var(--amber)':'var(--red)';
+  const top=[...hosts].sort((a,b)=>score(a.name||a.ip,a.status)-score(b.name||b.ip,b.status)).slice(0,10);
+  return (
+    <div className="card" style={{marginBottom:14}}>
+      <div className="card-title"><div className="dot"/>Device Health Scorecards</div>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+        {top.map((h,i)=>{
+          const nm=h.name||h.ip||'?';
+          const s=score(nm, h.status);
+          const g=grade(s);
+          const c=gradeClr(s);
+          return (
+            <div key={i} style={{minWidth:80,padding:'8px 10px',background:'var(--surface-2)',borderRadius:4,border:`1px solid ${s<60?'var(--red)':s<75?'var(--amber)':'var(--border)'}`,textAlign:'center',fontFamily:'var(--font-mono)'}}>
+              <div style={{fontSize:22,fontWeight:800,color:c,lineHeight:1}}>{g}</div>
+              <div style={{fontSize:16,fontWeight:400,color:c,lineHeight:1,marginTop:2}}>{s}</div>
+              <div style={{fontSize:8,color:'var(--muted)',marginTop:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:72}}>{nm}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StatusGrid({hosts, data}) {
+  if(!hosts||!hosts.length) return null;
+  const byHost={};
+  (data?.metrics||[]).forEach(r=>{
+    const h=r['HostMetrics.host_name']||'?';
+    const m=(r['HostMetrics.metric_name']||'').toLowerCase();
+    const v=Number(r['HostMetrics.avg_value'])||0;
+    if(!byHost[h]) byHost[h]={};
+    byHost[h][m]=v;
+  });
+  const statusDot=s=>s==='online'?'var(--green)':s==='degraded'?'var(--amber)':s==='offline'||s==='error'?'var(--red)':'var(--surface-3)';
+  const metricDot=(v,warn=75,crit=90)=>v>=crit?'var(--red)':v>=warn?'var(--amber)':v>0?'var(--green)':'var(--surface-3)';
+  const COLS=[
+    {label:'Status', fn:(h)=>({clr:statusDot(h.status), val:h.status})},
+    {label:'CPU',    fn:(h)=>{const v=byHost[h.name||h.ip]?.cpu??null;return {clr:v!==null?metricDot(v):'var(--surface-3)', val:v!==null?v.toFixed(0)+'%':'—'};}},
+    {label:'Mem',    fn:(h)=>{const v=byHost[h.name||h.ip]?.memory??null;return {clr:v!==null?metricDot(v):'var(--surface-3)', val:v!==null?v.toFixed(0)+'%':'—'};}},
+    {label:'Disk',   fn:(h)=>{const v=byHost[h.name||h.ip]?.disk??null;return {clr:v!==null?metricDot(v):'var(--surface-3)', val:v!==null?v.toFixed(0)+'%':'—'};}},
+    {label:'Latency',fn:(h)=>{const v=byHost[h.name||h.ip]?.latency??null;return {clr:v!==null?metricDot(v,100,200):'var(--surface-3)', val:v!==null?v.toFixed(0)+'ms':'—'};}},
+  ];
+  const show=hosts.slice(0,30);
+  return (
+    <div className="card" style={{marginBottom:14,overflowX:'auto'}}>
+      <div className="card-title"><div className="dot"/>Host Status Grid</div>
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:10,fontFamily:'var(--font-mono)'}}>
+        <thead><tr>
+          <th style={{textAlign:'left',padding:'2px 6px',color:'var(--muted)',fontWeight:400,borderBottom:'1px solid var(--border)'}}>Host</th>
+          {COLS.map(c=><th key={c.label} style={{textAlign:'center',width:56,padding:'2px 4px',color:'var(--muted)',fontWeight:400,borderBottom:'1px solid var(--border)'}}>{c.label}</th>)}
+        </tr></thead>
+        <tbody>
+          {show.map((h,i)=>{
+            const nm=h.name||h.ip||'?';
+            return (
+              <tr key={i}>
+                <td style={{padding:'3px 6px',color:'var(--ink)',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={nm}>{nm}</td>
+                {COLS.map(c=>{const {clr,val}=c.fn(h);return(
+                  <td key={c.label} style={{textAlign:'center',padding:'2px 4px'}}>
+                    <div style={{display:'inline-flex',alignItems:'center',gap:3}}>
+                      <div style={{width:8,height:8,borderRadius:'50%',background:clr,flexShrink:0}}/>
+                      <span style={{fontSize:9,color:'var(--muted)'}}>{val}</span>
+                    </div>
+                  </td>
+                );})}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function ThreatLookupPanel({subnets=[], leases=[]}) {
@@ -2887,6 +3162,30 @@ function DrillSheet({entity, onClose, leases=[], subnets=[], setSection, setZone
         {kv('Utilization', `${sub.util}% (${sub.used}/${sub.total})`)}
         {kv('Site', sub.site)}
         {kv('DHCP Leases', subLeases.length)}
+        {(()=>{
+          const hist = (LS.get('noc.tileHist',{})||{})['Subnets'] || [];
+          if(hist.length < 3) return null;
+          // simple linear regression on last N points
+          const n=hist.length, xs=hist.map((_,i)=>i), ys=hist;
+          const mx=xs.reduce((a,b)=>a+b,0)/n, my=ys.reduce((a,b)=>a+b,0)/n;
+          const num=xs.reduce((a,x,i)=>a+(x-mx)*(ys[i]-my),0);
+          const den=xs.reduce((a,x)=>a+(x-mx)**2,0)||1;
+          const slope=num/den, intercept=my-slope*mx;
+          const daysToFull = slope>0 ? Math.round((100-sub.util)/slope) : null;
+          return (
+            <div style={{marginTop:10,padding:'8px 10px',background:'var(--surface-3)',borderRadius:4,fontFamily:'var(--font-mono)',fontSize:11}}>
+              <div style={{color:'var(--muted)',fontSize:9,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:4}}>Capacity Forecast</div>
+              {daysToFull!==null && daysToFull>0 && daysToFull<365
+                ? <div style={{color:daysToFull<30?'var(--red)':daysToFull<90?'var(--amber)':'var(--green)'}}>
+                    [!] Pool exhaustion in ~{daysToFull} days at current trend
+                  </div>
+                : slope<=0
+                  ? <div style={{color:'var(--green)'}}>✓ Utilization trending down — no exhaustion projected</div>
+                  : <div style={{color:'var(--muted)'}}>Trend insufficient to project exhaustion</div>}
+              <div style={{color:'var(--muted)',marginTop:4}}>Trend: {slope>0?'+':'−'}{Math.abs(slope*10).toFixed(1)}%/10 refreshes · {n} data points</div>
+            </div>
+          );
+        })()}
         {subLeases.length>0&&(
           <div style={{marginTop:12}}>
             <div style={{fontSize:10,color:'var(--gray-400)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Active Leases</div>
@@ -3168,6 +3467,10 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
   const [editId,setEditId]=useState(null);
   const [editVals,setEditVals]=useState({});
   const nowMs=Date.now();
+  const [alertAcks,setAlertAcks]=React.useState(()=>LS.get('noc.alertAcks',{}));
+  const ackAlert=id=>{const n={...alertAcks,[id]:{ts:Date.now(),by:'operator'}};setAlertAcks(n);LS.set('noc.alertAcks',n);};
+  const unAckAlert=id=>{const {[id]:_,...rest}=alertAcks;setAlertAcks(rest);LS.set('noc.alertAcks',rest);};
+  const ackedCount=Object.keys(alertAcks).length;
   const add=()=>{ const n=[...rules,{id:Date.now(),metric,op,threshold:Number(thr),sev,notify_url:notifyUrl.trim()||null}]; setRules(n); LS.set('noc.alertRules',n); setNotifyUrl(''); };
   const del=id=>{ const n=rules.filter(r=>r.id!==id); setRules(n); LS.set('noc.alertRules',n); if(editId===id) setEditId(null); };
   const startEdit=r=>{ setEditId(r.id); setEditVals({metric:r.metric,op:r.op,threshold:r.threshold,sev:r.sev||'crit',notify_url:r.notify_url||''}); };
@@ -3196,13 +3499,50 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
     {key:'notify_url',label:'Webhook',nosort:true,render:r=>editId===r.id
       ?<input type="url" aria-label="Webhook URL" placeholder="https://…" value={editVals.notify_url||''} onChange={e=>setEditVals(v=>({...v,notify_url:e.target.value}))} style={{width:160,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--gray-200)',padding:'3px 6px',fontSize:10,fontFamily:'var(--font-mono)'}}/>
       :r.notify_url?<span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--teal)'}} title={r.notify_url}>wired</span>:<span style={{color:'var(--muted)',fontSize:10}}>—</span>},
+    {key:'_ack',label:'Ack',nosort:true,noexport:true,render:r=>alertAcks[r.id]
+      ?<span style={{fontSize:9,color:'var(--teal)',fontFamily:'var(--font-mono)'}}>✓ Acked <span style={{cursor:'pointer',color:'var(--muted)'}} onClick={()=>unAckAlert(r.id)}>✕</span></span>
+      :<button className="col-btn" style={{fontSize:9,padding:'2px 6px'}} onClick={()=>ackAlert(r.id)}>Ack</button>},
     {key:'_snooze',label:'Snooze',size:11,nosort:true,noexport:true,render:r=>{const snoozeExp=snoozed[r.id];const isActive=snoozeExp&&snoozeExp>nowMs;if(isActive){return <button style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 8px',borderRadius:3,border:'1px solid var(--border)',background:'none',color:'var(--amber)',cursor:'pointer'}} onClick={()=>setSnoozed(s=>({...s,[r.id]:0}))} title="Cancel snooze">✕ unsnooze</button>;}return(<div style={{position:'relative',display:'inline-block'}}><select style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 6px',borderRadius:3,border:'1px solid var(--border)',background:'var(--surface-2)',color:'var(--muted)',cursor:'pointer'}} value="" onChange={e=>{const mins=Number(e.target.value);if(mins)setSnoozed(s=>({...s,[r.id]:Date.now()+mins*60000}));}}><option value="">Snooze…</option><option value="30">30 min</option><option value="60">1 hour</option><option value="120">2 hours</option></select></div>);}},
   ];
   const alertCtl=useColumns('alert-rules',alertCols);
   const inStyle={background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--gray-200)',padding:'6px 8px'};
   return (
     <div className="card">
-      <div className="card-title" style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}><span style={{display:'flex',alignItems:'center',gap:6}}><div className="dot"/>Alert Rules — fire when a live metric crosses a threshold</span>{firingAlerts.length>0&&<button className="col-btn" onClick={snoozeAll} title="Snooze all firing alerts for 1 hour">Snooze All ({firingAlerts.length})</button>}</div>
+      <div className="card-title" style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}><span style={{display:'flex',alignItems:'center',gap:6}}><div className="dot"/>Alert Rules — fire when a live metric crosses a threshold{ackedCount>0&&<span style={{fontSize:9,color:'var(--teal)',marginLeft:8}}>{ackedCount} acked</span>}</span>{firingAlerts.length>0&&<button className="col-btn" onClick={snoozeAll} title="Snooze all firing alerts for 1 hour">Snooze All ({firingAlerts.length})</button>}</div>
+      {evald.length>0&&(()=>{
+        const sevClr={critical:'var(--red)',high:'var(--red)',medium:'var(--amber)',low:'var(--teal)',info:'var(--surface-3)',crit:'var(--red)',warn:'var(--amber)'};
+        const firingSet=new Set(firingAlerts.map(a=>a.id));
+        const ackedSet=new Set(Object.keys(alertAcks).map(Number));
+        return (
+          <div style={{marginBottom:12,overflowX:'auto'}}>
+            <div style={{fontSize:9,fontFamily:'var(--font-mono)',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6}}>Alert Trigger Map</div>
+            <div style={{display:'flex',flexDirection:'column',gap:3}}>
+              {evald.map(r=>{
+                const isFiring=firingSet.has(r.id);
+                const isAcked=ackedSet.has(r.id);
+                const sev=r.sev||'medium';
+                const clr=sevClr[sev]||'var(--surface-3)';
+                const bg=isFiring?clr:'var(--surface-2)';
+                const opacity=isAcked?.4:1;
+                return (
+                  <div key={r.id} style={{display:'flex',alignItems:'center',gap:8,opacity}}>
+                    <div style={{width:8,height:8,borderRadius:2,background:bg,flexShrink:0,boxShadow:isFiring?`0 0 6px ${clr}`:undefined}}/>
+                    <div style={{flex:1,fontSize:10,fontFamily:'var(--font-mono)',color:isFiring?'var(--ink)':'var(--muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                      {r.metric} {r.op} {r.threshold}
+                    </div>
+                    <div style={{fontSize:9,color:isFiring?clr:'var(--surface-3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',flexShrink:0}}>
+                      {isFiring?(isAcked?'ACKED':'FIRING'):(r.sev||'ok').toUpperCase()}
+                    </div>
+                    <div style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',flexShrink:0}}>
+                      {r.value!==undefined?String(Number(r.value).toFixed(1)):'—'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
       <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:14}}>
         <select className="viz-sel" value={metric} onChange={e=>setMetric(e.target.value)}>
           {ALERT_METRICS.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
@@ -3500,7 +3840,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   );
 }
 
-const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['heatmap','Heat'],['timeline','Timeline'],['raw','Raw']];
+const VIZ_OPTS=[['table','Table'],['bar','Bar'],['line','Line'],['heatmap','Heat'],['timeline','Timeline'],['pie','Pie'],['raw','Raw']];
 
 // Poll until the server responds 200, then call onReady().
 // Prevents the "page can't be displayed" flash when reloading right after a container restart.
@@ -3556,7 +3896,41 @@ function VizSelect({id, def='table', opts=VIZ_OPTS, getViz, setViz}) {
   );
 }
 
-function ScopeBar({subnets, zones, scopeSubnet, setScopeSubnet, scopeZone, setScopeZone}){
+function UtilGauges({subnets}) {
+  const top = [...subnets].sort((a,b)=>(b.util||0)-(a.util||0)).slice(0,5);
+  if(!top.length) return null;
+  const sevClr = u => u>=90?'var(--red)':u>=75?'var(--amber)':'var(--green)';
+  return (
+    <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+      {top.map((s,i)=>{
+        const u=Math.min(100,s.util||0);
+        const R=32, cx=40, cy=40;
+        const startAngle=-Math.PI*0.75;
+        const sweep=(u/100)*Math.PI*1.5;
+        const endAngle=startAngle+sweep;
+        const x1=cx+R*Math.cos(startAngle), y1=cy+R*Math.sin(startAngle);
+        const x2=cx+R*Math.cos(endAngle), y2=cy+R*Math.sin(endAngle);
+        const large=sweep>Math.PI?1:0;
+        const bgX2=cx+R*Math.cos(startAngle+Math.PI*1.5), bgY2=cy+R*Math.sin(startAngle+Math.PI*1.5);
+        const lbl=s.name&&s.name!==s.addr?s.name:s.addr;
+        const clr=sevClr(u);
+        return (
+          <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2,cursor:'pointer'}}
+            title={`${lbl} — ${u}% utilized`}>
+            <svg width={80} height={56} viewBox="0 0 80 56" aria-hidden="true">
+              <path d={`M ${x1} ${y1} A ${R} ${R} 0 1 1 ${bgX2} ${bgY2}`} fill="none" stroke="var(--surface-3)" strokeWidth={7} strokeLinecap="round"/>
+              {u>0&&<path d={`M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2}`} fill="none" stroke={clr} strokeWidth={7} strokeLinecap="round"/>}
+              <text x={40} y={38} textAnchor="middle" fontSize={11} fontWeight={700} fill={clr} fontFamily="var(--font-mono)">{u}%</text>
+            </svg>
+            <div style={{fontSize:8,fontFamily:'var(--font-mono)',color:'var(--muted)',textAlign:'center',maxWidth:78,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lbl}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ScopeBar({subnets, zones, scopeSubnet, setScopeSubnet, scopeZone, setScopeZone, onSave, savedScopes=[], onRestoreScope}){
   const hasScope = scopeSubnet||scopeZone;
   return (
     <div className="scope-bar" role="search" aria-label="Scope filters">
@@ -3573,6 +3947,16 @@ function ScopeBar({subnets, zones, scopeSubnet, setScopeSubnet, scopeZone, setSc
       </select>
       {hasScope&&<button className="scope-clear" onClick={()=>{setScopeSubnet(null);setScopeZone(null);}}>✕ Clear scope</button>}
       {hasScope&&<span className="scope-bar-label" style={{color:'var(--teal)'}}>· scoped</span>}
+      {/* saved scope controls */}
+      <button className="scope-clear" title="Save current scope" style={{marginLeft:4}} onClick={onSave} disabled={!scopeSubnet&&!scopeZone}>★</button>
+      {savedScopes.length>0&&(
+        <select className="scope-select" style={{maxWidth:120}} defaultValue="" onChange={e=>{if(e.target.value)onRestoreScope(JSON.parse(e.target.value));e.target.value='';}} title="Restore saved scope">
+          <option value="">Saved…</option>
+          {savedScopes.map((sc,i)=>(
+            <option key={i} value={JSON.stringify(sc)}>{sc.label||`Scope ${i+1}`}</option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
@@ -3994,6 +4378,7 @@ function App({vault, onVaultChange}={}) {
   const [subFilt,setSubFilt]         = useState(null);
   const [scopeSubnet, setScopeSubnet] = useState(null);
   const [scopeZone,   setScopeZone]   = useState(null);
+  const [savedScopes, setSavedScopes] = React.useState(()=>LS.get('noc.savedScopes',[]));
   const [siteFilt,    setSiteFilt]    = useState(null);
   const [timeRange,   setTimeRange]   = useState(()=>LS.get('noc.timeRange','all'));
   const [chartCursor, setChartCursor] = React.useState(null);
@@ -4024,9 +4409,14 @@ function App({vault, onVaultChange}={}) {
   const [onboardSeen, setOnboardSeen] = useState(()=>!!LS.get('noc.onboard.seen',false));
   const [ipamChip, setIpamChip] = useState(()=>LS.get('noc.ipamChip',null));
   const [ipamShowTiny, setIpamShowTiny] = useState(false);   // reveal single-IP /32 subnets (transient)
+  const [ipamGroupSite, setIpamGroupSite] = React.useState(false);
   const [hostChip, setHostChip] = useState(()=>LS.get('noc.hostChip',null));
+  const [ipamQ, setIpamQ] = React.useState('');
+  const [hostsQ, setHostsQ] = React.useState('');
+  const [auditQ, setAuditQ] = React.useState('');
   const [searchHistory, setSearchHistory] = useState(()=>LS.get('sh',[]));
   const [zoneFilt, setZoneFilt] = useState(null);
+  const [focusEntity, setFocusEntity] = React.useState(null); // {type:'site'|'subnet'|'host', key:string}
   const [rowLimits, setRowLimits]       = useState(()=>LS.get('rl',{}));
   const [collapsed, setCollapsed]       = useState(()=>LS.get('cl',{}));
   const DEFAULT_ORDER=['hosts','subnets','ttl','audit','pols','feeds'];
@@ -4764,7 +5154,7 @@ function App({vault, onVaultChange}={}) {
                 <option value="">Site: All</option>
                 {[...new Set((subnets||[]).map(s=>s.site).filter(Boolean).filter(s=>s!=='–'&&s!=='—'))].sort().map(s=><option key={s} value={s}>{s}</option>)}
               </select>
-              <select className="pill-select" data-tip="Time range filter — applies to audit logs" value={timeRange} onChange={e=>{setTimeRange(e.target.value);LS.set('noc.timeRange',e.target.value);}} aria-label="Time range" style={{appearance:'none',WebkitAppearance:'none',paddingRight:24,backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23768390'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center'}}>
+              <select className="pill-select" data-tip="Time range filter — applies to audit, DNS analytics, and host metrics" value={timeRange} onChange={e=>{setTimeRange(e.target.value);LS.set('noc.timeRange',e.target.value);}} aria-label="Time range" style={{appearance:'none',WebkitAppearance:'none',paddingRight:24,backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23768390'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center'}}>
                 {TR_OPTS.map(([v,l])=><option key={v} value={v}>Range: {l}</option>)}
               </select>
               <div className="pill-select" data-tip="Auto-refresh interval">Interval: 5m <span className="arrow">▾</span></div>
@@ -4783,7 +5173,21 @@ function App({vault, onVaultChange}={}) {
         </div>
         {data&&<ScopeBar subnets={subnets} zones={zones}
           scopeSubnet={scopeSubnet} setScopeSubnet={setScopeSubnet}
-          scopeZone={scopeZone} setScopeZone={setScopeZone}/>}
+          scopeZone={scopeZone} setScopeZone={setScopeZone}
+          savedScopes={savedScopes}
+          onSave={()=>{
+            const sub=subnets.find(s=>s.id===scopeSubnet);
+            const zon=zones.find(z=>z.id===scopeZone);
+            const label=[sub?sub.name||sub.addr:'',zon?zon.fqdn:''].filter(Boolean).join(' + ')||'Scope';
+            const sc={scopeSubnet,scopeZone,label};
+            const next=[...savedScopes.filter(x=>x.scopeSubnet!==scopeSubnet||x.scopeZone!==scopeZone),sc].slice(-8);
+            setSavedScopes(next);
+            LS.set('noc.savedScopes',next);
+            toast('Scope saved ✓','ok');
+          }}
+          onRestoreScope={sc=>{setScopeSubnet(sc.scopeSubnet||null);setScopeZone(sc.scopeZone||null);}}
+        />}
+        {focusEntity&&<button className="scope-clear" style={{position:'fixed',bottom:12,right:12,zIndex:200,background:'var(--surface-2)',border:'1px solid var(--teal)',color:'var(--teal)',padding:'4px 10px',borderRadius:4,fontSize:10,fontFamily:'var(--font-mono)',cursor:'pointer'}} onClick={()=>setFocusEntity(null)}>◉ focused: {focusEntity.key} — click to clear</button>}
         {/* ── ATC latch strip — read-only CRIT highlight, gated on critSubs ── */}
         {critSubs.length>0&&<div className="latch-strip" aria-live="polite">
           <div className="latch-text">
@@ -4868,6 +5272,26 @@ function App({vault, onVaultChange}={}) {
               <span className="section-line"/>
               {(errHosts.length>0||critSubs.length>0)?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0||ttlBad.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
             </div>
+            {/* Tactical Overview Bar */}
+            <div style={{display:'flex',gap:0,marginBottom:8,borderRadius:5,overflow:'hidden',border:'1px solid var(--border)',fontSize:10,fontFamily:'var(--font-mono)'}}>
+              {[
+                {label:'Hosts', val:s_hosts.length, sub:`${errHosts.length} down`, col:'var(--teal)', sec:'hosts', crit:errHosts.length>0},
+                {label:'Subnets', val:s_subnets.length, sub:`${critSubs.length} crit`, col:'var(--green)', sec:'ipam', crit:critSubs.length>0},
+                {label:'Zones', val:zones.length, sub:`${ttlBad.length} anomalies`, col:'var(--amber)', sec:'dns', crit:ttlBad.length>0},
+                {label:'Alerts', val:firingAlerts.length, sub:firingAlerts.length>0?'firing':'clear', col:'var(--red)', sec:'alerts', crit:firingAlerts.length>0},
+                {label:'Feeds', val:(data?.feeds||[]).filter(f=>f.active).length, sub:'active threats', col:'var(--gray-400)', sec:'security', crit:false},
+              ].map((seg,i)=>(
+                <div key={i} onClick={()=>setSection(seg.sec)}
+                  style={{flex:1,padding:'6px 10px',background:seg.crit?'rgba(248,81,73,.1)':'var(--surface-2)',
+                    cursor:'pointer',borderRight:i<4?'1px solid var(--border)':'none',transition:'background .15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.background='var(--surface-3)'}
+                  onMouseLeave={e=>e.currentTarget.style.background=seg.crit?'rgba(248,81,73,.1)':'var(--surface-2)'}>
+                  <div style={{fontWeight:700,fontSize:16,color:seg.crit?seg.col:'var(--ink)',lineHeight:1}}>{seg.val}</div>
+                  <div style={{color:'var(--muted)',fontSize:9,textTransform:'uppercase',letterSpacing:'.06em',marginTop:2}}>{seg.label}</div>
+                  <div style={{color:seg.crit?seg.col:'var(--muted)',fontSize:9,marginTop:1}}>{seg.sub}</div>
+                </div>
+              ))}
+            </div>
             {(()=>{
   const total = s_subnets.length||1;
   const critPct = Math.round((critSubs.length/total)*100);
@@ -4904,17 +5328,23 @@ function App({vault, onVaultChange}={}) {
                 };
                 const _sparkArr=(histKey)=>(_tileHist[histKey]||[]).slice(-20);
                 const kpis=[
-                  {v:s_hosts.length.toLocaleString(), l:scopeSubnet||scopeZone?'Hosts in Scope':'Total Hosts', delta:`${errHosts.length} offline / error`, sev:errHosts.length>0?'crit':null, histKey:'Hosts'},
-                  {v:s_subnets.length.toLocaleString(), l:scopeSubnet||scopeZone?'Subnets in Scope':'Total Subnets', delta:`${critSubs.length} critical`, sev:critSubs.length>0?'crit':null, histKey:'Subnets'},
-                  {v:`${critSubs[0]?.util??warnSubs[0]?.util??0}%`, l:'Peak DHCP Util', delta:critSubs.length>0?`${critSubs.length} over threshold`:'within threshold', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null, histKey:null},
-                  {v:zones.length.toLocaleString(), l:'DNS Zones', delta:`${ttlBad.length} TTL anomalies`, sev:ttlBad.length>0?'warn':null, histKey:'DNS'},
+                  {v:s_hosts.length.toLocaleString(), l:scopeSubnet||scopeZone?'Hosts in Scope':'Total Hosts', delta:`${errHosts.length} offline / error`, sev:errHosts.length>0?'crit':null, histKey:'Hosts', nav:'hosts',
+                    deltaAction: errHosts.length>0 ? ()=>{setSection('hosts');setHostChip('error');} : null},
+                  {v:s_subnets.length.toLocaleString(), l:scopeSubnet||scopeZone?'Subnets in Scope':'Total Subnets', delta:`${critSubs.length} critical`, sev:critSubs.length>0?'crit':null, histKey:'Subnets', nav:'ipam',
+                    deltaAction: critSubs.length>0 ? ()=>{setSection('ipam');setIpamChip('critical');} : null},
+                  {v:`${critSubs[0]?.util??warnSubs[0]?.util??0}%`, l:'Peak DHCP Util', delta:critSubs.length>0?`${critSubs.length} over threshold`:'within threshold', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null, histKey:null, nav:'ipam',
+                    deltaAction: critSubs.length>0 ? ()=>{setSection('ipam');setIpamChip('critical');} : null},
+                  {v:zones.length.toLocaleString(), l:'DNS Zones', delta:`${ttlBad.length} TTL anomalies`, sev:ttlBad.length>0?'warn':null, histKey:'DNS', nav:'dns',
+                    deltaAction: ttlBad.length>0 ? ()=>setSection('dns') : null},
                 ];
                 return kpis.map((k,i)=>{
                   const arr=_sparkArr(k.histKey);
                   const cursorVal=chartCursor!==null&&arr.length>1?arr[Math.round(chartCursor*(arr.length-1))]:null;
                   return (
                   <div key={i} className={`card${k.sev==='crit'?' crit-state':k.sev==='warn'?' warn-state':' dim'}`}
-                    style={{display:'flex',flexDirection:'column',gap:0,position:'relative',overflow:'hidden'}}>
+                    style={{display:'flex',flexDirection:'column',gap:0,position:'relative',overflow:'hidden',cursor:'pointer'}}
+                    title={`Go to ${k.nav} section`}
+                    onClick={()=>setSection(k.nav)}>
                     <svg width="100%" height="100%" viewBox="0 0 160 28" preserveAspectRatio="none"
                       style={{position:'absolute',inset:0,opacity:.18,pointerEvents:k.histKey?'auto':'none',cursor:'crosshair'}}
                       aria-hidden="true"
@@ -4934,7 +5364,9 @@ function App({vault, onVaultChange}={}) {
                     )}
                     <div className="kpi-val" style={{position:'relative',zIndex:1,...(i===2&&k.sev?{color:k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--ink)'}:{})}}>{k.v}</div>
                     <div className="kpi-lbl" style={{position:'relative',zIndex:1,marginTop:6}}>{k.l}</div>
-                    <div className="kpi-delta" style={{position:'relative',zIndex:1}}>{`→ ${k.delta}`}</div>
+                    {k.deltaAction
+                      ? <div className="kpi-delta" style={{position:'relative',zIndex:1,cursor:'pointer',textDecoration:'underline',textDecorationStyle:'dotted'}} onClick={e=>{e.stopPropagation();k.deltaAction();}}>{`→ ${k.delta}`}</div>
+                      : <div className="kpi-delta" style={{position:'relative',zIndex:1}}>{`→ ${k.delta}`}</div>}
                   </div>
                   );
                 });
@@ -5202,6 +5634,7 @@ function App({vault, onVaultChange}={}) {
           // by default (revealable). One pool drives the title, chip counts, and rows.
           const tinyCount = s_subnets.filter(s=>s.total<=1).length;
           const ipamPool = ipamShowTiny ? s_subnets : s_subnets.filter(s=>s.total>1);
+          const focusedPool = (focusEntity?.type==='site') ? ipamPool.filter(s=>s.site===focusEntity.key) : ipamPool;
           return (
           <>
           <div className="section-header">
@@ -5209,15 +5642,24 @@ function App({vault, onVaultChange}={}) {
             <span className="section-line"/>
             {critSubs.length>0?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
           </div>
+          <UtilGauges subnets={ipamPool}/>
           <div className="card">
-            <div className="card-title"><div className="dot"/>All Subnets — DHCP Utilization ({ipamPool.length}{sq&&` of ${subnets.length}`})<VizSelect id="ipam-subnets" getViz={getViz} setViz={setViz}/></div>
+            <div className="card-title"><div className="dot"/>All Subnets — DHCP Utilization ({focusedPool.length}{sq&&` of ${subnets.length}`})
+  {subnets.some(s=>s.site&&s.site!=='–'&&s.site!=='—')&&(
+    <button className="col-btn" style={{marginLeft:'auto'}} onClick={()=>setIpamGroupSite(g=>!g)} title="Group subnets by site">
+      {ipamGroupSite?'⊞ ungrouped':'⊟ by site'}
+    </button>
+  )}
+  <input className="viz-sel" style={{minWidth:90,width:'auto',paddingLeft:6}} placeholder="filter…" value={ipamQ} onChange={e=>setIpamQ(e.target.value)} onMouseDown={e=>e.stopPropagation()} aria-label="Filter subnets"/>
+  <VizSelect id="ipam-subnets" getViz={getViz} setViz={setViz}/>
+</div>
             <RowLimitBar limit={rl('ipam')} setLimit={v=>setRl('ipam',v)}/>
               <div className="chip-bar">
                 {[
-                  {label:'All', val:null, count:ipamPool.length},
-                  {label:'Critical ≥90%', val:'critical', count:ipamPool.filter(s=>s.util>=90).length},
-                  {label:'Warning 75–89%', val:'warning', count:ipamPool.filter(s=>s.util>=75&&s.util<90).length},
-                  {label:'Healthy <75%', val:'healthy', count:ipamPool.filter(s=>s.util<75).length},
+                  {label:'All', val:null, count:focusedPool.length},
+                  {label:'Critical ≥90%', val:'critical', count:focusedPool.filter(s=>s.util>=90).length},
+                  {label:'Warning 75–89%', val:'warning', count:focusedPool.filter(s=>s.util>=75&&s.util<90).length},
+                  {label:'Healthy <75%', val:'healthy', count:focusedPool.filter(s=>s.util<75).length},
                 ].map(c=>(
                   <button key={c.val} className={`chip${ipamChip===c.val?' on':''}`}
                     onClick={()=>setIpamChip(c.val)}>
@@ -5239,11 +5681,29 @@ function App({vault, onVaultChange}={}) {
                     style={{width:46,background:'var(--surface-3)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',padding:'2px 4px',fontSize:10}}/>%</label>
                 </span>
               </div>
-            {getViz('ipam-subnets')==='table'
-              ? <IPAMTable subnets={ipamPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
-              : getViz('ipam-subnets')==='timeline'
-                ? <StateTimeline subnets={ipamPool} onDrill={setDrillEntity}/>
-                : <WidgetViz data={ipamPool.map(s=>({subnet:`${s.addr}/${s.cidr}`,util:s.util,free:s.free}))} viz={getViz('ipam-subnets')} labelKey="subnet" valueKey="util" color="var(--teal)" defaultRows={10}/>}
+            {ipamGroupSite&&getViz('ipam-subnets')==='table'
+              ? (()=>{
+                  const filtPool = ipamQ ? focusedPool.filter(s=>[s.name,s.addr,s.site].some(v=>String(v||'').toLowerCase().includes(ipamQ.toLowerCase()))) : focusedPool;
+                  const bySite = {};
+                  filtPool.forEach(s=>{const k=s.site&&s.site!=='–'&&s.site!=='—'?s.site:'(no site)';if(!bySite[k])bySite[k]=[];bySite[k].push(s);});
+                  return Object.entries(bySite).sort(([a],[b])=>a.localeCompare(b)).map(([site,subs])=>(
+                    <div key={site} style={{marginBottom:16}}>
+                      <div style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.1em',padding:'4px 0',borderBottom:'1px solid var(--border)',marginBottom:6,display:'flex',alignItems:'center',gap:8}}>
+                        ◈ {site} <span style={{opacity:.5}}>({subs.length} subnet{subs.length!==1?'s':''})</span>
+                        <span onClick={()=>setFocusEntity(f=>f?.key===site?null:{type:'site',key:site})}
+                          style={{cursor:'pointer',color:focusEntity?.key===site?'var(--teal)':'var(--muted)',marginLeft:'auto',fontSize:9}}>
+                          {focusEntity?.key===site?'◉ focused':'◎ focus'}
+                        </span>
+                      </div>
+                      <IPAMTable subnets={subs} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
+                    </div>
+                  ));
+                })()
+              : getViz('ipam-subnets')==='table'
+                ? <IPAMTable subnets={ipamQ?focusedPool.filter(s=>[s.name,s.addr,s.site].some(v=>String(v||'').toLowerCase().includes(ipamQ.toLowerCase()))):focusedPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
+                : getViz('ipam-subnets')==='timeline'
+                  ? <StateTimeline subnets={ipamQ?focusedPool.filter(s=>[s.name,s.addr,s.site].some(v=>String(v||'').toLowerCase().includes(ipamQ.toLowerCase()))):focusedPool} onDrill={setDrillEntity}/>
+                  : <WidgetViz data={(ipamQ?focusedPool.filter(s=>[s.name,s.addr].some(v=>String(v||'').toLowerCase().includes(ipamQ.toLowerCase()))):focusedPool).map(s=>({subnet:`${s.addr}/${s.cidr}`,util:s.util,free:s.free}))} viz={getViz('ipam-subnets')} labelKey="subnet" valueKey="util" color="var(--teal)" defaultRows={10}/>}
           </div>
           <div style={{marginTop:20}}>
             <div className="section-header">
@@ -5382,14 +5842,16 @@ function App({vault, onVaultChange}={}) {
                   </div>
                 : lazyErr['dns-analytics']
                   ? <div className="card" style={{padding:24,color:'var(--red)',fontSize:12}}>Analytics unavailable</div>
-                  : <DnsAnalyticsPanel data={dnsAnalytics} rowLimit={rl('dns-clients')} setRowLimit={v=>setRl('dns-clients',v)}/>
+                  : <DnsAnalyticsPanel data={dnsAnalytics} rowLimit={rl('dns-clients')} setRowLimit={v=>setRl('dns-clients',v)} cutoffMs={cutoffMs}/>
               }
             </div>
           </>
         )}
 
         {/* ── HOSTS ── */}
-        {section==='hosts'&&(
+        {section==='hosts'&&(()=>{
+          const focusedHosts = (focusEntity?.type==='site') ? filtHosts.filter(h=>h.site===focusEntity.key) : filtHosts;
+          return (
           <>
             <div className="section-header">
               <span className="section-title">· Hosts</span>
@@ -5404,7 +5866,10 @@ function App({vault, onVaultChange}={}) {
               {hostFilt&&<div style={{textAlign:'center',fontSize:11,color:'var(--teal)',marginTop:8}}>Filtered: <b>{hostFilt}</b> — click segment to clear</div>}
             </div>
             <div className="card">
-              <div className="card-title"><div className="dot"/>Host List {hostFilt&&`— ${hostFilt} (${filtHosts.length})`}<VizSelect id="hosts-list" getViz={getViz} setViz={setViz}/></div>
+              <div className="card-title"><div className="dot"/>Host List {hostFilt&&`— ${hostFilt} (${filtHosts.length})`}
+  <input className="viz-sel" style={{minWidth:90,width:'auto',marginLeft:'auto',paddingLeft:6}} placeholder="filter…" value={hostsQ} onChange={e=>setHostsQ(e.target.value)} onMouseDown={e=>e.stopPropagation()} aria-label="Filter hosts"/>
+  <VizSelect id="hosts-list" getViz={getViz} setViz={setViz}/>
+</div>
               <RowLimitBar limit={rl('hosts')} setLimit={v=>setRl('hosts',v)}/>
               <div className="chip-bar">
                 {['online','degraded','offline','error','pending'].map(st=>{
@@ -5422,16 +5887,17 @@ function App({vault, onVaultChange}={}) {
                 {hostChip&&<button className="chip" onClick={()=>setHostChip(null)}>✕ clear</button>}
               </div>
               {getViz('hosts-list')==='table'
-                ? <HostsTable hosts={filtHosts} rowLimit={rl('hosts')} hostSeen={hostSeen} onDrill={setDrillEntity}/>
-                : <WidgetViz data={filtHosts.map(h=>({host:h.name||h.id||h.ip,status:h.status,ip:h.ip||'—'}))} viz={getViz('hosts-list')} labelKey="host" valueKey="status" color="var(--teal)" defaultRows={10}/>}
+                ? <HostsTable hosts={hostsQ?focusedHosts.filter(h=>[h.name,h.ip].some(v=>String(v||'').toLowerCase().includes(hostsQ.toLowerCase()))):focusedHosts} rowLimit={rl('hosts')} hostSeen={hostSeen} onDrill={setDrillEntity}/>
+                : <WidgetViz data={(hostsQ?focusedHosts.filter(h=>[h.name,h.ip].some(v=>String(v||'').toLowerCase().includes(hostsQ.toLowerCase()))):focusedHosts).map(h=>({host:h.name||h.id||h.ip,status:h.status,ip:h.ip||'—'}))} viz={getViz('hosts-list')} labelKey="host" valueKey="status" color="var(--teal)" defaultRows={10}/>}
             </div>
             <div className="card b-full">
               <div className="card-title"><div className="dot"/>Host Performance Metrics — avg, last hour</div>
               {lazyErr.hostMetrics
                 ? <PanelError what="host metrics" onRetry={()=>lazyFetch('hostMetrics','/api/host-metrics',setHostMetrics)}/>
-                : <HostMetricsPanel data={hostMetrics}/>}
+                : <HostMetricsPanel data={hostMetrics} cutoffMs={cutoffMs}/>}
             </div>
           </div>
+          {hostMetrics&&hosts&&<HealthScorecards data={hostMetrics} hosts={hosts}/>}
           <div style={{marginTop:20}}>
             <div className="section-header">
               <span className="section-title">· Performance Stack</span>
@@ -5446,11 +5912,12 @@ function App({vault, onVaultChange}={}) {
                 </div>
               : lazyErr?.hostMetrics
                 ? <div className="card" style={{padding:24,color:'var(--red)',fontSize:12}}>Host metrics unavailable</div>
-                : <PerfStack data={hostMetrics}/>
+                : <>{hosts&&<StatusGrid hosts={filtHosts} data={hostMetrics}/>}{hostMetrics&&hosts&&<ContentionMatrix data={hostMetrics} hosts={hosts}/>}{hostMetrics&&<PercentileCards data={hostMetrics}/>}<PerfStack data={hostMetrics}/></>
             }
           </div>
           </>
-        )}
+          );
+        })()}
 
         {/* ── SECURITY ── */}
         {section==='security'&&(
@@ -5517,9 +5984,12 @@ function App({vault, onVaultChange}={}) {
         {/* ── AUDIT ── */}
         {section==='audit'&&(
           <div className="card">
-            <div className="card-title"><div className="dot"/>Audit Log — {sq?`${s_logs.length} of `:'Last '}{auditLogs.length} Entries<VizSelect id="audit-log" getViz={getViz} setViz={setViz}/></div>
+            <div className="card-title"><div className="dot"/>Audit Log — {sq?`${s_logs.length} of `:'Last '}{auditLogs.length} Entries
+  <input className="viz-sel" style={{minWidth:90,width:'auto',marginLeft:'auto',paddingLeft:6}} placeholder="filter…" value={auditQ} onChange={e=>setAuditQ(e.target.value)} onMouseDown={e=>e.stopPropagation()} aria-label="Filter audit log"/>
+  <VizSelect id="audit-log" getViz={getViz} setViz={setViz}/>
+</div>
             {getViz('audit-log')==='table'
-              ? <><RowLimitBar limit={rl('audit')} setLimit={v=>setRl('audit',v)}/><AuditTable logs={s_logs} limit={rl('audit')} onDrill={setDrillEntity}/></>
+              ? <><RowLimitBar limit={rl('audit')} setLimit={v=>setRl('audit',v)}/><AuditTable logs={auditQ?s_logs.filter(l=>[l.action,l.user,l.resource].some(v=>String(v||'').toLowerCase().includes(auditQ.toLowerCase()))):s_logs} limit={rl('audit')} onDrill={setDrillEntity}/></>
               : <WidgetViz data={s_logs.map(l=>({action:l.action||l.type||'event',user:l.user||'—',result:l.result||'—',time:(l.ts||'').toString().slice(0,10)}))} viz={getViz('audit-log')} labelKey="action" valueKey="result" color="var(--teal)" defaultRows={10}/>}
           </div>
         )}
@@ -5612,7 +6082,7 @@ function App({vault, onVaultChange}={}) {
           </div>
         </div>
       )}
-      <CommandPalette open={cmdkOpen} onClose={()=>setCmdkOpen(false)} commands={commands}/>
+      <CommandPalette open={cmdkOpen} onClose={()=>setCmdkOpen(false)} commands={commands} data={{subnets,hosts,zones}} onDrill={setDrillEntity}/>
       <Toasts/>
       <ChatPanel
         open={chatOpen} onClose={()=>setChatOpen(false)}
