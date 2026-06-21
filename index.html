@@ -3049,7 +3049,7 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
 const PROTECTED_SECTIONS = new Set(['overview']);
 function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone}) {
   const [tab, setTab] = useState('widgets');
-  const navSections = SECTIONS.filter(s=>!PROTECTED_SECTIONS.has(s.id));
+  const navSections = SECTIONS.filter(s=>!PROTECTED_SECTIONS.has(s.id)&&!s.meta);
   const modalRef = useRef(null);
   useEffect(()=>{
     const prev = document.activeElement;
@@ -3383,6 +3383,7 @@ const SECTIONS=[
   {id:'audit',         icon:'audit',         label:'Audit Logs',      tip:'Timestamped record of every API action — who did what and when.'},
   {id:'alerts',        icon:'alerts',        label:'Alert Rules',     tip:'Define threshold-based alerts (e.g. DHCP &gt; 90%) with notifications. Includes triage view.'},
   {id:'explore',       icon:'explore',       label:'Explore',         tip:'Ad-hoc group-by pivot over hosts, leases, and DNS — Kentik-style explorer.'},
+  {id:'help', icon:'help', label:'Help', tip:'How every feature works — searchable ELI5 guide.', meta:true},
 ];
 
 function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
@@ -4368,6 +4369,138 @@ function PerfStack({data}){
   );
 }
 
+function HelpPage() {
+  const [q, setQ] = React.useState('');
+  const HELP = [
+    {group:'Overview', accent:'var(--teal)', features:[
+      {name:'Health Banner', eli5:'A color-coded status strip in Overview showing your overall network health as a 0–100 score. It aggregates the worst active alert state across all monitored systems so you spot critical issues at a glance.', steps:['Open Overview — the health strip appears just below the KPI tiles.','Green = all clear, amber = warnings active, red = critical thresholds breached.','Click the banner to jump to Alerts and see exactly which rules are firing.']},
+      {name:'KPI Tiles', eli5:'Large summary cards showing top-line metrics — total subnets, DHCP leases, DNS zones, host uptime, and alert count. Each tile is clickable and navigates you directly to the relevant section. Delta badges show trend vs the previous period.', steps:['Click any KPI tile to jump to that section.','Click a colored delta badge (e.g. +3 subnets) to navigate and pre-filter by the change.','Tiles auto-refresh on every polling cycle — no manual action needed.']},
+      {name:'Tactical Overview Bar', eli5:'A 5-segment strip just below the KPI tiles showing live counts for Hosts, Subnets, Zones, Alerts, and Feeds at a glance. Color-codes by severity so you can see the network pulse in one row.', steps:['Find the strip between KPI tiles and the main widget grid.','Red segments = critical issues in that domain, amber = warnings, teal = healthy.','Click a segment to navigate to its section.']},
+      {name:'Widget Reorder', eli5:'You can drag widgets on the Overview page into any order you like. Your layout is saved in the browser and survives refreshes. Reset from the ⋯ menu if you want defaults back.', steps:['On the Overview page, grab the drag handle (⠿) at the top-left of any card.','Drag it to a new position in the grid.','Layout auto-saves — open ⋯ → Reset dashboard to restore defaults.']},
+    ]},
+    {group:'IPAM / Subnets', accent:'var(--teal)', features:[
+      {name:'Subnet Table', eli5:'A full list of all IP address pools with utilization bars showing how full each subnet is. Click any row to drill down into that pool\'s details, DHCP lease history, and capacity forecast.', steps:['Go to IPAM / Subnets in the sidebar.','Use the chip filter (All / Critical / Warning / OK) to focus on problem subnets.','Click any subnet row to open the drill-down panel.']},
+      {name:'Group by Site', eli5:'Reorganizes the subnet table into site buckets (HQ, Branch-Dallas, Cloud, etc.) so you can see all subnets for a site together. Toggle between flat list and grouped view from the card header.', steps:['Find the "by site / ungrouped" toggle button in the IPAM card header.','Click to switch between flat list and site-grouped view.','Each site group shows a count of subnets and the worst utilization in that site.']},
+      {name:'Chip Filter', eli5:'Quick status filter buttons at the top of the IPAM card. Click "Critical" to show only subnets above 90% utilization, "Warning" for 75–90%, "OK" for healthy, or "All" for everything.', steps:['Click a chip (All / Critical / Warning / OK) in the IPAM card header.','The subnet list immediately filters to only show subnets matching that status.','Combine with the search input for further narrowing.']},
+      {name:'Per-widget Search', eli5:'A free-text search box inside each section card (IPAM, Hosts, Audit) that filters that card\'s rows in real time. Type a subnet name, IP, or hostname to narrow the list instantly.', steps:['Find the filter input in the card header (says "filter…").','Type any substring — subnet name, IP address, hostname, or log message.','Clear the input to restore the full list.']},
+      {name:'Saved Scopes', eli5:'The ScopeBar (at the top of most sections) lets you save your current filter combination with a star ★ button, then restore it from a dropdown. Useful for named filters like "Critical subnets only" or "HQ hosts".', steps:['Set your desired filters in the ScopeBar (chip, search, site group).','Click the ★ button and enter a name for the saved scope.','Click "Saved…" to open the dropdown and restore any previously saved scope.']},
+      {name:'Focus Entity', eli5:'Clicking "◎ focus" on a site or subnet in IPAM narrows the Hosts section to only show hosts in that site/subnet. A teal badge appears near the top bar showing what\'s focused. Click it to clear.', steps:['In IPAM with group-by-site on, find the "◎ focus" button on any site header.','Click it — Hosts section will auto-filter to only hosts in that site.','Click the teal "Focused: X — clear" button near the top bar to release the focus.']},
+      {name:'Utilization Gauges', eli5:'SVG arc gauges showing the top 5 most-utilized subnets at a glance, displayed above the main IPAM table. Each gauge shows the pool name and utilization percentage with color coding.', steps:['Scroll to the IPAM section — gauges appear above the main table.','Red arcs = above 90% full, amber = 75–90%, teal = healthy.','Hover a gauge to see the full subnet name and exact utilization.']},
+      {name:'Capacity Forecast', eli5:'Inside a subnet drill-down, a linear regression forecast shows how many days until the pool is exhausted at the current growth rate. Based on historical tile snapshots stored in your browser.', steps:['Click any subnet row to open the drill-down panel.','Scroll to the "Capacity Forecast" section inside the panel.','Days-to-full shows in red if under 30 days, amber if under 90 days.']},
+    ]},
+    {group:'DNS Zones', accent:'var(--teal)', features:[
+      {name:'Zone List', eli5:'A table of all authoritative DNS zones with TTL, record counts, negative TTL, and anomaly flags. Zones with configuration issues (e.g. negative TTL longer than TTL) are flagged in amber.', steps:['Go to DNS Zones in the sidebar.','Anomaly flags appear in the rightmost column — hover for the specific issue.','Click a zone row to drill into its record breakdown.']},
+      {name:'Top-N Talkers', eli5:'A selector in the DNS card header that limits the top-clients table to the top 5, 10, 25, or all clients by query volume. Useful for focusing on the noisiest hosts without scrolling a long list.', steps:['Open the DNS section.','Find the "Top N" select (5 / 10 / 25 / All) in the card header.','Change the value — the client table immediately truncates to that count.']},
+      {name:'DNS Forecast Band', eli5:'An amber dashed line extending the DNS query volume sparkline chart, showing a linear regression forecast for the next 3 time steps. A semi-transparent band shows the ±15% confidence range.', steps:['Open the DNS section and look at the query volume sparkline.','The solid teal line is historical data; the dashed amber extension is the forecast.','The shaded band shows the uncertainty range — wider band = less stable trend.']},
+      {name:'Time Range Filter', eli5:'A dropdown in the top bar (1h / 6h / 24h / 7d / All) that applies a cutoff to DNS analytics, host metrics, and audit logs simultaneously. Switching to "1h" shows only the last hour of data in all three sections.', steps:['Find the time range selector in the top bar (clock icon area).','Select 1h, 6h, 24h, 7d, or All.','DNS analytics, Host Metrics, and Audit Logs all filter to that window instantly.']},
+    ]},
+    {group:'Hosts', accent:'var(--teal)', features:[
+      {name:'Host Table', eli5:'A list of all infrastructure hosts (routers, switches, servers) with colored status dots — green = online, amber = degraded, red = offline or error. Click any host to drill into its details.', steps:['Go to Hosts in the sidebar.','Status dots: green = online, amber = degraded, red = offline.','Use the chip filter to show only offline or degraded hosts.']},
+      {name:'Chip Filter + Search', eli5:'Combine a status chip (All / Online / Degraded / Offline) with a free-text search to find specific hosts. Both filters stack — chip narrows by status, search matches hostname or IP.', steps:['Click a status chip in the Hosts card header.','Type in the search input to further narrow by hostname or IP.','Clear both to restore the full host list.']},
+      {name:'Health Scorecards', eli5:'Letter-grade cards (A–F) with a 0–100 numeric score for each host, calculated from CPU, memory, disk, and latency metrics plus host status. Worst-scoring hosts shown first so problems surface immediately.', steps:['Open the Hosts section — scorecards appear above the performance stack.','Grade A = healthy, F = critical issues or offline.','Scores below 60 are shown in red, below 75 in amber.']},
+      {name:'Status Grid', eli5:'A matrix table showing each host as a row and Status / CPU / Memory / Disk / Latency as columns. Each cell has a colored dot (green/amber/red) so you can scan the entire fleet at a glance.', steps:['Scroll down in the Hosts section to find the Status Grid.','Each row = one host, each column = one health dimension.','Red dot = critical threshold exceeded, amber = warning, green = OK.']},
+      {name:'Resource Contention Matrix', eli5:'A heat grid showing each host\'s CPU, memory, disk, and latency as colored cells. High saturation values glow red, moderate glow amber — spot resource contention across the fleet in one view.', steps:['Find the Contention Matrix below the Status Grid in Hosts.','Each cell shows the metric value and is colored by severity.','Hosts with multiple red cells are contention hotspots.']},
+      {name:'Percentile Cards', eli5:'Statistical summary cards showing p50, p95, and p99 percentiles for CPU, Memory, Disk, and Latency across the entire host fleet. Helps you understand tail-end resource usage, not just averages.', steps:['Find the Percentile Cards row in the Hosts Performance section.','p50 = median host performance, p95 = worst 5%, p99 = worst 1%.','p99 values in red mean your slowest hosts are critically loaded.']},
+    ]},
+    {group:'Security', accent:'var(--red)', features:[
+      {name:'Threat Feeds', eli5:'Live DNS Firewall feed status and threat intelligence data from your Infoblox feeds. Shows feed health, last-updated timestamps, and recent threat hits.', steps:['Go to Security in the sidebar.','Feed status shows green = active and syncing, red = feed error or stale.','Click a feed row to see recent threat matches.']},
+      {name:'Block / Unblock Domains', eli5:'One-click domain blocking via your Infoblox DNS Firewall. Add a domain to the block list directly from the dashboard; an Undo button appears immediately after blocking so you can reverse it.', steps:['In the Security section, find a domain in the threat feed.','Click "Block" to add it to the DNS Firewall block list.','Click "↶ Undo" on the same row to immediately reverse the block.']},
+      {name:'Policy Diffs', eli5:'A side-by-side comparison showing what changed in your security policies — new rules added, rules removed, or rule modifications. Color-coded green for additions and red for removals.', steps:['In the Security section, scroll to Policy Diffs.','Green rows = rules added since last snapshot, red = removed.','Hover a row for the full rule detail.']},
+    ]},
+    {group:'Audit Logs', accent:'var(--gray-400)', features:[
+      {name:'Full Audit Trail', eli5:'A timestamped log of every API action taken — who did what and when. Each entry shows the action type, target object, and result (success or error). Sourced directly from your Infoblox API audit log.', steps:['Go to Audit Logs in the sidebar.','Most recent actions appear at the top.','Use the search input to filter by action type, username, or object name.']},
+      {name:'Per-widget Search', eli5:'A search box in the Audit Logs card header that filters entries in real time by any text — action name, username, object, or result. Pair with the time range filter to narrow to a specific incident window.', steps:['Find the filter input in the Audit Logs card header.','Type any keyword — the log filters instantly.','Clear to restore the full audit trail.']},
+      {name:'Time Range Filter', eli5:'The top-bar time range selector (1h / 6h / 24h / 7d / All) applies a cutoff to the audit log, hiding entries older than the selected window. Useful for "what happened in the last hour".', steps:['Select a time range from the top-bar dropdown.','Audit log entries older than the window are hidden.','Combine with the search input for incident triage.']},
+    ]},
+    {group:'Alert Rules', accent:'var(--amber)', features:[
+      {name:'Define Threshold Alerts', eli5:'Create custom alert rules that fire when any live metric crosses a threshold — e.g. "DHCP utilization > 90%". Each rule has a severity level and an optional webhook URL for notifications.', steps:['Go to Alert Rules in the sidebar.','Click "Add Rule" and choose a metric, operator, threshold, and severity.','Optionally paste a webhook URL to get notified when the rule fires.']},
+      {name:'Alert Trigger Map', eli5:'A visual row-per-rule status map showing which alert rules are currently firing, which are acknowledged, and the current metric value for each. Color-coded dots glow red when active.', steps:['Open the Alert Rules section — the Trigger Map appears at the top.','Glowing red dot = currently firing. Dimmed dot = acknowledged.','Hover any row to see the exact threshold vs current value.']},
+      {name:'Per-alert Acknowledgement', eli5:'Each firing alert has an "Ack" button. Clicking it marks that alert as acknowledged (a ✓ Acked badge appears) and persists across refreshes. Use "Clear" to remove the acknowledgement.', steps:['In the Alert Rules section, find a firing alert row.','Click "Ack" to acknowledge it — the badge turns to "✓ Acked".','Click the small ✕ next to "Acked" to clear the acknowledgement.']},
+      {name:'Snooze All', eli5:'A "Snooze All" button appears in the Alert Rules header when any alerts are firing. Clicking it suppresses all currently-firing alerts for 1 hour — they stop appearing in the notification banner.', steps:['When alerts are firing, look for "Snooze All (N)" in the Alert Rules header.','Click it to suppress all firing alerts for 1 hour.','After 1 hour, unacknowledged alerts resume firing normally.']},
+    ]},
+    {group:'Explore', accent:'var(--teal)', features:[
+      {name:'Ad-hoc Pivot', eli5:'A Kentik-style group-by explorer that lets you pivot across hosts, DHCP leases, and DNS data by any dimension — group by site, subnet, status, or record type. Useful for ad-hoc analysis without writing queries.', steps:['Go to Explore in the sidebar.','Choose a data source (Hosts / Leases / DNS) and a group-by dimension.','The result table updates instantly — change dimensions to compare.']},
+    ]},
+    {group:'Global Tools', accent:'var(--green)', features:[
+      {name:'Command Palette', eli5:'Press ⌘K (or Ctrl+K) to open a fuzzy-search command launcher. Type any section name, action, or feature to navigate or execute it instantly — like Spotlight for the dashboard.', steps:['Press ⌘K (Mac) or Ctrl+K (Windows/Linux).','Type any keyword — section names, "refresh", "export", "theme", etc.','Press Enter or click a result to execute it.']},
+      {name:'Topology Map', eli5:'An Auvik-style visual map showing subnets grouped by site with host status dots. Hover a node to see counts; click to drill into that site or subnet.', steps:['Click "Topology Map" in the sidebar.','Subnet nodes are grouped by site — colors indicate worst host status.','Click any subnet node to open its IPAM drill-down.']},
+      {name:'Time Range Selector', eli5:'A dropdown in the top bar with options 1h, 6h, 24h, 7d, and All. Applies simultaneously to DNS analytics, host performance metrics, and audit logs. One control, three sections filtered.', steps:['Find the time range dropdown in the top bar.','Select the window you want.','DNS, Hosts Performance, and Audit Logs all update to that window.']},
+      {name:'Theme', eli5:'Cycle between System (follows OS preference), Light, and Dark themes from the sidebar popup. Your choice is saved in the browser and applied on every visit.', steps:['Open the sidebar by clicking the ☰ or hamburger icon.','Click "Theme" to cycle System → Light → Dark.','The change is instant and saved automatically.']},
+      {name:'Auto-refresh', eli5:'Cycle the data polling interval from Off to 30s, 1 minute, or 5 minutes. When active, a countdown timer appears and data refreshes automatically. Hover the dashboard to pause, or click "Pause" to freeze manually.', steps:['Open the sidebar and click "Auto-refresh" to cycle Off → 30s → 1m → 5m.','A countdown timer appears while active.','Hover over the dashboard or click Pause to temporarily freeze refreshing.']},
+      {name:'Wall Mode', eli5:'A fullscreen TV/wall-display mode that hides all navigation chrome, shows a live clock, and auto-cycles through all sections every 30 seconds. Designed for NOC dashboards on wall-mounted screens.', steps:['Open the sidebar and click "Wall mode" to toggle On.','Press Escape or click "Wall mode" again to exit.','In wall mode, sections auto-cycle every 30 seconds.']},
+      {name:'Demo Mode', eli5:'Hides test and allow-all security policies and prioritizes threat intel feeds. Designed for sales demos or presentations where you want to show realistic data without cluttering the view with allow-all rules.', steps:['Open the sidebar and click "Demo mode" to toggle On.','Trivial allow-all policies are hidden; threat intel feeds are prioritized.','Toggle Off to restore the full unfiltered view.']},
+      {name:'Share Link', eli5:'Copies a shareable URL for the current section to your clipboard. The URL includes the section ID so the recipient lands on the same view. Works as a bookmark too.', steps:['Open the sidebar and click "Copy link".','A URL is copied to your clipboard.','Paste it anywhere — the recipient opens the same section directly.']},
+      {name:'Keyboard Shortcuts', eli5:'A reference panel listing all keyboard shortcuts for the dashboard. Press ? at any time to toggle it open, or click "Shortcuts" in the sidebar.', steps:['Press ? to open the shortcuts panel.','1–9 jump to the corresponding sidebar section.','⌘K opens the command palette, / opens search.']},
+    ]},
+  ];
+
+  const lq = q.toLowerCase();
+  const filtered = HELP.map(g=>({
+    ...g,
+    features: q ? g.features.filter(f=>
+      f.name.toLowerCase().includes(lq) ||
+      f.eli5.toLowerCase().includes(lq) ||
+      f.steps.some(s=>s.toLowerCase().includes(lq))
+    ) : g.features
+  })).filter(g=>g.features.length>0);
+
+  const total = HELP.reduce((a,g)=>a+g.features.length,0);
+  const shown = filtered.reduce((a,g)=>a+g.features.length,0);
+
+  return (
+    <div className="help-page" style={{padding:'0 24px 40px',maxWidth:860,margin:'0 auto'}}>
+      <div className="section-header" style={{paddingTop:24,marginBottom:16}}>
+        <h2 className="section-title">Help &amp; Feature Reference</h2>
+        <span style={{fontSize:12,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>Every feature — what it does and how to use it</span>
+      </div>
+
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
+        <input
+          value={q}
+          onChange={e=>setQ(e.target.value)}
+          placeholder="Search features..."
+          style={{flex:1,background:'var(--surface-2)',border:'1px solid var(--border)',color:'var(--ink)',borderRadius:6,padding:'7px 12px',fontSize:13,fontFamily:'inherit',outline:'none'}}
+          onFocus={e=>{e.target.style.borderColor='var(--teal)';}}
+          onBlur={e=>{e.target.style.borderColor='var(--border)';}}
+        />
+        <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)',whiteSpace:'nowrap'}}>
+          {q ? `${shown} of ${total}` : `${total} features`}
+        </span>
+      </div>
+
+      {filtered.length===0&&(
+        <div style={{textAlign:'center',padding:'40px 0',color:'var(--muted)',fontSize:13}}>No features match "{q}"</div>
+      )}
+
+      {filtered.map(g=>(
+        <div key={g.group} className="card" style={{marginBottom:14,borderLeft:`3px solid ${g.accent}`,paddingLeft:0,overflow:'hidden'}}>
+          <div className="card-title" style={{paddingLeft:16}}>
+            <div className="dot" style={{background:g.accent}}/>
+            {g.group}
+            <span style={{marginLeft:'auto',fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>{g.features.length} feature{g.features.length!==1?'s':''}</span>
+          </div>
+          <div style={{padding:'0 16px 12px'}}>
+            {g.features.map((f,i)=>(
+              <div key={f.name} style={{padding:'10px 0',borderBottom:i<g.features.length-1?'1px solid var(--border)':undefined}}>
+                <div style={{fontWeight:600,fontSize:13,color:'var(--teal)',marginBottom:4}}>{f.name}</div>
+                <div style={{fontSize:12,color:'var(--gray-400)',lineHeight:1.6,marginBottom:6}}>{f.eli5}</div>
+                <ul style={{margin:0,paddingLeft:0,listStyle:'none'}}>
+                  {f.steps.map((s,si)=>(
+                    <li key={si} style={{fontSize:11,color:'var(--muted)',lineHeight:1.5,display:'flex',gap:6,marginBottom:2}}>
+                      <span style={{color:'var(--teal)',fontFamily:'var(--font-mono)',flexShrink:0}}>{si+1}.</span>
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function App({vault, onVaultChange}={}) {
   const [data,setData]         = useState(null);
   const [loading,setLoading]   = useState(true);
@@ -4584,7 +4717,7 @@ function App({vault, onVaultChange}={}) {
   useEffect(()=>{load();},[]);
   useEffect(()=>{ document.documentElement.style.setProperty('--sbw', sidebarCollapsed?'48px':'224px'); },[sidebarCollapsed]);
   useEffect(()=>{ if(!wallMode) return; const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t); },[wallMode]);
-  useEffect(()=>{ if(!wallMode) return; const ids=SECTIONS.map(s=>s.id); let i=ids.indexOf(section); const t=setInterval(()=>{ i=(i+1)%ids.length; setSection(ids[i]); },30000); return ()=>clearInterval(t); },[wallMode]);
+  useEffect(()=>{ if(!wallMode) return; const ids=SECTIONS.filter(s=>!s.meta).map(s=>s.id); let i=ids.indexOf(section); const t=setInterval(()=>{ i=(i+1)%ids.length; setSection(ids[i]); },30000); return ()=>clearInterval(t); },[wallMode]);
   const SEC_DELTA_KEY={ipam:'total_subnets',dns:'total_zones'};
   useEffect(()=>{ if(!data||!lastUpd) return; const h=LS.get('noc.tileHist',{}); const tn={Hosts:errHosts.length,Subnets:critSubs.length,DNS:ttlBad.length,Audit:auditLogs.filter(l=>l.result==='failure').length}; Object.entries(tn).forEach(([k,v])=>{ const a=(h[k]||[]).slice(-11); a.push(v); h[k]=a; }); LS.set('noc.tileHist',h); },[lastUpd]);
   useEffect(()=>{ if(!deltas) return; const t=LS.get('noc.secChanged',{}); Object.entries(SEC_DELTA_KEY).forEach(([sec,k])=>{ if(deltas[k]!=null&&deltas[k]!==0) t[sec]=Date.now(); }); LS.set('noc.secChanged',t); },[deltas]);
@@ -4711,7 +4844,7 @@ function App({vault, onVaultChange}={}) {
       if(e.key==='e'&&!e.metaKey&&!e.ctrlKey) { const n=SECTION_EXPORT_MAP[section]; if(n) document.querySelector(`[data-export-section="${n}"]`)?.click(); return; }
       if(e.key==='/'){ e.preventDefault(); setSection('explore'); return; }
       const idx = parseInt(e.key);
-      if(idx>=1&&idx<=9) { const s=SECTIONS[idx-1]; if(s) setSection(s.id); }
+      if(idx>=1&&idx<=9) { const _navS=SECTIONS.filter(s=>!s.meta); const s=_navS[idx-1]; if(s) setSection(s.id); }
     };
     document.addEventListener('keydown', handler);
     return ()=>document.removeEventListener('keydown', handler);
@@ -4921,7 +5054,7 @@ function App({vault, onVaultChange}={}) {
 
         <nav id="sidebar-nav" className="sidebar-nav">
           <div className="nav-sec">Navigation</div>
-          {SECTIONS.filter(s=>!hiddenSections.includes(s.id)).map(s=>{
+          {SECTIONS.filter(s=>!hiddenSections.includes(s.id)&&!s.meta).map(s=>{
             let badge = null;
             if(data&&s.id==='ipam') { const c=data.subnets.filter(x=>x.util>=90).length; if(c>0) badge=<span className="badge-pill">{c}</span>; }
             if(data&&s.id==='hosts') { const c=data.hosts.filter(h=>h.status==='error'||h.status==='offline').length; if(c>0) badge=<span className="badge-pill">{c}</span>; }
@@ -5012,6 +5145,12 @@ function App({vault, onVaultChange}={}) {
               data-tip="<b>Keyboard shortcuts</b> — all shortcuts at a glance (shortcut: <b>?</b>)">
               <span className="sf-ico">?</span>
               <span className="sf-lbl">Shortcuts</span>
+            </button>
+            <button className="sf-row" onClick={()=>{setSection('help');setSidebarOpen(false);}}
+              aria-label="Help — feature guide"
+              data-tip="<b>Help &amp; Features</b> — ELI5 guide to every dashboard feature">
+              <span className="sf-ico">?</span>
+              <span className="sf-lbl">Help</span>
             </button>
             <div className="sf-sep"/>
             <button className="sf-row" onClick={()=>setRefreshFrozen(v=>!v)}
@@ -6049,6 +6188,7 @@ function App({vault, onVaultChange}={}) {
             </>
           );
         })()}
+        {section==='help'&&<HelpPage/>}
         </div>{/* /section-view */}
 
       </main>
