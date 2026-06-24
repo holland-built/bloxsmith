@@ -632,7 +632,7 @@ tr:hover .copy-btn{opacity:1}
 .ver-badge.upd{color:var(--sev-amber-t);background:var(--badge-amber-bg);border-color:var(--badge-amber-bd);cursor:pointer}
 .ver-badge.upd:hover{background:rgba(245,158,11,.22)}
 .ver-up-arrow{font-weight:700;margin:0 2px}
-.upd-pop{position:absolute;bottom:calc(100% - 4px);left:14px;width:268px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;z-index:300;box-shadow:0 4px 16px rgba(0,0,0,.5)}
+.upd-pop{margin:0 0 4px;background:var(--surface-2);border:1px solid var(--border);border-left:2px solid var(--amber);padding:10px 12px;font-size:11px;border-radius:4px}
 .upd-pop .ver-line{font-size:12px;font-weight:600;color:var(--gray-100);margin-bottom:6px}
 .upd-pop .ver-line .to{color:var(--sev-amber-t)}
 .upd-pop a{color:var(--teal);font-size:11px;text-decoration:none}
@@ -751,6 +751,29 @@ tr:hover .copy-btn{opacity:1}
 .wiz-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)}
 .wiz-skip{background:none;border:1px solid var(--border);color:var(--gray-400);border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer}
 .wiz-done{background:var(--teal);border:none;color:var(--blue-dark);border-radius:6px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer}
+/* ─── HelpPage v6 editorial ─── */
+.help-page{padding:0;max-width:none;margin:0}
+.help-search{position:sticky;top:0;z-index:100;width:100%;background:rgba(13,17,23,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:none;border-bottom:1px solid rgba(240,246,252,0.1);color:var(--ink);font-size:13px;padding:11px 48px;font-family:var(--font-mono);letter-spacing:0.03em;outline:none}
+.help-search::placeholder{color:var(--muted)}
+.help-chapter{position:relative;padding:72px 48px 64px;overflow:hidden}
+.help-chapter+.help-chapter{border-top:1px solid rgba(240,246,252,0.08)}
+.help-chapter.help-hidden{display:none}
+.help-watermark{position:absolute;top:32px;left:20px;font-size:64px;font-weight:100;color:rgba(216,217,218,0.06);font-family:var(--font-mono);line-height:1;pointer-events:none;user-select:none;letter-spacing:-0.04em}
+.help-chapter-label{display:flex;align-items:baseline;gap:12px;margin-bottom:48px}
+.help-section-name{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:var(--amber);font-family:var(--font-mono)}
+.help-section-count{font-size:11px;color:var(--muted);font-family:var(--font-mono)}
+.help-feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px 56px}
+.help-feature-pair{display:contents}
+.help-feature-pair.help-hidden .help-feature-left,.help-feature-pair.help-hidden .help-feature-right{display:none}
+.help-feature-name{font-size:17px;font-weight:500;color:var(--teal);font-family:var(--font-mono);line-height:1.3;margin-bottom:6px}
+.help-feature-tag{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:var(--muted);font-family:var(--font-mono)}
+.help-eli5{font-size:13px;color:var(--ink);line-height:1.65;margin-bottom:10px}
+.help-steps{list-style:none;padding:0;counter-reset:hsteps}
+.help-steps li{counter-increment:hsteps;display:flex;gap:10px;font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-bottom:3px;line-height:1.5}
+.help-steps li::before{content:counter(hsteps,decimal-leading-zero);flex-shrink:0;color:rgba(88,166,255,0.4);font-size:10px;padding-top:1px}
+.help-no-match{text-align:center;padding:60px 0;color:var(--muted);font-size:13px;font-family:var(--font-mono)}
+.help-search-bar{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:12px;padding:0 48px}
+.help-search-count{font-size:11px;color:var(--muted);font-family:var(--font-mono);white-space:nowrap;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -3049,7 +3072,7 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
 const PROTECTED_SECTIONS = new Set(['overview']);
 function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone}) {
   const [tab, setTab] = useState('widgets');
-  const navSections = SECTIONS.filter(s=>!PROTECTED_SECTIONS.has(s.id)&&!s.meta);
+  const navSections = SECTIONS.filter(s=>!PROTECTED_SECTIONS.has(s.id)&&!s.noAuto);
   const modalRef = useRef(null);
   useEffect(()=>{
     const prev = document.activeElement;
@@ -3350,6 +3373,7 @@ function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection
 
 /* ── nav SVG icons — Lucide 1.5px stroke, 24-unit viewBox ── */
 const NAV_ICONS={
+  help: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
   overview:      'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
   triage:        'M22 12h-4l-3 9L9 3l-3 9H2',
   ipam:          'M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z',
@@ -3383,7 +3407,7 @@ const SECTIONS=[
   {id:'audit',         icon:'audit',         label:'Audit Logs',      tip:'Timestamped record of every API action — who did what and when.'},
   {id:'alerts',        icon:'alerts',        label:'Alert Rules',     tip:'Define threshold-based alerts (e.g. DHCP &gt; 90%) with notifications. Includes triage view.'},
   {id:'explore',       icon:'explore',       label:'Explore',         tip:'Ad-hoc group-by pivot over hosts, leases, and DNS — Kentik-style explorer.'},
-  {id:'help', icon:'help', label:'Help', tip:'How every feature works — searchable ELI5 guide.', meta:true},
+  {id:'help', icon:'help', label:'Help', tip:'How every feature works — searchable ELI5 guide.', noAuto:true},
 ];
 
 function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
@@ -4448,55 +4472,52 @@ function HelpPage() {
   const shown = filtered.reduce((a,g)=>a+g.features.length,0);
 
   return (
-    <div className="help-page" style={{padding:'0 24px 40px',maxWidth:860,margin:'0 auto'}}>
-      <div className="section-header" style={{paddingTop:24,marginBottom:16}}>
-        <h2 className="section-title">Help &amp; Feature Reference</h2>
-        <span style={{fontSize:12,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>Every feature — what it does and how to use it</span>
-      </div>
-
-      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
+    <div className="help-page">
+      <div className="help-search-bar">
         <input
+          className="help-search"
+          style={{flex:1,background:'transparent',border:'none',padding:'11px 0'}}
           value={q}
           onChange={e=>setQ(e.target.value)}
-          placeholder="Search features..."
-          style={{flex:1,background:'var(--surface-2)',border:'1px solid var(--border)',color:'var(--ink)',borderRadius:6,padding:'7px 12px',fontSize:13,fontFamily:'inherit',outline:'none'}}
-          onFocus={e=>{e.target.style.borderColor='var(--teal)';}}
-          onBlur={e=>{e.target.style.borderColor='var(--border)';}}
+          placeholder={`Search ${total} features…`}
+          aria-label="Search features"
         />
-        <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)',whiteSpace:'nowrap'}}>
-          {q ? `${shown} of ${total}` : `${total} features`}
-        </span>
+        {q&&<span className="help-search-count">{shown} of {total}</span>}
       </div>
-
       {filtered.length===0&&(
-        <div style={{textAlign:'center',padding:'40px 0',color:'var(--muted)',fontSize:13}}>No features match "{q}"</div>
+        <div className="help-no-match">No features match "{q}"</div>
       )}
-
-      {filtered.map(g=>(
-        <div key={g.group} className="card" style={{marginBottom:14,borderLeft:`3px solid ${g.accent}`,paddingLeft:0,overflow:'hidden'}}>
-          <div className="card-title" style={{paddingLeft:16}}>
-            <div className="dot" style={{background:g.accent}}/>
-            {g.group}
-            <span style={{marginLeft:'auto',fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>{g.features.length} feature{g.features.length!==1?'s':''}</span>
+      {HELP.map((g,gi)=>{
+        const vis=filtered.find(x=>x.group===g.group);
+        return (
+          <div key={g.group} className={`help-chapter${vis?'':' help-hidden'}`}>
+            <div className="help-watermark">{String(gi+1).padStart(2,'0')}</div>
+            <div className="help-chapter-label">
+              <span className="help-section-name">{g.group}</span>
+              <span className="help-section-count">{g.features.length} feature{g.features.length!==1?'s':''}</span>
+            </div>
+            <div className="help-feature-grid">
+              {g.features.map(f=>{
+                const match=!q||(f.name.toLowerCase().includes(lq)||f.eli5.toLowerCase().includes(lq)||f.steps.some(s=>s.toLowerCase().includes(lq)));
+                return (
+                  <div key={f.name} className={`help-feature-pair${match?'':' help-hidden'}`}>
+                    <div className="help-feature-left">
+                      <div className="help-feature-name">{f.name}</div>
+                      <div className="help-feature-tag">{g.group}</div>
+                    </div>
+                    <div className="help-feature-right">
+                      <div className="help-eli5">{f.eli5}</div>
+                      <ol className="help-steps">
+                        {f.steps.map((s,si)=><li key={si}><span>{s}</span></li>)}
+                      </ol>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div style={{padding:'0 16px 12px'}}>
-            {g.features.map((f,i)=>(
-              <div key={f.name} style={{padding:'10px 0',borderBottom:i<g.features.length-1?'1px solid var(--border)':undefined}}>
-                <div style={{fontWeight:600,fontSize:13,color:'var(--teal)',marginBottom:4}}>{f.name}</div>
-                <div style={{fontSize:12,color:'var(--gray-400)',lineHeight:1.6,marginBottom:6}}>{f.eli5}</div>
-                <ul style={{margin:0,paddingLeft:0,listStyle:'none'}}>
-                  {f.steps.map((s,si)=>(
-                    <li key={si} style={{fontSize:11,color:'var(--muted)',lineHeight:1.5,display:'flex',gap:6,marginBottom:2}}>
-                      <span style={{color:'var(--teal)',fontFamily:'var(--font-mono)',flexShrink:0}}>{si+1}.</span>
-                      <span>{s}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -4717,7 +4738,7 @@ function App({vault, onVaultChange}={}) {
   useEffect(()=>{load();},[]);
   useEffect(()=>{ document.documentElement.style.setProperty('--sbw', sidebarCollapsed?'48px':'224px'); },[sidebarCollapsed]);
   useEffect(()=>{ if(!wallMode) return; const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t); },[wallMode]);
-  useEffect(()=>{ if(!wallMode) return; const ids=SECTIONS.filter(s=>!s.meta).map(s=>s.id); let i=ids.indexOf(section); const t=setInterval(()=>{ i=(i+1)%ids.length; setSection(ids[i]); },30000); return ()=>clearInterval(t); },[wallMode]);
+  useEffect(()=>{ if(!wallMode) return; const ids=SECTIONS.filter(s=>!s.noAuto).map(s=>s.id); let i=ids.indexOf(section); const t=setInterval(()=>{ i=(i+1)%ids.length; setSection(ids[i]); },30000); return ()=>clearInterval(t); },[wallMode]);
   const SEC_DELTA_KEY={ipam:'total_subnets',dns:'total_zones'};
   useEffect(()=>{ if(!data||!lastUpd) return; const h=LS.get('noc.tileHist',{}); const tn={Hosts:errHosts.length,Subnets:critSubs.length,DNS:ttlBad.length,Audit:auditLogs.filter(l=>l.result==='failure').length}; Object.entries(tn).forEach(([k,v])=>{ const a=(h[k]||[]).slice(-11); a.push(v); h[k]=a; }); LS.set('noc.tileHist',h); },[lastUpd]);
   useEffect(()=>{ if(!deltas) return; const t=LS.get('noc.secChanged',{}); Object.entries(SEC_DELTA_KEY).forEach(([sec,k])=>{ if(deltas[k]!=null&&deltas[k]!==0) t[sec]=Date.now(); }); LS.set('noc.secChanged',t); },[deltas]);
@@ -4844,7 +4865,7 @@ function App({vault, onVaultChange}={}) {
       if(e.key==='e'&&!e.metaKey&&!e.ctrlKey) { const n=SECTION_EXPORT_MAP[section]; if(n) document.querySelector(`[data-export-section="${n}"]`)?.click(); return; }
       if(e.key==='/'){ e.preventDefault(); setSection('explore'); return; }
       const idx = parseInt(e.key);
-      if(idx>=1&&idx<=9) { const _navS=SECTIONS.filter(s=>!s.meta); const s=_navS[idx-1]; if(s) setSection(s.id); }
+      if(idx>=1&&idx<=9) { const _navS=SECTIONS.filter(s=>!s.noAuto); const s=_navS[idx-1]; if(s) setSection(s.id); }
     };
     document.addEventListener('keydown', handler);
     return ()=>document.removeEventListener('keydown', handler);
@@ -5054,7 +5075,7 @@ function App({vault, onVaultChange}={}) {
 
         <nav id="sidebar-nav" className="sidebar-nav">
           <div className="nav-sec">Navigation</div>
-          {SECTIONS.filter(s=>!hiddenSections.includes(s.id)&&!s.meta).map(s=>{
+          {SECTIONS.filter(s=>!hiddenSections.includes(s.id)).map(s=>{
             let badge = null;
             if(data&&s.id==='ipam') { const c=data.subnets.filter(x=>x.util>=90).length; if(c>0) badge=<span className="badge-pill">{c}</span>; }
             if(data&&s.id==='hosts') { const c=data.hosts.filter(h=>h.status==='error'||h.status==='offline').length; if(c>0) badge=<span className="badge-pill">{c}</span>; }
@@ -5201,12 +5222,13 @@ function App({vault, onVaultChange}={}) {
             </div>
           </>}
           {updPop&&(
-            <>
-            <div className="acct-overlay" onClick={()=>setUpdPop(false)}/>
             <div className="upd-pop" role="dialog" aria-label="App version">
-              <div className="ver-line">{upd.available
-                ? <>v{vault.version} → <span className="to">{upd.latest} available</span></>
-                : <>v{vault.version} · {upd.checkDisabled?'update checks disabled':(upd.latest?'up to date':'version')}</>}</div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+                <div className="ver-line" style={{margin:0}}>{upd.available
+                  ? <>v{vault.version} → <span className="to">{upd.latest} available</span></>
+                  : <>v{vault.version} · {upd.checkDisabled?'update checks disabled':(upd.latest?'up to date':'version')}</>}</div>
+                <button onClick={()=>setUpdPop(false)} style={{background:'none',border:'none',color:'var(--gray-400)',cursor:'pointer',padding:'0 0 0 8px',fontSize:13,lineHeight:1}} aria-label="Close">×</button>
+              </div>
               {upd.url&&<div><a href={upd.url} target="_blank" rel="noopener noreferrer">View release notes ↗</a></div>}
               {upd.available&&(upd.selfUpdate ? (
                 updApplying ? <>
@@ -5229,7 +5251,6 @@ function App({vault, onVaultChange}={}) {
                 </div>
               )}
             </div>
-            </>
           )}
           <div className="ctx-panel">
           {accounts&&accounts.length>0&&(
