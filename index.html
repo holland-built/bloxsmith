@@ -403,6 +403,26 @@ body.chat-open{padding-right:340px}
 [data-theme="light"] .notice.n-amber .n-btn:hover{background:rgba(183,121,31,.12)}
 .n-more{align-self:flex-start;background:none;border:none;color:var(--gray-400);font-size:11px;font-weight:600;cursor:pointer;padding:2px 0;font-family:inherit}
 .n-more:hover{color:var(--teal)}
+/* v5 incident commander two-column layout */
+.noc-layout{display:flex;gap:0;margin:0 -20px -40px;align-items:flex-start}
+.alert-col{width:340px;flex:0 0 340px;background:var(--surface);border-right:1px solid var(--border);position:sticky;top:80px;max-height:calc(100vh - 80px);overflow-y:auto;display:flex;flex-direction:column}
+.alert-col-header{padding:12px 14px 10px;border-bottom:1px solid var(--border);flex:0 0 auto;position:sticky;top:0;background:var(--surface);z-index:1}
+.alert-col-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:.01em}
+.alert-col-count{background:var(--danger-bg);color:var(--danger);border:1px solid rgba(248,113,113,.35);font-size:11px;font-weight:600;padding:1px 7px;border-radius:20px}
+.alert-col-empty{padding:32px 14px;text-align:center;color:var(--muted);font-size:12px}
+.content-col{flex:1;min-width:0;padding:0 20px 40px;overflow:hidden}
+/* alert col: restyle latch-strip as incident card */
+.alert-col .latch-strip{margin:10px 10px 0;border:1px solid rgba(248,113,113,.35);border-left:3px solid var(--danger);border-radius:var(--radius,2px);height:auto;padding:10px 11px;background:var(--danger-bg)}
+.alert-col .latch-text{flex-direction:column;gap:4px;align-items:flex-start}
+.alert-col .latch-spacer{display:none}
+/* alert col: restyle notice-rail as incident card list */
+.alert-col .notice-rail{display:flex;flex-direction:column;gap:8px;padding:10px;margin-bottom:0}
+.alert-col .notice{display:flex;flex-direction:column;align-items:flex-start;gap:6px;border-radius:var(--radius,2px);padding:10px 11px;border:1px solid var(--border);border-left-width:3px;border-left-color:var(--muted);animation:none;cursor:default}
+.alert-col .notice .n-ico{display:none}
+.alert-col .notice .n-acts{display:flex;gap:6px;flex-wrap:wrap}
+.alert-col .notice.n-red{background:var(--danger-bg);border-color:rgba(248,113,113,.25);border-left-color:var(--danger)}
+.alert-col .notice.n-amber{background:var(--warning-bg);border-color:rgba(251,191,36,.25);border-left-color:var(--warning)}
+.alert-col .notice.n-info{background:var(--info-bg);border-color:rgba(102,148,255,.25);border-left-color:var(--accent)}
 .thinking{display:flex;gap:5px;align-items:center;padding:4px 2px}
 .t-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:tbounce .9s ease-in-out infinite}
 .t-dot:nth-child(2){animation-delay:.15s}.t-dot:nth-child(3){animation-delay:.3s}
@@ -5423,6 +5443,14 @@ function App({vault, onVaultChange}={}) {
           onRestoreScope={sc=>{setScopeSubnet(sc.scopeSubnet||null);setScopeZone(sc.scopeZone||null);}}
         />}
         {focusEntity&&<button className="scope-clear" style={{position:'fixed',bottom:12,right:12,zIndex:200,background:'var(--surface-2)',border:'1px solid var(--teal)',color:'var(--teal)',padding:'4px 10px',borderRadius:4,fontSize:10,fontFamily:'var(--font-mono)',cursor:'pointer'}} onClick={()=>setFocusEntity(null)}>◉ focused: {focusEntity.key} — click to clear</button>}
+        <div className="noc-layout">
+          <div className="alert-col">
+            <div className="alert-col-header">
+              <div className="alert-col-title">
+                Active Incidents
+                {(firingAlerts.length+critSubs.length+errHosts.length)>0&&<span className="alert-col-count">{firingAlerts.length+critSubs.length+errHosts.length}</span>}
+              </div>
+            </div>
         {/* ── ATC latch strip — read-only CRIT highlight, gated on critSubs ── */}
         {critSubs.length>0&&<div className="latch-strip" aria-live="polite">
           <div className="latch-text">
@@ -5497,6 +5525,11 @@ function App({vault, onVaultChange}={}) {
             </div>
           );
         })()}
+          {(firingAlerts.length+critSubs.length+errHosts.length)===0&&!usingMock&&
+            <div className="alert-col-empty">· No active incidents</div>
+          }
+          </div>{/* /alert-col */}
+          <div className="content-col">
 
         <div key={section} className="section-view">
         {/* ── OVERVIEW ── */}
@@ -6286,6 +6319,8 @@ function App({vault, onVaultChange}={}) {
         })()}
         {section==='help'&&<HelpPage/>}
         </div>{/* /section-view */}
+          </div>{/* /content-col */}
+        </div>{/* /noc-layout */}
 
       </main>
 
