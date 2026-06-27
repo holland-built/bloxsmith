@@ -1627,20 +1627,30 @@ class Handler(BaseHTTPRequestHandler):
             domain = re.sub(r"[^a-zA-Z0-9.\-]", "", qs.get("domain",""))
             if not domain:
                 self.send_response(400); self.end_headers(); return
-            try:
-                req = urllib.request.Request(
-                    f"https://logo.clearbit.com/{domain}",
-                    headers={"User-Agent":"Mozilla/5.0","Accept":"image/*"})
-                with urllib.request.urlopen(req, timeout=5) as r:
-                    data = r.read()
-                    ct = r.headers.get("Content-Type","image/png")
-                self.send_response(200)
-                self.send_header("Content-Type", ct)
-                self.send_header("Content-Length", str(len(data)))
-                self.send_header("Cache-Control", "public, max-age=86400")
-                self.end_headers(); self.wfile.write(data)
-            except Exception:
-                self.send_response(404); self.end_headers()
+            # Try sources in order: DuckDuckGo favicon proxy (no auth), then Clearbit (may be down)
+            tried = [
+                f"https://icons.duckduckgo.com/ip3/{domain}.ico",
+                f"https://logo.clearbit.com/{domain}",
+            ]
+            for logo_url in tried:
+                try:
+                    req = urllib.request.Request(
+                        logo_url,
+                        headers={"User-Agent":"Mozilla/5.0","Accept":"image/*"})
+                    with urllib.request.urlopen(req, timeout=5) as r:
+                        data = r.read()
+                        ct = r.headers.get("Content-Type","image/png")
+                    if len(data) < 50:
+                        continue  # empty/error response
+                    self.send_response(200)
+                    self.send_header("Content-Type", ct)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "public, max-age=86400")
+                    self.end_headers(); self.wfile.write(data)
+                    return
+                except Exception:
+                    continue
+            self.send_response(404); self.end_headers()
             return
         if path == "/api/vault/status":
             self._json(vault_status()); return
