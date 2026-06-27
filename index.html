@@ -226,6 +226,11 @@ body{padding-left:0!important}
 .bento>*{min-width:0}
 .b-wide{grid-column:span 2}
 .b-full{grid-column:1/-1}
+.ov-bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start;margin-top:14px}
+.ov-bento>*{min-width:0}
+.ov-bento>.b-wide{grid-column:span 2}
+.ov-bento>.b-full{grid-column:1/-1}
+.ov-bento>.drag-card>.card{height:100%;box-sizing:border-box;max-height:none;overflow:auto}
 .card{min-width:0}
 .g2>*,.g3>*,.g4>*{min-width:0}
 @media(max-width:900px){.b-wide,.b-full{grid-column:span 1}}
@@ -534,7 +539,7 @@ tr:hover .copy-btn{opacity:1}
 .drag-card{transition:opacity .15s}
 .drag-card.dragging{opacity:.5}
 .drag-over{outline:2px dashed rgba(214,210,203,.45);outline-offset:4px;border-radius:10px;background:rgba(214,210,203,.04)}
-.drag-handle{cursor:grab;color:var(--gray-600);font-size:13px;line-height:1;padding:0 4px;user-select:none;flex-shrink:0;transition:color .12s,opacity .12s;opacity:.35}
+.drag-handle{cursor:grab;color:var(--gray-600);font-size:13px;line-height:1;padding:0 4px;user-select:none;flex-shrink:0;transition:color .12s,opacity .12s;opacity:.65}
 .drag-handle:hover{color:var(--teal);opacity:1}
 .drag-handle:active{cursor:grabbing}
 .viz-sel{background:var(--surface);border:1px solid var(--border);color:var(--gray-200);font-size:10px;border-radius:5px;padding:2px 5px;cursor:pointer;outline:none;flex-shrink:0}
@@ -4728,7 +4733,7 @@ function App({vault, onVaultChange}={}) {
   const [focusEntity, setFocusEntity] = React.useState(null); // {type:'site'|'subnet'|'host', key:string}
   const [rowLimits, setRowLimits]       = useState(()=>LS.get('rl',{}));
   const [collapsed, setCollapsed]       = useState(()=>LS.get('cl',{}));
-  const DEFAULT_ORDER=['hosts','subnets','ttl','audit','pols','feeds'];
+  const DEFAULT_ORDER=['dhcp','hosts','subnets','ttl','feeds','audit'];
   const [overviewOrder, setOverviewOrder] = useState(()=>{
     const saved=LS.get('noc.widgetOrder', null) || LS.get('oo', null) || DEFAULT_ORDER;
     // keep only known ids + append any missing defaults (forward-compatible)
@@ -4745,6 +4750,7 @@ function App({vault, onVaultChange}={}) {
   const [policyDiff, setPolicyDiff]     = useState({});
   const [wallMode, setWallMode]         = useState(()=>LS.get('noc.wall',false));
   const [wallSpans, setWallSpans]       = useState(()=>LS.get('noc.wallSpans',{}));
+  const [widgetHeights, setWidgetHeights] = useState(()=>LS.get('noc.heights',{}));
   const [hoverPause, setHoverPause]     = useState(false);
 
   const getViz = (id, def='table') => vizMode[id] || def;
@@ -4757,7 +4763,7 @@ function App({vault, onVaultChange}={}) {
   const [triagePromptDismissed, setTriagePromptDismissed] = useState(false);
   const [ackedAlerts, setAckedAlerts] = useState(()=>LS.get('noc.acked',{}));
   const [drillEntity, setDrillEntity] = useState(null);
-  const WIDGET_LABELS={hosts:'Host Status',subnets:'Top Subnets',ttl:'DNS TTL Issues',audit:'Audit Log',pols:'Security Policies',feeds:'Threat Feeds'};
+  const WIDGET_LABELS={dhcp:'DHCP Pools',hosts:'Host Status',subnets:'Top Subnets',ttl:'DNS Zones',audit:'Audit Log',feeds:'Threat Feeds'};
   const [hiddenSections, setHiddenSections] = useState(()=>LS.get('noc.hiddenSections',[]));
   const [showWizard, setShowWizard] = useState(()=>!LS.get('noc.wizardDone',false));
   const [theme, setTheme]           = useState(()=>LS.get('noc.theme','system')); // 'system'|'light'|'dark'
@@ -4837,6 +4843,8 @@ function App({vault, onVaultChange}={}) {
   // dragging only initiates from the handle (so inner buttons/text still work)
   const SPAN_CLS={1:'',2:'b-wide',3:'b-full'};
   const cycleSpan=id=>{ const cur=wallSpans[id]||1; const next=cur>=3?1:cur+1; const n={...wallSpans,[id]:next}; setWallSpans(n); LS.set('noc.wallSpans',n); };
+  const HEIGHT_PRESETS=[220,360,540];
+  const cycleHeight=id=>{ const cur=widgetHeights[id]||null; const idx=HEIGHT_PRESETS.indexOf(cur); const next=idx>=HEIGHT_PRESETS.length-1?null:HEIGHT_PRESETS[idx<0?0:idx+1]; const n={...widgetHeights}; if(next===null) delete n[id]; else n[id]=next; setWidgetHeights(n); LS.set('noc.heights',n); };
   const wrapProps = (id, extra='') => {
     const span = wallMode ? SPAN_CLS[wallSpans[id]||1] : '';
     const cls = [extra, span].filter(Boolean).join(' ');
@@ -4851,9 +4859,10 @@ function App({vault, onVaultChange}={}) {
   };
   const DragHandle = ({id}) => (
     <>
-      <span className="drag-handle" title="Drag to reorder" aria-label="Drag to reorder" data-tip="Drag to reorder this widget on the dashboard"
+      <span className="drag-handle" title="Drag to reorder" aria-label="Drag to reorder"
         onMouseDown={()=>setDragArmed(id)} onMouseUp={()=>setDragArmed(null)}>⠿</span>
-      {wallMode&&<button className="wall-span-btn" title="Cycle width: 1 / 2 / full" data-tip="Cycle widget width: 1 column → 2 columns → full width" onClick={()=>cycleSpan(id)}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>}
+      <button className="wall-span-btn" title="Cycle width: 1 / 2 / full" onClick={e=>{e.stopPropagation();cycleSpan(id);}}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>
+      <button className="wall-span-btn" title={widgetHeights[id]?`Height: ${widgetHeights[id]}px — click to cycle`:'Height: auto — click to set compact'} onClick={e=>{e.stopPropagation();cycleHeight(id);}}>{widgetHeights[id]?`${widgetHeights[id]}`:'↕'}</button>
     </>
   );
   const load = useCallback(async (bustCache=false)=>{
@@ -5725,229 +5734,230 @@ function App({vault, onVaultChange}={}) {
               const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber)':'var(--green)';
               const sevTxt=u=>u>=90?'CRIT':u>=75?'WARN':'OK';
               const hashN=(s,m)=>{let h=0;for(let i=0;i<(s||'').length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h%m;};
+              /* BENTO WIDGET RENDER */
               const topSubs=[...s_subnets].filter(s=>s.total>1).sort((a,b)=>b.util-a.util);
               const onlineH=s_hosts.filter(h=>h.status==='online').length;
               const warnH=s_hosts.filter(h=>h.status==='degraded').length;
               const downH=s_hosts.filter(h=>['offline','error'].includes(h.status)).length;
-              const baseUtil=critSubs[0]?.util??topSubs[0]?.util??60;
-              const chartPts=Array.from({length:30},(_,i)=>{
-                const x=(i*300/29).toFixed(1);
-                const u=Math.max(60,Math.min(100,baseUtil-12+i*(14/29)+Math.sin(i/3)*5));
-                const y=(70-(u-60)*1.75).toFixed(1);
-                return {x,y,u:u.toFixed(0),str:`${x},${y}`};
-              });
-              const ptsStr=chartPts.map(p=>p.str).join(' ');
-              const thresh80y=(70-(80-60)*1.75).toFixed(1);
-              const lastPt=chartPts[chartPts.length-1];
-              const trendClr=u=>parseInt(u)>=90?'var(--red)':parseInt(u)>=75?'var(--amber)':'var(--green)';
-              return (
-                <>
-                  {/* DHCP Section */}
-                  <div style={{marginTop:14}}>
-                    <div className="section-header">
-                      <span className="section-title">· DHCP</span>
-                      <span className="section-line"/>
-                      {critSubs.length>0?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
-                    </div>
-                    <div className="card" style={{padding:14}}>
-                      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-                        <span className="ov-sub" style={{margin:0}}>Pool Utilization</span>
-                        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                          <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>last 6h trend</span>
-                          <button className="col-btn" onClick={()=>exportCols('dhcp-pools',['addr','cidr','util','free'].map(k=>({key:k,label:k})),topSubs)}>CSV</button>
-                        </div>
+              const renderOvWidget=id=>{
+                if(id==='dhcp') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                        <DragHandle id={id}/>
+                        <span className="ov-sub" style={{margin:0}}>DHCP Pools</span>
                       </div>
-                      {topSubs.slice(0,5).map((s,i)=>{
-                        const u=parseInt(s.util)||0;
-                        const clr=sevClr(s.util);
-                        const badgeBg=u>=90?'rgba(248,113,113,.12)':u>=75?'rgba(251,191,36,.12)':'rgba(74,222,128,.10)';
-                        const badgeBd=u>=90?'rgba(248,113,113,.35)':u>=75?'rgba(251,191,36,.35)':'rgba(74,222,128,.35)';
-                        // generate 7-point trend sparkline toward current util
-                        const spark=Array.from({length:7},(_,j)=>{
-                          const pct=Math.max(0,Math.min(100,u - (6-j)*((u-Math.max(0,u-12))/6) + Math.sin(j)*2));
-                          return {x:j*10, y:18-(pct/100)*16};
-                        });
-                        const sparkPts=spark.map(p=>`${p.x},${p.y.toFixed(1)}`).join(' ');
-                        const lastY=spark[6].y.toFixed(1);
-                        return (<React.Fragment key={s.id||i}>
-                          {i>0&&<div style={{height:1,background:'var(--border)',margin:'0 4px'}}/>}
-                          <div style={{display:'grid',gridTemplateColumns:'1fr 38px 60px 54px',alignItems:'center',gap:8,height:36,padding:'0 4px',borderRadius:2,cursor:'pointer'}}
-                            onClick={()=>setScopeSubnet(scopeSubnet===s.id?null:s.id)}
-                            title={s.name||s.addr}>
-                            <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
-                            <span style={{fontFamily:'var(--font-mono)',fontSize:12,fontWeight:600,color:clr,textAlign:'right'}}>{s.util}%</span>
-                            <svg width={60} height={20} viewBox="0 0 60 20" preserveAspectRatio="none" style={{display:'block',overflow:'visible'}}>
-                              <polyline points={sparkPts} fill="none" stroke={clr} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
-                              <circle cx={60} cy={lastY} r={2} fill={clr}/>
-                            </svg>
-                            <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:600,textTransform:'uppercase',letterSpacing:'.04em',textAlign:'center',padding:'2px 5px',borderRadius:2,background:badgeBg,color:clr,border:`1px solid ${badgeBd}`}}>{sevTxt(s.util)}</span>
-                          </div>
+                      <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                        <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>6h trend</span>
+                        <button className="col-btn" onClick={()=>exportCols('dhcp-pools',['addr','cidr','util','free'].map(k=>({key:k,label:k})),topSubs)}>CSV</button>
+                      </div>
+                    </div>
+                    {topSubs.slice(0,5).map((s,i)=>{
+                      const u=parseInt(s.util)||0;
+                      const clr=sevClr(s.util);
+                      const badgeBg=u>=90?'rgba(248,113,113,.12)':u>=75?'rgba(251,191,36,.12)':'rgba(74,222,128,.10)';
+                      const badgeBd=u>=90?'rgba(248,113,113,.35)':u>=75?'rgba(251,191,36,.35)':'rgba(74,222,128,.35)';
+                      const spark=Array.from({length:7},(_,j)=>{
+                        const pct=Math.max(0,Math.min(100,u-(6-j)*((u-Math.max(0,u-12))/6)+Math.sin(j)*2));
+                        return {x:j*10,y:18-(pct/100)*16};
+                      });
+                      const sparkPts=spark.map(p=>`${p.x},${p.y.toFixed(1)}`).join(' ');
+                      const lastY=spark[6].y.toFixed(1);
+                      return (<React.Fragment key={s.id||i}>
+                        {i>0&&<div style={{height:1,background:'var(--border)',margin:'0 4px'}}/>}
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 38px 60px 54px',alignItems:'center',gap:8,height:36,padding:'0 4px',borderRadius:2,cursor:'pointer'}}
+                          onClick={()=>setScopeSubnet(scopeSubnet===s.id?null:s.id)} title={s.name||s.addr}>
+                          <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
+                          <span style={{fontFamily:'var(--font-mono)',fontSize:12,fontWeight:600,color:clr,textAlign:'right'}}>{s.util}%</span>
+                          <svg width={60} height={20} viewBox="0 0 60 20" preserveAspectRatio="none" style={{display:'block',overflow:'visible'}}>
+                            <polyline points={sparkPts} fill="none" stroke={clr} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
+                            <circle cx={60} cy={lastY} r={2} fill={clr}/>
+                          </svg>
+                          <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:600,textTransform:'uppercase',letterSpacing:'.04em',textAlign:'center',padding:'2px 5px',borderRadius:2,background:badgeBg,color:clr,border:`1px solid ${badgeBd}`}}>{sevTxt(s.util)}</span>
+                        </div>
+                      </React.Fragment>);
+                    })}
+                    <div style={{marginTop:10,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}>
+                      <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-ui)'}}>{topSubs.length} pools · {topSubs.filter(s=>parseInt(s.util)>=75).length} warn/crit</span>
+                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>80% threshold</span>
+                    </div>
+                  </div>
+                );
+                if(id==='ttl') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                        <DragHandle id={id}/>
+                        <span className="ov-sub" style={{margin:0}}>DNS Zones</span>
+                      </div>
+                      <button className="col-btn" onClick={()=>exportCols('dns-zones',['fqdn','view','ttl','records','anomaly'].map(k=>({key:k,label:k})),s_zones)}>CSV</button>
+                    </div>
+                    <div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',marginBottom:10}}>
+                      <span style={{color:'var(--ink)'}}>{s_zones.length}</span>{' zones  '}
+                      <span style={{color:'var(--ink)'}}>{s_zones.reduce((a,z)=>a+(z.records||0),0).toLocaleString()}</span>{' records  '}
+                      {ttlBad.length>0?<span style={{color:'var(--amber)'}}>{ttlBad.length} errors</span>:<span style={{color:'var(--green)'}}>0 errors</span>}
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 42px 54px 38px',gap:'3px 6px'}}>
+                      {['Zone','Q/HR','Type','Status'].map((h,i)=>(
+                        <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid var(--border)',paddingBottom:3}}>{h}</span>
+                      ))}
+                      {s_zones.slice(0,4).map((z,i)=>{
+                        const qhr=hashN(z.fqdn,900)+50;
+                        const isAnomaly=z.anomaly;
+                        return (<React.Fragment key={z.id||i}>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={z.fqdn} onClick={()=>setDrillEntity({type:'zone',data:z})}>{z.fqdn}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)'}}>{qhr}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>Primary</span>
+                          <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:isAnomaly?'var(--amber)':'var(--green)'}}>{isAnomaly?'? STALE':'· OK'}</span>
                         </React.Fragment>);
                       })}
-                      <div style={{marginTop:10,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}>
-                        <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-ui)'}}>{topSubs.length} pools · {topSubs.filter(s=>parseInt(s.util)>=75).length} warn/crit</span>
-                        <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>80% threshold</span>
-                      </div>
                     </div>
                   </div>
-
-                  {/* Infrastructure Section */}
-                  <div style={{marginTop:14}}>
-                    <div className="section-header">
-                      <span className="section-title">· Infrastructure</span>
-                      <span className="section-line"/>
+                );
+                if(id==='subnets') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                      <DragHandle id={id}/>
+                      <span className="ov-sub" style={{margin:0}}>IPAM Subnets</span>
+                      {critSubs.length>0?<span className="section-badge crit" style={{fontSize:8,padding:'1px 5px'}}>█ CRIT</span>:warnSubs.length>0?<span className="section-badge warn" style={{fontSize:8,padding:'1px 5px'}}>▲ WARN</span>:null}
                     </div>
-                    <div className="ov-3col">
-                      <div className="card" style={{padding:14}}>
-                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-                          <span className="ov-sub" style={{margin:0}}>· DNS Zones</span>
-                          <button className="col-btn" onClick={()=>exportCols('dns-zones',['fqdn','view','ttl','records','anomaly'].map(k=>({key:k,label:k})),s_zones)}>CSV</button>
-                        </div>
-                        <div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',marginBottom:10}}>
-                          <span style={{color:'var(--ink)'}}>{s_zones.length}</span>{' zones  '}
-                          <span style={{color:'var(--ink)'}}>{s_zones.reduce((a,z)=>a+(z.records||0),0).toLocaleString()}</span>{' records  '}
-                          {ttlBad.length>0
-                            ?<span style={{color:'var(--amber)'}}>{ttlBad.length} errors</span>
-                            :<span style={{color:'var(--green)'}}>0 errors</span>}
-                        </div>
-                        <div style={{display:'grid',gridTemplateColumns:'1fr 42px 54px 38px',gap:'3px 6px'}}>
-                          {['Zone','Q/HR','Type','Status'].map((h,i)=>(
-                            <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid var(--border)',paddingBottom:3}}>{h}</span>
-                          ))}
-                          {s_zones.slice(0,4).map((z,i)=>{
-                            const qhr=hashN(z.fqdn,900)+50;
-                            const isAnomaly=z.anomaly;
-                            return (<React.Fragment key={z.id||i}>
-                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={z.fqdn} onClick={()=>setDrillEntity({type:'zone',data:z})}>{z.fqdn}</span>
-                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)'}}>{qhr}</span>
-                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>Primary</span>
-                              <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:isAnomaly?'var(--amber)':'var(--green)'}}>{isAnomaly?'? STALE':'· OK'}</span>
-                            </React.Fragment>);
-                          })}
-                        </div>
-                      </div>
-                      <div className="card" style={{padding:14}}>
-                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-                          <span className="ov-sub" style={{margin:0}}>· IPAM Subnets</span>
-                          {critSubs.length>0
-                            ?<span className="section-badge crit" style={{fontSize:8,padding:'1px 5px'}}>█ CRIT</span>
-                            :warnSubs.length>0
-                              ?<span className="section-badge warn" style={{fontSize:8,padding:'1px 5px'}}>▲ WARN</span>
-                              :null}
-                        </div>
-                        <div style={{display:'flex',flexDirection:'column',gap:5}}>
-                          {topSubs.slice(0,5).map((s,i)=>{
-                            const clr=sevClr(s.util);
-                            return (
-                              <div key={s.id||i} style={{display:'grid',gridTemplateColumns:'1fr 80px 34px',gap:6,alignItems:'center',cursor:'pointer',padding:'2px 0'}}
-                                onClick={()=>{setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}>
-                                <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
-                                <div style={{height:6,background:'var(--surface-3)',borderRadius:3}}>
-                                  <div style={{width:`${Math.min(s.util,100)}%`,height:'100%',background:clr,borderRadius:3}}/>
-                                </div>
-                                <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:clr,textAlign:'right'}}>{s.util}%</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="card" style={{padding:14}}>
-                        <div className="ov-sub">· Hosts</div>
-                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
-                          {[{n:onlineH,l:'Online',c:'var(--green)'},{n:warnH,l:'Warn',c:'var(--amber)'},{n:downH,l:'Down',c:'var(--red)'}].map((x,i)=>(
-                            <div key={i} style={{display:'flex',flexDirection:'column',gap:2}}>
-                              <span style={{fontSize:22,fontFamily:'var(--font-mono)',color:x.c,lineHeight:1}}>{x.n}</span>
-                              <span style={{fontSize:9,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em'}}>{x.l}</span>
+                    <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                      {topSubs.slice(0,6).map((s,i)=>{
+                        const clr=sevClr(s.util);
+                        return (
+                          <div key={s.id||i} style={{display:'grid',gridTemplateColumns:'1fr 80px 34px',gap:6,alignItems:'center',cursor:'pointer',padding:'2px 0'}}
+                            onClick={()=>{setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}>
+                            <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
+                            <div style={{height:6,background:'var(--surface-3)',borderRadius:3}}>
+                              <div style={{width:`${Math.min(s.util,100)}%`,height:'100%',background:clr,borderRadius:3}}/>
                             </div>
-                          ))}
-                        </div>
-                        <div className="ov-dots">
-                          {s_hosts.slice(0,60).map((h,i)=>{
-                            const c=h.status==='online'?'var(--green)':h.status==='degraded'?'var(--amber)':['offline','error'].includes(h.status)?'var(--red)':'var(--muted)';
-                            return <div key={i} style={{width:8,height:8,borderRadius:2,background:c}} title={h.name||h.ip}/>;
-                          })}
-                        </div>
-                        {errHosts.length>0&&(
-                          <div style={{marginTop:8,display:'grid',gridTemplateColumns:'1fr 50px 54px',gap:'3px 6px',borderTop:'1px solid var(--border)',paddingTop:8}}>
-                            {['Host','Status','Detail'].map((h,i)=>(
-                              <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em'}}>{h}</span>
-                            ))}
-                            {errHosts.slice(0,3).map((h,i)=>{
-                              const isErr=['error','offline'].includes(h.status);
-                              return (<React.Fragment key={i}>
-                                <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={h.name||h.ip} onClick={()=>setDrillEntity({type:'host',data:h})}>{h.name||h.ip}</span>
-                                <span style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,
-                                  background:isErr?'rgba(248,81,73,.12)':'rgba(210,153,34,.12)',
-                                  color:isErr?'var(--red)':'var(--amber)',
-                                  border:`1px solid ${isErr?'rgba(248,81,73,.25)':'rgba(210,153,34,.25)'}`}}>
-                                  {isErr?'█ CRIT':'▲ WARN'}
-                                </span>
-                                <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{h.status}</span>
-                              </React.Fragment>);
-                            })}
+                            <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:clr,textAlign:'right'}}>{s.util}%</span>
                           </div>
-                        )}
-                      </div>
+                        );
+                      })}
                     </div>
                   </div>
-
-                  {/* Security & Audit Section */}
-                  <div style={{marginTop:14,marginBottom:14}}>
-                    <div className="section-header">
-                      <span className="section-title">· Security & Audit</span>
-                      <span className="section-line"/>
+                );
+                if(id==='hosts') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10}}>
+                      <DragHandle id={id}/>
+                      <span className="ov-sub" style={{margin:0}}>Host Status</span>
                     </div>
-                    <div className="ov-2col-eq">
-                      <div className="card" style={{padding:14}}>
-                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-                          <span className="ov-sub" style={{margin:0}}>· Active Threats</span>
-                          <button className="col-btn" onClick={()=>exportCols('active-threats',['name','cat','entries','level'].map(k=>({key:k,label:k})),feeds.filter(f=>f.active))}>CSV</button>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
+                      {[{n:onlineH,l:'Online',c:'var(--green)'},{n:warnH,l:'Warn',c:'var(--amber)'},{n:downH,l:'Down',c:'var(--red)'}].map((x,i)=>(
+                        <div key={i} style={{display:'flex',flexDirection:'column',gap:2}}>
+                          <span style={{fontSize:22,fontFamily:'var(--font-mono)',color:x.c,lineHeight:1}}>{x.n}</span>
+                          <span style={{fontSize:9,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em'}}>{x.l}</span>
                         </div>
-                        <div style={{display:'grid',gridTemplateColumns:'1fr 68px 48px 50px',gap:'3px 8px'}}>
-                          {['IP / Domain','Type','Blocked','Hits'].map((h,i)=>(
-                            <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid var(--border)',paddingBottom:3}}>{h}</span>
-                          ))}
-                          {feeds.filter(f=>f.active).slice(0,4).map((f,i)=>{
-                            const isHigh=(f.entries||0)>10000;
-                            return (<React.Fragment key={i}>
-                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={f.name} onClick={()=>setDrillEntity({type:'feed',data:f})}>{f.name}</span>
-                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{f.cat||f.category||'–'}</span>
-                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',textAlign:'right'}}>–</span>
-                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:isHigh?'var(--red)':'var(--ink)',textAlign:'right'}}>{(f.entries||0).toLocaleString()}</span>
-                            </React.Fragment>);
-                          })}
-                          {feeds.filter(f=>f.active).length===0&&(
-                            <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',gridColumn:'1/-1',paddingTop:6}}>No active feeds</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="card" style={{padding:14}}>
-                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-                          <span className="ov-sub" style={{margin:0}}>· Audit Events</span>
-                          <button className="col-btn" onClick={()=>exportCols('audit-events',['ts','user','action','result'].map(k=>({key:k,label:k})),auditLogs.slice(0,6))}>CSV</button>
-                        </div>
-                        {auditLogs.slice(0,6).map((log,i)=>{
-                          const time=(log.ts||log.timestamp||'').toString().slice(11,16)||'–';
-                          const isErr=log.result==='failure'||log.result==='error'||log.result==='failed';
-                          const isOk=log.result==='success'||log.result==='ok';
-                          const lvl=isErr?'ERROR':isOk?'INFO':'WARN';
-                          const lvlC=isErr?'var(--red)':isOk?'var(--green)':'var(--amber)';
-                          const lvlBg=isErr?'rgba(248,81,73,.1)':isOk?'rgba(63,185,80,.08)':'rgba(210,153,34,.1)';
-                          return (
-                            <div key={i} style={{display:'grid',gridTemplateColumns:'34px 40px 1fr',gap:6,alignItems:'baseline',padding:'4px 0',borderBottom:i<5?'1px solid var(--border)':'none',cursor:'pointer'}} onClick={()=>setDrillEntity({type:'audit',data:log})}>
-                              <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{time}</span>
-                              <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,background:lvlBg,color:lvlC,border:`1px solid ${lvlC}33`,textAlign:'center'}}>{lvl}</span>
-                              <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={`${log.user||''} ${log.action||''}`}>
-                                {log.user&&<span style={{color:'var(--muted)'}}>{log.user}{' '}</span>}
-                                {log.action||log.type||'event'}
-                              </span>
-                            </div>
-                          );
+                      ))}
+                    </div>
+                    <div className="ov-dots">
+                      {s_hosts.slice(0,60).map((h,i)=>{
+                        const c=h.status==='online'?'var(--green)':h.status==='degraded'?'var(--amber)':['offline','error'].includes(h.status)?'var(--red)':'var(--muted)';
+                        return <div key={i} style={{width:8,height:8,borderRadius:2,background:c}} title={h.name||h.ip}/>;
+                      })}
+                    </div>
+                    {errHosts.length>0&&(
+                      <div style={{marginTop:8,display:'grid',gridTemplateColumns:'1fr 50px 54px',gap:'3px 6px',borderTop:'1px solid var(--border)',paddingTop:8}}>
+                        {['Host','Status','Detail'].map((h,i)=>(
+                          <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em'}}>{h}</span>
+                        ))}
+                        {errHosts.slice(0,3).map((h,i)=>{
+                          const isErr=['error','offline'].includes(h.status);
+                          return (<React.Fragment key={i}>
+                            <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={h.name||h.ip} onClick={()=>setDrillEntity({type:'host',data:h})}>{h.name||h.ip}</span>
+                            <span style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,
+                              background:isErr?'rgba(248,81,73,.12)':'rgba(210,153,34,.12)',
+                              color:isErr?'var(--red)':'var(--amber)',
+                              border:`1px solid ${isErr?'rgba(248,81,73,.25)':'rgba(210,153,34,.25)'}`}}>
+                              {isErr?'█ CRIT':'▲ WARN'}
+                            </span>
+                            <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{h.status}</span>
+                          </React.Fragment>);
                         })}
                       </div>
+                    )}
+                  </div>
+                );
+                if(id==='feeds') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                        <DragHandle id={id}/>
+                        <span className="ov-sub" style={{margin:0}}>Active Threats</span>
+                      </div>
+                      <button className="col-btn" onClick={()=>exportCols('active-threats',['name','cat','entries','level'].map(k=>({key:k,label:k})),feeds.filter(f=>f.active))}>CSV</button>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 68px 48px 50px',gap:'3px 8px'}}>
+                      {['IP / Domain','Type','Blocked','Hits'].map((h,i)=>(
+                        <span key={i} style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid var(--border)',paddingBottom:3}}>{h}</span>
+                      ))}
+                      {feeds.filter(f=>f.active).slice(0,4).map((f,i)=>{
+                        const isHigh=(f.entries||0)>10000;
+                        return (<React.Fragment key={i}>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={f.name} onClick={()=>setDrillEntity({type:'feed',data:f})}>{f.name}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{f.cat||f.category||'–'}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',textAlign:'right'}}>–</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:isHigh?'var(--red)':'var(--ink)',textAlign:'right'}}>{(f.entries||0).toLocaleString()}</span>
+                        </React.Fragment>);
+                      })}
+                      {feeds.filter(f=>f.active).length===0&&(
+                        <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',gridColumn:'1/-1',paddingTop:6}}>No active feeds</span>
+                      )}
                     </div>
                   </div>
-                </>
+                );
+                if(id==='audit') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                        <DragHandle id={id}/>
+                        <span className="ov-sub" style={{margin:0}}>Audit Events</span>
+                      </div>
+                      <button className="col-btn" onClick={()=>exportCols('audit-events',['ts','user','action','result'].map(k=>({key:k,label:k})),auditLogs.slice(0,6))}>CSV</button>
+                    </div>
+                    {auditLogs.slice(0,6).map((log,i)=>{
+                      const time=(log.ts||log.timestamp||'').toString().slice(11,16)||'–';
+                      const isErr=log.result==='failure'||log.result==='error'||log.result==='failed';
+                      const isOk=log.result==='success'||log.result==='ok';
+                      const lvl=isErr?'ERROR':isOk?'INFO':'WARN';
+                      const lvlC=isErr?'var(--red)':isOk?'var(--green)':'var(--amber)';
+                      const lvlBg=isErr?'rgba(248,81,73,.1)':isOk?'rgba(63,185,80,.08)':'rgba(210,153,34,.1)';
+                      return (
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'34px 40px 1fr',gap:6,alignItems:'baseline',padding:'4px 0',borderBottom:i<5?'1px solid var(--border)':'none',cursor:'pointer'}} onClick={()=>setDrillEntity({type:'audit',data:log})}>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{time}</span>
+                          <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,background:lvlBg,color:lvlC,border:`1px solid ${lvlC}33`,textAlign:'center'}}>{lvl}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={`${log.user||''} ${log.action||''}`}>
+                            {log.user&&<span style={{color:'var(--muted)'}}>{log.user}{' '}</span>}
+                            {log.action||log.type||'event'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+                return null;
+              };
+              return (
+                <div className="ov-bento">
+                  {overviewOrder.filter(id=>!hiddenSections.includes(id)).map(id=>{
+                    const hStyle=widgetHeights[id]?{height:widgetHeights[id],overflow:'hidden'}:{};
+                    const spanCls=SPAN_CLS[wallSpans[id]||1];
+                    return (
+                      <div key={id}
+                        className={`drag-card${spanCls?' '+spanCls:''}${dragging===id?' dragging':''}${dragOver===id?' drag-over':''}`}
+                        style={hStyle}
+                        draggable={dragArmed===id}
+                        onDragStart={e=>onDragStart(e,id)}
+                        onDragOver={e=>onDragOver(e,id)}
+                        onDrop={e=>onDrop(e,id)}
+                        onDragEnd={()=>{onDragEnd();setDragArmed(null);}}>
+                        {renderOvWidget(id)}
+                      </div>
+                    );
+                  })}
+                </div>
               );
             })()}
             
