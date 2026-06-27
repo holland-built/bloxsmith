@@ -3117,12 +3117,20 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
 const PROTECTED_SECTIONS = new Set(['overview']);
 function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone, orgDomain, orgName, onBrandSave, initialTab}) {
   const [tab, setTab] = useState(initialTab||'widgets');
-  const [brandUrl, setBrandUrl] = useState(orgDomain?'https://'+orgDomain:'');
+  const [brandUrl, setBrandUrl] = useState(orgDomain||'');
   const [brandName, setBrandName] = useState(orgName||'');
-  const [brandPreview, setBrandPreview] = useState(orgDomain?`https://logo.clearbit.com/${orgDomain}`:'');
+  const [brandPreview, setBrandPreview] = useState('');
+  const [brandLoading, setBrandLoading] = useState(false);
+  const [brandError, setBrandError] = useState('');
   const handleBrandPreview = ()=>{
     const d=extractDomain(brandUrl);
-    if(d) setBrandPreview(`https://logo.clearbit.com/${d}`);
+    if(!d) return;
+    setBrandLoading(true); setBrandError(''); setBrandPreview('');
+    fetch(`https://logo.clearbit.com/${d}`)
+      .then(r=>{ if(!r.ok) throw new Error('not found'); return r.blob(); })
+      .then(blob=>{ setBrandPreview(URL.createObjectURL(blob)); })
+      .catch(()=>setBrandError(`No logo found for ${d}`))
+      .finally(()=>setBrandLoading(false));
   };
   const handleBrandSave = ()=>{
     const d=extractDomain(brandUrl);
@@ -3194,9 +3202,11 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
                   placeholder="Infoblox MCP"
                   style={{width:'100%',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',fontSize:12,padding:'5px 8px'}}/>
               </div>
-              {brandPreview&&(
+              {brandLoading&&<span style={{fontSize:12,color:'var(--muted)'}}>Loading…</span>}
+              {brandError&&<span style={{fontSize:12,color:'var(--danger)'}}>{brandError}</span>}
+              {brandPreview&&!brandLoading&&(
                 <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4}}>
-                  <img src={brandPreview} alt="logo preview" style={{width:28,height:28,borderRadius:4,objectFit:'contain',background:'#fff',padding:1}} onError={e=>{e.target.style.opacity='.3'}}/>
+                  <img src={brandPreview} alt="logo preview" style={{width:28,height:28,borderRadius:4,objectFit:'contain',background:'#fff',padding:1}}/>
                   <span style={{fontSize:12,color:'var(--muted)'}}>{brandName||'Company name'}</span>
                 </div>
               )}
