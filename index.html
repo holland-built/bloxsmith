@@ -3179,10 +3179,11 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
           {tab==='brand'&&(
             <div style={{padding:'16px 14px',display:'flex',flexDirection:'column',gap:14}}>
               <div>
-                <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:4}}>Company website</label>
+                <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:4}}>Company domain <span style={{fontWeight:400,opacity:.6}}>(for logo lookup)</span></label>
                 <div style={{display:'flex',gap:6}}>
                   <input value={brandUrl} onChange={e=>setBrandUrl(e.target.value)} onBlur={handleBrandPreview}
-                    placeholder="https://yourcompany.com" type="url"
+                    onKeyDown={e=>e.key==='Enter'&&handleBrandPreview()}
+                    placeholder="infoblox.com" type="text"
                     style={{flex:1,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',fontSize:12,padding:'5px 8px'}}/>
                   <button onClick={handleBrandPreview} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',fontSize:12,padding:'5px 10px',cursor:'pointer'}}>Preview</button>
                 </div>
