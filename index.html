@@ -3129,13 +3129,15 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
   };
   const navSections = SECTIONS.filter(s=>!PROTECTED_SECTIONS.has(s.id)&&!s.noAuto);
   const modalRef = useRef(null);
+  const onDoneRef = useRef(onDone);
+  useEffect(()=>{ onDoneRef.current=onDone; },[onDone]);
   useEffect(()=>{
     const prev = document.activeElement;
     const sel = 'button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])';
     const focusables = () => modalRef.current ? Array.from(modalRef.current.querySelectorAll(sel)) : [];
     const first = focusables()[0]; if(first) first.focus();
     const h = e => {
-      if(e.key==='Escape'){ onDone(); return; }
+      if(e.key==='Escape'){ onDoneRef.current(); return; }
       if(e.key==='Tab'){
         const f = focusables(); if(!f.length) return;
         const a = f[0], z = f[f.length-1];
@@ -3145,7 +3147,7 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
     };
     document.addEventListener('keydown', h);
     return ()=>{ document.removeEventListener('keydown', h); if(prev && prev.focus) prev.focus(); };
-  },[onDone]);
+  },[]);
   return (
     <>
       <div className="wiz-overlay" onClick={onDone}/>
