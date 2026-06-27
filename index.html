@@ -965,6 +965,26 @@ function downloadCSV(filename, rows, columns) {
   URL.revokeObjectURL(a.href);
 }
 
+// Ordered logo sources tried by BrandLogoImg — browser <img> sends Referer so Brandfetch works
+function buildLogoSources(domain){
+  return [
+    `https://cdn.brandfetch.io/${domain}/w/128/h/128`,
+    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+    `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+  ];
+}
+// BrandLogoImg: tries sources in order via onError waterfall, falls back to IB_LOGO
+function BrandLogoImg({domain, fallback, alt, className, style, onClick, title}){
+  const sources = domain ? buildLogoSources(domain) : [];
+  const [idx, setIdx] = React.useState(0);
+  React.useEffect(()=>{ setIdx(0); }, [domain]);
+  const src = idx < sources.length ? sources[idx] : (fallback||IB_LOGO);
+  return <img className={className} src={src} alt={alt||''} style={style}
+    title={title} onClick={onClick}
+    referrerPolicy="no-referrer-when-downgrade"
+    onError={()=>setIdx(i=>i+1)}/>;
+}
+
 function downloadLogo(src){
   if(src.startsWith('data:')){
     const a=document.createElement('a');
@@ -4628,7 +4648,7 @@ function StatusStrip({data, firingAlerts, now, setSection, orgDomain, orgName, o
     <div className="status-strip">
       <div className="ss-logo" onClick={onLogoClick} title="Change branding" style={{cursor:'pointer'}}>
         {orgDomain
-          ? <img className="ss-logo-img" src={`/api/logo?domain=${encodeURIComponent(orgDomain)}`} alt={orgName} onError={e=>{e.target.style.display='none'}}/>
+          ? <BrandLogoImg domain={orgDomain} alt={orgName} className="ss-logo-img"/>
           : <div className="ss-logo-mark">ib</div>}
         <span className="ss-logo-name">{orgName}</span>
       </div>
@@ -4747,7 +4767,6 @@ function App({vault, onVaultChange}={}) {
   const [alertsDismissed, setAlertsDismissed] = useState(false);  // session-only banner dismiss
   const [orgDomain, setOrgDomain] = useState(()=>LS.get('noc.orgDomain',''));
   const [orgName, setOrgName]     = useState(()=>LS.get('noc.orgName','Infoblox MCP'));
-  const [logoSrc, setLogoSrc]     = useState(()=>{ const d=LS.get('noc.orgDomain',''); return d?`/api/logo?domain=${encodeURIComponent(d)}`:'/api/logo?domain=infoblox.com'; });
   const [noticesExpanded, setNoticesExpanded] = useState(false);  // collapse extras past the cap
   const [updPop, setUpdPop]         = useState(false);            // version-chip popover
   const [updBusy, setUpdBusy]       = useState(false);            // "Check now" in flight
@@ -4787,7 +4806,6 @@ function App({vault, onVaultChange}={}) {
   const handleBrandSave = (domain, name) => {
     LS.set('noc.orgDomain', domain); LS.set('noc.orgName', name);
     setOrgDomain(domain); setOrgName(name);
-    setLogoSrc(domain?`/api/logo?domain=${encodeURIComponent(domain)}`:'/api/logo?domain=infoblox.com');
   };
   const resetDashboard = () => { setOverviewOrder([...DEFAULT_ORDER]); LS.set('noc.widgetOrder',[...DEFAULT_ORDER]); setCollapsed({}); LS.set('cl',{}); setHiddenSections([]); LS.set('noc.hiddenSections',[]); openWizard('widgets'); };
   const toggleFs = (key) => setFullscreen(f=>f===key?null:key);
@@ -5214,7 +5232,7 @@ function App({vault, onVaultChange}={}) {
       {sidebarOpen&&<div className="sidebar-backdrop" onClick={()=>setSidebarOpen(false)}/>}
       <div id="sidebar-nav" className={`sidebar${sidebarCollapsed?' collapsed':''}${sidebarOpen?' open':''}`}>
         <div className="logo">
-          <img className="logo-mark" src={orgDomain?`/api/logo?domain=${encodeURIComponent(orgDomain)}`:IB_LOGO} alt={orgName} width="26" height="26" onError={e=>{e.target.src=IB_LOGO}}/>
+          <BrandLogoImg domain={orgDomain} fallback={IB_LOGO} alt={orgName} className="logo-mark" style={{width:26,height:26}}/>
           <div>
             <div className="logo-text">{orgName}</div>
             <div className="logo-sub">for Infoblox Portal (CSP)</div>
@@ -5406,7 +5424,7 @@ function App({vault, onVaultChange}={}) {
           <div style={{display:'flex',alignItems:'center',minWidth:0,gap:16}}>
             <button className="menu-btn" aria-label="Menu" aria-expanded={sidebarOpen} aria-controls="sidebar-nav" onClick={()=>setSidebarOpen(o=>!o)}>☰</button>
             <div className="nav-brand">
-              <img className="nav-logo" src={logoSrc} alt="Infoblox" title="Download logo" onClick={()=>downloadLogo(logoSrc)} onError={()=>setLogoSrc(IB_LOGO)}/>
+              <BrandLogoImg domain={orgDomain||'infoblox.com'} fallback={IB_LOGO} alt="Infoblox" className="nav-logo" title="Download logo" onClick={()=>downloadLogo(orgDomain?buildLogoSources(orgDomain)[0]:IB_LOGO)}/>
               <span className="nav-brand-name">Infoblox NOC</span>
               <span className="nav-breadcrumb" role="navigation" aria-label="Breadcrumb">{(()=>{
                 const sep=<span className="bc-sep">›</span>;
