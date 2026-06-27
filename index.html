@@ -984,9 +984,10 @@ function downloadLogo(src){
 }
 
 function extractDomain(url){
-  const s=url.trim();
-  try{ return new URL(s.startsWith('http')?s:'https://'+s).hostname.replace(/^www\./,''); }
-  catch(e){ return s.replace(/^www\./,''); }
+  // strip any protocol/slashes/www noise then parse cleanly
+  const s=url.trim().replace(/^https?:\/?\/?/i,'').replace(/^www\./i,'').split('/')[0].split('?')[0];
+  try{ return new URL('https://'+s).hostname.replace(/^www\./i,''); }
+  catch(e){ return s; }
 }
 
 function timeAgo(iso) {
