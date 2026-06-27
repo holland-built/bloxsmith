@@ -434,8 +434,10 @@ body{padding-left:0!important}
 .ov-dots{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0}
 .ov-legend{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-top:6px;display:flex;gap:16px}
 @media(max-width:900px){.ov-2col,.ov-2col-eq,.ov-3col{grid-template-columns:1fr}}
-.nav-brand{display:flex;align-items:baseline;gap:8px;flex-shrink:0}
+.nav-brand{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .nav-brand-name{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.nav-logo{width:28px;height:28px;border-radius:4px;object-fit:contain;cursor:pointer;flex-shrink:0;transition:opacity .12s}
+.nav-logo:hover{opacity:.75}
 .nav-breadcrumb{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:0}
 .nav-breadcrumb .bc-sep{margin:0 4px;opacity:.45;flex-shrink:0}
 .nav-breadcrumb span{margin:0}
@@ -960,6 +962,24 @@ function downloadCSV(filename, rows, columns) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+function downloadLogo(src){
+  if(src.startsWith('data:')){
+    const a=document.createElement('a');
+    a.href=src; a.download='infoblox-logo.png'; a.click();
+  } else {
+    fetch(src)
+      .then(r=>r.blob())
+      .then(blob=>{
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url; a.download='infoblox-logo.png';
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+      })
+      .catch(()=>window.open(src,'_blank'));
+  }
 }
 
 function timeAgo(iso) {
@@ -4664,6 +4684,7 @@ function App({vault, onVaultChange}={}) {
   const [cmdkOpen, setCmdkOpen]     = useState(false);
   const [notifyOn, setNotifyOn]     = useState(()=>LS.get('noc.notify',false));
   const [alertsDismissed, setAlertsDismissed] = useState(false);  // session-only banner dismiss
+  const [logoSrc, setLogoSrc] = useState('https://logo.clearbit.com/infoblox.com');
   const [noticesExpanded, setNoticesExpanded] = useState(false);  // collapse extras past the cap
   const [updPop, setUpdPop]         = useState(false);            // version-chip popover
   const [updBusy, setUpdBusy]       = useState(false);            // "Check now" in flight
@@ -5315,6 +5336,7 @@ function App({vault, onVaultChange}={}) {
           <div style={{display:'flex',alignItems:'center',minWidth:0,gap:16}}>
             <button className="menu-btn" aria-label="Menu" aria-expanded={sidebarOpen} aria-controls="sidebar-nav" onClick={()=>setSidebarOpen(o=>!o)}>☰</button>
             <div className="nav-brand">
+              <img className="nav-logo" src={logoSrc} alt="Infoblox" title="Download logo" onClick={()=>downloadLogo(logoSrc)} onError={()=>setLogoSrc(IB_LOGO)}/>
               <span className="nav-brand-name">Infoblox NOC</span>
               <span className="nav-breadcrumb" role="navigation" aria-label="Breadcrumb">{(()=>{
                 const sep=<span className="bc-sep">›</span>;
