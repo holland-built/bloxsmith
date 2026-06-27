@@ -1621,6 +1621,27 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0]
+        if path == "/api/logo":
+            import urllib.request, urllib.parse
+            qs = dict(urllib.parse.parse_qsl(self.path.split("?",1)[1] if "?" in self.path else ""))
+            domain = re.sub(r"[^a-zA-Z0-9.\-]", "", qs.get("domain",""))
+            if not domain:
+                self.send_response(400); self.end_headers(); return
+            try:
+                req = urllib.request.Request(
+                    f"https://logo.clearbit.com/{domain}",
+                    headers={"User-Agent":"Mozilla/5.0","Accept":"image/*"})
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    data = r.read()
+                    ct = r.headers.get("Content-Type","image/png")
+                self.send_response(200)
+                self.send_header("Content-Type", ct)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers(); self.wfile.write(data)
+            except Exception:
+                self.send_response(404); self.end_headers()
+            return
         if path == "/api/vault/status":
             self._json(vault_status()); return
         if path == "/api/update/check":

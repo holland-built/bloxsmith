@@ -3126,7 +3126,7 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
     const d=extractDomain(brandUrl);
     if(!d) return;
     setBrandLoading(true); setBrandError(''); setBrandPreview('');
-    fetch(`https://logo.clearbit.com/${d}`)
+    fetch(`/api/logo?domain=${encodeURIComponent(d)}`)
       .then(r=>{ if(!r.ok) throw new Error('not found'); return r.blob(); })
       .then(blob=>{ setBrandPreview(URL.createObjectURL(blob)); })
       .catch(()=>setBrandError(`No logo found for ${d}`))
@@ -4628,7 +4628,7 @@ function StatusStrip({data, firingAlerts, now, setSection, orgDomain, orgName, o
     <div className="status-strip">
       <div className="ss-logo" onClick={onLogoClick} title="Change branding" style={{cursor:'pointer'}}>
         {orgDomain
-          ? <img className="ss-logo-img" src={`https://logo.clearbit.com/${orgDomain}`} alt={orgName} onError={e=>{e.target.style.display='none'}}/>
+          ? <img className="ss-logo-img" src={`/api/logo?domain=${encodeURIComponent(orgDomain)}`} alt={orgName} onError={e=>{e.target.style.display='none'}}/>
           : <div className="ss-logo-mark">ib</div>}
         <span className="ss-logo-name">{orgName}</span>
       </div>
@@ -4747,7 +4747,7 @@ function App({vault, onVaultChange}={}) {
   const [alertsDismissed, setAlertsDismissed] = useState(false);  // session-only banner dismiss
   const [orgDomain, setOrgDomain] = useState(()=>LS.get('noc.orgDomain',''));
   const [orgName, setOrgName]     = useState(()=>LS.get('noc.orgName','Infoblox MCP'));
-  const [logoSrc, setLogoSrc]     = useState(()=>{ const d=LS.get('noc.orgDomain',''); return d?`https://logo.clearbit.com/${d}`:'https://logo.clearbit.com/infoblox.com'; });
+  const [logoSrc, setLogoSrc]     = useState(()=>{ const d=LS.get('noc.orgDomain',''); return d?`/api/logo?domain=${encodeURIComponent(d)}`:'/api/logo?domain=infoblox.com'; });
   const [noticesExpanded, setNoticesExpanded] = useState(false);  // collapse extras past the cap
   const [updPop, setUpdPop]         = useState(false);            // version-chip popover
   const [updBusy, setUpdBusy]       = useState(false);            // "Check now" in flight
@@ -4787,7 +4787,7 @@ function App({vault, onVaultChange}={}) {
   const handleBrandSave = (domain, name) => {
     LS.set('noc.orgDomain', domain); LS.set('noc.orgName', name);
     setOrgDomain(domain); setOrgName(name);
-    setLogoSrc(domain?`https://logo.clearbit.com/${domain}`:'https://logo.clearbit.com/infoblox.com');
+    setLogoSrc(domain?`/api/logo?domain=${encodeURIComponent(domain)}`:'/api/logo?domain=infoblox.com');
   };
   const resetDashboard = () => { setOverviewOrder([...DEFAULT_ORDER]); LS.set('noc.widgetOrder',[...DEFAULT_ORDER]); setCollapsed({}); LS.set('cl',{}); setHiddenSections([]); LS.set('noc.hiddenSections',[]); openWizard('widgets'); };
   const toggleFs = (key) => setFullscreen(f=>f===key?null:key);
@@ -5214,7 +5214,7 @@ function App({vault, onVaultChange}={}) {
       {sidebarOpen&&<div className="sidebar-backdrop" onClick={()=>setSidebarOpen(false)}/>}
       <div id="sidebar-nav" className={`sidebar${sidebarCollapsed?' collapsed':''}${sidebarOpen?' open':''}`}>
         <div className="logo">
-          <img className="logo-mark" src={orgDomain?`https://logo.clearbit.com/${orgDomain}`:IB_LOGO} alt={orgName} width="26" height="26" onError={e=>{e.target.src=IB_LOGO}}/>
+          <img className="logo-mark" src={orgDomain?`/api/logo?domain=${encodeURIComponent(orgDomain)}`:IB_LOGO} alt={orgName} width="26" height="26" onError={e=>{e.target.src=IB_LOGO}}/>
           <div>
             <div className="logo-text">{orgName}</div>
             <div className="logo-sub">for Infoblox Portal (CSP)</div>
