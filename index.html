@@ -178,7 +178,7 @@ body.chat-open{padding-right:340px}
 .rb-btn-retry:hover{background:rgba(239,68,68,.25)}
 .rb-btn-x{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;display:flex;align-items:center;transition:color .12s}
 .rb-btn-x:hover{color:var(--gray-200)}
-.main{padding:0 20px 40px;flex:1;min-width:0;max-width:100%;width:100%}
+.main{padding:0 20px 40px;flex:1;min-width:0;max-width:100%;width:100%;overflow:visible}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding:0 14px 0 14px;height:48px;border-bottom:1px solid var(--border);position:fixed;top:32px;left:0;right:0;z-index:150;background:var(--blue-mid)}
 .page-title{font-size:15px;font-weight:700;line-height:1.15}
 .page-sub{font-size:12px;color:var(--muted);margin-top:0;margin-left:8px}
@@ -404,13 +404,13 @@ body.chat-open{padding-right:340px}
 .n-more{align-self:flex-start;background:none;border:none;color:var(--gray-400);font-size:11px;font-weight:600;cursor:pointer;padding:2px 0;font-family:inherit}
 .n-more:hover{color:var(--teal)}
 /* v5 incident commander two-column layout */
-.noc-layout{display:flex;gap:0;margin:0 -20px -40px;align-items:flex-start}
-.alert-col{width:340px;flex:0 0 340px;background:var(--surface);border-right:1px solid var(--border);position:sticky;top:80px;max-height:calc(100vh - 80px);overflow-y:auto;display:flex;flex-direction:column}
-.alert-col-header{padding:12px 14px 10px;border-bottom:1px solid var(--border);flex:0 0 auto;position:sticky;top:0;background:var(--surface);z-index:1}
+.noc-layout{display:flex;gap:0}
+.alert-col{width:340px;flex:0 0 340px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.alert-col-header{padding:12px 14px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
 .alert-col-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:.01em}
 .alert-col-count{background:var(--danger-bg);color:var(--danger);border:1px solid rgba(248,113,113,.35);font-size:11px;font-weight:600;padding:1px 7px;border-radius:20px}
 .alert-col-empty{padding:32px 14px;text-align:center;color:var(--muted);font-size:12px}
-.content-col{flex:1;min-width:0;padding:0 20px 40px;overflow:hidden}
+.content-col{flex:1;min-width:0;padding:0 20px 40px;overflow:visible}
 /* alert col: restyle latch-strip as incident card */
 .alert-col .latch-strip{margin:10px 10px 0;border:1px solid rgba(248,113,113,.35);border-left:3px solid var(--danger);border-radius:var(--radius,2px);height:auto;padding:10px 11px;background:var(--danger-bg)}
 .alert-col .latch-text{flex-direction:column;gap:4px;align-items:flex-start}
