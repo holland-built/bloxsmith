@@ -5752,7 +5752,7 @@ function App({vault, onVaultChange}={}) {
                     <div className="ov-2col">
                       <div className="card" style={{padding:14}}>
                         <div className="ov-sub">DHCP Pool Utilization</div>
-                        <svg height={76} width="100%" viewBox="-36 0 336 76" preserveAspectRatio="none" aria-hidden="true">
+                        <svg width="100%" viewBox="-36 0 336 76" preserveAspectRatio="xMidYMid meet" style={{display:'block',maxHeight:80}} aria-hidden="true">
                           {[60,70,80,90,100].map(v=>{
                             const yv=(70-(v-60)*1.75).toFixed(1);
                             return (<g key={v}>
