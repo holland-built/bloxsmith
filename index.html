@@ -3114,8 +3114,8 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
 
 /* ─── DASHBOARD WIZARD ───────────────────────────────────────────────────────*/
 const PROTECTED_SECTIONS = new Set(['overview']);
-function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone, orgDomain, orgName, onBrandSave}) {
-  const [tab, setTab] = useState('widgets');
+function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone, orgDomain, orgName, onBrandSave, initialTab}) {
+  const [tab, setTab] = useState(initialTab||'widgets');
   const [brandUrl, setBrandUrl] = useState(orgDomain?'https://'+orgDomain:'');
   const [brandName, setBrandName] = useState(orgName||'');
   const [brandPreview, setBrandPreview] = useState(orgDomain?`https://logo.clearbit.com/${orgDomain}`:'');
@@ -4604,7 +4604,7 @@ function HelpPage() {
   );
 }
 
-function StatusStrip({data, firingAlerts, now, setSection}) {
+function StatusStrip({data, firingAlerts, now, setSection, orgDomain, orgName, onLogoClick}) {
   const hostsCrit = data ? data.hosts.filter(h=>h.status==='error'||h.status==='offline').length : 0;
   const subWarn   = data ? data.subnets.filter(x=>x.util>=90).length : 0;
   const dnsAnom   = data ? data.zones.filter(z=>z.anomaly).length : 0;
@@ -4612,7 +4612,7 @@ function StatusStrip({data, firingAlerts, now, setSection}) {
   const timeStr   = now ? now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
   return (
     <div className="status-strip">
-      <div className="ss-logo">
+      <div className="ss-logo" onClick={onLogoClick} title="Change branding" style={{cursor:'pointer'}}>
         {orgDomain
           ? <img className="ss-logo-img" src={`https://logo.clearbit.com/${orgDomain}`} alt={orgName} onError={e=>{e.target.style.display='none'}}/>
           : <div className="ss-logo-mark">ib</div>}
@@ -4767,13 +4767,15 @@ function App({vault, onVaultChange}={}) {
   const toggleCollapse = (key) => { const n={...collapsed,[key]:!collapsed[key]}; setCollapsed(n); LS.set('cl',n); };
   const moveWidget = (id,dir) => { const arr=[...overviewOrder]; const i=arr.indexOf(id); const j=i+dir; if(j<0||j>=arr.length) return; [arr[i],arr[j]]=[arr[j],arr[i]]; setOverviewOrder(arr); LS.set('noc.widgetOrder',arr); toast('Layout saved ✓','ok'); };
   const toggleHideSection = (id) => { const n=hiddenSections.includes(id)?hiddenSections.filter(x=>x!==id):[...hiddenSections,id]; setHiddenSections(n); LS.set('noc.hiddenSections',n); };
+  const [wizardInitTab, setWizardInitTab] = useState('widgets');
+  const openWizard = (tab='widgets') => { setWizardInitTab(tab); setShowWizard(true); };
   const finishWizard = () => { setShowWizard(false); LS.set('noc.wizardDone',true); };
   const handleBrandSave = (domain, name) => {
     LS.set('noc.orgDomain', domain); LS.set('noc.orgName', name);
     setOrgDomain(domain); setOrgName(name);
     setLogoSrc(domain?`https://logo.clearbit.com/${domain}`:'https://logo.clearbit.com/infoblox.com');
   };
-  const resetDashboard = () => { setOverviewOrder([...DEFAULT_ORDER]); LS.set('noc.widgetOrder',[...DEFAULT_ORDER]); setCollapsed({}); LS.set('cl',{}); setHiddenSections([]); LS.set('noc.hiddenSections',[]); setShowWizard(true); };
+  const resetDashboard = () => { setOverviewOrder([...DEFAULT_ORDER]); LS.set('noc.widgetOrder',[...DEFAULT_ORDER]); setCollapsed({}); LS.set('cl',{}); setHiddenSections([]); LS.set('noc.hiddenSections',[]); openWizard('widgets'); };
   const toggleFs = (key) => setFullscreen(f=>f===key?null:key);
 
   const onDragStart = (e, id) => {
@@ -5192,7 +5194,7 @@ function App({vault, onVaultChange}={}) {
     <div style={{display:'flex',minHeight:'100vh'}} data-wall={wallMode?'on':undefined}>
 
       {/* STATUS STRIP */}
-      <StatusStrip data={data} firingAlerts={firingAlerts} now={now} setSection={setSection}/>
+      <StatusStrip data={data} firingAlerts={firingAlerts} now={now} setSection={setSection} orgDomain={orgDomain} orgName={orgName} onLogoClick={()=>openWizard('brand')}/>
 
       {/* SIDEBAR */}
       {sidebarOpen&&<div className="sidebar-backdrop" onClick={()=>setSidebarOpen(false)}/>}
@@ -6398,7 +6400,7 @@ function App({vault, onVaultChange}={}) {
         section={section}
       />
       {drillEntity&&<DrillSheet entity={drillEntity} onClose={()=>setDrillEntity(null)} leases={leases} subnets={subnets} setSection={setSection} setZoneFilt={setZoneFilt}/>}
-      {showWizard&&<DashboardWizard overviewOrder={overviewOrder} collapsed={collapsed} hiddenSections={hiddenSections} widgetLabels={WIDGET_LABELS} moveWidget={moveWidget} toggleCollapse={toggleCollapse} toggleHideSection={toggleHideSection} onDone={finishWizard} orgDomain={orgDomain} orgName={orgName} onBrandSave={handleBrandSave}/>}
+      {showWizard&&<DashboardWizard overviewOrder={overviewOrder} collapsed={collapsed} hiddenSections={hiddenSections} widgetLabels={WIDGET_LABELS} moveWidget={moveWidget} toggleCollapse={toggleCollapse} toggleHideSection={toggleHideSection} onDone={finishWizard} orgDomain={orgDomain} orgName={orgName} onBrandSave={handleBrandSave} initialTab={wizardInitTab}/>}
     </div>
   );
 }
