@@ -4803,6 +4803,7 @@ function App({vault, onVaultChange}={}) {
   const handleBrandSave = (domain, name) => {
     LS.set('noc.orgDomain', domain); LS.set('noc.orgName', name);
     setOrgDomain(domain); setOrgName(name);
+    fetch('/api/brand',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,name})}).catch(()=>{});
   };
   const resetDashboard = () => { setOverviewOrder([...DEFAULT_ORDER]); LS.set('noc.widgetOrder',[...DEFAULT_ORDER]); setCollapsed({}); LS.set('cl',{}); setHiddenSections([]); LS.set('noc.hiddenSections',[]); openWizard('widgets'); };
   const toggleFs = (key) => setFullscreen(f=>f===key?null:key);
@@ -5057,6 +5058,13 @@ function App({vault, onVaultChange}={}) {
   const nextAr=()=>{const i=arOpts.findIndex(([v])=>v===autoRefresh);const [nv]=arOpts[(i+1)%arOpts.length];setAutoRefresh(nv);LS.set('ar',nv);};
   const arLbl=arOpts.find(([v])=>v===autoRefresh)?.[1]||'Off';
 
+  useEffect(()=>{
+    fetch('/api/brand').then(r=>r.ok?r.json():null).then(b=>{
+      if(!b||!b.domain) return;
+      if(!LS.get('noc.orgDomain','')){ setOrgDomain(b.domain); LS.set('noc.orgDomain',b.domain); }
+      if(!LS.get('noc.orgName',''))  { setOrgName(b.name||'');  LS.set('noc.orgName',b.name||''); }
+    }).catch(()=>{});
+  },[]);
   useEffect(()=>{ document.documentElement.setAttribute('data-density', density); LS.set('noc.density', density); },[density]);
   useEffect(()=>{ LS.set('noc.ipamChip', ipamChip); },[ipamChip]);
   useEffect(()=>{ LS.set('noc.hostChip', hostChip); },[hostChip]);

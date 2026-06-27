@@ -555,6 +555,7 @@ def _resolve_vault_file():
     return os.path.join(DIR, "vault.json")
 
 VAULT_FILE = _resolve_vault_file()
+BRAND_FILE = os.path.join(os.path.dirname(VAULT_FILE), "brand.json")
 _vault = {"unlocked": False, "tenants": [], "active": None, "groq": "", "llm_base": "", "llm_model": "", "_key": None, "_salt": ""}
 _vault_lock = threading.Lock()
 
@@ -1652,6 +1653,11 @@ class Handler(BaseHTTPRequestHandler):
                     continue
             self.send_response(404); self.end_headers()
             return
+        if path == "/api/brand":
+            try:
+                with open(BRAND_FILE) as f: self._json(json.load(f))
+            except Exception: self._json({})
+            return
         if path == "/api/vault/status":
             self._json(vault_status()); return
         if path == "/api/update/check":
@@ -1745,6 +1751,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         body = json.loads(self.rfile.read(length) or b"{}") if length else {}
         # vault control endpoints — reachable while locked (that's their purpose)
+        if self.path == "/api/brand":
+            domain = re.sub(r"[^a-zA-Z0-9.\-]", "", str(body.get("domain", "")))[:253]
+            name   = str(body.get("name", ""))[:120]
+            try:
+                with open(BRAND_FILE, "w") as f: json.dump({"domain": domain, "name": name}, f)
+                self._json({"ok": True})
+            except Exception as e: self._json({"ok": False, "error": str(e)}, 500)
+            return
         if self.path == "/api/vault/init":
             self._json(vault_init(str(body.get("passphrase", "")))); return
         if self.path == "/api/vault/unlock":
