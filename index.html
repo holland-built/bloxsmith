@@ -192,6 +192,7 @@ body{padding-left:0!important}
 .status-strip{position:fixed;top:0;left:0;right:0;height:32px;z-index:160;display:flex;align-items:center;gap:4px;padding:0 12px;background:var(--blue-deep);border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:11px}
 .ss-logo{display:flex;align-items:center;gap:8px;padding:0 10px 0 0;border-right:1px solid var(--border);margin-right:4px;flex-shrink:0}
 .ss-logo-mark{width:18px;height:18px;border-radius:3px;background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0}
+.ss-logo-img{width:18px;height:18px;border-radius:3px;object-fit:contain;flex-shrink:0;background:#fff;padding:1px}
 .ss-logo-name{font-size:11px;font-weight:700;color:var(--teal);letter-spacing:.04em}
 .ss-pill{display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:3px;background:var(--surface-2);border:1px solid var(--border);color:var(--gray-200);cursor:pointer;white-space:nowrap;transition:background .12s,border-color .12s;font-size:10px;font-family:var(--font-mono)}
 .ss-pill:hover{background:var(--hover-strong);border-color:var(--teal)}
@@ -980,6 +981,12 @@ function downloadLogo(src){
       })
       .catch(()=>window.open(src,'_blank'));
   }
+}
+
+function extractDomain(url){
+  const s=url.trim();
+  try{ return new URL(s.startsWith('http')?s:'https://'+s).hostname.replace(/^www\./,''); }
+  catch(e){ return s.replace(/^www\./,''); }
 }
 
 function timeAgo(iso) {
@@ -3107,8 +3114,19 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
 
 /* ─── DASHBOARD WIZARD ───────────────────────────────────────────────────────*/
 const PROTECTED_SECTIONS = new Set(['overview']);
-function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone}) {
+function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone, orgDomain, orgName, onBrandSave}) {
   const [tab, setTab] = useState('widgets');
+  const [brandUrl, setBrandUrl] = useState(orgDomain?'https://'+orgDomain:'');
+  const [brandName, setBrandName] = useState(orgName||'');
+  const [brandPreview, setBrandPreview] = useState(orgDomain?`https://logo.clearbit.com/${orgDomain}`:'');
+  const handleBrandPreview = ()=>{
+    const d=extractDomain(brandUrl);
+    if(d) setBrandPreview(`https://logo.clearbit.com/${d}`);
+  };
+  const handleBrandSave = ()=>{
+    const d=extractDomain(brandUrl);
+    onBrandSave(d, brandName.trim()||'Infoblox MCP');
+  };
   const navSections = SECTIONS.filter(s=>!PROTECTED_SECTIONS.has(s.id)&&!s.noAuto);
   const modalRef = useRef(null);
   useEffect(()=>{
@@ -3140,6 +3158,7 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
           <div className="chip-bar" style={{marginTop:10,gap:4}}>
             <button className={`chip${tab==='widgets'?' on':''}`} onClick={()=>setTab('widgets')}>Overview Widgets</button>
             <button className={`chip${tab==='nav'?' on':''}`} onClick={()=>setTab('nav')}>Nav Sections</button>
+            <button className={`chip${tab==='brand'?' on':''}`} onClick={()=>setTab('brand')}>Branding</button>
           </div>
         </div>
         <div className="wiz-list">
@@ -3154,6 +3173,32 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
                 onClick={()=>toggleCollapse(id)}>{collapsed[id]?'Hidden':'Visible'}</button>
             </div>
           ))}
+          {tab==='brand'&&(
+            <div style={{padding:'16px 14px',display:'flex',flexDirection:'column',gap:14}}>
+              <div>
+                <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:4}}>Company website</label>
+                <div style={{display:'flex',gap:6}}>
+                  <input value={brandUrl} onChange={e=>setBrandUrl(e.target.value)} onBlur={handleBrandPreview}
+                    placeholder="https://yourcompany.com" type="url"
+                    style={{flex:1,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',fontSize:12,padding:'5px 8px'}}/>
+                  <button onClick={handleBrandPreview} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',fontSize:12,padding:'5px 10px',cursor:'pointer'}}>Preview</button>
+                </div>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:4}}>Display name</label>
+                <input value={brandName} onChange={e=>setBrandName(e.target.value)}
+                  placeholder="Infoblox MCP"
+                  style={{width:'100%',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',fontSize:12,padding:'5px 8px'}}/>
+              </div>
+              {brandPreview&&(
+                <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4}}>
+                  <img src={brandPreview} alt="logo preview" style={{width:28,height:28,borderRadius:4,objectFit:'contain',background:'#fff',padding:1}} onError={e=>{e.target.style.opacity='.3'}}/>
+                  <span style={{fontSize:12,color:'var(--muted)'}}>{brandName||'Company name'}</span>
+                </div>
+              )}
+              <button onClick={handleBrandSave} style={{alignSelf:'flex-start',background:'var(--accent)',border:'none',borderRadius:4,color:'#fff',fontSize:12,fontWeight:600,padding:'6px 14px',cursor:'pointer'}}>Save branding</button>
+            </div>
+          )}
           {tab==='nav'&&navSections.map(s=>(
             <div key={s.id} className="wiz-row">
               <span className="wiz-nav-icon"><NavIcon id={s.id} size={14}/></span>
@@ -4568,8 +4613,10 @@ function StatusStrip({data, firingAlerts, now, setSection}) {
   return (
     <div className="status-strip">
       <div className="ss-logo">
-        <div className="ss-logo-mark">ib</div>
-        <span className="ss-logo-name">Infoblox MCP</span>
+        {orgDomain
+          ? <img className="ss-logo-img" src={`https://logo.clearbit.com/${orgDomain}`} alt={orgName} onError={e=>{e.target.style.display='none'}}/>
+          : <div className="ss-logo-mark">ib</div>}
+        <span className="ss-logo-name">{orgName}</span>
       </div>
       <button className={`ss-pill${hostsCrit>0?' crit':' ok'}`} onClick={()=>setSection('hosts')} title="Hosts with errors or offline">
         <span className="ss-lbl">HOSTS</span>
@@ -4684,7 +4731,9 @@ function App({vault, onVaultChange}={}) {
   const [cmdkOpen, setCmdkOpen]     = useState(false);
   const [notifyOn, setNotifyOn]     = useState(()=>LS.get('noc.notify',false));
   const [alertsDismissed, setAlertsDismissed] = useState(false);  // session-only banner dismiss
-  const [logoSrc, setLogoSrc] = useState('https://logo.clearbit.com/infoblox.com');
+  const [orgDomain, setOrgDomain] = useState(()=>LS.get('noc.orgDomain',''));
+  const [orgName, setOrgName]     = useState(()=>LS.get('noc.orgName','Infoblox MCP'));
+  const [logoSrc, setLogoSrc]     = useState(()=>{ const d=LS.get('noc.orgDomain',''); return d?`https://logo.clearbit.com/${d}`:'https://logo.clearbit.com/infoblox.com'; });
   const [noticesExpanded, setNoticesExpanded] = useState(false);  // collapse extras past the cap
   const [updPop, setUpdPop]         = useState(false);            // version-chip popover
   const [updBusy, setUpdBusy]       = useState(false);            // "Check now" in flight
@@ -4719,6 +4768,11 @@ function App({vault, onVaultChange}={}) {
   const moveWidget = (id,dir) => { const arr=[...overviewOrder]; const i=arr.indexOf(id); const j=i+dir; if(j<0||j>=arr.length) return; [arr[i],arr[j]]=[arr[j],arr[i]]; setOverviewOrder(arr); LS.set('noc.widgetOrder',arr); toast('Layout saved ✓','ok'); };
   const toggleHideSection = (id) => { const n=hiddenSections.includes(id)?hiddenSections.filter(x=>x!==id):[...hiddenSections,id]; setHiddenSections(n); LS.set('noc.hiddenSections',n); };
   const finishWizard = () => { setShowWizard(false); LS.set('noc.wizardDone',true); };
+  const handleBrandSave = (domain, name) => {
+    LS.set('noc.orgDomain', domain); LS.set('noc.orgName', name);
+    setOrgDomain(domain); setOrgName(name);
+    setLogoSrc(domain?`https://logo.clearbit.com/${domain}`:'https://logo.clearbit.com/infoblox.com');
+  };
   const resetDashboard = () => { setOverviewOrder([...DEFAULT_ORDER]); LS.set('noc.widgetOrder',[...DEFAULT_ORDER]); setCollapsed({}); LS.set('cl',{}); setHiddenSections([]); LS.set('noc.hiddenSections',[]); setShowWizard(true); };
   const toggleFs = (key) => setFullscreen(f=>f===key?null:key);
 
@@ -5144,9 +5198,9 @@ function App({vault, onVaultChange}={}) {
       {sidebarOpen&&<div className="sidebar-backdrop" onClick={()=>setSidebarOpen(false)}/>}
       <div id="sidebar-nav" className={`sidebar${sidebarCollapsed?' collapsed':''}${sidebarOpen?' open':''}`}>
         <div className="logo">
-          <img className="logo-mark" src={IB_LOGO} alt="Infoblox" width="26" height="26"/>
+          <img className="logo-mark" src={orgDomain?`https://logo.clearbit.com/${orgDomain}`:IB_LOGO} alt={orgName} width="26" height="26" onError={e=>{e.target.src=IB_LOGO}}/>
           <div>
-            <div className="logo-text">Infoblox MCP</div>
+            <div className="logo-text">{orgName}</div>
             <div className="logo-sub">for Infoblox Portal (CSP)</div>
           </div>
         </div>
@@ -6344,7 +6398,7 @@ function App({vault, onVaultChange}={}) {
         section={section}
       />
       {drillEntity&&<DrillSheet entity={drillEntity} onClose={()=>setDrillEntity(null)} leases={leases} subnets={subnets} setSection={setSection} setZoneFilt={setZoneFilt}/>}
-      {showWizard&&<DashboardWizard overviewOrder={overviewOrder} collapsed={collapsed} hiddenSections={hiddenSections} widgetLabels={WIDGET_LABELS} moveWidget={moveWidget} toggleCollapse={toggleCollapse} toggleHideSection={toggleHideSection} onDone={finishWizard}/>}
+      {showWizard&&<DashboardWizard overviewOrder={overviewOrder} collapsed={collapsed} hiddenSections={hiddenSections} widgetLabels={WIDGET_LABELS} moveWidget={moveWidget} toggleCollapse={toggleCollapse} toggleHideSection={toggleHideSection} onDone={finishWizard} orgDomain={orgDomain} orgName={orgName} onBrandSave={handleBrandSave}/>}
     </div>
   );
 }
