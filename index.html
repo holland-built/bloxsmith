@@ -3142,17 +3142,31 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
 const PROTECTED_SECTIONS = new Set(['overview']);
 function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone, orgDomain, orgName, onBrandSave, initialTab}) {
   const [tab, setTab] = useState(initialTab||'widgets');
-  const [brandUrl, setBrandUrl] = useState(orgDomain||'');
-  const [brandName, setBrandName] = useState(orgName||'');
-  const [brandPreviewDomain, setBrandPreviewDomain] = useState(()=>extractDomain(orgDomain||''));
-  const handleBrandPreview = ()=>{
-    const d=extractDomain(brandUrl);
-    if(!d) return;
-    setBrandPreviewDomain(d);
+  const [companyInput, setCompanyInput] = useState(orgName||'');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedDomain, setSelectedDomain] = useState(orgDomain||'');
+  const [selectedName, setSelectedName] = useState(orgName||'');
+  const [fetchError, setFetchError] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualDomain, setManualDomain] = useState(orgDomain||'');
+  const debounceRef = useRef(null);
+  const fetchSuggestions = (q) => {
+    if(!q||q.length<2){ setSuggestions([]); setShowDropdown(false); return; }
+    fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(q)}`)
+      .then(r=>r.json())
+      .then(data=>{ setSuggestions(data.slice(0,6)); setShowDropdown(data.length>0); setFetchError(false); })
+      .catch(()=>{ setFetchError(true); setShowDropdown(false); });
+  };
+  const handleCompanyInput = (val) => {
+    setCompanyInput(val); setSelectedDomain(''); setSelectedName('');
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(()=>fetchSuggestions(val), 400);
   };
   const handleBrandSave = ()=>{
-    const d=extractDomain(brandUrl);
-    onBrandSave(d, brandName.trim()||'Infoblox MCP');
+    const domain = manualMode ? extractDomain(manualDomain) : selectedDomain;
+    const name = (manualMode ? companyInput : selectedName)||companyInput||'Infoblox MCP';
+    onBrandSave(domain, name);
   };
   const navSections = SECTIONS.filter(s=>!PROTECTED_SECTIONS.has(s.id)&&!s.noAuto);
   const modalRef = useRef(null);
@@ -3175,6 +3189,7 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
     document.addEventListener('keydown', h);
     return ()=>{ document.removeEventListener('keydown', h); if(prev && prev.focus) prev.focus(); };
   },[]);
+  useEffect(()=>{ setTab(initialTab||'widgets'); },[initialTab]);
   return (
     <>
       <div className="wiz-overlay" onClick={onDone}/>
@@ -3204,26 +3219,45 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
           ))}
           {tab==='brand'&&(
             <div style={{padding:'16px 14px',display:'flex',flexDirection:'column',gap:14}}>
-              <div>
-                <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:4}}>Company domain <span style={{fontWeight:400,opacity:.6}}>(for logo lookup)</span></label>
-                <div style={{display:'flex',gap:6}}>
-                  <input value={brandUrl} onChange={e=>setBrandUrl(e.target.value)} onBlur={handleBrandPreview}
-                    onKeyDown={e=>e.key==='Enter'&&handleBrandPreview()}
-                    placeholder="infoblox.com" type="text"
-                    style={{flex:1,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',fontSize:12,padding:'5px 8px'}}/>
-                  <button onClick={handleBrandPreview} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',fontSize:12,padding:'5px 10px',cursor:'pointer'}}>Preview</button>
-                </div>
-              </div>
-              <div>
-                <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:4}}>Display name</label>
-                <input value={brandName} onChange={e=>setBrandName(e.target.value)}
-                  placeholder="Infoblox MCP"
+              <div style={{position:'relative'}}>
+                <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:4}}>Company name</label>
+                <input value={companyInput} onChange={e=>handleCompanyInput(e.target.value)}
+                  onFocus={()=>suggestions.length&&setShowDropdown(true)}
+                  onBlur={()=>setTimeout(()=>setShowDropdown(false),150)}
+                  placeholder="e.g. Infoblox" type="text" autoComplete="off"
                   style={{width:'100%',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',fontSize:12,padding:'5px 8px'}}/>
+                {showDropdown&&suggestions.length>0&&(
+                  <div style={{position:'absolute',top:'calc(100% + 2px)',left:0,right:0,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,zIndex:200,boxShadow:'0 4px 16px rgba(0,0,0,.3)',overflow:'hidden'}}>
+                    {suggestions.map(s=>(
+                      <div key={s.domain}
+                        onMouseDown={e=>{e.preventDefault();setSelectedDomain(s.domain);setSelectedName(s.name);setCompanyInput(s.name);setShowDropdown(false);}}
+                        style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',cursor:'pointer',borderBottom:'1px solid var(--border)'}}>
+                        <BrandLogoImg domain={s.domain} alt={s.name} style={{width:20,height:20,borderRadius:2,objectFit:'contain',background:'#fff',padding:1,flexShrink:0}}/>
+                        <span style={{fontSize:12,color:'var(--ink)',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</span>
+                        <span style={{fontSize:11,color:'var(--muted)',fontFamily:'monospace',flexShrink:0}}>{s.domain}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {fetchError&&(
+                  <div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>
+                    Lookup unavailable. <button onMouseDown={e=>{e.preventDefault();setManualMode(m=>!m);}} style={{background:'none',border:'none',color:'var(--accent)',fontSize:11,cursor:'pointer',textDecoration:'underline',padding:0}}>Enter domain manually</button>
+                  </div>
+                )}
               </div>
-              {brandPreviewDomain&&(
+              {manualMode&&(
+                <div>
+                  <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:4}}>Domain <span style={{fontWeight:400,opacity:.6}}>(e.g. infoblox.com)</span></label>
+                  <input value={manualDomain} onChange={e=>setManualDomain(e.target.value)}
+                    onBlur={()=>setSelectedDomain(extractDomain(manualDomain))}
+                    placeholder="infoblox.com" type="text"
+                    style={{width:'100%',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4,color:'var(--ink)',fontSize:12,padding:'5px 8px'}}/>
+                </div>
+              )}
+              {selectedDomain&&(
                 <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4}}>
-                  <BrandLogoImg domain={brandPreviewDomain} alt="logo preview" style={{width:28,height:28,borderRadius:4,objectFit:'contain',background:'#fff',padding:1}}/>
-                  <span style={{fontSize:12,color:'var(--muted)'}}>{brandName||'Company name'} · {brandPreviewDomain}</span>
+                  <BrandLogoImg domain={selectedDomain} alt="logo preview" style={{width:28,height:28,borderRadius:4,objectFit:'contain',background:'#fff',padding:1}}/>
+                  <span style={{fontSize:12,color:'var(--muted)'}}>{selectedName||companyInput} · {selectedDomain}</span>
                 </div>
               )}
               <button onClick={handleBrandSave} style={{alignSelf:'flex-start',background:'var(--accent)',border:'none',borderRadius:4,color:'#fff',fontSize:12,fontWeight:600,padding:'6px 14px',cursor:'pointer'}}>Save branding</button>
