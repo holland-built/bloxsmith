@@ -114,10 +114,10 @@ window.onerror = function(msg,src,line,col,err) {
   --success-bg:rgba(38,167,105,0.08);--info-bg:rgba(0,62,204,0.07);
   color-scheme:light;
 }
-body{background:var(--blue-dark);color:var(--ink);font-family:var(--font-ui);margin:0;padding-left:var(--sbw,44px);padding-top:80px;overflow-x:hidden;line-height:1.5;transition:background .2s,color .2s,padding-left .2s}
+body{background:var(--blue-dark);color:var(--ink);font-family:var(--font-ui);margin:0;padding-left:var(--sbw,44px);padding-top:48px;overflow-x:hidden;line-height:1.5;transition:background .2s,color .2s,padding-left .2s}
 body.chat-open{padding-right:340px}
 @media(max-width:760px){body.chat-open{padding-right:0}}
-.sidebar{width:224px;min-width:224px;background:var(--blue-mid);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:stretch;position:fixed;top:80px;left:0;bottom:0;height:calc(100vh - 80px);z-index:100;overflow:hidden;transition:width .2s cubic-bezier(.4,0,.2,1)}
+.sidebar{width:224px;min-width:224px;background:var(--blue-mid);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:stretch;position:fixed;top:48px;left:0;bottom:0;height:calc(100vh - 48px);z-index:100;overflow:hidden;transition:width .2s cubic-bezier(.4,0,.2,1)}
 .logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:flex-start;gap:10px;width:100%}
 .logo-mark{width:26px;height:26px;border-radius:5px;background:#fff;padding:1px;flex-shrink:0}
 .logo-text{font-size:12px;font-weight:700;color:var(--teal);letter-spacing:.04em}
@@ -178,7 +178,7 @@ body{padding-left:0!important}
 .rb-btn-x{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;display:flex;align-items:center;transition:color .12s}
 .rb-btn-x:hover{color:var(--gray-200)}
 .main{padding:0 20px 40px;flex:1;min-width:0;max-width:100%;width:100%;overflow:visible}
-.topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;margin-bottom:16px;padding:0 14px 0 14px;height:48px;border-bottom:1px solid var(--border);position:fixed;top:32px;left:0;right:0;z-index:150;background:var(--blue-mid)}
+.topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;margin-bottom:16px;padding:0 14px 0 14px;height:48px;border-bottom:1px solid var(--border);position:fixed;top:0;left:0;right:0;z-index:150;background:var(--blue-mid)}
 .page-title{font-size:15px;font-weight:700;line-height:1.15}
 .page-sub{font-size:12px;color:var(--muted);margin-top:0;margin-left:8px}
 .refresh-btn{display:flex;align-items:center;gap:7px;background:var(--blue-deep);border:1px solid var(--teal);color:var(--teal);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:background .12s,border-color .12s}
@@ -4668,43 +4668,6 @@ function HelpPage() {
   );
 }
 
-function StatusStrip({data, firingAlerts, now, setSection, orgDomain, orgName, onLogoClick}) {
-  const hostsCrit = data ? data.hosts.filter(h=>h.status==='error'||h.status==='offline').length : 0;
-  const subWarn   = data ? data.subnets.filter(x=>x.util>=90).length : 0;
-  const dnsAnom   = data ? data.zones.filter(z=>z.anomaly).length : 0;
-  const threatCnt = firingAlerts ? firingAlerts.length : 0;
-  const timeStr   = now ? now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
-  return (
-    <div className="status-strip">
-      <div className="ss-logo" onClick={onLogoClick} title="Change branding" style={{cursor:'pointer'}}>
-        {orgDomain
-          ? <BrandLogoImg domain={orgDomain} alt={orgName} className="ss-logo-img"/>
-          : <div className="ss-logo-mark">ib</div>}
-        <span className="ss-logo-name">{orgName}</span>
-      </div>
-      <button className={`ss-pill${hostsCrit>0?' crit':' ok'}`} onClick={()=>setSection('hosts')} title="Hosts with errors or offline">
-        <span className="ss-lbl">HOSTS</span>
-        <span className="ss-cnt">{hostsCrit}</span>
-      </button>
-      <div className="ss-div"/>
-      <button className={`ss-pill${subWarn>0?' warn':' ok'}`} onClick={()=>setSection('ipam')} title="Subnets ≥90% utilization">
-        <span className="ss-lbl">SUBNETS</span>
-        <span className="ss-cnt">{subWarn}</span>
-      </button>
-      <div className="ss-div"/>
-      <button className={`ss-pill${dnsAnom>0?' warn':' ok'}`} onClick={()=>setSection('dns')} title="DNS zones with TTL anomalies">
-        <span className="ss-lbl">DNS</span>
-        <span className="ss-cnt">{dnsAnom}</span>
-      </button>
-      <div className="ss-div"/>
-      <button className={`ss-pill${threatCnt>0?' crit':' ok'}`} onClick={()=>setSection('alerts')} title="Firing alert rules">
-        <span className="ss-lbl">ALERTS</span>
-        <span className="ss-cnt">{threatCnt}</span>
-      </button>
-      <span className="ss-clock">{timeStr}</span>
-    </div>
-  );
-}
 
 function App({vault, onVaultChange}={}) {
   const [data,setData]         = useState(null);
@@ -5267,8 +5230,6 @@ function App({vault, onVaultChange}={}) {
   return (
     <div style={{display:'flex',minHeight:'100vh'}} data-wall={wallMode?'on':undefined}>
 
-      {/* STATUS STRIP */}
-      <StatusStrip data={data} firingAlerts={firingAlerts} now={now} setSection={setSection} orgDomain={orgDomain} orgName={orgName} onLogoClick={()=>openWizard('brand')}/>
 
       {/* SIDEBAR */}
       {sidebarOpen&&<div className="sidebar-backdrop" onClick={()=>setSidebarOpen(false)}/>}
@@ -5468,24 +5429,7 @@ function App({vault, onVaultChange}={}) {
             <div className="nav-brand">
               <BrandLogoImg domain={orgDomain||'infoblox.com'} fallback={IB_LOGO} alt="Infoblox" className="nav-logo" title="Download logo" onClick={()=>downloadLogo(orgDomain?buildLogoSources(orgDomain)[0]:IB_LOGO)}/>
               <span className="nav-brand-name">Infoblox NOC</span>
-              <span className="nav-breadcrumb" role="navigation" aria-label="Breadcrumb">{(()=>{
-                const sep=<span className="bc-sep">›</span>;
-                const truncStyle={maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'inline-block',verticalAlign:'bottom'};
-                const secLabel=SECTIONS.find(s=>s.id===section)?.label||section;
-                const drillLabel=drillEntity?(
-                  drillEntity.type==='subnet'?(drillEntity.data.name&&drillEntity.data.name!==drillEntity.data.addr?drillEntity.data.name:`${drillEntity.data.addr}/${drillEntity.data.cidr}`)
-                  :drillEntity.type==='zone'?drillEntity.data.fqdn
-                  :drillEntity.type==='host'?(drillEntity.data.name||drillEntity.data.ip)
-                  :drillEntity.type==='lease'?(drillEntity.data.addr||drillEntity.data.ip||'Lease')
-                  :drillEntity.type==='feed'?drillEntity.data.name
-                  :drillEntity.type==='audit'?(drillEntity.data.object||drillEntity.data.action||'Log Entry')
-                  :(drillEntity.data.name||drillEntity.data.ip||drillEntity.type)
-                ):null;
-                return (<>
-                  <span style={{cursor:'pointer'}} onClick={()=>setDrillEntity(null)}>{secLabel}</span>
-                  {drillLabel&&<>{sep}<span style={truncStyle} title={drillLabel}>{drillLabel}</span></>}
-                </>);
-              })()}</span>
+
             </div>
             <div style={{minWidth:0}}>
               <h1 className="page-title" style={{display:'none'}}>{SECTIONS.find(s=>s.id===section)?.label}</h1>
@@ -5500,7 +5444,7 @@ function App({vault, onVaultChange}={}) {
             {SECTIONS.filter(s=>!hiddenSections.includes(s.id)).map(s=>{
               let badge=null;
               if(data&&s.id==='ipam'){const c=data.subnets.filter(x=>x.util>=90).length;if(c>0)badge=<span className="badge-pill">{c}</span>;}
-              if(data&&s.id==='hosts'){const c=data.hosts.filter(h=>h.status==='error'||h.status==='offline').length;if(c>0)badge=<span className="badge-pill">{c}</span>;}
+
               if(data&&s.id==='dns'){const c=data.zones.filter(z=>z.anomaly).length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
               if(data&&s.id==='audit'){const c=data.auditLogs.filter(l=>l.result==='failure').length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
               if(s.id==='alerts'&&firingAlerts.length>0)badge=<span className="badge-pill">{firingAlerts.length}</span>;
@@ -5514,6 +5458,8 @@ function App({vault, onVaultChange}={}) {
           </nav>
           <div className="topbar-controls">
             <div className="topbar-group">
+              {data&&(()=>{const hc=data.hosts.filter(h=>h.status==='error'||h.status==='offline').length;return hc>0?<button className="ss-pill crit" onClick={()=>setSection('hosts')} title="Hosts offline or in error" style={{marginRight:4}}>HOSTS <span className="ss-cnt">{hc}</span></button>:null;})()}
+              {firingAlerts.length>0&&<button className="ss-pill crit" onClick={()=>setSection('alerts')} title="Firing alert rules" style={{marginRight:8}}>ALERTS <span className="ss-cnt">{firingAlerts.length}</span></button>}
               <select className="pill-select" data-tip="Filter by site" value={siteFilt||''} onChange={e=>setSiteFilt(e.target.value||null)} aria-label="Filter by site" style={{appearance:'none',WebkitAppearance:'none',paddingRight:24,backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23768390'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center'}}>
                 <option value="">Site: All</option>
                 {[...new Set((subnets||[]).map(s=>s.site).filter(Boolean).filter(s=>s!=='–'&&s!=='—'))].sort().map(s=><option key={s} value={s}>{s}</option>)}
@@ -5535,7 +5481,7 @@ function App({vault, onVaultChange}={}) {
             </div>
           </div>
         </div>
-        {data&&<ScopeBar subnets={subnets} zones={zones}
+        {data&&section!=='overview'&&<ScopeBar subnets={subnets} zones={zones}
           scopeSubnet={scopeSubnet} setScopeSubnet={setScopeSubnet}
           scopeZone={scopeZone} setScopeZone={setScopeZone}
           savedScopes={savedScopes}
