@@ -4315,8 +4315,10 @@ function TopoMap({subnets, hosts, zones, onDrill}){
                 const isHov=hover===s.id;
                 return (
                   <div key={s.id}
+                    role="button" tabIndex={0} aria-label={lbl}
                     onMouseEnter={()=>setHover(s.id)} onMouseLeave={()=>setHover(null)}
                     onClick={()=>onDrill&&onDrill({type:'subnet',data:s})}
+                    onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onDrill&&onDrill({type:'subnet',data:s});}}}
                     title={`${lbl} — ${s.util||0}% util · ${hs.length} hosts`}
                     style={{
                       width:100,padding:'8px 10px',borderRadius:5,cursor:'pointer',
