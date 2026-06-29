@@ -1784,7 +1784,7 @@ class Handler(BaseHTTPRequestHandler):
                         with open(LOGO_FILE, "wb") as f: f.write(data)
                     except Exception: pass  # CDN failure is non-fatal — UI falls back to CDN img tag
                 self._json({"ok": True})
-            except Exception as e: self._json({"ok": False, "error": str(e)}, 500)
+            except Exception as e: _log_exc("/api/brand", e); self._json({"ok": False, "error": "internal error"}, 500)
             return
         if self.path == "/api/vault/init":
             self._json(vault_init(str(body.get("passphrase", "")))); return
