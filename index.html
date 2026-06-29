@@ -3894,6 +3894,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
   const [editTenant,setEditTenant]=useState(null);  // connection whose key is being replaced
   const [testing,setTesting]=useState(false);
   const [locking,setLocking]=useState(false);
+  const [refreshingNames,setRefreshingNames]=useState(false);
   const [switchingKey,setSwitchingKey]=useState(null);   // tenant id being activated
   const tenants=vault.tenants||[];
   const active=tenants.find(t=>t.id===vault.active);
@@ -3992,8 +3993,8 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               <span className="menu-lbl">+ Add key</span>
               <span className="menu-desc">Store another Infoblox login</span>
             </button>)}
-            <button className="menu-item" onClick={refreshNames}>
-              <span className="menu-lbl">Refresh names</span>
+            <button className="menu-item" disabled={refreshingNames} onClick={async()=>{setRefreshingNames(true);await refreshNames();setRefreshingNames(false);}}>
+              <span className="menu-lbl">{refreshingNames?'Refreshing…':'Refresh names'}</span>
               <span className="menu-desc">Re-fetch account names from CSP</span>
             </button>
             <button className="menu-item" onClick={()=>{close();setSettings(true);}}>
