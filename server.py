@@ -9,6 +9,10 @@ Then open:  http://localhost:8080
 
 import asyncio, base64, hashlib, hmac, json, os, re, secrets, sys, threading
 from contextlib import asynccontextmanager
+
+def _run_async(coro):
+    """Run a coroutine from a sync context; creates a fresh event loop per call."""
+    return asyncio.run(coro)
 import groq as _groq
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -556,6 +560,7 @@ def _resolve_vault_file():
 
 VAULT_FILE = _resolve_vault_file()
 BRAND_FILE = os.path.join(os.path.dirname(VAULT_FILE), "brand.json")
+LOGO_FILE  = os.path.join(os.path.dirname(VAULT_FILE), "logo.png")
 _vault = {"unlocked": False, "tenants": [], "active": None, "groq": "", "llm_base": "", "llm_model": "", "_key": None, "_salt": ""}
 _vault_lock = threading.Lock()
 
@@ -822,7 +827,7 @@ def vault_llm_test(key, base_url=None, model=None):
             await c.chat.completions.create(model=mdl, max_tokens=4,
                                             messages=[{"role": "user", "content": "ping"}])
     try:
-        asyncio.run(_run()); return {"ok": True, "model": mdl}
+        _run_async(_run()); return {"ok": True, "model": mdl}
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
 
@@ -1196,7 +1201,7 @@ async def _fetch_dashboard_async() -> dict:
 
 def fetch_dashboard_data() -> dict:
     print("Fetching dashboard data via MCP…")
-    return asyncio.run(_fetch_dashboard_async())
+    return _run_async(_fetch_dashboard_async())
 
 # ── NL query handler ──────────────────────────────────────────────────────────
 
@@ -1449,16 +1454,11 @@ def _parse_ai_response(raw: str) -> dict:
     if last_obj:
         sugs = _clean_suggestions([s for s in last_obj.get("suggestions", []) if isinstance(s, str)])
         return {"answer": str(last_obj["answer"]), "suggestions": sugs}
-    # Attempt 3: SUGGESTIONS: plain-text block
-    if "SUGGESTIONS:" in raw:
-        parts = raw.split("SUGGESTIONS:", 1)
-        sugs = [l.strip().lstrip("-•*123456789. ") for l in parts[1].strip().splitlines() if l.strip()]
-        return {"answer": parts[0].strip(), "suggestions": sugs[:5]}
     return {"answer": raw, "suggestions": []}
 
 def handle_query(question: str, context: str = "") -> dict:
     trace: list = []
-    raw = asyncio.run(_handle_query_async(question, trace, context))
+    raw = _run_async(_handle_query_async(question, trace, context))
     out = _parse_ai_response(raw)
     if trace:
         out["trace"] = trace  # ordered list of {tool, args} the LLM invoked
@@ -1478,7 +1478,7 @@ async def _fetch_actions_async() -> dict:
             return {"actions": [], "_raw": _tool_text(result)[:200]}
 
 def fetch_actions() -> dict:
-    return asyncio.run(_fetch_actions_async())
+    return _run_async(_fetch_actions_async())
 
 # ── SOC Insights handler ──────────────────────────────────────────────────────
 
@@ -1501,7 +1501,7 @@ async def _fetch_insights_async() -> dict:
         )
 
 def fetch_insights() -> dict:
-    return asyncio.run(_fetch_insights_async())
+    return _run_async(_fetch_insights_async())
 
 # ── DNS Analytics handler ─────────────────────────────────────────────────────
 
@@ -1530,7 +1530,7 @@ async def _fetch_dns_analytics_async() -> dict:
         }
 
 def fetch_dns_analytics() -> dict:
-    return asyncio.run(_fetch_dns_analytics_async())
+    return _run_async(_fetch_dns_analytics_async())
 
 # ── Host Metrics handler ──────────────────────────────────────────────────────
 
@@ -1547,7 +1547,7 @@ async def _fetch_host_metrics_async() -> dict:
         return {"metrics": _results(data)}
 
 def fetch_host_metrics() -> dict:
-    return asyncio.run(_fetch_host_metrics_async())
+    return _run_async(_fetch_host_metrics_async())
 
 # ── Threat Lookup handler ─────────────────────────────────────────────────────
 
@@ -1557,7 +1557,7 @@ async def _threat_lookup_async(query: str) -> dict:
         return {"entities": hits, "query": query}
 
 def threat_lookup(query: str) -> dict:
-    return asyncio.run(_threat_lookup_async(query))
+    return _run_async(_threat_lookup_async(query))
 
 # ── Block Domain handler ──────────────────────────────────────────────────────
 
@@ -1580,7 +1580,7 @@ async def _block_domain_async(domain: str) -> dict:
         return {"ok": True, "domain": domain, "list": BLOCK_LIST_ID}
 
 def block_domain(domain: str) -> dict:
-    return asyncio.run(_block_domain_async(domain))
+    return _run_async(_block_domain_async(domain))
 
 async def _unblock_domain_async(domain: str) -> dict:
     """Rollback of a block: remove the domain item from the configured block list."""
@@ -1598,7 +1598,7 @@ async def _unblock_domain_async(domain: str) -> dict:
         return {"ok": True, "domain": domain, "list": BLOCK_LIST_ID}
 
 def unblock_domain(domain: str) -> dict:
-    return asyncio.run(_unblock_domain_async(domain))
+    return _run_async(_unblock_domain_async(domain))
 
 # ── HTTP handler ──────────────────────────────────────────────────────────────
 
@@ -1652,6 +1652,15 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     continue
             self.send_response(404); self.end_headers()
+            return
+        if path == "/api/logo":
+            if os.path.exists(LOGO_FILE):
+                with open(LOGO_FILE, "rb") as f: data = f.read()
+                self.send_response(200); self.send_header("Content-Type","image/png")
+                self.send_header("Content-Length", str(len(data))); self.send_header("Cache-Control","public,max-age=3600")
+                self.end_headers(); self.wfile.write(data)
+            else:
+                self.send_response(404); self.end_headers()
             return
         if path == "/api/brand":
             try:
@@ -1756,6 +1765,16 @@ class Handler(BaseHTTPRequestHandler):
             name   = str(body.get("name", ""))[:120]
             try:
                 with open(BRAND_FILE, "w") as f: json.dump({"domain": domain, "name": name}, f)
+                # Fetch and cache logo server-side so UI can use /api/logo instead of CDN
+                if domain:
+                    try:
+                        from urllib.request import urlopen, Request
+                        logo_url = f"https://cdn.brandfetch.io/{domain}/w/128/h/128"
+                        req = Request(logo_url, headers={"User-Agent": "Mozilla/5.0"})
+                        with urlopen(req, timeout=8) as r:
+                            data = r.read()
+                        with open(LOGO_FILE, "wb") as f: f.write(data)
+                    except Exception: pass  # CDN failure is non-fatal — UI falls back to CDN img tag
                 self._json({"ok": True})
             except Exception as e: self._json({"ok": False, "error": str(e)}, 500)
             return
