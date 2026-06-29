@@ -277,7 +277,7 @@ body{padding-left:0!important}
 .latch-stats{color:var(--muted);margin-left:6px}
 .latch-spacer{flex:1}
 /* alert banner */
-.alert{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--sev-red-t);display:flex;align-items:center;gap:7px}
+.alert{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:9px 13px;font-size:12px;color:var(--sev-red-t);display:flex;align-items:center;gap:8px}
 /* status-tile matrix — one tile per domain, tinted by worst severity, glanceable across a room */
 .health-banner.ok .hb-label{color:var(--sev-green-t)}.health-banner.issues-warn .hb-label{color:var(--sev-amber-t)}.health-banner.issues-crit .hb-label{color:var(--sev-red-t)}
 .hb-pill.ok{background:var(--badge-green-bg);border:1px solid var(--badge-green-bd);color:var(--sev-green-t)}
@@ -317,7 +317,7 @@ body{padding-left:0!important}
 /* tooltip */
 .tt{background:var(--blue-mid);border:1px solid var(--border);border-radius:6px;padding:9px 13px;font-size:12px}
 /* global tooltip layer */
-.gtip{position:fixed;pointer-events:none;z-index:10000;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:11px;color:var(--gray-100);line-height:1.45;max-width:240px;white-space:normal;box-shadow:0 4px 16px rgba(0,0,0,.45);animation:gtipIn .12s ease;font-weight:400;text-transform:none;letter-spacing:normal}
+.gtip{position:fixed;pointer-events:none;z-index:10000;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 12px;font-size:11px;color:var(--gray-100);line-height:1.45;max-width:240px;white-space:normal;box-shadow:0 4px 16px rgba(0,0,0,.45);animation:gtipIn .12s ease;font-weight:400;text-transform:none;letter-spacing:normal}
 @keyframes gtipIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 .gtip b{color:var(--teal);font-weight:600}
 /* pulse */
@@ -708,6 +708,7 @@ tr:hover .copy-btn{opacity:1}
 /* tablet: keep topbar single-line, hide low-priority controls */
 @media(max-width:1100px){ .topbar{flex-wrap:nowrap;gap:0 6px} .topbar-controls{gap:8px} .nav-clock{display:none} }
 @media(max-width:1100px){ .topbar-controls .pill-select{padding:4px 6px;max-width:96px;font-size:10px} }
+@media(max-width:480px){ .topbar-controls .pill-select{display:none} }
 /* ── skeleton loaders ── */
 .skel{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%);background-size:400% 100%;animation:skel 1.4s ease infinite;border-radius:5px}
 @keyframes skel{0%{background-position:100% 0}100%{background-position:-100% 0}}
