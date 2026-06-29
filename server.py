@@ -1409,8 +1409,8 @@ async def _handle_query_async(question: str, trace: list, context: str = "") -> 
                     result = result[:_MAX_TOOL_CHARS] + ("…[truncated]" if len(result) > _MAX_TOOL_CHARS else "")
                     messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
     except Exception as e:
-        err = str(e)[:300].replace('"', "'")
-        return f'{{"answer": "AI error: {err}", "suggestions": ["try again in a moment", "show network summary", "show offline hosts", "list threat feeds", "show audit logs"]}}'
+        _log_exc("_generate_ai_answer", e)
+        return '{"answer": "AI error: request failed", "suggestions": ["try again in a moment", "show network summary", "show offline hosts", "list threat feeds", "show audit logs"]}'
 
     return last.message.content if last else '{"answer": "No response.", "suggestions": []}'
 
