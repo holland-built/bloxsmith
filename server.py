@@ -1809,6 +1809,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/vault/refresh-names":
             self._json(vault_refresh_names()); return
         if self.path == "/api/vault/lock":
+            if not MCP_HEADERS.get("Authorization") and not self._authed():
+                self._json({"ok": False, "error": "unauthorized"}, 401); return
             self._json(vault_lock()); return
         if self.path == "/api/vault/reset":
             # Destructive + irreversible: require vault unlocked OR DASHBOARD_TOKEN.
