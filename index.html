@@ -3935,7 +3935,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
           <span className="ctx-cap" title="Infoblox Portal — account &amp; vault">Infoblox Portal</span>
           <div className="ctx-val">{'● '}{headline}</div>
         </div>
-        <button className="ctx-swap" title="Switch account or manage vault" disabled={switchingAcct} onClick={()=>open?close():setOpen(true)}>
+        <button className="ctx-swap" title="Switch account or manage vault" aria-label="Switch account or manage vault" disabled={switchingAcct} onClick={()=>open?close():setOpen(true)}>
           {switchingAcct?'⟳':'⇄'}
         </button>
       </div>
