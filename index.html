@@ -973,6 +973,7 @@ function downloadCSV(filename, rows, columns) {
 // Ordered logo sources tried by BrandLogoImg — browser <img> sends Referer so Brandfetch works
 function buildLogoSources(domain){
   return [
+    '/api/logo',
     `https://cdn.brandfetch.io/${domain}/w/128/h/128`,
     `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
     `https://icons.duckduckgo.com/ip3/${domain}.ico`,
@@ -5427,7 +5428,7 @@ function App({vault, onVaultChange}={}) {
           <div style={{display:'flex',alignItems:'center',minWidth:0,gap:16}}>
             <button className="menu-btn" aria-label="Menu" aria-expanded={sidebarOpen} aria-controls="sidebar-nav" onClick={()=>setSidebarOpen(o=>!o)}>☰</button>
             <div className="nav-brand">
-              <BrandLogoImg domain={orgDomain||'infoblox.com'} fallback={IB_LOGO} alt="Infoblox" className="nav-logo" title="Download logo" onClick={()=>downloadLogo(orgDomain?buildLogoSources(orgDomain)[0]:IB_LOGO)}/>
+              <BrandLogoImg domain={orgDomain||'infoblox.com'} fallback={IB_LOGO} alt="Infoblox" className="nav-logo" title={orgDomain||'Infoblox'}/>
               <span className="nav-brand-name">Infoblox NOC</span>
 
             </div>
