@@ -405,10 +405,11 @@ def apply_self_update():
                     orig.start()
             except Exception:
                 pass
+            _log_exc("_do_recreate", e)
             with _pull_lock:
                 _pull_state.update(
                     phase="rolledback",
-                    error=str(e),
+                    error="recreate failed",
                     rolledback=True,
                     rollback_from=APP_VERSION,
                     rollback_to="",
