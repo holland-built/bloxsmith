@@ -231,7 +231,8 @@ def apply_self_update():
     try:
         container = client.containers.get(os.environ.get("HOSTNAME", ""))
     except Exception as e:
-        return {"ok": False, "error": f"cannot inspect self: {e}"}
+        _log_exc("apply_self_update", e)
+        return {"ok": False, "error": "cannot inspect container"}
 
     def _do_recreate():
         import time as _t, socket as _sock, json as _json, os as _os
