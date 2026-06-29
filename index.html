@@ -5929,6 +5929,7 @@ function App({vault, onVaultChange}={}) {
                     const spanCls=SPAN_CLS[wallSpans[id]||1];
                     return (
                       <div key={id}
+                        role="region" aria-label={WIDGET_LABELS[id]||id}
                         className={`drag-card${spanCls?' '+spanCls:''}${dragging===id?' dragging':''}${dragOver===id?' drag-over':''}`}
                         style={hStyle}
                         draggable={dragArmed===id}
