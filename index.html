@@ -4077,7 +4077,9 @@ function StateTimeline({subnets, onDrill}){
         const u=s.util||0;
         const clr=sevClr(u);
         return (
-          <div key={s.id} onClick={()=>onDrill&&onDrill({type:'subnet',data:s})}
+          <div key={s.id} role="button" tabIndex={0} aria-label={lbl}
+            onClick={()=>onDrill&&onDrill({type:'subnet',data:s})}
+            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onDrill&&onDrill({type:'subnet',data:s});}}}
             style={{display:'flex',alignItems:'center',gap:8,padding:'3px 4px',borderRadius:3,cursor:'pointer',transition:'background .1s'}}
             onMouseEnter={e=>e.currentTarget.style.background='var(--hover)'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
