@@ -506,7 +506,8 @@ def _csp_json(path: str, body: dict | None = None) -> dict:
                   headers={"Authorization": API_KEY,
                            "Content-Type": "application/json"})
     with urlopen(req, timeout=15) as r:
-        return json.loads(r.read())
+        parsed = json.loads(r.read())
+        return parsed if isinstance(parsed, dict) else {}
 
 def list_accounts() -> dict:
     global _HOME_ACCOUNT_ID, _active_account_id
@@ -831,7 +832,8 @@ def vault_llm_test(key, base_url=None, model=None):
     try:
         _run_async(_run()); return {"ok": True, "model": mdl}
     except Exception as e:
-        return {"ok": False, "error": str(e)[:200]}
+        _log_exc("vault_llm_test", e)
+        return {"ok": False, "error": "LLM test failed"}
 
 def vault_refresh_names():
     """Re-resolve the CSP account name for any tenant still labelled 'Tenant N' or blank."""
@@ -995,9 +997,13 @@ async def _mcp_query_cube(session, cube: str, measures: list,
 
 async def _mcp_search(session, query: str) -> list:
     query = (query or "")[:256]  # cap length of user-controlled filter
-    result = await session.call_tool(
-        "infoblox-portal_network_entity_search", {"query": query}
-    )
+    try:
+        result = await asyncio.wait_for(
+            session.call_tool("infoblox-portal_network_entity_search", {"query": query}),
+            timeout=10.0
+        )
+    except asyncio.TimeoutError:
+        return []
     try:
         data = json.loads(_tool_text(result))
         return data if isinstance(data, list) else _results(data)
