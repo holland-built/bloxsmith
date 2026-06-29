@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOC Dashboard — Topbar v2: Two-Tier</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  /* ── THEME VARS ─────────────────────────────────────────────────── */
+  body.dark {
+    --bg:       #1a1b1e;
+    --surface:  #24252a;
+    --surface2: #1e1f23;
+    --border:   rgba(255,255,255,.10);
+    --teal:     #6694ff;
+    --ink:      #e8e8ea;
+    --muted:    #75767b;
+    --red:      #f87171;
+    --amber:    #fbbf24;
+    --green:    #4ade80;
+    --pill-bg:  rgba(248,113,113,.15);
+    --tab-hover: rgba(255,255,255,.06);
+    --tab-active-bg: rgba(102,148,255,.12);
+    --btn-hover: rgba(255,255,255,.07);
+    --divider:  rgba(255,255,255,.10);
+    --logo-ring: rgba(102,148,255,.30);
+  }
+
+  body.light {
+    --bg:       #f9fafa;
+    --surface:  #ffffff;
+    --surface2: #f0f0f2;
+    --border:   #d4d4d8;
+    --teal:     #003ecc;
+    --ink:      #232429;
+    --muted:    #6b6c71;
+    --red:      #c81f0c;
+    --amber:    #b45309;
+    --green:    #15803d;
+    --pill-bg:  rgba(200,31,12,.10);
+    --tab-hover: rgba(0,0,0,.04);
+    --tab-active-bg: rgba(0,62,204,.08);
+    --btn-hover: rgba(0,0,0,.05);
+    --divider:  #d4d4d8;
+    --logo-ring: rgba(0,62,204,.20);
+  }
+
+  /* ── PAGE SHELL ─────────────────────────────────────────────────── */
+  .page { background: var(--bg); color: var(--ink); min-height: 100vh; }
+
+  /* ── TOPBAR WRAPPER ─────────────────────────────────────────────── */
+  .topbar-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── TOP ROW (48px) ─────────────────────────────────────────────── */
+  .top-row {
+    height: 48px;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── SUB ROW (32px) ─────────────────────────────────────────────── */
+  .sub-row {
+    height: 32px;
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 0;
+  }
+
+  /* ── ICON BUTTON ─────────────────────────────────────────────────── */
+  .icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 2px;
+    font-size: 15px;
+    transition: background 0.12s, color 0.12s;
+    flex-shrink: 0;
+  }
+  .icon-btn:hover { background: var(--btn-hover); color: var(--ink); }
+
+  /* ── LOGO MARK ───────────────────────────────────────────────────── */
+  .logo-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px 0 4px;
+  }
+  .logo-mark {
+    width: 26px;
+    height: 26px;
+    border-radius: 2px;
+    background: var(--teal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 2px var(--logo-ring);
+  }
+  .logo-mark svg { display: block; }
+  .logo-label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  /* ── TOP-ROW DIVIDER ─────────────────────────────────────────────── */
+  .vdivider {
+    width: 1px;
+    height: 20px;
+    background: var(--divider);
+    flex-shrink: 0;
+    margin: 0 4px;
+  }
+
+  /* ── SPACER ──────────────────────────────────────────────────────── */
+  .spacer { flex: 1; }
+
+  /* ── STATUS PILLS ────────────────────────────────────────────────── */
+  .pill-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 2px;
+    background: var(--pill-bg);
+    border: 1px solid var(--red);
+    cursor: pointer;
+    transition: opacity 0.12s;
+    white-space: nowrap;
+  }
+  .pill:hover { opacity: .8; }
+  .pill-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    color: var(--red);
+  }
+  .pill-count {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--red);
+    font-family: 'Courier New', monospace;
+  }
+
+  /* ── CLOCK ───────────────────────────────────────────────────────── */
+  .clock {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    color: var(--muted);
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .clock-time {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: var(--ink);
+    letter-spacing: .5px;
+  }
+
+  /* ── QUERY BUTTON ────────────────────────────────────────────────── */
+  .query-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 2px;
+    border: 1px solid var(--teal);
+    background: transparent;
+    color: var(--teal);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s;
+    font-family: inherit;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .query-btn:hover { background: var(--tab-active-bg); }
+
+  /* ── SUB-ROW NAV TABS ────────────────────────────────────────────── */
+  .nav-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 100%;
+  }
+  .nav-tab {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 11px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.12s, background 0.12s, border-color 0.12s;
+    white-space: nowrap;
+    font-family: inherit;
+    border-radius: 2px 2px 0 0;
+    position: relative;
+    top: 0;
+  }
+  .nav-tab:hover { background: var(--tab-hover); color: var(--ink); }
+  .nav-tab.active {
+    color: var(--teal);
+    border-bottom-color: var(--teal);
+    background: var(--tab-active-bg);
+  }
+
+  /* ── MORE DOTS ───────────────────────────────────────────────────── */
+  .more-dots {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    color: var(--muted);
+    font-size: 14px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    border-radius: 2px;
+    height: 24px;
+    transition: background 0.12s;
+    margin: 0 2px;
+  }
+  .more-dots:hover { background: var(--tab-hover); color: var(--ink); }
+
+  /* ── SUB-ROW FILTERS (right side) ───────────────────────────────── */
+  .sub-filters {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+  }
+  .filter-label {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    padding-right: 2px;
+  }
+  .filter-select {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.12s;
+  }
+  .filter-select:hover { border-color: var(--teal); }
+  .filter-select .caret {
+    color: var(--muted);
+    font-size: 9px;
+    margin-left: 2px;
+  }
+  .filter-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--divider);
+    margin: 0 4px;
+  }
+  .interval-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 11px;
+    font-family: 'Courier New', monospace;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.12s;
+  }
+  .interval-chip:hover { border-color: var(--teal); }
+  .interval-chip .pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+    flex-shrink: 0;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: .3; }
+  }
+
+  /* ── TOGGLE BUTTON ───────────────────────────────────────────────── */
+  .theme-toggle-wrap {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 999;
+  }
+  .theme-toggle {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s, color 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  }
+  .theme-toggle:hover { background: var(--tab-hover); }
+
+  /* ── DEMO CONTENT AREA ───────────────────────────────────────────── */
+  .content-area {
+    padding: 24px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    max-width: 1200px;
+  }
+
+  .bento {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 16px;
+    min-height: 140px;
+  }
+  .bento-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .stat-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .stat-big {
+    font-family: 'Courier New', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .stat-unit {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .stat-delta {
+    font-size: 11px;
+    color: var(--green);
+  }
+  .stat-delta.down { color: var(--red); }
+
+  .sparkline-area {
+    margin-top: 10px;
+    height: 36px;
+    position: relative;
+    overflow: hidden;
+  }
+  .spark-svg { width: 100%; height: 100%; }
+
+  .alert-list { display: flex; flex-direction: column; gap: 6px; }
+  .alert-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 2px;
+    background: var(--bg);
+    border-left: 2px solid var(--red);
+  }
+  .alert-item.warn { border-left-color: var(--amber); }
+  .alert-item.ok   { border-left-color: var(--green); }
+  .alert-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--red);
+    flex-shrink: 0;
+  }
+  .alert-dot.warn { background: var(--amber); }
+  .alert-dot.ok   { background: var(--green); }
+  .alert-text {
+    font-size: 11px;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .alert-time {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .host-row {
+    display: flex;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+  }
+  .host-row:last-child { border-bottom: none; }
+  .host-status {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .host-name { font-size: 11px; color: var(--ink); font-family: 'Courier New', monospace; flex: 1; }
+  .host-ip   { font-size: 10px; color: var(--muted); font-family: 'Courier New', monospace; }
+  .host-tag  {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-weight: 600;
+    letter-spacing: .4px;
+  }
+  .host-tag.crit { background: rgba(248,113,113,.15); color: var(--red); }
+  .host-tag.warn { background: rgba(251,191,36,.12);  color: var(--amber); }
+  .host-tag.ok   { background: rgba(74,222,128,.12);  color: var(--green); }
+
+  /* ── SECTION LABEL ───────────────────────────────────────────────── */
+  .section-label {
+    padding: 20px 24px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .section-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0 24px 20px;
+  }
+
+  /* ── ANNOTATION ──────────────────────────────────────────────────── */
+  .annotation-wrap {
+    padding: 12px 24px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .annotation {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 10px 14px;
+    max-width: 280px;
+  }
+  .ann-num {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--teal);
+    min-width: 18px;
+  }
+  .ann-text {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .ann-text strong { color: var(--ink); font-weight: 600; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body class="dark">
+<div class="page">
+
+  <!-- ════════════════════════════════════════════════════════════════
+       TOPBAR — TWO-TIER
+  ═════════════════════════════════════════════════════════════════ -->
+  <div class="topbar-wrap">
+
+    <!-- TOP ROW (48px) -->
+    <div class="top-row">
+
+      <!-- ☰ Menu -->
+      <button class="icon-btn" title="Menu" aria-label="Menu">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="2" y="4" width="12" height="1.5" rx=".75" fill="currentColor"/>
+          <rect x="2" y="7.25" width="12" height="1.5" rx=".75" fill="currentColor"/>
+          <rect x="2" y="10.5" width="12" height="1.5" rx=".75" fill="currentColor"/>
+        </svg>
+      </button>
+
+      <!-- Logo -->
+      <div class="logo-wrap">
+        <div class="logo-mark" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="3" y="3" width="4" height="4" rx=".5" fill="white" opacity=".9"/>
+            <rect x="9" y="3" width="4" height="4" rx=".5" fill="white" opacity=".6"/>
+            <rect x="3" y="9" width="4" height="4" rx=".5" fill="white" opacity=".6"/>
+            <rect x="9" y="9" width="4" height="4" rx=".5" fill="white" opacity=".3"/>
+          </svg>
+        </div>
+        <span class="logo-label">Infoblox NOC</span>
+      </div>
+
+      <div class="vdivider"></div>
+
+      <!-- Status pills -->
+      <div class="pill-group">
+        <div class="pill" role="button" tabindex="0" title="10 hosts critical">
+          <span class="pill-label">Hosts</span>
+          <span class="pill-count">10</span>
+        </div>
+        <div class="pill" role="button" tabindex="0" title="3 active alerts">
+          <span class="pill-label">Alerts</span>
+          <span class="pill-count">3</span>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <!-- Clock -->
+      <div class="clock" aria-label="Current time UTC">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/>
+          <line x1="6" y1="3" x2="6" y2="6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="6" y1="6" x2="8.5" y2="7.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        <span class="clock-time" id="clock">14:32:07 UTC</span>
+      </div>
+
+      <div class="vdivider"></div>
+
+      <!-- Refresh -->
+      <button class="icon-btn" title="Refresh data" aria-label="Refresh">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M12 7A5 5 0 1 1 9.5 2.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M9.5 1.5v1.8h1.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+
+      <!-- Query -->
+      <button class="query-btn" aria-label="Open query panel">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+          <circle cx="6" cy="6" r="1" fill="currentColor"/>
+          <line x1="6" y1="1" x2="6" y2="3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <line x1="6" y1="9" x2="6" y2="11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <line x1="1" y1="6" x2="3" y2="6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <line x1="9" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        Query
+      </button>
+
+    </div>
+    <!-- /TOP ROW -->
+
+    <!-- SUB ROW (32px) -->
+    <div class="sub-row">
+
+      <!-- Nav tabs (left-aligned) -->
+      <nav class="nav-tabs" aria-label="Dashboard sections">
+        <button class="nav-tab active" aria-current="page">Overview</button>
+        <button class="nav-tab">Topology</button>
+        <button class="nav-tab">IPAM</button>
+        <button class="nav-tab">DNS</button>
+        <button class="nav-tab">Hosts</button>
+        <button class="nav-tab">Alerts</button>
+        <button class="nav-tab">Audit</button>
+      </nav>
+
+      <!-- More -->
+      <div class="more-dots" role="button" tabindex="0" title="More sections" aria-label="More sections">···</div>
+
+      <!-- Filters (right-aligned) -->
+      <div class="sub-filters">
+
+        <span class="filter-label">Site</span>
+        <div class="filter-select" role="button" tabindex="0" aria-label="Site filter: All">
+          All <span class="caret">▾</span>
+        </div>
+
+        <div class="filter-divider"></div>
+
+        <span class="filter-label">Range</span>
+        <div class="filter-select" role="button" tabindex="0" aria-label="Range filter: All">
+          All <span class="caret">▾</span>
+        </div>
+
+        <div class="filter-divider"></div>
+
+        <div class="interval-chip" role="button" tabindex="0" aria-label="Refresh interval: 5 minutes">
+          <span class="pulse" aria-hidden="true"></span>
+          5m
+        </div>
+
+      </div>
+
+    </div>
+    <!-- /SUB ROW -->
+
+  </div>
+  <!-- /TOPBAR -->
+
+  <!-- ════════════════════════════════════════════════════════════════
+       ANNOTATIONS
+  ═════════════════════════════════════════════════════════════════ -->
+  <div class="annotation-wrap">
+    <div class="annotation">
+      <span class="ann-num">①</span>
+      <span class="ann-text"><strong>Top row (48px):</strong> Menu · Brand · Status pills · Clock · Refresh · Query — primary identity &amp; global actions only.</span>
+    </div>
+    <div class="annotation">
+      <span class="ann-num">②</span>
+      <span class="ann-text"><strong>Sub-row (32px):</strong> Nav tabs left, contextual filters right — clear information hierarchy, no crowding.</span>
+    </div>
+    <div class="annotation">
+      <span class="ann-num">③</span>
+      <span class="ann-text"><strong>Total height 80px</strong> vs original 48px — gives every element breathing room with zero content loss.</span>
+    </div>
+    <div class="annotation">
+      <span class="ann-num">④</span>
+      <span class="ann-text"><strong>Sub-row surface:</strong> slightly darker than top row — subtle but legible visual tier separation.</span>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       DEMO CONTENT
+  ═════════════════════════════════════════════════════════════════ -->
+  <div class="section-label">Overview — Live Data</div>
+  <div class="section-divider"></div>
+
+  <div class="content-area">
+
+    <!-- DNS Queries card -->
+    <div class="bento">
+      <div class="bento-title">DNS Queries / sec</div>
+      <div class="stat-row">
+        <span class="stat-big">4,821</span>
+        <span class="stat-unit">q/s</span>
+        <span class="stat-delta">↑ 3.2%</span>
+      </div>
+      <div class="sparkline-area">
+        <svg class="spark-svg" viewBox="0 0 200 36" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="sg1" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--teal)" stop-opacity=".35"/>
+              <stop offset="100%" stop-color="var(--teal)" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="M0 28 L20 22 L40 25 L60 18 L80 20 L100 12 L120 16 L140 10 L160 14 L180 8 L200 6" fill="none" stroke="var(--teal)" stroke-width="1.5"/>
+          <path d="M0 28 L20 22 L40 25 L60 18 L80 20 L100 12 L120 16 L140 10 L160 14 L180 8 L200 6 L200 36 L0 36Z" fill="url(#sg1)"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- DHCP Leases card -->
+    <div class="bento">
+      <div class="bento-title">DHCP Leases Active</div>
+      <div class="stat-row">
+        <span class="stat-big">12,340</span>
+        <span class="stat-unit">of 16,384</span>
+        <span class="stat-delta down">↓ 1.1%</span>
+      </div>
+      <div class="sparkline-area">
+        <svg class="spark-svg" viewBox="0 0 200 36" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="sg2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--amber)" stop-opacity=".30"/>
+              <stop offset="100%" stop-color="var(--amber)" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="M0 14 L20 16 L40 12 L60 15 L80 18 L100 14 L120 20 L140 17 L160 22 L180 19 L200 24" fill="none" stroke="var(--amber)" stroke-width="1.5"/>
+          <path d="M0 14 L20 16 L40 12 L60 15 L80 18 L100 14 L120 20 L140 17 L160 22 L180 19 L200 24 L200 36 L0 36Z" fill="url(#sg2)"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Active Alerts card -->
+    <div class="bento">
+      <div class="bento-title">Active Alerts</div>
+      <div class="alert-list">
+        <div class="alert-item">
+          <span class="alert-dot" aria-hidden="true"></span>
+          <span class="alert-text">DDI-PROD-04 — DNS timeout spike</span>
+          <span class="alert-time">14:28</span>
+        </div>
+        <div class="alert-item warn">
+          <span class="alert-dot warn" aria-hidden="true"></span>
+          <span class="alert-text">DHCP pool 10.12.0.0/22 at 89%</span>
+          <span class="alert-time">14:19</span>
+        </div>
+        <div class="alert-item ok">
+          <span class="alert-dot ok" aria-hidden="true"></span>
+          <span class="alert-text">NS2 replication lag resolved</span>
+          <span class="alert-time">13:55</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Host Status card -->
+    <div class="bento">
+      <div class="bento-title">Critical Hosts</div>
+      <div>
+        <div class="host-row">
+          <span class="host-status" style="background:var(--red)" aria-hidden="true"></span>
+          <span class="host-name">DDI-PROD-04</span>
+          <span class="host-ip">10.10.1.4</span>
+          <span class="host-tag crit">CRIT</span>
+        </div>
+        <div class="host-row">
+          <span class="host-status" style="background:var(--amber)" aria-hidden="true"></span>
+          <span class="host-name">NS1-EAST</span>
+          <span class="host-ip">10.10.2.1</span>
+          <span class="host-tag warn">WARN</span>
+        </div>
+        <div class="host-row">
+          <span class="host-status" style="background:var(--amber)" aria-hidden="true"></span>
+          <span class="host-name">DHCP-CORE-02</span>
+          <span class="host-ip">10.10.1.12</span>
+          <span class="host-tag warn">WARN</span>
+        </div>
+        <div class="host-row">
+          <span class="host-status" style="background:var(--green)" aria-hidden="true"></span>
+          <span class="host-name">NS2-WEST</span>
+          <span class="host-ip">10.10.3.1</span>
+          <span class="host-tag ok">OK</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- IP Utilization card -->
+    <div class="bento">
+      <div class="bento-title">IP Utilization by Subnet</div>
+      <div class="stat-row">
+        <span class="stat-big">74</span>
+        <span class="stat-unit">% avg</span>
+      </div>
+      <div class="sparkline-area">
+        <svg class="spark-svg" viewBox="0 0 200 36" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="sg3" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--green)" stop-opacity=".35"/>
+              <stop offset="100%" stop-color="var(--green)" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="M0 24 L20 22 L40 20 L60 22 L80 18 L100 20 L120 16 L140 18 L160 15 L180 13 L200 11" fill="none" stroke="var(--green)" stroke-width="1.5"/>
+          <path d="M0 24 L20 22 L40 20 L60 22 L80 18 L100 20 L120 16 L140 18 L160 15 L180 13 L200 11 L200 36 L0 36Z" fill="url(#sg3)"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Audit log card -->
+    <div class="bento">
+      <div class="bento-title">Recent Audit Events</div>
+      <div class="alert-list">
+        <div class="alert-item ok" style="border-left-color:var(--muted)">
+          <span class="alert-dot" style="background:var(--muted)" aria-hidden="true"></span>
+          <span class="alert-text">admin — DNS zone edited: corp.local</span>
+          <span class="alert-time">14:31</span>
+        </div>
+        <div class="alert-item ok" style="border-left-color:var(--muted)">
+          <span class="alert-dot" style="background:var(--muted)" aria-hidden="true"></span>
+          <span class="alert-text">svc-api — DHCP lease reserved: 10.12.5.44</span>
+          <span class="alert-time">14:26</span>
+        </div>
+        <div class="alert-item ok" style="border-left-color:var(--muted)">
+          <span class="alert-dot" style="background:var(--muted)" aria-hidden="true"></span>
+          <span class="alert-text">netops — Host added: prn-floor3-p8</span>
+          <span class="alert-time">14:11</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /page -->
+
+<!-- ── THEME TOGGLE ─────────────────────────────────────────────── -->
+<div class="theme-toggle-wrap">
+  <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">
+    <svg id="themeIcon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="3" fill="currentColor"/>
+      <line x1="7" y1="1" x2="7" y2="2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="7" y1="11.5" x2="7" y2="13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="1" y1="7" x2="2.5" y2="7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="11.5" y1="7" x2="13" y2="7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="2.95" y1="2.95" x2="4.01" y2="4.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="9.99" y1="9.99" x2="11.05" y2="11.05" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="11.05" y1="2.95" x2="9.99" y2="4.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="4.01" y1="9.99" x2="2.95" y2="11.05" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+    </svg>
+    <span id="themeLabel">Light mode</span>
+  </button>
+</div>
+
+<script>
+  // ── Clock ────────────────────────────────────────────────────────
+  function updateClock() {
+    const now = new Date();
+    const hh = String(now.getUTCHours()).padStart(2,'0');
+    const mm = String(now.getUTCMinutes()).padStart(2,'0');
+    const ss = String(now.getUTCSeconds()).padStart(2,'0');
+    const el = document.getElementById('clock');
+    if (el) el.textContent = hh + ':' + mm + ':' + ss + ' UTC';
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // ── Theme toggle ─────────────────────────────────────────────────
+  const btn   = document.getElementById('themeBtn');
+  const label = document.getElementById('themeLabel');
+  let dark = true;
+
+  btn.addEventListener('click', () => {
+    dark = !dark;
+    document.body.classList.toggle('dark', dark);
+    document.body.classList.toggle('light', !dark);
+    label.textContent = dark ? 'Light mode' : 'Dark mode';
+  });
+
+  // ── Nav tab activation ───────────────────────────────────────────
+  document.querySelectorAll('.nav-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.nav-tab').forEach(t => {
+        t.classList.remove('active');
+        t.removeAttribute('aria-current');
+      });
+      tab.classList.add('active');
+      tab.setAttribute('aria-current', 'page');
+    });
+  });
+</script>
+</body>
+</html>

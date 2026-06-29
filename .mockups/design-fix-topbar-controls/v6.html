@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v6 — Minimal Topbar + Floating HUD</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Inter, -apple-system, sans-serif; font-size: 13px; }
+
+  /* ── THEME VARIABLES ── */
+  body.dark {
+    --bg: #1a1b1e;
+    --surface: #24252a;
+    --border: rgba(255,255,255,.10);
+    --teal: #6694ff;
+    --ink: #e8e8ea;
+    --muted: #75767b;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --green: #4ade80;
+    --hud-bg: rgba(20,21,25,0.82);
+    --hud-border: rgba(255,255,255,0.12);
+    --hud-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.4);
+    --tab-active-bg: rgba(102,148,255,0.12);
+    --tab-hover-bg: rgba(255,255,255,0.05);
+    --topbar-bg: #24252a;
+    --topbar-border: rgba(255,255,255,0.08);
+    --page-text: #e8e8ea;
+    --card-bg: #24252a;
+    --card-border: rgba(255,255,255,0.08);
+    --select-bg: rgba(255,255,255,0.06);
+    --select-border: rgba(255,255,255,0.12);
+    --hud-expand-bg: rgba(30,32,38,0.96);
+  }
+  body.light {
+    --bg: #f9fafa;
+    --surface: #ffffff;
+    --border: #d4d4d8;
+    --teal: #003ecc;
+    --ink: #232429;
+    --muted: #6b6c71;
+    --red: #c81f0c;
+    --amber: #d97706;
+    --green: #16a34a;
+    --hud-bg: rgba(255,255,255,0.88);
+    --hud-border: rgba(0,0,0,0.10);
+    --hud-shadow: 0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08);
+    --tab-active-bg: rgba(0,62,204,0.08);
+    --tab-hover-bg: rgba(0,0,0,0.04);
+    --topbar-bg: #ffffff;
+    --topbar-border: #d4d4d8;
+    --page-text: #232429;
+    --card-bg: #ffffff;
+    --card-border: #d4d4d8;
+    --select-bg: rgba(0,0,0,0.03);
+    --select-border: #d4d4d8;
+    --hud-expand-bg: rgba(250,250,250,0.98);
+  }
+
+  /* ── LAYOUT ── */
+  .mockup-section {
+    position: relative;
+    min-height: 420px;
+    background: var(--bg);
+    color: var(--ink);
+    overflow: hidden;
+    border-bottom: 3px solid var(--border);
+  }
+  .mockup-section + .mockup-section { border-top: none; }
+
+  /* ── SECTION LABEL ── */
+  .section-label {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    position: sticky;
+    top: 0;
+    height: 48px;
+    background: var(--topbar-bg);
+    border-bottom: 1px solid var(--topbar-border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 0;
+    z-index: 100;
+    justify-content: space-between;
+  }
+
+  /* LEFT: hamburger + logo */
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .hamburger {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .hamburger:hover { background: var(--tab-hover-bg); }
+  .hamburger span {
+    display: block;
+    height: 1.5px;
+    width: 16px;
+    background: var(--muted);
+    border-radius: 1px;
+  }
+  .logo-mark {
+    width: 22px;
+    height: 22px;
+    background: var(--teal);
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .logo-mark svg { width: 14px; height: 14px; }
+  .brand-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+  .brand-name span {
+    color: var(--muted);
+    font-weight: 400;
+    margin-left: 2px;
+  }
+
+  /* CENTER: nav tabs */
+  .topbar-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .nav-tab {
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 2px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+  }
+  .nav-tab:hover { background: var(--tab-hover-bg); color: var(--ink); }
+  .nav-tab.active {
+    background: var(--tab-active-bg);
+    color: var(--teal);
+  }
+  .nav-badge {
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    background: var(--red);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    line-height: 1;
+  }
+
+  /* RIGHT: action buttons */
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 15px;
+    transition: background 0.1s, color 0.1s;
+    border: none;
+    background: none;
+  }
+  .icon-btn:hover { background: var(--tab-hover-bg); color: var(--ink); }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  /* ── FLOATING HUD ── */
+  .hud {
+    position: absolute;
+    top: 60px;
+    right: 20px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  /* COLLAPSED PILL */
+  .hud-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px 0 8px;
+    height: 32px;
+    background: var(--hud-bg);
+    border: 1px solid var(--hud-border);
+    border-radius: 24px;
+    box-shadow: var(--hud-shadow);
+    cursor: pointer;
+    user-select: none;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .hud-pill:hover { border-color: var(--teal); }
+
+  .hud-grip {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5px;
+    padding: 2px;
+    opacity: 0.4;
+    cursor: grab;
+  }
+  .hud-grip:active { cursor: grabbing; }
+  .hud-grip span {
+    display: block;
+    width: 10px;
+    height: 1.5px;
+    background: var(--ink);
+    border-radius: 1px;
+  }
+
+  .hud-alerts {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .alert-dot {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+  }
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot.red { background: var(--red); box-shadow: 0 0 4px var(--red); }
+  .dot.amber { background: var(--amber); }
+  .dot.green { background: var(--green); }
+  .alert-dot.red-val { color: var(--red); }
+  .alert-dot.amber-val { color: var(--amber); }
+  .alert-dot.green-val { color: var(--green); }
+
+  .hud-sep {
+    width: 1px;
+    height: 16px;
+    background: var(--hud-border);
+  }
+
+  .hud-time {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .hud-expand-icon {
+    font-size: 10px;
+    color: var(--muted);
+    margin-left: 2px;
+  }
+
+  /* EXPANDED PANEL */
+  .hud-panel {
+    background: var(--hud-expand-bg);
+    border: 1px solid var(--hud-border);
+    border-radius: 16px;
+    box-shadow: var(--hud-shadow);
+    padding: 14px 14px 12px;
+    width: 256px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .hud-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .hud-panel-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .hud-close {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--select-bg);
+    border: 1px solid var(--hud-border);
+    color: var(--muted);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .hud-close:hover { color: var(--ink); }
+
+  .hud-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .hud-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hud-filter-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    width: 44px;
+    flex-shrink: 0;
+  }
+  .hud-select {
+    flex: 1;
+    height: 26px;
+    background: var(--select-bg);
+    border: 1px solid var(--select-border);
+    border-radius: 2px;
+    color: var(--ink);
+    font-size: 11px;
+    font-family: Inter, sans-serif;
+    padding: 0 6px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%2375767b' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 22px;
+  }
+  .hud-select:focus { outline: none; border-color: var(--teal); }
+
+  .hud-divider {
+    height: 1px;
+    background: var(--hud-border);
+    margin: 10px 0;
+  }
+
+  .hud-status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .hud-status-group {
+    display: flex;
+    gap: 10px;
+  }
+  .hud-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+  }
+  .hud-stat.crit { color: var(--red); }
+  .hud-stat.warn { color: var(--amber); }
+  .hud-stat.ok { color: var(--green); }
+
+  .hud-last-refresh {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+  }
+
+  /* ── PAGE CONTENT (dummy) ── */
+  .page-content {
+    padding: 80px 24px 24px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 2px;
+    padding: 16px;
+    height: 90px;
+  }
+  .card-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .card-value {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+  .card-value.red { color: var(--red); }
+  .card-value.green { color: var(--green); }
+  .card-value.amber { color: var(--amber); }
+
+  /* ── THEME TOGGLE ── */
+  .theme-toggle {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1a1b1e;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 2px;
+    padding: 8px 14px;
+    color: #e8e8ea;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: Inter, sans-serif;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    letter-spacing: 0.04em;
+  }
+  .theme-toggle:hover { border-color: #6694ff; color: #6694ff; }
+
+  /* ── ANNOTATION LABELS ── */
+  .annotation {
+    position: absolute;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 500;
+  }
+  .annotation.teal {
+    background: rgba(102,148,255,0.15);
+    color: #6694ff;
+    border: 1px solid rgba(102,148,255,0.25);
+  }
+  .annotation.amber {
+    background: rgba(251,191,36,0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(251,191,36,0.25);
+  }
+  .ann-line {
+    position: absolute;
+    pointer-events: none;
+    z-index: 499;
+  }
+
+  /* ── COLLAPSED DEMO ── */
+  .collapsed-demo {
+    position: absolute;
+    top: 60px;
+    right: 20px;
+    z-index: 201;
+    opacity: 0.5;
+  }
+  .collapsed-label {
+    font-size: 9px;
+    color: var(--muted);
+    text-align: right;
+    margin-bottom: 3px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body class="dark">
+
+<!-- ══════════════════════════════════════════
+     DARK SECTION
+══════════════════════════════════════════ -->
+<div class="mockup-section dark" id="dark-section">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <!-- LEFT -->
+    <div class="topbar-left">
+      <div class="hamburger" title="Menu">
+        <span></span><span></span><span></span>
+      </div>
+      <div class="logo-mark">
+        <svg viewBox="0 0 14 14" fill="none">
+          <rect x="1" y="1" width="5" height="5" rx="1" fill="#fff" opacity="0.9"/>
+          <rect x="8" y="1" width="5" height="5" rx="1" fill="#fff" opacity="0.6"/>
+          <rect x="1" y="8" width="5" height="5" rx="1" fill="#fff" opacity="0.6"/>
+          <rect x="8" y="8" width="5" height="5" rx="1" fill="#fff" opacity="0.3"/>
+        </svg>
+      </div>
+      <span class="brand-name">Infoblox <span>NOC</span></span>
+    </div>
+
+    <!-- CENTER NAV -->
+    <nav class="topbar-nav">
+      <div class="nav-tab active">Overview</div>
+      <div class="nav-tab">
+        Alerts
+        <span class="nav-badge">3</span>
+      </div>
+      <div class="nav-tab">DHCP</div>
+      <div class="nav-tab">DNS</div>
+      <div class="nav-tab">Threats</div>
+    </nav>
+
+    <!-- RIGHT -->
+    <div class="topbar-right">
+      <button class="icon-btn" title="Refresh">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M13.5 8A5.5 5.5 0 1 1 10 3.1"/>
+          <path d="M10 1v3h3"/>
+        </svg>
+      </button>
+      <button class="icon-btn" title="Add widget">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="8" cy="8" r="6.5"/>
+          <path d="M8 5v6M5 8h6"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ANNOTATION: topbar elements -->
+  <div class="annotation teal" style="top:54px;left:14px;">3 elements only</div>
+
+  <!-- PAGE CONTENT -->
+  <div class="page-content">
+    <div class="card">
+      <div class="card-label">Critical Alerts</div>
+      <div class="card-value red">3</div>
+    </div>
+    <div class="card">
+      <div class="card-label">DHCP Leases</div>
+      <div class="card-value">48,291</div>
+    </div>
+    <div class="card">
+      <div class="card-label">DNS Queries / s</div>
+      <div class="card-value">12.4k</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Threat Blocks</div>
+      <div class="card-value amber">19</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Uptime</div>
+      <div class="card-value green">99.98%</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Grid Members</div>
+      <div class="card-value">24</div>
+    </div>
+  </div>
+
+  <!-- FLOATING HUD — EXPANDED (dark) -->
+  <div class="hud" id="hud-dark">
+
+    <!-- PILL (collapsed preview, shown dimmed above) -->
+    <div style="opacity:0.45; pointer-events:none;">
+      <div style="font-size:9px;color:#75767b;text-align:right;margin-bottom:3px;letter-spacing:0.08em;text-transform:uppercase;">Collapsed</div>
+      <div class="hud-pill">
+        <div class="hud-grip">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="hud-alerts">
+          <div class="alert-dot red-val"><div class="dot red"></div>3</div>
+          <div class="alert-dot amber-val"><div class="dot amber"></div>19</div>
+          <div class="alert-dot green-val"><div class="dot green"></div>OK</div>
+        </div>
+        <div class="hud-sep"></div>
+        <div class="hud-time">14:32:07</div>
+        <div class="hud-expand-icon">▾</div>
+      </div>
+    </div>
+
+    <!-- EXPANDED PANEL -->
+    <div class="hud-panel">
+      <div class="hud-panel-header">
+        <span class="hud-panel-title">NOC Controls</span>
+        <div class="hud-close">✕</div>
+      </div>
+
+      <div class="hud-filter-group">
+        <div class="hud-filter-row">
+          <span class="hud-filter-label">Site</span>
+          <select class="hud-select">
+            <option>All Sites</option>
+            <option>US-East-1</option>
+            <option>US-West-2</option>
+            <option>EU-West</option>
+          </select>
+        </div>
+        <div class="hud-filter-row">
+          <span class="hud-filter-label">Range</span>
+          <select class="hud-select">
+            <option>Last 1 hour</option>
+            <option>Last 6 hours</option>
+            <option selected>Last 24 hours</option>
+            <option>Last 7 days</option>
+          </select>
+        </div>
+        <div class="hud-filter-row">
+          <span class="hud-filter-label">Interval</span>
+          <select class="hud-select">
+            <option>1 min</option>
+            <option selected>5 min</option>
+            <option>15 min</option>
+            <option>1 hour</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="hud-divider"></div>
+
+      <div class="hud-status-row">
+        <div class="hud-status-group">
+          <div class="hud-stat crit">
+            <div class="dot red"></div>3 CRIT
+          </div>
+          <div class="hud-stat warn">
+            <div class="dot amber"></div>19 WARN
+          </div>
+          <div class="hud-stat ok">
+            <div class="dot green"></div>OK
+          </div>
+        </div>
+        <div class="hud-last-refresh">↻ 14:32:07</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANNOTATION: HUD -->
+  <div class="annotation amber" style="top:60px;right:296px;">Floating HUD ▶</div>
+
+</div><!-- /dark-section -->
+
+
+<!-- ══════════════════════════════════════════
+     LIGHT SECTION
+══════════════════════════════════════════ -->
+<div class="mockup-section light" id="light-section" style="
+  --bg:#f9fafa;--surface:#ffffff;--border:#d4d4d8;--teal:#003ecc;--ink:#232429;
+  --muted:#6b6c71;--red:#c81f0c;--amber:#d97706;--green:#16a34a;
+  --hud-bg:rgba(255,255,255,0.88);--hud-border:rgba(0,0,0,0.10);
+  --hud-shadow:0 8px 32px rgba(0,0,0,0.14),0 2px 8px rgba(0,0,0,0.08);
+  --tab-active-bg:rgba(0,62,204,0.08);--tab-hover-bg:rgba(0,0,0,0.04);
+  --topbar-bg:#ffffff;--topbar-border:#d4d4d8;--page-text:#232429;
+  --card-bg:#ffffff;--card-border:#d4d4d8;
+  --select-bg:rgba(0,0,0,0.03);--select-border:#d4d4d8;
+  --hud-expand-bg:rgba(250,250,250,0.98);
+  background:#f9fafa; color:#232429;
+">
+
+  <!-- TOPBAR -->
+  <div class="topbar" style="background:#ffffff;border-bottom:1px solid #d4d4d8;">
+    <div class="topbar-left">
+      <div class="hamburger" title="Menu">
+        <span style="background:#6b6c71;"></span>
+        <span style="background:#6b6c71;"></span>
+        <span style="background:#6b6c71;"></span>
+      </div>
+      <div class="logo-mark" style="background:#003ecc;">
+        <svg viewBox="0 0 14 14" fill="none">
+          <rect x="1" y="1" width="5" height="5" rx="1" fill="#fff" opacity="0.9"/>
+          <rect x="8" y="1" width="5" height="5" rx="1" fill="#fff" opacity="0.6"/>
+          <rect x="1" y="8" width="5" height="5" rx="1" fill="#fff" opacity="0.6"/>
+          <rect x="8" y="8" width="5" height="5" rx="1" fill="#fff" opacity="0.3"/>
+        </svg>
+      </div>
+      <span class="brand-name" style="color:#232429;">Infoblox <span style="color:#6b6c71;">NOC</span></span>
+    </div>
+
+    <nav class="topbar-nav">
+      <div class="nav-tab active" style="background:rgba(0,62,204,0.08);color:#003ecc;">Overview</div>
+      <div class="nav-tab" style="color:#6b6c71;">
+        Alerts
+        <span class="nav-badge" style="background:#c81f0c;">3</span>
+      </div>
+      <div class="nav-tab" style="color:#6b6c71;">DHCP</div>
+      <div class="nav-tab" style="color:#6b6c71;">DNS</div>
+      <div class="nav-tab" style="color:#6b6c71;">Threats</div>
+    </nav>
+
+    <div class="topbar-right">
+      <button class="icon-btn" style="color:#6b6c71;" title="Refresh">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M13.5 8A5.5 5.5 0 1 1 10 3.1"/>
+          <path d="M10 1v3h3"/>
+        </svg>
+      </button>
+      <button class="icon-btn" style="color:#6b6c71;" title="Add widget">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="8" cy="8" r="6.5"/>
+          <path d="M8 5v6M5 8h6"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="annotation" style="top:54px;left:14px;background:rgba(0,62,204,0.08);color:#003ecc;border:1px solid rgba(0,62,204,0.2);">3 elements only</div>
+
+  <!-- PAGE CONTENT -->
+  <div class="page-content" style="background:#f9fafa;">
+    <div class="card" style="background:#fff;border:1px solid #d4d4d8;">
+      <div class="card-label" style="color:#6b6c71;">Critical Alerts</div>
+      <div class="card-value" style="color:#c81f0c;">3</div>
+    </div>
+    <div class="card" style="background:#fff;border:1px solid #d4d4d8;">
+      <div class="card-label" style="color:#6b6c71;">DHCP Leases</div>
+      <div class="card-value" style="color:#232429;">48,291</div>
+    </div>
+    <div class="card" style="background:#fff;border:1px solid #d4d4d8;">
+      <div class="card-label" style="color:#6b6c71;">DNS Queries / s</div>
+      <div class="card-value" style="color:#232429;">12.4k</div>
+    </div>
+    <div class="card" style="background:#fff;border:1px solid #d4d4d8;">
+      <div class="card-label" style="color:#6b6c71;">Threat Blocks</div>
+      <div class="card-value" style="color:#d97706;">19</div>
+    </div>
+    <div class="card" style="background:#fff;border:1px solid #d4d4d8;">
+      <div class="card-label" style="color:#6b6c71;">Uptime</div>
+      <div class="card-value" style="color:#16a34a;">99.98%</div>
+    </div>
+    <div class="card" style="background:#fff;border:1px solid #d4d4d8;">
+      <div class="card-label" style="color:#6b6c71;">Grid Members</div>
+      <div class="card-value" style="color:#232429;">24</div>
+    </div>
+  </div>
+
+  <!-- FLOATING HUD — EXPANDED (light) -->
+  <div class="hud" id="hud-light">
+
+    <!-- COLLAPSED PILL -->
+    <div style="opacity:0.5;pointer-events:none;">
+      <div style="font-size:9px;color:#6b6c71;text-align:right;margin-bottom:3px;letter-spacing:0.08em;text-transform:uppercase;">Collapsed</div>
+      <div class="hud-pill" style="background:rgba(255,255,255,0.88);border:1px solid rgba(0,0,0,0.10);box-shadow:0 4px 16px rgba(0,0,0,0.10);">
+        <div class="hud-grip">
+          <span style="background:#232429;"></span>
+          <span style="background:#232429;"></span>
+          <span style="background:#232429;"></span>
+        </div>
+        <div class="hud-alerts">
+          <div class="alert-dot" style="color:#c81f0c;"><div class="dot" style="background:#c81f0c;"></div>3</div>
+          <div class="alert-dot" style="color:#d97706;"><div class="dot" style="background:#d97706;"></div>19</div>
+          <div class="alert-dot" style="color:#16a34a;"><div class="dot" style="background:#16a34a;"></div>OK</div>
+        </div>
+        <div class="hud-sep" style="background:rgba(0,0,0,0.10);"></div>
+        <div class="hud-time" style="color:#6b6c71;">14:32:07</div>
+        <div class="hud-expand-icon" style="color:#6b6c71;">▾</div>
+      </div>
+    </div>
+
+    <!-- EXPANDED PANEL -->
+    <div class="hud-panel" style="background:rgba(250,250,250,0.98);border:1px solid rgba(0,0,0,0.10);box-shadow:0 8px 32px rgba(0,0,0,0.14),0 2px 8px rgba(0,0,0,0.08);">
+      <div class="hud-panel-header">
+        <span class="hud-panel-title" style="color:#6b6c71;">NOC Controls</span>
+        <div class="hud-close" style="background:rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.10);color:#6b6c71;">✕</div>
+      </div>
+
+      <div class="hud-filter-group">
+        <div class="hud-filter-row">
+          <span class="hud-filter-label" style="color:#6b6c71;">Site</span>
+          <select class="hud-select" style="background:rgba(0,0,0,0.03);border:1px solid #d4d4d8;color:#232429;">
+            <option>All Sites</option>
+            <option>US-East-1</option>
+            <option>US-West-2</option>
+          </select>
+        </div>
+        <div class="hud-filter-row">
+          <span class="hud-filter-label" style="color:#6b6c71;">Range</span>
+          <select class="hud-select" style="background:rgba(0,0,0,0.03);border:1px solid #d4d4d8;color:#232429;">
+            <option>Last 1 hour</option>
+            <option selected>Last 24 hours</option>
+            <option>Last 7 days</option>
+          </select>
+        </div>
+        <div class="hud-filter-row">
+          <span class="hud-filter-label" style="color:#6b6c71;">Interval</span>
+          <select class="hud-select" style="background:rgba(0,0,0,0.03);border:1px solid #d4d4d8;color:#232429;">
+            <option>1 min</option>
+            <option selected>5 min</option>
+            <option>15 min</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="hud-divider" style="background:#d4d4d8;"></div>
+
+      <div class="hud-status-row">
+        <div class="hud-status-group">
+          <div class="hud-stat" style="color:#c81f0c;">
+            <div class="dot" style="background:#c81f0c;"></div>3 CRIT
+          </div>
+          <div class="hud-stat" style="color:#d97706;">
+            <div class="dot" style="background:#d97706;"></div>19 WARN
+          </div>
+          <div class="hud-stat" style="color:#16a34a;">
+            <div class="dot" style="background:#16a34a;"></div>OK
+          </div>
+        </div>
+        <div class="hud-last-refresh" style="color:#6b6c71;">↻ 14:32:07</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="annotation" style="top:60px;right:296px;background:rgba(0,62,204,0.08);color:#003ecc;border:1px solid rgba(0,62,204,0.2);">Floating HUD ▶</div>
+
+</div><!-- /light-section -->
+
+
+<!-- THEME TOGGLE -->
+<button class="theme-toggle" onclick="toggleTheme()" id="toggle-btn">
+  ☀ Light mode
+</button>
+
+<!-- LIVE CLOCK -->
+<script>
+  function updateClocks() {
+    var t = new Date().toLocaleTimeString('en-US', {hour12:false});
+    document.querySelectorAll('.hud-time, .hud-last-refresh').forEach(function(el) {
+      if (el.classList.contains('hud-last-refresh')) {
+        el.textContent = '↻ ' + t;
+      } else {
+        el.textContent = t;
+      }
+    });
+  }
+  setInterval(updateClocks, 1000);
+  updateClocks();
+
+  var isDark = true;
+  function toggleTheme() {
+    isDark = !isDark;
+    document.body.className = isDark ? 'dark' : 'light';
+    document.getElementById('toggle-btn').textContent = isDark ? '☀ Light mode' : '☾ Dark mode';
+    // swap toggle button colors
+    var btn = document.getElementById('toggle-btn');
+    if (isDark) {
+      btn.style.background = '#1a1b1e';
+      btn.style.borderColor = 'rgba(255,255,255,0.15)';
+      btn.style.color = '#e8e8ea';
+    } else {
+      btn.style.background = '#ffffff';
+      btn.style.borderColor = '#d4d4d8';
+      btn.style.color = '#232429';
+    }
+  }
+
+  // Simple HUD drag demo (dark section pill only)
+  // Keeping it lightweight — just visual affordance
+</script>
+
+</body>
+</html>

@@ -1,0 +1,322 @@
+<!-- VARIANT: v9 — Worst pool focus + compact list -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DHCP Pool Utilization — v9</title>
+<style>
+  /* LOCKED TOKENS — DO NOT MODIFY */
+  :root[data-theme="dark"] {
+    --bg:        #1a1b1e;
+    --surface:   #24252a;
+    --surface-2: #2e2f35;
+    --border:    rgba(255,255,255,0.10);
+    --accent:    #6694ff;
+    --red:       #f87171;
+    --amber:     #fbbf24;
+    --green:     #4ade80;
+    --muted:     #75767b;
+    --ink:       #e8e8ea;
+    --font-ui:   "Inter", sans-serif;
+    --font-data: "Geist Mono", monospace;
+  }
+  :root[data-theme="light"] {
+    --bg:        #f9fafa;
+    --surface:   #fff;
+    --surface-2: #f3f4f9;
+    --border:    #d4d4d8;
+    --accent:    #003ecc;
+    --red:       #c81f0c;
+    --amber:     #977405;
+    --green:     #13854f;
+    --muted:     #6b6c71;
+    --ink:       #232429;
+    --font-ui:   "Inter", sans-serif;
+    --font-data: "Geist Mono", monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    font-family: var(--font-ui);
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 24px;
+    gap: 10px;
+    transition: background 0.15s;
+  }
+
+  /* Toggle button */
+  .toggle-btn {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: color 0.1s, background 0.1s;
+    align-self: flex-end;
+  }
+  .toggle-btn:hover { color: var(--ink); }
+
+  /* Section header */
+  .section-header {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 14px;
+    width: 480px;
+  }
+
+  /* Two-column layout */
+  .card-body {
+    display: flex;
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  /* LEFT — 40% worst pool */
+  .worst-pool {
+    flex: 0 0 40%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-right: 1px solid var(--border);
+    padding-right: 14px;
+  }
+
+  .worst-label {
+    font-family: var(--font-ui);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .worst-cidr {
+    font-family: var(--font-data);
+    font-size: 12px;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .worst-pct-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .worst-pct {
+    font-family: var(--font-data);
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--red);
+  }
+
+  .badge {
+    font-family: var(--font-ui);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 5px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--red) 15%, transparent);
+    color: var(--red);
+    border: 1px solid color-mix(in srgb, var(--red) 30%, transparent);
+    align-self: flex-start;
+    margin-top: 6px;
+  }
+
+  /* Mini area chart */
+  .mini-chart {
+    width: 100%;
+    height: 36px;
+    margin-top: 2px;
+  }
+
+  .mini-chart svg {
+    width: 100%;
+    height: 36px;
+    overflow: visible;
+  }
+
+  /* RIGHT — 60% compact pool list */
+  .pool-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    justify-content: center;
+  }
+
+  .pool-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pool-row:last-child { border-bottom: none; }
+
+  .pool-name {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--muted);
+    width: 90px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 4px;
+    background: var(--surface-2);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 1px;
+    transition: width 0.3s;
+  }
+
+  .pool-pct {
+    font-family: var(--font-data);
+    font-size: 10px;
+    font-weight: 600;
+    width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* Severity colors */
+  .sev-red   { color: var(--red);   }
+  .sev-amber { color: var(--amber); }
+  .sev-green { color: var(--green); }
+  .fill-red   { background: var(--red);   }
+  .fill-amber { background: var(--amber); }
+  .fill-green { background: var(--green); }
+</style>
+<script>if(new URLSearchParams(location.search).get("theme")==="light")document.documentElement.setAttribute("data-theme","light");</script>
+</head>
+<body>
+
+<button class="toggle-btn" onclick="toggleTheme()">Toggle light / dark</button>
+<div class="section-header">· DHCP</div>
+
+<div class="card">
+  <div class="card-body">
+
+    <!-- LEFT: Worst pool -->
+    <div class="worst-pool">
+      <div class="worst-label">Worst pool</div>
+      <div class="worst-cidr">10.20.30.0/24</div>
+      <div class="worst-pct-row">
+        <div class="worst-pct sev-red">94%</div>
+        <div class="badge">Critical</div>
+      </div>
+      <!-- Mini 80×36 area chart — last 6h trend -->
+      <div class="mini-chart">
+        <svg viewBox="0 0 80 36" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--red)" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="var(--red)" stop-opacity="0.03"/>
+            </linearGradient>
+          </defs>
+          <!-- Data: hours -6 to 0, values 78,81,84,87,91,94 (mapped 0–100 → y 34–2) -->
+          <!-- y = 34 - (val/100)*32 -->
+          <path
+            d="M0,34 L0,9.04 L16,8.08 L32,7.12 L48,6.16 L64,4.88 L80,3.92 L80,34 Z"
+            fill="url(#areaGrad)"
+          />
+          <polyline
+            points="0,9.04 16,8.08 32,7.12 48,6.16 64,4.88 80,3.92"
+            fill="none"
+            stroke="var(--red)"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+          />
+          <!-- Endpoint dot -->
+          <circle cx="80" cy="3.92" r="2" fill="var(--red)"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- RIGHT: Compact pool list -->
+    <div class="pool-list">
+
+      <!-- Pool rows: name | bar | % -->
+      <div class="pool-row">
+        <div class="pool-name sev-red">10.20.30.0/24</div>
+        <div class="bar-track"><div class="bar-fill fill-red"   style="width:94%"></div></div>
+        <div class="pool-pct sev-red">94%</div>
+      </div>
+
+      <div class="pool-row">
+        <div class="pool-name sev-amber">192.168.1.0/24</div>
+        <div class="bar-track"><div class="bar-fill fill-amber" style="width:81%"></div></div>
+        <div class="pool-pct sev-amber">81%</div>
+      </div>
+
+      <div class="pool-row">
+        <div class="pool-name sev-amber">172.16.0.0/22</div>
+        <div class="bar-track"><div class="bar-fill fill-amber" style="width:76%"></div></div>
+        <div class="pool-pct sev-amber">76%</div>
+      </div>
+
+      <div class="pool-row">
+        <div class="pool-name sev-green">10.0.4.0/24</div>
+        <div class="bar-track"><div class="bar-fill fill-green" style="width:48%"></div></div>
+        <div class="pool-pct sev-green">48%</div>
+      </div>
+
+      <div class="pool-row">
+        <div class="pool-name sev-green">10.10.0.0/16</div>
+        <div class="bar-track"><div class="bar-fill fill-green" style="width:22%"></div></div>
+        <div class="pool-pct sev-green">22%</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.setAttribute('data-theme',
+      html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
+    );
+  }
+</script>
+
+</body>
+</html>

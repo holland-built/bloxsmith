@@ -1,0 +1,275 @@
+<!-- VARIANT: v2 — Horizontal fill bars with mini spark -->
+<!DOCTYPE html>
+<html data-theme="dark" lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DHCP Pool Utilization — v2 Horizontal Bars</title>
+<style>
+  /* ── LOCKED TOKENS ─────────────────────────────────────────── */
+  :root {
+    /* dark defaults */
+    --bg:        #1a1b1e;
+    --surface:   #24252a;
+    --surface-2: #2e2f35;
+    --border:    rgba(255,255,255,0.10);
+    --accent:    #6694ff;
+    --red:       #f87171;
+    --amber:     #fbbf24;
+    --green:     #4ade80;
+    --muted:     #75767b;
+    --ink:       #e8e8ea;
+    --font-ui:   "Inter", system-ui, sans-serif;
+    --font-data: "Geist Mono", "Fira Mono", monospace;
+  }
+  [data-theme="light"] {
+    --bg:        #f9fafa;
+    --surface:   #fff;
+    --surface-2: #f3f4f9;
+    --border:    #d4d4d8;
+    --accent:    #003ecc;
+    --red:       #c81f0c;
+    --amber:     #977405;
+    --green:     #13854f;
+    --muted:     #6b6c71;
+    --ink:       #232429;
+  }
+
+  /* ── BASE ──────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 32px 24px;
+    gap: 20px;
+    min-height: 100vh;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  /* ── THEME TOGGLE ──────────────────────────────────────────── */
+  .toggle {
+    align-self: flex-end;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--ink);
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 5px 12px;
+    text-transform: uppercase;
+    transition: background 0.15s;
+  }
+  .toggle:hover { background: var(--surface); }
+
+  /* ── SECTION LABEL ─────────────────────────────────────────── */
+  .section-label {
+    align-self: flex-start;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ── WIDGET CARD ───────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 14px;
+    width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  /* ── POOL ROW ──────────────────────────────────────────────── */
+  .pool-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 42px 52px;
+    align-items: center;
+    gap: 10px;
+    height: 22px;
+  }
+
+  /* Pool name */
+  .pool-name {
+    font-family: var(--font-data);
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Progress bar track */
+  .bar-track {
+    background: var(--surface-2);
+    border-radius: 2px;
+    height: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Progress bar fill */
+  .bar-fill {
+    border-radius: 2px;
+    height: 100%;
+    transition: width 0.4s ease;
+  }
+  .bar-fill.critical { background: var(--red); }
+  .bar-fill.warning  { background: var(--amber); }
+  .bar-fill.ok       { background: var(--green); }
+
+  /* Utilization % */
+  .util-pct {
+    font-family: var(--font-data);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .util-pct.critical { color: var(--red); }
+  .util-pct.warning  { color: var(--amber); }
+  .util-pct.ok       { color: var(--green); }
+
+  /* Sparkline thumbnail */
+  .spark {
+    width: 48px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .spark path {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .spark path.critical { stroke: var(--red); }
+  .spark path.warning  { stroke: var(--amber); }
+  .spark path.ok       { stroke: var(--green); }
+
+  /* Divider between rows */
+  .pool-row + .pool-row {
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+    margin-top: 0;
+  }
+
+  /* Card header */
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2px;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .card-meta {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--muted);
+  }
+</style>
+<script>if(new URLSearchParams(location.search).get("theme")==="light")document.documentElement.setAttribute("data-theme","light");</script>
+</head>
+<body>
+
+  <button class="toggle" onclick="toggleTheme()">Toggle Light / Dark</button>
+
+  <div class="section-label">· DHCP</div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Pool Utilization</span>
+      <span class="card-meta">5 pools · 15 min</span>
+    </div>
+
+    <!-- Pool: 10.10.1.0/24 — 92% critical -->
+    <div class="pool-row">
+      <span class="pool-name">10.10.1.0/24</span>
+      <div class="bar-track">
+        <div class="bar-fill critical" style="width:92%"></div>
+      </div>
+      <span class="util-pct critical">92%</span>
+      <svg class="spark" viewBox="0 0 48 20" preserveAspectRatio="none">
+        <path class="critical" d="M0,16 L8,14 L16,13 L24,10 L32,7 L40,4 L48,2"/>
+      </svg>
+    </div>
+
+    <!-- Pool: 172.16.0.0/22 — 78% warning -->
+    <div class="pool-row">
+      <span class="pool-name">172.16.0.0/22</span>
+      <div class="bar-track">
+        <div class="bar-fill warning" style="width:78%"></div>
+      </div>
+      <span class="util-pct warning">78%</span>
+      <svg class="spark" viewBox="0 0 48 20" preserveAspectRatio="none">
+        <path class="warning" d="M0,14 L8,12 L16,15 L24,11 L32,13 L40,10 L48,9"/>
+      </svg>
+    </div>
+
+    <!-- Pool: 192.168.5.0/24 — 61% warning -->
+    <div class="pool-row">
+      <span class="pool-name">192.168.5.0/24</span>
+      <div class="bar-track">
+        <div class="bar-fill warning" style="width:61%"></div>
+      </div>
+      <span class="util-pct warning">61%</span>
+      <svg class="spark" viewBox="0 0 48 20" preserveAspectRatio="none">
+        <path class="warning" d="M0,10 L8,11 L16,9 L24,12 L32,10 L40,11 L48,10"/>
+      </svg>
+    </div>
+
+    <!-- Pool: 10.20.4.0/23 — 34% ok -->
+    <div class="pool-row">
+      <span class="pool-name">10.20.4.0/23</span>
+      <div class="bar-track">
+        <div class="bar-fill ok" style="width:34%"></div>
+      </div>
+      <span class="util-pct ok">34%</span>
+      <svg class="spark" viewBox="0 0 48 20" preserveAspectRatio="none">
+        <path class="ok" d="M0,8 L8,9 L16,10 L24,9 L32,11 L40,12 L48,13"/>
+      </svg>
+    </div>
+
+    <!-- Pool: 10.50.0.0/16 — 18% ok -->
+    <div class="pool-row">
+      <span class="pool-name">10.50.0.0/16</span>
+      <div class="bar-track">
+        <div class="bar-fill ok" style="width:18%"></div>
+      </div>
+      <span class="util-pct ok">18%</span>
+      <svg class="spark" viewBox="0 0 48 20" preserveAspectRatio="none">
+        <path class="ok" d="M0,14 L8,13 L16,14 L24,12 L32,13 L40,11 L48,12"/>
+      </svg>
+    </div>
+  </div>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.setAttribute('data-theme',
+      html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
+    );
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC — Network Pulse v6</title>
+<style>
+/* ── THEME TOKENS ─────────────────────────────────────────── */
+:root[data-theme="dark"] {
+  --bg:         #080a09;
+  --surface:    #0f1310;
+  --ring-bg:    #1a1e1b;
+  --accent:     #e86340;
+  --text:       #f0f0ec;
+  --muted:      #5a7058;
+  --critical:   #e83838;
+  --warning:    #e89820;
+  --ok:         #28c858;
+  --grid-line:  rgba(90,112,88,0.14);
+  --scanline:   rgba(0,255,50,0.025);
+  --tb-border:  rgba(232,99,64,0.28);
+  --center-bg:  #0f1310;
+  --score-glow: rgba(232,56,56,0.22);
+  --tick-major: #3a4a38;
+  --tick-minor: #20281f;
+  --label-ring: #3a5038;
+}
+:root[data-theme="light"] {
+  --bg:         #f5f2ed;
+  --surface:    #ede9e3;
+  --ring-bg:    #d8d3ca;
+  --accent:     #c04a1f;
+  --text:       #1a1814;
+  --muted:      #7a7568;
+  --critical:   #d42020;
+  --warning:    #b06000;
+  --ok:         #1a8c3a;
+  --grid-line:  rgba(122,117,104,0.18);
+  --scanline:   transparent;
+  --tb-border:  rgba(192,74,31,0.25);
+  --center-bg:  #ede9e3;
+  --score-glow: rgba(212,32,32,0.10);
+  --tick-major: #a09888;
+  --tick-minor: #c8c0b4;
+  --label-ring: #9a9080;
+}
+
+/* ── RESET ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── SCANLINE OVERLAY ──────────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--scanline) 0px, var(--scanline) 1px,
+    transparent 1px, transparent 4px
+  );
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* ── TOPBAR ────────────────────────────────────────────────── */
+#topbar {
+  height: 48px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--tb-border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.tb-logo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent);
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.tb-logo svg { width: 26px; height: 26px; flex-shrink: 0; }
+
+.tb-title {
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-size: 12px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.tb-divider {
+  width: 1px; height: 22px;
+  background: var(--tb-border);
+  flex-shrink: 0;
+}
+
+.tb-spacer { flex: 1; }
+
+#clock {
+  font-family: 'Courier New', 'Lucida Console', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  flex-shrink: 0;
+}
+
+.badge-crit {
+  background: var(--critical);
+  color: #f0f0ec;
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  padding: 3px 9px 2px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  animation: blink-crit 1.4s step-end infinite;
+}
+@keyframes blink-crit {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+.tb-btn {
+  background: transparent;
+  border: 1px solid var(--muted);
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  padding: 4px 11px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: border-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.tb-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tb-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#theme-btn {
+  background: transparent;
+  border: 1px solid var(--muted);
+  color: var(--muted);
+  font-size: 15px;
+  width: 30px; height: 30px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+#theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+#theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── MAIN LAYOUT ───────────────────────────────────────────── */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── LEFT: RADIAL PANEL ─────────────────────────────────────── */
+#radial-panel {
+  width: 45%;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 12px 12px 8px;
+}
+
+/* Grid texture */
+#radial-panel::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+#radial-svg {
+  width: 100%;
+  max-width: 460px;
+  height: auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Ring label strip */
+.ring-legend {
+  display: flex;
+  gap: 20px;
+  margin-top: 8px;
+  position: relative;
+  z-index: 1;
+}
+.rleg-item {
+  display: flex; align-items: center; gap: 5px;
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.rleg-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── RIGHT PANEL ─────────────────────────────────────────────── */
+#right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--grid-line);
+  min-width: 0;
+}
+
+/* ── SECTION HEADER ──────────────────────────────────────────── */
+.sec-hdr {
+  height: 34px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--grid-line);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.sec-label {
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.sec-count {
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-size: 16px;
+  color: var(--critical);
+  line-height: 1;
+}
+.sec-hdr-spacer { flex: 1; }
+.live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: livepulse 2.2s ease-in-out infinite;
+}
+@keyframes livepulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.65); }
+}
+
+/* ── INCIDENT FEED ───────────────────────────────────────────── */
+#incident-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-bottom: 1px solid var(--grid-line);
+  min-height: 0;
+}
+
+#incident-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+#incident-list::-webkit-scrollbar { width: 3px; }
+#incident-list::-webkit-scrollbar-track { background: transparent; }
+#incident-list::-webkit-scrollbar-thumb { background: var(--muted); }
+
+.inc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--grid-line);
+  transition: background 0.15s;
+  cursor: default;
+}
+.inc-item:hover { background: var(--surface); }
+.inc-item.new { animation: slide-in 0.35s ease-out; }
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.inc-bar {
+  width: 3px;
+  align-self: stretch;
+  border-radius: 2px;
+  flex-shrink: 0;
+  min-height: 28px;
+}
+.bar-crit { background: var(--critical); }
+.bar-warn { background: var(--warning); }
+.bar-ok   { background: var(--ok); }
+
+.inc-body { flex: 1; min-width: 0; }
+.inc-type {
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.inc-msg {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inc-msg .hl-crit { color: var(--critical); font-weight: 600; }
+.inc-msg .hl-warn { color: var(--warning); font-weight: 600; }
+
+.inc-time {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+/* ── METRIC TILES ────────────────────────────────────────────── */
+#metrics-section {
+  flex-shrink: 0;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.m-tile {
+  background: var(--surface);
+  border: 1px solid var(--grid-line);
+  padding: 9px 11px 8px;
+  position: relative;
+  overflow: hidden;
+}
+.m-tile::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 2px;
+}
+.m-tile.tc::before { background: var(--critical); }
+.m-tile.tw::before { background: var(--warning); }
+.m-tile.ta::before { background: var(--accent); }
+
+.m-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.m-name {
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.m-stale {
+  font-family: 'Courier New', monospace;
+  font-size: 8px;
+  color: var(--warning);
+  letter-spacing: 0.5px;
+}
+
+.m-main {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+.m-num {
+  font-family: Impact, 'Arial Black', sans-serif;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--text);
+}
+.m-unit {
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.m-sub {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.m-stat {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.m-stat::before {
+  content: '';
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+}
+.s-crit::before { background: var(--critical); }
+.s-warn::before { background: var(--warning); }
+.s-ok::before   { background: var(--ok); }
+
+/* ── SVG ARC ANIMATIONS ──────────────────────────────────────── */
+@keyframes arc-crit-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.65; }
+}
+@keyframes score-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.72; }
+}
+@keyframes score-ring-pulse {
+  0%, 100% { stroke-opacity: 0.8; }
+  50%       { stroke-opacity: 0.3; }
+}
+.arc-crit { animation: arc-crit-pulse 2s ease-in-out infinite; }
+.score-num { animation: score-pulse 1.6s ease-in-out infinite; }
+.score-ring { animation: score-ring-pulse 1.6s ease-in-out infinite; }
+
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- TOPBAR                                                       -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<header id="topbar" role="banner">
+  <div class="tb-logo" aria-label="Infoblox">
+    <svg viewBox="0 0 26 26" fill="none" aria-hidden="true">
+      <rect x="2"  y="2"  width="9" height="9" fill="var(--accent)" opacity="0.95"/>
+      <rect x="15" y="2"  width="9" height="9" fill="var(--accent)" opacity="0.45"/>
+      <rect x="2"  y="15" width="9" height="9" fill="var(--accent)" opacity="0.45"/>
+      <rect x="15" y="15" width="9" height="9" fill="var(--accent)" opacity="0.95"/>
+    </svg>
+    INFOBLOX
+  </div>
+  <div class="tb-divider" aria-hidden="true"></div>
+  <div class="tb-title" role="heading" aria-level="1">NOC DASHBOARD</div>
+  <div class="tb-spacer"></div>
+  <div id="clock" aria-live="polite" aria-label="Current UTC time"></div>
+  <div class="badge-crit" role="alert" aria-label="13 critical issues active">13 CRITICAL</div>
+  <button id="refresh-btn" class="tb-btn" onclick="doRefresh()" aria-label="Refresh all data feeds">REFRESH</button>
+  <button class="tb-btn" aria-label="Open query console">QUERY</button>
+  <button id="theme-btn" onclick="toggleTheme()" aria-label="Toggle dark/light theme">◑</button>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- MAIN                                                         -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<main id="main" role="main">
+
+  <!-- ─── LEFT: RADIAL HEALTH DISPLAY ─────────────────────── -->
+  <section id="radial-panel" aria-label="Network health radial display">
+
+    <!--
+      SVG coordinate space: 500×500, center 250,250
+      Rings:
+        DHCP    r=120  stroke-width=18  C=753.98
+        HOSTS   r=165  stroke-width=18  C=1036.73
+        THREATS r=210  stroke-width=18  C=1319.47
+      Arc formula:
+        arcLen = (degrees/360) * C
+        transform="rotate(startDeg - 90, 250, 250)"
+    -->
+    <svg id="radial-svg"
+      viewBox="0 0 500 500"
+      role="img"
+      aria-label="Network Pulse radial display. Health score: 45 CRITICAL.
+        Inner ring DHCP: 3 subnets critical, 3 warning, 2 ok.
+        Middle ring Hosts: 32 online, 10 warning, 10 down.
+        Outer ring DNS/Threats: 60% ok, 20% DNS errors, 13% active threats, 7% probing.">
+
+      <defs>
+        <!-- Glow filter: critical red -->
+        <filter id="f-glow-crit" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <!-- Glow filter: ok green (subtle) -->
+        <filter id="f-glow-ok" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <!-- Center radial gradient (critical halo) -->
+        <radialGradient id="g-crit-halo" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stop-color="#e83838" stop-opacity="0.18"/>
+          <stop offset="70%"  stop-color="#e83838" stop-opacity="0.05"/>
+          <stop offset="100%" stop-color="#e83838" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+
+      <!-- ── BACKGROUND HALO ───────────────────────────────── -->
+      <circle cx="250" cy="250" r="250"
+        fill="url(#g-crit-halo)"
+        class="score-num"
+        aria-hidden="true"/>
+
+      <!-- ── CROSSHAIRS ────────────────────────────────────── -->
+      <line x1="250" y1="15"  x2="250" y2="485"
+        style="stroke:var(--grid-line);" stroke-width="1"
+        stroke-dasharray="3 7" aria-hidden="true"/>
+      <line x1="15"  y1="250" x2="485" y2="250"
+        style="stroke:var(--grid-line);" stroke-width="1"
+        stroke-dasharray="3 7" aria-hidden="true"/>
+
+      <!-- ── TICK MARK GROUP (populated by JS) ────────────── -->
+      <g id="ticks" aria-hidden="true"></g>
+
+      <!-- ── RING TRACKS ──────────────────────────────────── -->
+      <!-- DHCP track r=120 -->
+      <circle cx="250" cy="250" r="120"
+        fill="none" style="stroke:var(--ring-bg);" stroke-width="18"
+        aria-hidden="true"/>
+      <!-- HOSTS track r=165 -->
+      <circle cx="250" cy="250" r="165"
+        fill="none" style="stroke:var(--ring-bg);" stroke-width="18"
+        aria-hidden="true"/>
+      <!-- THREATS track r=210 -->
+      <circle cx="250" cy="250" r="210"
+        fill="none" style="stroke:var(--ring-bg);" stroke-width="18"
+        aria-hidden="true"/>
+
+      <!-- ══════════════════════════════════════════════════ -->
+      <!-- DHCP RING  r=120  C=753.98                         -->
+      <!--  8 subnets × 40° arc + 5° gap = 360°              -->
+      <!--  arcLen=83.78  utilization color:                  -->
+      <!--  0°  crit(95%)  45°  warn(78%)  90°  warn(65%)     -->
+      <!--  135° ok(45%)  180° crit(92%) 225° crit(88%)       -->
+      <!--  270° ok(55%)  315° warn(72%)                      -->
+      <!-- ══════════════════════════════════════════════════ -->
+
+      <!-- Subnet 0: start=0°   95% CRITICAL -->
+      <circle cx="250" cy="250" r="120" fill="none"
+        stroke="#e83838" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="83.78 753.98"
+        transform="rotate(-90 250 250)"
+        class="arc-crit" filter="url(#f-glow-crit)"
+        aria-label="DHCP subnet 1: 95% critical"/>
+
+      <!-- Subnet 1: start=45°  78% WARNING -->
+      <circle cx="250" cy="250" r="120" fill="none"
+        stroke="#e89820" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="83.78 753.98"
+        transform="rotate(-45 250 250)"
+        aria-label="DHCP subnet 2: 78% warning"/>
+
+      <!-- Subnet 2: start=90°  65% WARNING -->
+      <circle cx="250" cy="250" r="120" fill="none"
+        stroke="#e89820" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="83.78 753.98"
+        transform="rotate(0 250 250)"
+        aria-label="DHCP subnet 3: 65% warning"/>
+
+      <!-- Subnet 3: start=135° 45% OK -->
+      <circle cx="250" cy="250" r="120" fill="none"
+        stroke="#28c858" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="83.78 753.98"
+        transform="rotate(45 250 250)"
+        aria-label="DHCP subnet 4: 45% ok"/>
+
+      <!-- Subnet 4: start=180° 92% CRITICAL -->
+      <circle cx="250" cy="250" r="120" fill="none"
+        stroke="#e83838" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="83.78 753.98"
+        transform="rotate(90 250 250)"
+        class="arc-crit" filter="url(#f-glow-crit)"
+        aria-label="DHCP subnet 5: 92% critical"/>
+
+      <!-- Subnet 5: start=225° 88% CRITICAL -->
+      <circle cx="250" cy="250" r="120" fill="none"
+        stroke="#e83838" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="83.78 753.98"
+        transform="rotate(135 250 250)"
+        class="arc-crit" filter="url(#f-glow-crit)"
+        aria-label="DHCP subnet 6: 88% critical"/>
+
+      <!-- Subnet 6: start=270° 55% OK -->
+      <circle cx="250" cy="250" r="120" fill="none"
+        stroke="#28c858" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="83.78 753.98"
+        transform="rotate(180 250 250)"
+        aria-label="DHCP subnet 7: 55% ok"/>
+
+      <!-- Subnet 7: start=315° 72% WARNING -->
+      <circle cx="250" cy="250" r="120" fill="none"
+        stroke="#e89820" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="83.78 753.98"
+        transform="rotate(225 250 250)"
+        aria-label="DHCP subnet 8: 72% warning"/>
+
+      <!-- ══════════════════════════════════════════════════ -->
+      <!-- HOSTS RING  r=165  C=1036.73                       -->
+      <!--  32 online 218.5°  10 warn 66.2°  10 down 66.2°   -->
+      <!--  2° gaps between groups                            -->
+      <!--  arcLen: online=626.6  warn/down=190.3             -->
+      <!-- ══════════════════════════════════════════════════ -->
+
+      <!-- Online: start=0°  rotate(-90) -->
+      <circle cx="250" cy="250" r="165" fill="none"
+        stroke="#28c858" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="626.6 1036.73"
+        transform="rotate(-90 250 250)"
+        aria-label="32 hosts online"/>
+
+      <!-- Warn: start=220.5°  rotate(130.5) -->
+      <circle cx="250" cy="250" r="165" fill="none"
+        stroke="#e89820" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="190.3 1036.73"
+        transform="rotate(130.5 250 250)"
+        aria-label="10 hosts warning"/>
+
+      <!-- Down: start=288.7°  rotate(198.7) -->
+      <circle cx="250" cy="250" r="165" fill="none"
+        stroke="#e83838" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="190.3 1036.73"
+        transform="rotate(198.7 250 250)"
+        class="arc-crit"
+        aria-label="10 hosts down"/>
+
+      <!-- ══════════════════════════════════════════════════ -->
+      <!-- THREATS/DNS RING  r=210  C=1319.47                 -->
+      <!--  DNS OK 213.6°=782.5  DNS Err 71.2°=260.7          -->
+      <!--  Threats 46.3°=169.6  Unknown 24.9°=91.2           -->
+      <!--  1° gaps between groups                            -->
+      <!-- ══════════════════════════════════════════════════ -->
+
+      <!-- DNS OK: start=0°  rotate(-90) -->
+      <circle cx="250" cy="250" r="210" fill="none"
+        stroke="#28c858" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="782.5 1319.47"
+        transform="rotate(-90 250 250)"
+        aria-label="DNS zones: healthy"/>
+
+      <!-- DNS Errors: start=214.6°  rotate(124.6) -->
+      <circle cx="250" cy="250" r="210" fill="none"
+        stroke="#e89820" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="260.7 1319.47"
+        transform="rotate(124.6 250 250)"
+        aria-label="DNS zones: errors"/>
+
+      <!-- Active Threats: start=286.8°  rotate(196.8) -->
+      <circle cx="250" cy="250" r="210" fill="none"
+        stroke="#e83838" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="169.6 1319.47"
+        transform="rotate(196.8 250 250)"
+        class="arc-crit" filter="url(#f-glow-crit)"
+        aria-label="Active threats detected"/>
+
+      <!-- Unknown/Probing: start=334.1°  rotate(244.1) -->
+      <circle cx="250" cy="250" r="210" fill="none"
+        stroke="#e86340" stroke-width="18" stroke-linecap="butt"
+        stroke-dasharray="91.2 1319.47"
+        transform="rotate(244.1 250 250)"
+        aria-label="Unknown probing activity"/>
+
+      <!-- ── 12 O'CLOCK THRESHOLD MARKER ──────────────────── -->
+      <!-- Radial line from just outside center to just outside outer ring -->
+      <line x1="250" y1="32" x2="250" y2="172"
+        stroke="var(--accent)" stroke-width="1.5"
+        stroke-dasharray="3 3" opacity="0.7"
+        aria-hidden="true"/>
+      <circle cx="250" cy="32" r="3"
+        fill="var(--accent)" opacity="0.8"
+        aria-hidden="true"/>
+      <!-- Threshold label -->
+      <text x="256" y="28"
+        font-family="'Courier New', monospace" font-size="8"
+        fill="var(--accent)" letter-spacing="1"
+        aria-hidden="true">0°</text>
+
+      <!-- ── RING AXIS LABELS (right side) ─────────────────── -->
+      <!-- DHCP label: right side of inner ring at 90° -->
+      <text x="376" y="253"
+        font-family="'Courier New', monospace" font-size="9"
+        style="fill:var(--label-ring);" letter-spacing="2"
+        aria-hidden="true">DHCP</text>
+
+      <!-- HOSTS label: right side of middle ring at 90° -->
+      <text x="422" y="248"
+        font-family="'Courier New', monospace" font-size="9"
+        style="fill:var(--label-ring);" letter-spacing="2"
+        aria-hidden="true">HOSTS</text>
+
+      <!-- THREATS label: above outer ring at top -->
+      <text x="250" y="14"
+        font-family="'Courier New', monospace" font-size="8"
+        style="fill:var(--label-ring);" letter-spacing="1.5"
+        text-anchor="middle"
+        aria-hidden="true">DNS · THREATS</text>
+
+      <!-- ── CENTER HEALTH DISPLAY ─────────────────────────── -->
+      <!-- Dashed outer ring for center -->
+      <circle cx="250" cy="250" r="80"
+        fill="none" stroke="#e83838" stroke-width="1"
+        stroke-dasharray="4 3" opacity="0.3"
+        class="score-ring"
+        aria-hidden="true"/>
+      <!-- Center fill circle -->
+      <circle cx="250" cy="250" r="74"
+        style="fill:var(--center-bg);"
+        aria-hidden="true"/>
+      <!-- Solid ring around center -->
+      <circle cx="250" cy="250" r="74"
+        fill="none" stroke="#e83838" stroke-width="2" opacity="0.75"
+        class="score-ring"
+        aria-hidden="true"/>
+
+      <!-- HEALTH score label -->
+      <text x="250" y="234"
+        font-family="'Courier New', monospace" font-size="8"
+        style="fill:var(--muted);"
+        text-anchor="middle" letter-spacing="3"
+        aria-hidden="true">HEALTH</text>
+
+      <!-- Score number -->
+      <text x="250" y="272"
+        font-family="Impact, 'Arial Black', sans-serif"
+        font-size="58" font-weight="900"
+        fill="#e83838"
+        text-anchor="middle"
+        class="score-num"
+        aria-hidden="true">45</text>
+
+      <!-- CRITICAL label -->
+      <text x="250" y="295"
+        font-family="'Courier New', monospace" font-size="9"
+        fill="#e83838" text-anchor="middle" letter-spacing="4"
+        aria-hidden="true">CRITICAL</text>
+
+      <!-- Screen-reader accessible description of center score -->
+      <title>Network Health Score 45 — CRITICAL status</title>
+
+      <!-- ── MINI STATS AROUND CENTER ─────────────────────── -->
+      <!-- Bottom of center circle -->
+      <text x="250" y="315"
+        font-family="'Courier New', monospace" font-size="9"
+        style="fill:var(--muted);" text-anchor="middle" letter-spacing="1"
+        aria-hidden="true">13 issues · 3 alerts</text>
+
+    </svg>
+
+    <!-- Legend strip -->
+    <div class="ring-legend" role="list" aria-label="Arc color legend">
+      <div class="rleg-item" role="listitem">
+        <div class="rleg-dot" style="background:#28c858"></div>OK
+      </div>
+      <div class="rleg-item" role="listitem">
+        <div class="rleg-dot" style="background:#e89820"></div>WARN
+      </div>
+      <div class="rleg-item" role="listitem">
+        <div class="rleg-dot" style="background:#e83838"></div>CRIT
+      </div>
+      <div class="rleg-item" role="listitem">
+        <div class="rleg-dot" style="background:#e86340"></div>THREAT
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── RIGHT PANEL ─────────────────────────────────────── -->
+  <div id="right-panel">
+
+    <!-- INCIDENT FEED -->
+    <section id="incident-section" aria-label="Live incident feed">
+      <div class="sec-hdr">
+        <span class="sec-label">INCIDENT FEED</span>
+        <span class="sec-count" aria-label="13 active incidents">13</span>
+        <span style="font-family:'Courier New',monospace;font-size:8px;color:var(--muted);letter-spacing:1px;">ACTIVE</span>
+        <div class="sec-hdr-spacer"></div>
+        <div class="live-dot" role="status" aria-label="Live feed active"></div>
+      </div>
+      <div id="incident-list"
+        role="log" aria-live="polite" aria-relevant="additions"
+        aria-label="Incident list">
+        <!-- populated by JS -->
+      </div>
+    </section>
+
+    <!-- METRIC TILES -->
+    <section id="metrics-section" aria-label="System metric tiles">
+
+      <div class="m-tile tc"
+        role="region" aria-label="DHCP: 20 pools, 9 critical">
+        <div class="m-hdr">
+          <span class="m-name">DHCP</span>
+          <span class="m-stale" aria-label="Data stale 1 minute">STALE 1m</span>
+        </div>
+        <div class="m-main">
+          <span class="m-num" aria-label="20 pools">20</span>
+          <span class="m-unit">POOLS</span>
+        </div>
+        <div class="m-sub">
+          <span class="m-stat s-crit" aria-label="9 critical">9 CRIT</span>
+          <span class="m-stat s-warn" aria-label="4 warning">4 WARN</span>
+          <span class="m-stat s-ok"   aria-label="7 ok">7 OK</span>
+        </div>
+      </div>
+
+      <div class="m-tile tc"
+        role="region" aria-label="Hosts: 52 total, 10 down">
+        <div class="m-hdr">
+          <span class="m-name">HOSTS</span>
+          <span class="m-stale" aria-label="Data stale 2 minutes">STALE 2m</span>
+        </div>
+        <div class="m-main">
+          <span class="m-num" aria-label="52 hosts">52</span>
+          <span class="m-unit">TOTAL</span>
+        </div>
+        <div class="m-sub">
+          <span class="m-stat s-crit" aria-label="10 down">10 DOWN</span>
+          <span class="m-stat s-warn" aria-label="10 warn">10 WARN</span>
+          <span class="m-stat s-ok"   aria-label="32 online">32 UP</span>
+        </div>
+      </div>
+
+      <div class="m-tile tw"
+        role="region" aria-label="DNS: 15 zones, 5 errors">
+        <div class="m-hdr">
+          <span class="m-name">DNS</span>
+          <span class="m-stale" aria-label="Data stale 1 minute">STALE 1m</span>
+        </div>
+        <div class="m-main">
+          <span class="m-num" aria-label="15 DNS zones">15</span>
+          <span class="m-unit">ZONES</span>
+        </div>
+        <div class="m-sub">
+          <span class="m-stat s-crit" aria-label="5 errors">5 ERR</span>
+          <span class="m-stat s-ok"   aria-label="10 healthy">10 OK</span>
+        </div>
+      </div>
+
+      <div class="m-tile ta"
+        role="region" aria-label="Threats: 3 active">
+        <div class="m-hdr">
+          <span class="m-name">THREATS</span>
+          <span class="m-stale" style="color:var(--ok);"
+            aria-label="Live data">LIVE</span>
+        </div>
+        <div class="m-main">
+          <span class="m-num" aria-label="3 active threats">3</span>
+          <span class="m-unit">ACTIVE</span>
+        </div>
+        <div class="m-sub">
+          <span class="m-stat s-crit" aria-label="1 DDoS">1 DDOS</span>
+          <span class="m-stat s-warn" aria-label="2 probing">2 PROBE</span>
+        </div>
+      </div>
+
+    </section>
+  </div><!-- /#right-panel -->
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- SCRIPT                                                       -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<script>
+/* ── CLOCK ──────────────────────────────────────────────────── */
+function tick() {
+  const n = new Date();
+  const p = v => String(v).padStart(2, '0');
+  document.getElementById('clock').textContent =
+    `${n.getUTCFullYear()}-${p(n.getUTCMonth()+1)}-${p(n.getUTCDate())}` +
+    ` ${p(n.getUTCHours())}:${p(n.getUTCMinutes())}:${p(n.getUTCSeconds())} UTC`;
+}
+tick();
+setInterval(tick, 1000);
+
+/* ── THEME TOGGLE ───────────────────────────────────────────── */
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  // ring-bg and center-bg are CSS vars; SVG inline style vars update automatically.
+}
+
+/* ── TICK MARKS ─────────────────────────────────────────────── */
+(function buildTicks() {
+  const g = document.getElementById('ticks');
+  const cx = 250, cy = 250, ri = 228, ro = 240;
+  let html = '';
+  for (let deg = 0; deg < 360; deg += 6) {
+    const rad = (deg - 90) * Math.PI / 180;
+    const isMajor = deg % 30 === 0;
+    const r0 = isMajor ? ri - 5 : ri;
+    const x1 = cx + Math.cos(rad) * r0;
+    const y1 = cy + Math.sin(rad) * r0;
+    const x2 = cx + Math.cos(rad) * ro;
+    const y2 = cy + Math.sin(rad) * ro;
+    const color = isMajor ? 'var(--tick-major)' : 'var(--tick-minor)';
+    const sw    = isMajor ? 1.5 : 0.8;
+    html += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}"
+      x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
+      style="stroke:${color}" stroke-width="${sw}"/>`;
+    if (isMajor && deg !== 0) {
+      const lr = 248;
+      const lx = (cx + Math.cos(rad) * lr).toFixed(1);
+      const ly = (cy + Math.sin(rad) * lr).toFixed(1);
+      html += `<text x="${lx}" y="${ly}"
+        font-family="'Courier New',monospace" font-size="7"
+        style="fill:var(--tick-major)" text-anchor="middle"
+        dominant-baseline="middle">${deg}°</text>`;
+    }
+  }
+  g.innerHTML = html;
+})();
+
+/* ── INCIDENT DATA ──────────────────────────────────────────── */
+const INCIDENTS = [
+  { sev:'crit', type:'DHCP-CRITICAL', msg:'<span class="hl-crit">192.168.1.0/24</span> at 95.3% — 9 leases remain',         ago:'0:12' },
+  { sev:'crit', type:'DHCP-CRITICAL', msg:'<span class="hl-crit">10.0.2.0/24</span> at 92.1% — 22 leases remain',            ago:'0:14' },
+  { sev:'crit', type:'HOST-DOWN',     msg:'<span class="hl-crit">10 hosts</span> unreachable — last seen 08:41 UTC',          ago:'0:19' },
+  { sev:'crit', type:'DHCP-CRITICAL', msg:'<span class="hl-crit">172.16.0.0/24</span> at 88.7% utilization',                 ago:'0:22' },
+  { sev:'crit', type:'THREAT-DDOS',   msg:'<span class="hl-crit">DDoS pattern</span> — src 192.168.100.50 → 847 req/s',      ago:'0:31' },
+  { sev:'warn', type:'DNS-WARN',      msg:'Zone <span class="hl-warn">corp.local</span> — 5 resolution failures in 5m',      ago:'0:33' },
+  { sev:'warn', type:'DHCP-WARN',     msg:'<span class="hl-warn">10.0.5.0/24</span> at 78.4% — trending up',                 ago:'0:38' },
+  { sev:'warn', type:'HOST-WARN',     msg:'<span class="hl-warn">10 hosts</span> degraded — latency &gt;200ms',              ago:'0:41' },
+  { sev:'warn', type:'DNS-WARN',      msg:'Zone <span class="hl-warn">internal.net</span> — forwarded query failures',        ago:'0:45' },
+  { sev:'crit', type:'DHCP-CAPACITY', msg:'<span class="hl-crit">3 subnets</span> above 80% threshold — capacity alert',     ago:'0:47' },
+  { sev:'warn', type:'THREAT-PROBE',  msg:'Port scan: <span class="hl-warn">10.0.0.55</span> probing /24 range',             ago:'0:52' },
+  { sev:'crit', type:'DNS-CRITICAL',  msg:'<span class="hl-crit">zone.corp.net</span> NXDOMAIN spike — 342 failures/min',    ago:'0:58' },
+  { sev:'warn', type:'DHCP-WARN',     msg:'<span class="hl-warn">10.0.8.0/24</span> at 72.1% — rising utilization',          ago:'1:03' },
+];
+
+function renderIncidents(list) {
+  document.getElementById('incident-list').innerHTML = list.map(i => `
+    <div class="inc-item" role="listitem">
+      <div class="inc-bar bar-${i.sev}" aria-hidden="true"></div>
+      <div class="inc-body">
+        <div class="inc-type">${i.type}</div>
+        <div class="inc-msg">${i.msg}</div>
+      </div>
+      <div class="inc-time" aria-label="${i.ago} ago">${i.ago}</div>
+    </div>`).join('');
+}
+renderIncidents(INCIDENTS);
+
+/* ── REFRESH ────────────────────────────────────────────────── */
+function doRefresh() {
+  const btn = document.getElementById('refresh-btn');
+  btn.textContent = 'LOADING…';
+  btn.disabled = true;
+  setTimeout(() => {
+    btn.textContent = 'REFRESH';
+    btn.disabled = false;
+    const fresh = {
+      sev:'ok', type:'SYSTEM',
+      msg:'<span class="hl-ok" style="color:var(--ok);font-weight:600;">All feeds refreshed</span> — data current',
+      ago:'0:00'
+    };
+    const updated = [fresh, ...INCIDENTS];
+    renderIncidents(updated);
+    document.querySelector('.inc-item').classList.add('new');
+  }, 900);
+}
+</script>
+</body>
+</html>

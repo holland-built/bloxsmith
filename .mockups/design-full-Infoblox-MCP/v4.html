@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html data-theme="dark" lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC — v4 Alert-First Split</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ── DESIGN TOKENS ─────────────────────────────────────────────────── */
+:root {
+  --bg:           #0d0f0e;
+  --surface:      #161a18;
+  --surface2:     #1e2420;
+  --left-panel:   #100808;
+  --border:       rgba(240,240,236,0.08);
+  --border-solid: rgba(240,240,236,0.12);
+  --accent:       #e86340;
+  --text:         #f0f0ec;
+  --muted:        #7a7d79;
+  --critical:     #e85050;
+  --warning:      #e8a030;
+  --ok:           #38c06c;
+  --critical-bg:  rgba(232,80,80,0.10);
+  --warning-bg:   rgba(232,160,48,0.10);
+  --ok-bg:        rgba(56,192,108,0.10);
+  --topbar-h:     48px;
+  --left-w:       38%;
+  --radius:       3px;
+  --font-ui:      "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-data:    "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+}
+
+[data-theme="light"] {
+  --bg:           #f5f2ed;
+  --surface:      #ede9e3;
+  --surface2:     #e3ddd7;
+  --left-panel:   #fdf0ef;
+  --border:       rgba(26,24,20,0.09);
+  --border-solid: rgba(26,24,20,0.15);
+  --accent:       #c04a1f;
+  --text:         #1a1814;
+  --muted:        #7a7568;
+  --critical:     #c83030;
+  --warning:      #b86a14;
+  --ok:           #2a9a56;
+  --critical-bg:  rgba(200,48,48,0.08);
+  --warning-bg:   rgba(184,106,20,0.09);
+  --ok-bg:        rgba(42,154,86,0.09);
+}
+
+/* ── RESET + BASE ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font-family: var(--font-ui); }
+
+/* ── TOPBAR ─────────────────────────────────────────────────────────── */
+.topbar {
+  height: var(--topbar-h);
+  min-height: var(--topbar-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-solid);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 10px;
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  background: var(--accent);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: #f8f7f4;
+}
+
+.topbar-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.topbar-div {
+  width: 1px;
+  height: 18px;
+  background: var(--border-solid);
+  flex-shrink: 0;
+}
+
+.topbar-env {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.topbar-spacer { flex: 1; }
+
+.topbar-ts {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.topbar-ts strong {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.btn-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-solid);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+}
+.btn-icon:hover { background: var(--surface2); color: var(--text); }
+.btn-icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── MAIN LAYOUT ────────────────────────────────────────────────────── */
+.layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── LEFT ALERT PANEL ───────────────────────────────────────────────── */
+.alert-panel {
+  width: var(--left-w);
+  min-width: 310px;
+  max-width: 480px;
+  background: var(--left-panel);
+  border-right: 1px solid var(--border-solid);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.alert-panel-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px 10px;
+  border-bottom: 1px solid var(--border-solid);
+  flex-shrink: 0;
+}
+
+.alert-panel-hdr-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: 1;
+}
+
+.badge-count {
+  background: var(--critical);
+  color: #f8f7f4;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px 2px;
+  border-radius: var(--radius);
+  letter-spacing: 0.03em;
+}
+
+.alert-feed {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-solid) transparent;
+}
+.alert-feed::-webkit-scrollbar { width: 4px; }
+.alert-feed::-webkit-scrollbar-track { background: transparent; }
+.alert-feed::-webkit-scrollbar-thumb { background: var(--border-solid); border-radius: 2px; }
+
+/* severity section dividers */
+.sev-divider {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 14px 7px;
+}
+.sev-divider-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+.sev-divider-label.crit { background: var(--critical-bg); color: var(--critical); }
+.sev-divider-label.warn { background: var(--warning-bg); color: var(--warning); }
+.sev-divider-rule { flex: 1; height: 1px; background: var(--border-solid); }
+
+/* individual alert cards */
+.alert-item {
+  position: relative;
+  margin: 0 10px 7px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border-left: 3px solid transparent;
+  padding: 9px 11px 9px 11px;
+  transition: background 0.12s;
+}
+.alert-item:hover { background: var(--surface2); }
+.alert-item.critical { border-left-color: var(--critical); }
+.alert-item.warning  { border-left-color: var(--warning); }
+
+.alert-meta {
+  font-family: var(--font-data);
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.alert-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+  margin-bottom: 6px;
+}
+
+.alert-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.chip {
+  font-size: 10px;
+  font-family: var(--font-data);
+  background: var(--surface2);
+  color: var(--muted);
+  padding: 1px 6px 2px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-solid);
+  white-space: nowrap;
+}
+
+.chip.more {
+  color: var(--accent);
+  border-color: transparent;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 10px;
+}
+
+.alert-actions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn-a {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 9px 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-solid);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+.btn-a:hover { background: var(--surface2); }
+.btn-a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn-a.primary { background: var(--accent); border-color: var(--accent); color: #f8f7f4; }
+.btn-a.primary:hover { opacity: 0.86; }
+.btn-a.dismiss { color: var(--muted); padding: 3px 7px; }
+
+.more-notices-link {
+  display: block;
+  font-size: 11px;
+  color: var(--accent);
+  padding: 4px 24px 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+.more-notices-link:hover { text-decoration: underline; }
+.more-notices-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── RIGHT DATA PANEL ───────────────────────────────────────────────── */
+.data-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 13px;
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-solid) transparent;
+}
+.data-panel::-webkit-scrollbar { width: 5px; }
+.data-panel::-webkit-scrollbar-track { background: transparent; }
+.data-panel::-webkit-scrollbar-thumb { background: var(--border-solid); border-radius: 2px; }
+
+/* ── METRICS GRID ───────────────────────────────────────────────────── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: auto auto auto;
+  gap: 11px;
+}
+
+/* ── CARD ───────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border-solid);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  min-height: 190px;
+}
+
+.card-hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.card-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: 1;
+}
+
+.card-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px 2px;
+  border-radius: var(--radius);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.card-badge.crit { background: var(--critical-bg); color: var(--critical); }
+.card-badge.warn { background: var(--warning-bg); color: var(--warning); }
+.card-badge.ok   { background: var(--ok-bg); color: var(--ok); }
+
+.err-count-badge {
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--critical-bg);
+  color: var(--critical);
+  padding: 2px 5px;
+  border-radius: var(--radius);
+}
+
+.card-body {
+  flex: 1;
+  padding: 10px 12px 8px;
+  min-height: 0;
+}
+
+.card-body.no-pad { padding: 8px 0 4px; }
+
+.card-footer {
+  padding: 5px 12px 6px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font-data);
+  text-align: right;
+}
+
+.stale { color: var(--warning); font-weight: 700; }
+
+/* ── DHCP POOL BARS ─────────────────────────────────────────────────── */
+.pool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.pool-row { display: flex; flex-direction: column; gap: 3px; }
+
+.pool-lrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.pool-cidr {
+  font-family: var(--font-data);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.pool-pct {
+  font-family: var(--font-data);
+  font-size: 10px;
+  font-weight: 600;
+}
+.pool-pct.ov  { color: var(--critical); }
+.pool-pct.nr  { color: var(--warning); }
+.pool-pct.ok  { color: var(--ok); }
+
+.bar-track {
+  position: relative;
+  height: 9px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: visible;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  position: relative;
+  z-index: 1;
+}
+.bar-fill.ov { background: var(--critical); }
+.bar-fill.nr { background: var(--warning); }
+.bar-fill.ok { background: var(--ok); }
+
+.threshold-mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 1.5px;
+  background: var(--muted);
+  left: 90%;
+  z-index: 2;
+  opacity: 0.55;
+}
+
+.threshold-lbl {
+  position: absolute;
+  top: -13px;
+  left: 90%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-family: var(--font-data);
+  color: var(--muted);
+  opacity: 0.7;
+  white-space: nowrap;
+  z-index: 3;
+}
+
+/* ── HOST STATUS ────────────────────────────────────────────────────── */
+.host-tiles {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.host-tile {
+  flex: 1;
+  text-align: center;
+  padding: 9px 4px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-solid);
+  background: var(--surface2);
+}
+
+.host-tile-n {
+  font-family: var(--font-data);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+
+.host-tile-lbl {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tile-ok   .host-tile-n { color: var(--ok); }
+.tile-warn .host-tile-n { color: var(--warning); }
+.tile-crit .host-tile-n { color: var(--critical); }
+
+.health-lrow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.health-lrow .pct-bad { color: var(--critical); font-weight: 600; }
+
+.health-bar {
+  height: 10px;
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+  background: var(--surface2);
+}
+
+.hb-ok   { background: var(--ok); }
+.hb-warn { background: var(--warning); }
+.hb-crit { background: var(--critical); }
+
+/* ── DATA TABLE ─────────────────────────────────────────────────────── */
+.dtbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.dtbl th {
+  text-align: left;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 5px 5px 12px;
+  border-bottom: 1px solid var(--border-solid);
+}
+.dtbl th:first-child { padding-left: 12px; }
+
+.dtbl td {
+  padding: 5px 5px 5px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+  font-size: 11px;
+}
+.dtbl td:first-child { padding-left: 12px; }
+.dtbl tr:last-child td { border-bottom: none; }
+.dtbl tr:hover td { background: rgba(240,240,236,0.03); }
+[data-theme="light"] .dtbl tr:hover td { background: rgba(26,24,20,0.02); }
+
+.mono { font-family: var(--font-data); }
+
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.dot.ok   { background: var(--ok); }
+.dot.warn { background: var(--warning); }
+.dot.crit { background: var(--critical); }
+
+/* inline mini bar */
+.mini-bar-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  vertical-align: middle;
+}
+
+.mini-track {
+  width: 44px;
+  height: 5px;
+  background: var(--surface2);
+  border-radius: 1px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.mini-fill {
+  height: 100%;
+  border-radius: 1px;
+}
+
+/* tag badges */
+.tg {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px 2px;
+  border-radius: var(--radius);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.tg.err     { background: var(--critical-bg); color: var(--critical); }
+.tg.warn    { background: var(--warning-bg);  color: var(--warning); }
+.tg.ok      { background: var(--ok-bg);        color: var(--ok); }
+.tg.info    { background: rgba(122,125,121,0.13); color: var(--muted); }
+.tg.blocked { background: var(--ok-bg); color: var(--ok); }
+.tg.active  { background: var(--warning-bg); color: var(--warning); }
+
+.row-hl-crit td { background: var(--critical-bg) !important; }
+.row-hl-warn td { background: var(--warning-bg) !important; }
+.bold-row td { font-weight: 600; }
+
+/* ── FOCUS VISIBLE GLOBAL ───────────────────────────────────────────── */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ────────────────────── TOPBAR ──────────────────────────────────── -->
+<header class="topbar" role="banner">
+  <div class="topbar-logo" aria-label="Infoblox NOC Dashboard">
+    <div class="logo-mark" aria-hidden="true">IB</div>
+    <span class="topbar-name">Infoblox NOC</span>
+  </div>
+  <div class="topbar-div" aria-hidden="true"></div>
+  <span class="topbar-env">Production</span>
+  <div class="topbar-spacer"></div>
+  <span class="topbar-ts" aria-live="polite" aria-label="Dashboard last updated">
+    Last updated <strong>14:32:07 UTC</strong>
+  </span>
+  <div class="topbar-actions">
+    <button class="btn-icon" title="Refresh data" aria-label="Refresh dashboard data">↻</button>
+    <button
+      class="btn-icon"
+      title="Toggle light/dark theme"
+      aria-label="Toggle light/dark theme"
+      onclick="var h=document.documentElement;h.dataset.theme=h.dataset.theme==='light'?'dark':'light';"
+    >◑</button>
+  </div>
+</header>
+
+<!-- ────────────────────── MAIN LAYOUT ─────────────────────────────── -->
+<div class="layout">
+
+  <!-- ══════════ LEFT: ALERT PANEL ══════════ -->
+  <aside class="alert-panel" role="complementary" aria-label="Active Incidents panel">
+    <div class="alert-panel-hdr">
+      <span class="alert-panel-hdr-title">Active Incidents</span>
+      <span class="badge-count" aria-label="16 active incidents">16</span>
+    </div>
+
+    <div class="alert-feed" role="list" aria-label="Incident list">
+
+      <!-- ── CRITICAL ── -->
+      <div class="sev-divider" aria-hidden="true">
+        <span class="sev-divider-label crit">CRIT</span>
+        <span class="sev-divider-rule"></span>
+      </div>
+
+      <!-- Alert: 3 subnets over capacity -->
+      <article class="alert-item critical" role="listitem" aria-label="Critical alert: 3 subnets over capacity">
+        <div class="alert-meta">14:28 UTC · DHCP · Subnet</div>
+        <div class="alert-title">3 subnets over capacity</div>
+        <div class="alert-chips" aria-label="Affected components">
+          <span class="chip">HQ-Corporate</span>
+          <span class="chip">Guest-WiFi</span>
+          <span class="chip more">+1 more</span>
+        </div>
+        <div class="alert-actions">
+          <button class="btn-a primary" aria-label="View subnet details">View</button>
+          <button class="btn-a" aria-label="Acknowledge alert">Ack ▾</button>
+        </div>
+      </article>
+
+      <!-- Alert: 13 critical issues -->
+      <article class="alert-item critical" role="listitem" aria-label="Critical alert: 13 critical issues">
+        <div class="alert-meta">14:22 UTC · Multi-component</div>
+        <div class="alert-title">13 critical issues — 3 subnets over capacity, 10 hosts offline</div>
+        <div class="alert-actions">
+          <button class="btn-a primary" aria-label="View triage for 13 critical issues">View triage</button>
+          <button class="btn-a dismiss" aria-label="Dismiss this alert">×</button>
+        </div>
+      </article>
+
+      <!-- ── WARNING ── -->
+      <div class="sev-divider" style="margin-top:5px;" aria-hidden="true">
+        <span class="sev-divider-label warn">WARN</span>
+        <span class="sev-divider-rule"></span>
+      </div>
+
+      <!-- Alert: 3 alerts firing -->
+      <article class="alert-item warning" role="listitem" aria-label="Warning alert: 3 alerts firing">
+        <div class="alert-meta">14:15 UTC · Network · DNS</div>
+        <div class="alert-title">3 alerts firing — Offline/error hosts (10), Subnets ≥90% util (7), +1 more</div>
+        <div class="alert-actions">
+          <button class="btn-a" aria-label="View alert details">View</button>
+          <button class="btn-a" aria-label="Acknowledge alert">Ack ▾</button>
+          <button class="btn-a dismiss" aria-label="Dismiss this alert">×</button>
+        </div>
+      </article>
+
+      <a href="#" class="more-notices-link" role="button" aria-label="Show 3 more notices">+3 more notices..</a>
+
+    </div><!-- /alert-feed -->
+  </aside>
+
+  <!-- ══════════ RIGHT: DATA PANEL ══════════ -->
+  <main class="data-panel" role="main" aria-label="Data metrics panel">
+    <div class="metrics-grid">
+
+      <!-- ─── 1. DHCP POOLS ─────────────────────────────────────── -->
+      <section class="card" role="region" aria-label="DHCP Pools">
+        <div class="card-hdr">
+          <span class="card-title">DHCP Pools</span>
+          <span class="card-badge crit">CRIT</span>
+        </div>
+        <div class="card-body">
+          <div class="pool-list">
+
+            <div class="pool-row">
+              <div class="pool-lrow">
+                <span class="pool-cidr">10.1.0.0/24</span>
+                <span class="pool-pct ov">95%</span>
+              </div>
+              <div class="bar-track" role="meter" aria-valuenow="95" aria-valuemin="0" aria-valuemax="100" aria-label="10.1.0.0/24 at 95%">
+                <span class="threshold-lbl" aria-hidden="true">90%</span>
+                <div class="threshold-mark" aria-hidden="true"></div>
+                <div class="bar-fill ov" style="width:95%"></div>
+              </div>
+            </div>
+
+            <div class="pool-row">
+              <div class="pool-lrow">
+                <span class="pool-cidr">10.20.0.0/23</span>
+                <span class="pool-pct ov">95%</span>
+              </div>
+              <div class="bar-track" role="meter" aria-valuenow="95" aria-valuemin="0" aria-valuemax="100" aria-label="10.20.0.0/23 at 95%">
+                <div class="threshold-mark" aria-hidden="true"></div>
+                <div class="bar-fill ov" style="width:95%"></div>
+              </div>
+            </div>
+
+            <div class="pool-row">
+              <div class="pool-lrow">
+                <span class="pool-cidr">10.5.0.0/22</span>
+                <span class="pool-pct ov">92%</span>
+              </div>
+              <div class="bar-track" role="meter" aria-valuenow="92" aria-valuemin="0" aria-valuemax="100" aria-label="10.5.0.0/22 at 92%">
+                <div class="threshold-mark" aria-hidden="true"></div>
+                <div class="bar-fill ov" style="width:92%"></div>
+              </div>
+            </div>
+
+            <div class="pool-row">
+              <div class="pool-lrow">
+                <span class="pool-cidr">192.168.1.0/25</span>
+                <span class="pool-pct nr">91%</span>
+              </div>
+              <div class="bar-track" role="meter" aria-valuenow="91" aria-valuemin="0" aria-valuemax="100" aria-label="192.168.1.0/25 at 91%">
+                <div class="threshold-mark" aria-hidden="true"></div>
+                <div class="bar-fill nr" style="width:91%"></div>
+              </div>
+            </div>
+
+            <div class="pool-row">
+              <div class="pool-lrow">
+                <span class="pool-cidr">10.3.0.0/24</span>
+                <span class="pool-pct ok">85%</span>
+              </div>
+              <div class="bar-track" role="meter" aria-valuenow="85" aria-valuemin="0" aria-valuemax="100" aria-label="10.3.0.0/24 at 85%">
+                <div class="threshold-mark" aria-hidden="true"></div>
+                <div class="bar-fill ok" style="width:85%"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <div class="card-footer">Updated 1m ago</div>
+      </section>
+
+      <!-- ─── 2. HOST STATUS ─────────────────────────────────────── -->
+      <section class="card" role="region" aria-label="Host Status">
+        <div class="card-hdr">
+          <span class="card-title">Host Status</span>
+          <span class="card-badge warn">WARN</span>
+        </div>
+        <div class="card-body">
+          <div class="host-tiles" role="list" aria-label="Host status counts">
+            <div class="host-tile tile-ok" role="listitem">
+              <div class="host-tile-n" aria-label="27 hosts online">27</div>
+              <div class="host-tile-lbl">Online</div>
+            </div>
+            <div class="host-tile tile-warn" role="listitem">
+              <div class="host-tile-n" aria-label="10 hosts warning">10</div>
+              <div class="host-tile-lbl">Warn</div>
+            </div>
+            <div class="host-tile tile-crit" role="listitem">
+              <div class="host-tile-n" aria-label="10 hosts down">10</div>
+              <div class="host-tile-lbl">Down</div>
+            </div>
+          </div>
+          <div class="health-lrow">
+            <span>Fleet health</span>
+            <span class="pct-bad">52% degraded / down</span>
+          </div>
+          <div class="health-bar" role="meter" aria-valuenow="48" aria-valuemin="0" aria-valuemax="100" aria-label="48% healthy, 52% degraded or down">
+            <div class="hb-ok"   style="width:57.4%"></div>
+            <div class="hb-warn" style="width:21.3%"></div>
+            <div class="hb-crit" style="width:21.3%"></div>
+          </div>
+        </div>
+        <div class="card-footer">Updated 2m ago</div>
+      </section>
+
+      <!-- ─── 3. IPAM SUBNETS ───────────────────────────────────── -->
+      <section class="card" role="region" aria-label="IPAM Subnets">
+        <div class="card-hdr">
+          <span class="card-title">IPAM Subnets</span>
+          <span class="card-badge crit">CRIT</span>
+        </div>
+        <div class="card-body no-pad">
+          <table class="dtbl" aria-label="Subnet utilization table">
+            <thead>
+              <tr>
+                <th>Subnet</th>
+                <th>Util</th>
+                <th>Used / Total</th>
+                <th>State</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono" style="font-size:10px;">10.1.0.0/24</td>
+                <td>
+                  <div class="mini-bar-wrap">
+                    <div class="mini-track"><div class="mini-fill" style="width:95%;background:var(--critical)"></div></div>
+                    <span class="mono" style="font-size:10px;color:var(--critical);">95%</span>
+                  </div>
+                </td>
+                <td class="mono" style="font-size:10px;color:var(--muted);">243/256</td>
+                <td><span class="tg err">CRIT</span></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;">10.20.0.0/23</td>
+                <td>
+                  <div class="mini-bar-wrap">
+                    <div class="mini-track"><div class="mini-fill" style="width:95%;background:var(--critical)"></div></div>
+                    <span class="mono" style="font-size:10px;color:var(--critical);">95%</span>
+                  </div>
+                </td>
+                <td class="mono" style="font-size:10px;color:var(--muted);">487/512</td>
+                <td><span class="tg err">CRIT</span></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;">10.5.0.0/22</td>
+                <td>
+                  <div class="mini-bar-wrap">
+                    <div class="mini-track"><div class="mini-fill" style="width:92%;background:var(--critical)"></div></div>
+                    <span class="mono" style="font-size:10px;color:var(--critical);">92%</span>
+                  </div>
+                </td>
+                <td class="mono" style="font-size:10px;color:var(--muted);">945/1024</td>
+                <td><span class="tg err">CRIT</span></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;">192.168.1.0/25</td>
+                <td>
+                  <div class="mini-bar-wrap">
+                    <div class="mini-track"><div class="mini-fill" style="width:91%;background:var(--warning)"></div></div>
+                    <span class="mono" style="font-size:10px;color:var(--warning);">91%</span>
+                  </div>
+                </td>
+                <td class="mono" style="font-size:10px;color:var(--muted);">116/128</td>
+                <td><span class="tg warn">WARN</span></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;">10.3.0.0/24</td>
+                <td>
+                  <div class="mini-bar-wrap">
+                    <div class="mini-track"><div class="mini-fill" style="width:85%;background:var(--ok)"></div></div>
+                    <span class="mono" style="font-size:10px;color:var(--ok);">85%</span>
+                  </div>
+                </td>
+                <td class="mono" style="font-size:10px;color:var(--muted);">218/256</td>
+                <td><span class="tg ok">OK</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer">Updated 3m ago</div>
+      </section>
+
+      <!-- ─── 4. DNS ZONES ──────────────────────────────────────── -->
+      <section class="card" role="region" aria-label="DNS Zones">
+        <div class="card-hdr">
+          <span class="card-title">DNS Zones</span>
+          <span class="err-count-badge" aria-label="5 zone errors">5 errors</span>
+        </div>
+        <div class="card-body no-pad">
+          <table class="dtbl" aria-label="DNS zone status table">
+            <thead>
+              <tr>
+                <th>Zone</th>
+                <th>Q/hr</th>
+                <th>Type</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono" style="font-size:10px;">corp.acme.com</td>
+                <td class="mono" style="font-size:10px;">14,220</td>
+                <td><span class="tg info">Primary</span></td>
+                <td><span class="dot ok" aria-label="OK status"></span></td>
+              </tr>
+              <tr class="row-hl-crit">
+                <td class="mono" style="font-size:10px;">guest.acme.com</td>
+                <td class="mono" style="font-size:10px;color:var(--critical);">0</td>
+                <td><span class="tg info">Primary</span></td>
+                <td><span class="tg err">FAIL</span></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;">10.in-addr.arpa</td>
+                <td class="mono" style="font-size:10px;">8,103</td>
+                <td><span class="tg info">Reverse</span></td>
+                <td><span class="dot ok" aria-label="OK status"></span></td>
+              </tr>
+              <tr class="row-hl-warn">
+                <td class="mono" style="font-size:10px;">dmz.acme.com</td>
+                <td class="mono" style="font-size:10px;color:var(--warning);">421</td>
+                <td><span class="tg info">Secondary</span></td>
+                <td><span class="tg warn">STALE</span></td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;">vpn.acme.com</td>
+                <td class="mono" style="font-size:10px;">2,890</td>
+                <td><span class="tg info">Primary</span></td>
+                <td><span class="dot ok" aria-label="OK status"></span></td>
+              </tr>
+              <tr class="row-hl-crit">
+                <td class="mono" style="font-size:10px;">lab.acme.internal</td>
+                <td class="mono" style="font-size:10px;color:var(--critical);">0</td>
+                <td><span class="tg info">Primary</span></td>
+                <td><span class="tg err">FAIL</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer">Updated 4m ago</div>
+      </section>
+
+      <!-- ─── 5. ACTIVE THREATS ─────────────────────────────────── -->
+      <section class="card" role="region" aria-label="Active Threats">
+        <div class="card-hdr">
+          <span class="card-title">Active Threats</span>
+          <span class="card-badge crit">CRIT</span>
+        </div>
+        <div class="card-body no-pad">
+          <table class="dtbl" aria-label="Active threat indicators table">
+            <thead>
+              <tr>
+                <th>IP / Domain</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Hits</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="bold-row">
+                <td class="mono" style="font-size:10px;">185.220.101.47</td>
+                <td><span class="tg err">C2</span></td>
+                <td><span class="tg blocked">BLOCKED</span></td>
+                <td class="mono" style="font-size:10px;color:var(--critical);font-weight:700;">2,841</td>
+              </tr>
+              <tr class="bold-row">
+                <td class="mono" style="font-size:10px;">malware-cdn.ru</td>
+                <td><span class="tg err">Malware</span></td>
+                <td><span class="tg blocked">BLOCKED</span></td>
+                <td class="mono" style="font-size:10px;color:var(--critical);font-weight:700;">1,203</td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;">45.142.212.100</td>
+                <td><span class="tg warn">Phishing</span></td>
+                <td><span class="tg blocked">BLOCKED</span></td>
+                <td class="mono" style="font-size:10px;">337</td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;">update.fakems.net</td>
+                <td><span class="tg warn">DNS Hijack</span></td>
+                <td><span class="tg blocked">BLOCKED</span></td>
+                <td class="mono" style="font-size:10px;">89</td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;">104.21.44.200</td>
+                <td><span class="tg info">Scanner</span></td>
+                <td><span class="tg active">ACTIVE</span></td>
+                <td class="mono" style="font-size:10px;">12</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer"><span class="stale">STALE</span> · Updated 7m ago</div>
+      </section>
+
+      <!-- ─── 6. AUDIT EVENTS ───────────────────────────────────── -->
+      <section class="card" role="region" aria-label="Audit Events">
+        <div class="card-hdr">
+          <span class="card-title">Audit Events</span>
+          <span class="card-badge ok">OK</span>
+        </div>
+        <div class="card-body no-pad">
+          <table class="dtbl" aria-label="Recent audit events table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Level</th>
+                <th>User</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono" style="font-size:10px;color:var(--muted);">14:31:52</td>
+                <td><span class="tg info">INFO</span></td>
+                <td class="mono" style="font-size:10px;">jsmith</td>
+                <td style="font-size:10px;">Added DNS record</td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;color:var(--muted);">14:29:18</td>
+                <td><span class="tg warn">WARN</span></td>
+                <td class="mono" style="font-size:10px;">automation</td>
+                <td style="font-size:10px;">Lease reclaimed</td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;color:var(--muted);">14:25:03</td>
+                <td><span class="tg err">CRIT</span></td>
+                <td class="mono" style="font-size:10px;">system</td>
+                <td style="font-size:10px;">Pool 10.1.0.0/24 &gt;90%</td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;color:var(--muted);">14:22:47</td>
+                <td><span class="tg info">INFO</span></td>
+                <td class="mono" style="font-size:10px;">mlopez</td>
+                <td style="font-size:10px;">Modified ACL rule</td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;color:var(--muted);">14:19:30</td>
+                <td><span class="tg warn">WARN</span></td>
+                <td class="mono" style="font-size:10px;">system</td>
+                <td style="font-size:10px;">DNS zone dmz stale</td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-size:10px;color:var(--muted);">14:14:06</td>
+                <td><span class="tg info">INFO</span></td>
+                <td class="mono" style="font-size:10px;">agarwal</td>
+                <td style="font-size:10px;">Threat rule updated</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer">Updated 1m ago</div>
+      </section>
+
+    </div><!-- /metrics-grid -->
+  </main><!-- /data-panel -->
+
+</div><!-- /layout -->
+</body>
+</html>

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INFOBLOX NOC — v6 Wild</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-data: "Geist Mono", "SF Mono", ui-monospace, monospace;
+
+  /* dark (default) */
+  --bg: #0f1117;
+  --surface: #161820;
+  --surface-2: #1e2030;
+  --text: #c8ccd4;
+  --muted: #5c6274;
+  --accent: #3b5bdb;
+  --accent-hover: #4c6ef5;
+
+  --crit-bg: #7f1d1d;  --crit-fg: #fecaca;
+  --warn-bg: #78350f;  --warn-fg: #fde68a;
+  --ok-bg:   #064e3b;  --ok-fg:   #6ee7b7;
+  --info-bg: #1e3a5f;  --info-fg: #93c5fd;
+
+  --rule: #1e2030;
+}
+
+:root[data-theme="light"] {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f9;
+  --text: #1a1d27;
+  --muted: #8590a2;
+  --accent: #3b5bdb;
+  --accent-hover: #2f49b3;
+
+  --crit-bg: #fee2e2;  --crit-fg: #7f1d1d;
+  --warn-bg: #fffbeb;  --warn-fg: #78350f;
+  --ok-bg:   #ecfdf5;  --ok-fg:   #064e3b;
+  --info-bg: #eff6ff;  --info-fg: #1e3a5f;
+
+  --rule: #e3e7ef;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ─── TOP BAR ─────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  height: 56px;
+  padding: 0 28px;
+  background: var(--surface);
+  box-shadow: 0 1px 0 0 var(--rule), 0 2px 8px rgba(0,0,0,0.18);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand {
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 26px;
+  flex: 1;
+}
+
+.tab {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 6px 0;
+  position: relative;
+  transition: color 0.12s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); }
+.tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -2px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.search {
+  background: var(--surface-2);
+  border: none;
+  border-radius: 0;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 8px 12px;
+  width: 220px;
+  outline: none;
+}
+.search::placeholder { color: var(--muted); }
+.search:focus { box-shadow: inset 0 -2px 0 0 var(--accent); }
+
+.toggle {
+  background: var(--surface-2);
+  border: none;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 9px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toggle:hover { background: var(--accent); color: #fff; }
+
+/* ─── LAYOUT ──────────────────────────────────────────── */
+.layout {
+  display: grid;
+  grid-template-columns: 60% 40%;
+  gap: 0;
+  min-height: calc(100vh - 56px);
+}
+
+.main { padding: 36px 32px 48px; }
+.sidebar {
+  padding: 36px 32px 48px;
+  background: var(--surface);
+}
+
+/* ─── STAT BAR ────────────────────────────────────────── */
+.stats {
+  display: flex;
+  align-items: flex-end;
+  gap: 56px;
+  padding-bottom: 36px;
+  margin-bottom: 4px;
+}
+.stat .num {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.stat .num.accent { color: var(--accent); }
+.stat .lbl {
+  display: block;
+  margin-top: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ─── SECTION HEADS ───────────────────────────────────── */
+.head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-bottom: 12px;
+  box-shadow: 0 1px 0 0 var(--rule);
+  margin-bottom: 4px;
+}
+
+/* ─── SUBNET TABLE ────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+thead th {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 14px 12px 10px;
+}
+thead th.r, tbody td.r { text-align: right; }
+tbody td {
+  padding: 13px 12px;
+  box-shadow: inset 0 1px 0 0 var(--rule);
+  vertical-align: middle;
+}
+tbody tr:hover td { background: var(--surface-2); }
+
+td.idx, td.subnet, td.util {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+td.idx { color: var(--muted); width: 36px; }
+td.subnet { font-weight: 500; font-size: 13px; }
+td.desc { color: var(--text); }
+td.util { font-weight: 600; }
+
+.badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 2px;
+}
+.b-crit { background: var(--crit-bg); color: var(--crit-fg); }
+.b-warn { background: var(--warn-bg); color: var(--warn-fg); }
+.b-ok   { background: var(--ok-bg);   color: var(--ok-fg); }
+.b-info { background: var(--info-bg); color: var(--info-fg); }
+
+/* ─── INCIDENT QUEUE ──────────────────────────────────── */
+.incident {
+  padding: 14px 16px;
+  margin-bottom: 2px;
+  background: var(--surface-2);
+  border-left: 4px solid var(--muted);
+}
+.incident.crit { border-left-color: #ef4444; }
+.incident.warn { border-left-color: #f59e0b; }
+.incident.info { border-left-color: var(--accent); }
+.incident .top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.incident .id {
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.incident .age {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--muted);
+}
+.incident .title { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
+.incident .meta { font-size: 12px; color: var(--muted); }
+
+/* ─── RECENT LOG ──────────────────────────────────────── */
+.log { margin-top: 4px; }
+.log-row {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  padding: 9px 12px;
+  font-size: 12px;
+}
+.log-row:nth-child(odd) { background: var(--surface-2); }
+.log-row .ts {
+  font-family: var(--font-data);
+  color: var(--muted);
+  white-space: nowrap;
+  font-size: 11px;
+}
+.log-row .msg { color: var(--text); }
+
+.block-gap { margin-top: 40px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="brand">INFOBLOX NOC</span>
+  <nav class="tabs">
+    <a href="#" class="tab active">Overview</a>
+    <a href="#" class="tab">DNS</a>
+    <a href="#" class="tab">DHCP</a>
+    <a href="#" class="tab">IPAM</a>
+    <a href="#" class="tab">Reports</a>
+  </nav>
+  <input class="search" type="text" placeholder="Search subnets, hosts, records…">
+  <button class="toggle" id="themeToggle" onclick="toggleTheme()">◐ Theme</button>
+</header>
+
+<div class="layout">
+
+  <!-- MAIN -->
+  <main class="main">
+    <section class="stats">
+      <div class="stat">
+        <span class="num">247</span>
+        <span class="lbl">Networks</span>
+      </div>
+      <div class="stat">
+        <span class="num accent">1,521</span>
+        <span class="lbl">Queries / sec</span>
+      </div>
+      <div class="stat">
+        <span class="num">78%</span>
+        <span class="lbl">DHCP Util</span>
+      </div>
+    </section>
+
+    <div class="head">Subnet Utilization</div>
+    <table>
+      <thead>
+        <tr>
+          <th class="r">#</th>
+          <th>Subnet</th>
+          <th>Description</th>
+          <th class="r">Util%</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="idx r">01</td><td class="subnet">10.4.12.0/24</td><td class="desc">Core Datacenter A</td><td class="util r">94</td><td><span class="badge b-crit">Critical</span></td></tr>
+        <tr><td class="idx r">02</td><td class="subnet">10.4.13.0/24</td><td class="desc">Core Datacenter B</td><td class="util r">88</td><td><span class="badge b-warn">Warning</span></td></tr>
+        <tr><td class="idx r">03</td><td class="subnet">10.8.0.0/22</td><td class="desc">VoIP / Telephony</td><td class="util r">71</td><td><span class="badge b-ok">Healthy</span></td></tr>
+        <tr><td class="idx r">04</td><td class="subnet">172.16.4.0/24</td><td class="desc">Branch — NYC</td><td class="util r">62</td><td><span class="badge b-ok">Healthy</span></td></tr>
+        <tr><td class="idx r">05</td><td class="subnet">172.16.9.0/24</td><td class="desc">Branch — LDN</td><td class="util r">90</td><td><span class="badge b-warn">Warning</span></td></tr>
+        <tr><td class="idx r">06</td><td class="subnet">192.168.20.0/24</td><td class="desc">Guest Wi-Fi</td><td class="util r">44</td><td><span class="badge b-info">Provisioning</span></td></tr>
+        <tr><td class="idx r">07</td><td class="subnet">10.20.0.0/16</td><td class="desc">Lab / Staging</td><td class="util r">33</td><td><span class="badge b-ok">Healthy</span></td></tr>
+        <tr><td class="idx r">08</td><td class="subnet">10.4.30.0/24</td><td class="desc">Storage Fabric</td><td class="util r">97</td><td><span class="badge b-crit">Critical</span></td></tr>
+        <tr><td class="idx r">09</td><td class="subnet">10.50.1.0/24</td><td class="desc">IoT Sensors</td><td class="util r">58</td><td><span class="badge b-info">Provisioning</span></td></tr>
+        <tr><td class="idx r">10</td><td class="subnet">172.16.40.0/24</td><td class="desc">Branch — SGP</td><td class="util r">67</td><td><span class="badge b-ok">Healthy</span></td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="head">Incident Queue</div>
+
+    <div class="incident crit">
+      <div class="top">
+        <span class="id">INC-4471</span>
+        <span class="age">8m</span>
+      </div>
+      <div class="title">DHCP pool exhausted — 10.4.30.0/24</div>
+      <div class="meta">Storage Fabric · 97% allocated · auto-page sent</div>
+    </div>
+
+    <div class="incident warn">
+      <div class="top">
+        <span class="id">INC-4468</span>
+        <span class="age">41m</span>
+      </div>
+      <div class="title">DNS latency spike — primary resolver</div>
+      <div class="meta">ns1.corp · p95 184ms · degraded</div>
+    </div>
+
+    <div class="incident info">
+      <div class="top">
+        <span class="id">INC-4459</span>
+        <span class="age">2h</span>
+      </div>
+      <div class="title">New subnet awaiting approval</div>
+      <div class="meta">10.50.1.0/24 · IoT Sensors · pending review</div>
+    </div>
+
+    <div class="head block-gap">Recent Log</div>
+    <div class="log">
+      <div class="log-row"><span class="ts">14:02:17</span><span class="msg">Lease renewed — 172.16.4.118</span></div>
+      <div class="log-row"><span class="ts">14:01:53</span><span class="msg">Zone transfer OK — corp.internal</span></div>
+      <div class="log-row"><span class="ts">14:01:40</span><span class="msg">Grid member ny-grid-02 reachable</span></div>
+      <div class="log-row"><span class="ts">14:00:58</span><span class="msg">DHCP scope created — 10.50.1.0/24</span></div>
+      <div class="log-row"><span class="ts">14:00:31</span><span class="msg">Util threshold crossed — 10.4.30.0/24</span></div>
+      <div class="log-row"><span class="ts">13:59:47</span><span class="msg">A record added — app7.corp.internal</span></div>
+      <div class="log-row"><span class="ts">13:59:12</span><span class="msg">Failover sync complete — pair-A</span></div>
+      <div class="log-row"><span class="ts">13:58:39</span><span class="msg">Resolver cache flushed — ns2.corp</span></div>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  document.getElementById('themeToggle').textContent = (next === 'dark' ? '◐ Theme' : '◑ Theme');
+}
+</script>
+
+</body>
+</html>

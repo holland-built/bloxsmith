@@ -1,0 +1,268 @@
+<!-- VARIANT: v10 — Segmented timeline (WILD) -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DHCP Pool Utilization — v10 Segmented Timeline</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── LOCKED TOKENS ── */
+  [data-theme="dark"] {
+    --bg:        #1a1b1e;
+    --surface:   #24252a;
+    --surface-2: #2e2f35;
+    --border:    rgba(255,255,255,0.10);
+    --accent:    #6694ff;
+    --red:       #f87171;
+    --amber:     #fbbf24;
+    --green:     #4ade80;
+    --muted:     #75767b;
+    --ink:       #e8e8ea;
+  }
+  [data-theme="light"] {
+    --bg:        #f9fafa;
+    --surface:   #fff;
+    --surface-2: #f3f4f9;
+    --border:    #d4d4d8;
+    --accent:    #003ecc;
+    --red:       #c81f0c;
+    --amber:     #977405;
+    --green:     #13854f;
+    --muted:     #6b6c71;
+    --ink:       #232429;
+  }
+
+  body {
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: "Inter", system-ui, sans-serif;
+    transition: background 0.2s;
+  }
+
+  /* ── THEME TOGGLE ── */
+  .toggle-btn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .toggle-btn:hover { background: var(--border); }
+
+  /* ── WIDGET CARD ── */
+  .widget {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 14px;
+    width: 320px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  /* ── SECTION HEADER ── */
+  .section-header {
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  /* ── POOL STRIPS ── */
+  .pools {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .pool-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .pool-label {
+    font-family: "Geist Mono", "Fira Mono", monospace;
+    font-size: 9px;
+    color: var(--muted);
+    white-space: nowrap;
+    width: 94px;
+    flex-shrink: 0;
+    letter-spacing: -0.01em;
+  }
+
+  /* 24-segment timeline strip */
+  .timeline {
+    display: flex;
+    flex: 1;
+    gap: 1px;
+    height: 14px;
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .seg {
+    flex: 1;
+    height: 100%;
+    border-radius: 0;
+    transition: opacity 0.15s;
+  }
+  .seg:hover { opacity: 0.75; }
+
+  .seg.green { background: var(--green); }
+  .seg.amber { background: var(--amber); }
+  .seg.red   { background: var(--red); }
+
+  /* current % badge */
+  .pct-badge {
+    font-family: "Geist Mono", "Fira Mono", monospace;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .pct-badge.green { color: var(--green); }
+  .pct-badge.amber { color: var(--amber); }
+  .pct-badge.red   { color: var(--red); }
+
+  /* ── TIME AXIS HINT (12am / now) ── */
+  .axis-hint {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    padding-left: 102px;
+    padding-right: 38px;
+  }
+  .axis-hint span {
+    font-family: "Geist Mono", "Fira Mono", monospace;
+    font-size: 8px;
+    color: var(--muted);
+    opacity: 0.55;
+  }
+</style>
+<script>if(new URLSearchParams(location.search).get("theme")==="light")document.documentElement.setAttribute("data-theme","light");</script>
+</head>
+<body>
+
+<button class="toggle-btn" onclick="toggleTheme()">Toggle light / dark</button>
+
+<div class="widget">
+  <div class="section-header">· DHCP</div>
+
+  <div class="pools">
+
+    <!-- Pool 1: 10.0.0.0/22 — mostly healthy, spikes red at hour 22-23 -->
+    <div class="pool-row">
+      <div class="pool-label">10.0.0.0/22</div>
+      <div class="timeline" id="pool-1"></div>
+      <div class="pct-badge red">94%</div>
+    </div>
+
+    <!-- Pool 2: 172.16.4.0/23 — steady climb green→amber→red -->
+    <div class="pool-row">
+      <div class="pool-label">172.16.4.0/23</div>
+      <div class="timeline" id="pool-2"></div>
+      <div class="pct-badge amber">71%</div>
+    </div>
+
+    <!-- Pool 3: 192.168.10.0/24 — healthy all day, amber at end -->
+    <div class="pool-row">
+      <div class="pool-label">192.168.10.0/24</div>
+      <div class="timeline" id="pool-3"></div>
+      <div class="pct-badge amber">68%</div>
+    </div>
+
+    <!-- Pool 4: 10.50.0.0/20 — consistently green -->
+    <div class="pool-row">
+      <div class="pool-label">10.50.0.0/20</div>
+      <div class="timeline" id="pool-4"></div>
+      <div class="pct-badge green">31%</div>
+    </div>
+
+  </div>
+
+  <!-- axis hints: barely visible, 8px mono -->
+  <div class="axis-hint">
+    <span>12 am</span>
+    <span>now</span>
+  </div>
+</div>
+
+<script>
+  // Severity color string → CSS class
+  function seg(cls) {
+    const d = document.createElement('div');
+    d.className = 'seg ' + cls;
+    return d;
+  }
+
+  // Pool 1: 10.0.0.0/22 — green for morning, amber mid-day, red by evening
+  // Simulates a pool that fills up through business hours and spikes at end of day
+  const pool1 = [
+    'green','green','green','green','green','green', // 0-5 (overnight)
+    'green','green','amber','amber','amber','amber', // 6-11 (morning ramp)
+    'amber','amber','amber','red',  'red',  'red',  // 12-17 (business hours peak)
+    'red',  'red',  'red',  'red',  'red',  'red'  // 18-23 (no relief)
+  ];
+
+  // Pool 2: 172.16.4.0/23 — gradual climb, amber now
+  const pool2 = [
+    'green','green','green','green','green','green', // 0-5
+    'green','green','green','amber','amber','amber', // 6-11
+    'amber','amber','amber','amber','amber','amber', // 12-17
+    'amber','amber','red',  'amber','amber','amber', // 18-23 (brief spike at 20)
+  ];
+
+  // Pool 3: 192.168.10.0/24 — mostly green, amber creeping in afternoon
+  const pool3 = [
+    'green','green','green','green','green','green', // 0-5
+    'green','green','green','green','green','green', // 6-11
+    'green','green','green','amber','amber','amber', // 12-17
+    'amber','amber','amber','amber','amber','amber', // 18-23
+  ];
+
+  // Pool 4: 10.50.0.0/20 — large pool, all green
+  const pool4 = [
+    'green','green','green','green','green','green',
+    'green','green','green','green','green','green',
+    'green','green','green','green','green','green',
+    'green','green','green','green','green','green',
+  ];
+
+  function buildTimeline(id, data) {
+    const el = document.getElementById(id);
+    data.forEach(cls => el.appendChild(seg(cls)));
+  }
+
+  buildTimeline('pool-1', pool1);
+  buildTimeline('pool-2', pool2);
+  buildTimeline('pool-3', pool3);
+  buildTimeline('pool-4', pool4);
+
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.setAttribute('data-theme',
+      html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
+    );
+  }
+</script>
+</body>
+</html>

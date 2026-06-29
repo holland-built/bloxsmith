@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC — Subnets (v4)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-data: "Geist Mono", "SF Mono", "Monaco", monospace;
+
+    /* dark (default) */
+    --background: #1a1b1e;
+    --surface: #24252a;
+    --surface-2: #2e2f35;
+    --border: rgba(255,255,255,0.10);
+    --text: #e8e8ea;
+    --muted: #75767b;
+    --accent: #6694ff;
+    --danger: #f87171;
+    --warning: #fbbf24;
+    --success: #4ade80;
+    --row-h: 34px;
+    --radius: 2px;
+  }
+  :root[data-theme="light"] {
+    --background: #f9fafa;
+    --surface: #ffffff;
+    --surface-2: #f3f4f9;
+    --border: #d4d4d8;
+    --text: #232429;
+    --muted: #919297;
+    --accent: #003ecc;
+    --danger: #c81f0c;
+    --warning: #977405;
+    --success: #26a769;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font-ui);
+    background: var(--background);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  .mono { font-family: var(--font-data); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+  /* ---------- App shell ---------- */
+  .app {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    height: 100vh;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .brand {
+    padding: 16px 16px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  .brand h1 { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
+  .nav { padding: 12px 8px; flex: 1; }
+  .nav-group { margin-bottom: 14px; }
+  .nav-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 4px 8px;
+  }
+  .nav-link {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13px; font-weight: 500;
+    cursor: pointer;
+  }
+  .nav-link:hover { background: var(--surface-2); }
+  .nav-link.active {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent);
+    font-weight: 600;
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  .nav-badge {
+    font-family: var(--font-data);
+    font-size: 11px; font-weight: 600;
+    background: var(--danger);
+    color: #fff;
+    border-radius: 999px;
+    padding: 1px 7px;
+    line-height: 1.5;
+  }
+  :root[data-theme="light"] .nav-badge { color: #fff; }
+
+  /* ---------- Main ---------- */
+  .main {
+    display: grid;
+    grid-template-rows: 1fr 1fr auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* topbar */
+  .topbar {
+    grid-row: 1;
+    position: absolute; top: 0; right: 0;
+    padding: 12px 16px;
+    z-index: 5;
+  }
+  .theme-toggle {
+    font-family: var(--font-ui);
+    font-size: 12px; font-weight: 500;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 5px 10px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .theme-toggle:hover { background: var(--surface-2); }
+
+  /* ---------- Master pane ---------- */
+  .master {
+    border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .toolbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .toolbar .count { font-size: 13px; font-weight: 600; }
+  .toolbar .count .num { color: var(--accent); }
+  .search {
+    flex: 1; max-width: 280px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 5px 10px;
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 12px;
+  }
+  .search::placeholder { color: var(--muted); }
+  .search:focus { outline: none; border-color: var(--accent); }
+  .chips { display: flex; gap: 6px; margin-left: auto; }
+  .chip {
+    font-size: 12px; font-weight: 500;
+    padding: 4px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .chip:hover { color: var(--text); border-color: var(--text); }
+  .chip.active {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .table-wrap { overflow-y: auto; flex: 1; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    position: sticky; top: 0;
+    background: var(--surface);
+    text-align: left;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 7px 16px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  thead th.num, tbody td.num { text-align: right; }
+  tbody tr {
+    height: var(--row-h);
+    cursor: pointer;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  }
+  tbody tr:hover { background: var(--surface-2); }
+  tbody tr.selected {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  tbody td {
+    padding: 0 16px;
+    font-size: 13px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  tbody td.subnet { color: var(--text); }
+  .muted { color: var(--muted); }
+
+  /* utilization bar */
+  .util { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .util .bar {
+    width: 56px; height: 5px; border-radius: 999px;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .util .fill { height: 100%; border-radius: 999px; }
+  .util .val { font-family: var(--font-data); font-size: 12px; min-width: 34px; text-align: right; }
+
+  /* status pill */
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; }
+  .status .led { width: 7px; height: 7px; border-radius: 50%; }
+  .led.s-healthy { background: var(--success); }
+  .led.s-critical { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent); }
+  .led.s-degraded { background: var(--warning); }
+  .st-healthy { color: var(--success); }
+  .st-critical { color: var(--danger); }
+  .st-degraded { color: var(--warning); }
+
+  /* ---------- Detail pane ---------- */
+  .detail {
+    display: flex; flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    background: var(--background);
+  }
+  .detail-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .detail-head .title { font-family: var(--font-data); font-size: 14px; font-weight: 600; }
+  .detail-head .sub { color: var(--muted); font-family: var(--font-ui); font-weight: 500; }
+  .badge {
+    margin-left: auto;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: var(--radius);
+  }
+  .badge.critical {
+    background: color-mix(in srgb, var(--danger) 18%, transparent);
+    color: var(--danger);
+    border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  }
+
+  .detail-body { padding: 14px 16px; }
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+  }
+  .card h3 {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 9px;
+  }
+  .kv { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; }
+  .kv .k { color: var(--muted); font-size: 12px; }
+  .kv .v { font-size: 12px; }
+  .kv .v.mono { font-size: 12px; }
+
+  .section-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 7px;
+  }
+  .lease-table { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; }
+  .lease-table table { width: 100%; }
+  .lease-table thead th { background: var(--surface-2); position: static; }
+  .lease-table tbody tr { height: 30px; cursor: default; }
+  .lease-table tbody tr:hover { background: var(--surface); }
+  .lease-table tbody tr:last-child { border-bottom: none; }
+
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--font-ui);
+    font-size: 12px; font-weight: 600;
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  :root[data-theme="light"] .btn.primary { color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+
+  /* ---------- Footer ---------- */
+  .footer {
+    grid-row: 3;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    padding: 7px 16px;
+    display: flex; align-items: center; gap: 16px;
+    font-size: 12px; color: var(--muted);
+  }
+  .footer .live { display: inline-flex; align-items: center; gap: 6px; }
+  .footer .live .led { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+  .footer .sep { opacity: 0.5; }
+  .footer .incidents { color: var(--danger); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>Infoblox NOC</h1>
+    </div>
+    <nav class="nav">
+      <div class="nav-group">
+        <div class="nav-label">Network</div>
+        <a class="nav-link">Overview</a>
+        <a class="nav-link active">Subnets</a>
+        <a class="nav-link">DHCP</a>
+        <a class="nav-link">DNS</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">Security</div>
+        <a class="nav-link">Threats<span class="nav-badge">3</span></a>
+        <a class="nav-link">Policies</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">Settings</div>
+        <a class="nav-link">Config</a>
+        <a class="nav-link">Help</a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">
+        <span id="themeIcon">☾</span><span id="themeText">Dark</span>
+      </button>
+    </div>
+
+    <!-- Master pane: subnets table -->
+    <section class="master">
+      <div class="toolbar">
+        <span class="count"><span class="num mono">247</span> subnets</span>
+        <input class="search" type="text" placeholder="Search subnets, names, VRF…">
+        <div class="chips">
+          <button class="chip active">All</button>
+          <button class="chip">Critical</button>
+          <button class="chip">Degraded</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Subnet</th>
+              <th>Name</th>
+              <th>VRF</th>
+              <th class="num">Utilization</th>
+              <th>Status</th>
+              <th class="num">Last Seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="subnet mono">10.0.0.0/8</td>
+              <td>Core backbone</td>
+              <td class="mono muted">default</td>
+              <td class="num"><div class="util"><div class="bar"><div class="fill" style="width:45%;background:var(--success)"></div></div><span class="val">45%</span></div></td>
+              <td><span class="status st-healthy"><span class="led s-healthy"></span>Healthy</span></td>
+              <td class="num mono muted">2s ago</td>
+            </tr>
+            <tr class="selected">
+              <td class="subnet mono">10.10.50.0/23</td>
+              <td>Branch office</td>
+              <td class="mono muted">corp-vrf</td>
+              <td class="num"><div class="util"><div class="bar"><div class="fill" style="width:96%;background:var(--danger)"></div></div><span class="val">96%</span></div></td>
+              <td><span class="status st-critical"><span class="led s-critical"></span>Critical</span></td>
+              <td class="num mono muted">1s ago</td>
+            </tr>
+            <tr>
+              <td class="subnet mono">192.168.1.0/24</td>
+              <td>Guest WiFi</td>
+              <td class="mono muted">guest-vrf</td>
+              <td class="num"><div class="util"><div class="bar"><div class="fill" style="width:62%;background:var(--success)"></div></div><span class="val">62%</span></div></td>
+              <td><span class="status st-healthy"><span class="led s-healthy"></span>Healthy</span></td>
+              <td class="num mono muted">5s ago</td>
+            </tr>
+            <tr>
+              <td class="subnet mono">172.16.0.0/12</td>
+              <td>Management</td>
+              <td class="mono muted">mgmt-vrf</td>
+              <td class="num"><div class="util"><div class="bar"><div class="fill" style="width:23%;background:var(--success)"></div></div><span class="val">23%</span></div></td>
+              <td><span class="status st-healthy"><span class="led s-healthy"></span>Healthy</span></td>
+              <td class="num mono muted">8s ago</td>
+            </tr>
+            <tr>
+              <td class="subnet mono">10.20.30.0/24</td>
+              <td>VoIP services</td>
+              <td class="mono muted">voice-vrf</td>
+              <td class="num"><div class="util"><div class="bar"><div class="fill" style="width:81%;background:var(--warning)"></div></div><span class="val">81%</span></div></td>
+              <td><span class="status st-degraded"><span class="led s-degraded"></span>Degraded</span></td>
+              <td class="num mono muted">3s ago</td>
+            </tr>
+            <tr>
+              <td class="subnet mono">10.40.0.0/16</td>
+              <td>Data center A</td>
+              <td class="mono muted">dc-vrf</td>
+              <td class="num"><div class="util"><div class="bar"><div class="fill" style="width:54%;background:var(--success)"></div></div><span class="val">54%</span></div></td>
+              <td><span class="status st-healthy"><span class="led s-healthy"></span>Healthy</span></td>
+              <td class="num mono muted">4s ago</td>
+            </tr>
+            <tr>
+              <td class="subnet mono">10.50.10.0/24</td>
+              <td>IoT sensors</td>
+              <td class="mono muted">iot-vrf</td>
+              <td class="num"><div class="util"><div class="bar"><div class="fill" style="width:88%;background:var(--warning)"></div></div><span class="val">88%</span></div></td>
+              <td><span class="status st-degraded"><span class="led s-degraded"></span>Degraded</span></td>
+              <td class="num mono muted">6s ago</td>
+            </tr>
+            <tr>
+              <td class="subnet mono">203.0.113.0/24</td>
+              <td>DMZ public</td>
+              <td class="mono muted">dmz-vrf</td>
+              <td class="num"><div class="util"><div class="bar"><div class="fill" style="width:37%;background:var(--success)"></div></div><span class="val">37%</span></div></td>
+              <td><span class="status st-healthy"><span class="led s-healthy"></span>Healthy</span></td>
+              <td class="num mono muted">9s ago</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Detail pane -->
+    <section class="detail">
+      <div class="detail-head">
+        <span class="title">10.10.50.0/23</span>
+        <span class="sub">— Branch office</span>
+        <span class="badge critical">Critical</span>
+      </div>
+      <div class="detail-body">
+        <div class="info-grid">
+          <div class="card">
+            <h3>Network Details</h3>
+            <div class="kv"><span class="k">CIDR</span><span class="v mono">10.10.50.0/23</span></div>
+            <div class="kv"><span class="k">Gateway</span><span class="v mono">10.10.50.1</span></div>
+            <div class="kv"><span class="k">VLAN ID</span><span class="v mono">2050</span></div>
+            <div class="kv"><span class="k">VRF</span><span class="v mono">corp-vrf</span></div>
+          </div>
+          <div class="card">
+            <h3>DHCP Stats</h3>
+            <div class="kv"><span class="k">Pool size</span><span class="v mono">512</span></div>
+            <div class="kv"><span class="k">Allocated</span><span class="v mono">491</span></div>
+            <div class="kv"><span class="k">Free</span><span class="v mono">21</span></div>
+            <div class="kv"><span class="k">Utilization</span><span class="v mono st-critical">96%</span></div>
+          </div>
+          <div class="card">
+            <h3>DNS</h3>
+            <div class="kv"><span class="k">Zone</span><span class="v mono">corp.net</span></div>
+            <div class="kv"><span class="k">NS 1</span><span class="v mono">10.0.0.53</span></div>
+            <div class="kv"><span class="k">NS 2</span><span class="v mono">10.0.0.54</span></div>
+            <div class="kv"><span class="k">Records</span><span class="v mono">438</span></div>
+          </div>
+        </div>
+
+        <div class="section-label">Recent Leases</div>
+        <div class="lease-table">
+          <table>
+            <thead>
+              <tr>
+                <th>MAC Address</th>
+                <th>IP Address</th>
+                <th>Hostname</th>
+                <th class="num">Age</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono">a4:5e:60:c1:2f:9b</td>
+                <td class="mono">10.10.50.184</td>
+                <td>laptop-jdoe</td>
+                <td class="num mono muted">2m</td>
+              </tr>
+              <tr>
+                <td class="mono">3c:22:fb:0e:71:44</td>
+                <td class="mono">10.10.51.07</td>
+                <td>printer-fl2</td>
+                <td class="num mono muted">14m</td>
+              </tr>
+              <tr>
+                <td class="mono">d8:9e:f3:55:a0:1c</td>
+                <td class="mono">10.10.50.219</td>
+                <td>voip-desk-118</td>
+                <td class="num mono muted">38m</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary">View DHCP Leases</button>
+          <button class="btn">View DNS Records</button>
+          <button class="btn">Create Alert</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span class="live"><span class="led"></span>Live</span>
+      <span class="sep">·</span>
+      <span>Last updated <span class="mono">8s</span> ago</span>
+      <span class="sep">·</span>
+      <span class="incidents">3 active incidents</span>
+    </footer>
+  </div>
+</div>
+
+<script>
+  if (new URLSearchParams(location.search).get("theme") === "light") document.documentElement.setAttribute("data-theme","light");
+  function toggleTheme() {
+    const root = document.documentElement;
+    const isDark = root.getAttribute('data-theme') === 'dark';
+    root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    document.getElementById('themeIcon').textContent = isDark ? '☀' : '☾';
+    document.getElementById('themeText').textContent = isDark ? 'Light' : 'Dark';
+  }
+
+  // Row selection wiring (master-detail)
+  document.querySelectorAll('.master tbody tr').forEach(row => {
+    row.addEventListener('click', () => {
+      document.querySelectorAll('.master tbody tr').forEach(r => r.classList.remove('selected'));
+      row.classList.add('selected');
+    });
+  });
+</script>
+</body>
+</html>

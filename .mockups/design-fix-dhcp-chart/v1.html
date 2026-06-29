@@ -1,0 +1,358 @@
+<!-- VARIANT: v1 — Compact inline sparkline row -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DHCP Pool Utilization — v1 Compact Inline Sparkline</title>
+<style>
+  /* ── LOCKED TOKEN SYSTEM ── */
+  :root {
+    --font-ui: "Inter", system-ui, sans-serif;
+    --font-data: "Geist Mono", "SF Mono", "Fira Code", monospace;
+  }
+
+  [data-theme="dark"] {
+    --bg:        #1a1b1e;
+    --surface:   #24252a;
+    --surface-2: #2e2f35;
+    --border:    rgba(255,255,255,0.10);
+    --accent:    #6694ff;
+    --red:       #f87171;
+    --amber:     #fbbf24;
+    --green:     #4ade80;
+    --muted:     #75767b;
+    --ink:       #e8e8ea;
+  }
+
+  [data-theme="light"] {
+    --bg:        #f9fafa;
+    --surface:   #fff;
+    --surface-2: #f3f4f9;
+    --border:    #d4d4d8;
+    --accent:    #003ecc;
+    --red:       #c81f0c;
+    --amber:     #977405;
+    --green:     #13854f;
+    --muted:     #6b6c71;
+    --ink:       #232429;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 32px 24px;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  /* ── THEME TOGGLE ── */
+  .toggle-wrap {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 100;
+  }
+
+  .theme-toggle {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    padding: 5px 10px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .theme-toggle:hover { background: var(--surface-2); }
+
+  /* ── SECTION HEADER ── */
+  .section-header {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 0 6px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+    width: 100%;
+  }
+
+  /* ── WIDGET WRAPPER ── */
+  .widget-outer {
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── CARD ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* ── CARD HEADER ── */
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .card-title {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .card-meta {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  /* ── POOL ROW ── */
+  .pool-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .pool-row {
+    display: grid;
+    grid-template-columns: 1fr 38px 60px 54px;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 6px;
+    border-radius: 2px;
+    background: transparent;
+    transition: background 0.12s;
+  }
+  .pool-row:hover { background: var(--surface-2); }
+
+  /* Pool name */
+  .pool-name {
+    font-family: var(--font-data);
+    font-size: 11px;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  /* Utilization % */
+  .pool-pct {
+    font-family: var(--font-data);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: right;
+    line-height: 1;
+  }
+  .pct-crit  { color: var(--red); }
+  .pct-warn  { color: var(--amber); }
+  .pct-ok    { color: var(--green); }
+  .pct-idle  { color: var(--muted); }
+
+  /* Inline sparkline */
+  .sparkline {
+    display: block;
+    width: 60px;
+    height: 20px;
+    overflow: visible;
+  }
+
+  /* Threshold badge */
+  .badge {
+    font-family: var(--font-data);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 2px 5px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .badge-crit  { background: rgba(248,113,113,0.12); color: var(--red); }
+  .badge-warn  { background: rgba(251,191,36,0.12);  color: var(--amber); }
+  .badge-ok    { background: rgba(74,222,128,0.10);  color: var(--green); }
+  .badge-idle  { background: rgba(117,118,123,0.10); color: var(--muted); }
+
+  /* Divider between rows */
+  .pool-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0 6px;
+  }
+
+  /* ── FOOTER ── */
+  .card-footer {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .card-footer-label {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .card-footer-val {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--muted);
+  }
+</style>
+<script>if(new URLSearchParams(location.search).get("theme")==="light")document.documentElement.setAttribute("data-theme","light");</script>
+</head>
+<body>
+
+<!-- THEME TOGGLE -->
+<div class="toggle-wrap">
+  <button class="theme-toggle" onclick="
+    const html = document.documentElement;
+    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    this.textContent = next === 'dark' ? '☀ Light' : '☾ Dark';
+  ">☀ Light</button>
+</div>
+
+<!-- WIDGET -->
+<div class="widget-outer">
+
+  <!-- Section header matching app style -->
+  <div class="section-header">· DHCP</div>
+
+  <div class="card">
+
+    <!-- Card header -->
+    <div class="card-header">
+      <span class="card-title">Pool Utilization</span>
+      <span class="card-meta">updated 12s ago</span>
+    </div>
+
+    <!-- Pool rows -->
+    <div class="pool-list">
+
+      <!-- Row 1: 10.1.0.0/24 — 94% CRITICAL -->
+      <div class="pool-row">
+        <span class="pool-name">10.1.0.0/24</span>
+        <span class="pool-pct pct-crit">94%</span>
+        <svg class="sparkline" viewBox="0 0 60 20" preserveAspectRatio="none">
+          <!-- history: 71,74,79,83,88,91,94 -->
+          <polyline
+            points="0,9.1 10,8.5 20,7.0 30,5.6 40,4.0 50,2.9 60,1.8"
+            fill="none" stroke="#f87171" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="60" cy="1.8" r="2" fill="#f87171"/>
+        </svg>
+        <span class="badge badge-crit">CRITICAL</span>
+      </div>
+
+      <div class="pool-divider"></div>
+
+      <!-- Row 2: 10.2.0.0/23 — 87% WARNING -->
+      <div class="pool-row">
+        <span class="pool-name">10.2.0.0/23</span>
+        <span class="pool-pct pct-warn">87%</span>
+        <svg class="sparkline" viewBox="0 0 60 20" preserveAspectRatio="none">
+          <!-- history: 72,75,78,80,82,85,87 -->
+          <polyline
+            points="0,8.4 10,7.5 20,6.6 30,6.0 40,5.4 50,4.5 60,3.9"
+            fill="none" stroke="#fbbf24" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="60" cy="3.9" r="2" fill="#fbbf24"/>
+        </svg>
+        <span class="badge badge-warn">WARN</span>
+      </div>
+
+      <div class="pool-divider"></div>
+
+      <!-- Row 3: 192.168.1.0/24 — 78% WARNING -->
+      <div class="pool-row">
+        <span class="pool-name">192.168.1.0/24</span>
+        <span class="pool-pct pct-warn">78%</span>
+        <svg class="sparkline" viewBox="0 0 60 20" preserveAspectRatio="none">
+          <!-- history: 68,70,72,73,75,77,78 -->
+          <polyline
+            points="0,10.4 10,9.0 20,7.6 30,7.1 40,5.5 50,4.3 60,4.4"
+            fill="none" stroke="#fbbf24" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="60" cy="4.4" r="2" fill="#fbbf24"/>
+        </svg>
+        <span class="badge badge-warn">WARN</span>
+      </div>
+
+      <div class="pool-divider"></div>
+
+      <!-- Row 4: 172.16.0.0/22 — 61% OK -->
+      <div class="pool-row">
+        <span class="pool-name">172.16.0.0/22</span>
+        <span class="pool-pct pct-ok">61%</span>
+        <svg class="sparkline" viewBox="0 0 60 20" preserveAspectRatio="none">
+          <!-- history: 58,59,60,60,61,61,61 -->
+          <polyline
+            points="0,12.4 10,12.1 20,11.8 30,11.8 40,11.5 50,11.5 60,11.7"
+            fill="none" stroke="#4ade80" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="60" cy="11.7" r="2" fill="#4ade80"/>
+        </svg>
+        <span class="badge badge-ok">OK</span>
+      </div>
+
+      <div class="pool-divider"></div>
+
+      <!-- Row 5: 10.100.0.0/16 — 33% OK -->
+      <div class="pool-row">
+        <span class="pool-name">10.100.0.0/16</span>
+        <span class="pool-pct pct-ok">33%</span>
+        <svg class="sparkline" viewBox="0 0 60 20" preserveAspectRatio="none">
+          <!-- history: 38,37,36,35,34,33,33 — slight decline -->
+          <polyline
+            points="0,7.6 10,7.9 20,8.2 30,8.5 40,8.8 50,9.1 60,9.1"
+            fill="none" stroke="#4ade80" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="60" cy="9.1" r="2" fill="#4ade80"/>
+        </svg>
+        <span class="badge badge-ok">OK</span>
+      </div>
+
+    </div><!-- /pool-list -->
+
+    <!-- Footer summary -->
+    <div class="card-footer">
+      <span class="card-footer-label">5 pools · 2 critical/warn</span>
+      <span class="card-footer-val">last 6h trend</span>
+    </div>
+
+  </div><!-- /card -->
+</div><!-- /widget-outer -->
+
+</body>
+</html>

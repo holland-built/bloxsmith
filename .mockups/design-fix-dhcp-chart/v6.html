@@ -1,0 +1,237 @@
+<!-- VARIANT: v6 — Arc gauge cluster (WILD) -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DHCP Pool Utilization — v6 Arc Gauge Cluster</title>
+<style>
+  /* ── LOCKED TOKENS ── */
+  :root {
+    --font-ui: "Inter", system-ui, sans-serif;
+    --font-data: "Geist Mono", "Fira Mono", monospace;
+  }
+  [data-theme="dark"] {
+    --bg:        #1a1b1e;
+    --surface:   #24252a;
+    --surface-2: #2e2f35;
+    --border:    rgba(255,255,255,0.10);
+    --accent:    #6694ff;
+    --red:       #f87171;
+    --amber:     #fbbf24;
+    --green:     #4ade80;
+    --muted:     #75767b;
+    --ink:       #e8e8ea;
+    --track:     rgba(255,255,255,0.07);
+  }
+  [data-theme="light"] {
+    --bg:        #f9fafa;
+    --surface:   #fff;
+    --surface-2: #f3f4f9;
+    --border:    #d4d4d8;
+    --accent:    #003ecc;
+    --red:       #c81f0c;
+    --amber:     #977405;
+    --green:     #13854f;
+    --muted:     #6b6c71;
+    --ink:       #232429;
+    --track:     rgba(0,0,0,0.07);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    font-family: var(--font-ui);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 32px;
+    gap: 24px;
+    transition: background 0.2s;
+  }
+
+  /* ── Toggle ── */
+  .toggle-btn {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 12px;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    transition: color 0.15s, background 0.15s;
+  }
+  .toggle-btn:hover { color: var(--ink); }
+
+  /* ── Widget card ── */
+  .widget {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 14px;
+    width: 380px;
+  }
+
+  /* ── Section header ── */
+  .section-header {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* ── Gauge row ── */
+  .gauge-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  /* ── Single gauge cell ── */
+  .gauge-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .gauge-svg-wrap {
+    position: relative;
+    width: 70px;
+    height: 38px; /* half of 70px diameter + stroke */
+    overflow: visible;
+  }
+
+  .gauge-svg-wrap svg {
+    display: block;
+    overflow: visible;
+  }
+
+  /* Pct label sits inside the arc arc */
+  .gauge-pct {
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+    margin-top: 2px;
+  }
+
+  .gauge-label {
+    font-family: var(--font-data);
+    font-size: 9px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 72px;
+    text-align: center;
+    line-height: 1.2;
+  }
+</style>
+<script>if(new URLSearchParams(location.search).get("theme")==="light")document.documentElement.setAttribute("data-theme","light");</script>
+</head>
+<body>
+
+<button class="toggle-btn" onclick="toggleTheme()">Toggle light / dark</button>
+
+<div class="widget">
+  <div class="section-header">· DHCP</div>
+
+  <div class="gauge-row" id="gaugeRow">
+    <!-- Gauges injected by JS -->
+  </div>
+</div>
+
+<script>
+  /* ── Data ── */
+  const pools = [
+    { label: "10.1.0.0/24",     pct: 94, severity: "red"   },
+    { label: "192.168.1.0/24",  pct: 78, severity: "amber" },
+    { label: "172.16.0.0/22",   pct: 61, severity: "green" },
+    { label: "10.0.0.0/8",      pct: 45, severity: "green" },
+  ];
+
+  /* ── SVG arc helpers ── */
+  // 180° semicircle, drawn left-to-right along the top.
+  // cx=35, cy=35 (bottom centre of the 70×70 viewBox — we crop to top 38px).
+  // r=28 gives a comfortable ring inside 70px width.
+  // Arc length (half circumference) = π * r ≈ 87.96
+  const R   = 28;
+  const CX  = 35;
+  const CY  = 35;
+  const ARC = Math.PI * R; // half circumference
+
+  function makeArcCell(pool) {
+    const filled = (pool.pct / 100) * ARC;
+    const gap    = ARC - filled;
+
+    // Start point (left tip of semicircle): (CX - R, CY)
+    // End point   (right tip):              (CX + R, CY)
+    // Path goes counter-clockwise? No — we draw left→right, sweep-flag=1 (CW)
+    const pathD = `M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`;
+
+    // dasharray: filled segment first, then gap to avoid wrap
+    const dashArray  = `${filled} ${gap + 0.5}`;  // +0.5 prevents hairline bleed
+    const dashOffset = 0; // we start exactly at 0% (left tip)
+
+    const cell = document.createElement("div");
+    cell.className = "gauge-cell";
+    cell.innerHTML = `
+      <div class="gauge-svg-wrap">
+        <svg width="70" height="38" viewBox="0 0 70 70" aria-label="${pool.label} ${pool.pct}% utilization">
+          <!-- track -->
+          <path
+            d="${pathD}"
+            fill="none"
+            stroke="var(--track)"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <!-- filled arc -->
+          <path
+            d="${pathD}"
+            fill="none"
+            stroke="var(--${pool.severity})"
+            stroke-width="6"
+            stroke-linecap="round"
+            stroke-dasharray="${dashArray}"
+            stroke-dashoffset="${dashOffset}"
+          />
+        </svg>
+      </div>
+      <div class="gauge-pct">${pool.pct}%</div>
+      <div class="gauge-label" title="${pool.label}">${pool.label}</div>
+    `;
+    return cell;
+  }
+
+  function renderGauges() {
+    const row = document.getElementById("gaugeRow");
+    row.innerHTML = "";
+    pools.forEach(p => row.appendChild(makeArcCell(p)));
+  }
+
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.setAttribute("data-theme",
+      html.getAttribute("data-theme") === "dark" ? "light" : "dark"
+    );
+  }
+
+  renderGauges();
+</script>
+</body>
+</html>

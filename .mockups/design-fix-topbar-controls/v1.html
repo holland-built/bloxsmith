@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOC Topbar v1 — Icon-only Controls</title>
+<style>
+
+/* ===== RESET ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+a { text-decoration: none; }
+button { font-family: inherit; }
+
+/* ===== PAGE ===== */
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: #111214;
+  padding: 36px 28px 80px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+/* ===== THEME TOKENS ===== */
+.dark {
+  --bg:       #1a1b1e;
+  --surface:  #24252a;
+  --surface2: #2e2f36;
+  --border:   rgba(255,255,255,.10);
+  --teal:     #6694ff;
+  --ink:      #e8e8ea;
+  --muted:    #75767b;
+  --red:      #f87171;
+  --amber:    #fbbf24;
+  --green:    #4ade80;
+  --shadow:   rgba(0,0,0,.55);
+  --tab-active-bg: rgba(102,148,255,.06);
+}
+
+.light {
+  --bg:       #f9fafa;
+  --surface:  #ffffff;
+  --surface2: #f3f4f6;
+  --border:   #d4d4d8;
+  --teal:     #003ecc;
+  --ink:      #232429;
+  --muted:    #6b6c71;
+  --red:      #c81f0c;
+  --amber:    #b45309;
+  --green:    #15803d;
+  --shadow:   rgba(0,0,0,.18);
+  --tab-active-bg: rgba(0,62,204,.05);
+}
+
+/* ===== SECTION WRAPPER ===== */
+.theme-section {
+  max-width: 1280px;
+  width: 100%;
+}
+
+.section-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  color: #44454d;
+}
+
+.theme-name-dark  { color: #6694ff; }
+.theme-name-light { color: #003ecc; }
+
+.page-frame {
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  overflow: visible;
+}
+
+/* ===== TOPBAR ===== */
+.topbar {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  border-radius: 2px 2px 0 0;
+  position: relative;
+  overflow: visible;
+  gap: 0;
+}
+
+/* ===== LOGO ===== */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  margin-right: 10px;
+}
+
+.logo-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 2px;
+  background: var(--teal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.logo-mark svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.logo-word {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--ink);
+}
+
+.logo-tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--teal);
+  border: 1px solid var(--teal);
+  padding: 1px 5px;
+  border-radius: 2px;
+  opacity: .65;
+}
+
+/* ===== NAV ===== */
+.topbar-nav {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  justify-content: center;
+  height: 100%;
+  overflow: visible;
+}
+
+.nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 100%;
+  padding: 0 13px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color .13s ease, border-color .13s ease, background .13s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.nav-tab:hover {
+  color: var(--ink);
+  background: var(--tab-active-bg);
+}
+
+.nav-tab.active {
+  color: var(--teal);
+  border-bottom-color: var(--teal);
+  background: var(--tab-active-bg);
+}
+
+/* Inline tab badge (small dot on the tab) */
+.tab-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  font-size: 9.5px;
+  font-weight: 800;
+  font-family: 'Courier New', monospace;
+  line-height: 1;
+  letter-spacing: -.01em;
+}
+
+.tab-dot-red  { background: var(--red);   color: #fff; }
+.tab-dot-amb  { background: var(--amber); color: #fff; }
+
+.dark .tab-dot-red  { color: #1a1b1e; }
+.dark .tab-dot-amb  { color: #1a1b1e; }
+
+/* ===== RIGHT CONTROLS ===== */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  margin-left: 10px;
+  overflow: visible;
+}
+
+/* Alert pills — right side colored count circles */
+.alert-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: 'Courier New', monospace;
+  letter-spacing: -.01em;
+  cursor: default;
+}
+
+.pill-red  { background: var(--red);   color: #fff; }
+.pill-amb  { background: var(--amber); color: #fff; }
+
+.dark .pill-red { color: #1a1b1e; }
+.dark .pill-amb { color: #1a1b1e; }
+
+/* Separator */
+.sep {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  flex-shrink: 0;
+  margin: 0 5px;
+}
+
+/* ===== ICON BUTTONS ===== */
+.icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--muted);
+  transition: background .12s ease, color .12s ease;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.icon-btn:hover {
+  background: var(--border);
+  color: var(--ink);
+}
+
+.icon-btn:active { opacity: .7; }
+
+/* Refresh spin on hover */
+.icon-btn.refresh:hover {
+  animation: spin .35s ease;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ===== TOOLTIPS (appear below, via ::after) ===== */
+.icon-btn[data-tip]::after,
+.alert-pill[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: 'Inter', system-ui, sans-serif;
+  padding: 5px 9px;
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease;
+  z-index: 500;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 14px var(--shadow);
+}
+
+/* Tooltip arrow */
+.icon-btn[data-tip]::before,
+.alert-pill[data-tip]::before {
+  content: '';
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 4px solid var(--border);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease;
+  z-index: 501;
+}
+
+.icon-btn[data-tip]:hover::after,
+.icon-btn[data-tip]:hover::before,
+.alert-pill[data-tip]:hover::after,
+.alert-pill[data-tip]:hover::before {
+  opacity: 1;
+}
+
+/* Clamp tooltip from overflowing right edge */
+.icon-btn.tip-left[data-tip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.icon-btn.tip-left[data-tip]::before {
+  left: auto;
+  right: 8px;
+  transform: none;
+}
+
+/* ===== ANNOTATION STRIP ===== */
+.annotation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.ann-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--teal);
+  flex-shrink: 0;
+}
+
+.ann-text {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'Courier New', monospace;
+  white-space: nowrap;
+}
+
+.ann-arrow {
+  font-size: 11px;
+  color: var(--border);
+  flex-shrink: 0;
+}
+
+/* ===== CONTENT AREA ===== */
+.content-area {
+  padding: 16px;
+  background: var(--bg);
+  border-radius: 0 0 2px 2px;
+}
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.bento-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 14px 16px 12px;
+}
+
+.card-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.card-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: 'Courier New', monospace;
+  letter-spacing: -.03em;
+  line-height: 1.1;
+}
+
+.card-value.v-green  { color: var(--green); }
+.card-value.v-red    { color: var(--red);   }
+.card-value.v-amber  { color: var(--amber); }
+.card-value.v-teal   { color: var(--teal);  }
+.card-value.v-small  { font-size: 20px; letter-spacing: .01em; }
+
+.card-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+/* Inline status row */
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.sdot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sdot-green  { background: var(--green); }
+.sdot-red    { background: var(--red);   }
+.sdot-amber  { background: var(--amber); }
+
+.status-text {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.status-text.t-red   { color: var(--red); }
+.status-text.t-amber { color: var(--amber); }
+.status-text.t-green { color: var(--green); }
+
+/* Mini sparkline */
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 28px;
+  margin-top: 8px;
+}
+
+.spark-bar {
+  flex: 1;
+  border-radius: 1px;
+  background: var(--teal);
+  opacity: .55;
+  min-height: 3px;
+}
+
+.spark-bar.g { background: var(--green); opacity: .5; }
+.spark-bar.a { background: var(--amber); opacity: .7; }
+
+/* ===== GLOBAL TOGGLE BUTTON (fixed bottom-right) ===== */
+#cycle-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 9px 18px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: 'Inter', system-ui, sans-serif;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 2px;
+  background: #6694ff;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 14px rgba(102,148,255,.45);
+  transition: background .15s, box-shadow .15s;
+  z-index: 9999;
+}
+
+#cycle-btn:hover {
+  background: #5580ee;
+  box-shadow: 0 2px 20px rgba(102,148,255,.55);
+}
+
+</style>
+</head>
+<body>
+
+<!-- Fixed cycle button -->
+<button id="cycle-btn" onclick="cycleMode()">Both → Dark → Light</button>
+
+<!-- ===================== DARK SECTION ===================== -->
+<div class="theme-section dark" id="sec-dark">
+  <div class="section-meta">
+    <span class="section-label"><span class="theme-name-dark">DARK</span> &nbsp;·&nbsp; v1: Icon-only Controls</span>
+    <span class="section-label">Logo · 7 tabs · 2 pills · 6 icon-btns — 3 visual groups</span>
+  </div>
+
+  <div class="page-frame">
+
+    <!-- Topbar -->
+    <header class="topbar">
+
+      <!-- Logo -->
+      <a class="logo" href="#">
+        <div class="logo-mark">
+          <svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1.5" y="1.5" width="5" height="12" rx="1" fill="rgba(255,255,255,.95)"/>
+            <rect x="8.5" y="5.5" width="5" height="8" rx="1" fill="rgba(255,255,255,.65)"/>
+          </svg>
+        </div>
+        <span class="logo-word">Infoblox</span>
+        <span class="logo-tag">NOC</span>
+      </a>
+
+      <!-- Nav tabs -->
+      <nav class="topbar-nav">
+        <a class="nav-tab active" href="#" onclick="setTab(event, this)">Overview</a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">Topology</a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">IPAM</a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">DNS</a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">Hosts <span class="tab-dot tab-dot-red">10</span></a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">Alerts <span class="tab-dot tab-dot-amb">3</span></a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">Audit</a>
+      </nav>
+
+      <!-- Right controls -->
+      <div class="topbar-right">
+        <!-- Alert count pills (far right) -->
+        <span class="alert-pill pill-red" data-tip="10 host issues">10</span>
+        <span class="alert-pill pill-amb" data-tip="3 active alerts">3</span>
+
+        <div class="sep"></div>
+
+        <!-- Icon-only controls -->
+        <button class="icon-btn" data-tip="Site: All Sites">🌐</button>
+        <button class="icon-btn" data-tip="Range: Last 24h">📅</button>
+        <button class="icon-btn" data-tip="Interval: 5 min">⏱</button>
+        <button class="icon-btn" data-tip="Time: 14:22:07 UTC">🕐</button>
+        <button class="icon-btn refresh tip-left" data-tip="Refresh now">↻</button>
+        <button class="icon-btn tip-left" data-tip="Add query">⊕</button>
+      </div>
+    </header>
+
+    <!-- Annotation strip -->
+    <div class="annotation">
+      <span class="ann-tag">Before</span>
+      <span class="ann-text">11 elements cramped into 48 px — 4 dropdowns with text labels, visible clock, refresh text</span>
+      <span class="ann-arrow">→</span>
+      <span class="ann-tag">After</span>
+      <span class="ann-text">Logo · 7 tabs centered · 2 count pills · 6 icon-btns with hover tooltips</span>
+    </div>
+
+    <!-- Dashboard content -->
+    <main class="content-area">
+      <div class="bento-grid">
+
+        <div class="bento-card">
+          <div class="card-label">Network Status</div>
+          <div class="card-value v-green">98.7%</div>
+          <div class="card-sub">Uptime · all regions</div>
+          <div class="status-row">
+            <span class="sdot sdot-green"></span>
+            <span class="sdot sdot-green"></span>
+            <span class="sdot sdot-green"></span>
+            <span class="sdot sdot-amber"></span>
+            <span class="sdot sdot-green"></span>
+            <span class="sdot sdot-green"></span>
+            <span class="status-text">6 sites</span>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-label">DHCP Leases</div>
+          <div class="card-value v-teal">24,891</div>
+          <div class="card-sub">+412 last hour</div>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:42%"></div>
+            <div class="spark-bar" style="height:55%"></div>
+            <div class="spark-bar" style="height:48%"></div>
+            <div class="spark-bar" style="height:68%"></div>
+            <div class="spark-bar" style="height:62%"></div>
+            <div class="spark-bar" style="height:78%"></div>
+            <div class="spark-bar" style="height:74%"></div>
+            <div class="spark-bar" style="height:88%"></div>
+            <div class="spark-bar" style="height:84%"></div>
+            <div class="spark-bar" style="height:100%"></div>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-label">DNS Queries / s</div>
+          <div class="card-value">18,240</div>
+          <div class="card-sub">p99 latency 2.1 ms</div>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:58%"></div>
+            <div class="spark-bar" style="height:72%"></div>
+            <div class="spark-bar" style="height:52%"></div>
+            <div class="spark-bar" style="height:84%"></div>
+            <div class="spark-bar" style="height:92%"></div>
+            <div class="spark-bar" style="height:68%"></div>
+            <div class="spark-bar" style="height:78%"></div>
+            <div class="spark-bar" style="height:64%"></div>
+            <div class="spark-bar" style="height:96%"></div>
+            <div class="spark-bar" style="height:80%"></div>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-label">Active Hosts</div>
+          <div class="card-value">4,021</div>
+          <div class="card-sub">Monitoring · 12 flagged</div>
+          <div class="status-row">
+            <span class="sdot sdot-red"></span>
+            <span class="status-text t-red">2 critical</span>
+            <span class="sdot sdot-amber" style="margin-left:6px"></span>
+            <span class="status-text t-amber">10 degraded</span>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-label">Alert Summary</div>
+          <div class="card-value v-red">13</div>
+          <div class="card-sub">Open · last 24h</div>
+          <div class="status-row">
+            <span class="status-text t-red">10 host alerts</span>
+            <span class="status-text">·</span>
+            <span class="status-text t-amber">3 policy</span>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-label">Last Refresh</div>
+          <div class="card-value v-small">14:22:07</div>
+          <div class="card-sub">UTC · auto every 5 min</div>
+          <div class="sparkline">
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar a" style="height:30%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+          </div>
+        </div>
+
+      </div><!-- /bento-grid -->
+    </main>
+
+  </div><!-- /page-frame -->
+</div><!-- /dark section -->
+
+
+<!-- ===================== LIGHT SECTION ===================== -->
+<div class="theme-section light" id="sec-light">
+  <div class="section-meta">
+    <span class="section-label"><span class="theme-name-light">LIGHT</span> &nbsp;·&nbsp; v1: Icon-only Controls</span>
+    <span class="section-label" style="color:#9a9ba3">Logo · 7 tabs · 2 pills · 6 icon-btns — 3 visual groups</span>
+  </div>
+
+  <div class="page-frame">
+
+    <!-- Topbar -->
+    <header class="topbar">
+
+      <!-- Logo -->
+      <a class="logo" href="#">
+        <div class="logo-mark">
+          <svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1.5" y="1.5" width="5" height="12" rx="1" fill="rgba(255,255,255,.95)"/>
+            <rect x="8.5" y="5.5" width="5" height="8" rx="1" fill="rgba(255,255,255,.65)"/>
+          </svg>
+        </div>
+        <span class="logo-word">Infoblox</span>
+        <span class="logo-tag">NOC</span>
+      </a>
+
+      <!-- Nav tabs -->
+      <nav class="topbar-nav">
+        <a class="nav-tab active" href="#" onclick="setTab(event, this)">Overview</a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">Topology</a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">IPAM</a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">DNS</a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">Hosts <span class="tab-dot tab-dot-red">10</span></a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">Alerts <span class="tab-dot tab-dot-amb">3</span></a>
+        <a class="nav-tab" href="#" onclick="setTab(event, this)">Audit</a>
+      </nav>
+
+      <!-- Right controls -->
+      <div class="topbar-right">
+        <span class="alert-pill pill-red" data-tip="10 host issues">10</span>
+        <span class="alert-pill pill-amb" data-tip="3 active alerts">3</span>
+
+        <div class="sep"></div>
+
+        <button class="icon-btn" data-tip="Site: All Sites">🌐</button>
+        <button class="icon-btn" data-tip="Range: Last 24h">📅</button>
+        <button class="icon-btn" data-tip="Interval: 5 min">⏱</button>
+        <button class="icon-btn" data-tip="Time: 14:22:07 UTC">🕐</button>
+        <button class="icon-btn refresh tip-left" data-tip="Refresh now">↻</button>
+        <button class="icon-btn tip-left" data-tip="Add query">⊕</button>
+      </div>
+    </header>
+
+    <!-- Annotation strip -->
+    <div class="annotation">
+      <span class="ann-tag">Before</span>
+      <span class="ann-text">11 elements cramped into 48 px — 4 dropdowns with text labels, visible clock, refresh text</span>
+      <span class="ann-arrow">→</span>
+      <span class="ann-tag">After</span>
+      <span class="ann-text">Logo · 7 tabs centered · 2 count pills · 6 icon-btns with hover tooltips</span>
+    </div>
+
+    <!-- Dashboard content -->
+    <main class="content-area">
+      <div class="bento-grid">
+
+        <div class="bento-card">
+          <div class="card-label">Network Status</div>
+          <div class="card-value v-green">98.7%</div>
+          <div class="card-sub">Uptime · all regions</div>
+          <div class="status-row">
+            <span class="sdot sdot-green"></span>
+            <span class="sdot sdot-green"></span>
+            <span class="sdot sdot-green"></span>
+            <span class="sdot sdot-amber"></span>
+            <span class="sdot sdot-green"></span>
+            <span class="sdot sdot-green"></span>
+            <span class="status-text">6 sites</span>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-label">DHCP Leases</div>
+          <div class="card-value v-teal">24,891</div>
+          <div class="card-sub">+412 last hour</div>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:42%"></div>
+            <div class="spark-bar" style="height:55%"></div>
+            <div class="spark-bar" style="height:48%"></div>
+            <div class="spark-bar" style="height:68%"></div>
+            <div class="spark-bar" style="height:62%"></div>
+            <div class="spark-bar" style="height:78%"></div>
+            <div class="spark-bar" style="height:74%"></div>
+            <div class="spark-bar" style="height:88%"></div>
+            <div class="spark-bar" style="height:84%"></div>
+            <div class="spark-bar" style="height:100%"></div>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-label">DNS Queries / s</div>
+          <div class="card-value">18,240</div>
+          <div class="card-sub">p99 latency 2.1 ms</div>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:58%"></div>
+            <div class="spark-bar" style="height:72%"></div>
+            <div class="spark-bar" style="height:52%"></div>
+            <div class="spark-bar" style="height:84%"></div>
+            <div class="spark-bar" style="height:92%"></div>
+            <div class="spark-bar" style="height:68%"></div>
+            <div class="spark-bar" style="height:78%"></div>
+            <div class="spark-bar" style="height:64%"></div>
+            <div class="spark-bar" style="height:96%"></div>
+            <div class="spark-bar" style="height:80%"></div>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-label">Active Hosts</div>
+          <div class="card-value">4,021</div>
+          <div class="card-sub">Monitoring · 12 flagged</div>
+          <div class="status-row">
+            <span class="sdot sdot-red"></span>
+            <span class="status-text t-red">2 critical</span>
+            <span class="sdot sdot-amber" style="margin-left:6px"></span>
+            <span class="status-text t-amber">10 degraded</span>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-label">Alert Summary</div>
+          <div class="card-value v-red">13</div>
+          <div class="card-sub">Open · last 24h</div>
+          <div class="status-row">
+            <span class="status-text t-red">10 host alerts</span>
+            <span class="status-text">·</span>
+            <span class="status-text t-amber">3 policy</span>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="card-label">Last Refresh</div>
+          <div class="card-value v-small">14:22:07</div>
+          <div class="card-sub">UTC · auto every 5 min</div>
+          <div class="sparkline">
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar a" style="height:30%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+            <div class="spark-bar g" style="height:100%"></div>
+          </div>
+        </div>
+
+      </div><!-- /bento-grid -->
+    </main>
+
+  </div><!-- /page-frame -->
+</div><!-- /light section -->
+
+<script>
+// Tab switching (per-section, independent)
+function setTab(e, el) {
+  e.preventDefault();
+  const nav = el.closest('.topbar-nav');
+  nav.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// Mode cycling: both → dark-only → light-only → both
+let mode = 'both';
+const secDark  = document.getElementById('sec-dark');
+const secLight = document.getElementById('sec-light');
+const btn      = document.getElementById('cycle-btn');
+
+const labels = {
+  both:  'Dark + Light → Dark only',
+  dark:  'Dark only → Light only',
+  light: 'Light only → Both'
+};
+
+function cycleMode() {
+  if (mode === 'both') {
+    mode = 'dark';
+    secDark.style.display  = 'block';
+    secLight.style.display = 'none';
+    document.body.style.background = '#0a0b0d';
+  } else if (mode === 'dark') {
+    mode = 'light';
+    secDark.style.display  = 'none';
+    secLight.style.display = 'block';
+    document.body.style.background = '#e4e5e8';
+  } else {
+    mode = 'both';
+    secDark.style.display  = 'block';
+    secLight.style.display = 'block';
+    document.body.style.background = '#111214';
+  }
+  btn.textContent = labels[mode];
+}
+
+btn.textContent = labels[mode];
+</script>
+</body>
+</html>

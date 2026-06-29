@@ -1,0 +1,325 @@
+<!-- VARIANT: v4 — Heatmap grid (time × pool) -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DHCP Pool Utilization — v4 Heatmap</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #1a1b1e;
+    --surface:   #24252a;
+    --surface-2: #2e2f35;
+    --border:    rgba(255,255,255,0.10);
+    --accent:    #6694ff;
+    --red:       #f87171;
+    --amber:     #fbbf24;
+    --green:     #4ade80;
+    --muted:     #75767b;
+    --ink:       #e8e8ea;
+    --font-ui:   "Inter", system-ui, sans-serif;
+    --font-data: "Geist Mono", "JetBrains Mono", monospace;
+  }
+
+  [data-theme="light"] {
+    --bg:        #f9fafa;
+    --surface:   #fff;
+    --surface-2: #f3f4f9;
+    --border:    #d4d4d8;
+    --accent:    #003ecc;
+    --red:       #c81f0c;
+    --amber:     #977405;
+    --green:     #13854f;
+    --muted:     #6b6c71;
+    --ink:       #232429;
+  }
+
+  body {
+    background: var(--bg);
+    font-family: var(--font-ui);
+    padding: 32px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+  }
+
+  /* Toggle */
+  .theme-toggle {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 2px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .theme-toggle:hover { color: var(--ink); }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 14px;
+    width: 520px;
+  }
+
+  /* Section header */
+  .section-header {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* Heatmap layout */
+  .heatmap-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* Time label row */
+  .time-row {
+    display: grid;
+    grid-template-columns: 120px repeat(12, 1fr);
+    margin-bottom: 4px;
+  }
+  .time-spacer { /* empty corner */ }
+  .time-label {
+    font-family: var(--font-data);
+    font-size: 9px;
+    color: var(--muted);
+    text-align: center;
+    letter-spacing: 0;
+    line-height: 1;
+  }
+  .time-label.now {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* Pool rows */
+  .pool-row {
+    display: grid;
+    grid-template-columns: 120px repeat(12, 1fr);
+    gap: 2px;
+    margin-bottom: 2px;
+  }
+  .pool-name {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    padding-right: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1;
+  }
+
+  /* Heat cells */
+  .cell {
+    height: 18px;
+    border-radius: 2px;
+    cursor: default;
+    position: relative;
+    transition: opacity 0.1s;
+  }
+  .cell:hover { opacity: 0.78; }
+
+  .cell-green  { background: var(--green); }
+  .cell-amber  { background: var(--amber); }
+  .cell-red    { background: var(--red);   }
+
+  /* Muted/dim variant — lower alpha for older buckets */
+  [data-theme="dark"] .cell-green  { background: color-mix(in srgb, var(--green)  70%, transparent); }
+  [data-theme="dark"] .cell-amber  { background: color-mix(in srgb, var(--amber)  70%, transparent); }
+  [data-theme="dark"] .cell-red    { background: color-mix(in srgb, var(--red)    70%, transparent); }
+
+  /* Most-recent column: full opacity */
+  [data-theme="dark"] .pool-row .cell:last-child { filter: brightness(1.2); opacity: 1; }
+
+  /* Tooltip */
+  .cell[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    font-family: var(--font-data);
+    font-size: 10px;
+    padding: 3px 6px;
+    border-radius: 2px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* Legend strip */
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--muted);
+    font-family: var(--font-ui);
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 1px;
+  }
+  .legend-dot.green { background: var(--green); }
+  .legend-dot.amber { background: var(--amber); }
+  .legend-dot.red   { background: var(--red);   }
+  .legend-sep { margin-left: auto; font-size: 10px; color: var(--muted); font-family: var(--font-data); }
+</style>
+<script>if(new URLSearchParams(location.search).get("theme")==="light")document.documentElement.setAttribute("data-theme","light");</script>
+</head>
+<body>
+
+<button class="theme-toggle" onclick="toggle()">Toggle light / dark</button>
+
+<div class="card">
+  <div class="section-header">· DHCP</div>
+
+  <div class="heatmap-wrap">
+
+    <!-- Time labels row: 12h ago → now -->
+    <div class="time-row">
+      <div class="time-spacer"></div>
+      <div class="time-label">11h</div>
+      <div class="time-label">10h</div>
+      <div class="time-label">9h</div>
+      <div class="time-label">8h</div>
+      <div class="time-label">7h</div>
+      <div class="time-label">6h</div>
+      <div class="time-label">5h</div>
+      <div class="time-label">4h</div>
+      <div class="time-label">3h</div>
+      <div class="time-label">2h</div>
+      <div class="time-label">1h</div>
+      <div class="time-label now">now</div>
+    </div>
+
+    <!--
+      Pools × 12 hourly buckets (oldest → newest, left → right)
+      Utilization brackets:
+        green  = < 70 %
+        amber  = 70–89 %
+        red    = ≥ 90 %
+    -->
+
+    <!-- Pool 1: 10.0.0.0/22 — mostly healthy, spikes near noon -->
+    <div class="pool-row">
+      <div class="pool-name">10.0.0.0/22</div>
+      <div class="cell cell-green" title="10.0.0.0/22 · 11h ago · 34%"></div>
+      <div class="cell cell-green" title="10.0.0.0/22 · 10h ago · 41%"></div>
+      <div class="cell cell-green" title="10.0.0.0/22 · 9h ago  · 55%"></div>
+      <div class="cell cell-amber" title="10.0.0.0/22 · 8h ago  · 72%"></div>
+      <div class="cell cell-amber" title="10.0.0.0/22 · 7h ago  · 78%"></div>
+      <div class="cell cell-red"   title="10.0.0.0/22 · 6h ago  · 91%"></div>
+      <div class="cell cell-amber" title="10.0.0.0/22 · 5h ago  · 84%"></div>
+      <div class="cell cell-amber" title="10.0.0.0/22 · 4h ago  · 76%"></div>
+      <div class="cell cell-green" title="10.0.0.0/22 · 3h ago  · 63%"></div>
+      <div class="cell cell-green" title="10.0.0.0/22 · 2h ago  · 58%"></div>
+      <div class="cell cell-green" title="10.0.0.0/22 · 1h ago  · 61%"></div>
+      <div class="cell cell-green" title="10.0.0.0/22 · now     · 67%"></div>
+    </div>
+
+    <!-- Pool 2: 192.168.10.0/24 — trending red, small pool -->
+    <div class="pool-row">
+      <div class="pool-name">192.168.10.0/24</div>
+      <div class="cell cell-amber" title="192.168.10.0/24 · 11h ago · 70%"></div>
+      <div class="cell cell-amber" title="192.168.10.0/24 · 10h ago · 75%"></div>
+      <div class="cell cell-amber" title="192.168.10.0/24 · 9h ago  · 80%"></div>
+      <div class="cell cell-red"   title="192.168.10.0/24 · 8h ago  · 90%"></div>
+      <div class="cell cell-red"   title="192.168.10.0/24 · 7h ago  · 93%"></div>
+      <div class="cell cell-red"   title="192.168.10.0/24 · 6h ago  · 96%"></div>
+      <div class="cell cell-red"   title="192.168.10.0/24 · 5h ago  · 95%"></div>
+      <div class="cell cell-red"   title="192.168.10.0/24 · 4h ago  · 97%"></div>
+      <div class="cell cell-red"   title="192.168.10.0/24 · 3h ago  · 98%"></div>
+      <div class="cell cell-red"   title="192.168.10.0/24 · 2h ago  · 99%"></div>
+      <div class="cell cell-red"   title="192.168.10.0/24 · 1h ago  · 99%"></div>
+      <div class="cell cell-red"   title="192.168.10.0/24 · now     · 100%"></div>
+    </div>
+
+    <!-- Pool 3: 172.16.0.0/20 — low utilization, healthy -->
+    <div class="pool-row">
+      <div class="pool-name">172.16.0.0/20</div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 11h ago · 12%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 10h ago · 15%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 9h ago  · 18%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 8h ago  · 22%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 7h ago  · 29%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 6h ago  · 33%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 5h ago  · 31%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 4h ago  · 28%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 3h ago  · 25%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 2h ago  · 21%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · 1h ago  · 19%"></div>
+      <div class="cell cell-green" title="172.16.0.0/20 · now     · 17%"></div>
+    </div>
+
+    <!-- Pool 4: 10.128.0.0/21 — volatile, mid-day spikes -->
+    <div class="pool-row">
+      <div class="pool-name">10.128.0.0/21</div>
+      <div class="cell cell-green" title="10.128.0.0/21 · 11h ago · 48%"></div>
+      <div class="cell cell-green" title="10.128.0.0/21 · 10h ago · 52%"></div>
+      <div class="cell cell-amber" title="10.128.0.0/21 · 9h ago  · 71%"></div>
+      <div class="cell cell-red"   title="10.128.0.0/21 · 8h ago  · 92%"></div>
+      <div class="cell cell-red"   title="10.128.0.0/21 · 7h ago  · 94%"></div>
+      <div class="cell cell-amber" title="10.128.0.0/21 · 6h ago  · 88%"></div>
+      <div class="cell cell-amber" title="10.128.0.0/21 · 5h ago  · 82%"></div>
+      <div class="cell cell-green" title="10.128.0.0/21 · 4h ago  · 65%"></div>
+      <div class="cell cell-green" title="10.128.0.0/21 · 3h ago  · 59%"></div>
+      <div class="cell cell-amber" title="10.128.0.0/21 · 2h ago  · 73%"></div>
+      <div class="cell cell-red"   title="10.128.0.0/21 · 1h ago  · 91%"></div>
+      <div class="cell cell-red"   title="10.128.0.0/21 · now     · 93%"></div>
+    </div>
+
+  </div><!-- /heatmap-wrap -->
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot green"></div>&lt; 70%</div>
+    <div class="legend-item"><div class="legend-dot amber"></div>70–89%</div>
+    <div class="legend-item"><div class="legend-dot red"></div>≥ 90%</div>
+    <div class="legend-sep">4 pools · 12h window</div>
+  </div>
+
+</div><!-- /card -->
+
+<script>
+  function toggle() {
+    const html = document.documentElement;
+    html.setAttribute('data-theme',
+      html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
+    );
+  }
+</script>
+</body>
+</html>

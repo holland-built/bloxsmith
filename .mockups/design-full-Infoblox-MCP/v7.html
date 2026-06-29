@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>INFOBLOX NOC — WAR ROOM RADIATOR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;900&family=Oswald:wght@500;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root[data-theme="dark"] {
+  --page-bg: #060a08;
+  --crit-bg: #3a0a0a;
+  --crit-border: #e83838;
+  --crit-text: #ffffff;
+  --crit-sub: rgba(255,255,255,0.72);
+  --warn-bg: #3a2a0a;
+  --warn-border: #e89820;
+  --warn-text: #ffffff;
+  --warn-sub: rgba(255,255,255,0.72);
+  --ok-bg: #0a2a14;
+  --ok-border: #28c858;
+  --ok-text: #ffffff;
+  --ok-sub: rgba(255,255,255,0.72);
+  --neutral-bg: #0d1210;
+  --neutral-border: #2a3a2a;
+  --neutral-text: #f0f0ec;
+  --neutral-sub: rgba(240,240,236,0.65);
+  --accent: #e86340;
+  --ctrl-bg: rgba(8,12,8,0.93);
+  --ctrl-border: #1c2c1c;
+  --ctrl-text: #b8ccb0;
+  --btn-bg: #162416;
+  --btn-text: #6ab86a;
+  --btn-border: #254025;
+  --stale-bg: #c87c10;
+  --stale-text: #ffffff;
+  --bar-track: rgba(255,255,255,0.11);
+  --list-divider: rgba(255,255,255,0.10);
+}
+
+:root[data-theme="light"] {
+  --page-bg: #ccc8c0;
+  --crit-bg: #fde8e8;
+  --crit-border: #c03030;
+  --crit-text: #1a0808;
+  --crit-sub: rgba(26,8,8,0.60);
+  --warn-bg: #fdf0d8;
+  --warn-border: #b87020;
+  --warn-text: #1a1008;
+  --warn-sub: rgba(26,16,8,0.60);
+  --ok-bg: #e8f5ec;
+  --ok-border: #207850;
+  --ok-text: #081a10;
+  --ok-sub: rgba(8,26,16,0.60);
+  --neutral-bg: #ede9e3;
+  --neutral-border: #b0a898;
+  --neutral-text: #1a1814;
+  --neutral-sub: rgba(26,24,20,0.60);
+  --accent: #c04020;
+  --ctrl-bg: rgba(220,214,206,0.96);
+  --ctrl-border: #b0a898;
+  --ctrl-text: #3a3028;
+  --btn-bg: #e4ddd4;
+  --btn-text: #3a5030;
+  --btn-border: #b0a898;
+  --stale-bg: #b87020;
+  --stale-text: #ffffff;
+  --bar-track: rgba(0,0,0,0.09);
+  --list-divider: rgba(0,0,0,0.09);
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--page-bg);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  transition: background 0.25s;
+}
+
+/* ─── Corner Controls ──────────────────────────────────────────────── */
+.ctrl {
+  position: fixed; top: 10px; left: 10px; z-index: 200;
+  background: var(--ctrl-bg);
+  border: 1px solid var(--ctrl-border);
+  border-radius: 7px;
+  padding: 7px 14px;
+  display: flex; align-items: center; gap: 12px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.wordmark {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 900; font-size: 17px;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ctrl-text); white-space: nowrap;
+}
+.wordmark em { color: var(--accent); font-style: normal; }
+
+.ctrl-sep {
+  width: 1px; height: 18px;
+  background: var(--ctrl-border);
+  flex-shrink: 0;
+}
+
+#clock {
+  font-family: 'Oswald', monospace;
+  font-size: 13px; font-weight: 500;
+  letter-spacing: 0.08em; color: var(--ctrl-text);
+  opacity: 0.75; white-space: nowrap;
+}
+
+.ctrl-btn {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  background: var(--btn-bg); color: var(--btn-text);
+  border: 1px solid var(--btn-border);
+  border-radius: 4px; padding: 4px 10px;
+  cursor: pointer; white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.ctrl-btn:hover { opacity: 0.75; }
+.ctrl-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ctrl-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* ─── Full-Viewport Grid ────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(3, 1fr);
+  width: 100vw; height: 100vh;
+  gap: 3px; padding: 3px;
+}
+
+/* ─── Tile Shell ────────────────────────────────────────────────────── */
+.tile {
+  position: relative;
+  border-radius: 5px;
+  border-width: 2px; border-style: solid;
+  padding: 18px 26px 16px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: background 0.25s, border-color 0.25s;
+}
+.tile--crit  { background: var(--crit-bg);  border-color: var(--crit-border);  color: var(--crit-text); }
+.tile--warn  { background: var(--warn-bg);  border-color: var(--warn-border);  color: var(--warn-text); }
+.tile--ok    { background: var(--ok-bg);    border-color: var(--ok-border);    color: var(--ok-text); }
+.tile--neutral { background: var(--neutral-bg); border-color: var(--neutral-border); color: var(--neutral-text); }
+
+/* Stale badge */
+.stale {
+  position: absolute; top: 12px; right: 12px;
+  background: var(--stale-bg); color: var(--stale-text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 3px 7px; border-radius: 3px;
+}
+
+/* ─── Tile Header ───────────────────────────────────────────────────── */
+.t-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(10px, 1.1vw, 14px);
+  font-weight: 600; letter-spacing: 0.20em;
+  text-transform: uppercase; opacity: 0.55;
+}
+
+/* ─── Big Number ────────────────────────────────────────────────────── */
+.t-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 900;
+  font-size: clamp(78px, 10.5vw, 152px);
+  line-height: 0.86; letter-spacing: -0.02em;
+  margin-top: 6px;
+}
+
+.t-sub {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 700;
+  font-size: clamp(12px, 1.55vw, 22px);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  opacity: 0.78; margin-top: 5px;
+}
+
+.t-sec {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(9px, 0.92vw, 13px);
+  font-weight: 500; opacity: 0.52;
+  letter-spacing: 0.05em; margin-top: 4px;
+}
+
+/* ─── Detail Region ─────────────────────────────────────────────────── */
+.t-detail { margin-top: auto; padding-top: 10px; }
+
+/* Spark bars */
+.bars { display: flex; flex-direction: column; gap: 5px; }
+.bar-row { display: flex; align-items: center; gap: 8px; }
+.bar-lbl {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(8px, 0.78vw, 11px);
+  opacity: 0.65; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  width: clamp(66px, 6.5vw, 100px); flex-shrink: 0;
+}
+.bar-track {
+  flex: 1; height: 7px;
+  background: var(--bar-track);
+  border-radius: 2px; overflow: hidden;
+}
+.bar-fill {
+  height: 100%; border-radius: 2px;
+}
+.tile--crit .bar-fill { background: var(--crit-border); }
+.tile--warn .bar-fill { background: var(--warn-border); }
+.bar-pct {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: clamp(9px, 0.9vw, 13px);
+  opacity: 0.88; text-align: right;
+  width: clamp(28px, 2.8vw, 38px); flex-shrink: 0;
+}
+
+/* Alert / item list */
+.items { display: flex; flex-direction: column; gap: 3px; }
+.item {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(8px, 0.85vw, 12px);
+  font-weight: 500; opacity: 0.72;
+  padding: 3px 0;
+  border-top: 1px solid var(--list-divider);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.tile--crit .dot { background: var(--crit-border); animation: blink 1.4s ease-in-out infinite; }
+.tile--warn .dot { background: var(--warn-border); }
+.dot--accent  { background: var(--accent) !important; animation: none !important; }
+
+@keyframes blink {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:0.45; transform:scale(0.75); }
+}
+
+/* Util bar (single wide) */
+.ubar-wrap { display: flex; flex-direction: column; gap: 5px; }
+.ubar-lbl {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(8px, 0.82vw, 11px); opacity: 0.62;
+  letter-spacing: 0.04em;
+}
+.ubar-track {
+  width: 100%; height: 10px;
+  background: var(--bar-track); border-radius: 3px; overflow: hidden;
+}
+.ubar-fill {
+  height: 100%; border-radius: 3px;
+  background: var(--warn-border);
+}
+.ubar-caption {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(7px, 0.72vw, 10px);
+  opacity: 0.40; letter-spacing: 0.04em;
+}
+
+/* Timestamps */
+.t-ts {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(7px, 0.70vw, 10px);
+  opacity: 0.38; letter-spacing: 0.05em;
+  margin-top: 8px;
+}
+.ts-stale { color: var(--stale-bg); opacity: 1 !important; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- ── Corner Controls ───────────────────────────────────────────── -->
+<nav class="ctrl" aria-label="Dashboard controls">
+  <div class="wordmark">INFOBLOX <em>NOC</em></div>
+  <div class="ctrl-sep" aria-hidden="true"></div>
+  <div id="clock" aria-live="polite" aria-label="Current time"></div>
+  <div class="ctrl-sep" aria-hidden="true"></div>
+  <button id="btn-refresh" class="ctrl-btn" onclick="doRefresh(this)" aria-label="Refresh dashboard">Refresh</button>
+  <button class="ctrl-btn" onclick="doQuery()" aria-label="Open query panel">Query</button>
+  <div class="ctrl-sep" aria-hidden="true"></div>
+  <button id="btn-theme" class="ctrl-btn" onclick="toggleTheme()" aria-label="Toggle colour theme">☀ Light</button>
+</nav>
+
+<!-- ── War Room Grid ─────────────────────────────────────────────── -->
+<main class="grid" aria-label="NOC Status Radiator">
+
+  <!-- T1 · DHCP POOLS — CRITICAL -->
+  <article class="tile tile--crit" role="status" aria-live="polite"
+           aria-label="DHCP Pools: 9 critical of 20 total">
+    <div class="t-label">DHCP Pools</div>
+    <div class="t-num" aria-hidden="true">9</div>
+    <div class="t-sub">CRIT / 20 POOLS</div>
+    <div class="t-sec">Worst pool: 10.20.0.0/24 — 97% utilized</div>
+    <div class="t-detail">
+      <div class="bars" aria-label="Top 3 critical pool utilizations">
+        <div class="bar-row">
+          <span class="bar-lbl">10.20.0.0/24</span>
+          <div class="bar-track"><div class="bar-fill" style="width:97%"></div></div>
+          <span class="bar-pct">97%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-lbl">192.168.4.0/24</span>
+          <div class="bar-track"><div class="bar-fill" style="width:95%"></div></div>
+          <span class="bar-pct">95%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-lbl">172.16.12.0/23</span>
+          <div class="bar-track"><div class="bar-fill" style="width:92%"></div></div>
+          <span class="bar-pct">92%</span>
+        </div>
+      </div>
+      <div class="t-ts">Updated 14s ago</div>
+    </div>
+  </article>
+
+  <!-- T2 · HOST STATUS — CRITICAL -->
+  <article class="tile tile--crit" role="status" aria-live="polite"
+           aria-label="Hosts: 10 down out of 52 total">
+    <div class="t-label">Hosts</div>
+    <div class="t-num" aria-hidden="true">10</div>
+    <div class="t-sub">DOWN / 52 TOTAL</div>
+    <div class="t-sec">10 WARN &nbsp;·&nbsp; 27 OK &nbsp;·&nbsp; 5 UNKNOWN</div>
+    <div class="t-detail">
+      <div class="items" aria-label="Recently downed hosts">
+        <div class="item"><span class="dot" aria-hidden="true"></span>dns-primary.corp.local</div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>fw-edge-02.net.local</div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>dhcp-relay-4.dmz.local</div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>ntp-01.infra.local</div>
+      </div>
+      <div class="t-ts">Updated 22s ago</div>
+    </div>
+  </article>
+
+  <!-- T3 · ALERTS — CRITICAL -->
+  <article class="tile tile--crit" role="status" aria-live="polite"
+           aria-label="3 alerts currently firing">
+    <div class="t-label">Alerts</div>
+    <div class="t-num" aria-hidden="true">3</div>
+    <div class="t-sub">FIRING</div>
+    <div class="t-sec">2 CRITICAL &nbsp;·&nbsp; 1 HIGH</div>
+    <div class="t-detail">
+      <div class="items" aria-label="Active alert names">
+        <div class="item"><span class="dot" aria-hidden="true"></span>DHCPPoolNearExhaustion</div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>HostUnreachable — Threshold Breach</div>
+        <div class="item"><span class="dot dot--accent" aria-hidden="true"></span>HighDNSQueryLatency</div>
+      </div>
+      <div class="t-ts">Updated 8s ago</div>
+    </div>
+  </article>
+
+  <!-- T4 · IPAM — WARNING -->
+  <article class="tile tile--warn" role="status" aria-live="polite"
+           aria-label="IPAM: 3 critical subnets of 20 total">
+    <div class="stale" aria-label="Data is stale">STALE</div>
+    <div class="t-label">IPAM</div>
+    <div class="t-num" aria-hidden="true">3</div>
+    <div class="t-sub">CRIT SUBNETS / 20</div>
+    <div class="t-sec">Avg utilization 78% &nbsp;·&nbsp; 5 WARN &nbsp;·&nbsp; 12 OK</div>
+    <div class="t-detail">
+      <div class="ubar-wrap" aria-label="Worst subnet utilization bar">
+        <div class="ubar-lbl">10.100.0.0/16 — WORST SUBNET</div>
+        <div class="ubar-track"><div class="ubar-fill" style="width:91%"></div></div>
+        <div class="ubar-caption">91% utilized &nbsp;·&nbsp; 23,142 / 25,600 addresses assigned</div>
+      </div>
+      <div class="t-ts">Updated 41s ago &nbsp;<span class="ts-stale">● STALE</span></div>
+    </div>
+  </article>
+
+  <!-- T5 · DNS ZONES — WARNING -->
+  <article class="tile tile--warn" role="status" aria-live="polite"
+           aria-label="DNS Zones: 5 zones with errors of 15 total">
+    <div class="t-label">DNS Zones</div>
+    <div class="t-num" aria-hidden="true">5</div>
+    <div class="t-sub">ERRORS / 15 ZONES</div>
+    <div class="t-sec">Avg query latency: 312 ms &nbsp;·&nbsp; 3 WARN</div>
+    <div class="t-detail">
+      <div class="items" aria-label="DNS zones with errors">
+        <div class="item"><span class="dot" aria-hidden="true"></span>corp.local — SERVFAIL ×840</div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>dmz.corp.net — NXDOMAIN spike</div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>internal.lab.net — resolver timeout</div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>vpn.infra.local — delegation failure</div>
+      </div>
+      <div class="t-ts">Updated 18s ago</div>
+    </div>
+  </article>
+
+  <!-- T6 · THREATS — WARNING -->
+  <article class="tile tile--warn" role="status" aria-live="polite"
+           aria-label="4 active threat feeds">
+    <div class="t-label">Threats</div>
+    <div class="t-num" aria-hidden="true">4</div>
+    <div class="t-sub">ACTIVE FEEDS</div>
+    <div class="t-sec">Last block: 4m ago &nbsp;·&nbsp; 127 events / hr</div>
+    <div class="t-detail">
+      <div class="items" aria-label="Active threat feed names and match counts">
+        <div class="item"><span class="dot" aria-hidden="true"></span>Ransomware C2 — 38 matches</div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>Malware DGA — 51 matches</div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>Phishing Domains — 24 matches</div>
+        <div class="item"><span class="dot" aria-hidden="true"></span>Data Exfiltration — 14 matches</div>
+      </div>
+      <div class="t-ts">Updated 6s ago</div>
+    </div>
+  </article>
+
+</main>
+
+<script>
+// ── Clock ─────────────────────────────────────────────────────────
+function tick() {
+  const t = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('clock').textContent =
+    pad(t.getUTCHours()) + ':' + pad(t.getUTCMinutes()) + ':' + pad(t.getUTCSeconds()) + ' UTC';
+}
+tick();
+setInterval(tick, 1000);
+
+// ── Theme toggle ──────────────────────────────────────────────────
+function toggleTheme() {
+  const root = document.documentElement;
+  const btn  = document.getElementById('btn-theme');
+  if (root.getAttribute('data-theme') === 'dark') {
+    root.setAttribute('data-theme', 'light');
+    btn.textContent = '☾ Dark';
+  } else {
+    root.setAttribute('data-theme', 'dark');
+    btn.textContent = '☀ Light';
+  }
+}
+
+// ── Refresh stub ──────────────────────────────────────────────────
+function doRefresh(btn) {
+  btn.textContent = 'Refreshing…';
+  btn.disabled = true;
+  setTimeout(() => {
+    btn.textContent = 'Refresh';
+    btn.disabled = false;
+  }, 1400);
+}
+
+// ── Query stub ────────────────────────────────────────────────────
+function doQuery() {
+  alert('Query panel — wire to MCP endpoint');
+}
+</script>
+</body>
+</html>

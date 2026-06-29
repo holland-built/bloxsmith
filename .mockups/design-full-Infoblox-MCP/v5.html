@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Infoblox NOC — Thermal Grid v5</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Dark mode (default) ───────────────────────────── */
+    :root {
+      --bg:             #0d0f0e;
+      --temp-ok:        #1a2e1e;
+      --temp-warn:      #2e1e0a;
+      --temp-crit:      #2e0a0a;
+      --text:           #f0f0ec;
+      --text-crit:      #ff8080;
+      --text-warn:      #ffcc80;
+      --text-ok:        #a8e6b0;
+      --text-muted:     #7a7a74;
+      --accent:         #e86340;
+      --divider:        rgba(255,255,255,0.08);
+      --divider-strong: rgba(255,255,255,0.15);
+      --topbar-bg:      #080a09;
+      --crit-pill-bg:   rgba(232,99,64,0.22);
+      --crit-pill-text: #ff8080;
+      --btn-bg:         rgba(255,255,255,0.08);
+      --btn-hover:      rgba(255,255,255,0.13);
+      --bar-bg:         rgba(255,255,255,0.10);
+      --threshold:      rgba(232,99,64,0.75);
+      --host-up-bg:     rgba(168,230,176,0.06);
+      --host-warn-bg:   rgba(255,204,128,0.06);
+      --host-crit-bg:   rgba(255,128,128,0.08);
+      --font-ui:        'Space Grotesk', system-ui, sans-serif;
+      --font-data:      'Fira Code', ui-monospace, monospace;
+    }
+
+    /* ── Light mode ────────────────────────────────────── */
+    [data-theme="light"] {
+      --bg:             #f5f2ed;
+      --temp-ok:        #e8f2ea;
+      --temp-warn:      #f5ead8;
+      --temp-crit:      #f5e0e0;
+      --text:           #1a1814;
+      --text-crit:      #b03030;
+      --text-warn:      #8a5800;
+      --text-ok:        #286630;
+      --text-muted:     #888070;
+      --accent:         #c04a1f;
+      --divider:        rgba(0,0,0,0.10);
+      --divider-strong: rgba(0,0,0,0.18);
+      --topbar-bg:      #e6e2dc;
+      --crit-pill-bg:   rgba(192,74,31,0.14);
+      --crit-pill-text: #b03030;
+      --btn-bg:         rgba(0,0,0,0.07);
+      --btn-hover:      rgba(0,0,0,0.12);
+      --bar-bg:         rgba(0,0,0,0.10);
+      --threshold:      rgba(192,74,31,0.60);
+      --host-up-bg:     rgba(40,102,48,0.07);
+      --host-warn-bg:   rgba(138,88,0,0.07);
+      --host-crit-bg:   rgba(176,48,48,0.08);
+    }
+
+    /* ── Base ──────────────────────────────────────────── */
+    html, body {
+      height: 100%;
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    *:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* ── Shell ─────────────────────────────────────────── */
+    .shell {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      gap: 2px;
+    }
+
+    /* ── Topbar ────────────────────────────────────────── */
+    .topbar {
+      background: var(--topbar-bg);
+      height: 44px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 10px;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--divider-strong);
+    }
+
+    .logo-mark {
+      width: 26px;
+      height: 26px;
+      background: var(--accent);
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: #fffdf9;
+      letter-spacing: -0.02em;
+      flex-shrink: 0;
+    }
+
+    .topbar-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .topbar-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .topbar-spacer { flex: 1; }
+
+    .crit-pill {
+      background: var(--crit-pill-bg);
+      color: var(--crit-pill-text);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 100px;
+      letter-spacing: 0.03em;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .crit-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-crit);
+      animation: blink 1.6s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.25; }
+    }
+
+    .topbar-btn {
+      background: var(--btn-bg);
+      border: 1px solid var(--divider-strong);
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .topbar-btn:hover { background: var(--btn-hover); }
+
+    .clock {
+      font-family: var(--font-data);
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Thermal Grid ──────────────────────────────────── */
+    .thermal-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      grid-template-areas:
+        "dhcp   dhcp   host  ipam"
+        "dns    threat host  audit";
+      gap: 2px;
+      min-height: 0;
+    }
+
+    /* ── Cells ─────────────────────────────────────────── */
+    .cell {
+      padding: 14px 16px 28px;   /* bottom leaves room for timestamp */
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .cell--crit  { background: var(--temp-crit); }
+    .cell--warn  { background: var(--temp-warn); }
+    .cell--ok    { background: var(--temp-ok);   }
+
+    .cell-dhcp   { grid-area: dhcp;   }
+    .cell-host   { grid-area: host;   }
+    .cell-ipam   { grid-area: ipam;   }
+    .cell-dns    { grid-area: dns;    }
+    .cell-threat { grid-area: threat; }
+    .cell-audit  { grid-area: audit;  }
+
+    /* ── Cell header ───────────────────────────────────── */
+    .cell-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      padding-bottom: 9px;
+      border-bottom: 1px solid var(--divider-strong);
+    }
+
+    .cell-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .cell-badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 2px 6px;
+      border-radius: 2px;
+    }
+    .badge--crit { background: rgba(255,128,128,0.14); color: var(--text-crit); }
+    .badge--warn { background: rgba(255,204,128,0.14); color: var(--text-warn); }
+    .badge--ok   { background: rgba(168,230,176,0.13); color: var(--text-ok);   }
+
+    /* ── Timestamp ─────────────────────────────────────── */
+    .ts {
+      position: absolute;
+      bottom: 9px;
+      right: 12px;
+      font-family: var(--font-data);
+      font-size: 10px;
+      color: var(--text-muted);
+      opacity: 0.55;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .stale-badge {
+      font-family: var(--font-ui);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      background: rgba(255,128,128,0.18);
+      color: var(--text-crit);
+      padding: 1px 5px;
+      border-radius: 2px;
+      opacity: 1;
+    }
+
+    /* ── DHCP Pools ────────────────────────────────────── */
+    .pool-list {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      flex: 1;
+      gap: 8px;
+      min-height: 0;
+    }
+
+    .pool-row { display: flex; flex-direction: column; gap: 5px; }
+
+    .pool-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .pool-name {
+      font-family: var(--font-data);
+      font-size: 11px;
+      color: var(--text);
+    }
+
+    .pool-pct {
+      font-family: var(--font-data);
+      font-size: 12px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .pct--crit { color: var(--text-crit); }
+    .pct--warn { color: var(--text-warn); }
+    .pct--ok   { color: var(--text-ok);   }
+
+    .bar-track {
+      position: relative;
+      height: 5px;
+      background: var(--bar-bg);
+      border-radius: 2px;
+      overflow: visible;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      opacity: 0.85;
+    }
+    .bar--crit { background: var(--text-crit); }
+    .bar--warn { background: var(--text-warn); }
+    .bar--ok   { background: var(--text-ok);   }
+
+    /* 90% threshold marker */
+    .bar-mark {
+      position: absolute;
+      top: -3px;
+      left: 90%;
+      width: 1px;
+      height: calc(100% + 6px);
+      background: var(--threshold);
+    }
+
+    .bar-mark-label {
+      position: absolute;
+      top: -15px;
+      left: 90%;
+      transform: translateX(-50%);
+      font-family: var(--font-data);
+      font-size: 9px;
+      color: var(--accent);
+      white-space: nowrap;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Host Status ───────────────────────────────────── */
+    .host-tiles {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .host-tile {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--divider-strong);
+      border-radius: 2px;
+      min-height: 0;
+    }
+    .host-tile--up   { background: var(--host-up-bg);   border-color: rgba(168,230,176,0.25); }
+    .host-tile--warn { background: var(--host-warn-bg);  border-color: rgba(255,204,128,0.25); }
+    .host-tile--crit { background: var(--host-crit-bg);  border-color: rgba(255,128,128,0.30); }
+
+    .host-num {
+      font-family: var(--font-data);
+      font-size: 36px;
+      font-weight: 500;
+      line-height: 1;
+    }
+    .host-num--up   { color: var(--text-ok);   }
+    .host-num--warn { color: var(--text-warn);  }
+    .host-num--crit { color: var(--text-crit);  }
+
+    .host-lbl {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* ── Shared table ──────────────────────────────────── */
+    .tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    .tbl th {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: left;
+      padding: 0 0 5px 0;
+      border-bottom: 1px solid var(--divider-strong);
+    }
+
+    .tbl td {
+      padding: 5px 0;
+      border-bottom: 1px solid var(--divider);
+      vertical-align: middle;
+    }
+
+    .tbl tr:last-child td { border-bottom: none; }
+
+    .td-r { text-align: right; }
+    .mono  { font-family: var(--font-data); }
+
+    .dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+    .dot--crit { background: var(--text-crit); }
+    .dot--warn { background: var(--text-warn); }
+    .dot--ok   { background: var(--text-ok);   }
+
+    .v--crit { color: var(--text-crit); }
+    .v--warn { color: var(--text-warn); }
+    .v--ok   { color: var(--text-ok);   }
+
+    /* ── Threats ───────────────────────────────────────── */
+    .threat-list {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .threat-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--divider);
+    }
+    .threat-row:last-child { border-bottom: none; }
+
+    .threat-info { flex: 1; min-width: 0; }
+
+    .threat-name {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .threat-src {
+      font-family: var(--font-data);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .sev-tag {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 2px 5px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .sev-tag--crit { background: rgba(255,128,128,0.14); color: var(--text-crit); }
+    .sev-tag--warn { background: rgba(255,204,128,0.14); color: var(--text-warn); }
+
+    /* ── Audit ─────────────────────────────────────────── */
+    .audit-list {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .audit-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--divider);
+    }
+    .audit-row:last-child { border-bottom: none; }
+
+    .audit-time {
+      font-family: var(--font-data);
+      font-size: 10px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      width: 38px;
+    }
+
+    .audit-desc {
+      font-size: 11px;
+      color: var(--text);
+      line-height: 1.35;
+    }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Topbar ────────────────────────────────────────── -->
+  <header class="topbar" role="banner">
+    <div class="logo-mark" aria-hidden="true">IB</div>
+    <span class="topbar-title">Infoblox NOC</span>
+    <span class="topbar-sub">/ Thermal Grid</span>
+    <div class="topbar-spacer"></div>
+    <div class="crit-pill" role="status" aria-live="polite">
+      <span class="crit-dot" aria-hidden="true"></span>
+      2 CRITICAL
+    </div>
+    <button
+      class="topbar-btn"
+      id="themeToggle"
+      aria-label="Switch to light theme"
+    >Light</button>
+    <span class="clock" id="clock" aria-label="Current time"></span>
+  </header>
+
+  <!-- ── Thermal Grid ──────────────────────────────────── -->
+  <main class="thermal-grid" role="main">
+
+    <!-- DHCP POOLS — CRIT 2×1 ──────────────────────────── -->
+    <section
+      class="cell cell--crit cell-dhcp"
+      role="region"
+      aria-label="DHCP Pools — critical severity, 2 pools exhausted"
+      tabindex="0"
+    >
+      <div class="cell-header">
+        <span class="cell-title">DHCP Pools</span>
+        <span class="cell-badge badge--crit">2 EXHAUSTED</span>
+      </div>
+
+      <div class="pool-list">
+
+        <div class="pool-row">
+          <div class="pool-meta">
+            <span class="pool-name">192.168.10.0/24</span>
+            <span class="pool-pct pct--crit">94%</span>
+          </div>
+          <div class="bar-track" aria-hidden="true">
+            <div class="bar-fill bar--crit" style="width:94%"></div>
+            <div class="bar-mark"></div>
+            <span class="bar-mark-label">90%</span>
+          </div>
+        </div>
+
+        <div class="pool-row">
+          <div class="pool-meta">
+            <span class="pool-name">10.100.0.0/24</span>
+            <span class="pool-pct pct--crit">91%</span>
+          </div>
+          <div class="bar-track" aria-hidden="true">
+            <div class="bar-fill bar--crit" style="width:91%"></div>
+            <div class="bar-mark"></div>
+          </div>
+        </div>
+
+        <div class="pool-row">
+          <div class="pool-meta">
+            <span class="pool-name">10.20.0.0/22</span>
+            <span class="pool-pct pct--warn">88%</span>
+          </div>
+          <div class="bar-track" aria-hidden="true">
+            <div class="bar-fill bar--warn" style="width:88%"></div>
+            <div class="bar-mark"></div>
+          </div>
+        </div>
+
+        <div class="pool-row">
+          <div class="pool-meta">
+            <span class="pool-name">172.16.50.0/23</span>
+            <span class="pool-pct pct--ok">67%</span>
+          </div>
+          <div class="bar-track" aria-hidden="true">
+            <div class="bar-fill bar--ok" style="width:67%"></div>
+            <div class="bar-mark"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <span class="ts" aria-label="Updated 1 minute ago">Updated 1m ago</span>
+    </section>
+
+    <!-- HOST STATUS — CRIT 1×2 ─────────────────────────── -->
+    <section
+      class="cell cell--crit cell-host"
+      role="region"
+      aria-label="Host Status — critical severity, 10 hosts down"
+      tabindex="0"
+    >
+      <div class="cell-header">
+        <span class="cell-title">Host Status</span>
+        <span class="cell-badge badge--crit">10 DOWN</span>
+      </div>
+
+      <div class="host-tiles">
+        <div class="host-tile host-tile--up" role="group" aria-label="27 hosts up">
+          <span class="host-num host-num--up">27</span>
+          <span class="host-lbl">Up</span>
+        </div>
+        <div class="host-tile host-tile--warn" role="group" aria-label="10 hosts degraded">
+          <span class="host-num host-num--warn">10</span>
+          <span class="host-lbl">Degraded</span>
+        </div>
+        <div class="host-tile host-tile--crit" role="group" aria-label="10 hosts down — critical">
+          <span class="host-num host-num--crit">10</span>
+          <span class="host-lbl">Down</span>
+        </div>
+      </div>
+
+      <span class="ts" aria-label="Updated just now">Updated 0m ago</span>
+    </section>
+
+    <!-- IPAM SUBNETS — WARN 1×1 ────────────────────────── -->
+    <section
+      class="cell cell--warn cell-ipam"
+      role="region"
+      aria-label="IPAM Subnets — warning severity, 3 approaching threshold"
+      tabindex="0"
+    >
+      <div class="cell-header">
+        <span class="cell-title">IPAM Subnets</span>
+        <span class="cell-badge badge--warn">3 WARN</span>
+      </div>
+
+      <table class="tbl" aria-label="Subnet utilization">
+        <thead>
+          <tr>
+            <th>Subnet</th>
+            <th class="td-r">Used</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono"><span class="dot dot--warn" aria-hidden="true"></span>10.0.10.0/24</td>
+            <td class="mono td-r v--warn">83%</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="dot dot--warn" aria-hidden="true"></span>10.0.20.0/23</td>
+            <td class="mono td-r v--warn">79%</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="dot dot--warn" aria-hidden="true"></span>172.31.0.0/16</td>
+            <td class="mono td-r v--warn">71%</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="dot dot--ok" aria-hidden="true"></span>10.0.30.0/22</td>
+            <td class="mono td-r v--ok">42%</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="dot dot--ok" aria-hidden="true"></span>192.168.1.0/24</td>
+            <td class="mono td-r v--ok">38%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <span class="ts" aria-label="Updated 3 minutes ago">Updated 3m ago</span>
+    </section>
+
+    <!-- DNS ZONES — WARN 1×1 ───────────────────────────── -->
+    <section
+      class="cell cell--warn cell-dns"
+      role="region"
+      aria-label="DNS Zones — warning severity, 4 zones with errors"
+      tabindex="0"
+    >
+      <div class="cell-header">
+        <span class="cell-title">DNS Zones</span>
+        <span class="cell-badge badge--warn">4 ERR</span>
+      </div>
+
+      <table class="tbl" aria-label="DNS zone error rates">
+        <thead>
+          <tr>
+            <th>Zone</th>
+            <th class="td-r">Err/h</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono"><span class="dot dot--crit" aria-hidden="true"></span>corp.internal</td>
+            <td class="mono td-r v--crit">247</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="dot dot--warn" aria-hidden="true"></span>dmz.ext</td>
+            <td class="mono td-r v--warn">62</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="dot dot--warn" aria-hidden="true"></span>vpn.corp</td>
+            <td class="mono td-r v--warn">41</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="dot dot--warn" aria-hidden="true"></span>lab.internal</td>
+            <td class="mono td-r v--warn">29</td>
+          </tr>
+          <tr>
+            <td class="mono"><span class="dot dot--ok" aria-hidden="true"></span>staging.corp</td>
+            <td class="mono td-r v--ok">3</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <span class="ts" aria-label="Updated 2 minutes ago">Updated 2m ago</span>
+    </section>
+
+    <!-- ACTIVE THREATS — WARN 1×1 ──────────────────────── -->
+    <section
+      class="cell cell--warn cell-threat"
+      role="region"
+      aria-label="Active Threats — warning severity, 5 active threats"
+      tabindex="0"
+    >
+      <div class="cell-header">
+        <span class="cell-title">Active Threats</span>
+        <span class="cell-badge badge--warn">5 ACTIVE</span>
+      </div>
+
+      <div class="threat-list">
+        <div class="threat-row">
+          <div class="threat-info">
+            <div class="threat-name">DNS Exfiltration</div>
+            <div class="threat-src">10.20.14.88</div>
+          </div>
+          <span class="sev-tag sev-tag--crit">CRIT</span>
+        </div>
+        <div class="threat-row">
+          <div class="threat-info">
+            <div class="threat-name">DHCP Starvation</div>
+            <div class="threat-src">00:1A:2B:3C:4D:5E</div>
+          </div>
+          <span class="sev-tag sev-tag--warn">HIGH</span>
+        </div>
+        <div class="threat-row">
+          <div class="threat-info">
+            <div class="threat-name">Suspicious NXDomain</div>
+            <div class="threat-src">10.20.5.201</div>
+          </div>
+          <span class="sev-tag sev-tag--warn">HIGH</span>
+        </div>
+        <div class="threat-row">
+          <div class="threat-info">
+            <div class="threat-name">Rogue DNS Server</div>
+            <div class="threat-src">192.168.10.99</div>
+          </div>
+          <span class="sev-tag sev-tag--warn">MED</span>
+        </div>
+        <div class="threat-row">
+          <div class="threat-info">
+            <div class="threat-name">PTR Record Flood</div>
+            <div class="threat-src">172.16.44.12</div>
+          </div>
+          <span class="sev-tag sev-tag--warn">MED</span>
+        </div>
+      </div>
+
+      <span class="ts" aria-label="Stale data — updated 8 minutes ago">
+        Updated 8m ago
+        <span class="stale-badge" role="img" aria-label="stale">STALE</span>
+      </span>
+    </section>
+
+    <!-- AUDIT EVENTS — OK 1×1 ──────────────────────────── -->
+    <section
+      class="cell cell--ok cell-audit"
+      role="region"
+      aria-label="Audit Events — healthy, 12 events today"
+      tabindex="0"
+    >
+      <div class="cell-header">
+        <span class="cell-title">Audit Events</span>
+        <span class="cell-badge badge--ok">12 TODAY</span>
+      </div>
+
+      <div class="audit-list">
+        <div class="audit-row">
+          <span class="audit-time">00:42</span>
+          <span class="audit-desc">Lease released — 10.0.10.55</span>
+        </div>
+        <div class="audit-row">
+          <span class="audit-time">00:31</span>
+          <span class="audit-desc">DNS record updated — corp.internal</span>
+        </div>
+        <div class="audit-row">
+          <span class="audit-time">00:18</span>
+          <span class="audit-desc">Pool threshold adjusted — 172.16.50.0/23</span>
+        </div>
+        <div class="audit-row">
+          <span class="audit-time">23:55</span>
+          <span class="audit-desc">Subnet added — 10.0.40.0/24</span>
+        </div>
+        <div class="audit-row">
+          <span class="audit-time">23:41</span>
+          <span class="audit-desc">Admin login — api@infoblox.corp</span>
+        </div>
+      </div>
+
+      <span class="ts" aria-label="Updated 5 minutes ago">Updated 5m ago</span>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // Live clock
+  const clockEl = document.getElementById('clock');
+  function tick() {
+    const n = new Date();
+    const hh = String(n.getHours()).padStart(2,'0');
+    const mm = String(n.getMinutes()).padStart(2,'0');
+    const ss = String(n.getSeconds()).padStart(2,'0');
+    clockEl.textContent = `${hh}:${mm}:${ss}`;
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  // Theme toggle
+  const html = document.documentElement;
+  const btn  = document.getElementById('themeToggle');
+
+  btn.addEventListener('click', () => {
+    const goingLight = html.getAttribute('data-theme') !== 'light';
+    html.setAttribute('data-theme', goingLight ? 'light' : 'dark');
+    btn.textContent = goingLight ? 'Dark' : 'Light';
+    btn.setAttribute('aria-label', goingLight ? 'Switch to dark theme' : 'Switch to light theme');
+  });
+</script>
+</body>
+</html>

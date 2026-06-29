@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<!-- VARIANT: v3 — Timeline status strip + widget grid -->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC — Overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-data: "Geist Mono", "SF Mono", "Monaco", "Courier New", monospace;
+
+    /* Dark (default) */
+    --background: #1a1b1e;
+    --surface:    #24252a;
+    --surface-2:  #2e2f35;
+    --border:     rgba(255,255,255,0.10);
+    --text:       #e8e8ea;
+    --muted:      #75767b;
+    --accent:     #6694ff;
+    --danger:     #f87171;
+    --warning:    #fbbf24;
+    --success:    #4ade80;
+    --info:       #6694ff;
+    --radius: 2px;
+  }
+
+  :root[data-theme="light"] {
+    --background: #f9fafa;
+    --surface:    #ffffff;
+    --surface-2:  #f3f4f9;
+    --border:     #d4d4d8;
+    --text:       #232429;
+    --muted:      #919297;
+    --accent:     #003ecc;
+    --danger:     #c81f0c;
+    --warning:    #977405;
+    --success:    #26a769;
+    --info:       #003ecc;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-ui);
+    background: var(--background);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+  .brand .dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  .tabs { display: flex; gap: 2px; flex: 1; }
+  .tab {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    background: none;
+    border: none;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab:hover { color: var(--text); background: var(--surface-2); }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .live-pill {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 500; color: var(--muted);
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    cursor: pointer;
+  }
+  .live-pill .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--success);
+  }
+  .live-pill.paused .pulse { background: var(--muted); }
+  body.live .live-pill .pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  .theme-btn {
+    font: inherit; font-size: 12px; font-weight: 500;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 5px 10px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .theme-btn:hover { border-color: var(--accent); }
+
+  /* ---------- Timeline strip ---------- */
+  .timeline {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px 14px;
+  }
+  .timeline-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .timeline-title {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .timeline-hint { font-size: 11px; color: var(--muted); }
+  .segments {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 2px;
+    height: 28px;
+  }
+  .seg {
+    border-radius: var(--radius);
+    cursor: pointer;
+    position: relative;
+    border: 1px solid transparent;
+  }
+  .seg.green  { background: var(--success); }
+  .seg.amber  { background: var(--warning); }
+  .seg.red    { background: var(--danger); }
+  .seg:hover  { outline: 2px solid var(--text); outline-offset: 1px; z-index: 2; }
+  .seg::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 5px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s;
+    z-index: 5;
+  }
+  .seg:hover::after { opacity: 1; }
+  .ticks {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 2px;
+    margin-top: 5px;
+  }
+  .tick {
+    font-size: 9px;
+    color: var(--muted);
+    text-align: center;
+    font-family: var(--font-data);
+  }
+  .tick:nth-child(even) { visibility: hidden; }
+
+  /* ---------- Grid ---------- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    padding: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 720px)  { .grid { grid-template-columns: 1fr; } }
+
+  .widget {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .widget-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .widget-title {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+    text-transform: uppercase; color: var(--text);
+  }
+  .widget-meta { font-size: 11px; color: var(--muted); }
+  .widget-body { padding: 14px; flex: 1; }
+
+  /* severity dot */
+  .sev { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .sev.critical { background: var(--danger); }
+  .sev.warn     { background: var(--warning); }
+  .sev.info     { background: var(--info); }
+  .sev.calm     { background: var(--success); }
+
+  /* Subnet Health stat */
+  .health-bar {
+    display: flex;
+    height: 14px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .health-bar span { display: block; }
+  .health-bar .h-ok   { background: var(--success); }
+  .health-bar .h-deg  { background: var(--warning); }
+  .health-bar .h-crit { background: var(--danger); }
+  .health-stats { display: flex; gap: 8px; }
+  .stat-cell {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px;
+  }
+  .stat-num { font-family: var(--font-data); font-size: 22px; font-weight: 600; line-height: 1; }
+  .stat-cell.ok .stat-num   { color: var(--success); }
+  .stat-cell.deg .stat-num  { color: var(--warning); }
+  .stat-cell.crit .stat-num { color: var(--danger); }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+  /* DHCP pools */
+  .pool { margin-bottom: 12px; }
+  .pool:last-child { margin-bottom: 0; }
+  .pool-top {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 5px;
+  }
+  .pool-name { font-family: var(--font-data); font-size: 12px; }
+  .pool-pct { font-family: var(--font-data); font-size: 12px; font-weight: 600; }
+  .pool-track {
+    height: 6px;
+    background: var(--surface-2);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .pool-fill { height: 100%; border-radius: var(--radius); }
+  .pool-fill.ok   { background: var(--success); }
+  .pool-fill.warn { background: var(--warning); }
+  .pool-fill.crit { background: var(--danger); }
+
+  /* DNS metrics */
+  .dns-metrics { display: flex; flex-direction: column; gap: 12px; }
+  .dns-metric {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dns-metric:last-child { border-bottom: none; padding-bottom: 0; }
+  .dns-label { font-size: 12px; color: var(--muted); }
+  .dns-val { font-family: var(--font-data); font-size: 24px; font-weight: 600; }
+  .dns-unit { font-family: var(--font-data); font-size: 13px; color: var(--muted); margin-left: 3px; font-weight: 400; }
+
+  /* Alert rows / change rows / sec rows */
+  .rows { display: flex; flex-direction: column; }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    min-height: 34px;
+    border-bottom: 1px solid var(--border);
+  }
+  .row:last-child { border-bottom: none; }
+  .row-main { flex: 1; min-width: 0; }
+  .row-msg { font-size: 12.5px; color: var(--text); }
+  .row-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .row-age { font-family: var(--font-data); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .row-time { font-family: var(--font-data); font-size: 11px; color: var(--muted); white-space: nowrap; min-width: 64px; }
+  .tag {
+    font-family: var(--font-data);
+    font-size: 11px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1px 5px;
+  }
+
+  /* ---------- Footer ---------- */
+  .footer {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 0 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .footer .conn { display: flex; align-items: center; gap: 6px; }
+  .footer .conn .pulse {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--success);
+  }
+  .footer .right { margin-left: auto; }
+  .footer .mono { color: var(--text); }
+</style>
+</head>
+<body class="live">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> Infoblox NOC</div>
+    <nav class="tabs">
+      <button class="tab active">Overview</button>
+      <button class="tab">Subnets</button>
+      <button class="tab">DHCP</button>
+      <button class="tab">DNS</button>
+      <button class="tab">Security</button>
+    </nav>
+    <div class="topbar-right">
+      <button class="live-pill" id="liveBtn"><span class="pulse"></span><span id="liveLabel">Live</span></button>
+      <button class="theme-btn" id="themeBtn"><span id="themeIcon">☀</span> <span id="themeLabel">Light</span></button>
+    </div>
+  </header>
+
+  <!-- Timeline strip -->
+  <section class="timeline">
+    <div class="timeline-head">
+      <span class="timeline-title">Network Health — Last 24 Hours</span>
+      <span class="timeline-hint">Click segment for details</span>
+    </div>
+    <div class="segments" id="segments"></div>
+    <div class="ticks" id="ticks"></div>
+  </section>
+
+  <!-- Widget grid -->
+  <main class="grid">
+
+    <!-- 1. Subnet Health -->
+    <section class="widget">
+      <div class="widget-head">
+        <span class="widget-title">Subnet Health</span>
+        <span class="widget-meta">247 monitored</span>
+      </div>
+      <div class="widget-body">
+        <div class="health-bar">
+          <span class="h-ok"   style="flex: 241"></span>
+          <span class="h-deg"  style="flex: 4"></span>
+          <span class="h-crit" style="flex: 2"></span>
+        </div>
+        <div class="health-stats">
+          <div class="stat-cell ok"><div class="stat-num">241</div><div class="stat-label">Healthy</div></div>
+          <div class="stat-cell deg"><div class="stat-num">4</div><div class="stat-label">Degraded</div></div>
+          <div class="stat-cell crit"><div class="stat-num">2</div><div class="stat-label">Critical</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. DHCP Pool Status -->
+    <section class="widget">
+      <div class="widget-head">
+        <span class="widget-title">DHCP Pool Status</span>
+        <span class="widget-meta">Top 5 by utilization</span>
+      </div>
+      <div class="widget-body">
+        <div class="pool">
+          <div class="pool-top"><span class="pool-name mono">10.20.4.0/24</span><span class="pool-pct mono">97%</span></div>
+          <div class="pool-track"><div class="pool-fill crit" style="width:97%"></div></div>
+        </div>
+        <div class="pool">
+          <div class="pool-top"><span class="pool-name mono">10.20.8.0/23</span><span class="pool-pct mono">91%</span></div>
+          <div class="pool-track"><div class="pool-fill warn" style="width:91%"></div></div>
+        </div>
+        <div class="pool">
+          <div class="pool-top"><span class="pool-name mono">172.16.0.0/22</span><span class="pool-pct mono">78%</span></div>
+          <div class="pool-track"><div class="pool-fill warn" style="width:78%"></div></div>
+        </div>
+        <div class="pool">
+          <div class="pool-top"><span class="pool-name mono">192.168.30.0/24</span><span class="pool-pct mono">64%</span></div>
+          <div class="pool-track"><div class="pool-fill ok" style="width:64%"></div></div>
+        </div>
+        <div class="pool">
+          <div class="pool-top"><span class="pool-name mono">10.20.16.0/24</span><span class="pool-pct mono">42%</span></div>
+          <div class="pool-track"><div class="pool-fill ok" style="width:42%"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. DNS Performance -->
+    <section class="widget">
+      <div class="widget-head">
+        <span class="widget-title">DNS Performance</span>
+        <span class="widget-meta">5-min avg</span>
+      </div>
+      <div class="widget-body">
+        <div class="dns-metrics">
+          <div class="dns-metric">
+            <span class="dns-label">Queries / sec</span>
+            <span><span class="dns-val">1,521</span><span class="dns-unit">qps</span></span>
+          </div>
+          <div class="dns-metric">
+            <span class="dns-label">Avg latency</span>
+            <span><span class="dns-val">12</span><span class="dns-unit">ms</span></span>
+          </div>
+          <div class="dns-metric">
+            <span class="dns-label">NXDOMAIN rate</span>
+            <span><span class="dns-val">0.3</span><span class="dns-unit">%</span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Active Alerts -->
+    <section class="widget">
+      <div class="widget-head">
+        <span class="widget-title">Active Alerts</span>
+        <span class="widget-meta">3 open</span>
+      </div>
+      <div class="widget-body">
+        <div class="rows">
+          <div class="row">
+            <span class="sev critical"></span>
+            <div class="row-main">
+              <div class="row-msg">DHCP pool exhausted on <span class="mono">10.20.4.0/24</span></div>
+              <div class="row-sub">Member: dhcp-east-02</div>
+            </div>
+            <span class="row-age">8m</span>
+          </div>
+          <div class="row">
+            <span class="sev warn"></span>
+            <div class="row-main">
+              <div class="row-msg">DNS resolver latency above threshold</div>
+              <div class="row-sub">Member: dns-edge-04 · 48ms</div>
+            </div>
+            <span class="row-age">22m</span>
+          </div>
+          <div class="row">
+            <span class="sev info"></span>
+            <div class="row-main">
+              <div class="row-msg">Grid sync lag detected</div>
+              <div class="row-sub">Member: gm-replica-01 · 3s behind</div>
+            </div>
+            <span class="row-age">1h</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Recent Changes -->
+    <section class="widget">
+      <div class="widget-head">
+        <span class="widget-title">Recent Changes</span>
+        <span class="widget-meta">Audit log</span>
+      </div>
+      <div class="widget-body">
+        <div class="rows">
+          <div class="row">
+            <span class="row-time">14:02:17</span>
+            <div class="row-main"><div class="row-msg"><span class="tag">create</span> A record <span class="mono">app7.corp.local</span></div></div>
+          </div>
+          <div class="row">
+            <span class="row-time">13:58:44</span>
+            <div class="row-main"><div class="row-msg"><span class="tag">modify</span> DHCP range <span class="mono">10.20.8.0/23</span></div></div>
+          </div>
+          <div class="row">
+            <span class="row-time">13:41:09</span>
+            <div class="row-main"><div class="row-msg"><span class="tag">delete</span> Fixed addr <span class="mono">192.168.30.55</span></div></div>
+          </div>
+          <div class="row">
+            <span class="row-time">13:20:31</span>
+            <div class="row-main"><div class="row-msg"><span class="tag">create</span> Network <span class="mono">10.20.16.0/24</span></div></div>
+          </div>
+          <div class="row">
+            <span class="row-time">12:55:02</span>
+            <div class="row-main"><div class="row-msg"><span class="tag">modify</span> DNS zone <span class="mono">corp.local</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. Security Events -->
+    <section class="widget">
+      <div class="widget-head">
+        <span class="widget-title">Security Events</span>
+        <span class="widget-meta">Last 1h</span>
+      </div>
+      <div class="widget-body">
+        <div class="rows">
+          <div class="row">
+            <span class="sev critical"></span>
+            <div class="row-main">
+              <div class="row-msg">Threat intel hit — malware C2 domain</div>
+              <div class="row-sub mono">client 10.20.4.118 → x4z9-cdn.ru</div>
+            </div>
+            <span class="row-age">4m</span>
+          </div>
+          <div class="row">
+            <span class="sev warn"></span>
+            <div class="row-main">
+              <div class="row-msg">RPZ policy violation — blocked</div>
+              <div class="row-sub mono">client 172.16.2.41 → adserv.example</div>
+            </div>
+            <span class="row-age">19m</span>
+          </div>
+          <div class="row">
+            <span class="sev info"></span>
+            <div class="row-main">
+              <div class="row-msg">Anomalous DNS query volume</div>
+              <div class="row-sub mono">client 10.20.8.203 · 4.2k/min</div>
+            </div>
+            <span class="row-age">37m</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <span class="conn"><span class="pulse"></span> Connected to Grid Master <span class="mono">gm-01.corp.local</span></span>
+    <span class="right">Last updated <span class="mono" id="updated">14:03:12</span></span>
+  </footer>
+
+<script>
+  if (new URLSearchParams(location.search).get("theme") === "light") document.documentElement.setAttribute("data-theme","light");
+  // ---------- Timeline data: 24 hourly segments ----------
+  // status per hour 00..23 (now = 21)
+  const tl = [
+    {h:0,s:'green'},{h:1,s:'green'},{h:2,s:'green'},{h:3,s:'green'},
+    {h:4,s:'green'},{h:5,s:'green'},{h:6,s:'green'},
+    {h:7,s:'green'},{h:8,s:'green'},{h:9,s:'green'},
+    {h:10,s:'green'},{h:11,s:'green'},
+    {h:12,s:'amber',note:'Planned maintenance — Grid Master patch'},
+    {h:13,s:'green'},{h:14,s:'green'},{h:15,s:'green'},{h:16,s:'green'},{h:17,s:'green'},
+    {h:18,s:'amber',note:'DNS latency spike — dns-edge-04'},
+    {h:19,s:'amber',note:'DNS latency spike — recovering'},
+    {h:20,s:'red',note:'DHCP exhaustion incident — 10.20.4.0/24'},
+    {h:21,s:'green'},{h:22,s:'green'},{h:23,s:'green'}
+  ];
+  const labels = {green:'Healthy', amber:'Degraded', red:'Critical'};
+  const segWrap = document.getElementById('segments');
+  const tickWrap = document.getElementById('ticks');
+  tl.forEach(seg => {
+    const hh = String(seg.h).padStart(2,'0');
+    const d = document.createElement('div');
+    d.className = 'seg ' + seg.s;
+    d.dataset.tip = hh + ':00 — ' + labels[seg.s] + (seg.note ? ' · ' + seg.note : '');
+    d.title = '';
+    d.addEventListener('click', () => {
+      alert(hh + ':00\n' + labels[seg.s] + (seg.note ? '\n' + seg.note : '\nNo incidents'));
+    });
+    segWrap.appendChild(d);
+    const t = document.createElement('div');
+    t.className = 'tick';
+    t.textContent = hh;
+    tickWrap.appendChild(t);
+  });
+
+  // ---------- Theme toggle ----------
+  const root = document.documentElement;
+  const themeBtn = document.getElementById('themeBtn');
+  const themeIcon = document.getElementById('themeIcon');
+  const themeLabel = document.getElementById('themeLabel');
+  themeBtn.addEventListener('click', () => {
+    const dark = root.getAttribute('data-theme') === 'dark';
+    root.setAttribute('data-theme', dark ? 'light' : 'dark');
+    themeIcon.textContent = dark ? '☾' : '☀';
+    themeLabel.textContent = dark ? 'Dark' : 'Light';
+  });
+
+  // ---------- Live toggle ----------
+  const liveBtn = document.getElementById('liveBtn');
+  const liveLabel = document.getElementById('liveLabel');
+  const updated = document.getElementById('updated');
+  let timer = null;
+  function startLive() {
+    timer = setInterval(() => {
+      const n = new Date();
+      updated.textContent = n.toLocaleTimeString('en-GB');
+    }, 1000);
+  }
+  liveBtn.addEventListener('click', () => {
+    const live = document.body.classList.toggle('live');
+    liveBtn.classList.toggle('paused', !live);
+    liveLabel.textContent = live ? 'Live' : 'Paused';
+    if (live) startLive(); else clearInterval(timer);
+  });
+  startLive();
+</script>
+</body>
+</html>

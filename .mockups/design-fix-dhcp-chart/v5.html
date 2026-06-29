@@ -1,0 +1,259 @@
+<!-- VARIANT: v5 — Terminal monospace table with ASCII bars -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DHCP Pool Utilization — v5 Terminal</title>
+<style>
+  /* LOCKED TOKENS — do not modify */
+  :root {
+    --bg:       #1a1b1e;
+    --surface:  #24252a;
+    --surface2: #2e2f35;
+    --border:   rgba(255,255,255,0.10);
+    --accent:   #6694ff;
+    --red:      #f87171;
+    --amber:    #fbbf24;
+    --green:    #4ade80;
+    --muted:    #75767b;
+    --ink:      #e8e8ea;
+    --font-ui:  "Inter", sans-serif;
+    --font-data:"Geist Mono", "Fira Mono", "Courier New", monospace;
+  }
+  [data-theme="light"] {
+    --bg:       #f9fafa;
+    --surface:  #fff;
+    --surface2: #f3f4f9;
+    --border:   #d4d4d8;
+    --accent:   #003ecc;
+    --red:      #c81f0c;
+    --amber:    #977405;
+    --green:    #13854f;
+    --muted:    #6b6c71;
+    --ink:      #232429;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    font-family: var(--font-ui);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  .demo-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 320px;
+  }
+
+  /* Theme toggle */
+  .toggle-btn {
+    align-self: flex-end;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font-data);
+    font-size: 11px;
+    padding: 4px 10px;
+    letter-spacing: 0.04em;
+  }
+  .toggle-btn:hover { color: var(--ink); }
+
+  /* Section header */
+  .section-header {
+    font-family: var(--font-data);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 14px;
+  }
+
+  /* Terminal table */
+  .term-table {
+    font-family: var(--font-data);
+    font-size: 11px;
+    width: 100%;
+    border-collapse: collapse;
+    line-height: 1;
+  }
+
+  /* Header row */
+  .term-table thead tr th {
+    color: var(--muted);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .term-table thead tr th.col-util  { text-align: right; width: 36px; }
+  .term-table thead tr th.col-stat  { text-align: right; width: 44px; }
+
+  /* Body rows */
+  .term-table tbody tr {
+    border-bottom: 1px solid transparent;
+  }
+  .term-table tbody tr td {
+    padding: 5px 0 4px;
+    vertical-align: middle;
+  }
+  .term-table tbody tr:last-child td { padding-bottom: 0; }
+
+  .col-pool {
+    color: var(--ink);
+    white-space: nowrap;
+    font-size: 10.5px;
+    padding-right: 8px;
+    width: 100px;
+  }
+
+  .col-bar {
+    padding-right: 6px;
+  }
+
+  .bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+
+  .bar-fill {
+    display: inline-block;
+  }
+  .bar-empty {
+    display: inline-block;
+    color: var(--muted);
+    opacity: 0.4;
+  }
+
+  .col-util {
+    text-align: right;
+    font-size: 11px;
+    padding-right: 8px;
+    white-space: nowrap;
+    width: 36px;
+  }
+
+  .col-stat {
+    text-align: right;
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    width: 44px;
+  }
+
+  /* Severity colors */
+  .sev-crit  { color: var(--red); }
+  .sev-warn  { color: var(--amber); }
+  .sev-ok    { color: var(--green); }
+  .sev-info  { color: var(--accent); }
+</style>
+<script>if(new URLSearchParams(location.search).get("theme")==="light")document.documentElement.setAttribute("data-theme","light");</script>
+</head>
+<body>
+
+<div class="demo-wrap">
+  <button class="toggle-btn" onclick="toggleTheme()">[ toggle light/dark ]</button>
+
+  <div>
+    <div class="section-header">· DHCP</div>
+    <div class="card">
+      <table class="term-table">
+        <thead>
+          <tr>
+            <th class="col-pool">POOL</th>
+            <th class="col-bar"></th>
+            <th class="col-util">UTIL</th>
+            <th class="col-stat">STATUS</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- Pool 1: 94% CRIT -->
+          <tr>
+            <td class="col-pool sev-crit">10.10.1.0/24</td>
+            <td class="col-bar">
+              <div class="bar-wrap">
+                <span class="bar-fill sev-crit">█████████░</span>
+                <span class="bar-empty"></span>
+              </div>
+            </td>
+            <td class="col-util sev-crit">94%</td>
+            <td class="col-stat sev-crit">CRIT</td>
+          </tr>
+
+          <!-- Pool 2: 78% WARN -->
+          <tr>
+            <td class="col-pool sev-warn">192.168.0.0/23</td>
+            <td class="col-bar">
+              <div class="bar-wrap">
+                <span class="bar-fill sev-warn">███████░░░</span>
+              </div>
+            </td>
+            <td class="col-util sev-warn">78%</td>
+            <td class="col-stat sev-warn">WARN</td>
+          </tr>
+
+          <!-- Pool 3: 41% OK -->
+          <tr>
+            <td class="col-pool sev-ok">172.16.4.0/22</td>
+            <td class="col-bar">
+              <div class="bar-wrap">
+                <span class="bar-fill sev-ok">████░░░░░░</span>
+              </div>
+            </td>
+            <td class="col-util sev-ok">41%</td>
+            <td class="col-stat sev-ok">OK</td>
+          </tr>
+
+          <!-- Pool 4: 17% OK -->
+          <tr>
+            <td class="col-pool sev-ok">10.20.0.0/16</td>
+            <td class="col-bar">
+              <div class="bar-wrap">
+                <span class="bar-fill sev-ok">█░░░░░░░░░</span>
+              </div>
+            </td>
+            <td class="col-util sev-ok">17%</td>
+            <td class="col-stat sev-ok">OK</td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.setAttribute('data-theme',
+      html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
+    );
+  }
+</script>
+
+</body>
+</html>
