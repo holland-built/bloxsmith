@@ -240,7 +240,7 @@ body{padding-left:0!important}
 .tbl{width:100%;border-collapse:collapse;table-layout:fixed}
 .tbl th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);padding:8px 10px;border-bottom:1px solid var(--border);white-space:normal}
 .tbl td{padding:8px 10px;font-size:12px;line-height:1.4;border-bottom:1px solid var(--row-border)}
-.tbl tr:hover td{background:var(--hover)}
+.tbl tr:hover td{background:var(--hover);border-left:2px solid var(--teal)}.tbl tr:hover td+td{border-left:none}
 .tbl tr:last-child td{border-bottom:none}
 .scroll{overflow-y:auto;overflow-x:auto;max-width:100%}
 /* ── normalize overview widget heights: cap tall cards, scroll the body, keep header pinned ── */
@@ -606,7 +606,7 @@ tr:hover .copy-btn{opacity:1}
 .theme-btn:hover{border-color:var(--teal);color:var(--teal)}
 .topbar-tabs{display:flex;align-items:stretch;gap:0;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none;margin:0 8px}
 .topbar-tabs::-webkit-scrollbar{display:none}
-.topbar-tab{display:inline-flex;align-items:center;gap:5px;padding:0 12px;border:none;background:none;color:var(--gray-400);font-size:12.5px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;height:48px;transition:color .12s,border-color .12s;position:relative}
+.topbar-tab{display:inline-flex;align-items:center;gap:5px;padding:0 12px;border:none;background:none;color:var(--gray-400);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;height:48px;transition:color .12s,border-color .12s;position:relative}
 .topbar-tab:hover{color:var(--teal)}
 .topbar-tab.active{color:var(--ink);font-weight:600;border-bottom-color:var(--teal)}
 .topbar-tab .badge-pill{font-size:9px;padding:1px 5px}
@@ -2166,7 +2166,7 @@ function WidgetViz({data=[], viz='table', columns=[], labelKey, valueKey, rowCol
           {slices.map((s,i)=>(
             <div key={i} style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
               <div style={{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0}}/>
-              <span style={{fontFamily:'var(--font-mono)',color:'var(--ink)',minWidth:60,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.label}</span>
+              <span style={{fontFamily:'var(--font-mono)',color:'var(--ink)',minWidth:60,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={s.label}>{s.label}</span>
               <span style={{color:'var(--muted)'}}>{Math.round(s.val/total*100)}%</span>
             </div>
           ))}
@@ -2594,7 +2594,7 @@ function HealthScorecards({data, hosts}) {
             <div key={i} style={{minWidth:80,padding:'8px 10px',background:'var(--surface-2)',borderRadius:4,border:`1px solid ${s<60?'var(--red)':s<75?'var(--amber)':'var(--border)'}`,textAlign:'center',fontFamily:'var(--font-mono)'}}>
               <div style={{fontSize:22,fontWeight:800,color:c,lineHeight:1}}>{g}</div>
               <div style={{fontSize:16,fontWeight:400,color:c,lineHeight:1,marginTop:2}}>{s}</div>
-              <div style={{fontSize:8,color:'var(--muted)',marginTop:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:72}}>{nm}</div>
+              <div title={nm} style={{fontSize:8,color:'var(--muted)',marginTop:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:72}}>{nm}</div>
             </div>
           );
         })}
@@ -3700,7 +3700,7 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
                 return (
                   <div key={r.id} style={{display:'flex',alignItems:'center',gap:8,opacity}}>
                     <div style={{width:8,height:8,borderRadius:2,background:bg,flexShrink:0,boxShadow:isFiring?`0 0 6px ${clr}`:undefined}}/>
-                    <div style={{flex:1,fontSize:10,fontFamily:'var(--font-mono)',color:isFiring?'var(--ink)':'var(--muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                    <div title={`${r.metric} ${r.op} ${r.threshold}`} style={{flex:1,fontSize:10,fontFamily:'var(--font-mono)',color:isFiring?'var(--ink)':'var(--muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
                       {r.metric} {r.op} {r.threshold}
                     </div>
                     <div style={{fontSize:9,color:isFiring?clr:'var(--surface-3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',flexShrink:0}}>
@@ -3717,10 +3717,10 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
         );
       })()}
       <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:14}}>
-        <select className="viz-sel" value={metric} onChange={e=>setMetric(e.target.value)}>
+        <select className="viz-sel" aria-label="Alert metric" value={metric} onChange={e=>setMetric(e.target.value)}>
           {ALERT_METRICS.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
         </select>
-        <select className="viz-sel" value={op} onChange={e=>setOp(e.target.value)}>
+        <select className="viz-sel" aria-label="Alert operator" value={op} onChange={e=>setOp(e.target.value)}>
           {Object.keys(ALERT_OPS).map(o=><option key={o} value={o}>{o}</option>)}
         </select>
         <input type="number" value={thr} onChange={e=>setThr(e.target.value)} aria-label="Alert threshold value" style={{...inStyle,width:80}}/>
@@ -4049,7 +4049,7 @@ function StateTimeline({subnets, onDrill}){
             style={{display:'flex',alignItems:'center',gap:8,padding:'3px 4px',borderRadius:3,cursor:'pointer',transition:'background .1s'}}
             onMouseEnter={e=>e.currentTarget.style.background='var(--hover)'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-            <span style={{width:140,fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flexShrink:0}}>{lbl}</span>
+            <span title={lbl} style={{width:140,fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flexShrink:0}}>{lbl}</span>
             <div style={{flex:1,height:14,background:'var(--surface-3)',borderRadius:2,overflow:'hidden'}}>
               <div style={{width:`${u}%`,height:'100%',background:clr,borderRadius:2,transition:'width .3s'}}/>
             </div>
@@ -4341,7 +4341,7 @@ function TopoMap({subnets, hosts, zones, onDrill}){
                       cursor:'pointer',background:hover===s.id?'var(--surface-3)':'transparent',
                       borderLeft:`3px solid ${sevClr(s.util||0)}`}}>
                     <span style={{width:140,display:'flex',alignItems:'center',gap:3}}>
-                      <span style={{flex:1,fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',
+                      <span title={lbl} style={{flex:1,fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',
                         overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{lbl}</span>
                       {annotations[s.id]&&(
                         <span title={annotations[s.id].text}
@@ -4695,6 +4695,7 @@ function App({vault, onVaultChange}={}) {
   const [actions, setActions]           = useState(null);
   const [hostMetrics, setHostMetrics]   = useState(null);
   const [lazyErr, setLazyErr]           = useState({}); // per-panel fetch error flags
+  const [lazyLoading, setLazyLoading]   = useState({}); // per-panel in-flight flags
   const [usingMock, setUsingMock]       = useState(false);
   const [demoDismiss, setDemoDismiss]   = useState(()=>LS.get('noc.demoDismiss',false));
   const [sidebarOpen, setSidebarOpen]       = useState(false);
@@ -5125,15 +5126,16 @@ function App({vault, onVaultChange}={}) {
 
   const lazyFetch = useCallback((key,url,set)=>{
     setLazyErr(e=>({...e,[key]:false}));
+    setLazyLoading(l=>({...l,[key]:true}));
     fetch(url).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-      .then(d=>set(d))
-      .catch(()=>setLazyErr(e=>({...e,[key]:true})));
+      .then(d=>{ setLazyLoading(l=>({...l,[key]:false})); set(d); })
+      .catch(()=>{ setLazyLoading(l=>({...l,[key]:false})); setLazyErr(e=>({...e,[key]:true})); });
   },[]);
   useEffect(()=>{
-    if(section==='dns'&&!dnsAnalytics&&!lazyErr['dns-analytics']) lazyFetch('dns-analytics','/api/dns-analytics',setDnsAnalytics);
-    if(section==='security'&&!insights&&!lazyErr.insights) lazyFetch('insights','/api/insights',setInsights);
-    if(section==='security'&&!actions&&!lazyErr.actions) lazyFetch('actions','/api/actions',setActions);
-    if(section==='hosts'&&!hostMetrics&&!lazyErr.hostMetrics) lazyFetch('hostMetrics','/api/host-metrics',setHostMetrics);
+    if(section==='dns'&&!dnsAnalytics&&!lazyErr['dns-analytics']&&!lazyLoading['dns-analytics']) lazyFetch('dns-analytics','/api/dns-analytics',setDnsAnalytics);
+    if(section==='security'&&!insights&&!lazyErr.insights&&!lazyLoading.insights) lazyFetch('insights','/api/insights',setInsights);
+    if(section==='security'&&!actions&&!lazyErr.actions&&!lazyLoading.actions) lazyFetch('actions','/api/actions',setActions);
+    if(section==='hosts'&&!hostMetrics&&!lazyErr.hostMetrics&&!lazyLoading.hostMetrics) lazyFetch('hostMetrics','/api/host-metrics',setHostMetrics);
   },[section]);
 
   // Resolve + apply the theme during render (before children render) so chart
@@ -5585,7 +5587,7 @@ function App({vault, onVaultChange}={}) {
             <div className="alert-col-empty">· No active incidents</div>
           }
           </div>{/* /alert-col */}
-          <div className="content-col">
+          <div className="content-col" style={{opacity:refreshing?0.72:1,transition:'opacity .3s'}}>
 
         <div key={section} className="section-view">
         {/* ── OVERVIEW ── */}
@@ -6158,9 +6160,11 @@ function App({vault, onVaultChange}={}) {
                 <span className="section-line"/>
               </div>
               {!dnsAnalytics&&!lazyErr['dns-analytics']
-                ? <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}>
-                    <button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}} onClick={()=>lazyFetch('dns-analytics','/api/dns-analytics',setDnsAnalytics)}>Load DNS Analytics</button>
-                  </div>
+                ? lazyLoading['dns-analytics']
+                  ? <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}>Loading…</div>
+                  : <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}>
+                      <button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}} onClick={()=>lazyFetch('dns-analytics','/api/dns-analytics',setDnsAnalytics)}>Load DNS Analytics</button>
+                    </div>
                 : lazyErr['dns-analytics']
                   ? <div className="card" style={{padding:24,color:'var(--red)',fontSize:12}}>Analytics unavailable</div>
                   : <DnsAnalyticsPanel data={dnsAnalytics} rowLimit={rl('dns-clients')} setRowLimit={v=>setRl('dns-clients',v)} cutoffMs={cutoffMs}/>
@@ -6225,12 +6229,14 @@ function App({vault, onVaultChange}={}) {
               <span className="section-line"/>
             </div>
             {!hostMetrics&&!lazyErr?.hostMetrics
-              ? <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}>
-                  <button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}}
-                    onClick={()=>lazyFetch('hostMetrics','/api/host-metrics',setHostMetrics)}>
-                    Load Host Metrics
-                  </button>
-                </div>
+              ? lazyLoading.hostMetrics
+                ? <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}>Loading…</div>
+                : <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}>
+                    <button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}}
+                      onClick={()=>lazyFetch('hostMetrics','/api/host-metrics',setHostMetrics)}>
+                      Load Host Metrics
+                    </button>
+                  </div>
               : lazyErr?.hostMetrics
                 ? <div className="card" style={{padding:24,color:'var(--red)',fontSize:12}}>Host metrics unavailable</div>
                 : <>{hosts&&<StatusGrid hosts={filtHosts} data={hostMetrics}/>}{hostMetrics&&hosts&&<ContentionMatrix data={hostMetrics} hosts={hosts}/>}{hostMetrics&&<PercentileCards data={hostMetrics}/>}<PerfStack data={hostMetrics}/></>
@@ -6273,7 +6279,9 @@ function App({vault, onVaultChange}={}) {
               ? <div className="card"><PanelError what="SOC insights" onRetry={()=>lazyFetch('insights','/api/insights',setInsights)}/></div>
               : insights
                 ? <InsightsPanel data={insights} rowLimit={rl('insights')} setRowLimit={v=>setRl('insights',v)}/>
-                : <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}><button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}} onClick={()=>lazyFetch('insights','/api/insights',setInsights)}>Load SOC Insights</button></div>}
+                : lazyLoading.insights
+                  ? <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}>Loading…</div>
+                  : <div className="card" style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}><button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}} onClick={()=>lazyFetch('insights','/api/insights',setInsights)}>Load SOC Insights</button></div>}
           </div>
           <div style={{marginTop:16}}>
             <div className="section-header">
@@ -6286,7 +6294,9 @@ function App({vault, onVaultChange}={}) {
                 ? <PanelError what="IQ actions" onRetry={()=>lazyFetch('actions','/api/actions',setActions)}/>
                 : actions
                   ? <ActionsPanel data={actions} rowLimit={rl('actions')} setRowLimit={v=>setRl('actions',v)}/>
-                  : <div style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}><button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}} onClick={()=>lazyFetch('actions','/api/actions',setActions)}>Load IQ Actions</button></div>}
+                  : lazyLoading.actions
+                    ? <div style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}>Loading…</div>
+                    : <div style={{padding:24,textAlign:'center',color:'var(--muted)',fontSize:12}}><button className="refresh-btn" style={{fontSize:11,padding:'5px 12px'}} onClick={()=>lazyFetch('actions','/api/actions',setActions)}>Load IQ Actions</button></div>}
             </div>
           </div>
           <div style={{marginTop:16}}>
