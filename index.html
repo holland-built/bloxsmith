@@ -4739,7 +4739,7 @@ function App({vault, onVaultChange}={}) {
   const [dhcpCrit, setDhcpCrit]         = useState(()=>LS.get('noc.dhcpCrit',95));
   const [policyDiff, setPolicyDiff]     = useState({});
   const [wallMode, setWallMode]         = useState(()=>LS.get('noc.wall',false));
-  const [wallSpans, setWallSpans]       = useState(()=>LS.get('noc.wallSpans',{}));
+  const [wallSpans, setWallSpans]       = useState(()=>LS.get('noc.wallSpans',{feeds:2}));
   const [widgetHeights, setWidgetHeights] = useState(()=>LS.get('noc.heights',{}));
   const [hoverPause, setHoverPause]     = useState(false);
 
