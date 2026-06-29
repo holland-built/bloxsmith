@@ -1627,7 +1627,7 @@ class Handler(BaseHTTPRequestHandler):
             qs = dict(urllib.parse.parse_qsl(self.path.split("?",1)[1] if "?" in self.path else ""))
             domain = re.sub(r"[^a-zA-Z0-9.\-]", "", qs.get("domain",""))
             if not domain:
-                self.send_response(400); self.end_headers(); return
+                self.send_response(204); self.end_headers(); return
             # Try sources in order: DuckDuckGo favicon proxy (no auth), then Clearbit (may be down)
             tried = [
                 f"https://icons.duckduckgo.com/ip3/{domain}.ico",
@@ -1749,7 +1749,7 @@ class Handler(BaseHTTPRequestHandler):
         elif not path.startswith("/api/"):
             self._file("index.html")  # SPA fallback — all non-API routes serve the app
         else:
-            self.send_error(404)
+            self._json({"error": "not found"}, 404)
 
     MAX_BODY = 64 * 1024  # 64 KB
 
@@ -1758,7 +1758,10 @@ class Handler(BaseHTTPRequestHandler):
         if length > self.MAX_BODY:
             self.send_error(413, "Request Too Large")
             return
-        body = json.loads(self.rfile.read(length) or b"{}") if length else {}
+        try:
+            body = json.loads(self.rfile.read(length) or b"{}") if length else {}
+        except (json.JSONDecodeError, ValueError):
+            self._json({"error": "invalid JSON body"}, 400); return
         # vault control endpoints — reachable while locked (that's their purpose)
         if self.path == "/api/brand":
             domain = re.sub(r"[^a-zA-Z0-9.\-]", "", str(body.get("domain", "")))[:253]
@@ -1878,7 +1881,7 @@ class Handler(BaseHTTPRequestHandler):
                 _log_exc("/api/unblock-domain", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
         else:
-            self.send_error(404)
+            self._json({"error": "not found"}, 404)
 
     def _send_cors_origin(self):
         # Reflect only an allowlisted same-host origin; never wildcard.
