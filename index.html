@@ -700,7 +700,7 @@ tr:hover .copy-btn{opacity:1}
   .sidebar.open{transform:translateX(0)}
   .sidebar-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
   .menu-btn{display:inline-flex;align-items:center}
-  .topbar{flex-wrap:nowrap;gap:0 4px} .topbar-controls .pill-select[data-tip="Filter by site"],.topbar-controls .pill-select[data-tip^="Time range"]{display:none} .nav-breadcrumb{display:none}
+  .topbar{flex-wrap:nowrap;gap:0 4px} .topbar-controls .pill-select[data-tip="Filter by site"],.topbar-controls .pill-select[data-tip^="Time range"],.topbar-group .pill-select[data-tip="Auto-refresh interval"],.nav-clock{display:none} .nav-breadcrumb{display:none} .nav-brand-name{display:none}
   .main{padding:0 14px max(40px,env(safe-area-inset-bottom,40px))}
   .chat-panel{width:100%}
   .page-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:calc(100vw - 180px)}
@@ -1269,12 +1269,12 @@ function SubnetBars({subnets,highlight,onBar}) {
 function TTLTable({zones, onDrill}) {
   const bad=zones.filter(z=>z.anomaly);
   const ctl=useColumns('ttl',[
-    {key:'fqdn',label:'Zone FQDN',fixed:true,mono:true,size:11,width:'30%'},
-    {key:'view',label:'View',width:'20%',render:z=><span className="badge b-teal">{z.view}</span>},
-    {key:'ttl',label:'TTL',mono:true,size:11,width:'13%',sortVal:z=>z.ttl,render:z=><span style={{color:z.ttl<60||z.ttl>86400?'var(--sev-red-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.ttl}s</span>},
-    {key:'neg_ttl',label:'Neg TTL',mono:true,size:11,width:'13%',sortVal:z=>z.neg_ttl,render:z=><span style={{color:z.neg_ttl>3600?'var(--sev-amber-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.neg_ttl}s</span>},
-    {key:'records',label:'Records',mono:true,size:11,sortVal:z=>z.records||0,render:z=><span style={{fontFamily:'var(--font-mono)',color:z.records===0?'var(--amber)':'var(--ink)'}}>{(z.records||0).toLocaleString()}</span>},
-    {key:'issues',label:'Issues',nosort:true,width:'30%',render:z=>z.issues.map((iss,i)=>(<span key={i} className={`badge ${iss.includes('High')||iss.includes('Too High')?'b-amber':'b-red'}`} style={{marginRight:3}}>{iss}</span>))},
+    {key:'fqdn',label:'Zone FQDN',fixed:true,mono:true,size:11,width:'27%'},
+    {key:'view',label:'View',width:'12%',render:z=><span className="badge b-teal">{z.view}</span>},
+    {key:'ttl',label:'TTL',mono:true,size:11,width:'11%',sortVal:z=>z.ttl,render:z=><span style={{color:z.ttl<60||z.ttl>86400?'var(--sev-red-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.ttl}s</span>},
+    {key:'neg_ttl',label:'Neg TTL',mono:true,size:11,width:'11%',sortVal:z=>z.neg_ttl,render:z=><span style={{color:z.neg_ttl>3600?'var(--sev-amber-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.neg_ttl}s</span>},
+    {key:'records',label:'Records',mono:true,size:11,width:'10%',sortVal:z=>z.records||0,render:z=><span style={{fontFamily:'var(--font-mono)',color:z.records===0?'var(--amber)':'var(--ink)'}}>{(z.records||0).toLocaleString()}</span>},
+    {key:'issues',label:'Issues',nosort:true,width:'29%',render:z=>z.issues.map((iss,i)=>(<span key={i} className={`badge ${iss.includes('High')||iss.includes('Too High')?'b-amber':'b-red'}`} style={{marginRight:3}}>{iss}</span>))},
   ]);
   if(!bad.length) return <div className="no-data">✓ No TTL anomalies detected</div>;
   return <DataTable ctl={ctl} rows={bad} defaultRows={10} rowKey={z=>z.id} initialSort={{key:'fqdn',dir:'asc'}} exportName="ttl-anomalies" persistId="ttl" onRowClick={onDrill?z=>onDrill({type:'zone',data:z}):undefined}/>;
