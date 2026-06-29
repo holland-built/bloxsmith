@@ -4447,7 +4447,7 @@ function PivotExplorer({data, hosts, subnets, zones}){
             {m}
           </button>
         ))}
-        <input value={filterTxt} onChange={e=>setFilterTxt(e.target.value)}
+        <input value={filterTxt} onChange={e=>setFilterTxt(e.target.value)} aria-label="Filter pivot explorer results"
           placeholder="filter…"
           style={{fontFamily:'var(--font-mono)',fontSize:11,padding:'3px 8px',borderRadius:3,border:'1px solid var(--border)',
             background:'var(--surface-2)',color:'var(--ink)',marginLeft:'auto',width:160}}/>
