@@ -4841,7 +4841,7 @@ function App({vault, onVaultChange}={}) {
   const handleBrandSave = (domain, name) => {
     LS.set('noc.orgDomain', domain); LS.set('noc.orgName', name);
     setOrgDomain(domain); setOrgName(name);
-    fetch('/api/brand',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,name})}).catch(()=>{});
+    fetch('/api/brand',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain,name})}).catch(()=>{ toast('Failed to save brand settings — server unreachable','err'); });
   };
   const resetDashboard = () => { setOverviewOrder([...DEFAULT_ORDER]); LS.set('noc.widgetOrder',[...DEFAULT_ORDER]); setCollapsed({}); LS.set('cl',{}); setHiddenSections([]); LS.set('noc.hiddenSections',[]); openWizard('widgets'); };
   const toggleFs = (key) => setFullscreen(f=>f===key?null:key);
