@@ -960,7 +960,7 @@ const MOCK = (() => {
 
 const LS = {
   get: (k, def) => { try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):def; } catch{return def;} },
-  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) { console.warn('localStorage write failed:', k, e); } }
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } }
 };
 
 /* ─── HELPERS ───────────────────────────────────────────────────────────────*/
