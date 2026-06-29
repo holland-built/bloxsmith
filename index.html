@@ -3246,7 +3246,7 @@ function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels
                     {suggestions.map(s=>(
                       <div key={s.domain}
                         onMouseDown={e=>{e.preventDefault();setSelectedDomain(s.domain);setSelectedName(s.name);setCompanyInput(s.name);setShowDropdown(false);}}
-                        style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',cursor:'pointer',borderBottom:'1px solid var(--border)'}}>
+                        style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',cursor:'pointer',borderBottom:'1px solid var(--border)'}}>
                         <BrandLogoImg domain={s.domain} alt={s.name} style={{width:20,height:20,borderRadius:2,objectFit:'contain',background:'#fff',padding:1,flexShrink:0}}/>
                         <span style={{fontSize:12,color:'var(--ink)',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</span>
                         <span style={{fontSize:11,color:'var(--muted)',fontFamily:'monospace',flexShrink:0}}>{s.domain}</span>
