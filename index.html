@@ -678,9 +678,9 @@ tr:hover .copy-btn{opacity:1}
 .upd-actions button.primary:hover{background:var(--amber);border-color:var(--amber)}
 .upd-spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(0,0,0,.3);border-top-color:var(--blue-dark);border-radius:50%;vertical-align:-2px;margin-right:6px;animation:spin .8s linear infinite}
 .upd-note{font-size:10px;color:var(--gray-400);margin-top:6px}
-.ver-badge.updating{color:var(--sev-amber-t);background:var(--badge-amber-bg);border-color:var(--badge-amber-bd);display:inline-flex;align-items:center;gap:4px;padding:3px 7px;white-space:nowrap;max-width:none;cursor:default}
+.ver-badge.updating{color:var(--sev-amber-t);background:var(--badge-amber-bg);border-color:var(--badge-amber-bd);display:inline-flex;align-items:center;gap:4px;padding:3px 8px;white-space:nowrap;max-width:none;cursor:default}
 .ver-badge.updating .upd-spin{border:2px solid rgba(245,158,11,.25);border-top-color:var(--amber);width:10px;height:10px;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
-.ver-badge.upd-done{color:var(--sev-green-t);background:var(--badge-green-bg);border-color:var(--badge-green-bd);display:inline-flex;align-items:center;gap:4px;padding:3px 7px;white-space:nowrap;cursor:default}
+.ver-badge.upd-done{color:var(--sev-green-t);background:var(--badge-green-bg);border-color:var(--badge-green-bd);display:inline-flex;align-items:center;gap:4px;padding:3px 8px;white-space:nowrap;cursor:default}
 .ver-upd-elapsed{font-size:9px;color:rgba(245,158,11,.7);font-variant-numeric:tabular-nums;flex-shrink:0}
 /* ── panel error state ── */
 .panel-error{text-align:center;padding:40px 24px;color:var(--gray-400);font-size:12px;line-height:1.6}
@@ -1334,6 +1334,7 @@ function FeedsTable({feeds, rowLimit, demoMode, onDrill}) {
 
 function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
   const [testExpanded, setTestExpanded] = useState(false);
+  const [showCount, setShowCount] = useState(10);
   const actBadge={block:'b-red',allow:'b-green',redirect:'b-amber',monitor:'b-teal'};
   const activeCt=policies.filter(p=>p.active).length;
   const totalRules=policies.reduce((a,p)=>a+p.rules,0);
@@ -1372,7 +1373,14 @@ function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
           </div>
         ))}
       </div>
-      {realPolicies.map(renderPol)}
+      {realPolicies.slice(0, showCount).map(renderPol)}
+      {showCount < realPolicies.length && (
+        <button className="show-more-btn"
+          onClick={()=>setShowCount(n=>n+10)}
+          aria-label={`Show more policies (${realPolicies.length - showCount} remaining)`}>
+          Show {Math.min(10, realPolicies.length - showCount)} more · {realPolicies.length - showCount} remaining
+        </button>
+      )}
       {testPolicies.length>0&&(
         <>
           <div className="pol-item" style={{cursor:'pointer',opacity:.7}} tabIndex={0}
@@ -1385,7 +1393,12 @@ function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
               <div style={{fontSize:10,color:'var(--gray-600)',marginTop:2}}>Click to {testExpanded?'collapse':'expand'}</div>
             </div>
           </div>
-          {testExpanded&&testPolicies.map(renderPol)}
+          {testExpanded&&testPolicies.slice(0,20).map(renderPol)}
+          {testExpanded&&testPolicies.length>20&&(
+            <div style={{fontSize:11,color:'var(--muted)',padding:'4px 0'}}>
+              {testPolicies.length-20} more test policies hidden
+            </div>
+          )}
         </>
       )}
     </>
@@ -4896,6 +4909,8 @@ function App({vault, onVaultChange}={}) {
       }
     } catch(e) {
       setData(MOCK); setUsingMock(true); /* no server running — use mock */
+    } finally {
+      loadInFlight.current = false;
     }
     setLastUpd(new Date());
     setLoading(false);
@@ -5457,6 +5472,7 @@ function App({vault, onVaultChange}={}) {
               if(s.id==='alerts'&&firingAlerts.length>0)badge=<span className="badge-pill">{firingAlerts.length}</span>;
               return(
                 <button key={s.id} className={`topbar-tab${section===s.id?' active':''}`}
+                  aria-current={section===s.id?'page':undefined}
                   onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>
                   {s.label}{badge}
                 </button>
@@ -5610,7 +5626,10 @@ function App({vault, onVaultChange}={}) {
                 {label:'Alerts', val:firingAlerts.length, sub:firingAlerts.length>0?'firing':'clear', col:'var(--red)', sec:'alerts', crit:firingAlerts.length>0},
                 {label:'Feeds', val:(data?.feeds||[]).filter(f=>f.active).length, sub:'active threats', col:'var(--gray-400)', sec:'security', crit:false},
               ].map((seg,i)=>(
-                <div key={i} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(seg.sec);}}} onClick={()=>setSection(seg.sec)}
+                <div key={i} role="button" tabIndex={0}
+                  onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(seg.sec);}}}
+                  aria-label={`Go to ${seg.label} section`}
+                  onClick={()=>setSection(seg.sec)}
                   style={{flex:1,padding:'6px 10px',background:seg.crit?'rgba(248,81,73,.1)':'var(--surface-2)',
                     cursor:'pointer',borderRight:i<4?'1px solid var(--border)':'none',transition:'background .15s'}}
                   onMouseEnter={e=>e.currentTarget.style.background='var(--surface-3)'}
@@ -5671,7 +5690,10 @@ function App({vault, onVaultChange}={}) {
                   const cursorVal=chartCursor!==null&&arr.length>1?arr[Math.round(chartCursor*(arr.length-1))]:null;
                   return (
                   <div key={i} className={`card${k.sev==='crit'?' crit-state':k.sev==='warn'?' warn-state':' dim'}`}
-                    role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(k.nav);}}} style={{display:'flex',flexDirection:'column',gap:0,position:'relative',overflow:'hidden',cursor:'pointer'}}
+                    role="button" tabIndex={0}
+                    onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(k.nav);}}}
+                    aria-label={`Go to ${k.l} section`}
+                    style={{display:'flex',flexDirection:'column',gap:0,position:'relative',overflow:'hidden',cursor:'pointer'}}
                     title={`Go to ${k.nav} section`}
                     onClick={()=>setSection(k.nav)}>
                     <svg width="100%" height="100%" viewBox="0 0 160 28" preserveAspectRatio="none"
