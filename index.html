@@ -616,18 +616,18 @@ tr:hover .copy-btn{opacity:1}
 .topbar-chip{display:inline-flex;align-items:center;gap:5px;padding:0 9px;height:24px;border-radius:2px;font-size:10px;font-weight:700;letter-spacing:.07em;white-space:nowrap;font-family:var(--font-mono)}
 .topbar-chip-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;animation:chip-pulse 1.6s ease-in-out infinite}
 @keyframes chip-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.8)}}
-.chip-crit{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:#f87171}
-.chip-crit .topbar-chip-dot{background:#f87171}
-.chip-warn{background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.25);color:#fbbf24}
-.chip-warn .topbar-chip-dot{background:#fbbf24}
-.chip-ok{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);color:#4ade80}
-.chip-ok .topbar-chip-dot{background:#4ade80;animation:none}
-[data-theme=light] .chip-crit{background:rgba(200,31,12,.08);border-color:rgba(200,31,12,.2);color:#c81f0c}
-[data-theme=light] .chip-crit .topbar-chip-dot{background:#c81f0c}
-[data-theme=light] .chip-warn{background:rgba(151,116,5,.08);border-color:rgba(151,116,5,.2);color:#977405}
-[data-theme=light] .chip-warn .topbar-chip-dot{background:#977405}
-[data-theme=light] .chip-ok{background:rgba(19,133,79,.08);border-color:rgba(19,133,79,.2);color:#13854f}
-[data-theme=light] .chip-ok .topbar-chip-dot{background:#13854f}
+.chip-crit{background:var(--danger-bg);border:1px solid var(--red-border);color:var(--danger)}
+.chip-crit .topbar-chip-dot{background:var(--danger)}
+.chip-warn{background:var(--warning-bg);border:1px solid var(--yellow-border);color:var(--warning)}
+.chip-warn .topbar-chip-dot{background:var(--warning)}
+.chip-ok{background:var(--success-bg);border:1px solid var(--green-border);color:var(--success)}
+.chip-ok .topbar-chip-dot{background:var(--success);animation:none}
+[data-theme=light] .chip-crit{background:var(--danger-bg);border-color:var(--red-border);color:var(--danger)}
+[data-theme=light] .chip-crit .topbar-chip-dot{background:var(--danger)}
+[data-theme=light] .chip-warn{background:var(--warning-bg);border-color:var(--yellow-border);color:var(--warning)}
+[data-theme=light] .chip-warn .topbar-chip-dot{background:var(--warning)}
+[data-theme=light] .chip-ok{background:var(--success-bg);border-color:var(--green-border);color:var(--success)}
+[data-theme=light] .chip-ok .topbar-chip-dot{background:var(--success)}
 .topbar-controls{display:flex;align-items:center;gap:12px;flex-wrap:nowrap;justify-content:flex-end;flex-shrink:0}
 .topbar-group{display:flex;align-items:center;gap:6px}
 .topbar-group .theme-btn,.topbar-group .chat-toggle-btn{margin-left:0}
