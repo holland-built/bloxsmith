@@ -5804,8 +5804,13 @@ function App({vault, onVaultChange}={}) {
                       const lastY=spark[6].y.toFixed(1);
                       return (<React.Fragment key={s.id||i}>
                         {i>0&&<div style={{height:1,background:'var(--border)',margin:'0 4px'}}/>}
-                        <div className="ov-pool-row" style={{display:'grid',gridTemplateColumns:'1fr 38px 60px 54px',alignItems:'center',gap:8,height:36,padding:'0 4px'}}
-                          onClick={()=>setScopeSubnet(scopeSubnet===s.id?null:s.id)} title={s.name||s.addr}>
+                        <div className="ov-pool-row" role="button" tabIndex={0}
+                          aria-label={`${s.name||s.addr} — click to scope`}
+                          aria-pressed={scopeSubnet===s.id}
+                          style={{display:'grid',gridTemplateColumns:'1fr 38px 60px 54px',alignItems:'center',gap:8,height:36,padding:'0 4px'}}
+                          onClick={()=>setScopeSubnet(scopeSubnet===s.id?null:s.id)}
+                          onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setScopeSubnet(scopeSubnet===s.id?null:s.id);}}}
+                          title={s.name||s.addr}>
                           <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
                           <span style={{fontFamily:'var(--font-mono)',fontSize:12,fontWeight:600,color:clr,textAlign:'right'}}>{s.util}%</span>
                           <svg width={60} height={20} viewBox="0 0 60 20" preserveAspectRatio="none" style={{display:'block',overflow:'visible'}}>
