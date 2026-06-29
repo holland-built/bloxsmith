@@ -5854,7 +5854,7 @@ function App({vault, onVaultChange}={}) {
                         {errHosts.slice(0,3).map((h,i)=>{
                           const isErr=['error','offline'].includes(h.status);
                           return (<React.Fragment key={i}>
-                            <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={h.name||h.ip} onClick={()=>setDrillEntity({type:'host',data:h})}>{h.name||h.ip}</span>
+                            <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'host',data:h});}}} title={h.name||h.ip} onClick={()=>setDrillEntity({type:'host',data:h})}>{h.name||h.ip}</span>
                             <span style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,
                               background:isErr?'rgba(248,81,73,.12)':'rgba(210,153,34,.12)',
                               color:isErr?'var(--red)':'var(--amber)',
