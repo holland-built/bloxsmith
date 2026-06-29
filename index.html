@@ -6033,7 +6033,7 @@ function App({vault, onVaultChange}={}) {
           <div className="card">
             <div className="card-title"><div className="dot" aria-hidden="true"/>All Subnets — DHCP Utilization ({focusedPool.length}{sq&&` of ${subnets.length}`})
   {subnets.some(s=>s.site&&s.site!=='–'&&s.site!=='—')&&(
-    <button className="col-btn" style={{marginLeft:'auto'}} onClick={()=>setIpamGroupSite(g=>!g)} title="Group subnets by site">
+    <button className="col-btn" style={{marginLeft:'auto'}} onClick={()=>setIpamGroupSite(g=>!g)} title={ipamGroupSite?'Ungroup subnets':'Group subnets by site'} aria-label={ipamGroupSite?'Ungroup subnets':'Group subnets by site'} aria-pressed={ipamGroupSite}>
       {ipamGroupSite?'⊞ ungrouped':'⊟ by site'}
     </button>
   )}
