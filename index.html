@@ -3967,7 +3967,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
                     <div className="tenant-confirm" style={{flex:1,display:'flex',alignItems:'center',gap:'6px',padding:'4px 8px',borderRadius:'4px',background:'var(--red-bg)',border:'1px solid var(--red-border)'}}>
                       <span className="tenant-confirm-q" style={{flex:1,fontSize:'11px',color:'var(--sev-red-t)'}}>Remove {u.name}?</span>
                       <button className="tenant-confirm-yes" title="Remove permanently" aria-label="Confirm removal" onClick={()=>remove(u.tenantId,u.name)}>✓</button>
-                      <button className="tenant-confirm-no" title="Keep" onClick={()=>setConfirmRm(null)}>✕</button>
+                      <button className="tenant-confirm-no" title="Keep" aria-label="Cancel removal" onClick={()=>setConfirmRm(null)}>✕</button>
                     </div>
                   ) : (
                     <>
