@@ -2304,7 +2304,7 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit, cutoffMs=0}) {
       </div>
       <div className="g2 mb20">
         <div className="card">
-          <div className="card-title"><div className="dot"/>Query Volume — Last 7 Days</div>
+          <div className="card-title"><div className="dot" aria-hidden="true"/>Query Volume — Last 7 Days</div>
           {(()=>{
             if(!filtVolume||!filtVolume.length) return <div className="no-data">No data</div>;
             const vk='NstarDnsActivity.total_query_count';
@@ -2344,7 +2344,7 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit, cutoffMs=0}) {
           })()}
         </div>
         <div className="card">
-          <div className="card-title"><div className="dot"/>Query Types</div>
+          <div className="card-title"><div className="dot" aria-hidden="true"/>Query Types</div>
           {query_types.length===0?<div className="no-data">No data</div>:(
             <div style={{marginTop:4}}>
               <QueryTypeChart queryTypes={query_types}/>
@@ -2368,7 +2368,7 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit, cutoffMs=0}) {
       </div>
       <div className="card">
         <div className="card-title" style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-          <div className="dot"/>Top DNS Clients — Last 7 Days
+          <div className="dot" aria-hidden="true"/>Top DNS Clients — Last 7 Days
           <select aria-label="Number of top DNS clients to show" value={topN} onChange={e=>setTopN(e.target.value==='all'?'all':Number(e.target.value))}
             style={{fontSize:10,background:'var(--surface-2)',color:'var(--ink)',border:'1px solid var(--border)',borderRadius:3,padding:'1px 4px',fontFamily:'var(--font-mono)',marginLeft:4}}>
             {[5,10,25,'all'].map(n=><option key={n} value={n}>Top {n==='all'?'All':n}</option>)}
@@ -2427,7 +2427,7 @@ function InsightsPanel({data, rowLimit, setRowLimit}) {
         ))}
       </div>
       <div className="card">
-        <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>SOC Insights</div>
+        <div className="card-title"><div className="dot" aria-label="critical" style={{background:'var(--red)'}}/>SOC Insights</div>
         <RowLimitBar limit={rowLimit} setLimit={setRowLimit}/>
         <DataTable ctl={ctl} rows={rows.slice(0,rowLimit)} defaultRows={rowLimit} initialSort={{key:'severity',dir:'asc'}} exportName="soc-insights" persistId="insights"/>
       </div>
@@ -2539,7 +2539,7 @@ function ContentionMatrix({data, hosts}) {
   if(!hostNames.length) return null;
   return (
     <div className="card" style={{marginBottom:14,overflowX:'auto'}}>
-      <div className="card-title"><div className="dot"/>Resource Contention Matrix</div>
+      <div className="card-title"><div className="dot" aria-hidden="true"/>Resource Contention Matrix</div>
       <table style={{width:'100%',borderCollapse:'collapse',fontSize:10,fontFamily:'var(--font-mono)'}}>
         <thead>
           <tr>
@@ -2595,7 +2595,7 @@ function HealthScorecards({data, hosts}) {
   const top=[...hosts].sort((a,b)=>score(a.name||a.ip,a.status)-score(b.name||b.ip,b.status)).slice(0,10);
   return (
     <div className="card" style={{marginBottom:14}}>
-      <div className="card-title"><div className="dot"/>Device Health Scorecards</div>
+      <div className="card-title"><div className="dot" aria-hidden="true"/>Device Health Scorecards</div>
       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
         {top.map((h,i)=>{
           const nm=h.name||h.ip||'?';
@@ -2637,7 +2637,7 @@ function StatusGrid({hosts, data}) {
   const show=hosts.slice(0,30);
   return (
     <div className="card" style={{marginBottom:14,overflowX:'auto'}}>
-      <div className="card-title"><div className="dot"/>Host Status Grid</div>
+      <div className="card-title"><div className="dot" aria-hidden="true"/>Host Status Grid</div>
       <table style={{width:'100%',borderCollapse:'collapse',fontSize:10,fontFamily:'var(--font-mono)'}}>
         <thead><tr>
           <th style={{textAlign:'left',padding:'2px 6px',color:'var(--muted)',fontWeight:400,borderBottom:'1px solid var(--border)'}}>Host</th>
@@ -2774,7 +2774,7 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
       )}
       {actionLog.length>0&&(
         <div className="card" style={{marginTop:16}}>
-          <div className="card-title"><div className="dot"/>Action audit trail</div>
+          <div className="card-title"><div className="dot" aria-hidden="true"/>Action audit trail</div>
           {actionLog.map(a=>(
             <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid var(--border)',fontSize:11}}>
               <span><b style={{color:a.act==='block'?'var(--sev-red-t)':'var(--teal)'}}>{a.act}</b> {a.domain}{' '}
@@ -2936,7 +2936,7 @@ function SearchSection({data, srchQ, setSrchQ, srchRes, setSrchRes, srching, set
           ].filter(g=>srchRes.local[g.key]?.length>0).map(g=>(
             <div key={g.key} className="card mb14">
               <div className="card-title">
-                <div className="dot"/>
+                <div className="dot" aria-hidden="true"/>
                 {g.label}
                 <span style={{marginLeft:6,background:'var(--surface-3)',borderRadius:4,padding:'1px 8px',fontSize:10,color:'var(--teal)',fontWeight:700}}>
                   {srchRes.local[g.key].length}
@@ -2950,7 +2950,7 @@ function SearchSection({data, srchQ, setSrchQ, srchRes, setSrchRes, srching, set
           {srchRes.entities.length>0&&(
             <div className="card">
               <div className="card-title">
-                <div className="dot" style={{background:'var(--green)'}}/>
+                <div className="dot" aria-label="ok" style={{background:'var(--green)'}}/>
                 Network Entities
                 <span style={{marginLeft:6,background:'var(--surface-3)',borderRadius:4,padding:'1px 8px',fontSize:10,color:'var(--green)',fontWeight:700}}>
                   {srchRes.entities.length}
@@ -3509,7 +3509,7 @@ function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection
   const sevDot = {crit:'var(--red)',warn:'var(--amber)',info:'var(--teal)'};
   return (
     <div className="card">
-      <div className="card-title"><div className="dot" style={{background:'var(--amber)'}}/>Triage — items needing attention</div>
+      <div className="card-title"><div className="dot" aria-label="warning" style={{background:'var(--amber)'}}/>Triage — items needing attention</div>
       {rows.length===0
         ? <div className="no-data" style={{padding:24}}>No issues detected — all metrics within normal thresholds.</div>
         : rows.map((r,i)=>(
@@ -3694,7 +3694,7 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
   const inStyle={background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--gray-200)',padding:'6px 8px'};
   return (
     <div className="card">
-      <div className="card-title" style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}><span style={{display:'flex',alignItems:'center',gap:6}}><div className="dot"/>Alert Rules — fire when a live metric crosses a threshold{ackedCount>0&&<span style={{fontSize:9,color:'var(--teal)',marginLeft:8}}>{ackedCount} acked</span>}</span>{firingAlerts.length>0&&<button className="col-btn" onClick={snoozeAll} title="Snooze all firing alerts for 1 hour">Snooze All ({firingAlerts.length})</button>}</div>
+      <div className="card-title" style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}><span style={{display:'flex',alignItems:'center',gap:6}}><div className="dot" aria-hidden="true"/>Alert Rules — fire when a live metric crosses a threshold{ackedCount>0&&<span style={{fontSize:9,color:'var(--teal)',marginLeft:8}}>{ackedCount} acked</span>}</span>{firingAlerts.length>0&&<button className="col-btn" onClick={snoozeAll} title="Snooze all firing alerts for 1 hour">Snooze All ({firingAlerts.length})</button>}</div>
       {evald.length>0&&(()=>{
         const sevClr={critical:'var(--red)',high:'var(--red)',medium:'var(--amber)',low:'var(--teal)',info:'var(--surface-3)',crit:'var(--red)',warn:'var(--amber)'};
         const firingSet=new Set(firingAlerts.map(a=>a.id));
@@ -4177,7 +4177,7 @@ function RunbookPanel({critSubs, errHosts}){
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',padding:'2px 0',marginBottom:open?10:0}}
         onClick={()=>setOpen(o=>!o)}>
         <div className="card-title" style={{margin:0}}>
-          <div className="dot" style={{background:'var(--amber)'}}/>
+          <div className="dot" aria-label="warning" style={{background:'var(--amber)'}}/>
           Runbook — {items.length} active condition{items.length!==1?'s':''}
         </div>
         <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>{open?'▲ collapse':'▼ expand'}</span>
@@ -5143,18 +5143,22 @@ function App({vault, onVaultChange}={}) {
     const cur={}; data.secPolicies.forEach(p=>{cur[p.id]=p.rules;}); LS.set('noc.prevPolicies',cur);
   },[data]);
 
+  const lazyAbort = useRef({});
   const lazyFetch = useCallback((key,url,set)=>{
     setLazyErr(e=>({...e,[key]:false}));
     setLazyLoading(l=>({...l,[key]:true}));
-    fetch(url).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    const ctrl = new AbortController();
+    lazyAbort.current[key] = ctrl;
+    fetch(url, {signal: ctrl.signal}).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(d=>{ setLazyLoading(l=>({...l,[key]:false})); set(d); })
-      .catch(()=>{ setLazyLoading(l=>({...l,[key]:false})); setLazyErr(e=>({...e,[key]:true})); });
+      .catch(e=>{ if(e?.name==='AbortError') return; setLazyLoading(l=>({...l,[key]:false})); setLazyErr(err=>({...err,[key]:true})); });
   },[]);
   useEffect(()=>{
     if(section==='dns'&&!dnsAnalytics&&!lazyErr['dns-analytics']&&!lazyLoading['dns-analytics']) lazyFetch('dns-analytics','/api/dns-analytics',setDnsAnalytics);
     if(section==='security'&&!insights&&!lazyErr.insights&&!lazyLoading.insights) lazyFetch('insights','/api/insights',setInsights);
     if(section==='security'&&!actions&&!lazyErr.actions&&!lazyLoading.actions) lazyFetch('actions','/api/actions',setActions);
     if(section==='hosts'&&!hostMetrics&&!lazyErr.hostMetrics&&!lazyLoading.hostMetrics) lazyFetch('hostMetrics','/api/host-metrics',setHostMetrics);
+    return ()=>{ Object.values(lazyAbort.current).forEach(c=>c.abort()); };
   },[section]);
 
   // Resolve + apply the theme during render (before children render) so chart
@@ -5726,7 +5730,7 @@ function App({vault, onVaultChange}={}) {
             </div>
             {deltas&&Object.keys(deltas).length>0&&(
               <div className="card mb14">
-                <div className="card-title"><div className="dot"/>Changes since last refresh</div>
+                <div className="card-title"><div className="dot" aria-hidden="true"/>Changes since last refresh</div>
                 <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
                   {Object.entries(deltas).map(([k,v])=>(
                     <div key={k} style={{fontSize:12,color:'var(--gray-200)'}}>
@@ -5993,7 +5997,7 @@ function App({vault, onVaultChange}={}) {
           </div>
           <UtilGauges subnets={ipamPool}/>
           <div className="card">
-            <div className="card-title"><div className="dot"/>All Subnets — DHCP Utilization ({focusedPool.length}{sq&&` of ${subnets.length}`})
+            <div className="card-title"><div className="dot" aria-hidden="true"/>All Subnets — DHCP Utilization ({focusedPool.length}{sq&&` of ${subnets.length}`})
   {subnets.some(s=>s.site&&s.site!=='–'&&s.site!=='—')&&(
     <button className="col-btn" style={{marginLeft:'auto'}} onClick={()=>setIpamGroupSite(g=>!g)} title="Group subnets by site">
       {ipamGroupSite?'⊞ ungrouped':'⊟ by site'}
@@ -6075,7 +6079,7 @@ function App({vault, onVaultChange}={}) {
             </div>
             <div className="card">
               <div className="card-title">
-                <div className="dot"/>DHCP Leases
+                <div className="dot" aria-hidden="true"/>DHCP Leases
                 <span style={{fontWeight:400,color:'var(--gray-600)',fontSize:10}}>
                   {dhcpSubFilt?` — ${subnets.find(s=>s.id===dhcpSubFilt)?.name||'subnet'} (${s_leases.length})`:sq?` — filtered (${s_leases.length})`:` (${s_leases.length})`}
                 </span>
@@ -6141,7 +6145,7 @@ function App({vault, onVaultChange}={}) {
             </div>
             <div className="g2">
               <div className="card">
-                <div className="card-title"><div className="dot" style={{background:'var(--amber)'}}/>Zones with TTL Issues<VizSelect id="dns-ttl" getViz={getViz} setViz={setViz}/></div>
+                <div className="card-title"><div className="dot" aria-label="warning" style={{background:'var(--amber)'}}/>Zones with TTL Issues<VizSelect id="dns-ttl" getViz={getViz} setViz={setViz}/></div>
                 {getViz('dns-ttl')==='table'
                   ? <TTLTable zones={s_zones} onDrill={setDrillEntity}/>
                   : <WidgetViz data={s_zones.filter(z=>z.anomaly).map(z=>({zone:z.fqdn,ttl:z.ttl,records:z.records||0}))} viz={getViz('dns-ttl')} labelKey="zone" valueKey="ttl" color="var(--amber)" defaultRows={10}/>}
@@ -6177,7 +6181,7 @@ function App({vault, onVaultChange}={}) {
                 })()}
               </div>
               <div className="card">
-                <div className="card-title"><div className="dot"/>DNS Zones — Empty Records</div>
+                <div className="card-title"><div className="dot" aria-hidden="true"/>DNS Zones — Empty Records</div>
                 <NXProxy zones={s_zones}/>
               </div>
             </div>
@@ -6213,12 +6217,12 @@ function App({vault, onVaultChange}={}) {
           <div className="g2">
             <HostBanner hosts={hosts} demoMode={demoMode}/>
             <div className="card">
-              <div className="card-title"><div className="dot"/>Status Breakdown</div>
+              <div className="card-title"><div className="dot" aria-hidden="true"/>Status Breakdown</div>
               <Donut hosts={hosts} filter={hostFilt} onSlice={s=>setHostFilt(f=>f===s?null:s)}/>
               {hostFilt&&<div style={{textAlign:'center',fontSize:11,color:'var(--teal)',marginTop:8}}>Filtered: <b>{hostFilt}</b> — click segment to clear</div>}
             </div>
             <div className="card">
-              <div className="card-title"><div className="dot"/>Host List {hostFilt&&`— ${hostFilt} (${filtHosts.length})`}
+              <div className="card-title"><div className="dot" aria-hidden="true"/>Host List {hostFilt&&`— ${hostFilt} (${filtHosts.length})`}
   <input className="viz-sel" style={{minWidth:90,width:'auto',marginLeft:'auto',paddingLeft:6}} placeholder="filter…" value={hostsQ} onChange={e=>setHostsQ(e.target.value)} onMouseDown={e=>e.stopPropagation()} aria-label="Filter hosts"/>
   <VizSelect id="hosts-list" getViz={getViz} setViz={setViz}/>
 </div>
@@ -6243,7 +6247,7 @@ function App({vault, onVaultChange}={}) {
                 : <WidgetViz data={(hostsQ?focusedHosts.filter(h=>[h.name,h.ip].some(v=>String(v||'').toLowerCase().includes(hostsQ.toLowerCase()))):focusedHosts).map(h=>({host:h.name||h.id||h.ip,status:h.status,ip:h.ip||'—'}))} viz={getViz('hosts-list')} labelKey="host" valueKey="status" color="var(--teal)" defaultRows={10}/>}
             </div>
             <div className="card b-full">
-              <div className="card-title"><div className="dot"/>Host Performance Metrics — avg, last hour</div>
+              <div className="card-title"><div className="dot" aria-hidden="true"/>Host Performance Metrics — avg, last hour</div>
               {lazyErr.hostMetrics
                 ? <PanelError what="host metrics" onRetry={()=>lazyFetch('hostMetrics','/api/host-metrics',setHostMetrics)}/>
                 : <HostMetricsPanel data={hostMetrics} cutoffMs={cutoffMs}/>}
@@ -6282,7 +6286,7 @@ function App({vault, onVaultChange}={}) {
               <span className="section-badge ok">· OK</span>
             </div>
           <div className="card">
-            <div className="card-title"><div className="dot"/>Security Policies ({s_policies.length}{sq&&` of ${secPolicies.length}`})</div>
+            <div className="card-title"><div className="dot" aria-hidden="true"/>Security Policies ({s_policies.length}{sq&&` of ${secPolicies.length}`})</div>
             <PoliciesPanel policies={s_policies} diff={policyDiff} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/>
           </div>
           <div style={{marginTop:16}}>
@@ -6291,7 +6295,7 @@ function App({vault, onVaultChange}={}) {
               <span className="section-line"/>
             </div>
             <div className="card">
-              <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>All Threat Feeds by Severity{sq&&` (${s_feeds.length} of ${feeds.length})`}<VizSelect id="sec-feeds" getViz={getViz} setViz={setViz}/></div>
+              <div className="card-title"><div className="dot" aria-label="critical" style={{background:'var(--red)'}}/>All Threat Feeds by Severity{sq&&` (${s_feeds.length} of ${feeds.length})`}<VizSelect id="sec-feeds" getViz={getViz} setViz={setViz}/></div>
               {getViz('sec-feeds')==='table'
                 ? <><RowLimitBar limit={rl('threats')} setLimit={v=>setRl('threats',v)}/><FeedsTable feeds={s_feeds} rowLimit={rl('threats')} demoMode={demoMode} onDrill={d=>setDrillEntity(d)}/></>
                 : <WidgetViz data={s_feeds.map(f=>({name:f.name,entries:f.entries||0,category:f.cat||f.category||'—'}))} viz={getViz('sec-feeds')} labelKey="name" valueKey="entries" color="var(--red)" defaultRows={10}/>}
@@ -6316,7 +6320,7 @@ function App({vault, onVaultChange}={}) {
               <span className="section-line"/>
             </div>
             <div className="card">
-              <div className="card-title"><div className="dot"/>IQ Actions — recent automated actions</div>
+              <div className="card-title"><div className="dot" aria-hidden="true"/>IQ Actions — recent automated actions</div>
               {lazyErr.actions
                 ? <PanelError what="IQ actions" onRetry={()=>lazyFetch('actions','/api/actions',setActions)}/>
                 : actions
@@ -6332,7 +6336,7 @@ function App({vault, onVaultChange}={}) {
               <span className="section-line"/>
             </div>
             <div className="card">
-              <div className="card-title"><div className="dot" style={{background:'var(--red)'}}/>Entity &amp; Threat Lookup</div>
+              <div className="card-title"><div className="dot" aria-label="critical" style={{background:'var(--red)'}}/>Entity &amp; Threat Lookup</div>
               <ThreatLookupPanel subnets={subnets} leases={leases}/>
             </div>
           </div>
@@ -6342,7 +6346,7 @@ function App({vault, onVaultChange}={}) {
         {/* ── AUDIT ── */}
         {section==='audit'&&(
           <div className="card">
-            <div className="card-title"><div className="dot"/>Audit Log — {sq?`${s_logs.length} of `:'Last '}{auditLogs.length} Entries
+            <div className="card-title"><div className="dot" aria-hidden="true"/>Audit Log — {sq?`${s_logs.length} of `:'Last '}{auditLogs.length} Entries
   <input className="viz-sel" style={{minWidth:90,width:'auto',marginLeft:'auto',paddingLeft:6}} placeholder="filter…" value={auditQ} onChange={e=>setAuditQ(e.target.value)} onMouseDown={e=>e.stopPropagation()} aria-label="Filter audit log"/>
   <VizSelect id="audit-log" getViz={getViz} setViz={setViz}/>
 </div>
@@ -6388,7 +6392,7 @@ function App({vault, onVaultChange}={}) {
               ))}
             </div>
             <div className="card">
-              <div className="card-title"><div className="dot"/>Subnet Topology — by Site</div>
+              <div className="card-title"><div className="dot" aria-hidden="true"/>Subnet Topology — by Site</div>
               <TopoMap subnets={subnets} hosts={hosts} zones={zones} onDrill={setDrillEntity}/>
             </div>
             <RunbookPanel critSubs={critSubs} errHosts={errHosts}/>
