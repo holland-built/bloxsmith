@@ -6573,7 +6573,7 @@ function TooltipLayer() {
   else if(tip.dir === 'down') style.transform = 'translateX(-50%)';
   else style.transform = 'translateX(-50%) translateY(-100%)'; // up
   return ReactDOM.createPortal(
-    <div className="gtip" style={style} dangerouslySetInnerHTML={{__html: tip.text}}/>,
+    <div className="gtip" style={style} ref={el => { if(el) el.textContent = tip.text; }}/>,
     document.body
   );
 }
