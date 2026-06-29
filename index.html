@@ -5791,7 +5791,7 @@ function App({vault, onVaultChange}={}) {
                         const qhr=hashN(z.fqdn,900)+50;
                         const isAnomaly=z.anomaly;
                         return (<React.Fragment key={z.id||i}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={z.fqdn} onClick={()=>setDrillEntity({type:'zone',data:z})}>{z.fqdn}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'zone',data:z});}}} title={z.fqdn} onClick={()=>setDrillEntity({type:'zone',data:z})}>{z.fqdn}</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)'}}>{qhr}</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>Primary</span>
                           <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:isAnomaly?'var(--amber)':'var(--green)'}}>{isAnomaly?'? STALE':'· OK'}</span>
