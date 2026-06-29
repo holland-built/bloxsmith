@@ -3980,7 +3980,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
                       </button>
                       {vault.vaultMode&&<>
                         <button className="tenant-mini" title="Replace this key (e.g. if expired)" onClick={()=>{setOpen(false);setEditTenant({id:u.tenantId,label:u.name});}}>chg</button>
-                        <button className="tenant-rm" title="Remove key" onClick={()=>setConfirmRm(u.tenantId)}>✕</button>
+                        <button className="tenant-rm" title="Remove key" aria-label="Remove key" onClick={()=>setConfirmRm(u.tenantId)}>✕</button>
                       </>}
                     </>
                   )}
