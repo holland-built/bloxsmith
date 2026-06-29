@@ -5320,7 +5320,7 @@ function App({vault, onVaultChange}={}) {
               <div className="rb-badge-sub">{rbInfo.to?`v${String(rbInfo.to).replace(/^v/,'')} failed`:'update failed'}</div>
             </div>
             <div className="rb-badge-actions">
-              <button className="rb-btn-retry" onClick={()=>{fetch('/api/update/rollback-clear',{method:'POST'}).catch(()=>{}); setRbInfo(null); LS.set('noc.updRollback',null); applyUpdate();}}>retry</button>
+              <button className="rb-btn-retry" onClick={()=>{fetch('/api/update/rollback-clear',{method:'POST'}).catch(()=>{}); setRbInfo(null); LS.set('noc.updRollback',null); applyUpdate();}}>Retry</button>
               <button className="rb-btn-x" title="Dismiss" onClick={()=>{fetch('/api/update/rollback-clear',{method:'POST'}).catch(()=>{}); setRbInfo(null); LS.set('noc.updRollback',null);}}>&#215;</button>
             </div>
           </div>}
