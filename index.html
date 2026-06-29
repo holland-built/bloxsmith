@@ -203,14 +203,14 @@ body{padding-left:0!important}
 .ss-pill.ok{color:var(--sev-green-t)}
 .ss-div{width:1px;height:16px;background:var(--border);margin:0 4px;flex-shrink:0}
 .ss-clock{margin-left:auto;color:var(--muted);letter-spacing:.05em;font-size:11px;flex-shrink:0}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px;box-shadow:var(--shadow-card);transition:border-color .15s,opacity .15s}
-.card:not(.crit-state):not(.warn-state):hover{border-color:rgba(61,186,95,.4);box-shadow:0 0 0 1px rgba(61,186,95,.15),0 2px 12px rgba(61,186,95,.08),var(--shadow-card)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:2px;padding:18px;box-shadow:var(--shadow-card);min-width:0;transition:border-color .15s,opacity .15s}
+.card:not(.crit-state):not(.warn-state):hover{border-color:var(--teal);box-shadow:0 0 0 1px var(--tint-border),var(--shadow-card)}
 .card.dim{opacity:.70}.card.dim:hover{opacity:.85}
 .card.warn-state{opacity:1;border-left:3px solid var(--amber);box-shadow:var(--shadow-card)}
 .card.warn-state:hover{border-color:rgba(210,153,34,.55)}
 .card.crit-state{opacity:1;border-left:3px solid var(--red);box-shadow:var(--shadow-card)}
 .card.crit-state:hover{border-color:rgba(248,81,73,.55)}
-.card-title{font-size:var(--fs-sm);font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.card-title{font-size:var(--fs-sm);font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0}
 .g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
 .g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
@@ -231,15 +231,14 @@ body{padding-left:0!important}
 .ov-bento>.b-wide{grid-column:span 2}
 .ov-bento>.b-full{grid-column:1/-1}
 .ov-bento>.drag-card>.card{height:100%;box-sizing:border-box;max-height:none;overflow:auto}
-.card{min-width:0}
 .g2>*,.g3>*,.g4>*{min-width:0}
 @media(max-width:900px){.b-wide,.b-full{grid-column:span 1}}
 .mb14{margin-bottom:14px}
 .mb20{margin-bottom:20px}
 /* gauges */
 /* tables */
-.tbl{width:100%;border-collapse:collapse}
-.tbl th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);padding:7px 10px;border-bottom:1px solid var(--border)}
+.tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.tbl th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);padding:8px 10px;border-bottom:1px solid var(--border)}
 .tbl td{padding:8px 10px;font-size:12px;line-height:1.4;border-bottom:1px solid var(--row-border)}
 .tbl tr:hover td{background:var(--hover)}
 .tbl tr:last-child td{border-bottom:none}
@@ -250,7 +249,6 @@ body{padding-left:0!important}
 .bento>.drag-card>.card>.card-title{position:sticky;top:0;background:var(--surface);padding:2px 0 8px;margin-top:-2px;z-index:3}
 .bento>.drag-card>.card>.card-title::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--border)}
 /* ── tables FIT the card: fixed columns divide the width, no sideways scroll ── */
-.tbl{table-layout:fixed;width:100%}
 /* headers wrap naturally; title attr provides tooltip for long labels */
 .tbl th{white-space:normal}
 .tbl td{overflow-wrap:anywhere;word-break:break-word}
@@ -623,6 +621,7 @@ tr:hover .copy-btn{opacity:1}
 /* ── column controls ── */
 .col-btn{background:none;border:1px solid var(--border);color:var(--gray-400);font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;flex-shrink:0;line-height:1.4;transition:background .12s,border-color .12s,color .12s}
 .col-btn:hover{border-color:var(--teal);color:var(--teal)}
+.col-btn:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
 .col-menu{position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px;min-width:230px;z-index:310;box-shadow:0 8px 24px rgba(0,0,0,.35)}
 .col-menu-head{display:flex;justify-content:space-between;align-items:center;padding:4px 6px 8px;border-bottom:1px solid var(--border);margin-bottom:4px}
 .col-menu-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400)}
@@ -736,7 +735,7 @@ tr:hover .copy-btn{opacity:1}
 :root[data-density="compact"] .tbl td{padding:4px 8px}
 :root[data-density="compact"] .tbl th{padding:4px 8px}
 :root[data-density="compact"] .card{padding:13px}
-:root[data-density="compact"] .bento{gap:11px}
+:root[data-density="compact"] .bento{gap:12px}
 :root[data-density="compact"] .g2,:root[data-density="compact"] .g3,:root[data-density="compact"] .g4{gap:10px}
 :root[data-density="compact"] .pol-item{padding:6px 0}
 [data-wall="on"] .bento{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -748,6 +747,7 @@ tr:hover .copy-btn{opacity:1}
 @media(max-width:1100px){[data-wall="on"] .bento{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .wall-span-btn{background:none;border:1px solid var(--border);border-radius:4px;color:var(--gray-400);font-size:10px;line-height:1;padding:2px 5px;cursor:pointer;margin-left:4px}
 .wall-span-btn:hover{color:var(--teal);border-color:var(--teal)}
+.wall-span-btn:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 .wall-clock{margin-left:18px;font-family:monospace;font-size:20px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:.04em;white-space:nowrap}
 .sec-changed{margin-left:8px;font-size:10px;color:var(--gray-400)}
 .drill-sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:499}
@@ -1360,7 +1360,7 @@ function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
   return (
     <>
       <div style={{display:'flex',justifyContent:'flex-end',marginBottom:8}}>
-        <button className="col-btn" data-export-section="security-policies"
+        <button className="col-btn" aria-label="Export security policies as CSV" data-export-section="security-policies"
           onClick={()=>downloadCSV('security-policies',[...realPolicies,...testPolicies].map(p=>({name:p.name,action:p.action,rules:p.rules,active:p.active,created:p.created})),Object.keys({name:'',action:'',rules:'',active:'',created:''}))}>CSV</button>
       </div>
       <div style={{display:'flex',gap:12,marginBottom:14}}>
@@ -1604,7 +1604,7 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
     <>
       {(exportName||ctl)&&(
         <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginBottom:6}}>
-          {exportName&&<button className="col-btn" data-export-section={exportName} title="Export visible columns as CSV"
+          {exportName&&<button className="col-btn" data-export-section={exportName} aria-label="Export visible columns as CSV" title="Export visible columns as CSV"
             onClick={()=>exportCols(exportName, vcols, sorted)}>CSV</button>}
           {ctl&&<ColumnMenu ctl={ctl}/>}
         </div>
@@ -4850,8 +4850,8 @@ function App({vault, onVaultChange}={}) {
     <>
       <span className="drag-handle" title="Drag to reorder" aria-label="Drag to reorder"
         onMouseDown={()=>setDragArmed(id)} onMouseUp={()=>setDragArmed(null)}>⠿</span>
-      <button className="wall-span-btn" title="Cycle width: 1 / 2 / full" onClick={e=>{e.stopPropagation();cycleSpan(id);}}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>
-      <button className="wall-span-btn" title={widgetHeights[id]?`Height: ${widgetHeights[id]}px — click to cycle`:'Height: auto — click to set compact'} onClick={e=>{e.stopPropagation();cycleHeight(id);}}>{widgetHeights[id]?`${widgetHeights[id]}`:'↕'}</button>
+      <button className="wall-span-btn" aria-label="Cycle card width" title="Cycle width: 1 / 2 / full" onClick={e=>{e.stopPropagation();cycleSpan(id);}}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>
+      <button className="wall-span-btn" aria-label="Cycle card height" title={widgetHeights[id]?`Height: ${widgetHeights[id]}px — click to cycle`:'Height: auto — click to set compact'} onClick={e=>{e.stopPropagation();cycleHeight(id);}}>{widgetHeights[id]?`${widgetHeights[id]}`:'↕'}</button>
     </>
   );
   const load = useCallback(async (bustCache=false)=>{
