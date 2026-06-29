@@ -316,7 +316,7 @@ body{padding-left:0!important}
 /* tooltip */
 .tt{background:var(--blue-mid);border:1px solid var(--border);border-radius:6px;padding:9px 13px;font-size:12px}
 /* global tooltip layer */
-.gtip{position:fixed;pointer-events:none;z-index:10000;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 12px;font-size:11px;color:var(--gray-100);line-height:1.45;max-width:240px;white-space:normal;box-shadow:0 4px 16px rgba(0,0,0,.45);animation:gtipIn .12s ease;font-weight:400;text-transform:none;letter-spacing:normal}
+.gtip{position:fixed;pointer-events:none;z-index:var(--z-tooltip);background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 12px;font-size:11px;color:var(--gray-100);line-height:1.45;max-width:240px;white-space:normal;box-shadow:0 4px 16px rgba(0,0,0,.45);animation:gtipIn .12s ease;font-weight:400;text-transform:none;letter-spacing:normal}
 @keyframes gtipIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 .gtip b{color:var(--teal);font-weight:600}
 /* pulse */
