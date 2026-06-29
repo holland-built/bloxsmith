@@ -5873,7 +5873,7 @@ function App({vault, onVaultChange}={}) {
                         const clr=sevClr(s.util);
                         return (
                           <div key={s.id||i} style={{display:'grid',gridTemplateColumns:'1fr 80px 34px',gap:6,alignItems:'center',cursor:'pointer',padding:'2px 0'}}
-                            role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}} onClick={()=>{setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}>
+                            role="button" tabIndex={0} title={s.name&&s.name!==s.addr?s.name+' ('+s.addr+'/'+s.cidr+')':s.addr+'/'+s.cidr} aria-label={s.name&&s.name!==s.addr?s.name+' ('+s.addr+'/'+s.cidr+')':s.addr+'/'+s.cidr} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}} onClick={()=>{setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}>
                             <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
                             <div style={{height:6,background:'var(--surface-3)',borderRadius:3}}>
                               <div style={{width:`${Math.min(s.util,100)}%`,height:'100%',background:clr,borderRadius:3}}/>
