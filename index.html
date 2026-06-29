@@ -4325,7 +4325,7 @@ function TopoMap({subnets, hosts, zones, onDrill}){
                     {hs.length>0&&<div style={{marginTop:4,fontSize:9,color:hostClr(hs)}}>{hs.length} host{hs.length!==1?'s':''}</div>}
                     {editingAnnot===s.id&&(
                       <div onClick={e=>e.stopPropagation()} style={{marginTop:6}}>
-                        <textarea maxLength={120} value={annotText} onChange={e=>setAnnotText(e.target.value)}
+                        <textarea maxLength={120} value={annotText} onChange={e=>setAnnotText(e.target.value)} aria-label="Subnet annotation note"
                           onClick={e=>e.stopPropagation()}
                           style={{width:'100%',resize:'none',background:'var(--surface-2)',border:'1px solid var(--teal)',
                             borderRadius:3,color:'var(--ink)',fontFamily:'var(--font-mono)',fontSize:9,padding:'3px 4px',outline:'none',boxSizing:'border-box'}}
