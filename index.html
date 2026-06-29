@@ -2537,7 +2537,7 @@ function ContentionMatrix({data, hosts}) {
         <tbody>
           {hostNames.map(h=>(
             <tr key={h}>
-              <td style={{padding:'2px 8px',color:'var(--ink)',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h}</td>
+              <td style={{padding:'2px 8px',color:'var(--ink)',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={h}>{h}</td>
               {METRICS.map(m=>{
                 const v=byHost[h][m]??null;
                 return (
