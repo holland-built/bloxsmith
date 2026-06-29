@@ -5913,7 +5913,7 @@ function App({vault, onVaultChange}={}) {
                       const lvlC=isErr?'var(--red)':isOk?'var(--green)':'var(--amber)';
                       const lvlBg=isErr?'rgba(248,81,73,.1)':isOk?'rgba(63,185,80,.08)':'rgba(210,153,34,.1)';
                       return (
-                        <div key={i} style={{display:'grid',gridTemplateColumns:'34px 40px 1fr',gap:6,alignItems:'baseline',padding:'4px 0',borderBottom:i<5?'1px solid var(--border)':'none',cursor:'pointer'}} onClick={()=>setDrillEntity({type:'audit',data:log})}>
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'34px 40px 1fr',gap:6,alignItems:'baseline',padding:'4px 0',borderBottom:i<5?'1px solid var(--border)':'none',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'audit',data:log});}}} onClick={()=>setDrillEntity({type:'audit',data:log})}>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{time}</span>
                           <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,background:lvlBg,color:lvlC,border:`1px solid ${lvlC}33`,textAlign:'center'}}>{lvl}</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={`${log.user||''} ${log.action||''}`}>
