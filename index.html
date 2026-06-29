@@ -2880,6 +2880,7 @@ function SearchSection({data, srchQ, setSrchQ, srchRes, setSrchRes, srching, set
             style={{flex:1,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:7,
               color:'var(--ink)',fontSize:13,padding:'10px 14px',outline:'none',transition:'border-color .12s'}}
             placeholder="IP address, hostname, subnet, domain, zone…"
+            aria-label="Search your network"
             value={srchQ} onChange={e=>setSrchQ(e.target.value)} onKeyDown={onKey}
             autoFocus
             onFocus={e=>e.target.style.borderColor='var(--focus-border)'}
