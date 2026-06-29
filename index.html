@@ -182,7 +182,7 @@ body{padding-left:0!important}
 .page-title{font-size:15px;font-weight:700;line-height:1.15}
 .page-sub{font-size:12px;color:var(--muted);margin-top:0;margin-left:8px}
 .refresh-btn{display:flex;align-items:center;gap:7px;background:var(--blue-deep);border:1px solid var(--teal);color:var(--teal);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:background .12s,border-color .12s}
-.refresh-btn:hover{background:var(--hover-strong)}
+.refresh-btn:hover{background:var(--hover-strong)}.refresh-btn:disabled{opacity:.5;cursor:default}
 /* nav clock */
 .nav-clock{font-family:var(--font-mono);font-size:13px;color:var(--muted);letter-spacing:.05em;min-width:62px;text-align:right;margin-right:4px}
 .spin{animation:spin .8s linear infinite}
@@ -1675,7 +1675,7 @@ function RefreshControl({autoRefresh,refreshFrozen,setRefreshFrozen,hoverPause,a
   const cd = autoRefresh===0 ? '' : (refreshFrozen?'Paused':hoverPause?'Hover ⏸':arCountdown+'s');
   return (
     <span className="refresh-split" style={{position:'relative',display:'inline-flex'}}>
-      <button className="refresh-btn" onClick={onRefresh} title="Refresh all data"
+      <button className="refresh-btn" onClick={onRefresh} disabled={refreshing} title="Refresh all data"
         data-tip="Pull fresh data from the Infoblox API right now (shortcut: <b>R</b>)">
         <span className={refreshing?'spin':''} style={{display:'inline-block'}}>↻</span>
         {refreshing?'Refreshing…':'Refresh'}
