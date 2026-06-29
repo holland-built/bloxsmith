@@ -1754,8 +1754,11 @@ class Handler(BaseHTTPRequestHandler):
     MAX_BODY = 64 * 1024  # 64 KB
 
     def do_POST(self):
-        length = int(self.headers.get("Content-Length", 0))
-        if length > self.MAX_BODY:
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (ValueError, TypeError):
+            self._json({"error": "invalid Content-Length"}, 400); return
+        if length < 0 or length > self.MAX_BODY:
             self.send_error(413, "Request Too Large")
             return
         try:
@@ -1815,12 +1818,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "error": "unauthorized"}, 401); return
             self._json(vault_reset()); return
         if self.path == "/api/update/rollback-clear":
+            if not MCP_HEADERS.get("Authorization") and not self._authed():
+                self._json({"ok": False, "error": "unauthorized"}, 401); return
             with _pull_lock:
                 _pull_state.update(rolledback=False, rollback_from=None, rollback_to=None)
             self._json({"ok": True}); return
         if self.path == "/api/update/apply":
-            if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
-                self._json({"error": "vault locked", "locked": True}, 503); return
+            if not MCP_HEADERS.get("Authorization") and not self._authed():
+                self._json({"ok": False, "error": "vault locked", "locked": True}, 401); return
             self._json(apply_self_update()); return
         if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
             self._json({"error": "vault locked", "locked": True}, 503); return
