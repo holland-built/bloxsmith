@@ -433,6 +433,8 @@ body{padding-left:0!important}
 .ov-2col-eq{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
 .ov-3col{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
 .ov-sub{font-family:var(--font-mono);font-size:10px;color:var(--gray-200);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.ov-pool-row{cursor:pointer;border-radius:2px;transition:background .12s}
+.ov-pool-row:hover{background:var(--surface-2)}
 .ov-dots{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0}
 .ov-legend{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-top:6px;display:flex;gap:16px}
 @media(max-width:900px){.ov-2col,.ov-2col-eq,.ov-3col{grid-template-columns:1fr}}
@@ -610,6 +612,22 @@ tr:hover .copy-btn{opacity:1}
 .topbar-tab.active{color:var(--ink);font-weight:600;border-bottom-color:var(--teal)}
 .topbar-tab .badge-pill{font-size:9px;padding:1px 5px}
 /* topbar grouping: primary actions | utility cluster */
+.topbar-center{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 12px}
+.topbar-chip{display:inline-flex;align-items:center;gap:5px;padding:0 9px;height:24px;border-radius:2px;font-size:10px;font-weight:700;letter-spacing:.07em;white-space:nowrap;font-family:var(--font-mono)}
+.topbar-chip-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;animation:chip-pulse 1.6s ease-in-out infinite}
+@keyframes chip-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.8)}}
+.chip-crit{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:#f87171}
+.chip-crit .topbar-chip-dot{background:#f87171}
+.chip-warn{background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.25);color:#fbbf24}
+.chip-warn .topbar-chip-dot{background:#fbbf24}
+.chip-ok{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);color:#4ade80}
+.chip-ok .topbar-chip-dot{background:#4ade80;animation:none}
+[data-theme=light] .chip-crit{background:rgba(200,31,12,.08);border-color:rgba(200,31,12,.2);color:#c81f0c}
+[data-theme=light] .chip-crit .topbar-chip-dot{background:#c81f0c}
+[data-theme=light] .chip-warn{background:rgba(151,116,5,.08);border-color:rgba(151,116,5,.2);color:#977405}
+[data-theme=light] .chip-warn .topbar-chip-dot{background:#977405}
+[data-theme=light] .chip-ok{background:rgba(19,133,79,.08);border-color:rgba(19,133,79,.2);color:#13854f}
+[data-theme=light] .chip-ok .topbar-chip-dot{background:#13854f}
 .topbar-controls{display:flex;align-items:center;gap:12px;flex-wrap:nowrap;justify-content:flex-end;flex-shrink:0}
 .topbar-group{display:flex;align-items:center;gap:6px}
 .topbar-group .theme-btn,.topbar-group .chat-toggle-btn{margin-left:0}
@@ -5467,6 +5485,11 @@ function App({vault, onVaultChange}={}) {
             </div>
             {wallMode&&<div className="wall-clock" aria-live="off">{now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>}
           </div>
+          <div className="topbar-center">
+            {(critSubs.length+errHosts.length)>0&&<div className="topbar-chip chip-crit" role="status" aria-label={`${critSubs.length+errHosts.length} critical issues`}><span className="topbar-chip-dot"/>{critSubs.length+errHosts.length} CRIT</div>}
+            {firingAlerts.length>0&&<div className="topbar-chip chip-warn" role="status" aria-label={`${firingAlerts.length} alerts firing`}><span className="topbar-chip-dot"/>{firingAlerts.length} FIRING</div>}
+            {(critSubs.length+errHosts.length+firingAlerts.length)===0&&<div className="topbar-chip chip-ok" role="status" aria-label="All systems OK"><span className="topbar-chip-dot"/>ALL OK</div>}
+          </div>
           <nav className="topbar-tabs" aria-label="Sections">
             {SECTIONS.filter(s=>!hiddenSections.includes(s.id)).map(s=>{
               let badge=null;
@@ -5776,7 +5799,7 @@ function App({vault, onVaultChange}={}) {
                       const lastY=spark[6].y.toFixed(1);
                       return (<React.Fragment key={s.id||i}>
                         {i>0&&<div style={{height:1,background:'var(--border)',margin:'0 4px'}}/>}
-                        <div style={{display:'grid',gridTemplateColumns:'1fr 38px 60px 54px',alignItems:'center',gap:8,height:36,padding:'0 4px',borderRadius:2,cursor:'pointer'}}
+                        <div className="ov-pool-row" style={{display:'grid',gridTemplateColumns:'1fr 38px 60px 54px',alignItems:'center',gap:8,height:36,padding:'0 4px'}}
                           onClick={()=>setScopeSubnet(scopeSubnet===s.id?null:s.id)} title={s.name||s.addr}>
                           <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
                           <span style={{fontFamily:'var(--font-mono)',fontSize:12,fontWeight:600,color:clr,textAlign:'right'}}>{s.util}%</span>
