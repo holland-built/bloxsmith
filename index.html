@@ -4857,7 +4857,10 @@ function App({vault, onVaultChange}={}) {
       <button className="wall-span-btn" aria-label="Cycle card height" title={widgetHeights[id]?`Height: ${widgetHeights[id]}px — click to cycle`:'Height: auto — click to set compact'} onClick={e=>{e.stopPropagation();cycleHeight(id);}} onKeyDown={e=>{if(e.key==='ArrowUp'){e.preventDefault();cycleHeight(id,1);}if(e.key==='ArrowDown'){e.preventDefault();cycleHeight(id,-1);}}}>{widgetHeights[id]?`${widgetHeights[id]}`:'↕'}</button>
     </>
   );
+  const loadInFlight = useRef(false);
   const load = useCallback(async (bustCache=false)=>{
+    if(loadInFlight.current && !bustCache) return;
+    loadInFlight.current = true;
     // Show stale data immediately so UI isn't blank
     if(!data) {
       const stale = LS.get('_dc', null);
