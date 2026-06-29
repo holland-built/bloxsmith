@@ -214,8 +214,9 @@ def _run_prepull(image_ref):
                                layer_total=len(layers_total),
                                stalled=False, error=None)
     except Exception as e:
+        _log_exc("_run_prepull", e)
         with _pull_lock:
-            _pull_state.update(phase="error", error=str(e))
+            _pull_state.update(phase="error", error="pull failed")
 
 
 def apply_self_update():
