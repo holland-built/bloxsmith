@@ -5459,8 +5459,6 @@ function App({vault, onVaultChange}={}) {
           </nav>
           <div className="topbar-controls">
             <div className="topbar-group">
-              {data&&(()=>{const hc=data.hosts.filter(h=>h.status==='error'||h.status==='offline').length;return hc>0?<button className="ss-pill crit" onClick={()=>setSection('hosts')} title="Hosts offline or in error" style={{marginRight:4}}>HOSTS <span className="ss-cnt">{hc}</span></button>:null;})()}
-              {firingAlerts.length>0&&<button className="ss-pill crit" onClick={()=>setSection('alerts')} title="Firing alert rules" style={{marginRight:8}}>ALERTS <span className="ss-cnt">{firingAlerts.length}</span></button>}
               <select className="pill-select" data-tip="Filter by site" value={siteFilt||''} onChange={e=>setSiteFilt(e.target.value||null)} aria-label="Filter by site" style={{appearance:'none',WebkitAppearance:'none',paddingRight:24,backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23768390'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center'}}>
                 <option value="">Site: All</option>
                 {[...new Set((subnets||[]).map(s=>s.site).filter(Boolean).filter(s=>s!=='–'&&s!=='—'))].sort().map(s=><option key={s} value={s}>{s}</option>)}
