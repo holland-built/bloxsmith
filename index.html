@@ -4370,8 +4370,9 @@ function TopoMap({subnets, hosts, zones, onDrill}){
                 const hs=hostsBySub[s.id]||[];
                 const lbl=s.name&&s.name!==s.addr?s.name:`${s.addr}/${s.cidr}`;
                 return (
-                  <div key={s.id}
+                  <div key={s.id} role="button" tabIndex={0} aria-label={lbl}
                     onClick={()=>onDrill&&onDrill({type:'subnet',data:s})}
+                    onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onDrill&&onDrill({type:'subnet',data:s});}}}
                     onMouseEnter={()=>setHover(s.id)} onMouseLeave={()=>setHover(null)}
                     style={{display:'flex',alignItems:'center',gap:8,padding:'4px 8px',borderRadius:3,
                       cursor:'pointer',background:hover===s.id?'var(--surface-3)':'transparent',
