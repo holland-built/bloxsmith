@@ -5884,7 +5884,7 @@ function App({vault, onVaultChange}={}) {
                       {feeds.filter(f=>f.active).slice(0,4).map((f,i)=>{
                         const isHigh=(f.entries||0)>10000;
                         return (<React.Fragment key={i}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} title={f.name} onClick={()=>setDrillEntity({type:'feed',data:f})}>{f.name}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'feed',data:f});}}} title={f.name} onClick={()=>setDrillEntity({type:'feed',data:f})}>{f.name}</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{f.cat||f.category||'–'}</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',textAlign:'right'}}>–</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:isHigh?'var(--red)':'var(--ink)',textAlign:'right'}} aria-label={((f.entries||0).toLocaleString())+(isHigh?' — high':'')}>{isHigh&&<span aria-hidden="true" style={{fontSize:8,verticalAlign:'top',marginRight:1}}>▲</span>}{(f.entries||0).toLocaleString()}</span>
