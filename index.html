@@ -4334,7 +4334,9 @@ function TopoMap({subnets, hosts, zones, onDrill}){
                           style={{width:6,height:6,borderRadius:'50%',background:'var(--teal)',flexShrink:0,display:'inline-block'}}/>
                       )}
                       {isHov&&(
-                        <span onClick={e=>{e.stopPropagation();setEditingAnnot(s.id);setAnnotText((annotations[s.id]&&annotations[s.id].text)||'');}}
+                        <span role="button" tabIndex={0} aria-label="Add note"
+                          onClick={e=>{e.stopPropagation();setEditingAnnot(s.id);setAnnotText((annotations[s.id]&&annotations[s.id].text)||'');}}
+                          onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();setEditingAnnot(s.id);setAnnotText((annotations[s.id]&&annotations[s.id].text)||'');}}}
                           title="Add note" style={{cursor:'pointer',color:'var(--muted)',fontSize:9,flexShrink:0}}>✎</span>
                       )}
                     </div>
