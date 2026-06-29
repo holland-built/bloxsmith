@@ -4833,9 +4833,9 @@ function App({vault, onVaultChange}={}) {
   // props for a draggable bento wrapper; whole card is the drop target but
   // dragging only initiates from the handle (so inner buttons/text still work)
   const SPAN_CLS={1:'',2:'b-wide',3:'b-full'};
-  const cycleSpan=id=>{ const cur=wallSpans[id]||1; const next=cur>=3?1:cur+1; const n={...wallSpans,[id]:next}; setWallSpans(n); LS.set('noc.wallSpans',n); };
+  const cycleSpan=(id,dir=1)=>{ const cur=wallSpans[id]||1; let next=cur+dir; if(next>3)next=1; if(next<1)next=3; const n={...wallSpans,[id]:next}; setWallSpans(n); LS.set('noc.wallSpans',n); };
   const HEIGHT_PRESETS=[220,360,540];
-  const cycleHeight=id=>{ const cur=widgetHeights[id]||null; const idx=HEIGHT_PRESETS.indexOf(cur); const next=idx>=HEIGHT_PRESETS.length-1?null:HEIGHT_PRESETS[idx<0?0:idx+1]; const n={...widgetHeights}; if(next===null) delete n[id]; else n[id]=next; setWidgetHeights(n); LS.set('noc.heights',n); };
+  const cycleHeight=(id,dir=1)=>{ const states=[null,...HEIGHT_PRESETS]; const i=states.indexOf(widgetHeights[id]||null); const next=states[(i+dir+states.length)%states.length]; const n={...widgetHeights}; if(next===null)delete n[id];else n[id]=next; setWidgetHeights(n); LS.set('noc.heights',n); };
   const wrapProps = (id, extra='') => {
     const span = wallMode ? SPAN_CLS[wallSpans[id]||1] : '';
     const cls = [extra, span].filter(Boolean).join(' ');
@@ -4852,8 +4852,8 @@ function App({vault, onVaultChange}={}) {
     <>
       <span className="drag-handle" title="Drag to reorder" aria-label="Drag to reorder"
         onMouseDown={()=>setDragArmed(id)} onMouseUp={()=>setDragArmed(null)}>⠿</span>
-      <button className="wall-span-btn" aria-label="Cycle card width" title="Cycle width: 1 / 2 / full" onClick={e=>{e.stopPropagation();cycleSpan(id);}}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>
-      <button className="wall-span-btn" aria-label="Cycle card height" title={widgetHeights[id]?`Height: ${widgetHeights[id]}px — click to cycle`:'Height: auto — click to set compact'} onClick={e=>{e.stopPropagation();cycleHeight(id);}}>{widgetHeights[id]?`${widgetHeights[id]}`:'↕'}</button>
+      <button className="wall-span-btn" aria-label="Cycle card width" title="Cycle width: 1 / 2 / full" onClick={e=>{e.stopPropagation();cycleSpan(id);}} onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();cycleSpan(id,1);}if(e.key==='ArrowLeft'){e.preventDefault();cycleSpan(id,-1);}}}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>
+      <button className="wall-span-btn" aria-label="Cycle card height" title={widgetHeights[id]?`Height: ${widgetHeights[id]}px — click to cycle`:'Height: auto — click to set compact'} onClick={e=>{e.stopPropagation();cycleHeight(id);}} onKeyDown={e=>{if(e.key==='ArrowUp'){e.preventDefault();cycleHeight(id,1);}if(e.key==='ArrowDown'){e.preventDefault();cycleHeight(id,-1);}}}>{widgetHeights[id]?`${widgetHeights[id]}`:'↕'}</button>
     </>
   );
   const load = useCallback(async (bustCache=false)=>{
