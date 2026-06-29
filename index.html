@@ -5610,7 +5610,7 @@ function App({vault, onVaultChange}={}) {
                 {label:'Alerts', val:firingAlerts.length, sub:firingAlerts.length>0?'firing':'clear', col:'var(--red)', sec:'alerts', crit:firingAlerts.length>0},
                 {label:'Feeds', val:(data?.feeds||[]).filter(f=>f.active).length, sub:'active threats', col:'var(--gray-400)', sec:'security', crit:false},
               ].map((seg,i)=>(
-                <div key={i} onClick={()=>setSection(seg.sec)}
+                <div key={i} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(seg.sec);}}} onClick={()=>setSection(seg.sec)}
                   style={{flex:1,padding:'6px 10px',background:seg.crit?'rgba(248,81,73,.1)':'var(--surface-2)',
                     cursor:'pointer',borderRight:i<4?'1px solid var(--border)':'none',transition:'background .15s'}}
                   onMouseEnter={e=>e.currentTarget.style.background='var(--surface-3)'}
