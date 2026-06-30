@@ -1635,9 +1635,15 @@ class Handler(BaseHTTPRequestHandler):
             import urllib.request, urllib.parse
             qs = dict(urllib.parse.parse_qsl(self.path.split("?",1)[1] if "?" in self.path else ""))
             domain = re.sub(r"[^a-zA-Z0-9.\-]", "", qs.get("domain",""))
+            # Serve vault logo first (user-uploaded or cached)
+            if os.path.exists(LOGO_FILE):
+                with open(LOGO_FILE, "rb") as f: data = f.read()
+                self.send_response(200); self.send_header("Content-Type","image/png")
+                self.send_header("Content-Length", str(len(data))); self.send_header("Cache-Control","public,max-age=3600")
+                self.end_headers(); self.wfile.write(data); return
+            # No vault logo — try CDN sources for the given domain
             if not domain:
-                self.send_response(204); self.end_headers(); return
-            # Try sources in order: DuckDuckGo favicon proxy (no auth), then Clearbit (may be down)
+                self.send_response(404); self.end_headers(); return
             tried = [
                 f"https://icons.duckduckgo.com/ip3/{domain}.ico",
                 f"https://logo.clearbit.com/{domain}",
@@ -1651,25 +1657,15 @@ class Handler(BaseHTTPRequestHandler):
                         data = r.read()
                         ct = r.headers.get("Content-Type","image/png")
                     if len(data) < 50:
-                        continue  # empty/error response
+                        continue
                     self.send_response(200)
                     self.send_header("Content-Type", ct)
                     self.send_header("Content-Length", str(len(data)))
                     self.send_header("Cache-Control", "public, max-age=86400")
-                    self.end_headers(); self.wfile.write(data)
-                    return
+                    self.end_headers(); self.wfile.write(data); return
                 except Exception:
                     continue
             self.send_response(404); self.end_headers()
-            return
-        if path == "/api/logo":
-            if os.path.exists(LOGO_FILE):
-                with open(LOGO_FILE, "rb") as f: data = f.read()
-                self.send_response(200); self.send_header("Content-Type","image/png")
-                self.send_header("Content-Length", str(len(data))); self.send_header("Cache-Control","public,max-age=3600")
-                self.end_headers(); self.wfile.write(data)
-            else:
-                self.send_response(404); self.end_headers()
             return
         if path == "/api/brand":
             try:
