@@ -118,7 +118,7 @@ window.onerror = function(msg,src,line,col,err) {
   --success-bg:rgba(52,199,89,0.08);--info-bg:rgba(0,122,255,0.08);
   color-scheme:light;
 }
-body{background:var(--blue-dark);color:var(--ink);font-family:var(--font-ui);margin:0;padding-left:var(--sbw,44px);padding-top:48px;overflow-x:hidden;line-height:1.5;transition:background .2s,color .2s,padding-left .2s}
+body{background:var(--blue-dark);color:var(--ink);font-family:var(--font-ui);margin:0;padding-left:var(--sbw,44px);padding-top:92px;overflow-x:hidden;line-height:1.5;transition:background .2s,color .2s,padding-left .2s}
 body.chat-open{padding-right:340px}
 @media(max-width:760px){body.chat-open{padding-right:0}}
 .sidebar{width:224px;min-width:224px;background:var(--blue-mid);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:stretch;position:fixed;top:48px;left:0;bottom:0;height:calc(100vh - 48px);z-index:100;overflow:hidden;transition:width .2s cubic-bezier(.4,0,.2,1)}
@@ -183,6 +183,28 @@ body{padding-left:0!important}
 .rb-btn-x:hover{color:var(--gray-200)}
 .main{padding:0 20px 40px;flex:1;min-width:0;max-width:100%;width:100%;overflow:visible}
 .topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;margin-bottom:16px;padding:0 16px;height:48px;border-bottom:1px solid var(--border);position:fixed;top:0;left:0;right:0;z-index:150;background:var(--blue-mid)}
+/* v7 subbar + status rail */
+.subbar{position:fixed;top:48px;left:0;right:0;height:44px;z-index:149;background:var(--blue-dark);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+.subbar-filters{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.ghost-chip{height:26px;padding:0 8px;display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-dim);background:transparent;border:1px solid transparent;border-radius:6px;cursor:pointer;font-family:var(--font-ui);transition:border-color .12s,background .12s;appearance:none;-webkit-appearance:none}
+.ghost-chip:hover{border-color:var(--border);background:var(--hover)}
+.ghost-chip b{color:var(--ink-dim);font-weight:600}
+.ghost-chip-arrow{font-size:9px;opacity:.5}
+/* status rail */
+.status-rail-wrap{display:flex;align-items:center;gap:10px;padding:0 14px 0 8px;height:48px;border-left:1px solid var(--border)}
+.status-rail{width:4px;height:34px;border-radius:4px;flex-shrink:0;background:linear-gradient(to bottom,var(--red) 0%,var(--red) 40%,var(--amber) 65%,var(--green) 100%)}
+.status-rail.ok{background:var(--green)}
+.status-counts{display:flex;flex-direction:column;gap:2px}
+.status-cnt{display:flex;align-items:baseline;gap:4px;line-height:1.1;font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--ink-dim)}
+.status-cnt strong{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.status-cnt.crit strong{color:var(--red)}
+.status-cnt.warn strong{color:var(--amber)}
+.status-cnt.ok-all strong{color:var(--green)}
+/* brand org name */
+.nav-brand-org{font-size:10px;color:var(--ink-dim);line-height:1;margin-top:1px}
+.nav-brand-edit{margin-left:4px;font-size:11px;color:var(--ink-dim);opacity:0;transition:opacity .15s;}
+.nav-brand:hover .nav-brand-edit{opacity:1}
+.nav-brand-names{display:flex;flex-direction:column;line-height:1.15}
 .page-title{font-size:15px;font-weight:700;line-height:1.15}
 .page-sub{font-size:12px;color:var(--muted);margin-top:0;margin-left:8px}
 .refresh-btn{display:flex;align-items:center;gap:8px;background:var(--blue-deep);border:1px solid var(--teal);color:var(--teal);padding:8px 14px;border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600;transition:background .12s,border-color .12s}
@@ -5483,7 +5505,7 @@ function App({vault, onVaultChange}={}) {
             <button className="menu-btn" aria-label="Menu" aria-expanded={sidebarOpen} aria-controls="sidebar-nav" onClick={()=>setSidebarOpen(o=>!o)}>☰</button>
             <div className="nav-brand" onClick={()=>openWizard('brand')} style={{cursor:'pointer'}} title="Click to change logo or company name">
               <BrandLogoImg domain={orgDomain||'infoblox.com'} fallback={IB_LOGO} alt="Infoblox" className="nav-logo" title={orgDomain||'Infoblox'}/>
-              <span className="nav-brand-name">Infoblox NOC</span>
+              <div className="nav-brand-names"><span className="nav-brand-name">Infoblox NOC</span>{orgName&&<span className="nav-brand-org">{orgName}</span>}</div><span className="nav-brand-edit">✎</span>
             </div>
             <div style={{minWidth:0}}>
               <h1 className="page-title" style={{display:'none'}}>{SECTIONS.find(s=>s.id===section)?.label}</h1>
@@ -5494,49 +5516,40 @@ function App({vault, onVaultChange}={}) {
             </div>
             {wallMode&&<div className="wall-clock" aria-live="off">{now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>}
           </div>
-          <div className="topbar-center">
-            {(critSubs.length+errHosts.length)>0&&<div className="topbar-chip chip-crit" role="status" aria-label={`${critSubs.length+errHosts.length} critical issues`}><span className="topbar-chip-dot"/>{critSubs.length+errHosts.length} CRIT</div>}
-            {firingAlerts.length>0&&<div className="topbar-chip chip-warn" role="status" aria-label={`${firingAlerts.length} alerts firing`}><span className="topbar-chip-dot"/>{firingAlerts.length} FIRING</div>}
-            {(critSubs.length+errHosts.length+firingAlerts.length)===0&&<div className="topbar-chip chip-ok" role="status" aria-label="All systems OK"><span className="topbar-chip-dot"/>ALL OK</div>}
+          <div className="topbar-right" style={{display:"flex",alignItems:"center",gap:0}}>
+            <span className="nav-clock" aria-live="off" style={{padding:"0 12px",fontSize:12}}>{now.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</span>
+            <RefreshControl autoRefresh={autoRefresh} refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen} hoverPause={hoverPause} arCountdown={arCountdown} refreshing={refreshing} onRefresh={()=>load(true)}/>
+            <div className={`status-rail-wrap`} title={`${critSubs.length+errHosts.length} critical, ${firingAlerts.length} firing`}>
+              <div className={`status-rail${(critSubs.length+errHosts.length+firingAlerts.length)===0?" ok":""}`}/>
+              <div className="status-counts">
+                {(critSubs.length+errHosts.length)>0&&<span className="status-cnt crit" role="status"><strong>{critSubs.length+errHosts.length}</strong> CRIT</span>}
+                {firingAlerts.length>0&&<span className="status-cnt warn" role="status"><strong>{firingAlerts.length}</strong> FIRING</span>}
+                {(critSubs.length+errHosts.length+firingAlerts.length)===0&&<span className="status-cnt ok-all" role="status"><strong>OK</strong></span>}
+              </div>
+            </div>
           </div>
+        </div>
+        <div className="subbar">
           <nav className="topbar-tabs" aria-label="Sections">
             {SECTIONS.filter(s=>!hiddenSections.includes(s.id)).map(s=>{
               let badge=null;
-              if(data&&s.id==='ipam'){const c=data.subnets.filter(x=>x.util>=90).length;if(c>0)badge=<span className="badge-pill">{c}</span>;}
-
-              if(data&&s.id==='dns'){const c=data.zones.filter(z=>z.anomaly).length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
-              if(data&&s.id==='audit'){const c=data.auditLogs.filter(l=>l.result==='failure').length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
-              if(s.id==='alerts'&&firingAlerts.length>0)badge=<span className="badge-pill">{firingAlerts.length}</span>;
-              return(
-                <button key={s.id} className={`topbar-tab${section===s.id?' active':''}`}
-                  aria-current={section===s.id?'page':undefined}
-                  onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>
-                  {s.label}{badge}
-                </button>
-              );
+              if(data&&s.id==="ipam"){const c=data.subnets.filter(x=>x.util>=90).length;if(c>0)badge=<span className="badge-pill">{c}</span>;}
+              if(data&&s.id==="dns"){const c=data.zones.filter(z=>z.anomaly).length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
+              if(data&&s.id==="audit"){const c=data.auditLogs.filter(l=>l.result==="failure").length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
+              if(s.id==="alerts"&&firingAlerts.length>0)badge=<span className="badge-pill">{firingAlerts.length}</span>;
+              return(<button key={s.id} className={`topbar-tab${section===s.id?" active":""}`} aria-current={section===s.id?"page":undefined} onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>{s.label}{badge}</button>);
             })}
           </nav>
-          <div className="topbar-controls">
-            <div className="topbar-group">
-              <select className="pill-select" data-tip="Filter by site" value={siteFilt||''} onChange={e=>setSiteFilt(e.target.value||null)} aria-label="Filter by site" style={{appearance:'none',WebkitAppearance:'none',paddingRight:24,backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23768390'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center'}}>
-                <option value="">Site: All</option>
-                {[...new Set((subnets||[]).map(s=>s.site).filter(Boolean).filter(s=>s!=='–'&&s!=='—'))].sort().map(s=><option key={s} value={s}>{s}</option>)}
-              </select>
-              <select className="pill-select" data-tip="Time range filter — applies to audit, DNS analytics, and host metrics" value={timeRange} onChange={e=>{setTimeRange(e.target.value);LS.set('noc.timeRange',e.target.value);}} aria-label="Time range" style={{appearance:'none',WebkitAppearance:'none',paddingRight:24,backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23768390'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center'}}>
-                {TR_OPTS.map(([v,l])=><option key={v} value={v}>Range: {l}</option>)}
-              </select>
-              <div className="pill-select" data-tip="Auto-refresh interval">Interval: 5m <span className="arrow">▾</span></div>
-              <span className="nav-clock" aria-live="off">{now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
-              <RefreshControl autoRefresh={autoRefresh}
-                refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen} hoverPause={hoverPause}
-                arCountdown={arCountdown} refreshing={refreshing} onRefresh={()=>load(true)}/>
-              <button className={`chat-toggle-btn${chatOpen?' on':''}`}
-                data-tip="AI query assistant — ask questions about your network data in plain English"
-                onClick={()=>setChatOpen(o=>!o)}>
-                ⊕ {chatOpen?'Close Query':'Query'}
-              </button>
-
-            </div>
+          <div className="subbar-filters">
+            <select className="ghost-chip" value={siteFilt||""} onChange={e=>setSiteFilt(e.target.value||null)} aria-label="Filter by site" style={{appearance:"none",WebkitAppearance:"none"}}>
+              <option value="">Site: All</option>
+              {[...new Set((subnets||[]).map(s=>s.site).filter(Boolean).filter(s=>s!=="–"&&s!=="—"))].sort().map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className="ghost-chip" value={timeRange} onChange={e=>{setTimeRange(e.target.value);LS.set("noc.timeRange",e.target.value);}} aria-label="Time range" style={{appearance:"none",WebkitAppearance:"none"}}>
+              {TR_OPTS.map(([v,l])=><option key={v} value={v}>Range: {l}</option>)}
+            </select>
+            <div className="ghost-chip">Interval: 5m <span className="ghost-chip-arrow">▾</span></div>
+            <button className={`ghost-chip${chatOpen?" on":""}`} onClick={()=>setChatOpen(o=>!o)}>⊕ {chatOpen?"Close":"Query"}</button>
           </div>
         </div>
         {data&&section!=='overview'&&<ScopeBar subnets={subnets} zones={zones}
