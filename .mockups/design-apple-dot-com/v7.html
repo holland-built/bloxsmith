@@ -1,0 +1,291 @@
+<!-- VARIANT: v7 — Floating action panel + ambient data -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC — Cisco</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif; }
+
+  /* ANNOTATION: Status rail is a thin colored top-border on the entire page — red while any incident is critical, visible at 6ft without reading a single label. */
+  body {
+    min-height: 100vh;
+    transition: background .3s, color .3s;
+    border-top: 4px solid #ff453a;
+  }
+
+  /* ---------- DARK (default) ---------- */
+  html[data-theme="dark"] body { background: #1d1d1f; color: #f5f5f7; }
+  html[data-theme="dark"] .nav { background: rgba(29,29,31,.85); border-bottom: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .section-alt { background: #000000; }
+  html[data-theme="dark"] .card { background: #2d2d2f; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 2px 20px rgba(0,0,0,.4); }
+  html[data-theme="dark"] .raised { background: #3a3a3c; }
+  html[data-theme="dark"] .ink2 { color: #86868b; }
+  html[data-theme="dark"] .ink3 { color: #6e6e73; }
+  html[data-theme="dark"] .accent { color: #2997ff; }
+  html[data-theme="dark"] .tab { color: #86868b; }
+  html[data-theme="dark"] .tab:hover { color: #f5f5f7; }
+  html[data-theme="dark"] .tab.active { color: #f5f5f7; }
+  html[data-theme="dark"] .row { border-bottom: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .panel { background: #2d2d2f; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 2px 20px rgba(0,0,0,.4); }
+  html[data-theme="dark"] .red { color: #ff453a; } html[data-theme="dark"] .red-bg { background: rgba(255,69,58,.12); }
+  html[data-theme="dark"] .amber { color: #ff9f0a; } html[data-theme="dark"] .amber-bg { background: rgba(255,159,10,.12); }
+  html[data-theme="dark"] .green { color: #30d158; } html[data-theme="dark"] .green-bg { background: rgba(48,209,88,.10); }
+  html[data-theme="dark"] .btn { background: #2997ff; color: #fff; }
+  html[data-theme="dark"] .btn-ghost { background: #3a3a3c; color: #f5f5f7; }
+  html[data-theme="dark"] .toggle { background: #3a3a3c; color: #f5f5f7; border: 1px solid rgba(255,255,255,.08); }
+
+  /* ---------- LIGHT ---------- */
+  html[data-theme="light"] body { background: #ffffff; color: #1d1d1f; }
+  html[data-theme="light"] .nav { background: rgba(255,255,255,.85); border-bottom: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .section-alt { background: #f5f5f7; }
+  html[data-theme="light"] .card { background: #ffffff; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+  html[data-theme="light"] .raised { background: #f5f5f7; }
+  html[data-theme="light"] .ink2 { color: #6e6e73; }
+  html[data-theme="light"] .ink3 { color: #86868b; }
+  html[data-theme="light"] .accent { color: #0071e3; }
+  html[data-theme="light"] .tab { color: #6e6e73; }
+  html[data-theme="light"] .tab:hover { color: #1d1d1f; }
+  html[data-theme="light"] .tab.active { color: #1d1d1f; }
+  html[data-theme="light"] .row { border-bottom: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .panel { background: #ffffff; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 2px 20px rgba(0,0,0,.4); }
+  html[data-theme="light"] .red { color: #ff3b30; } html[data-theme="light"] .red-bg { background: rgba(255,59,48,.08); }
+  html[data-theme="light"] .amber { color: #ff9500; } html[data-theme="light"] .amber-bg { background: rgba(255,149,0,.08); }
+  html[data-theme="light"] .green { color: #28cd41; } html[data-theme="light"] .green-bg { background: rgba(40,205,65,.08); }
+  html[data-theme="light"] .btn { background: #0071e3; color: #fff; }
+  html[data-theme="light"] .btn-ghost { background: #f5f5f7; color: #1d1d1f; }
+  html[data-theme="light"] .toggle { background: #f5f5f7; color: #1d1d1f; border: 1px solid rgba(0,0,0,.08); }
+
+  /* ---------- Nav ---------- */
+  .nav {
+    position: fixed; top: 4px; left: 0; right: 0; z-index: 50;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    padding: 0 80px;
+  }
+  .nav-inner { display: flex; align-items: center; gap: 32px; height: 52px; }
+  .brand { display: flex; align-items: center; gap: 8px; cursor: pointer; text-decoration: none; color: inherit; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 6px; background: #2997ff; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; }
+  .brand-name { font-size: 15px; font-weight: 600; letter-spacing: -.3px; }
+  .brand-org { font-size: 13px; }
+  .tabs { display: flex; gap: 24px; flex: 1; }
+  .tab { font-size: 13px; font-weight: 500; cursor: pointer; background: none; border: none; letter-spacing: -.2px; padding: 4px 0; }
+  .nav-status { display: flex; align-items: center; gap: 16px; font-size: 13px; font-weight: 500; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .dot.red { background: #ff453a; } .dot.amber { background: #ff9f0a; } .dot.green { background: #30d158; }
+  html[data-theme="light"] .dot.red { background: #ff3b30; } html[data-theme="light"] .dot.amber { background: #ff9500; } html[data-theme="light"] .dot.green { background: #28cd41; }
+  .stat-chip { display: inline-flex; align-items: center; gap: 6px; }
+  .toggle { padding: 6px 14px; border-radius: 12px; font-size: 12px; font-weight: 500; cursor: pointer; }
+
+  /* ---------- Layout ---------- */
+  main { padding: 56px 80px 120px; }
+  section { padding: 48px 0; }
+  .section-alt { margin: 0 -80px; padding: 48px 80px; }
+  .eyebrow { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+  h1 { font-size: 28px; font-weight: 700; letter-spacing: -.5px; margin-bottom: 32px; }
+  h2 { font-size: 21px; font-weight: 600; letter-spacing: -.4px; margin-bottom: 24px; }
+
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+  .card { border-radius: 18px; padding: 24px; }
+  .kpi-label { font-size: 13px; font-weight: 500; margin-bottom: 16px; }
+  .kpi-num { font-size: 40px; font-weight: 700; letter-spacing: -1px; line-height: 1; }
+  .kpi-sub { font-size: 13px; margin-top: 8px; }
+
+  /* ---------- Table ---------- */
+  .table { width: 100%; }
+  .row { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr .8fr; gap: 16px; padding: 16px 0; align-items: center; font-size: 14px; }
+  .row.head { font-size: 12px; font-weight: 500; }
+  .mono { font-family: "SF Mono", "Menlo", ui-monospace, monospace; font-size: 13px; }
+  .status-cell { display: flex; align-items: center; gap: 8px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 500; }
+
+  /* ---------- Bars ---------- */
+  .bar { height: 6px; border-radius: 6px; background: rgba(128,128,128,.18); overflow: hidden; }
+  .bar > span { display: block; height: 100%; border-radius: 6px; }
+
+  /* ---------- Floating panel ---------- */
+  /* ANNOTATION: Action panel floats bottom-right (300px, opaque card) so the full viewport stays a clean data canvas — frosted glass is reserved for .nav only. */
+  .panel {
+    position: fixed; bottom: 24px; right: 24px; z-index: 60; width: 300px;
+    border-radius: 18px; padding: 24px;
+  }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .panel-title { font-size: 13px; font-weight: 600; }
+  .panel-num { font-size: 28px; font-weight: 700; letter-spacing: -.5px; line-height: 1; }
+  .panel-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 13px; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  .pulse { width: 6px; height: 6px; border-radius: 50%; background: #30d158; animation: pulse 1.6s infinite; }
+  html[data-theme="light"] .pulse { background: #28cd41; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .btn, .btn-ghost { border: none; border-radius: 12px; padding: 10px 16px; font-size: 13px; font-weight: 500; cursor: pointer; width: 100%; margin-top: 12px; }
+
+  /* ---------- States strip ---------- */
+  .states { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-top: 24px; }
+  .state-box { border-radius: 12px; padding: 20px; min-height: 96px; display: flex; flex-direction: column; gap: 8px; }
+  .state-label { font-size: 12px; font-weight: 500; }
+  .state-demo { font-size: 13px; }
+  .state-box.hover:hover { transform: translateY(-2px); transition: transform .2s; }
+  .state-box.focus { outline: 2px solid #2997ff; outline-offset: 2px; }
+  html[data-theme="light"] .state-box.focus { outline-color: #0071e3; }
+  .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(128,128,128,.3); border-top-color: #2997ff; animation: spin .8s linear infinite; }
+  html[data-theme="light"] .spinner { border-top-color: #0071e3; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+  <!-- ===== Frosted nav: brand left, tabs center, status right ===== -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="#" onclick="return false">
+        <span class="brand-mark">I</span>
+        <span class="brand-name">Infoblox NOC</span>
+        <span class="brand-org ink2">· Cisco</span>
+      </a>
+      <div class="tabs">
+        <button class="tab active">Overview</button>
+        <button class="tab">Topology Map</button>
+        <button class="tab">IPAM</button>
+        <button class="tab">DNS</button>
+        <button class="tab">Hosts</button>
+        <button class="tab">Security</button>
+        <button class="tab">Alerts</button>
+        <button class="tab">Audit Logs</button>
+      </div>
+      <div class="nav-status">
+        <span class="stat-chip"><span class="dot red"></span><span class="red">13 CRIT</span></span>
+        <span class="stat-chip"><span class="dot amber"></span><span class="amber">3 FIRING</span></span>
+        <button class="toggle" onclick="toggleTheme()">Light / Dark</button>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- ===== Hero KPIs (light-context default surface) ===== -->
+    <section>
+      <div class="eyebrow accent">infoblox.com · live</div>
+      <h1>Network operations overview</h1>
+      <div class="grid">
+        <div class="card">
+          <div class="kpi-label ink2">Critical subnets</div>
+          <div class="kpi-num red">20</div>
+          <div class="kpi-sub ink2">of 52 total subnets</div>
+        </div>
+        <div class="card">
+          <div class="kpi-label ink2">Warning subnets</div>
+          <div class="kpi-num amber">15</div>
+          <div class="kpi-sub ink2">approaching pool limits</div>
+        </div>
+        <div class="card">
+          <div class="kpi-label ink2">Hosts online</div>
+          <div class="kpi-num green">142</div>
+          <div class="kpi-sub ink2">3 offline · 97.9% reachable</div>
+        </div>
+        <div class="card">
+          <div class="kpi-label ink2">Peak DHCP pool</div>
+          <div class="kpi-num">87<span style="font-size:24px">%</span></div>
+          <div class="kpi-sub ink2" style="margin-bottom:8px">utilization</div>
+          <div class="bar"><span class="amber-bg" style="width:87%;background:#ff9f0a"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Subnet table on alternate section bg ===== -->
+    <section class="section-alt">
+      <h2>Critical subnets</h2>
+      <div class="card" style="padding:8px 24px">
+        <div class="table">
+          <div class="row head ink2">
+            <span>Subnet</span><span>Utilization</span><span>Leases</span><span>Scope</span><span>Status</span>
+          </div>
+          <div class="row">
+            <span class="mono">10.20.0.0/22</span>
+            <span><div class="bar"><span style="width:94%;background:#ff453a"></span></div></span>
+            <span class="mono ink2">962 / 1022</span>
+            <span class="ink2">core-east</span>
+            <span class="status-cell"><span class="dot red"></span><span class="red">Critical</span></span>
+          </div>
+          <div class="row">
+            <span class="mono">10.20.8.0/23</span>
+            <span><div class="bar"><span style="width:88%;background:#ff453a"></span></div></span>
+            <span class="mono ink2">450 / 510</span>
+            <span class="ink2">core-east</span>
+            <span class="status-cell"><span class="dot red"></span><span class="red">Critical</span></span>
+          </div>
+          <div class="row">
+            <span class="mono">172.16.4.0/24</span>
+            <span><div class="bar"><span style="width:72%;background:#ff9f0a"></span></div></span>
+            <span class="mono ink2">184 / 254</span>
+            <span class="ink2">branch-sjc</span>
+            <span class="status-cell"><span class="dot amber"></span><span class="amber">Warning</span></span>
+          </div>
+          <div class="row">
+            <span class="mono">192.168.50.0/24</span>
+            <span><div class="bar"><span style="width:41%;background:#30d158"></span></div></span>
+            <span class="mono ink2">104 / 254</span>
+            <span class="ink2">lab-rtp</span>
+            <span class="status-cell"><span class="dot green"></span><span class="green">Healthy</span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== States strip ===== -->
+    <section>
+      <h2>Component states</h2>
+      <div class="states">
+        <div class="card state-box hover">
+          <span class="state-label ink2">Hover</span>
+          <span class="state-demo">Lift on pointer</span>
+          <span class="badge green-bg green" style="align-self:flex-start">interactive</span>
+        </div>
+        <div class="card state-box focus">
+          <span class="state-label ink2">Focus</span>
+          <span class="state-demo">Accent ring</span>
+          <span class="mono ink2">10.20.0.0/22</span>
+        </div>
+        <div class="card state-box">
+          <span class="state-label ink2">Empty</span>
+          <span class="state-demo ink3">No alerts in range</span>
+          <span class="ink3" style="font-size:28px;line-height:1">—</span>
+        </div>
+        <div class="card state-box">
+          <span class="state-label ink2">Error</span>
+          <span class="state-demo red">Fetch failed</span>
+          <span class="badge red-bg red" style="align-self:flex-start">retry</span>
+        </div>
+        <div class="card state-box">
+          <span class="state-label ink2">Loading</span>
+          <span class="state-demo ink2">Polling grid…</span>
+          <span class="spinner"></span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== Floating action panel (frosted, bottom-right) ===== -->
+  <aside class="panel">
+    <div class="panel-head">
+      <span class="panel-title">Active incidents</span>
+      <span class="live"><span class="pulse"></span><span class="ink2">live</span></span>
+    </div>
+    <div class="panel-num red">13</div>
+    <div class="panel-row"><span class="ink2">Firing alerts</span><span class="amber">3</span></div>
+    <div class="panel-row"><span class="ink2">Acknowledged</span><span class="green">7</span></div>
+    <div class="panel-row"><span class="ink2">Last sync</span><span class="mono ink2">00:04 ago</span></div>
+    <button class="btn">Refresh now</button>
+    <button class="btn-ghost">Pause auto-refresh</button>
+  </aside>
+
+<script>
+  function toggleTheme() {
+    var h = document.documentElement;
+    h.setAttribute('data-theme', h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,324 @@
+<!-- VARIANT: v3 — Command palette + stat summary cards -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC — Cisco</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; }
+
+  /* ---------- DARK (default) ---------- */
+  html[data-theme="dark"] body { background: #1d1d1f; color: #f5f5f7; }
+  html[data-theme="dark"] .nav { background: rgba(29,29,31,.85); border-bottom: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .tab { color: #86868b; }
+  html[data-theme="dark"] .tab:hover { color: #f5f5f7; }
+  html[data-theme="dark"] .tab.active { color: #f5f5f7; }
+  html[data-theme="dark"] .section { background: #1d1d1f; }
+  html[data-theme="dark"] .section.alt { background: #000000; }
+  html[data-theme="dark"] .card { background: #2d2d2f; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 2px 20px rgba(0,0,0,.4); }
+  html[data-theme="dark"] .label2 { color: #86868b; }
+  html[data-theme="dark"] .ink3 { color: #6e6e73; }
+  html[data-theme="dark"] .palette { background: #2d2d2f; border: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .palette input { color: #f5f5f7; }
+  html[data-theme="dark"] .palette input::placeholder { color: #6e6e73; }
+  html[data-theme="dark"] .chip { background: #3a3a3c; color: #f5f5f7; border: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .chip.on { background: #2997ff; border-color: #2997ff; color: #fff; }
+  html[data-theme="dark"] .kbd { background: #3a3a3c; color: #86868b; border: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .row { border-bottom: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .row:hover { background: rgba(255,255,255,.03); }
+  html[data-theme="dark"] thead th { color: #86868b; border-bottom: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .mono { color: #f5f5f7; }
+  html[data-theme="dark"] .accent { color: #2997ff; }
+  html[data-theme="dark"] .red { color: #ff453a; } html[data-theme="dark"] .red-bg { background: rgba(255,69,58,.12); }
+  html[data-theme="dark"] .amber { color: #ff9f0a; } html[data-theme="dark"] .amber-bg { background: rgba(255,159,10,.12); }
+  html[data-theme="dark"] .green { color: #30d158; } html[data-theme="dark"] .green-bg { background: rgba(48,209,88,.10); }
+  html[data-theme="dark"] .toggle { background: #3a3a3c; color: #f5f5f7; border: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .state-box { background: #2d2d2f; border: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .state-box.hoverable:hover { background: #3a3a3c; }
+  html[data-theme="dark"] .state-box.focusable:focus { outline: 2px solid #2997ff; outline-offset: 2px; }
+  html[data-theme="dark"] .brand-sub { color: #86868b; }
+
+  /* ---------- LIGHT ---------- */
+  html[data-theme="light"] body { background: #ffffff; color: #1d1d1f; }
+  html[data-theme="light"] .nav { background: rgba(255,255,255,.85); border-bottom: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .tab { color: #6e6e73; }
+  html[data-theme="light"] .tab:hover { color: #1d1d1f; }
+  html[data-theme="light"] .tab.active { color: #1d1d1f; }
+  html[data-theme="light"] .section { background: #ffffff; }
+  html[data-theme="light"] .section.alt { background: #f5f5f7; }
+  html[data-theme="light"] .card { background: #ffffff; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+  html[data-theme="light"] .label2 { color: #6e6e73; }
+  html[data-theme="light"] .ink3 { color: #86868b; }
+  html[data-theme="light"] .palette { background: #ffffff; border: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .palette input { color: #1d1d1f; }
+  html[data-theme="light"] .palette input::placeholder { color: #86868b; }
+  html[data-theme="light"] .chip { background: #f5f5f7; color: #1d1d1f; border: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .chip.on { background: #0071e3; border-color: #0071e3; color: #fff; }
+  html[data-theme="light"] .kbd { background: #f5f5f7; color: #6e6e73; border: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .row { border-bottom: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .row:hover { background: rgba(0,0,0,.02); }
+  html[data-theme="light"] thead th { color: #6e6e73; border-bottom: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .mono { color: #1d1d1f; }
+  html[data-theme="light"] .accent { color: #0071e3; }
+  html[data-theme="light"] .red { color: #ff3b30; } html[data-theme="light"] .red-bg { background: rgba(255,59,48,.08); }
+  html[data-theme="light"] .amber { color: #ff9500; } html[data-theme="light"] .amber-bg { background: rgba(255,149,0,.08); }
+  html[data-theme="light"] .green { color: #28cd41; } html[data-theme="light"] .green-bg { background: rgba(40,205,65,.08); }
+  html[data-theme="light"] .toggle { background: #f5f5f7; color: #1d1d1f; border: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .state-box { background: #ffffff; border: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .state-box.hoverable:hover { background: #f5f5f7; }
+  html[data-theme="light"] .state-box.focusable:focus { outline: 2px solid #0071e3; outline-offset: 2px; }
+  html[data-theme="light"] .brand-sub { color: #6e6e73; }
+
+  /* ---------- LAYOUT ---------- */
+  .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  .nav-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 32px; }
+  .brand { display: flex; align-items: baseline; gap: 8px; cursor: pointer; text-decoration: none; }
+  .brand-name { font-size: 17px; font-weight: 600; color: inherit; letter-spacing: -.3px; }
+  .brand-sub { font-size: 12px; }
+  .nav-right { display: flex; align-items: center; gap: 16px; }
+  .status-inline { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+  .stat-mini { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .dot.red { background: #ff453a; } .dot.amber { background: #ff9f0a; } .dot.green { background: #30d158; }
+  html[data-theme="light"] .dot.red { background: #ff3b30; } html[data-theme="light"] .dot.amber { background: #ff9500; } html[data-theme="light"] .dot.green { background: #28cd41; }
+  .toggle { font-size: 12px; padding: 6px 14px; border-radius: 12px; cursor: pointer; font-weight: 500; }
+  .tabs { display: flex; gap: 28px; padding: 0 32px 12px; overflow-x: auto; }
+  .tab { font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; padding-bottom: 4px; border-bottom: 2px solid transparent; background: none; border-top: none; border-left: none; border-right: none; }
+  html[data-theme="dark"] .tab.active { border-bottom-color: #2997ff; }
+  html[data-theme="light"] .tab.active { border-bottom-color: #0071e3; }
+
+  .section { padding: 48px 32px; }
+  .section-head { font-size: 24px; font-weight: 700; letter-spacing: -.6px; margin-bottom: 8px; }
+  .section-note { font-size: 14px; margin-bottom: 32px; }
+
+  /* stat summary strip — apple product-spec: number left, label right */
+  .stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 48px; }
+  .card { border-radius: 18px; padding: 24px; }
+  .stat-card { display: flex; align-items: center; gap: 16px; }
+  .stat-num { font-size: 40px; font-weight: 700; letter-spacing: -1px; line-height: 1; }
+  .stat-meta { display: flex; flex-direction: column; gap: 2px; }
+  .stat-meta .lbl { font-size: 14px; font-weight: 600; }
+  .stat-meta .sub { font-size: 12px; }
+
+  /* command palette */
+  .palette { border-radius: 12px; padding: 4px; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .palette .glyph { padding-left: 12px; font-size: 15px; opacity: .5; }
+  .palette input { flex: 1; background: none; border: none; outline: none; font-size: 15px; padding: 12px 4px; font-family: inherit; }
+  .palette .kbd { font-size: 11px; padding: 3px 7px; border-radius: 6px; margin-right: 8px; font-family: "SF Mono", "Menlo", ui-monospace, monospace; }
+  .chips { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 500; }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 12px; font-weight: 500; padding: 0 16px 12px; }
+  thead th:first-child { padding-left: 0; }
+  .row td { padding: 14px 16px; font-size: 13px; }
+  .row td:first-child { padding-left: 0; }
+  .mono { font-family: "SF Mono", "Menlo", ui-monospace, monospace; font-size: 13px; }
+  .status-cell { display: flex; align-items: center; gap: 8px; }
+  .pct { font-family: "SF Mono", "Menlo", ui-monospace, monospace; font-size: 13px; font-weight: 600; }
+
+  /* states strip */
+  .states { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  .state-box { border-radius: 18px; padding: 24px; min-height: 120px; display: flex; flex-direction: column; gap: 10px; }
+  .state-label { font-size: 11px; font-weight: 600; letter-spacing: .3px; }
+  .state-body { font-size: 13px; flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }
+  .spinner { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(128,128,128,.3); border-top-color: #2997ff; animation: spin .8s linear infinite; margin: 0 auto; }
+  html[data-theme="light"] .spinner { border-top-color: #0071e3; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ANNOTATION: Status KPIs (13 CRIT / 3 FIRING) live inline in the frosted nav as 6px dot + number so they read at 6ft on every tab, not just Overview. -->
+<nav class="nav">
+  <div class="nav-top">
+    <a class="brand" href="#" onclick="return false;">
+      <span class="brand-name">Infoblox NOC</span>
+      <span class="brand-sub">Cisco · infoblox.com</span>
+    </a>
+    <div class="nav-right">
+      <div class="status-inline">
+        <span class="stat-mini red"><span class="dot red"></span><b>13</b>&nbsp;CRIT</span>
+        <span class="stat-mini amber"><span class="dot amber"></span><b>3</b>&nbsp;FIRING</span>
+        <span class="stat-mini green"><span class="dot green"></span><b>142</b>&nbsp;online</span>
+      </div>
+      <button class="toggle" onclick="toggleTheme()">Light / Dark</button>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab active">Overview</button>
+    <button class="tab">Topology Map</button>
+    <button class="tab">IPAM</button>
+    <button class="tab">DNS</button>
+    <button class="tab">Hosts</button>
+    <button class="tab">Security</button>
+    <button class="tab">Alerts</button>
+    <button class="tab">Audit Logs</button>
+  </div>
+</nav>
+
+<!-- ============ DARK SECTION ============ -->
+<section class="section alt" style="padding-top: 120px;">
+  <div class="section-head">Overview</div>
+  <div class="section-note label2">Network operations summary · last refresh 30s ago</div>
+
+  <!-- ANNOTATION: Stat cards use apple.com product-spec layout — oversized 40px/700 number on the LEFT, descriptive label stacked on the RIGHT — so the hero metric dominates over the chrome. -->
+  <div class="stat-strip">
+    <div class="card stat-card">
+      <div class="stat-num red">13</div>
+      <div class="stat-meta"><span class="lbl">Critical</span><span class="sub label2">of 52 subnets</span></div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-num amber">3</div>
+      <div class="stat-meta"><span class="lbl">Firing alerts</span><span class="sub label2">2 acknowledged</span></div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-num green">142</div>
+      <div class="stat-meta"><span class="lbl">Hosts online</span><span class="sub label2">3 offline</span></div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-num">87<span style="font-size:22px;">%</span></div>
+      <div class="stat-meta"><span class="lbl">DHCP peak</span><span class="sub label2">pool utilization</span></div>
+    </div>
+  </div>
+
+  <!-- command palette -->
+  <div class="palette">
+    <span class="glyph">⌘</span>
+    <input type="text" placeholder="Filter subnets, hosts, alerts…   try: status:critical util:>80" />
+    <span class="kbd">⌘K</span>
+  </div>
+  <div class="chips">
+    <span class="chip on">All</span>
+    <span class="chip">Critical 20</span>
+    <span class="chip">Warning 15</span>
+    <span class="chip">Healthy 17</span>
+    <span class="chip">Util &gt; 80%</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Subnet</th><th>Name</th><th>Status</th><th>Hosts</th><th>Utilization</th></tr>
+    </thead>
+    <tbody>
+      <tr class="row">
+        <td class="mono">10.20.0.0/24</td><td>core-prod-east</td>
+        <td><span class="status-cell red"><span class="dot red"></span>Critical</span></td>
+        <td class="mono">246 / 254</td><td class="pct red">96%</td>
+      </tr>
+      <tr class="row">
+        <td class="mono">10.20.4.0/24</td><td>dc-storage</td>
+        <td><span class="status-cell red"><span class="dot red"></span>Critical</span></td>
+        <td class="mono">231 / 254</td><td class="pct red">91%</td>
+      </tr>
+      <tr class="row">
+        <td class="mono">10.30.8.0/23</td><td>campus-wifi</td>
+        <td><span class="status-cell amber"><span class="dot amber"></span>Warning</span></td>
+        <td class="mono">398 / 510</td><td class="pct amber">78%</td>
+      </tr>
+      <tr class="row">
+        <td class="mono">10.40.0.0/24</td><td>iot-sensors</td>
+        <td><span class="status-cell amber"><span class="dot amber"></span>Warning</span></td>
+        <td class="mono">171 / 254</td><td class="pct amber">67%</td>
+      </tr>
+      <tr class="row">
+        <td class="mono">10.50.0.0/24</td><td>guest-vlan</td>
+        <td><span class="status-cell green"><span class="dot green"></span>Healthy</span></td>
+        <td class="mono">62 / 254</td><td class="pct green">24%</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ LIGHT SECTION ============ -->
+<section class="section" data-light-demo style="background:#f5f5f7;" id="lightDemo">
+  <div class="section-head">Same layout · light treatment</div>
+  <div class="section-note ink3">Identical palette + stat strip rendered against the light token set.</div>
+
+  <div class="stat-strip" style="margin-bottom:32px;">
+    <div class="card stat-card" style="background:#fff;border:1px solid rgba(0,0,0,.08);box-shadow:0 2px 12px rgba(0,0,0,.08);">
+      <div class="stat-num" style="color:#ff3b30;">13</div>
+      <div class="stat-meta"><span class="lbl" style="color:#1d1d1f;">Critical</span><span class="sub" style="color:#6e6e73;">of 52 subnets</span></div>
+    </div>
+    <div class="card stat-card" style="background:#fff;border:1px solid rgba(0,0,0,.08);box-shadow:0 2px 12px rgba(0,0,0,.08);">
+      <div class="stat-num" style="color:#ff9500;">3</div>
+      <div class="stat-meta"><span class="lbl" style="color:#1d1d1f;">Firing alerts</span><span class="sub" style="color:#6e6e73;">2 acknowledged</span></div>
+    </div>
+    <div class="card stat-card" style="background:#fff;border:1px solid rgba(0,0,0,.08);box-shadow:0 2px 12px rgba(0,0,0,.08);">
+      <div class="stat-num" style="color:#28cd41;">142</div>
+      <div class="stat-meta"><span class="lbl" style="color:#1d1d1f;">Hosts online</span><span class="sub" style="color:#6e6e73;">3 offline</span></div>
+    </div>
+    <div class="card stat-card" style="background:#fff;border:1px solid rgba(0,0,0,.08);box-shadow:0 2px 12px rgba(0,0,0,.08);">
+      <div class="stat-num" style="color:#1d1d1f;">87<span style="font-size:22px;">%</span></div>
+      <div class="stat-meta"><span class="lbl" style="color:#1d1d1f;">DHCP peak</span><span class="sub" style="color:#6e6e73;">pool utilization</span></div>
+    </div>
+  </div>
+
+  <div class="palette" style="background:#fff;border:1px solid rgba(0,0,0,.08);">
+    <span class="glyph">⌘</span>
+    <input type="text" placeholder="Filter subnets, hosts, alerts…   try: status:critical" style="color:#1d1d1f;" />
+    <span class="kbd" style="background:#f5f5f7;color:#6e6e73;border:1px solid rgba(0,0,0,.08);">⌘K</span>
+  </div>
+  <div class="chips">
+    <span class="chip" style="background:#0071e3;border-color:#0071e3;color:#fff;">All</span>
+    <span class="chip" style="background:#fff;border:1px solid rgba(0,0,0,.08);color:#1d1d1f;">Critical 20</span>
+    <span class="chip" style="background:#fff;border:1px solid rgba(0,0,0,.08);color:#1d1d1f;">Warning 15</span>
+    <span class="chip" style="background:#fff;border:1px solid rgba(0,0,0,.08);color:#1d1d1f;">Util &gt; 80%</span>
+  </div>
+</section>
+
+<!-- ============ STATES STRIP ============ -->
+<section class="section alt">
+  <div class="section-head" style="font-size:18px;">Component states</div>
+  <div class="section-note label2">hover · focus · empty · error · loading</div>
+  <div class="states">
+    <div class="state-box hoverable">
+      <span class="state-label accent">HOVER</span>
+      <div class="state-body label2">Hover this card — surface lifts to surface2.</div>
+    </div>
+    <div class="state-box focusable" tabindex="0">
+      <span class="state-label accent">FOCUS</span>
+      <div class="state-body label2">Tab / click — accent focus ring appears.</div>
+    </div>
+    <div class="state-box">
+      <span class="state-label label2">EMPTY</span>
+      <div class="state-body ink3">No subnets match this filter.</div>
+    </div>
+    <div class="state-box red-bg">
+      <span class="state-label red">ERROR</span>
+      <div class="state-body red">Failed to reach Grid 10.20.0.1 — retry?</div>
+    </div>
+    <div class="state-box">
+      <span class="state-label label2">LOADING</span>
+      <div class="state-body"><div class="spinner"></div></div>
+    </div>
+  </div>
+</section>
+
+<script>
+  function toggleTheme() {
+    var h = document.documentElement;
+    h.setAttribute('data-theme', h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  }
+  // chip toggle demo
+  document.querySelectorAll('.chips .chip').forEach(function (c) {
+    c.addEventListener('click', function () {
+      var sib = c.parentElement.querySelectorAll('.chip');
+      sib.forEach(function (s) { s.classList.remove('on'); });
+      c.classList.add('on');
+    });
+  });
+  // tab toggle demo
+  document.querySelectorAll('.tab').forEach(function (t) {
+    t.addEventListener('click', function () {
+      document.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('active'); });
+      t.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

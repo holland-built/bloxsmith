@@ -1,0 +1,1696 @@
+<!-- VARIANT: v4 — Apple Health App / Activity Big Number + Context Card -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC Dashboard — v4 Apple Activity</title>
+<style>
+/* ============================================================
+   APPLE HIG TOKENS
+   ============================================================ */
+:root {
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Monaco", ui-monospace, monospace;
+}
+
+[data-theme="dark"] {
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --surface-3: #3a3a3c;
+  --border: rgba(255,255,255,0.15);
+  --separator: rgba(255,255,255,0.08);
+  --accent: #0a84ff;
+  --ink: #ffffff;
+  --ink-dim: rgba(255,255,255,0.55);
+  --muted: rgba(235,235,245,0.60);
+  --muted-2: rgba(235,235,245,0.30);
+  --red: #ff453a;
+  --amber: #ff9f0a;
+  --green: #32d74b;
+  --teal-apple: #5ac8fa;
+  --indigo: #5e5ce6;
+  --red-bg: rgba(255,69,58,0.12);
+  --amber-bg: rgba(255,159,10,0.12);
+  --green-bg: rgba(50,215,75,0.10);
+  --shadow: 0 4px 16px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+[data-theme="light"] {
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #f2f2f7;
+  --surface-3: #e5e5ea;
+  --border: rgba(60,60,67,0.20);
+  --separator: rgba(60,60,67,0.12);
+  --accent: #007aff;
+  --ink: #000000;
+  --ink-dim: rgba(0,0,0,0.55);
+  --muted: rgba(60,60,67,0.60);
+  --muted-2: rgba(60,60,67,0.30);
+  --red: #ff3b30;
+  --amber: #ff9500;
+  --green: #34c759;
+  --teal-apple: #32ade6;
+  --indigo: #5856d6;
+  --red-bg: rgba(255,59,48,0.08);
+  --amber-bg: rgba(255,149,0,0.08);
+  --green-bg: rgba(52,199,89,0.08);
+  --shadow: 0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+/* ============================================================
+   RESET + BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  transition: background 0.2s, color 0.2s;
+}
+
+/* ============================================================
+   TOPBAR — 48px fixed
+   ============================================================ */
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 48px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--separator);
+  display: flex;
+  align-items: center;
+  gap: 0;
+  z-index: 100;
+  padding: 0 16px;
+}
+
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.topbar-logo-mark {
+  width: 24px;
+  height: 24px;
+  background: var(--accent);
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.topbar-logo-mark svg {
+  width: 14px;
+  height: 14px;
+  fill: #ffffff;
+}
+
+.topbar-logo-text {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.topbar-logo-sub {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: 24px;
+  flex: 1;
+}
+
+.topbar-nav a {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0 12px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.topbar-nav a.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.topbar-nav a:hover:not(.active) {
+  color: var(--ink);
+}
+
+.topbar-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.chip-crit {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.chip-firing {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse-ring 1.4s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+  0%   { opacity: 1; transform: scale(1); }
+  60%  { opacity: 0.4; transform: scale(1.3); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Theme toggle */
+.theme-toggle {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--surface-2);
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+}
+
+/* ============================================================
+   ALERT BAR — pinned below topbar
+   ============================================================ */
+.alert-bar {
+  position: fixed;
+  top: 48px;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: var(--red-bg);
+  border-bottom: 1px solid rgba(255,69,58,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  z-index: 99;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+[data-theme="light"] .alert-bar {
+  border-bottom-color: rgba(255,59,48,0.20);
+}
+
+.alert-bar:hover {
+  background: rgba(255,69,58,0.18);
+}
+
+.alert-bar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: pulse-ring 1.2s ease-out infinite;
+}
+
+.alert-bar-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--red);
+  letter-spacing: 0.1px;
+}
+
+.alert-bar-caret {
+  color: var(--red);
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+/* ============================================================
+   MAIN CONTENT
+   ============================================================ */
+.main {
+  margin-top: 84px; /* 48px topbar + 36px alert bar */
+  padding: 24px 20px 40px;
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-top: 108px; /* 84 + 24 */
+}
+
+/* Section label */
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+
+/* ============================================================
+   BENTO GRID — Apple activity card style
+   ============================================================ */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 900px) {
+  .bento-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .bento-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   ACTIVITY CARD
+   ============================================================ */
+.activity-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.15s;
+  cursor: default;
+  overflow: hidden;
+  position: relative;
+}
+
+.activity-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow), 0 8px 24px rgba(0,0,0,0.15);
+}
+
+/* Card header row */
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-type-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.1px;
+}
+
+.card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+/* Big number stat */
+.big-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: -4px;
+}
+
+.big-number {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.big-unit {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  opacity: 0.7;
+}
+
+/* Card body content */
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Footnote */
+.card-footnote {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.1px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.footnote-alert {
+  color: var(--red);
+  font-weight: 600;
+}
+
+/* Divider */
+.card-divider {
+  height: 1px;
+  background: var(--separator);
+  margin: 0 -20px;
+}
+
+/* ============================================================
+   DHCP SPARKLINE CARD
+   ============================================================ */
+.sparkline-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sparkline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sparkline-row-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.sparkline-row-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sparkline-row-pct {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+
+.sparkline-canvas {
+  flex-shrink: 0;
+  width: 56px;
+  height: 24px;
+}
+
+.sparkline-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badge-crit { background: var(--red-bg); color: var(--red); }
+.badge-warn { background: var(--amber-bg); color: var(--amber); }
+.badge-ok   { background: var(--green-bg); color: var(--green); }
+
+/* ============================================================
+   RING CHART
+   ============================================================ */
+.ring-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ring-svg {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+}
+
+.ring-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.ring-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ring-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ring-legend-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  flex: 1;
+}
+
+.ring-legend-val {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.3px;
+}
+
+/* ============================================================
+   IPAM CARD — subnet table
+   ============================================================ */
+.subnet-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subnet-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.subnet-prefix {
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subnet-avail {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.utilbar-wrap {
+  width: 48px;
+  height: 4px;
+  background: var(--surface-3);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.utilbar-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+
+/* ============================================================
+   DNS CARD
+   ============================================================ */
+.dns-stats {
+  display: flex;
+  gap: 8px;
+}
+
+.dns-stat-box {
+  flex: 1;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.dns-stat-val {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.8px;
+}
+
+.dns-stat-lbl {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.dns-qps-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.dns-qps-big {
+  font-size: 32px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+  color: var(--teal-apple);
+}
+
+.dns-qps-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* Mini sparkline for DNS */
+.dns-mini-spark {
+  width: 100%;
+  height: 32px;
+}
+
+/* ============================================================
+   THREATS CARD
+   ============================================================ */
+.threat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.threat-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.threat-sev-bar {
+  width: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  align-self: stretch;
+  min-height: 40px;
+}
+
+.threat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.threat-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.threat-detail {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.threat-sev-chip {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   AUDIT CARD
+   ============================================================ */
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.audit-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.audit-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.audit-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.audit-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.audit-action {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audit-who {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.audit-time {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+/* ============================================================
+   HORIZONTAL SCROLL ROW (overflow summary cards)
+   ============================================================ */
+.scroll-section {
+  margin-top: 24px;
+}
+
+.scroll-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-3) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-row::-webkit-scrollbar {
+  height: 4px;
+}
+.scroll-row::-webkit-scrollbar-track { background: transparent; }
+.scroll-row::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 2px;
+}
+
+.summary-card {
+  flex-shrink: 0;
+  width: 168px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.summary-card-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.summary-card-val {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.summary-card-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* ============================================================
+   THEME SEPARATOR
+   ============================================================ */
+.theme-sep {
+  width: 100%;
+  height: 2px;
+  background: var(--separator);
+  margin: 48px 0 0;
+}
+
+.theme-label {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  margin: 16px 0 32px;
+}
+
+/* ============================================================
+   LIGHT MODE SECTION WRAPPER
+   ============================================================ */
+.light-section {
+  background: #f2f2f7;
+  padding: 0 0 48px;
+}
+
+/* Hide the light topbar duplicate spacer */
+.light-topbar-spacer {
+  height: 84px;
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     TOPBAR — fixed
+     ============================================================ -->
+<header class="topbar">
+  <div class="topbar-logo">
+    <div class="topbar-logo-mark">
+      <svg viewBox="0 0 14 14">
+        <path d="M7 1 L13 4.5 L13 9.5 L7 13 L1 9.5 L1 4.5 Z" stroke="#fff" stroke-width="1.2" fill="none"/>
+        <circle cx="7" cy="7" r="2" fill="#fff"/>
+      </svg>
+    </div>
+    <div>
+      <div class="topbar-logo-text">Infoblox</div>
+      <div class="topbar-logo-sub">NOC Dashboard</div>
+    </div>
+  </div>
+
+  <nav class="topbar-nav">
+    <a href="#" class="active">OVERVIEW</a>
+    <a href="#">IPAM</a>
+    <a href="#">TOPOLOGY</a>
+    <a href="#">DNS</a>
+    <a href="#">HOSTS</a>
+    <a href="#">ALERTS</a>
+    <a href="#">AUDIT</a>
+  </nav>
+
+  <div class="topbar-chips">
+    <span class="chip chip-crit">2 CRIT</span>
+    <span class="chip chip-firing"><span class="pulse-dot"></span>5 FIRING</span>
+  </div>
+
+  <div class="topbar-right">
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀︎</button>
+    <button class="icon-btn" title="Search">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="6.5" cy="6.5" r="4.5"/>
+        <line x1="10.5" y1="10.5" x2="14" y2="14"/>
+      </svg>
+    </button>
+    <div class="avatar">SH</div>
+  </div>
+</header>
+
+<!-- ALERT BAR -->
+<div class="alert-bar">
+  <div class="alert-bar-dot"></div>
+  <span class="alert-bar-text">2 critical issues — tap to view</span>
+  <span class="alert-bar-caret">›</span>
+</div>
+
+<!-- ============================================================
+     DARK MODE CONTENT
+     ============================================================ -->
+<main class="main" id="dark-main">
+  <div class="section-label">Live Overview · Updated 4s ago</div>
+
+  <div class="bento-grid">
+
+    <!-- ======== CARD 1: DHCP Pools ======== -->
+    <div class="activity-card">
+      <div class="card-header">
+        <div class="card-meta">
+          <div class="card-type-badge">DHCP</div>
+          <div class="card-title">Pool Utilization</div>
+        </div>
+        <div class="card-icon" style="background:var(--amber-bg);">🔶</div>
+      </div>
+
+      <!-- Big number = worst-case pool -->
+      <div class="big-stat">
+        <span class="big-number" style="color:var(--red);">94</span>
+        <span class="big-unit" style="color:var(--red);">%</span>
+      </div>
+      <div style="font-size:11px;font-weight:500;color:var(--muted);font-family:var(--font-mono);margin-top:-8px;">10.1.0.0/24 — CRITICAL</div>
+
+      <div class="card-divider"></div>
+
+      <div class="sparkline-rows">
+        <!-- Row 1 -->
+        <div class="sparkline-row">
+          <div class="sparkline-row-meta">
+            <div class="sparkline-row-label">10.1.0.0/24</div>
+            <div class="sparkline-row-pct" style="color:var(--red);">94%</div>
+          </div>
+          <svg class="sparkline-canvas" viewBox="0 0 56 24" preserveAspectRatio="none">
+            <polyline points="0,20 8,18 16,17 24,15 32,13 40,10 48,8 56,4"
+              fill="none" stroke="var(--red)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="0,20 8,18 16,17 24,15 32,13 40,10 48,8 56,4 56,24 0,24"
+              fill="var(--red)" fill-opacity="0.12" stroke="none"/>
+          </svg>
+          <span class="sparkline-badge badge-crit">CRIT</span>
+        </div>
+        <!-- Row 2 -->
+        <div class="sparkline-row">
+          <div class="sparkline-row-meta">
+            <div class="sparkline-row-label">10.2.0.0/23</div>
+            <div class="sparkline-row-pct" style="color:var(--amber);">87%</div>
+          </div>
+          <svg class="sparkline-canvas" viewBox="0 0 56 24" preserveAspectRatio="none">
+            <polyline points="0,16 8,15 16,14 24,14 32,13 40,12 48,11 56,8"
+              fill="none" stroke="var(--amber)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="0,16 8,15 16,14 24,14 32,13 40,12 48,11 56,8 56,24 0,24"
+              fill="var(--amber)" fill-opacity="0.10" stroke="none"/>
+          </svg>
+          <span class="sparkline-badge badge-warn">WARN</span>
+        </div>
+        <!-- Row 3 -->
+        <div class="sparkline-row">
+          <div class="sparkline-row-meta">
+            <div class="sparkline-row-label">192.168.1.0/24</div>
+            <div class="sparkline-row-pct" style="color:var(--green);">45%</div>
+          </div>
+          <svg class="sparkline-canvas" viewBox="0 0 56 24" preserveAspectRatio="none">
+            <polyline points="0,14 8,15 16,14 24,13 32,14 40,13 48,13 56,12"
+              fill="none" stroke="var(--green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="0,14 8,15 16,14 24,13 32,14 40,13 48,13 56,12 56,24 0,24"
+              fill="var(--green)" fill-opacity="0.08" stroke="none"/>
+          </svg>
+          <span class="sparkline-badge badge-ok">OK</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== CARD 2: Host Status ======== -->
+    <div class="activity-card">
+      <div class="card-header">
+        <div class="card-meta">
+          <div class="card-type-badge">HOSTS</div>
+          <div class="card-title">Device Status</div>
+        </div>
+        <div class="card-icon" style="background:var(--green-bg);">🟢</div>
+      </div>
+
+      <div class="big-stat">
+        <span class="big-number" style="color:var(--green);">847</span>
+      </div>
+      <div style="font-size:11px;font-weight:500;color:var(--muted);margin-top:-8px;">devices online</div>
+
+      <div class="card-divider"></div>
+
+      <div class="ring-wrap">
+        <svg class="ring-svg" viewBox="0 0 80 80">
+          <!-- Background ring -->
+          <circle cx="40" cy="40" r="32" fill="none" stroke="var(--surface-3)" stroke-width="8"/>
+          <!-- Online (green): 847/862 = 98.3% of 251.3 = 246.7deg arc -->
+          <circle cx="40" cy="40" r="32" fill="none" stroke="var(--green)" stroke-width="8"
+            stroke-dasharray="246 5" stroke-dashoffset="63" stroke-linecap="round"/>
+          <!-- Degraded (amber): 12/862 = 1.4% -->
+          <circle cx="40" cy="40" r="32" fill="none" stroke="var(--amber)" stroke-width="8"
+            stroke-dasharray="3.5 247" stroke-dashoffset="-184" stroke-linecap="round"/>
+          <!-- Offline (red): 3/862 = 0.35% -->
+          <circle cx="40" cy="40" r="32" fill="none" stroke="var(--red)" stroke-width="8"
+            stroke-dasharray="1 249" stroke-dashoffset="-187" stroke-linecap="round"/>
+          <!-- Center text -->
+          <text x="40" y="37" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="14" font-weight="700" fill="var(--ink)">862</text>
+          <text x="40" y="50" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="9" fill="var(--muted)">TOTAL</text>
+        </svg>
+        <div class="ring-legend">
+          <div class="ring-legend-item">
+            <div class="ring-dot" style="background:var(--green);"></div>
+            <span class="ring-legend-label">Online</span>
+            <span class="ring-legend-val" style="color:var(--green);">847</span>
+          </div>
+          <div class="ring-legend-item">
+            <div class="ring-dot" style="background:var(--amber);"></div>
+            <span class="ring-legend-label">Degraded</span>
+            <span class="ring-legend-val" style="color:var(--amber);">12</span>
+          </div>
+          <div class="ring-legend-item">
+            <div class="ring-dot" style="background:var(--red);"></div>
+            <span class="ring-legend-label">Offline</span>
+            <span class="ring-legend-val" style="color:var(--red);">3</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-footnote">
+        <span class="footnote-alert">⚠ 3 offline</span>
+        <span style="color:var(--muted-2);">·</span>
+        <span>12 degraded need attention</span>
+      </div>
+    </div>
+
+    <!-- ======== CARD 3: IPAM Subnets ======== -->
+    <div class="activity-card">
+      <div class="card-header">
+        <div class="card-meta">
+          <div class="card-type-badge">IPAM</div>
+          <div class="card-title">Subnet Blocks</div>
+        </div>
+        <div class="card-icon" style="background:rgba(90,200,250,0.12);">🔷</div>
+      </div>
+
+      <div class="big-stat">
+        <span class="big-number" style="color:var(--teal-apple);">148</span>
+      </div>
+      <div style="font-size:11px;font-weight:500;color:var(--muted);margin-top:-8px;">subnets managed · 4 unassigned</div>
+
+      <div class="card-divider"></div>
+
+      <div class="subnet-table">
+        <div class="subnet-row">
+          <span class="subnet-prefix">10.0.0.0/8</span>
+          <span class="subnet-avail">1.2M avail</span>
+          <div class="utilbar-wrap">
+            <div class="utilbar-fill" style="width:28%;background:var(--green);"></div>
+          </div>
+        </div>
+        <div class="subnet-row">
+          <span class="subnet-prefix">172.16.0.0/12</span>
+          <span class="subnet-avail">834K avail</span>
+          <div class="utilbar-wrap">
+            <div class="utilbar-fill" style="width:42%;background:var(--teal-apple);"></div>
+          </div>
+        </div>
+        <div class="subnet-row">
+          <span class="subnet-prefix">192.168.0.0/16</span>
+          <span class="subnet-avail">12K avail</span>
+          <div class="utilbar-wrap">
+            <div class="utilbar-fill" style="width:82%;background:var(--amber);"></div>
+          </div>
+        </div>
+        <div class="subnet-row">
+          <span class="subnet-prefix">10.100.0.0/16</span>
+          <span class="subnet-avail">48K avail</span>
+          <div class="utilbar-wrap">
+            <div class="utilbar-fill" style="width:55%;background:var(--teal-apple);"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== CARD 4: DNS Zones ======== -->
+    <div class="activity-card">
+      <div class="card-header">
+        <div class="card-meta">
+          <div class="card-type-badge">DNS</div>
+          <div class="card-title">Zone Health</div>
+        </div>
+        <div class="card-icon" style="background:rgba(90,200,250,0.12);">🌐</div>
+      </div>
+
+      <div class="dns-qps-row">
+        <span class="dns-qps-big">24.7k</span>
+        <span class="dns-qps-unit">qps</span>
+      </div>
+      <div style="font-size:11px;font-weight:500;color:var(--muted);margin-top:2px;">peak last 5m</div>
+
+      <svg class="dns-mini-spark" viewBox="0 0 280 32" preserveAspectRatio="none">
+        <polyline points="0,28 20,24 40,22 60,18 80,20 100,16 120,12 140,14 160,10 180,8 200,12 220,9 240,7 260,10 280,8"
+          fill="none" stroke="var(--teal-apple)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="0,28 20,24 40,22 60,18 80,20 100,16 120,12 140,14 160,10 180,8 200,12 220,9 240,7 260,10 280,8 280,32 0,32"
+          fill="var(--teal-apple)" fill-opacity="0.10" stroke="none"/>
+      </svg>
+
+      <div class="card-divider"></div>
+
+      <div class="dns-stats">
+        <div class="dns-stat-box">
+          <span class="dns-stat-val" style="color:var(--teal-apple);">312</span>
+          <span class="dns-stat-lbl">Zones</span>
+        </div>
+        <div class="dns-stat-box">
+          <span class="dns-stat-val" style="color:var(--green);">99.97%</span>
+          <span class="dns-stat-lbl">Uptime</span>
+        </div>
+        <div class="dns-stat-box">
+          <span class="dns-stat-val" style="color:var(--amber);">2</span>
+          <span class="dns-stat-lbl">Stale</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== CARD 5: Active Threats ======== -->
+    <div class="activity-card">
+      <div class="card-header">
+        <div class="card-meta">
+          <div class="card-type-badge">THREATS</div>
+          <div class="card-title">Active Incidents</div>
+        </div>
+        <div class="card-icon" style="background:var(--red-bg);">🔴</div>
+      </div>
+
+      <div class="big-stat">
+        <span class="big-number" style="color:var(--red);">7</span>
+      </div>
+      <div style="font-size:11px;font-weight:500;color:var(--muted);margin-top:-8px;">active detections · 2 critical</div>
+
+      <div class="card-divider"></div>
+
+      <div class="threat-list">
+        <div class="threat-item">
+          <div class="threat-sev-bar" style="background:var(--red);"></div>
+          <div class="threat-content">
+            <div class="threat-name">DNS Tunneling Detected</div>
+            <div class="threat-detail">src: 10.14.22.87 → iodine.ext</div>
+          </div>
+          <span class="threat-sev-chip badge-crit">CRIT</span>
+        </div>
+        <div class="threat-item">
+          <div class="threat-sev-bar" style="background:var(--amber);"></div>
+          <div class="threat-content">
+            <div class="threat-name">Malware C2 Callback</div>
+            <div class="threat-detail">src: 10.8.3.14 → c2.darknet.io</div>
+          </div>
+          <span class="threat-sev-chip badge-warn">HIGH</span>
+        </div>
+      </div>
+
+      <div class="card-footnote">
+        <span class="footnote-alert">2 require immediate action</span>
+      </div>
+    </div>
+
+    <!-- ======== CARD 6: Audit Events ======== -->
+    <div class="activity-card">
+      <div class="card-header">
+        <div class="card-meta">
+          <div class="card-type-badge">AUDIT</div>
+          <div class="card-title">Recent Changes</div>
+        </div>
+        <div class="card-icon" style="background:rgba(94,92,230,0.12);">📋</div>
+      </div>
+
+      <div class="big-stat">
+        <span class="big-number" style="color:var(--indigo);">38</span>
+      </div>
+      <div style="font-size:11px;font-weight:500;color:var(--muted);margin-top:-8px;">events in last hour</div>
+
+      <div class="card-divider"></div>
+
+      <div class="audit-list">
+        <div class="audit-item">
+          <div class="audit-dot" style="background:var(--red);"></div>
+          <div class="audit-content">
+            <div class="audit-action">Policy rule deleted: dns-block-ext</div>
+            <div class="audit-who">jsmith@corp.local</div>
+          </div>
+          <div class="audit-time">09:41</div>
+        </div>
+        <div class="audit-item">
+          <div class="audit-dot" style="background:var(--amber);"></div>
+          <div class="audit-content">
+            <div class="audit-action">Subnet 10.50.0.0/20 added</div>
+            <div class="audit-who">netops-svc</div>
+          </div>
+          <div class="audit-time">09:38</div>
+        </div>
+        <div class="audit-item">
+          <div class="audit-dot" style="background:var(--indigo);"></div>
+          <div class="audit-content">
+            <div class="audit-action">Zone corp.internal SOA updated</div>
+            <div class="audit-who">dns-automation</div>
+          </div>
+          <div class="audit-time">09:31</div>
+        </div>
+        <div class="audit-item">
+          <div class="audit-dot" style="background:var(--green);"></div>
+          <div class="audit-content">
+            <div class="audit-action">Grid backup completed</div>
+            <div class="audit-who">system</div>
+          </div>
+          <div class="audit-time">09:00</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /bento-grid -->
+
+  <!-- ============================================================
+       SCROLL ROW — summary cards (overflow)
+       ============================================================ -->
+  <div class="scroll-section">
+    <div class="section-label">Quick Stats</div>
+    <div class="scroll-row">
+
+      <div class="summary-card">
+        <div class="summary-card-lbl">Grid Members</div>
+        <div class="summary-card-val" style="color:var(--green);">24</div>
+        <div class="summary-card-sub">All reporting</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-card-lbl">Leases/hr</div>
+        <div class="summary-card-val" style="color:var(--teal-apple);">1.4k</div>
+        <div class="summary-card-sub">↑ 12% vs 1h ago</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-card-lbl">DNS Errors</div>
+        <div class="summary-card-val" style="color:var(--amber);">143</div>
+        <div class="summary-card-sub">NXDOMAIN / SERVFAIL</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-card-lbl">Rogue Devices</div>
+        <div class="summary-card-val" style="color:var(--red);">9</div>
+        <div class="summary-card-sub">Unregistered MACs</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-card-lbl">Config Changes</div>
+        <div class="summary-card-val" style="color:var(--indigo);">38</div>
+        <div class="summary-card-sub">Last 60 minutes</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-card-lbl">Avg DHCP ms</div>
+        <div class="summary-card-val" style="color:var(--green);">2.1</div>
+        <div class="summary-card-sub">Response latency</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-card-lbl">IP Conflicts</div>
+        <div class="summary-card-val" style="color:var(--red);">2</div>
+        <div class="summary-card-sub">Needs resolution</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-card-lbl">NIOS Version</div>
+        <div class="summary-card-val" style="font-size:20px;color:var(--muted);">9.0.4</div>
+        <div class="summary-card-sub">Up to date</div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<!-- ============================================================
+     LIGHT MODE SECTION
+     ============================================================ -->
+<div class="theme-sep"></div>
+<div class="theme-label">LIGHT MODE</div>
+
+<div class="light-section" data-theme="light">
+  <div class="light-topbar-spacer"></div>
+
+  <div style="max-width:1280px;margin:0 auto;padding:0 20px 40px;">
+    <div class="section-label" style="color:rgba(60,60,67,0.30);">Live Overview · Updated 4s ago</div>
+
+    <div class="bento-grid">
+
+      <!-- CARD 1: DHCP — LIGHT -->
+      <div class="activity-card">
+        <div class="card-header">
+          <div class="card-meta">
+            <div class="card-type-badge">DHCP</div>
+            <div class="card-title">Pool Utilization</div>
+          </div>
+          <div class="card-icon" style="background:var(--amber-bg);">🔶</div>
+        </div>
+        <div class="big-stat">
+          <span class="big-number" style="color:var(--red);">94</span>
+          <span class="big-unit" style="color:var(--red);">%</span>
+        </div>
+        <div style="font-size:11px;font-weight:500;color:var(--muted);font-family:var(--font-mono);margin-top:-8px;">10.1.0.0/24 — CRITICAL</div>
+        <div class="card-divider"></div>
+        <div class="sparkline-rows">
+          <div class="sparkline-row">
+            <div class="sparkline-row-meta">
+              <div class="sparkline-row-label">10.1.0.0/24</div>
+              <div class="sparkline-row-pct" style="color:var(--red);">94%</div>
+            </div>
+            <svg class="sparkline-canvas" viewBox="0 0 56 24" preserveAspectRatio="none">
+              <polyline points="0,20 8,18 16,17 24,15 32,13 40,10 48,8 56,4"
+                fill="none" stroke="var(--red)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <polyline points="0,20 8,18 16,17 24,15 32,13 40,10 48,8 56,4 56,24 0,24"
+                fill="var(--red)" fill-opacity="0.08" stroke="none"/>
+            </svg>
+            <span class="sparkline-badge badge-crit">CRIT</span>
+          </div>
+          <div class="sparkline-row">
+            <div class="sparkline-row-meta">
+              <div class="sparkline-row-label">10.2.0.0/23</div>
+              <div class="sparkline-row-pct" style="color:var(--amber);">87%</div>
+            </div>
+            <svg class="sparkline-canvas" viewBox="0 0 56 24" preserveAspectRatio="none">
+              <polyline points="0,16 8,15 16,14 24,14 32,13 40,12 48,11 56,8"
+                fill="none" stroke="var(--amber)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <polyline points="0,16 8,15 16,14 24,14 32,13 40,12 48,11 56,8 56,24 0,24"
+                fill="var(--amber)" fill-opacity="0.08" stroke="none"/>
+            </svg>
+            <span class="sparkline-badge badge-warn">WARN</span>
+          </div>
+          <div class="sparkline-row">
+            <div class="sparkline-row-meta">
+              <div class="sparkline-row-label">192.168.1.0/24</div>
+              <div class="sparkline-row-pct" style="color:var(--green);">45%</div>
+            </div>
+            <svg class="sparkline-canvas" viewBox="0 0 56 24" preserveAspectRatio="none">
+              <polyline points="0,14 8,15 16,14 24,13 32,14 40,13 48,13 56,12"
+                fill="none" stroke="var(--green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <polyline points="0,14 8,15 16,14 24,13 32,14 40,13 48,13 56,12 56,24 0,24"
+                fill="var(--green)" fill-opacity="0.08" stroke="none"/>
+            </svg>
+            <span class="sparkline-badge badge-ok">OK</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 2: Host Status — LIGHT -->
+      <div class="activity-card">
+        <div class="card-header">
+          <div class="card-meta">
+            <div class="card-type-badge">HOSTS</div>
+            <div class="card-title">Device Status</div>
+          </div>
+          <div class="card-icon" style="background:var(--green-bg);">🟢</div>
+        </div>
+        <div class="big-stat">
+          <span class="big-number" style="color:var(--green);">847</span>
+        </div>
+        <div style="font-size:11px;font-weight:500;color:var(--muted);margin-top:-8px;">devices online</div>
+        <div class="card-divider"></div>
+        <div class="ring-wrap">
+          <svg class="ring-svg" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--surface-3)" stroke-width="8"/>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--green)" stroke-width="8"
+              stroke-dasharray="246 5" stroke-dashoffset="63" stroke-linecap="round"/>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--amber)" stroke-width="8"
+              stroke-dasharray="3.5 247" stroke-dashoffset="-184" stroke-linecap="round"/>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--red)" stroke-width="8"
+              stroke-dasharray="1 249" stroke-dashoffset="-187" stroke-linecap="round"/>
+            <text x="40" y="37" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="14" font-weight="700" fill="var(--ink)">862</text>
+            <text x="40" y="50" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="9" fill="var(--muted)">TOTAL</text>
+          </svg>
+          <div class="ring-legend">
+            <div class="ring-legend-item">
+              <div class="ring-dot" style="background:var(--green);"></div>
+              <span class="ring-legend-label">Online</span>
+              <span class="ring-legend-val" style="color:var(--green);">847</span>
+            </div>
+            <div class="ring-legend-item">
+              <div class="ring-dot" style="background:var(--amber);"></div>
+              <span class="ring-legend-label">Degraded</span>
+              <span class="ring-legend-val" style="color:var(--amber);">12</span>
+            </div>
+            <div class="ring-legend-item">
+              <div class="ring-dot" style="background:var(--red);"></div>
+              <span class="ring-legend-label">Offline</span>
+              <span class="ring-legend-val" style="color:var(--red);">3</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-footnote">
+          <span class="footnote-alert">⚠ 3 offline</span>
+          <span style="color:var(--muted-2);">·</span>
+          <span>12 degraded need attention</span>
+        </div>
+      </div>
+
+      <!-- CARD 3: IPAM — LIGHT -->
+      <div class="activity-card">
+        <div class="card-header">
+          <div class="card-meta">
+            <div class="card-type-badge">IPAM</div>
+            <div class="card-title">Subnet Blocks</div>
+          </div>
+          <div class="card-icon" style="background:rgba(50,173,230,0.10);">🔷</div>
+        </div>
+        <div class="big-stat">
+          <span class="big-number" style="color:var(--teal-apple);">148</span>
+        </div>
+        <div style="font-size:11px;font-weight:500;color:var(--muted);margin-top:-8px;">subnets managed · 4 unassigned</div>
+        <div class="card-divider"></div>
+        <div class="subnet-table">
+          <div class="subnet-row">
+            <span class="subnet-prefix">10.0.0.0/8</span>
+            <span class="subnet-avail">1.2M avail</span>
+            <div class="utilbar-wrap">
+              <div class="utilbar-fill" style="width:28%;background:var(--green);"></div>
+            </div>
+          </div>
+          <div class="subnet-row">
+            <span class="subnet-prefix">172.16.0.0/12</span>
+            <span class="subnet-avail">834K avail</span>
+            <div class="utilbar-wrap">
+              <div class="utilbar-fill" style="width:42%;background:var(--teal-apple);"></div>
+            </div>
+          </div>
+          <div class="subnet-row">
+            <span class="subnet-prefix">192.168.0.0/16</span>
+            <span class="subnet-avail">12K avail</span>
+            <div class="utilbar-wrap">
+              <div class="utilbar-fill" style="width:82%;background:var(--amber);"></div>
+            </div>
+          </div>
+          <div class="subnet-row">
+            <span class="subnet-prefix">10.100.0.0/16</span>
+            <span class="subnet-avail">48K avail</span>
+            <div class="utilbar-wrap">
+              <div class="utilbar-fill" style="width:55%;background:var(--teal-apple);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 4: DNS — LIGHT -->
+      <div class="activity-card">
+        <div class="card-header">
+          <div class="card-meta">
+            <div class="card-type-badge">DNS</div>
+            <div class="card-title">Zone Health</div>
+          </div>
+          <div class="card-icon" style="background:rgba(50,173,230,0.10);">🌐</div>
+        </div>
+        <div class="dns-qps-row">
+          <span class="dns-qps-big">24.7k</span>
+          <span class="dns-qps-unit">qps</span>
+        </div>
+        <div style="font-size:11px;font-weight:500;color:var(--muted);margin-top:2px;">peak last 5m</div>
+        <svg class="dns-mini-spark" viewBox="0 0 280 32" preserveAspectRatio="none">
+          <polyline points="0,28 20,24 40,22 60,18 80,20 100,16 120,12 140,14 160,10 180,8 200,12 220,9 240,7 260,10 280,8"
+            fill="none" stroke="var(--teal-apple)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="0,28 20,24 40,22 60,18 80,20 100,16 120,12 140,14 160,10 180,8 200,12 220,9 240,7 260,10 280,8 280,32 0,32"
+            fill="var(--teal-apple)" fill-opacity="0.08" stroke="none"/>
+        </svg>
+        <div class="card-divider"></div>
+        <div class="dns-stats">
+          <div class="dns-stat-box">
+            <span class="dns-stat-val" style="color:var(--teal-apple);">312</span>
+            <span class="dns-stat-lbl">Zones</span>
+          </div>
+          <div class="dns-stat-box">
+            <span class="dns-stat-val" style="color:var(--green);">99.97%</span>
+            <span class="dns-stat-lbl">Uptime</span>
+          </div>
+          <div class="dns-stat-box">
+            <span class="dns-stat-val" style="color:var(--amber);">2</span>
+            <span class="dns-stat-lbl">Stale</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 5: Threats — LIGHT -->
+      <div class="activity-card">
+        <div class="card-header">
+          <div class="card-meta">
+            <div class="card-type-badge">THREATS</div>
+            <div class="card-title">Active Incidents</div>
+          </div>
+          <div class="card-icon" style="background:var(--red-bg);">🔴</div>
+        </div>
+        <div class="big-stat">
+          <span class="big-number" style="color:var(--red);">7</span>
+        </div>
+        <div style="font-size:11px;font-weight:500;color:var(--muted);margin-top:-8px;">active detections · 2 critical</div>
+        <div class="card-divider"></div>
+        <div class="threat-list">
+          <div class="threat-item">
+            <div class="threat-sev-bar" style="background:var(--red);"></div>
+            <div class="threat-content">
+              <div class="threat-name">DNS Tunneling Detected</div>
+              <div class="threat-detail">src: 10.14.22.87 → iodine.ext</div>
+            </div>
+            <span class="threat-sev-chip badge-crit">CRIT</span>
+          </div>
+          <div class="threat-item">
+            <div class="threat-sev-bar" style="background:var(--amber);"></div>
+            <div class="threat-content">
+              <div class="threat-name">Malware C2 Callback</div>
+              <div class="threat-detail">src: 10.8.3.14 → c2.darknet.io</div>
+            </div>
+            <span class="threat-sev-chip badge-warn">HIGH</span>
+          </div>
+        </div>
+        <div class="card-footnote">
+          <span class="footnote-alert">2 require immediate action</span>
+        </div>
+      </div>
+
+      <!-- CARD 6: Audit — LIGHT -->
+      <div class="activity-card">
+        <div class="card-header">
+          <div class="card-meta">
+            <div class="card-type-badge">AUDIT</div>
+            <div class="card-title">Recent Changes</div>
+          </div>
+          <div class="card-icon" style="background:rgba(88,86,214,0.10);">📋</div>
+        </div>
+        <div class="big-stat">
+          <span class="big-number" style="color:var(--indigo);">38</span>
+        </div>
+        <div style="font-size:11px;font-weight:500;color:var(--muted);margin-top:-8px;">events in last hour</div>
+        <div class="card-divider"></div>
+        <div class="audit-list">
+          <div class="audit-item">
+            <div class="audit-dot" style="background:var(--red);"></div>
+            <div class="audit-content">
+              <div class="audit-action">Policy rule deleted: dns-block-ext</div>
+              <div class="audit-who">jsmith@corp.local</div>
+            </div>
+            <div class="audit-time">09:41</div>
+          </div>
+          <div class="audit-item">
+            <div class="audit-dot" style="background:var(--amber);"></div>
+            <div class="audit-content">
+              <div class="audit-action">Subnet 10.50.0.0/20 added</div>
+              <div class="audit-who">netops-svc</div>
+            </div>
+            <div class="audit-time">09:38</div>
+          </div>
+          <div class="audit-item">
+            <div class="audit-dot" style="background:var(--indigo);"></div>
+            <div class="audit-content">
+              <div class="audit-action">Zone corp.internal SOA updated</div>
+              <div class="audit-who">dns-automation</div>
+            </div>
+            <div class="audit-time">09:31</div>
+          </div>
+          <div class="audit-item">
+            <div class="audit-dot" style="background:var(--green);"></div>
+            <div class="audit-content">
+              <div class="audit-action">Grid backup completed</div>
+              <div class="audit-who">system</div>
+            </div>
+            <div class="audit-time">09:00</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /bento-grid light -->
+
+    <!-- SCROLL ROW LIGHT -->
+    <div class="scroll-section">
+      <div class="section-label" style="color:rgba(60,60,67,0.30);">Quick Stats</div>
+      <div class="scroll-row">
+        <div class="summary-card">
+          <div class="summary-card-lbl">Grid Members</div>
+          <div class="summary-card-val" style="color:var(--green);">24</div>
+          <div class="summary-card-sub">All reporting</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-lbl">Leases/hr</div>
+          <div class="summary-card-val" style="color:var(--teal-apple);">1.4k</div>
+          <div class="summary-card-sub">↑ 12% vs 1h ago</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-lbl">DNS Errors</div>
+          <div class="summary-card-val" style="color:var(--amber);">143</div>
+          <div class="summary-card-sub">NXDOMAIN / SERVFAIL</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-lbl">Rogue Devices</div>
+          <div class="summary-card-val" style="color:var(--red);">9</div>
+          <div class="summary-card-sub">Unregistered MACs</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-lbl">Config Changes</div>
+          <div class="summary-card-val" style="color:var(--indigo);">38</div>
+          <div class="summary-card-sub">Last 60 minutes</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-lbl">Avg DHCP ms</div>
+          <div class="summary-card-val" style="color:var(--green);">2.1</div>
+          <div class="summary-card-sub">Response latency</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-lbl">IP Conflicts</div>
+          <div class="summary-card-val" style="color:var(--red);">2</div>
+          <div class="summary-card-sub">Needs resolution</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card-lbl">NIOS Version</div>
+          <div class="summary-card-val" style="font-size:20px;color:var(--muted);">9.0.4</div>
+          <div class="summary-card-sub">Up to date</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function toggleTheme() {
+    const body = document.documentElement;
+    const current = body.getAttribute('data-theme');
+    body.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    document.querySelector('.theme-toggle').textContent = current === 'dark' ? '🌙' : '☀︎';
+  }
+</script>
+</body>
+</html>

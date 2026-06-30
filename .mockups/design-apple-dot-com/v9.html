@@ -1,0 +1,376 @@
+<!-- VARIANT: v9 — WILD: Newspaper broadsheet with data columns -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC — The Broadsheet</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { -webkit-font-smoothing: antialiased; }
+
+  body {
+    font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+    line-height: 1.4;
+    transition: background .3s ease, color .3s ease;
+  }
+
+  /* DARK (default) */
+  html[data-theme="dark"] body { background: #1d1d1f; color: #f5f5f7; }
+  html[data-theme="dark"] .nav { background: rgba(29,29,31,.85); border-bottom: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .masthead { border-color: #f5f5f7; }
+  html[data-theme="dark"] .article { border-color: rgba(255,255,255,.08); }
+  html[data-theme="dark"] .ink2 { color: #86868b; }
+  html[data-theme="dark"] .ink3 { color: #6e6e73; }
+  html[data-theme="dark"] .row { border-color: rgba(255,255,255,.08); }
+  html[data-theme="dark"] .rule { background: #f5f5f7; }
+  html[data-theme="dark"] .accent { color: #2997ff; }
+  html[data-theme="dark"] .red { color: #ff453a; }
+  html[data-theme="dark"] .amber { color: #ff9f0a; }
+  html[data-theme="dark"] .green { color: #30d158; }
+  html[data-theme="dark"] .dot-red { background: #ff453a; }
+  html[data-theme="dark"] .dot-amber { background: #ff9f0a; }
+  html[data-theme="dark"] .dot-green { background: #30d158; }
+  html[data-theme="dark"] .lead-box { background: #2d2d2f; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 2px 20px rgba(0,0,0,.4); }
+  html[data-theme="dark"] .state-box { background: #2d2d2f; border: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .tab { color: #86868b; }
+  html[data-theme="dark"] .tab.active { color: #f5f5f7; }
+  html[data-theme="dark"] .toggle { background: #2d2d2f; border: 1px solid rgba(255,255,255,.08); color: #f5f5f7; }
+  html[data-theme="dark"] .focus-demo:focus { outline: 2px solid #2997ff; }
+  html[data-theme="dark"] .state-error { background: rgba(255,69,58,.12); }
+
+  /* LIGHT */
+  html[data-theme="light"] body { background: #ffffff; color: #1d1d1f; }
+  html[data-theme="light"] .nav { background: rgba(255,255,255,.85); border-bottom: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .masthead { border-color: #1d1d1f; }
+  html[data-theme="light"] .article { border-color: rgba(0,0,0,.08); }
+  html[data-theme="light"] .ink2 { color: #6e6e73; }
+  html[data-theme="light"] .ink3 { color: #86868b; }
+  html[data-theme="light"] .row { border-color: rgba(0,0,0,.08); }
+  html[data-theme="light"] .rule { background: #1d1d1f; }
+  html[data-theme="light"] .accent { color: #0071e3; }
+  html[data-theme="light"] .red { color: #ff3b30; }
+  html[data-theme="light"] .amber { color: #ff9500; }
+  html[data-theme="light"] .green { color: #28cd41; }
+  html[data-theme="light"] .dot-red { background: #ff3b30; }
+  html[data-theme="light"] .dot-amber { background: #ff9500; }
+  html[data-theme="light"] .dot-green { background: #28cd41; }
+  html[data-theme="light"] .lead-box { background: #ffffff; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+  html[data-theme="light"] .state-box { background: #ffffff; border: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .tab { color: #6e6e73; }
+  html[data-theme="light"] .tab.active { color: #1d1d1f; }
+  html[data-theme="light"] .toggle { background: #f5f5f7; border: 1px solid rgba(0,0,0,.08); color: #1d1d1f; }
+  html[data-theme="light"] .focus-demo:focus { outline: 2px solid #0071e3; }
+  html[data-theme="light"] .state-error { background: rgba(255,59,48,.08); }
+
+  /* ===== FROSTED NAV ===== */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    padding: 12px 32px;
+  }
+  .nav-top { display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-size: 17px; font-weight: 700; letter-spacing: -.4px; cursor: pointer; text-decoration: none; color: inherit; }
+  .brand span { font-weight: 400; }
+  .nav-status { display: flex; align-items: center; gap: 16px; font-size: 13px; font-weight: 600; }
+  .nav-status .item { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .tabs { display: flex; gap: 24px; margin-top: 10px; overflow-x: auto; }
+  .tab { font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; padding-bottom: 2px; transition: color .2s; }
+  .tab.active { font-weight: 600; }
+  .toggle { font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 12px; cursor: pointer; }
+
+  /* ===== PAGE CONTAINER ===== */
+  .paper { max-width: 1160px; margin: 0 auto; padding: 0 32px; }
+  .section-top { padding-top: 132px; }
+
+  /* ===== MASTHEAD ===== */
+  .masthead {
+    border-top: 3px solid; border-bottom: 1px solid;
+    padding: 32px 0 16px;
+    text-align: center;
+  }
+  .masthead h1 {
+    font-size: 56px; font-weight: 800; letter-spacing: -2px; line-height: 1;
+  }
+  .masthead h1 .light-w { font-weight: 300; }
+  .masthead-sub {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 16px; padding-top: 12px; border-top: 1px solid; border-color: inherit;
+    font-size: 12px; letter-spacing: .3px;
+  }
+
+  /* ===== HEADLINE BANNER ===== */
+  .banner {
+    display: flex; align-items: baseline; gap: 16px;
+    padding: 24px 0 8px; flex-wrap: wrap;
+  }
+  .banner .head { font-size: 40px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; }
+  .banner .sub { font-size: 15px; }
+
+  /* ===== 3-COLUMN GRID ===== */
+  .columns {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+    margin-top: 24px;
+  }
+  .article {
+    padding: 24px 24px 32px;
+    border-right: 1px solid;
+  }
+  .article:nth-child(3n) { border-right: none; }
+  .kicker { font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+  .headline { font-size: 22px; font-weight: 700; letter-spacing: -.6px; line-height: 1.1; margin-bottom: 4px; }
+  .byline { font-size: 12px; margin-bottom: 14px; }
+  .rule { height: 1px; width: 32px; margin: 0 0 16px; }
+
+  /* drop-cap lead stat */
+  .lead { display: flex; align-items: baseline; gap: 4px; margin-bottom: 4px; }
+  .lead .num { font-size: 64px; font-weight: 800; letter-spacing: -3px; line-height: .85; }
+  .lead .unit { font-size: 15px; font-weight: 600; }
+  .lead-cap { font-size: 13px; margin-bottom: 18px; }
+
+  /* table rows */
+  .row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0; border-bottom: 1px solid; font-size: 13px;
+  }
+  .row:last-child { border-bottom: none; }
+  .row .label { display: flex; align-items: center; gap: 8px; }
+  .row .val { font-variant-numeric: tabular-nums; font-weight: 600; font-family: "SF Mono", "Menlo", ui-monospace, monospace; font-size: 12px; }
+
+  /* lead boxed stat (alt article) */
+  .lead-box {
+    border-radius: 18px; padding: 24px; margin-bottom: 16px;
+  }
+  .lead-box .num { font-size: 48px; font-weight: 800; letter-spacing: -2px; line-height: 1; }
+  .lead-box .cap { font-size: 13px; margin-top: 4px; }
+
+  /* ===== STATES STRIP ===== */
+  .states-wrap { padding: 48px 0 80px; }
+  .states-title { font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+  .states { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  .state-box {
+    border-radius: 12px; padding: 20px 16px; min-height: 96px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    transition: transform .2s, box-shadow .2s;
+    cursor: pointer;
+  }
+  .state-label { font-size: 11px; font-weight: 700; letter-spacing: .5px; }
+  .state-body { font-size: 12px; }
+  .state-hover:hover { transform: translateY(-3px); box-shadow: 0 2px 20px rgba(0,0,0,.4); }
+  html[data-theme="light"] .state-hover:hover { box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+  .focus-demo { width: 100%; border: none; background: transparent; color: inherit; font: inherit; text-align: left; padding: 0; cursor: pointer; }
+  .empty-dash { font-size: 24px; font-weight: 300; }
+  .spinner {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid rgba(150,150,150,.3); border-top-color: #2997ff;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* section divider between light & dark demo */
+  .demo-divider { text-align: center; font-size: 12px; padding: 24px 0; letter-spacing: .5px; }
+
+  @media (max-width: 820px) {
+    .columns { grid-template-columns: 1fr; }
+    .article { border-right: none; border-bottom: 1px solid; }
+    .states { grid-template-columns: repeat(2, 1fr); }
+    .masthead h1 { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== FROSTED GLASS TOPBAR ===== -->
+<!-- ANNOTATION: Nav is the ONLY UI chrome in the whole layout — broadsheet body is pure editorial, so the frosted bar stays minimal to not compete with the masthead. -->
+<nav class="nav">
+  <div class="nav-top">
+    <a class="brand" href="#">Infoblox NOC <span>/ Cisco</span></a>
+    <div class="nav-status">
+      <span class="item red"><span class="dot dot-red"></span>13 CRIT</span>
+      <span class="item amber"><span class="dot dot-amber"></span>3 FIRING</span>
+      <button class="toggle" onclick="toggleTheme()">Light / Dark</button>
+    </div>
+  </div>
+  <div class="tabs">
+    <span class="tab active">Overview</span>
+    <span class="tab">Topology Map</span>
+    <span class="tab">IPAM</span>
+    <span class="tab">DNS</span>
+    <span class="tab">Hosts</span>
+    <span class="tab">Security</span>
+    <span class="tab">Alerts</span>
+    <span class="tab">Audit Logs</span>
+  </div>
+</nav>
+
+<!-- ===== DARK BROADSHEET (default) ===== -->
+<div class="paper section-top">
+
+  <!-- MASTHEAD -->
+  <header class="masthead">
+    <h1>The Infoblox <span class="light-w">Broadsheet</span></h1>
+    <div class="masthead-sub ink2">
+      <span>CISCO &nbsp;·&nbsp; infoblox.com</span>
+      <span>NETWORK OPERATIONS · DAILY EDITION</span>
+      <span>SUNDAY, JUNE 28, 2026</span>
+    </div>
+  </header>
+
+  <!-- LEAD HEADLINE -->
+  <!-- ANNOTATION: The masthead status count must read at 6ft — driven by a 40px/800 headline + colored word rather than a pill badge, keeping Apple's "typography hero" rule inside a newspaper idiom. -->
+  <div class="banner">
+    <span class="head"><span class="red">13 Critical</span> Conditions Across the Estate</span>
+    <span class="sub ink2">3 alerts firing now · 142 of 145 hosts reporting</span>
+  </div>
+
+  <!-- 3-COLUMN GRID -->
+  <main class="columns">
+
+    <!-- COL 1 — IPAM -->
+    <article class="article">
+      <div class="kicker accent">IPAM</div>
+      <div class="headline">Subnet Pressure Builds in Core Ranges</div>
+      <div class="byline ink2">Address management desk</div>
+      <div class="rule"></div>
+      <div class="lead">
+        <span class="num accent">52</span>
+        <span class="unit ink2">subnets</span>
+      </div>
+      <div class="lead-cap ink2">under active management this cycle</div>
+      <div class="row"><span class="label"><span class="dot dot-red"></span>Critical utilization</span><span class="val red">20</span></div>
+      <div class="row"><span class="label"><span class="dot dot-amber"></span>Warning utilization</span><span class="val amber">15</span></div>
+      <div class="row"><span class="label"><span class="dot dot-green"></span>Healthy</span><span class="val green">17</span></div>
+      <div class="row"><span class="label ink2">DHCP peak pool</span><span class="val">87%</span></div>
+    </article>
+
+    <!-- COL 2 — HOSTS (boxed lead) -->
+    <article class="article">
+      <div class="kicker accent">HOSTS</div>
+      <div class="headline">Fleet Holds Steady, Three Dark</div>
+      <div class="byline ink2">Infrastructure desk</div>
+      <div class="rule"></div>
+      <div class="lead-box">
+        <div class="num green">142</div>
+        <div class="cap ink2">hosts online · 3 offline</div>
+      </div>
+      <div class="row"><span class="label ink2">core-dns-01</span><span class="val green">UP</span></div>
+      <div class="row"><span class="label ink2">core-dns-02</span><span class="val green">UP</span></div>
+      <div class="row"><span class="label ink2">edge-dhcp-07</span><span class="val red">DOWN</span></div>
+      <div class="row"><span class="label ink2">grid-master-a</span><span class="val green">UP</span></div>
+      <div class="row"><span class="label ink2">grid-bk-rtp-3</span><span class="val red">DOWN</span></div>
+    </article>
+
+    <!-- COL 3 — SECURITY / ALERTS -->
+    <article class="article">
+      <div class="kicker accent">SECURITY</div>
+      <div class="headline">Three Alerts Firing on the Wire</div>
+      <div class="byline ink2">Threat operations desk</div>
+      <div class="rule"></div>
+      <div class="lead">
+        <span class="num amber">3</span>
+        <span class="unit ink2">firing</span>
+      </div>
+      <div class="lead-cap ink2">active alert conditions, last 15 min</div>
+      <div class="row"><span class="label"><span class="dot dot-red"></span>DNS tunneling — RTP edge</span><span class="val red">CRIT</span></div>
+      <div class="row"><span class="label"><span class="dot dot-amber"></span>DHCP starvation — VLAN 40</span><span class="val amber">WARN</span></div>
+      <div class="row"><span class="label"><span class="dot dot-amber"></span>RPZ hit spike — guest net</span><span class="val amber">WARN</span></div>
+      <div class="row"><span class="label ink2">Blocked queries / hr</span><span class="val">4,218</span></div>
+    </article>
+
+  </main>
+
+  <!-- STATES STRIP -->
+  <section class="states-wrap">
+    <div class="states-title ink2">Component states</div>
+    <div class="states">
+      <div class="state-box state-hover">
+        <span class="state-label accent">HOVER</span>
+        <span class="state-body ink2">Lift on pointer-over</span>
+      </div>
+      <div class="state-box">
+        <span class="state-label accent">FOCUS</span>
+        <button class="focus-demo state-body">Tab to ring me</button>
+      </div>
+      <div class="state-box">
+        <span class="state-label ink3">EMPTY</span>
+        <span class="empty-dash ink3">—</span>
+      </div>
+      <div class="state-box state-error">
+        <span class="state-label red">ERROR</span>
+        <span class="state-body red">Grid sync failed</span>
+      </div>
+      <div class="state-box">
+        <span class="state-label ink2">LOADING</span>
+        <span class="spinner"></span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="demo-divider ink3" style="border-top:1px solid; border-color:rgba(128,128,128,.2);">↓ Same broadsheet, light edition — toggle flips both ↓</div>
+
+<!-- ===== LIGHT BROADSHEET (static demo of inverse theme) ===== -->
+<!-- This block intentionally mirrors the dark one; the toggle re-skins the whole page so light/dark share one DOM. -->
+<div class="paper" style="padding-bottom:40px;">
+  <header class="masthead" style="margin-top:24px;">
+    <h1>The Infoblox <span class="light-w">Broadsheet</span></h1>
+    <div class="masthead-sub ink2">
+      <span>CISCO &nbsp;·&nbsp; infoblox.com</span>
+      <span>LATE EDITION · IPAM SUPPLEMENT</span>
+      <span>52 SUBNETS · 142 HOSTS</span>
+    </div>
+  </header>
+  <div class="banner">
+    <span class="head">DHCP Pool Hits <span class="amber">87%</span> at Peak</span>
+    <span class="sub ink2">20 subnets critical · 15 in warning</span>
+  </div>
+  <main class="columns">
+    <article class="article">
+      <div class="kicker accent">DNS</div>
+      <div class="headline">Resolution Latency Within Bounds</div>
+      <div class="byline ink2">Service desk</div>
+      <div class="rule"></div>
+      <div class="lead"><span class="num accent">9.4</span><span class="unit ink2">ms avg</span></div>
+      <div class="lead-cap ink2">recursive resolver response time</div>
+      <div class="row"><span class="label"><span class="dot dot-green"></span>Authoritative zones</span><span class="val green">312</span></div>
+      <div class="row"><span class="label"><span class="dot dot-green"></span>Forwarders healthy</span><span class="val green">8 / 8</span></div>
+      <div class="row"><span class="label ink2">Queries / sec</span><span class="val">11,902</span></div>
+    </article>
+    <article class="article">
+      <div class="kicker accent">AUDIT</div>
+      <div class="headline">Change Log Quiet Overnight</div>
+      <div class="byline ink2">Governance desk</div>
+      <div class="rule"></div>
+      <div class="lead-box">
+        <div class="num accent">27</div>
+        <div class="cap ink2">config changes · last 24h</div>
+      </div>
+      <div class="row"><span class="label ink2">jchen · DHCP scope</span><span class="val">02:14</span></div>
+      <div class="row"><span class="label ink2">svc-auto · RPZ rule</span><span class="val">04:51</span></div>
+      <div class="row"><span class="label ink2">mrivera · zone edit</span><span class="val">06:08</span></div>
+    </article>
+    <article class="article">
+      <div class="kicker accent">TOPOLOGY</div>
+      <div class="headline">Two Grid Members Unreachable</div>
+      <div class="byline ink2">Network desk</div>
+      <div class="rule"></div>
+      <div class="lead"><span class="num red">2</span><span class="unit ink2">down</span></div>
+      <div class="lead-cap ink2">grid members not responding to probe</div>
+      <div class="row"><span class="label"><span class="dot dot-red"></span>edge-dhcp-07</span><span class="val red">DOWN</span></div>
+      <div class="row"><span class="label"><span class="dot dot-red"></span>grid-bk-rtp-3</span><span class="val red">DOWN</span></div>
+      <div class="row"><span class="label"><span class="dot dot-green"></span>Members healthy</span><span class="val green">14</span></div>
+    </article>
+  </main>
+</div>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOC Design — All Variants</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #111;
+    color: #eee;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    font-size: 13px;
+  }
+
+  /* ── Sticky jump nav ───────────────────────────────────────────── */
+  .jump-nav {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    background: #1a1a1a;
+    border-bottom: 1px solid #333;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .jump-nav-label {
+    color: #666;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .jump-nav a {
+    color: #0a84ff;
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 7px;
+    border-radius: 5px;
+    border: 1px solid rgba(10,132,255,0.3);
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+
+  .jump-nav a:hover {
+    background: rgba(10,132,255,0.15);
+    color: #40a4ff;
+  }
+
+  .jump-nav a.light-link {
+    color: #ff9f0a;
+    border-color: rgba(255,159,10,0.3);
+  }
+
+  .jump-nav a.light-link:hover {
+    background: rgba(255,159,10,0.12);
+    color: #ffb84d;
+  }
+
+  .nav-sep {
+    color: #444;
+    font-size: 11px;
+  }
+
+  /* ── Section headers ────────────────────────────────────────────── */
+  .variant-section {
+    padding: 0;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px 10px;
+    background: #161616;
+    border-top: 1px solid #2a2a2a;
+  }
+
+  .section-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: -0.01em;
+  }
+
+  .tag {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+
+  .tag-safe  { background: rgba(50,215,75,0.15);  color: #32d74b; border: 1px solid rgba(50,215,75,0.3); }
+  .tag-bold  { background: rgba(255,159,10,0.15); color: #ff9f0a; border: 1px solid rgba(255,159,10,0.3); }
+  .tag-wild  { background: rgba(255,55,95,0.15);  color: #ff375f; border: 1px solid rgba(255,55,95,0.3); }
+
+  .tag-rec {
+    background: rgba(10,132,255,0.2);
+    color: #0a84ff;
+    border: 1px solid rgba(10,132,255,0.4);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* ── Iframe pair row ────────────────────────────────────────────── */
+  .iframe-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border-bottom: 2px solid #2a2a2a;
+  }
+
+  .iframe-col {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .iframe-sublabel {
+    padding: 5px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: #0f0f0f;
+    color: #555;
+    border-bottom: 1px solid #222;
+  }
+
+  .iframe-col.light-col .iframe-sublabel {
+    background: #1c1c1c;
+    color: #666;
+  }
+
+  iframe {
+    width: 100%;
+    height: 400px;
+    border: none;
+    display: block;
+    background: #000;
+  }
+
+  .iframe-divider {
+    width: 1px;
+    background: #2a2a2a;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── STICKY JUMP NAV ──────────────────────────────────────────── -->
+<nav class="jump-nav">
+  <span class="jump-nav-label">Jump →</span>
+
+  <a href="#v1-dark">v1·D</a>
+  <a href="#v1-light" class="light-link">v1·L</a>
+  <span class="nav-sep">·</span>
+
+  <a href="#v2-dark">v2·D</a>
+  <a href="#v2-light" class="light-link">v2·L</a>
+  <span class="nav-sep">·</span>
+
+  <a href="#v3-dark">v3·D</a>
+  <a href="#v3-light" class="light-link">v3·L</a>
+  <span class="nav-sep">·</span>
+
+  <a href="#v4-dark">v4·D</a>
+  <a href="#v4-light" class="light-link">v4·L</a>
+  <span class="nav-sep">·</span>
+
+  <a href="#v5-dark">v5·D</a>
+  <a href="#v5-light" class="light-link">v5·L</a>
+  <span class="nav-sep">·</span>
+
+  <a href="#v6-dark">v6·D</a>
+  <a href="#v6-light" class="light-link">v6·L</a>
+  <span class="nav-sep">·</span>
+
+  <a href="#v7-dark">v7·D</a>
+  <a href="#v7-light" class="light-link">v7·L</a>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════════════
+     v1 — macOS System Settings
+══════════════════════════════════════════════════════════════════ -->
+<section class="variant-section">
+  <div class="section-header">
+    <span class="section-label">v1 — macOS System Settings</span>
+    <span class="tag tag-safe">SAFE</span>
+  </div>
+  <div class="iframe-row">
+    <div class="iframe-col">
+      <div class="iframe-sublabel" id="v1-dark">▲ Dark</div>
+      <iframe src="v1.html" title="v1 dark"></iframe>
+    </div>
+    <div class="iframe-divider"></div>
+    <div class="iframe-col light-col">
+      <div class="iframe-sublabel" id="v1-light">☀ Light</div>
+      <iframe src="v1.html" title="v1 light" onload="makeLight(this, 'v1')"></iframe>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     v2 — iOS Dashboard / Control Center
+══════════════════════════════════════════════════════════════════ -->
+<section class="variant-section">
+  <div class="section-header">
+    <span class="section-label">v2 — iOS Dashboard / Control Center</span>
+    <span class="tag tag-safe">SAFE</span>
+  </div>
+  <div class="iframe-row">
+    <div class="iframe-col">
+      <div class="iframe-sublabel" id="v2-dark">▲ Dark</div>
+      <iframe src="v2.html" title="v2 dark"></iframe>
+    </div>
+    <div class="iframe-divider"></div>
+    <div class="iframe-col light-col">
+      <div class="iframe-sublabel" id="v2-light">☀ Light</div>
+      <iframe src="v2.html" title="v2 light" onload="makeLight(this, 'v2')"></iframe>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     v3 — macOS Pro App (Final Cut / Instruments)
+══════════════════════════════════════════════════════════════════ -->
+<section class="variant-section">
+  <div class="section-header">
+    <span class="section-label">v3 — macOS Pro App (Final Cut Pro / Instruments)</span>
+    <span class="tag tag-bold">BOLD</span>
+  </div>
+  <div class="iframe-row">
+    <div class="iframe-col">
+      <div class="iframe-sublabel" id="v3-dark">▲ Dark</div>
+      <iframe src="v3.html" title="v3 dark"></iframe>
+    </div>
+    <div class="iframe-divider"></div>
+    <div class="iframe-col light-col">
+      <div class="iframe-sublabel" id="v3-light">☀ Light</div>
+      <iframe src="v3.html" title="v3 light" onload="makeLight(this, 'v3')"></iframe>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     v4 — Apple Health / Activity Big Number
+══════════════════════════════════════════════════════════════════ -->
+<section class="variant-section">
+  <div class="section-header">
+    <span class="section-label">v4 — Apple Health App / Activity Big Number</span>
+    <span class="tag tag-bold">BOLD</span>
+  </div>
+  <div class="iframe-row">
+    <div class="iframe-col">
+      <div class="iframe-sublabel" id="v4-dark">▲ Dark</div>
+      <iframe src="v4.html" title="v4 dark"></iframe>
+    </div>
+    <div class="iframe-divider"></div>
+    <div class="iframe-col light-col">
+      <div class="iframe-sublabel" id="v4-light">☀ Light</div>
+      <iframe src="v4.html" title="v4 light" onload="makeLight(this, 'v4')"></iframe>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     v5 — Refined Bento (Apple + NOC fusion)
+══════════════════════════════════════════════════════════════════ -->
+<section class="variant-section">
+  <div class="section-header">
+    <span class="section-label">v5 — Refined Bento (Apple + NOC fusion)</span>
+    <span class="tag tag-safe">SAFE</span>
+    <span class="tag-rec">★ RECOMMENDED</span>
+  </div>
+  <div class="iframe-row">
+    <div class="iframe-col">
+      <div class="iframe-sublabel" id="v5-dark">▲ Dark</div>
+      <iframe src="v5.html" title="v5 dark"></iframe>
+    </div>
+    <div class="iframe-divider"></div>
+    <div class="iframe-col light-col">
+      <div class="iframe-sublabel" id="v5-light">☀ Light</div>
+      <iframe src="v5.html" title="v5 light" onload="makeLight(this, 'v5')"></iframe>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     v6 — Apple Vision Pro Spatial
+══════════════════════════════════════════════════════════════════ -->
+<section class="variant-section">
+  <div class="section-header">
+    <span class="section-label">v6 — Apple Vision Pro Spatial</span>
+    <span class="tag tag-wild">WILD</span>
+  </div>
+  <div class="iframe-row">
+    <div class="iframe-col">
+      <div class="iframe-sublabel" id="v6-dark">▲ Dark</div>
+      <iframe src="v6.html" title="v6 dark"></iframe>
+    </div>
+    <div class="iframe-divider"></div>
+    <div class="iframe-col light-col">
+      <div class="iframe-sublabel" id="v6-light">☀ Light</div>
+      <iframe src="v6.html" title="v6 light" onload="makeLight(this, 'v6')"></iframe>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     v7 — Apple Terminal / Developer Tools
+══════════════════════════════════════════════════════════════════ -->
+<section class="variant-section">
+  <div class="section-header">
+    <span class="section-label">v7 — Apple Terminal / Developer Tools</span>
+    <span class="tag tag-bold">BOLD</span>
+  </div>
+  <div class="iframe-row">
+    <div class="iframe-col">
+      <div class="iframe-sublabel" id="v7-dark">▲ Dark</div>
+      <iframe src="v7.html" title="v7 dark"></iframe>
+    </div>
+    <div class="iframe-divider"></div>
+    <div class="iframe-col light-col">
+      <div class="iframe-sublabel" id="v7-light">☀ Light</div>
+      <iframe src="v7.html" title="v7 light" onload="makeLight(this, 'v7')"></iframe>
+    </div>
+  </div>
+</section>
+
+<script>
+/**
+ * Switch an iframe to light mode.
+ * Each variant uses a different theme mechanism:
+ *  v1, v3      — toggleTheme() function (shows/hides separate dark/light divs)
+ *  v2          — inline onclick sets data-theme on <html>; we set it directly
+ *  v4, v5      — toggleTheme() function (sets data-theme on <html>)
+ *  v6          — separate dark/light divs, no function; manipulate directly
+ *  v7          — separate #dark-view / #light-view sections (100vh); scroll to light
+ */
+function makeLight(iframe, variant) {
+  try {
+    const w = iframe.contentWindow;
+    const d = iframe.contentDocument;
+
+    if (variant === 'v7') {
+      // Two 100vh stacked sections — scroll to the light one
+      const lightView = d.getElementById('light-view');
+      if (lightView) lightView.scrollIntoView({ behavior: 'instant' });
+      return;
+    }
+
+    if (variant === 'v6') {
+      // Separate dark/light divs, no toggle function
+      const darkDiv  = d.querySelector('[data-theme="dark"]');
+      const lightDiv = d.querySelector('[data-theme="light"]');
+      if (darkDiv)  darkDiv.style.display  = 'none';
+      if (lightDiv) lightDiv.style.display = 'block';
+      if (d.body)   d.body.style.background = '#f2f2f7';
+      return;
+    }
+
+    if (variant === 'v2') {
+      // data-theme attribute on <html>
+      d.documentElement.setAttribute('data-theme', 'light');
+      if (d.body) d.body.style.background = '#f2f2f7';
+      return;
+    }
+
+    // v1, v3, v4, v5 — all expose toggleTheme()
+    if (typeof w.toggleTheme === 'function') {
+      w.toggleTheme();
+      return;
+    }
+
+    // Fallback: try setting data-theme directly
+    d.documentElement.setAttribute('data-theme', 'light');
+  } catch (e) {
+    console.warn('makeLight failed for', variant, e);
+  }
+}
+</script>
+</body>
+</html>

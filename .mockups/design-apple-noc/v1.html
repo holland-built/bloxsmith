@@ -1,0 +1,1557 @@
+<!-- VARIANT: v1 — macOS System Settings -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC — v1 macOS System Settings</title>
+<style>
+/* ─── RESET ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); font-size: 13px; line-height: 1.4; background: var(--bg); color: var(--ink); }
+
+/* ─── TOKENS ─── */
+[data-theme="dark"] {
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --surface-3: #3a3a3c;
+  --border: rgba(255,255,255,0.15);
+  --separator: rgba(255,255,255,0.08);
+  --accent: #0a84ff;
+  --ink: #ffffff;
+  --ink-dim: rgba(255,255,255,0.55);
+  --muted: rgba(235,235,245,0.60);
+  --muted-2: rgba(235,235,245,0.30);
+  --red: #ff453a;
+  --amber: #ff9f0a;
+  --green: #32d74b;
+  --teal-apple: #5ac8fa;
+  --indigo: #5e5ce6;
+  --red-bg: rgba(255,69,58,0.12);
+  --amber-bg: rgba(255,159,10,0.12);
+  --green-bg: rgba(50,215,75,0.10);
+  --shadow: 0 4px 16px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Monaco", ui-monospace, monospace;
+}
+[data-theme="light"] {
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #f2f2f7;
+  --surface-3: #e5e5ea;
+  --border: rgba(60,60,67,0.20);
+  --separator: rgba(60,60,67,0.12);
+  --accent: #007aff;
+  --ink: #000000;
+  --ink-dim: rgba(0,0,0,0.55);
+  --muted: rgba(60,60,67,0.60);
+  --muted-2: rgba(60,60,67,0.30);
+  --red: #ff3b30;
+  --amber: #ff9500;
+  --green: #34c759;
+  --teal-apple: #32ade6;
+  --indigo: #5856d6;
+  --red-bg: rgba(255,59,48,0.08);
+  --amber-bg: rgba(255,149,0,0.08);
+  --green-bg: rgba(52,199,89,0.08);
+  --shadow: 0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Monaco", ui-monospace, monospace;
+}
+
+/* ─── TOPBAR ─── */
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--separator);
+  z-index: 100;
+  padding: 0 16px;
+}
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--ink);
+  flex-shrink: 0;
+  margin-right: 24px;
+}
+.topbar-logo svg { width: 20px; height: 20px; }
+
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+.nav-tab {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  transition: background 0.15s, color 0.15s;
+  text-transform: uppercase;
+}
+.nav-tab:hover { background: var(--surface-2); color: var(--ink); }
+.nav-tab.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.topbar-alerts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 24px;
+}
+.alert-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.alert-chip.crit { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); }
+.alert-chip.firing { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber); }
+.alert-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.ctrl-btn {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.ctrl-btn:hover { background: var(--surface-3); color: var(--ink); }
+.toggle-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-dim);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.toggle-btn:hover { background: var(--surface-3); color: var(--ink); }
+
+/* ─── LAYOUT ─── */
+.app-body {
+  display: flex;
+  padding-top: 48px;
+  min-height: 100vh;
+}
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--separator);
+  padding: 16px 8px;
+  position: sticky;
+  top: 48px;
+  height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.sidebar-search {
+  margin: 0 8px 16px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-3);
+  border: none;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--ink);
+  width: calc(100% - 16px);
+  outline: none;
+}
+.sidebar-search::placeholder { color: var(--muted); }
+
+.sidebar-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 4px 8px 4px;
+  margin-top: 8px;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-dim);
+  position: relative;
+}
+.sidebar-item:hover { background: var(--surface-2); color: var(--ink); }
+.sidebar-item.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+.sidebar-icon {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.sidebar-item.active .sidebar-icon { background: rgba(255,255,255,0.2); }
+.sidebar-item:not(.active) .sidebar-icon { background: var(--surface-3); }
+.sidebar-badge {
+  margin-left: auto;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-item.active .sidebar-badge { background: rgba(255,255,255,0.3); color: #fff; }
+.badge-red { background: var(--red); color: #fff; }
+.badge-amber { background: var(--amber); color: #fff; }
+
+/* ─── MAIN PANE ─── */
+.main-pane {
+  flex: 1;
+  padding: 24px 32px 64px;
+  max-width: 1100px;
+}
+
+.pane-header {
+  margin-bottom: 24px;
+}
+.pane-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.4px;
+}
+.pane-subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ─── GROUPED SECTION ─── */
+.settings-group {
+  margin-bottom: 32px;
+}
+.group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 16px;
+  margin-bottom: 8px;
+}
+.group-table {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* ─── ROW CELLS ─── */
+.cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  height: 52px;
+  border-bottom: 1px solid var(--separator);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.cell:last-child { border-bottom: none; }
+.cell:hover { background: var(--surface-2); }
+.cell:active { background: var(--surface-3); }
+
+.cell-leading {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.cell-body { flex: 1; min-width: 0; }
+.cell-title {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cell-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cell-trailing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.cell-value {
+  font-size: 13px;
+  color: var(--muted);
+}
+.cell-chevron {
+  color: var(--muted-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ─── STATUS BADGES ─── */
+.badge {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  letter-spacing: 0.2px;
+}
+.badge-crit { background: var(--red-bg); color: var(--red); }
+.badge-warn { background: var(--amber-bg); color: var(--amber); }
+.badge-ok { background: var(--green-bg); color: var(--green); }
+.badge-info { background: rgba(90,200,250,0.12); color: var(--teal-apple); }
+.badge-high { background: var(--amber-bg); color: var(--amber); }
+
+/* ─── UTILIZATION BAR ─── */
+.util-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.util-bar {
+  width: 64px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.util-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.util-pct { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ─── INLINE STAT ROW ─── */
+.stat-row {
+  display: flex;
+  gap: 0;
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 32px;
+}
+.stat-cell {
+  flex: 1;
+  padding: 16px;
+  border-right: 1px solid var(--separator);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-cell:last-child { border-right: none; }
+.stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.5px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-delta {
+  font-size: 11px;
+  color: var(--muted);
+}
+.stat-value.crit { color: var(--red); }
+.stat-value.warn { color: var(--amber); }
+.stat-value.ok { color: var(--green); }
+
+/* ─── CONTENT GRID ─── */
+.content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.content-col { }
+
+/* ─── THREAT ROW ─── */
+.threat-indicator {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ─── CELL LEADING ICONS (colored) ─── */
+.ic-red { background: var(--red-bg); }
+.ic-amber { background: var(--amber-bg); }
+.ic-green { background: var(--green-bg); }
+.ic-blue { background: rgba(10,132,255,0.12); }
+.ic-indigo { background: rgba(94,92,230,0.12); }
+.ic-teal { background: rgba(90,200,250,0.12); }
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 3px; }
+
+/* ─── SECOND THEME WRAPPER ─── */
+.theme-block { }
+.theme-divider {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(128,128,128,0.6);
+  background: #888;
+}
+
+/* ─── MINI SPARKLINE ─── */
+.sparkline-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 20px;
+  width: 48px;
+}
+.spark-bar { flex: 1; border-radius: 1px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════ -->
+<!--  DARK MODE                                  -->
+<!-- ═══════════════════════════════════════════ -->
+<div data-theme="dark" class="theme-block">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <!-- Logo -->
+    <div class="topbar-logo">
+      <svg viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="9" stroke="#0a84ff" stroke-width="1.5"/>
+        <circle cx="10" cy="10" r="5" fill="#0a84ff" opacity="0.3"/>
+        <circle cx="10" cy="10" r="2.5" fill="#0a84ff"/>
+        <line x1="10" y1="1" x2="10" y2="4" stroke="#0a84ff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="10" y1="16" x2="10" y2="19" stroke="#0a84ff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="1" y1="10" x2="4" y2="10" stroke="#0a84ff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="16" y1="10" x2="19" y2="10" stroke="#0a84ff" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      Infoblox NOC
+    </div>
+    <!-- Nav -->
+    <nav class="topbar-nav">
+      <button class="nav-tab active">Overview</button>
+      <button class="nav-tab">IPAM</button>
+      <button class="nav-tab">Topology</button>
+      <button class="nav-tab">DNS</button>
+      <button class="nav-tab">Hosts</button>
+      <button class="nav-tab">Alerts</button>
+      <button class="nav-tab">Audit</button>
+    </nav>
+    <!-- Alert chips -->
+    <div class="topbar-alerts">
+      <span class="alert-chip crit"><span class="alert-dot"></span>2 CRIT</span>
+      <span class="alert-chip firing"><span class="alert-dot"></span>5 FIRING</span>
+    </div>
+    <!-- Controls -->
+    <div class="topbar-controls">
+      <button class="ctrl-btn" title="Refresh">↺</button>
+      <button class="ctrl-btn" title="Notifications">🔔</button>
+      <button class="toggle-btn" onclick="toggleTheme()">Light Mode</button>
+    </div>
+  </div>
+
+  <!-- APP BODY -->
+  <div class="app-body">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <input class="sidebar-search" type="search" placeholder="Search">
+
+      <div class="sidebar-section-label">Network</div>
+      <div class="sidebar-item active">
+        <div class="sidebar-icon">📊</div>
+        Overview
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">🌐</div>
+        IPAM Subnets
+        <span class="sidebar-badge badge-amber">14</span>
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">💧</div>
+        DHCP Pools
+        <span class="sidebar-badge badge-red">2</span>
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">📡</div>
+        DNS Zones
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">🖥️</div>
+        Host Status
+        <span class="sidebar-badge badge-red">3</span>
+      </div>
+
+      <div class="sidebar-section-label">Security</div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">⚠️</div>
+        Active Threats
+        <span class="sidebar-badge badge-red">7</span>
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">🔒</div>
+        RPZ Policy
+      </div>
+
+      <div class="sidebar-section-label">Operations</div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">📋</div>
+        Audit Events
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">⚙️</div>
+        Grid Members
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">📈</div>
+        Reports
+      </div>
+    </aside>
+
+    <!-- MAIN PANE -->
+    <main class="main-pane">
+      <div class="pane-header">
+        <div class="pane-title">Overview</div>
+        <div class="pane-subtitle">Network operations — last updated 14 seconds ago</div>
+      </div>
+
+      <!-- TOP STAT ROW -->
+      <div class="stat-row">
+        <div class="stat-cell">
+          <div class="stat-label">Hosts Online</div>
+          <div class="stat-value ok">847</div>
+          <div class="stat-delta">↑ 12 from 1h ago</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Degraded</div>
+          <div class="stat-value warn">12</div>
+          <div class="stat-delta">→ unchanged</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Offline</div>
+          <div class="stat-value crit">3</div>
+          <div class="stat-delta">↑ 1 from 4h ago</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Active Threats</div>
+          <div class="stat-value crit">7</div>
+          <div class="stat-delta">2 critical, 5 high</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">DHCP Utilization</div>
+          <div class="stat-value warn">78%</div>
+          <div class="stat-delta">3 pools critical</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">DNS Queries/s</div>
+          <div class="stat-value">4,821</div>
+          <div class="stat-delta">Peak: 6,103/s</div>
+        </div>
+      </div>
+
+      <div class="content-grid">
+        <!-- LEFT COL -->
+        <div class="content-col">
+
+          <!-- DHCP POOLS -->
+          <div class="settings-group">
+            <div class="group-label">DHCP Pools</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-red">💧</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">10.1.0.0/24</div>
+                  <div class="cell-sub">Corp-LAN · 235/250 leases</div>
+                </div>
+                <div class="cell-trailing">
+                  <div class="util-bar-wrap">
+                    <div class="util-bar"><div class="util-fill" style="width:94%; background: var(--red);"></div></div>
+                    <span class="util-pct">94%</span>
+                  </div>
+                  <span class="badge badge-crit">CRIT</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">💧</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">10.2.0.0/23</div>
+                  <div class="cell-sub">Data-Center · 447/512 leases</div>
+                </div>
+                <div class="cell-trailing">
+                  <div class="util-bar-wrap">
+                    <div class="util-bar"><div class="util-fill" style="width:87%; background: var(--amber);"></div></div>
+                    <span class="util-pct">87%</span>
+                  </div>
+                  <span class="badge badge-warn">WARN</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">💧</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">192.168.1.0/24</div>
+                  <div class="cell-sub">Guest-WiFi · 112/248 leases</div>
+                </div>
+                <div class="cell-trailing">
+                  <div class="util-bar-wrap">
+                    <div class="util-bar"><div class="util-fill" style="width:45%; background: var(--green);"></div></div>
+                    <span class="util-pct">45%</span>
+                  </div>
+                  <span class="badge badge-ok">OK</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">💧</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">172.16.0.0/20</div>
+                  <div class="cell-sub">VPN-Pool · 88/4094 leases</div>
+                </div>
+                <div class="cell-trailing">
+                  <div class="util-bar-wrap">
+                    <div class="util-bar"><div class="util-fill" style="width:2%; background: var(--green);"></div></div>
+                    <span class="util-pct">2%</span>
+                  </div>
+                  <span class="badge badge-ok">OK</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ACTIVE THREATS -->
+          <div class="settings-group">
+            <div class="group-label">Active Threats</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-red">🛡️</div>
+                <div class="cell-body">
+                  <div class="cell-title">DNS Tunneling Detected</div>
+                  <div class="cell-sub">src: 10.1.44.82 → tunnel.attacker.io · 14 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-crit">CRITICAL</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-red">🛡️</div>
+                <div class="cell-body">
+                  <div class="cell-title">Malware C2 Communication</div>
+                  <div class="cell-sub">src: 10.2.18.211 · RPZ block active · 2 hr ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-high">HIGH</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">🛡️</div>
+                <div class="cell-body">
+                  <div class="cell-title">Fast Flux Domain Activity</div>
+                  <div class="cell-sub">domain: r4nd0m-flux.net · 24 TTL violations</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-high">HIGH</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">🛡️</div>
+                <div class="cell-body">
+                  <div class="cell-title">DGA-Pattern Lookups</div>
+                  <div class="cell-sub">src: 10.1.77.33 · 847 queries / 5 min</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-warn">MEDIUM</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AUDIT EVENTS -->
+          <div class="settings-group">
+            <div class="group-label">Audit Events — Last Hour</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-blue">📋</div>
+                <div class="cell-body">
+                  <div class="cell-title">DNS Zone Modified</div>
+                  <div class="cell-sub">corp.local — admin@infoblox · 3 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value">CREATE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">📋</div>
+                <div class="cell-body">
+                  <div class="cell-title">DHCP Failover State Change</div>
+                  <div class="cell-sub">Pool 10.1.0.0/24 — dhcp-peer-02 · 9 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value" style="color: var(--amber);">WARN</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-blue">📋</div>
+                <div class="cell-body">
+                  <div class="cell-title">Fixed Address Created</div>
+                  <div class="cell-sub">10.1.22.100 → printer-hq-03 · 17 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value">CREATE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-red">📋</div>
+                <div class="cell-body">
+                  <div class="cell-title">Grid Member Unreachable</div>
+                  <div class="cell-sub">ns2.corp.local — 10.0.0.12 · 31 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value" style="color: var(--red);">ERROR</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-blue">📋</div>
+                <div class="cell-body">
+                  <div class="cell-title">RPZ Rule Updated</div>
+                  <div class="cell-sub">Block: malware-feed.rpz — noc@infoblox · 44 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value">UPDATE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT COL -->
+        <div class="content-col">
+
+          <!-- IPAM SUBNETS -->
+          <div class="settings-group">
+            <div class="group-label">IPAM Subnets</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-blue">🌐</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">10.0.0.0/8</div>
+                  <div class="cell-sub">Corporate supernet · 14 child subnets</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value">RFC 1918</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">🌐</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">10.1.0.0/16</div>
+                  <div class="cell-sub">HQ · util 94% · 3 pools critical</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-warn">HIGH USE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">🌐</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">10.2.0.0/16</div>
+                  <div class="cell-sub">Data Center · util 62% · stable</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-ok">NORMAL</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">🌐</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">192.168.0.0/16</div>
+                  <div class="cell-sub">Remote sites · util 31%</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-ok">NORMAL</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-indigo">🌐</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">172.16.0.0/12</div>
+                  <div class="cell-sub">VPN tunnels · util 8%</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-ok">NORMAL</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- DNS ZONES -->
+          <div class="settings-group">
+            <div class="group-label">DNS Zones</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-green">📡</div>
+                <div class="cell-body">
+                  <div class="cell-title">corp.local</div>
+                  <div class="cell-sub">Primary · 1,247 records · ns1, ns2</div>
+                </div>
+                <div class="cell-trailing">
+                  <div class="sparkline-bars" title="Query rate last 6 slots">
+                    <div class="spark-bar" style="height:40%; background: var(--accent); opacity:0.5;"></div>
+                    <div class="spark-bar" style="height:60%; background: var(--accent); opacity:0.6;"></div>
+                    <div class="spark-bar" style="height:55%; background: var(--accent); opacity:0.7;"></div>
+                    <div class="spark-bar" style="height:80%; background: var(--accent); opacity:0.8;"></div>
+                    <div class="spark-bar" style="height:70%; background: var(--accent); opacity:0.9;"></div>
+                    <div class="spark-bar" style="height:90%; background: var(--accent);"></div>
+                  </div>
+                  <span class="badge badge-ok">OK</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-red">📡</div>
+                <div class="cell-body">
+                  <div class="cell-title">10.in-addr.arpa</div>
+                  <div class="cell-sub">Reverse · PTR sync lag 4 min · ns2 delayed</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-warn">WARN</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">📡</div>
+                <div class="cell-body">
+                  <div class="cell-title">dmz.corp.local</div>
+                  <div class="cell-sub">Secondary · 84 records · read-only</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-ok">OK</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-teal">📡</div>
+                <div class="cell-body">
+                  <div class="cell-title">rpz.infoblox.local</div>
+                  <div class="cell-sub">RPZ · 24,811 block rules · updated 3h ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-info">RPZ</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- HOST STATUS -->
+          <div class="settings-group">
+            <div class="group-label">Host Status</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-red">🖥️</div>
+                <div class="cell-body">
+                  <div class="cell-title">ns2.corp.local</div>
+                  <div class="cell-sub">10.0.0.12 · Grid member · no heartbeat 31 min</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-crit">OFFLINE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-red">🖥️</div>
+                <div class="cell-body">
+                  <div class="cell-title">dhcp-peer-02.corp</div>
+                  <div class="cell-sub">10.0.0.22 · DHCP failover · comms interrupted</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-crit">OFFLINE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">🖥️</div>
+                <div class="cell-body">
+                  <div class="cell-title">sw-hq-access-07</div>
+                  <div class="cell-sub">10.1.0.7 · packet loss 12% · link flapping</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-warn">DEGRADED</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">🖥️</div>
+                <div class="cell-body">
+                  <div class="cell-title">ap-hq-floor3-02</div>
+                  <div class="cell-sub">10.1.3.44 · high retransmit rate · 802.11ac</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-warn">DEGRADED</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">🖥️</div>
+                <div class="cell-body">
+                  <div class="cell-title">847 hosts online</div>
+                  <div class="cell-sub">All other managed hosts reporting normally</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-ok">ALL OK</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+</div><!-- /dark -->
+
+<!-- DIVIDER -->
+<div class="theme-divider" style="color:#fff; background:#555;">▲ DARK MODE &nbsp;&nbsp;&nbsp; LIGHT MODE ▼</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!--  LIGHT MODE                                 -->
+<!-- ═══════════════════════════════════════════ -->
+<div data-theme="light" class="theme-block">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-logo">
+      <svg viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="9" stroke="#007aff" stroke-width="1.5"/>
+        <circle cx="10" cy="10" r="5" fill="#007aff" opacity="0.25"/>
+        <circle cx="10" cy="10" r="2.5" fill="#007aff"/>
+        <line x1="10" y1="1" x2="10" y2="4" stroke="#007aff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="10" y1="16" x2="10" y2="19" stroke="#007aff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="1" y1="10" x2="4" y2="10" stroke="#007aff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="16" y1="10" x2="19" y2="10" stroke="#007aff" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      Infoblox NOC
+    </div>
+    <nav class="topbar-nav">
+      <button class="nav-tab active">Overview</button>
+      <button class="nav-tab">IPAM</button>
+      <button class="nav-tab">Topology</button>
+      <button class="nav-tab">DNS</button>
+      <button class="nav-tab">Hosts</button>
+      <button class="nav-tab">Alerts</button>
+      <button class="nav-tab">Audit</button>
+    </nav>
+    <div class="topbar-alerts">
+      <span class="alert-chip crit"><span class="alert-dot"></span>2 CRIT</span>
+      <span class="alert-chip firing"><span class="alert-dot"></span>5 FIRING</span>
+    </div>
+    <div class="topbar-controls">
+      <button class="ctrl-btn" title="Refresh">↺</button>
+      <button class="ctrl-btn" title="Notifications">🔔</button>
+      <button class="toggle-btn">Dark Mode</button>
+    </div>
+  </div>
+
+  <div class="app-body">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <input class="sidebar-search" type="search" placeholder="Search">
+
+      <div class="sidebar-section-label">Network</div>
+      <div class="sidebar-item active">
+        <div class="sidebar-icon">📊</div>
+        Overview
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">🌐</div>
+        IPAM Subnets
+        <span class="sidebar-badge badge-amber">14</span>
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">💧</div>
+        DHCP Pools
+        <span class="sidebar-badge badge-red">2</span>
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">📡</div>
+        DNS Zones
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">🖥️</div>
+        Host Status
+        <span class="sidebar-badge badge-red">3</span>
+      </div>
+
+      <div class="sidebar-section-label">Security</div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">⚠️</div>
+        Active Threats
+        <span class="sidebar-badge badge-red">7</span>
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">🔒</div>
+        RPZ Policy
+      </div>
+
+      <div class="sidebar-section-label">Operations</div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">📋</div>
+        Audit Events
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">⚙️</div>
+        Grid Members
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon">📈</div>
+        Reports
+      </div>
+    </aside>
+
+    <main class="main-pane">
+      <div class="pane-header">
+        <div class="pane-title">Overview</div>
+        <div class="pane-subtitle">Network operations — last updated 14 seconds ago</div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-cell">
+          <div class="stat-label">Hosts Online</div>
+          <div class="stat-value ok">847</div>
+          <div class="stat-delta">↑ 12 from 1h ago</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Degraded</div>
+          <div class="stat-value warn">12</div>
+          <div class="stat-delta">→ unchanged</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Offline</div>
+          <div class="stat-value crit">3</div>
+          <div class="stat-delta">↑ 1 from 4h ago</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Active Threats</div>
+          <div class="stat-value crit">7</div>
+          <div class="stat-delta">2 critical, 5 high</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">DHCP Utilization</div>
+          <div class="stat-value warn">78%</div>
+          <div class="stat-delta">3 pools critical</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">DNS Queries/s</div>
+          <div class="stat-value">4,821</div>
+          <div class="stat-delta">Peak: 6,103/s</div>
+        </div>
+      </div>
+
+      <div class="content-grid">
+        <div class="content-col">
+
+          <div class="settings-group">
+            <div class="group-label">DHCP Pools</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-red">💧</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">10.1.0.0/24</div>
+                  <div class="cell-sub">Corp-LAN · 235/250 leases</div>
+                </div>
+                <div class="cell-trailing">
+                  <div class="util-bar-wrap">
+                    <div class="util-bar"><div class="util-fill" style="width:94%; background: var(--red);"></div></div>
+                    <span class="util-pct">94%</span>
+                  </div>
+                  <span class="badge badge-crit">CRIT</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">💧</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">10.2.0.0/23</div>
+                  <div class="cell-sub">Data-Center · 447/512 leases</div>
+                </div>
+                <div class="cell-trailing">
+                  <div class="util-bar-wrap">
+                    <div class="util-bar"><div class="util-fill" style="width:87%; background: var(--amber);"></div></div>
+                    <span class="util-pct">87%</span>
+                  </div>
+                  <span class="badge badge-warn">WARN</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">💧</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">192.168.1.0/24</div>
+                  <div class="cell-sub">Guest-WiFi · 112/248 leases</div>
+                </div>
+                <div class="cell-trailing">
+                  <div class="util-bar-wrap">
+                    <div class="util-bar"><div class="util-fill" style="width:45%; background: var(--green);"></div></div>
+                    <span class="util-pct">45%</span>
+                  </div>
+                  <span class="badge badge-ok">OK</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">💧</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">172.16.0.0/20</div>
+                  <div class="cell-sub">VPN-Pool · 88/4094 leases</div>
+                </div>
+                <div class="cell-trailing">
+                  <div class="util-bar-wrap">
+                    <div class="util-bar"><div class="util-fill" style="width:2%; background: var(--green);"></div></div>
+                    <span class="util-pct">2%</span>
+                  </div>
+                  <span class="badge badge-ok">OK</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="group-label">Active Threats</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-red">🛡️</div>
+                <div class="cell-body">
+                  <div class="cell-title">DNS Tunneling Detected</div>
+                  <div class="cell-sub">src: 10.1.44.82 → tunnel.attacker.io · 14 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-crit">CRITICAL</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-red">🛡️</div>
+                <div class="cell-body">
+                  <div class="cell-title">Malware C2 Communication</div>
+                  <div class="cell-sub">src: 10.2.18.211 · RPZ block active · 2 hr ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-high">HIGH</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">🛡️</div>
+                <div class="cell-body">
+                  <div class="cell-title">Fast Flux Domain Activity</div>
+                  <div class="cell-sub">domain: r4nd0m-flux.net · 24 TTL violations</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-high">HIGH</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">🛡️</div>
+                <div class="cell-body">
+                  <div class="cell-title">DGA-Pattern Lookups</div>
+                  <div class="cell-sub">src: 10.1.77.33 · 847 queries / 5 min</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-warn">MEDIUM</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="group-label">Audit Events — Last Hour</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-blue">📋</div>
+                <div class="cell-body">
+                  <div class="cell-title">DNS Zone Modified</div>
+                  <div class="cell-sub">corp.local — admin@infoblox · 3 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value">CREATE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">📋</div>
+                <div class="cell-body">
+                  <div class="cell-title">DHCP Failover State Change</div>
+                  <div class="cell-sub">Pool 10.1.0.0/24 — dhcp-peer-02 · 9 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value" style="color: var(--amber);">WARN</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-blue">📋</div>
+                <div class="cell-body">
+                  <div class="cell-title">Fixed Address Created</div>
+                  <div class="cell-sub">10.1.22.100 → printer-hq-03 · 17 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value">CREATE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-red">📋</div>
+                <div class="cell-body">
+                  <div class="cell-title">Grid Member Unreachable</div>
+                  <div class="cell-sub">ns2.corp.local — 10.0.0.12 · 31 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value" style="color: var(--red);">ERROR</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-blue">📋</div>
+                <div class="cell-body">
+                  <div class="cell-title">RPZ Rule Updated</div>
+                  <div class="cell-sub">Block: malware-feed.rpz — noc@infoblox · 44 min ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value">UPDATE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="content-col">
+
+          <div class="settings-group">
+            <div class="group-label">IPAM Subnets</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-blue">🌐</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">10.0.0.0/8</div>
+                  <div class="cell-sub">Corporate supernet · 14 child subnets</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="cell-value">RFC 1918</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">🌐</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">10.1.0.0/16</div>
+                  <div class="cell-sub">HQ · util 94% · 3 pools critical</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-warn">HIGH USE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">🌐</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">10.2.0.0/16</div>
+                  <div class="cell-sub">Data Center · util 62% · stable</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-ok">NORMAL</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">🌐</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">192.168.0.0/16</div>
+                  <div class="cell-sub">Remote sites · util 31%</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-ok">NORMAL</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-indigo">🌐</div>
+                <div class="cell-body">
+                  <div class="cell-title" style="font-family: var(--font-mono); font-size: 12px;">172.16.0.0/12</div>
+                  <div class="cell-sub">VPN tunnels · util 8%</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-ok">NORMAL</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="group-label">DNS Zones</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-green">📡</div>
+                <div class="cell-body">
+                  <div class="cell-title">corp.local</div>
+                  <div class="cell-sub">Primary · 1,247 records · ns1, ns2</div>
+                </div>
+                <div class="cell-trailing">
+                  <div class="sparkline-bars">
+                    <div class="spark-bar" style="height:40%; background: var(--accent); opacity:0.5;"></div>
+                    <div class="spark-bar" style="height:60%; background: var(--accent); opacity:0.6;"></div>
+                    <div class="spark-bar" style="height:55%; background: var(--accent); opacity:0.7;"></div>
+                    <div class="spark-bar" style="height:80%; background: var(--accent); opacity:0.8;"></div>
+                    <div class="spark-bar" style="height:70%; background: var(--accent); opacity:0.9;"></div>
+                    <div class="spark-bar" style="height:90%; background: var(--accent);"></div>
+                  </div>
+                  <span class="badge badge-ok">OK</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-red">📡</div>
+                <div class="cell-body">
+                  <div class="cell-title">10.in-addr.arpa</div>
+                  <div class="cell-sub">Reverse · PTR sync lag 4 min · ns2 delayed</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-warn">WARN</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">📡</div>
+                <div class="cell-body">
+                  <div class="cell-title">dmz.corp.local</div>
+                  <div class="cell-sub">Secondary · 84 records · read-only</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-ok">OK</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-teal">📡</div>
+                <div class="cell-body">
+                  <div class="cell-title">rpz.infoblox.local</div>
+                  <div class="cell-sub">RPZ · 24,811 block rules · updated 3h ago</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-info">RPZ</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <div class="group-label">Host Status</div>
+            <div class="group-table">
+              <div class="cell">
+                <div class="cell-leading ic-red">🖥️</div>
+                <div class="cell-body">
+                  <div class="cell-title">ns2.corp.local</div>
+                  <div class="cell-sub">10.0.0.12 · Grid member · no heartbeat 31 min</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-crit">OFFLINE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-red">🖥️</div>
+                <div class="cell-body">
+                  <div class="cell-title">dhcp-peer-02.corp</div>
+                  <div class="cell-sub">10.0.0.22 · DHCP failover · comms interrupted</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-crit">OFFLINE</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">🖥️</div>
+                <div class="cell-body">
+                  <div class="cell-title">sw-hq-access-07</div>
+                  <div class="cell-sub">10.1.0.7 · packet loss 12% · link flapping</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-warn">DEGRADED</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-amber">🖥️</div>
+                <div class="cell-body">
+                  <div class="cell-title">ap-hq-floor3-02</div>
+                  <div class="cell-sub">10.1.3.44 · high retransmit rate · 802.11ac</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-warn">DEGRADED</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-leading ic-green">🖥️</div>
+                <div class="cell-body">
+                  <div class="cell-title">847 hosts online</div>
+                  <div class="cell-sub">All other managed hosts reporting normally</div>
+                </div>
+                <div class="cell-trailing">
+                  <span class="badge badge-ok">ALL OK</span>
+                  <span class="cell-chevron">›</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+</div><!-- /light -->
+
+<script>
+function toggleTheme() {
+  const dark = document.querySelector('[data-theme="dark"]');
+  const light = document.querySelector('[data-theme="light"]');
+  const divider = document.querySelector('.theme-divider');
+  const isDarkVisible = dark.style.display !== 'none';
+  if (isDarkVisible) {
+    dark.style.display = 'none';
+    divider.style.display = 'none';
+    light.style.display = 'block';
+    document.body.style.background = '#f2f2f7';
+  } else {
+    dark.style.display = 'block';
+    divider.style.display = 'flex';
+    light.style.display = 'none';
+    document.body.style.background = '#000000';
+  }
+}
+</script>
+</body>
+</html>

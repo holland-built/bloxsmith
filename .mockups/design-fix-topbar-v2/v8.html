@@ -1,0 +1,513 @@
+<!-- VARIANT: v8 — Notification-first HUD -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v8 — Notification-first HUD</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    background: #000000;
+    color: #ffffff;
+    padding: 40px 24px 80px;
+  }
+
+  /* ===== THEME TOKENS baked raw per section ===== */
+
+  /* DARK section */
+  #dark {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --surface2: #2c2c2e;
+    --accent: #0a84ff;
+    --ink: #ffffff;
+    --separator: rgba(255,255,255,0.08);
+    --red: #ff453a;
+    --amber: #ff9f0a;
+    --green: #32d74b;
+    --ink-dim: rgba(235,235,245,0.6);
+  }
+  /* LIGHT section */
+  #light {
+    --bg: #f2f2f7;
+    --surface: #ffffff;
+    --surface2: #f2f2f7;
+    --accent: #007aff;
+    --ink: #000000;
+    --separator: rgba(60,60,67,0.12);
+    --red: #ff3b30;
+    --amber: #ff9500;
+    --green: #34c759;
+    --ink-dim: rgba(60,60,67,0.6);
+  }
+
+  /* ANNOTATION: both #dark and #light render simultaneously — no theme-swap display:none.
+     Each section carries its own --bg/--surface/etc. scoped vars so the two render side by side.
+     The toggle only tints the neutral page chrome, never hides a section. */
+  html[data-theme="dark"] body { background: #0b0b0c; color: #ffffff; }
+  html[data-theme="light"] body { background: #e9e9ee; color: #1c1c1e; }
+
+  .toggle-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 16px;
+    background: rgba(28,28,30,0.9);
+    backdrop-filter: none;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 13px;
+  }
+  html[data-theme="light"] .toggle-bar {
+    background: rgba(255,255,255,0.95);
+    color: #000;
+    border-bottom: 1px solid rgba(60,60,67,0.12);
+  }
+  .toggle-bar button {
+    font: inherit; cursor: pointer;
+    padding: 6px 14px; border-radius: 8px;
+    border: 1px solid currentColor; background: transparent;
+    color: inherit; font-weight: 590;
+  }
+
+  .section { margin-top: 56px; }
+  .section h2 {
+    font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-dim); margin: 0 0 14px 2px; font-weight: 600;
+  }
+
+  /* ===== APP FRAME (holds topbar + sidebar peek) ===== */
+  .app-frame {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--separator);
+    background: var(--bg);
+    height: 360px;
+  }
+
+  /* ===== TOPBAR : 3 equal columns ===== */
+  .topbar {
+    position: relative; z-index: 5;
+    height: 48px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    align-items: center;
+    background: var(--surface);
+    border-bottom: 1px solid var(--separator);
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  /* --- COL 1: brand + menu --- */
+  .col-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .hamburger {
+    width: 32px; height: 32px; border-radius: 8px;
+    border: none; background: transparent; color: var(--ink);
+    cursor: pointer; display: grid; place-items: center; flex: none;
+  }
+  .hamburger:hover { background: var(--surface2); }
+  .hamburger span {
+    display: block; width: 16px; height: 1.5px; background: currentColor;
+    box-shadow: 0 -5px 0 currentColor, 0 5px 0 currentColor;
+  }
+  /* ANNOTATION: brand is a real button — pencil fades in on hover to signal it opens brand settings, not just a logo */
+  .brand {
+    display: flex; align-items: center; gap: 8px; min-width: 0;
+    padding: 4px 8px; border-radius: 8px;
+    border: 1px solid transparent; background: transparent;
+    cursor: pointer; color: var(--ink);
+  }
+  .brand:hover { background: var(--surface2); border-color: var(--separator); }
+  .brand .logo {
+    width: 24px; height: 24px; border-radius: 6px; flex: none;
+    background: var(--accent);
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px;
+  }
+  .brand .names { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+  .brand .product { font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .brand .org { font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
+  .brand .pencil {
+    opacity: 0; font-size: 11px; color: var(--ink-dim); flex: none;
+    transition: opacity .12s;
+  }
+  .brand:hover .pencil { opacity: 1; }
+
+  /* --- COL 2: ALERT HUD (the star) --- */
+  /* ANNOTATION: center column is the HUD — 28px numerals on saturated pills make CRIT/FIRING the loudest thing on the bar, beating nav for attention */
+  .col-hud { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .alert-pill {
+    display: flex; align-items: center; gap: 8px;
+    height: 38px; padding: 0 14px; border-radius: 8px;
+    cursor: pointer; user-select: none;
+  }
+  .alert-pill .num {
+    font-size: 28px; font-weight: 800; line-height: 1;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  }
+  .alert-pill .lbl {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; line-height: 1.1; text-align: left;
+  }
+  .pill-crit {
+    background: var(--red); color: #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.05), 0 2px 8px rgba(255,69,58,0.35);
+  }
+  .pill-crit .dot { animation: pulse 1.4s ease-in-out infinite; }
+  .pill-firing { background: var(--amber); color: #1a1300; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .hud-divider { width: 1px; height: 24px; background: var(--separator); }
+  .hud-ok {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--ink-dim); font-weight: 500;
+  }
+  .hud-ok .dot { background: var(--green); }
+
+  /* --- COL 3: filters + controls --- */
+  .col-ctrl { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  /* ANNOTATION: filters rendered as small ghost chips (11px, muted) — deliberately quieter than tabs + HUD so they read as utilities */
+  .filter {
+    display: flex; align-items: center; gap: 4px;
+    height: 28px; padding: 0 8px; border-radius: 6px;
+    font-size: 11px; color: var(--ink-dim);
+    background: transparent; border: 1px solid var(--separator);
+    cursor: pointer; white-space: nowrap;
+  }
+  .filter:hover { background: var(--surface2); color: var(--ink); }
+  .filter b { color: var(--ink); font-weight: 600; }
+  .filter .car { font-size: 8px; opacity: 0.6; }
+  .clock {
+    font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums;
+    padding: 0 6px; white-space: nowrap;
+  }
+  .icon-btn {
+    width: 30px; height: 30px; border-radius: 8px; flex: none;
+    border: 1px solid var(--separator); background: transparent; color: var(--ink);
+    cursor: pointer; display: grid; place-items: center; font-size: 13px;
+  }
+  .icon-btn:hover { background: var(--surface2); }
+  .icon-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* ===== SECONDARY NAV BAR ===== */
+  .navbar {
+    position: relative; z-index: 5;
+    height: 40px; display: flex; align-items: center; gap: 2px;
+    padding: 0 12px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--separator);
+    overflow-x: auto;
+  }
+  .tab {
+    font-size: 13px; font-weight: 500; color: var(--ink-dim);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+    border: none; background: transparent;
+  }
+  .tab:hover { color: var(--ink); background: var(--surface2); }
+  .tab.active { color: var(--ink); font-weight: 600; }
+  .tab.active::after {
+    content: ""; display: block; height: 2px; border-radius: 2px;
+    background: var(--accent); margin: 5px 2px -7px;
+  }
+
+  /* ===== SIDEBAR PEEK + OVERLAY ===== */
+  .overlay {
+    position: absolute; inset: 0; z-index: 8;
+    background: rgba(0,0,0,0.6);
+  }
+  .sidebar {
+    position: absolute; top: 0; bottom: 0; left: 0; z-index: 9;
+    width: 224px; padding: 14px 12px;
+    background: var(--surface);
+    border-right: 1px solid var(--separator);
+    box-shadow: 8px 0 28px rgba(0,0,0,0.4);
+    transform: translateX(-124px); /* peek: ~100px visible */
+  }
+  .sidebar .side-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; padding-left: 112px;
+  }
+  .sidebar .side-head button {
+    font: inherit; font-size: 11px; cursor: pointer;
+    border: 1px solid var(--separator); background: var(--surface2);
+    color: var(--ink); padding: 4px 8px; border-radius: 6px;
+  }
+  .side-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px; font-size: 13px;
+    color: var(--ink-dim);
+  }
+  .side-item.active { background: var(--surface2); color: var(--ink); font-weight: 600; }
+  .side-item .ico { width: 16px; text-align: center; }
+
+  .body-fill {
+    position: relative; z-index: 1;
+    padding: 24px; font-size: 13px; color: var(--ink-dim);
+  }
+
+  /* ===== STATES STRIP ===== */
+  .states {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+    margin-top: 16px;
+  }
+  .state-box {
+    border: 1px solid var(--separator); border-radius: 12px;
+    padding: 14px; background: var(--surface);
+    display: flex; flex-direction: column; gap: 10px; min-height: 110px;
+  }
+  .state-box .cap {
+    font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ink-dim); font-weight: 700;
+  }
+  .state-demo { display: flex; align-items: center; justify-content: center; flex: 1; }
+
+  /* state: hover (filter highlighted) */
+  .filter.is-hover { background: var(--surface2); color: var(--ink); }
+  /* state: focus */
+  .filter.is-focus { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--ink); }
+  /* state: empty */
+  .hud-empty {
+    display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-dim);
+  }
+  .hud-empty .dot { background: var(--green); }
+  /* state: error */
+  .pill-error {
+    display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px;
+    border-radius: 8px; background: var(--red); color: #fff; font-size: 12px; font-weight: 600;
+  }
+  /* state: loading */
+  .pill-load {
+    display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px;
+    border-radius: 8px; background: var(--surface2); color: var(--ink-dim);
+  }
+  .skel {
+    width: 40px; height: 22px; border-radius: 6px;
+    background: linear-gradient(90deg, var(--separator), var(--surface), var(--separator));
+    background-size: 200% 100%; animation: shimmer 1.2s linear infinite;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .spinner {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--separator); border-top-color: var(--accent);
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="toggle-bar">
+  <strong>v8 — Notification-first HUD</strong>
+  <span style="opacity:.6">3-column control-room topbar · nav demoted to row 2</span>
+  <button onclick="toggleTheme()" style="margin-left:auto">☀︎ / ☾ Toggle theme</button>
+</div>
+
+<!-- =================== DARK =================== -->
+<div id="dark" class="section">
+  <h2>Dark</h2>
+  <div class="app-frame">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <!-- COL 1 -->
+      <div class="col-brand">
+        <button class="hamburger" title="Toggle sidebar"><span></span></button>
+        <button class="brand">
+          <span class="logo">N</span>
+          <span class="names">
+            <span class="product">Infoblox NOC</span>
+            <span class="org">Cisco</span>
+          </span>
+          <span class="pencil">✎</span>
+        </button>
+      </div>
+
+      <!-- COL 2 — HUD -->
+      <div class="col-hud">
+        <div class="alert-pill pill-crit" title="13 critical alerts">
+          <span class="dot"></span>
+          <span class="num">13</span>
+          <span class="lbl">Crit</span>
+        </div>
+        <div class="alert-pill pill-firing" title="3 firing alerts">
+          <span class="dot"></span>
+          <span class="num">3</span>
+          <span class="lbl">Firing</span>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-ok"><span class="dot"></span> 412 OK</div>
+      </div>
+
+      <!-- COL 3 -->
+      <div class="col-ctrl">
+        <button class="filter">Site <b>All</b><span class="car">▾</span></button>
+        <button class="filter">Range <b>All</b><span class="car">▾</span></button>
+        <button class="filter">Interval <b>5m</b><span class="car">▾</span></button>
+        <span class="clock">14:32:08</span>
+        <button class="icon-btn" title="Refresh">⟳</button>
+        <button class="icon-btn primary" title="Run query">⌘</button>
+      </div>
+    </div>
+
+    <!-- SECONDARY NAV -->
+    <div class="navbar">
+      <button class="tab active">Overview</button>
+      <button class="tab">Topology Map</button>
+      <button class="tab">IPAM</button>
+      <button class="tab">DNS</button>
+      <button class="tab">Hosts</button>
+      <button class="tab">Security</button>
+      <button class="tab">Alerts</button>
+      <button class="tab">Audit Logs</button>
+    </div>
+
+    <div class="body-fill">Dashboard content…</div>
+
+    <!-- SIDEBAR PEEK + OVERLAY -->
+    <div class="overlay" id="overlay-dark" onclick="closeSidebar('dark')"></div>
+    <div class="sidebar" id="sidebar-dark">
+      <div class="side-head">
+        <button onclick="closeSidebar('dark')">✕ close sidebar</button>
+      </div>
+      <div class="side-item active"><span class="ico">▤</span> Overview</div>
+      <div class="side-item"><span class="ico">◈</span> Topology Map</div>
+      <div class="side-item"><span class="ico">▦</span> IPAM</div>
+      <div class="side-item"><span class="ico">⌖</span> DNS</div>
+    </div>
+
+  </div>
+
+  <!-- STATES STRIP (static — lives inside #dark so it inherits dark tokens) -->
+  <div class="states">
+    <div class="state-box">
+      <div class="cap">Hover</div>
+      <div class="state-demo"><button class="filter is-hover">Site <b>All</b><span class="car">▾</span></button></div>
+    </div>
+    <div class="state-box">
+      <div class="cap">Focus</div>
+      <div class="state-demo"><button class="filter is-focus">Range <b>All</b><span class="car">▾</span></button></div>
+    </div>
+    <div class="state-box">
+      <div class="cap">Empty</div>
+      <div class="state-demo"><div class="hud-empty"><span class="dot"></span> 0 alerts · all clear</div></div>
+    </div>
+    <div class="state-box">
+      <div class="cap">Error</div>
+      <div class="state-demo"><div class="pill-error"><span class="dot"></span> Alert feed offline</div></div>
+    </div>
+    <div class="state-box">
+      <div class="cap">Loading</div>
+      <div class="state-demo"><div class="pill-load"><span class="spinner"></span><span class="skel"></span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== LIGHT =================== -->
+<div id="light" class="section">
+  <h2>Light</h2>
+  <div class="app-frame">
+
+    <div class="topbar">
+      <div class="col-brand">
+        <button class="hamburger" title="Toggle sidebar"><span></span></button>
+        <button class="brand">
+          <span class="logo">N</span>
+          <span class="names">
+            <span class="product">Infoblox NOC</span>
+            <span class="org">Cisco</span>
+          </span>
+          <span class="pencil">✎</span>
+        </button>
+      </div>
+
+      <div class="col-hud">
+        <div class="alert-pill pill-crit" title="13 critical alerts">
+          <span class="dot"></span>
+          <span class="num">13</span>
+          <span class="lbl">Crit</span>
+        </div>
+        <div class="alert-pill pill-firing" title="3 firing alerts">
+          <span class="dot"></span>
+          <span class="num">3</span>
+          <span class="lbl">Firing</span>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-ok"><span class="dot"></span> 412 OK</div>
+      </div>
+
+      <div class="col-ctrl">
+        <button class="filter">Site <b>All</b><span class="car">▾</span></button>
+        <button class="filter">Range <b>All</b><span class="car">▾</span></button>
+        <button class="filter">Interval <b>5m</b><span class="car">▾</span></button>
+        <span class="clock">14:32:08</span>
+        <button class="icon-btn" title="Refresh">⟳</button>
+        <button class="icon-btn primary" title="Run query">⌘</button>
+      </div>
+    </div>
+
+    <div class="navbar">
+      <button class="tab active">Overview</button>
+      <button class="tab">Topology Map</button>
+      <button class="tab">IPAM</button>
+      <button class="tab">DNS</button>
+      <button class="tab">Hosts</button>
+      <button class="tab">Security</button>
+      <button class="tab">Alerts</button>
+      <button class="tab">Audit Logs</button>
+    </div>
+
+    <div class="body-fill">Dashboard content…</div>
+
+    <div class="overlay" id="overlay-light" onclick="closeSidebar('light')"></div>
+    <div class="sidebar" id="sidebar-light">
+      <div class="side-head">
+        <button onclick="closeSidebar('light')">✕ close sidebar</button>
+      </div>
+      <div class="side-item active"><span class="ico">▤</span> Overview</div>
+      <div class="side-item"><span class="ico">◈</span> Topology Map</div>
+      <div class="side-item"><span class="ico">▦</span> IPAM</div>
+      <div class="side-item"><span class="ico">⌖</span> DNS</div>
+    </div>
+
+  </div>
+
+  <!-- STATES STRIP (static — lives inside #light so it inherits light tokens) -->
+  <div class="states">
+    <div class="state-box">
+      <div class="cap">Hover</div>
+      <div class="state-demo"><button class="filter is-hover">Site <b>All</b><span class="car">▾</span></button></div>
+    </div>
+    <div class="state-box">
+      <div class="cap">Focus</div>
+      <div class="state-demo"><button class="filter is-focus">Range <b>All</b><span class="car">▾</span></button></div>
+    </div>
+    <div class="state-box">
+      <div class="cap">Empty</div>
+      <div class="state-demo"><div class="hud-empty"><span class="dot"></span> 0 alerts · all clear</div></div>
+    </div>
+    <div class="state-box">
+      <div class="cap">Error</div>
+      <div class="state-demo"><div class="pill-error"><span class="dot"></span> Alert feed offline</div></div>
+    </div>
+    <div class="state-box">
+      <div class="cap">Loading</div>
+      <div class="state-demo"><div class="pill-load"><span class="spinner"></span><span class="skel"></span></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  }
+  function closeSidebar(which) {
+    document.getElementById('sidebar-' + which).style.display = 'none';
+    document.getElementById('overlay-' + which).style.display = 'none';
+  }
+</script>
+</body>
+</html>

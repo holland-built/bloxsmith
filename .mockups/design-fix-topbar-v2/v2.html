@@ -1,0 +1,334 @@
+<!-- VARIANT: v2 — Bloomberg data rail -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v2 — Bloomberg data rail</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; }
+
+  /* ---- THEME TOKENS baked as raw values ---- */
+  html[data-theme="dark"] {
+    --bg: #000000; --surface: #1c1c1e; --surface2: #2c2c2e;
+    --accent: #0a84ff; --ink: #ffffff; --sep: rgba(255,255,255,0.08);
+    --red: #ff453a; --amber: #ff9f0a; --green: #32d74b;
+    --muted: rgba(235,235,245,0.45);
+  }
+  html[data-theme="light"] {
+    --bg: #f2f2f7; --surface: #ffffff; --surface2: #f2f2f7;
+    --accent: #007aff; --ink: #000000; --sep: rgba(60,60,67,0.12);
+    --red: #ff3b30; --amber: #ff9500; --green: #34c759;
+    --muted: rgba(60,60,67,0.5);
+  }
+
+  body { background: var(--bg); color: var(--ink); padding: 0 0 48px; }
+
+  .mono { font-family: ui-monospace, "SF Mono", "Menlo", monospace; }
+
+  /* ===================== TOPBAR ===================== */
+  .topbar {
+    height: 48px;
+    display: flex;
+    align-items: stretch;
+    background: var(--surface);
+    border-bottom: 1px solid var(--sep);
+    position: relative;
+    z-index: 10;
+  }
+
+  /* --- LEFT: brand as small mono text, clearly clickable --- */
+  .brand {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 14px;
+    border-right: 1px solid var(--sep);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.12s;
+  }
+  .brand:hover { background: var(--surface2); }
+  .brand:hover .brand-edit { opacity: 1; }
+  .brand-logo {
+    width: 20px; height: 20px; border-radius: 4px;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #fff;
+  }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+  .brand-org { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .brand-prod { font-size: 12px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-edit { font-size: 10px; color: var(--muted); opacity: 0; transition: opacity 0.12s; margin-left: 2px; }
+
+  /* --- CENTER: text-only underline nav --- */
+  .nav { display: flex; align-items: stretch; flex: 1; overflow-x: auto; }
+  .nav::-webkit-scrollbar { display: none; }
+  .tab {
+    display: flex; align-items: center;
+    padding: 0 13px;
+    font-size: 12.5px; font-weight: 500;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    cursor: pointer; white-space: nowrap;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+
+  /* --- RIGHT: alert cells, big bold mono numbers in colored bg --- */
+  .alerts { display: flex; align-items: stretch; border-left: 1px solid var(--sep); }
+  .alert-cell {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 0 14px; min-width: 62px;
+    cursor: pointer;
+    line-height: 1;
+    transition: filter 0.12s;
+  }
+  .alert-cell:hover { filter: brightness(1.15); }
+  .alert-cell.crit { background: var(--red); color: #fff; }
+  .alert-cell.warn { background: var(--amber); color: #000; }
+  .alert-num { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
+  .alert-lbl { font-size: 8.5px; font-weight: 700; letter-spacing: 0.1em; margin-top: 2px; opacity: 0.85; }
+
+  /* --- FAR RIGHT: tiny secondary filter chips --- */
+  .filters { display: flex; align-items: center; gap: 6px; padding: 0 12px; border-left: 1px solid var(--sep); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    height: 22px; padding: 0 8px;
+    background: var(--surface2);
+    border: 1px solid var(--sep); border-radius: 6px;
+    font-size: 10.5px; color: var(--muted);
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--muted); }
+  .chip b { color: var(--ink); font-weight: 600; }
+  .chip .caret { font-size: 8px; opacity: 0.6; }
+
+  /* ===================== SECTION SCAFFOLD ===================== */
+  .stage { position: relative; margin: 0; }
+  .section-label {
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); padding: 14px 14px 6px;
+  }
+
+  /* --- sidebar peek + overlay --- */
+  .stage-overlaywrap { position: relative; overflow: hidden; }
+  .demo-canvas { position: relative; height: 220px; background: var(--bg); }
+  .overlay {
+    position: absolute; inset: 48px 0 0 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 15;
+  }
+  .sidebar {
+    position: absolute; top: 48px; bottom: 0; left: 0;
+    width: 224px; z-index: 16;
+    background: var(--surface);
+    border-right: 1px solid var(--sep);
+    box-shadow: 8px 0 24px rgba(0,0,0,0.4);
+    padding: 10px 0;
+  }
+  .side-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 16px; font-size: 13px; color: var(--muted); cursor: pointer;
+  }
+  .side-item.active { color: var(--ink); background: var(--surface2); box-shadow: inset 2px 0 0 var(--accent); }
+  .side-item:hover { color: var(--ink); }
+  .side-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .side-close {
+    position: absolute; top: 60px; left: 240px; z-index: 17;
+    background: var(--surface2); color: var(--ink);
+    border: 1px solid var(--sep); border-radius: 8px;
+    font-size: 11px; padding: 6px 10px; cursor: pointer;
+  }
+
+  /* ===================== STATES STRIP ===================== */
+  .states { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 10px 14px 0; }
+  .state-box { background: var(--surface); border: 1px solid var(--sep); border-radius: 12px; padding: 12px; min-height: 96px; display: flex; flex-direction: column; gap: 8px; }
+  .state-name { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .mini-chip {
+    display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+    height: 24px; padding: 0 9px; border-radius: 6px;
+    background: var(--surface2); border: 1px solid var(--sep);
+    font-size: 11px; color: var(--ink);
+  }
+  .mini-chip.hover { border-color: var(--muted); background: var(--bg); }
+  .mini-chip.focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+  .mini-chip.err { border-color: var(--red); color: var(--red); }
+  .mini-cell { display: inline-flex; flex-direction: column; align-items: center; align-self: flex-start; padding: 4px 12px; border-radius: 6px; line-height: 1; }
+  .mini-cell.crit { background: var(--red); color: #fff; }
+  .mini-cell .n { font-size: 16px; font-weight: 800; }
+  .mini-cell .l { font-size: 7.5px; font-weight: 700; letter-spacing: 0.1em; margin-top: 2px; }
+  .empty-dash { color: var(--muted); font-size: 12px; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--sep); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .skeleton { height: 22px; width: 70%; border-radius: 6px; background: linear-gradient(90deg, var(--surface2) 25%, var(--sep) 50%, var(--surface2) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ===================== THEME TOGGLE ===================== */
+  .toggle {
+    position: fixed; top: 12px; right: 14px; z-index: 50;
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 8px; font-size: 12px; font-weight: 600;
+    padding: 8px 12px; cursor: pointer;
+  }
+  .divider { height: 1px; background: var(--sep); margin: 22px 0 0; }
+</style>
+</head>
+<body>
+
+<button class="toggle" onclick="toggleTheme()">Toggle Light / Dark</button>
+
+<!-- ANNOTATION: Alert numbers live in solid red/amber cells on the far right so severity reads at a glance — they are the loudest object in the bar, beating the muted underline tabs. -->
+
+<!-- ============ LIVE STAGE: dark default, with sidebar peek + overlay ============ -->
+<div id="dark-stage" class="stage">
+  <div class="section-label">Live — sidebar drawer open (click overlay or ✕ to close)</div>
+  <div class="stage-overlaywrap">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="brand" title="Open brand settings">
+        <div class="brand-logo">N</div>
+        <div class="brand-text">
+          <span class="brand-org mono">Cisco</span>
+          <span class="brand-prod">Infoblox NOC</span>
+        </div>
+        <span class="brand-edit">✎</span>
+      </div>
+
+      <nav class="nav">
+        <div class="tab active">Overview</div>
+        <div class="tab">Topology Map</div>
+        <div class="tab">IPAM</div>
+        <div class="tab">DNS</div>
+        <div class="tab">Hosts</div>
+        <div class="tab">Security</div>
+        <div class="tab">Alerts</div>
+        <div class="tab">Audit Logs</div>
+      </nav>
+
+      <div class="alerts">
+        <div class="alert-cell crit">
+          <span class="alert-num mono">13</span>
+          <span class="alert-lbl">CRIT</span>
+        </div>
+        <div class="alert-cell warn">
+          <span class="alert-num mono">3</span>
+          <span class="alert-lbl">FIRING</span>
+        </div>
+      </div>
+
+      <!-- ANNOTATION: Filters are tiny 22px chips parked at the far right, lower contrast than tabs — they are utility, not navigation. -->
+      <div class="filters">
+        <div class="chip">Site <b>All</b><span class="caret">▼</span></div>
+        <div class="chip">Range <b>24h</b><span class="caret">▼</span></div>
+        <div class="chip">Int <b>5m</b><span class="caret">▼</span></div>
+      </div>
+    </div>
+
+    <!-- canvas behind topbar with overlay + sidebar peek -->
+    <div class="demo-canvas">
+      <div class="overlay" onclick="closeSidebar()"></div>
+      <!-- ANNOTATION: Sidebar is a slide-in panel BEHIND the topbar; the 60% black overlay illustrates click-away-to-close. -->
+      <div class="sidebar">
+        <div class="side-item active"><span class="side-dot" style="background:var(--accent)"></span>Overview</div>
+        <div class="side-item"><span class="side-dot"></span>Topology Map</div>
+        <div class="side-item"><span class="side-dot"></span>IPAM</div>
+        <div class="side-item"><span class="side-dot"></span>DNS</div>
+        <div class="side-item"><span class="side-dot"></span>Hosts</div>
+        <div class="side-item"><span class="side-dot"></span>Security</div>
+      </div>
+      <button class="side-close" onclick="closeSidebar()">✕ close sidebar</button>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ============ STATIC LIGHT REFERENCE ============ -->
+<div id="light" class="stage" data-forcelight>
+  <div class="section-label">Light reference (this section forces light tokens)</div>
+  <div class="topbar">
+    <div class="brand" title="Open brand settings">
+      <div class="brand-logo">N</div>
+      <div class="brand-text">
+        <span class="brand-org mono">Cisco</span>
+        <span class="brand-prod">Infoblox NOC</span>
+      </div>
+      <span class="brand-edit">✎</span>
+    </div>
+    <nav class="nav">
+      <div class="tab active">Overview</div>
+      <div class="tab">Topology Map</div>
+      <div class="tab">IPAM</div>
+      <div class="tab">DNS</div>
+      <div class="tab">Hosts</div>
+      <div class="tab">Security</div>
+      <div class="tab">Alerts</div>
+      <div class="tab">Audit Logs</div>
+    </nav>
+    <div class="alerts">
+      <div class="alert-cell crit"><span class="alert-num mono">13</span><span class="alert-lbl">CRIT</span></div>
+      <div class="alert-cell warn"><span class="alert-num mono">3</span><span class="alert-lbl">FIRING</span></div>
+    </div>
+    <div class="filters">
+      <div class="chip">Site <b>All</b><span class="caret">▼</span></div>
+      <div class="chip">Range <b>24h</b><span class="caret">▼</span></div>
+      <div class="chip">Int <b>5m</b><span class="caret">▼</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ STATES STRIP ============ -->
+<div class="section-label" style="margin-top:8px">Topbar control states</div>
+<div class="states">
+  <div class="state-box">
+    <span class="state-name">Hover</span>
+    <span class="mini-chip hover">Site <b style="color:var(--ink)">All</b> ▼</span>
+    <span class="state-name" style="color:var(--muted)">filter chip, pointer over</span>
+  </div>
+  <div class="state-box">
+    <span class="state-name">Focus</span>
+    <span class="mini-chip focus">Range <b style="color:var(--ink)">24h</b> ▼</span>
+    <span class="state-name" style="color:var(--muted)">keyboard ring</span>
+  </div>
+  <div class="state-box">
+    <span class="state-name">Empty</span>
+    <span class="mini-cell" style="background:var(--surface2);color:var(--muted)"><span class="n mono">0</span><span class="l">CRIT</span></span>
+    <span class="empty-dash">no active alerts</span>
+  </div>
+  <div class="state-box">
+    <span class="state-name">Error</span>
+    <span class="mini-chip err">⚠ feed lost ▼</span>
+    <span class="state-name" style="color:var(--red)">alert API unreachable</span>
+  </div>
+  <div class="state-box">
+    <span class="state-name">Loading</span>
+    <div style="display:flex;align-items:center;gap:8px"><div class="spinner"></div><span class="state-name">fetching…</span></div>
+    <div class="skeleton"></div>
+  </div>
+</div>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  }
+  function closeSidebar() {
+    document.querySelector('.overlay').style.display = 'none';
+    document.querySelector('.sidebar').style.display = 'none';
+    document.querySelector('.side-close').style.display = 'none';
+  }
+</script>
+
+<style>
+  /* force the light reference section regardless of global theme */
+  #light { background: #f2f2f7; color: #000;
+    --bg:#f2f2f7; --surface:#fff; --surface2:#f2f2f7; --accent:#007aff; --ink:#000;
+    --sep:rgba(60,60,67,0.12); --red:#ff3b30; --amber:#ff9500; --green:#34c759; --muted:rgba(60,60,67,0.5);
+  }
+</style>
+
+</body>
+</html>

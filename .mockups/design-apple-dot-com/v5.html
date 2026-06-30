@@ -1,0 +1,359 @@
+<!-- VARIANT: v5 — Bento grid with apple.com product-page card aesthetic -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC — Bento</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { -webkit-font-smoothing: antialiased; }
+
+  body {
+    font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+    background: #1d1d1f;
+    color: #f5f5f7;
+    transition: background .4s ease, color .4s ease;
+  }
+
+  /* ===== DARK (default) ===== */
+  html[data-theme="dark"] body { background: #1d1d1f; color: #f5f5f7; }
+  html[data-theme="dark"] .nav { background: rgba(29,29,31,.85); border-bottom: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .card { background: #2d2d2f; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 2px 20px rgba(0,0,0,.4); }
+  html[data-theme="dark"] .card-alt { background: #3a3a3c; }
+  html[data-theme="dark"] .section-black { background: #000000; }
+  html[data-theme="dark"] .section-soft { background: #1d1d1f; }
+  html[data-theme="dark"] .ink2 { color: #86868b; }
+  html[data-theme="dark"] .ink3 { color: #6e6e73; }
+  html[data-theme="dark"] .accent { color: #2997ff; }
+  html[data-theme="dark"] .hairline { border-color: rgba(255,255,255,.08); }
+  html[data-theme="dark"] .tab:hover { background: rgba(255,255,255,.06); }
+  html[data-theme="dark"] .tab.active { color: #f5f5f7; }
+  html[data-theme="dark"] .red-bg { background: rgba(255,69,58,.12); }
+  html[data-theme="dark"] .amber-bg { background: rgba(255,159,10,.12); }
+  html[data-theme="dark"] .green-bg { background: rgba(48,209,88,.10); }
+  html[data-theme="dark"] .red { color: #ff453a; } html[data-theme="dark"] .dot-red { background: #ff453a; }
+  html[data-theme="dark"] .amber { color: #ff9f0a; } html[data-theme="dark"] .dot-amber { background: #ff9f0a; }
+  html[data-theme="dark"] .green { color: #30d158; } html[data-theme="dark"] .dot-green { background: #30d158; }
+  html[data-theme="dark"] .spark-line { stroke: #2997ff; }
+  html[data-theme="dark"] .spark-fill { fill: rgba(41,151,255,.14); }
+  html[data-theme="dark"] .btn-accent { background: #2997ff; color: #fff; }
+  html[data-theme="dark"] .toggle { background: #3a3a3c; color: #f5f5f7; border: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .state { background: #2d2d2f; border: 1px solid rgba(255,255,255,.08); }
+  html[data-theme="dark"] .state.focus { outline: 2px solid #2997ff; }
+
+  /* ===== LIGHT ===== */
+  html[data-theme="light"] body { background: #ffffff; color: #1d1d1f; }
+  html[data-theme="light"] .nav { background: rgba(255,255,255,.85); border-bottom: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .card { background: #ffffff; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+  html[data-theme="light"] .card-alt { background: #f5f5f7; }
+  html[data-theme="light"] .section-black { background: #f5f5f7; }
+  html[data-theme="light"] .section-soft { background: #ffffff; }
+  html[data-theme="light"] .ink2 { color: #6e6e73; }
+  html[data-theme="light"] .ink3 { color: #86868b; }
+  html[data-theme="light"] .accent { color: #0071e3; }
+  html[data-theme="light"] .hairline { border-color: rgba(0,0,0,.08); }
+  html[data-theme="light"] .tab:hover { background: rgba(0,0,0,.04); }
+  html[data-theme="light"] .tab.active { color: #1d1d1f; }
+  html[data-theme="light"] .red-bg { background: rgba(255,59,48,.08); }
+  html[data-theme="light"] .amber-bg { background: rgba(255,149,0,.08); }
+  html[data-theme="light"] .green-bg { background: rgba(40,205,65,.08); }
+  html[data-theme="light"] .red { color: #ff3b30; } html[data-theme="light"] .dot-red { background: #ff3b30; }
+  html[data-theme="light"] .amber { color: #ff9500; } html[data-theme="light"] .dot-amber { background: #ff9500; }
+  html[data-theme="light"] .green { color: #28cd41; } html[data-theme="light"] .dot-green { background: #28cd41; }
+  html[data-theme="light"] .spark-line { stroke: #0071e3; }
+  html[data-theme="light"] .spark-fill { fill: rgba(0,113,227,.10); }
+  html[data-theme="light"] .btn-accent { background: #0071e3; color: #fff; }
+  html[data-theme="light"] .toggle { background: #f5f5f7; color: #1d1d1f; border: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .state { background: #ffffff; border: 1px solid rgba(0,0,0,.08); }
+  html[data-theme="light"] .state.focus { outline: 2px solid #0071e3; }
+
+  /* ===== Nav ===== */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    transition: background .4s ease, border-color .4s ease;
+  }
+  .nav-top {
+    display: flex; align-items: center; gap: 24px;
+    padding: 0 32px; height: 48px;
+  }
+  .brand {
+    font-size: 17px; font-weight: 600; letter-spacing: -.3px;
+    color: inherit; text-decoration: none; cursor: pointer; white-space: nowrap;
+  }
+  .brand .org { font-weight: 400; }
+  .brand .org::before { content: "  "; }
+  .nav-status { display: flex; align-items: center; gap: 16px; margin-left: auto; }
+  .status-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .toggle {
+    font-size: 12px; font-weight: 500; padding: 6px 12px; border-radius: 12px;
+    cursor: pointer; transition: all .2s ease;
+  }
+  .nav-tabs {
+    display: flex; align-items: center; gap: 2px;
+    padding: 0 24px 0; height: 40px; overflow-x: auto;
+  }
+  .tab {
+    font-size: 13px; font-weight: 400; color: inherit; text-decoration: none;
+    padding: 6px 12px; border-radius: 8px; white-space: nowrap;
+    transition: background .2s ease; cursor: pointer;
+  }
+  html[data-theme="dark"] .tab { color: #86868b; }
+  html[data-theme="light"] .tab { color: #6e6e73; }
+  .tab.active { font-weight: 500; }
+
+  /* ===== Layout ===== */
+  main { padding-top: 88px; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+  .section-pad { padding: 48px 0; }
+  .section-label { font-size: 21px; font-weight: 600; letter-spacing: -.4px; margin-bottom: 8px; }
+  .section-sub { font-size: 15px; margin-bottom: 24px; }
+
+  /* ===== Bento Grid ===== */
+  .bento {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+  }
+  .card { border-radius: 18px; padding: 24px; transition: background .4s ease, border-color .4s ease, transform .2s ease; }
+  .card.hero { display: flex; flex-direction: column; justify-content: space-between; min-height: 320px; }
+  .stack { display: grid; grid-template-rows: 1fr 1fr; gap: 16px; }
+
+  .kpi-label { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .kpi-hero { font-size: 80px; font-weight: 700; letter-spacing: -3px; line-height: 1; }
+  .kpi-num { font-size: 40px; font-weight: 700; letter-spacing: -1px; line-height: 1; }
+  .kpi-unit { font-size: 15px; font-weight: 400; margin-top: 6px; }
+
+  .hero-foot { display: flex; gap: 32px; align-items: flex-end; }
+  .hero-stat .n { font-size: 28px; font-weight: 700; letter-spacing: -1px; }
+  .hero-stat .l { font-size: 12px; margin-top: 2px; }
+
+  /* ANNOTATION: Sparkline uses the section's single accent and lives inside the hero card so the headline stat reads as one "product hero" unit, mirroring apple.com product pages. -->
+  .spark { width: 100%; height: 60px; margin-top: 24px; }
+  .spark-line { fill: none; stroke-width: 2; }
+
+  .mini-row { display: flex; align-items: baseline; gap: 8px; }
+  .util-bar { height: 6px; border-radius: 6px; margin-top: 16px; overflow: hidden; }
+  html[data-theme="dark"] .util-bar { background: rgba(255,255,255,.08); }
+  html[data-theme="light"] .util-bar { background: rgba(0,0,0,.06); }
+  .util-fill { height: 100%; border-radius: 6px; }
+
+  /* ===== Table ===== */
+  .tbl { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .tbl th { text-align: left; font-size: 12px; font-weight: 500; padding: 8px 12px; }
+  html[data-theme="dark"] .tbl th { color: #86868b; }
+  html[data-theme="light"] .tbl th { color: #6e6e73; }
+  .tbl td { font-size: 14px; padding: 12px; border-top: 1px solid; }
+  .tbl tbody tr td { border-color: inherit; }
+  .mono { font-family: "SF Mono", "Menlo", ui-monospace, monospace; font-size: 13px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; }
+
+  /* ===== States strip ===== */
+  .states { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  .state {
+    border-radius: 18px; padding: 24px; min-height: 120px;
+    display: flex; flex-direction: column; gap: 8px;
+    transition: all .2s ease;
+  }
+  .state .st-title { font-size: 13px; font-weight: 600; }
+  .state .st-body { font-size: 13px; }
+  html[data-theme="dark"] .state.hover { transform: translateY(-4px); box-shadow: 0 8px 28px rgba(0,0,0,.5); border-color: rgba(255,255,255,.16); }
+  html[data-theme="light"] .state.hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+  .state.empty { align-items: center; justify-content: center; text-align: center; }
+  html[data-theme="dark"] .state.empty { border: 1px dashed rgba(255,255,255,.16); }
+  html[data-theme="light"] .state.empty { border: 1px dashed rgba(0,0,0,.16); }
+  .state.error.red-bg { border-color: transparent; }
+  .skeleton { border-radius: 8px; height: 12px; }
+  html[data-theme="dark"] .skeleton { background: linear-gradient(90deg, #3a3a3c 25%, #4a4a4c 50%, #3a3a3c 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+  html[data-theme="light"] .skeleton { background: linear-gradient(90deg, #ececef 25%, #f5f5f7 50%, #ececef 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .skeleton.w70 { width: 70%; } .skeleton.w40 { width: 40%; }
+
+  .btn-accent { font-size: 13px; font-weight: 500; padding: 8px 16px; border-radius: 12px; border: none; cursor: pointer; transition: opacity .2s ease; }
+  .btn-accent:hover { opacity: .85; }
+
+  @media (max-width: 880px) {
+    .bento { grid-template-columns: 1fr; }
+    .states { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Frosted Nav ===== -->
+<nav class="nav">
+  <div class="nav-top">
+    <a class="brand" onclick="location.href='#'">Infoblox NOC<span class="org ink2">Cisco · infoblox.com</span></a>
+    <div class="nav-status">
+      <span class="status-chip red"><span class="dot dot-red"></span>13 CRIT</span>
+      <span class="status-chip amber"><span class="dot dot-amber"></span>3 FIRING</span>
+      <span class="status-chip green"><span class="dot dot-green"></span>142 ONLINE</span>
+      <button class="toggle" onclick="toggleTheme()" id="tgl">☀ Light</button>
+    </div>
+  </div>
+  <div class="nav-tabs">
+    <a class="tab active">Overview</a>
+    <a class="tab">Topology Map</a>
+    <a class="tab">IPAM</a>
+    <a class="tab">DNS</a>
+    <a class="tab">Hosts</a>
+    <a class="tab">Security</a>
+    <a class="tab">Alerts</a>
+    <a class="tab">Audit Logs</a>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ===== DARK / soft section: Bento grid ===== -->
+  <section class="section-soft section-pad">
+    <div class="wrap">
+      <div class="section-label">Overview</div>
+      <div class="section-sub ink2">Network address management across 52 subnets — live.</div>
+
+      <!-- ANNOTATION: Asymmetric 2fr/1fr bento — the headline stat earns the large left card; secondary KPIs stack at one-third width, an apple.com product-page rhythm. -->
+      <div class="bento">
+
+        <!-- Hero card -->
+        <div class="card hero">
+          <div>
+            <div class="kpi-label ink2">Total Subnets</div>
+            <div class="kpi-hero">52</div>
+            <div class="kpi-unit ink3">20 critical · 15 warning · 17 healthy</div>
+          </div>
+
+          <svg class="spark" viewBox="0 0 600 60" preserveAspectRatio="none">
+            <polygon class="spark-fill" points="0,48 40,42 80,46 120,30 160,36 200,22 240,28 280,16 320,24 360,12 400,18 440,10 480,20 520,8 560,14 600,6 600,60 0,60"/>
+            <polyline class="spark-line" points="0,48 40,42 80,46 120,30 160,36 200,22 240,28 280,16 320,24 360,12 400,18 440,10 480,20 520,8 560,14 600,6"/>
+          </svg>
+
+          <div class="hero-foot">
+            <div class="hero-stat"><div class="n green">142</div><div class="l ink2">Hosts online</div></div>
+            <div class="hero-stat"><div class="n red">3</div><div class="l ink2">Hosts offline</div></div>
+            <div class="hero-stat"><div class="n amber">87%</div><div class="l ink2">Peak DHCP pool</div></div>
+          </div>
+        </div>
+
+        <!-- Stacked right column -->
+        <div class="stack">
+          <div class="card">
+            <div class="kpi-label ink2">Critical Alerts</div>
+            <div class="mini-row"><span class="kpi-num red">13</span><span class="ink3">+2 last hr</span></div>
+            <div class="kpi-unit ink3">Across DNS &amp; DHCP scopes</div>
+            <div style="margin-top:auto"></div>
+          </div>
+          <div class="card">
+            <div class="kpi-label ink2">DHCP Utilization</div>
+            <div class="mini-row"><span class="kpi-num amber">87</span><span class="ink2 kpi-unit">% peak pool</span></div>
+            <div class="util-bar"><div class="util-fill amber-bg" style="width:87%; background:#ff9f0a"></div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== DARK / black section: subnet table ===== -->
+  <section class="section-black section-pad">
+    <div class="wrap">
+      <div class="section-label">Critical Subnets</div>
+      <div class="section-sub ink2">20 of 52 subnets need attention.</div>
+
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Subnet</th><th>Name</th><th>Utilization</th><th>Hosts</th><th>Status</th></tr></thead>
+          <tbody class="hairline">
+            <tr><td class="mono">10.12.0.0/22</td><td>Core-DC-East</td><td class="mono">94%</td><td class="mono">1018</td><td><span class="badge red"><span class="dot dot-red"></span>Critical</span></td></tr>
+            <tr><td class="mono">10.20.4.0/24</td><td>VoIP-Floor3</td><td class="mono">91%</td><td class="mono">231</td><td><span class="badge red"><span class="dot dot-red"></span>Critical</span></td></tr>
+            <tr><td class="mono">172.16.8.0/23</td><td>Wireless-Guest</td><td class="mono">88%</td><td class="mono">476</td><td><span class="badge amber"><span class="dot dot-amber"></span>Warning</span></td></tr>
+            <tr><td class="mono">10.40.0.0/24</td><td>Lab-Automation</td><td class="mono">62%</td><td class="mono">158</td><td><span class="badge green"><span class="dot dot-green"></span>Healthy</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== LIGHT section preview ===== -->
+  <section class="section-soft section-pad" data-force="light">
+    <!-- ANNOTATION: This block carries class hooks identical to dark; the html[data-theme] toggle re-skins everything, so light/dark parity is proven by one DOM, not two. -->
+    <div class="wrap">
+      <div class="section-label">Light Theme Parity</div>
+      <div class="section-sub ink2">Same bento, light tokens. Toggle the nav button to switch the whole page.</div>
+
+      <div class="bento">
+        <div class="card hero">
+          <div>
+            <div class="kpi-label ink2">Firing Rules</div>
+            <div class="kpi-hero amber">3</div>
+            <div class="kpi-unit ink3">DNS latency · pool exhaustion · zone drift</div>
+          </div>
+          <div class="hero-foot">
+            <div class="hero-stat"><div class="n">52</div><div class="l ink2">Subnets</div></div>
+            <div class="hero-stat"><div class="n red">13</div><div class="l ink2">Critical</div></div>
+            <button class="btn-accent" style="margin-left:auto">View all alerts</button>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="card card-alt">
+            <div class="kpi-label ink2">Online Hosts</div>
+            <div class="kpi-num green">142</div>
+            <div class="kpi-unit ink3">3 offline · 99.8% reachable</div>
+          </div>
+          <div class="card card-alt">
+            <div class="kpi-label ink2">Subnet Health</div>
+            <div class="kpi-num">17/52</div>
+            <div class="util-bar"><div class="util-fill green-bg" style="width:33%; background:#30d158"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== States strip ===== -->
+  <section class="section-black section-pad">
+    <div class="wrap">
+      <div class="section-label">Component States</div>
+      <div class="section-sub ink2">hover · focus · empty · error · loading</div>
+
+      <div class="states">
+        <div class="state hover">
+          <div class="st-title accent">Hover</div>
+          <div class="st-body ink2">Card lifts 4px with a soft shadow. No accent fill — motion is the affordance.</div>
+        </div>
+        <div class="state focus" tabindex="0">
+          <div class="st-title accent">Focus</div>
+          <div class="st-body ink2">2px accent ring on keyboard focus for DHCP scope row.</div>
+        </div>
+        <div class="state empty">
+          <div class="st-title ink2">Empty</div>
+          <div class="st-body ink3">No firing rules in this zone.</div>
+        </div>
+        <div class="state error red-bg">
+          <div class="st-title red"><span class="dot dot-red"></span> Error</div>
+          <div class="st-body red">Failed to reach 10.12.0.0/22 — retry in 12s.</div>
+        </div>
+        <div class="state">
+          <div class="st-title ink2">Loading</div>
+          <div class="skeleton w70"></div>
+          <div class="skeleton w40"></div>
+          <div class="skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  function toggleTheme() {
+    var html = document.documentElement;
+    var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    document.getElementById('tgl').textContent = next === 'dark' ? '☀ Light' : '☾ Dark';
+  }
+</script>
+</body>
+</html>

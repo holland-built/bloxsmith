@@ -1,0 +1,1191 @@
+<!-- VARIANT: v7 — Apple Terminal / Developer Tools -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infoblox NOC — v7 Terminal</title>
+<style>
+
+/* =========================================
+   DESIGN TOKENS — APPLE HIG
+========================================= */
+
+[data-theme="dark"] {
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --surface-3: #3a3a3c;
+  --border: rgba(255,255,255,0.15);
+  --separator: rgba(255,255,255,0.08);
+  --accent: #0a84ff;
+  --accent-tint: rgba(10,132,255,0.12);
+  --ink: #ffffff;
+  --ink-dim: rgba(255,255,255,0.55);
+  --muted: rgba(235,235,245,0.60);
+  --muted-2: rgba(235,235,245,0.30);
+  --red: #ff453a;
+  --amber: #ff9f0a;
+  --green: #32d74b;
+  --teal-apple: #5ac8fa;
+  --indigo: #5e5ce6;
+  --red-bg: rgba(255,69,58,0.12);
+  --amber-bg: rgba(255,159,10,0.12);
+  --green-bg: rgba(50,215,75,0.10);
+  --shadow: 0 4px 16px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Monaco", ui-monospace, monospace;
+}
+
+[data-theme="light"] {
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #f2f2f7;
+  --surface-3: #e5e5ea;
+  --border: rgba(60,60,67,0.20);
+  --separator: rgba(60,60,67,0.12);
+  --accent: #007aff;
+  --accent-tint: rgba(0,122,255,0.10);
+  --ink: #000000;
+  --ink-dim: rgba(0,0,0,0.55);
+  --muted: rgba(60,60,67,0.60);
+  --muted-2: rgba(60,60,67,0.30);
+  --red: #ff3b30;
+  --amber: #ff9500;
+  --green: #34c759;
+  --teal-apple: #32ade6;
+  --indigo: #5856d6;
+  --red-bg: rgba(255,59,48,0.08);
+  --amber-bg: rgba(255,149,0,0.08);
+  --green-bg: rgba(52,199,89,0.08);
+  --shadow: 0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Monaco", ui-monospace, monospace;
+}
+
+/* =========================================
+   RESET
+========================================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: #000;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* =========================================
+   SECTION WRAPPER — each is 100vh isolated
+========================================= */
+.noc-section {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  overflow: hidden;
+}
+
+/* =========================================
+   TOPBAR — 48px fixed
+========================================= */
+.topbar {
+  height: 48px;
+  min-height: 48px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 16px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.topbar-logo {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.10em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.logo-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--green);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.topbar-nav {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-item {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-dim);
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.12s, color 0.12s;
+}
+
+.nav-item:hover { color: var(--ink); background: var(--surface-2); }
+
+.nav-item.active {
+  color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.topbar-chips {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.chip-crit {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid rgba(255,69,58,0.22);
+}
+
+[data-theme="light"] .chip-crit {
+  border-color: rgba(255,59,48,0.18);
+}
+
+.chip-firing {
+  background: var(--amber-bg);
+  color: var(--amber);
+  border: 1px solid rgba(255,159,10,0.22);
+}
+
+[data-theme="light"] .chip-firing {
+  border-color: rgba(255,149,0,0.18);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--amber);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.75); }
+}
+
+.topbar-status {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.s-up   { color: var(--green); }
+.s-down { color: var(--red); }
+.s-warn { color: var(--amber); }
+
+.topbar-time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 56px;
+  text-align: right;
+}
+
+/* =========================================
+   MAIN CONTENT — split pane
+========================================= */
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* =========================================
+   LEFT PANE — terminal log (40%)
+========================================= */
+.terminal-pane {
+  width: 40%;
+  flex-shrink: 0;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pane-header {
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--separator);
+  flex-shrink: 0;
+}
+
+.pane-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--surface-3);
+}
+
+.log-stream {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  min-height: 0;
+}
+
+.log-stream::-webkit-scrollbar { width: 4px; }
+.log-stream::-webkit-scrollbar-track { background: transparent; }
+.log-stream::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 4px; }
+
+.log-entry {
+  display: grid;
+  grid-template-columns: 72px 40px 56px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.log-entry:last-child { border-bottom: none; }
+
+.le-time   { color: var(--teal-apple); white-space: nowrap; }
+.le-level  { font-weight: 600; white-space: nowrap; }
+.le-source { color: var(--indigo); white-space: nowrap; }
+.le-msg    { color: var(--ink); word-break: break-word; }
+
+.lv-crit { color: var(--red); }
+.lv-warn { color: var(--amber); }
+.lv-info { color: var(--muted); }
+.lv-ok   { color: var(--green); }
+
+.le-msg .ip    { color: var(--teal-apple); }
+.le-msg .host  { color: var(--muted); }
+.le-msg .vok   { color: var(--green); }
+.le-msg .vwarn { color: var(--amber); }
+.le-msg .vcrit { color: var(--red); }
+
+.cursor {
+  display: inline-block;
+  width: 8px;
+  height: 16px;
+  background: var(--green);
+  vertical-align: text-bottom;
+  margin-left: 4px;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* =========================================
+   RIGHT PANE — bento grid (60%)
+========================================= */
+.bento-pane {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--bg);
+  min-width: 0;
+}
+
+.bento-pane::-webkit-scrollbar { width: 4px; }
+.bento-pane::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 4px; }
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* =========================================
+   CARD BASE
+========================================= */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  overflow: hidden;
+}
+
+.card.span-2 { grid-column: span 2; }
+
+.card-hdr {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--surface-3);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hdr-badge {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  letter-spacing: 0.04em;
+}
+
+.badge-crit { background: var(--red-bg); color: var(--red); }
+.badge-warn { background: var(--amber-bg); color: var(--amber); }
+.badge-ok   { background: var(--green-bg); color: var(--green); }
+
+/* =========================================
+   CARD: DHCP POOLS
+========================================= */
+.dhcp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.dhcp-table th {
+  color: var(--muted-2);
+  text-align: left;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  padding-bottom: 8px;
+}
+
+.dhcp-table th:not(:first-child) { padding-left: 12px; }
+
+.dhcp-table td {
+  padding: 4px 0;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.dhcp-table td:not(:first-child) { padding-left: 12px; }
+
+.dhcp-table tr { border-bottom: 1px solid var(--separator); }
+.dhcp-table tr:last-child { border-bottom: none; }
+
+.dhcp-table tbody tr:hover td { background: var(--surface-2); }
+
+.td-subnet { color: var(--teal-apple); }
+.td-crit   { color: var(--red); font-weight: 600; }
+.td-warn   { color: var(--amber); font-weight: 600; }
+.td-ok     { color: var(--green); }
+.td-dim    { color: var(--ink-dim); }
+
+.dhcp-bar { letter-spacing: 0.04em; }
+.bf-crit  { color: var(--red); }
+.bf-warn  { color: var(--amber); }
+.bf-ok    { color: var(--green); }
+.be       { color: var(--muted-2); }
+
+.s-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.s-crit { background: var(--red-bg);   color: var(--red); }
+.s-warn { background: var(--amber-bg); color: var(--amber); }
+.s-ok   { background: var(--green-bg); color: var(--green); }
+
+/* =========================================
+   CARD: HOST STATUS
+========================================= */
+.host-counters {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.host-counter { flex: 1; text-align: center; }
+
+.hc-num {
+  font-family: var(--font-mono);
+  font-size: 32px;
+  font-weight: 300;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.hc-lbl {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.c-online   { color: var(--green); }
+.c-degraded { color: var(--amber); }
+.c-offline  { color: var(--red); }
+
+.host-divider {
+  border: none;
+  border-top: 1px solid var(--separator);
+  margin: 12px 0;
+}
+
+.changes-lbl {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted-2);
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.change-row {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--separator);
+  align-items: baseline;
+}
+
+.change-row:last-child { border-bottom: none; }
+.cr-time   { color: var(--teal-apple); }
+.cr-ip     { color: var(--accent); }
+.cr-warn   { color: var(--amber); }
+.cr-crit   { color: var(--red); }
+.cr-ok     { color: var(--green); }
+
+/* =========================================
+   CARD: IPAM SUBNETS
+========================================= */
+.ipam-row {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto auto 32px;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--separator);
+  align-items: center;
+}
+
+.ipam-row:last-child { border-bottom: none; }
+.ir-subnet  { color: var(--teal-apple); }
+.ir-hosts   { color: var(--ink-dim); white-space: nowrap; }
+.ir-bar     { letter-spacing: 0.04em; }
+.ir-util    { font-weight: 600; text-align: right; }
+.ir-crit    { color: var(--red); }
+.ir-warn    { color: var(--amber); }
+.ir-ok      { color: var(--green); }
+
+/* =========================================
+   CARD: DNS ZONES
+========================================= */
+.dns-row {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  display: grid;
+  grid-template-columns: 1fr 64px auto 8px;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--separator);
+  align-items: center;
+}
+
+.dns-row:last-child { border-bottom: none; }
+.dr-zone  { color: var(--ink); }
+.dr-type  { color: var(--indigo); }
+.dr-recs  { color: var(--ink-dim); text-align: right; }
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.dot-green { background: var(--green); }
+.dot-amber { background: var(--amber); }
+.dot-red   { background: var(--red); }
+.dot-muted { background: var(--muted-2); }
+
+/* =========================================
+   CARD: ACTIVE THREATS
+========================================= */
+.threat-row {
+  display: grid;
+  grid-template-columns: 8px auto 1fr auto 64px;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--separator);
+  align-items: center;
+}
+
+.threat-row:last-child { border-bottom: none; }
+
+.t-sev {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  white-space: nowrap;
+}
+
+.ts-crit { background: var(--red-bg);   color: var(--red); }
+.ts-high { background: var(--amber-bg); color: var(--amber); }
+.ts-med  { color: var(--teal-apple); padding: 4px 8px; }
+.ts-low  { color: var(--muted);      padding: 4px 8px; }
+
+.t-name { font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
+.t-src  { font-family: var(--font-mono); font-size: 12px; color: var(--teal-apple); text-align: right; }
+.t-time { font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: right; white-space: nowrap; }
+
+/* =========================================
+   CARD: AUDIT EVENTS
+========================================= */
+.audit-row {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  display: grid;
+  grid-template-columns: 64px 80px auto 1fr auto;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--separator);
+  align-items: baseline;
+  color: var(--ink-dim);
+}
+
+.audit-row:last-child { border-bottom: none; }
+.ar-time   { color: var(--teal-apple); }
+.ar-user   { color: var(--accent); }
+.ar-action { color: var(--ink); font-weight: 600; }
+.ar-target { color: var(--indigo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ar-result {
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ar-success { background: var(--green-bg); color: var(--green); }
+.ar-change  { background: var(--amber-bg); color: var(--amber); }
+
+/* =========================================
+   THEME NAV
+========================================= */
+.theme-nav {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.theme-btn {
+  font-family: "SF Mono", "Menlo", "Monaco", ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(28,28,30,0.92);
+  color: rgba(255,255,255,0.78);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.12s, color 0.12s;
+}
+
+.theme-btn:hover {
+  background: rgba(58,58,60,0.96);
+  color: #fff;
+}
+
+.theme-btn.light-btn {
+  background: rgba(255,255,255,0.92);
+  border-color: rgba(0,0,0,0.14);
+  color: rgba(0,0,0,0.78);
+}
+
+.theme-btn.light-btn:hover {
+  background: rgba(240,240,245,0.96);
+  color: #000;
+}
+
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     DARK MODE
+═══════════════════════════════════════════════ -->
+<div class="noc-section" id="dark-view" data-theme="dark">
+
+  <header class="topbar">
+    <div class="topbar-logo">
+      <span class="logo-dot"></span>
+      INFOBLOX
+    </div>
+
+    <nav class="topbar-nav">
+      <span class="nav-item active">OVERVIEW</span>
+      <span class="nav-item">IPAM</span>
+      <span class="nav-item">TOPOLOGY</span>
+      <span class="nav-item">DNS</span>
+      <span class="nav-item">HOSTS</span>
+      <span class="nav-item">ALERTS</span>
+      <span class="nav-item">AUDIT</span>
+    </nav>
+
+    <div class="topbar-chips">
+      <span class="chip chip-crit">2 CRIT</span>
+      <span class="chip chip-firing"><span class="pulse-dot"></span>5 FIRING</span>
+    </div>
+
+    <div class="topbar-status">
+      <span class="s-up">↑847 hosts</span>
+      <span class="s-down">↓3 offline</span>
+      <span class="s-warn">⚠ 2 alerts</span>
+    </div>
+
+    <div class="topbar-time" id="dark-time">06:42:18</div>
+  </header>
+
+  <main class="main-content">
+
+    <!-- LEFT: TERMINAL LOG -->
+    <aside class="terminal-pane">
+      <div class="pane-header">
+        <div class="pane-title">SYSTEM LOG — LIVE</div>
+      </div>
+      <div class="log-stream" id="dark-log">
+
+        <div class="log-entry">
+          <span class="le-time">[06:42:18]</span>
+          <span class="le-level lv-crit">CRIT</span>
+          <span class="le-source">dhcp</span>
+          <span class="le-msg">pool <span class="ip">10.1.0.0/24</span> utilization <span class="vcrit">94.2%</span> leases=238/252</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:42:15]</span>
+          <span class="le-level lv-warn">WARN</span>
+          <span class="le-source">dns</span>
+          <span class="le-msg">query spike <span class="ip">ns1.corp.local</span> <span class="vwarn">12847 qps</span> baseline=10k</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:42:12]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">host</span>
+          <span class="le-msg"><span class="ip">10.1.45.23</span> <span class="host">sw-core-01.corp.local</span> ONLINE</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:42:09]</span>
+          <span class="le-level lv-crit">CRIT</span>
+          <span class="le-source">threat</span>
+          <span class="le-msg">DNS tunnel C2 src=<span class="ip">10.1.88.45</span> action=<span class="vok">RPZ_BLOCK</span></span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:42:06]</span>
+          <span class="le-level lv-warn">WARN</span>
+          <span class="le-source">dhcp</span>
+          <span class="le-msg">pool <span class="ip">10.2.0.0/23</span> utilization <span class="vwarn">87.1%</span> leases=446/512</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:42:03]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">audit</span>
+          <span class="le-msg"><span class="host">admin@corp.local</span> LOGIN <span class="vok">SUCCESS</span> src=<span class="ip">10.1.1.100</span></span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:58]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">host</span>
+          <span class="le-msg"><span class="ip">10.2.18.99</span> <span class="host">fw-edge-02.corp.local</span> ONLINE</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:54]</span>
+          <span class="le-level lv-warn">WARN</span>
+          <span class="le-source">ipam</span>
+          <span class="le-msg">subnet <span class="ip">172.16.0.0/20</span> allocated <span class="vwarn">80%</span> of 4096 addrs</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:51]</span>
+          <span class="le-level lv-crit">CRIT</span>
+          <span class="le-source">threat</span>
+          <span class="le-msg">malware C2 beacon src=<span class="ip">10.1.44.23</span> dst=<span class="vcrit">185.220.101.47</span></span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:47]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">dns</span>
+          <span class="le-msg">zone <span class="host">corp.local</span> SOA refresh <span class="vok">OK</span> serial=2024062801</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:44]</span>
+          <span class="le-level lv-warn">WARN</span>
+          <span class="le-source">host</span>
+          <span class="le-msg"><span class="ip">10.1.0.15</span> <span class="host">ap-lobby-01</span> ONLINE→<span class="vwarn">DEGRADED</span></span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:40]</span>
+          <span class="le-level lv-warn">WARN</span>
+          <span class="le-source">dhcp</span>
+          <span class="le-msg">lease churn <span class="ip">10.1.0.0/24</span> rate=<span class="vwarn">+340/hr</span> abnormal</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:37]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">audit</span>
+          <span class="le-msg"><span class="host">svc-mgmt</span> CONFIG_CHANGE dns_view=<span class="vok">internal</span></span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:33]</span>
+          <span class="le-level lv-crit">CRIT</span>
+          <span class="le-source">host</span>
+          <span class="le-msg"><span class="ip">10.3.44.21</span> <span class="host">printer-finance</span> ONLINE→<span class="vcrit">OFFLINE</span></span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:29]</span>
+          <span class="le-level lv-warn">WARN</span>
+          <span class="le-source">ipam</span>
+          <span class="le-msg">container <span class="ip">10.0.0.0/8</span> fragmentation high frag_score=0.74</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:25]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">dns</span>
+          <span class="le-msg">RPZ block applied src=<span class="ip">10.1.88.45</span> rule=<span class="vok">C2_BLACKLIST</span></span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:21]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">host</span>
+          <span class="le-msg"><span class="ip">10.1.92.6</span> <span class="host">laptop-dev-07</span> NEW ONLINE</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:18]</span>
+          <span class="le-level lv-crit">CRIT</span>
+          <span class="le-source">dhcp</span>
+          <span class="le-msg">pool <span class="ip">10.1.0.0/24</span> lease_count <span class="vcrit">238/252</span> at 94.4%</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:14]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">audit</span>
+          <span class="le-msg"><span class="host">jsmith</span> EXPORT ipam_data 847 records <span class="vok">SUCCESS</span></span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:09]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">host</span>
+          <span class="le-msg"><span class="ip">10.4.22.18</span> <span class="host">srv-backup-02</span> ONLINE</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:06]</span>
+          <span class="le-level lv-warn">WARN</span>
+          <span class="le-source">threat</span>
+          <span class="le-msg">fast flux DNS zone=<span class="host">dmz.corp.local</span> ttl=<span class="vwarn">30s</span></span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:41:02]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">dns</span>
+          <span class="le-msg">zone <span class="host">168.192.in-addr.arpa</span> SOA refresh <span class="vok">OK</span></span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:40:58]</span>
+          <span class="le-level lv-warn">WARN</span>
+          <span class="le-source">ipam</span>
+          <span class="le-msg">container <span class="ip">10.100.0.0/16</span> utilization <span class="vwarn">94%</span> review needed</span>
+        </div>
+
+        <div class="log-entry">
+          <span class="le-time">[06:40:55]</span>
+          <span class="le-level lv-info">INFO</span>
+          <span class="le-source">audit</span>
+          <span class="le-msg"><span class="host">jsmith</span> EXPORT ipam_data <span class="vok">SUCCESS</span> size=128KB<span class="cursor"></span></span>
+        </div>
+
+      </div><!-- .log-stream -->
+    </aside>
+
+    <!-- RIGHT: BENTO GRID -->
+    <section class="bento-pane">
+      <div class="bento-grid">
+
+        <!-- DHCP POOLS — full width -->
+        <div class="card span-2">
+          <div class="card-hdr">
+            DHCP POOLS
+            <span class="hdr-badge badge-crit">2 CRITICAL</span>
+          </div>
+          <table class="dhcp-table">
+            <thead>
+              <tr>
+                <th>SUBNET</th>
+                <th>UTIL</th>
+                <th>USAGE</th>
+                <th>STATUS</th>
+                <th>LEASES</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="td-subnet">10.1.0.0/24</td>
+                <td class="td-crit">94%</td>
+                <td class="dhcp-bar"><span class="bf-crit">████████</span><span class="be">░░</span></td>
+                <td><span class="s-badge s-crit">CRIT</span></td>
+                <td class="td-dim">238/252</td>
+              </tr>
+              <tr>
+                <td class="td-subnet">10.2.0.0/23</td>
+                <td class="td-warn">87%</td>
+                <td class="dhcp-bar"><span class="bf-warn">████████</span><span class="be">░░</span></td>
+                <td><span class="s-badge s-warn">WARN</span></td>
+                <td class="td-dim">446/512</td>
+              </tr>
+              <tr>
+                <td class="td-subnet">192.168.1.0/24</td>
+                <td class="td-ok">45%</td>
+                <td class="dhcp-bar"><span class="bf-ok">████</span><span class="be">░░░░░░</span></td>
+                <td><span class="s-badge s-ok">OK</span></td>
+                <td class="td-dim">115/254</td>
+              </tr>
+              <tr>
+                <td class="td-subnet">10.10.0.0/24</td>
+                <td class="td-ok">62%</td>
+                <td class="dhcp-bar"><span class="bf-ok">██████</span><span class="be">░░░░</span></td>
+                <td><span class="s-badge s-ok">OK</span></td>
+                <td class="td-dim">158/254</td>
+              </tr>
+              <tr>
+                <td class="td-subnet">172.16.1.0/24</td>
+                <td class="td-ok">31%</td>
+                <td class="dhcp-bar"><span class="bf-ok">███</span><span class="be">░░░░░░░</span></td>
+                <td><span class="s-badge s-ok">OK</span></td>
+                <td class="td-dim">79/254</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- HOST STATUS -->
+        <div class="card">
+          <div class="card-hdr">HOST STATUS</div>
+          <div class="host-counters">
+            <div class="host-counter">
+              <div class="hc-num c-online">847</div>
+              <div class="hc-lbl">● ONLINE</div>
+            </div>
+            <div class="host-counter">
+              <div class="hc-num c-degraded">12</div>
+              <div class="hc-lbl">● DEGRADED</div>
+            </div>
+            <div class="host-counter">
+              <div class="hc-num c-offline">3</div>
+              <div class="hc-lbl">● OFFLINE</div>
+            </div>
+          </div>
+          <hr class="host-divider">
+          <div class="changes-lbl">RECENT CHANGES</div>
+          <div class="change-row">
+            <span class="cr-time">[06:41:44]</span>
+            <span class="cr-ip">10.1.0.15</span>
+            <span class="cr-warn">ONLINE→DEGRADED</span>
+          </div>
+          <div class="change-row">
+            <span class="cr-time">[06:41:33]</span>
+            <span class="cr-ip">10.3.44.21</span>
+            <span class="cr-crit">ONLINE→OFFLINE</span>
+          </div>
+          <div class="change-row">
+            <span class="cr-time">[06:41:21]</span>
+            <span class="cr-ip">10.1.92.6</span>
+            <span class="cr-ok">NEW ONLINE</span>
+          </div>
+        </div>
+
+        <!-- IPAM SUBNETS -->
+        <div class="card">
+          <div class="card-hdr">
+            IPAM SUBNETS
+            <span class="hdr-badge badge-warn">1 WARN</span>
+          </div>
+          <div class="ipam-row">
+            <span class="ir-subnet">10.0.0.0/8</span>
+            <span class="ir-hosts">12847 hosts</span>
+            <span class="ir-bar"><span class="bf-warn">████████</span><span class="be">░░</span></span>
+            <span class="ir-util ir-warn">83%</span>
+          </div>
+          <div class="ipam-row">
+            <span class="ir-subnet">172.16.0.0/12</span>
+            <span class="ir-hosts">4821 hosts</span>
+            <span class="ir-bar"><span class="bf-ok">███████</span><span class="be">░░░</span></span>
+            <span class="ir-util ir-ok">67%</span>
+          </div>
+          <div class="ipam-row">
+            <span class="ir-subnet">192.168.0.0/16</span>
+            <span class="ir-hosts">1293 hosts</span>
+            <span class="ir-bar"><span class="bf-ok">████</span><span class="be">░░░░░░</span></span>
+            <span class="ir-util ir-ok">45%</span>
+          </div>
+          <div class="ipam-row">
+            <span class="ir-subnet">10.100.0.0/16</span>
+            <span class="ir-hosts">847 hosts</span>
+            <span class="ir-bar"><span class="bf-crit">█████████</span><span class="be">░</span></span>
+            <span class="ir-util ir-crit">94%</span>
+          </div>
+        </div>
+
+        <!-- DNS ZONES -->
+        <div class="card">
+          <div class="card-hdr">
+            DNS ZONES
+            <span class="hdr-badge badge-warn">1 WARN</span>
+          </div>
+          <div class="dns-row">
+            <span class="dr-zone">corp.local</span>
+            <span class="dr-type">PRIMARY</span>
+            <span class="dr-recs">4821 recs</span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="dns-row">
+            <span class="dr-zone">dmz.corp.local</span>
+            <span class="dr-type">PRIMARY</span>
+            <span class="dr-recs">342 recs</span>
+            <span class="dot dot-amber"></span>
+          </div>
+          <div class="dns-row">
+            <span class="dr-zone">internal.corp</span>
+            <span class="dr-type">PRIMARY</span>
+            <span class="dr-recs">1293 recs</span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="dns-row">
+            <span class="dr-zone">168.192.in-addr</span>
+            <span class="dr-type">REVERSE</span>
+            <span class="dr-recs">1293 recs</span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="dns-row">
+            <span class="dr-zone">rpz.security</span>
+            <span class="dr-type">RPZ</span>
+            <span class="dr-recs">8 rules</span>
+            <span class="dot dot-green"></span>
+          </div>
+        </div>
+
+        <!-- ACTIVE THREATS -->
+        <div class="card">
+          <div class="card-hdr">
+            ACTIVE THREATS
+            <span class="hdr-badge badge-crit">4 ACTIVE</span>
+          </div>
+          <div class="threat-row">
+            <span class="dot dot-red"></span>
+            <span class="t-sev ts-crit">CRIT</span>
+            <span class="t-name">DNS Tunnel C2</span>
+            <span class="t-src">10.1.88.45</span>
+            <span class="t-time">06:42:09</span>
+          </div>
+          <div class="threat-row">
+            <span class="dot dot-amber"></span>
+            <span class="t-sev ts-high">HIGH</span>
+            <span class="t-name">Malware C2 Beacon</span>
+            <span class="t-src">10.1.44.23</span>
+            <span class="t-time">06:41:51</span>
+          </div>
+          <div class="threat-row">
+            <span class="dot dot-amber"></span>
+            <span class="t-sev ts-med">MED</span>
+            <span class="t-name">Fast Flux DNS</span>
+            <span class="t-src">10.2.18.77</span>
+            <span class="t-time">06:38:12</span>
+          </div>
+          <div class="threat-row">
+            <span class="dot dot-muted"></span>
+            <span class="t-sev ts-low">LOW</span>
+            <span class="t-name">Recon Port Scan</span>
+            <span class="t-src">10.0.0.0/22</span>
+            <span class="t-time">06:31:44</span>
+          </div>
+        </div>
+
+        <!-- AUDIT EVENTS — full width -->
+        <div class="card span-2">
+          <div class="card-hdr">AUDIT EVENTS</div>
+          <div class="audit-row">
+            <span class="ar-time">[06:42:03]</span>
+            <span class="ar-user">admin</span>
+            <span class="ar-action">LOGIN</span>
+            <span class="ar-target">src=10.1.1.100 terminal</span>
+            <span class="ar-result ar-success">SUCCESS</span>
+          </div>
+          <div class="audit-row">
+            <span class="ar-time">[06:41:37]</span>
+            <span class="ar-user">svc-mgmt</span>
+            <span class="ar-action">CONFIG_CHANGE</span>
+            <span class="ar-target">dns_view=internal via 172.16.0.1</span>
+            <span class="ar-result ar-change">MODIFIED</span>
+          </div>
+          <div class="audit-row">
+            <span class="ar-time">[06:40:55]</span>
+            <span class="ar-user">jsmith</span>
+            <span class="ar-action">EXPORT</span>
+            <span class="ar-target">ipam_data 847 records 128KB</span>
+            <span class="ar-result ar-success">SUCCESS</span>
+          </div>
+          <div class="audit-row">
+            <span class="ar-time">[06:39:22]</span>
+            <span class="ar-user">api_user</span>
+            <span class="ar-action">BULK_QUERY</span>
+            <span class="ar-target">dns_records 12k rows external</span>
+            <span class="ar-result ar-success">SUCCESS</span>
+          </div>
+          <div class="audit-row">
+            <span class="ar-time">[06:38:41]</span>
+            <span class="ar-user">admin</span>
+            <span class="ar-action">POLICY_MOD</span>
+            <span class="ar-target">rpz_rule C2_BLACKLIST +entry</span>
+            <span class="ar-result ar-change">MODIFIED</span>
+          </div>
+        </div>
+
+      </div><!-- .bento-grid -->
+    </section>
+
+  </main>
+</div><!-- #dark-view -->
+
+
+<!-- ═══════════════════════════════════════════════
+     LIGHT MODE — cloned from dark by script
+═══════════════════════════════════════════════ -->
+<div class="noc-section" id="light-view" data-theme="light"></div>
+
+
+<!-- THEME NAVIGATION -->
+<div class="theme-nav">
+  <button class="theme-btn" onclick="document.getElementById('dark-view').scrollIntoView({behavior:'smooth'})">▲ DARK</button>
+  <button class="theme-btn light-btn" onclick="document.getElementById('light-view').scrollIntoView({behavior:'smooth'})">▼ LIGHT</button>
+</div>
+
+
+<script>
+  // Clone dark section content into light section
+  (function() {
+    const dark  = document.getElementById('dark-view');
+    const light = document.getElementById('light-view');
+    light.innerHTML = dark.innerHTML;
+    // Fix cloned time element id to avoid duplicate
+    const clonedTime = light.querySelector('[id="dark-time"]');
+    if (clonedTime) clonedTime.id = 'light-time';
+    // Fix cloned log element id
+    const clonedLog = light.querySelector('[id="dark-log"]');
+    if (clonedLog) clonedLog.id = 'light-log';
+  })();
+
+  // Live clock
+  function tick() {
+    const t = new Date().toTimeString().slice(0, 8);
+    const dt = document.getElementById('dark-time');
+    const lt = document.getElementById('light-time');
+    if (dt) dt.textContent = t;
+    if (lt) lt.textContent = t;
+  }
+  setInterval(tick, 1000);
+  tick();
+
+  // Scroll log streams to bottom on load
+  window.addEventListener('load', function() {
+    document.querySelectorAll('.log-stream').forEach(function(el) {
+      el.scrollTop = el.scrollHeight;
+    });
+  });
+</script>
+
+</body>
+</html>

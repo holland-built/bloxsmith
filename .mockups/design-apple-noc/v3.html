@@ -1,0 +1,1646 @@
+<!-- VARIANT: v3 — macOS Pro App (Final Cut Pro / Instruments) -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOC Dashboard — v3 macOS Pro App</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+[data-theme="dark"] {
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --surface-3: #3a3a3c;
+  --border: rgba(255,255,255,0.15);
+  --separator: rgba(255,255,255,0.08);
+  --accent: #0a84ff;
+  --ink: #ffffff;
+  --ink-dim: rgba(255,255,255,0.55);
+  --muted: rgba(235,235,245,0.60);
+  --muted-2: rgba(235,235,245,0.30);
+  --red: #ff453a;
+  --amber: #ff9f0a;
+  --green: #32d74b;
+  --teal-apple: #5ac8fa;
+  --indigo: #5e5ce6;
+  --red-bg: rgba(255,69,58,0.12);
+  --amber-bg: rgba(255,159,10,0.12);
+  --green-bg: rgba(50,215,75,0.10);
+  --shadow: 0 4px 16px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Monaco", ui-monospace, monospace;
+}
+
+[data-theme="light"] {
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #f2f2f7;
+  --surface-3: #e5e5ea;
+  --border: rgba(60,60,67,0.20);
+  --separator: rgba(60,60,67,0.12);
+  --accent: #007aff;
+  --ink: #000000;
+  --ink-dim: rgba(0,0,0,0.55);
+  --muted: rgba(60,60,67,0.60);
+  --muted-2: rgba(60,60,67,0.30);
+  --red: #ff3b30;
+  --amber: #ff9500;
+  --green: #34c759;
+  --teal-apple: #32ade6;
+  --indigo: #5856d6;
+  --red-bg: rgba(255,59,48,0.08);
+  --amber-bg: rgba(255,149,0,0.08);
+  --green-bg: rgba(52,199,89,0.08);
+  --shadow: 0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Monaco", ui-monospace, monospace;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── TOPBAR ─────────────────────────────────────────────── */
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 48px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  z-index: 100;
+  padding: 0 16px;
+  gap: 0;
+}
+
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+
+.topbar-logo svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+
+.topbar-logo-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.topbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--separator);
+  margin: 0 12px;
+  flex-shrink: 0;
+}
+
+/* Tool groups */
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-xs);
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
+}
+
+.tool-btn:hover { background: var(--surface-2); color: var(--ink); }
+.tool-btn.active { background: var(--accent); color: #fff; }
+.tool-btn svg { width: 14px; height: 14px; }
+
+/* Nav tabs */
+.nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+
+.nav-tab {
+  padding: 0 12px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: background 0.1s, color 0.1s;
+}
+
+.nav-tab:hover { background: var(--surface-2); color: var(--ink); }
+.nav-tab.active { background: var(--surface-3); color: var(--ink); }
+
+/* Alert chips center */
+.topbar-alerts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 auto;
+}
+
+.alert-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  height: 20px;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.alert-chip.crit { background: var(--red-bg); color: var(--red); }
+.alert-chip.warn { background: var(--amber-bg); color: var(--amber); }
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: pulse-ring 1.6s ease-in-out infinite;
+}
+
+.pulse-dot.warn { background: var(--amber); }
+
+@keyframes pulse-ring {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+/* Topbar right controls */
+.topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.theme-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.theme-toggle:hover { background: var(--surface-3); color: var(--ink); }
+
+/* ─── SHELL ──────────────────────────────────────────────── */
+.app-shell {
+  display: flex;
+  height: 100vh;
+  padding-top: 48px;
+  padding-bottom: 24px; /* status bar */
+}
+
+/* ─── LEFT SIDEBAR ───────────────────────────────────────── */
+.sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.sidebar-section {
+  margin-bottom: 4px;
+}
+
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.disclosure {
+  width: 12px;
+  height: 12px;
+  color: var(--muted);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.disclosure.open { transform: rotate(90deg); }
+
+.sidebar-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sidebar-items {
+  padding: 2px 0;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 24px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-dim);
+  border-radius: 0;
+  transition: background 0.1s;
+}
+
+.sidebar-item:hover { background: var(--surface-2); color: var(--ink); }
+
+.sidebar-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sidebar-item.active .item-badge { background: rgba(255,255,255,0.25); color: #fff; }
+
+.item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.item-badge {
+  margin-left: auto;
+  padding: 0 6px;
+  height: 16px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-3);
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.sidebar-separator {
+  height: 1px;
+  background: var(--separator);
+  margin: 4px 12px;
+}
+
+/* ─── MAIN CONTENT ───────────────────────────────────────── */
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* ─── TOOLBAR STRIP ──────────────────────────────────────── */
+.content-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 8px;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--separator);
+  margin: 0 8px;
+}
+
+.toolbar-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+.tb-btn {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-xs);
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.1s;
+}
+
+.tb-btn:hover { background: var(--surface-2); color: var(--ink); }
+.tb-btn.active { background: var(--surface-3); color: var(--ink); }
+.tb-btn svg { width: 12px; height: 12px; }
+
+.toolbar-spacer { flex: 1; }
+
+.tb-search {
+  height: 24px;
+  width: 160px;
+  padding: 0 8px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+}
+
+.tb-search::placeholder { color: var(--muted-2); }
+.tb-search:focus { border-color: var(--accent); }
+
+/* ─── BENTO GRID ─────────────────────────────────────────── */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto auto;
+  gap: 12px;
+}
+
+.bento-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.bento-card.wide { grid-column: span 2; }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid var(--separator);
+  gap: 8px;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.card-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-2);
+  margin-left: auto;
+}
+
+.card-body { padding: 8px 0; }
+
+/* ─── DHCP POOL TABLE ────────────────────────────────────── */
+.dhcp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dhcp-table th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--separator);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.dhcp-table th:hover { color: var(--ink-dim); }
+
+.col-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sort-chevron {
+  width: 8px;
+  height: 8px;
+  color: var(--accent);
+}
+
+.dhcp-table td {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--separator);
+  white-space: nowrap;
+}
+
+.dhcp-table tr:last-child td { border-bottom: none; }
+.dhcp-table tr:hover td { background: var(--surface-2); }
+
+/* DHCP sparkline track */
+.sparkline-track {
+  position: relative;
+  width: 80px;
+  height: 20px;
+  background: var(--surface-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.sparkline-track canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Utilization bar */
+.util-bar {
+  width: 80px;
+  height: 4px;
+  background: var(--surface-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.util-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.util-pct {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Status badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  height: 16px;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.status-badge.crit { background: var(--red-bg); color: var(--red); }
+.status-badge.warn { background: var(--amber-bg); color: var(--amber); }
+.status-badge.ok { background: var(--green-bg); color: var(--green); }
+
+/* ─── HOST STATUS CARD ───────────────────────────────────── */
+.host-stat-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 12px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.host-stat-row:last-child { border-bottom: none; }
+
+.host-stat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.host-stat-label {
+  font-size: 12px;
+  color: var(--ink-dim);
+  flex: 1;
+}
+
+.host-stat-count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 40px;
+  text-align: right;
+}
+
+.host-stat-bar {
+  width: 64px;
+  height: 4px;
+  background: var(--surface-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.host-stat-fill { height: 100%; border-radius: 2px; }
+
+/* ─── DNS ZONES TABLE ────────────────────────────────────── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--separator);
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table td {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--separator);
+  white-space: nowrap;
+}
+
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--surface-2); }
+
+/* ─── THREAT CARD ────────────────────────────────────────── */
+.threat-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 12px;
+  gap: 12px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.threat-row:last-child { border-bottom: none; }
+
+.threat-sev {
+  width: 3px;
+  align-self: stretch;
+  border-radius: 2px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.threat-info { flex: 1; min-width: 0; }
+
+.threat-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.threat-detail {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.threat-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-2);
+  flex-shrink: 0;
+}
+
+/* ─── AUDIT TABLE ────────────────────────────────────────── */
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.audit-table th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--separator);
+}
+
+.audit-table td {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--separator);
+  white-space: nowrap;
+}
+
+.audit-table tr:last-child td { border-bottom: none; }
+.audit-table tr:hover td { background: var(--surface-2); }
+
+.audit-actor { color: var(--teal-apple); }
+.audit-action { color: var(--ink-dim); }
+.audit-target { color: var(--ink); }
+
+/* ─── IPAM SUBNETS ───────────────────────────────────────── */
+.subnet-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  gap: 12px;
+  border-bottom: 1px solid var(--separator);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.subnet-row:last-child { border-bottom: none; }
+.subnet-row:hover { background: var(--surface-2); }
+
+.subnet-cidr { color: var(--ink); width: 120px; flex-shrink: 0; }
+.subnet-desc { color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.subnet-util { width: 80px; flex-shrink: 0; }
+.subnet-hosts { color: var(--muted-2); width: 64px; text-align: right; flex-shrink: 0; }
+
+/* ─── RIGHT INSPECTOR ────────────────────────────────────── */
+.inspector {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.inspector-header {
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inspector-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.inspector-section {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.inspector-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.inspector-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.inspector-key {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  width: 72px;
+  padding-top: 1px;
+}
+
+.inspector-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  flex: 1;
+  word-break: break-all;
+}
+
+.inspector-val.crit { color: var(--red); }
+.inspector-val.warn { color: var(--amber); }
+.inspector-val.ok { color: var(--green); }
+
+/* Mini sparkline in inspector */
+.mini-spark {
+  width: 100%;
+  height: 32px;
+  background: var(--surface-2);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  position: relative;
+  margin-top: 8px;
+}
+
+/* ─── STATUS BAR ─────────────────────────────────────────── */
+.status-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 16px;
+  z-index: 100;
+}
+
+.status-item {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.status-item.active { color: var(--ink); }
+.status-item.crit { color: var(--red); }
+.status-item.warn { color: var(--amber); }
+.status-item.ok { color: var(--green); }
+
+.status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.status-spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- ─── TOPBAR ─────────────────────────────────────────── -->
+<header class="topbar">
+  <!-- Logo -->
+  <div class="topbar-logo">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="10" cy="10" r="8"/>
+      <path d="M6 10h8M10 6v8"/>
+      <circle cx="10" cy="10" r="3" fill="currentColor" stroke="none"/>
+    </svg>
+    <span class="topbar-logo-text">BloxNOC</span>
+  </div>
+
+  <div class="topbar-divider"></div>
+
+  <!-- Tool groups -->
+  <div class="tool-group">
+    <button class="tool-btn">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="1" y="1" width="5" height="5" rx="1"/>
+        <rect x="8" y="1" width="5" height="5" rx="1"/>
+        <rect x="1" y="8" width="5" height="5" rx="1"/>
+        <rect x="8" y="8" width="5" height="5" rx="1"/>
+      </svg>
+    </button>
+    <button class="tool-btn">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M1 3h12M1 7h12M1 11h12"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="topbar-divider"></div>
+
+  <!-- Nav tabs -->
+  <nav class="nav-tabs">
+    <button class="nav-tab active">OVERVIEW</button>
+    <button class="nav-tab">IPAM</button>
+    <button class="nav-tab">TOPOLOGY</button>
+    <button class="nav-tab">DNS</button>
+    <button class="nav-tab">HOSTS</button>
+    <button class="nav-tab">ALERTS</button>
+    <button class="nav-tab">AUDIT</button>
+  </nav>
+
+  <!-- Alert chips center -->
+  <div class="topbar-alerts">
+    <div class="alert-chip crit">
+      <div class="pulse-dot"></div>
+      2 CRIT
+    </div>
+    <div class="alert-chip warn">
+      <div class="pulse-dot warn"></div>
+      5 FIRING
+    </div>
+  </div>
+
+  <!-- Right controls -->
+  <div class="topbar-controls">
+    <div class="refresh-btn">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M9 5A4 4 0 1 1 5.5 1.1"/>
+        <path d="M5 1h4V5"/>
+      </svg>
+      12s
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="7" cy="7" r="3"/>
+        <path d="M7 1v1M7 12v1M1 7h1M12 7h1M3 3l.7.7M10.3 10.3l.7.7M3 11l.7-.7M10.3 3.7l.7-.7"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ─── APP SHELL ──────────────────────────────────────── -->
+<div class="app-shell">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-header" onclick="toggleSection(this)">
+        <svg class="disclosure open" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 2l4 4-4 4"/>
+        </svg>
+        <span class="sidebar-section-label">Network</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item active">
+          <div class="item-dot" style="background:var(--accent)"></div>
+          Overview
+        </div>
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--muted-2)"></div>
+          IPAM
+          <span class="item-badge">14</span>
+        </div>
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--muted-2)"></div>
+          DHCP Pools
+          <span class="item-badge" style="background:var(--red-bg);color:var(--red)">2!</span>
+        </div>
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--muted-2)"></div>
+          DNS Zones
+          <span class="item-badge">8</span>
+        </div>
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--muted-2)"></div>
+          Topology
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-separator"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-header" onclick="toggleSection(this)">
+        <svg class="disclosure open" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 2l4 4-4 4"/>
+        </svg>
+        <span class="sidebar-section-label">Security</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--red)"></div>
+          Active Threats
+          <span class="item-badge" style="background:var(--red-bg);color:var(--red)">2</span>
+        </div>
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--amber)"></div>
+          Anomalies
+          <span class="item-badge" style="background:var(--amber-bg);color:var(--amber)">7</span>
+        </div>
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--muted-2)"></div>
+          Blocklist
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-separator"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-header" onclick="toggleSection(this)">
+        <svg class="disclosure open" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 2l4 4-4 4"/>
+        </svg>
+        <span class="sidebar-section-label">Operations</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--muted-2)"></div>
+          Hosts
+          <span class="item-badge">862</span>
+        </div>
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--muted-2)"></div>
+          Audit Log
+        </div>
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--muted-2)"></div>
+          Alerts
+          <span class="item-badge" style="background:var(--amber-bg);color:var(--amber)">5</span>
+        </div>
+        <div class="sidebar-item">
+          <div class="item-dot" style="background:var(--muted-2)"></div>
+          Reports
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    <!-- Toolbar strip -->
+    <div class="content-toolbar">
+      <div class="toolbar-group">
+        <span class="toolbar-label">View</span>
+        <button class="tb-btn active">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="1" y="1" width="4" height="4" rx="0.5"/>
+            <rect x="7" y="1" width="4" height="4" rx="0.5"/>
+            <rect x="1" y="7" width="4" height="4" rx="0.5"/>
+            <rect x="7" y="7" width="4" height="4" rx="0.5"/>
+          </svg>
+          Grid
+        </button>
+        <button class="tb-btn">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M1 3h10M1 6h10M1 9h10"/>
+          </svg>
+          List
+        </button>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <div class="toolbar-group">
+        <span class="toolbar-label">Filter</span>
+        <button class="tb-btn">All</button>
+        <button class="tb-btn" style="color:var(--red)">Critical</button>
+        <button class="tb-btn" style="color:var(--amber)">Warning</button>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <div class="toolbar-group">
+        <span class="toolbar-label">Range</span>
+        <button class="tb-btn">1h</button>
+        <button class="tb-btn active">6h</button>
+        <button class="tb-btn">24h</button>
+        <button class="tb-btn">7d</button>
+      </div>
+
+      <div class="toolbar-spacer"></div>
+
+      <input class="tb-search" type="search" placeholder="Filter subnets, hosts…">
+    </div>
+
+    <!-- BENTO GRID -->
+    <div class="bento-grid">
+
+      <!-- Card 1: DHCP Pools (wide) -->
+      <div class="bento-card wide">
+        <div class="card-header">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--accent)" stroke-width="1.5">
+            <rect x="1" y="3" width="11" height="7" rx="1.5"/>
+            <path d="M4 3V1.5M9 3V1.5"/>
+          </svg>
+          <span class="card-title">DHCP Pools</span>
+          <div class="card-meta">3 pools · 2 CRIT</div>
+        </div>
+        <div class="card-body">
+          <table class="dhcp-table">
+            <thead>
+              <tr>
+                <th style="width:140px">
+                  <span class="col-sort">
+                    SUBNET
+                    <svg class="sort-chevron" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M1 3l3 3 3-3"/>
+                    </svg>
+                  </span>
+                </th>
+                <th style="width:80px">UTIL%</th>
+                <th style="width:96px">TRACK</th>
+                <th style="width:72px">FREE</th>
+                <th style="width:64px">LEASED</th>
+                <th style="width:80px">STATUS</th>
+                <th style="width:72px">RANGE</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>10.1.0.0/24</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <div class="util-bar"><div class="util-fill" style="width:94%;background:var(--red)"></div></div>
+                    <span class="util-pct" style="color:var(--red)">94%</span>
+                  </div>
+                </td>
+                <td><canvas class="sparkline" data-color="ff453a" width="80" height="20" data-vals="60,70,75,80,83,87,88,91,94,94"></canvas></td>
+                <td>15</td>
+                <td>241</td>
+                <td><span class="status-badge crit">● CRIT</span></td>
+                <td>.1–.254</td>
+              </tr>
+              <tr>
+                <td>10.2.0.0/23</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <div class="util-bar"><div class="util-fill" style="width:87%;background:var(--amber)"></div></div>
+                    <span class="util-pct" style="color:var(--amber)">87%</span>
+                  </div>
+                </td>
+                <td><canvas class="sparkline" data-color="ff9f0a" width="80" height="20" data-vals="70,72,74,78,80,82,83,85,86,87"></canvas></td>
+                <td>66</td>
+                <td>446</td>
+                <td><span class="status-badge warn">● WARN</span></td>
+                <td>.1–.510</td>
+              </tr>
+              <tr>
+                <td>192.168.1.0/24</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <div class="util-bar"><div class="util-fill" style="width:45%;background:var(--green)"></div></div>
+                    <span class="util-pct" style="color:var(--green)">45%</span>
+                  </div>
+                </td>
+                <td><canvas class="sparkline" data-color="32d74b" width="80" height="20" data-vals="38,40,41,43,43,44,44,45,45,45"></canvas></td>
+                <td>139</td>
+                <td>115</td>
+                <td><span class="status-badge ok">● OK</span></td>
+                <td>.1–.254</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Card 2: Host Status -->
+      <div class="bento-card">
+        <div class="card-header">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--teal-apple)" stroke-width="1.5">
+            <circle cx="6.5" cy="4.5" r="2.5"/>
+            <path d="M1.5 11.5c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
+          </svg>
+          <span class="card-title">Host Status</span>
+          <div class="card-meta">862 total</div>
+        </div>
+        <div class="card-body">
+          <div class="host-stat-row">
+            <div class="host-stat-dot" style="background:var(--green)"></div>
+            <span class="host-stat-label">Online</span>
+            <div class="host-stat-bar"><div class="host-stat-fill" style="width:98%;background:var(--green)"></div></div>
+            <span class="host-stat-count" style="color:var(--green)">847</span>
+          </div>
+          <div class="host-stat-row">
+            <div class="host-stat-dot" style="background:var(--amber)"></div>
+            <span class="host-stat-label">Degraded</span>
+            <div class="host-stat-bar"><div class="host-stat-fill" style="width:14%;background:var(--amber)"></div></div>
+            <span class="host-stat-count" style="color:var(--amber)">12</span>
+          </div>
+          <div class="host-stat-row">
+            <div class="host-stat-dot" style="background:var(--red)"></div>
+            <span class="host-stat-label">Offline</span>
+            <div class="host-stat-bar"><div class="host-stat-fill" style="width:3.5%;background:var(--red)"></div></div>
+            <span class="host-stat-count" style="color:var(--red)">3</span>
+          </div>
+          <div class="host-stat-row">
+            <div class="host-stat-dot" style="background:var(--muted-2)"></div>
+            <span class="host-stat-label">Unknown</span>
+            <div class="host-stat-bar"><div class="host-stat-fill" style="width:2%;background:var(--muted-2)"></div></div>
+            <span class="host-stat-count">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: IPAM Subnets -->
+      <div class="bento-card">
+        <div class="card-header">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--indigo)" stroke-width="1.5">
+            <rect x="1" y="1" width="11" height="11" rx="2"/>
+            <path d="M1 5h11M5 5v7"/>
+          </svg>
+          <span class="card-title">IPAM Subnets</span>
+          <div class="card-meta">14 subnets · 6 CRIT</div>
+        </div>
+        <div class="card-body">
+          <div class="subnet-row">
+            <span class="subnet-cidr">10.0.0.0/8</span>
+            <span class="subnet-desc">Core fabric</span>
+            <div class="subnet-util">
+              <div class="util-bar" style="width:64px"><div class="util-fill" style="width:72%;background:var(--amber)"></div></div>
+            </div>
+            <span class="subnet-hosts" style="color:var(--amber)">72%</span>
+          </div>
+          <div class="subnet-row">
+            <span class="subnet-cidr">10.1.0.0/24</span>
+            <span class="subnet-desc">Datacenter-A</span>
+            <div class="subnet-util">
+              <div class="util-bar" style="width:64px"><div class="util-fill" style="width:94%;background:var(--red)"></div></div>
+            </div>
+            <span class="subnet-hosts" style="color:var(--red)">94%</span>
+          </div>
+          <div class="subnet-row">
+            <span class="subnet-cidr">10.2.0.0/23</span>
+            <span class="subnet-desc">Datacenter-B</span>
+            <div class="subnet-util">
+              <div class="util-bar" style="width:64px"><div class="util-fill" style="width:87%;background:var(--amber)"></div></div>
+            </div>
+            <span class="subnet-hosts" style="color:var(--amber)">87%</span>
+          </div>
+          <div class="subnet-row">
+            <span class="subnet-cidr">172.16.0.0/12</span>
+            <span class="subnet-desc">Management</span>
+            <div class="subnet-util">
+              <div class="util-bar" style="width:64px"><div class="util-fill" style="width:31%;background:var(--green)"></div></div>
+            </div>
+            <span class="subnet-hosts" style="color:var(--green)">31%</span>
+          </div>
+          <div class="subnet-row">
+            <span class="subnet-cidr">192.168.1.0/24</span>
+            <span class="subnet-desc">Guest WLAN</span>
+            <div class="subnet-util">
+              <div class="util-bar" style="width:64px"><div class="util-fill" style="width:45%;background:var(--green)"></div></div>
+            </div>
+            <span class="subnet-hosts" style="color:var(--green)">45%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4: DNS Zones -->
+      <div class="bento-card">
+        <div class="card-header">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--teal-apple)" stroke-width="1.5">
+            <circle cx="6.5" cy="6.5" r="5.5"/>
+            <path d="M6.5 1C5 3 4.5 4.8 4.5 6.5S5 10 6.5 12M6.5 1c1.5 2 2 3.8 2 5.5S8 10 6.5 12M1 6.5h11"/>
+          </svg>
+          <span class="card-title">DNS Zones</span>
+          <div class="card-meta">8 zones</div>
+        </div>
+        <div class="card-body">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ZONE</th>
+                <th>TYPE</th>
+                <th>RECORDS</th>
+                <th>QPS</th>
+                <th>STATUS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>corp.infoblox.local</td>
+                <td>PRIMARY</td>
+                <td>2,847</td>
+                <td>1,204</td>
+                <td><span class="status-badge ok">OK</span></td>
+              </tr>
+              <tr>
+                <td>10.in-addr.arpa</td>
+                <td>REVERSE</td>
+                <td>1,023</td>
+                <td>388</td>
+                <td><span class="status-badge ok">OK</span></td>
+              </tr>
+              <tr>
+                <td>dmz.infoblox.local</td>
+                <td>FORWARD</td>
+                <td>94</td>
+                <td>62</td>
+                <td><span class="status-badge warn">WARN</span></td>
+              </tr>
+              <tr>
+                <td>guest.infoblox.local</td>
+                <td>FORWARD</td>
+                <td>12</td>
+                <td>8</td>
+                <td><span class="status-badge ok">OK</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Card 5: Active Threats -->
+      <div class="bento-card">
+        <div class="card-header">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--red)" stroke-width="1.5">
+            <path d="M6.5 1.5l5 9.5H1.5z"/>
+            <path d="M6.5 5.5v2.5M6.5 9.5h.01"/>
+          </svg>
+          <span class="card-title">Active Threats</span>
+          <div class="card-meta" style="color:var(--red)">2 active</div>
+        </div>
+        <div class="card-body">
+          <div class="threat-row">
+            <div class="threat-sev" style="background:var(--red)"></div>
+            <div class="threat-info">
+              <div class="threat-name">DNS Tunneling Detected</div>
+              <div class="threat-detail">src: 10.1.0.44 → iodine.c2.example.com</div>
+              <div class="threat-detail" style="margin-top:2px;color:var(--red)">Exfil volume: 2.4 MB/5min</div>
+            </div>
+            <div class="threat-time">14:22:07</div>
+          </div>
+          <div class="threat-row">
+            <div class="threat-sev" style="background:var(--amber)"></div>
+            <div class="threat-info">
+              <div class="threat-name">Malware C2 Beaconing</div>
+              <div class="threat-detail">src: 10.2.0.118 → 185.220.101.47</div>
+              <div class="threat-detail" style="margin-top:2px;color:var(--amber)">Interval: 5min ±3s</div>
+            </div>
+            <div class="threat-time">14:19:53</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 6: Audit Events (wide) -->
+      <div class="bento-card wide">
+        <div class="card-header">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--muted)" stroke-width="1.5">
+            <path d="M2 2h9v9H2zM5 2v9M2 5h9"/>
+          </svg>
+          <span class="card-title">Audit Events</span>
+          <div class="card-meta">last 6 hours</div>
+        </div>
+        <div class="card-body">
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th style="width:80px">TIME</th>
+                <th style="width:100px">ACTOR</th>
+                <th style="width:100px">ACTION</th>
+                <th>TARGET</th>
+                <th style="width:72px">RESULT</th>
+                <th style="width:80px">SOURCE IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>14:22:07</td>
+                <td class="audit-actor">svc-monitor</td>
+                <td class="audit-action">LEASE_RECLAIM</td>
+                <td class="audit-target">10.1.0.44 / host-44.corp</td>
+                <td><span class="status-badge crit">BLOCKED</span></td>
+                <td>10.1.0.44</td>
+              </tr>
+              <tr>
+                <td>14:18:33</td>
+                <td class="audit-actor">noc-admin</td>
+                <td class="audit-action">ZONE_UPDATE</td>
+                <td class="audit-target">dmz.infoblox.local</td>
+                <td><span class="status-badge ok">OK</span></td>
+                <td>10.0.0.5</td>
+              </tr>
+              <tr>
+                <td>14:15:01</td>
+                <td class="audit-actor">svc-dhcp</td>
+                <td class="audit-action">POOL_EXPAND</td>
+                <td class="audit-target">10.1.0.0/24 → requested /23</td>
+                <td><span class="status-badge warn">PENDING</span></td>
+                <td>10.0.0.2</td>
+              </tr>
+              <tr>
+                <td>14:09:44</td>
+                <td class="audit-actor">alice.chen</td>
+                <td class="audit-action">HOST_DELETE</td>
+                <td class="audit-target">172.16.12.55 / dev-test-07</td>
+                <td><span class="status-badge ok">OK</span></td>
+                <td>10.0.0.11</td>
+              </tr>
+              <tr>
+                <td>13:58:22</td>
+                <td class="audit-actor">svc-monitor</td>
+                <td class="audit-action">ALERT_FIRE</td>
+                <td class="audit-target">DNS:TUNNEL / 10.1.0.44</td>
+                <td><span class="status-badge crit">CRIT</span></td>
+                <td>10.0.0.2</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /bento-grid -->
+  </main>
+
+  <!-- RIGHT INSPECTOR -->
+  <aside class="inspector">
+    <div class="inspector-header">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--accent)" stroke-width="1.5">
+        <circle cx="6.5" cy="6.5" r="5.5"/>
+        <path d="M6.5 4v3l2 1.5"/>
+      </svg>
+      <span class="inspector-title">Inspector</span>
+    </div>
+
+    <div class="inspector-section">
+      <div class="inspector-section-title">Selected: DHCP Pool</div>
+      <div class="inspector-row">
+        <span class="inspector-key">Subnet</span>
+        <span class="inspector-val">10.1.0.0/24</span>
+      </div>
+      <div class="inspector-row">
+        <span class="inspector-key">Utiliz.</span>
+        <span class="inspector-val crit">94.1%</span>
+      </div>
+      <div class="inspector-row">
+        <span class="inspector-key">Leased</span>
+        <span class="inspector-val">241 / 254</span>
+      </div>
+      <div class="inspector-row">
+        <span class="inspector-key">Free</span>
+        <span class="inspector-val crit">13 IPs</span>
+      </div>
+      <div class="inspector-row">
+        <span class="inspector-key">Server</span>
+        <span class="inspector-val">dhcp-01.corp</span>
+      </div>
+      <div class="inspector-row">
+        <span class="inspector-key">Lease T.</span>
+        <span class="inspector-val">86400s</span>
+      </div>
+      <div class="mini-spark">
+        <canvas id="insp-spark" width="196" height="32"></canvas>
+      </div>
+    </div>
+
+    <div class="inspector-section">
+      <div class="inspector-section-title">Top Consumers</div>
+      <div class="inspector-row">
+        <span class="inspector-key">10.1.0.44</span>
+        <span class="inspector-val" style="color:var(--red)">THREAT</span>
+      </div>
+      <div class="inspector-row">
+        <span class="inspector-key">10.1.0.12</span>
+        <span class="inspector-val">web-prod-01</span>
+      </div>
+      <div class="inspector-row">
+        <span class="inspector-key">10.1.0.7</span>
+        <span class="inspector-val">db-primary</span>
+      </div>
+    </div>
+
+    <div class="inspector-section">
+      <div class="inspector-section-title">Alerts</div>
+      <div class="inspector-row">
+        <span class="inspector-key">Status</span>
+        <span class="inspector-val crit">CRITICAL</span>
+      </div>
+      <div class="inspector-row">
+        <span class="inspector-key">Fired</span>
+        <span class="inspector-val">14:22:07</span>
+      </div>
+      <div class="inspector-row">
+        <span class="inspector-key">Silenced</span>
+        <span class="inspector-val">No</span>
+      </div>
+    </div>
+
+    <div class="inspector-section">
+      <div class="inspector-section-title">Actions</div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <button style="
+          height:28px;
+          border-radius:var(--radius-xs);
+          border:none;
+          background:var(--accent);
+          color:#fff;
+          font-family:var(--font);
+          font-size:12px;
+          font-weight:600;
+          cursor:pointer;
+          width:100%;
+        ">Expand Pool →</button>
+        <button style="
+          height:28px;
+          border-radius:var(--radius-xs);
+          border:1px solid var(--border);
+          background:var(--surface-2);
+          color:var(--ink);
+          font-family:var(--font);
+          font-size:12px;
+          cursor:pointer;
+          width:100%;
+        ">View Leases</button>
+        <button style="
+          height:28px;
+          border-radius:var(--radius-xs);
+          border:1px solid var(--border);
+          background:var(--surface-2);
+          color:var(--ink);
+          font-family:var(--font);
+          font-size:12px;
+          cursor:pointer;
+          width:100%;
+        ">Silence Alert</button>
+      </div>
+    </div>
+  </aside>
+
+</div><!-- /app-shell -->
+
+<!-- STATUS BAR -->
+<div class="status-bar">
+  <div class="status-item active">
+    <div class="status-dot" style="background:var(--green)"></div>
+    847 hosts
+  </div>
+  <div class="status-item crit">
+    <div class="status-dot" style="background:var(--red)"></div>
+    6 subnets crit
+  </div>
+  <div class="status-item warn">
+    <div class="status-dot" style="background:var(--amber)"></div>
+    2 threats active
+  </div>
+  <div class="status-item">dhcp-01.corp: connected</div>
+  <div class="status-item">dns-01.corp: connected</div>
+  <div class="status-spacer"></div>
+  <div class="status-item">last refresh 12s ago</div>
+  <div class="status-item">bloxnoc-agent v2.4.1</div>
+</div>
+
+<script>
+/* ─── SPARKLINE RENDERER ─────────────────────────────────── */
+function drawSparkline(canvas, vals, colorHex, isMini) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || canvas.width;
+  const h = canvas.offsetHeight || canvas.height;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const bg = isDark ? '#3a3a3c' : '#e5e5ea';
+  const alpha = isDark ? 0.15 : 0.10;
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+
+  const min = Math.min(...vals) - 2;
+  const max = Math.max(...vals) + 2;
+  const range = max - min || 1;
+  const pad = 2;
+
+  const pts = vals.map((v, i) => ({
+    x: pad + (i / (vals.length - 1)) * (w - pad * 2),
+    y: h - pad - ((v - min) / range) * (h - pad * 2)
+  }));
+
+  // Fill under line
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, h);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pts[pts.length-1].x, h);
+  ctx.closePath();
+  ctx.fillStyle = `#${colorHex}${Math.round(alpha * 255).toString(16).padStart(2,'0')}`;
+  ctx.fill();
+
+  // 1px crisp line
+  ctx.beginPath();
+  pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.strokeStyle = `#${colorHex}`;
+  ctx.lineWidth = 1;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+function renderAllSparklines() {
+  document.querySelectorAll('canvas.sparkline').forEach(c => {
+    const vals = c.dataset.vals.split(',').map(Number);
+    const color = c.dataset.color;
+    drawSparkline(c, vals, color, false);
+  });
+
+  // Inspector mini sparkline
+  const insp = document.getElementById('insp-spark');
+  if (insp) {
+    drawSparkline(insp, [60,70,75,80,83,87,88,91,94,94], 'ff453a', true);
+  }
+}
+
+/* ─── THEME TOGGLE ───────────────────────────────────────── */
+function toggleTheme() {
+  const html = document.documentElement;
+  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  setTimeout(renderAllSparklines, 0);
+}
+
+/* ─── SIDEBAR DISCLOSURE ─────────────────────────────────── */
+function toggleSection(header) {
+  const disc = header.querySelector('.disclosure');
+  const items = header.nextElementSibling;
+  if (!items) return;
+  const isOpen = disc.classList.contains('open');
+  disc.classList.toggle('open', !isOpen);
+  items.style.display = isOpen ? 'none' : '';
+}
+
+/* ─── INIT ───────────────────────────────────────────────── */
+window.addEventListener('load', () => {
+  renderAllSparklines();
+});
+
+window.addEventListener('resize', () => {
+  renderAllSparklines();
+});
+</script>
+</body>
+</html>
