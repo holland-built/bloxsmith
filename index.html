@@ -26,21 +26,23 @@ window.onerror = function(msg,src,line,col,err) {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  /* v7 dense-list — dark. bg/fg/border/status colors copied verbatim from GitHub Primer's
-     compiled dark theme (unpkg.com/@primer/primitives/dist/css/functional/themes/dark.css) —
-     proven contrast + colorblind-safe values, not invented. */
-  --bg:#0d1117;--surface:#1B1F28;--surface-2:#232834;--surface-3:#2E3440;
-  --border:#3d444d;--separator:#3d444d;
-  /* accent — warm off-white ink */
+  /* v7 dense-list — dark. bg/surface/border/text/status colors copied verbatim from Vercel's
+     Geist design system (github.com/ephraimduncan/geist-colors src/dark.ts, mirrors
+     vercel.com/geist/colors) — full 10-step scale, not single invented values. See
+     .mockups/design-infoblox-mcp/geist-tokens.md for the full scale + mapping table. */
+  --bg:#1a1a1a;--surface:#1f1f1f;--surface-2:#292929;--surface-3:#2e2e2e;
+  --border:#2e2e2e;--separator:#2e2e2e;
+  /* accent — warm off-white ink (unchanged — not part of the Geist status scale) */
   --accent:#D6D2CB;--teal:#D6D2CB;--teal-bright:#E4E1DB;
-  /* text ramp */
-  --ink:#f0f6fc;--ink-dim:#9CA3AF;--muted:#9CA3AF;
-  --gray-100:#f0f6fc;--gray-200:#9CA3AF;--gray-400:rgba(156,163,175,0.80);--gray-500:rgba(156,163,175,0.60);--gray-600:rgba(156,163,175,0.40);
-  /* semantic status — Primer danger/attention/success (dark) */
-  --red:#f85149;--amber:#d29922;--green:#3fb950;
-  --red-bg:rgba(248,81,73,0.12);--red-border:rgba(248,81,73,0.35);--red-text:#f85149;
-  --amber-bg:rgba(210,153,34,0.12);--amber-border:rgba(210,153,34,0.35);--amber-text:#d29922;
-  --green-bg:rgba(63,185,80,0.10);--green-border:rgba(63,185,80,0.35);--green-text:#3fb950;
+  /* text ramp — gray 1000/900/700 */
+  --ink:#ededed;--ink-dim:#a1a1a1;--muted:#a1a1a1;
+  --gray-100:#ededed;--gray-200:#a1a1a1;--gray-400:rgba(143,143,143,0.80);--gray-500:rgba(143,143,143,0.60);--gray-600:rgba(143,143,143,0.40);
+  /* semantic status — Geist red/amber/green 900 (text-safe; also used for UI chrome —
+     see geist-tokens.md note on why 600/900 collapsed to one value here) */
+  --red:#ff6166;--amber:#ff990a;--green:#62c073;
+  --red-bg:rgba(255,97,102,0.12);--red-border:#832126;--red-text:#ff6166;
+  --amber-bg:rgba(255,153,10,0.12);--amber-border:#6b4105;--amber-text:#ff990a;
+  --green-bg:rgba(98,192,115,0.10);--green-border:#126426;--green-text:#62c073;
   /* type scale */
   --fs-2xs:10px;--fs-xs:11px;--fs-sm:12px;--fs-base:13px;--fs-md:14px;--fs-lg:20px;--fs-xl:28px;--fs-2xl:48px;
   /* interaction */
@@ -53,24 +55,24 @@ window.onerror = function(msg,src,line,col,err) {
   --svg-grid:rgba(255,255,255,0.06);
   --focus-border:rgba(214,210,203,0.55);
   /* severity badge tints */
-  --sev-red-t:#f85149;--sev-amber-t:#d29922;--sev-green-t:#3fb950;
-  --badge-red-bg:rgba(248,81,73,0.12);--badge-red-bd:rgba(248,81,73,0.35);
-  --badge-amber-bg:rgba(210,153,34,0.12);--badge-amber-bd:rgba(210,153,34,0.35);
-  --badge-green-bg:rgba(63,185,80,0.10);--badge-green-bd:rgba(63,185,80,0.35);
+  --sev-red-t:#ff6166;--sev-amber-t:#ff990a;--sev-green-t:#62c073;
+  --badge-red-bg:rgba(255,97,102,0.12);--badge-red-bd:rgba(255,97,102,0.35);
+  --badge-amber-bg:rgba(255,153,10,0.12);--badge-amber-bd:rgba(255,153,10,0.35);
+  --badge-green-bg:rgba(98,192,115,0.10);--badge-green-bd:rgba(98,192,115,0.35);
   --badge-gray-bg:rgba(255,255,255,0.06);--badge-gray-bd:rgba(255,255,255,0.12);--badge-gray-tx:var(--gray-100);
   --shadow-float:0 8px 24px rgba(0,0,0,.4);--shadow-card:none;--shadow:none;--shadow-sm:none;
   --r-card:10px;--r-ctl:6px;--r-pill:20px;--r-status:3px;
-  --brand:#D6D2CB;--latch-bg:rgba(248,81,73,0.10);--latch-border:rgba(248,81,73,0.35);
+  --brand:#D6D2CB;--latch-bg:rgba(255,97,102,0.10);--latch-border:rgba(255,97,102,0.35);
   /* fonts */
   --font-ui:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --font-data:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
   --font-mono:var(--font-data);
   /* aliases */
-  --background:#0d1117;--text:#f0f6fc;
-  --blue-dark:#0d1117;--blue-mid:#1B1F28;--blue-deep:#3d444d;
-  --danger:#f85149;--warning:#d29922;--success:#3fb950;--info:#D6D2CB;
-  --danger-bg:rgba(248,81,73,0.12);--warning-bg:rgba(210,153,34,0.12);
-  --success-bg:rgba(63,185,80,0.10);--info-bg:rgba(214,210,203,0.10);
+  --background:#1a1a1a;--text:#ededed;
+  --blue-dark:#1a1a1a;--blue-mid:#1f1f1f;--blue-deep:#2e2e2e;
+  --danger:#ff6166;--warning:#ff990a;--success:#62c073;--info:#D6D2CB;
+  --danger-bg:rgba(255,97,102,0.12);--warning-bg:rgba(255,153,10,0.12);
+  --success-bg:rgba(98,192,115,0.10);--info-bg:rgba(214,210,203,0.10);
   --z-tooltip:10000;--radius:6px;--radius-sm:6px;--radius-xs:3px;
   color-scheme:dark;
 }
@@ -229,10 +231,10 @@ body{padding-left:0!important}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:18px;min-width:0;transition:opacity .15s}
 .card:not(.crit-state):not(.warn-state):hover{transform:translateY(-2px);border-color:var(--surface-3)}
 .card.dim{opacity:.70}.card.dim:hover{opacity:.85}
-.card.warn-state{opacity:1;background:rgba(210,153,34,.08)}
-.card.warn-state:hover{border-color:rgba(210,153,34,.55)}
-.card.crit-state{opacity:1;background:rgba(248,81,73,.10)}
-.card.crit-state:hover{border-color:rgba(248,81,73,.55)}
+.card.warn-state{opacity:1;background:rgba(255,153,10,.08)}
+.card.warn-state:hover{border-color:rgba(255,153,10,.55)}
+.card.crit-state{opacity:1;background:rgba(255,97,102,.10)}
+.card.crit-state:hover{border-color:rgba(255,97,102,.55)}
 .card-title{font-size:var(--fs-sm);font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-200);margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0}
 .g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
@@ -383,17 +385,17 @@ body{padding-left:0!important}
 .n-btn{background:none;border:1px solid;border-radius:var(--r-ctl);font-size:11px;font-weight:600;padding:3px 10px;cursor:pointer;color:inherit;font-family:inherit}
 .n-x{background:none;border:none;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0;color:var(--gray-400);padding:0 2px}
 .n-x:hover{color:var(--ink)}
-.notice.n-red{background:rgba(248,81,73,.1);border-color:var(--badge-red-bd);color:var(--sev-red-t)}
+.notice.n-red{background:rgba(255,97,102,.1);border-color:var(--badge-red-bd);color:var(--sev-red-t)}
 .notice.n-red .n-ico{background:var(--badge-red-bg);color:var(--sev-red-t)}
 .notice.n-red .n-btn{border-color:var(--badge-red-bd)}.notice.n-red .n-btn:hover{background:var(--badge-red-bg)}
 .notice.n-info{background:var(--hover-strong);border-color:var(--tint-border);color:var(--gray-200)}
 .notice.n-info .n-ico{background:var(--surface-3);color:var(--gray-200)}
 .notice.n-info b{color:var(--teal)}
 .notice.n-info .n-btn{border-color:var(--tint-border);color:var(--teal)}.notice.n-info .n-btn:hover{background:var(--hover-strong)}
-.notice.n-amber{background:rgba(210,153,34,.1);border-color:rgba(210,153,34,.4);color:var(--sev-amber-t)}
-.notice.n-amber .n-ico{background:rgba(210,153,34,.15);color:var(--sev-amber-t)}
+.notice.n-amber{background:rgba(255,153,10,.1);border-color:rgba(255,153,10,.4);color:var(--sev-amber-t)}
+.notice.n-amber .n-ico{background:rgba(255,153,10,.15);color:var(--sev-amber-t)}
 .notice.n-amber b{color:var(--sev-amber-t)}
-.notice.n-amber .n-btn{border-color:rgba(210,153,34,.4);color:var(--sev-amber-t)}.notice.n-amber .n-btn:hover{background:rgba(210,153,34,.15)}
+.notice.n-amber .n-btn{border-color:rgba(255,153,10,.4);color:var(--sev-amber-t)}.notice.n-amber .n-btn:hover{background:rgba(255,153,10,.15)}
 [data-theme="light"] .notice.n-amber{background:rgba(183,121,31,.08);border-color:rgba(183,121,31,.35);color:var(--sev-amber-t)}
 [data-theme="light"] .notice.n-amber .n-ico{background:rgba(183,121,31,.12);color:var(--sev-amber-t)}
 [data-theme="light"] .notice.n-amber b{color:var(--sev-amber-t)}
@@ -551,8 +553,8 @@ body{padding-left:0!important}
 .copy-btn:focus-visible{opacity:1}
 tr:hover .copy-btn{opacity:1}
 .copy-btn.done{color:var(--green)}
-.badge-pill{display:inline-block;background:rgba(248,81,73,.2);color:var(--sev-red-t);border-radius:var(--r-pill);padding:1px 6px;font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle}
-.badge-pill-amber{background:rgba(210,153,34,.2);color:var(--sev-amber-t)}
+.badge-pill{display:inline-block;background:rgba(255,97,102,.2);color:var(--sev-red-t);border-radius:var(--r-pill);padding:1px 6px;font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle}
+.badge-pill-amber{background:rgba(255,153,10,.2);color:var(--sev-amber-t)}
 .row-limit-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;justify-content:flex-end}
 .row-limit-btn{padding:2px 9px;border-radius:var(--r-ctl);border:1px solid var(--border);background:none;color:var(--gray-400);font-size:10px;cursor:pointer;font-weight:600;transition:background .12s,border-color .12s,color .12s}
 .row-limit-btn.on{background:var(--surface-3);color:var(--teal);border-color:var(--teal)}
@@ -578,8 +580,8 @@ tr:hover .copy-btn{opacity:1}
 .lookup-btn{background:var(--teal);border:none;border-radius:var(--r-ctl);color:var(--blue-dark);font-size:12px;font-weight:700;padding:8px 16px;cursor:pointer}
 .lookup-btn:hover{background:var(--teal-bright)}
 .lookup-btn:disabled{opacity:.45;cursor:default}
-.block-btn{background:rgba(248,81,73,.15);border:1px solid rgba(248,81,73,.35);border-radius:var(--r-ctl);color:var(--sev-red-t);font-size:10px;font-weight:700;padding:3px 9px;cursor:pointer;margin-top:6px}
-.block-btn:hover{background:rgba(248,81,73,.3)}
+.block-btn{background:rgba(255,97,102,.15);border:1px solid rgba(255,97,102,.35);border-radius:var(--r-ctl);color:var(--sev-red-t);font-size:10px;font-weight:700;padding:3px 9px;cursor:pointer;margin-top:6px}
+.block-btn:hover{background:rgba(255,97,102,.3)}
 .sev-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
 @media(max-width:480px){.sev-grid{grid-template-columns:repeat(2,1fr)}}
 .sev-card{border-radius:var(--r-card);padding:14px;text-align:center;border:1px solid}
@@ -702,7 +704,7 @@ tr:hover .copy-btn{opacity:1}
 /* ── onboarding / demo banner ── */
 /* version chip: amber when a newer build is available (notify only, no self-update) */
 .ver-badge.upd{color:var(--sev-amber-t);background:var(--badge-amber-bg);border-color:var(--badge-amber-bd);cursor:pointer}
-.ver-badge.upd:hover{background:rgba(210,153,34,.22)}
+.ver-badge.upd:hover{background:rgba(255,153,10,.22)}
 .ver-up-arrow{font-weight:700;margin:0 2px}
 .upd-pop{margin:0 0 4px;background:var(--surface-2);border:1px solid var(--border);padding:10px 12px;font-size:11px;border-radius:var(--r-ctl)}
 .upd-pop .ver-line{font-size:12px;font-weight:600;color:var(--gray-100);margin-bottom:6px}
@@ -718,9 +720,9 @@ tr:hover .copy-btn{opacity:1}
 .upd-spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(0,0,0,.3);border-top-color:var(--blue-dark);border-radius:50%;vertical-align:-2px;margin-right:6px;animation:spin .8s linear infinite}
 .upd-note{font-size:10px;color:var(--gray-400);margin-top:6px}
 .ver-badge.updating{color:var(--sev-amber-t);background:var(--badge-amber-bg);border-color:var(--badge-amber-bd);display:inline-flex;align-items:center;gap:4px;padding:3px 8px;white-space:nowrap;max-width:none;cursor:default}
-.ver-badge.updating .upd-spin{border:2px solid rgba(210,153,34,.25);border-top-color:var(--amber);width:10px;height:10px;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+.ver-badge.updating .upd-spin{border:2px solid rgba(255,153,10,.25);border-top-color:var(--amber);width:10px;height:10px;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
 .ver-badge.upd-done{color:var(--sev-green-t);background:var(--badge-green-bg);border-color:var(--badge-green-bd);display:inline-flex;align-items:center;gap:4px;padding:3px 8px;white-space:nowrap;cursor:default}
-.ver-upd-elapsed{font-size:9px;color:rgba(210,153,34,.7);font-variant-numeric:tabular-nums;flex-shrink:0}
+.ver-upd-elapsed{font-size:9px;color:rgba(255,153,10,.7);font-variant-numeric:tabular-nums;flex-shrink:0}
 /* ── panel error state ── */
 .panel-error{text-align:center;padding:40px 24px;color:var(--gray-400);font-size:12px;line-height:1.6}
 .panel-error .retry-btn{margin-top:12px;background:var(--blue-deep);border:1px solid var(--teal);color:var(--teal);border-radius:var(--r-ctl);padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer}
@@ -811,7 +813,7 @@ tr:hover .copy-btn{opacity:1}
 .wiz-nav-icon{color:var(--gray-400);width:18px;display:flex;align-items:center;justify-content:center}
 .wiz-lbl{flex:1;font-size:13px;color:var(--gray-200)}
 .wiz-vis{font-size:10px;font-weight:700;border-radius:var(--r-ctl);padding:3px 9px;border:1px solid var(--border);background:none;color:var(--gray-400);cursor:pointer;text-transform:uppercase;letter-spacing:.05em}
-.wiz-vis.on{color:var(--sev-green-t);border-color:var(--green);background:rgba(63,185,80,.10)}
+.wiz-vis.on{color:var(--sev-green-t);border-color:var(--green);background:rgba(98,192,115,.10)}
 .wiz-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)}
 .wiz-skip{background:none;border:1px solid var(--border);color:var(--gray-400);border-radius:var(--r-ctl);padding:6px 14px;font-size:12px;cursor:pointer}
 .wiz-done{background:var(--teal);border:none;color:var(--blue-dark);border-radius:var(--r-ctl);padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer}
@@ -1078,9 +1080,9 @@ const fmtTs = iso => {
 /* chart hexes deepen in light mode so fills/labels clear ≥3:1 on white */
 const isLight = () => typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')==='light';
 const CK = {
-  red:   () => isLight()?'#d1242f':'#f85149',
-  amber: () => isLight()?'#9a6700':'#d29922',
-  green: () => isLight()?'#1a7f37':'#3fb950',
+  red:   () => isLight()?'#d1242f':'#ff6166',
+  amber: () => isLight()?'#9a6700':'#ff990a',
+  green: () => isLight()?'#1a7f37':'#62c073',
   slate: () => isLight()?'#6A655D':'#64748B',
 };
 const levelOrder = {critical:0,high:1,medium:2,low:3};
@@ -1349,7 +1351,7 @@ function FeedsTable({feeds, rowLimit, demoMode, onDrill}) {
         {deltas[f.id]!=null&&deltas[f.id]!==0&&(
           <span style={{fontSize:9,fontWeight:700,borderRadius:3,padding:'1px 4px',
             color:deltas[f.id]>0?'var(--sev-red-t)':'var(--sev-green-t)',
-            background:deltas[f.id]>0?'rgba(248,81,73,.18)':'rgba(63,185,80,.18)'}}>
+            background:deltas[f.id]>0?'rgba(255,97,102,.18)':'rgba(98,192,115,.18)'}}>
             {deltas[f.id]>0?'+':''}{deltas[f.id].toLocaleString()}
           </span>
         )}
@@ -5676,10 +5678,10 @@ function App({vault, onVaultChange}={}) {
                   onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(seg.sec);}}}
                   aria-label={`Go to ${seg.label} section`}
                   onClick={()=>setSection(seg.sec)}
-                  style={{flex:1,padding:'6px 10px',background:seg.crit?'rgba(248,81,73,.1)':'var(--surface-2)',
+                  style={{flex:1,padding:'6px 10px',background:seg.crit?'rgba(255,97,102,.1)':'var(--surface-2)',
                     cursor:'pointer',borderRight:i<4?'1px solid var(--border)':'none',transition:'background .15s'}}
                   onMouseEnter={e=>e.currentTarget.style.background='var(--surface-3)'}
-                  onMouseLeave={e=>e.currentTarget.style.background=seg.crit?'rgba(248,81,73,.1)':'var(--surface-2)'}>
+                  onMouseLeave={e=>e.currentTarget.style.background=seg.crit?'rgba(255,97,102,.1)':'var(--surface-2)'}>
                   <div style={{fontWeight:700,fontSize:16,color:seg.crit?seg.col:'var(--ink)',lineHeight:1}}>{seg.val}</div>
                   <div style={{color:'var(--muted)',fontSize:9,textTransform:'uppercase',letterSpacing:'.06em',marginTop:2}}>{seg.label}</div>
                   <div style={{color:seg.crit?seg.col:'var(--muted)',fontSize:9,marginTop:1}}>{seg.sub}</div>
@@ -5929,9 +5931,9 @@ function App({vault, onVaultChange}={}) {
                           return (<React.Fragment key={i}>
                             <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'host',data:h});}}} title={h.name||h.ip} onClick={()=>setDrillEntity({type:'host',data:h})}>{h.name||h.ip}</span>
                             <span style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,
-                              background:isErr?'rgba(248,81,73,.12)':'rgba(210,153,34,.12)',
+                              background:isErr?'rgba(255,97,102,.12)':'rgba(255,153,10,.12)',
                               color:isErr?'var(--red)':'var(--amber)',
-                              border:`1px solid ${isErr?'rgba(248,81,73,.25)':'rgba(210,153,34,.25)'}`}}>
+                              border:`1px solid ${isErr?'rgba(255,97,102,.25)':'rgba(255,153,10,.25)'}`}}>
                               {isErr?'█ CRIT':'▲ WARN'}
                             </span>
                             <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{h.status}</span>
@@ -5984,7 +5986,7 @@ function App({vault, onVaultChange}={}) {
                       const isOk=log.result==='success'||log.result==='ok';
                       const lvl=isErr?'ERROR':isOk?'INFO':'WARN';
                       const lvlC=isErr?'var(--red)':isOk?'var(--green)':'var(--amber)';
-                      const lvlBg=isErr?'rgba(248,81,73,.1)':isOk?'rgba(63,185,80,.08)':'rgba(210,153,34,.1)';
+                      const lvlBg=isErr?'rgba(255,97,102,.1)':isOk?'rgba(98,192,115,.08)':'rgba(255,153,10,.1)';
                       return (
                         <div key={i} style={{display:'grid',gridTemplateColumns:'34px 40px 1fr',gap:6,alignItems:'baseline',padding:'4px 0',borderBottom:i<5?'1px solid var(--border)':'none',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'audit',data:log});}}} onClick={()=>setDrillEntity({type:'audit',data:log})}>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{time}</span>
