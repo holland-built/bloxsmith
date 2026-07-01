@@ -34,16 +34,18 @@ window.onerror = function(msg,src,line,col,err) {
   --border:#2e2e2e;--separator:#2e2e2e;
   /* accent — warm off-white ink (unchanged — not part of the Geist status scale) */
   --accent:#D6D2CB;--teal:#D6D2CB;--teal-bright:#E4E1DB;
-  /* text ramp — gray 1000/900/700 */
-  --ink:#ededed;--ink-dim:#a1a1a1;--muted:#a1a1a1;
-  --gray-100:#ededed;--gray-200:#a1a1a1;--gray-400:rgba(143,143,143,0.80);--gray-500:rgba(143,143,143,0.60);--gray-600:rgba(143,143,143,0.40);
-  /* semantic status — Geist red/amber/green 900 (text-safe; also used for UI chrome —
-     see geist-tokens.md note on why 600/900 collapsed to one value here) */
-  --red:#ff6166;--amber:#ff990a;--green:#62c073;
+  /* text ramp — pure white ink per explicit request (was Geist gray-1000 #ededed,
+     chosen originally to avoid halation glow on near-black bg — traded for max whiteness) */
+  --ink:#ffffff;--ink-dim:#a1a1a1;--muted:#a1a1a1;
+  --gray-100:#ffffff;--gray-200:#a1a1a1;--gray-400:rgba(143,143,143,0.80);--gray-500:rgba(143,143,143,0.60);--gray-600:rgba(143,143,143,0.40);
+  /* semantic status — red is Radix Colors red-11 dark (github.com/radix-ui/colors,
+     unpkg.com/@radix-ui/colors/red-dark.css) — text-safe step, distinct from the prior
+     Geist coral-pink. amber/green unchanged from the Geist pass. */
+  --red:#ff9592;--amber:#ff990a;--green:#62c073;
   /* channel triples — single source for every rgba() tint below and elsewhere in the file;
      a future palette swap only ever needs to change these 3 lines (+ the light equivalents) */
-  --red-rgb:255,97,102;--amber-rgb:255,153,10;--green-rgb:98,192,115;
-  --red-bg:rgba(var(--red-rgb),0.12);--red-border:#832126;--red-text:#ff6166;
+  --red-rgb:255,149,146;--amber-rgb:255,153,10;--green-rgb:98,192,115;
+  --red-bg:rgba(var(--red-rgb),0.12);--red-border:rgba(var(--red-rgb),0.35);--red-text:#ff9592;
   --amber-bg:rgba(var(--amber-rgb),0.12);--amber-border:#6b4105;--amber-text:#ff990a;
   --green-bg:rgba(var(--green-rgb),0.10);--green-border:#126426;--green-text:#62c073;
   /* type scale */
@@ -58,7 +60,7 @@ window.onerror = function(msg,src,line,col,err) {
   --svg-grid:rgba(255,255,255,0.06);
   --focus-border:rgba(214,210,203,0.55);
   /* severity badge tints */
-  --sev-red-t:#ff6166;--sev-amber-t:#ff990a;--sev-green-t:#62c073;
+  --sev-red-t:#ff9592;--sev-amber-t:#ff990a;--sev-green-t:#62c073;
   --badge-red-bg:rgba(var(--red-rgb),0.12);--badge-red-bd:rgba(var(--red-rgb),0.35);
   --badge-amber-bg:rgba(var(--amber-rgb),0.12);--badge-amber-bd:rgba(var(--amber-rgb),0.35);
   --badge-green-bg:rgba(var(--green-rgb),0.10);--badge-green-bd:rgba(var(--green-rgb),0.35);
@@ -71,9 +73,9 @@ window.onerror = function(msg,src,line,col,err) {
   --font-data:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
   --font-mono:var(--font-data);
   /* aliases */
-  --background:#1a1a1a;--text:#ededed;
+  --background:#1a1a1a;--text:#ffffff;
   --blue-dark:#1a1a1a;--blue-mid:#1f1f1f;--blue-deep:#2e2e2e;
-  --danger:#ff6166;--warning:#ff990a;--success:#62c073;--info:#D6D2CB;
+  --danger:#ff9592;--warning:#ff990a;--success:#62c073;--info:#D6D2CB;
   --danger-bg:rgba(var(--red-rgb),0.12);--warning-bg:rgba(var(--amber-rgb),0.12);
   --success-bg:rgba(var(--green-rgb),0.10);--info-bg:rgba(214,210,203,0.10);
   --z-tooltip:10000;--radius:6px;--radius-sm:6px;--radius-xs:3px;
@@ -90,10 +92,11 @@ window.onerror = function(msg,src,line,col,err) {
   /* text ramp */
   --ink:#1f2328;--ink-dim:#5A6068;--muted:#5A6068;
   --gray-100:#1f2328;--gray-200:#5A6068;--gray-400:rgba(90,96,104,0.80);--gray-500:rgba(90,96,104,0.60);--gray-600:rgba(90,96,104,0.40);
-  /* semantic status — Primer danger/attention/success (light) */
-  --red:#d1242f;--amber:#9a6700;--green:#1a7f37;
-  --red-rgb:209,36,47;--amber-rgb:154,103,0;--green-rgb:26,127,55;
-  --red-bg:rgba(var(--red-rgb),0.08);--red-border:rgba(var(--red-rgb),0.35);--red-text:#d1242f;
+  /* semantic status — red is Radix Colors red-11 light (unpkg.com/@radix-ui/colors/red.css),
+     matching the dark-theme red source; amber/green unchanged (Primer) */
+  --red:#ce2c31;--amber:#9a6700;--green:#1a7f37;
+  --red-rgb:206,44,49;--amber-rgb:154,103,0;--green-rgb:26,127,55;
+  --red-bg:rgba(var(--red-rgb),0.08);--red-border:rgba(var(--red-rgb),0.35);--red-text:#ce2c31;
   --amber-bg:rgba(var(--amber-rgb),0.08);--amber-border:rgba(var(--amber-rgb),0.35);--amber-text:#9a6700;
   --green-bg:rgba(var(--green-rgb),0.08);--green-border:rgba(var(--green-rgb),0.35);--green-text:#1a7f37;
   /* interaction */
@@ -106,7 +109,7 @@ window.onerror = function(msg,src,line,col,err) {
   --svg-grid:rgba(0,0,0,0.06);
   --focus-border:rgba(0,123,48,0.55);
   /* severity */
-  --sev-red-t:#d1242f;--sev-amber-t:#9a6700;--sev-green-t:#1a7f37;
+  --sev-red-t:#ce2c31;--sev-amber-t:#9a6700;--sev-green-t:#1a7f37;
   --badge-red-bg:rgba(var(--red-rgb),0.08);--badge-red-bd:rgba(var(--red-rgb),0.35);
   --badge-amber-bg:rgba(var(--amber-rgb),0.08);--badge-amber-bd:rgba(var(--amber-rgb),0.35);
   --badge-green-bg:rgba(var(--green-rgb),0.08);--badge-green-bd:rgba(var(--green-rgb),0.35);
@@ -116,7 +119,7 @@ window.onerror = function(msg,src,line,col,err) {
   /* aliases */
   --background:#ffffff;--text:#1f2328;
   --blue-dark:#ffffff;--blue-mid:#FFFFFF;--blue-deep:#ECEAE2;
-  --danger:#d1242f;--warning:#9a6700;--success:#1a7f37;--info:#007B30;
+  --danger:#ce2c31;--warning:#9a6700;--success:#1a7f37;--info:#007B30;
   --danger-bg:rgba(var(--red-rgb),0.08);--warning-bg:rgba(var(--amber-rgb),0.08);
   --success-bg:rgba(var(--green-rgb),0.08);--info-bg:rgba(0,123,48,0.08);
   color-scheme:light;
@@ -1087,7 +1090,7 @@ const isLight = () => typeof document!=='undefined' && document.documentElement.
    a palette swap only ever needs to change :root, this helper no longer hardcodes hex */
 const cssVar = name => typeof document!=='undefined' ? getComputedStyle(document.documentElement).getPropertyValue(name).trim() : '';
 const CK = {
-  red:   () => cssVar('--red-text')   || '#ff6166',
+  red:   () => cssVar('--red-text')   || '#ff9592',
   amber: () => cssVar('--amber-text') || '#ff990a',
   green: () => cssVar('--green-text') || '#62c073',
   slate: () => isLight()?'#6A655D':'#64748B',
