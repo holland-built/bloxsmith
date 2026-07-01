@@ -32,7 +32,7 @@ MCP.md
 PRODUCT.md
 DAILY_CHANGELOG.md
 brainstorms/
-mockups/
+.mockups/
 docs/change-reporting.md
 docs/CONTEXT.md
 docs/design-workflow.md
@@ -40,4 +40,5 @@ docs/PLANNING.md
 docs/TESTING.md
 
 # Proof/screenshot artifacts
-_proof.png
+*-verify.png
+*_proof.png
