@@ -53,3 +53,7 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# Alert suppression state — runtime data, not a secret, never committed
+backend/data/alert_state.json
+backend/data/alert_state.json.tmp
