@@ -1,4 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+async function mockAuthedAsViewer(page: Page) {
+  await page.route('**/auth/me', (route) =>
+    route.fulfill({ status: 200, body: JSON.stringify({ email: 'test@x.com', role: 'operator' }) })
+  );
+}
 
 // Minimal NetworkData that renders real content (not the empty/degraded
 // state) so NetworkVertical mounts a stable, selectable root — see
@@ -45,6 +51,7 @@ test.describe('triage landing', () => {
   test('triage panel renders before the network vertical in DOM order', async ({
     page,
   }) => {
+    await mockAuthedAsViewer(page);
     await page.route('**/api/alerts/incidents', (route) =>
       route.fulfill({
         status: 200,
@@ -118,6 +125,7 @@ test.describe('triage landing', () => {
     // of this app (TriagePanel always passes through `loading: true`
     // before data resolves), it's just not deterministically catchable in
     // this environment without adding test-only hooks to the component.
+    await mockAuthedAsViewer(page);
     await page.route('**/api/alerts/incidents', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 200));
       await route.fulfill({
@@ -150,6 +158,7 @@ test.describe('triage landing', () => {
     // and only calls issued after snoozing return [].
     let snoozed = false;
 
+    await mockAuthedAsViewer(page);
     await page.route('**/api/alerts/incidents', (route) => {
       const body = snoozed ? [] : [INCIDENT];
       return route.fulfill({
@@ -195,6 +204,7 @@ test.describe('triage landing', () => {
   test('error state is visually distinct from the healthy empty state', async ({
     page,
   }) => {
+    await mockAuthedAsViewer(page);
     await page.route('**/api/alerts/incidents', (route) =>
       route.fulfill({
         status: 500,

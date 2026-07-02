@@ -57,3 +57,6 @@ playwright/.cache/
 # Alert suppression state — runtime data, not a secret, never committed
 backend/data/alert_state.json
 backend/data/alert_state.json.tmp
+
+# Audit log — runtime data (hash-chained, tamper-evident), never committed
+backend/data/audit_log.jsonl

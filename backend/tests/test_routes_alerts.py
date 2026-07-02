@@ -23,13 +23,41 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.alerts import suppression
+from backend.audit import log as audit_log
+from backend.auth import sessions
 from backend.main import app
 
 client = TestClient(app)
 
 
-def test_get_incidents_returns_200_with_json_list():
-    r = client.get("/api/alerts/incidents")
+@pytest.fixture
+def isolated_sessions():
+    """Reset the in-memory session store before AND after each test."""
+    sessions._SESSIONS.clear()
+    yield
+    sessions._SESSIONS.clear()
+
+
+@pytest.fixture
+def isolated_audit_log(tmp_path, monkeypatch):
+    """Redirect the audit log's on-disk file to tmp_path for this test only."""
+    monkeypatch.setattr(audit_log, "LOG_FILE", str(tmp_path / "audit_log.jsonl"))
+    yield
+
+
+@pytest.fixture
+def authed_client(isolated_sessions, isolated_audit_log, monkeypatch):
+    """Dev-login as operator (covers both viewer-gated GET and operator-gated
+    POST) and reuse the module-level client -- TestClient persists cookies
+    across calls on the same instance."""
+    monkeypatch.setenv("AUTH_DEV_MODE", "1")
+    r = client.post("/auth/dev-login", json={"email": "test@x.com", "role": "operator"})
+    assert r.status_code == 200
+    yield client
+
+
+def test_get_incidents_returns_200_with_json_list(authed_client):
+    r = authed_client.get("/api/alerts/incidents")
     assert r.status_code == 200
     assert isinstance(r.json(), list)
 
@@ -54,7 +82,7 @@ def isolated_suppression_state(tmp_path, monkeypatch):
     yield
 
 
-def test_snooze_end_to_end_excludes_category_from_subsequent_incidents(isolated_suppression_state):
+def test_snooze_end_to_end_excludes_category_from_subsequent_incidents(isolated_suppression_state, authed_client):
     sample = {
         "subnets": [{"id": "sub-1", "name": "core-net", "util": 95, "severity": "crit"}],
         "leases": [],
@@ -62,16 +90,16 @@ def test_snooze_end_to_end_excludes_category_from_subsequent_incidents(isolated_
         "views": [],
     }
     with patch("backend.routes_alerts.fetch_network", new=AsyncMock(return_value=sample)):
-        r = client.get("/api/alerts/incidents")
+        r = authed_client.get("/api/alerts/incidents")
         assert r.status_code == 200
         incidents = r.json()
         categories = {inc["category"] for inc in incidents}
         assert "subnet-utilization" in categories
 
-        r = client.post("/api/alerts/snooze", json={"category": "subnet-utilization", "minutes": 60})
+        r = authed_client.post("/api/alerts/snooze", json={"category": "subnet-utilization", "minutes": 60})
         assert r.status_code == 200
 
-        r = client.get("/api/alerts/incidents")
+        r = authed_client.get("/api/alerts/incidents")
         assert r.status_code == 200
         incidents = r.json()
         categories = {inc["category"] for inc in incidents}

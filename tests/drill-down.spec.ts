@@ -1,4 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+async function mockAuthedAsViewer(page: Page) {
+  await page.route('**/auth/me', (route) =>
+    route.fulfill({ status: 200, body: JSON.stringify({ email: 'test@x.com', role: 'operator' }) })
+  );
+}
 
 // Matches the Incident shape from src/types/alerts.ts. entity_type: 'subnet'
 // plus sample_entities[0] === 'subnet-1' drives src/lib/drilldown.ts's
@@ -42,6 +48,7 @@ test.describe('drill-down', () => {
   test('clicking a triage row\'s View button highlights the target subnet row', async ({
     page,
   }) => {
+    await mockAuthedAsViewer(page);
     await page.route('**/api/alerts/incidents', (route) =>
       route.fulfill({
         status: 200,

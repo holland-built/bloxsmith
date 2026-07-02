@@ -1,12 +1,14 @@
 """Alerts vertical routes: incidents, heartbeat health, and snooze control."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from backend.alerts.signals import build_signals
 from backend.alerts.correlate import correlate
 from backend.alerts.suppression import is_snoozed, snooze
 from backend.alerts.heartbeat import freshness
+from backend.audit import log as audit_log
+from backend.auth.roles import Role, require_role
 from backend.data.fetch import fetch_network
 
 router = APIRouter()
@@ -18,7 +20,7 @@ class SnoozeRequest(BaseModel):
 
 
 @router.get("/api/alerts/incidents")
-async def get_incidents():
+async def get_incidents(session: dict = Depends(require_role(Role.viewer))):
     try:
         data = await fetch_network()
         sigs = build_signals(data)
@@ -34,6 +36,7 @@ def get_health():
 
 
 @router.post("/api/alerts/snooze")
-def post_snooze(body: SnoozeRequest):
+def post_snooze(body: SnoozeRequest, session: dict = Depends(require_role(Role.operator))):
     snooze(body.category, body.minutes)
+    audit_log.append_event("snooze", sub=session["sub"], email=session["email"], detail={"category": body.category, "minutes": body.minutes})
     return {"ok": True, "category": body.category, "minutes": body.minutes}
