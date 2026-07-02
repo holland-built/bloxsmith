@@ -57,6 +57,19 @@ test.describe('auth gate', () => {
     await page.route('**/api/verticals/network', (route) =>
       route.fulfill({ status: 200, body: JSON.stringify(EMPTY_NETWORK_DATA) })
     );
+    await page.route('**/api/vault/status', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          vaultMode: false,
+          exists: true,
+          unlocked: true,
+          ready: true,
+          tenants: [],
+          active: '',
+        }),
+      })
+    );
 
     await page.goto('/index-vite.html');
 
@@ -107,6 +120,19 @@ test.describe('auth gate', () => {
       route.fulfill({
         status: 200,
         body: JSON.stringify({ entries: [], chain_valid: true, broken_index: null }),
+      })
+    );
+    await page.route('**/api/vault/status', (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          vaultMode: false,
+          exists: true,
+          unlocked: true,
+          ready: true,
+          tenants: [],
+          active: '',
+        }),
       })
     );
 

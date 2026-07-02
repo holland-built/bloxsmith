@@ -33,7 +33,7 @@ if os.path.exists(_env_file):
                 os.environ.setdefault(_k.strip(), _v)
 
 # ── credentials / MCP target ───────────────────────────────────────────────
-API_KEY = ""
+API_KEY = os.environ.get("INFOBLOX_API_KEY", "")
 # No env key → run in encrypted-vault mode: the dashboard prompts for a
 # passphrase and manages one-or-more tenant keys, AES-encrypted at rest on a
 # mounted volume. An env key keeps the original single-key behavior (and all
