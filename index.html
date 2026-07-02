@@ -26,102 +26,95 @@ window.onerror = function(msg,src,line,col,err) {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  /* v7 dense-list — dark. bg/surface/border/text/status colors copied verbatim from Vercel's
-     Geist design system (github.com/ephraimduncan/geist-colors src/dark.ts, mirrors
-     vercel.com/geist/colors) — full 10-step scale, not single invented values. See
-     .mockups/design-infoblox-mcp/geist-tokens.md for the full scale + mapping table. */
-  --bg:#000000;--surface:#1f1f1f;--surface-2:#292929;--surface-3:#2e2e2e;
-  --border:#2e2e2e;--separator:#2e2e2e;
-  /* accent — warm off-white ink (unchanged — not part of the Geist status scale) */
-  --accent:#D6D2CB;--teal:#D6D2CB;--teal-bright:#E4E1DB;
-  /* text ramp — pure white ink per explicit request (was Geist gray-1000 #ededed,
-     chosen originally to avoid halation glow on near-black bg — traded for max whiteness) */
-  --ink:#ffffff;--ink-dim:#a1a1a1;--muted:#a1a1a1;
-  --gray-100:#ffffff;--gray-200:#a1a1a1;--gray-400:rgba(143,143,143,0.80);--gray-500:rgba(143,143,143,0.60);--gray-600:rgba(143,143,143,0.40);
-  /* semantic status — red is Radix Colors red-11 dark (github.com/radix-ui/colors,
-     unpkg.com/@radix-ui/colors/red-dark.css) — text-safe step, distinct from the prior
-     Geist coral-pink. amber/green unchanged from the Geist pass. */
-  --red:#ff9592;--amber:#ff990a;--green:#62c073;
-  /* channel triples — single source for every rgba() tint below and elsewhere in the file;
-     a future palette swap only ever needs to change these 3 lines (+ the light equivalents) */
-  --red-rgb:255,149,146;--amber-rgb:255,153,10;--green-rgb:98,192,115;
-  --red-bg:rgba(var(--red-rgb),0.12);--red-border:rgba(var(--red-rgb),0.35);--red-text:#ff9592;
-  --amber-bg:rgba(var(--amber-rgb),0.12);--amber-border:#6b4105;--amber-text:#ff990a;
-  --green-bg:rgba(var(--green-rgb),0.10);--green-border:#126426;--green-text:#62c073;
+  /* v2 "Bloomberg data grid" — dark. Full fresh redesign (BOLD-mode /design run, 10
+     mockups judged, this one picked): petrol-teal charcoal canvas, electric-cyan accent,
+     amethyst/gold/jade severity — deliberately not red/amber/green. See
+     .mockups/design-infoblox-mcp-v2/approved-tokens.md for the full source + mapping. */
+  --bg:#0a1418;--surface:#0f1d23;--surface-2:#16282f;--surface-3:#1d333b;
+  --border:#26414a;--separator:#26414a;
+  /* accent — electric cyan */
+  --accent:#2dd4ce;--teal:#2dd4ce;--teal-bright:#2dd4ce;
+  /* text ramp */
+  --ink:#e8f4f4;--ink-dim:#b6ccce;--muted:#7c979b;
+  --gray-100:#e8f4f4;--gray-200:#7c979b;--gray-400:rgba(124,151,155,0.85);--gray-500:rgba(124,151,155,0.65);--gray-600:rgba(124,151,155,0.45);
+  /* semantic status — amethyst-magenta / sodium-gold / jade, from v2 mockup */
+  --red:#d967e0;--amber:#f2b23c;--green:#46d19a;
+  --red-rgb:217,103,224;--amber-rgb:242,178,60;--green-rgb:70,209,154;
+  --red-bg:rgba(var(--red-rgb),0.12);--red-border:rgba(var(--red-rgb),0.35);--red-text:#d967e0;
+  --amber-bg:rgba(var(--amber-rgb),0.12);--amber-border:rgba(var(--amber-rgb),0.35);--amber-text:#f2b23c;
+  --green-bg:rgba(var(--green-rgb),0.10);--green-border:rgba(var(--green-rgb),0.35);--green-text:#46d19a;
   /* type scale */
   --fs-2xs:10px;--fs-xs:11px;--fs-sm:12px;--fs-base:13px;--fs-md:14px;--fs-lg:20px;--fs-xl:28px;--fs-2xl:48px;
-  /* interaction */
-  --hover:rgba(214,210,203,0.08);
-  --hover-strong:rgba(214,210,203,0.15);
-  --tint:rgba(214,210,203,0.10);
-  --tint-border:rgba(214,210,203,0.25);
+  /* interaction — retinted to the new cyan accent (was the old warm off-white, 214,210,203) */
+  --hover:rgba(45,212,206,0.08);
+  --hover-strong:rgba(45,212,206,0.15);
+  --tint:rgba(45,212,206,0.10);
+  --tint-border:rgba(45,212,206,0.25);
   --row-border:rgba(255,255,255,0.06);
   --svg-track:rgba(255,255,255,0.05);
   --svg-grid:rgba(255,255,255,0.06);
-  --focus-border:rgba(214,210,203,0.55);
+  --focus-border:rgba(45,212,206,0.55);
   /* severity badge tints */
-  --sev-red-t:#ff9592;--sev-amber-t:#ff990a;--sev-green-t:#62c073;
+  --sev-red-t:#d967e0;--sev-amber-t:#f2b23c;--sev-green-t:#46d19a;
   --badge-red-bg:rgba(var(--red-rgb),0.12);--badge-red-bd:rgba(var(--red-rgb),0.35);
   --badge-amber-bg:rgba(var(--amber-rgb),0.12);--badge-amber-bd:rgba(var(--amber-rgb),0.35);
   --badge-green-bg:rgba(var(--green-rgb),0.10);--badge-green-bd:rgba(var(--green-rgb),0.35);
   --badge-gray-bg:rgba(255,255,255,0.06);--badge-gray-bd:rgba(255,255,255,0.12);--badge-gray-tx:var(--gray-100);
   --shadow-float:0 8px 24px rgba(0,0,0,.4);--shadow-card:none;--shadow:none;--shadow-sm:none;
   --r-card:10px;--r-ctl:6px;--r-pill:20px;--r-status:3px;
-  --brand:#D6D2CB;--latch-bg:rgba(var(--red-rgb),0.10);--latch-border:rgba(var(--red-rgb),0.35);
+  --brand:#2dd4ce;--latch-bg:rgba(var(--red-rgb),0.10);--latch-border:rgba(var(--red-rgb),0.35);
   /* fonts */
   --font-ui:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --font-data:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
   --font-mono:var(--font-data);
   /* aliases */
-  --background:#000000;--text:#ffffff;
-  --blue-dark:#000000;--blue-mid:#1f1f1f;--blue-deep:#2e2e2e;
-  --danger:#ff9592;--warning:#ff990a;--success:#62c073;--info:#D6D2CB;
+  --background:#0a1418;--text:#e8f4f4;
+  --blue-dark:#0a1418;--blue-mid:#0f1d23;--blue-deep:#16282f;
+  --danger:#d967e0;--warning:#f2b23c;--success:#46d19a;--info:#2dd4ce;
   --danger-bg:rgba(var(--red-rgb),0.12);--warning-bg:rgba(var(--amber-rgb),0.12);
-  --success-bg:rgba(var(--green-rgb),0.10);--info-bg:rgba(214,210,203,0.10);
+  --success-bg:rgba(var(--green-rgb),0.10);--info-bg:rgba(45,212,206,0.10);
   --z-tooltip:10000;--radius:6px;--radius-sm:6px;--radius-xs:3px;
   color-scheme:dark;
 }
 :root[data-theme="light"]{
-  /* v7 dense-list — light. bg/fg/border/status colors copied verbatim from GitHub Primer's
-     compiled light theme (unpkg.com/@primer/primitives/dist/css/functional/themes/light.css) —
-     proven contrast + colorblind-safe values, not invented. */
-  --bg:#ffffff;--surface:#FFFFFF;--surface-2:#F7F6F1;--surface-3:#ECEAE2;
-  --border:#d1d9e0;--separator:#d1d9e0;
-  /* accent — Infoblox green */
-  --accent:#007B30;--teal:#007B30;--teal-bright:#00933A;
+  /* v2 "Bloomberg data grid" — light. Hand-tuned cool-paper variant of the same
+     petrol/cyan family, not a CSS invert. See .mockups/design-infoblox-mcp-v2/approved-tokens.md */
+  --bg:#eef2f3;--surface:#ffffff;--surface-2:#e7edee;--surface-3:#dce5e6;
+  --border:#c9d6d8;--separator:#c9d6d8;
+  /* accent — darkened cyan for AA on white */
+  --accent:#087d78;--teal:#087d78;--teal-bright:#087d78;
   /* text ramp */
-  --ink:#1f2328;--ink-dim:#5A6068;--muted:#5A6068;
-  --gray-100:#1f2328;--gray-200:#5A6068;--gray-400:rgba(90,96,104,0.80);--gray-500:rgba(90,96,104,0.60);--gray-600:rgba(90,96,104,0.40);
-  /* semantic status — red is Radix Colors red-11 light (unpkg.com/@radix-ui/colors/red.css),
-     matching the dark-theme red source; amber/green unchanged (Primer) */
-  --red:#ce2c31;--amber:#9a6700;--green:#1a7f37;
-  --red-rgb:206,44,49;--amber-rgb:154,103,0;--green-rgb:26,127,55;
-  --red-bg:rgba(var(--red-rgb),0.08);--red-border:rgba(var(--red-rgb),0.35);--red-text:#ce2c31;
-  --amber-bg:rgba(var(--amber-rgb),0.08);--amber-border:rgba(var(--amber-rgb),0.35);--amber-text:#9a6700;
-  --green-bg:rgba(var(--green-rgb),0.08);--green-border:rgba(var(--green-rgb),0.35);--green-text:#1a7f37;
-  /* interaction */
-  --hover:rgba(0,123,48,0.06);
-  --hover-strong:rgba(0,123,48,0.12);
-  --tint:rgba(0,123,48,0.08);
-  --tint-border:rgba(0,123,48,0.25);
+  --ink:#08171b;--ink-dim:#2f4348;--muted:#566a6e;
+  --gray-100:#08171b;--gray-200:#566a6e;--gray-400:rgba(86,106,110,0.80);--gray-500:rgba(86,106,110,0.60);--gray-600:rgba(86,106,110,0.40);
+  /* semantic status — amethyst-magenta / sodium-gold / jade, darkened for light-bg AA */
+  --red:#9b1fa6;--amber:#8a5b06;--green:#0a7d55;
+  --red-rgb:155,31,166;--amber-rgb:138,91,6;--green-rgb:10,125,85;
+  --red-bg:rgba(var(--red-rgb),0.08);--red-border:rgba(var(--red-rgb),0.35);--red-text:#9b1fa6;
+  --amber-bg:rgba(var(--amber-rgb),0.08);--amber-border:rgba(var(--amber-rgb),0.35);--amber-text:#8a5b06;
+  --green-bg:rgba(var(--green-rgb),0.08);--green-border:rgba(var(--green-rgb),0.35);--green-text:#0a7d55;
+  /* interaction — retinted to cyan accent (was Infoblox green, 0,123,48) */
+  --hover:rgba(10,143,137,0.06);
+  --hover-strong:rgba(10,143,137,0.12);
+  --tint:rgba(10,143,137,0.08);
+  --tint-border:rgba(10,143,137,0.25);
   --row-border:rgba(0,0,0,0.06);
   --svg-track:rgba(0,0,0,0.05);
   --svg-grid:rgba(0,0,0,0.06);
-  --focus-border:rgba(0,123,48,0.55);
+  --focus-border:rgba(10,143,137,0.55);
   /* severity */
-  --sev-red-t:#ce2c31;--sev-amber-t:#9a6700;--sev-green-t:#1a7f37;
+  --sev-red-t:#9b1fa6;--sev-amber-t:#8a5b06;--sev-green-t:#0a7d55;
   --badge-red-bg:rgba(var(--red-rgb),0.08);--badge-red-bd:rgba(var(--red-rgb),0.35);
   --badge-amber-bg:rgba(var(--amber-rgb),0.08);--badge-amber-bd:rgba(var(--amber-rgb),0.35);
   --badge-green-bg:rgba(var(--green-rgb),0.08);--badge-green-bd:rgba(var(--green-rgb),0.35);
   --badge-gray-bg:rgba(0,0,0,0.05);--badge-gray-bd:rgba(0,0,0,0.12);--badge-gray-tx:var(--gray-100);
   --shadow-float:0 8px 24px rgba(16,24,32,.14);--shadow-card:none;--shadow:none;--shadow-sm:none;
-  --brand:#007B30;--latch-bg:rgba(var(--red-rgb),0.06);--latch-border:rgba(var(--red-rgb),0.32);
+  --brand:#087d78;--latch-bg:rgba(var(--red-rgb),0.06);--latch-border:rgba(var(--red-rgb),0.32);
   /* aliases */
-  --background:#ffffff;--text:#1f2328;
-  --blue-dark:#ffffff;--blue-mid:#FFFFFF;--blue-deep:#ECEAE2;
-  --danger:#ce2c31;--warning:#9a6700;--success:#1a7f37;--info:#007B30;
+  --background:#eef2f3;--text:#08171b;
+  --blue-dark:#eef2f3;--blue-mid:#ffffff;--blue-deep:#e7edee;
+  --danger:#9b1fa6;--warning:#8a5b06;--success:#0a7d55;--info:#087d78;
   --danger-bg:rgba(var(--red-rgb),0.08);--warning-bg:rgba(var(--amber-rgb),0.08);
-  --success-bg:rgba(var(--green-rgb),0.08);--info-bg:rgba(0,123,48,0.08);
+  --success-bg:rgba(var(--green-rgb),0.08);--info-bg:rgba(10,143,137,0.08);
   color-scheme:light;
 }
 body{background:var(--blue-dark);color:var(--ink);font-family:var(--font-ui);margin:0;padding-left:var(--sbw,44px);padding-top:92px;overflow-x:hidden;line-height:1.5;transition:background .2s,color .2s,padding-left .2s}
@@ -188,9 +181,17 @@ body{padding-left:0!important}
 .rb-btn-x{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;display:flex;align-items:center;transition:color .12s}
 .rb-btn-x:hover{color:var(--gray-200)}
 .main{padding:0 20px 40px;flex:1;min-width:0;max-width:100%;width:100%;overflow:visible}
-.topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;margin-bottom:16px;padding:0 16px;height:48px;border-bottom:1px solid var(--border);position:fixed;top:0;left:0;right:0;z-index:150;background:var(--surface)}
+.topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;margin-bottom:16px;padding:0 16px;height:48px;border-bottom:1px solid var(--surface-3);position:fixed;top:0;left:0;right:0;z-index:150;background:var(--surface-2)}
 /* v7 subbar + status rail */
-.subbar{position:fixed;top:48px;left:0;right:0;height:44px;z-index:149;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+.subbar{position:fixed;top:48px;left:0;right:0;height:44px;z-index:149;background:var(--surface-2);border-bottom:1px solid var(--surface-3);display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+/* v2 alert ticker — non-fixed, flows in normal document order right after the subbar */
+.ticker{display:flex;align-items:center;gap:0;height:26px;background:var(--surface);border-bottom:1px solid var(--border);overflow:hidden;font-size:12px}
+.ticker .flag{flex:0 0 auto;align-self:stretch;display:flex;align-items:center;padding:0 12px;background:var(--red);color:var(--bg);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em}
+.ticker .stream{display:flex;gap:26px;padding:0 16px;white-space:nowrap;overflow:hidden}
+.ticker .item{display:inline-flex;align-items:center;gap:8px;color:var(--ink-dim)}
+.ticker .item .mono{color:var(--ink);font-family:var(--font-mono)}
+.ticker .tk-dot{width:6px;height:6px;border-radius:50%}
+.dot-crit{background:var(--red)}.dot-warn{background:var(--amber)}.dot-ok{background:var(--green)}
 .subbar-filters{display:flex;align-items:center;gap:4px;flex-shrink:0}
 .ghost-chip{height:26px;padding:0 8px;display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-dim);background:transparent;border:1px solid transparent;border-radius:var(--r-ctl);cursor:pointer;font-family:var(--font-ui);transition:border-color .12s,background .12s;appearance:none;-webkit-appearance:none}
 .ghost-chip:hover{border-color:var(--border);background:var(--hover)}
@@ -249,7 +250,7 @@ body{padding-left:0!important}
 .g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
 @media(max-width:900px){.g3-2{grid-template-columns:1fr}}
 .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
-.kpi-val{font-family:var(--font-mono);font-size:28px;font-weight:400;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.1;letter-spacing:-.01em;margin-bottom:6px}
+.kpi-val{font-family:var(--font-mono);font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.1;letter-spacing:-.01em;margin-bottom:6px}
 .kpi-val.crit{color:var(--red);font-weight:700}
 .kpi-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .kpi-delta{font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:4px}
@@ -5537,6 +5538,28 @@ function App({vault, onVaultChange}={}) {
             </div>
           </div>
         </div>
+        {(()=>{
+          const tItems=[];
+          if(errHosts.length>0)  tItems.push({sev:'crit',lbl:'HOSTS OFFLINE/ERROR',n:errHosts.length});
+          if(critSubs.length>0)  tItems.push({sev:'crit',lbl:`SUBNETS ≥${dhcpCrit}% UTIL`,n:critSubs.length});
+          if(ttlBad.length>0)    tItems.push({sev:'warn',lbl:'DNS ZONES STALE',n:ttlBad.length});
+          if(firingAlerts.length>0) tItems.push({sev:'crit',lbl:'ALERTS FIRING',n:firingAlerts.length});
+          tItems.push({sev:'ok',lbl:'FEEDS ACTIVE',n:(s_feeds||feeds||[]).length});
+          const firing=errHosts.length+critSubs.length+firingAlerts.length;
+          if(tItems.length===0) return null;
+          return (
+            <div className="ticker" role="status" aria-label="Active alert ticker">
+              <span className="flag">Firing · {firing}</span>
+              <div className="stream">
+                {tItems.map((it,i)=>(
+                  <span className="item" key={i}>
+                    <span className={`tk-dot dot-${it.sev}`}></span> {it.lbl} <span className="mono">{it.n.toLocaleString()}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
         <div className="subbar">
           <nav className="topbar-tabs" aria-label="Sections">
             {SECTIONS.filter(s=>!hiddenSections.includes(s.id)).map(s=>{
