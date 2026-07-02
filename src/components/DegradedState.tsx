@@ -1,6 +1,11 @@
 import './DegradedState.css';
 
-export function DegradedState({ mode }: { mode: 'loading' | 'error' | 'empty' }) {
+interface DegradedStateProps {
+  mode: 'loading' | 'error' | 'empty';
+  onRetry?: () => void;
+}
+
+export function DegradedState({ mode, onRetry }: DegradedStateProps) {
   if (mode === 'loading') {
     return (
       <div className="degraded-state" data-mode={mode}>
@@ -13,6 +18,11 @@ export function DegradedState({ mode }: { mode: 'loading' | 'error' | 'empty' })
   return (
     <div className="degraded-state" data-mode={mode}>
       <p>No data — check connection</p>
+      {mode === 'error' && onRetry && (
+        <button type="button" className="degraded-retry" onClick={onRetry}>
+          Retry
+        </button>
+      )}
     </div>
   );
 }
