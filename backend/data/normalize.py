@@ -45,6 +45,7 @@ def norm_subnets(raw):
             "used": used,
             "util": pct,
             "site": tags.get("site") or tags.get("location") or "–",
+            "owner": tags.get("owner") or tags.get("team") or "–",
             "severity": _subnet_severity(pct),
         })
     return out

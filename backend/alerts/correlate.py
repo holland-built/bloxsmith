@@ -16,6 +16,7 @@ class Incident(TypedDict):
     sample_entities: list
     first_detected_at: float
     message: str
+    entity_type: str
 
 
 _SEVERITY_ORDER = {"ok": 0, "warn": 1, "crit": 2}
@@ -44,6 +45,10 @@ def correlate(signals: list) -> list:
         sample_entities = [s["entity_id"] for s in group[:_SAMPLE_CAP]]
         first_detected_at = min(s["detected_at"] for s in group)
         message = f"{count} {category.replace('-', ' ')}"
+        # v1 assumption: every category maps 1:1 to one entity_type today, so
+        # taking group[0]'s entity_type is safe. If a future category ever
+        # mixes entity_types, this needs revisiting (out of scope now).
+        entity_type = group[0]["entity_type"]
 
         incidents.append(
             Incident(
@@ -54,6 +59,7 @@ def correlate(signals: list) -> list:
                 sample_entities=sample_entities,
                 first_detected_at=first_detected_at,
                 message=message,
+                entity_type=entity_type,
             )
         )
 
