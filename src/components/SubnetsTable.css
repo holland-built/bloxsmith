@@ -1,0 +1,67 @@
+.subnets-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+
+.subnets-table th,
+.subnets-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+.subnets-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.subnets-table th {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 600;
+}
+
+.subnets-mono {
+  font-family: var(--font-mono);
+}
+
+.subnets-util {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subnets-bar-track {
+  position: relative;
+  width: 60px;
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: var(--r-status);
+  overflow: visible;
+}
+
+.subnets-bar-fill {
+  height: 100%;
+  border-radius: var(--r-status);
+}
+
+.subnets-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.subnets-util-text {
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  color: var(--ink-dim);
+}

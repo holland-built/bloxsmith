@@ -1,5 +1,7 @@
+import { NetworkVertical } from './components/NetworkVertical';
+
 function App() {
-  return <div data-scaffold="ok">Scaffold OK</div>
+  return <NetworkVertical />;
 }
 
-export default App
+export default App;

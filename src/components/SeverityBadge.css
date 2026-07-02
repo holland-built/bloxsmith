@@ -1,0 +1,27 @@
+.severity-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--r-status);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.severity-badge.crit {
+  color: var(--red);
+  background-color: rgba(var(--red-rgb), 0.12);
+  border: 1px solid rgba(var(--red-rgb), 0.35);
+}
+
+.severity-badge.warn {
+  color: var(--amber);
+  background-color: rgba(var(--amber-rgb), 0.12);
+  border: 1px solid rgba(var(--amber-rgb), 0.35);
+}
+
+.severity-badge.ok {
+  color: var(--green);
+  background-color: rgba(var(--green-rgb), 0.12);
+  border: 1px solid rgba(var(--green-rgb), 0.35);
+}

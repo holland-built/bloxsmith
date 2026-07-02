@@ -1,12 +1,10 @@
-/* GENERATED — do not edit. Run: node scripts/gen-dark-tokens.mjs */
+/* Hand-tuned v2 dark — SOURCE OF TRUTH. Do NOT run gen:tokens against this file — it lightness-inverts and produces the WRONG palette for this hand-tuned design (dark uses a different hue/chroma per token than light, not just a lightness invert). See brainstorms/noc-dashboard-step3b-plan-2026-07-02.md locked decision 3. */
 
 [data-theme="dark"] {
-  --color-bg: #000000;
-  --color-fg: #e5e5e5;
-  --color-surface: #0a0a0a;
-  --color-border: #262626;
-  --color-accent: #1452da;
-  --color-danger: #d92323;
-  --color-warning: #f99726;
-  --color-success: #5ce990;
+  --bg:#0a1418;--surface:#0f1d23;--surface-2:#16282f;--surface-3:#1d333b;
+  --border:#26414a;
+  --accent:#2dd4ce;--teal:#2dd4ce;
+  --ink:#e8f4f4;--ink-dim:#b6ccce;--muted:#7c979b;
+  --red:#d967e0;--amber:#f2b23c;--green:#46d19a;
+  --red-rgb:217,103,224;--amber-rgb:242,178,60;--green-rgb:70,209,154;
 }

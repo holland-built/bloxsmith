@@ -1,7 +1,14 @@
 @import url('./tokens.light.css');
 @import url('./tokens.dark.css');
 
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
 body {
-  background: var(--color-bg);
-  color: var(--color-fg);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
 }
