@@ -8,6 +8,10 @@ test('shows degraded state when data is empty', async ({ page }) => {
     })
   );
 
+  await page.route('**/api/alerts/incidents', (route) =>
+    route.fulfill({ status: 200, body: JSON.stringify([]) })
+  );
+
   await page.goto('/index-vite.html');
 
   await expect(page.getByText('No data — check connection')).toBeVisible();
@@ -65,6 +69,10 @@ test('shows real data when the API returns sample rows', async ({ page }) => {
         views: [],
       }),
     })
+  );
+
+  await page.route('**/api/alerts/incidents', (route) =>
+    route.fulfill({ status: 200, body: JSON.stringify([]) })
   );
 
   await page.goto('/index-vite.html');

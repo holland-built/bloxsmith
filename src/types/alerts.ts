@@ -8,6 +8,7 @@ export interface Incident {
   sample_entities: string[];
   first_detected_at: number;
   message: string;
+  entity_type: string;
 }
 
 export interface AlertsHealth {

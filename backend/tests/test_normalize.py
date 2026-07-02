@@ -78,6 +78,21 @@ def test_subnet_no_tags_defaults_to_dash():
             "utilization": {"total": 10, "used": 1}}]
     out = normalize.norm_subnets(raw)
     assert out[0]["site"] == "–"
+    assert out[0]["owner"] == "–"
+
+
+def test_subnet_tags_owner_present():
+    raw = [{"id": "9", "name": "sub-i", "address": "10.0.8.0", "cidr": 24,
+            "utilization": {"total": 10, "used": 1}, "tags": {"owner": "team-a"}}]
+    out = normalize.norm_subnets(raw)
+    assert out[0]["owner"] == "team-a"
+
+
+def test_subnet_tags_owner_fallback_to_team():
+    raw = [{"id": "10", "name": "sub-j", "address": "10.0.9.0", "cidr": 24,
+            "utilization": {"total": 10, "used": 1}, "tags": {"team": "team-b"}}]
+    out = normalize.norm_subnets(raw)
+    assert out[0]["owner"] == "team-b"
 
 
 # ── norm_leases ─────────────────────────────────────────────────────────

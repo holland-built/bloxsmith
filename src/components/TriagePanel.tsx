@@ -1,4 +1,5 @@
 import { useIncidents } from '../hooks/useIncidents';
+import { drillTo } from '../lib/drilldown';
 import { DegradedState } from './DegradedState';
 import { SeverityBadge } from './SeverityBadge';
 import { SnoozeControl } from './SnoozeControl';
@@ -33,7 +34,13 @@ export function TriagePanel() {
             <span className="triage-entities">
               {incident.sample_entities.join(', ')}
             </span>
-            {/* future: "View →" drill-down to affected entities (step 5, not built here) */}
+            <button
+              type="button"
+              className="triage-view"
+              onClick={() => drillTo(incident.entity_type, incident.sample_entities[0])}
+            >
+              View →
+            </button>
             <SnoozeControl category={incident.category} onSnoozed={refetch} />
           </li>
         ))}

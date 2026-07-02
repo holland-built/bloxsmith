@@ -9,6 +9,7 @@ export interface Subnet {
   used: number;
   util: number;
   site?: string;
+  owner?: string;
   severity: Severity;
 }
 

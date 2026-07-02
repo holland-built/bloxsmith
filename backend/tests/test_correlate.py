@@ -58,3 +58,13 @@ def test_sample_entities_capped_at_five_but_count_reflects_true_total():
     inc = incidents[0]
     assert len(inc["sample_entities"]) == 5
     assert inc["count"] == 8
+
+
+def test_incident_entity_type_matches_signal_entity_type():
+    signals = [
+        _signal("subnet-utilization", "warn", "sub-1"),
+        _signal("subnet-utilization", "crit", "sub-2"),
+    ]
+    incidents = correlate(signals)
+    assert len(incidents) == 1
+    assert incidents[0]["entity_type"] == "subnet"
