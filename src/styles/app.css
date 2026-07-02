@@ -12,3 +12,9 @@ body {
   color: var(--ink);
   font-family: var(--font-ui);
 }
+
+.app-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
