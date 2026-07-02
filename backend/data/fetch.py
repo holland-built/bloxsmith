@@ -8,6 +8,7 @@ OUT OF SCOPE: hosts/policies/feeds/audit (other verticals, not ported here).
 import asyncio
 
 from backend import mcp_client
+from backend.alerts import heartbeat
 from backend.data import normalize
 
 
@@ -31,4 +32,5 @@ async def fetch_network() -> dict:
         views = normalize.norm_views(mcp_client._results(views_d))
         zones = normalize.norm_zones(mcp_client._results(zones_d), view_map)
 
+        heartbeat.mark_fetch_ok()
         return {"subnets": subnets, "leases": leases, "zones": zones, "views": views}
