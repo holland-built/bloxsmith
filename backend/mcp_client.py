@@ -15,13 +15,17 @@ never a bare-name import of those globals, so every module sees one source
 of truth (see backend/config.py docstring).
 """
 
+import asyncio
 import json
+import re
+import sys
 from contextlib import asynccontextmanager
 
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.client.session import ClientSession
 
 from backend import config
+from backend.cache import _cache_key, _cache_get, _cache_set
 
 
 # ── MCP helpers ───────────────────────────────────────────────────────────────
@@ -64,3 +68,99 @@ def list_accounts() -> dict:
         if not config._active_account_id:
             config._active_account_id = config._HOME_ACCOUNT_ID
     return {"accounts": accounts, "active": config._active_account_id}
+
+
+# ── Generic paginated MCP fetch plumbing ────────────────────────────────────
+# Ported verbatim from server.py (_TABLE_RE:445, _tool_text/_columnar_to_dicts/
+# _results:880-899, _query_all_rows:900-920, _mcp_get:922-960).
+
+# Allowlist: Parquet table names returned by MCP are alphanumeric + _ - and .
+# (the name carries a .parquet extension, e.g. ipamsvc_ipam_subnet_get.parquet)
+_TABLE_RE = re.compile(r'^[a-zA-Z0-9_][a-zA-Z0-9_.\-]{0,127}$')
+
+
+def _tool_text(result) -> str:
+    return result.content[0].text if result.content else "{}"
+
+
+def _columnar_to_dicts(raw: dict) -> list:
+    """Convert DuckDB columnar result {columns, data} to list of dicts."""
+    inner = raw.get("results", raw)
+    cols = inner.get("columns", [])
+    rows = inner.get("data", [])
+    return [dict(zip(cols, row)) for row in rows]
+
+
+def _results(data) -> list:
+    """Pass-through: _mcp_get now returns a list directly."""
+    if isinstance(data, list):
+        return data
+    for key in ("data", "results", "items"):
+        val = data.get(key)
+        if isinstance(val, list):
+            return val
+    return []
+
+
+async def _query_all_rows(session, table: str, row_count: int, label: str) -> list:
+    """Page through stored Parquet 100 rows at a time — MCP caps inline data at 100."""
+    PAGE = 100
+    rows: list = []
+    offset = 0
+    while offset < row_count:
+        try:
+            r = await asyncio.wait_for(
+                session.call_tool("infoblox-portal_query_stored_data", {
+                    "task_description": f"Read rows {offset}–{offset+PAGE} from {label}",
+                    "sql_query": f'SELECT * FROM "{table}" LIMIT {PAGE} OFFSET {offset}',
+                }), timeout=30)
+        except asyncio.TimeoutError:
+            print(f"  [warn] MCP timeout: {label} (step 2 @ offset {offset})", file=sys.stderr)
+            break
+        batch = _columnar_to_dicts(json.loads(_tool_text(r)))
+        if not batch:
+            break
+        rows.extend(batch)
+        offset += PAGE
+    return rows
+
+
+async def _mcp_get(session, service: str, endpoint: str,
+                   params: dict | None = None, fetch_all: bool = False) -> list:
+    ck = _cache_key(service, endpoint, params, fetch_all)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+    # Step 1: store data as Parquet
+    args = {
+        "task_description": f"Fetch {service} {endpoint} for NOC dashboard",
+        "service_name": service,
+        "endpoint": endpoint,
+        "fetch_all": fetch_all,
+    }
+    if params:
+        args["query_params"] = params
+    try:
+        r1 = await asyncio.wait_for(
+            session.call_tool("infoblox-portal_make_get_request", args), timeout=30)
+    except asyncio.TimeoutError:
+        print(f"  [warn] MCP timeout: {service}/{endpoint} (step 1)", file=sys.stderr)
+        return []
+    try:
+        meta = json.loads(_tool_text(r1))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(meta, dict):
+        return []
+    table = meta.get("table_name", "")
+    if not table or not _TABLE_RE.match(table) or meta.get("row_count", 0) == 0:
+        return []
+    # Step 2: page through stored Parquet (MCP caps inline rows at 100)
+    try:
+        result = await _query_all_rows(session, table, meta.get("row_count", 0),
+                                       f"{service}/{endpoint}")
+        _cache_set(ck, result)
+        return result
+    except Exception as e:
+        print(f"  [warn] _mcp_get {service}/{endpoint}: {e}", file=sys.stderr)
+        return []
