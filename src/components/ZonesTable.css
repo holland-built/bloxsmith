@@ -1,0 +1,55 @@
+.zones-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+
+.zones-table th,
+.zones-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.zones-table th {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 600;
+}
+
+.zones-table td {
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+.zones-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.zones-mono {
+  font-family: var(--font-mono);
+}
+
+.zones-issues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.zones-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-2xs);
+  color: var(--amber);
+  background-color: rgba(var(--amber-rgb), 0.12);
+}
+
+.zones-none {
+  color: var(--muted);
+}
