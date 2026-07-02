@@ -1,0 +1,7 @@
+@import url('./tokens.light.css');
+@import url('./tokens.dark.css');
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}

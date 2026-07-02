@@ -1,3 +1,12 @@
+FROM node:24-slim AS frontend
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+COPY vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json index-vite.html ./
+COPY src ./src
+COPY scripts ./scripts
+RUN npm run build
+
 FROM python:3.13-slim
 
 WORKDIR /app
@@ -9,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # App code + static assets (index.html, react/recharts/babel bundles, etc.)
 COPY server.py index.html ./
 COPY *.js ./
+COPY --from=frontend /app/dist ./dist
 
 # Bind to all interfaces inside the container so the host port mapping works.
 # Keys are supplied at run time (env -e INFOBLOX_API_KEY, or the in-app encrypted

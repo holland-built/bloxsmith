@@ -21,7 +21,33 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  frontend-lint-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate dark tokens and verify no drift
+        run: |
+          npm run gen:tokens
+          git diff --exit-code src/styles/tokens.dark.css
+
+      - name: Lint tokens (fail on raw hex/rgb)
+        run: npm run lint:tokens
+
+      - name: Build frontend
+        run: npm run build
+
   build-push:
+    needs: frontend-lint-build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

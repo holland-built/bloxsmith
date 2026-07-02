@@ -1,0 +1,11 @@
+{
+  "extends": "stylelint-config-standard",
+  "rules": {
+    "color-no-hex": true,
+    "declaration-property-value-disallowed-list": {
+      "/^--/": ["/^rgb\\(/", "/^rgba\\(/", "/^hsl\\(/"],
+      "color": ["/^rgb\\(/", "/^rgba\\(/", "/^hsl\\(/"],
+      "background": ["/^rgb\\(/", "/^rgba\\(/", "/^hsl\\(/"]
+    }
+  }
+}

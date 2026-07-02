@@ -1,0 +1,12 @@
+/* GENERATED — do not edit. Run: node scripts/gen-dark-tokens.mjs */
+
+[data-theme="dark"] {
+  --color-bg: #000000;
+  --color-fg: #e5e5e5;
+  --color-surface: #0a0a0a;
+  --color-border: #262626;
+  --color-accent: #1452da;
+  --color-danger: #d92323;
+  --color-warning: #f99726;
+  --color-success: #5ce990;
+}
