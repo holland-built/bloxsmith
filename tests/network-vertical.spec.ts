@@ -1,6 +1,13 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+async function mockAuthedAsViewer(page: Page) {
+  await page.route('**/auth/me', (route) =>
+    route.fulfill({ status: 200, body: JSON.stringify({ email: 'test@x.com', role: 'operator' }) })
+  );
+}
 
 test('shows degraded state when data is empty', async ({ page }) => {
+  await mockAuthedAsViewer(page);
   await page.route('**/api/verticals/network', (route) =>
     route.fulfill({
       status: 200,
@@ -26,6 +33,7 @@ test('shows real data when the API returns sample rows', async ({ page }) => {
   // this test (the component always passes through it before data
   // resolves) — the hard assertions below focus on the two data-presence
   // outcomes that matter for this spec.
+  await mockAuthedAsViewer(page);
   await page.route('**/api/verticals/network', (route) =>
     route.fulfill({
       status: 200,
