@@ -42,3 +42,8 @@ docs/TESTING.md
 # Proof/screenshot artifacts
 *-verify.png
 *_proof.png
+
+# Node / frontend build (new scaffold)
+node_modules/
+dist/
+.vite/
