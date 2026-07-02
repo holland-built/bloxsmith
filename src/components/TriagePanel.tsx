@@ -9,11 +9,11 @@ export function TriagePanel() {
   const { data, loading, error, refetch } = useIncidents();
 
   if (loading) return <DegradedState mode="loading" />;
-  if (error) return <DegradedState mode="error" />;
+  if (error) return <DegradedState mode="error" onRetry={refetch} />;
 
   if (!data || data.length === 0) {
     return (
-      <section className="triage-panel">
+      <section className="triage-panel" id="section-triage">
         <h2>Triage</h2>
         <p className="triage-empty">
           No issues detected — all metrics within normal thresholds
@@ -23,7 +23,7 @@ export function TriagePanel() {
   }
 
   return (
-    <section className="triage-panel">
+    <section className="triage-panel" id="section-triage">
       <h2>Triage</h2>
       <ul className="triage-list">
         {data.map((incident) => (

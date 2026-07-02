@@ -5,14 +5,14 @@ import { LeaseSummary } from './LeaseSummary';
 import { ZonesTable } from './ZonesTable';
 
 export function NetworkVertical() {
-  const { data, loading, error } = useNetworkData();
+  const { data, loading, error, refetch } = useNetworkData();
 
   if (loading) {
     return <DegradedState mode="loading" />;
   }
 
   if (error) {
-    return <DegradedState mode="error" />;
+    return <DegradedState mode="error" onRetry={refetch} />;
   }
 
   const isEmpty =
@@ -28,9 +28,15 @@ export function NetworkVertical() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <SubnetsTable subnets={data!.subnets} />
-      <LeaseSummary leases={data!.leases} />
-      <ZonesTable zones={data!.zones} />
+      <div id="section-subnets" style={{ display: 'contents' }}>
+        <SubnetsTable subnets={data!.subnets} />
+      </div>
+      <div id="section-leases" style={{ display: 'contents' }}>
+        <LeaseSummary leases={data!.leases} />
+      </div>
+      <div id="section-zones" style={{ display: 'contents' }}>
+        <ZonesTable zones={data!.zones} />
+      </div>
     </div>
   );
 }

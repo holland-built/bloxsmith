@@ -5,12 +5,14 @@ interface UseNetworkDataResult {
   data: NetworkData | null;
   loading: boolean;
   error: Error | null;
+  refetch: () => void;
 }
 
 export function useNetworkData(): UseNetworkDataResult {
   const [data, setData] = useState<NetworkData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [trigger, setTrigger] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -30,7 +32,9 @@ export function useNetworkData(): UseNetworkDataResult {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, []);
+  }, [trigger]);
 
-  return { data, loading, error };
+  const refetch = () => setTrigger((t) => t + 1);
+
+  return { data, loading, error, refetch };
 }
