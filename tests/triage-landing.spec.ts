@@ -65,6 +65,14 @@ test.describe('triage landing', () => {
       })
     );
 
+    // Suppress OnboardingBanner (src/components/OnboardingBanner.tsx) so
+    // .app-stack's literal first child stays TriagePanel — the banner
+    // otherwise mounts above it and is orthogonal to the triage-before-
+    // network ordering this test verifies.
+    await page.addInitScript(() => {
+      localStorage.setItem('noc.onboarding.dismissed', '1');
+    });
+
     await page.goto('/index-vite.html');
 
     const triagePanel = page.locator('.triage-panel');

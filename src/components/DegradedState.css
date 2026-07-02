@@ -27,3 +27,15 @@
     transform: rotate(360deg);
   }
 }
+
+.degraded-retry {
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  padding: 4px 10px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
