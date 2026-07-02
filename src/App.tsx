@@ -4,6 +4,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { AuditExportButton } from './components/AuditExportButton';
 import { OnboardingBanner } from './components/OnboardingBanner';
 import { CommandPalette } from './components/CommandPalette';
+import { VaultSetup } from './components/VaultSetup';
 import { useAuth } from './hooks/useAuth';
 
 function App() {
@@ -13,13 +14,15 @@ function App() {
   if (!user) return <LoginScreen onDevLogin={devLogin} />;
 
   return (
-    <div className="app-stack">
-      <OnboardingBanner />
-      {user.role === 'admin' && <AuditExportButton />}
-      <TriagePanel />
-      <NetworkVertical />
-      <CommandPalette onLogout={logout} />
-    </div>
+    <VaultSetup>
+      <div className="app-stack">
+        <OnboardingBanner />
+        {user.role === 'admin' && <AuditExportButton />}
+        <TriagePanel />
+        <NetworkVertical />
+        <CommandPalette onLogout={logout} />
+      </div>
+    </VaultSetup>
   );
 }
 

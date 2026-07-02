@@ -1,0 +1,65 @@
+.vault-setup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg);
+  font-family: var(--font-ui);
+}
+
+.vault-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 340px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 24px;
+}
+
+.vault-title {
+  margin: 0 0 4px;
+  font-size: var(--fs-lg);
+  color: var(--ink);
+}
+
+.vault-caption {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+.vault-input {
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  padding: 6px 8px;
+  font-size: var(--fs-sm);
+  font-family: var(--font-ui);
+}
+
+.vault-button {
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  padding: 6px 10px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.vault-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.vault-error {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--red);
+}

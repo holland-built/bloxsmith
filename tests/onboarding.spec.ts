@@ -4,6 +4,19 @@ async function mockAuthedAsViewer(page: Page) {
   await page.route('**/auth/me', (route) =>
     route.fulfill({ status: 200, body: JSON.stringify({ email: 'test@x.com', role: 'operator' }) })
   );
+  await page.route('**/api/vault/status', (route) =>
+    route.fulfill({
+      status: 200,
+      body: JSON.stringify({
+        vaultMode: false,
+        exists: true,
+        unlocked: true,
+        ready: true,
+        tenants: [],
+        active: '',
+      }),
+    })
+  );
 }
 
 const EMPTY_NETWORK_DATA = {
