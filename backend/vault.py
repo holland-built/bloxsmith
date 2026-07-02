@@ -29,14 +29,9 @@ import threading
 from cryptography.fernet import Fernet, InvalidToken
 
 from backend import config
+from backend.cache import cache_invalidate
 
 DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-def cache_invalidate():
-    """Stub — the data-fetch caching layer is ported in a later step.
-    Ported functions below call this; it's a no-op until then."""
-    pass
 
 
 # ── encrypted vault (multi-tenant key store) ──────────────────────────────────
