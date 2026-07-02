@@ -18,7 +18,7 @@ export function ZonesTable({ zones }: { zones: Zone[] }) {
       </thead>
       <tbody>
         {zones.map((z) => (
-          <tr key={z.id}>
+          <tr key={z.id} id={`zone-${z.id}`}>
             <td className="zones-mono">{z.fqdn}</td>
             <td>{z.view}</td>
             <td className="zones-mono">{z.ttl}</td>
