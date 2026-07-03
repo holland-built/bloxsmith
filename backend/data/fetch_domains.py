@@ -128,6 +128,16 @@ async def fetch_domains() -> dict:
     } for d in dfp]
 
     # --- On-prem host inventory ---
+    def _qps_num(h):
+        # detail_hosts.qps may be a scalar or an object like {"limit": N, ...}
+        q = h.get("qps", 0)
+        if isinstance(q, dict):
+            for k in ("current", "value", "avg", "limit"):
+                if isinstance(q.get(k), (int, float)):
+                    return q[k]
+            return 0
+        return q if isinstance(q, (int, float)) else 0
+
     host_status = Counter(str(h.get("composite_status", "unknown")).lower() for h in hosts)
     host_inventory = {
         "total": len(hosts),
@@ -137,7 +147,7 @@ async def fetch_domains() -> dict:
             "ip": h.get("ip_address", ""),
             "version": h.get("host_version", ""),
             "status": str(h.get("composite_status", "")).lower(),
-            "qps": h.get("qps", 0),
+            "qps": _qps_num(h),
         } for h in hosts[:12]],
     }
 

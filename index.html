@@ -4797,7 +4797,7 @@ function App({vault, onVaultChange}={}) {
   const [focusEntity, setFocusEntity] = React.useState(null); // {type:'site'|'subnet'|'host', key:string}
   const [rowLimits, setRowLimits]       = useState(()=>LS.get('rl',{}));
   const [collapsed, setCollapsed]       = useState(()=>LS.get('cl',{}));
-  const DEFAULT_ORDER=['dhcp','hosts','subnets','ttl','feeds','audit'];
+  const DEFAULT_ORDER=['dhcp','hosts','subnets','ttl','feeds','audit','svchealth','threatevents','threatfeeds','customlists','secpolicies','hostinv','anycast','dfp','roaming'];
   const [overviewOrder, setOverviewOrder] = useState(()=>{
     const saved=LS.get('noc.widgetOrder', null) || LS.get('oo', null) || DEFAULT_ORDER;
     // keep only known ids + append any missing defaults (forward-compatible)
@@ -4816,6 +4816,9 @@ function App({vault, onVaultChange}={}) {
   const [wallSpans, setWallSpans]       = useState(()=>LS.get('noc.wallSpans',{feeds:2}));
   const [widgetHeights, setWidgetHeights] = useState(()=>LS.get('noc.heights',{}));
   const [hoverPause, setHoverPause]     = useState(false);
+  const [hubHealth, setHubHealth]       = useState(null);
+  const [hubSecurity, setHubSecurity]   = useState(null);
+  const [hubDomains, setHubDomains]     = useState(null);
 
   const getViz = (id, def='table') => vizMode[id] || def;
   const setViz = (id, v) => { const n={...vizMode,[id]:v}; setVizMode(n); LS.set('noc.viz',n); };
@@ -4827,7 +4830,7 @@ function App({vault, onVaultChange}={}) {
   const [triagePromptDismissed, setTriagePromptDismissed] = useState(false);
   const [ackedAlerts, setAckedAlerts] = useState(()=>LS.get('noc.acked',{}));
   const [drillEntity, setDrillEntity] = useState(null);
-  const WIDGET_LABELS={dhcp:'DHCP Pools',hosts:'Host Status',subnets:'Top Subnets',ttl:'DNS Zones',audit:'Audit Log',feeds:'Threat Feeds'};
+  const WIDGET_LABELS={dhcp:'DHCP Pools',hosts:'Host Status',subnets:'Top Subnets',ttl:'DNS Zones',audit:'Audit Log',feeds:'Threat Feeds',svchealth:'Service Health',threatevents:'DNS Threat Events',threatfeeds:'Threat Feeds',customlists:'Custom Lists',secpolicies:'Security Policies',hostinv:'Host Inventory',anycast:'Anycast HA',dfp:'DNS Forwarding Proxy',roaming:'Roaming Endpoints'};
   const [hiddenSections, setHiddenSections] = useState(()=>LS.get('noc.hiddenSections',[]));
   const [showWizard, setShowWizard] = useState(()=>!LS.get('noc.wizardDone',false));
   const [theme, setTheme]           = useState(()=>LS.get('noc.theme','system')); // 'system'|'light'|'dark'
@@ -4972,6 +4975,12 @@ function App({vault, onVaultChange}={}) {
     } finally {
       loadInFlight.current = false;
     }
+    // Hub endpoints (Service Health / DNS Security / Domains) — never break load()
+    Promise.all([
+      fetch('/api/hub/health').then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch('/api/hub/security').then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch('/api/hub/domains').then(r=>r.ok?r.json():null).catch(()=>null),
+    ]).then(([h,s,d])=>{ setHubHealth(h); setHubSecurity(s); setHubDomains(d); }).catch(()=>{});
     setLastUpd(new Date());
     setLoading(false);
     setRefreshing(false);
@@ -5826,6 +5835,17 @@ function App({vault, onVaultChange}={}) {
               const onlineH=s_hosts.filter(h=>h.status==='online').length;
               const warnH=s_hosts.filter(h=>h.status==='degraded').length;
               const downH=s_hosts.filter(h=>['offline','error'].includes(h.status)).length;
+              const hubC=v=>{v=String(v||'').toLowerCase();return (v.startsWith('crit')||v==='high')?'var(--red)':(v.startsWith('warn')||v==='medium'||v==='degraded')?'var(--amber)':'var(--green)';};
+              const hubMuted=txt=>(<div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',padding:'10px 4px'}}>{txt}</div>);
+              const hubHead=(id,title,right)=>(
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <DragHandle id={id}/>
+                    <span id={"card-title-"+id} className="ov-sub" style={{margin:0}}>{title}</span>
+                  </div>
+                  {right||null}
+                </div>
+              );
               const renderOvWidget=id=>{
                 if(id==='dhcp') return (
                   <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
@@ -6032,6 +6052,154 @@ function App({vault, onVaultChange}={}) {
                       );
                     })}
                     {auditLogs.length===0&&<div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',padding:'4px 0'}}>— no events logged</div>}
+                  </div>
+                );
+                if(id==='svchealth') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    {hubHead(id,'Service Health')}
+                    {!hubHealth ? hubMuted('loading…') : hubHealth.length===0 ? hubMuted('— no services') :
+                      hubHealth.map((sv,i)=>(
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'12px 1fr auto',gap:8,alignItems:'center',padding:'6px 4px',borderBottom:i<hubHealth.length-1?'1px solid var(--border)':'none'}}>
+                          <span style={{width:8,height:8,borderRadius:'50%',background:hubC(sv.status),justifySelf:'center'}} title={sv.statusLabel||sv.status}/>
+                          <span style={{fontSize:12,fontFamily:'var(--font-ui)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={sv.name}>{sv.name}</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:hubC(sv.status),textAlign:'right'}}>{sv.statusLabel||sv.status}{sv.meta?<span style={{color:'var(--muted)',marginLeft:6}}>{sv.meta}</span>:null}</span>
+                        </div>
+                      ))}
+                  </div>
+                );
+                if(id==='threatevents') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    {hubHead(id,'DNS Threat Events')}
+                    {!hubSecurity ? hubMuted('loading…') : (<>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:10}}>
+                        {[{n:hubSecurity.counts?.critical||0,l:'Crit',c:'var(--red)'},{n:hubSecurity.counts?.high||0,l:'High',c:'var(--red)'},{n:hubSecurity.counts?.medium||0,l:'Med',c:'var(--amber)'},{n:hubSecurity.counts?.low||0,l:'Low',c:'var(--green)'}].map((x,i)=>(
+                          <div key={i} style={{display:'flex',flexDirection:'column',gap:2}}>
+                            <span style={{fontSize:20,fontFamily:'var(--font-mono)',color:x.c,lineHeight:1}}>{x.n}</span>
+                            <span style={{fontSize:9,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em'}}>{x.l}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)',marginBottom:8}}>
+                        <span style={{color:'var(--red)'}}>{hubSecurity.blocked||0}</span> blocked · <span style={{color:'var(--ink)'}}>{hubSecurity.logged||0}</span> logged · last hr
+                      </div>
+                      {(hubSecurity.events||[]).slice(0,4).map((e,i)=>(
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:6,alignItems:'center',padding:'4px 0',borderTop:'1px solid var(--border)'}}>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={e.qname}>{e.qname}</span>
+                          <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 5px',borderRadius:3,background:'var(--surface-3)',color:hubC(e.severity),textTransform:'uppercase'}}>{e.severity}</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{e.policy_action}</span>
+                        </div>
+                      ))}
+                      {(hubSecurity.events||[]).length===0&&hubMuted('— no recent events')}
+                    </>)}
+                  </div>
+                );
+                if(id==='threatfeeds') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    {hubHead(id,'Threat Feeds')}
+                    {!hubDomains ? hubMuted('loading…') : (hubDomains.threat_feeds||[]).length===0 ? hubMuted('— no feeds') :
+                      (hubDomains.threat_feeds||[]).slice(0,8).map((f,i)=>(
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',padding:'5px 4px',borderBottom:i<Math.min(hubDomains.threat_feeds.length,8)-1?'1px solid var(--border)':'none'}}>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{f.source}</span>
+                          <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 5px',borderRadius:3,background:'var(--surface-3)',color:hubC(f.severity||f.threat_level),textTransform:'uppercase'}}>{f.threat_level}</span>
+                        </div>
+                      ))}
+                  </div>
+                );
+                if(id==='customlists') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    {hubHead(id,'Custom Lists')}
+                    {!hubDomains ? hubMuted('loading…') : (hubDomains.named_lists||[]).length===0 ? hubMuted('— no lists') :
+                      (hubDomains.named_lists||[]).slice(0,8).map((l,i)=>(
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',padding:'5px 4px',borderBottom:i<Math.min(hubDomains.named_lists.length,8)-1?'1px solid var(--border)':'none'}}>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={l.name}>{l.name}</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{(l.items||0).toLocaleString()} items</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{l.policies} pol</span>
+                        </div>
+                      ))}
+                  </div>
+                );
+                if(id==='secpolicies') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    {hubHead(id,'Security Policies')}
+                    {!hubDomains ? hubMuted('loading…') : (hubDomains.security_policies||[]).length===0 ? hubMuted('— no policies') :
+                      (hubDomains.security_policies||[]).slice(0,8).map((p,i)=>(
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',padding:'5px 4px',borderBottom:i<Math.min(hubDomains.security_policies.length,8)-1?'1px solid var(--border)':'none'}}>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={p.name}>{p.name}</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{p.rules} rules</span>
+                          <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 5px',borderRadius:3,background:'var(--surface-3)',color:'var(--ink)',textTransform:'uppercase'}}>{p.default_action}</span>
+                        </div>
+                      ))}
+                  </div>
+                );
+                if(id==='hostinv') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    {hubHead(id,'Host Inventory')}
+                    {!hubDomains||!hubDomains.host_inventory ? hubMuted('loading…') : (<>
+                      <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:10}}>
+                        {Object.entries(hubDomains.host_inventory.by_status||{}).map(([k,v],i)=>(
+                          <span key={i} style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'2px 7px',borderRadius:10,background:'var(--surface-3)',color:hubC(k)}}>{k}: {v}</span>
+                        ))}
+                        <span style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'2px 7px',borderRadius:10,background:'var(--surface-3)',color:'var(--muted)'}}>total: {hubDomains.host_inventory.total||0}</span>
+                      </div>
+                      {(hubDomains.host_inventory.hosts||[]).slice(0,6).map((h,i)=>(
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'12px 1fr auto auto',gap:8,alignItems:'center',padding:'4px 4px',borderTop:'1px solid var(--border)'}}>
+                          <span style={{width:8,height:8,borderRadius:'50%',background:hubC(h.status),justifySelf:'center'}} title={h.status}/>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={h.name}>{h.name}</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{h.ip}</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{h.qps} qps</span>
+                        </div>
+                      ))}
+                    </>)}
+                  </div>
+                );
+                if(id==='anycast') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    {hubHead(id,'Anycast HA')}
+                    {!hubDomains ? hubMuted('loading…') : (hubDomains.anycast_ha||[]).length===0 ? hubMuted('— no anycast services') :
+                      (hubDomains.anycast_ha||[]).slice(0,8).map((a,i)=>(
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',padding:'5px 4px',borderBottom:i<Math.min(hubDomains.anycast_ha.length,8)-1?'1px solid var(--border)':'none'}}>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={a.name}>{a.name} <span style={{color:'var(--muted)'}}>{a.service}</span></span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{a.ip}</span>
+                          <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 5px',borderRadius:3,background:'var(--surface-3)',color:hubC(a.severity||a.state),textTransform:'uppercase'}}>{a.state}</span>
+                        </div>
+                      ))}
+                  </div>
+                );
+                if(id==='dfp') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    {hubHead(id,'DNS Forwarding Proxy')}
+                    {!hubDomains ? hubMuted('loading…') : (hubDomains.dfp_services||[]).length===0 ? hubMuted('— no DFP services') :
+                      (hubDomains.dfp_services||[]).slice(0,8).map((s,i)=>(
+                        <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',padding:'5px 4px',borderBottom:i<Math.min(hubDomains.dfp_services.length,8)-1?'1px solid var(--border)':'none'}}>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={s.name}>{s.name}</span>
+                          <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{s.host}</span>
+                          <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 5px',borderRadius:3,background:'var(--surface-3)',color:'var(--ink)',textTransform:'uppercase'}}>{s.mode}</span>
+                        </div>
+                      ))}
+                  </div>
+                );
+                if(id==='roaming') return (
+                  <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
+                    {hubHead(id,'Roaming Endpoints')}
+                    {!hubDomains||!hubDomains.roaming_endpoints ? hubMuted('loading…') : (<>
+                      <div style={{fontSize:20,fontFamily:'var(--font-mono)',color:'var(--ink)',lineHeight:1,marginBottom:8}}>{(hubDomains.roaming_endpoints.total||0).toLocaleString()}<span style={{fontSize:9,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',marginLeft:6}}>endpoints</span></div>
+                      <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:10}}>
+                        {Object.entries(hubDomains.roaming_endpoints.by_status||{}).map(([k,v],i)=>(
+                          <span key={i} style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'2px 7px',borderRadius:10,background:'var(--surface-3)',color:hubC(k)}}>{k}: {v}</span>
+                        ))}
+                      </div>
+                      <div style={{fontSize:9,color:'var(--gray-200)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:4}}>Top Countries</div>
+                      {(Array.isArray(hubDomains.roaming_endpoints.top_countries)
+                          ? hubDomains.roaming_endpoints.top_countries.map(c=>Array.isArray(c)?[c[0],c[1]]:[c.country||c.name||c.code, c.count!=null?c.count:c.total])
+                          : Object.entries(hubDomains.roaming_endpoints.top_countries||{})
+                        ).slice(0,5).map(([k,v],i)=>(
+                        <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'3px 4px',borderTop:'1px solid var(--border)'}}>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)'}}>{k}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{(v||0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </>)}
                   </div>
                 );
                 return null;
