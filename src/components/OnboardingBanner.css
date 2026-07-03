@@ -2,8 +2,9 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: none;
+  box-shadow: var(--elev-raised);
   border-radius: var(--r-card);
   padding: 8px 12px;
   font-family: var(--font-ui);
@@ -20,7 +21,8 @@
   display: inline-block;
   background: var(--surface);
   color: var(--ink);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
   border-radius: var(--r-ctl);
   padding: 1px 5px;
   font-family: var(--font-mono);

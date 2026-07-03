@@ -14,7 +14,8 @@
   gap: 12px;
   width: 340px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: var(--elev-raised);
   border-radius: var(--r-card);
   padding: 24px;
 }
@@ -23,6 +24,8 @@
   margin: 0 0 4px;
   font-size: var(--fs-lg);
   color: var(--ink);
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-display);
 }
 
 .vault-caption {
@@ -32,20 +35,27 @@
 }
 
 .vault-input {
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--ink);
-  border: 1px solid var(--border);
-  border-radius: var(--r-ctl);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: 6px;
   padding: 6px 8px;
   font-size: var(--fs-sm);
   font-family: var(--font-ui);
 }
 
+.vault-input:focus {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
 .vault-button {
   background: var(--surface);
-  color: var(--accent);
-  border: 1px solid var(--border);
-  border-radius: var(--r-ctl);
+  color: var(--fg);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: 6px;
   padding: 6px 10px;
   font-size: var(--fs-xs);
   font-weight: 600;
@@ -61,12 +71,12 @@
 .vault-error {
   margin: 0;
   font-size: var(--fs-xs);
-  color: var(--red);
+  color: var(--danger);
 }
 
 .vault-divider {
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-soft);
   margin: 4px 0;
 }
 
@@ -103,8 +113,10 @@
 }
 
 .vault-button--danger {
-  color: var(--red);
-  border-color: var(--red);
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  box-shadow: none;
 }
 
 .vault-link {
@@ -124,5 +136,5 @@
 }
 
 .vault-caption--warn {
-  color: var(--red);
+  color: var(--danger);
 }

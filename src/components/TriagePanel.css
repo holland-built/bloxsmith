@@ -1,7 +1,8 @@
 .triage-panel {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
+  border: none;
+  box-shadow: var(--elev-raised);
+  border-radius: var(--radius-md);
   padding: 12px;
   font-family: var(--font-ui);
 }
@@ -30,7 +31,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-soft);
   font-size: var(--fs-sm);
   color: var(--ink);
 }

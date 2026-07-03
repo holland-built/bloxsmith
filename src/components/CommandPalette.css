@@ -12,7 +12,8 @@
 .cmdk-box {
   width: min(560px, 92vw);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: var(--elev-raised);
   border-radius: var(--r-card);
   overflow: hidden;
 }

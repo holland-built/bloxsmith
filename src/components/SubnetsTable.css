@@ -2,7 +2,8 @@
   width: 100%;
   border-collapse: collapse;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: var(--elev-raised);
   border-radius: var(--r-card);
   overflow: hidden;
 }
@@ -11,7 +12,7 @@
 .subnets-table td {
   padding: 8px 12px;
   text-align: left;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-soft);
   font-size: var(--fs-sm);
   color: var(--ink);
 }
@@ -21,6 +22,7 @@
 }
 
 .subnets-table th {
+  border-bottom: 1px solid var(--border);
   color: var(--muted);
   font-size: var(--fs-xs);
   text-transform: uppercase;

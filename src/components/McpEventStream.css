@@ -1,7 +1,8 @@
 .mcp-event-stream {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
+  border: none;
+  box-shadow: var(--elev-raised);
+  border-radius: var(--radius-md);
   padding: 12px;
   font-family: var(--font-ui);
 }
@@ -41,7 +42,7 @@
   align-items: baseline;
   gap: 10px;
   padding: 4px 6px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-soft);
   font-size: var(--fs-xs);
 }
 
@@ -74,7 +75,8 @@
   flex-shrink: 0;
   background: var(--surface-3);
   color: var(--ink-dim);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .mcp-event-desc {
