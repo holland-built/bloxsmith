@@ -9,21 +9,19 @@ Session 3 (`/improve` against commit `6f42354`): medium-priority reliability, a1
 | # | Plan | Category | Effort | Priority | Status | Depends on |
 |---|---|---|---|---|---|---|
 | 001 | [Delete dead prop-types.min.js](001-delete-dead-prop-types.md) | delete | S | P3 | DONE | — |
-| 002 | [Extract `_run_async` helper](002-run-async-helper.md) | shrink | S | P3 | TODO | — |
-| 003 | [Drop SUGGESTIONS: fallback](003-drop-parse-ai-suggestions-fallback.md) | YAGNI | S | P3 | TODO | — |
+| 002 | [Extract `_run_async` helper](002-run-async-helper.md) | shrink | S | P3 | DONE | — |
+| 003 | [Drop SUGGESTIONS: fallback](003-drop-parse-ai-suggestions-fallback.md) | YAGNI | S | P3 | DONE | — |
 | 004 | [Fix loadInFlight.current never reset](004-loadinflight-reset.md) | bug | S | P1 | DONE | — |
 | 005 | [Validate Content-Length in do_POST](005-content-length-validation.md) | security | S | P1 | DONE | — |
 | 006 | [Guard /api/update/apply with auth](006-update-apply-auth.md) | security | S | P1 | DONE | — |
 | 007 | [Paginate PoliciesPanel](007-policies-panel-pagination.md) | perf | S | P1 | DONE | — |
 | 008 | [aria-current on nav tabs + OVB keyboard](008-nav-aria-current.md) | a11y | S | P2 | DONE | — |
-| 009 | [AbortController for lazyFetch](009-lazyfetch-abortcontroller.md) | bug/memory | S | P2 | TODO | — |
-| 010 | [_csp_json type guard](010-csp-json-type-guard.md) | bug | S | P2 | TODO | — |
-| 011 | [asyncio timeout on _mcp_search](011-mcp-search-timeout.md) | reliability | S | P2 | TODO | — |
-| 012 | [aria-hidden/label on status dots](012-status-dot-aria.md) | a11y | S | P2 | TODO | — |
+| 009 | [AbortController for lazyFetch](009-lazyfetch-abortcontroller.md) | bug/memory | S | P2 | DONE | — |
+| 010 | [_csp_json type guard](010-csp-json-type-guard.md) | bug | S | P2 | DONE | — |
+| 011 | [asyncio timeout on _mcp_search](011-mcp-search-timeout.md) | reliability | S | P2 | DONE | — |
+| 012 | [aria-hidden/label on status dots](012-status-dot-aria.md) | a11y | S | P2 | DONE | — |
 
-**Recommended execution order**: 010 → 011 → 009 → 012 → 002 → 003
-
-All plans are independent — no blocking dependencies.
+All 12 plans DONE. No open work in this list.
 
 ## Dependency graph
 

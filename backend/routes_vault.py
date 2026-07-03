@@ -51,6 +51,10 @@ class ActiveBody(BaseModel):
     id: str = ""
 
 
+class ResetBody(BaseModel):
+    confirm: str = ""
+
+
 class GroqBody(BaseModel):
     key: str = ""
 
@@ -109,6 +113,11 @@ def post_vault_unlock(body: PassphraseBody, response: Response):
 
 @router.post("/api/vault/tenant")
 def post_vault_tenant(body: TenantBody, response: Response):
+    # Validate key against CSP before persisting; block on explicit 4xx rejection.
+    test = vault.vault_test_key(body.key)
+    if test.get("rejected"):
+        response.status_code = 400
+        return {"ok": False, "error": test["error"]}
     r = vault.vault_add_tenant(body.label, body.key, body.groq)
     response.status_code = 200 if r.get("ok") else 400
     return r
@@ -198,8 +207,11 @@ def post_vault_lock(request: Request, response: Response):
 
 
 @router.post("/api/vault/reset")
-def post_vault_reset(request: Request, response: Response):
-    if not config.MCP_HEADERS.get("Authorization") and not _authed(request):
-        response.status_code = 401
-        return {"ok": False, "error": "unauthorized"}
+def post_vault_reset(body: ResetBody, request: Request, response: Response):
+    # Allow unauthenticated reset when the caller confirms intent explicitly.
+    # Authenticated callers (active key or dashboard token) bypass the confirm check.
+    authed = config.MCP_HEADERS.get("Authorization") or _authed(request)
+    if not authed and body.confirm != "RESET":
+        response.status_code = 403
+        return {"ok": False, "error": "Send {\"confirm\":\"RESET\"} to confirm"}
     return vault.vault_reset()

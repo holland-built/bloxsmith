@@ -1,0 +1,225 @@
+.mcp-incident-queue {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 12px;
+  font-family: var(--font-ui);
+}
+
+.mcp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.mcp-section-title {
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--ink);
+}
+
+.mcp-refresh-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 6px;
+  color: var(--accent);
+  font-size: var(--fs-md);
+  cursor: pointer;
+  border-radius: var(--r-ctl);
+  line-height: 1;
+}
+
+.mcp-refresh-btn:hover {
+  background: var(--surface-2);
+}
+
+.mcp-empty {
+  margin: 0;
+  padding: 8px 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.mcp-incident-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mcp-incident-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.mcp-incident-list li:last-child .mcp-incident-row {
+  border-bottom: none;
+}
+
+.mcp-incident-row:hover,
+.mcp-incident-row--expanded {
+  background: var(--surface-2);
+}
+
+.mcp-incident-id {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-dim);
+  min-width: 6ch;
+}
+
+.mcp-incident-type {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  min-width: 8ch;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mcp-incident-title {
+  flex: 1;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcp-incident-affected {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-dim);
+  min-width: 3ch;
+  text-align: right;
+}
+
+.mcp-incident-time {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  min-width: 6ch;
+  text-align: right;
+}
+
+/* Status badge */
+.mcp-status-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: var(--r-status);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--surface-3);
+  color: var(--ink-dim);
+  border: 1px solid var(--border);
+}
+
+.mcp-status-badge.mcp-status-open {
+  color: var(--red);
+  background: rgba(var(--red-rgb), 0.10);
+  border-color: rgba(var(--red-rgb), 0.30);
+}
+
+.mcp-status-badge.mcp-status-investigating {
+  color: var(--amber);
+  background: rgba(var(--amber-rgb), 0.10);
+  border-color: rgba(var(--amber-rgb), 0.30);
+}
+
+.mcp-status-badge.mcp-status-resolved {
+  color: var(--green);
+  background: rgba(var(--green-rgb), 0.10);
+  border-color: rgba(var(--green-rgb), 0.30);
+}
+
+/* Inline detail panel */
+.mcp-incident-detail {
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+}
+
+.mcp-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.mcp-detail-title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.mcp-detail-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: var(--fs-base);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.mcp-detail-close:hover {
+  color: var(--ink);
+}
+
+.mcp-detail-description {
+  margin: 0 0 8px;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+.mcp-triggers-heading {
+  margin: 0 0 4px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.mcp-triggers-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mcp-trigger-row {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-xs);
+}
+
+.mcp-trigger-row:last-child {
+  border-bottom: none;
+}
+
+.mcp-trigger-time {
+  font-family: var(--font-mono);
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mcp-trigger-desc {
+  color: var(--ink);
+}
