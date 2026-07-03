@@ -43,7 +43,7 @@ window.onerror = function(msg,src,line,col,err) {
   --amber-bg:rgba(234,179,8,.12);--amber-border:rgba(234,179,8,.3);--amber-text:#a16207;
   --green-bg:rgba(22,163,74,.10);--green-border:rgba(22,163,74,.3);--green-text:#16a34a;
   /* type scale */
-  --fs-2xs:10px;--fs-xs:11px;--fs-sm:12px;--fs-base:13px;--fs-md:14px;--fs-lg:20px;--fs-xl:28px;--fs-2xl:48px;
+  --fs-2xs:11px;--fs-xs:12px;--fs-sm:13px;--fs-base:15px;--fs-md:16px;--fs-lg:22px;--fs-xl:30px;--fs-2xl:48px;
   /* interaction */
   --hover:rgba(0,0,0,.04);
   --hover-strong:rgba(0,0,0,.06);
@@ -224,7 +224,7 @@ body{padding-left:0!important}
 .bento>*{min-width:0}
 .b-wide{grid-column:span 2}
 .b-full{grid-column:1/-1}
-.ov-bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start;margin-top:14px}
+.ov-bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px;align-items:start;margin-top:14px}
 .ov-bento>*{min-width:0}
 .ov-bento>.b-wide{grid-column:span 2}
 .ov-bento>.b-full{grid-column:1/-1}
@@ -378,7 +378,13 @@ body{padding-left:0!important}
 .n-more:hover{color:var(--teal)}
 /* v5 incident commander two-column layout */
 .noc-layout{display:flex;gap:0}
-.alert-col{width:38%;max-width:520px;min-width:280px;flex:0 0 38%;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.alert-col{width:300px;max-width:300px;min-width:300px;flex:0 0 300px;background:var(--surface);border-right:none;box-shadow:1px 0 0 var(--border);display:flex;flex-direction:column}
+.alert-col:empty,.alert-col.is-empty{display:none}
+/* desktop-collapsible: when hidden the whole rail folds to 0 and the grid reclaims it */
+.alert-col.collapsed-mobile{width:0;max-width:0;min-width:0;flex-basis:0;box-shadow:none;overflow:hidden;pointer-events:none}
+.incidents-reopen{position:sticky;top:0;align-self:flex-start;margin:14px 0 0 14px;display:inline-flex;align-items:center;gap:7px;background:var(--surface);box-shadow:0 0 0 1px var(--border);color:var(--ink);font-size:var(--fs-sm);font-weight:600;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;z-index:50}
+.incidents-reopen:hover{box-shadow:0 0 0 1px var(--accent);color:var(--accent)}
+.incidents-reopen .ir-count{background:var(--red);color:#fff;font-family:var(--font-mono);font-size:var(--fs-2xs);font-weight:700;padding:0 6px;border-radius:9999px}
 .alert-col-header{padding:12px 14px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
 .alert-col-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:.01em}
 .alert-col-count{background:var(--danger-bg);color:var(--danger);border:1px solid rgba(248,113,113,.35);font-size:11px;font-weight:600;padding:1px 6px;border-radius:var(--r-pill)}
@@ -4739,7 +4745,7 @@ function App({vault, onVaultChange}={}) {
   const [demoDismiss, setDemoDismiss]   = useState(()=>LS.get('noc.demoDismiss',false));
   const [sidebarOpen, setSidebarOpen]       = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(()=>LS.get('noc.sidebarCollapsed',true));
-  const [alertColCollapsed, setAlertColCollapsed] = useState(false);
+  const [alertColCollapsed, setAlertColCollapsed] = useState(()=>LS.get('noc.incidentsHidden',true));
   const [srchQ, setSrchQ]       = useState('');
   const [srchRes, setSrchRes]   = useState(null);
   const [srching, setSrching]   = useState(false);
@@ -5576,12 +5582,13 @@ function App({vault, onVaultChange}={}) {
         />}
         {focusEntity&&<button className="scope-clear" style={{position:'fixed',bottom:12,right:12,zIndex:200,background:'var(--surface-2)',border:'1px solid var(--teal)',color:'var(--teal)',padding:'4px 10px',borderRadius:4,fontSize:10,fontFamily:'var(--font-mono)',cursor:'pointer'}} onClick={()=>setFocusEntity(null)}>◉ focused: {focusEntity.key} — click to clear</button>}
         <div className="noc-layout">
+          {alertColCollapsed&&section==='overview'&&<button className="incidents-reopen" onClick={()=>{setAlertColCollapsed(false);LS.set('noc.incidentsHidden',false);}} title="Show active incidents">⚠ Incidents{(firingAlerts.length+critSubs.length+errHosts.length)>0&&<span className="ir-count">{firingAlerts.length+critSubs.length+errHosts.length}</span>}</button>}
           <div className={`alert-col${alertColCollapsed?' collapsed-mobile':''}`}>
             <div className="alert-col-header">
               <div className="alert-col-title">
                 Active Incidents
                 {(firingAlerts.length+critSubs.length+errHosts.length)>0&&<span className="alert-col-count">{firingAlerts.length+critSubs.length+errHosts.length}</span>}
-                <button className="alert-col-mobile-toggle" aria-expanded={!alertColCollapsed} onClick={()=>setAlertColCollapsed(v=>!v)}>{alertColCollapsed?'Show ⌄':'Hide ⌃'}</button>
+                <button className="alert-col-mobile-toggle" aria-expanded={!alertColCollapsed} onClick={()=>setAlertColCollapsed(v=>{LS.set('noc.incidentsHidden',!v);return !v;})}>{alertColCollapsed?'Show ⌄':'Hide ⌃'}</button>
               </div>
             </div>
         {/* ── ATC latch strip — read-only CRIT highlight, gated on critSubs ── */}
