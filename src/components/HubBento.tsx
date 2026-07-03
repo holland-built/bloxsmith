@@ -36,6 +36,9 @@ export function HubBento({ metrics }: { metrics: HubMetrics }) {
     openOver48h,
     services,
     security,
+    securityBlocked,
+    securityLogged,
+    securityReal,
     sparkline,
   } = metrics;
 
@@ -168,7 +171,10 @@ export function HubBento({ metrics }: { metrics: HubMetrics }) {
 
       {/* security action queue */}
       <section className="tile security">
-        <div className="lbl2">Security Actions</div>
+        <div className="lbl2">
+          {securityReal ? 'DNS Threat Events' : 'Security Actions'}
+          {securityReal && <span className="sec-live">· live</span>}
+        </div>
         <div className="sec-grid">
           <div className={`sec ${security.critical === 0 ? 'zero' : ''}`}>
             <div className="num">{security.critical}</div>
@@ -187,6 +193,11 @@ export function HubBento({ metrics }: { metrics: HubMetrics }) {
             <div className="cls">Low</div>
           </div>
         </div>
+        {securityReal && (
+          <div className="sec-foot">
+            <b>{securityBlocked}</b> blocked · <b>{securityLogged}</b> logged · last hr
+          </div>
+        )}
       </section>
     </div>
   );
