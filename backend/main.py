@@ -1,6 +1,7 @@
 import os
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend import config, routes_vault, routes_network, routes_alerts  # noqa: F401 — importing config triggers its .env load
@@ -37,6 +38,11 @@ except Exception:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/")
+def root():
+    return RedirectResponse(url="/index-vite.html")
 
 
 if os.path.isdir("dist"):
