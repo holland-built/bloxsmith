@@ -2,6 +2,7 @@ import { useHubData } from '../hooks/useHubData';
 import { DegradedState } from './DegradedState';
 import { HubTickerStrip } from './HubTickerStrip';
 import { HubBento } from './HubBento';
+import { HubDomains } from './HubDomains';
 import './HubView.css';
 
 export function HubView() {
@@ -24,9 +25,12 @@ export function HubView() {
   }
 
   return (
-    <div className="hub-view">
-      <HubTickerStrip metrics={metrics} />
-      <HubBento metrics={metrics} />
+    <div className="hub-view hub-view--scroll">
+      <div className="hub-atglance">
+        <HubTickerStrip metrics={metrics} />
+        <HubBento metrics={metrics} />
+      </div>
+      <HubDomains />
     </div>
   );
 }
