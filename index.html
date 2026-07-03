@@ -4830,7 +4830,7 @@ function App({vault, onVaultChange}={}) {
   const [triagePromptDismissed, setTriagePromptDismissed] = useState(false);
   const [ackedAlerts, setAckedAlerts] = useState(()=>LS.get('noc.acked',{}));
   const [drillEntity, setDrillEntity] = useState(null);
-  const WIDGET_LABELS={dhcp:'DHCP Pools',hosts:'Host Status',subnets:'Top Subnets',ttl:'DNS Zones',audit:'Audit Log',feeds:'Threat Feeds',svchealth:'Service Health',threatevents:'DNS Threat Events',threatfeeds:'Threat Feeds',customlists:'Custom Lists',secpolicies:'Security Policies',hostinv:'Host Inventory',anycast:'Anycast HA',dfp:'DNS Forwarding Proxy',roaming:'Roaming Endpoints'};
+  const WIDGET_LABELS={dhcp:'DHCP Pools',hosts:'Host Status',subnets:'Top Subnets',ttl:'DNS Zones',audit:'Audit Log',feeds:'Active Threats',svchealth:'Service Health',threatevents:'DNS Threat Events',threatfeeds:'Threat Feeds',customlists:'Custom Lists',secpolicies:'Security Policies',hostinv:'Host Inventory',anycast:'Anycast HA',dfp:'DNS Forwarding Proxy',roaming:'Roaming Endpoints'};
   const [hiddenSections, setHiddenSections] = useState(()=>LS.get('noc.hiddenSections',[]));
   const [showWizard, setShowWizard] = useState(()=>!LS.get('noc.wizardDone',false));
   const [theme, setTheme]           = useState(()=>LS.get('noc.theme','system')); // 'system'|'light'|'dark'
