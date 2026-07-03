@@ -275,8 +275,10 @@ def vault_set_llm(key, base_url=None, model=None):
         return {"ok": True}
 
 def vault_test_key(key):
-    """Verify an Infoblox API key reaches CSP; return the resolved account name."""
+    """Verify an Infoblox API key reaches CSP; return the resolved account name.
+    Sets 'rejected': True only for explicit HTTP 4xx (bad key) vs network errors."""
     from urllib.request import urlopen, Request
+    from urllib.error import HTTPError
     k = _norm_key(key)
     if not k:
         return {"ok": False, "error": "API key required"}
@@ -288,8 +290,10 @@ def vault_test_key(key):
         with urlopen(req, timeout=12) as r:
             r.read()
         return {"ok": True, "name": ""}   # reachable, but no account name resolved
+    except HTTPError as e:
+        return {"ok": False, "rejected": True, "error": f"Infoblox CSP rejected this key (HTTP {e.code}) — check the key is valid and not expired"}
     except Exception:
-        return {"ok": False, "error": "key rejected by Infoblox CSP"}
+        return {"ok": False, "error": "Could not reach Infoblox CSP — key saved but may not work"}
 
 def vault_conn_test():
     """Verify the ACTIVE connection's key reaches Infoblox CSP (read-only)."""

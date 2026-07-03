@@ -59,6 +59,8 @@ async function suppressOnboarding(page: Page) {
 }
 
 async function openPalette(page: Page) {
+  // Wait for CommandPalette to be mounted (app-stack renders after vault/status resolves).
+  await page.locator('.app-stack').waitFor({ state: 'attached', timeout: 5000 });
   await page.keyboard.press('Meta+k');
   const dialog = page.locator('[role="dialog"]');
   if ((await dialog.count()) === 0) {

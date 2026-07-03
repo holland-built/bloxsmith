@@ -12,13 +12,14 @@ interface PaletteItem {
 
 interface CommandPaletteProps {
   onLogout: () => void;
+  onManageVault: () => void;
 }
 
 function scrollToSection(id: string): void {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-export function CommandPalette({ onLogout }: CommandPaletteProps) {
+export function CommandPalette({ onLogout, onManageVault }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -52,6 +53,7 @@ export function CommandPalette({ onLogout }: CommandPaletteProps) {
     { id: 'cmd-subnets', label: 'Subnets', run: () => scrollToSection('section-subnets') },
     { id: 'cmd-leases', label: 'Leases', run: () => scrollToSection('section-leases') },
     { id: 'cmd-zones', label: 'Zones', run: () => scrollToSection('section-zones') },
+    { id: 'cmd-vault', label: 'API key settings', run: () => { close(); onManageVault(); } },
     { id: 'cmd-logout', label: 'Log out', run: () => { close(); onLogout(); } },
   ];
 

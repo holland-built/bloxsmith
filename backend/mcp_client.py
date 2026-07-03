@@ -19,6 +19,7 @@ import asyncio
 import json
 import re
 import sys
+import time as _time
 from contextlib import asynccontextmanager
 
 from mcp.client.streamable_http import streamablehttp_client
@@ -68,6 +69,45 @@ def list_accounts() -> dict:
         if not config._active_account_id:
             config._active_account_id = config._HOME_ACCOUNT_ID
     return {"accounts": accounts, "active": config._active_account_id}
+
+
+_jwt_issued_at = 0.0
+_JWT_REFRESH_AFTER = 50 * 60  # re-mint 10 min before CSP's ~1h expiry
+
+
+def switch_account(account_id: str) -> dict:
+    """Switch MCP proxy to account_id. Home account uses the long-lived Token
+    key directly (no JWT needed); other accounts exchange for a Bearer JWT."""
+    global _jwt_issued_at
+    known = {a["id"]: a["name"] for a in list_accounts()["accounts"]}
+    if account_id not in known:
+        return {"ok": False, "error": "unknown account"}
+    if account_id == config._HOME_ACCOUNT_ID:
+        config.MCP_HEADERS["Authorization"] = config.API_KEY
+    else:
+        resp = _csp_json("/v2/session/account_switch", {"id": account_id})
+        jwt = resp.get("jwt") or resp.get("result", {}).get("jwt", "")
+        if not jwt:
+            return {"ok": False, "error": "account_switch returned no JWT"}
+        config.MCP_HEADERS["Authorization"] = f"Bearer {jwt}"
+        _jwt_issued_at = _time.time()
+    config._active_account_id = account_id
+    cache_invalidate()
+    return {"ok": True, "active": account_id, "name": known[account_id]}
+
+
+def _maybe_refresh_jwt():
+    """Re-mint JWT only for non-home accounts nearing the ~1h CSP expiry.
+    No-op on the home account (uses long-lived Token key, never expires)."""
+    if (config._active_account_id
+            and config._HOME_ACCOUNT_ID
+            and config._active_account_id != config._HOME_ACCOUNT_ID
+            and _time.time() - _jwt_issued_at > _JWT_REFRESH_AFTER):
+        try:
+            switch_account(config._active_account_id)
+            print(f"  [info] refreshed account JWT for {config._active_account_id}", file=sys.stderr)
+        except Exception as e:
+            print(f"  [warn] JWT refresh failed: {e}", file=sys.stderr)
 
 
 # ── Generic paginated MCP fetch plumbing ────────────────────────────────────
