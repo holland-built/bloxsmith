@@ -2,9 +2,11 @@ import { useMemo } from 'react';
 import { useMcpIncidents } from './useMcpIncidents';
 import { useMcpEvents } from './useMcpEvents';
 import { useNetworkData } from './useNetworkData';
+import { useHubHealth } from './useHubHealth';
+import { useHubSecurity } from './useHubSecurity';
 import type { McpIncident, McpEvent } from '../types/mcp';
 import type { Subnet } from '../types/network';
-import type { HubMetrics, Health, ServiceHealth } from '../types/hub';
+import type { HubMetrics, Health, ServiceHealth, SecurityFeed } from '../types/hub';
 
 const MIN = 60 * 1000;
 const RANK: Record<Health, number> = { ok: 0, warn: 1, crit: 2 };
@@ -49,7 +51,9 @@ function worstFor(incidents: McpIncident[], re: RegExp): Health {
 function deriveMetrics(
   incidents: McpIncident[],
   events: McpEvent[],
-  subnets: Subnet[]
+  subnets: Subnet[],
+  realHealth: ServiceHealth[] | null,
+  realSecurity: SecurityFeed | null
 ): HubMetrics {
   // --- FIRE: critical incidents ---
   const critList = incidents.filter((i) => i.severity === 'crit');
@@ -118,21 +122,36 @@ function deriveMetrics(
     (i) => (/security|threat|malware|rpz/i.test(i.type) || /security|threat|malware|rpz/i.test(i.title)) && i.severity === 'crit'
   ).length;
 
-  const services: ServiceHealth[] = [
-    { name: 'DNS', status: dnsH, statusLabel: statusLabel(dnsH), meta: dnsCount ? `${dnsCount} alert${dnsCount === 1 ? '' : 's'}` : 'nominal' },
-    { name: 'DHCP', status: dhcpH, statusLabel: statusLabel(dhcpH), meta: maxUtil >= 95 ? `pool ${maxUtil}%` : dhcpCount ? `${dhcpCount} alert${dhcpCount === 1 ? '' : 's'}` : 'nominal' },
-    { name: 'IPAM', status: ipamH, statusLabel: statusLabel(ipamH), meta: oversubCount ? `${oversubCount} oversub` : 'nominal' },
-    { name: 'Security', status: secH, statusLabel: statusLabel(secH), meta: `${secCrit} crit` },
-  ];
+  // Derived rollup (fallback). Real infra health overrides DNS/DHCP/Security below.
+  const derivedServices: Record<string, ServiceHealth> = {
+    DNS: { name: 'DNS', status: dnsH, statusLabel: statusLabel(dnsH), meta: dnsCount ? `${dnsCount} alert${dnsCount === 1 ? '' : 's'}` : 'nominal' },
+    DHCP: { name: 'DHCP', status: dhcpH, statusLabel: statusLabel(dhcpH), meta: maxUtil >= 95 ? `pool ${maxUtil}%` : dhcpCount ? `${dhcpCount} alert${dhcpCount === 1 ? '' : 's'}` : 'nominal' },
+    IPAM: { name: 'IPAM', status: ipamH, statusLabel: statusLabel(ipamH), meta: oversubCount ? `${oversubCount} oversub` : 'nominal' },
+    Security: { name: 'Security', status: secH, statusLabel: statusLabel(secH), meta: `${secCrit} crit` },
+  };
+
+  const healthReal = !!realHealth && realHealth.length > 0;
+  // Real infra health backs DNS/DHCP/Security; IPAM has no infra service so it
+  // stays derived from subnet utilization.
+  const realByName: Record<string, ServiceHealth> = {};
+  for (const r of realHealth ?? []) realByName[r.name] = r;
+  const services: ServiceHealth[] = ['DNS', 'DHCP', 'IPAM', 'Security'].map(
+    (name) => realByName[name] ?? derivedServices[name]
+  );
 
   // --- SECURITY action counts ---
+  const securityReal = !!realSecurity;
   const okCount = incidents.filter((i) => i.severity === 'ok').length;
-  const security = {
-    critical: critCount,
-    high: warnBacklog,
-    medium: Math.ceil(okCount / 2),
-    low: Math.floor(okCount / 2),
-  };
+  const security = realSecurity
+    ? realSecurity.counts
+    : {
+        critical: critCount,
+        high: warnBacklog,
+        medium: Math.ceil(okCount / 2),
+        low: Math.floor(okCount / 2),
+      };
+  const securityBlocked = realSecurity?.blocked ?? 0;
+  const securityLogged = realSecurity?.logged ?? 0;
 
   // --- TRENDING: sparkline (9 bins over last hour) ---
   const bins = new Array<number>(9).fill(0);
@@ -160,6 +179,10 @@ function deriveMetrics(
     openOver48h,
     services,
     security,
+    securityBlocked,
+    securityLogged,
+    securityReal,
+    healthReal,
     sparkline,
   };
 }
@@ -168,7 +191,11 @@ export function useHubData(): UseHubDataResult {
   const inc = useMcpIncidents();
   const evt = useMcpEvents();
   const net = useNetworkData();
+  const hlt = useHubHealth();
+  const sec = useHubSecurity();
 
+  // Core sources gate loading; health/security are best-effort overlays that
+  // fall back to derived values, so they never block or fail the whole hub.
   const loading = inc.loading || evt.loading || net.loading;
   const error = inc.error && evt.error && net.error ? inc.error : null;
 
@@ -176,13 +203,21 @@ export function useHubData(): UseHubDataResult {
     inc.refetch();
     evt.refetch();
     net.refetch();
+    hlt.refetch();
+    sec.refetch();
   };
 
   const metrics = useMemo<HubMetrics | null>(() => {
     if (loading) return null;
     if (!inc.data && !evt.data && !net.data) return null;
-    return deriveMetrics(inc.data ?? [], evt.data ?? [], net.data?.subnets ?? []);
-  }, [loading, inc.data, evt.data, net.data]);
+    return deriveMetrics(
+      inc.data ?? [],
+      evt.data ?? [],
+      net.data?.subnets ?? [],
+      hlt.data,
+      sec.data
+    );
+  }, [loading, inc.data, evt.data, net.data, hlt.data, sec.data]);
 
   return { metrics, loading, error, refetch };
 }
