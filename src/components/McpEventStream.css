@@ -1,0 +1,87 @@
+.mcp-event-stream {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 12px;
+  font-family: var(--font-ui);
+}
+
+/* Shared header + refresh button styles — .mcp-section-header, .mcp-section-title, .mcp-refresh-btn,
+   and .mcp-empty are defined in McpIncidentQueue.css which loads alongside this file.
+   If McpIncidentQueue is absent, redefine them here. */
+
+.mcp-event-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.mcp-event-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.mcp-event-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mcp-event-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.mcp-event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mcp-event-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-xs);
+}
+
+.mcp-event-row:last-child {
+  border-bottom: none;
+}
+
+.mcp-event-row:hover {
+  background: var(--surface-2);
+}
+
+.mcp-event-ts {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 14ch;
+}
+
+.mcp-event-type-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--r-status);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: var(--surface-3);
+  color: var(--ink-dim);
+  border: 1px solid var(--border);
+}
+
+.mcp-event-desc {
+  flex: 1;
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

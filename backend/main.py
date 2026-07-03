@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from backend import config, routes_vault, routes_network, routes_alerts  # noqa: F401 — importing config triggers its .env load
-from backend import routes_auth, routes_scim, routes_audit
+from backend import routes_auth, routes_scim, routes_audit, routes_incidents
 
 # Run with: uvicorn backend.main:app --port 8000
 # Legacy server.py owns port 8080, Vite dev server owns 5173 - no port conflicts.
@@ -20,6 +20,7 @@ app.include_router(routes_alerts.router)
 app.include_router(routes_auth.router)
 app.include_router(routes_scim.router)
 app.include_router(routes_audit.router)
+app.include_router(routes_incidents.router)
 
 # Best-effort boot auto-unlock, matching legacy's behavior when VAULT_PASSPHRASE
 # (or VAULT_PASSPHRASE_FILE) is set — never raises if no vault exists yet.
