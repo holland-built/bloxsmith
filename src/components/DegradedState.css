@@ -6,7 +6,8 @@
   gap: 12px;
   padding: 48px 24px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: var(--elev-raised);
   border-radius: var(--r-card);
   color: var(--muted);
   font-family: var(--font-ui);
@@ -30,8 +31,9 @@
 
 .degraded-retry {
   background: var(--surface);
-  color: var(--accent);
-  border: 1px solid var(--border);
+  color: var(--fg);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
   border-radius: var(--r-ctl);
   padding: 4px 10px;
   font-size: var(--fs-xs);

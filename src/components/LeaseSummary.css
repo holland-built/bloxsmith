@@ -6,7 +6,8 @@
 .lease-stat {
   flex: 1;
   background-color: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: var(--elev-raised);
   border-radius: var(--r-card);
   padding: 16px;
 }

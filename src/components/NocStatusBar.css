@@ -67,12 +67,13 @@
 .noc-mcp-err { color: var(--red); }
 
 .noc-bar-btn {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--ink-dim);
+  background: var(--surface);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
+  color: var(--fg);
   font-size: var(--fs-xs);
   padding: 3px 10px;
-  border-radius: 3px;
+  border-radius: 6px;
   cursor: pointer;
   font-family: var(--font-ui);
 }

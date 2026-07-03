@@ -1,7 +1,8 @@
 .mcp-incident-queue {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
+  border: none;
+  box-shadow: var(--elev-raised);
+  border-radius: var(--radius-md);
   padding: 12px;
   font-family: var(--font-ui);
 }
@@ -20,18 +21,18 @@
 }
 
 .mcp-refresh-btn {
-  background: transparent;
+  background: var(--fg);
   border: none;
   padding: 2px 6px;
-  color: var(--accent);
+  color: var(--accent-on);
   font-size: var(--fs-md);
   cursor: pointer;
-  border-radius: var(--r-ctl);
+  border-radius: 6px;
   line-height: 1;
 }
 
 .mcp-refresh-btn:hover {
-  background: var(--surface-2);
+  background: var(--accent-hover);
 }
 
 .mcp-empty {
@@ -53,7 +54,7 @@
   gap: 10px;
   padding: 7px 10px;
   border: none;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-soft);
   background: transparent;
   width: 100%;
   text-align: left;
@@ -122,25 +123,26 @@
   letter-spacing: 0.06em;
   background: var(--surface-3);
   color: var(--ink-dim);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .mcp-status-badge.mcp-status-open {
   color: var(--red);
   background: rgba(var(--red-rgb), 0.10);
-  border-color: rgba(var(--red-rgb), 0.30);
+  box-shadow: 0 0 0 1px rgba(var(--red-rgb), 0.30);
 }
 
 .mcp-status-badge.mcp-status-investigating {
   color: var(--amber);
   background: rgba(var(--amber-rgb), 0.10);
-  border-color: rgba(var(--amber-rgb), 0.30);
+  box-shadow: 0 0 0 1px rgba(var(--amber-rgb), 0.30);
 }
 
 .mcp-status-badge.mcp-status-resolved {
   color: var(--green);
   background: rgba(var(--green-rgb), 0.10);
-  border-color: rgba(var(--green-rgb), 0.30);
+  box-shadow: 0 0 0 1px rgba(var(--green-rgb), 0.30);
 }
 
 /* Inline detail panel */
@@ -205,7 +207,7 @@
   display: flex;
   gap: 12px;
   padding: 4px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-soft);
   font-size: var(--fs-xs);
 }
 
