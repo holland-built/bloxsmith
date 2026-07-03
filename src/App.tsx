@@ -1,11 +1,9 @@
-import { NetworkVertical } from './components/NetworkVertical';
 import { LoginScreen } from './components/LoginScreen';
 import { OnboardingBanner } from './components/OnboardingBanner';
 import { CommandPalette } from './components/CommandPalette';
 import { VaultSetup } from './components/VaultSetup';
-import { McpIncidentQueue } from './components/McpIncidentQueue';
-import { McpEventStream } from './components/McpEventStream';
 import { NocStatusBar } from './components/NocStatusBar';
+import { HubView } from './components/HubView';
 import { useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 
@@ -28,19 +26,7 @@ function App() {
           onManageVault={() => setShowVaultManager(true)}
           onLogout={logout}
         />
-        <div className="noc-grid">
-          <div className="noc-col-left">
-            <McpIncidentQueue />
-          </div>
-          <div className="noc-col-right">
-            <div className="noc-network-pane">
-              <NetworkVertical />
-            </div>
-            <div className="noc-events-pane">
-              <McpEventStream />
-            </div>
-          </div>
-        </div>
+        <HubView />
         <CommandPalette onLogout={logout} onManageVault={() => setShowVaultManager(true)} />
       </div>
     </VaultSetup>
