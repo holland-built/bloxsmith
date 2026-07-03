@@ -323,6 +323,22 @@
   grid-area: security;
   background: var(--surface-2);
 }
+.hub-bento .sec-live {
+  color: var(--accent);
+  font-weight: 700;
+  margin-left: 6px;
+  font-size: var(--fs-2xs);
+}
+.hub-bento .sec-foot {
+  margin-top: 9px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+.hub-bento .sec-foot b {
+  color: var(--ink);
+  font-weight: 700;
+}
 .hub-bento .sec-grid {
   flex: 1;
   display: grid;
