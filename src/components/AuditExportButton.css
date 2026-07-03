@@ -7,8 +7,9 @@
 
 .audit-export-button-button {
   background: var(--surface);
-  color: var(--accent);
-  border: 1px solid var(--border);
+  color: var(--fg);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
   border-radius: var(--r-ctl);
   padding: 4px 10px;
   font-size: var(--fs-xs);
@@ -23,6 +24,6 @@
 }
 
 .audit-export-button-error {
-  color: var(--red);
+  color: var(--danger);
   font-size: var(--fs-xs);
 }

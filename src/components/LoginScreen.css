@@ -14,7 +14,8 @@
   gap: 12px;
   width: 320px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: var(--elev-raised);
   border-radius: var(--r-card);
   padding: 24px;
 }
@@ -23,15 +24,17 @@
   margin: 0 0 4px;
   font-size: var(--fs-lg);
   color: var(--ink);
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-display);
 }
 
 .login-sso-button {
   display: block;
   text-align: center;
-  background: var(--surface);
-  color: var(--accent);
-  border: 1px solid var(--border);
-  border-radius: var(--r-ctl);
+  background: var(--fg);
+  color: var(--accent-on);
+  border: none;
+  border-radius: 6px;
   padding: 8px 10px;
   font-size: var(--fs-base);
   font-weight: 600;
@@ -40,8 +43,12 @@
   cursor: pointer;
 }
 
+.login-sso-button:hover {
+  background: var(--accent-hover);
+}
+
 .login-divider {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-soft);
   margin: 4px 0;
 }
 
@@ -59,20 +66,28 @@
 
 .login-dev-input,
 .login-dev-select {
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--ink);
-  border: 1px solid var(--border);
-  border-radius: var(--r-ctl);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: 6px;
   padding: 6px 8px;
   font-size: var(--fs-sm);
   font-family: var(--font-ui);
 }
 
+.login-dev-input:focus,
+.login-dev-select:focus {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
 .login-dev-button {
   background: var(--surface);
-  color: var(--accent);
-  border: 1px solid var(--border);
-  border-radius: var(--r-ctl);
+  color: var(--fg);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: 6px;
   padding: 6px 10px;
   font-size: var(--fs-xs);
   font-weight: 600;

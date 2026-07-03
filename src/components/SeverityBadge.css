@@ -9,19 +9,19 @@
 }
 
 .severity-badge.crit {
-  color: var(--red);
-  background-color: rgba(var(--red-rgb), 0.12);
-  border: 1px solid rgba(var(--red-rgb), 0.35);
+  color: var(--danger);
+  background-color: var(--red-bg);
+  border: none;
 }
 
 .severity-badge.warn {
-  color: var(--amber);
-  background-color: rgba(var(--amber-rgb), 0.12);
-  border: 1px solid rgba(var(--amber-rgb), 0.35);
+  color: var(--warn);
+  background-color: var(--amber-bg);
+  border: none;
 }
 
 .severity-badge.ok {
-  color: var(--green);
-  background-color: rgba(var(--green-rgb), 0.12);
-  border: 1px solid rgba(var(--green-rgb), 0.35);
+  color: var(--success);
+  background-color: var(--green-bg);
+  border: none;
 }

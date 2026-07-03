@@ -2,7 +2,8 @@
   width: 100%;
   border-collapse: collapse;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: var(--elev-raised);
   border-radius: var(--r-card);
   overflow: hidden;
 }
@@ -11,10 +12,11 @@
 .zones-table td {
   padding: 8px 12px;
   text-align: left;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .zones-table th {
+  border-bottom: 1px solid var(--border);
   color: var(--muted);
   font-size: var(--fs-xs);
   text-transform: uppercase;
@@ -46,8 +48,8 @@
   padding: 2px 8px;
   border-radius: var(--r-pill);
   font-size: var(--fs-2xs);
-  color: var(--amber);
-  background-color: rgba(var(--amber-rgb), 0.12);
+  color: var(--warn);
+  background-color: var(--amber-bg);
 }
 
 .zones-none {

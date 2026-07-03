@@ -8,7 +8,8 @@
 .snooze-control-select {
   background: var(--surface-2);
   color: var(--ink);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
   border-radius: var(--r-ctl);
   padding: 4px 6px;
   font-size: var(--fs-xs);
@@ -21,8 +22,9 @@
 
 .snooze-control-button {
   background: var(--surface);
-  color: var(--accent);
-  border: 1px solid var(--border);
+  color: var(--fg);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
   border-radius: var(--r-ctl);
   padding: 4px 10px;
   font-size: var(--fs-xs);
