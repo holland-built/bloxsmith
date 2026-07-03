@@ -546,6 +546,23 @@ def switch_account(account_id: str) -> dict:
     cache_invalidate()  # cached rows belong to the previous tenant
     return {"ok": True, "active": account_id, "name": known[account_id]}
 
+def _rest_get(path: str, params: dict | None = None) -> list:
+    """Direct Infoblox REST GET → results list. Uses active tenant/account auth."""
+    import urllib.request, urllib.parse
+    q = ("?" + urllib.parse.urlencode(params)) if params else ""
+    url = f"{BASE_URL}{path}{q}"
+    auth = MCP_HEADERS.get("Authorization") or API_KEY
+    req = urllib.request.Request(url, headers={"Authorization": auth, "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=35) as r:
+            j = json.loads(r.read())
+        if isinstance(j, dict):
+            return j.get("results", j.get("result", []) or [])
+        return j if isinstance(j, list) else []
+    except Exception as e:
+        print(f"  [warn] rest_get {path}: {e}")
+        return []
+
 # ── encrypted vault (multi-tenant key store) ──────────────────────────────────
 # Keys are secrets the bridge must *replay* to Infoblox, so they're stored
 # reversibly — but encrypted at rest (Fernet/AES) under a key derived from a
@@ -1209,8 +1226,256 @@ async def _fetch_dashboard_async() -> dict:
         }
 
 def fetch_dashboard_data() -> dict:
-    print("Fetching dashboard data via MCP…")
-    return _run_async(_fetch_dashboard_async())
+    """Fetch all dashboard data via direct Infoblox REST (the MCP parquet path
+    is broken server-side). Reuses the norm_* shapers unchanged."""
+    ck = _cache_key("dashboard_rest", "", None, False)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+
+    print("Fetching dashboard data via direct REST…")
+    subnets_d  = _rest_get("/api/ddi/v1/ipam/subnet",
+                           {"_fields": "id,name,address,cidr,utilization,tags", "_limit": 5000})
+    leases_d   = _rest_get("/api/ddi/v1/dhcp/lease",
+                           {"_fields": "address,hostname,state,client_id", "_limit": 5000})
+    views_d    = _rest_get("/api/ddi/v1/dns/view",
+                           {"_fields": "id,name,comment", "_limit": 5000})
+    zones_d    = _rest_get("/api/ddi/v1/dns/auth_zone",
+                           {"_fields": "id,fqdn,view,zone_authority,primary_type", "_limit": 5000})
+    hosts_d    = _rest_get("/api/infra/v1/detail_hosts", {"_limit": 500})
+    policies_d = _rest_get("/api/atcfw/v1/security_policies", {"_limit": 200})
+    feeds_d    = _rest_get("/api/atcfw/v1/named_lists", {"_limit": 200})
+    audit_d    = []
+
+    view_map = {v.get("id", ""): v.get("name", "") for v in views_d}
+
+    result = {
+        "subnets":     norm_subnets(subnets_d),
+        "leases":      norm_leases(leases_d),
+        "dnsViews":    norm_views(views_d),
+        "zones":       norm_zones(zones_d, view_map),
+        "hosts":       norm_hosts(hosts_d),
+        "secPolicies": norm_policies(policies_d),
+        "feeds":       norm_feeds(feeds_d),
+        "auditLogs":   norm_audit(audit_d),
+    }
+    print(f"  subnets={len(result['subnets'])} leases={len(result['leases'])} "
+          f"zones={len(result['zones'])} hosts={len(result['hosts'])} "
+          f"policies={len(result['secPolicies'])} feeds={len(result['feeds'])}")
+    _cache_set(ck, result)
+    return result
+
+# ── operator-hub fetchers (direct REST — ports of backend/data/fetch_*.py) ─────
+
+_HUB_SERVICE_BUCKETS = {
+    "DNS": {"dns", "ndns"},
+    "DHCP": {"dhcp", "ndhcp"},
+    "Security": {"dfp", "orpheus"},
+}
+_HUB_STATUS_RANK = {"online": 0, "stopped": 1, "error": 2}
+_HUB_RANK_SEVERITY = {0: "ok", 1: "warn", 2: "crit"}
+_HUB_SEVERITY_LABEL = {"ok": "healthy", "warn": "degraded", "crit": "critical"}
+
+def fetch_hub_health() -> list:
+    """Per-service-type health rollup for DNS / DHCP / Security."""
+    ck = _cache_key("hub_health", "", None, False)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+
+    services = _rest_get("/api/infra/v1/detail_services", {"_limit": 500})
+    rollup = []
+    for svc_name, types in _HUB_SERVICE_BUCKETS.items():
+        members = [s for s in services if s.get("service_type") in types]
+        if not members:
+            rollup.append({
+                "name": svc_name, "status": "ok",
+                "statusLabel": "no services", "meta": "0 deployed",
+            })
+            continue
+        worst = max(_HUB_STATUS_RANK.get(s.get("composite_status", "online"), 0) for s in members)
+        severity = _HUB_RANK_SEVERITY[worst]
+        errs = sum(1 for s in members if s.get("composite_status") == "error")
+        stopped = sum(1 for s in members if s.get("composite_status") == "stopped")
+        online = sum(1 for s in members if s.get("composite_status") == "online")
+        if errs:
+            meta = f"{errs} error · {online}/{len(members)} up"
+        elif stopped:
+            meta = f"{stopped} stopped · {online}/{len(members)} up"
+        else:
+            meta = f"{online}/{len(members)} online"
+        rollup.append({
+            "name": svc_name,
+            "status": severity,
+            "statusLabel": _HUB_SEVERITY_LABEL[severity],
+            "meta": meta,
+        })
+    _cache_set(ck, rollup)
+    return rollup
+
+def fetch_hub_security(window_secs: int = 3600, limit: int = 50) -> dict:
+    """Recent DNS security (threat) events + severity/action counts."""
+    ck = _cache_key("hub_security", "", {"w": window_secs, "l": limit}, False)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+
+    t1 = int(_time.time())
+    t0 = t1 - window_secs
+    rows = _rest_get("/api/dnsdata/v2/dns_event", {"t0": t0, "t1": t1, "_limit": limit})
+
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    blocked = logged = 0
+    events = []
+    for e in rows:
+        sev = str(e.get("severity", "")).lower()
+        if sev in counts:
+            counts[sev] += 1
+        action = str(e.get("policy_action", "")).lower()
+        if action in ("block", "redirect"):
+            blocked += 1
+        elif action == "log":
+            logged += 1
+        events.append({
+            "event_time": e.get("event_time", ""),
+            "qname": e.get("qname", ""),
+            "severity": e.get("severity", ""),
+            "policy_action": e.get("policy_action", ""),
+            "feed_name": e.get("feed_name", ""),
+            "threat_indicator": e.get("threat_indicator", ""),
+            "device": e.get("device", ""),
+            "network": e.get("network", ""),
+        })
+    result = {
+        "events": events,
+        "counts": counts,
+        "blocked": blocked,
+        "logged": logged,
+        "total": len(rows),
+    }
+    _cache_set(ck, result)
+    return result
+
+def _hub_sev_rank(level: str) -> str:
+    lv = str(level).upper()
+    if lv in ("HIGH", "CRITICAL"):
+        return "crit"
+    if lv in ("MEDIUM", "MED"):
+        return "warn"
+    return "ok"
+
+def fetch_hub_domains() -> dict:
+    """Rich domain panels across the platform (threat defense, endpoints,
+    anycast, DFP, hosts). Same output shape as backend/data/fetch_domains.py."""
+    from collections import Counter
+    ck = _cache_key("hub_domains", "", None, False)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+
+    policies = _rest_get("/api/atcfw/v1/security_policies", {"_limit": 100})
+    feeds    = _rest_get("/api/atcfw/v1/threat_feeds", {"_limit": 100})
+    named    = _rest_get("/api/atcfw/v1/named_lists", {"_limit": 100})
+    roaming  = _rest_get("/api/atcep/v1/roaming_devices", {"_limit": 200})
+    anycast  = _rest_get("/api/anycast/v1/accm/ac_runtime_statuses", {"_limit": 100})
+    dfp      = _rest_get("/api/atcdfp/v1/dfp_services", {"_limit": 100})
+    hosts    = _rest_get("/api/infra/v1/detail_hosts", {"_limit": 200})
+
+    threat_feeds = [{
+        "name": f.get("name", ""),
+        "source": f.get("source", ""),
+        "threat_level": f.get("threat_level", ""),
+        "confidence": f.get("confidence_level", ""),
+        "severity": _hub_sev_rank(f.get("threat_level", "")),
+    } for f in feeds]
+
+    named_lists = [{
+        "name": n.get("name", ""),
+        "type": n.get("type", ""),
+        "items": n.get("item_count", 0),
+        "threat_level": n.get("threat_level", ""),
+        "policies": len(n.get("policies", []) or []),
+        "severity": _hub_sev_rank(n.get("threat_level", "")),
+    } for n in named]
+
+    security_policies = [{
+        "name": p.get("name", ""),
+        "default_action": p.get("default_action", ""),
+        "dfps": len(p.get("dfps", []) or []),
+        "rules": len(p.get("rules", []) or []),
+        "doh": bool(p.get("doh_enabled")),
+    } for p in policies]
+
+    status_counts = Counter(
+        str(d.get("display_status", d.get("calculated_status", "unknown"))).lower()
+        for d in roaming
+    )
+    countries = Counter(d.get("country_name", "—") for d in roaming if d.get("country_name"))
+    roaming_endpoints = {
+        "total": len(roaming),
+        "by_status": dict(status_counts),
+        "top_countries": countries.most_common(5),
+    }
+
+    anycast_ha = []
+    for a in anycast:
+        rt = a.get("runtime_status", {}) or {}
+        state = str(rt.get("state", rt) if isinstance(rt, dict) else rt).lower()
+        anycast_ha.append({
+            "name": a.get("name", ""),
+            "service": a.get("service", ""),
+            "ip": a.get("anycast_ip_address", ""),
+            "state": state or "unknown",
+            "severity": "ok" if "up" in state or "online" in state or "healthy" in state else ("warn" if state and state != "unknown" else "warn"),
+        })
+
+    def _dfp_host(d):
+        h = d.get("host", "")
+        if isinstance(h, list):
+            return (h[0].get("name", "") if h and isinstance(h[0], dict) else "")
+        return str(h)[:40]
+
+    dfp_services = [{
+        "name": d.get("name", ""),
+        "mode": d.get("forwarding_policy", d.get("mode", "")),
+        "host": _dfp_host(d),
+        "resolvers": len(d.get("default_resolvers", []) or []),
+    } for d in dfp]
+
+    def _qps_num(h):
+        # detail_hosts.qps may be a scalar or an object like {"limit": N, ...}
+        q = h.get("qps", 0)
+        if isinstance(q, dict):
+            for k in ("current", "value", "avg", "limit"):
+                if isinstance(q.get(k), (int, float)):
+                    return q[k]
+            return 0
+        return q if isinstance(q, (int, float)) else 0
+
+    host_status = Counter(str(h.get("composite_status", "unknown")).lower() for h in hosts)
+    host_inventory = {
+        "total": len(hosts),
+        "by_status": dict(host_status),
+        "hosts": [{
+            "name": h.get("display_name", ""),
+            "ip": h.get("ip_address", ""),
+            "version": h.get("host_version", ""),
+            "status": str(h.get("composite_status", "")).lower(),
+            "qps": _qps_num(h),
+        } for h in hosts[:12]],
+    }
+
+    result = {
+        "threat_feeds": threat_feeds,
+        "named_lists": named_lists,
+        "security_policies": security_policies,
+        "roaming_endpoints": roaming_endpoints,
+        "anycast_ha": anycast_ha,
+        "dfp_services": dfp_services,
+        "host_inventory": host_inventory,
+    }
+    _cache_set(ck, result)
+    return result
 
 # ── NL query handler ──────────────────────────────────────────────────────────
 
@@ -1723,6 +1988,15 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/host-metrics", e)
                 self._json({"error": "internal error"}, 500)
+        elif path == "/api/hub/health":
+            try: self._json(fetch_hub_health())
+            except Exception as e: _log_exc("/api/hub/health", e); self._json({"error":"internal error"},500)
+        elif path == "/api/hub/security":
+            try: self._json(fetch_hub_security())
+            except Exception as e: _log_exc("/api/hub/security", e); self._json({"error":"internal error"},500)
+        elif path == "/api/hub/domains":
+            try: self._json(fetch_hub_domains())
+            except Exception as e: _log_exc("/api/hub/domains", e); self._json({"error":"internal error"},500)
         elif path == "/api/threat-lookup":
             q = ""
             if "?" in self.path:
