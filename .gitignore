@@ -60,3 +60,13 @@ backend/data/alert_state.json.tmp
 
 # Audit log — runtime data (hash-chained, tamper-evident), never committed
 backend/data/audit_log.jsonl
+
+# encrypted vault — never commit
+vault.json
+scripts/out_*.json
+scripts/out_*.txt
+scripts/catalog_*.py
+scripts/test_queries.py
+scripts/test_workarounds.py
+scripts/test_resource_read.py
+scripts/test_final.py
