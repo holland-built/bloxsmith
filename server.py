@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Infoblox NOC Dashboard — local bridge server.
+Bloxsmith — local bridge server.
 Serves index.html and proxies requests to the Infoblox portal via MCP.
 
 Usage:  python3 server.py
@@ -62,7 +62,7 @@ APP_VERSION = os.environ.get("APP_VERSION") or _git_version()
 # Server-side, cached, opt-out. The browser never calls GitHub (avoids CORS,
 # per-tab rate-limit burn, and leaking viewer IPs). We poll the Releases API at
 # most once per day in a background thread; the status endpoint never waits on it.
-APP_REPO = os.environ.get("APP_REPO", "holland-built/infoblox-noc-dashboard")
+APP_REPO = os.environ.get("APP_REPO", "holland-built/bloxsmith")
 UPDATE_CHECK_DISABLED = bool(os.environ.get("DISABLE_UPDATE_CHECK"))
 _UPDATE_TTL = 24 * 3600  # seconds between checks
 import uuid as _uuid
@@ -108,7 +108,7 @@ def _do_update_fetch():
     """Hit the GitHub Releases API with retries; update the cache. Never raises."""
     from urllib.request import urlopen, Request
     req = Request(f"https://api.github.com/repos/{APP_REPO}/releases/latest",
-                  headers={"User-Agent": "infoblox-noc-dashboard",
+                  headers={"User-Agent": "bloxsmith",
                            "Accept": "application/vnd.github+json"})
     for attempt in range(3):
         try:
@@ -251,7 +251,7 @@ def apply_self_update():
             name = attrs.get("Name", "").lstrip("/")
             image = attrs.get("Config", {}).get("Image", "")
             # Prefer the pre-pulled GHCR image so updates on locally-tagged
-            # containers (e.g. dev builds named 'infoblox-mcp') actually land
+            # containers (e.g. dev builds named 'bloxsmith') actually land
             # on the new version rather than re-running the old local image.
             ghcr_image = f"ghcr.io/{APP_REPO}:latest"
             try:
@@ -267,7 +267,7 @@ def apply_self_update():
             with _update_lock:
                 rollback_to = _update_cache.get("latest") or ""
             try:
-                client.images.get(image).tag("infoblox-mcp", "rollback")
+                client.images.get(image).tag("bloxsmith", "rollback")
             except Exception:
                 pass
 
@@ -582,6 +582,79 @@ def _resolve_vault_file():
 VAULT_FILE = _resolve_vault_file()
 BRAND_FILE = os.path.join(os.path.dirname(VAULT_FILE), "brand.json")
 LOGO_FILE  = os.path.join(os.path.dirname(VAULT_FILE), "logo.png")
+
+# ── saved views (dashboard layouts) ───────────────────────────────────────────
+# One JSON blob per view on the same mounted volume as the vault, so saved
+# layouts survive restarts/updates. Names are sanitized to a flat filename to
+# prevent path traversal — no "/" or ".." can escape VIEWS_DIR.
+VIEWS_DIR = os.path.join(os.path.dirname(VAULT_FILE) or os.environ.get("VAULT_DIR", "/vault"), "views")
+
+def _view_path(name):
+    """Sanitized absolute path for a view name, or None if the name is empty."""
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", str(name or "").strip())[:120]
+    if not safe or safe in (".", ".."):
+        return None
+    return os.path.join(VIEWS_DIR, safe + ".json")
+
+def views_list():
+    """List saved views (name + saved_at only, no bodies)."""
+    out = []
+    try:
+        for fn in sorted(os.listdir(VIEWS_DIR)):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(VIEWS_DIR, fn)) as f:
+                    v = json.load(f)
+                out.append({"name": v.get("name", fn[:-5]), "saved_at": v.get("saved_at")})
+            except Exception:
+                continue
+    except FileNotFoundError:
+        pass
+    return {"views": out}
+
+def view_read(name):
+    """Return the full stored view blob, or None if missing/invalid."""
+    p = _view_path(name)
+    if not p or not os.path.exists(p):
+        return None
+    try:
+        with open(p) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+def view_write(blob):
+    """Validate + persist an (opaque) view blob. Returns (payload, status)."""
+    if not isinstance(blob, dict):
+        return {"ok": False, "error": "view must be an object"}, 400
+    name = blob.get("name")
+    if not name or not str(name).strip():
+        return {"ok": False, "error": "name required"}, 400
+    p = _view_path(name)
+    if not p:
+        return {"ok": False, "error": "invalid name"}, 400
+    rec = {
+        "name": str(name),
+        "widgets": blob.get("widgets", {}),
+        "order": blob.get("order", []),
+        "layout": blob.get("layout", {}),
+        "saved_at": blob.get("saved_at") or _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
+    }
+    os.makedirs(VIEWS_DIR, exist_ok=True)
+    tmp = p + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(rec, f)
+    os.replace(tmp, p)
+    return {"ok": True, "name": rec["name"]}, 200
+
+def view_delete(name):
+    """Delete a saved view. Returns True if a file was removed."""
+    p = _view_path(name)
+    if not p or not os.path.exists(p):
+        return False
+    os.remove(p)
+    return True
 _vault = {"unlocked": False, "tenants": [], "active": None, "groq": "", "llm_base": "", "llm_model": "", "_key": None, "_salt": ""}
 _vault_lock = threading.Lock()
 
@@ -1479,7 +1552,7 @@ def fetch_hub_domains() -> dict:
 
 # ── NL query handler ──────────────────────────────────────────────────────────
 
-_AI_SYSTEM = """You are a network analyst for an Infoblox NOC dashboard. Call tools to fetch live data, then answer.
+_AI_SYSTEM = """You are a network analyst for the Bloxsmith dashboard. Call tools to fetch live data, then answer.
 
 RULES:
 1. Always call the right tool(s) before answering. Never fabricate data.
@@ -1874,6 +1947,239 @@ async def _unblock_domain_async(domain: str) -> dict:
 def unblock_domain(domain: str) -> dict:
     return _run_async(_unblock_domain_async(domain))
 
+# ── curated data-source registry (no-code widget builder) ─────────────────────
+# Declarative catalog of chartable sources. Each entry carries typed field
+# metadata (dimension / measure / filterable) so the frontend can ask
+# "what can I chart?" (/api/sources — meta only) and "give me rows for X"
+# (/api/source/<id> — normalized {rows,count,fields}). Only sources verified
+# to return live rows are listed. Cubes are excluded (parquet path is broken).
+
+def _fld(name, type_, role):
+    return {"name": name, "type": type_, "role": role}
+
+def norm_threat_feeds(raw):
+    return [{
+        "name":         f.get("name", ""),
+        "source":       f.get("source", ""),
+        "confidence":   f.get("confidence_level", ""),
+        "threat_level": f.get("threat_level", ""),
+    } for f in raw]
+
+def norm_named_lists(raw):
+    return [{
+        "name":         n.get("name", ""),
+        "type":         n.get("type", ""),
+        "item_count":   n.get("item_count", 0),
+        "threat_level": n.get("threat_level", ""),
+        "policies":     len(n.get("policies", []) or []),
+    } for n in raw]
+
+def norm_dfp(raw):
+    def _host(d):
+        h = d.get("host", "")
+        if isinstance(h, list):
+            return (h[0].get("name", "") if h and isinstance(h[0], dict) else "")
+        return str(h)[:40]
+    return [{
+        "name":      d.get("name", ""),
+        "mode":      d.get("forwarding_policy", d.get("mode", "")),
+        "host":      _host(d),
+        "resolvers": len(d.get("default_resolvers", []) or []),
+    } for d in raw]
+
+def norm_anycast(raw):
+    out = []
+    for a in raw:
+        rt = a.get("runtime_status", {}) or {}
+        state = str(rt.get("state", rt) if isinstance(rt, dict) else rt).lower() or "unknown"
+        out.append({
+            "name":    a.get("name", ""),
+            "service": a.get("service", ""),
+            "ip":      a.get("anycast_ip_address", ""),
+            "state":   state,
+        })
+    return out
+
+def norm_roaming(raw):
+    return [{
+        "name":    d.get("name", ""),
+        "status":  str(d.get("display_status") or d.get("calculated_status") or "unknown"),
+        "country": d.get("country_name", ""),
+        "os":      d.get("os_platform", ""),
+        "group":   d.get("group_name", ""),
+    } for d in raw]
+
+def norm_records(raw):
+    out = []
+    for r in raw:
+        meta = r.get("nios_metadata") or {}
+        rtype = str(meta.get("objType", "")).replace("record_", "").upper() or r.get("type", "")
+        out.append({
+            "name":     r.get("absolute_name_spec") or r.get("name_in_zone", ""),
+            "zone":     r.get("absolute_zone_name", ""),
+            "type":     rtype,
+            "rdata":    r.get("dns_rdata", ""),
+            "disabled": bool(r.get("disabled")),
+        })
+    return out
+
+def norm_incidents(raw):
+    acts = raw.get("actions", []) if isinstance(raw, dict) else (raw or [])
+    return [{
+        "id":            a.get("id", ""),
+        "type":          a.get("type", ""),
+        "title":         a.get("title", ""),
+        "priority":      a.get("priority", ""),
+        "status":        a.get("status", ""),
+        "affected":      a.get("affected", ""),
+        "last_activity": a.get("last_activity", ""),
+    } for a in acts]
+
+SOURCES = {
+    # ── REST (direct Infoblox REST via _rest_get; paths lifted from fetchers) ──
+    "subnets": {
+        "id": "subnets", "label": "IPAM Subnets", "transport": "rest",
+        "fetch": lambda p: norm_subnets(_rest_get("/api/ddi/v1/ipam/subnet",
+                 {"_fields": "id,name,address,cidr,utilization,tags", "_limit": 5000})),
+        "fields": [_fld("id","string","dimension"), _fld("name","string","dimension"),
+                   _fld("addr","string","dimension"), _fld("cidr","number","dimension"),
+                   _fld("total","number","measure"), _fld("used","number","measure"),
+                   _fld("util","number","measure"), _fld("site","string","filterable")],
+    },
+    "leases": {
+        "id": "leases", "label": "DHCP Leases", "transport": "rest",
+        "fetch": lambda p: norm_leases(_rest_get("/api/ddi/v1/dhcp/lease",
+                 {"_fields": "address,hostname,state,client_id", "_limit": 5000})),
+        "fields": [_fld("addr","string","dimension"), _fld("host","string","dimension"),
+                   _fld("subnet","string","filterable"), _fld("state","string","filterable")],
+    },
+    "dns_zones": {
+        "id": "dns_zones", "label": "DNS Auth Zones", "transport": "rest",
+        "fetch": lambda p: norm_zones(_rest_get("/api/ddi/v1/dns/auth_zone",
+                 {"_fields": "id,fqdn,view,zone_authority,primary_type", "_limit": 5000})),
+        "fields": [_fld("id","string","dimension"), _fld("fqdn","string","dimension"),
+                   _fld("view","string","filterable"), _fld("ttl","number","measure"),
+                   _fld("neg_ttl","number","measure"), _fld("records","number","measure")],
+    },
+    "dns_records": {
+        "id": "dns_records", "label": "DNS Records", "transport": "rest",
+        "fetch": lambda p: norm_records(_rest_get("/api/ddi/v1/dns/record", {"_limit": 2000})),
+        "fields": [_fld("name","string","dimension"), _fld("zone","string","filterable"),
+                   _fld("type","string","filterable"), _fld("rdata","string","dimension"),
+                   _fld("disabled","string","filterable")],
+    },
+    "hosts": {
+        "id": "hosts", "label": "Infrastructure Hosts", "transport": "rest",
+        "fetch": lambda p: norm_hosts(_rest_get("/api/infra/v1/detail_hosts", {"_limit": 500})),
+        "fields": [_fld("id","string","dimension"), _fld("name","string","dimension"),
+                   _fld("ip","string","dimension"), _fld("type","string","filterable"),
+                   _fld("status","string","filterable")],
+    },
+    "threat_feeds": {
+        "id": "threat_feeds", "label": "Threat Feeds", "transport": "rest",
+        "fetch": lambda p: norm_threat_feeds(_rest_get("/api/atcfw/v1/threat_feeds", {"_limit": 200})),
+        "fields": [_fld("name","string","dimension"), _fld("source","string","filterable"),
+                   _fld("confidence","string","filterable"), _fld("threat_level","string","filterable")],
+    },
+    "named_lists": {
+        "id": "named_lists", "label": "Named Lists", "transport": "rest",
+        "fetch": lambda p: norm_named_lists(_rest_get("/api/atcfw/v1/named_lists", {"_limit": 200})),
+        "fields": [_fld("name","string","dimension"), _fld("type","string","filterable"),
+                   _fld("item_count","number","measure"), _fld("threat_level","string","filterable"),
+                   _fld("policies","number","measure")],
+    },
+    "security_policies": {
+        "id": "security_policies", "label": "Security Policies", "transport": "rest",
+        "fetch": lambda p: norm_policies(_rest_get("/api/atcfw/v1/security_policies", {"_limit": 200})),
+        "fields": [_fld("id","string","dimension"), _fld("name","string","dimension"),
+                   _fld("action","string","filterable"), _fld("rules","number","measure"),
+                   _fld("created","string","dimension"), _fld("active","string","filterable")],
+    },
+    "dfp": {
+        "id": "dfp", "label": "DNS Forwarding Proxies", "transport": "rest",
+        "fetch": lambda p: norm_dfp(_rest_get("/api/atcdfp/v1/dfp_services", {"_limit": 200})),
+        "fields": [_fld("name","string","dimension"), _fld("mode","string","filterable"),
+                   _fld("host","string","dimension"), _fld("resolvers","number","measure")],
+    },
+    "anycast": {
+        "id": "anycast", "label": "Anycast HA Status", "transport": "rest",
+        "fetch": lambda p: norm_anycast(_rest_get("/api/anycast/v1/accm/ac_runtime_statuses", {"_limit": 200})),
+        "fields": [_fld("name","string","dimension"), _fld("service","string","filterable"),
+                   _fld("ip","string","dimension"), _fld("state","string","filterable")],
+    },
+    "roaming": {
+        "id": "roaming", "label": "Roaming Devices", "transport": "rest",
+        "fetch": lambda p: norm_roaming(_rest_get("/api/atcep/v1/roaming_devices", {"_limit": 2000})),
+        "fields": [_fld("name","string","dimension"), _fld("status","string","filterable"),
+                   _fld("country","string","filterable"), _fld("os","string","filterable"),
+                   _fld("group","string","filterable")],
+    },
+    # ── MCP (via iq-actions / network_entity_search) ──────────────────────────
+    "incidents": {
+        "id": "incidents", "label": "Incidents (SOC Actions)", "transport": "mcp",
+        "fetch": lambda p: norm_incidents(fetch_actions()),
+        "fields": [_fld("id","string","dimension"), _fld("type","string","filterable"),
+                   _fld("title","string","dimension"), _fld("priority","string","filterable"),
+                   _fld("status","string","filterable"), _fld("affected","string","filterable"),
+                   _fld("last_activity","time","dimension")],
+    },
+    # Reuses the hub_security REST event fetch (dns_event); grouped with the
+    # security/anomaly domain. transport reflects the actual mechanism (rest).
+    "anomaly_events": {
+        "id": "anomaly_events", "label": "DNS Security Events", "transport": "rest",
+        "fetch": lambda p: fetch_hub_security(limit=200).get("events", []),
+        "fields": [_fld("event_time","time","dimension"), _fld("qname","string","dimension"),
+                   _fld("severity","string","filterable"), _fld("policy_action","string","filterable"),
+                   _fld("feed_name","string","filterable"), _fld("threat_indicator","string","dimension"),
+                   _fld("device","string","dimension"), _fld("network","string","dimension")],
+    },
+    "entity_search": {
+        "id": "entity_search", "label": "Network Entity Search", "transport": "mcp",
+        "requires": ["q"],
+        "fetch": lambda p: threat_lookup(p.get("q", "")).get("entities", []) if p.get("q") else [],
+        "fields": [_fld("name","string","dimension"), _fld("type","string","filterable")],
+    },
+}
+
+def sources_meta():
+    """Registry META only — no tenant data. Safe to serve while vault is locked."""
+    return {"sources": [{
+        "id": s["id"], "label": s["label"], "transport": s["transport"],
+        "requires": s.get("requires", []), "fields": s["fields"],
+    } for s in SOURCES.values()] + [
+        # Escape hatch: call any Infoblox REST path directly (untyped rows).
+        {"id": "__raw", "label": "Advanced: raw endpoint", "transport": "rest",
+         "requires": ["path"], "fields": []},
+    ]}
+
+def source_rows(sid: str, params: dict) -> dict:
+    """Resolve a source, fetch via its transport, apply optional equality
+    filter(s) on field names + `limit` (default 200). Returns {rows,count,fields}."""
+    if sid == "__raw":
+        # Raw REST escape hatch: proxy an arbitrary Infoblox API path through the
+        # same auth as every other source. Reject anything that isn't an /api/
+        # path (blocks absolute URLs / SSRF to non-API endpoints).
+        rest_path = params.get("path", "")
+        if not rest_path.startswith("/api/"):
+            return {"error": "path must start with /api/", "rows": [], "count": 0, "fields": []}
+        rest_params = {k: v for k, v in params.items() if k != "path"}
+        rows = _rest_get(rest_path, rest_params or None) or []
+        return {"rows": rows, "count": len(rows), "fields": []}
+    src = SOURCES.get(sid)
+    if not src:
+        return {"error": "unknown source", "rows": [], "count": 0, "fields": []}
+    try:
+        limit = max(1, min(int(params.get("limit", 200)), 5000))
+    except (TypeError, ValueError):
+        limit = 200
+    rows = src["fetch"](params) or []
+    field_names = {f["name"] for f in src["fields"]}
+    for key, val in params.items():
+        if key in field_names:
+            rows = [r for r in rows if str(r.get(key, "")) == val]
+    rows = rows[:limit]
+    return {"rows": rows, "count": len(rows), "fields": src["fields"]}
+
 # ── HTTP handler ──────────────────────────────────────────────────────────────
 
 def _log_exc(label: str, e: Exception):
@@ -1951,6 +2257,16 @@ class Handler(BaseHTTPRequestHandler):
                     "rollback_from": _pull_state["rollback_from"],
                     "rollback_to": _pull_state["rollback_to"],
                 }); return
+        if path == "/api/sources":
+            # Registry META only (no tenant data) — safe above the vault gate.
+            self._json(sources_meta()); return
+        if path == "/api/views":
+            # View names/timestamps only (no tenant data) — safe above the gate.
+            try:
+                self._json(views_list())
+            except Exception as e:
+                _log_exc("/api/views", e); self._json({"error": "internal error"}, 500)
+            return
         # In vault mode, no data leaves until a tenant key is unlocked + active.
         if VAULT_MODE and not MCP_HEADERS.get("Authorization") and path.startswith("/api/"):
             self._json({"error": "vault locked", "locked": True}, 503); return
@@ -2023,6 +2339,25 @@ class Handler(BaseHTTPRequestHandler):
                 status = getattr(e, "code", None)
                 msg = f"CSP rejected this key ({status})" if status else "Infoblox CSP unreachable"
                 self._json({"accounts": [], "active": "", "error": msg, "status": status}, 200)
+        elif path.startswith("/api/views/"):
+            from urllib.parse import unquote
+            name = unquote(path[len("/api/views/"):].strip("/"))
+            try:
+                v = view_read(name)
+                self._json(v if v is not None else {"error": "not found"}, 200 if v is not None else 404)
+            except Exception as e:
+                _log_exc("/api/views/get", e); self._json({"error": "internal error"}, 500)
+        elif path.startswith("/api/source/"):
+            sid = path[len("/api/source/"):].strip("/")
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            params = {k: v[0] for k, v in parse_qs(qs).items()}
+            try:
+                result = source_rows(sid, params)
+                self._json(result, 404 if result.get("error") == "unknown source" else 200)
+            except Exception as e:
+                _log_exc(f"/api/source/{sid}", e)
+                self._json({"error": "internal error"}, 500)
         elif path.lstrip("/") in _STATIC_FILES:
             self._file(path.lstrip("/"))  # _file validates realpath before serving
         elif not path.startswith("/api/"):
@@ -2122,6 +2457,15 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/query", e)
                 self._json({"answer": "Error: internal error", "suggestions": []}, 500)
+        elif self.path in ("/api/views", "/api/views/import"):
+            # Persist a dashboard view. /api/views/import accepts a complete
+            # exported blob; both validate + write the same way. MAX_BODY is
+            # already enforced at the top of do_POST.
+            try:
+                payload, status = view_write(body)
+                self._json(payload, status)
+            except Exception as e:
+                _log_exc("/api/views", e); self._json({"ok": False, "error": "internal error"}, 500)
         elif self.path == "/api/switch-account":
             # Portal-style sandbox switch: target must be an account the key's
             # user already belongs to; no credentials in the request.
@@ -2169,6 +2513,19 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json({"error": "not found"}, 404)
 
+    def do_DELETE(self):
+        path = self.path.split("?")[0]
+        if path.startswith("/api/views/"):
+            from urllib.parse import unquote
+            name = unquote(path[len("/api/views/"):].strip("/"))
+            try:
+                ok = view_delete(name)
+                self._json({"ok": True} if ok else {"error": "not found"}, 200 if ok else 404)
+            except Exception as e:
+                _log_exc("/api/views/delete", e); self._json({"error": "internal error"}, 500)
+            return
+        self._json({"error": "not found"}, 404)
+
     def _send_cors_origin(self):
         # Reflect only an allowlisted same-host origin; never wildcard.
         origin = self.headers.get("Origin", "")
@@ -2182,7 +2539,7 @@ class Handler(BaseHTTPRequestHandler):
     def _cors(self):
         self.send_response(200)
         self._send_cors_origin()
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token")
 
     def _json(self, data, status=200):
@@ -2266,7 +2623,7 @@ if __name__ == "__main__":
                        "set it up manually in the browser.",
                   file=sys.stderr)
     server = ThreadedHTTPServer((HOST, PORT), Handler)
-    print(f"Infoblox NOC Dashboard → http://{HOST}:{PORT}")
+    print(f"Bloxsmith → http://{HOST}:{PORT}")
     print(f"MCP: {MCP_URL}")
     print("Ctrl+C to stop\n")
     try:

@@ -1,15 +1,16 @@
-# Infoblox NOC Dashboard
+# Bloxsmith
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
 [![Docker ready](https://img.shields.io/badge/Docker-ready-2496ED.svg)](Dockerfile)
 
-A local, browser-based NOC dashboard for the **Infoblox Portal / CSP** —
-subnets, DHCP leases, DNS zones, hosts, security policies, threat feeds, audit logs,
-plus an optional natural-language query box. A small Python bridge talks to the
-Infoblox cloud over **MCP** and serves a React dashboard at `http://localhost:8080`.
+**Bloxsmith** is a composable, self-hostable workbench for your **Infoblox Portal / CSP**
+data — subnets, DHCP leases, DNS zones, hosts, security policies, threat feeds, and audit
+logs, plus an optional natural-language query box. Build your own views instead of living in
+a fixed monitoring dashboard. A small Python bridge talks to the Infoblox cloud over
+**MCP** and serves a React workspace at `http://localhost:8080`.
 
-![NOC Dashboard](docs/dashboard.png)
+![Bloxsmith](docs/dashboard.png)
 
 ```
 browser ──HTTP──▶ bridge (server.py) ──MCP──▶ csp.infoblox.com/mcp
