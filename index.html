@@ -6043,6 +6043,26 @@ function App({vault, onVaultChange}={}) {
             {wallMode&&<div className="wall-clock" aria-live="off">{now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>}
           </div>
           <div className="topbar-right" style={{display:"flex",alignItems:"center",gap:0}}>
+            {upd.available&&<div style={{position:"relative",marginRight:8}}>
+              <button className="ver-badge upd" onClick={()=>setUpdPop(v=>!v)}
+                data-tip={`Update available: v${String(upd.latest||"").replace(/^v/,"")}`}
+                style={{display:"inline-flex",alignItems:"center",gap:4,minHeight:24,padding:"2px 9px",fontSize:11,fontWeight:600}}>
+                ↑ Update <b style={{fontWeight:700}}>v{String(upd.latest||"").replace(/^v/,"")}</b>
+              </button>
+              {updPop&&<div className="upd-pop" role="dialog" aria-label="Update available"
+                style={{position:"absolute",top:"100%",right:0,marginTop:6,zIndex:300,minWidth:250,boxShadow:"var(--shadow-float)"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                  <div className="ver-line" style={{margin:0}}>v{vault&&vault.version} → <span className="to">{upd.latest} available</span></div>
+                  <button onClick={()=>setUpdPop(false)} style={{background:"none",border:"none",color:"var(--gray-400)",cursor:"pointer",padding:"0 0 0 8px",fontSize:13,lineHeight:1}} aria-label="Close">×</button>
+                </div>
+                {upd.url&&<div><a href={upd.url} target="_blank" rel="noopener noreferrer">View release notes ↗</a></div>}
+                {upd.selfUpdate
+                  ? <><div className="upd-actions"><button className="primary" onClick={applyUpdate}>Update now</button></div>
+                      <div className="upd-note">Pulls the new image and restarts. Vault stays intact.</div></>
+                  : <><div className="upd-actions"><button onClick={checkUpdate} disabled={updBusy||upd.checkDisabled}>{updBusy?"Checking…":"Check now"}</button></div>
+                      <div className="upd-note">One-click update needs the Docker install (run-image.sh). This build detects updates but applies them via <code>docker pull</code> + restart.</div></>}
+              </div>}
+            </div>}
             <span className="nav-clock" aria-live="off" style={{padding:"0 12px",fontSize:12}}>{now.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</span>
             <RefreshControl autoRefresh={autoRefresh} refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen} hoverPause={hoverPause} arCountdown={arCountdown} refreshing={refreshing} onRefresh={()=>load(true)}/>
             <div className={`status-rail-wrap`} data-tip={`${critSubs.length+errHosts.length} critical, ${firingAlerts.length} firing`}>
