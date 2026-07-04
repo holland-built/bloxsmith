@@ -46,7 +46,7 @@ window.onerror = function(msg,src,line,col,err) {
   --amber-bg:rgba(234,179,8,.12);--amber-border:rgba(234,179,8,.3);--amber-text:#a16207;
   --green-bg:rgba(22,163,74,.10);--green-border:rgba(22,163,74,.3);--green-text:#16a34a;
   /* type scale */
-  --fs-2xs:11px;--fs-xs:12px;--fs-sm:13px;--fs-base:15px;--fs-md:16px;--fs-lg:22px;--fs-xl:30px;--fs-2xl:48px;
+  --fs-2xs:12px;--fs-xs:13px;--fs-sm:14px;--fs-base:16px;--fs-md:18px;--fs-lg:24px;--fs-xl:32px;--fs-2xl:50px;
   /* interaction */
   --hover:rgba(0,0,0,.04);
   --hover-strong:rgba(0,0,0,.06);
@@ -211,17 +211,17 @@ body{padding-left:0!important}
 .card.warn-state:hover{border-color:rgba(var(--amber-rgb),.55)}
 .card.crit-state{opacity:1;background:rgba(var(--red-rgb),.10)}
 .card.crit-state:hover{border-color:rgba(var(--red-rgb),.55)}
-.card-title{font-size:var(--fs-sm);font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-200);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-title{font-size:var(--fs-sm);font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--ink);margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0}
 .g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
 .g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
 .g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
 @media(max-width:900px){.g3-2{grid-template-columns:1fr}}
 .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
-.kpi-val{font-family:var(--font-mono);font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.1;letter-spacing:-.02em;margin-bottom:6px}
+.kpi-val{font-family:var(--font-mono);font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.05;letter-spacing:-.02em;margin-bottom:6px}
 .kpi-val.crit{color:var(--red);font-weight:700}
-.kpi-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
-.kpi-delta{font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:4px}
+.kpi-lbl{font-size:12px;font-weight:400;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.kpi-delta{font-size:12px;color:var(--muted);font-weight:600;font-family:var(--font-mono);margin-top:4px}
 .bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start}
 .section-view .bento{display:none!important}
 .bento>*{min-width:0}
@@ -250,8 +250,9 @@ body{padding-left:0!important}
 /* gauges */
 /* tables */
 .tbl{width:100%;border-collapse:collapse;table-layout:fixed}
-.tbl th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);padding:8px 10px;border-bottom:1px solid var(--border);white-space:normal}
-.tbl td{padding:8px 10px;font-size:12px;line-height:1.4;border-bottom:1px solid var(--row-border)}
+.tbl th{text-align:left;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);padding:8px 10px;border-bottom:1px solid var(--border);white-space:normal}
+.tbl td{padding:8px 10px;font-size:12px;line-height:1.4;border-bottom:1px solid var(--row-border);font-variant-numeric:tabular-nums}
+.tbl tbody tr:nth-child(even) td{background:var(--surface-2)}
 .tbl tr:hover td{background:var(--hover)}
 .tbl tr:last-child td{border-bottom:none}
 .scroll{overflow-y:auto;overflow-x:auto;max-width:100%}
@@ -453,7 +454,7 @@ body{padding-left:0!important}
 .ov-pool-row{cursor:pointer;border-radius:var(--r-status);transition:background .12s}
 .ov-pool-row:hover{background:var(--surface-2)}
 .ov-dots{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0}
-.ov-legend{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-top:6px;display:flex;gap:16px}
+.ov-legend{font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-top:6px;display:flex;gap:16px}
 @media(max-width:900px){.ov-2col,.ov-2col-eq,.ov-3col{grid-template-columns:1fr}}
 .nav-brand{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .nav-brand-name{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
@@ -765,8 +766,8 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 @keyframes skel{0%{background-position:100% 0}100%{background-position:-100% 0}}
 .skel-row{height:13px;margin:9px 0}
 /* ── overview card entrance (staggered) ── */
-@keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.bento>.drag-card{animation:cardIn .32s cubic-bezier(.2,.8,.2,1) both}
+@keyframes cardIn{0%{opacity:0;transform:translateY(8px) scale(.96)}40%{opacity:1;transform:translateY(0) scale(1.015);filter:brightness(1.09) saturate(1.1)}70%{transform:scale(.997)}100%{opacity:1;transform:none;filter:none}}
+.bento>.drag-card{animation:cardIn .35s cubic-bezier(.2,.8,.2,1) both}
 .bento>.drag-card:nth-child(2){animation-delay:.04s}
 .bento>.drag-card:nth-child(3){animation-delay:.08s}
 .bento>.drag-card:nth-child(4){animation-delay:.12s}
@@ -809,6 +810,20 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .drill-sheet-bd{padding:16px;overflow-y:auto;flex:1;font-size:12px}
 .drill-kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
 .drill-kv .k{color:var(--gray-400);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+/* ── nav incident bell + slide-over ── */
+.nav-bell{position:relative;display:inline-flex;align-items:center;justify-content:center;width:32px;height:28px;background:none;border:none;color:var(--muted);cursor:pointer;border-radius:var(--r-ctl);transition:color .12s,background .12s;margin:0 2px}
+.nav-bell:hover{color:var(--ink);background:var(--hover)}
+.nav-bell.has-inc{color:var(--red)}
+.nav-bell-badge{position:absolute;top:-1px;right:-2px;min-width:16px;height:16px;padding:0 4px;background:var(--red);color:#fff;font-family:var(--font-mono);font-size:10px;font-weight:700;line-height:16px;text-align:center;border-radius:9999px;box-sizing:border-box}
+.inc-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:11px 4px;cursor:pointer;font-family:inherit;transition:background .12s}
+.inc-item:hover{background:var(--hover)}
+.inc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--muted)}
+.inc-dot.crit{background:var(--red)}.inc-dot.warn{background:var(--amber)}
+.inc-body{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.inc-t{font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inc-d{font-size:12px;color:var(--muted);font-family:var(--font-mono)}
+.inc-arrow{color:var(--gray-400);flex-shrink:0;font-size:13px}
+.inc-item:hover .inc-arrow{color:var(--accent)}
 @media(prefers-reduced-motion:reduce){.drill-sheet{animation:none}}
 .wiz-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:120}
 .wiz-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(440px,92vw);max-height:84vh;overflow:auto;background:var(--surface-2);border:none;border-radius:var(--r-card);z-index:121;box-shadow:var(--shadow-float);animation:wizardIn .22s cubic-bezier(.16,1,.3,1) both}
@@ -1713,12 +1728,14 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
             onKeyDown={onRowClick?(e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onRowClick(r);}}):undefined}
             aria-haspopup={onRowClick?"dialog":undefined}
             style={onRowClick?{cursor:'pointer'}:undefined}>
-            {vcols.map(c=>(
+            {vcols.map(c=>{
+              const _num=!c.render&&typeof r[c.key]==='number';
+              return (
               <td key={c.key} className={c.expanded?'exp':''}
-                style={{fontSize:c.size||12,...(c.mono?{fontFamily:'monospace'}:{}),...(c.align?{textAlign:c.align}:{})}}>
-                {c.render?c.render(r):(r[c.key]==null?'—':(typeof r[c.key]==='number'?r[c.key].toLocaleString():String(r[c.key])))}
+                style={{fontSize:c.size||12,...(c.mono?{fontFamily:'monospace'}:{}),...(c.align?{textAlign:c.align}:(_num?{textAlign:'right'}:{}))}}>
+                {c.render?c.render(r):(r[c.key]==null?'—':(_num?r[c.key].toLocaleString():String(r[c.key])))}
               </td>
-            ))}
+            );})}
           </tr>
         ))}
       </ShowMoreTable>
@@ -2287,6 +2304,31 @@ function BuilderDonut({rows, dim, measure, agg}){
   );
 }
 
+/* Safe left-to-right formula evaluator for builder computed fields. NO eval:
+   tokenizes into operands (field names or numbers) + operators (+ - * /) and
+   folds left-to-right. Returns a number, or null when the expr is malformed or
+   references a non-numeric/missing field. */
+function evalComputed(expr, row){
+  const s=String(expr||'').trim();
+  if(!s) return null;
+  const toks=s.match(/[A-Za-z0-9_.%]+|[+\-*/]/g);
+  if(!toks||toks.length<3||toks.length%2===0) return null;
+  const val=t=>{ if(/^[0-9]*\.?[0-9]+$/.test(t)) return Number(t); const v=row?.[t]; const n=typeof v==='number'?v:Number(v); return (v==null||isNaN(n))?null:n; };
+  let acc=val(toks[0]); if(acc===null) return null;
+  for(let i=1;i<toks.length;i+=2){
+    const op=toks[i], b=val(toks[i+1]); if(b===null) return null;
+    if(op==='+')acc+=b; else if(op==='-')acc-=b; else if(op==='*')acc*=b;
+    else if(op==='/'){ if(b===0) return null; acc/=b; } else return null;
+  }
+  return acc;
+}
+/* Applies cfg.computed fields to each row, producing a new derived-column set. */
+function applyComputed(rows, computed){
+  const cs=(computed||[]).filter(c=>c&&c.name&&c.expr);
+  if(!cs.length) return rows;
+  return rows.map(r=>{ const o={...r}; cs.forEach(c=>{ o[c.name]=evalComputed(c.expr,r); }); return o; });
+}
+
 /* Renders one custom widget. Refetches ONLY when source/filters/limit change
    (AbortController cancels in-flight); swapping viz/x/y/agg re-aggregates the
    cached rows client-side. DragHandle is passed from App (optional in preview). */
@@ -2341,13 +2383,18 @@ function BuilderWidget({id, cfg, DragHandle}){
 
   if(!cfg||!cfg.source) return card(<div className="no-data">Pick a source to preview</div>);
   if(err) return card(<div className="no-data">Couldn't load data. The bridge or Infoblox Portal (CSP) may be unreachable.</div>);
-  if(rows===null) return card(<div className="no-data">Loading…</div>);
+  if(rows===null) return card(
+    <div style={{padding:'6px 2px'}} aria-busy="true" aria-label="Loading">
+      {[62,88,50,74,42].map((w,i)=><div key={i} className="skel skel-row" style={{width:w+'%'}}/>)}
+    </div>
+  );
   if(!rows.length) return card(<div className="no-data">No data</div>);
 
   const viz=cfg.viz, x=cfg.x, y=cfg.y, col=cfg.col, agg=cfg.agg||'sum';
+  const drows=applyComputed(rows,cfg.computed);
   let body;
   if(viz==='stat'){
-    const v=_aggAll(rows,y,agg);
+    const v=_aggAll(drows,y,agg);
     body=(
       <div style={{display:'flex',flexDirection:'column',justifyContent:'center',minHeight:100}}>
         <div style={{fontSize:38,fontWeight:700,fontFamily:'var(--font-mono)',color:'var(--ink)',lineHeight:1}}>{Number(v).toLocaleString(undefined,{maximumFractionDigits:1})}</div>
@@ -2355,16 +2402,16 @@ function BuilderWidget({id, cfg, DragHandle}){
       </div>
     );
   } else if(viz==='line'||viz==='area'){
-    const ad=aggregate(rows,x,y,agg);
+    const ad=aggregate(drows,x,y,agg);
     body=<MiniLineChart data={ad} valueKey="value" labelKey="label" height={140}/>;
   } else if(viz==='bar'){
-    const ad=aggregate(rows,x,y,agg).sort((a,b)=>b.value-a.value);
+    const ad=aggregate(drows,x,y,agg).sort((a,b)=>b.value-a.value);
     body=<VizBars rows={ad}/>;
   } else if(viz==='donut'){
-    body=<BuilderDonut rows={rows} dim={x} measure={y} agg={agg}/>;
+    body=<BuilderDonut rows={drows} dim={x} measure={y} agg={agg}/>;
   } else if(viz==='pivot'){
-    const xs=[...new Set(rows.map(r=>String(r?.[x]??'—')))].slice(0,25);
-    const cs=[...new Set(rows.map(r=>String(r?.[col]??'—')))].slice(0,12);
+    const xs=[...new Set(drows.map(r=>String(r?.[x]??'—')))].slice(0,25);
+    const cs=[...new Set(drows.map(r=>String(r?.[col]??'—')))].slice(0,12);
     body=(
       <div style={{overflow:'auto'}}>
         <table className="tbl">
@@ -2373,7 +2420,7 @@ function BuilderWidget({id, cfg, DragHandle}){
             <tr key={xv}>
               <td style={{fontFamily:'var(--font-mono)'}}>{xv}</td>
               {cs.map(cv=>{
-                const sub=rows.filter(r=>String(r?.[x]??'—')===xv&&String(r?.[col]??'—')===cv);
+                const sub=drows.filter(r=>String(r?.[x]??'—')===xv&&String(r?.[col]??'—')===cv);
                 const cellV=Number(_aggAll(sub,y,agg));
                 return <td key={cv} data-tip={`${x||'row'}: ${xv} · ${col||'col'}: ${cv} · ${agg}${y?' '+y:''}: ${cellV.toLocaleString()}`} style={{textAlign:'right',fontFamily:'var(--font-mono)'}}>{cellV.toLocaleString()}</td>;
               })}
@@ -2383,8 +2430,8 @@ function BuilderWidget({id, cfg, DragHandle}){
       </div>
     );
   } else {
-    const cols=((cfg.columns&&cfg.columns.length?cfg.columns:Object.keys(rows[0]).slice(0,6))).map(k=>({key:k,label:k}));
-    body=<WidgetVizTable data={rows} columns={cols} persistId={id||'cw_preview'}/>;
+    const cols=((cfg.columns&&cfg.columns.length?cfg.columns:Object.keys(drows[0]).slice(0,6))).map(k=>({key:k,label:k}));
+    body=<WidgetVizTable data={drows} columns={cols} persistId={id||'cw_preview'}/>;
   }
   return card(body);
 }
@@ -2393,7 +2440,7 @@ function BuilderWidget({id, cfg, DragHandle}){
    (the SAME BuilderWidget) on the right. Debounces the draft 300ms so typing
    in filter/limit fields doesn't hammer the network. No code required. */
 const BUILDER_VIZ=[{v:'table',l:'Table'},{v:'stat',l:'Stat'},{v:'line',l:'Line/Area'},{v:'bar',l:'Bar'},{v:'donut',l:'Donut'},{v:'pivot',l:'Pivot'}];
-const _blankDraft=()=>({source:'',viz:'table',title:'',agg:'sum',x:'',y:'',col:'',columns:[],filters:{},limit:25,rawPath:'',rawParams:'',_titleEdited:false});
+const _blankDraft=()=>({source:'',viz:'table',title:'',agg:'sum',x:'',y:'',col:'',columns:[],filters:{},limit:25,rawPath:'',rawParams:'',computed:[],_titleEdited:false});
 function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
   const [sources,setSources]=useState(null);
   const [draft,setDraft]=useState(_blankDraft);
@@ -2420,7 +2467,11 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
   const dims=fields.filter(f=>f.role==='dimension');
   const meas=fields.filter(f=>f.role==='measure');
   const filt=fields.filter(f=>f.role==='filterable');
+  const computed=draft.computed||[];
+  const compNames=computed.filter(c=>c.name&&c.expr).map(c=>c.name);
+  const numFields=[...new Set([...(meas.length?meas:fields).map(f=>f.name),...compNames])];
   const vizLabel=v=>(BUILDER_VIZ.find(z=>z.v===v)||{}).l||v;
+  const updComputed=nr=>upd({computed:nr});
 
   const upd=patch=>setDraft(d=>{
     const n={...d,...patch};
@@ -2456,6 +2507,7 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
     if(!valid) return;
     const cfg={...draft};
     delete cfg._titleEdited;
+    cfg.computed=(cfg.computed||[]).filter(c=>c&&c.name&&c.expr);
     if(!cfg.title) cfg.title=((src&&src.label)||cfg.source)+' · '+vizLabel(cfg.viz);
     onAdd(cfg);
   };
@@ -2546,10 +2598,23 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
                 <label htmlFor="bld-y">Value (measure)</label>
                 <select id="bld-y" className="scope-select" value={draft.y} onChange={e=>upd({y:e.target.value})}>
                   <option value="">Choose…</option>
-                  {(meas.length?meas:fields).map(f=><option key={f.name} value={f.name}>{f.name}</option>)}
+                  {numFields.map(n=><option key={n} value={n}>{compNames.includes(n)?'ƒ '+n:n}</option>)}
                 </select>
               </div>
             )}
+
+            <div className="bld-field">
+              <label>Computed field <span style={{color:'var(--muted)',fontWeight:400}}>(optional)</span></label>
+              {computed.map((c,i)=>(
+                <div className="bld-frow" key={i}>
+                  <input className="bld-in" style={{flex:'0 0 96px'}} placeholder="name" value={c.name||''} onChange={e=>{const nr=computed.map((x,j)=>j===i?{...x,name:e.target.value}:x);updComputed(nr);}}/>
+                  <input className="bld-in" placeholder="e.g. used / total * 100" value={c.expr||''} onChange={e=>{const nr=computed.map((x,j)=>j===i?{...x,expr:e.target.value}:x);updComputed(nr);}}/>
+                  <button className="col-iconbtn" aria-label="Remove computed field" onClick={()=>updComputed(computed.filter((_,j)=>j!==i))}>✕</button>
+                </div>
+              ))}
+              <button className="ghost-chip" onClick={()=>updComputed([...computed,{name:'',expr:''}])}><b>+</b> Add computed field</button>
+              <div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>Formula over numeric fields — left to right, no precedence. Ops: <b>+ − * /</b>. Becomes a measure & table column.</div>
+            </div>
 
             <div className="bld-field">
               <label>Filters</label>
@@ -5215,6 +5280,7 @@ function App({vault, onVaultChange}={}) {
   const [sidebarOpen, setSidebarOpen]       = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(()=>LS.get('noc.sidebarCollapsed',true));
   const [alertColCollapsed, setAlertColCollapsed] = useState(()=>LS.get('noc.incidentsHidden',true));
+  const [bellOpen, setBellOpen] = useState(false);
   const [srchQ, setSrchQ]       = useState('');
   const [srchRes, setSrchRes]   = useState(null);
   const [srching, setSrching]   = useState(false);
@@ -6065,6 +6131,12 @@ function App({vault, onVaultChange}={}) {
             </div>}
             <span className="nav-clock" aria-live="off" style={{padding:"0 12px",fontSize:12}}>{now.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</span>
             <RefreshControl autoRefresh={autoRefresh} refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen} hoverPause={hoverPause} arCountdown={arCountdown} refreshing={refreshing} onRefresh={()=>load(true)}/>
+            {(()=>{const _inc=firingAlerts.length+critSubs.length+errHosts.length;return (
+              <button className={`nav-bell${_inc>0?' has-inc':''}`} aria-label={`${_inc} active incident${_inc===1?'':'s'}`} data-tip="Active incidents" onClick={()=>setBellOpen(true)}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                {_inc>0&&<span className="nav-bell-badge">{_inc>99?'99+':_inc}</span>}
+              </button>
+            );})()}
             <div className={`status-rail-wrap`} data-tip={`${critSubs.length+errHosts.length} critical, ${firingAlerts.length} firing`}>
               <div className={`status-rail${(critSubs.length+errHosts.length+firingAlerts.length)===0?" ok":""}`}/>
               <div className="status-counts">
@@ -6138,16 +6210,8 @@ function App({vault, onVaultChange}={}) {
         />}
         {focusEntity&&<button className="scope-clear" style={{position:'fixed',bottom:12,right:12,zIndex:200,background:'var(--surface-2)',border:'1px solid var(--teal)',color:'var(--teal)',padding:'4px 10px',borderRadius:4,fontSize:10,fontFamily:'var(--font-mono)',cursor:'pointer'}} onClick={()=>setFocusEntity(null)}>◉ focused: {focusEntity.key} — click to clear</button>}
         <div className="noc-layout">
-          {alertColCollapsed&&section==='overview'&&<button className="incidents-reopen" onClick={()=>{setAlertColCollapsed(false);LS.set('noc.incidentsHidden',false);}} title="Show active incidents">⚠ Incidents{(firingAlerts.length+critSubs.length+errHosts.length)>0&&<span className="ir-count">{firingAlerts.length+critSubs.length+errHosts.length}</span>}</button>}
-          <div className={`alert-col${alertColCollapsed?' collapsed-mobile':''}`}>
-            <div className="alert-col-header">
-              <div className="alert-col-title">
-                Active Incidents
-                {(firingAlerts.length+critSubs.length+errHosts.length)>0&&<span className="alert-col-count">{firingAlerts.length+critSubs.length+errHosts.length}</span>}
-                <button className="alert-col-mobile-toggle" aria-expanded={!alertColCollapsed} onClick={()=>setAlertColCollapsed(v=>{LS.set('noc.incidentsHidden',!v);return !v;})}>{alertColCollapsed?'Show ⌄':'Hide ⌃'}</button>
-              </div>
-            </div>
-        {/* ── ATC latch strip — read-only CRIT highlight, gated on critSubs ── */}
+          <div className="content-col" style={{opacity:refreshing?0.72:1,transition:'opacity .3s'}}>
+        {/* ── ATC latch strip — thin full-width top strip, gated on critSubs ── */}
         {critSubs.length>0&&<div className="latch-strip" aria-live="polite">
           <div className="latch-text">
             <span className="latch-crit">█ CRIT</span>
@@ -6221,12 +6285,6 @@ function App({vault, onVaultChange}={}) {
             </div>
           );
         })()}
-          {(firingAlerts.length+critSubs.length+errHosts.length)===0&&!usingMock&&
-            <div className="alert-col-empty">· No active incidents</div>
-          }
-          </div>{/* /alert-col */}
-          <div className="content-col" style={{opacity:refreshing?0.72:1,transition:'opacity .3s'}}>
-
         <div key={section} className="section-view">
         {/* ── OVERVIEW ── */}
         {section==='overview'&&(
@@ -6324,14 +6382,14 @@ function App({vault, onVaultChange}={}) {
                     data-tip={`Go to ${k.nav} section`}
                     onClick={()=>setSection(k.nav)}>
                     <svg width="100%" height="100%" viewBox="0 0 160 28" preserveAspectRatio="none"
-                      style={{position:'absolute',left:0,right:0,bottom:0,height:34,top:'auto',opacity:.16,pointerEvents:k.histKey?'auto':'none',cursor:'crosshair'}}
+                      style={{position:'absolute',left:0,right:0,bottom:0,height:40,top:'auto',opacity:k.histKey?.5:0,pointerEvents:k.histKey?'auto':'none',cursor:'crosshair'}}
                       aria-hidden="true"
                       onMouseMove={k.histKey?e=>{const r=e.currentTarget.getBoundingClientRect();setChartCursor((e.clientX-r.left)/r.width);}:null}
                       onMouseLeave={k.histKey?()=>setChartCursor(null):null}>
-                      <polyline points={_sparkPts(k.histKey)} fill="none"
+                      {k.histKey&&<polyline points={_sparkPts(k.histKey)} fill="none"
                         stroke={k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--teal)'}
-                        strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
-                      {chartCursor!==null&&<line x1={chartCursor*160} y1={0} x2={chartCursor*160} y2={28}
+                        strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>}
+                      {k.histKey&&chartCursor!==null&&<line x1={chartCursor*160} y1={0} x2={chartCursor*160} y2={28}
                         stroke="var(--teal)" strokeWidth=".75" vectorEffect="non-scaling-stroke" opacity=".7"/>}
                     </svg>
                     {cursorVal!==null&&(
@@ -6340,11 +6398,11 @@ function App({vault, onVaultChange}={}) {
                         {cursorVal}
                       </div>
                     )}
-                    <div className="kpi-val" style={{position:'relative',zIndex:1,...(i===2&&k.sev?{color:k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--ink)'}:{})}}>{k.v}</div>
+                    <div className="kpi-val" style={{position:'relative',zIndex:1,...(k.sev==='crit'?{color:'var(--red)'}:{})}}>{k.v}</div>
                     <div className="kpi-lbl" style={{position:'relative',zIndex:1,marginTop:6}}>{k.l}</div>
-                    {k.deltaAction
-                      ? <div className="kpi-delta" style={{position:'relative',zIndex:1,cursor:'pointer',textDecoration:'underline',textDecorationStyle:'dotted'}} onClick={e=>{e.stopPropagation();k.deltaAction();}}>{`→ ${k.delta}`}</div>
-                      : <div className="kpi-delta" style={{position:'relative',zIndex:1}}>{`→ ${k.delta}`}</div>}
+                    {(()=>{const dClr=k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--green)';return k.deltaAction
+                      ? <div className="kpi-delta" style={{position:'relative',zIndex:1,color:dClr,cursor:'pointer',textDecoration:'underline',textDecorationStyle:'dotted'}} onClick={e=>{e.stopPropagation();k.deltaAction();}}>{`→ ${k.delta}`}</div>
+                      : <div className="kpi-delta" style={{position:'relative',zIndex:1,color:dClr}}>{`→ ${k.delta}`}</div>;})()}
                   </div>
                   );
                 });
@@ -7275,6 +7333,32 @@ function App({vault, onVaultChange}={}) {
       {showWizard&&<DashboardWizard overviewOrder={overviewOrder} collapsed={collapsed} hiddenSections={hiddenSections} widgetLabels={WIDGET_LABELS} moveWidget={moveWidget} toggleCollapse={toggleCollapse} toggleHideSection={toggleHideSection} onDone={finishWizard} orgDomain={orgDomain} orgName={orgName} onBrandSave={handleBrandSave} initialTab={wizardInitTab}/>}
       {chromeHidden&&<button className="show-chrome-fab" onClick={()=>setChromeHidden(()=>{LS.set('noc.chromeHidden',false);return false;})} data-tip="Show the top nav bar again (shortcut: f)" aria-label="Show chrome">⤡ Show chrome</button>}
       {builderOpen&&<BuilderModal open={builderOpen} onClose={()=>{setBuilderOpen(false);setBuilderEditId(null);}} onAdd={saveBuilderWidget} editId={builderEditId} initialCfg={builderEditId?customWidgets[builderEditId]:null}/>}
+      {bellOpen&&(()=>{
+        const items=[];
+        errHosts.forEach(h=>items.push({sev:'crit',t:h.name||h.ip,d:`Host ${h.status}`,go:()=>{setSection('hosts');setHostChip('error');}}));
+        critSubs.forEach(s=>items.push({sev:'crit',t:s.name||s.addr,d:`DHCP ${s.util}% — over capacity`,go:()=>{setSection('ipam');setIpamChip('critical');}}));
+        firingAlerts.forEach(a=>items.push({sev:'warn',t:metricLabel(a.metric),d:`Firing · ${a.value}`,go:()=>setSection('alerts')}));
+        return (
+          <>
+            <div className="drill-sheet-overlay" onClick={()=>setBellOpen(false)}/>
+            <div className="drill-sheet" role="dialog" aria-modal="true" aria-label="Active incidents">
+              <div className="drill-sheet-hd">
+                <div style={{display:'flex',alignItems:'center',gap:8}}><b style={{fontSize:14}}>Active Incidents</b>{items.length>0&&<span className="nav-bell-badge" style={{position:'static'}}>{items.length}</span>}</div>
+                <button className="drill-close" onClick={()=>setBellOpen(false)} aria-label="Close">×</button>
+              </div>
+              <div className="drill-sheet-bd">
+                {items.length===0?<div className="no-data">✓ No active incidents</div>:items.map((it,i)=>(
+                  <button key={i} className="inc-item" onClick={()=>{it.go();setBellOpen(false);}}>
+                    <span className={`inc-dot ${it.sev}`}/>
+                    <span className="inc-body"><span className="inc-t">{it.t}</span><span className="inc-d">{it.d}</span></span>
+                    <span className="inc-arrow" aria-hidden="true">→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
