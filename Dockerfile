@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # App code + static assets (index.html, react/babel bundles, etc.)
 COPY server.py index.html ./
 COPY *.js ./
+COPY *.woff2 ./
 
 # Bind to all interfaces inside the container so the host port mapping works.
 # Keys are supplied at run time (env -e INFOBLOX_API_KEY, or the in-app encrypted
