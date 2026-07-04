@@ -551,8 +551,26 @@ tr:hover .copy-btn{opacity:1}
 .row-limit-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;justify-content:flex-end}
 .row-limit-btn{padding:2px 9px;border-radius:var(--r-ctl);border:1px solid var(--border);background:none;color:var(--gray-400);font-size:10px;cursor:pointer;font-weight:600;transition:background .12s,border-color .12s,color .12s}
 .row-limit-btn.on{background:var(--surface-3);color:var(--teal);border-color:var(--teal)}
-.drag-card{transition:opacity .15s}
+.drag-card{transition:opacity .15s;position:relative}
 .drag-card.dragging{opacity:.5}
+/* ── widget hover action row (comfort 1) + fullscreen (comfort 3) ── */
+.wact-row{position:absolute;top:8px;right:10px;z-index:6;display:flex;gap:4px;opacity:0;transform:translateY(-2px);transition:opacity .12s,transform .12s;pointer-events:none}
+.drag-card:hover .wact-row,.drag-card:focus-within .wact-row{opacity:1;transform:none;pointer-events:auto}
+.wact-btn{width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--gray-400);font-size:12px;line-height:1;cursor:pointer;box-shadow:var(--shadow-float);transition:color .12s,border-color .12s}
+.wact-btn:hover{color:var(--teal);border-color:var(--teal)}
+.wact-btn.wact-danger:hover{color:var(--red);border-color:var(--red)}
+.wact-btn:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.fs-wrap{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:590;display:flex;align-items:center;justify-content:center;padding:32px;animation:gtipIn .15s ease}
+.fs-panel{position:relative;width:min(1200px,94vw);height:min(88vh,900px);background:var(--surface-2);border-radius:var(--r-card);box-shadow:var(--shadow-float);overflow:auto;padding:10px}
+.fs-panel>.card{height:100%;box-sizing:border-box;max-height:none}
+.fs-close{position:absolute;top:10px;right:12px;z-index:2;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--gray-400);font-size:15px;line-height:1;cursor:pointer;box-shadow:var(--shadow-float)}
+.fs-close:hover{color:var(--teal);border-color:var(--teal)}
+/* ── hide-chrome mode (comfort 4) ── */
+body.chrome-hidden{padding-top:0}
+body.chrome-hidden .topbar,body.chrome-hidden .subbar,body.chrome-hidden .ticker{display:none}
+body.chrome-hidden .sidebar{top:0;height:100vh}
+.show-chrome-fab{position:fixed;top:8px;right:12px;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--gray-400);font-size:11px;padding:5px 10px;cursor:pointer;box-shadow:var(--shadow-float);display:inline-flex;align-items:center;gap:6px}
+.show-chrome-fab:hover{color:var(--teal);border-color:var(--teal)}
 .drag-over{outline:2px dashed rgba(214,210,203,.45);outline-offset:4px;border-radius:var(--r-card);background:rgba(214,210,203,.04)}
 .drag-handle{cursor:grab;color:var(--gray-600);font-size:13px;line-height:1;padding:0 4px;user-select:none;flex-shrink:0;transition:color .12s,opacity .12s;opacity:.65}
 .drag-handle:hover{color:var(--teal);opacity:1}
@@ -2258,9 +2276,9 @@ function BuilderDonut({rows, dim, measure, agg}){
       </svg>
       <div style={{display:'flex',flexDirection:'column',gap:4}}>
         {data.map((d,i)=>(
-          <div key={i} style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
+          <div key={i} data-tip={`${d.label}: ${Math.round(d.value).toLocaleString()} · ${Math.round(d.value/total*100)}%`} style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
             <div style={{width:8,height:8,borderRadius:2,background:cols[i%cols.length],flexShrink:0}}/>
-            <span style={{fontFamily:'var(--font-mono)',color:'var(--ink)',minWidth:60,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={d.label}>{d.label}</span>
+            <span style={{fontFamily:'var(--font-mono)',color:'var(--ink)',minWidth:60,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.label}</span>
             <span style={{color:'var(--muted)'}}>{Math.round(d.value/total*100)}%</span>
           </div>
         ))}
@@ -2356,7 +2374,8 @@ function BuilderWidget({id, cfg, DragHandle}){
               <td style={{fontFamily:'var(--font-mono)'}}>{xv}</td>
               {cs.map(cv=>{
                 const sub=rows.filter(r=>String(r?.[x]??'—')===xv&&String(r?.[col]??'—')===cv);
-                return <td key={cv} style={{textAlign:'right',fontFamily:'var(--font-mono)'}}>{Number(_aggAll(sub,y,agg)).toLocaleString()}</td>;
+                const cellV=Number(_aggAll(sub,y,agg));
+                return <td key={cv} data-tip={`${x||'row'}: ${xv} · ${col||'col'}: ${cv} · ${agg}${y?' '+y:''}: ${cellV.toLocaleString()}`} style={{textAlign:'right',fontFamily:'var(--font-mono)'}}>{cellV.toLocaleString()}</td>;
               })}
             </tr>
           ))}</tbody>
@@ -2375,14 +2394,21 @@ function BuilderWidget({id, cfg, DragHandle}){
    in filter/limit fields doesn't hammer the network. No code required. */
 const BUILDER_VIZ=[{v:'table',l:'Table'},{v:'stat',l:'Stat'},{v:'line',l:'Line/Area'},{v:'bar',l:'Bar'},{v:'donut',l:'Donut'},{v:'pivot',l:'Pivot'}];
 const _blankDraft=()=>({source:'',viz:'table',title:'',agg:'sum',x:'',y:'',col:'',columns:[],filters:{},limit:25,rawPath:'',rawParams:'',_titleEdited:false});
-function BuilderModal({open, onClose, onAdd}){
+function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
   const [sources,setSources]=useState(null);
   const [draft,setDraft]=useState(_blankDraft);
   const [preview,setPreview]=useState(_blankDraft);
   const [filterRows,setFilterRows]=useState([{field:'',val:''}]);
 
   useEffect(()=>{ if(!open) return; let alive=true; fetch('/api/sources').then(r=>r.json()).then(d=>{ if(alive) setSources((d&&d.sources)||[]); }).catch(()=>{ if(alive) setSources([]); }); return ()=>{alive=false;}; },[open]);
-  useEffect(()=>{ if(open){ setDraft(_blankDraft()); setPreview(_blankDraft()); setFilterRows([{field:'',val:''}]); } },[open]);
+  useEffect(()=>{ if(open){
+    if(initialCfg){ // edit mode: seed the draft from the existing cfg
+      const seed={..._blankDraft(),...initialCfg,_titleEdited:true};
+      setDraft(seed); setPreview(seed);
+      const fr=Object.entries(initialCfg.filters||{}).map(([field,val])=>({field,val:String(val)}));
+      setFilterRows(fr.length?fr:[{field:'',val:''}]);
+    } else { setDraft(_blankDraft()); setPreview(_blankDraft()); setFilterRows([{field:'',val:''}]); }
+  } },[open]);
   useEffect(()=>{ const t=setTimeout(()=>setPreview(draft),300); return ()=>clearTimeout(t); },[draft]);
   useEffect(()=>{ if(!open) return; const h=e=>{ if(e.key==='Escape') onClose(); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[open,onClose]);
 
@@ -2437,9 +2463,9 @@ function BuilderModal({open, onClose, onAdd}){
   return (
     <>
       <div className="wiz-overlay" onClick={onClose}/>
-      <div className="builder-modal" role="dialog" aria-modal="true" aria-label="Add a widget" onClick={e=>e.stopPropagation()}>
+      <div className="builder-modal" role="dialog" aria-modal="true" aria-label={editId?'Edit widget':'Add a widget'} onClick={e=>e.stopPropagation()}>
         <div className="wiz-hd">
-          <div className="wiz-title">Add a widget</div>
+          <div className="wiz-title">{editId?'Edit widget':'Add a widget'}</div>
           <div className="wiz-sub">Pick a source and chart — preview updates live. No code.</div>
         </div>
 
@@ -2560,7 +2586,7 @@ function BuilderModal({open, onClose, onAdd}){
 
         <div className="wiz-foot">
           <button className="wiz-skip" onClick={onClose}>Cancel</button>
-          <button className="wiz-done" disabled={!valid} onClick={doAdd}>Add to dashboard</button>
+          <button className="wiz-done" disabled={!valid} onClick={doAdd}>{editId?'Save changes':'Add to dashboard'}</button>
         </div>
       </div>
     </>
@@ -5225,6 +5251,9 @@ function App({vault, onVaultChange}={}) {
   });
   const [vizMode, setVizMode]           = useState(()=>LS.get('noc.viz',{}));
   const [fullscreen, setFullscreen]     = useState(null);
+  const [fullscreenId, setFullscreenId] = useState(null);           // single-widget fullscreen (comfort 3)
+  const [builderEditId, setBuilderEditId] = useState(null);         // editing an existing cw_* (comfort 1)
+  const [chromeHidden, setChromeHidden] = useState(()=>LS.get('noc.chromeHidden',false)); // hide-chrome (comfort 4)
   const [dragOver, setDragOver]         = useState(null);
   const [dragging, setDragging]         = useState(null);
   const [dragArmed, setDragArmed]       = useState(null);
@@ -5299,6 +5328,42 @@ function App({vault, onVaultChange}={}) {
     setOverviewOrder(order); LS.set('noc.widgetOrder',order);
     setBuilderOpen(false);
     toast('Widget added ✓','ok');
+  };
+  // comfort 1: edit reopens the builder pre-filled; save writes back to the SAME id
+  const editWidget = (id) => { if(customWidgets[id]){ setBuilderEditId(id); setBuilderOpen(true); } };
+  const saveBuilderWidget = (cfg) => {
+    if(builderEditId){
+      const nw={...customWidgets,[builderEditId]:{...cfg,id:builderEditId}};
+      setCustomWidgets(nw); LS.set('noc.customWidgets',nw);
+      setBuilderOpen(false); setBuilderEditId(null);
+      toast('Widget updated ✓','ok');
+    } else addCustomWidget(cfg);
+  };
+  // comfort 1: duplicate (cw_* only) — clone cfg into a new cw_ id after the source
+  const duplicateWidget = (id) => {
+    const src=customWidgets[id]; if(!src) return;
+    const nid='cw_'+Date.now().toString(36);
+    const nw={...customWidgets,[nid]:{...src,id:nid,title:(src.title||'Widget')+' (copy)'}};
+    setCustomWidgets(nw); LS.set('noc.customWidgets',nw);
+    const order=[...overviewOrder]; const i=order.indexOf(id);
+    order.splice(i<0?order.length:i+1,0,nid);
+    setOverviewOrder(order); LS.set('noc.widgetOrder',order);
+    toast('Widget duplicated ✓','ok');
+  };
+  // comfort 1: remove — cw_* delete from customWidgets+order; built-in hides via hiddenSections
+  const removeWidget = (id) => {
+    if(fullscreenId===id) setFullscreenId(null);
+    if(id.startsWith('cw_')){
+      const nw={...customWidgets}; delete nw[id];
+      setCustomWidgets(nw); LS.set('noc.customWidgets',nw);
+      const order=overviewOrder.filter(x=>x!==id);
+      setOverviewOrder(order); LS.set('noc.widgetOrder',order);
+      toast('Widget removed ✓','ok');
+    } else {
+      const n=hiddenSections.includes(id)?hiddenSections:[...hiddenSections,id];
+      setHiddenSections(n); LS.set('noc.hiddenSections',n);
+      toast('Widget hidden ✓','ok');
+    }
   };
   const toggleHideSection = (id) => { const n=hiddenSections.includes(id)?hiddenSections.filter(x=>x!==id):[...hiddenSections,id]; setHiddenSections(n); LS.set('noc.hiddenSections',n); };
   const [wizardInitTab, setWizardInitTab] = useState('widgets');
@@ -5534,13 +5599,14 @@ function App({vault, onVaultChange}={}) {
       if(e.key==='?') { setShowShortcuts(s=>!s); return; }
       if(e.key==='Escape') {
         setChatOpen(false); setShowShortcuts(false); setCmdkOpen(false); setShowWizard(false);
-        setUpdPop(false); setSidebarOpen(false); setFullscreen(null); setShowAcctMenu(false);
+        setUpdPop(false); setSidebarOpen(false); setFullscreen(null); setFullscreenId(null); setShowAcctMenu(false);
         if(/[?&](host|sub)=/.test(location.hash)) history.back();   // close an open drill via history
         else { setSubFilt(null); setHostFilt(null); }
         return;
       }
       if(e.key==='r'&&!e.metaKey&&!e.ctrlKey) { load(); return; }
       if(e.key==='t'&&!e.metaKey&&!e.ctrlKey) { setTheme(t=>THEME_CYCLE[t]||'system'); return; }
+      if(e.key==='f'&&!e.metaKey&&!e.ctrlKey) { setChromeHidden(v=>{ const n=!v; LS.set('noc.chromeHidden',n); return n; }); return; }
       if(e.key==='e'&&!e.metaKey&&!e.ctrlKey) { const n=SECTION_EXPORT_MAP[section]; if(n) document.querySelector(`[data-export-section="${n}"]`)?.click(); return; }
       if(e.key==='/'){ e.preventDefault(); setSection('explore'); return; }
       const idx = parseInt(e.key);
@@ -5554,6 +5620,12 @@ function App({vault, onVaultChange}={}) {
     document.body.classList.toggle('chat-open', chatOpen);
     return ()=>document.body.classList.remove('chat-open');
   },[chatOpen]);
+
+  // comfort 4: hide top nav bar + FIRING strip; grid reclaims the space
+  useEffect(()=>{
+    document.body.classList.toggle('chrome-hidden', chromeHidden);
+    return ()=>document.body.classList.remove('chrome-hidden');
+  },[chromeHidden]);
 
   // theme: resolve 'system' via OS preference, apply to <html>, persist, react to OS changes
   useEffect(()=>{
@@ -5860,6 +5932,13 @@ function App({vault, onVaultChange}={}) {
               <span className="sf-lbl">Wall mode</span>
               <span className="sf-val">{wallMode?'On':'Off'}</span>
             </button>
+            <button className="sf-row" onClick={()=>setChromeHidden(v=>{const n=!v;LS.set('noc.chromeHidden',n);return n;})}
+              aria-label={`Hide chrome: ${chromeHidden?'On':'Off'} — click to toggle`}
+              data-tip="Hide the top nav bar &amp; FIRING strip for a focused view (shortcut: <b>f</b>)">
+              <span className="sf-ico">⤢</span>
+              <span className="sf-lbl">Hide chrome</span>
+              <span className="sf-val">{chromeHidden?'On':'Off'}</span>
+            </button>
             <button className="sf-row" onClick={()=>{const v=!demoMode;setDemoMode(v);LS.set('noc.demoMode',v);if(v){setSection('overview');setDemoBannerDismissed(false);}}}
               aria-label={`Demo mode: ${demoMode?'On':'Off'} — click to toggle`}
               data-tip="Hides test/allow-all policies; prioritizes threat intel feeds">
@@ -5966,7 +6045,7 @@ function App({vault, onVaultChange}={}) {
           <div className="topbar-right" style={{display:"flex",alignItems:"center",gap:0}}>
             <span className="nav-clock" aria-live="off" style={{padding:"0 12px",fontSize:12}}>{now.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</span>
             <RefreshControl autoRefresh={autoRefresh} refreshFrozen={refreshFrozen} setRefreshFrozen={setRefreshFrozen} hoverPause={hoverPause} arCountdown={arCountdown} refreshing={refreshing} onRefresh={()=>load(true)}/>
-            <div className={`status-rail-wrap`} title={`${critSubs.length+errHosts.length} critical, ${firingAlerts.length} firing`}>
+            <div className={`status-rail-wrap`} data-tip={`${critSubs.length+errHosts.length} critical, ${firingAlerts.length} firing`}>
               <div className={`status-rail${(critSubs.length+errHosts.length+firingAlerts.length)===0?" ok":""}`}/>
               <div className="status-counts">
                 {(critSubs.length+errHosts.length)>0&&<span className="status-cnt crit" role="status"><strong>{critSubs.length+errHosts.length}</strong> CRIT</span>}
@@ -6222,7 +6301,7 @@ function App({vault, onVaultChange}={}) {
                     onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(k.nav);}}}
                     aria-label={`Go to ${k.l} section`}
                     style={{display:'flex',flexDirection:'column',gap:0,position:'relative',overflow:'hidden',cursor:'pointer'}}
-                    title={`Go to ${k.nav} section`}
+                    data-tip={`Go to ${k.nav} section`}
                     onClick={()=>setSection(k.nav)}>
                     <svg width="100%" height="100%" viewBox="0 0 160 28" preserveAspectRatio="none"
                       style={{position:'absolute',left:0,right:0,bottom:0,height:34,top:'auto',opacity:.16,pointerEvents:k.histKey?'auto':'none',cursor:'crosshair'}}
@@ -6317,7 +6396,7 @@ function App({vault, onVaultChange}={}) {
                           style={{display:'grid',gridTemplateColumns:'1fr 38px 60px 54px',alignItems:'center',gap:8,height:36,padding:'0 4px'}}
                           onClick={()=>setScopeSubnet(scopeSubnet===s.id?null:s.id)}
                           onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setScopeSubnet(scopeSubnet===s.id?null:s.id);}}}
-                          title={s.name||s.addr}>
+                          data-tip={s.name||s.addr}>
                           <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
                           <span style={{fontFamily:'var(--font-mono)',fontSize:12,fontWeight:600,color:clr,textAlign:'right'}}>{s.util}%</span>
                           <svg width={60} height={20} viewBox="0 0 60 20" preserveAspectRatio="none" style={{display:'block',overflow:'visible'}}>
@@ -6358,7 +6437,7 @@ function App({vault, onVaultChange}={}) {
                         const qhr=hashN(z.fqdn,900)+50;
                         const isAnomaly=z.anomaly;
                         return (<React.Fragment key={z.id||i}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'zone',data:z});}}} title={z.fqdn} onClick={()=>setDrillEntity({type:'zone',data:z})}>{z.fqdn}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'zone',data:z});}}} data-tip={z.fqdn} onClick={()=>setDrillEntity({type:'zone',data:z})}>{z.fqdn}</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)'}}>{qhr}</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>Primary</span>
                           <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:isAnomaly?'var(--amber)':'var(--green)'}}>{isAnomaly?'? STALE':'· OK'}</span>
@@ -6379,7 +6458,7 @@ function App({vault, onVaultChange}={}) {
                         const clr=sevClr(s.util);
                         return (
                           <div key={s.id||i} style={{display:'grid',gridTemplateColumns:'1fr 80px 34px',gap:6,alignItems:'center',cursor:'pointer',padding:'2px 0'}}
-                            role="button" tabIndex={0} title={s.name&&s.name!==s.addr?s.name+' ('+s.addr+'/'+s.cidr+')':s.addr+'/'+s.cidr} aria-label={s.name&&s.name!==s.addr?s.name+' ('+s.addr+'/'+s.cidr+')':s.addr+'/'+s.cidr} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}} onClick={()=>{setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}>
+                            role="button" tabIndex={0} data-tip={s.name&&s.name!==s.addr?s.name+' ('+s.addr+'/'+s.cidr+')':s.addr+'/'+s.cidr} aria-label={s.name&&s.name!==s.addr?s.name+' ('+s.addr+'/'+s.cidr+')':s.addr+'/'+s.cidr} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}} onClick={()=>{setScopeSubnet(scopeSubnet===s.id?null:s.id);setDrillEntity({type:'subnet',data:s});}}>
                             <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
                             <div style={{height:6,background:'var(--surface-3)',borderRadius:3}}>
                               <div style={{width:`${Math.min(s.util,100)}%`,height:'100%',background:clr,borderRadius:3}}/>
@@ -6409,7 +6488,7 @@ function App({vault, onVaultChange}={}) {
                     <div className="ov-dots">
                       {s_hosts.slice(0,60).map((h,i)=>{
                         const c=h.status==='online'?'var(--green)':h.status==='degraded'?'var(--amber)':['offline','error'].includes(h.status)?'var(--red)':'var(--muted)';
-                        return <div key={i} style={{width:8,height:8,borderRadius:2,background:c}} title={h.name||h.ip}/>;
+                        return <div key={i} style={{width:8,height:8,borderRadius:2,background:c}} data-tip={h.name||h.ip}/>;
                       })}
                     </div>
                     {s_hosts.length===0&&<div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',padding:'4px 0'}}>No hosts reporting</div>}
@@ -6421,7 +6500,7 @@ function App({vault, onVaultChange}={}) {
                         {errHosts.slice(0,3).map((h,i)=>{
                           const isErr=['error','offline'].includes(h.status);
                           return (<React.Fragment key={i}>
-                            <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'host',data:h});}}} title={h.name||h.ip} onClick={()=>setDrillEntity({type:'host',data:h})}>{h.name||h.ip}</span>
+                            <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'host',data:h});}}} data-tip={h.name||h.ip} onClick={()=>setDrillEntity({type:'host',data:h})}>{h.name||h.ip}</span>
                             <span style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,
                               background:isErr?'rgba(var(--red-rgb),.12)':'rgba(var(--amber-rgb),.12)',
                               color:isErr?'var(--red)':'var(--amber)',
@@ -6451,7 +6530,7 @@ function App({vault, onVaultChange}={}) {
                       {feeds.filter(f=>f.active).slice(0,4).map((f,i)=>{
                         const isHigh=(f.entries||0)>10000;
                         return (<React.Fragment key={i}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'feed',data:f});}}} title={f.name} onClick={()=>setDrillEntity({type:'feed',data:f})}>{f.name}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'feed',data:f});}}} data-tip={f.name} onClick={()=>setDrillEntity({type:'feed',data:f})}>{f.name}</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{f.cat||f.category||'–'}</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',textAlign:'right'}}>–</span>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:isHigh?'var(--red)':'var(--ink)',textAlign:'right'}} aria-label={((f.entries||0).toLocaleString())+(isHigh?' — high':'')}>{isHigh&&<span aria-hidden="true" style={{fontSize:8,verticalAlign:'top',marginRight:1}}>▲</span>}{(f.entries||0).toLocaleString()}</span>
@@ -6483,7 +6562,7 @@ function App({vault, onVaultChange}={}) {
                         <div key={i} style={{display:'grid',gridTemplateColumns:'34px 40px 1fr',gap:6,alignItems:'baseline',padding:'4px 0',borderBottom:i<5?'1px solid var(--border)':'none',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'audit',data:log});}}} onClick={()=>setDrillEntity({type:'audit',data:log})}>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{time}</span>
                           <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,background:lvlBg,color:lvlC,border:`1px solid ${lvlC}33`,textAlign:'center'}}>{lvl}</span>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={`${log.user||''} ${log.action||''}`}>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} data-tip={`${log.user||''} ${log.action||''}`}>
                             {log.user&&<span style={{color:'var(--muted)'}}>{log.user}{' '}</span>}
                             {log.action||log.type||'event'}
                           </span>
@@ -6499,8 +6578,8 @@ function App({vault, onVaultChange}={}) {
                     {!hubHealth ? hubMuted('loading…') : hubHealth.length===0 ? hubMuted('— no services') :
                       hubHealth.map((sv,i)=>(
                         <div key={i} style={{display:'grid',gridTemplateColumns:'12px 1fr auto',gap:8,alignItems:'center',padding:'6px 4px',borderBottom:i<hubHealth.length-1?'1px solid var(--border)':'none'}}>
-                          <span style={{width:8,height:8,borderRadius:'50%',background:hubC(sv.status),justifySelf:'center'}} title={sv.statusLabel||sv.status}/>
-                          <span style={{fontSize:12,fontFamily:'var(--font-ui)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={sv.name}>{sv.name}</span>
+                          <span style={{width:8,height:8,borderRadius:'50%',background:hubC(sv.status),justifySelf:'center'}} data-tip={sv.statusLabel||sv.status}/>
+                          <span style={{fontSize:12,fontFamily:'var(--font-ui)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} data-tip={sv.name}>{sv.name}</span>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:hubC(sv.status),textAlign:'right'}}>{sv.statusLabel||sv.status}{sv.meta?<span style={{color:'var(--muted)',marginLeft:6}}>{sv.meta}</span>:null}</span>
                         </div>
                       ))}
@@ -6523,7 +6602,7 @@ function App({vault, onVaultChange}={}) {
                       </div>
                       {(hubSecurity.events||[]).slice(0,4).map((e,i)=>(
                         <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:6,alignItems:'center',padding:'4px 0',borderTop:'1px solid var(--border)'}}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={e.qname}>{e.qname}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} data-tip={e.qname}>{e.qname}</span>
                           <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 5px',borderRadius:3,background:'var(--surface-3)',color:hubC(e.severity),textTransform:'uppercase'}}>{e.severity}</span>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{e.policy_action}</span>
                         </div>
@@ -6538,7 +6617,7 @@ function App({vault, onVaultChange}={}) {
                     {!hubDomains ? hubMuted('loading…') : (hubDomains.threat_feeds||[]).length===0 ? hubMuted('— no feeds') :
                       (hubDomains.threat_feeds||[]).slice(0,8).map((f,i)=>(
                         <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',padding:'5px 4px',borderBottom:i<Math.min(hubDomains.threat_feeds.length,8)-1?'1px solid var(--border)':'none'}}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.name}>{f.name}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} data-tip={f.name}>{f.name}</span>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{f.source}</span>
                           <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 5px',borderRadius:3,background:'var(--surface-3)',color:hubC(f.severity||f.threat_level),textTransform:'uppercase'}}>{f.threat_level}</span>
                         </div>
@@ -6551,7 +6630,7 @@ function App({vault, onVaultChange}={}) {
                     {!hubDomains ? hubMuted('loading…') : (hubDomains.named_lists||[]).length===0 ? hubMuted('— no lists') :
                       (hubDomains.named_lists||[]).slice(0,8).map((l,i)=>(
                         <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',padding:'5px 4px',borderBottom:i<Math.min(hubDomains.named_lists.length,8)-1?'1px solid var(--border)':'none'}}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={l.name}>{l.name}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} data-tip={l.name}>{l.name}</span>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{(l.items||0).toLocaleString()} items</span>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{l.policies} pol</span>
                         </div>
@@ -6564,7 +6643,7 @@ function App({vault, onVaultChange}={}) {
                     {!hubDomains ? hubMuted('loading…') : (hubDomains.security_policies||[]).length===0 ? hubMuted('— no policies') :
                       (hubDomains.security_policies||[]).slice(0,8).map((p,i)=>(
                         <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',padding:'5px 4px',borderBottom:i<Math.min(hubDomains.security_policies.length,8)-1?'1px solid var(--border)':'none'}}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={p.name}>{p.name}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} data-tip={p.name}>{p.name}</span>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{p.rules} rules</span>
                           <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 5px',borderRadius:3,background:'var(--surface-3)',color:'var(--ink)',textTransform:'uppercase'}}>{p.default_action}</span>
                         </div>
@@ -6583,8 +6662,8 @@ function App({vault, onVaultChange}={}) {
                       </div>
                       {(hubDomains.host_inventory.hosts||[]).slice(0,6).map((h,i)=>(
                         <div key={i} style={{display:'grid',gridTemplateColumns:'12px 1fr auto auto',gap:8,alignItems:'center',padding:'4px 4px',borderTop:'1px solid var(--border)'}}>
-                          <span style={{width:8,height:8,borderRadius:'50%',background:hubC(h.status),justifySelf:'center'}} title={h.status}/>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={h.name}>{h.name}</span>
+                          <span style={{width:8,height:8,borderRadius:'50%',background:hubC(h.status),justifySelf:'center'}} data-tip={h.status}/>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} data-tip={h.name}>{h.name}</span>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{h.ip}</span>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{h.qps} qps</span>
                         </div>
@@ -6598,7 +6677,7 @@ function App({vault, onVaultChange}={}) {
                     {!hubDomains ? hubMuted('loading…') : (hubDomains.anycast_ha||[]).length===0 ? hubMuted('— no anycast services') :
                       (hubDomains.anycast_ha||[]).slice(0,8).map((a,i)=>(
                         <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',padding:'5px 4px',borderBottom:i<Math.min(hubDomains.anycast_ha.length,8)-1?'1px solid var(--border)':'none'}}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={a.name}>{a.name} <span style={{color:'var(--muted)'}}>{a.service}</span></span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} data-tip={a.name}>{a.name} <span style={{color:'var(--muted)'}}>{a.service}</span></span>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{a.ip}</span>
                           <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 5px',borderRadius:3,background:'var(--surface-3)',color:hubC(a.severity||a.state),textTransform:'uppercase'}}>{a.state}</span>
                         </div>
@@ -6611,7 +6690,7 @@ function App({vault, onVaultChange}={}) {
                     {!hubDomains ? hubMuted('loading…') : (hubDomains.dfp_services||[]).length===0 ? hubMuted('— no DFP services') :
                       (hubDomains.dfp_services||[]).slice(0,8).map((s,i)=>(
                         <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:8,alignItems:'center',padding:'5px 4px',borderBottom:i<Math.min(hubDomains.dfp_services.length,8)-1?'1px solid var(--border)':'none'}}>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={s.name}>{s.name}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} data-tip={s.name}>{s.name}</span>
                           <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>{s.host}</span>
                           <span style={{fontSize:8,fontFamily:'var(--font-mono)',padding:'1px 5px',borderRadius:3,background:'var(--surface-3)',color:'var(--ink)',textTransform:'uppercase'}}>{s.mode}</span>
                         </div>
@@ -6644,6 +6723,7 @@ function App({vault, onVaultChange}={}) {
                 return null;
               };
               return (
+                <>
                 <div className="ov-bento">
                   {overviewOrder.filter(id=>!hiddenSections.includes(id)).map(id=>{
                     const hStyle=widgetHeights[id]?{height:widgetHeights[id],overflow:'hidden'}:{};
@@ -6658,6 +6738,18 @@ function App({vault, onVaultChange}={}) {
                         onDragOver={e=>onDragOver(e,id)}
                         onDrop={e=>onDrop(e,id)}
                         onDragEnd={()=>{onDragEnd();setDragArmed(null);}}>
+                        {(()=>{ const isCw=id.startsWith('cw_'); return (
+                          <div className="wact-row">
+                            <button className="wact-btn" draggable={false} data-tip="Fullscreen" aria-label="Open widget fullscreen"
+                              onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();setFullscreenId(id);}}>⤢</button>
+                            {isCw&&<button className="wact-btn" draggable={false} data-tip="Edit widget" aria-label="Edit widget"
+                              onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();editWidget(id);}}>✎</button>}
+                            {isCw&&<button className="wact-btn" draggable={false} data-tip="Duplicate widget" aria-label="Duplicate widget"
+                              onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();duplicateWidget(id);}}>⧉</button>}
+                            <button className="wact-btn wact-danger" draggable={false} data-tip={isCw?'Remove widget':'Hide widget'} aria-label={isCw?'Remove widget':'Hide widget'}
+                              onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();removeWidget(id);}}>✕</button>
+                          </div>
+                        ); })()}
                         {renderOvWidget(id)}
                       </div>
                     );
@@ -6668,6 +6760,15 @@ function App({vault, onVaultChange}={}) {
                     <span className="ov-add-sub">graph · pivot · table from any Infoblox source</span>
                   </button>
                 </div>
+                {fullscreenId&&(
+                  <div className="fs-wrap" onClick={()=>setFullscreenId(null)}>
+                    <div className="fs-panel" onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Widget fullscreen">
+                      <button className="fs-close" onClick={()=>setFullscreenId(null)} aria-label="Exit fullscreen">✕</button>
+                      {renderOvWidget(fullscreenId)}
+                    </div>
+                  </div>
+                )}
+                </>
               );
             })()}
             
@@ -7152,7 +7253,8 @@ function App({vault, onVaultChange}={}) {
       />
       {drillEntity&&<DrillSheet entity={drillEntity} onClose={()=>setDrillEntity(null)} leases={leases} subnets={subnets} setSection={setSection} setZoneFilt={setZoneFilt}/>}
       {showWizard&&<DashboardWizard overviewOrder={overviewOrder} collapsed={collapsed} hiddenSections={hiddenSections} widgetLabels={WIDGET_LABELS} moveWidget={moveWidget} toggleCollapse={toggleCollapse} toggleHideSection={toggleHideSection} onDone={finishWizard} orgDomain={orgDomain} orgName={orgName} onBrandSave={handleBrandSave} initialTab={wizardInitTab}/>}
-      {builderOpen&&<BuilderModal open={builderOpen} onClose={()=>setBuilderOpen(false)} onAdd={addCustomWidget}/>}
+      {chromeHidden&&<button className="show-chrome-fab" onClick={()=>setChromeHidden(()=>{LS.set('noc.chromeHidden',false);return false;})} data-tip="Show the top nav bar again (shortcut: f)" aria-label="Show chrome">⤡ Show chrome</button>}
+      {builderOpen&&<BuilderModal open={builderOpen} onClose={()=>{setBuilderOpen(false);setBuilderEditId(null);}} onAdd={saveBuilderWidget} editId={builderEditId} initialCfg={builderEditId?customWidgets[builderEditId]:null}/>}
     </div>
   );
 }
