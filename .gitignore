@@ -70,3 +70,6 @@ scripts/test_queries.py
 scripts/test_workarounds.py
 scripts/test_resource_read.py
 scripts/test_final.py
+
+mockups/
+.mockups/

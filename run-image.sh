@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Infoblox NOC Dashboard — run from the PREBUILT image (no source, no build).
+# Bloxsmith — run from the PREBUILT image (no source, no build).
 # For end users (e.g. SEs): just needs Docker. Pulls the published image from
 # GHCR and starts it. Re-run any time to update — it always pulls :latest first.
 #
@@ -9,15 +9,15 @@
 # env before running (then it's passed straight through).
 set -euo pipefail
 
-IMAGE="${IMAGE:-ghcr.io/holland-built/infoblox-noc-dashboard:latest}"
-NAME="infoblox-mcp"
+IMAGE="${IMAGE:-ghcr.io/holland-built/bloxsmith:latest}"
+NAME="bloxsmith"
 PORT="${PORT:-8080}"
 BIND="${BIND:-127.0.0.1}"      # loopback by default; set BIND=0.0.0.0 to expose on the LAN
 [[ "${LAN:-0}" == "1" ]] && BIND=0.0.0.0   # LAN=1 shortcut: expose on the local network
 VOLUME="${VOLUME:-noc-vault}"  # named volume holding the encrypted vault
 INFOBLOX_URL="${INFOBLOX_URL:-https://csp.infoblox.com}"
 
-echo "── Infoblox NOC Dashboard (prebuilt image) ──────────────────────"
+echo "── Bloxsmith (prebuilt image) ──────────────────────"
 echo "Pulling latest image: $IMAGE"
 docker pull "$IMAGE"
 docker rm -f "$NAME" >/dev/null 2>&1 || true
