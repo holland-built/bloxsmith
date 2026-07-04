@@ -438,6 +438,7 @@ MIME = {
     ".js":   "application/javascript",
     ".css":  "text/css",
     ".json": "application/json",
+    ".woff2": "font/woff2",
 }
 
 # Allowlist: Parquet table names returned by MCP are alphanumeric + _ - and .

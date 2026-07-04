@@ -4,9 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Bloxsmith · Portal (CSP)</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Self-hosted Geist (air-gapped Grid requirement — no Google Fonts CDN) */
+@font-face{font-family:"Geist";font-style:normal;font-weight:400;font-display:swap;src:url('Geist-400.woff2') format('woff2')}
+@font-face{font-family:"Geist";font-style:normal;font-weight:500;font-display:swap;src:url('Geist-500.woff2') format('woff2')}
+@font-face{font-family:"Geist";font-style:normal;font-weight:600;font-display:swap;src:url('Geist-600.woff2') format('woff2')}
+@font-face{font-family:"Geist";font-style:normal;font-weight:700;font-display:swap;src:url('Geist-700.woff2') format('woff2')}
+@font-face{font-family:"Geist Mono";font-style:normal;font-weight:400;font-display:swap;src:url('GeistMono-400.woff2') format('woff2')}
+@font-face{font-family:"Geist Mono";font-style:normal;font-weight:500;font-display:swap;src:url('GeistMono-500.woff2') format('woff2')}
+</style>
 <link rel="icon" type="image/png" href="data:image/png;base64,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">
 <script>
 /* apply saved theme before first paint (no flash) */
@@ -218,10 +224,23 @@ body{padding-left:0!important}
 .g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
 @media(max-width:900px){.g3-2{grid-template-columns:1fr}}
 .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
-.kpi-val{font-family:var(--font-mono);font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.05;letter-spacing:-.02em;margin-bottom:6px}
+.kpi-val{font-family:var(--font-mono);font-size:36px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink);line-height:1.1;letter-spacing:-.02em;margin-bottom:6px}
 .kpi-val.crit{color:var(--red);font-weight:700}
 .kpi-lbl{font-size:12px;font-weight:400;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .kpi-delta{font-size:12px;color:var(--muted);font-weight:600;font-family:var(--font-mono);margin-top:4px}
+/* hero stat band — the single loudest number on Overview */
+.ov-hero{display:flex;align-items:center;gap:28px;margin-bottom:12px;padding:16px 22px;background:var(--surface);box-shadow:var(--shadow-float);border-radius:var(--r-card);flex-wrap:wrap}
+.ov-hero-score{display:flex;flex-direction:column;justify-content:center;flex-shrink:0;min-width:150px}
+.ov-hero-num{font-family:var(--font-mono);font-size:52px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.ov-hero-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:8px}
+.ov-hero-status{font-weight:600;letter-spacing:.12em}
+.ov-hero-bar{flex:1 1 160px;min-width:120px;height:8px;background:var(--surface-3);border-radius:4px;overflow:hidden}
+.ov-hero-bar>i{display:block;height:100%;border-radius:4px;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.ov-hero-stats{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+.ov-hero-stat{display:flex;flex-direction:column;gap:4px;cursor:pointer}
+.ov-hero-stat .v{font-family:var(--font-mono);font-size:24px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--ink)}
+.ov-hero-stat .l{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+@media(max-width:760px){.ov-hero-num{font-size:40px}.ov-hero-stats{gap:18px}}
 .bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start}
 .section-view .bento{display:none!important}
 .bento>*{min-width:0}
@@ -1588,10 +1607,14 @@ function RowLimitBar({limit, setLimit, options=[10,25,50,100]}) {
   );
 }
 
+const TABLE_RENDER_CAP=500; // never mount more than this many <tr> — 10k rows won't freeze the tab
 function ShowMoreTable({rows, defaultRows=8, children, tableHead}) {
   const [expanded, setExpanded] = React.useState(false);
-  const visible = expanded ? rows : rows.slice(0, defaultRows);
-  const hidden = rows.length - defaultRows;
+  const safeRows = Array.isArray(rows) ? rows : [];
+  if(safeRows.length===0) return <div className="no-data">No data</div>;
+  const capped = safeRows.length > TABLE_RENDER_CAP;
+  const visible = expanded ? safeRows.slice(0, TABLE_RENDER_CAP) : safeRows.slice(0, defaultRows);
+  const hidden = safeRows.length - defaultRows;
   return (
     <>
       <div className="scroll" style={{maxHeight: expanded ? 480 : 360}}>
@@ -1602,15 +1625,30 @@ function ShowMoreTable({rows, defaultRows=8, children, tableHead}) {
           </tbody>
         </table>
       </div>
-      {rows.length > defaultRows && (
+      {safeRows.length > defaultRows && (
         <button className="show-more-btn" onClick={()=>setExpanded(e=>!e)}>
-          {expanded ? `▲ Show less` : `▼ Show ${Math.min(hidden, rows.length - defaultRows)} more (${rows.length} total)`}
+          {expanded ? `▲ Show less` : `▼ Show ${Math.min(hidden, safeRows.length - defaultRows)} more (${safeRows.length} total)`}
         </button>
+      )}
+      {expanded && capped && (
+        <div className="no-data" style={{padding:'6px 2px',fontSize:11}}>
+          Showing first {TABLE_RENDER_CAP.toLocaleString()} of {safeRows.length.toLocaleString()} rows — refine filters to narrow the set.
+        </div>
       )}
     </>
   );
 }
 
+/* Coerce ANY raw field value into a printable cell string. Guards the class of
+   bug where a source returns an object (e.g. qps `{limit}`) or NaN in a column
+   that expects a scalar — React throws if you render a bare object as a child. */
+function fmtCell(v){
+  if(v==null) return '—';
+  if(typeof v==='number') return Number.isFinite(v)?v.toLocaleString():'—';
+  if(typeof v==='boolean') return v?'true':'false';
+  if(typeof v==='object'){ try{ const s=JSON.stringify(v); return s.length>60?s.slice(0,57)+'…':s; }catch(e){ return '—'; } }
+  return String(v);
+}
 /* ── per-widget column autonomy: show/hide + reorder + expand, persisted ── */
 function useColumns(widgetId, allCols){
   const SK='noc.cols.'+widgetId;
@@ -1729,11 +1767,11 @@ function DataTable({cols, ctl, rows, defaultRows=10, rowKey, initialSort, export
             aria-haspopup={onRowClick?"dialog":undefined}
             style={onRowClick?{cursor:'pointer'}:undefined}>
             {vcols.map(c=>{
-              const _num=!c.render&&typeof r[c.key]==='number';
+              const _num=!c.render&&typeof r[c.key]==='number'&&Number.isFinite(r[c.key]);
               return (
               <td key={c.key} className={c.expanded?'exp':''}
                 style={{fontSize:c.size||12,...(c.mono?{fontFamily:'monospace'}:{}),...(c.align?{textAlign:c.align}:(_num?{textAlign:'right'}:{}))}}>
-                {c.render?c.render(r):(r[c.key]==null?'—':(_num?r[c.key].toLocaleString():String(r[c.key])))}
+                {c.render?c.render(r):fmtCell(r[c.key])}
               </td>
             );})}
           </tr>
@@ -2304,6 +2342,46 @@ function BuilderDonut({rows, dim, measure, agg}){
   );
 }
 
+/* Generic heatmap — one cell per aggregate group, cell color = measure intensity
+   on a single-hue light→accent ramp. Headline use: subnet/IP utilization, but it
+   works for any dimension→cells / measure→color pairing. Legend + hover data-tip. */
+function BuilderHeatmap({rows, dim, measure, agg}){
+  const data=aggregate(rows,dim,measure,agg)
+    .filter(r=>Number.isFinite(Number(r.value)))
+    .sort((a,b)=>b.value-a.value)
+    .slice(0,240); // cap cells so a high-cardinality dimension can't flood the grid
+  if(!data.length) return <div className="no-data">No numeric data to chart</div>;
+  const vals=data.map(r=>Number(r.value)||0);
+  const min=Math.min(...vals), max=Math.max(...vals);
+  const rng=(max-min)||1; // guards all-equal series (single flat color)
+  const heat=t=>`rgba(0,112,243,${(0.10+0.85*t).toFixed(3)})`; // --accent #0070f3
+  const fmt=v=>v.toLocaleString(undefined,{maximumFractionDigits:1});
+  return (
+    <div style={{position:'relative'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(58px,1fr))',gap:4}}>
+        {data.map((r,i)=>{
+          const v=Number(r.value)||0; const t=(v-min)/rng;
+          return (
+            <div key={i} data-tip={`${dim||'group'}: ${r.label} · ${agg}${measure?' '+measure:''}: ${fmt(v)}`}
+              style={{aspectRatio:'1',borderRadius:4,background:heat(t),display:'flex',flexDirection:'column',
+                justifyContent:'flex-end',padding:'4px 5px',overflow:'hidden',cursor:'default',
+                color:t>0.55?'#fff':'var(--ink)'}}>
+              <span style={{fontSize:9,lineHeight:1.1,opacity:.85,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.label}</span>
+              <span style={{fontSize:11,fontFamily:'var(--font-mono)',fontWeight:600,fontVariantNumeric:'tabular-nums'}}>{fmt(v)}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginTop:10,fontSize:10,color:'var(--muted)'}}>
+        <span style={{fontVariantNumeric:'tabular-nums'}}>{fmt(min)}</span>
+        <div style={{flex:'0 0 110px',height:8,borderRadius:4,background:'linear-gradient(90deg,rgba(0,112,243,.10),rgba(0,112,243,.95))'}}/>
+        <span style={{fontVariantNumeric:'tabular-nums'}}>{fmt(max)}</span>
+        <span style={{marginLeft:'auto'}}>{data.length} cells · {measure||'count'}</span>
+      </div>
+    </div>
+  );
+}
+
 /* Safe left-to-right formula evaluator for builder computed fields. NO eval:
    tokenizes into operands (field names or numbers) + operators (+ - * /) and
    folds left-to-right. Returns a number, or null when the expr is malformed or
@@ -2402,13 +2480,15 @@ function BuilderWidget({id, cfg, DragHandle}){
       </div>
     );
   } else if(viz==='line'||viz==='area'){
-    const ad=aggregate(drows,x,y,agg);
+    const ad=aggregate(drows,x,y,agg).slice(0,500); // cap points so a high-cardinality x doesn't mount thousands of nodes
     body=<MiniLineChart data={ad} valueKey="value" labelKey="label" height={140}/>;
   } else if(viz==='bar'){
     const ad=aggregate(drows,x,y,agg).sort((a,b)=>b.value-a.value);
     body=<VizBars rows={ad}/>;
   } else if(viz==='donut'){
     body=<BuilderDonut rows={drows} dim={x} measure={y} agg={agg}/>;
+  } else if(viz==='heatmap'){
+    body=<BuilderHeatmap rows={drows} dim={x} measure={y} agg={agg}/>;
   } else if(viz==='pivot'){
     const xs=[...new Set(drows.map(r=>String(r?.[x]??'—')))].slice(0,25);
     const cs=[...new Set(drows.map(r=>String(r?.[col]??'—')))].slice(0,12);
@@ -2439,8 +2519,17 @@ function BuilderWidget({id, cfg, DragHandle}){
 /* Split-panel builder modal: pick source + chart on the left, live preview
    (the SAME BuilderWidget) on the right. Debounces the draft 300ms so typing
    in filter/limit fields doesn't hammer the network. No code required. */
-const BUILDER_VIZ=[{v:'table',l:'Table'},{v:'stat',l:'Stat'},{v:'line',l:'Line/Area'},{v:'bar',l:'Bar'},{v:'donut',l:'Donut'},{v:'pivot',l:'Pivot'}];
-const _blankDraft=()=>({source:'',viz:'table',title:'',agg:'sum',x:'',y:'',col:'',columns:[],filters:{},limit:25,rawPath:'',rawParams:'',computed:[],_titleEdited:false});
+const BUILDER_VIZ=[{v:'table',l:'Table'},{v:'stat',l:'Stat'},{v:'line',l:'Line/Area'},{v:'bar',l:'Bar'},{v:'heatmap',l:'Heatmap'},{v:'donut',l:'Donut'},{v:'pivot',l:'Pivot'}];
+const _blankDraft=()=>({source:'',viz:'table',title:'',agg:'sum',x:'',y:'',col:'',columns:[],filters:{},limit:25,rawPath:'',rawParams:'',computed:[],_titleEdited:false,_vizManual:false});
+/* Gentle default viz from a source's field roles/names. Overridden the moment the
+   user clicks a chart-type chip (_vizManual). time dim → line; %/utilization
+   measure → heatmap; categorical + measure → bar; otherwise → table. */
+const autoPickViz=(ds,ms,timeDim,utilMeas)=>{
+  if(timeDim && ms.length) return 'line';
+  if(utilMeas && ds.length) return 'heatmap';
+  if(ds.length && ms.length) return 'bar';
+  return 'table';
+};
 function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
   const [sources,setSources]=useState(null);
   const [draft,setDraft]=useState(_blankDraft);
@@ -2450,7 +2539,7 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
   useEffect(()=>{ if(!open) return; let alive=true; fetch('/api/sources').then(r=>r.json()).then(d=>{ if(alive) setSources((d&&d.sources)||[]); }).catch(()=>{ if(alive) setSources([]); }); return ()=>{alive=false;}; },[open]);
   useEffect(()=>{ if(open){
     if(initialCfg){ // edit mode: seed the draft from the existing cfg
-      const seed={..._blankDraft(),...initialCfg,_titleEdited:true};
+      const seed={..._blankDraft(),...initialCfg,_titleEdited:true,_vizManual:true};
       setDraft(seed); setPreview(seed);
       const fr=Object.entries(initialCfg.filters||{}).map(([field,val])=>({field,val:String(val)}));
       setFilterRows(fr.length?fr:[{field:'',val:''}]);
@@ -2485,17 +2574,22 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
     if(sid==='__raw'){ setFilterRows([{field:'',val:''}]); upd({source:sid,viz:'table',x:'',y:'',col:'',columns:[],filters:{},rawPath:'',rawParams:''}); return; }
     const s=sources&&sources.find(x=>x.id===sid);
     const fs=s?s.fields:[];
-    const d0=fs.filter(f=>f.role==='dimension')[0];
-    const m0=fs.filter(f=>f.role==='measure')[0];
+    const ds=fs.filter(f=>f.role==='dimension');
+    const ms=fs.filter(f=>f.role==='measure');
+    const timeDim=ds.find(f=>/time|date|timestamp|(^|_)ts$/i.test(f.name));
+    const utilMeas=ms.find(f=>/util|pct|percent|usage|ratio|%/i.test(f.name));
+    const viz=draft._vizManual?draft.viz:autoPickViz(ds,ms,timeDim,utilMeas);
+    const d0=((viz==='line'||viz==='area')&&timeDim)?timeDim:ds[0];
+    const m0=(viz==='heatmap'&&utilMeas)?utilMeas:ms[0];
     setFilterRows([{field:'',val:''}]);
-    upd({source:sid, x:d0?d0.name:'', y:m0?m0.name:'', col:'', columns:[], filters:{}});
+    upd({source:sid, viz, x:d0?d0.name:'', y:m0?m0.name:'', col:'', columns:[], filters:{}});
   };
   const commitFilters=nr=>{
     setFilterRows(nr);
     const f={}; nr.forEach(r=>{ if(r.field&&r.val!=='') f[r.field]=r.val; });
     upd({filters:f});
   };
-  const needsX=['line','area','bar','donut','pivot'].includes(draft.viz);
+  const needsX=['line','area','bar','heatmap','donut','pivot'].includes(draft.viz);
   const needsY=draft.agg!=='count';
   const valid=!!draft.source && (isRaw ? !!(draft.rawPath&&draft.rawPath.trim()) : (!!draft.viz && (
     draft.viz==='table' ? true :
@@ -2507,6 +2601,7 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
     if(!valid) return;
     const cfg={...draft};
     delete cfg._titleEdited;
+    delete cfg._vizManual;
     cfg.computed=(cfg.computed||[]).filter(c=>c&&c.name&&c.expr);
     if(!cfg.title) cfg.title=((src&&src.label)||cfg.source)+' · '+vizLabel(cfg.viz);
     onAdd(cfg);
@@ -2559,7 +2654,7 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
               <label>Chart type</label>
               <div className="chip-bar" style={{marginBottom:0}}>
                 {BUILDER_VIZ.map(z=>(
-                  <button key={z.v} className={`chip${draft.viz===z.v?' on':''}`} onClick={()=>upd({viz:z.v})}>{z.l}</button>
+                  <button key={z.v} className={`chip${draft.viz===z.v?' on':''}`} onClick={()=>upd({viz:z.v,_vizManual:true})}>{z.l}</button>
                 ))}
               </div>
             </div>
@@ -5327,7 +5422,7 @@ function App({vault, onVaultChange}={}) {
   const [dhcpCrit, setDhcpCrit]         = useState(()=>LS.get('noc.dhcpCrit',95));
   const [policyDiff, setPolicyDiff]     = useState({});
   const [wallMode, setWallMode]         = useState(()=>LS.get('noc.wall',false));
-  const [wallSpans, setWallSpans]       = useState(()=>LS.get('noc.wallSpans',{feeds:2}));
+  const [wallSpans, setWallSpans]       = useState(()=>LS.get('noc.wallSpans',{}));
   const [widgetHeights, setWidgetHeights] = useState(()=>LS.get('noc.heights',{}));
   const [hoverPause, setHoverPause]     = useState(false);
   const [hubHealth, setHubHealth]       = useState(null);
@@ -5469,11 +5564,17 @@ function App({vault, onVaultChange}={}) {
   // props for a draggable bento wrapper; whole card is the drop target but
   // dragging only initiates from the handle (so inner buttons/text still work)
   const SPAN_CLS={1:'',2:'b-wide',3:'b-full'};
-  const cycleSpan=(id,dir=1)=>{ const cur=wallSpans[id]||1; let next=cur+dir; if(next>3)next=1; if(next<1)next=3; const n={...wallSpans,[id]:next}; setWallSpans(n); LS.set('noc.wallSpans',n); };
+  // importance-based DEFAULT spans for built-in overview widgets — bigger for
+  // fire/health signal, span 1 (default) for plain counters. Only a fallback:
+  // any id the user has explicitly cycled lives in persisted noc.wallSpans and
+  // wins over this. cw_* widgets are absent here, so they stay span 1.
+  const DEFAULT_SPANS={svchealth:2,threatevents:2,dhcp:2,feeds:2};
+  const spanOf=(id)=> wallSpans[id] ?? DEFAULT_SPANS[id] ?? 1;
+  const cycleSpan=(id,dir=1)=>{ const cur=spanOf(id); let next=cur+dir; if(next>3)next=1; if(next<1)next=3; const n={...wallSpans,[id]:next}; setWallSpans(n); LS.set('noc.wallSpans',n); };
   const HEIGHT_PRESETS=[220,360,540];
   const cycleHeight=(id,dir=1)=>{ const states=[null,...HEIGHT_PRESETS]; const i=states.indexOf(widgetHeights[id]||null); const next=states[(i+dir+states.length)%states.length]; const n={...widgetHeights}; if(next===null)delete n[id];else n[id]=next; setWidgetHeights(n); LS.set('noc.heights',n); };
   const wrapProps = (id, extra='') => {
-    const span = wallMode ? SPAN_CLS[wallSpans[id]||1] : '';
+    const span = wallMode ? SPAN_CLS[spanOf(id)] : '';
     const cls = [extra, span].filter(Boolean).join(' ');
     return {
       draggable: dragArmed===id,
@@ -5488,7 +5589,7 @@ function App({vault, onVaultChange}={}) {
     <>
       <span className="drag-handle" title="Drag to reorder" aria-label="Drag to reorder"
         onMouseDown={()=>setDragArmed(id)} onMouseUp={()=>setDragArmed(null)}>⠿</span>
-      <button className="wall-span-btn" aria-label="Cycle card width" title="Cycle width: 1 / 2 / full" onClick={e=>{e.stopPropagation();cycleSpan(id);}} onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();cycleSpan(id,1);}if(e.key==='ArrowLeft'){e.preventDefault();cycleSpan(id,-1);}}}>{({1:'▭',2:'▭▭',3:'◫'})[wallSpans[id]||1]}</button>
+      <button className="wall-span-btn" aria-label="Cycle card width" title="Cycle width: 1 / 2 / full" onClick={e=>{e.stopPropagation();cycleSpan(id);}} onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();cycleSpan(id,1);}if(e.key==='ArrowLeft'){e.preventDefault();cycleSpan(id,-1);}}}>{({1:'▭',2:'▭▭',3:'◫'})[spanOf(id)]}</button>
       <button className="wall-span-btn" aria-label="Cycle card height" title={widgetHeights[id]?`Height: ${widgetHeights[id]}px — click to cycle`:'Height: auto — click to set compact'} onClick={e=>{e.stopPropagation();cycleHeight(id);}} onKeyDown={e=>{if(e.key==='ArrowUp'){e.preventDefault();cycleHeight(id,1);}if(e.key==='ArrowDown'){e.preventDefault();cycleHeight(id,-1);}}}>{widgetHeights[id]?`${widgetHeights[id]}`:'↕'}</button>
     </>
   );
@@ -6332,16 +6433,28 @@ function App({vault, onVaultChange}={}) {
   const healthScore = Math.max(0, 100 - critPct*2 - warnPct);
   const scoreClr = healthScore>=80?'var(--green)':healthScore>=50?'var(--amber)':'var(--red)';
   const scoreLabel = healthScore>=80?'HEALTHY':healthScore>=50?'DEGRADED':'CRITICAL';
+  const peakUtil = critSubs[0]?.util??warnSubs[0]?.util??0;
+  const hstats=[
+    {v:errHosts.length, l:'Offline / Error', clr:errHosts.length>0?'var(--red)':'var(--ink)', nav:()=>{setSection('hosts');setHostChip('error');}},
+    {v:critSubs.length, l:'Critical Subnets', clr:critSubs.length>0?'var(--red)':warnSubs.length>0?'var(--amber)':'var(--ink)', nav:()=>{setSection('ipam');setIpamChip('critical');}},
+    {v:`${peakUtil}%`, l:'Peak DHCP Util', clr:critSubs.length>0?'var(--red)':warnSubs.length>0?'var(--amber)':'var(--ink)', nav:()=>setSection('ipam')},
+  ];
   return (
-    <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:12,padding:'8px 14px',
-      background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6}}>
-      <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em',flexShrink:0}}>Network Health</span>
-      <div style={{flex:1,height:6,background:'var(--surface-3)',borderRadius:3}}>
-        <div style={{width:`${healthScore}%`,height:'100%',background:scoreClr,borderRadius:3,transition:'width .4s'}}/>
+    <div className="ov-hero" aria-label={`Network health ${healthScore} of 100, ${scoreLabel}`}>
+      <div className="ov-hero-score">
+        <span className="ov-hero-num" style={{color:scoreClr}}>{healthScore}</span>
+        <span className="ov-hero-lbl">Network Health<span className="ov-hero-status" style={{color:scoreClr}}>{scoreLabel}</span>{(scopeSubnet||scopeZone||siteFilt)?<span style={{color:'var(--muted)'}}>· scoped</span>:null}</span>
       </div>
-      <span style={{fontFamily:'var(--font-mono)',fontSize:20,fontWeight:400,color:scoreClr,flexShrink:0,minWidth:40,textAlign:'right'}}>{healthScore}</span>
-      <span style={{fontFamily:'var(--font-mono)',fontSize:9,color:scoreClr,textTransform:'uppercase',letterSpacing:'.1em',flexShrink:0}}>{scoreLabel}</span>
-      {scopeSubnet||scopeZone||siteFilt?<span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)',flexShrink:0}}>· scoped</span>:null}
+      <div className="ov-hero-bar"><i style={{width:`${healthScore}%`,background:scoreClr}}/></div>
+      <div className="ov-hero-stats">
+        {hstats.map((h,i)=>(
+          <div key={i} className="ov-hero-stat" role="button" tabIndex={0} aria-label={`${h.l}: ${h.v}`}
+            onClick={h.nav} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();h.nav();}}}>
+            <span className="v" style={{color:h.clr}}>{h.v}</span>
+            <span className="l">{h.l}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 })()}
@@ -6805,7 +6918,7 @@ function App({vault, onVaultChange}={}) {
                 <div className="ov-bento">
                   {overviewOrder.filter(id=>!hiddenSections.includes(id)).map(id=>{
                     const hStyle=widgetHeights[id]?{height:widgetHeights[id],overflow:'hidden'}:{};
-                    const spanCls=SPAN_CLS[wallSpans[id]||1];
+                    const spanCls=SPAN_CLS[spanOf(id)];
                     return (
                       <div key={id}
                         role="region" aria-labelledby={"card-title-"+id}
