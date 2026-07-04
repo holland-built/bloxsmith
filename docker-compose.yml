@@ -1,4 +1,4 @@
-# Infoblox NOC Dashboard — Docker Compose deploy.
+# Bloxsmith — Docker Compose deploy.
 #
 #   docker compose up -d            # dashboard + self-update sidecar (loopback)
 #   BIND=0.0.0.0 docker compose up -d   # expose on the LAN (no login — keep vault locked)
@@ -9,9 +9,9 @@
 # Copy .env.example to .env to set BIND/PORT/token/auth.
 
 services:
-  infoblox-mcp:
-    image: ghcr.io/holland-built/infoblox-noc-dashboard:latest
-    container_name: infoblox-mcp
+  bloxsmith:
+    image: ghcr.io/holland-built/bloxsmith:latest
+    container_name: bloxsmith
     restart: unless-stopped
     ports:
       - "${BIND:-127.0.0.1}:${PORT:-8080}:8080"

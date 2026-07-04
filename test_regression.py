@@ -1053,7 +1053,7 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("document.title", "document.title assignment missing")
 
     def test_page_title_shows_app_name(self):
-        self.assertContains("Infoblox MCP", "Page title app name missing")
+        self.assertContains("Bloxsmith", "Page title app name missing")
 
     # ── Feature 8: Sidebar Nav Badges ─────────────────────────────────────────
 
