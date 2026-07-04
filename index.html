@@ -229,6 +229,17 @@ body{padding-left:0!important}
 .ov-bento>.b-wide{grid-column:span 2}
 .ov-bento>.b-full{grid-column:1/-1}
 .ov-bento>.drag-card>.card{height:100%;box-sizing:border-box;max-height:none;overflow:auto}
+.ov-add-widget-btn{background:var(--ink);color:var(--accent-on);border:none;border-radius:6px;font-weight:600;padding:5px 12px;font-size:11px;font-family:var(--font-ui);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background .12s;appearance:none;-webkit-appearance:none}
+.ov-add-widget-btn:hover{background:#333}
+.ov-add-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:160px;border:1.5px dashed var(--border);background:transparent;border-radius:var(--r-card);color:var(--muted);cursor:pointer;font-family:var(--font-ui);text-align:center;padding:16px;transition:border-color .15s,color .15s}
+.ov-add-tile:hover{border-color:var(--accent);color:var(--accent)}
+.ov-add-plus{font-size:28px;line-height:1;font-weight:300}
+.ov-add-sub{font-size:11px;opacity:.75}
+.builder-hint{display:flex;align-items:center;gap:14px;padding:10px 14px;margin-bottom:12px;background:var(--surface);box-shadow:0 0 0 1px var(--border);border-radius:var(--r-card);font-size:var(--fs-sm);color:var(--ink-dim)}
+.builder-hint-cta{margin-left:auto;background:var(--ink);color:var(--accent-on);border:none;border-radius:6px;font-weight:600;padding:5px 12px;font-size:var(--fs-sm);font-family:var(--font-ui);cursor:pointer;transition:background .12s;white-space:nowrap}
+.builder-hint-cta:hover{background:#333}
+.builder-hint-x{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 2px}
+.builder-hint-x:hover{color:var(--ink-dim)}
 .g2>*,.g3>*,.g4>*{min-width:0}
 @media(max-width:900px){.b-wide,.b-full{grid-column:span 1}}
 .mb14{margin-bottom:14px}
@@ -5200,6 +5211,7 @@ function App({vault, onVaultChange}={}) {
   const [collapsed, setCollapsed]       = useState(()=>LS.get('cl',{}));
   const [customWidgets, setCustomWidgets] = useState(()=>LS.get('noc.customWidgets',{}));
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [hintDismissed, setHintDismissed] = useState(()=>LS.get('noc.builderHintDismissed',false));
   const DEFAULT_ORDER=['dhcp','hosts','subnets','ttl','feeds','audit','svchealth','threatevents','threatfeeds','customlists','secpolicies','hostinv','anycast','dfp','roaming'];
   const [overviewOrder, setOverviewOrder] = useState(()=>{
     const cw=LS.get('noc.customWidgets',{});
@@ -6121,8 +6133,15 @@ function App({vault, onVaultChange}={}) {
               <span className="section-title">· Overview</span>
               <span className="section-line"/>
               {(errHosts.length>0||critSubs.length>0)?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0||ttlBad.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
-              <button className="ghost-chip" onClick={()=>setBuilderOpen(true)}><b>+</b> Add widget</button>
+              <button className="ov-add-widget-btn" onClick={()=>setBuilderOpen(true)}><b>+</b> Add widget</button>
             </div>
+            {!hintDismissed && Object.keys(customWidgets).length===0 && (
+              <div className="builder-hint">
+                <div><b>Bloxsmith is yours to build.</b> Drop a graph, pivot, or table from any of 15 live Infoblox sources onto this dashboard — no code.</div>
+                <button className="builder-hint-cta" onClick={()=>setBuilderOpen(true)}>Build your first view</button>
+                <button className="builder-hint-x" aria-label="Dismiss" onClick={()=>{LS.set('noc.builderHintDismissed',true);setHintDismissed(true);}}>×</button>
+              </div>
+            )}
             {/* Tactical Overview Bar */}
             <div style={{display:'flex',gap:0,marginBottom:8,borderRadius:5,overflow:'hidden',border:'1px solid var(--border)',fontSize:10,fontFamily:'var(--font-mono)'}}>
               {[
@@ -6640,6 +6659,11 @@ function App({vault, onVaultChange}={}) {
                       </div>
                     );
                   })}
+                  <button className="ov-add-tile" onClick={()=>setBuilderOpen(true)} aria-label="Add a widget">
+                    <span className="ov-add-plus">+</span>
+                    <span>Add a widget</span>
+                    <span className="ov-add-sub">graph · pivot · table from any Infoblox source</span>
+                  </button>
                 </div>
               );
             })()}
