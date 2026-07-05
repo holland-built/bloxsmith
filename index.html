@@ -240,11 +240,13 @@ body{padding-left:0!important}
 .bento>*{min-width:0}
 .b-wide{grid-column:span 2}
 .b-full{grid-column:1/-1}
-.ov-bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px;align-items:start;margin-top:14px}
+.ov-bento{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:18px;align-items:start;margin-top:14px}
 .ov-bento>*{min-width:0}
 .ov-bento>.b-wide{grid-column:span 2}
 .ov-bento>.b-full{grid-column:1/-1}
 .ov-bento>.drag-card>.card{height:100%;box-sizing:border-box;max-height:none;overflow:auto}
+@media(max-width:1100px){.ov-bento{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media(max-width:760px){.ov-bento{grid-template-columns:repeat(1,minmax(0,1fr))}}
 .ov-add-widget-btn{background:var(--ink);color:var(--accent-on);border:none;border-radius:6px;font-weight:600;padding:5px 12px;font-size:11px;font-family:var(--font-ui);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background .12s;appearance:none;-webkit-appearance:none}
 .ov-add-widget-btn:hover{background:var(--ink-hover)}
 .ov-add-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:160px;border:1.5px dashed var(--border);background:transparent;border-radius:var(--r-card);color:var(--muted);cursor:pointer;font-family:var(--font-ui);text-align:center;padding:16px;transition:border-color .15s,color .15s}
@@ -1752,8 +1754,23 @@ function FreshnessPill({lastUpd}) {
     <span className={`fresh-dot${stale?'':' pulse'}`}/>Updated {txt}</span>;
 }
 
+/* Per-widget freshness: muted "updated Ns ago" that counts up live (1s tick),
+   seconds-granular so it reads "updated 4s ago" immediately after a fetch. Accepts
+   a Date or epoch-ms timestamp. Reused by BuilderWidget + built-in card headers. */
+function WidgetFreshness({ts}){
+  const [,tick]=React.useState(0);
+  React.useEffect(()=>{ const t=setInterval(()=>tick(n=>n+1),1000); return ()=>clearInterval(t); },[]);
+  if(!ts) return null;
+  const ms=ts instanceof Date?ts.getTime():Number(ts);
+  if(!ms) return null;
+  const sec=Math.max(0,Math.floor((Date.now()-ms)/1000));
+  const txt=sec<60?sec+'s ago':sec<3600?Math.floor(sec/60)+'m ago':Math.floor(sec/3600)+'h ago';
+  return <span className="ov-sub" style={{margin:0,fontSize:9,color:'var(--muted)',fontWeight:400,whiteSpace:'nowrap'}}
+    title={`Data last refreshed ${new Date(ms).toLocaleTimeString()}`}>updated {txt}</span>;
+}
+
 /* ── saved views: snapshot the dashboard's persisted layout/prefs as named presets ── */
-const VIEW_KEYS=['noc.viz','rl','cl','noc.widgetOrder','oo','noc.density','noc.ipamChip','noc.hostChip','noc.customWidgets','noc.wallSpans','noc.heights'];
+const VIEW_KEYS=['noc.viz','rl','cl','noc.widgetOrder','oo','noc.density','noc.ipamChip','noc.hostChip','noc.customWidgets','noc.wallSpans','noc.heights','noc.grid'];
 const isViewKey=k=>VIEW_KEYS.includes(k)||/^noc\.(cols|sort)\./.test(k);
 function snapshotViewLS(){
   const snap={};
@@ -1966,9 +1983,11 @@ function PresetMenu({section, openProp, setOpenProp}) {
   const setOpen = setOpenProp || _setOpen;
   const [saving,setSaving]=React.useState(false);
   const [nameVal,setNameVal]=React.useState('');
+  const [folderVal,setFolderVal]=React.useState('');
+  const [collapsed,setCollapsed]=React.useState({}); // folder → true when collapsed
   const names=Object.keys(views);
   // ── server-backed "cloud views" (best-effort; falls back to LS-only if 404) ──
-  const [cloud,setCloud]=React.useState([]);        // [{name,saved_at}]
+  const [cloud,setCloud]=React.useState([]);        // [{name,saved_at,folder}]
   const [cloudOk,setCloudOk]=React.useState(true);  // server supports /api/views
   const fileRef=React.useRef(null);
   const refreshCloud=React.useCallback(()=>{
@@ -1981,13 +2000,18 @@ function PresetMenu({section, openProp, setOpenProp}) {
     // also push to the server (best-effort) so the view can be shared/loaded elsewhere
     fetch('/api/views',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       name,
+      folder:folderVal.trim(),
       widgets:LS.get('noc.customWidgets',{}),
       order:LS.get('noc.widgetOrder',null),
       layout:snapshotViewLS()
     })}).then(r=>{ if(r.ok){ refreshCloud(); toast('View saved to cloud ✓','ok'); } }).catch(()=>{});
-    setSaving(false); setNameVal('');
+    setSaving(false); setNameVal(''); setFolderVal('');
   };
-  const cancelSave=()=>{ setSaving(false); setNameVal(''); };
+  const cancelSave=()=>{ setSaving(false); setNameVal(''); setFolderVal(''); };
+  // group cloud views by folder for flat, collapsible sections; "" ⇒ Ungrouped.
+  const folders=[...new Set(cloud.map(cv=>(cv.folder||'').trim()))].sort((a,b)=>{ if(!a) return 1; if(!b) return -1; return a.localeCompare(b); });
+  const existingFolders=folders.filter(Boolean);
+  const cloudByFolder=f=>cloud.filter(cv=>((cv.folder||'').trim())===f);
   const apply=name=>{ const v=views[name]; if(!v) return; applyViewLS(v.ls); location.hash=v.section||section; location.reload(); };
   const del=name=>{ const next={...views}; delete next[name]; setViews(next); LS.set('noc.views',next); };
   // load a cloud view: hydrate LS from the server blob, then reload so the grid rebuilds
@@ -2030,17 +2054,28 @@ function PresetMenu({section, openProp, setOpenProp}) {
             {!saving&&<button className="col-reset" onClick={()=>{ setSaving(true); setNameVal(''); }}>+ Save current</button>}
           </div>
           {saving&&(
-            <div style={{padding:'6px 10px',display:'flex',gap:6,alignItems:'center'}}>
-              <input autoFocus className="vault-in"
-                style={{flex:1,fontSize:11,padding:'4px 8px',height:28}}
-                placeholder="Snapshot name…"
+            <div style={{padding:'6px 10px',display:'flex',flexDirection:'column',gap:6}}>
+              <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                <input autoFocus className="vault-in"
+                  style={{flex:1,fontSize:11,padding:'4px 8px',height:28}}
+                  placeholder="Snapshot name…"
+                  maxLength={50}
+                  value={nameVal}
+                  onChange={e=>setNameVal(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();commitSave();} if(e.key==='Escape'){e.preventDefault();cancelSave();} }}
+                  aria-label="Snapshot name"/>
+                <button className="col-reset" onClick={commitSave} disabled={!nameVal.trim()}>Save</button>
+                <button className="col-iconbtn" onClick={cancelSave} aria-label="Cancel">✕</button>
+              </div>
+              <input className="vault-in" list="preset-folders"
+                style={{fontSize:11,padding:'4px 8px',height:28}}
+                placeholder="Folder (optional) — pick or type new…"
                 maxLength={50}
-                value={nameVal}
-                onChange={e=>setNameVal(e.target.value)}
+                value={folderVal}
+                onChange={e=>setFolderVal(e.target.value)}
                 onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();commitSave();} if(e.key==='Escape'){e.preventDefault();cancelSave();} }}
-                aria-label="Snapshot name"/>
-              <button className="col-reset" onClick={commitSave} disabled={!nameVal.trim()}>Save</button>
-              <button className="col-iconbtn" onClick={cancelSave} aria-label="Cancel">✕</button>
+                aria-label="Folder"/>
+              <datalist id="preset-folders">{existingFolders.map(f=><option key={f} value={f}/>)}</datalist>
             </div>
           )}
           {names.length===0
@@ -2059,13 +2094,27 @@ function PresetMenu({section, openProp, setOpenProp}) {
             </div>
             {cloud.length===0
               ? <div className="col-row" style={{color:'var(--gray-400)'}}>No cloud views yet</div>
-              : cloud.map(cv=>(
-                  <div key={cv.name} className="col-row">
-                    <button className="col-lbl" style={{background:'none',border:'none',color:'inherit',textAlign:'left',cursor:'pointer',font:'inherit',padding:0,flex:1}} onClick={()=>applyCloud(cv.name)} title={`Apply "${cv.name}"`}>{cv.name}</button>
-                    <button className="col-iconbtn" title="Export as file" aria-label={`Export ${cv.name}`} onClick={()=>exportCloud(cv.name)}>⭳</button>
-                    <button className="col-iconbtn" title="Delete cloud view" aria-label={`Delete ${cv.name}`} onClick={()=>delCloud(cv.name)}>✕</button>
-                  </div>
-                ))}
+              : folders.map(f=>{
+                  const items=cloudByFolder(f); if(!items.length) return null;
+                  const label=f||'Ungrouped';
+                  const isCollapsed=!!collapsed[label];
+                  return (
+                    <div key={label||'__ungrouped'}>
+                      <button className="col-lbl" style={{background:'none',border:'none',color:'var(--muted)',textAlign:'left',cursor:'pointer',font:'inherit',padding:'4px 10px 2px',width:'100%',fontSize:10.5,textTransform:'uppercase',letterSpacing:'.04em',display:'flex',alignItems:'center',gap:5}}
+                        aria-expanded={!isCollapsed}
+                        onClick={()=>setCollapsed(c=>({...c,[label]:!c[label]}))}>
+                        <span style={{fontSize:9,width:8,display:'inline-block'}}>{isCollapsed?'▸':'▾'}</span>{label} <span style={{opacity:.6}}>({items.length})</span>
+                      </button>
+                      {!isCollapsed&&items.map(cv=>(
+                        <div key={cv.name} className="col-row">
+                          <button className="col-lbl" style={{background:'none',border:'none',color:'inherit',textAlign:'left',cursor:'pointer',font:'inherit',padding:'0 0 0 13px',flex:1}} onClick={()=>applyCloud(cv.name)} title={`Apply "${cv.name}"`}>{cv.name}</button>
+                          <button className="col-iconbtn" title="Export as file" aria-label={`Export ${cv.name}`} onClick={()=>exportCloud(cv.name)}>⭳</button>
+                          <button className="col-iconbtn" title="Delete cloud view" aria-label={`Delete ${cv.name}`} onClick={()=>delCloud(cv.name)}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
           </>)}
         </div>
       </>)}
@@ -2215,7 +2264,7 @@ function MiniLineChart({data, valueKey, labelKey, color='var(--teal)', height=90
 }
 
 /* Generic horizontal-bar chart over arbitrary {label,value} rows — pure SVG */
-function VizBars({rows, color='var(--teal)', unit=''}) {
+function VizBars({rows, color='var(--teal)', unit='', onBarClick}) {
   const data=rows.filter(r=>Number(r.value)>0).slice(0,12);
   const [tip,setTip]=useState(null);
   if(!data.length) return <div className="no-data">No numeric data to chart</div>;
@@ -2245,7 +2294,8 @@ function VizBars({rows, color='var(--teal)', unit=''}) {
           const col=r.color||color;
           const label=(r.label||'').length>17?(r.label).slice(0,16)+'…':r.label;
           return (
-            <g key={i} onMouseEnter={()=>setTip(r)} onMouseLeave={()=>setTip(null)}>
+            <g key={i} onMouseEnter={()=>setTip(r)} onMouseLeave={()=>setTip(null)}
+              onClick={onBarClick?()=>onBarClick(r):undefined} style={onBarClick?{cursor:'pointer'}:undefined}>
               <text x={lw-6} y={y+bh/2} fill="var(--gray-200)" fontSize={10} textAnchor="end" dominantBaseline="central">{label}</text>
               <rect x={lw} y={y} width={chartW} height={bh} fill="var(--svg-track)" rx={3}/>
               <rect x={lw} y={y} width={bw} height={bh} fill={col} rx={3}/>
@@ -2264,9 +2314,9 @@ function VizBars({rows, color='var(--teal)', unit=''}) {
   );
 }
 
-function WidgetVizTable({data, columns, defaultRows, persistId}) {
+function WidgetVizTable({data, columns, defaultRows, persistId, onRowClick}) {
   const ctl = useColumns(persistId, columns.map(c=>({...c})));
-  return <DataTable ctl={ctl} rows={data} defaultRows={defaultRows} exportName={persistId} persistId={persistId}/>;
+  return <DataTable ctl={ctl} rows={data} defaultRows={defaultRows} exportName={persistId} persistId={persistId} onRowClick={onRowClick}/>;
 }
 
 /* ── no-code widget builder ──────────────────────────────────────────────
@@ -2293,7 +2343,7 @@ function aggregate(rows, dim, measure, agg='sum'){
 const _aggAll=(rows,measure,agg)=>{ const a=aggregate(rows,'__none__',measure,agg); return a.length?a[0].value:0; };
 
 /* small stroke-dasharray SVG donut over aggregate(rows,dim,measure,agg) */
-function BuilderDonut({rows, dim, measure, agg}){
+function BuilderDonut({rows, dim, measure, agg, onSegClick}){
   const data=aggregate(rows,dim,measure,agg).filter(r=>r.value>0).sort((a,b)=>b.value-a.value).slice(0,8);
   if(!data.length) return <div className="no-data">No numeric data to chart</div>;
   const total=data.reduce((s,r)=>s+r.value,0)||1;
@@ -2321,7 +2371,7 @@ function BuilderDonut({rows, dim, measure, agg}){
       </div>
       <div style={{display:'flex',flexDirection:'column',gap:4}}>
         {data.map((d,i)=>(
-          <div key={i} data-tip={`${d.label}: ${Math.round(d.value).toLocaleString()} · ${Math.round(d.value/total*100)}%`} style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
+          <div key={i} data-tip={`${d.label}: ${Math.round(d.value).toLocaleString()} · ${Math.round(d.value/total*100)}%`} onClick={onSegClick?()=>onSegClick(d):undefined} style={{display:'flex',alignItems:'center',gap:6,fontSize:11,cursor:onSegClick?'pointer':'default'}}>
             <div style={{width:8,height:8,borderRadius:2,background:cols[i%cols.length],flexShrink:0}}/>
             <span style={{fontFamily:'var(--font-mono)',color:'var(--ink)',minWidth:60,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.label}</span>
             <span style={{color:'var(--muted)'}}>{Math.round(d.value/total*100)}%</span>
@@ -2336,7 +2386,55 @@ function BuilderDonut({rows, dim, measure, agg}){
    measure intensity on a single-hue light→accent ramp, cells sorted high→low.
    This maps a SINGLE dimension to color, so it is labeled "grid", not "heatmap"
    (a heatmap needs two axes). Legend (min→max) + cell count + hover data-tip. */
-function BuilderHeatmap({rows, dim, measure, agg}){
+function BuilderHeatmap({rows, dim, measure, agg, col, onCellClick}){
+  // 2-axis mode: X(dim) columns × Y(col) rows, cell color = measure intensity.
+  if(col){
+    const xs=[...new Set((rows||[]).map(r=>String(r?.[dim]??'—')))].slice(0,20);
+    const ys=[...new Set((rows||[]).map(r=>String(r?.[col]??'—')))].slice(0,20);
+    const cells=[]; let min=Infinity, max=-Infinity;
+    ys.forEach(yv=>xs.forEach(xv=>{
+      const sub=(rows||[]).filter(r=>String(r?.[dim]??'—')===xv&&String(r?.[col]??'—')===yv);
+      const v=Number(_aggAll(sub,measure,agg))||0;
+      if(sub.length){ if(v<min)min=v; if(v>max)max=v; }
+      cells.push({xv,yv,v,sub});
+    }));
+    if(!isFinite(min)){ min=0; max=0; }
+    const rng=(max-min)||1;
+    const heat=t=>`rgba(0,112,243,${(0.08+0.87*t).toFixed(3)})`;
+    const fmt=v=>v.toLocaleString(undefined,{maximumFractionDigits:1});
+    const cellAt=(xv,yv)=>cells.find(z=>z.xv===xv&&z.yv===yv)||{v:0,sub:[]};
+    return (
+      <div style={{position:'relative',overflow:'auto'}} role="img"
+        aria-label={`Heatmap, ${dim||'x'} by ${col||'y'}, color ${agg}${measure?' '+measure:''}, range ${fmt(min)} to ${fmt(max)}`}>
+        <div style={{fontSize:11,color:'var(--muted)',marginBottom:8,fontFamily:'var(--font-ui)'}}>
+          {agg}{measure?' '+measure:''} · {dim||'x'} (columns) × {col||'y'} (rows)
+        </div>
+        <table style={{borderCollapse:'separate',borderSpacing:2}}>
+          <thead><tr><th style={{position:'sticky',left:0,background:'var(--surface)'}}></th>
+            {xs.map(xv=><th key={xv} title={xv} style={{fontSize:9,fontWeight:500,color:'var(--muted)',padding:'2px 4px',maxWidth:70,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{xv}</th>)}</tr></thead>
+          <tbody>{ys.map(yv=>(
+            <tr key={yv}>
+              <th title={yv} style={{fontSize:9,fontWeight:500,color:'var(--muted)',textAlign:'right',padding:'2px 6px',position:'sticky',left:0,background:'var(--surface)',maxWidth:90,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{yv}</th>
+              {xs.map(xv=>{
+                const c=cellAt(xv,yv); const t=c.sub.length?(c.v-min)/rng:0;
+                return <td key={xv} data-tip={`${dim||'x'}: ${xv} · ${col||'y'}: ${yv} · ${agg}${measure?' '+measure:''}: ${fmt(c.v)}`}
+                  onClick={onCellClick&&c.sub.length?()=>onCellClick({label:`${xv} · ${yv}`,rows:c.sub}):undefined}
+                  style={{width:44,height:30,borderRadius:3,textAlign:'center',fontSize:10,fontFamily:'var(--font-mono)',
+                    background:c.sub.length?heat(t):'var(--surface-2)',color:t>0.55?'#fff':'var(--ink)',
+                    cursor:onCellClick&&c.sub.length?'pointer':'default'}}>{c.sub.length?fmt(c.v):''}</td>;
+              })}
+            </tr>
+          ))}</tbody>
+        </table>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginTop:10,fontSize:10,color:'var(--muted)'}}>
+          <span style={{fontVariantNumeric:'tabular-nums'}}>{fmt(min)}</span>
+          <div style={{flex:'0 0 110px',height:8,borderRadius:4,background:'linear-gradient(90deg,rgba(0,112,243,.08),rgba(0,112,243,.95))'}}/>
+          <span style={{fontVariantNumeric:'tabular-nums'}}>{fmt(max)}</span>
+          <span style={{marginLeft:'auto'}}>{xs.length}×{ys.length} · {measure||'count'}</span>
+        </div>
+      </div>
+    );
+  }
   const data=aggregate(rows,dim,measure,agg)
     .filter(r=>Number.isFinite(Number(r.value)))
     .sort((a,b)=>b.value-a.value)
@@ -2358,8 +2456,9 @@ function BuilderHeatmap({rows, dim, measure, agg}){
           const v=Number(r.value)||0; const t=(v-min)/rng;
           return (
             <div key={i} data-tip={`${dim||'group'}: ${r.label} · ${agg}${measure?' '+measure:''}: ${fmt(v)}`}
+              onClick={onCellClick?()=>onCellClick({label:r.label,rows:(rows||[]).filter(row=>String(row?.[dim]??'—')===r.key)}):undefined}
               style={{aspectRatio:'1',borderRadius:4,background:heat(t),display:'flex',flexDirection:'column',
-                justifyContent:'flex-end',padding:'4px 5px',overflow:'hidden',cursor:'default',
+                justifyContent:'flex-end',padding:'4px 5px',overflow:'hidden',cursor:onCellClick?'pointer':'default',
                 color:t>0.55?'#fff':'var(--ink)'}}>
               <span style={{fontSize:9,lineHeight:1.1,opacity:.85,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.label}</span>
               <span style={{fontSize:11,fontFamily:'var(--font-mono)',fontWeight:600,fontVariantNumeric:'tabular-nums'}}>{fmt(v)}</span>
@@ -2402,15 +2501,94 @@ function applyComputed(rows, computed){
   return rows.map(r=>{ const o={...r}; cs.forEach(c=>{ o[c.name]=evalComputed(c.expr,r); }); return o; });
 }
 
+/* Retool-style field transforms applied per-row BEFORE aggregation:
+   - rename  {type:'rename',field,alias}  → copies field to a new alias column
+   - derive  {type:'derive',alias,expr}   → safe a op b formula → new numeric column
+   - format  {type:'format',field,format} → no column; registers a display format
+   Aliased/derived columns become selectable fields & table columns. Back-compat:
+   absent cfg.transforms ⇒ no-op. */
+function applyTransforms(rows, transforms){
+  const ts=(transforms||[]).filter(t=>t&&t.type);
+  if(!ts.length) return rows;
+  return (rows||[]).map(r=>{
+    const o={...r};
+    ts.forEach(t=>{
+      if(t.type==='rename'&&t.field&&t.alias) o[t.alias]=r[t.field];
+      else if(t.type==='derive'&&t.alias&&t.expr) o[t.alias]=evalComputed(t.expr,r);
+    });
+    return o;
+  });
+}
+/* field→format map from cfg.transforms 'format' entries, consumed at render. */
+function buildFormatMap(transforms){
+  const m={};
+  (transforms||[]).forEach(t=>{ if(t&&t.type==='format'&&t.field&&t.format) m[t.field]=t.format; });
+  return m;
+}
+/* Apply a display format to a raw value (number/percent/bytes/int). */
+function fmtByType(v,fmt){
+  if(v==null||v==='') return '—';
+  const n=Number(v);
+  if(fmt==='percent') return (Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:1}):v)+'%';
+  if(fmt==='bytes'){ if(!Number.isFinite(n)) return String(v); const u=['B','KB','MB','GB','TB','PB']; let x=n,i=0; while(x>=1024&&i<u.length-1){x/=1024;i++;} return x.toLocaleString(undefined,{maximumFractionDigits:1})+' '+u[i]; }
+  if(fmt==='int') return Number.isFinite(n)?Math.round(n).toLocaleString():String(v);
+  if(fmt==='number') return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:1}):String(v);
+  return fmtCell(v);
+}
+
+/* Parse a filter value string into {op,val}. A leading operator token selects a
+   comparison; a bare value means equality. Supported: = != > < >= <= and ~ (contains).
+   NO eval — pure string parse. Used to filter client-side over the fetched rows. */
+function parseFilterOp(raw){
+  const s=String(raw==null?'':raw).trim();
+  if(s==='') return null;
+  const m=s.match(/^(!=|>=|<=|~|>|<|=)\s*([\s\S]*)$/);
+  if(m) return {op:m[1],val:m[2].trim()};
+  return {op:'=',val:s};
+}
+const _filterMatch=(cell,op,val)=>{
+  const cs=String(cell==null?'':cell);
+  if(op==='~') return cs.toLowerCase().includes(val.toLowerCase());
+  if(op==='=') return cs===val||cs.toLowerCase()===val.toLowerCase();
+  if(op==='!=') return cs.toLowerCase()!==val.toLowerCase();
+  const cn=Number(cell), vn=Number(val);
+  if(Number.isNaN(cn)||Number.isNaN(vn)) return false;
+  if(op==='>') return cn>vn; if(op==='<') return cn<vn;
+  if(op==='>=') return cn>=vn; if(op==='<=') return cn<=vn;
+  return true;
+};
+/* Applies cfg.filters (field→value-with-optional-operator) over rows client-side.
+   Bare-equality ('=') filters are already applied server-side, so only operator
+   filters (!= > < >= <= ~) run here. Runs after applyComputed so operators can
+   also target computed columns. */
+function applyFilters(rows, filters){
+  const fs=filters||{};
+  const keys=Object.keys(fs).filter(k=>{ if(fs[k]===''||fs[k]==null) return false; const p=parseFilterOp(fs[k]); return p&&p.op!=='='; });
+  if(!keys.length) return rows;
+  return (rows||[]).filter(r=>keys.every(k=>{ const p=parseFilterOp(fs[k]); return p?_filterMatch(r?.[k],p.op,p.val):true; }));
+}
+
 /* Renders one custom widget. Refetches ONLY when source/filters/limit change
    (AbortController cancels in-flight); swapping viz/x/y/agg re-aggregates the
    cached rows client-side. DragHandle is passed from App (optional in preview). */
-function BuilderWidget({id, cfg, DragHandle}){
+/* The ONLY two sources that carry a real time field (server registry:
+   incidents.last_activity, anomaly_events.event_time). anomaly_events is
+   server-capped to the last 1h (fetch_hub_security window_secs=3600), so a
+   range wider than 1h can't widen it — we badge it "≤1h source" honestly. */
+const TIMESTAMPED_SOURCES={incidents:'last_activity',anomaly_events:'event_time'};
+const TR_WINDOW_SECS={'1h':3600,'6h':21600,'24h':86400,'7d':604800};
+function BuilderWidget({id, cfg, DragHandle, refreshTick, onRowsDrill, timeRange='all'}){
   const [rows,setRows]=useState(null);
   const [err,setErr]=useState(false);
+  const [updatedAt,setUpdatedAt]=useState(null);
   const filterKey=JSON.stringify((cfg&&cfg.filters)||{});
   const source=cfg&&cfg.source, limit=cfg&&cfg.limit;
+  const tsField=TIMESTAMPED_SOURCES[source]; // real time field, or undefined
+  const windowSecs=TR_WINDOW_SECS[timeRange]||0; // 0 = "all" / no window
   const rawPath=cfg&&cfg.rawPath, rawParams=cfg&&cfg.rawParams;
+  const join=cfg&&cfg.join;
+  const joinActive=!!(join&&join.secondary&&join.key&&join.secondaryKey&&source!=='__raw');
+  const joinKey=JSON.stringify(join||null);
   useEffect(()=>{
     if(!source){ setRows([]); setErr(false); return; }
     // raw escape hatch: pass an arbitrary /api/... path straight through the bridge
@@ -2425,8 +2603,38 @@ function BuilderWidget({id, cfg, DragHandle}){
       if(rawParams) url+='&'+rawParams;
       fetch(url,{signal:ctrl.signal})
         .then(r=>r.json())
-        .then(d=>{ if(d&&d.error){ setRows([]); if(d.error!=='vault locked'&&!d.locked) setErr(true); } else setRows((d&&d.rows)||[]); })
-        .catch(e=>{ if(e.name!=='AbortError'){ setErr(true); setRows([]); } });
+        .then(d=>{ if(d&&d.error){ setRows([]); if(d.error!=='vault locked'&&!d.locked) setErr(true); } else setRows((d&&d.rows)||[]); setUpdatedAt(new Date()); })
+        .catch(e=>{ if(e.name!=='AbortError'){ setErr(true); setRows([]); setUpdatedAt(new Date()); } });
+      return ()=>ctrl.abort();
+    }
+    // cross-source LEFT join: fetch primary + secondary (each row-capped 500),
+    // build a Map on the secondary key, merge secondary fields (namespaced
+    // `<secondary>.field`) onto each primary row. All primary rows are kept.
+    if(joinActive){
+      const ctrl=new AbortController();
+      setErr(false); setRows(null);
+      const pParams=new URLSearchParams(); pParams.set('limit', String(Math.min(limit||25,500)));
+      const fsj=JSON.parse(filterKey);
+      const jpfx=join.secondary+'.';
+      Object.keys(fsj).forEach(k=>{ if(fsj[k]!==''&&fsj[k]!=null&&k.indexOf(jpfx)!==0){ const p=parseFilterOp(fsj[k]); if(p&&p.op==='=') pParams.set(k,p.val); } });
+      if(tsField&&windowSecs>0){ const now=Math.floor(Date.now()/1000); pParams.set('t0',String(now-windowSecs)); pParams.set('t1',String(now)); }
+      const sParams=new URLSearchParams(); sParams.set('limit','500');
+      Promise.all([
+        fetch(`/api/source/${source}?${pParams.toString()}`,{signal:ctrl.signal}).then(r=>r.json()),
+        fetch(`/api/source/${join.secondary}?${sParams.toString()}`,{signal:ctrl.signal}).then(r=>r.json()),
+      ]).then(([pd,sd])=>{
+        const perr=(pd&&pd.error), serr=(sd&&sd.error);
+        if(perr||serr){ setRows([]); if(perr!=='vault locked'&&serr!=='vault locked'&&!(pd&&pd.locked)&&!(sd&&sd.locked)) setErr(true); setUpdatedAt(new Date()); return; }
+        const prows=(pd&&pd.rows)||[], srows=(sd&&sd.rows)||[];
+        const smap=new Map();
+        srows.forEach(sr=>{ const k=String(sr?.[join.secondaryKey]??''); if(k!==''&&!smap.has(k)) smap.set(k,sr); });
+        const merged=prows.slice(0,2000).map(pr=>{
+          const o={...pr}, m=smap.get(String(pr?.[join.key]??''));
+          if(m) Object.keys(m).forEach(k=>{ o[jpfx+k]=m[k]; });
+          return o;
+        });
+        setRows(merged); setUpdatedAt(new Date());
+      }).catch(e=>{ if(e.name!=='AbortError'){ setErr(true); setRows([]); setUpdatedAt(new Date()); } });
       return ()=>ctrl.abort();
     }
     const ctrl=new AbortController();
@@ -2434,13 +2642,18 @@ function BuilderWidget({id, cfg, DragHandle}){
     const params=new URLSearchParams();
     params.set('limit', String(limit||25));
     const fs=JSON.parse(filterKey);
-    Object.keys(fs).forEach(k=>{ if(fs[k]!==''&&fs[k]!=null) params.set(k,fs[k]); });
+    // Only bare-equality filters go to the server (cheap prefilter); operator filters
+    // (!= > < >= <= ~) are applied client-side over the fetched rows, so skip them here.
+    Object.keys(fs).forEach(k=>{ if(fs[k]!==''&&fs[k]!=null){ const p=parseFilterOp(fs[k]); if(p&&p.op==='=') params.set(k,p.val); } });
+    // Honest global time-range: only the two timestamped sources get a t0/t1
+    // window (epoch seconds); the server ignores it for point-in-time sources.
+    if(tsField&&windowSecs>0){ const now=Math.floor(Date.now()/1000); params.set('t0',String(now-windowSecs)); params.set('t1',String(now)); }
     fetch(`/api/source/${source}?${params.toString()}`,{signal:ctrl.signal})
       .then(r=>r.json())
-      .then(d=>{ if(d&&d.error){ setRows([]); if(d.error!=='vault locked'&&!d.locked) setErr(true); } else setRows((d&&d.rows)||[]); })
-      .catch(e=>{ if(e.name!=='AbortError'){ setErr(true); setRows([]); } });
+      .then(d=>{ if(d&&d.error){ setRows([]); if(d.error!=='vault locked'&&!d.locked) setErr(true); } else setRows((d&&d.rows)||[]); setUpdatedAt(new Date()); })
+      .catch(e=>{ if(e.name!=='AbortError'){ setErr(true); setRows([]); setUpdatedAt(new Date()); } });
     return ()=>ctrl.abort();
-  },[source,filterKey,limit,rawPath,rawParams]);
+  },[source,filterKey,limit,rawPath,rawParams,joinKey,refreshTick,timeRange]);
 
   const title=(cfg&&cfg.title)||'Widget';
   const card=body=>(
@@ -2449,6 +2662,10 @@ function BuilderWidget({id, cfg, DragHandle}){
         {DragHandle&&id?<DragHandle id={id}/>:null}
         <span {...(id?{id:'card-title-'+id}:{})} className="ov-sub" style={{margin:0}}>{title}</span>
         {cfg&&cfg.source==='__raw'&&<span className="chip" style={{fontSize:9,padding:'1px 5px',opacity:.8,cursor:'default'}} title="Unguarded raw endpoint passthrough">raw</span>}
+        {joinActive&&<span className="chip" style={{fontSize:9,padding:'1px 5px',opacity:.8,cursor:'default'}} title={`left join: ${source}.${join.key} ⋈ ${join.secondary}.${join.secondaryKey}`}>joined: {source} ⋈ {join.secondary}</span>}
+        {source&&source!=='__raw'&&!tsField&&timeRange!=='all'&&<span className="chip" style={{fontSize:9,padding:'1px 5px',opacity:.8,cursor:'default'}} title="No time field — the global range doesn't filter this source">point-in-time</span>}
+        {source==='anomaly_events'&&timeRange!=='1h'&&<span className="chip" style={{fontSize:9,padding:'1px 5px',opacity:.8,cursor:'default'}} title="Server caps DNS Security Events to the last hour; a wider range can't widen it">≤1h source</span>}
+        {updatedAt&&<span style={{marginLeft:'auto'}}><WidgetFreshness ts={updatedAt}/></span>}
       </div>
       {body}
     </div>
@@ -2464,13 +2681,17 @@ function BuilderWidget({id, cfg, DragHandle}){
   if(!rows.length) return card(<div className="no-data">No data</div>);
 
   const viz=cfg.viz, x=cfg.x, y=cfg.y, col=cfg.col, agg=cfg.agg||'sum';
-  const drows=applyComputed(rows,cfg.computed);
+  const fmtMap=buildFormatMap(cfg.transforms);
+  const drows=applyFilters(applyTransforms(applyComputed(rows,cfg.computed),cfg.transforms),cfg.filters);
+  if(!drows.length) return card(<div className="no-data">No rows match the current filter</div>);
+  const drillCols=(cfg.columns&&cfg.columns.length?cfg.columns:Object.keys(drows[0]||{}).slice(0,10));
+  const openDrill=(dtitle,subset)=>{ if(onRowsDrill&&subset&&subset.length) onRowsDrill({title:dtitle,rows:subset,columns:drillCols.map(k=>({key:k,label:k}))}); };
   let body;
   if(viz==='stat'){
     const v=_aggAll(drows,y,agg);
     body=(
       <div style={{display:'flex',flexDirection:'column',justifyContent:'center',minHeight:100}}>
-        <div style={{fontSize:38,fontWeight:700,fontFamily:'var(--font-mono)',color:'var(--ink)',lineHeight:1}}>{Number(v).toLocaleString(undefined,{maximumFractionDigits:1})}</div>
+        <div style={{fontSize:38,fontWeight:700,fontFamily:'var(--font-mono)',color:'var(--ink)',lineHeight:1}}>{fmtMap[y]?fmtByType(v,fmtMap[y]):Number(v).toLocaleString(undefined,{maximumFractionDigits:1})}</div>
         <div style={{fontSize:11,color:'var(--muted)',marginTop:6,textTransform:'uppercase',letterSpacing:'.05em'}}>{agg}{agg==='count'?'':' · '+(y||'')}</div>
       </div>
     );
@@ -2479,34 +2700,54 @@ function BuilderWidget({id, cfg, DragHandle}){
     body=<MiniLineChart data={ad} valueKey="value" labelKey="label" height={140} unit={agg==='count'?'count':(y||'')}/>;
   } else if(viz==='bar'){
     const ad=aggregate(drows,x,y,agg).sort((a,b)=>b.value-a.value);
-    body=<VizBars rows={ad} unit={agg==='count'?'count':(y||'')}/>;
+    body=<VizBars rows={ad} unit={agg==='count'?'count':(y||'')} onBarClick={onRowsDrill?d=>openDrill(`${x||'group'}: ${d.label}`, drows.filter(r=>String(r?.[x]??'—')===String(d.key))):undefined}/>;
   } else if(viz==='donut'){
-    body=<BuilderDonut rows={drows} dim={x} measure={y} agg={agg}/>;
+    body=<BuilderDonut rows={drows} dim={x} measure={y} agg={agg} onSegClick={onRowsDrill?d=>openDrill(`${x||'group'}: ${d.label}`, drows.filter(r=>String(r?.[x]??'—')===String(d.key))):undefined}/>;
   } else if(viz==='heatmap'){
-    body=<BuilderHeatmap rows={drows} dim={x} measure={y} agg={agg}/>;
+    body=<BuilderHeatmap rows={drows} dim={x} measure={y} col={col} agg={agg} onCellClick={onRowsDrill?d=>openDrill(d.label, d.rows):undefined}/>;
   } else if(viz==='pivot'){
-    const xs=[...new Set(drows.map(r=>String(r?.[x]??'—')))].slice(0,25);
-    const cs=[...new Set(drows.map(r=>String(r?.[col]??'—')))].slice(0,12);
+    // Real row×col×measure cross-tab with row totals (trailing column) and
+    // column totals (footer row) + grand total. Cardinality-capped 25×12.
+    const allXs=[...new Set(drows.map(r=>String(r?.[x]??'—')))];
+    const allCs=[...new Set(drows.map(r=>String(r?.[col]??'—')))];
+    const xs=allXs.slice(0,25);
+    const cs=allCs.slice(0,12);
+    const capNote=(allXs.length>xs.length||allCs.length>cs.length)?`showing ${xs.length}×${cs.length} of ${allXs.length}×${allCs.length}`:null;
+    const fmtN=v=>Number(v).toLocaleString(undefined,{maximumFractionDigits:1});
     body=(
       <div style={{overflow:'auto'}}>
+        {capNote&&<div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>{capNote}</div>}
         <table className="tbl">
-          <thead><tr><th>{x||'—'}</th>{cs.map(c=><th key={c} style={{textAlign:'right'}}>{c}</th>)}</tr></thead>
-          <tbody>{xs.map(xv=>(
+          <thead><tr><th>{x||'—'}</th>{cs.map(c=><th key={c} style={{textAlign:'right'}}>{c}</th>)}<th style={{textAlign:'right',fontWeight:700,borderLeft:'1px solid var(--border)'}}>Total</th></tr></thead>
+          <tbody>{xs.map(xv=>{
+            const rowSub=drows.filter(r=>String(r?.[x]??'—')===xv);
+            const rowTot=Number(_aggAll(rowSub,y,agg));
+            return (
             <tr key={xv}>
               <td style={{fontFamily:'var(--font-mono)'}}>{xv}</td>
               {cs.map(cv=>{
-                const sub=drows.filter(r=>String(r?.[x]??'—')===xv&&String(r?.[col]??'—')===cv);
+                const sub=rowSub.filter(r=>String(r?.[col]??'—')===cv);
                 const cellV=Number(_aggAll(sub,y,agg));
-                return <td key={cv} data-tip={`${x||'row'}: ${xv} · ${col||'col'}: ${cv} · ${agg}${y?' '+y:''}: ${cellV.toLocaleString()}`} style={{textAlign:'right',fontFamily:'var(--font-mono)'}}>{cellV.toLocaleString()}</td>;
+                return <td key={cv} data-tip={`${x||'row'}: ${xv} · ${col||'col'}: ${cv} · ${agg}${y?' '+y:''}: ${fmtN(cellV)}`} onClick={onRowsDrill&&sub.length?()=>openDrill(`${xv} · ${cv}`, sub):undefined} style={{textAlign:'right',fontFamily:'var(--font-mono)',cursor:onRowsDrill&&sub.length?'pointer':'default'}}>{fmtN(cellV)}</td>;
               })}
+              <td data-tip={`${x||'row'}: ${xv} · total ${agg}${y?' '+y:''}: ${fmtN(rowTot)}`} onClick={onRowsDrill&&rowSub.length?()=>openDrill(`${x||'row'}: ${xv}`, rowSub):undefined} style={{textAlign:'right',fontFamily:'var(--font-mono)',fontWeight:700,borderLeft:'1px solid var(--border)',cursor:onRowsDrill&&rowSub.length?'pointer':'default'}}>{fmtN(rowTot)}</td>
             </tr>
-          ))}</tbody>
+          );})}</tbody>
+          <tfoot><tr style={{borderTop:'2px solid var(--border)',fontWeight:700}}>
+            <td style={{fontWeight:700}}>Total</td>
+            {cs.map(cv=>{
+              const colSub=drows.filter(r=>String(r?.[col]??'—')===cv);
+              const colTot=Number(_aggAll(colSub,y,agg));
+              return <td key={cv} data-tip={`${col||'col'}: ${cv} · total ${agg}${y?' '+y:''}: ${fmtN(colTot)}`} onClick={onRowsDrill&&colSub.length?()=>openDrill(`${col||'col'}: ${cv}`, colSub):undefined} style={{textAlign:'right',fontFamily:'var(--font-mono)',fontWeight:700,cursor:onRowsDrill&&colSub.length?'pointer':'default'}}>{fmtN(colTot)}</td>;
+            })}
+            <td style={{textAlign:'right',fontFamily:'var(--font-mono)',fontWeight:700,borderLeft:'1px solid var(--border)'}}>{fmtN(Number(_aggAll(drows,y,agg)))}</td>
+          </tr></tfoot>
         </table>
       </div>
     );
   } else {
-    const cols=((cfg.columns&&cfg.columns.length?cfg.columns:Object.keys(drows[0]).slice(0,6))).map(k=>({key:k,label:k}));
-    body=<WidgetVizTable data={drows} columns={cols} persistId={id||'cw_preview'}/>;
+    const cols=((cfg.columns&&cfg.columns.length?cfg.columns:Object.keys(drows[0]).slice(0,6))).map(k=>({key:k,label:k,render:fmtMap[k]?(r=>fmtByType(r[k],fmtMap[k])):undefined}));
+    body=<WidgetVizTable data={drows} columns={cols} persistId={id||'cw_preview'} onRowClick={onRowsDrill?row=>openDrill('Row detail',[row]):undefined}/>;
   }
   return card(body);
 }
@@ -2515,7 +2756,7 @@ function BuilderWidget({id, cfg, DragHandle}){
    (the SAME BuilderWidget) on the right. Debounces the draft 300ms so typing
    in filter/limit fields doesn't hammer the network. No code required. */
 const BUILDER_VIZ=[{v:'table',l:'Table'},{v:'stat',l:'Stat'},{v:'line',l:'Line/Area'},{v:'bar',l:'Bar'},{v:'heatmap',l:'Heatmap'},{v:'donut',l:'Donut'},{v:'pivot',l:'Pivot'}];
-const _blankDraft=()=>({source:'',viz:'table',title:'',agg:'sum',x:'',y:'',col:'',columns:[],filters:{},limit:25,rawPath:'',rawParams:'',computed:[],_titleEdited:false,_vizManual:false});
+const _blankDraft=()=>({source:'',viz:'table',title:'',agg:'sum',x:'',y:'',col:'',columns:[],filters:{},limit:25,rawPath:'',rawParams:'',computed:[],transforms:[],join:null,_titleEdited:false,_vizManual:false});
 /* Gentle default viz from a source's field roles/names. Overridden the moment the
    user clicks a chart-type chip (_vizManual). time dim → line; %/utilization
    measure → heatmap; categorical + measure → bar; otherwise → table. */
@@ -2553,9 +2794,24 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
   const filt=fields.filter(f=>f.role==='filterable');
   const computed=draft.computed||[];
   const compNames=computed.filter(c=>c.name&&c.expr).map(c=>c.name);
-  const numFields=[...new Set([...(meas.length?meas:fields).map(f=>f.name),...compNames])];
+  const transforms=draft.transforms||[];
+  const tformDims=transforms.filter(t=>t.type==='rename'&&t.alias).map(t=>t.alias);
+  const tformNums=transforms.filter(t=>t.type==='derive'&&t.alias).map(t=>t.alias);
+  // cross-source join: union the secondary source's fields (namespaced) so they're chartable
+  const join=draft.join;
+  const secSrc=join&&join.secondary?(sources||[]).find(s=>s.id===join.secondary):null;
+  const secFields=secSrc?secSrc.fields:[];
+  const joinActive=!!(join&&join.secondary&&join.key&&join.secondaryKey);
+  const jpfx=join&&join.secondary?join.secondary+'.':'';
+  const joinDims=joinActive?secFields.filter(f=>f.role==='dimension').map(f=>jpfx+f.name):[];
+  const joinMeas=joinActive?secFields.filter(f=>f.role==='measure').map(f=>jpfx+f.name):[];
+  const joinFilt=joinActive?secFields.filter(f=>f.role!=='measure').map(f=>jpfx+f.name):[];
+  const dimNames=[...new Set([...dims.map(f=>f.name),...tformDims,...tformNums,...joinDims])];
+  const filtNames=[...new Set([...filt.map(f=>f.name),...tformDims,...tformNums,...joinFilt])];
+  const numFields=[...new Set([...(meas.length?meas:fields).map(f=>f.name),...compNames,...tformNums,...tformDims,...joinMeas])];
   const vizLabel=v=>(BUILDER_VIZ.find(z=>z.v===v)||{}).l||v;
   const updComputed=nr=>upd({computed:nr});
+  const updTransforms=nr=>upd({transforms:nr});
 
   const upd=patch=>setDraft(d=>{
     const n={...d,...patch};
@@ -2598,6 +2854,8 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
     delete cfg._titleEdited;
     delete cfg._vizManual;
     cfg.computed=(cfg.computed||[]).filter(c=>c&&c.name&&c.expr);
+    cfg.transforms=(cfg.transforms||[]).filter(t=>t&&t.type&&(t.type==='format'?(t.field&&t.format):(t.type==='derive'?(t.alias&&t.expr):(t.field&&t.alias))));
+    if(!(cfg.join&&cfg.join.secondary&&cfg.join.key&&cfg.join.secondaryKey)) delete cfg.join;
     if(!cfg.title) cfg.title=((src&&src.label)||cfg.source)+' · '+vizLabel(cfg.viz);
     onAdd(cfg);
   };
@@ -2619,6 +2877,39 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
               {(sources||[]).map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </div>
+
+          {draft.source&&!isRaw&&(()=>{
+            const others=(sources||[]).filter(s=>s.id!==draft.source&&s.id!=='__raw');
+            const primFields=fields.map(f=>f.name);
+            const j=draft.join||{};
+            const jSec=j.secondary?(sources||[]).find(s=>s.id===j.secondary):null;
+            const jSecFields=jSec?jSec.fields.map(f=>f.name):[];
+            const setJoin=patch=>{ const nj={type:'left',...(draft.join||{}),...patch}; if(!nj.secondary) upd({join:null}); else upd({join:nj}); };
+            const noKeys=j.secondary&&(!primFields.length||!jSecFields.length);
+            return (
+            <div className="bld-field">
+              <label>Join a second source <span style={{color:'var(--muted)',fontWeight:400}}>(optional · left join)</span></label>
+              <select className="scope-select" value={j.secondary||''} onChange={e=>setJoin({secondary:e.target.value})}>
+                <option value="">No join</option>
+                {others.map(s=><option key={s.id} value={s.id} disabled={!s.fields||!s.fields.length}>{s.label}{(!s.fields||!s.fields.length)?' (untyped)':''}</option>)}
+              </select>
+              {j.secondary&&!noKeys&&<>
+                <div className="bld-frow" style={{marginTop:6}}>
+                  <select className="scope-select" value={j.key||''} onChange={e=>setJoin({key:e.target.value})}>
+                    <option value="">Primary key…</option>
+                    {primFields.map(n=><option key={n} value={n}>{n}</option>)}
+                  </select>
+                  <span style={{alignSelf:'center',color:'var(--muted)',fontSize:13}}>⋈</span>
+                  <select className="scope-select" value={j.secondaryKey||''} onChange={e=>setJoin({secondaryKey:e.target.value})}>
+                    <option value="">{jSec?jSec.label+' key…':'Secondary key…'}</option>
+                    {jSecFields.map(n=><option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                <div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>Secondary fields join in as <b>{j.secondary}.field</b> — selectable for chart, columns & filters.</div>
+              </>}
+              {noKeys&&<div style={{fontSize:11,color:'var(--amber)',marginTop:4}}>One of these sources has no typed fields to join on — pick a typed source.</div>}
+            </div>
+          );})()}
 
           {isRaw&&<>
             <div className="bld-field">
@@ -2668,17 +2959,17 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
                 <label htmlFor="bld-x">{draft.viz==='pivot'?'Rows (dimension)':'Group by (dimension)'}</label>
                 <select id="bld-x" className="scope-select" value={draft.x} onChange={e=>upd({x:e.target.value})}>
                   <option value="">Choose…</option>
-                  {dims.map(f=><option key={f.name} value={f.name}>{f.name}</option>)}
+                  {dimNames.map(n=><option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
             )}
 
-            {draft.viz==='pivot'&&(
+            {(draft.viz==='pivot'||draft.viz==='heatmap')&&(
               <div className="bld-field">
-                <label htmlFor="bld-col">Columns (dimension)</label>
+                <label htmlFor="bld-col">{draft.viz==='pivot'?'Columns (dimension)':'Y axis (dimension) '}{draft.viz==='heatmap'&&<span style={{color:'var(--muted)',fontWeight:400}}>(optional — enables 2-axis grid)</span>}</label>
                 <select id="bld-col" className="scope-select" value={draft.col} onChange={e=>upd({col:e.target.value})}>
                   <option value="">Choose…</option>
-                  {dims.filter(f=>f.name!==draft.x).map(f=><option key={f.name} value={f.name}>{f.name}</option>)}
+                  {dimNames.filter(n=>n!==draft.x).map(n=><option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
             )}
@@ -2707,12 +2998,48 @@ function BuilderModal({open, onClose, onAdd, editId, initialCfg}){
             </div>
 
             <div className="bld-field">
+              <label>Transforms <span style={{color:'var(--muted)',fontWeight:400}}>(optional)</span></label>
+              {transforms.map((t,i)=>{
+                const setT=patch=>updTransforms(transforms.map((x,j)=>j===i?{...x,...patch}:x));
+                return (
+                <div className="bld-frow" key={i} style={{flexWrap:'wrap'}}>
+                  <select className="scope-select" style={{flex:'0 0 84px'}} value={t.type||'rename'} onChange={e=>setT({type:e.target.value})}>
+                    <option value="rename">rename</option>
+                    <option value="format">format</option>
+                    <option value="derive">derive</option>
+                  </select>
+                  {t.type==='derive'?<>
+                    <input className="bld-in" style={{flex:'0 0 90px'}} placeholder="alias" value={t.alias||''} onChange={e=>setT({alias:e.target.value})}/>
+                    <input className="bld-in" placeholder="e.g. used / total * 100" value={t.expr||''} onChange={e=>setT({expr:e.target.value})}/>
+                  </>:t.type==='format'?<>
+                    <select className="scope-select" value={t.field||''} onChange={e=>setT({field:e.target.value})}>
+                      <option value="">Field…</option>
+                      {numFields.map(n=><option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <select className="scope-select" value={t.format||'number'} onChange={e=>setT({format:e.target.value})}>
+                      {['number','percent','bytes','int'].map(f=><option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </>:<>
+                    <select className="scope-select" value={t.field||''} onChange={e=>setT({field:e.target.value})}>
+                      <option value="">Field…</option>
+                      {[...dims,...meas,...filt].map(f=><option key={f.name} value={f.name}>{f.name}</option>)}
+                    </select>
+                    <input className="bld-in" style={{flex:'0 0 90px'}} placeholder="new name" value={t.alias||''} onChange={e=>setT({alias:e.target.value})}/>
+                  </>}
+                  <button className="col-iconbtn" aria-label="Remove transform" onClick={()=>updTransforms(transforms.filter((_,j)=>j!==i))}>✕</button>
+                </div>
+              );})}
+              <button className="ghost-chip" onClick={()=>updTransforms([...transforms,{type:'rename',field:'',alias:''}])}><b>+</b> Add transform</button>
+              <div style={{fontSize:11,color:'var(--muted)',marginTop:4}}><b>rename</b> aliases a field · <b>format</b> displays as number/percent/bytes/int · <b>derive</b> makes a new field from a formula. Applied before aggregation.</div>
+            </div>
+
+            <div className="bld-field">
               <label>Filters</label>
               {filterRows.map((fr,i)=>(
                 <div className="bld-frow" key={i}>
                   <select className="scope-select" value={fr.field} onChange={e=>{const nr=[...filterRows];nr[i]={...nr[i],field:e.target.value};commitFilters(nr);}}>
                     <option value="">Field…</option>
-                    {filt.map(f=><option key={f.name} value={f.name}>{f.name}</option>)}
+                    {filtNames.map(n=><option key={n} value={n}>{n}</option>)}
                   </select>
                   <input className="bld-in" placeholder="equals…" value={fr.val} onChange={e=>{const nr=[...filterRows];nr[i]={...nr[i],val:e.target.value};commitFilters(nr);}}/>
                   {filterRows.length>1&&<button className="col-iconbtn" aria-label="Remove filter" onClick={()=>{const nr=filterRows.filter((_,j)=>j!==i);commitFilters(nr.length?nr:[{field:'',val:''}]);}}>✕</button>}
@@ -4141,6 +4468,59 @@ function DrillSheet({entity, onClose, leases=[], subnets=[], setSection, setZone
   );
 }
 
+/* Lightweight right-slide-over listing the raw rows behind a clicked mark
+   (bar / table row / pivot or heatmap cell / donut segment). Reuses the
+   .drill-sheet overlay + focus-trap shell; renders a plain source-columns table.
+   Esc or click-out closes and returns focus. */
+function RowsSheet({title, rows, columns, onClose}){
+  const panelRef=useRef(null);
+  useEffect(()=>{
+    const prev=document.activeElement;
+    const panel=panelRef.current;
+    const sel='button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const focusables=()=>panel?Array.from(panel.querySelectorAll(sel)):[];
+    const first=focusables()[0]; if(first) first.focus();
+    const h=e=>{
+      if(e.key==='Escape'){ onClose(); return; }
+      if(e.key==='Tab'){
+        const f=focusables(); if(!f.length) return;
+        const a=f[0], z=f[f.length-1];
+        if(e.shiftKey&&document.activeElement===a){ e.preventDefault(); z.focus(); }
+        else if(!e.shiftKey&&document.activeElement===z){ e.preventDefault(); a.focus(); }
+      }
+    };
+    document.addEventListener('keydown',h);
+    return ()=>{ document.removeEventListener('keydown',h); if(prev&&prev.focus) prev.focus(); };
+  },[onClose]);
+  const rws=rows||[];
+  const cols=(columns&&columns.length?columns:(rws[0]?Object.keys(rws[0]).slice(0,10).map(k=>({key:k,label:k})):[]));
+  return (
+    <>
+      <div className="drill-sheet-overlay" onClick={onClose}/>
+      <div className="drill-sheet" role="dialog" aria-modal="true" aria-label={`Underlying rows: ${title||''}`} ref={panelRef} style={{width:'min(560px,92vw)'}}>
+        <div className="drill-sheet-hd">
+          <div style={{fontSize:13,fontWeight:700,color:'var(--gray-200)'}}>{title||'Rows'}
+            <span style={{color:'var(--muted)',fontWeight:400,marginLeft:8}}>{rws.length} row{rws.length===1?'':'s'}</span></div>
+          <button className="close-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="drill-sheet-bd" style={{padding:0}}>
+          {rws.length===0
+            ? <div className="no-data" style={{padding:24}}>No underlying rows</div>
+            : (<div style={{overflow:'auto'}}>
+                <table className="tbl">
+                  <thead><tr>{cols.map(c=><th key={c.key}>{c.label}</th>)}</tr></thead>
+                  <tbody>{rws.slice(0,500).map((r,i)=>(
+                    <tr key={i}>{cols.map(c=><td key={c.key} style={{fontFamily:'var(--font-mono)',fontSize:11}}>{String(r?.[c.key]??'—')}</td>)}</tr>
+                  ))}</tbody>
+                </table>
+                {rws.length>500&&<div style={{fontSize:10,color:'var(--muted)',padding:'8px 12px'}}>+{rws.length-500} more rows</div>}
+              </div>)}
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ─── TRIAGE PANEL ──────────────────────────────────────────────────────────*/
 function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection, dhcpCrit, dhcpWarn}) {
   const errHosts  = hosts.filter(h=>h.status==='error'||h.status==='offline');
@@ -5426,6 +5806,7 @@ function App({vault, onVaultChange}={}) {
   const [wallMode, setWallMode]         = useState(()=>LS.get('noc.wall',false));
   const [wallSpans, setWallSpans]       = useState(()=>LS.get('noc.wallSpans',{}));
   const [widgetHeights, setWidgetHeights] = useState(()=>LS.get('noc.heights',{}));
+  const [grid, setGrid]                 = useState(()=>LS.get('noc.grid',{})); // R5 12-col: {id:{colSpan,rowSpan}}; lazy-derived from legacy wallSpans/heights
   const [hoverPause, setHoverPause]     = useState(false);
   const [hubHealth, setHubHealth]       = useState(null);
   const [hubSecurity, setHubSecurity]   = useState(null);
@@ -5441,6 +5822,7 @@ function App({vault, onVaultChange}={}) {
   const [triagePromptDismissed, setTriagePromptDismissed] = useState(false);
   const [ackedAlerts, setAckedAlerts] = useState(()=>LS.get('noc.acked',{}));
   const [drillEntity, setDrillEntity] = useState(null);
+  const [rowsDrill, setRowsDrill] = useState(null);  // builder-widget drill-down: {title, rows, columns}
   const WIDGET_LABELS={dhcp:'DHCP Pools',hosts:'Host Status',subnets:'Top Subnets',ttl:'DNS Zones',audit:'Audit Log',feeds:'Active Threats',svchealth:'Service Health',threatevents:'DNS Threat Events',threatfeeds:'Threat Feeds',customlists:'Custom Lists',secpolicies:'Security Policies',hostinv:'Host Inventory',anycast:'Anycast HA',dfp:'DNS Forwarding Proxy',roaming:'Roaming Endpoints'};
   const [hiddenSections, setHiddenSections] = useState(()=>LS.get('noc.hiddenSections',[]));
   const [showWizard, setShowWizard] = useState(()=>!LS.get('noc.wizardDone',false));
@@ -5572,7 +5954,27 @@ function App({vault, onVaultChange}={}) {
   // wins over this. cw_* widgets are absent here, so they stay span 1.
   const DEFAULT_SPANS={svchealth:2,threatevents:2,dhcp:2,feeds:2};
   const spanOf=(id)=> wallSpans[id] ?? DEFAULT_SPANS[id] ?? 1;
-  const cycleSpan=(id,dir=1)=>{ const cur=spanOf(id); let next=cur+dir; if(next>3)next=1; if(next<1)next=3; const n={...wallSpans,[id]:next}; setWallSpans(n); LS.set('noc.wallSpans',n); };
+  // R5 12-col grid: derive-on-read so old saved layouts survive with NO loss.
+  // Precedence: explicit noc.grid > cw_* cfg mirror > legacy wallSpans mapping.
+  const SPAN_TO_COL={1:4,2:6,3:12};        // legacy 1/2/full → 12-col equivalents
+  const COL_STEPS=[3,4,6,8,12];            // cycle-span snap steps
+  const gridOf=(id)=>{
+    const g=grid[id];
+    if(g&&g.colSpan) return {colSpan:g.colSpan, rowSpan:g.rowSpan};
+    const cw=customWidgets[id];
+    if(cw&&cw.colSpan) return {colSpan:cw.colSpan, rowSpan:cw.rowSpan};
+    return {colSpan:SPAN_TO_COL[spanOf(id)]||4};
+  };
+  // width control: wall-mode keeps legacy 1/2/full; overview snaps through 12-col steps → noc.grid
+  const cycleSpan=(id,dir=1)=>{
+    if(wallMode){ const cur=spanOf(id); let next=cur+dir; if(next>3)next=1; if(next<1)next=3; const n={...wallSpans,[id]:next}; setWallSpans(n); LS.set('noc.wallSpans',n); return; }
+    const cur=gridOf(id).colSpan;
+    let i=COL_STEPS.indexOf(cur); if(i<0){ i=COL_STEPS.findIndex(s=>s>=cur); if(i<0) i=0; }
+    const next=COL_STEPS[(i+dir+COL_STEPS.length)%COL_STEPS.length];
+    const prev=gridOf(id); const n={...grid,[id]:{...prev,colSpan:next}};
+    setGrid(n); LS.set('noc.grid',n);
+    if(id.startsWith('cw_')&&customWidgets[id]){ const nw={...customWidgets,[id]:{...customWidgets[id],colSpan:next}}; setCustomWidgets(nw); LS.set('noc.customWidgets',nw); }
+  };
   const HEIGHT_PRESETS=[220,360,540];
   const cycleHeight=(id,dir=1)=>{ const states=[null,...HEIGHT_PRESETS]; const i=states.indexOf(widgetHeights[id]||null); const next=states[(i+dir+states.length)%states.length]; const n={...widgetHeights}; if(next===null)delete n[id];else n[id]=next; setWidgetHeights(n); LS.set('noc.heights',n); };
   const wrapProps = (id, extra='') => {
@@ -5591,7 +5993,7 @@ function App({vault, onVaultChange}={}) {
     <>
       <span className="drag-handle" title="Drag to reorder" aria-label="Drag to reorder"
         onMouseDown={()=>setDragArmed(id)} onMouseUp={()=>setDragArmed(null)}>⠿</span>
-      <button className="wall-span-btn" aria-label="Cycle card width" title="Cycle width: 1 / 2 / full" onClick={e=>{e.stopPropagation();cycleSpan(id);}} onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();cycleSpan(id,1);}if(e.key==='ArrowLeft'){e.preventDefault();cycleSpan(id,-1);}}}>{({1:'▭',2:'▭▭',3:'◫'})[spanOf(id)]}</button>
+      <button className="wall-span-btn" aria-label="Cycle card width" title={wallMode?'Cycle width: 1 / 2 / full':'Cycle width: snap to 12-col (3/4/6/8/12)'} onClick={e=>{e.stopPropagation();cycleSpan(id);}} onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();cycleSpan(id,1);}if(e.key==='ArrowLeft'){e.preventDefault();cycleSpan(id,-1);}}}>{wallMode?({1:'▭',2:'▭▭',3:'◫'})[spanOf(id)]:gridOf(id).colSpan}</button>
       <button className="wall-span-btn" aria-label="Cycle card height" title={widgetHeights[id]?`Height: ${widgetHeights[id]}px — click to cycle`:'Height: auto — click to set compact'} onClick={e=>{e.stopPropagation();cycleHeight(id);}} onKeyDown={e=>{if(e.key==='ArrowUp'){e.preventDefault();cycleHeight(id,1);}if(e.key==='ArrowDown'){e.preventDefault();cycleHeight(id,-1);}}}>{widgetHeights[id]?`${widgetHeights[id]}`:'↕'}</button>
     </>
   );
@@ -6530,11 +6932,14 @@ function App({vault, onVaultChange}={}) {
                     <DragHandle id={id}/>
                     <span id={"card-title-"+id} className="ov-sub" style={{margin:0}}>{title}</span>
                   </div>
-                  {right||null}
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <WidgetFreshness ts={lastUpd}/>
+                    {right||null}
+                  </div>
                 </div>
               );
               const renderOvWidget=id=>{
-                if(id.startsWith('cw_')){ const c=customWidgets[id]; if(!c) return null; return <BuilderWidget id={id} cfg={c} DragHandle={DragHandle}/>; }
+                if(id.startsWith('cw_')){ const c=customWidgets[id]; if(!c) return null; return <BuilderWidget id={id} cfg={c} DragHandle={DragHandle} refreshTick={lastUpd?lastUpd.getTime():0} onRowsDrill={setRowsDrill} timeRange={timeRange}/>; }
                 if(id==='dhcp') return (
                   <div className="card" style={{padding:14,height:'100%',boxSizing:'border-box'}}>
                     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
@@ -6897,13 +7302,14 @@ function App({vault, onVaultChange}={}) {
                 <>
                 <div className="ov-bento">
                   {overviewOrder.filter(id=>!hiddenSections.includes(id)).map(id=>{
-                    const hStyle=widgetHeights[id]?{height:widgetHeights[id],overflow:'hidden'}:{};
-                    const spanCls=SPAN_CLS[spanOf(id)];
+                    const gd=gridOf(id);
+                    const cStyle={gridColumn:'span '+Math.min(gd.colSpan||4,12), ...(widgetHeights[id]?{height:widgetHeights[id],overflow:'hidden'}:{})};
+                    if(gd.rowSpan) cStyle.gridRow='span '+gd.rowSpan;
                     return (
                       <div key={id}
                         role="region" aria-labelledby={"card-title-"+id}
-                        className={`drag-card${spanCls?' '+spanCls:''}${dragging===id?' dragging':''}${dragOver===id?' drag-over':''}`}
-                        style={hStyle}
+                        className={`drag-card${dragging===id?' dragging':''}${dragOver===id?' drag-over':''}`}
+                        style={cStyle}
                         draggable={dragArmed===id}
                         onDragStart={e=>onDragStart(e,id)}
                         onDragOver={e=>onDragOver(e,id)}
@@ -7423,6 +7829,7 @@ function App({vault, onVaultChange}={}) {
         section={section}
       />
       {drillEntity&&<DrillSheet entity={drillEntity} onClose={()=>setDrillEntity(null)} leases={leases} subnets={subnets} setSection={setSection} setZoneFilt={setZoneFilt}/>}
+      {rowsDrill&&<RowsSheet title={rowsDrill.title} rows={rowsDrill.rows} columns={rowsDrill.columns} onClose={()=>setRowsDrill(null)}/>}
       {showWizard&&<DashboardWizard overviewOrder={overviewOrder} collapsed={collapsed} hiddenSections={hiddenSections} widgetLabels={WIDGET_LABELS} moveWidget={moveWidget} toggleCollapse={toggleCollapse} toggleHideSection={toggleHideSection} onDone={finishWizard} orgDomain={orgDomain} orgName={orgName} onBrandSave={handleBrandSave} initialTab={wizardInitTab}/>}
       {chromeHidden&&<button className="show-chrome-fab" onClick={()=>setChromeHidden(()=>{LS.set('noc.chromeHidden',false);return false;})} data-tip="Show the top nav bar again (shortcut: f)" aria-label="Show chrome">⤡ Show chrome</button>}
       {builderOpen&&<BuilderModal open={builderOpen} onClose={()=>{setBuilderOpen(false);setBuilderEditId(null);}} onAdd={saveBuilderWidget} editId={builderEditId} initialCfg={builderEditId?customWidgets[builderEditId]:null}/>}
