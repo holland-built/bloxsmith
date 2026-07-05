@@ -48,7 +48,7 @@ window.onerror = function(msg,src,line,col,err) {
   /* semantic status — Vercel red / amber / green */
   --red:#dc2626;--amber:#eab308;--green:#16a34a;
   --red-rgb:220,38,38;--amber-rgb:234,179,8;--green-rgb:22,163,74;
-  --red-bg:rgba(220,38,38,.10);--red-border:rgba(220,38,38,.3);--red-text:#dc2626;
+  --red-bg:rgba(220,38,38,.10);--red-border:rgba(220,38,38,.3);--red-text:#b91c1c;
   --amber-bg:rgba(234,179,8,.12);--amber-border:rgba(234,179,8,.3);--amber-text:#a16207;
   --green-bg:rgba(22,163,74,.10);--green-border:rgba(22,163,74,.3);--green-text:#16a34a;
   --green-tx:#15803d;  /* AA-accessible green for small text (~5:1 on white) */
@@ -64,7 +64,7 @@ window.onerror = function(msg,src,line,col,err) {
   --svg-grid:rgba(0,0,0,.06);
   --focus-border:#0070f3;
   /* severity badge tints */
-  --sev-red-t:#dc2626;--sev-amber-t:#a16207;--sev-green-t:#16a34a;
+  --sev-red-t:#b91c1c;--sev-amber-t:#a16207;--sev-green-t:#16a34a;
   --badge-red-bg:rgba(220,38,38,.10);--badge-red-bd:rgba(220,38,38,.3);
   --badge-amber-bg:rgba(234,179,8,.12);--badge-amber-bd:rgba(234,179,8,.3);
   --badge-green-bg:rgba(22,163,74,.10);--badge-green-bd:rgba(22,163,74,.3);
@@ -234,6 +234,7 @@ body{padding-left:0!important}
 .ov-hero-stat{display:flex;flex-direction:column;gap:4px;cursor:pointer}
 .ov-hero-stat .v{font-family:var(--font-mono);font-size:24px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--ink)}
 .ov-hero-stat .l{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.ov-hero-stat .s{font-size:11px;font-weight:600;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
 @media(max-width:760px){.ov-hero-num{font-size:40px}.ov-hero-stats{gap:18px}}
 .bento{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start}
 .section-view .bento{display:none!important}
@@ -254,6 +255,7 @@ body{padding-left:0!important}
 .ov-add-plus{font-size:28px;line-height:1;font-weight:300}
 .ov-add-sub{font-size:11px;opacity:.75}
 .builder-hint{display:flex;align-items:center;gap:14px;padding:10px 14px;margin-bottom:12px;background:var(--surface);box-shadow:0 0 0 1px var(--border);border-radius:var(--r-card);font-size:var(--fs-sm);color:var(--ink-dim)}
+.builder-hint-slim{padding:6px 12px;margin-bottom:14px;gap:10px;font-size:12px;background:transparent}
 .builder-hint-cta{margin-left:auto;background:var(--ink);color:var(--accent-on);border:none;border-radius:6px;font-weight:600;padding:5px 12px;font-size:var(--fs-sm);font-family:var(--font-ui);cursor:pointer;transition:background .12s;white-space:nowrap}
 .builder-hint-cta:hover{background:var(--ink-hover)}
 .builder-hint-x{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 2px}
@@ -2386,6 +2388,18 @@ function BuilderDonut({rows, dim, measure, agg, onSegClick}){
    measure intensity on a single-hue light→accent ramp, cells sorted high→low.
    This maps a SINGLE dimension to color, so it is labeled "grid", not "heatmap"
    (a heatmap needs two axes). Legend (min→max) + cell count + hover data-tip. */
+// Utilization severity ramp: green (low) → amber → red (high). Maps the real
+// measure value (t in 0..1) to a diverging severity color so magnitude reads as
+// "how bad", not "clickable". Blue/--accent stays reserved for links/CTA/focus.
+function heatSev(t){
+  t=Math.max(0,Math.min(1,isFinite(t)?t:0));
+  const lerp=(a,b,f)=>Math.round(a+(b-a)*f);
+  let r,g,b;
+  if(t<0.5){const f=t/0.5;r=lerp(22,234,f);g=lerp(163,179,f);b=lerp(74,8,f);}   // green→amber
+  else{const f=(t-0.5)/0.5;r=lerp(234,220,f);g=lerp(179,38,f);b=lerp(8,38,f);}  // amber→red
+  return `rgba(${r},${g},${b},${(0.2+0.75*t).toFixed(3)})`;
+}
+const HEAT_LEGEND='linear-gradient(90deg,rgba(22,163,74,.28),rgba(234,179,8,.7),rgba(220,38,38,.95))';
 function BuilderHeatmap({rows, dim, measure, agg, col, onCellClick}){
   // 2-axis mode: X(dim) columns × Y(col) rows, cell color = measure intensity.
   if(col){
@@ -2400,7 +2414,7 @@ function BuilderHeatmap({rows, dim, measure, agg, col, onCellClick}){
     }));
     if(!isFinite(min)){ min=0; max=0; }
     const rng=(max-min)||1;
-    const heat=t=>`rgba(0,112,243,${(0.08+0.87*t).toFixed(3)})`;
+    const heat=heatSev;
     const fmt=v=>v.toLocaleString(undefined,{maximumFractionDigits:1});
     const cellAt=(xv,yv)=>cells.find(z=>z.xv===xv&&z.yv===yv)||{v:0,sub:[]};
     return (
@@ -2428,7 +2442,7 @@ function BuilderHeatmap({rows, dim, measure, agg, col, onCellClick}){
         </table>
         <div style={{display:'flex',alignItems:'center',gap:8,marginTop:10,fontSize:10,color:'var(--muted)'}}>
           <span style={{fontVariantNumeric:'tabular-nums'}}>{fmt(min)}</span>
-          <div style={{flex:'0 0 110px',height:8,borderRadius:4,background:'linear-gradient(90deg,rgba(0,112,243,.08),rgba(0,112,243,.95))'}}/>
+          <div style={{flex:'0 0 110px',height:8,borderRadius:4,background:HEAT_LEGEND}}/>
           <span style={{fontVariantNumeric:'tabular-nums'}}>{fmt(max)}</span>
           <span style={{marginLeft:'auto'}}>{xs.length}×{ys.length} · {measure||'count'}</span>
         </div>
@@ -2443,7 +2457,7 @@ function BuilderHeatmap({rows, dim, measure, agg, col, onCellClick}){
   const vals=data.map(r=>Number(r.value)||0);
   const min=Math.min(...vals), max=Math.max(...vals);
   const rng=(max-min)||1; // guards all-equal series (single flat color)
-  const heat=t=>`rgba(0,112,243,${(0.10+0.85*t).toFixed(3)})`; // --accent #0070f3
+  const heat=heatSev; // green→amber→red severity ramp (not the blue CTA accent)
   const fmt=v=>v.toLocaleString(undefined,{maximumFractionDigits:1});
   return (
     <div style={{position:'relative'}} role="img"
@@ -2468,7 +2482,7 @@ function BuilderHeatmap({rows, dim, measure, agg, col, onCellClick}){
       </div>
       <div style={{display:'flex',alignItems:'center',gap:8,marginTop:10,fontSize:10,color:'var(--muted)'}}>
         <span style={{fontVariantNumeric:'tabular-nums'}}>{fmt(min)}</span>
-        <div style={{flex:'0 0 110px',height:8,borderRadius:4,background:'linear-gradient(90deg,rgba(0,112,243,.10),rgba(0,112,243,.95))'}}/>
+        <div style={{flex:'0 0 110px',height:8,borderRadius:4,background:HEAT_LEGEND}}/>
         <span style={{fontVariantNumeric:'tabular-nums'}}>{fmt(max)}</span>
         <span style={{marginLeft:'auto'}}>{data.length} cells · {measure||'count'}</span>
       </div>
@@ -5601,9 +5615,7 @@ function HelpPage() {
   const [q, setQ] = React.useState('');
   const HELP = [
     {group:'Overview', accent:'var(--teal)', features:[
-      {name:'Health Banner', eli5:'A color-coded status strip in Overview showing your overall network health as a 0–100 score. It aggregates the worst active alert state across all monitored systems so you spot critical issues at a glance.', steps:['Open Overview — the health strip appears just below the KPI tiles.','Green = all clear, amber = warnings active, red = critical thresholds breached.','Click the banner to jump to Alerts and see exactly which rules are firing.']},
-      {name:'KPI Tiles', eli5:'Large summary cards showing top-line metrics — total subnets, DHCP leases, DNS zones, host uptime, and alert count. Each tile is clickable and navigates you directly to the relevant section. Delta badges show trend vs the previous period.', steps:['Click any KPI tile to jump to that section.','Click a colored delta badge (e.g. +3 subnets) to navigate and pre-filter by the change.','Tiles auto-refresh on every polling cycle — no manual action needed.']},
-      {name:'Tactical Overview Bar', eli5:'A 5-segment strip just below the KPI tiles showing live counts for Hosts, Subnets, Zones, Alerts, and Feeds at a glance. Color-codes by severity so you can see the network pulse in one row.', steps:['Find the strip between KPI tiles and the main widget grid.','Red segments = critical issues in that domain, amber = warnings, teal = healthy.','Click a segment to navigate to its section.']},
+      {name:'Health Band', eli5:'The single summary surface at the top of Overview: a 0–100 network health score plus the top-line stats — Hosts, Subnets, DNS Zones, Peak DHCP Util, Alerts, and Threat Feeds. Each stat shows its total and any crisis count (offline, critical, anomalies) and is clickable to jump to that section. Every number appears here exactly once.', steps:['Open Overview — the health band is the first thing below the header.','Score color: green = healthy, amber = degraded, red = critical.','Click any stat (e.g. Subnets) to jump straight to that section, pre-filtered to its issues.']},
       {name:'Widget Reorder', eli5:'You can drag widgets on the Overview page into any order you like. Your layout is saved in the browser and survives refreshes. Reset from the ⋯ menu if you want defaults back.', steps:['On the Overview page, grab the drag handle (⠿) at the top-left of any card.','Drag it to a new position in the grid.','Layout auto-saves — open ⋯ → Reset dashboard to restore defaults.']},
     ]},
     {group:'IPAM / Subnets', accent:'var(--teal)', features:[
@@ -6746,7 +6758,7 @@ function App({vault, onVaultChange}={}) {
           // Single severity-ranked alert region: highest severity first (red → amber → info).
           const _sevRank={'n-red':0,'n-amber':1,'n-info':2};
           notices.sort((a,b)=>(_sevRank[a.sev]??9)-(_sevRank[b.sev]??9));
-          const CAP=2, hidden=notices.length-CAP;
+          const CAP=1, hidden=notices.length-CAP;
           const shown=noticesExpanded?notices:notices.slice(0,CAP);
           return (
             <div className="notice-rail" role="status" aria-live={notices.some(n=>n.sev==='n-red')?'assertive':'polite'}>
@@ -6771,36 +6783,6 @@ function App({vault, onVaultChange}={}) {
               {(errHosts.length>0||critSubs.length>0)?<span className="section-badge crit">█ CRIT</span>:warnSubs.length>0||ttlBad.length>0?<span className="section-badge warn">▲ WARN</span>:<span className="section-badge ok">· OK</span>}
               <button className="ov-add-widget-btn" onClick={()=>setBuilderOpen(true)}><b>+</b> Add widget</button>
             </div>
-            {!hintDismissed && Object.keys(customWidgets).length===0 && (
-              <div className="builder-hint">
-                <div><b>Bloxsmith is yours to build.</b> Drop a graph, pivot, or table from any of 15 live Infoblox sources onto this dashboard — no code.</div>
-                <button className="builder-hint-cta" onClick={()=>setBuilderOpen(true)}>Build your first view</button>
-                <button className="builder-hint-x" aria-label="Dismiss" onClick={()=>{LS.set('noc.builderHintDismissed',true);setHintDismissed(true);}}>×</button>
-              </div>
-            )}
-            {/* Tactical Overview Bar */}
-            <div style={{display:'flex',gap:0,marginBottom:8,borderRadius:5,overflow:'hidden',border:'1px solid var(--border)',fontSize:10,fontFamily:'var(--font-mono)'}}>
-              {[
-                {label:'Hosts', val:s_hosts.length, sub:`${errHosts.length} down`, col:'var(--teal)', sec:'hosts', crit:errHosts.length>0},
-                {label:'Subnets', val:s_subnets.length, sub:`${critSubs.length} crit`, col:'var(--green-tx)', sec:'ipam', crit:critSubs.length>0},
-                {label:'Zones', val:zones.length, sub:`${ttlBad.length} anomalies`, col:'var(--amber-text)', sec:'dns', crit:ttlBad.length>0},
-                {label:'Alerts', val:firingAlerts.length, sub:firingAlerts.length>0?'firing':'clear', col:'var(--red)', sec:'alerts', crit:firingAlerts.length>0},
-                {label:'Feeds', val:(data?.feeds||[]).filter(f=>f.active).length, sub:'active threats', col:'var(--gray-400)', sec:'security', crit:false},
-              ].map((seg,i)=>(
-                <div key={i} role="button" tabIndex={0}
-                  onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(seg.sec);}}}
-                  aria-label={`Go to ${seg.label} section`}
-                  onClick={()=>setSection(seg.sec)}
-                  style={{flex:1,padding:'6px 10px',background:'var(--surface-2)',
-                    cursor:'pointer',borderRight:i<4?'1px solid var(--border)':'none',transition:'background .15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.background='var(--surface-3)'}
-                  onMouseLeave={e=>e.currentTarget.style.background='var(--surface-2)'}>
-                  <div style={{fontWeight:700,fontSize:16,color:'var(--ink)',lineHeight:1}}>{fmtN(seg.val)}</div>
-                  <div style={{color:'var(--muted)',fontSize:12,textTransform:'uppercase',letterSpacing:'.06em',marginTop:2}}>{seg.label}</div>
-                  <div style={{color:seg.crit?seg.col:'var(--muted)',fontSize:12,marginTop:1}}>{seg.sub}</div>
-                </div>
-              ))}
-            </div>
             {(()=>{
   const total = s_subnets.length||1;
   const hostTotal = s_hosts.length||1;
@@ -6816,10 +6798,16 @@ function App({vault, onVaultChange}={}) {
   const scoreClr = anyCrit?'var(--red)':anyWarn?'var(--amber-text)':'var(--green-tx)';
   const scoreLabel = anyCrit?'CRITICAL':anyWarn?'DEGRADED':'HEALTHY';
   const peakUtil = critSubs[0]?.util??warnSubs[0]?.util??0;
+  const feedsActive = (data?.feeds||[]).filter(f=>f.active).length;
+  // Single authoritative KPI surface: every top-line number lives here once.
+  // sev: 'crit'|'warn'|null drives both the value color and the sub-line.
   const hstats=[
-    {v:errHosts.length, l:'Offline / Error', clr:errHosts.length>0?'var(--red)':'var(--ink)', nav:()=>{setSection('hosts');setHostChip('error');}},
-    {v:critSubs.length, l:'Critical Subnets', clr:critSubs.length>0?'var(--red)':warnSubs.length>0?'var(--amber-text)':'var(--ink)', nav:()=>{setSection('ipam');setIpamChip('critical');}},
-    {v:`${peakUtil}%`, l:'Peak DHCP Util', clr:critSubs.length>0?'var(--red)':warnSubs.length>0?'var(--amber-text)':'var(--ink)', nav:()=>setSection('ipam')},
+    {v:s_hosts.length, l:'Hosts', sub:errHosts.length>0?`${errHosts.length} offline / error`:'all online', sev:errHosts.length>0?'crit':null, nav:()=>{setSection('hosts');setHostChip('error');}},
+    {v:s_subnets.length, l:'Subnets', sub:critSubs.length>0?`${critSubs.length} critical`:warnSubs.length>0?`${warnSubs.length} warning`:'within limits', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null, nav:()=>{setSection('ipam');setIpamChip('critical');}},
+    {v:zones.length, l:'DNS Zones', sub:ttlBad.length>0?`${ttlBad.length} TTL anomalies`:'nominal', sev:ttlBad.length>0?'warn':null, nav:()=>setSection('dns')},
+    {v:`${peakUtil}%`, l:'Peak DHCP Util', sub:critSubs.length>0?`${critSubs.length} over threshold`:'within threshold', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null, nav:()=>setSection('ipam')},
+    {v:firingAlerts.length, l:'Alerts', sub:firingAlerts.length>0?'firing':'clear', sev:firingAlerts.length>0?'warn':null, nav:()=>setSection('alerts')},
+    {v:feedsActive, l:'Threat Feeds', sub:'active', sev:null, nav:()=>setSection('security')},
   ];
   return (
     <div className="ov-hero" aria-label={`Network health ${healthScore} of 100, ${scoreLabel}`}>
@@ -6829,80 +6817,29 @@ function App({vault, onVaultChange}={}) {
       </div>
       <div className="ov-hero-bar"><i style={{width:`${healthScore}%`,background:scoreClr}}/></div>
       <div className="ov-hero-stats">
-        {hstats.map((h,i)=>(
-          <div key={i} className="ov-hero-stat" role="button" tabIndex={0} aria-label={`${h.l}: ${h.v}`}
+        {hstats.map((h,i)=>{
+          const clr=h.sev==='crit'?'var(--red)':h.sev==='warn'?'var(--amber-text)':'var(--ink)';
+          const subClr=h.sev==='crit'?'var(--red)':h.sev==='warn'?'var(--amber-text)':'var(--muted)';
+          return (
+          <div key={i} className="ov-hero-stat" role="button" tabIndex={0} aria-label={`${h.l}: ${h.v}, ${h.sub}`}
             onClick={h.nav} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();h.nav();}}}>
-            <span className="v" style={{color:h.clr}}>{fmtN(h.v)}</span>
+            <span className="v" style={{color:clr}}>{fmtN(h.v)}</span>
             <span className="l">{h.l}</span>
+            <span className="s" style={{color:subClr}}>{h.sub}</span>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 })()}
-            <div className="kpi-row">
-              {(()=>{
-                const _tileHist=LS.get('noc.tileHist',{});
-                const _sparkPts=(histKey)=>{
-                  const arr=(_tileHist[histKey]||[]).slice(-20);
-                  if(arr.length<2) return '0,14 160,14';
-                  const mn=Math.min(...arr), mx=Math.max(...arr);
-                  const rng=mx-mn||1;
-                  return arr.map((v,j)=>{
-                    const x=Math.round(j/(arr.length-1)*160);
-                    const y=Math.round(26-(v-mn)/rng*24);
-                    return `${x},${y}`;
-                  }).join(' ');
-                };
-                const _sparkArr=(histKey)=>(_tileHist[histKey]||[]).slice(-20);
-                const kpis=[
-                  {v:s_hosts.length.toLocaleString(), l:scopeSubnet||scopeZone?'Hosts in Scope':'Total Hosts', delta:`${errHosts.length} offline / error`, sev:errHosts.length>0?'crit':null, histKey:'Hosts', nav:'hosts',
-                    deltaAction: errHosts.length>0 ? ()=>{setSection('hosts');setHostChip('error');} : null},
-                  {v:s_subnets.length.toLocaleString(), l:scopeSubnet||scopeZone?'Subnets in Scope':'Total Subnets', delta:`${critSubs.length} critical`, sev:critSubs.length>0?'crit':null, histKey:'Subnets', nav:'ipam',
-                    deltaAction: critSubs.length>0 ? ()=>{setSection('ipam');setIpamChip('critical');} : null},
-                  {v:`${critSubs[0]?.util??warnSubs[0]?.util??0}%`, l:'Peak DHCP Util', delta:critSubs.length>0?`${critSubs.length} over threshold`:'within threshold', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null, histKey:null, nav:'ipam',
-                    deltaAction: critSubs.length>0 ? ()=>{setSection('ipam');setIpamChip('critical');} : null},
-                  {v:zones.length.toLocaleString(), l:'DNS Zones', delta:`${ttlBad.length} TTL anomalies`, sev:ttlBad.length>0?'warn':null, histKey:'DNS', nav:'dns',
-                    deltaAction: ttlBad.length>0 ? ()=>setSection('dns') : null},
-                ];
-                return kpis.map((k,i)=>{
-                  const arr=_sparkArr(k.histKey);
-                  const cursorVal=chartCursor!==null&&arr.length>1?arr[Math.round(chartCursor*(arr.length-1))]:null;
-                  return (
-                  <div key={i} className="card"
-                    role="button" tabIndex={0}
-                    onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(k.nav);}}}
-                    aria-label={`Go to ${k.l} section`}
-                    style={{display:'flex',flexDirection:'column',gap:0,position:'relative',overflow:'hidden',cursor:'pointer'}}
-                    data-tip={`Go to ${k.nav} section`}
-                    onClick={()=>setSection(k.nav)}>
-                    <svg width="100%" height="100%" viewBox="0 0 160 28" preserveAspectRatio="none"
-                      style={{position:'absolute',left:0,right:0,bottom:0,height:40,top:'auto',opacity:k.histKey?.5:0,pointerEvents:k.histKey?'auto':'none',cursor:'crosshair'}}
-                      aria-hidden="true"
-                      onMouseMove={k.histKey?e=>{const r=e.currentTarget.getBoundingClientRect();setChartCursor((e.clientX-r.left)/r.width);}:null}
-                      onMouseLeave={k.histKey?()=>setChartCursor(null):null}>
-                      {k.histKey&&<polyline points={_sparkPts(k.histKey)} fill="none"
-                        stroke={k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--teal)'}
-                        strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>}
-                      {k.histKey&&chartCursor!==null&&<line x1={chartCursor*160} y1={0} x2={chartCursor*160} y2={28}
-                        stroke="var(--teal)" strokeWidth=".75" vectorEffect="non-scaling-stroke" opacity=".7"/>}
-                    </svg>
-                    {cursorVal!==null&&(
-                      <div style={{position:'absolute',top:4,right:6,zIndex:2,fontSize:12,fontFamily:'var(--font-mono)',
-                        color:'var(--ink)',background:'var(--surface-3)',padding:'1px 4px',borderRadius:2,pointerEvents:'none'}}>
-                        {cursorVal}
-                      </div>
-                    )}
-                    <div className="kpi-val" style={{position:'relative',zIndex:1}}>{k.v}</div>
-                    <div className="kpi-lbl" style={{position:'relative',zIndex:1,marginTop:6}}>{k.l}</div>
-                    {(()=>{const dClr=k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber-text)':'var(--green-tx)';return k.deltaAction
-                      ? <div className="kpi-delta" style={{position:'relative',zIndex:1,color:dClr,cursor:'pointer',textDecoration:'underline',textDecorationStyle:'dotted'}} onClick={e=>{e.stopPropagation();k.deltaAction();}}>{`→ ${k.delta}`}</div>
-                      : <div className="kpi-delta" style={{position:'relative',zIndex:1,color:dClr}}>{`→ ${k.delta}`}</div>;})()}
-                  </div>
-                  );
-                });
-              })()}
-            </div>
+            {!hintDismissed && Object.keys(customWidgets).length===0 && (
+              <div className="builder-hint builder-hint-slim">
+                <span><b>Bloxsmith is yours to build.</b> Drag any of 15 live Infoblox sources onto this canvas — no code.</span>
+                <button className="builder-hint-cta" onClick={()=>setBuilderOpen(true)}>Build your first view</button>
+                <button className="builder-hint-x" aria-label="Dismiss" onClick={()=>{LS.set('noc.builderHintDismissed',true);setHintDismissed(true);}}>×</button>
+              </div>
+            )}
             {deltas&&Object.keys(deltas).length>0&&(
               <div className="card mb14">
                 <div className="card-title"><div className="dot" aria-hidden="true"/>Changes since last refresh</div>
