@@ -43,14 +43,15 @@ window.onerror = function(msg,src,line,col,err) {
   /* accent — Vercel blue */
   --accent:#0070f3;--teal:#0070f3;--teal-bright:#0070f3;--accent-on:#ffffff;
   /* text ramp */
-  --ink:#171717;--ink-dim:#4d4d4d;--muted:#666;
-  --gray-100:#171717;--gray-200:#666;--gray-400:#808080;--gray-500:#999;--gray-600:#b3b3b3;
+  --ink:#171717;--ink-hover:#333;--ink-dim:#4d4d4d;--muted:#666;
+  --gray-100:#171717;--gray-200:#666;--gray-400:#6e6e6e;--gray-500:#999;--gray-600:#b3b3b3;
   /* semantic status — Vercel red / amber / green */
   --red:#dc2626;--amber:#eab308;--green:#16a34a;
   --red-rgb:220,38,38;--amber-rgb:234,179,8;--green-rgb:22,163,74;
   --red-bg:rgba(220,38,38,.10);--red-border:rgba(220,38,38,.3);--red-text:#dc2626;
   --amber-bg:rgba(234,179,8,.12);--amber-border:rgba(234,179,8,.3);--amber-text:#a16207;
   --green-bg:rgba(22,163,74,.10);--green-border:rgba(22,163,74,.3);--green-text:#16a34a;
+  --green-tx:#15803d;  /* AA-accessible green for small text (~5:1 on white) */
   /* type scale */
   --fs-2xs:12px;--fs-xs:13px;--fs-sm:14px;--fs-base:16px;--fs-md:18px;--fs-lg:24px;--fs-xl:32px;--fs-2xl:50px;
   /* interaction */
@@ -71,7 +72,7 @@ window.onerror = function(msg,src,line,col,err) {
   --shadow-float:0 0 0 1px rgba(0,0,0,.08),0 2px 2px rgba(0,0,0,.04),0 8px 8px -8px rgba(0,0,0,.04),0 0 0 1px #fafafa;
   --shadow-card:none;--shadow:none;--shadow-sm:none;
   --r-card:8px;--r-ctl:6px;--r-pill:9999px;--r-status:6px;
-  --brand:#171717;--latch-bg:rgba(220,38,38,.06);--latch-border:rgba(220,38,38,.32);
+  --brand:#171717;
   /* fonts */
   --font-ui:"Geist","Geist Sans",-apple-system,"Segoe UI",Arial,sans-serif;
   --font-data:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
@@ -91,7 +92,7 @@ window.onerror = function(msg,src,line,col,err) {
      The old teal dark/light variants were removed in the Vercel reskin. */
   color-scheme:light;
 }
-body{background:var(--blue-dark);color:var(--ink);font-family:var(--font-ui);margin:0;padding-left:var(--sbw,44px);padding-top:92px;overflow-x:hidden;line-height:1.5;transition:background .2s,color .2s,padding-left .2s}
+body{background:var(--blue-dark);color:var(--ink);font-family:var(--font-ui);margin:0;padding-left:var(--sbw,44px);padding-top:92px;overflow-x:hidden;line-height:1.5;font-variant-numeric:tabular-nums;transition:background .2s,color .2s,padding-left .2s}
 body.chat-open{padding-right:340px}
 @media(max-width:760px){body.chat-open{padding-right:0}}
 .sidebar{width:224px;min-width:224px;background:var(--blue-mid);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:stretch;position:fixed;top:92px;left:0;bottom:0;height:calc(100vh - 92px);z-index:100;overflow:hidden;transition:width .2s cubic-bezier(.4,0,.2,1)}
@@ -139,8 +140,8 @@ body{padding-left:0!important}
 .sf-row:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
 .sf-ico{width:14px;text-align:center;font-size:12px;color:var(--gray-400);flex-shrink:0}
 .sf-lbl{flex:1}
-.sf-val{font-size:9px;color:var(--gray-500);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-status);padding:1px 5px;white-space:nowrap}
-.sf-hint{font-size:9px;color:var(--gray-600)}
+.sf-val{font-size:var(--fs-2xs);color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-status);padding:1px 5px;white-space:nowrap}
+.sf-hint{font-size:var(--fs-2xs);color:var(--muted)}
 .sf-sep{height:1px;background:var(--border);margin:3px 0}
 .sidebar-foot{padding:10px 0 4px;border-top:1px solid var(--border);font-size:11px;color:var(--gray-400);position:relative}
 .sf-status{padding:0 14px 8px;}
@@ -158,19 +159,12 @@ body{padding-left:0!important}
 .topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;margin-bottom:16px;padding:0 16px;height:48px;border-bottom:1px solid var(--surface-3);position:fixed;top:0;left:0;right:0;z-index:150;background:var(--surface-2)}
 /* v7 subbar + status rail */
 .subbar{position:fixed;top:48px;left:0;right:0;height:44px;z-index:149;background:var(--surface-2);border-bottom:1px solid var(--surface-3);display:flex;align-items:center;justify-content:space-between;padding:0 12px}
-/* v2 alert ticker — non-fixed, flows in normal document order right after the subbar */
-.ticker{display:flex;align-items:center;gap:0;height:26px;background:var(--surface);border-bottom:1px solid var(--border);overflow:hidden;font-size:12px}
-.ticker .flag{flex:0 0 auto;align-self:stretch;display:flex;align-items:center;padding:0 12px;background:var(--red);color:var(--bg);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em}
-.ticker .stream{display:flex;gap:26px;padding:0 16px;white-space:nowrap;overflow:hidden}
-.ticker .item{display:inline-flex;align-items:center;gap:8px;color:var(--ink-dim)}
-.ticker .item .mono{color:var(--ink);font-family:var(--font-mono)}
-.ticker .tk-dot{width:6px;height:6px;border-radius:50%}
 .dot-crit{background:var(--red)}.dot-warn{background:var(--amber)}.dot-ok{background:var(--green)}
 .subbar-filters{display:flex;align-items:center;gap:4px;flex-shrink:0}
 .ghost-chip{height:26px;padding:0 8px;display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-dim);background:transparent;border:1px solid transparent;border-radius:var(--r-ctl);cursor:pointer;font-family:var(--font-ui);transition:border-color .12s,background .12s;appearance:none;-webkit-appearance:none}
 .ghost-chip:hover{border-color:var(--border);background:var(--hover)}
 .ghost-chip b{color:var(--ink-dim);font-weight:600}
-.ghost-chip-arrow{font-size:9px;opacity:.5}
+.ghost-chip-arrow{font-size:var(--fs-2xs);opacity:.5}
 /* status rail */
 .status-rail-wrap{display:flex;align-items:center;gap:10px;padding:0 14px 0 8px;height:48px;border-left:1px solid var(--border)}
 .status-rail{width:4px;height:34px;border-radius:var(--r-status);flex-shrink:0;background:linear-gradient(to bottom,var(--red) 0%,var(--red) 40%,var(--amber) 65%,var(--green) 100%)}
@@ -179,8 +173,8 @@ body{padding-left:0!important}
 .status-cnt{display:flex;align-items:baseline;gap:4px;line-height:1.1;font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--ink-dim)}
 .status-cnt strong{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
 .status-cnt.crit strong{color:var(--red)}
-.status-cnt.warn strong{color:var(--amber)}
-.status-cnt.ok-all strong{color:var(--green)}
+.status-cnt.warn strong{color:var(--amber-text)}
+.status-cnt.ok-all strong{color:var(--green-tx)}
 /* brand org name */
 .nav-brand-org{font-size:10px;color:var(--ink-dim);line-height:1;margin-top:1px}
 .nav-brand-edit{margin-left:4px;font-size:11px;color:var(--ink-dim);opacity:0;transition:opacity .15s;}
@@ -188,8 +182,8 @@ body{padding-left:0!important}
 .nav-brand-names{display:flex;flex-direction:column;line-height:1.15}
 .page-title{font-size:15px;font-weight:700;line-height:1.15}
 .page-sub{font-size:12px;color:var(--muted);margin-top:0;margin-left:8px}
-.refresh-btn{display:flex;align-items:center;gap:8px;background:var(--ink);border:none;color:#fff;padding:8px 14px;border-radius:var(--r-ctl);cursor:pointer;font-size:12px;font-weight:600;transition:background .12s,opacity .12s}
-.refresh-btn:hover{background:#333}.refresh-btn:disabled{opacity:.5;cursor:default}
+.refresh-btn{display:flex;align-items:center;gap:8px;background:var(--ink);border:none;color:var(--accent-on);padding:8px 14px;border-radius:var(--r-ctl);cursor:pointer;font-size:12px;font-weight:600;transition:background .12s,opacity .12s}
+.refresh-btn:hover{background:var(--ink-hover)}.refresh-btn:disabled{opacity:.5;cursor:default}
 /* nav clock */
 .nav-clock{font-family:var(--font-mono);font-size:13px;color:var(--muted);letter-spacing:.05em;min-width:62px;text-align:right;margin-right:4px}
 .spin{animation:spin .8s linear infinite}
@@ -198,12 +192,12 @@ body{padding-left:0!important}
 /* ── status strip ── */
 .status-strip{position:fixed;top:0;left:0;right:0;height:32px;z-index:160;display:flex;align-items:center;gap:4px;padding:0 12px;background:var(--blue-deep);border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:11px}
 .ss-logo{display:flex;align-items:center;gap:8px;padding:0 10px 0 0;border-right:1px solid var(--border);margin-right:4px;flex-shrink:0}
-.ss-logo-mark{width:18px;height:18px;border-radius:var(--r-status);background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:#fff;flex-shrink:0}
+.ss-logo-mark{width:18px;height:18px;border-radius:var(--r-status);background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:var(--fs-2xs);font-weight:900;color:var(--accent-on);flex-shrink:0}
 .ss-logo-img{width:18px;height:18px;border-radius:var(--r-status);object-fit:contain;flex-shrink:0;background:#fff;padding:1px}
 .ss-logo-name{font-size:11px;font-weight:700;color:var(--teal);letter-spacing:.04em}
 .ss-pill{display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:var(--r-status);background:var(--surface-2);border:1px solid var(--border);color:var(--gray-200);cursor:pointer;white-space:nowrap;transition:background .12s,border-color .12s;font-size:10px;font-family:var(--font-mono)}
 .ss-pill:hover{background:var(--hover-strong);border-color:var(--teal)}
-.ss-pill .ss-lbl{color:var(--gray-400);letter-spacing:.08em;font-size:9px}
+.ss-pill .ss-lbl{color:var(--gray-400);letter-spacing:.08em;font-size:var(--fs-2xs)}
 .ss-pill .ss-cnt{font-weight:700}
 .ss-pill.crit{color:var(--sev-red-t);border-color:var(--badge-red-bd)}
 .ss-pill.warn{color:var(--sev-amber-t);border-color:var(--badge-amber-bd)}
@@ -252,14 +246,14 @@ body{padding-left:0!important}
 .ov-bento>.b-full{grid-column:1/-1}
 .ov-bento>.drag-card>.card{height:100%;box-sizing:border-box;max-height:none;overflow:auto}
 .ov-add-widget-btn{background:var(--ink);color:var(--accent-on);border:none;border-radius:6px;font-weight:600;padding:5px 12px;font-size:11px;font-family:var(--font-ui);cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background .12s;appearance:none;-webkit-appearance:none}
-.ov-add-widget-btn:hover{background:#333}
+.ov-add-widget-btn:hover{background:var(--ink-hover)}
 .ov-add-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:160px;border:1.5px dashed var(--border);background:transparent;border-radius:var(--r-card);color:var(--muted);cursor:pointer;font-family:var(--font-ui);text-align:center;padding:16px;transition:border-color .15s,color .15s}
 .ov-add-tile:hover{border-color:var(--accent);color:var(--accent)}
 .ov-add-plus{font-size:28px;line-height:1;font-weight:300}
 .ov-add-sub{font-size:11px;opacity:.75}
 .builder-hint{display:flex;align-items:center;gap:14px;padding:10px 14px;margin-bottom:12px;background:var(--surface);box-shadow:0 0 0 1px var(--border);border-radius:var(--r-card);font-size:var(--fs-sm);color:var(--ink-dim)}
 .builder-hint-cta{margin-left:auto;background:var(--ink);color:var(--accent-on);border:none;border-radius:6px;font-weight:600;padding:5px 12px;font-size:var(--fs-sm);font-family:var(--font-ui);cursor:pointer;transition:background .12s;white-space:nowrap}
-.builder-hint-cta:hover{background:#333}
+.builder-hint-cta:hover{background:var(--ink-hover)}
 .builder-hint-x{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 2px}
 .builder-hint-x:hover{color:var(--ink-dim)}
 .g2>*,.g3>*,.g4>*{min-width:0}
@@ -299,14 +293,6 @@ body{padding-left:0!important}
 /* spinner / loading */
 .spinner{width:30px;height:30px;border:3px solid var(--surface-3);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite;margin:36px auto}
 .no-data{text-align:center;padding:48px 36px;color:var(--gray-400);font-size:12px;line-height:1.6}
-/* latch strip — ATC-style critical alert bar */
-.latch-strip{height:36px;background:var(--latch-bg);border-bottom:1px solid var(--latch-border);display:flex;align-items:center;padding:0 14px;gap:0;overflow:hidden;margin-bottom:0}
-.latch-text{font-family:var(--font-mono);font-size:12px;display:flex;align-items:center;flex:1;white-space:nowrap;overflow:hidden;gap:0}
-.latch-crit{color:var(--red);margin-right:10px;font-weight:600}
-.latch-sep{color:var(--latch-border);margin:0 8px}
-.latch-label{color:var(--ink)}
-.latch-stats{color:var(--muted);margin-left:6px}
-.latch-spacer{flex:1}
 /* alert banner */
 .alert{background:var(--red-bg);border:1px solid var(--red-border);border-radius:var(--radius);padding:9px 13px;font-size:12px;color:var(--red-text);display:flex;align-items:center;gap:8px}
 /* status-tile matrix — one tile per domain, tinted by worst severity, glanceable across a room */
@@ -333,7 +319,7 @@ body{padding-left:0!important}
 .subnet-rank-row{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:var(--r-ctl);text-align:left;transition:background .12s,opacity .12s}
 .subnet-rank-row:hover{background:var(--hover)}
 .subnet-rank-row.active{background:var(--tint)}
-.sr-num{flex:0 0 16px;text-align:right;font-size:10px;color:var(--gray-500);font-variant-numeric:tabular-nums}
+.sr-num{flex:0 0 16px;text-align:right;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
 .sr-name{flex:0 0 118px;font-size:11px;color:var(--gray-200);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sr-ut{flex:0 0 72px;text-align:right;font-size:10px;color:var(--gray-400);font-family:monospace;font-variant-numeric:tabular-nums}
 .sr-bar{flex:1;height:6px;min-width:40px;background:var(--svg-track);border-radius:var(--r-status);overflow:hidden}
@@ -377,8 +363,8 @@ body{padding-left:0!important}
 .chat-row{display:flex;gap:6px;align-items:flex-end}
 .chat-in{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--ink);font-size:12px;padding:8px 11px;resize:none;font-family:inherit;max-height:90px;line-height:1.4}
 .chat-in:focus{border-color:var(--focus-border)}
-.send-b{background:var(--ink);border:none;border-radius:var(--r-ctl);color:#fff;font-size:16px;font-weight:900;padding:8px 12px;cursor:pointer;transition:background .15s;line-height:1;flex-shrink:0}
-.send-b:hover{background:#333}
+.send-b{background:var(--ink);border:none;border-radius:var(--r-ctl);color:var(--accent-on);font-size:16px;font-weight:900;padding:8px 12px;cursor:pointer;transition:background .15s;line-height:1;flex-shrink:0}
+.send-b:hover{background:var(--ink-hover)}
 .send-b:disabled{opacity:.35;cursor:default}
 .chat-toggle-btn{display:flex;align-items:center;gap:8px;background:var(--blue-deep);border:1px solid var(--border);color:var(--gray-200);padding:8px 12px;border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600;margin-left:8px;transition:background .12s,border-color .12s,color .12s}
 .chat-toggle-btn:hover,.chat-toggle-btn.on{border-color:var(--teal);color:var(--teal);background:var(--hover-strong)}
@@ -412,39 +398,10 @@ body{padding-left:0!important}
 .n-more:hover{color:var(--teal)}
 /* v5 incident commander two-column layout */
 .noc-layout{display:flex;gap:0}
-.alert-col{width:300px;max-width:300px;min-width:300px;flex:0 0 300px;background:var(--surface);border-right:none;box-shadow:1px 0 0 var(--border);display:flex;flex-direction:column}
-.alert-col:empty,.alert-col.is-empty{display:none}
-/* desktop-collapsible: when hidden the whole rail folds to 0 and the grid reclaims it */
-.alert-col.collapsed-mobile{width:0;max-width:0;min-width:0;flex-basis:0;box-shadow:none;overflow:hidden;pointer-events:none}
-.incidents-reopen{position:sticky;top:0;align-self:flex-start;margin:14px 0 0 14px;display:inline-flex;align-items:center;gap:7px;background:var(--surface);box-shadow:0 0 0 1px var(--border);color:var(--ink);font-size:var(--fs-sm);font-weight:600;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;z-index:50}
-.incidents-reopen:hover{box-shadow:0 0 0 1px var(--accent);color:var(--accent)}
-.incidents-reopen .ir-count{background:var(--red);color:#fff;font-family:var(--font-mono);font-size:var(--fs-2xs);font-weight:700;padding:0 6px;border-radius:9999px}
-.alert-col-header{padding:12px 14px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
-.alert-col-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:.01em}
-.alert-col-count{background:var(--danger-bg);color:var(--danger);border:1px solid rgba(248,113,113,.35);font-size:11px;font-weight:600;padding:1px 6px;border-radius:var(--r-pill)}
-.alert-col-empty{padding:32px 14px;text-align:center;color:var(--muted);font-size:12px}
 .content-col{flex:1;min-width:0;padding:0 20px 40px;overflow:visible}
-/* alert col: restyle latch-strip as incident card */
-.alert-col .latch-strip{margin:10px 10px 0;border:1px solid rgba(248,113,113,.35);border-radius:var(--r-ctl);height:auto;padding:12px;background:var(--danger-bg)}
-.alert-col .latch-text{flex-direction:column;gap:4px;align-items:flex-start}
-.alert-col .latch-spacer{display:none}
-/* alert col: restyle notice-rail as incident card list */
-.alert-col .notice-rail{display:flex;flex-direction:column;gap:8px;padding:10px;margin-bottom:0}
-.alert-col .notice{display:flex;flex-direction:column;align-items:flex-start;gap:6px;border-radius:var(--r-ctl);padding:12px;border:1px solid var(--border);animation:none;cursor:default}
-.alert-col .notice .n-ico{display:none}
-.alert-col .notice .n-acts{display:flex;gap:6px;flex-wrap:wrap}
-.alert-col .notice.n-red{background:var(--danger-bg);border-color:rgba(248,113,113,.25)}
-.alert-col .notice.n-amber{background:var(--warning-bg);border-color:rgba(251,191,36,.25)}
-.alert-col .notice.n-info{background:var(--info-bg);border-color:rgba(102,148,255,.25)}
-.alert-col-mobile-toggle{display:none;align-items:center;gap:6px;margin-left:auto;background:none;border:1px solid var(--border);color:var(--muted);border-radius:var(--r-ctl);font-size:11px;padding:3px 8px;cursor:pointer;font-family:inherit}
-.alert-col-mobile-toggle:hover{border-color:var(--teal);color:var(--teal)}
 @media(max-width:760px){
   .noc-layout{flex-direction:column}
-  .alert-col{width:100%;flex:0 0 auto;border-right:none;border-bottom:1px solid var(--border);max-height:42vh;overflow-y:auto}
-  .alert-col.collapsed-mobile .latch-strip,.alert-col.collapsed-mobile .notice-rail,.alert-col.collapsed-mobile .alert-col-empty{display:none}
-  .alert-col.collapsed-mobile{max-height:none}
-  .content-col{padding:0 14px 40px}
-  .alert-col-mobile-toggle{display:flex}
+  .content-col{padding:0 16px 40px}
 }
 .thinking{display:flex;gap:4px;align-items:center;padding:4px 2px}
 .t-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:tbounce .9s ease-in-out infinite}
@@ -517,7 +474,7 @@ body{padding-left:0!important}
 .acct-pill{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-ctl);padding:4px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:1px;transition:border-color .12s,color .12s;flex-shrink:0}
 .acct-pill:hover:not(:disabled){border-color:var(--teal)}
 .acct-pill:disabled{opacity:.5;cursor:default}
-.acct-pill-cap{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--gray-500);font-weight:600;line-height:1.2}
+.acct-pill-cap{font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;line-height:1.2}
 .acct-pill-name{font-size:12px;font-weight:600;color:var(--gray-200);line-height:1.2;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acct-pill:hover:not(:disabled) .acct-pill-cap,.acct-pill:hover:not(:disabled) .acct-pill-name{color:var(--teal)}
 .acct-menu.down{top:calc(100% + 6px);bottom:auto;left:auto;right:0;margin-bottom:0;margin-top:0;position:absolute;min-width:220px}
@@ -525,12 +482,12 @@ body{padding-left:0!important}
 .ctx-panel{margin-top:10px;display:flex;flex-direction:column;gap:8px}
 .ctx-block{position:relative}
 .ctx-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
-.ctx-cap{font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--gray-500);font-weight:600}
+.ctx-cap{font-size:var(--fs-2xs);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .ctx-val{font-size:12px;font-weight:600;color:var(--gray-200);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .ctx-swap{background:none;border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--gray-400);cursor:pointer;font-size:11px;line-height:1;padding:3px 6px;transition:background .12s,border-color .12s,color .12s;flex-shrink:0}
 .ctx-swap:hover:not(:disabled){color:var(--teal);border-color:var(--teal);background:var(--hover-strong)}
 .ctx-swap:disabled{opacity:.5;cursor:default}
-.ver-badge{margin-left:auto;font-size:9px;font-weight:600;color:var(--gray-500);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-ctl);padding:1px 5px;letter-spacing:.02em;cursor:pointer}
+.ver-badge{margin-left:auto;font-size:var(--fs-2xs);font-weight:600;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-ctl);padding:1px 5px;letter-spacing:.02em;cursor:pointer}
 .ver-badge:hover{border-color:var(--gray-600);color:var(--gray-200)}
 .tenant-confirm{display:flex;align-items:center;gap:6px;padding:5px 8px 5px 10px;border-radius:var(--r-ctl);background:var(--red-bg);border:1px solid var(--red-border)}
 .tenant-confirm-q{flex:1;font-size:11px;color:var(--sev-red-t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -539,7 +496,7 @@ body{padding-left:0!important}
 .tenant-confirm-no{color:var(--gray-400)}
 .tenant-confirm-yes:hover{color:var(--red)}
 .tenant-confirm-no:hover{color:var(--gray-200)}
-.tenant-mini{background:none;border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--gray-400);font-size:9px;font-weight:600;padding:2px 6px;cursor:pointer;flex-shrink:0}
+.tenant-mini{background:none;border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--gray-400);font-size:var(--fs-2xs);font-weight:600;padding:2px 6px;cursor:pointer;flex-shrink:0}
 .tenant-mini:hover{background:var(--hover-strong);border-color:var(--teal);color:var(--teal-bright)}
 /* manage/AI menu items with an inline description */
 .menu-item{display:block;width:100%;text-align:left;background:none;border:none;padding:6px 10px;border-radius:var(--r-ctl);cursor:pointer}
@@ -547,9 +504,9 @@ body{padding-left:0!important}
 .menu-item:hover .menu-lbl{color:var(--teal-bright)}
 .menu-item:disabled{opacity:.6;cursor:default}
 .menu-lbl{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-200)}
-.menu-desc{display:block;font-size:9px;color:var(--gray-500);margin-top:1px;line-height:1.4}
+.menu-desc{display:block;font-size:var(--fs-2xs);color:var(--muted);margin-top:1px;line-height:1.4}
 .acct-sec-divider{height:1px;background:var(--border);margin:4px 0}
-.acct-sec-label{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--gray-500);font-weight:600;padding:4px 10px 2px}
+.acct-sec-label{font-size:var(--fs-2xs);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:4px 10px 2px}
 /* ── new features ── */
 .refresh-countdown{font-size:11px;color:var(--gray-400);margin-left:4px}
 .refresh-pause{background:var(--surface);border:1px solid var(--border);color:var(--gray-200);font-size:10px;line-height:1;border-radius:var(--r-ctl);padding:3px 6px;margin-left:6px;cursor:pointer}
@@ -565,7 +522,7 @@ body{padding-left:0!important}
 .copy-btn{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:10px;padding:0 3px;opacity:0;transition:opacity .15s;line-height:1}
 .copy-btn:focus-visible{opacity:1}
 tr:hover .copy-btn{opacity:1}
-.copy-btn.done{color:var(--green)}
+.copy-btn.done{color:var(--green-tx)}
 .badge-pill{display:inline-block;background:rgba(var(--red-rgb),.2);color:var(--sev-red-t);border-radius:var(--r-pill);padding:1px 6px;font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle}
 .badge-pill-amber{background:rgba(var(--amber-rgb),.2);color:var(--sev-amber-t)}
 .row-limit-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;justify-content:flex-end}
@@ -587,12 +544,12 @@ tr:hover .copy-btn{opacity:1}
 .fs-close:hover{color:var(--teal);border-color:var(--teal)}
 /* ── hide-chrome mode (comfort 4) ── */
 body.chrome-hidden{padding-top:0}
-body.chrome-hidden .topbar,body.chrome-hidden .subbar,body.chrome-hidden .ticker{display:none}
+body.chrome-hidden .topbar,body.chrome-hidden .subbar{display:none}
 body.chrome-hidden .sidebar{top:0;height:100vh}
 .show-chrome-fab{position:fixed;top:8px;right:12px;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--gray-400);font-size:11px;padding:5px 10px;cursor:pointer;box-shadow:var(--shadow-float);display:inline-flex;align-items:center;gap:6px}
 .show-chrome-fab:hover{color:var(--teal);border-color:var(--teal)}
 .drag-over{outline:2px dashed rgba(214,210,203,.45);outline-offset:4px;border-radius:var(--r-card);background:rgba(214,210,203,.04)}
-.drag-handle{cursor:grab;color:var(--gray-600);font-size:13px;line-height:1;padding:0 4px;user-select:none;flex-shrink:0;transition:color .12s,opacity .12s;opacity:.65}
+.drag-handle{cursor:grab;color:var(--muted);font-size:13px;line-height:1;padding:0 4px;user-select:none;flex-shrink:0;transition:color .12s,opacity .12s;opacity:.65}
 .drag-handle:hover{color:var(--teal);opacity:1}
 .drag-handle:active{cursor:grabbing}
 .viz-sel{background:var(--surface);border:1px solid var(--border);color:var(--gray-200);font-size:10px;border-radius:var(--r-ctl);padding:2px 5px;cursor:pointer;outline:none;flex-shrink:0}
@@ -608,8 +565,8 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .lookup-input-row{display:flex;gap:8px;margin-bottom:18px}
 .lookup-in{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--ink);font-size:12px;padding:8px 12px}
 .lookup-in:focus{border-color:var(--focus-border)}
-.lookup-btn{background:var(--ink);border:none;border-radius:var(--r-ctl);color:#fff;font-size:12px;font-weight:700;padding:8px 16px;cursor:pointer;transition:background .12s}
-.lookup-btn:hover{background:#333}
+.lookup-btn{background:var(--ink);border:none;border-radius:var(--r-ctl);color:var(--accent-on);font-size:12px;font-weight:700;padding:8px 16px;cursor:pointer;transition:background .12s}
+.lookup-btn:hover{background:var(--ink-hover)}
 .lookup-btn:disabled{opacity:.45;cursor:default}
 .block-btn{background:rgba(var(--red-rgb),.15);border:1px solid rgba(var(--red-rgb),.35);border-radius:var(--r-ctl);color:var(--sev-red-t);font-size:10px;font-weight:700;padding:3px 9px;cursor:pointer;margin-top:6px}
 .block-btn:hover{background:rgba(var(--red-rgb),.3)}
@@ -618,7 +575,7 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .sev-card{border-radius:var(--r-card);padding:14px;text-align:center;border:1px solid}
 .sort-th{cursor:pointer;user-select:none}
 .sort-th:hover{color:var(--teal-bright)}
-.sort-ind{margin-left:4px;opacity:.5;font-size:9px}
+.sort-ind{margin-left:4px;opacity:.5;font-size:var(--fs-2xs)}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{transition-duration:.01ms!important}
   .pulse,.t-dot{animation:none}
@@ -648,14 +605,14 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .vault-card label{display:block;font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 5px}
 .vault-in{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--ink);font-size:13px;padding:10px 12px;outline:none;font-family:inherit}
 .vault-in:focus{border-color:var(--focus-border)}
-.vault-btn{width:100%;background:var(--ink);border:none;border-radius:var(--r-ctl);color:#fff;font-size:13px;font-weight:700;padding:11px;cursor:pointer;margin-top:18px;transition:background .15s,transform .08s}
+.vault-btn{width:100%;background:var(--ink);border:none;border-radius:var(--r-ctl);color:var(--accent-on);font-size:13px;font-weight:700;padding:11px;cursor:pointer;margin-top:18px;transition:background .15s,transform .08s}
 .vault-btn:active{transform:scale(.98)}
-.vault-btn:hover{background:#333}
+.vault-btn:hover{background:var(--ink-hover)}
 .vault-btn:disabled{opacity:.45;cursor:default}
 .vault-err{color:var(--sev-red-t);font-size:12px;margin-top:10px}
 .vault-logo{font-size:13px;font-weight:700;color:var(--teal);letter-spacing:.06em;margin-bottom:18px}
 .tenant-row{display:flex;align-items:center;gap:6px;width:100%}
-.tenant-rm{background:none;border:none;color:var(--gray-600);cursor:pointer;font-size:11px;padding:0 3px}
+.tenant-rm{background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 3px}
 .tenant-rm:hover{color:var(--red)}
 /* theme toggle */
 .theme-btn{display:flex;align-items:center;justify-content:center;background:var(--blue-deep);border:1px solid var(--border);color:var(--gray-200);border-radius:var(--r-ctl);cursor:pointer;font-size:14px;padding:8px 10px;margin-left:6px;transition:background .12s,border-color .12s,color .12s;line-height:1}
@@ -665,22 +622,22 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .topbar-tab{display:inline-flex;align-items:center;gap:5px;padding:0 12px;border:none;background:none;color:var(--gray-400);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;height:48px;transition:color .12s,border-color .12s;position:relative}
 .topbar-tab:hover{color:var(--teal)}
 .topbar-tab.active{color:var(--ink);font-weight:600;border-bottom-color:var(--teal)}
-.topbar-tab .badge-pill{font-size:9px;padding:1px 5px}
+.topbar-tab .badge-pill{font-size:var(--fs-2xs);padding:1px 5px}
 /* topbar grouping: primary actions | utility cluster */
 .topbar-center{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 12px}
 .topbar-chip{display:inline-flex;align-items:center;gap:5px;padding:0 9px;height:24px;border-radius:var(--r-status);font-size:10px;font-weight:700;letter-spacing:.07em;white-space:nowrap;font-family:var(--font-mono)}
 .topbar-chip-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
 .chip-crit{background:var(--red-bg);border:1px solid var(--red-border);color:var(--red)}
 .chip-crit .topbar-chip-dot{background:var(--red)}
-.chip-warn{background:var(--amber-bg);border:1px solid var(--amber-border);color:var(--amber)}
+.chip-warn{background:var(--amber-bg);border:1px solid var(--amber-border);color:var(--amber-text)}
 .chip-warn .topbar-chip-dot{background:var(--amber)}
-.chip-ok{background:var(--green-bg);border:1px solid var(--green-border);color:var(--green)}
+.chip-ok{background:var(--green-bg);border:1px solid var(--green-border);color:var(--green-tx)}
 .chip-ok .topbar-chip-dot{background:var(--green);animation:none}
 [data-theme=light] .chip-crit{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}
 [data-theme=light] .chip-crit .topbar-chip-dot{background:var(--red)}
-[data-theme=light] .chip-warn{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber)}
+[data-theme=light] .chip-warn{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber-text)}
 [data-theme=light] .chip-warn .topbar-chip-dot{background:var(--amber)}
-[data-theme=light] .chip-ok{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+[data-theme=light] .chip-ok{background:var(--green-bg);border-color:var(--green-border);color:var(--green-tx)}
 [data-theme=light] .chip-ok .topbar-chip-dot{background:var(--green)}
 .topbar-controls{display:flex;align-items:center;gap:12px;flex-wrap:nowrap;justify-content:flex-end;flex-shrink:0}
 .topbar-group{display:flex;align-items:center;gap:6px}
@@ -700,7 +657,7 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .col-row.col-hidden{opacity:.5}
 .col-row input[type=checkbox]{accent-color:var(--teal);cursor:pointer;width:13px;height:13px;flex-shrink:0}
 .col-row.col-dragging{opacity:.4}
-.col-grip{cursor:grab;color:var(--gray-600);font-size:11px;flex-shrink:0;user-select:none}
+.col-grip{cursor:grab;color:var(--muted);font-size:11px;flex-shrink:0;user-select:none}
 .col-grip:active{cursor:grabbing}
 /* ── command palette ── */
 .cmdk-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;animation:cmkdOverlayIn .15s ease}
@@ -709,21 +666,21 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .cmdk-list{max-height:50vh;overflow-y:auto;padding:6px}
 .cmdk-item{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:var(--r-ctl);cursor:pointer;font-size:13px;color:var(--gray-200)}
 .cmdk-item .cmdk-icon{width:18px;text-align:center;color:var(--gray-400)}
-.cmdk-item .cmdk-hint{margin-left:auto;font-size:10px;color:var(--gray-600);text-transform:uppercase;letter-spacing:.08em}
+.cmdk-item .cmdk-hint{margin-left:auto;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .cmdk-item.sel{background:var(--tint);color:var(--teal)}
 .cmdk-item.sel .cmdk-icon{color:var(--teal)}
 .cmdk-empty{padding:20px;text-align:center;color:var(--gray-400);font-size:12px}
-.cmdk-foot{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--border);font-size:10px;color:var(--gray-600)}
+.cmdk-foot{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--border);font-size:10px;color:var(--muted)}
 /* ── freshness pill ── */
 .fresh-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--gray-400);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-pill);padding:2px 9px;margin-left:8px;white-space:nowrap}
 .fresh-dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
 .fresh-stale .fresh-dot{background:var(--amber)}
 /* ── trace timeline (LLM tool calls) ── */
 .trace-tl{margin:3px 0 8px;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-ctl)}
-.trace-hd{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:5px}
+.trace-hd{font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.1em;color:var(--gray-400);margin-bottom:5px}
 .trace-step{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--gray-200);padding:1px 0}
 .trace-step .trace-tool{font-family:monospace;color:var(--teal)}
-.trace-step .trace-n{width:15px;height:15px;border-radius:50%;background:var(--surface-3);color:var(--gray-400);font-size:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.trace-step .trace-n{width:15px;height:15px;border-radius:50%;background:var(--surface-3);color:var(--gray-400);font-size:var(--fs-2xs);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 /* ── toasts ── */
 .toasts{position:fixed;bottom:16px;right:16px;z-index:650;display:flex;flex-direction:column;gap:8px;max-width:340px}
 .toast{display:flex;align-items:flex-start;gap:9px;background:var(--surface);border:none;border-radius:var(--r-card);padding:10px 13px;box-shadow:var(--shadow-float);font-size:12px;color:var(--gray-200);animation:toastIn .2s cubic-bezier(.2,.8,.2,1)}
@@ -753,7 +710,7 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .ver-badge.updating{color:var(--sev-amber-t);background:var(--badge-amber-bg);border-color:var(--badge-amber-bd);display:inline-flex;align-items:center;gap:4px;padding:3px 8px;white-space:nowrap;max-width:none;cursor:default}
 .ver-badge.updating .upd-spin{border:2px solid rgba(var(--amber-rgb),.25);border-top-color:var(--amber);width:10px;height:10px;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
 .ver-badge.upd-done{color:var(--sev-green-t);background:var(--badge-green-bg);border-color:var(--badge-green-bd);display:inline-flex;align-items:center;gap:4px;padding:3px 8px;white-space:nowrap;cursor:default}
-.ver-upd-elapsed{font-size:9px;color:rgba(var(--amber-rgb),.7);font-variant-numeric:tabular-nums;flex-shrink:0}
+.ver-upd-elapsed{font-size:var(--fs-2xs);color:rgba(var(--amber-rgb),.7);font-variant-numeric:tabular-nums;flex-shrink:0}
 /* ── panel error state ── */
 .panel-error{text-align:center;padding:40px 24px;color:var(--gray-400);font-size:12px;line-height:1.6}
 .panel-error .retry-btn{margin-top:12px;background:var(--blue-deep);border:1px solid var(--teal);color:var(--teal);border-radius:var(--r-ctl);padding:6px 16px;font-size:12px;font-weight:600;cursor:pointer}
@@ -796,7 +753,7 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 /* clearer drag drop indicator */
 .drag-card.drag-over{outline:2px dashed var(--teal);outline-offset:4px;border-radius:var(--r-card);background:var(--hover)}
 .col-row .col-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
-.col-iconbtn{background:none;border:none;color:var(--gray-600);cursor:pointer;font-size:11px;padding:1px 3px;line-height:1;border-radius:var(--r-status);flex-shrink:0}
+.col-iconbtn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:1px 3px;line-height:1;border-radius:var(--r-status);flex-shrink:0}
 .col-iconbtn:hover{color:var(--teal);background:var(--hover-strong)}
 .col-iconbtn:disabled{opacity:.25;cursor:default}
 .col-iconbtn.on{color:var(--teal)}
@@ -833,7 +790,7 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .nav-bell{position:relative;display:inline-flex;align-items:center;justify-content:center;width:32px;height:28px;background:none;border:none;color:var(--muted);cursor:pointer;border-radius:var(--r-ctl);transition:color .12s,background .12s;margin:0 2px}
 .nav-bell:hover{color:var(--ink);background:var(--hover)}
 .nav-bell.has-inc{color:var(--red)}
-.nav-bell-badge{position:absolute;top:-1px;right:-2px;min-width:16px;height:16px;padding:0 4px;background:var(--red);color:#fff;font-family:var(--font-mono);font-size:10px;font-weight:700;line-height:16px;text-align:center;border-radius:9999px;box-sizing:border-box}
+.nav-bell-badge{position:absolute;top:-1px;right:-2px;min-width:16px;height:16px;padding:0 4px;background:var(--red);color:var(--accent-on);font-family:var(--font-mono);font-size:10px;font-weight:700;line-height:16px;text-align:center;border-radius:9999px;box-sizing:border-box}
 .inc-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:11px 4px;cursor:pointer;font-family:inherit;transition:background .12s}
 .inc-item:hover{background:var(--hover)}
 .inc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--muted)}
@@ -852,7 +809,7 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .wiz-list{padding:8px 10px}
 .wiz-row{display:flex;align-items:center;gap:10px;padding:8px 8px;border-bottom:1px solid var(--border)}
 .wiz-ord{display:flex;flex-direction:column;gap:1px}
-.wiz-ordbtn{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:9px;line-height:1;padding:1px}
+.wiz-ordbtn{background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:var(--fs-2xs);line-height:1;padding:1px}
 .wiz-ordbtn:disabled{opacity:.25;cursor:default}
 .wiz-ordbtn:hover:not(:disabled){color:var(--teal)}
 .wiz-nav-icon{color:var(--gray-400);width:18px;display:flex;align-items:center;justify-content:center}
@@ -861,8 +818,8 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .wiz-vis.on{color:var(--sev-green-t);border-color:var(--green);background:rgba(var(--green-rgb),.10)}
 .wiz-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)}
 .wiz-skip{background:none;border:1px solid var(--border);color:var(--gray-400);border-radius:var(--r-ctl);padding:6px 14px;font-size:12px;cursor:pointer}
-.wiz-done{background:var(--ink);border:none;color:#fff;border-radius:var(--r-ctl);padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer;transition:background .12s}
-.wiz-done:hover{background:#333}
+.wiz-done{background:var(--ink);border:none;color:var(--accent-on);border-radius:var(--r-ctl);padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer;transition:background .12s}
+.wiz-done:hover{background:var(--ink-hover)}
 .wiz-done:disabled{background:var(--surface-3);color:var(--gray-400);cursor:not-allowed}
 /* ─── no-code widget builder ─── */
 .builder-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(880px,94vw);max-height:88vh;background:var(--surface-2);border:none;border-radius:var(--r-card);z-index:121;box-shadow:var(--shadow-float);animation:wizardIn .22s cubic-bezier(.16,1,.3,1) both;display:grid;grid-template-columns:380px 1fr;grid-template-rows:auto 1fr auto;overflow:hidden}
@@ -889,13 +846,13 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .help-chapter.help-hidden{display:none}
 .help-watermark{position:absolute;top:32px;left:20px;font-size:64px;font-weight:100;color:var(--hover);font-family:var(--font-mono);line-height:1;pointer-events:none;user-select:none;letter-spacing:-0.04em}
 .help-chapter-label{display:flex;align-items:baseline;gap:12px;margin-bottom:48px}
-.help-section-name{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:var(--amber);font-family:var(--font-mono)}
+.help-section-name{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:var(--amber-text);font-family:var(--font-mono)}
 .help-section-count{font-size:11px;color:var(--muted);font-family:var(--font-mono)}
 .help-feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px 56px}
 .help-feature-pair{display:contents}
 .help-feature-pair.help-hidden .help-feature-left,.help-feature-pair.help-hidden .help-feature-right{display:none}
 .help-feature-name{font-size:17px;font-weight:500;color:var(--teal);font-family:var(--font-mono);line-height:1.3;margin-bottom:6px}
-.help-feature-tag{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:var(--muted);font-family:var(--font-mono)}
+.help-feature-tag{font-size:var(--fs-2xs);font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:var(--muted);font-family:var(--font-mono)}
 .help-eli5{font-size:13px;color:var(--ink);line-height:1.65;margin-bottom:10px}
 .help-steps{list-style:none;padding:0;counter-reset:hsteps}
 .help-steps li{counter-increment:hsteps;display:flex;gap:10px;font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-bottom:3px;line-height:1.5}
@@ -1380,7 +1337,7 @@ function TTLTable({zones, onDrill}) {
     {key:'view',label:'View',width:'12%',render:z=><span className="badge b-teal">{z.view}</span>},
     {key:'ttl',label:'TTL',mono:true,size:11,width:'11%',sortVal:z=>z.ttl,render:z=><span style={{color:z.ttl<60||z.ttl>86400?'var(--sev-red-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.ttl}s</span>},
     {key:'neg_ttl',label:'Neg TTL',mono:true,size:11,width:'11%',sortVal:z=>z.neg_ttl,render:z=><span style={{color:z.neg_ttl>3600?'var(--sev-amber-t)':'var(--gray-200)',fontVariantNumeric:'tabular-nums'}}>{z.neg_ttl}s</span>},
-    {key:'records',label:'Records',mono:true,size:11,width:'10%',sortVal:z=>z.records||0,render:z=><span style={{fontFamily:'var(--font-mono)',color:z.records===0?'var(--amber)':'var(--ink)'}}>{(z.records||0).toLocaleString()}</span>},
+    {key:'records',label:'Records',mono:true,size:11,width:'10%',sortVal:z=>z.records||0,render:z=><span style={{fontFamily:'var(--font-mono)',color:z.records===0?'var(--amber-text)':'var(--ink)'}}>{(z.records||0).toLocaleString()}</span>},
     {key:'issues',label:'Issues',nosort:true,width:'29%',render:z=>z.issues.map((iss,i)=>(<span key={i} className={`badge ${iss.includes('High')||iss.includes('Too High')?'b-amber':'b-red'}`} style={{marginRight:3}}>{iss}</span>))},
   ]);
   if(!bad.length) return <div className="no-data">✓ No TTL anomalies detected</div>;
@@ -1473,7 +1430,7 @@ function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
           onClick={()=>downloadCSV('security-policies',[...realPolicies,...testPolicies].map(p=>({name:p.name,action:p.action,rules:p.rules,active:p.active,created:p.created})),Object.keys({name:'',action:'',rules:'',active:'',created:''}))}>CSV</button>
       </div>
       <div style={{display:'flex',gap:12,marginBottom:14}}>
-        {[{v:activeCt,l:'Active Policies',c:'var(--teal)'},{v:totalRules,l:'Total Rules',c:'var(--amber)'}].map((x,i)=>(
+        {[{v:activeCt,l:'Active Policies',c:'var(--teal)'},{v:totalRules,l:'Total Rules',c:'var(--amber-text)'}].map((x,i)=>(
           <div key={i} className="card" style={{flex:1,textAlign:'center',padding:14}}>
             <div style={{fontSize:28,fontWeight:800,color:x.c}}>{x.v}</div>
             <div style={{fontSize:10,color:'var(--gray-400)',marginTop:3,textTransform:'uppercase',letterSpacing:'.1em'}}>{x.l}</div>
@@ -1497,7 +1454,7 @@ function PoliciesPanel({policies, diff={}, demoMode, onDrill}) {
               <div style={{fontSize:12,fontWeight:500,color:'var(--gray-400)'}}>
                 {testExpanded?'▼':'▶'} {testPolicies.length} test / allow-all {testPolicies.length>1?'policies':'policy'} (collapsed)
               </div>
-              <div style={{fontSize:10,color:'var(--gray-600)',marginTop:2}}>Click to {testExpanded?'collapse':'expand'}</div>
+              <div style={{fontSize:10,color:'var(--muted)',marginTop:2}}>Click to {testExpanded?'collapse':'expand'}</div>
             </div>
           </div>
           {testExpanded&&testPolicies.slice(0,20).map(renderPol)}
@@ -1695,7 +1652,7 @@ function ColumnMenu({ctl}){
                 <span className="col-grip" title="Drag to reorder" aria-hidden="true">⠿</span>
                 <input type="checkbox" checked={!hid} disabled={c.fixed||(!hid&&ctl.shownCount<=1)}
                   id={cid} onChange={()=>ctl.toggleHidden(c.key)}/>
-                <label className="col-lbl" htmlFor={cid}>{c.label}{c.fixed&&<span style={{color:'var(--gray-600)',fontSize:9}}> · fixed</span>}</label>
+                <label className="col-lbl" htmlFor={cid}>{c.label}{c.fixed&&<span style={{color:'var(--muted)',fontSize:9}}> · fixed</span>}</label>
                 <button className="col-iconbtn" title="Move up" disabled={i===0} onClick={()=>ctl.move(c.key,-1)} aria-label="Move up">↑</button>
                 <button className="col-iconbtn" title="Move down" disabled={i===ctl.allCols.length-1} onClick={()=>ctl.move(c.key,1)} aria-label="Move down">↓</button>
                 <button className={`col-iconbtn${ctl.expanded[c.key]?' on':''}`} title="Expand field (no truncation)" aria-pressed={!!ctl.expanded[c.key]}
@@ -1899,7 +1856,7 @@ function AcctPill({accounts=[], activeAcct, switchAcct, switchingAcct, vault={},
   const handleSwitchAcct = id => { close(); switchAcct && switchAcct(id); };
   const handleManageKeys = () => { close(); onManageKeys && onManageKeys(); };
   const keyedStyle = {borderLeft:'2px solid var(--teal)',paddingLeft:'8px',borderRadius:'0 4px 4px 0'};
-  const grayStyle  = {borderLeft:'2px solid var(--border)',paddingLeft:'8px',borderRadius:'0 4px 4px 0',color:'var(--gray-500)',cursor:'default'};
+  const grayStyle  = {borderLeft:'2px solid var(--border)',paddingLeft:'8px',borderRadius:'0 4px 4px 0',color:'var(--muted)',cursor:'default'};
   return (
     <div style={{position:'relative',flexShrink:0}}>
       {adding && <VaultAddTenant onDone={()=>{setAdding(false);setOpen(false);window.location.reload();}} onCancel={()=>setAdding(false)}/>}
@@ -2197,29 +2154,41 @@ function PanelError({onRetry, what='data'}){
 }
 
 let _lgSeq = 0;
-function MiniLineChart({data, valueKey, labelKey, color='var(--teal)', height=90}) {
+function MiniLineChart({data, valueKey, labelKey, color='var(--teal)', height=90, unit=''}) {
   const gid = React.useMemo(()=>'lg'+(++_lgSeq),[]);
   const [tip,setTip] = useState(null);
   if(!data||!data.length) return <div className="no-data">No data</div>;
   const vals = data.map(d=>Number(d[valueKey])||0);
   const max = Math.max(...vals,1);
-  const W=420, H=height, pad=8;
-  const pts = vals.map((v,i)=>({
-    x: pad + i*(W-2*pad)/(vals.length-1||1),
-    y: H - pad - (v/max)*(H-2*pad)
-  }));
+  const W=420, H=height, pad=8, axisW=42;   // axisW: left gutter reserved for Y tick labels
+  const x0=axisW, x1=W-pad, plotW=x1-x0, plotH=H-2*pad;
+  const uSuf=unit?' '+unit:'';
+  const fmt=v=>v.toLocaleString(undefined,{maximumFractionDigits:1});
+  const ticks=[max, max/2, 0];   // explicit zero baseline at the bottom
+  const yFor=v=>H-pad-(v/max)*plotH;
+  const pts = vals.map((v,i)=>({ x: x0 + i*plotW/(vals.length-1||1), y: yFor(v) }));
   const line = pts.map((p,i)=>`${i?'L':'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const area = line + ` L${pts[pts.length-1].x.toFixed(1)},${H} L${pts[0].x.toFixed(1)},${H} Z`;
+  const area = line + ` L${pts[pts.length-1].x.toFixed(1)},${H-pad} L${pts[0].x.toFixed(1)},${H-pad} Z`;
   const labels = data.map(d=>(d[labelKey]||'').toString().slice(0,10));
   return (
     <div style={{position:'relative'}}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:'block'}} role="img" aria-label={`Trend chart over ${data.length} data points`}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:'block'}} role="img"
+        aria-label={`Trend line over ${data.length} points, peak ${fmt(max)}${uSuf}, baseline 0`}>
         <defs>
           <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.25"/>
             <stop offset="100%" stopColor={color} stopOpacity="0.02"/>
           </linearGradient>
         </defs>
+        {ticks.map((t,i)=>{
+          const gy=yFor(t);
+          return (<g key={i}>
+            <line x1={x0} y1={gy} x2={x1} y2={gy} stroke="var(--border)"
+              strokeWidth={i===2?1:0.5} strokeDasharray={i===2?'':'2 3'}/>
+            <text x={x0-5} y={gy} textAnchor="end" dominantBaseline="central"
+              fontSize={8} fill="var(--muted)" fontFamily="var(--font-mono)">{fmt(t)}</text>
+          </g>);
+        })}
         <path d={area} fill={`url(#${gid})`}/>
         <path d={line} fill="none" stroke={color} strokeWidth="1.8"/>
         {pts.map((p,i)=>(
@@ -2228,34 +2197,47 @@ function MiniLineChart({data, valueKey, labelKey, color='var(--teal)', height=90
         ))}
         {tip!=null&&(
           <g>
-            <rect x={Math.min(pts[tip].x-38,W-80)} y={pts[tip].y-30} width={78} height={24} rx={4}
+            <rect x={Math.min(Math.max(pts[tip].x-42,x0),W-88)} y={pts[tip].y-30} width={86} height={24} rx={4}
               fill="var(--blue-mid)" stroke="var(--border)" strokeWidth={1}/>
-            <text x={Math.min(pts[tip].x-38,W-80)+39} y={pts[tip].y-14} textAnchor="middle"
-              fill={color} fontSize={10} fontWeight={700}>{vals[tip].toLocaleString()}</text>
+            <text x={Math.min(Math.max(pts[tip].x-42,x0),W-88)+43} y={pts[tip].y-14} textAnchor="middle"
+              fill={color} fontSize={10} fontWeight={700}>{fmt(vals[tip])}{uSuf}</text>
           </g>
         )}
       </svg>
-      <div style={{display:'flex',justifyContent:'space-between',marginTop:2}}>
+      <div style={{display:'flex',justifyContent:'space-between',marginTop:2,paddingLeft:`${axisW/W*100}%`}}>
         {labels.map((l,i)=>i===0||i===labels.length-1||i===Math.floor(labels.length/2)?(
-          <span key={i} style={{fontSize:9,color:'var(--gray-400)'}}>{l.slice(5)}</span>
+          <span key={i} style={{fontSize:9,color:'var(--muted)'}}>{l.slice(5)}</span>
         ):null)}
       </div>
+      {unit&&<div style={{fontSize:9,color:'var(--muted)',textAlign:'right',marginTop:1}}>{unit}</div>}
     </div>
   );
 }
 
 /* Generic horizontal-bar chart over arbitrary {label,value} rows — pure SVG */
-function VizBars({rows, color='var(--teal)'}) {
+function VizBars({rows, color='var(--teal)', unit=''}) {
   const data=rows.filter(r=>Number(r.value)>0).slice(0,12);
   const [tip,setTip]=useState(null);
   if(!data.length) return <div className="no-data">No numeric data to chart</div>;
   const max=Math.max(...data.map(r=>Number(r.value)||0),1);
-  const W=420,lw=120,rpad=50,bh=16,gap=8;
+  const uSuf=unit?' '+unit:'';
+  const fmt=v=>v.toLocaleString(undefined,{maximumFractionDigits:1});
+  const W=420,lw=120,rpad=50,bh=16,gap=8,axisH=16;
   const chartW=W-lw-rpad;
-  const H=data.length*(bh+gap)+2;
+  const barsH=data.length*(bh+gap)+2;
+  const H=barsH+axisH;
+  const gridT=[0,0.5,1];   // value axis reference: 0 baseline, mid, max
   return (
     <div style={{position:'relative'}}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:'block'}} role="img" aria-label={`Bar chart: ${data.map(r=>`${r.label} ${(Number(r.value)||0).toLocaleString()}`).join(', ')}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:'block'}} role="img" aria-label={`Bar chart, max ${fmt(max)}${uSuf}: ${data.map(r=>`${r.label} ${fmt(Number(r.value)||0)}`).join(', ')}`}>
+        {gridT.map((t,i)=>{
+          const gx=lw+t*chartW;
+          return (<g key={'g'+i}>
+            <line x1={gx} y1={0} x2={gx} y2={barsH} stroke="var(--border)" strokeWidth={t===0?1:0.5} strokeDasharray={t===0?'':'2 3'}/>
+            <text x={gx} y={barsH+10} textAnchor="middle" fontSize={8} fill="var(--muted)" fontFamily="var(--font-mono)">{fmt(max*t)}</text>
+          </g>);
+        })}
+        {unit&&<text x={W-2} y={barsH+10} textAnchor="end" fontSize={8} fill="var(--muted)">{unit}</text>}
         {data.map((r,i)=>{
           const y=i*(bh+gap);
           const v=Number(r.value)||0;
@@ -2267,7 +2249,7 @@ function VizBars({rows, color='var(--teal)'}) {
               <text x={lw-6} y={y+bh/2} fill="var(--gray-200)" fontSize={10} textAnchor="end" dominantBaseline="central">{label}</text>
               <rect x={lw} y={y} width={chartW} height={bh} fill="var(--svg-track)" rx={3}/>
               <rect x={lw} y={y} width={bw} height={bh} fill={col} rx={3}/>
-              <text x={lw+bw+5} y={y+bh/2} fill={col} fontSize={10} dominantBaseline="central" fontWeight={700}>{v.toLocaleString()}</text>
+              <text x={lw+bw+5} y={y+bh/2} fill={col} fontSize={10} dominantBaseline="central" fontWeight={700}>{fmt(v)}</text>
             </g>
           );
         })}
@@ -2275,7 +2257,7 @@ function VizBars({rows, color='var(--teal)'}) {
       {tip&&(
         <div style={{position:'absolute',top:0,right:0,background:'var(--blue-mid)',border:'1px solid var(--border)',borderRadius:6,padding:'6px 10px',fontSize:11,pointerEvents:'none',zIndex:10}}>
           <div style={{color:'var(--teal)',fontWeight:700}}>{tip.label}</div>
-          <div style={{color:'var(--gray-200)'}}>{(Number(tip.value)||0).toLocaleString()}</div>
+          <div style={{color:'var(--gray-200)'}}>{fmt(Number(tip.value)||0)}{uSuf}</div>
         </div>
       )}
     </div>
@@ -2315,20 +2297,28 @@ function BuilderDonut({rows, dim, measure, agg}){
   const data=aggregate(rows,dim,measure,agg).filter(r=>r.value>0).sort((a,b)=>b.value-a.value).slice(0,8);
   if(!data.length) return <div className="no-data">No numeric data to chart</div>;
   const total=data.reduce((s,r)=>s+r.value,0)||1;
+  const totalFmt=Math.round(total).toLocaleString();
   const cols=['var(--teal)','var(--amber)','var(--green)','var(--red)','var(--gray-400)','var(--teal-bright)'];
   const C=64,R=48,sw=16,circ=2*Math.PI*R;
   let acc=0;
   return (
-    <div style={{display:'flex',alignItems:'center',gap:16,padding:'4px 0'}}>
-      <svg width={128} height={128} viewBox="0 0 128 128" style={{flexShrink:0,transform:'rotate(-90deg)'}} aria-hidden="true">
-        <circle cx={C} cy={C} r={R} fill="none" stroke="var(--svg-track)" strokeWidth={sw}/>
-        {data.map((d,i)=>{
-          const frac=d.value/total;
-          const seg=<circle key={i} cx={C} cy={C} r={R} fill="none" stroke={cols[i%cols.length]} strokeWidth={sw}
-            strokeDasharray={`${(frac*circ).toFixed(2)} ${circ.toFixed(2)}`} strokeDashoffset={(-acc*circ).toFixed(2)}/>;
-          acc+=frac; return seg;
-        })}
-      </svg>
+    <div style={{display:'flex',alignItems:'center',gap:16,padding:'4px 0'}} role="img"
+      aria-label={`Donut chart, total ${measure||'value'} ${totalFmt} across ${data.length} segment${data.length>1?'s':''}`}>
+      <div style={{position:'relative',width:128,height:128,flexShrink:0}}>
+        <svg width={128} height={128} viewBox="0 0 128 128" style={{transform:'rotate(-90deg)'}} aria-hidden="true">
+          <circle cx={C} cy={C} r={R} fill="none" stroke="var(--svg-track)" strokeWidth={sw}/>
+          {data.map((d,i)=>{
+            const frac=d.value/total;
+            const seg=<circle key={i} cx={C} cy={C} r={R} fill="none" stroke={cols[i%cols.length]} strokeWidth={sw}
+              strokeDasharray={`${(frac*circ).toFixed(2)} ${circ.toFixed(2)}`} strokeDashoffset={(-acc*circ).toFixed(2)}/>;
+            acc+=frac; return seg;
+          })}
+        </svg>
+        <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',pointerEvents:'none'}}>
+          <span style={{fontSize:18,fontWeight:700,fontFamily:'var(--font-mono)',color:'var(--ink)',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{totalFmt}</span>
+          <span style={{fontSize:8,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.05em',marginTop:2}}>total</span>
+        </div>
+      </div>
       <div style={{display:'flex',flexDirection:'column',gap:4}}>
         {data.map((d,i)=>(
           <div key={i} data-tip={`${d.label}: ${Math.round(d.value).toLocaleString()} · ${Math.round(d.value/total*100)}%`} style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
@@ -2342,9 +2332,10 @@ function BuilderDonut({rows, dim, measure, agg}){
   );
 }
 
-/* Generic heatmap — one cell per aggregate group, cell color = measure intensity
-   on a single-hue light→accent ramp. Headline use: subnet/IP utilization, but it
-   works for any dimension→cells / measure→color pairing. Legend + hover data-tip. */
+/* One-dimension utilization grid — one cell per aggregate group, cell color =
+   measure intensity on a single-hue light→accent ramp, cells sorted high→low.
+   This maps a SINGLE dimension to color, so it is labeled "grid", not "heatmap"
+   (a heatmap needs two axes). Legend (min→max) + cell count + hover data-tip. */
 function BuilderHeatmap({rows, dim, measure, agg}){
   const data=aggregate(rows,dim,measure,agg)
     .filter(r=>Number.isFinite(Number(r.value)))
@@ -2357,7 +2348,11 @@ function BuilderHeatmap({rows, dim, measure, agg}){
   const heat=t=>`rgba(0,112,243,${(0.10+0.85*t).toFixed(3)})`; // --accent #0070f3
   const fmt=v=>v.toLocaleString(undefined,{maximumFractionDigits:1});
   return (
-    <div style={{position:'relative'}}>
+    <div style={{position:'relative'}} role="img"
+      aria-label={`Utilization grid, ${data.length} cells of ${agg}${measure?' '+measure:''} by ${dim||'group'}, range ${fmt(min)} to ${fmt(max)}`}>
+      <div style={{fontSize:11,color:'var(--muted)',marginBottom:8,fontFamily:'var(--font-ui)'}}>
+        Utilization grid<span> · {agg}{measure?' '+measure:''} by {dim||'group'}, sorted high→low</span>
+      </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(58px,1fr))',gap:4}}>
         {data.map((r,i)=>{
           const v=Number(r.value)||0; const t=(v-min)/rng;
@@ -2481,10 +2476,10 @@ function BuilderWidget({id, cfg, DragHandle}){
     );
   } else if(viz==='line'||viz==='area'){
     const ad=aggregate(drows,x,y,agg).slice(0,500); // cap points so a high-cardinality x doesn't mount thousands of nodes
-    body=<MiniLineChart data={ad} valueKey="value" labelKey="label" height={140}/>;
+    body=<MiniLineChart data={ad} valueKey="value" labelKey="label" height={140} unit={agg==='count'?'count':(y||'')}/>;
   } else if(viz==='bar'){
     const ad=aggregate(drows,x,y,agg).sort((a,b)=>b.value-a.value);
-    body=<VizBars rows={ad}/>;
+    body=<VizBars rows={ad} unit={agg==='count'?'count':(y||'')}/>;
   } else if(viz==='donut'){
     body=<BuilderDonut rows={drows} dim={x} measure={y} agg={agg}/>;
   } else if(viz==='heatmap'){
@@ -2766,13 +2761,14 @@ function WidgetViz({data=[], viz='table', columns=[], labelKey, valueKey, rowCol
     const lk=labelKey||(columns[0]&&columns[0].key);
     const vk=valueKey||(columns.find(c=>data.some(r=>typeof r[c.key]==='number'))||{}).key||(columns[1]&&columns[1].key);
     if(!vk) return <div className="no-data">No numeric column to chart</div>;
+    const unit=(columns.find(c=>c.key===vk)||{}).label||vk;
     if(viz==='line') {
       const ld=data.slice(0,40);
-      return <MiniLineChart data={ld} valueKey={vk} labelKey={lk} color={color} height={120}/>;
+      return <MiniLineChart data={ld} valueKey={vk} labelKey={lk} color={color} height={120} unit={unit}/>;
     }
     const rows=[...data].sort((a,b)=>(Number(b[vk])||0)-(Number(a[vk])||0))
       .map(r=>({label:String(r[lk]??'—'),value:Number(r[vk])||0,color:rowColor?rowColor(r):null}));
-    return <VizBars rows={rows} color={color}/>;
+    return <VizBars rows={rows} color={color} unit={unit}/>;
   }
 
   if(viz==='heatmap'){
@@ -2947,7 +2943,7 @@ function DnsAnalyticsPanel({data, rowLimit, setRowLimit, cutoffMs=0}) {
         {[
           {v:(top_clients.reduce((a,r)=>a+(Number(r['NstarDnsActivity.total_query_count'])||0),0)).toLocaleString(), l:'Total Queries (7d)', c:'var(--teal)'},
           {v:top_clients.length, l:'Unique Clients', c:'var(--gray-200)'},
-          {v:query_types.length, l:'Query Types', c:'var(--amber)'},
+          {v:query_types.length, l:'Query Types', c:'var(--amber-text)'},
         ].map((x,i)=>(
           <div key={i} className="card" style={{textAlign:'center'}}>
             <div style={{fontSize:26,fontWeight:800,color:x.c,fontFamily:'var(--font-mono)'}}>{x.v}</div>
@@ -3055,7 +3051,7 @@ function InsightsPanel({data, rowLimit, setRowLimit}) {
     {key:'status',label:'Status',size:11,sortVal:r=>r[INS+'currentStatus']||'',render:r=><span style={{color:'var(--gray-400)'}}>{r[INS+'currentStatus']||'—'}</span>},
     {key:'events',label:'Events',mono:true,size:11,sortVal:r=>Number(r[INS+'totalEvents'])||0,render:r=>(Number(r[INS+'totalEvents'])||0).toLocaleString()},
     {key:'assets',label:'Assets',mono:true,size:11,sortVal:r=>Number(r[INS+'totalVerifiedAssets'])||0,render:r=>Number(r[INS+'totalVerifiedAssets'])||0},
-    {key:'saved',label:'Time Saved',size:11,sortVal:r=>Number(r[INS+'timeSaved'])||0,render:r=>{const mins=Math.round((Number(r[INS+'timeSaved'])||0)/60);return <span style={{color:'var(--green)'}}>{mins>0?`${mins}m`:'—'}</span>;}},
+    {key:'saved',label:'Time Saved',size:11,sortVal:r=>Number(r[INS+'timeSaved'])||0,render:r=>{const mins=Math.round((Number(r[INS+'timeSaved'])||0)/60);return <span style={{color:'var(--green-tx)'}}>{mins>0?`${mins}m`:'—'}</span>;}},
   ]);
   if(!data) return <SkeletonTable/>;
   const rows = data.data || [];
@@ -3166,7 +3162,7 @@ function PercentileCards({data}) {
             {[['p50',p50],['p95',p95],['p99',p99]].map(([lbl,v])=>(
               <div key={lbl} style={{display:'flex',justifyContent:'space-between',fontSize:11,fontFamily:'var(--font-mono)',padding:'1px 0'}}>
                 <span style={{color:'var(--muted)'}}>{lbl}</span>
-                <span style={{color:lbl==='p99'&&v>90?'var(--red)':lbl==='p95'&&v>85?'var(--amber)':'var(--ink)',fontWeight:lbl==='p50'?400:600}}>{fmt(v)}{m.unit}</span>
+                <span style={{color:lbl==='p99'&&v>90?'var(--red)':lbl==='p95'&&v>85?'var(--amber-text)':'var(--ink)',fontWeight:lbl==='p50'?400:600}}>{fmt(v)}{m.unit}</span>
               </div>
             ))}
           </div>
@@ -3244,7 +3240,7 @@ function HealthScorecards({data, hosts}) {
     return Math.max(0,s);
   };
   const grade=s=>s>=90?'A':s>=75?'B':s>=60?'C':s>=40?'D':'F';
-  const gradeClr=s=>s>=90?'var(--green)':s>=60?'var(--amber)':'var(--red)';
+  const gradeClr=s=>s>=90?'var(--green-tx)':s>=60?'var(--amber-text)':'var(--red)';
   const top=[...hosts].sort((a,b)=>score(a.name||a.ip,a.status)-score(b.name||b.ip,b.status)).slice(0,10);
   return (
     <div className="card" style={{marginBottom:14}}>
@@ -3410,8 +3406,8 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
                       <div style={{marginTop:8,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:4,fontSize:11}}>
                         <div style={{fontSize:9,textTransform:'uppercase',letterSpacing:'.08em',color:'var(--gray-400)'}}>Network context</div>
                         <div><span style={{color:'var(--gray-400)'}}>IP:</span> <span style={{fontFamily:'monospace',color:'var(--ink)'}}>{ip}</span></div>
-                        <div><span style={{color:'var(--gray-400)'}}>Host:</span> {lease&&lease.host?<span style={{color:'var(--gray-200)'}}>{lease.host}</span>:<span style={{color:'var(--gray-600)'}}>— no active lease</span>}</div>
-                        <div><span style={{color:'var(--gray-400)'}}>Subnet:</span> {sub?<span style={{color:'var(--gray-200)'}}>{sub.name!==sub.addr?sub.name:`${sub.addr}/${sub.cidr}`} <span className="badge b-gray">{sub.site||'—'}</span> <span style={{color:utilColor(sub.util),fontWeight:700}}>{sub.util}%</span></span>:<span style={{color:'var(--gray-600)'}}>— not found in IPAM</span>}</div>
+                        <div><span style={{color:'var(--gray-400)'}}>Host:</span> {lease&&lease.host?<span style={{color:'var(--gray-200)'}}>{lease.host}</span>:<span style={{color:'var(--muted)'}}>— no active lease</span>}</div>
+                        <div><span style={{color:'var(--gray-400)'}}>Subnet:</span> {sub?<span style={{color:'var(--gray-200)'}}>{sub.name!==sub.addr?sub.name:`${sub.addr}/${sub.cidr}`} <span className="badge b-gray">{sub.site||'—'}</span> <span style={{color:utilColor(sub.util),fontWeight:700}}>{sub.util}%</span></span>:<span style={{color:'var(--muted)'}}>— not found in IPAM</span>}</div>
                       </div>
                     );
                   })()}
@@ -3431,7 +3427,7 @@ function ThreatLookupPanel({subnets=[], leases=[]}) {
           {actionLog.map(a=>(
             <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:'1px solid var(--border)',fontSize:11}}>
               <span><b style={{color:a.act==='block'?'var(--sev-red-t)':'var(--teal)'}}>{a.act}</b> {a.domain}{' '}
-                <span style={{color:a.ok?'var(--green)':'var(--red)'}}>{a.ok?'✓':'✗ '+a.err}</span></span>
+                <span style={{color:a.ok?'var(--green-tx)':'var(--red)'}}>{a.ok?'✓':'✗ '+a.err}</span></span>
               <span style={{display:'flex',gap:8,alignItems:'center'}}>
                 <span style={{color:'var(--gray-400)'}}>{new Date(a.ts).toLocaleTimeString()}</span>
                 {a.act==='block'&&a.ok&&<button className="collapse-btn" style={{margin:0}} onClick={()=>unblock(a.domain)} title="Roll back" aria-label="Roll back block">↶ Undo</button>}
@@ -3605,7 +3601,7 @@ function SearchSection({data, srchQ, setSrchQ, srchRes, setSrchRes, srching, set
               <div className="card-title">
                 <div className="dot" aria-label="ok" style={{background:'var(--green)'}}/>
                 Network Entities
-                <span style={{marginLeft:6,background:'var(--surface-3)',borderRadius:4,padding:'1px 8px',fontSize:10,color:'var(--green)',fontWeight:700}}>
+                <span style={{marginLeft:6,background:'var(--surface-3)',borderRadius:4,padding:'1px 8px',fontSize:10,color:'var(--green-tx)',fontWeight:700}}>
                   {srchRes.entities.length}
                 </span>
               </div>
@@ -4013,11 +4009,11 @@ function DrillSheet({entity, onClose, leases=[], subnets=[], setSection, setZone
             <div style={{marginTop:10,padding:'8px 10px',background:'var(--surface-3)',borderRadius:4,fontFamily:'var(--font-mono)',fontSize:11}}>
               <div style={{color:'var(--muted)',fontSize:9,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:4}}>Capacity Forecast</div>
               {daysToFull!==null && daysToFull>0 && daysToFull<365
-                ? <div style={{color:daysToFull<30?'var(--red)':daysToFull<90?'var(--amber)':'var(--green)'}}>
+                ? <div style={{color:daysToFull<30?'var(--red)':daysToFull<90?'var(--amber-text)':'var(--green-tx)'}}>
                     [!] Pool exhaustion in ~{daysToFull} days at current trend
                   </div>
                 : slope<=0
-                  ? <div style={{color:'var(--green)'}}>✓ Utilization trending down — no exhaustion projected</div>
+                  ? <div style={{color:'var(--green-tx)'}}>✓ Utilization trending down — no exhaustion projected</div>
                   : <div style={{color:'var(--muted)'}}>Trend insufficient to project exhaustion</div>}
               <div style={{color:'var(--muted)',marginTop:4}}>Trend: {slope>0?'+':'−'}{Math.abs(slope*10).toFixed(1)}%/10 refreshes · {n} data points</div>
             </div>
@@ -4170,7 +4166,7 @@ function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection
               <div style={{width:8,height:8,borderRadius:'50%',background:sevDot[r.sev],flexShrink:0}}/>
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:600}}>
-                  <span style={{color:r.sev==='crit'?'var(--red)':'var(--amber)',marginRight:6}}>{r.count}</span>
+                  <span style={{color:r.sev==='crit'?'var(--red)':'var(--amber-text)',marginRight:6}}>{r.count}</span>
                   {r.desc}
                 </div>
                 {r.items.length>0&&<div style={{fontSize:10,color:'var(--gray-400)',marginTop:2}}>{r.items.join(', ')}</div>}
@@ -4224,23 +4220,23 @@ const SECTIONS=[
   {id:'help', icon:'help', label:'Help', tip:'How every feature works — searchable ELI5 guide.', noAuto:true},
 ];
 
-function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill}) {
+function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill, dhcpCrit=95, dhcpWarn=80}) {
   const hasSite = subnets.some(s=>s.site&&s.site!=='–'&&s.site!=='—');
   const rows = subnets.filter(s=>{
     if(!ipamChip) return true;
-    if(ipamChip==='critical') return s.util>=90;
-    if(ipamChip==='warning')  return s.util>=75&&s.util<90;
-    if(ipamChip==='healthy')  return s.util<75;
+    if(ipamChip==='critical') return s.util>=dhcpCrit;
+    if(ipamChip==='warning')  return s.util>=dhcpWarn&&s.util<dhcpCrit;
+    if(ipamChip==='healthy')  return s.util<dhcpWarn;
     return true;
   });
   const allCols=[
-    {key:'name',label:'Name',fixed:true,render:s=><span style={{fontWeight:500}} title={s.name!==s.addr?s.name:undefined}>{s.name!==s.addr?s.name:<span style={{color:'var(--gray-600)'}}>—</span>}</span>},
+    {key:'name',label:'Name',fixed:true,render:s=><span style={{fontWeight:500}} title={s.name!==s.addr?s.name:undefined}>{s.name!==s.addr?s.name:<span style={{color:'var(--muted)'}}>—</span>}</span>},
     {key:'addr',label:'Network',mono:true,size:11,sortVal:s=>s.addr,csv:s=>`${s.addr}/${s.cidr}`,render:s=>(<span style={{color:'var(--gray-200)'}} title={`${s.addr}/${s.cidr}`}>{s.addr}/{s.cidr}<button className="copy-btn" tabIndex={0} onClick={()=>copyToClip(s.addr)} title="Copy IP" aria-label="Copy IP address">⎘</button></span>)},
     ...(hasSite?[{key:'site',label:'Site',size:11,render:s=><span style={{color:'var(--gray-400)'}}>{s.site}</span>}]:[]),
     {key:'usedtotal',label:'Used / Total',mono:true,size:11,sortVal:s=>s.used,csv:s=>`${s.used}/${s.total}`,render:s=>`${s.used} / ${s.total}`},
     {key:'util',label:'Utilization',sortVal:s=>s.util,render:s=>(<div style={{display:'flex',alignItems:'center',gap:8}}><div className="bar-track" style={{position:'relative'}}><div className="bar-fill" style={{width:`${s.util}%`,background:utilColor(s.util)}}/><div style={{position:'absolute',top:0,bottom:0,left:'75%',width:'1px',background:'rgba(232,160,48,0.5)'}} title="75% warning"/><div style={{position:'absolute',top:0,bottom:0,left:'90%',width:'1px',background:'rgba(232,80,80,0.6)'}} title="90% critical"/></div><span style={{fontSize:11,fontWeight:700,color:utilColor(s.util)}}>{s.util}%</span></div>)},
     {key:'leases',label:'DHCP Leases',size:11,sortVal:s=>leaseCt[s.name]||0,render:s=><span style={{color:'var(--gray-400)'}}>{(leaseCt[s.name]||0).toLocaleString()}</span>},
-    {key:'anomaly',label:'Risk',size:11,nosort:false,sortVal:s=>{let sc=0;if(s.util>=90)sc+=3;else if(s.util>=75)sc+=2;if(s.free===0)sc+=2;if((leaseCt[s.name]||0)===0&&s.util===0)sc-=1;return sc;},csv:s=>{let sc=0;if(s.util>=90)sc+=3;else if(s.util>=75)sc+=2;if(s.free===0)sc+=2;return sc>0?sc:'OK';},render:s=>{let sc=0;if(s.util>=90)sc+=3;else if(s.util>=75)sc+=2;if(s.free===0)sc+=2;if(sc===0)return <span style={{color:'var(--green)',fontSize:10}}>OK</span>;if(sc>=4)return <span style={{color:'var(--red)',fontSize:10,fontWeight:700}}>HIGH</span>;if(sc>=2)return <span style={{color:'var(--amber)',fontSize:10,fontWeight:600}}>WARN</span>;return <span style={{color:'var(--amber)',fontSize:10}}>LOW</span>;}},
+    {key:'anomaly',label:'Risk',size:11,nosort:false,sortVal:s=>{let sc=0;if(s.util>=90)sc+=3;else if(s.util>=75)sc+=2;if(s.free===0)sc+=2;if((leaseCt[s.name]||0)===0&&s.util===0)sc-=1;return sc;},csv:s=>{let sc=0;if(s.util>=90)sc+=3;else if(s.util>=75)sc+=2;if(s.free===0)sc+=2;return sc>0?sc:'OK';},render:s=>{let sc=0;if(s.util>=90)sc+=3;else if(s.util>=75)sc+=2;if(s.free===0)sc+=2;if(sc===0)return <span style={{color:'var(--green-tx)',fontSize:10}}>OK</span>;if(sc>=4)return <span style={{color:'var(--red)',fontSize:10,fontWeight:700}}>HIGH</span>;if(sc>=2)return <span style={{color:'var(--amber-text)',fontSize:10,fontWeight:600}}>WARN</span>;return <span style={{color:'var(--amber-text)',fontSize:10}}>LOW</span>;}},
   ];
   const ctl=useColumns('ipam',allCols);
   return <DataTable ctl={ctl} rows={rows} defaultRows={rowLimit} rowKey={s=>s.id} initialSort={{key:'util',dir:'desc'}} exportName="subnets" persistId="ipam" onRowClick={onDrill?s=>onDrill({type:'subnet',data:s}):undefined}/>;
@@ -4255,17 +4251,21 @@ function HostsTable({hosts, rowLimit, hostSeen={}, onDrill}) {
     {key:'lastonline',label:'Last Online',size:11,sortVal:h=>hostSeen[h.id]?new Date(hostSeen[h.id]).getTime():(h.status==='online'?Infinity:-1),render:h=>{
       if(h.status==='online') return <span style={{color:'var(--sev-green-t)',fontSize:11}}>now</span>;
       const t=hostSeen[h.id];
-      if(!t) return <span style={{color:'var(--gray-600)'}}>—</span>;
+      if(!t) return <span style={{color:'var(--muted)'}}>—</span>;
       return <span style={{color:'var(--gray-400)',fontSize:11}} title={fmtTs(t)}>{timeAgo(t)}</span>;
     }},
   ]);
   return <DataTable ctl={ctl} rows={hosts} defaultRows={rowLimit} rowKey={h=>h.id} initialSort={{key:'name',dir:'asc'}} exportName="hosts" persistId="hosts" onRowClick={onDrill?h=>onDrill({type:'host',data:h}):undefined}/>;
 }
 
+// Single source of truth for the "subnet over capacity" threshold. The runtime
+// dhcpCrit state defaults to this, and the alert metric below uses it, so the
+// over-threshold count + label are identical across header/KPI/banner/tab badge.
+const DHCP_OVER_THRESHOLD = 95;
 // ── Alert-rules engine: fire when a live metric crosses a threshold ──────────
 const ALERT_METRICS = [
   {key:'offline_hosts',    label:'Offline / error hosts',      get:d=>d.hosts.filter(h=>h.status==='error'||h.status==='offline').length},
-  {key:'critical_subnets', label:'Subnets ≥90% utilization',   get:d=>d.subnets.filter(s=>s.util>=90).length},
+  {key:'critical_subnets', label:`Subnets ≥${DHCP_OVER_THRESHOLD}% utilization`,   get:d=>d.subnets.filter(s=>s.util>=DHCP_OVER_THRESHOLD).length},
   {key:'ttl_anomalies',    label:'DNS zones w/ TTL anomalies',  get:d=>d.zones.filter(z=>z.anomaly).length},
   {key:'audit_failures',   label:'Failed audit events',        get:d=>d.auditLogs.filter(l=>l.result==='failure').length},
   {key:'active_feeds',     label:'Active threat feeds',         get:d=>d.feeds.filter(f=>f.active).length},
@@ -4275,6 +4275,8 @@ const ALERT_OPS = {'>=':(a,b)=>a>=b, '>':(a,b)=>a>b, '<=':(a,b)=>a<=b, '<':(a,b)
 // which section a firing alert metric points at (drives the nav badge)
 const ALERT_SECTION = {offline_hosts:'hosts', critical_subnets:'ipam', ttl_anomalies:'dns', audit_failures:'audit', active_feeds:'threats', total_hosts:'hosts'};
 const metricLabel = k => (ALERT_METRICS.find(m=>m.key===k)||{}).label || k;
+// Single number formatter — thousands separators for every count/metric rendered.
+const fmtN = v => (typeof v==='number'&&isFinite(v)) ? v.toLocaleString() : (v??'');
 const DEFAULT_ALERT_RULES = [
   {id:'def-offline',  metric:'offline_hosts',    op:'>=', threshold:1},
   {id:'def-critical', metric:'critical_subnets', op:'>=', threshold:1},
@@ -4334,14 +4336,14 @@ function AlertsPanel({data, rules, setRules, snoozed, setSnoozed}){
     {key:'value',label:'Current',nosort:true,render:r=>{const snoozeExp=snoozed[r.id];if(snoozeExp&&snoozeExp>nowMs){const exp=new Date(snoozeExp);const hhmm=exp.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});return <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--muted)'}}>SNOOZED until {hhmm}</span>;}return <span style={{fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.value}</span>;}},
     {key:'_actions',label:'',nosort:true,noexport:true,render:r=>editId===r.id
       ?<button className="collapse-btn" style={{margin:0}} onClick={()=>saveEdit(r.id)} title="Save" aria-label="Save rule">✓</button>
-      :<span style={{whiteSpace:'nowrap'}}><button className="collapse-btn" style={{margin:0,color:'var(--gray-500)'}} onClick={()=>startEdit(r)} title="Edit rule" aria-label="Edit rule">✎</button><button className="collapse-btn" style={{margin:0}} onClick={()=>del(r.id)} title="Delete rule" aria-label="Delete rule">✕</button></span>},
+      :<span style={{whiteSpace:'nowrap'}}><button className="collapse-btn" style={{margin:0,color:'var(--muted)'}} onClick={()=>startEdit(r)} title="Edit rule" aria-label="Edit rule">✎</button><button className="collapse-btn" style={{margin:0}} onClick={()=>del(r.id)} title="Delete rule" aria-label="Delete rule">✕</button></span>},
     {key:'notify_url',label:'Webhook',nosort:true,render:r=>editId===r.id
       ?<input type="url" aria-label="Webhook URL" placeholder="https://…" value={editVals.notify_url||''} onChange={e=>setEditVals(v=>({...v,notify_url:e.target.value}))} style={{width:160,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,color:'var(--gray-200)',padding:'3px 6px',fontSize:10,fontFamily:'var(--font-mono)'}}/>
       :r.notify_url?<span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--teal)'}} title={r.notify_url}>wired</span>:<span style={{color:'var(--muted)',fontSize:10}}>—</span>},
     {key:'_ack',label:'Ack',nosort:true,noexport:true,render:r=>alertAcks[r.id]
       ?<span style={{fontSize:9,color:'var(--teal)',fontFamily:'var(--font-mono)'}}>✓ Acked <button style={{cursor:'pointer',color:'var(--muted)',background:'none',border:'none',padding:'0 2px',font:'inherit',lineHeight:1}} onClick={()=>unAckAlert(r.id)} aria-label="Remove acknowledgement">✕</button></span>
       :<button className="col-btn" style={{fontSize:9,padding:'2px 6px'}} onClick={()=>ackAlert(r.id)}>Ack</button>},
-    {key:'_snooze',label:'Snooze',size:11,nosort:true,noexport:true,render:r=>{const snoozeExp=snoozed[r.id];const isActive=snoozeExp&&snoozeExp>nowMs;if(isActive){return <button style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 8px',borderRadius:3,border:'1px solid var(--border)',background:'none',color:'var(--amber)',cursor:'pointer'}} onClick={()=>setSnoozed(s=>({...s,[r.id]:0}))} title="Cancel snooze">✕ unsnooze</button>;}return(<div style={{position:'relative',display:'inline-block'}}><select style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 6px',borderRadius:3,border:'1px solid var(--border)',background:'var(--surface-2)',color:'var(--muted)',cursor:'pointer'}} aria-label="Snooze duration" value="" onChange={e=>{const mins=Number(e.target.value);if(mins)setSnoozed(s=>({...s,[r.id]:Date.now()+mins*60000}));}}><option value="">Snooze…</option><option value="30">30 min</option><option value="60">1 hour</option><option value="120">2 hours</option></select></div>);}},
+    {key:'_snooze',label:'Snooze',size:11,nosort:true,noexport:true,render:r=>{const snoozeExp=snoozed[r.id];const isActive=snoozeExp&&snoozeExp>nowMs;if(isActive){return <button style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 8px',borderRadius:3,border:'1px solid var(--border)',background:'none',color:'var(--amber-text)',cursor:'pointer'}} onClick={()=>setSnoozed(s=>({...s,[r.id]:0}))} title="Cancel snooze">✕ unsnooze</button>;}return(<div style={{position:'relative',display:'inline-block'}}><select style={{fontFamily:'var(--font-mono)',fontSize:10,padding:'2px 6px',borderRadius:3,border:'1px solid var(--border)',background:'var(--surface-2)',color:'var(--muted)',cursor:'pointer'}} aria-label="Snooze duration" value="" onChange={e=>{const mins=Number(e.target.value);if(mins)setSnoozed(s=>({...s,[r.id]:Date.now()+mins*60000}));}}><option value="">Snooze…</option><option value="30">30 min</option><option value="60">1 hour</option><option value="120">2 hours</option></select></div>);}},
   ];
   const alertCtl=useColumns('alert-rules',alertCols);
   const inStyle={background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,color:'var(--gray-200)',padding:'6px 8px'};
@@ -4642,7 +4644,7 @@ function TenantManager({vault, accounts=[], activeAcct, switchAcct, switchingAcc
               {hasWithKey&&hasNoKey&&<div className="acct-sec-divider" style={{margin:'4px 10px'}}/>}
               {filteredAccts.filter(u=>!u.hasKey).map(u=>(
                 <div key={u.accountId} style={{display:'flex',alignItems:'center'}}>
-                  <button style={{borderLeft:'2px solid var(--border)',paddingLeft:'8px',borderRadius:'0 4px 4px 0',flex:1,color:'var(--gray-500)',cursor:'default'}} className="acct-menu-item" disabled>
+                  <button style={{borderLeft:'2px solid var(--border)',paddingLeft:'8px',borderRadius:'0 4px 4px 0',flex:1,color:'var(--muted)',cursor:'default'}} className="acct-menu-item" disabled>
                     {'○ '}{u.name}
                   </button>
                   {vault.vaultMode&&<button style={{fontSize:'9px',padding:'1px 5px',marginRight:'6px',borderRadius:'3px',border:'1px solid var(--border)',background:'none',color:'var(--gray-400)',cursor:'pointer',flexShrink:0}} onClick={e=>{e.stopPropagation();setAdding(true);}}>+ key</button>}
@@ -4696,7 +4698,7 @@ function waitForServer(onReady, maxAttempts=40, interval=500) {
 }
 
 function StateTimeline({subnets, onDrill}){
-  const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber)':'var(--green)';
+  const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber-text)':'var(--green-tx)';
   const sevLbl=u=>u>=90?'CRIT':u>=75?'WARN':'OK';
   if(!subnets||!subnets.length) return <div className="no-data">No subnet data</div>;
   const sorted=[...subnets].sort((a,b)=>(b.util||0)-(a.util||0));
@@ -4741,7 +4743,7 @@ function VizSelect({id, def='table', opts=VIZ_OPTS, getViz, setViz}) {
 function UtilGauges({subnets}) {
   const top = [...subnets].sort((a,b)=>(b.util||0)-(a.util||0)).slice(0,5);
   if(!top.length) return null;
-  const sevClr = u => u>=90?'var(--red)':u>=75?'var(--amber)':'var(--green)';
+  const sevClr = u => u>=90?'var(--red)':u>=75?'var(--amber-text)':'var(--green-tx)';
   return (
     <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
       {top.map((s,i)=>{
@@ -4840,7 +4842,7 @@ function RunbookPanel({critSubs, errHosts}){
       {open&&items.map(it=>(
         <div key={it.key} style={{marginBottom:12,paddingBottom:12,borderBottom:'1px solid var(--border)'}}>
           <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:6}}>
-            <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--amber)'}}>{it.label}</span>
+            <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--amber-text)'}}>{it.label}</span>
             <button className="col-btn" onClick={()=>ack(it.key)} style={{fontSize:9,padding:'2px 8px',flexShrink:0,marginLeft:8}}>Acknowledge</button>
           </div>
           <ol style={{margin:0,paddingLeft:18,fontSize:10,fontFamily:'var(--font-mono)',color:'var(--muted)',lineHeight:1.6}}>
@@ -4881,7 +4883,7 @@ function TopoMap({subnets, hosts, zones, onDrill}){
     });
     return m;
   },[hosts,subnets]);
-  const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber)':'var(--green)';
+  const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber-text)':'var(--green-tx)';
   const hostClr=hs=>{if(!hs||!hs.length)return'var(--border)';if(hs.some(h=>h.status==='down'))return'var(--red)';if(hs.some(h=>h.status==='degraded'))return'var(--amber)';return'var(--green)';};
   const saveAnnotation=(sid,txt)=>{
     const n={...annotations,[sid]:{text:txt,ts:Date.now(),author:'NOC'}};
@@ -5163,7 +5165,7 @@ function PerfStack({data}){
   const METRICS = [
     {key:'cpu',    label:'CPU %',    max:100, color:'var(--blue)'},
     {key:'mem',    label:'Mem %',    max:100, color:'var(--teal)'},
-    {key:'dns_qps',label:'DNS QPS',  max:null, color:'var(--amber)'},
+    {key:'dns_qps',label:'DNS QPS',  max:null, color:'var(--amber-text)'},
   ];
 
   // auto-max for unbounded metrics
@@ -5258,7 +5260,7 @@ function HelpPage() {
       {name:'Per-widget Search', eli5:'A search box in the Audit Logs card header that filters entries in real time by any text — action name, username, object, or result. Pair with the time range filter to narrow to a specific incident window.', steps:['Find the filter input in the Audit Logs card header.','Type any keyword — the log filters instantly.','Clear to restore the full audit trail.']},
       {name:'Time Range Filter', eli5:'The top-bar time range selector (1h / 6h / 24h / 7d / All) applies a cutoff to the audit log, hiding entries older than the selected window. Useful for "what happened in the last hour".', steps:['Select a time range from the top-bar dropdown.','Audit log entries older than the window are hidden.','Combine with the search input for incident triage.']},
     ]},
-    {group:'Alert Rules', accent:'var(--amber)', features:[
+    {group:'Alert Rules', accent:'var(--amber-text)', features:[
       {name:'Define Threshold Alerts', eli5:'Create custom alert rules that fire when any live metric crosses a threshold — e.g. "DHCP utilization > 90%". Each rule has a severity level and an optional webhook URL for notifications.', steps:['Go to Alert Rules in the sidebar.','Click "Add Rule" and choose a metric, operator, threshold, and severity.','Optionally paste a webhook URL to get notified when the rule fires.']},
       {name:'Alert Trigger Map', eli5:'A visual row-per-rule status map showing which alert rules are currently firing, which are acknowledged, and the current metric value for each. Color-coded dots glow red when active.', steps:['Open the Alert Rules section — the Trigger Map appears at the top.','Glowing red dot = currently firing. Dimmed dot = acknowledged.','Hover any row to see the exact threshold vs current value.']},
       {name:'Per-alert Acknowledgement', eli5:'Each firing alert has an "Ack" button. Clicking it marks that alert as acknowledged (a ✓ Acked badge appears) and persists across refreshes. Use "Clear" to remove the acknowledgement.', steps:['In the Alert Rules section, find a firing alert row.','Click "Ack" to acknowledge it — the badge turns to "✓ Acked".','Click the small ✕ next to "Acked" to clear the acknowledgement.']},
@@ -5267,7 +5269,7 @@ function HelpPage() {
     {group:'Explore', accent:'var(--teal)', features:[
       {name:'Ad-hoc Pivot', eli5:'A Kentik-style group-by explorer that lets you pivot across hosts, DHCP leases, and DNS data by any dimension — group by site, subnet, status, or record type. Useful for ad-hoc analysis without writing queries.', steps:['Go to Explore in the sidebar.','Choose a data source (Hosts / Leases / DNS) and a group-by dimension.','The result table updates instantly — change dimensions to compare.']},
     ]},
-    {group:'Global Tools', accent:'var(--green)', features:[
+    {group:'Global Tools', accent:'var(--green-tx)', features:[
       {name:'Command Palette', eli5:'Press ⌘K (or Ctrl+K) to open a fuzzy-search command launcher. Type any section name, action, or feature to navigate or execute it instantly — like Spotlight for the dashboard.', steps:['Press ⌘K (Mac) or Ctrl+K (Windows/Linux).','Type any keyword — section names, "refresh", "export", "theme", etc.','Press Enter or click a result to execute it.']},
       {name:'Topology Map', eli5:'An Auvik-style visual map showing subnets grouped by site with host status dots. Hover a node to see counts; click to drill into that site or subnet.', steps:['Click "Topology Map" in the sidebar.','Subnet nodes are grouped by site — colors indicate worst host status.','Click any subnet node to open its IPAM drill-down.']},
       {name:'Time Range Selector', eli5:'A dropdown in the top bar with options 1h, 6h, 24h, 7d, and All. Applies simultaneously to DNS analytics, host performance metrics, and audit logs. One control, three sections filtered.', steps:['Find the time range dropdown in the top bar.','Select the window you want.','DNS, Hosts Performance, and Audit Logs all update to that window.']},
@@ -5419,7 +5421,7 @@ function App({vault, onVaultChange}={}) {
   const [dragging, setDragging]         = useState(null);
   const [dragArmed, setDragArmed]       = useState(null);
   const [dhcpWarn, setDhcpWarn]         = useState(()=>LS.get('noc.dhcpWarn',80));
-  const [dhcpCrit, setDhcpCrit]         = useState(()=>LS.get('noc.dhcpCrit',95));
+  const [dhcpCrit, setDhcpCrit]         = useState(()=>LS.get('noc.dhcpCrit',DHCP_OVER_THRESHOLD));
   const [policyDiff, setPolicyDiff]     = useState({});
   const [wallMode, setWallMode]         = useState(()=>LS.get('noc.wall',false));
   const [wallSpans, setWallSpans]       = useState(()=>LS.get('noc.wallSpans',{}));
@@ -6006,7 +6008,7 @@ function App({vault, onVaultChange}={}) {
         </div>
 
         <div className="sidebar-foot">
-          <div className="sf-status" style={{color:'var(--green)',display:'flex',alignItems:'center',gap:5}}>
+          <div className="sf-status" style={{color:'var(--green-tx)',display:'flex',alignItems:'center',gap:5}}>
             <span className="pulse">●</span> API Connected
             {vault&&vault.version&&(updDone
               ? <span className="ver-badge upd-done" aria-live="polite">✓ Updated to v{String(upd.latest||vault.version).replace(/^v/,'')}</span>
@@ -6248,33 +6250,11 @@ function App({vault, onVaultChange}={}) {
             </div>
           </div>
         </div>
-        {(()=>{
-          const tItems=[];
-          if(errHosts.length>0)  tItems.push({sev:'crit',lbl:'HOSTS OFFLINE/ERROR',n:errHosts.length});
-          if(critSubs.length>0)  tItems.push({sev:'crit',lbl:`SUBNETS ≥${dhcpCrit}% UTIL`,n:critSubs.length});
-          if(ttlBad.length>0)    tItems.push({sev:'warn',lbl:'DNS ZONES STALE',n:ttlBad.length});
-          if(firingAlerts.length>0) tItems.push({sev:'crit',lbl:'ALERTS FIRING',n:firingAlerts.length});
-          tItems.push({sev:'ok',lbl:'FEEDS ACTIVE',n:(s_feeds||feeds||[]).length});
-          const firing=errHosts.length+critSubs.length+firingAlerts.length;
-          if(tItems.length===0) return null;
-          return (
-            <div className="ticker" role="status" aria-label="Active alert ticker">
-              <span className="flag">Firing · {firing}</span>
-              <div className="stream">
-                {tItems.map((it,i)=>(
-                  <span className="item" key={i}>
-                    <span className={`tk-dot dot-${it.sev}`}></span> {it.lbl} <span className="mono">{it.n.toLocaleString()}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
         <div className="subbar">
           <nav className="topbar-tabs" aria-label="Sections">
             {SECTIONS.filter(s=>!hiddenSections.includes(s.id)).map(s=>{
               let badge=null;
-              if(data&&s.id==="ipam"){const c=data.subnets.filter(x=>x.util>=90).length;if(c>0)badge=<span className="badge-pill">{c}</span>;}
+              if(data&&s.id==="ipam"){const c=data.subnets.filter(x=>x.util>=dhcpCrit).length;if(c>0)badge=<span className="badge-pill">{c}</span>;}
               if(data&&s.id==="dns"){const c=data.zones.filter(z=>z.anomaly).length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
               if(data&&s.id==="audit"){const c=data.auditLogs.filter(l=>l.result==="failure").length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
               if(s.id==="alerts"&&firingAlerts.length>0)badge=<span className="badge-pill">{firingAlerts.length}</span>;
@@ -6312,16 +6292,6 @@ function App({vault, onVaultChange}={}) {
         {focusEntity&&<button className="scope-clear" style={{position:'fixed',bottom:12,right:12,zIndex:200,background:'var(--surface-2)',border:'1px solid var(--teal)',color:'var(--teal)',padding:'4px 10px',borderRadius:4,fontSize:10,fontFamily:'var(--font-mono)',cursor:'pointer'}} onClick={()=>setFocusEntity(null)}>◉ focused: {focusEntity.key} — click to clear</button>}
         <div className="noc-layout">
           <div className="content-col" style={{opacity:refreshing?0.72:1,transition:'opacity .3s'}}>
-        {/* ── ATC latch strip — thin full-width top strip, gated on critSubs ── */}
-        {critSubs.length>0&&<div className="latch-strip" aria-live="polite">
-          <div className="latch-text">
-            <span className="latch-crit">█ CRIT</span>
-            <span className="latch-sep">·</span>
-            <span className="latch-label">{critSubs.length} subnet{critSubs.length>1?'s':''} over capacity</span>
-            <span className="latch-stats">&nbsp;·&nbsp;{critSubs.slice(0,2).map(s=>s.name||s.addr).join(', ')}{critSubs.length>2?` +${critSubs.length-2} more`:''}</span>
-            <span className="latch-spacer"/>
-          </div>
-        </div>}
         {/* ── unified notice rail (one vocabulary; severity-sorted; collapses past 2) ── */}
         {(()=>{
           const notices=[];
@@ -6371,6 +6341,9 @@ function App({vault, onVaultChange}={}) {
             acts:<>{section!=='security'&&<button className="n-btn" onClick={()=>setSection('security')}>Review</button>}<AckMenu id="pol-diff" onAck={ackAlert}/></>,
           }); }
           if(!notices.length) return null;
+          // Single severity-ranked alert region: highest severity first (red → amber → info).
+          const _sevRank={'n-red':0,'n-amber':1,'n-info':2};
+          notices.sort((a,b)=>(_sevRank[a.sev]??9)-(_sevRank[b.sev]??9));
           const CAP=2, hidden=notices.length-CAP;
           const shown=noticesExpanded?notices:notices.slice(0,CAP);
           return (
@@ -6407,8 +6380,8 @@ function App({vault, onVaultChange}={}) {
             <div style={{display:'flex',gap:0,marginBottom:8,borderRadius:5,overflow:'hidden',border:'1px solid var(--border)',fontSize:10,fontFamily:'var(--font-mono)'}}>
               {[
                 {label:'Hosts', val:s_hosts.length, sub:`${errHosts.length} down`, col:'var(--teal)', sec:'hosts', crit:errHosts.length>0},
-                {label:'Subnets', val:s_subnets.length, sub:`${critSubs.length} crit`, col:'var(--green)', sec:'ipam', crit:critSubs.length>0},
-                {label:'Zones', val:zones.length, sub:`${ttlBad.length} anomalies`, col:'var(--amber)', sec:'dns', crit:ttlBad.length>0},
+                {label:'Subnets', val:s_subnets.length, sub:`${critSubs.length} crit`, col:'var(--green-tx)', sec:'ipam', crit:critSubs.length>0},
+                {label:'Zones', val:zones.length, sub:`${ttlBad.length} anomalies`, col:'var(--amber-text)', sec:'dns', crit:ttlBad.length>0},
                 {label:'Alerts', val:firingAlerts.length, sub:firingAlerts.length>0?'firing':'clear', col:'var(--red)', sec:'alerts', crit:firingAlerts.length>0},
                 {label:'Feeds', val:(data?.feeds||[]).filter(f=>f.active).length, sub:'active threats', col:'var(--gray-400)', sec:'security', crit:false},
               ].map((seg,i)=>(
@@ -6416,28 +6389,35 @@ function App({vault, onVaultChange}={}) {
                   onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(seg.sec);}}}
                   aria-label={`Go to ${seg.label} section`}
                   onClick={()=>setSection(seg.sec)}
-                  style={{flex:1,padding:'6px 10px',background:seg.crit?'rgba(var(--red-rgb),.1)':'var(--surface-2)',
+                  style={{flex:1,padding:'6px 10px',background:'var(--surface-2)',
                     cursor:'pointer',borderRight:i<4?'1px solid var(--border)':'none',transition:'background .15s'}}
                   onMouseEnter={e=>e.currentTarget.style.background='var(--surface-3)'}
-                  onMouseLeave={e=>e.currentTarget.style.background=seg.crit?'rgba(var(--red-rgb),.1)':'var(--surface-2)'}>
-                  <div style={{fontWeight:700,fontSize:16,color:seg.crit?seg.col:'var(--ink)',lineHeight:1}}>{seg.val}</div>
-                  <div style={{color:'var(--muted)',fontSize:9,textTransform:'uppercase',letterSpacing:'.06em',marginTop:2}}>{seg.label}</div>
-                  <div style={{color:seg.crit?seg.col:'var(--muted)',fontSize:9,marginTop:1}}>{seg.sub}</div>
+                  onMouseLeave={e=>e.currentTarget.style.background='var(--surface-2)'}>
+                  <div style={{fontWeight:700,fontSize:16,color:'var(--ink)',lineHeight:1}}>{fmtN(seg.val)}</div>
+                  <div style={{color:'var(--muted)',fontSize:12,textTransform:'uppercase',letterSpacing:'.06em',marginTop:2}}>{seg.label}</div>
+                  <div style={{color:seg.crit?seg.col:'var(--muted)',fontSize:12,marginTop:1}}>{seg.sub}</div>
                 </div>
               ))}
             </div>
             {(()=>{
   const total = s_subnets.length||1;
+  const hostTotal = s_hosts.length||1;
   const critPct = Math.round((critSubs.length/total)*100);
   const warnPct = Math.round((warnSubs.length/total)*100);
-  const healthScore = Math.max(0, 100 - critPct*2 - warnPct);
-  const scoreClr = healthScore>=80?'var(--green)':healthScore>=50?'var(--amber)':'var(--red)';
-  const scoreLabel = healthScore>=80?'HEALTHY':healthScore>=50?'DEGRADED':'CRITICAL';
+  const offlinePct = Math.round((errHosts.length/hostTotal)*100);
+  // State is derived from actual alerts, not from the score, so the two can never contradict.
+  const anyCrit = critSubs.length>0 || errHosts.length>0;
+  const anyWarn = warnSubs.length>0 || firingAlerts.length>0 || ttlBad.length>0;
+  let healthScore = Math.max(0, 100 - critPct*2 - warnPct - offlinePct*2 - firingAlerts.length*3 - ttlBad.length);
+  if(anyCrit) healthScore = Math.min(healthScore, 49);        // any crit → red band
+  else if(anyWarn) healthScore = Math.min(healthScore, 79);   // any warn → amber band
+  const scoreClr = anyCrit?'var(--red)':anyWarn?'var(--amber-text)':'var(--green-tx)';
+  const scoreLabel = anyCrit?'CRITICAL':anyWarn?'DEGRADED':'HEALTHY';
   const peakUtil = critSubs[0]?.util??warnSubs[0]?.util??0;
   const hstats=[
     {v:errHosts.length, l:'Offline / Error', clr:errHosts.length>0?'var(--red)':'var(--ink)', nav:()=>{setSection('hosts');setHostChip('error');}},
-    {v:critSubs.length, l:'Critical Subnets', clr:critSubs.length>0?'var(--red)':warnSubs.length>0?'var(--amber)':'var(--ink)', nav:()=>{setSection('ipam');setIpamChip('critical');}},
-    {v:`${peakUtil}%`, l:'Peak DHCP Util', clr:critSubs.length>0?'var(--red)':warnSubs.length>0?'var(--amber)':'var(--ink)', nav:()=>setSection('ipam')},
+    {v:critSubs.length, l:'Critical Subnets', clr:critSubs.length>0?'var(--red)':warnSubs.length>0?'var(--amber-text)':'var(--ink)', nav:()=>{setSection('ipam');setIpamChip('critical');}},
+    {v:`${peakUtil}%`, l:'Peak DHCP Util', clr:critSubs.length>0?'var(--red)':warnSubs.length>0?'var(--amber-text)':'var(--ink)', nav:()=>setSection('ipam')},
   ];
   return (
     <div className="ov-hero" aria-label={`Network health ${healthScore} of 100, ${scoreLabel}`}>
@@ -6450,7 +6430,7 @@ function App({vault, onVaultChange}={}) {
         {hstats.map((h,i)=>(
           <div key={i} className="ov-hero-stat" role="button" tabIndex={0} aria-label={`${h.l}: ${h.v}`}
             onClick={h.nav} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();h.nav();}}}>
-            <span className="v" style={{color:h.clr}}>{h.v}</span>
+            <span className="v" style={{color:h.clr}}>{fmtN(h.v)}</span>
             <span className="l">{h.l}</span>
           </div>
         ))}
@@ -6487,7 +6467,7 @@ function App({vault, onVaultChange}={}) {
                   const arr=_sparkArr(k.histKey);
                   const cursorVal=chartCursor!==null&&arr.length>1?arr[Math.round(chartCursor*(arr.length-1))]:null;
                   return (
-                  <div key={i} className={`card${k.sev==='crit'?' crit-state':k.sev==='warn'?' warn-state':' dim'}`}
+                  <div key={i} className="card"
                     role="button" tabIndex={0}
                     onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSection(k.nav);}}}
                     aria-label={`Go to ${k.l} section`}
@@ -6506,14 +6486,14 @@ function App({vault, onVaultChange}={}) {
                         stroke="var(--teal)" strokeWidth=".75" vectorEffect="non-scaling-stroke" opacity=".7"/>}
                     </svg>
                     {cursorVal!==null&&(
-                      <div style={{position:'absolute',top:4,right:6,zIndex:2,fontSize:9,fontFamily:'var(--font-mono)',
+                      <div style={{position:'absolute',top:4,right:6,zIndex:2,fontSize:12,fontFamily:'var(--font-mono)',
                         color:'var(--ink)',background:'var(--surface-3)',padding:'1px 4px',borderRadius:2,pointerEvents:'none'}}>
                         {cursorVal}
                       </div>
                     )}
-                    <div className="kpi-val" style={{position:'relative',zIndex:1,...(k.sev==='crit'?{color:'var(--red)'}:{})}}>{k.v}</div>
+                    <div className="kpi-val" style={{position:'relative',zIndex:1}}>{k.v}</div>
                     <div className="kpi-lbl" style={{position:'relative',zIndex:1,marginTop:6}}>{k.l}</div>
-                    {(()=>{const dClr=k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber)':'var(--green)';return k.deltaAction
+                    {(()=>{const dClr=k.sev==='crit'?'var(--red)':k.sev==='warn'?'var(--amber-text)':'var(--green-tx)';return k.deltaAction
                       ? <div className="kpi-delta" style={{position:'relative',zIndex:1,color:dClr,cursor:'pointer',textDecoration:'underline',textDecorationStyle:'dotted'}} onClick={e=>{e.stopPropagation();k.deltaAction();}}>{`→ ${k.delta}`}</div>
                       : <div className="kpi-delta" style={{position:'relative',zIndex:1,color:dClr}}>{`→ ${k.delta}`}</div>;})()}
                   </div>
@@ -6528,22 +6508,21 @@ function App({vault, onVaultChange}={}) {
                   {Object.entries(deltas).map(([k,v])=>(
                     <div key={k} style={{fontSize:12,color:'var(--gray-200)'}}>
                       {({total_subnets:'Total subnets',total_zones:'Total zones',total_leases:'Total leases'}[k])||metricLabel(k)}:{' '}
-                      <span style={{fontWeight:700,color:v>0?'var(--red)':'var(--green)'}}>{v>0?('▲ +'+v):('▼ '+v)}</span>
+                      <span style={{fontWeight:700,color:v>0?'var(--red)':'var(--green-tx)'}}>{v>0?('▲ +'+v):('▼ '+v)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
             {(()=>{
-              const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber)':'var(--green)';
+              const sevClr=u=>u>=90?'var(--red)':u>=75?'var(--amber-text)':'var(--green-tx)';
               const sevTxt=u=>u>=90?'CRIT':u>=75?'WARN':'OK';
-              const hashN=(s,m)=>{let h=0;for(let i=0;i<(s||'').length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h%m;};
               /* BENTO WIDGET RENDER */
               const topSubs=[...s_subnets].filter(s=>s.total>1).sort((a,b)=>b.util-a.util);
               const onlineH=s_hosts.filter(h=>h.status==='online').length;
               const warnH=s_hosts.filter(h=>h.status==='degraded').length;
               const downH=s_hosts.filter(h=>['offline','error'].includes(h.status)).length;
-              const hubC=v=>{v=String(v||'').toLowerCase();return (v.startsWith('crit')||v==='high')?'var(--red)':(v.startsWith('warn')||v==='medium'||v==='degraded')?'var(--amber)':'var(--green)';};
+              const hubC=v=>{v=String(v||'').toLowerCase();return (v.startsWith('crit')||v==='high')?'var(--red)':(v.startsWith('warn')||v==='medium'||v==='degraded')?'var(--amber-text)':'var(--green-tx)';};
               const hubMuted=txt=>(<div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',padding:'10px 4px'}}>{txt}</div>);
               const hubHead=(id,title,right)=>(
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
@@ -6564,7 +6543,7 @@ function App({vault, onVaultChange}={}) {
                         <span id="card-title-dhcp" className="ov-sub" style={{margin:0}}>DHCP Pools</span>
                       </div>
                       <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                        <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>6h trend</span>
+                        <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>trend</span>
                         <button className="col-btn" onClick={()=>exportCols('dhcp-pools',['addr','cidr','util','free'].map(k=>({key:k,label:k})),topSubs)}>CSV</button>
                       </div>
                     </div>
@@ -6573,12 +6552,13 @@ function App({vault, onVaultChange}={}) {
                       const clr=sevClr(s.util);
                       const badgeBg=u>=90?'rgba(248,113,113,.12)':u>=75?'rgba(251,191,36,.12)':'rgba(74,222,128,.10)';
                       const badgeBd=u>=90?'rgba(248,113,113,.35)':u>=75?'rgba(251,191,36,.35)':'rgba(74,222,128,.35)';
-                      const spark=Array.from({length:7},(_,j)=>{
-                        const pct=Math.max(0,Math.min(100,u-(6-j)*((u-Math.max(0,u-12))/6)+Math.sin(j)*2));
-                        return {x:j*10,y:18-(pct/100)*16};
-                      });
-                      const sparkPts=spark.map(p=>`${p.x},${p.y.toFixed(1)}`).join(' ');
-                      const lastY=spark[6].y.toFixed(1);
+                      // Real per-pool history only — never synthesize a trend. No stored
+                      // history for this pool yet → show an honest "no history" placeholder.
+                      const poolHist=(LS.get('noc.tileHist',{})['pool:'+(s.id||s.addr)]||[]).slice(-12);
+                      const poolMn=poolHist.length?Math.min(...poolHist):0;
+                      const poolRg=poolHist.length?((Math.max(...poolHist)-poolMn)||1):1;
+                      const sparkPts=poolHist.map((v,j)=>`${(j*(60/((poolHist.length-1)||1))).toFixed(1)},${(18-((v-poolMn)/poolRg)*16).toFixed(1)}`).join(' ');
+                      const lastY=poolHist.length?(18-((poolHist[poolHist.length-1]-poolMn)/poolRg)*16).toFixed(1):18;
                       return (<React.Fragment key={s.id||i}>
                         {i>0&&<div style={{height:1,background:'var(--border)',margin:'0 4px'}}/>}
                         <div className="ov-pool-row" role="button" tabIndex={0}
@@ -6590,18 +6570,20 @@ function App({vault, onVaultChange}={}) {
                           data-tip={s.name||s.addr}>
                           <span style={{fontFamily:'var(--font-mono)',fontSize:11,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.addr}/{s.cidr}</span>
                           <span style={{fontFamily:'var(--font-mono)',fontSize:12,fontWeight:600,color:clr,textAlign:'right'}}>{s.util}%</span>
-                          <svg width={60} height={20} viewBox="0 0 60 20" preserveAspectRatio="none" style={{display:'block',overflow:'visible'}}>
-                            <polyline points={sparkPts} fill="none" stroke={clr} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
-                            <circle cx={60} cy={lastY} r={2} fill={clr}/>
-                          </svg>
-                          <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:600,textTransform:'uppercase',letterSpacing:'.04em',textAlign:'center',padding:'2px 5px',borderRadius:2,background:badgeBg,color:clr,border:`1px solid ${badgeBd}`}}>{sevTxt(s.util)}</span>
+                          {poolHist.length>=2?(
+                            <svg width={60} height={20} viewBox="0 0 60 20" preserveAspectRatio="none" style={{display:'block',overflow:'visible'}}>
+                              <polyline points={sparkPts} fill="none" stroke={clr} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
+                              <circle cx={60} cy={lastY} r={2} fill={clr}/>
+                            </svg>
+                          ):<span style={{fontSize:12,color:'var(--muted)',fontFamily:'var(--font-ui)',textAlign:'center'}} data-tip="No trend history recorded yet">no history</span>}
+                          <span style={{fontFamily:'var(--font-mono)',fontSize:12,fontWeight:600,textTransform:'uppercase',letterSpacing:'.04em',textAlign:'center',padding:'2px 5px',borderRadius:2,background:badgeBg,color:clr,border:`1px solid ${badgeBd}`}}>{sevTxt(s.util)}</span>
                         </div>
                       </React.Fragment>);
                     })}
                     {topSubs.length===0&&<div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',padding:'10px 4px'}}>No DHCP pools in scope</div>}
                     <div style={{marginTop:10,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}>
                       <span style={{fontSize:10,color:'var(--muted)',fontFamily:'var(--font-ui)'}}>{topSubs.length} pools · {topSubs.filter(s=>parseInt(s.util)>=75).length} warn/crit</span>
-                      <span style={{fontSize:9,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>80% threshold</span>
+                      <span style={{fontSize:12,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>80% threshold</span>
                     </div>
                   </div>
                 );
@@ -6617,21 +6599,19 @@ function App({vault, onVaultChange}={}) {
                     <div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',marginBottom:10}}>
                       <span style={{color:'var(--ink)'}}>{s_zones.length}</span>{' zones  '}
                       <span style={{color:'var(--ink)'}}>{s_zones.reduce((a,z)=>a+(z.records||0),0).toLocaleString()}</span>{' records  '}
-                      {ttlBad.length>0?<span style={{color:'var(--amber)'}}>{ttlBad.length} errors</span>:<span style={{color:'var(--green)'}}>0 errors</span>}
+                      {ttlBad.length>0?<span style={{color:'var(--amber-text)'}}>{ttlBad.length} errors</span>:<span style={{color:'var(--green-tx)'}}>0 errors</span>}
                     </div>
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 42px 54px 38px',gap:'3px 6px'}}>
-                      {['Zone','Q/HR','Type','Status'].map((h,i)=>(
-                        <span key={i} style={{fontSize:9,color:'var(--gray-200)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid var(--border)',paddingBottom:3}}>{h}</span>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 54px 44px',gap:'3px 6px'}}>
+                      {['Zone','Records','Status'].map((h,i)=>(
+                        <span key={i} style={{fontSize:12,color:'var(--gray-200)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid var(--border)',paddingBottom:3,textAlign:i===1?'right':'left'}}>{h}</span>
                       ))}
                       {s_zones.length===0&&<span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)',gridColumn:'1/-1',paddingTop:6}}>No DNS zones</span>}
                       {s_zones.slice(0,4).map((z,i)=>{
-                        const qhr=hashN(z.fqdn,900)+50;
                         const isAnomaly=z.anomaly;
                         return (<React.Fragment key={z.id||i}>
                           <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'zone',data:z});}}} data-tip={z.fqdn} onClick={()=>setDrillEntity({type:'zone',data:z})}>{z.fqdn}</span>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--ink)'}}>{qhr}</span>
-                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--muted)'}}>Primary</span>
-                          <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:isAnomaly?'var(--amber)':'var(--green)'}}>{isAnomaly?'? STALE':'· OK'}</span>
+                          <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:(z.records||0)===0?'var(--amber-text)':'var(--ink)',textAlign:'right'}}>{(z.records||0).toLocaleString()}</span>
+                          <span style={{fontSize:12,fontFamily:'var(--font-mono)',color:isAnomaly?'var(--amber-text)':'var(--green-tx)'}}>{isAnomaly?'? STALE':'· OK'}</span>
                         </React.Fragment>);
                       })}
                     </div>
@@ -6642,7 +6622,7 @@ function App({vault, onVaultChange}={}) {
                     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
                       <DragHandle id={id}/>
                       <span id="card-title-subnets" className="ov-sub" style={{margin:0}}>IPAM Subnets</span>
-                      {critSubs.length>0?<span className="section-badge crit" style={{fontSize:8,padding:'1px 5px'}}>█ CRIT</span>:warnSubs.length>0?<span className="section-badge warn" style={{fontSize:8,padding:'1px 5px'}}>▲ WARN</span>:null}
+                      {critSubs.length>0?<span className="section-badge crit" style={{fontSize:12,padding:'1px 5px'}}>█ CRIT</span>:warnSubs.length>0?<span className="section-badge warn" style={{fontSize:12,padding:'1px 5px'}}>▲ WARN</span>:null}
                     </div>
                     <div style={{display:'flex',flexDirection:'column',gap:5}}>
                       {topSubs.slice(0,6).map((s,i)=>{
@@ -6669,10 +6649,10 @@ function App({vault, onVaultChange}={}) {
                       <span id="card-title-hosts" className="ov-sub" style={{margin:0}}>Host Status</span>
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
-                      {[{n:onlineH,l:'Online',c:'var(--green)'},{n:warnH,l:'Warn',c:'var(--amber)'},{n:downH,l:'Down',c:'var(--red)'}].map((x,i)=>(
+                      {[{n:onlineH,l:'Online',c:'var(--green-tx)'},{n:warnH,l:'Warn',c:'var(--amber-text)'},{n:downH,l:'Down',c:'var(--red)'}].map((x,i)=>(
                         <div key={i} style={{display:'flex',flexDirection:'column',gap:2}}>
                           <span style={{fontSize:22,fontFamily:'var(--font-mono)',color:x.c,lineHeight:1}}>{x.n}</span>
-                          <span style={{fontSize:9,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em'}}>{x.l}</span>
+                          <span style={{fontSize:12,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em'}}>{x.l}</span>
                         </div>
                       ))}
                     </div>
@@ -6686,15 +6666,15 @@ function App({vault, onVaultChange}={}) {
                     {errHosts.length>0&&(
                       <div style={{marginTop:8,display:'grid',gridTemplateColumns:'1fr 50px 54px',gap:'3px 6px',borderTop:'1px solid var(--border)',paddingTop:8}}>
                         {['Host','Status','Detail'].map((h,i)=>(
-                          <span key={i} style={{fontSize:9,color:'var(--gray-200)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em'}}>{h}</span>
+                          <span key={i} style={{fontSize:12,color:'var(--gray-200)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.06em'}}>{h}</span>
                         ))}
                         {errHosts.slice(0,3).map((h,i)=>{
                           const isErr=['error','offline'].includes(h.status);
                           return (<React.Fragment key={i}>
                             <span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'host',data:h});}}} data-tip={h.name||h.ip} onClick={()=>setDrillEntity({type:'host',data:h})}>{h.name||h.ip}</span>
-                            <span style={{fontSize:9,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,
+                            <span style={{fontSize:12,fontFamily:'var(--font-mono)',padding:'1px 4px',borderRadius:3,
                               background:isErr?'rgba(var(--red-rgb),.12)':'rgba(var(--amber-rgb),.12)',
-                              color:isErr?'var(--red)':'var(--amber)',
+                              color:isErr?'var(--red)':'var(--amber-text)',
                               border:`1px solid ${isErr?'rgba(var(--red-rgb),.25)':'rgba(var(--amber-rgb),.25)'}`}}>
                               {isErr?'█ CRIT':'▲ WARN'}
                             </span>
@@ -6747,7 +6727,7 @@ function App({vault, onVaultChange}={}) {
                       const isErr=log.result==='failure'||log.result==='error'||log.result==='failed';
                       const isOk=log.result==='success'||log.result==='ok';
                       const lvl=isErr?'ERROR':isOk?'INFO':'WARN';
-                      const lvlC=isErr?'var(--red)':isOk?'var(--green)':'var(--amber)';
+                      const lvlC=isErr?'var(--red)':isOk?'var(--green-tx)':'var(--amber-text)';
                       const lvlBg=isErr?'rgba(var(--red-rgb),.1)':isOk?'rgba(var(--green-rgb),.08)':'rgba(var(--amber-rgb),.1)';
                       return (
                         <div key={i} style={{display:'grid',gridTemplateColumns:'34px 40px 1fr',gap:6,alignItems:'baseline',padding:'4px 0',borderBottom:i<5?'1px solid var(--border)':'none',cursor:'pointer'}} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setDrillEntity({type:'audit',data:log});}}} onClick={()=>setDrillEntity({type:'audit',data:log})}>
@@ -6781,7 +6761,7 @@ function App({vault, onVaultChange}={}) {
                     {hubHead(id,'DNS Threat Events')}
                     {!hubSecurity ? hubMuted('loading…') : (<>
                       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:10}}>
-                        {[{n:hubSecurity.counts?.critical||0,l:'Crit',c:'var(--red)'},{n:hubSecurity.counts?.high||0,l:'High',c:'var(--red)'},{n:hubSecurity.counts?.medium||0,l:'Med',c:'var(--amber)'},{n:hubSecurity.counts?.low||0,l:'Low',c:'var(--green)'}].map((x,i)=>(
+                        {[{n:hubSecurity.counts?.critical||0,l:'Crit',c:'var(--red)'},{n:hubSecurity.counts?.high||0,l:'High',c:'var(--red)'},{n:hubSecurity.counts?.medium||0,l:'Med',c:'var(--amber-text)'},{n:hubSecurity.counts?.low||0,l:'Low',c:'var(--green-tx)'}].map((x,i)=>(
                           <div key={i} style={{display:'flex',flexDirection:'column',gap:2}}>
                             <span style={{fontSize:20,fontFamily:'var(--font-mono)',color:x.c,lineHeight:1}}>{x.n}</span>
                             <span style={{fontSize:9,color:'var(--muted)',textTransform:'uppercase',letterSpacing:'.08em'}}>{x.l}</span>
@@ -7034,12 +7014,12 @@ function App({vault, onVaultChange}={}) {
                           {focusEntity?.key===site?'◉ focused':'◎ focus'}
                         </span>
                       </div>
-                      <IPAMTable subnets={subs} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
+                      <IPAMTable subnets={subs} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity} dhcpCrit={dhcpCrit} dhcpWarn={dhcpWarn}/>
                     </div>
                   ));
                 })()
               : getViz('ipam-subnets')==='table'
-                ? <IPAMTable subnets={ipamQ?focusedPool.filter(s=>[s.name,s.addr,s.site].some(v=>String(v||'').toLowerCase().includes(ipamQ.toLowerCase()))):focusedPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity}/>
+                ? <IPAMTable subnets={ipamQ?focusedPool.filter(s=>[s.name,s.addr,s.site].some(v=>String(v||'').toLowerCase().includes(ipamQ.toLowerCase()))):focusedPool} ipamChip={ipamChip} rowLimit={rl('ipam')} leaseCt={leaseCt} onDrill={setDrillEntity} dhcpCrit={dhcpCrit} dhcpWarn={dhcpWarn}/>
                 : getViz('ipam-subnets')==='timeline'
                   ? <StateTimeline subnets={ipamQ?focusedPool.filter(s=>[s.name,s.addr,s.site].some(v=>String(v||'').toLowerCase().includes(ipamQ.toLowerCase()))):focusedPool} onDrill={setDrillEntity}/>
                   : <WidgetViz data={(ipamQ?focusedPool.filter(s=>[s.name,s.addr].some(v=>String(v||'').toLowerCase().includes(ipamQ.toLowerCase()))):focusedPool).map(s=>({subnet:`${s.addr}/${s.cidr}`,util:s.util,free:s.free}))} viz={getViz('ipam-subnets')} labelKey="subnet" valueKey="util" color="var(--teal)" defaultRows={10}/>}
@@ -7053,7 +7033,7 @@ function App({vault, onVaultChange}={}) {
             <div className="g3 mb20">
               {[
                 {v:s_leases.filter(l=>l.state==='active').length, l:'Active Leases',  c:'var(--teal)'},
-                {v:s_leases.filter(l=>l.state==='expired').length,l:'Expired Leases', c:'var(--amber)'},
+                {v:s_leases.filter(l=>l.state==='expired').length,l:'Expired Leases', c:'var(--amber-text)'},
                 {v:Object.keys(leaseCt).length,                   l:'Subnets w/ Leases',c:'var(--gray-200)'},
               ].map((x,i)=>(
                 <div key={i} className="card" style={{textAlign:'center'}}>
@@ -7065,7 +7045,7 @@ function App({vault, onVaultChange}={}) {
             <div className="card">
               <div className="card-title">
                 <div className="dot" aria-hidden="true"/>DHCP Leases
-                <span style={{fontWeight:400,color:'var(--gray-600)',fontSize:10}}>
+                <span style={{fontWeight:400,color:'var(--muted)',fontSize:10}}>
                   {dhcpSubFilt?` — ${subnets.find(s=>s.id===dhcpSubFilt)?.name||'subnet'} (${s_leases.length})`:sq?` — filtered (${s_leases.length})`:` (${s_leases.length})`}
                 </span>
                 <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
@@ -7102,14 +7082,14 @@ function App({vault, onVaultChange}={}) {
                     <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>view: {z.view}</span>
                     <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>TTL: {z.ttl}s</span>
                     <span style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)'}}>neg TTL: {z.neg_ttl||0}s</span>
-                    <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:z.records===0?'var(--amber)':'var(--green)'}}>{(z.records||0).toLocaleString()} records</span>
+                    <span style={{fontSize:11,fontFamily:'var(--font-mono)',color:z.records===0?'var(--amber-text)':'var(--green-tx)'}}>{(z.records||0).toLocaleString()} records</span>
                     {issueCount>0&&<span style={{fontSize:11,fontFamily:'var(--font-mono)',color:'var(--red)'}}>▲ {issueCount} issue{issueCount>1?'s':''}</span>}
                     <button className="drill-close" style={{marginLeft:'auto'}} onClick={()=>setScopeZone(null)} aria-label="Clear zone scope" title="Clear zone scope">×</button>
                   </div>
                   {z.anomaly&&z.issues&&z.issues.length>0&&(
                     <div style={{padding:'6px 12px',display:'flex',flexWrap:'wrap',gap:6}}>
                       {z.issues.map((iss,i)=>(
-                        <span key={i} style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--amber)',border:'1px solid var(--border)',borderRadius:3,padding:'1px 6px'}}>{iss}</span>
+                        <span key={i} style={{fontSize:10,fontFamily:'var(--font-mono)',color:'var(--amber-text)',border:'1px solid var(--border)',borderRadius:3,padding:'1px 6px'}}>{iss}</span>
                       ))}
                     </div>
                   )}
@@ -7120,7 +7100,7 @@ function App({vault, onVaultChange}={}) {
               {[
                 {v:dnsViews.length,  l:'DNS Views',     c:'var(--teal)'},
                 {v:zones.length,     l:'Auth Zones',    c:'var(--gray-200)'},
-                {v:ttlBad.length,    l:'TTL Anomalies', c:'var(--amber)'},
+                {v:ttlBad.length,    l:'TTL Anomalies', c:'var(--amber-text)'},
               ].map((x,i)=>(
                 <div key={i} className="card" style={{textAlign:'center'}}>
                   <div style={{fontSize:30,fontWeight:800,color:x.c}}>{x.v}</div>
@@ -7367,7 +7347,7 @@ function App({vault, onVaultChange}={}) {
               {[
                 {v:subnets.length, l:'Subnets', c:'var(--teal)'},
                 {v:hosts.length,   l:'Hosts',   c:'var(--gray-200)'},
-                {v:zones.length,   l:'Zones',   c:'var(--amber)'},
+                {v:zones.length,   l:'Zones',   c:'var(--amber-text)'},
                 {v:critSubs.length,l:'Critical', c:'var(--red)'},
               ].map((x,i)=>(
                 <div key={i} className="card" style={{textAlign:'center'}}>
