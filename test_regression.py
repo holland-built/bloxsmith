@@ -7,7 +7,7 @@ Run:  python3 test_regression.py
       python3 -m unittest test_regression -v
 """
 
-import json, os, sys, time, threading, unittest
+import json, os, re, sys, time, threading, unittest
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -1330,6 +1330,64 @@ class FrontendStructureTests(unittest.TestCase):
         html = open(HTML).read()
         self.assertIn(".drag-card.dragging{opacity:.5}", html,
             ".drag-card.dragging opacity must be .5 (not .35)")
+
+
+# ── Bloxsmith enterprise shell rebuild (2026-07-05) ───────────────────────────
+
+class ShellRebuildTests(unittest.TestCase):
+    """Locks in the shell/IA rebuild: triage-first Home landing, persistent
+    left rail, dark theme, shape-coded severity, master-detail panels, and
+    the accent-as-chart-series color-law fix. See
+    brainstorms/bloxsmith-shell-rebuild-plan-2026-07-05.md for the full spec.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(HTML, encoding="utf-8") as f:
+            cls.html = f.read()
+
+    def test_home_is_default_landing_ahead_of_overview(self):
+        self.assertIn("id:'home'", self.html, "Home section missing from SECTIONS array")
+        self.assertIn("useState('home')", self.html,
+            "Default section state must be 'home', not 'overview'")
+        self.assertIn("section==='home'", self.html, "Home section not rendered")
+        self.assertIn("section==='overview'", self.html,
+            "Overview route must still exist as a secondary destination")
+
+    def test_rail_nav_grouped_and_visible_text(self):
+        self.assertIn("NAV_GROUPS", self.html, "Grouped rail nav (NAV_GROUPS) missing")
+        for group in ("Workspace", "DDI", "Security"):
+            self.assertIn(f"label:'{group}'", self.html, f"Nav group '{group}' missing")
+        # visible-text labels, not icon-only — nav-lbl span must exist
+        self.assertIn("nav-lbl", self.html, "Rail nav items must render a visible text label")
+
+    def test_dark_theme_exists(self):
+        self.assertIn(':root[data-theme="dark"]', self.html,
+            "Dark theme token block is missing")
+
+    def test_severity_is_shape_and_color_coded(self):
+        self.assertIn("const SevBar", self.html, "SevBar shape-coded severity component missing")
+        self.assertIn('role="img" aria-label={SEV_LABEL[sev]', self.html,
+            "SevBar must expose an accessible name (shape alone isn't screen-reader visible)")
+
+    def test_explore_and_home_have_master_detail_panels(self):
+        self.assertEqual(self.html.count("gridTemplateColumns:'1fr 316px'"), 2,
+            "Expected exactly 2 master-detail (1fr/316px) layouts: Explore and Home triage")
+
+    def test_no_accent_reused_as_chart_series_color(self):
+        for arr_name in ("COLORS", "cols"):
+            for m in re.finditer(rf"const {arr_name}=(\[[^\]]*\]);", self.html):
+                arr = m.group(1)
+                if "var(--teal)" in arr:
+                    self.assertEqual(arr.count("var(--teal)") + arr.count("var(--teal-bright)"), 1,
+                        f"Accent reused more than once in a chart color series: {arr}")
+
+    def test_triage_row_keyboard_activation_does_not_double_fire(self):
+        # A row's onKeyDown must ignore events that bubbled up from a nested
+        # interactive child (e.g. the "View ->" button), or Enter/Space on
+        # that button both selects the row AND navigates away.
+        self.assertIn("if(e.target!==e.currentTarget) return;", self.html,
+            "Triage row keydown handler must guard against bubbled child events")
 
 
 # ── update resilience tests ───────────────────────────────────────────────────
