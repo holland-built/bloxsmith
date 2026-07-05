@@ -1,6 +1,6 @@
-# SHIP.md — release playbook for Infoblox MCP
+# SHIP.md — release playbook for Bloxsmith
 
-Repo: `github.com/holland-built/infoblox-noc-dashboard`. Run `/release` from anywhere in the repo.
+Repo: `github.com/holland-built/bloxsmith`. Run `/release` from anywhere in the repo.
 
 ## Environments
 | Env | Branch | Default | Notes |
