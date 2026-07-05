@@ -73,3 +73,6 @@ scripts/test_final.py
 
 mockups/
 .mockups/
+
+# saved-view runtime store (VAULT_DIR)
+views/
