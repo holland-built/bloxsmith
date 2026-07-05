@@ -92,19 +92,67 @@ window.onerror = function(msg,src,line,col,err) {
      The old teal dark/light variants were removed in the Vercel reskin. */
   color-scheme:light;
 }
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  /* dark canvas ramp */
+  --bg:#0b0e14;--surface:#12161f;--surface-2:#171c27;--surface-3:#1c2230;
+  --border:rgba(255,255,255,.08);--separator:rgba(255,255,255,.08);
+  /* accent — lightened Vercel blue, same hue as light so brand identity carries over */
+  --accent:#3b9eff;--teal:#3b9eff;--teal-bright:#63b3ff;--accent-on:#0b0e14;
+  /* text ramp */
+  --ink:#e6e9ee;--ink-hover:#f4f6f9;--ink-dim:#aab1bd;--muted:#8b93a1;
+  --gray-100:#e6e9ee;--gray-200:#9aa1ad;--gray-400:#7d8590;--gray-500:#5b6472;--gray-600:#3d4452;
+  /* semantic status — brightened for dark backgrounds, same hue family as light */
+  --red:#f87171;--amber:#fbbf24;--green:#34d399;
+  --red-rgb:248,113,113;--amber-rgb:251,191,36;--green-rgb:52,211,153;
+  --red-bg:rgba(248,113,113,.15);--red-border:rgba(248,113,113,.4);--red-text:#fca5a5;
+  --amber-bg:rgba(251,191,36,.15);--amber-border:rgba(251,191,36,.4);--amber-text:#fcd34d;
+  --green-bg:rgba(52,211,153,.15);--green-border:rgba(52,211,153,.4);--green-text:#6ee7b7;
+  --green-tx:#4ade80;
+  /* interaction */
+  --hover:rgba(255,255,255,.06);
+  --hover-strong:rgba(255,255,255,.1);
+  --tint:rgba(59,158,255,.12);
+  --tint-border:rgba(59,158,255,.35);
+  --row-border:rgba(255,255,255,.06);
+  --svg-track:rgba(255,255,255,.08);
+  --svg-grid:rgba(255,255,255,.08);
+  --focus-border:#3b9eff;
+  /* severity badge tints */
+  --sev-red-t:#fca5a5;--sev-amber-t:#fcd34d;--sev-green-t:#6ee7b7;
+  --badge-red-bg:rgba(248,113,113,.15);--badge-red-bd:rgba(248,113,113,.4);
+  --badge-amber-bg:rgba(251,191,36,.15);--badge-amber-bd:rgba(251,191,36,.4);
+  --badge-green-bg:rgba(52,211,153,.15);--badge-green-bd:rgba(52,211,153,.4);
+  --badge-gray-bg:rgba(255,255,255,.06);--badge-gray-bd:rgba(255,255,255,.14);--badge-gray-tx:var(--gray-100);
+  --shadow-float:0 0 0 1px rgba(0,0,0,.6),0 1px 2px rgba(0,0,0,.5),0 4px 16px -4px rgba(0,0,0,.6);
+  --shadow-card:0 1px 3px rgba(0,0,0,.4),0 4px 12px -4px rgba(0,0,0,.5);
+  --shadow:0 2px 6px rgba(0,0,0,.4);--shadow-sm:0 1px 2px rgba(0,0,0,.35);
+  --brand:#e6e9ee;
+  /* aliases */
+  --background:#0b0e14;--text:#e6e9ee;
+  --blue-dark:#0b0e14;--blue-mid:#12161f;--blue-deep:#1c2230;
+  --danger:#f87171;--warning:#fcd34d;--success:#34d399;--info:#3b9eff;
+  --danger-bg:rgba(248,113,113,.15);--warning-bg:rgba(251,191,36,.15);
+  --success-bg:rgba(52,211,153,.15);--info-bg:rgba(59,158,255,.12);
+}
 body{background:var(--blue-dark);color:var(--ink);font-family:var(--font-ui);margin:0;padding-left:var(--sbw,44px);padding-top:92px;overflow-x:hidden;line-height:1.5;font-variant-numeric:tabular-nums;transition:background .2s,color .2s,padding-left .2s}
 body.chat-open{padding-right:340px}
 @media(max-width:760px){body.chat-open{padding-right:0}}
-.sidebar{width:224px;min-width:224px;background:var(--blue-mid);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:stretch;position:fixed;top:92px;left:0;bottom:0;height:calc(100vh - 92px);z-index:100;overflow:hidden;transition:width .2s cubic-bezier(.4,0,.2,1)}
+.sidebar{width:224px;min-width:224px;background:var(--blue-mid);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:stretch;position:fixed;top:92px;left:0;bottom:0;height:calc(100vh - 92px);z-index:100;overflow-y:auto;overflow-x:hidden;transition:width .2s cubic-bezier(.4,0,.2,1)}
 .logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:flex-start;gap:10px;width:100%}
 .logo-mark{width:26px;height:26px;border-radius:var(--r-ctl);background:#fff;padding:1px;flex-shrink:0}
 .logo-text{font-size:12px;font-weight:700;color:var(--teal);letter-spacing:.04em}
 .logo-sub{font-size:10px;color:var(--gray-400);letter-spacing:.1em;margin-top:1px}
-.sidebar-nav{flex:1;padding:6px 0;overflow-y:auto;width:100%}
+.sidebar-nav{flex:0 0 auto;padding:6px 0;width:100%}
+.nav-sec{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400);padding:14px 14px 4px;font-weight:600}
+.nav-item{position:relative;display:flex;align-items:center;gap:9px;padding:8px 10px;font-size:13px;width:100%;box-sizing:border-box;background:none;border:none;color:var(--gray-200);cursor:pointer;font-family:inherit;text-align:left;transition:background .12s,color .12s}
+.nav-item:hover{background:var(--hover);color:var(--ink)}
 .nav-item.active{background:var(--tint);color:var(--ink);font-weight:600}
 .nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;height:100%;background:var(--teal);border-radius:0 var(--r-status) var(--r-status) 0}
 .nav-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;color:var(--gray-400);transition:color .12s;flex-shrink:0;font-size:16px}
 .nav-item:hover .nav-icon,.nav-item.active .nav-icon{color:var(--teal)}
+.nav-lbl{display:inline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-badge-wrap{margin-left:auto;flex-shrink:0;display:flex;align-items:center}
 .sidebar-foot{display:block}
 /* collapsed state */
 .sidebar.collapsed{width:44px;min-width:44px;align-items:center}
@@ -128,11 +176,6 @@ body.chat-open{padding-right:340px}
 .sidebar.open .nav-lbl{display:inline}
 .sidebar.open .nav-badge-wrap{position:static}
 .sidebar.open .sidebar-foot{display:block}
-/* sidebar becomes off-canvas settings drawer — nav moves to topbar */
-.sidebar{transform:translateX(-100%);transition:transform .2s cubic-bezier(.4,0,.2,1),width .2s cubic-bezier(.4,0,.2,1);box-shadow:none}
-.sidebar.open{transform:translateX(0);box-shadow:var(--shadow-float);width:224px;min-width:224px}
-.sidebar-collapse-btn{display:none}
-body{padding-left:0!important}
 .sidebar-icon-strip .theme-btn{margin-left:0}
 .sf-menu{padding:4px 0}
 .sf-row{display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;font-size:11px;color:var(--gray-200);background:none;border:none;width:100%;text-align:left;font-family:inherit;line-height:1}
@@ -621,12 +664,6 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 /* theme toggle */
 .theme-btn{display:flex;align-items:center;justify-content:center;background:var(--blue-deep);border:1px solid var(--border);color:var(--gray-200);border-radius:var(--r-ctl);cursor:pointer;font-size:14px;padding:8px 10px;margin-left:6px;transition:background .12s,border-color .12s,color .12s;line-height:1}
 .theme-btn:hover{border-color:var(--teal);color:var(--teal)}
-.topbar-tabs{display:flex;align-items:stretch;gap:0;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none;margin:0 8px}
-.topbar-tabs::-webkit-scrollbar{display:none}
-.topbar-tab{display:inline-flex;align-items:center;gap:5px;padding:0 12px;border:none;background:none;color:var(--gray-400);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;height:48px;transition:color .12s,border-color .12s;position:relative}
-.topbar-tab:hover{color:var(--teal)}
-.topbar-tab.active{color:var(--ink);font-weight:600;border-bottom-color:var(--teal)}
-.topbar-tab .badge-pill{font-size:var(--fs-2xs);padding:1px 5px}
 /* topbar grouping: primary actions | utility cluster */
 .topbar-center{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 12px}
 .topbar-chip{display:inline-flex;align-items:center;gap:5px;padding:0 9px;height:24px;border-radius:var(--r-status);font-size:10px;font-weight:700;letter-spacing:.07em;white-space:nowrap;font-family:var(--font-mono)}
@@ -729,6 +766,7 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
   body{padding-left:0!important;padding-left:env(safe-area-inset-left,0)!important}
   .sidebar{transform:translateX(-100%);transition:transform .22s cubic-bezier(.25,1,.5,1);box-shadow:var(--shadow-float);padding-bottom:env(safe-area-inset-bottom,0)}
   .sidebar.open{transform:translateX(0)}
+  .sidebar-collapse-btn{display:none}
   .sidebar-backdrop{background:rgba(0,0,0,.5)}
   .menu-btn{display:inline-flex;align-items:center}
   .topbar{flex-wrap:nowrap;gap:0 4px} .nav-clock{display:none} .nav-breadcrumb{display:none} .nav-brand-name{display:none}
@@ -799,6 +837,12 @@ body.chrome-hidden .sidebar{top:0;height:100vh}
 .inc-item:hover{background:var(--hover)}
 .inc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--muted)}
 .inc-dot.crit{background:var(--red)}.inc-dot.warn{background:var(--amber)}
+.sev-bar{display:inline-flex;align-items:flex-end;gap:1.5px;height:10px;flex-shrink:0}
+.sev-bar i{width:2.5px;border-radius:1px;background:var(--gray-400);font-style:normal}
+.sev-bar i:nth-child(1){height:4px}.sev-bar i:nth-child(2){height:7px}.sev-bar i:nth-child(3){height:10px}
+.sev-bar.crit i{background:var(--red)}
+.sev-bar.warn i:nth-child(1),.sev-bar.warn i:nth-child(2){background:var(--amber)}
+.sev-bar.info i:nth-child(1){background:var(--teal)}
 .inc-body{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
 .inc-t{font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .inc-d{font-size:12px;color:var(--muted);font-family:var(--font-mono)}
@@ -2350,7 +2394,7 @@ function BuilderDonut({rows, dim, measure, agg, onSegClick}){
   if(!data.length) return <div className="no-data">No numeric data to chart</div>;
   const total=data.reduce((s,r)=>s+r.value,0)||1;
   const totalFmt=Math.round(total).toLocaleString();
-  const cols=['var(--teal)','var(--amber)','var(--green)','var(--red)','var(--gray-400)','var(--teal-bright)'];
+  const cols=['var(--teal)','var(--amber)','var(--green)','var(--red)','var(--gray-400)','var(--gray-500)'];
   const C=64,R=48,sw=16,circ=2*Math.PI*R;
   let acc=0;
   return (
@@ -3206,7 +3250,7 @@ function QueryTypeChart({queryTypes}){
   })).filter(r=>r.cnt>0);
   if(!items.length) return null;
   const total=items.reduce((a,r)=>a+r.cnt,0);
-  const COLORS=['var(--teal)','var(--amber)','var(--green)','var(--red)','var(--gray-400)','var(--teal-bright)'];
+  const COLORS=['var(--teal)','var(--amber)','var(--green)','var(--red)','var(--gray-400)','var(--gray-500)'];
   const R=52, r=28, cx=64, cy=64;
   let angle=-Math.PI/2;
   const slices=items.map((it,i)=>{
@@ -4144,7 +4188,7 @@ function ChatPanel({open, onClose, data, messages, setMessages, queryMode, setQu
 }
 
 /* ─── DASHBOARD WIZARD ───────────────────────────────────────────────────────*/
-const PROTECTED_SECTIONS = new Set(['overview']);
+const PROTECTED_SECTIONS = new Set(['overview','home']);
 function DashboardWizard({overviewOrder, collapsed, hiddenSections, widgetLabels, moveWidget, toggleCollapse, toggleHideSection, onDone, orgDomain, orgName, onBrandSave, initialTab}) {
   const [tab, setTab] = useState(initialTab||'widgets');
   const [companyInput, setCompanyInput] = useState(orgName||'');
@@ -4535,8 +4579,12 @@ function RowsSheet({title, rows, columns, onClose}){
   );
 }
 
+/* ─── severity bar indicator — shape+color coded (not color-only) ──────────*/
+const SEV_LABEL = {crit:'critical',warn:'warning',info:'info'};
+const SevBar = ({sev}) => <span className={`sev-bar ${sev}`} role="img" aria-label={SEV_LABEL[sev]||sev}><i/><i/><i/></span>;
+
 /* ─── TRIAGE PANEL ──────────────────────────────────────────────────────────*/
-function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection, dhcpCrit, dhcpWarn}) {
+function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection, dhcpCrit, dhcpWarn, onSelectRow, selectedRow}) {
   const errHosts  = hosts.filter(h=>h.status==='error'||h.status==='offline');
   const critSubs  = subnets.filter(s=>s.util>=dhcpCrit);
   const warnSubs  = subnets.filter(s=>s.util>=dhcpWarn&&s.util<dhcpCrit);
@@ -4549,15 +4597,19 @@ function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection
   if(firingAlerts.length>0) rows.push({sev:'warn',count:firingAlerts.length, desc:`alert rule${firingAlerts.length>1?'s':''} firing`,sec:'alerts',items:firingAlerts.slice(0,3).map(a=>a.metric)});
   if(warnSubs.length>0)  rows.push({sev:'warn',count:warnSubs.length,  desc:`subnet${warnSubs.length>1?'s':''} ${dhcpWarn}–${dhcpCrit-1}% utilization`,sec:'ipam',items:warnSubs.slice(0,3).map(s=>s.name!==s.addr?s.name:s.addr)});
   if(ttlBad.length>0)    rows.push({sev:'warn',count:ttlBad.length,    desc:`DNS zone${ttlBad.length>1?'s':''} with TTL anomalies`,sec:'dns',items:ttlBad.slice(0,3).map(z=>z.name)});
-  const sevDot = {crit:'var(--red)',warn:'var(--amber)',info:'var(--teal)'};
   return (
     <div className="card">
       <div className="card-title"><div className="dot" aria-label="warning" style={{background:'var(--amber)'}}/>Triage — items needing attention</div>
       {rows.length===0
         ? <div className="no-data" style={{padding:24}}>No issues detected — all metrics within normal thresholds.</div>
-        : rows.map((r,i)=>(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
-              <div style={{width:8,height:8,borderRadius:'50%',background:sevDot[r.sev],flexShrink:0}}/>
+        : rows.map((r,i)=>{
+            const isSel = selectedRow && (selectedRow.sec+'|'+selectedRow.desc)===(r.sec+'|'+r.desc);
+            return (
+            <div key={i} role="button" tabIndex={0}
+              style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid var(--border)',cursor:'pointer',background:isSel?'var(--hover)':'transparent'}}
+              onClick={()=>onSelectRow&&onSelectRow(r)}
+              onKeyDown={e=>{if(e.target!==e.currentTarget) return; if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelectRow&&onSelectRow(r);}}}>
+              <SevBar sev={r.sev}/>
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:600}}>
                   <span style={{color:r.sev==='crit'?'var(--red)':'var(--amber-text)',marginRight:6}}>{r.count}</span>
@@ -4565,9 +4617,10 @@ function TriagePanel({subnets, hosts, zones, auditLogs, firingAlerts, setSection
                 </div>
                 {r.items.length>0&&<div style={{fontSize:10,color:'var(--gray-400)',marginTop:2}}>{r.items.join(', ')}</div>}
               </div>
-              <button className="n-btn" onClick={()=>setSection(r.sec)}>View →</button>
+              <button className="n-btn" onClick={(e)=>{e.stopPropagation();setSection(r.sec);}}>View →</button>
             </div>
-          ))
+            );
+          })
       }
     </div>
   );
@@ -4602,6 +4655,7 @@ function NavIcon({id,size=16}){
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,display:'block'}} aria-hidden="true"><path d={d}/></svg>;
 }
 const SECTIONS=[
+  {id:'home',          icon:'triage',        label:'Home',           tip:'Triage-first landing — network health at a glance and everything that needs attention right now.'},
   {id:'overview',      icon:'overview',      label:'Overview',       tip:'Health tiles + per-domain status at a glance. Drag widgets to reorder.'},
   {id:'map',           icon:'map',           label:'Topology Map',    tip:'Subnets grouped by site with host status — Auvik-style topology view.'},
   {id:'ipam',          icon:'ipam',          label:'IPAM / Subnets',  tip:'IP address management — subnets, DHCP leases, utilization, and drill-down.'},
@@ -4612,6 +4666,11 @@ const SECTIONS=[
   {id:'alerts',        icon:'alerts',        label:'Alert Rules',     tip:'Define threshold-based alerts (e.g. DHCP &gt; 90%) with notifications. Includes triage view.'},
   {id:'explore',       icon:'explore',       label:'Explore',         tip:'Ad-hoc group-by pivot over hosts, leases, and DNS — Kentik-style explorer.'},
   {id:'help', icon:'help', label:'Help', tip:'How every feature works — searchable ELI5 guide.', noAuto:true},
+];
+const NAV_GROUPS=[
+  {label:'Workspace', ids:['home','overview','explore','alerts','audit']},
+  {label:'DDI',       ids:['map','ipam','dns','hosts']},
+  {label:'Security',  ids:['security']},
 ];
 
 function IPAMTable({subnets, ipamChip, rowLimit, leaseCt, onDrill, dhcpCrit=95, dhcpWarn=80}) {
@@ -5434,11 +5493,12 @@ function TopoMap({subnets, hosts, zones, onDrill}){
   );
 }
 
-function PivotExplorer({data, hosts, subnets, zones}){
+function PivotExplorer({data, hosts, subnets, zones, onSelect}){
   const [groupBy, setGroupBy] = React.useState('subnet');
   const [metric, setMetric]   = React.useState('count');
   const [filterTxt, setFilterTxt] = React.useState('');
   const [viewMode, setViewMode] = React.useState('bars');
+  const [selectedKey, setSelectedKey] = React.useState(null);
 
   // Build pivot rows based on groupBy + metric
   const rows = React.useMemo(()=>{
@@ -5521,7 +5581,10 @@ function PivotExplorer({data, hosts, subnets, zones}){
             const pct=maxVal>0?Math.round(r.val/maxVal*100):0;
             const bg=(metric==='util'?r.val:pct)>=90?'var(--red)':(metric==='util'?r.val:pct)>=70?'var(--amber)':'var(--teal)';
             return <div key={r.key} title={`${r.label}: ${r.val}`}
-              style={{width:56,height:32,borderRadius:3,background:bg,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',border:'1px solid rgba(0,0,0,.2)'}}>
+              role="button" tabIndex={0}
+              onClick={()=>{setSelectedKey(r.key);onSelect&&onSelect({...r,groupBy});}}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedKey(r.key);onSelect&&onSelect({...r,groupBy});}}}
+              style={{width:56,height:32,borderRadius:3,background:bg,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',border:r.key===selectedKey?'2px solid var(--ink)':'1px solid rgba(0,0,0,.2)',cursor:'pointer'}}>
               <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:'rgba(0,0,0,.85)',fontWeight:700}}>{r.val}</span>
               <span style={{fontSize:7,color:'rgba(0,0,0,.6)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:52,padding:'0 2px'}}>{r.label}</span>
             </div>;
@@ -5533,7 +5596,10 @@ function PivotExplorer({data, hosts, subnets, zones}){
           const pct = maxVal>0 ? Math.round(r.val/maxVal*100) : 0;
           const barColor = (metric==='util'?r.val:pct)>=90?'var(--red)':(metric==='util'?r.val:pct)>=70?'var(--amber)':'var(--teal)';
           return (
-            <div key={r.key} style={{display:'grid',gridTemplateColumns:'180px 1fr 60px',gap:8,alignItems:'center'}}>
+            <div key={r.key} role="button" tabIndex={0}
+              onClick={()=>{setSelectedKey(r.key);onSelect&&onSelect({...r,groupBy});}}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedKey(r.key);onSelect&&onSelect({...r,groupBy});}}}
+              style={{display:'grid',gridTemplateColumns:'180px 1fr 60px',gap:8,alignItems:'center',cursor:'pointer',border:r.key===selectedKey?'1px solid var(--ink)':'1px solid transparent',borderRadius:3,padding:'2px 4px',background:r.key===selectedKey?'var(--surface-3)':'none'}}>
               <span style={{fontSize:11,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'var(--font-mono)'}} title={r.label}>{r.label}</span>
               <div style={{height:6,background:'var(--surface-3)',borderRadius:3}}>
                 <div style={{width:`${pct}%`,height:'100%',background:barColor,borderRadius:3,transition:'width .3s'}}/>
@@ -5744,7 +5810,7 @@ function App({vault, onVaultChange}={}) {
   const [loading,setLoading]   = useState(true);
   const [refreshing,setRefreshing] = useState(false);
   const [lastUpd,setLastUpd]   = useState(null);
-  const [section,setSection]   = useState('overview');
+  const [section,setSection]   = useState('home');
   const [hostFilt,setHostFilt]       = useState(null);
   const [subFilt,setSubFilt]         = useState(null);
   const [scopeSubnet, setScopeSubnet] = useState(null);
@@ -5767,7 +5833,9 @@ function App({vault, onVaultChange}={}) {
   const [usingMock, setUsingMock]       = useState(false);
   const [demoDismiss, setDemoDismiss]   = useState(()=>LS.get('noc.demoDismiss',false));
   const [sidebarOpen, setSidebarOpen]       = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(()=>LS.get('noc.sidebarCollapsed',true));
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(()=>LS.get('noc.sidebarCollapsed',false));
+  const [exploreSel, setExploreSel] = useState(null);
+  const [homeSel, setHomeSel] = useState(null);
   const [alertColCollapsed, setAlertColCollapsed] = useState(()=>LS.get('noc.incidentsHidden',true));
   const [bellOpen, setBellOpen] = useState(false);
   const [srchQ, setSrchQ]       = useState('');
@@ -6063,7 +6131,15 @@ function App({vault, onVaultChange}={}) {
   },[]);
 
   useEffect(()=>{load();},[]);
-  useEffect(()=>{ document.documentElement.style.setProperty('--sbw','0px'); },[]);
+  useEffect(()=>{
+    const applySbw=()=>{
+      const desktop = window.innerWidth > 760;
+      document.documentElement.style.setProperty('--sbw', desktop ? (sidebarCollapsed?'44px':'224px') : '0px');
+    };
+    applySbw();
+    window.addEventListener('resize', applySbw);
+    return ()=>window.removeEventListener('resize', applySbw);
+  },[sidebarCollapsed]);
   useEffect(()=>{ const t=setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(t); },[]);
   useEffect(()=>{ if(!wallMode) return; const ids=SECTIONS.filter(s=>!s.noAuto).map(s=>s.id); let i=ids.indexOf(section); const t=setInterval(()=>{ i=(i+1)%ids.length; setSection(ids[i]); },30000); return ()=>clearInterval(t); },[wallMode]);
   const SEC_DELTA_KEY={ipam:'total_subnets',dns:'total_zones'};
@@ -6421,6 +6497,35 @@ function App({vault, onVaultChange}={}) {
           </div>
         </div>
 
+        <nav className="sidebar-nav" aria-label="Sections">
+          {NAV_GROUPS.map(g=>{
+            const items=g.ids.map(id=>SECTIONS.find(s=>s.id===id)).filter(s=>s&&!hiddenSections.includes(s.id));
+            if(items.length===0) return null;
+            return (
+              <div key={g.label}>
+                <div className="nav-sec">{g.label}</div>
+                {items.map(s=>{
+                  let badge=null;
+                  if(data&&s.id==="ipam"){const c=data.subnets.filter(x=>x.util>=dhcpCrit).length;if(c>0)badge=<span className="badge-pill">{c}</span>;}
+                  if(data&&s.id==="dns"){const c=data.zones.filter(z=>z.anomaly).length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
+                  if(data&&s.id==="audit"){const c=data.auditLogs.filter(l=>l.result==="failure").length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
+                  if(s.id==="alerts"&&firingAlerts.length>0)badge=<span className="badge-pill">{firingAlerts.length}</span>;
+                  return (
+                    <button key={s.id} type="button" className={`nav-item${section===s.id?' active':''}`}
+                      aria-current={section===s.id?'page':undefined}
+                      title={s.label} aria-label={s.label}
+                      onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>
+                      <span className="nav-icon"><NavIcon id={s.icon}/></span>
+                      <span className="nav-lbl">{s.label}</span>
+                      {badge&&<span className="nav-badge-wrap">{badge}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </nav>
+
         <div className="sidebar-foot">
           <div className="sf-status" style={{color:'var(--green-tx)',display:'flex',alignItems:'center',gap:5}}>
             <span className="pulse">●</span> API Connected
@@ -6665,16 +6770,6 @@ function App({vault, onVaultChange}={}) {
           </div>
         </div>
         <div className="subbar">
-          <nav className="topbar-tabs" aria-label="Sections">
-            {SECTIONS.filter(s=>!hiddenSections.includes(s.id)).map(s=>{
-              let badge=null;
-              if(data&&s.id==="ipam"){const c=data.subnets.filter(x=>x.util>=dhcpCrit).length;if(c>0)badge=<span className="badge-pill">{c}</span>;}
-              if(data&&s.id==="dns"){const c=data.zones.filter(z=>z.anomaly).length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
-              if(data&&s.id==="audit"){const c=data.auditLogs.filter(l=>l.result==="failure").length;if(c>0)badge=<span className="badge-pill badge-pill-amber">{c}</span>;}
-              if(s.id==="alerts"&&firingAlerts.length>0)badge=<span className="badge-pill">{firingAlerts.length}</span>;
-              return(<button key={s.id} className={`topbar-tab${section===s.id?" active":""}`} aria-current={section===s.id?"page":undefined} onClick={()=>{setSection(s.id);setSidebarOpen(false);}}>{s.label}{badge}</button>);
-            })}
-          </nav>
           <div className="subbar-filters">
             <select className="ghost-chip" value={siteFilt||""} onChange={e=>setSiteFilt(e.target.value||null)} aria-label="Filter by site" style={{appearance:"none",WebkitAppearance:"none"}}>
               <option value="">Site: All</option>
@@ -6687,7 +6782,7 @@ function App({vault, onVaultChange}={}) {
             <button className={`ghost-chip${chatOpen?" on":""}`} onClick={()=>setChatOpen(o=>!o)}>⊕ {chatOpen?"Close":"Query"}</button>
           </div>
         </div>
-        {data&&section!=='overview'&&<ScopeBar subnets={subnets} zones={zones}
+        {data&&section!=='overview'&&section!=='home'&&<ScopeBar subnets={subnets} zones={zones}
           scopeSubnet={scopeSubnet} setScopeSubnet={setScopeSubnet}
           scopeZone={scopeZone} setScopeZone={setScopeZone}
           savedScopes={savedScopes}
@@ -6775,6 +6870,83 @@ function App({vault, onVaultChange}={}) {
         })()}
         <div key={section} className="section-view">
         {/* ── OVERVIEW ── */}
+        {section==='home'&&(
+          <>
+            <div className="section-header">
+              <span className="section-title">· Home</span>
+              <span className="section-line"/>
+            </div>
+            {(()=>{
+  const total = s_subnets.length||1;
+  const hostTotal = s_hosts.length||1;
+  const critPct = Math.round((critSubs.length/total)*100);
+  const warnPct = Math.round((warnSubs.length/total)*100);
+  const offlinePct = Math.round((errHosts.length/hostTotal)*100);
+  // State is derived from actual alerts, not from the score, so the two can never contradict.
+  const anyCrit = critSubs.length>0 || errHosts.length>0;
+  const anyWarn = warnSubs.length>0 || firingAlerts.length>0 || ttlBad.length>0;
+  let healthScore = Math.max(0, 100 - critPct*2 - warnPct - offlinePct*2 - firingAlerts.length*3 - ttlBad.length);
+  if(anyCrit) healthScore = Math.min(healthScore, 49);        // any crit → red band
+  else if(anyWarn) healthScore = Math.min(healthScore, 79);   // any warn → amber band
+  const scoreClr = anyCrit?'var(--red)':anyWarn?'var(--amber-text)':'var(--green-tx)';
+  const scoreLabel = anyCrit?'CRITICAL':anyWarn?'DEGRADED':'HEALTHY';
+  const peakUtil = critSubs[0]?.util??warnSubs[0]?.util??0;
+  const feedsActive = (data?.feeds||[]).filter(f=>f.active).length;
+  // Single authoritative KPI surface: every top-line number lives here once.
+  // sev: 'crit'|'warn'|null drives both the value color and the sub-line.
+  const hstats=[
+    {v:s_hosts.length, l:'Hosts', sub:errHosts.length>0?`${errHosts.length} offline / error`:'all online', sev:errHosts.length>0?'crit':null, nav:()=>{setSection('hosts');setHostChip('error');}},
+    {v:s_subnets.length, l:'Subnets', sub:critSubs.length>0?`${critSubs.length} critical`:warnSubs.length>0?`${warnSubs.length} warning`:'within limits', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null, nav:()=>{setSection('ipam');setIpamChip('critical');}},
+    {v:zones.length, l:'DNS Zones', sub:ttlBad.length>0?`${ttlBad.length} TTL anomalies`:'nominal', sev:ttlBad.length>0?'warn':null, nav:()=>setSection('dns')},
+    {v:`${peakUtil}%`, l:'Peak DHCP Util', sub:critSubs.length>0?`${critSubs.length} over threshold`:'within threshold', sev:critSubs.length>0?'crit':warnSubs.length>0?'warn':null, nav:()=>setSection('ipam')},
+    {v:firingAlerts.length, l:'Alerts', sub:firingAlerts.length>0?'firing':'clear', sev:firingAlerts.length>0?'warn':null, nav:()=>setSection('alerts')},
+    {v:feedsActive, l:'Threat Feeds', sub:'active', sev:null, nav:()=>setSection('security')},
+  ];
+  return (
+    <div className="ov-hero" aria-label={`Network health ${healthScore} of 100, ${scoreLabel}`}>
+      <div className="ov-hero-score">
+        <span className="ov-hero-num" style={{color:scoreClr}}>{healthScore}</span>
+        <span className="ov-hero-lbl">Network Health<span className="ov-hero-status" style={{color:scoreClr}}>{scoreLabel}</span>{(scopeSubnet||scopeZone||siteFilt)?<span style={{color:'var(--muted)'}}>· scoped</span>:null}</span>
+      </div>
+      <div className="ov-hero-bar"><i style={{width:`${healthScore}%`,background:scoreClr}}/></div>
+      <div className="ov-hero-stats">
+        {hstats.map((h,i)=>{
+          const clr=h.sev==='crit'?'var(--red)':h.sev==='warn'?'var(--amber-text)':'var(--ink)';
+          const subClr=h.sev==='crit'?'var(--red)':h.sev==='warn'?'var(--amber-text)':'var(--muted)';
+          return (
+          <div key={i} className="ov-hero-stat" role="button" tabIndex={0} aria-label={`${h.l}: ${h.v}, ${h.sub}`}
+            onClick={h.nav} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();h.nav();}}}>
+            <span className="v" style={{color:clr}}>{fmtN(h.v)}</span>
+            <span className="l">{h.l}</span>
+            <span className="s" style={{color:subClr}}>{h.sub}</span>
+          </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+})()}
+            <div style={{marginTop:20,display:'grid',gridTemplateColumns:'1fr 316px',gap:16,alignItems:'start'}}>
+              <TriagePanel subnets={subnets} hosts={hosts} zones={zones} auditLogs={auditLogs}
+                firingAlerts={firingAlerts} setSection={setSection}
+                dhcpCrit={dhcpCrit} dhcpWarn={dhcpWarn}
+                onSelectRow={setHomeSel} selectedRow={homeSel}/>
+              <div className="card" style={{padding:16,position:'sticky',top:16}}>
+                {homeSel ? (
+                  <>
+                    <div style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.05em'}}>Selected issue</div>
+                    <div style={{fontSize:15,fontWeight:600,marginTop:6}}><span style={{color:homeSel.sev==='crit'?'var(--red)':'var(--amber-text)'}}>{homeSel.count}</span> {homeSel.desc}</div>
+                    {homeSel.items&&homeSel.items.length>0&&<div style={{fontSize:12,color:'var(--muted)',marginTop:8}}>{homeSel.items.join(', ')}</div>}
+                    <button className="n-btn" style={{marginTop:14}} onClick={()=>setSection(homeSel.sec)}>View full section →</button>
+                    <button className="n-btn" style={{marginTop:8}} onClick={()=>setHomeSel(null)}>Clear selection</button>
+                  </>
+                ) : (
+                  <div style={{fontSize:12,color:'var(--muted)',textAlign:'center',padding:'20px 0'}}>Select a triage row to see details here.</div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
         {section==='overview'&&(
           <>
             <div className="section-header">
@@ -7707,18 +7879,31 @@ function App({vault, onVaultChange}={}) {
           </>
         )}
 
-        {section==='explore'&&(()=>{
-          return (
-            <>
-              <div className="section-header">
-                <span className="section-title">· Explore</span>
-                <span className="section-line"/>
-                <span className="section-badge ok">· LIVE</span>
+        {section==='explore'&&(
+          <>
+            <div className="section-header">
+              <span className="section-title">· Explore</span>
+              <span className="section-line"/>
+              <span className="section-badge ok">· LIVE</span>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 316px',gap:16,alignItems:'start'}}>
+              <PivotExplorer data={data} hosts={hosts} subnets={subnets} zones={zones} onSelect={setExploreSel}/>
+              <div className="card" style={{padding:16,position:'sticky',top:16}}>
+                {exploreSel ? (
+                  <>
+                    <div style={{fontSize:11,color:'var(--muted)',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'.05em'}}>Selected</div>
+                    <div style={{fontSize:15,fontWeight:600,marginTop:6,wordBreak:'break-all'}}>{exploreSel.label}</div>
+                    <div style={{fontSize:22,fontWeight:600,marginTop:10,fontFamily:'var(--font-mono)'}}>{typeof exploreSel.val==='number'?exploreSel.val.toLocaleString():exploreSel.val}</div>
+                    {exploreSel.sub&&<div style={{fontSize:12,color:'var(--muted)',marginTop:6}}>{exploreSel.sub}</div>}
+                    <button className="n-btn" style={{marginTop:14}} onClick={()=>setExploreSel(null)}>Clear selection</button>
+                  </>
+                ) : (
+                  <div style={{fontSize:12,color:'var(--muted)',textAlign:'center',padding:'20px 0'}}>Select a row or cell to see details here.</div>
+                )}
               </div>
-              <PivotExplorer data={data} hosts={hosts} subnets={subnets} zones={zones}/>
-            </>
-          );
-        })()}
+            </div>
+          </>
+        )}
         {section==='help'&&<HelpPage/>}
         </div>{/* /section-view */}
           </div>{/* /content-col */}
@@ -7786,7 +7971,7 @@ function App({vault, onVaultChange}={}) {
               <div className="drill-sheet-bd">
                 {items.length===0?<div className="no-data">✓ No active incidents</div>:items.map((it,i)=>(
                   <button key={i} className="inc-item" onClick={()=>{it.go();setBellOpen(false);}}>
-                    <span className={`inc-dot ${it.sev}`}/>
+                    <SevBar sev={it.sev}/>
                     <span className="inc-body"><span className="inc-t">{it.t}</span><span className="inc-d">{it.d}</span></span>
                     <span className="inc-arrow" aria-hidden="true">→</span>
                   </button>
