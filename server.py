@@ -607,7 +607,8 @@ def views_list():
             try:
                 with open(os.path.join(VIEWS_DIR, fn)) as f:
                     v = json.load(f)
-                out.append({"name": v.get("name", fn[:-5]), "saved_at": v.get("saved_at")})
+                out.append({"name": v.get("name", fn[:-5]), "saved_at": v.get("saved_at"),
+                            "folder": v.get("folder", "")})
             except Exception:
                 continue
     except FileNotFoundError:
@@ -640,6 +641,7 @@ def view_write(blob):
         "widgets": blob.get("widgets", {}),
         "order": blob.get("order", []),
         "layout": blob.get("layout", {}),
+        "folder": str(blob.get("folder", "") or ""),
         "saved_at": blob.get("saved_at") or _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
     }
     os.makedirs(VIEWS_DIR, exist_ok=True)
@@ -2153,9 +2155,37 @@ def sources_meta():
          "requires": ["path"], "fields": []},
     ]}
 
+def _row_epoch(val):
+    """Best-effort parse of a row time value → epoch seconds, or None if
+    unparseable. Handles epoch int/float (s or ms) and common ISO-8601 strings."""
+    if val is None or val == "":
+        return None
+    if isinstance(val, (int, float)):
+        v = float(val)
+        return v / 1000.0 if v > 1e11 else v  # ms → s heuristic
+    s = str(val).strip()
+    try:
+        v = float(s)
+        return v / 1000.0 if v > 1e11 else v
+    except (TypeError, ValueError):
+        pass
+    try:
+        from datetime import datetime, timezone
+        iso = s.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except (TypeError, ValueError):
+        return None
+
 def source_rows(sid: str, params: dict) -> dict:
     """Resolve a source, fetch via its transport, apply optional equality
-    filter(s) on field names + `limit` (default 200). Returns {rows,count,fields}."""
+    filter(s) on field names + `limit` (default 200). For the two timestamped
+    sources (a field with type "time": incidents.last_activity,
+    anomaly_events.event_time) an optional t0/t1 epoch-second window filters
+    rows honestly; all other sources ignore t0/t1 (point-in-time).
+    Returns {rows,count,fields}."""
     if sid == "__raw":
         # Raw REST escape hatch: proxy an arbitrary Infoblox API path through the
         # same auth as every other source. Reject anything that isn't an /api/
@@ -2178,6 +2208,26 @@ def source_rows(sid: str, params: dict) -> dict:
     for key, val in params.items():
         if key in field_names:
             rows = [r for r in rows if str(r.get(key, "")) == val]
+    # Honest time-window: only the timestamped source (a field of type "time")
+    # respects t0/t1. Point-in-time sources ignore the window entirely.
+    time_field = next((f["name"] for f in src["fields"] if f.get("type") == "time"), None)
+    if time_field and (params.get("t0") or params.get("t1")):
+        def _win(v):
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+        t0, t1 = _win(params.get("t0")), _win(params.get("t1"))
+        def _keep(r):
+            e = _row_epoch(r.get(time_field))
+            if e is None:
+                return True  # never fabricate exclusion for unparseable stamps
+            if t0 is not None and e < t0:
+                return False
+            if t1 is not None and e > t1:
+                return False
+            return True
+        rows = [r for r in rows if _keep(r)]
     rows = rows[:limit]
     return {"rows": rows, "count": len(rows), "fields": src["fields"]}
 
