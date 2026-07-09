@@ -184,9 +184,18 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 .palette-in{width:100%;height:44px;padding:0 var(--s4);font-size:var(--t14);color:var(--text);background:var(--raised);border:1px solid var(--border-strong);border-radius:var(--r-panel);}
 .palette-body{padding:var(--s3);color:var(--text-faint);font-size:var(--t12);}
 
+/* row-level focus ring for keyboard-tabbable clickable rows */
+table.dt tbody tr.clickable:focus-visible{box-shadow:inset 0 0 0 1px var(--accent-text);}
+
 @media (max-width:768px){
   .brand-org{display:none;}
   .main{padding:var(--s4);}
+}
+@media (max-width:640px){
+  .hide-sm{display:none;}
+  .kbd{display:none;}
+  .topbar-right .acct-trigger{max-width:140px;}
+  .topbar{gap:var(--s2);padding:0 var(--s2);}
 }
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{transition:none!important;animation:none!important;}
@@ -277,6 +286,16 @@ function useApi(url,{poll}={}){
   return {data,error,locked,fetchedAt,refetch,loading};
 }
 
+/* DataCtx — ONE shared /api/data feed. The payload is multi-MB (5000 subnets),
+   so every tab refetching it on mount showed skeletons for seconds. Provider
+   mounts once inside VaultGate; all tabs read this instead of their own useApi. */
+const DataCtx=React.createContext(null);
+function useData(){ return React.useContext(DataCtx)||{data:null,error:null,locked:false,fetchedAt:null,refetch:()=>{},loading:false}; }
+function DataProvider({children}){
+  const api=useApi('/api/data');
+  return <DataCtx.Provider value={api}>{children}</DataCtx.Provider>;
+}
+
 /* ─────────────────────────────────────────────────────────────
    3. Freshness — "updated Ns ago" mono pill; red + Retry on error.
    ───────────────────────────────────────────────────────────── */
@@ -317,8 +336,8 @@ function Toasts(){
     };
     return ()=>{_toastPush=null;};
   },[]);
-  if(!items.length) return null;
-  return <div className="toasts" role="status" aria-live="polite">
+  return <div className="toasts" role="status" aria-live="polite" aria-atomic="false"
+    style={items.length?null:{pointerEvents:'none'}}>
     {items.map(t=><div key={t.id} className={'toast '+(t.kind||'ok')}>{t.msg}</div>)}
   </div>;
 }
@@ -361,7 +380,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName}){
     <div className="tbl-wrap">
       <table className="dt">
         <thead><tr>
-          {columns.map(c=><th key={c.key} className={isNum(c)?'num':''}
+          {columns.map(c=><th key={c.key} className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')}
             style={c.width?{width:c.width}:null} onClick={()=>toggle(c.key)}>
             {c.label||c.key}
             <span className="sort-ind">{sort&&sort.key===c.key?(sort.dir==='asc'?'↑':'↓'):''}</span>
@@ -372,8 +391,10 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName}){
             ? <tr><td className="dt-empty" colSpan={columns.length||1}>No data</td></tr>
             : sorted.map((r,ri)=><tr key={ri}
                 className={onRowClick?'clickable':''}
-                onClick={onRowClick?()=>onRowClick(r,ri):null}>
-                {columns.map(c=><td key={c.key} className={(isNum(c)?'num ':'')+(c.mono?'mono':'')}
+                role={onRowClick?'button':undefined} tabIndex={onRowClick?0:undefined}
+                onClick={onRowClick?()=>onRowClick(r,ri):null}
+                onKeyDown={onRowClick?e=>{if(e.key==='Enter')onRowClick(r,ri);}:undefined}>
+                {columns.map(c=><td key={c.key} className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')}
                   style={c.width?{width:c.width}:null}>
                   {c.render?c.render(r[c.key],r):(r[c.key]??'')}
                 </td>)}
@@ -999,7 +1020,7 @@ function OvSection({title,aside,link,api,children}){
 
 function OverviewTab(){
   const health=useApi('/api/hub/health',{poll:60000});
-  const data=useApi('/api/data');
+  const data=useData();
   const sec=useApi('/api/hub/security');
   const dns=useApi('/api/dns-analytics');
 
@@ -1181,7 +1202,8 @@ const NET_LEASE_COLS=[
 
 function NetworkTab(){
   const {params}=useRoute();
-  const {data,error,loading,fetchedAt,refetch}=useApi('/api/data');
+  const {data,error,locked,loading,fetchedAt,refetch}=useData();
+  if(locked) return null;
   if(loading&&!data) return <div style={{maxWidth:1200,margin:'0 auto'}}><Skeleton rows={8}/></div>;
   if(error) return <div style={{maxWidth:1200,margin:'0 auto'}}><Freshness error onRetry={refetch}/></div>;
   const subnets=(data&&data.subnets)||[];
@@ -1193,7 +1215,7 @@ function NetworkTab(){
     {key:'name',label:'Subnet'},
     {key:'addr',label:'Network',mono:true,align:'left',render:(v,r)=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')},
     {key:'util',label:'Utilization',align:'right',render:v=>UtilBar(v)},
-    {key:'site',label:'Site'},
+    {key:'site',label:'Site',hideSm:true},
   ];
 
   return <div style={NETDNS_WRAP}>
@@ -1233,14 +1255,15 @@ function NetworkTab(){
 }
 
 function DnsTab(){
-  const {data,error,loading,fetchedAt,refetch}=useApi('/api/data');
+  const {data,error,locked,loading,fetchedAt,refetch}=useData();
   const an=useApi('/api/dns-analytics');
+  if(locked) return null;
   if(loading&&!data) return <div style={{maxWidth:1200,margin:'0 auto'}}><Skeleton rows={8}/></div>;
   if(error) return <div style={{maxWidth:1200,margin:'0 auto'}}><Freshness error onRetry={refetch}/></div>;
   const zones=(data&&data.zones)||[];
   const zoneCols=[
     {key:'fqdn',label:'Zone',mono:true,align:'left'},
-    {key:'view',label:'View'},
+    {key:'view',label:'View',hideSm:true},
     {key:'ttl',label:'TTL',mono:true,align:'right'},
     {key:'issues',label:'Issues',align:'left',render:v=>(v&&v.length)
       ? <span className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>{v.join(', ')}</span> : ''},
@@ -1366,7 +1389,7 @@ function fmtMetric(v){
 function InfraTab({vaultTick}={}){
   const {params}=useRoute();
   const hostParam=params.host||'';
-  const {data,error,loading,fetchedAt,refetch}=useApi('/api/data');
+  const {data,error,locked,loading,fetchedAt,refetch}=useData();
   const mx=useApi('/api/host-metrics');
 
   // Re-fetch both feeds once a vault unlock is reported upstream.
@@ -1403,6 +1426,8 @@ function InfraTab({vaultTick}={}){
     };
   },[metricRows]);
 
+  if(locked||mx.locked) return null;
+
   // ── Per-host drill panel ──
   if(hostParam){
     const host=hosts.find(h=>h.name===hostParam);
@@ -1438,7 +1463,7 @@ function InfraTab({vaultTick}={}){
   const hostCols=[
     {key:'name',label:'Host'},
     {key:'ip',label:'IP',mono:true},
-    {key:'type',label:'Type'},
+    {key:'type',label:'Type',hideSm:true},
     {key:'status',label:'Status',render:v=><span className="mono infra-st" style={{color:infraStatusColor(v)}}>{v||'—'}</span>},
   ];
 
@@ -1525,12 +1550,13 @@ function SecChips({options,value,onChange}){
 }
 
 function SecTriageInbox(){
-  const {data,error,fetchedAt,refetch,loading}=useApi('/api/hub/security',{poll:60000});
+  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/hub/security',{poll:60000});
   const [sevF,setSevF]=useState('all');
   const [actF,setActF]=useState('all');
   const [acks,setAcks]=useState(()=>LS.get('acks',{}));
   const toggleAck=e=>{const k=secAckKey(e);setAcks(p=>{const n={...p};if(n[k])delete n[k];else n[k]=true;LS.set('acks',n);return n;});};
   const clearAcks=()=>{setAcks({});LS.set('acks',{});};
+  if(locked) return null;
   if(loading&&!data) return <div><SecHead title="Triage inbox"/><Skeleton rows={8}/></div>;
   const d=data||{};
   const counts=d.counts||{};
@@ -1572,7 +1598,7 @@ function SecTriageInbox(){
       <table className="dt">
         <thead><tr>
           <th style={{width:28}} aria-label="Acknowledge"></th>
-          <th>Severity</th><th>Query</th><th>Action</th><th>Feed</th><th>Device</th><th className="num">Time</th>
+          <th>Severity</th><th>Query</th><th>Action</th><th className="hide-sm">Feed</th><th className="hide-sm">Device</th><th className="num">Time</th>
         </tr></thead>
         <tbody>
           {rows.length===0
@@ -1584,8 +1610,8 @@ function SecTriageInbox(){
                   <td className="mono" style={{color:secSevColor(e.severity),textTransform:'uppercase'}}>{e.severity||'—'}</td>
                   <td className="mono">{e.qname||'—'}</td>
                   <td>{e.policy_action||'—'}</td>
-                  <td style={{color:'var(--text-dim)'}}>{e.feed_name||'—'}</td>
-                  <td>{e.device||'—'}</td>
+                  <td className="hide-sm" style={{color:'var(--text-dim)'}}>{e.feed_name||'—'}</td>
+                  <td className="hide-sm">{e.device||'—'}</td>
                   <td className="num mono" style={{color:'var(--text-faint)'}}>{secEvtAge(e.event_time)}</td>
                 </tr>;
               })}
@@ -1678,8 +1704,10 @@ function SecRoaming({re}){
   </SecSection>;
 }
 function SecDomainPanels(){
-  const {data,error,fetchedAt,refetch,loading}=useApi('/api/hub/domains');
+  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/hub/domains');
+  if(locked) return null;
   if(loading&&!data) return <div><SecHead title="Domain protection"/><Skeleton rows={10}/></div>;
+  if(error&&!data) return <div><SecHead title="Domain protection" at={fetchedAt} onRetry={refetch} error={error}/><div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div></div>;
   const d=data||{};
   const hosts=d.host_inventory&&Array.isArray(d.host_inventory.hosts)?d.host_inventory.hosts:(Array.isArray(d.hosts)?d.hosts:null);
   return <div>
@@ -1697,21 +1725,27 @@ function SecDomainPanels(){
 }
 
 function SecInsights(){
-  const {data,error,fetchedAt,refetch,loading}=useApi('/api/insights');
+  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/insights');
+  if(locked) return null;
   if(loading&&!data) return <div><SecHead title="SOC insights"/><Skeleton rows={6}/></div>;
   const rows=!data?[]:(Array.isArray(data)?data:(data.data||data.results||data.items||[]));
   return <div>
     <SecHead title="SOC insights" at={fetchedAt} onRetry={refetch} error={error}/>
-    {rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} csvName="soc-insights"/>:<div className="dt-empty">No insights</div>}
+    {error&&!rows.length
+      ? <div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div>
+      : rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} csvName="soc-insights"/>:<div className="dt-empty">No insights</div>}
   </div>;
 }
 function SecActions(){
-  const {data,error,fetchedAt,refetch,loading}=useApi('/api/actions');
+  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/actions');
+  if(locked) return null;
   if(loading&&!data) return <div><SecHead title="Actions"/><Skeleton rows={6}/></div>;
   const rows=!data?[]:(Array.isArray(data)?data:(data.actions||data.results||data.data||[]));
   return <div>
     <SecHead title="Actions" at={fetchedAt} onRetry={refetch} error={error}/>
-    {rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} csvName="actions"/>:<div className="dt-empty">No actions</div>}
+    {error&&!rows.length
+      ? <div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div>
+      : rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} csvName="actions"/>:<div className="dt-empty">No actions</div>}
   </div>;
 }
 
@@ -1934,7 +1968,7 @@ function AskTab(){
 /* AuditTab — audit rows from /api/data .auditLogs ({ts,user,action,resource,result}). */
 const AUDIT_ACT_COLOR={CREATE:'var(--ok)',DELETE:'var(--crit)',UPDATE:'var(--warn)'};
 function AuditTab(){
-  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/data');
+  const {data,error,locked,fetchedAt,refetch,loading}=useData();
   const [q,setQ]=useState('');
   const rows=(data&&(data.auditLogs||data.audit))||[];
   const filtered=useMemo(()=>{
@@ -2201,7 +2235,7 @@ function Shell(){
 }
 
 function App(){
-  return <VaultGate><Shell/></VaultGate>;
+  return <VaultGate><DataProvider><Shell/></DataProvider></VaultGate>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
