@@ -1523,8 +1523,8 @@ function DnsTab(){
   if(document.getElementById('bx-infra-styles')) return;
   const s=document.createElement('style');s.id='bx-infra-styles';
   s.textContent=`
-  .infra-page{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:32px;}
-  .infra-sec{display:flex;flex-direction:column;gap:12px;}
+  .infra-page{width:100%;display:flex;flex-direction:column;gap:32px;}
+  .infra-sec{display:flex;flex-direction:column;gap:12px;min-width:0;}
   .infra-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:20px;}
   .infra-h{font-size:13px;font-weight:600;color:var(--text);}
   .infra-dim{font-size:12px;color:var(--text-faint);padding:6px 0;}
@@ -1540,6 +1540,15 @@ function DnsTab(){
   table.sensor .sensor-hcol{position:sticky;left:0;z-index:1;text-align:left;background:var(--bg);}
   table.sensor td.sensor-null{color:var(--text-faint);}
   table.sensor td.sensor-hot{color:var(--warn);}
+  .infra-panel{border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:16px;display:flex;flex-direction:column;gap:12px;align-self:start;}
+  .infra-panel-h{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);}
+  .infra-stat{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text);}
+  .infra-stat-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
+  .infra-stat-l{flex:1 1 auto;}
+  .infra-stat-v{color:var(--text);}
+  .infra-panel-div{height:1px;background:var(--border);margin:2px 0;}
+  .infra-panel-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--text-dim);}
+  .infra-panel-btn{font-size:12px;color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;text-align:left;}
   `;
   document.head.appendChild(s);
 })();
@@ -1576,7 +1585,7 @@ function InfraTab({vaultTick}={}){
   const metricRows=(mx.data&&mx.data.metrics)||[];
 
   // Pivot metrics into rows=host, cols=metric; flag each column's top decile.
-  const {hostNames,metricNames,pivot,hotSet}=useMemo(()=>{
+  const {hostNames,metricNames,pivot,hotSet,hotByHost}=useMemo(()=>{
     const pv={},hSet=new Set(),mSet=new Set(),cols={};
     metricRows.forEach(r=>{
       const h=r[M_HOST],m=r[M_NAME];
@@ -1586,14 +1595,14 @@ function InfraTab({vaultTick}={}){
       (pv[h]||(pv[h]={}))[m]=isFinite(val)?val:null;
       if(isFinite(val)) (cols[m]||(cols[m]=[])).push(val);
     });
-    const hot=new Set();
+    const hot=new Set(),hotByHost={};
     Object.keys(cols).forEach(m=>{
       const vals=cols[m].slice().sort((a,b)=>a-b);
       if(vals.length<2||vals[0]===vals[vals.length-1]) return; // no spread → no tint
       const thr=vals[Math.floor(0.9*(vals.length-1))];
       Object.keys(pv).forEach(h=>{
         const v=pv[h][m];
-        if(v!=null&&v>=thr) hot.add(h+' '+m);
+        if(v!=null&&v>=thr){ hot.add(h+' '+m); hotByHost[h]=(hotByHost[h]||0)+1; }
       });
     });
     return {
@@ -1602,6 +1611,15 @@ function InfraTab({vaultTick}={}){
       pivot:pv, hotSet:hot,
     };
   },[metricRows]);
+
+  // ── Synthesis derivations (host status + hottest, day-over-day delta) ──
+  const {delta}=useSnapshots();
+  const online=hosts.filter(h=>/^(online|up)$/i.test(String(h.status||''))).length;
+  const degradedHosts=hosts.filter(h=>/^degraded$/i.test(String(h.status||'')));
+  const offlineHosts=hosts.filter(h=>/^(down|offline)$/i.test(String(h.status||'')));
+  const total=hosts.length, degraded=degradedHosts.length, offline=offlineHosts.length;
+  const byType=useMemo(()=>{const m={};hosts.forEach(h=>{const t=h.type||'—';m[t]=(m[t]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);},[hosts]);
+  const hottest=Object.keys(hotByHost).reduce((best,h)=>hotByHost[h]>(hotByHost[best]||0)?h:best,null);
 
   if(locked||mx.locked) return null;
 
@@ -1644,15 +1662,51 @@ function InfraTab({vaultTick}={}){
     {key:'status',label:'Status',render:v=><span className="mono infra-st" style={{color:infraStatusColor(v)}}>{v||'—'}</span>},
   ];
 
+  // ── Answer-first synthesis band ──
+  const tone=offline>0?'crit':degraded>0?'warn':'ok';
+  const worst=(offlineHosts[0]&&offlineHosts[0].name)||(degradedHosts[0]&&degradedHosts[0].name)||'';
+  const verdict=(offline===0&&degraded===0)
+    ? 'All '+total+' hosts online — infrastructure healthy'
+    : offline+' hosts offline, '+degraded+' degraded'+(worst?' — '+worst+' needs attention':'');
+  const dOff={v:delta('hosts.offline'),good:'down'};
+  const facts=[
+    {label:'Hosts online',value:online+'/'+total,delta:dOff},
+    {label:'Degraded',value:degraded},
+    {label:'Offline',value:offline,delta:dOff},
+    {label:'Hottest host',value:hottest||'—'},
+  ];
+  const chips=offlineHosts.map(h=>({label:h.name,onClick:()=>nav('infra',{host:h.name})}));
+
   return <div className="infra-page">
-    <div className="infra-sec">
-      <div className="infra-head">
-        <span className="infra-h">Hosts</span>
-        <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
+    <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
+
+    <div className="grid-2">
+      <div className="infra-sec">
+        <div className="infra-head">
+          <span className="infra-h">Hosts</span>
+          <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
+        </div>
+        {loading&&!data ? <Skeleton rows={6}/>
+          : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
+              csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}/>}
       </div>
-      {loading&&!data ? <Skeleton rows={6}/>
-        : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
-            csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}/>}
+
+      <div className="infra-panel">
+        <div className="infra-panel-h">Status</div>
+        <div className="infra-stat"><span className="infra-stat-dot" style={{background:'var(--ok)'}}/><span className="infra-stat-l">Online</span><span className="infra-stat-v mono">{online}</span></div>
+        <div className="infra-stat"><span className="infra-stat-dot" style={{background:'var(--warn)'}}/><span className="infra-stat-l">Degraded</span><span className="infra-stat-v mono">{degraded}</span></div>
+        <div className="infra-stat"><span className="infra-stat-dot" style={{background:'var(--crit)'}}/><span className="infra-stat-l">Offline</span><span className="infra-stat-v mono">{offline}</span></div>
+        <div className="infra-panel-div"/>
+        <div className="infra-panel-h">By type</div>
+        {byType.length
+          ? byType.map(([t,c])=><div key={t} className="infra-panel-row"><span>{t}</span><span className="mono">{c}</span></div>)
+          : <div className="infra-dim">No hosts</div>}
+        {hottest?<React.Fragment>
+          <div className="infra-panel-div"/>
+          <div className="infra-panel-h">Hottest host</div>
+          <button className="infra-panel-btn" onClick={()=>nav('infra',{host:hottest})}>{hottest} — {hotByHost[hottest]} sensors hot →</button>
+        </React.Fragment>:null}
+      </div>
     </div>
 
     <div className="infra-sec">
