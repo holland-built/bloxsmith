@@ -1123,8 +1123,7 @@ function SnapshotWriter(){
   if(document.getElementById('bx-ov-styles')) return;
   const s=document.createElement('style');s.id='bx-ov-styles';
   s.textContent=`
-  .ov{max-width:1200px;margin:0 auto;}
-  .ov-sec{margin-bottom:32px;}
+  .ov-sec{margin-bottom:0;}
   .ov-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
   .ov-head-l{display:flex;align-items:baseline;gap:12px;min-width:0;}
   .ov-title{margin:0;font-size:13px;font-weight:600;color:var(--text);}
@@ -1195,6 +1194,7 @@ function OverviewTab(){
   const data=useData();
   const sec=useApi('/api/hub/security');
   const dns=useApi('/api/dns-analytics');
+  const {delta}=useSnapshots();
 
   // ── KPI derivations (case-tolerant) ──
   const d=data.data||{};
@@ -1247,6 +1247,43 @@ function OverviewTab(){
     return isNaN(dt.getTime())?String(t).slice(5,10):dt.toLocaleDateString(undefined,{weekday:'short'});
   };
 
+  // ── Synthesis band (answer-first) — computed pre-return, hooks already run ──
+  const healthArr=Array.isArray(health.data)?health.data:[];
+  const anyHealthCrit=healthArr.some(s=>s.status==='crit');
+  const anyHealthWarn=healthArr.some(s=>s.status==='warn');
+  const gt85=subnets.filter(s=>(Number(s.util)||0)>85).length;
+  const worst=topSubs[0]||null;
+  const worstUtil=worst?(Number(worst.util)||0):0;
+  const hostsOffline=hosts.length-hostsOnline;
+  const critHigh=(Number(counts.critical)||0)+(Number(counts.high)||0);
+  const bandTone=(anyHealthCrit||(Number(counts.critical)||0)>0||worstUtil>85)?'crit'
+    :(anyHealthWarn||(Number(counts.high)||0)>0||worstUtil>70)?'warn':'ok';
+  const dCrit=delta('sec.crit'),dHigh=delta('sec.high');
+  const dThreat=(dCrit==null&&dHigh==null)?null:(dCrit||0)+(dHigh||0);
+  const dnsLast=volSeries.length?volSeries[volSeries.length-1].v:0;
+  const dnsAvg=volSeries.length?volTotal/volSeries.length:0;
+  const dnsPct=dnsAvg>0?Math.round((dnsLast-dnsAvg)/dnsAvg*100):null;
+  const bandFacts=[
+    {label:'Critical + high threats',value:critHigh,delta:{v:dThreat,good:'down'}},
+    {label:'Subnets >85%',value:gt85,delta:{v:delta('subnets.gt85'),good:'down'}},
+    {label:'Hosts offline',value:hostsOffline,delta:{v:delta('hosts.offline'),good:'down'}},
+    {label:'DNS 7d volume',value:volTotal.toLocaleString(),delta:{v:dnsPct,good:'up'}},
+  ];
+  const bandIssues=[];
+  if(critHigh>0) bandIssues.push((Number(counts.critical)||0)+' critical / '+(Number(counts.high)||0)+' high threats');
+  if(gt85>0) bandIssues.push(gt85+' subnet'+(gt85===1?'':'s')+' over 85%'+(worst?(' (worst '+(worst.name||worst.addr)+' '+Math.round(worstUtil)+'%)'):''));
+  else if(worstUtil>70) bandIssues.push('subnets nearing capacity (peak '+Math.round(worstUtil)+'%)');
+  if(hostsOffline>0) bandIssues.push(hostsOffline+' host'+(hostsOffline===1?'':'s')+' offline');
+  if(anyHealthCrit) bandIssues.unshift('service health degraded');
+  const bandVerdict=bandTone==='ok'
+    ? 'All systems healthy — no critical threats, capacity normal'
+    : bandIssues.slice(0,2).join('; ').replace(/^./,c=>c.toUpperCase());
+  const bandChips=[];
+  if(critHigh>0) bandChips.push({label:'Threats · '+critHigh,onClick:()=>nav('security')});
+  if(gt85>0||worstUtil>70) bandChips.push({label:'Capacity · '+(worst?((worst.name||worst.addr)+' '+Math.round(worstUtil)+'%'):Math.round(worstUtil)+'%'),onClick:()=>nav('network',{subnet:worst&&(worst.addr||worst.id)})});
+  if(hostsOffline>0) bandChips.push({label:hostsOffline+' offline',onClick:()=>nav('infra')});
+  const bandChips3=bandChips.slice(0,3);
+
   // Vault locked → render nothing; the gate handles it. (After all hooks.)
   if(health.locked||data.locked||sec.locked||dns.locked) return null;
 
@@ -1258,7 +1295,9 @@ function OverviewTab(){
     {n:threats1h,l:'Threats 1h'},
   ];
 
-  return <div className="ov">
+  return <div className="page">
+
+    <SynthBand tone={bandTone} verdict={bandVerdict} facts={bandFacts} chips={bandChips3}/>
 
     <OvSection title="Service health" api={health}>
       {Array.isArray(health.data)&&health.data.length
@@ -1281,6 +1320,8 @@ function OverviewTab(){
         </div>)}
       </div>
     </OvSection>
+
+    <div className="grid-2">
 
     <OvSection title="Top subnets by utilization" api={data}>
       {topSubs.length
@@ -1308,6 +1349,8 @@ function OverviewTab(){
           </div>)
         : <div className="ov-empty">No unacknowledged events</div>}
     </OvSection>
+
+    </div>
 
     <OvSection title="DNS volume — 7 days"
       aside={volSeries.length?volTotal.toLocaleString()+' queries':null}
