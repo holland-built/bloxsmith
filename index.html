@@ -2095,7 +2095,6 @@ function SecurityTab(){
   if(document.getElementById('bx-askglobal-styles')) return;
   const s=document.createElement('style');s.id='bx-askglobal-styles';
   s.textContent=`
-  .ask-wrap{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:32px;}
   .ask-bar{display:flex;gap:8px;}
   .ask-in{flex:1 1 auto;height:36px;padding:0 12px;font-size:13px;color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);}
   .ask-in:focus{border-color:var(--accent);}
@@ -2229,6 +2228,7 @@ function AlertRulesPanel(){
 /* AskTab — natural-language query console over POST /api/query. */
 function AskTab(){
   const {params}=useRoute();
+  const {data}=useData();
   const [input,setInput]=useState('');
   const [busy,setBusy]=useState(false);
   const [items,setItems]=useState([]); // newest first, capped at 5
@@ -2264,34 +2264,56 @@ function AskTab(){
     const q=params&&params.q;
     if(q&&askedRef.current!==q){ askedRef.current=q; setInput(q); submit(q); }
   },[params&&params.q]);
-  return <div className="ask-wrap">
-    <div>
-      <div className="ask-bar">
-        <input className="ask-in mono" placeholder="Ask about your network… e.g. Which subnets are nearly full?"
-          value={input} onChange={e=>setInput(e.target.value)}
-          onKeyDown={e=>{if(e.key==='Enter')submit();}}
-          aria-label="Natural-language query" autoFocus/>
-        <button className="btn" style={{height:36}} onClick={()=>submit()} disabled={busy||!input.trim()}>Ask</button>
-      </div>
-      {busy&&<div className="ask-busy mono">Querying… (LLM — may take a moment)</div>}
-    </div>
-    {items.map(it=>
-      <div key={it.id} className="panel ask-item">
-        <div className="ask-q mono">&gt; {it.q}</div>
-        {it.error
-          ? <div className="ask-err">{it.error}</div>
-          : <div className="ask-a">{it.answer}</div>}
-        {!!(it.suggestions&&it.suggestions.length)&&<div className="ask-chips">
-          {it.suggestions.map((sg,i)=>
-            <button key={i} className="chip chip-btn" onClick={()=>{setInput(sg);submit(sg);}}>{sg}</button>)}
-        </div>}
-        {!!(it.trace&&it.trace.length)&&<div className="ask-trace mono">
-          {it.trace.map((t,i)=><div key={i} className="ask-trace-row">
-            <span>{t.tool}</span> <span className="args">{JSON.stringify(t.args)}</span>
+
+  // ── Context band — inventory scope + real-numbered suggested questions ──
+  const nSub=((data&&data.subnets)||[]).length;
+  const nZone=((data&&data.zones)||[]).length;
+  const nHost=((data&&data.hosts)||[]).length;
+  const ar={...ALERT_DEFAULTS,...LS.get('alertRules',{})};
+  const alertsArmed=ar.subnetUtilOn||ar.hostOfflineOn;
+  const verdict='Ask anything about your network — '+nSub+' subnets, '+nZone+' zones, '+nHost+' hosts indexed';
+  const facts=[{label:'Alert rules',value:alertsArmed?'Armed':'Disarmed'}];
+  const ask=q=>{setInput(q);submit(q);};
+  const chips=[
+    {label:'Which subnets are nearly full?',onClick:()=>ask('Which subnets are nearly full?')},
+    {label:'Are any of my '+nZone+' DNS zones misconfigured?',onClick:()=>ask('Are any of my '+nZone+' DNS zones misconfigured?')},
+    {label:'Which of '+nHost+' hosts are offline?',onClick:()=>ask('Which of '+nHost+' hosts are offline?')},
+    {label:'What changed in the last 24 hours?',onClick:()=>ask('What changed in the last 24 hours?')},
+  ];
+
+  return <div className="page">
+    <SynthBand tone="ok" verdict={verdict} facts={facts} chips={chips}/>
+    <div className="grid-2">
+      <div className="prose" style={{display:'flex',flexDirection:'column',gap:'var(--s5)'}}>
+        <div>
+          <div className="ask-bar">
+            <input className="ask-in mono" placeholder="Ask about your network… e.g. Which subnets are nearly full?"
+              value={input} onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter')submit();}}
+              aria-label="Natural-language query" autoFocus/>
+            <button className="btn" style={{height:36}} onClick={()=>submit()} disabled={busy||!input.trim()}>Ask</button>
+          </div>
+          {busy&&<div className="ask-busy mono">Querying… (LLM — may take a moment)</div>}
+        </div>
+        {items.map(it=>
+          <div key={it.id} className="panel ask-item">
+            <div className="ask-q mono">&gt; {it.q}</div>
+            {it.error
+              ? <div className="ask-err">{it.error}</div>
+              : <div className="ask-a">{it.answer}</div>}
+            {!!(it.suggestions&&it.suggestions.length)&&<div className="ask-chips">
+              {it.suggestions.map((sg,i)=>
+                <button key={i} className="chip chip-btn" onClick={()=>{setInput(sg);submit(sg);}}>{sg}</button>)}
+            </div>}
+            {!!(it.trace&&it.trace.length)&&<div className="ask-trace mono">
+              {it.trace.map((t,i)=><div key={i} className="ask-trace-row">
+                <span>{t.tool}</span> <span className="args">{JSON.stringify(t.args)}</span>
+              </div>)}
+            </div>}
           </div>)}
-        </div>}
-      </div>)}
-    <AlertRulesPanel/>
+      </div>
+      <AlertRulesPanel/>
+    </div>
   </div>;
 }
 
@@ -2317,7 +2339,29 @@ function AuditTab(){
     {key:'result',label:'Result',render:v=>
       <span style={{color:v==='failure'?'var(--crit)':'var(--text-dim)'}}>{v}</span>},
   ];
-  return <div className="ask-wrap">
+
+  // ── Answer-first synthesis band (snapshot schema has no audit → no deltas) ──
+  const isFail=r=>String(r&&r.result||'').toLowerCase()==='failure';
+  const total=rows.length;
+  const fails=rows.filter(isFail);
+  const deletes=rows.filter(r=>String(r&&r.action||'').toUpperCase()==='DELETE').length;
+  const actorCount={};
+  rows.forEach(r=>{const u=r&&r.user;if(u)actorCount[u]=(actorCount[u]||0)+1;});
+  const topActor=Object.keys(actorCount).reduce((b,u)=>actorCount[u]>(actorCount[b]||0)?u:b,null);
+  const recentFail=[...fails].sort((a,b)=>String(b.ts||'').localeCompare(String(a.ts||'')))[0];
+  const tone=fails.length>0?'crit':deletes>0?'warn':'ok';
+  const verdict=fails.length===0
+    ? 'No failed changes in the last '+total+' operations'
+    : fails.length+' failed operations — most recent by '+((recentFail&&recentFail.user)||'unknown');
+  const facts=[
+    {label:'Total ops',value:total},
+    {label:'Failures',value:fails.length},
+    {label:'Deletes',value:deletes},
+    {label:'Top actor',value:topActor||'—'},
+  ];
+
+  return <div className="page">
+    <SynthBand tone={tone} verdict={verdict} facts={facts}/>
     <div style={{display:'flex',alignItems:'center',gap:12}}>
       <input className="ask-in mono" style={{maxWidth:320,height:32,flex:'0 1 320px'}}
         placeholder="Filter user / resource / action…" value={q} onChange={e=>setQ(e.target.value)}
