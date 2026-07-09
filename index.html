@@ -933,7 +933,172 @@ const DnsTab=()=><Stub name="DNS"/>;
 // ═══ END: NETDNS ═══
 
 // ═══ REGION: INFRA ═══
-const InfraTab=()=><Stub name="Infra"/>;
+/* InfraTab — host inventory + PRTG-style sensor grid + per-host metric drill.
+   Reuses useApi / DataTable / Freshness / Skeleton / nav / useRoute + dark tokens.
+   Metric rows use LITERAL dotted keys from the HostMetrics cube. */
+(function injectInfraStyles(){
+  if(document.getElementById('bx-infra-styles')) return;
+  const s=document.createElement('style');s.id='bx-infra-styles';
+  s.textContent=`
+  .infra-page{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:32px;}
+  .infra-sec{display:flex;flex-direction:column;gap:12px;}
+  .infra-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:20px;}
+  .infra-h{font-size:13px;font-weight:600;color:var(--text);}
+  .infra-dim{font-size:12px;color:var(--text-faint);padding:6px 0;}
+  .infra-drill-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .infra-back{font-size:12px;color:var(--accent-text);background:transparent;border:none;padding:0;}
+  .infra-ip{font-size:12px;color:var(--text-dim);}
+  .infra-st{font-size:11px;text-transform:uppercase;}
+  .sensor-wrap{overflow-x:auto;}
+  table.sensor{border-collapse:collapse;font-size:12px;white-space:nowrap;}
+  table.sensor th{height:30px;padding:0 12px;font-size:11px;font-weight:500;color:var(--text-dim);
+    text-transform:uppercase;text-align:right;border-bottom:1px solid var(--border);}
+  table.sensor td{height:30px;padding:0 12px;text-align:right;color:var(--text);border-bottom:1px solid var(--border);}
+  table.sensor .sensor-hcol{position:sticky;left:0;z-index:1;text-align:left;background:var(--bg);}
+  table.sensor td.sensor-null{color:var(--text-faint);}
+  table.sensor td.sensor-hot{color:var(--warn);}
+  `;
+  document.head.appendChild(s);
+})();
+
+const M_HOST='HostMetrics.host_name', M_NAME='HostMetrics.metric_name', M_VAL='HostMetrics.avg_value';
+
+function infraStatusColor(s){
+  const v=(s||'').toLowerCase();
+  if(v==='online'||v==='up') return 'var(--ok)';
+  if(v==='degraded') return 'var(--warn)';
+  if(v==='down'||v==='offline') return 'var(--crit)';
+  return 'var(--text-faint)';
+}
+function fmtMetric(v){
+  if(v==null||v==='') return null;
+  const n=Number(v);
+  if(!isFinite(n)) return null;
+  const a=Math.abs(n);
+  if(a>=1e6) return (n/1e6).toFixed(1)+'M';
+  if(a>=1e3) return (n/1e3).toFixed(1)+'k';
+  return n.toFixed(1);
+}
+
+function InfraTab({vaultTick}={}){
+  const {params}=useRoute();
+  const hostParam=params.host||'';
+  const {data,error,loading,fetchedAt,refetch}=useApi('/api/data');
+  const mx=useApi('/api/host-metrics');
+
+  // Re-fetch both feeds once a vault unlock is reported upstream.
+  useEffect(()=>{ if(vaultTick){ refetch(); mx.refetch(); } },[vaultTick]);
+
+  const hosts=(data&&data.hosts)||[];
+  const metricRows=(mx.data&&mx.data.metrics)||[];
+
+  // Pivot metrics into rows=host, cols=metric; flag each column's top decile.
+  const {hostNames,metricNames,pivot,hotSet}=useMemo(()=>{
+    const pv={},hSet=new Set(),mSet=new Set(),cols={};
+    metricRows.forEach(r=>{
+      const h=r[M_HOST],m=r[M_NAME];
+      if(h==null||m==null) return;
+      const val=Number(r[M_VAL]);
+      hSet.add(h);mSet.add(m);
+      (pv[h]||(pv[h]={}))[m]=isFinite(val)?val:null;
+      if(isFinite(val)) (cols[m]||(cols[m]=[])).push(val);
+    });
+    const hot=new Set();
+    Object.keys(cols).forEach(m=>{
+      const vals=cols[m].slice().sort((a,b)=>a-b);
+      if(vals.length<2||vals[0]===vals[vals.length-1]) return; // no spread → no tint
+      const thr=vals[Math.floor(0.9*(vals.length-1))];
+      Object.keys(pv).forEach(h=>{
+        const v=pv[h][m];
+        if(v!=null&&v>=thr) hot.add(h+' '+m);
+      });
+    });
+    return {
+      hostNames:[...hSet].sort((a,b)=>a.localeCompare(b)),
+      metricNames:[...mSet].sort((a,b)=>a.localeCompare(b)),
+      pivot:pv, hotSet:hot,
+    };
+  },[metricRows]);
+
+  // ── Per-host drill panel ──
+  if(hostParam){
+    const host=hosts.find(h=>h.name===hostParam);
+    const drillRows=metricRows
+      .filter(r=>r[M_HOST]===hostParam)
+      .map(r=>({metric:r[M_NAME],value:Number(r[M_VAL])}));
+    const drillCols=[
+      {key:'metric',label:'Metric'},
+      {key:'value',label:'Value',mono:true,align:'right',render:v=>{const f=fmtMetric(v);return f==null?'·':f;}},
+    ];
+    return <div className="infra-page">
+      <div className="infra-sec">
+        <div className="infra-drill-top">
+          <button className="infra-back" onClick={()=>history.back()}>← Back</button>
+          <span className="infra-h">{hostParam}</span>
+          {host&&host.ip?<span className="infra-ip mono">{host.ip}</span>:null}
+          {host?<span className="infra-st mono" style={{color:infraStatusColor(host.status)}}>{host.status}</span>:null}
+        </div>
+      </div>
+      <div className="infra-sec">
+        <div className="infra-head">
+          <span className="infra-h">Metrics</span>
+          <Freshness at={mx.fetchedAt} error={mx.error} onRetry={mx.refetch}/>
+        </div>
+        {mx.loading&&!mx.data ? <Skeleton rows={5}/>
+          : drillRows.length===0 ? <div className="infra-dim">No metrics reported</div>
+          : <DataTable cols={drillCols} rows={drillRows} defaultSort={{key:'metric',dir:'asc'}}/>}
+      </div>
+    </div>;
+  }
+
+  // ── Host inventory ──
+  const hostCols=[
+    {key:'name',label:'Host'},
+    {key:'ip',label:'IP',mono:true},
+    {key:'type',label:'Type'},
+    {key:'status',label:'Status',render:v=><span className="mono infra-st" style={{color:infraStatusColor(v)}}>{v||'—'}</span>},
+  ];
+
+  return <div className="infra-page">
+    <div className="infra-sec">
+      <div className="infra-head">
+        <span className="infra-h">Hosts</span>
+        <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
+      </div>
+      {loading&&!data ? <Skeleton rows={6}/>
+        : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
+            csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}/>}
+    </div>
+
+    <div className="infra-sec">
+      <div className="infra-head">
+        <span className="infra-h">Sensors</span>
+        <Freshness at={mx.fetchedAt} error={mx.error} onRetry={mx.refetch}/>
+      </div>
+      {mx.loading&&!mx.data ? <Skeleton rows={6}/>
+        : metricNames.length===0 ? <div className="infra-dim">No metrics reported</div>
+        : <div className="sensor-wrap">
+            <table className="sensor">
+              <thead><tr>
+                <th className="sensor-hcol">Host</th>
+                {metricNames.map(m=><th key={m}>{m}</th>)}
+              </tr></thead>
+              <tbody>
+                {hostNames.map(h=><tr key={h}>
+                  <td className="sensor-hcol mono">{h}</td>
+                  {metricNames.map(m=>{
+                    const f=fmtMetric(pivot[h]&&pivot[h][m]);
+                    const hot=hotSet.has(h+' '+m);
+                    return <td key={m} className={'mono'+(f==null?' sensor-null':(hot?' sensor-hot':''))}>
+                      {f==null?'·':f}</td>;
+                  })}
+                </tr>)}
+              </tbody>
+            </table>
+          </div>}
+    </div>
+  </div>;
+}
 // ═══ END: INFRA ═══
 
 // ═══ REGION: SECURITY ═══
