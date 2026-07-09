@@ -941,23 +941,399 @@ const SecurityTab=()=><Stub name="Security"/>;
 // ═══ END: SECURITY ═══
 
 // ═══ REGION: ASKGLOBAL ═══
-const AskTab=()=><Stub name="Ask"/>;
-const AuditTab=()=><Stub name="Audit"/>;
-function CommandPalette({open,onClose}){
-  const inputRef=useRef(null);
-  useEffect(()=>{if(open&&inputRef.current) inputRef.current.focus();},[open]);
-  if(!open) return null;
-  return <div className="palette-scrim" onClick={onClose}>
-    <div className="palette" onClick={e=>e.stopPropagation()}>
-      <input ref={inputRef} className="palette-in mono" placeholder="Search commands…"
-        onKeyDown={e=>{if(e.key==='Escape') onClose();}}/>
-      <div className="panel palette-body" style={{marginTop:8}}>Command palette — building</div>
+/* Ask console, audit log, command palette, saved views, alert rules. */
+(function injectAskGlobalStyles(){
+  if(document.getElementById('bx-askglobal-styles')) return;
+  const s=document.createElement('style');s.id='bx-askglobal-styles';
+  s.textContent=`
+  .ask-wrap{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:32px;}
+  .ask-bar{display:flex;gap:8px;}
+  .ask-in{flex:1 1 auto;height:36px;padding:0 12px;font-size:13px;color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);}
+  .ask-in:focus{border-color:var(--accent);}
+  .ask-busy{margin-top:8px;font-size:12px;color:var(--text-faint);}
+  .ask-item{padding:16px;}
+  .ask-q{font-size:12px;color:var(--text-dim);margin-bottom:8px;}
+  .ask-a{font-size:13px;line-height:1.5;color:var(--text);white-space:pre-wrap;}
+  .ask-err{font-size:12px;color:var(--text-faint);}
+  .ask-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+  .chip-btn{cursor:pointer;transition:border-color .12s ease;}
+  .chip-btn:hover{border-color:var(--border-strong);color:var(--text);}
+  .ask-trace{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-left:12px;border-left:1px solid var(--border);}
+  .ask-trace-row{font-size:11px;color:var(--text);}
+  .ask-trace-row .args{color:var(--text-faint);}
+  .alerts-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);padding:6px 0;}
+  .alerts-num{width:56px;height:26px;padding:0 8px;font-size:12px;color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);}
+  .pal-list{margin-top:8px;max-height:320px;overflow-y:auto;padding:4px;}
+  .pal-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:8px 12px;font-size:12px;color:var(--text);text-align:left;background:transparent;border:none;border-left:2px solid transparent;cursor:pointer;}
+  .pal-row.sel{background:var(--hover);border-left-color:var(--accent);}
+  .pal-kind{font-size:11px;color:var(--text-faint);flex:0 0 auto;}
+  .pal-empty{padding:12px;font-size:12px;color:var(--text-faint);text-align:center;}
+  .pal-confirm{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;font-size:12px;color:var(--text);}
+  .views-slot{position:relative;display:inline-flex;}
+  .views-overlay{position:fixed;inset:0;z-index:60;}
+  .views-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:61;width:280px;max-height:60vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:6px;}
+  .views-folder{padding:6px 8px 2px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);}
+  .views-row{display:flex;align-items:center;gap:4px;padding:0 2px;}
+  .views-item{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;padding:6px 8px;font-size:12px;color:var(--text);text-align:left;background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+  .views-item:hover{background:var(--hover);}
+  .views-item .vname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .views-date{font-size:10px;color:var(--text-faint);flex:0 0 auto;}
+  .views-mini{height:20px;padding:0 6px;font-size:10px;color:var(--text-dim);background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;flex-shrink:0;}
+  .views-mini:hover{border-color:var(--border-strong);color:var(--text);}
+  .views-mini.crit:hover{border-color:var(--crit);color:var(--crit);}
+  .views-confirm-q{flex:1;padding:0 6px;font-size:11px;color:var(--crit);}
+  .views-divider{height:1px;margin:6px 8px;background:var(--border);}
+  .views-empty{padding:8px;font-size:11px;color:var(--text-faint);}
+  `;
+  document.head.appendChild(s);
+})();
+
+/* Saved-view helpers shared by ViewsMenu + CommandPalette.
+   Server (view_write) persists only name/widgets/order/layout/folder/saved_at
+   and drops unknown top-level keys, so the route is mirrored inside layout
+   (opaque to the server) as well as sent top-level per the view schema. */
+function saveCurrentView(name,folder){
+  const {tab,params}=parseHash();
+  const route={tab,params};
+  return fetch('/api/views',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name,widgets:{},order:[],layout:{route},folder:folder||'',saved_at:new Date().toISOString(),route})})
+    .then(async r=>{const j=await r.json().catch(()=>({}));return {ok:r.ok&&j.ok!==false,error:j&&j.error};});
+}
+function applyViewByName(name){
+  fetch('/api/views/'+encodeURIComponent(name))
+    .then(r=>r.ok?r.json():Promise.reject('HTTP '+r.status))
+    .then(v=>{
+      const route=(v&&v.route)||(v&&v.layout&&v.layout.route)||null;
+      if(route&&route.tab){ nav(route.tab,route.params||{}); toast('View "'+name+'" applied','ok'); }
+      else toast('Legacy view — no route stored','warn');
+    })
+    .catch(()=>toast('Could not load view "'+name+'"','err'));
+}
+
+/* Alert rules — LS-only thresholds polled against /api/data every 120s. */
+const ALERT_DEFAULTS={subnetUtilOn:false,subnetUtil:85,hostOfflineOn:false};
+function AlertRulesPanel(){
+  const [rules,setRules]=useState(()=>({...ALERT_DEFAULTS,...LS.get('alertRules',{})}));
+  const firedRef=useRef({});
+  const save=next=>{setRules(next);LS.set('alertRules',next);};
+  const toggle=(key,on)=>{
+    if(on&&typeof Notification!=='undefined'&&Notification.permission==='default'){
+      try{Notification.requestPermission();}catch(e){}
+    }
+    save({...rules,[key]:on});
+  };
+  const anyOn=rules.subnetUtilOn||rules.hostOfflineOn;
+  useEffect(()=>{
+    if(!anyOn) return;
+    let alive=true;
+    const notify=m=>{
+      toast(m,'warn');
+      if(typeof Notification!=='undefined'&&Notification.permission==='granted'){
+        try{new Notification('BloxSmith alert',{body:m});}catch(e){}
+      }
+    };
+    const check=()=>{
+      fetch('/api/data',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{
+        if(!alive||!d||d.locked||d.error) return;
+        if(rules.subnetUtilOn){
+          const thr=Number(rules.subnetUtil)||85;
+          (d.subnets||[]).forEach(s=>{
+            if((s.util||0)>=thr){
+              const k='sub:'+(s.id||s.name);
+              if(!firedRef.current[k]){firedRef.current[k]=1;notify('Subnet '+(s.name||s.addr)+' at '+s.util+'% utilization (threshold '+thr+'%)');}
+            }
+          });
+        }
+        if(rules.hostOfflineOn){
+          (d.hosts||[]).forEach(h=>{
+            if(h.status==='offline'){
+              const k='host:'+(h.id||h.name);
+              if(!firedRef.current[k]){firedRef.current[k]=1;notify('Host '+(h.name||h.id)+' is offline');}
+            }
+          });
+        }
+      }).catch(()=>{});
+    };
+    check();
+    const iv=setInterval(check,120000);
+    return ()=>{alive=false;clearInterval(iv);};
+  },[anyOn,rules.subnetUtilOn,rules.hostOfflineOn,rules.subnetUtil]);
+  return <div className="panel" style={{padding:16}}>
+    <div style={{fontSize:12,fontWeight:600}}>Alerts</div>
+    <div style={{fontSize:11,color:'var(--text-faint)',margin:'4px 0 8px'}}>
+      Checked every 2 minutes while this tab is open. Fires a toast plus a browser notification when permitted.
+    </div>
+    <label className="alerts-row">
+      <input type="checkbox" checked={!!rules.subnetUtilOn} onChange={e=>toggle('subnetUtilOn',e.target.checked)}/>
+      <span>Subnet utilization at or above</span>
+      <input className="alerts-num mono" type="number" min="1" max="100" value={rules.subnetUtil}
+        onChange={e=>save({...rules,subnetUtil:e.target.value})} aria-label="Subnet utilization threshold percent"/>
+      <span>%</span>
+    </label>
+    <label className="alerts-row">
+      <input type="checkbox" checked={!!rules.hostOfflineOn} onChange={e=>toggle('hostOfflineOn',e.target.checked)}/>
+      <span>Any infrastructure host offline</span>
+    </label>
+  </div>;
+}
+
+/* AskTab — natural-language query console over POST /api/query. */
+function AskTab(){
+  const {params}=useRoute();
+  const [input,setInput]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [items,setItems]=useState([]); // newest first, capped at 5
+  const askedRef=useRef(null);
+  const push=entry=>setItems(list=>[{id:Date.now()+Math.random(),...entry},...list].slice(0,5));
+  const submit=(qArg)=>{
+    const q=String(qArg!=null?qArg:input).trim();
+    if(!q||busy) return;
+    setBusy(true);
+    fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({question:q,context:''})})
+      .then(async r=>{const j=await r.json().catch(()=>null);return {r,j};})
+      .then(({r,j})=>{
+        if(r.status===503||(j&&j.locked)){
+          window.dispatchEvent(new CustomEvent('bx:vault-locked'));
+          push({q,error:'Vault locked — unlock to query.'});
+          return;
+        }
+        if(j&&j.error){ push({q,error:String(j.error)}); return; }
+        if(!r.ok&&!(j&&typeof j.answer==='string')){ push({q,error:'HTTP '+r.status}); return; }
+        push({
+          q,
+          answer:(j&&typeof j.answer==='string')?j.answer:'Query returned an unexpected response.',
+          suggestions:(j&&Array.isArray(j.suggestions))?j.suggestions:[],
+          trace:(j&&Array.isArray(j.trace))?j.trace:null,
+        });
+      })
+      .catch(()=>toast('Query failed — server unreachable','err'))
+      .finally(()=>setBusy(false));
+  };
+  // Palette hands off "#ask?q=…": prefill + submit once per distinct q.
+  useEffect(()=>{
+    const q=params&&params.q;
+    if(q&&askedRef.current!==q){ askedRef.current=q; setInput(q); submit(q); }
+  },[params&&params.q]);
+  return <div className="ask-wrap">
+    <div>
+      <div className="ask-bar">
+        <input className="ask-in mono" placeholder="Ask about your network… e.g. Which subnets are nearly full?"
+          value={input} onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>{if(e.key==='Enter')submit();}}
+          aria-label="Natural-language query" autoFocus/>
+        <button className="btn" style={{height:36}} onClick={()=>submit()} disabled={busy||!input.trim()}>Ask</button>
+      </div>
+      {busy&&<div className="ask-busy mono">Querying… (LLM — may take a moment)</div>}
+    </div>
+    {items.map(it=>
+      <div key={it.id} className="panel ask-item">
+        <div className="ask-q mono">&gt; {it.q}</div>
+        {it.error
+          ? <div className="ask-err">{it.error}</div>
+          : <div className="ask-a">{it.answer}</div>}
+        {!!(it.suggestions&&it.suggestions.length)&&<div className="ask-chips">
+          {it.suggestions.map((sg,i)=>
+            <button key={i} className="chip chip-btn" onClick={()=>{setInput(sg);submit(sg);}}>{sg}</button>)}
+        </div>}
+        {!!(it.trace&&it.trace.length)&&<div className="ask-trace mono">
+          {it.trace.map((t,i)=><div key={i} className="ask-trace-row">
+            <span>{t.tool}</span> <span className="args">{JSON.stringify(t.args)}</span>
+          </div>)}
+        </div>}
+      </div>)}
+    <AlertRulesPanel/>
+  </div>;
+}
+
+/* AuditTab — audit rows from /api/data .auditLogs ({ts,user,action,resource,result}). */
+const AUDIT_ACT_COLOR={CREATE:'var(--ok)',DELETE:'var(--crit)',UPDATE:'var(--warn)'};
+function AuditTab(){
+  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/data');
+  const [q,setQ]=useState('');
+  const rows=(data&&(data.auditLogs||data.audit))||[];
+  const filtered=useMemo(()=>{
+    const t=q.trim().toLowerCase();
+    if(!t) return rows;
+    return rows.filter(r=>[r.user,r.resource,r.action].some(v=>String(v||'').toLowerCase().includes(t)));
+  },[rows,q]);
+  const cols=[
+    {key:'ts',label:'Time',mono:true,align:'left',width:190},
+    {key:'user',label:'User'},
+    {key:'action',label:'Action',render:v=>{
+      const a=String(v||'').toUpperCase();
+      return <span className="mono" style={{fontSize:11,textTransform:'uppercase',color:AUDIT_ACT_COLOR[a]||'var(--text-dim)'}}>{a}</span>;
+    }},
+    {key:'resource',label:'Resource'},
+    {key:'result',label:'Result',render:v=>
+      <span style={{color:v==='failure'?'var(--crit)':'var(--text-dim)'}}>{v}</span>},
+  ];
+  return <div className="ask-wrap">
+    <div style={{display:'flex',alignItems:'center',gap:12}}>
+      <input className="ask-in mono" style={{maxWidth:320,height:32,flex:'0 1 320px'}}
+        placeholder="Filter user / resource / action…" value={q} onChange={e=>setQ(e.target.value)}
+        aria-label="Filter audit log"/>
+      <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
+    </div>
+    <div className="panel" style={{padding:'4px 12px 12px'}}>
+      {loading&&!data
+        ? <Skeleton rows={6}/>
+        : locked
+          ? <div className="dt-empty">Vault locked — unlock to load the audit log.</div>
+          : error
+            ? <div className="dt-empty">Failed to load audit log — <button className="fresh-retry" onClick={refetch}>Retry</button></div>
+            : <DataTable cols={cols} rows={filtered} defaultSort={{key:'ts',dir:'desc'}} csvName="audit"/>}
     </div>
   </div>;
 }
+
+/* CommandPalette — ⌘K overlay (Shell owns open state) + topbar ViewsMenu portal. */
+function CommandPalette({open,onClose}){
+  const inputRef=useRef(null);
+  const [q,setQ]=useState('');
+  const [sel,setSel]=useState(0);
+  const [views,setViews]=useState([]);
+  const [confirmBlock,setConfirmBlock]=useState(null);
+  const [blocking,setBlocking]=useState(false);
+  const [slot,setSlot]=useState(null);
+  // Mount the saved-views dropdown into the topbar without editing Shell.
+  useEffect(()=>{setSlot(document.querySelector('.topbar-right'));},[]);
+  useEffect(()=>{
+    if(!open) return;
+    setQ('');setSel(0);setConfirmBlock(null);
+    if(inputRef.current) inputRef.current.focus();
+    fetch('/api/views').then(r=>r.ok?r.json():null).then(d=>setViews((d&&d.views)||[])).catch(()=>{});
+  },[open]);
+  useEffect(()=>{setSel(0);},[q]);
+  const typed=q.trim();
+  const needle=typed.toLowerCase();
+  const base=[
+    ...TABS.map(t=>({label:'Go to '+TAB_LABELS[t],kind:'nav',run:()=>{nav(t);onClose();}})),
+    {label:'Alert rules',kind:'nav',run:()=>{nav('ask');onClose();}},
+    ...views.map(v=>({label:'View: '+v.name,kind:'view',run:()=>{onClose();applyViewByName(v.name);}})),
+  ];
+  const items=base.filter(c=>c.label.toLowerCase().includes(needle));
+  if(typed){
+    items.push({label:'Ask: '+typed,kind:'ask',run:()=>{onClose();nav('ask',{q:typed});}});
+    items.push({label:'Block domain: '+typed,kind:'block',run:()=>setConfirmBlock(typed)});
+  }
+  const runBlock=()=>{
+    const domain=confirmBlock;
+    if(!domain||blocking) return;
+    setBlocking(true);
+    fetch('/api/block-domain',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({domain})})
+      .then(async r=>{
+        const j=await r.json().catch(()=>({}));
+        if(r.ok&&j.ok!==false) toast('Blocked '+domain+' network-wide','ok');
+        else toast('Block failed: '+((j&&j.error)||('HTTP '+r.status)),'err');
+      })
+      .catch(()=>toast('Block failed — server unreachable','err'))
+      .finally(()=>{setBlocking(false);setConfirmBlock(null);onClose();});
+  };
+  const onKey=e=>{
+    if(e.key==='Escape'){e.preventDefault(); if(confirmBlock) setConfirmBlock(null); else onClose(); return;}
+    if(confirmBlock){ if(e.key==='Enter'){e.preventDefault();runBlock();} return; }
+    if(e.key==='ArrowDown'){e.preventDefault();setSel(s=>Math.min(s+1,Math.max(items.length-1,0)));}
+    else if(e.key==='ArrowUp'){e.preventDefault();setSel(s=>Math.max(s-1,0));}
+    else if(e.key==='Enter'){e.preventDefault();const it=items[sel];if(it)it.run();}
+  };
+  return <>
+    {slot?ReactDOM.createPortal(<ViewsMenu/>,slot):null}
+    {open&&<div className="palette-scrim" onClick={onClose}>
+      <div className="palette" onClick={e=>e.stopPropagation()}>
+        <input ref={inputRef} className="palette-in mono" value={q} onChange={e=>setQ(e.target.value)}
+          onKeyDown={onKey} placeholder="Type a command, question, or domain…"
+          aria-label="Command palette" role="combobox" aria-expanded="true"/>
+        <div className="panel pal-list" role="listbox" aria-label="Commands">
+          {confirmBlock
+            ? <div className="pal-confirm">
+                <span>Block <span className="mono">{confirmBlock}</span> network-wide?</span>
+                <span style={{display:'inline-flex',gap:8}}>
+                  <button className="btn" style={{borderColor:'var(--crit)',color:'var(--crit)'}}
+                    disabled={blocking} onClick={runBlock}>{blocking?'Blocking…':'Confirm block'}</button>
+                  <button className="btn" disabled={blocking} onClick={()=>setConfirmBlock(null)}>Cancel</button>
+                </span>
+              </div>
+            : items.length===0
+              ? <div className="pal-empty">No matching commands</div>
+              : items.map((it,i)=>
+                <button key={it.kind+':'+it.label} className={'pal-row'+(i===sel?' sel':'')}
+                  role="option" aria-selected={i===sel}
+                  onMouseEnter={()=>setSel(i)} onClick={()=>it.run()}>
+                  <span>{it.label}</span>
+                  <span className="pal-kind mono">{it.kind}</span>
+                </button>)}
+        </div>
+      </div>
+    </div>}
+  </>;
+}
+
+/* ViewsMenu — topbar saved-views dropdown (GET/POST/DELETE /api/views). */
 function ViewsMenu(){
-  // A-later: saved views menu
-  return null;
+  const [open,setOpen]=useState(false);
+  const [views,setViews]=useState([]);
+  const [err,setErr]=useState('');
+  const [confirmDel,setConfirmDel]=useState(null);
+  const refresh=useCallback(()=>{
+    fetch('/api/views').then(r=>r.ok?r.json():Promise.reject())
+      .then(d=>{setViews((d&&d.views)||[]);setErr('');})
+      .catch(()=>setErr('Views unavailable'));
+  },[]);
+  useEffect(()=>{if(open){refresh();setConfirmDel(null);}},[open,refresh]);
+  const saveCurrent=()=>{
+    const name=window.prompt('Save current view as:');
+    if(!name||!name.trim()) return;
+    saveCurrentView(name.trim())
+      .then(res=>{
+        if(res.ok){toast('View "'+name.trim()+'" saved','ok');refresh();}
+        else toast('Save failed: '+(res.error||'unknown error'),'err');
+      })
+      .catch(()=>toast('Save failed — server unreachable','err'));
+  };
+  const del=name=>{
+    fetch('/api/views/'+encodeURIComponent(name),{method:'DELETE'})
+      .then(r=>{ if(r.ok){toast('Deleted "'+name+'"','ok');refresh();} else toast('Delete failed','err'); })
+      .catch(()=>toast('Delete failed — server unreachable','err'))
+      .finally(()=>setConfirmDel(null));
+  };
+  const folders=[...new Set(views.map(v=>(v.folder||'').trim()))]
+    .sort((a,b)=>{if(!a)return 1;if(!b)return -1;return a.localeCompare(b);});
+  return <span className="views-slot">
+    <button className="btn" aria-haspopup="menu" aria-expanded={open}
+      title="Saved views" onClick={()=>setOpen(o=>!o)}>Views</button>
+    {open&&<>
+      <div className="views-overlay" onClick={()=>setOpen(false)}/>
+      <div className="views-menu" role="menu">
+        <button className="views-item" onClick={()=>{setOpen(false);saveCurrent();}}>Save current…</button>
+        <div className="views-divider"/>
+        {err&&<div className="views-empty">{err}</div>}
+        {!err&&views.length===0&&<div className="views-empty">No saved views</div>}
+        {folders.map(f=><div key={f||'(ungrouped)'}>
+          {(f||folders.length>1)?<div className="views-folder">{f||'Ungrouped'}</div>:null}
+          {views.filter(v=>((v.folder||'').trim())===f).map(v=>
+            <div key={v.name} className="views-row">
+              {confirmDel===v.name
+                ? <>
+                    <span className="views-confirm-q">Delete {v.name}?</span>
+                    <button className="views-mini crit" onClick={()=>del(v.name)}>delete</button>
+                    <button className="views-mini" onClick={()=>setConfirmDel(null)}>keep</button>
+                  </>
+                : <>
+                    <button className="views-item" style={{flex:1}}
+                      onClick={()=>{setOpen(false);applyViewByName(v.name);}}>
+                      <span className="vname">{v.name}</span>
+                      {v.saved_at?<span className="views-date mono">{String(v.saved_at).slice(0,10)}</span>:null}
+                    </button>
+                    <button className="views-mini crit" aria-label={'Delete view '+v.name}
+                      onClick={()=>setConfirmDel(v.name)}>✕</button>
+                  </>}
+            </div>)}
+        </div>)}
+      </div>
+    </>}
+  </span>;
 }
 // ═══ END: ASKGLOBAL ═══
 
