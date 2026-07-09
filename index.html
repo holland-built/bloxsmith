@@ -1780,13 +1780,9 @@ function SecChips({options,value,onChange}){
   </span>;
 }
 
-function SecTriageInbox(){
-  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/hub/security',{poll:60000});
-  const [sevF,setSevF]=useState('all');
+function SecTriageInbox({api,sevF,setSevF,acks,toggleAck,clearAcks,triageRef}){
+  const {data,error,locked,fetchedAt,refetch,loading}=api;
   const [actF,setActF]=useState('all');
-  const [acks,setAcks]=useState(()=>LS.get('acks',{}));
-  const toggleAck=e=>{const k=secAckKey(e);setAcks(p=>{const n={...p};if(n[k])delete n[k];else n[k]=true;LS.set('acks',n);return n;});};
-  const clearAcks=()=>{setAcks({});LS.set('acks',{});};
   if(locked) return null;
   if(loading&&!data) return <div><SecHead title="Triage inbox"/><Skeleton rows={8}/></div>;
   const d=data||{};
@@ -1807,7 +1803,7 @@ function SecTriageInbox(){
     if(ra!==rb) return ra-rb;
     return String(B.e.event_time||'').localeCompare(String(A.e.event_time||''));
   }).map(x=>x.e);
-  return <div>
+  return <div ref={triageRef}>
     <SecHead title="Triage inbox" at={fetchedAt} onRetry={refetch} error={error}>
       <span className="mono" style={{fontSize:'var(--t12)'}}>
         <span style={{color:'var(--crit)'}}>critical {counts.critical||0}</span>{' · '}
@@ -1980,14 +1976,63 @@ function SecActions(){
   </div>;
 }
 
-const SecurityTab=()=>
-  <div style={{maxWidth:1200,margin:'0 auto',display:'flex',flexDirection:'column',gap:'var(--s8)'}}>
-    <SecTriageInbox/>
-    <SecThreatLookup/>
-    <SecDomainPanels/>
-    <SecInsights/>
-    <SecActions/>
+function SecSynthBand({api,acks,setSevF,triageRef}){
+  const {delta}=useSnapshots();
+  if(!api||!api.data) return null;
+  const d=api.data||{};
+  const events=Array.isArray(d.events)?d.events:[];
+  const sevOf=e=>String(e.severity||'').toLowerCase();
+  const unacked=events.filter(e=>!acks[secAckKey(e)]);
+  const uCrit=unacked.filter(e=>sevOf(e)==='critical').length;
+  const uHigh=unacked.filter(e=>sevOf(e)==='high').length;
+  const blocked=Number(d.blocked)||0;
+  const total=Number(d.total)||events.length;
+  const tone=uCrit>0?'crit':uHigh>0?'warn':'ok';
+  const pool=uCrit>0?unacked.filter(e=>sevOf(e)==='critical'):unacked;
+  const topDev=(()=>{
+    const freq={};
+    pool.forEach(e=>{const v=e.device;if(v)freq[v]=(freq[v]||0)+1;});
+    const arr=Object.entries(freq).sort((a,b)=>b[1]-a[1]);
+    return arr.length?arr[0][0]:null;
+  })();
+  const verdict=uCrit>0
+    ? uCrit+' critical threat'+(uCrit===1?'':'s')+' awaiting triage'+(topDev?' (top target: '+topDev+')':'')
+    : 'No unacknowledged critical threats — '+blocked+' blocked automatically';
+  const facts=[
+    {label:'Unacked critical', value:uCrit, delta:{v:delta('sec.crit'),good:'down'}},
+    {label:'Unacked high', value:uHigh, delta:{v:delta('sec.high'),good:'down'}},
+    {label:'Blocked', value:blocked, delta:{v:delta('sec.blocked'),good:'up'}},
+    {label:'Total events', value:total},
+  ];
+  const jump=sev=>{setSevF(sev);if(triageRef&&triageRef.current)triageRef.current.scrollIntoView({behavior:'smooth',block:'start'});};
+  const chips=[
+    uCrit>0?{label:'Triage '+uCrit+' critical', onClick:()=>jump('critical')}:null,
+    uHigh>0?{label:'Triage '+uHigh+' high', onClick:()=>jump('high')}:null,
+    topDev?{label:'Top target: '+topDev, onClick:()=>jump(uCrit>0?'critical':'all')}:null,
+  ].filter(Boolean);
+  return <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>;
+}
+
+function SecurityTab(){
+  const sec=useApi('/api/hub/security',{poll:60000});
+  const [sevF,setSevF]=useState('all');
+  const [acks,setAcks]=useState(()=>LS.get('acks',{}));
+  const triageRef=useRef(null);
+  const toggleAck=e=>{const k=secAckKey(e);setAcks(p=>{const n={...p};if(n[k])delete n[k];else n[k]=true;LS.set('acks',n);return n;});};
+  const clearAcks=()=>{setAcks({});LS.set('acks',{});};
+  return <div className="page">
+    <SecSynthBand api={sec} acks={acks} setSevF={setSevF} triageRef={triageRef}/>
+    <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef}/>
+    <div className="grid-2">
+      <SecThreatLookup/>
+      <SecInsights/>
+    </div>
+    <div className="grid-2">
+      <SecDomainPanels/>
+      <SecActions/>
+    </div>
   </div>;
+}
 // ═══ END: SECURITY ═══
 
 // ═══ REGION: ASKGLOBAL ═══
