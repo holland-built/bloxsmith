@@ -1,159 +1,40 @@
 import { test, expect } from '@playwright/test';
 
-// Minimal NetworkData that satisfies the NetworkData shape (see
-// src/types/network.ts) without triggering NetworkVertical's error
-// branches — used once the app-stack is revealed post-login.
-const EMPTY_NETWORK_DATA = {
-  subnets: [],
-  leases: [],
-  zones: [],
-  views: [],
-};
+// Mocks /api/vault/status to drive the VaultGate decision tree deterministically.
+// VaultGate (index.html): !vaultMode -> app shell; ready -> app shell;
+// !exists -> setup; !unlocked -> unlock screen.
 
-test.describe('auth gate', () => {
-  test('unauthenticated shows LoginScreen and no app-stack', async ({
-    page,
-  }) => {
-    await page.route('**/auth/me', (route) =>
-      route.fulfill({ status: 401, body: JSON.stringify({ error: 'unauthenticated' }) })
-    );
+async function mockStatus(page, body) {
+  await page.route('**/api/vault/status', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  );
+}
 
-    await page.goto('/index-vite.html');
+test('locked vault shows passphrase unlock screen, no tab bar', async ({ page }) => {
+  await mockStatus(page, { vaultMode: true, exists: true, unlocked: false });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Unlock vault' })).toBeVisible();
+  await expect(page.locator('#vu-pass')).toBeVisible();
+  await expect(page.locator('.tabbar')).toHaveCount(0);
+});
 
-    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: /dev sign in/i })
-    ).toBeVisible();
-    await expect(page.locator('.app-stack')).toHaveCount(0);
-  });
+test('non-vault mode renders the app shell', async ({ page }) => {
+  await mockStatus(page, { vaultMode: false });
+  await page.goto('/');
+  await expect(page.locator('.topbar')).toBeVisible();
+  await expect(page.locator('.tabbar')).toBeVisible();
+  await expect(page.locator('.vault-screen')).toHaveCount(0);
+});
 
-  test('dev-login reveals the app-stack', async ({ page }) => {
-    let loggedIn = false;
-
-    await page.route('**/auth/me', (route) => {
-      if (loggedIn) {
-        return route.fulfill({
-          status: 200,
-          body: JSON.stringify({ email: 'test@x.com', role: 'operator' }),
-        });
-      }
-      return route.fulfill({
-        status: 401,
-        body: JSON.stringify({ error: 'unauthenticated' }),
-      });
-    });
-
-    await page.route('**/auth/dev-login', (route) => {
-      loggedIn = true;
-      return route.fulfill({
-        status: 200,
-        body: JSON.stringify({ ok: true }),
-      });
-    });
-
-    await page.route('**/api/alerts/incidents', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify([]) })
-    );
-    await page.route('**/api/verticals/network', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify(EMPTY_NETWORK_DATA) })
-    );
-    await page.route('**/api/vault/status', (route) =>
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify({
-          vaultMode: false,
-          exists: true,
-          unlocked: true,
-          ready: true,
-          tenants: [],
-          active: '',
-        }),
-      })
-    );
-
-    await page.goto('/index-vite.html');
-
-    await expect(
-      page.getByRole('button', { name: /dev sign in/i })
-    ).toBeVisible();
-
-    await page.getByRole('textbox', { name: 'Email' }).fill('test@x.com');
-    await page.getByRole('combobox', { name: 'Role' }).selectOption('operator');
-    await page.getByRole('button', { name: /dev sign in/i }).click();
-
-    await expect(page.locator('.app-stack')).toBeVisible();
-  });
-
-  test('admin sees the audit export button and can trigger a download', async ({
-    page,
-  }) => {
-    let loggedIn = false;
-
-    await page.route('**/auth/me', (route) => {
-      if (loggedIn) {
-        return route.fulfill({
-          status: 200,
-          body: JSON.stringify({ email: 'admin@x.com', role: 'admin' }),
-        });
-      }
-      return route.fulfill({
-        status: 401,
-        body: JSON.stringify({ error: 'unauthenticated' }),
-      });
-    });
-
-    await page.route('**/auth/dev-login', (route) => {
-      loggedIn = true;
-      return route.fulfill({
-        status: 200,
-        body: JSON.stringify({ ok: true }),
-      });
-    });
-
-    await page.route('**/api/alerts/incidents', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify([]) })
-    );
-    await page.route('**/api/verticals/network', (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify(EMPTY_NETWORK_DATA) })
-    );
-    await page.route('**/api/audit/export', (route) =>
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify({ entries: [], chain_valid: true, broken_index: null }),
-      })
-    );
-    await page.route('**/api/vault/status', (route) =>
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify({
-          vaultMode: false,
-          exists: true,
-          unlocked: true,
-          ready: true,
-          tenants: [],
-          active: '',
-        }),
-      })
-    );
-
-    await page.goto('/index-vite.html');
-
-    await page.getByRole('textbox', { name: 'Email' }).fill('admin@x.com');
-    await page.getByRole('combobox', { name: 'Role' }).selectOption('admin');
-    await page.getByRole('button', { name: /dev sign in/i }).click();
-
-    await expect(page.locator('.app-stack')).toBeVisible();
-
-    const exportButton = page.getByRole('button', { name: /export audit log/i });
-    await expect(exportButton).toBeVisible();
-
-    // AuditExportButton (src/components/AuditExportButton.tsx) builds a
-    // Blob URL and clicks a synthetic <a download> element, which should
-    // surface as a real Playwright `download` event.
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      exportButton.click(),
-    ]);
-    expect(download.suggestedFilename()).toMatch(/^audit-export-.*\.json$/);
-  });
+test('no vault yet shows setup screen with min-8 passphrase field', async ({ page }) => {
+  await mockStatus(page, { vaultMode: true, exists: false });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Create your vault' })).toBeVisible();
+  const pass = page.locator('#vs-pass');
+  await expect(pass).toBeVisible();
+  // min-8 enforcement: a short passphrase surfaces the validation error.
+  await pass.fill('short');
+  await page.locator('#vs-confirm').fill('short');
+  await page.getByRole('button', { name: 'Create vault' }).click();
+  await expect(page.locator('.vault-err')).toContainText('at least 8');
 });

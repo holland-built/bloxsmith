@@ -1,101 +1,46 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
-async function mockAuthedAsViewer(page: Page) {
-  await page.route('**/auth/me', (route) =>
-    route.fulfill({ status: 200, body: JSON.stringify({ email: 'test@x.com', role: 'operator' }) })
-  );
-  await page.route('**/api/vault/status', (route) =>
-    route.fulfill({
-      status: 200,
-      body: JSON.stringify({
-        vaultMode: false,
-        exists: true,
-        unlocked: true,
-        ready: true,
-        tenants: [],
-        active: '',
-      }),
-    })
-  );
-}
+// Mocks /api/data with 2 subnets + 3 leases. leasesInSubnet (index.html) matches
+// by octet prefix (/24 -> first 3 octets). Subnet Alpha (util 90) sorts first.
 
-// Matches the Incident shape from src/types/alerts.ts. entity_type: 'subnet'
-// plus sample_entities[0] === 'subnet-1' drives src/lib/drilldown.ts's
-// drillTo('subnet', 'subnet-1'), which targets #subnet-subnet-1 (see the
-// PREFIX map in that file: subnet -> 'subnet-').
-const INCIDENT = {
-  key: 'subnet-utilization',
-  category: 'subnet-utilization',
-  entity_type: 'subnet',
-  severity: 'crit',
-  count: 1,
-  sample_entities: ['subnet-1'],
-  first_detected_at: 0,
-  message: '1 subnet utilization',
-};
-
-// Minimal NetworkData that renders real content (not the empty/degraded
-// state) — see src/components/NetworkVertical.tsx and
-// tests/triage-landing.spec.ts's NETWORK_DATA comment for the same pattern.
-// The subnet's id 'subnet-1' makes SubnetsTable render <tr id="subnet-subnet-1">
-// (src/components/SubnetsTable.tsx: id={`subnet-${s.id}`}).
-const NETWORK_DATA = {
+const DATA = {
   subnets: [
-    {
-      id: 'subnet-1',
-      name: 'test-subnet',
-      addr: '10.0.0.0',
-      cidr: 24,
-      total: 100,
-      used: 90,
-      util: 90,
-      severity: 'crit',
-    },
+    { id: 's-a', name: 'Subnet Alpha', addr: '10.10.10.0', cidr: 24, util: 90, site: 'HQ' },
+    { id: 's-b', name: 'Subnet Beta', addr: '10.20.20.0', cidr: 24, util: 20, site: 'DR' },
   ],
-  leases: [],
+  leases: [
+    { addr: '10.10.10.5', mac: 'aa:bb:cc:00:00:05', state: 'active', host: 'alpha-1' },
+    { addr: '10.10.10.6', mac: 'aa:bb:cc:00:00:06', state: 'active', host: 'alpha-2' },
+    { addr: '10.20.20.9', mac: 'aa:bb:cc:00:00:09', state: 'free', host: 'beta-1' },
+  ],
   zones: [],
-  views: [],
+  hosts: [],
+  auditLogs: [],
 };
 
-test.describe('drill-down', () => {
-  test('clicking a triage row\'s View button highlights the target subnet row', async ({
-    page,
-  }) => {
-    await mockAuthedAsViewer(page);
-    await page.route('**/api/alerts/incidents', (route) =>
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify([INCIDENT]),
-      })
-    );
-    await page.route('**/api/verticals/network', (route) =>
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify(NETWORK_DATA),
-      })
-    );
+test('clicking a subnet row drills into leases, back restores the table', async ({ page }) => {
+  await page.route('**/api/data', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(DATA) })
+  );
 
-    await page.goto('/index-vite.html');
+  await page.goto('/#network');
+  const rows = page.locator('table.dt tbody tr.clickable');
+  await expect(rows.first()).toBeVisible();
 
-    const triageRow = page.locator('.triage-row');
-    await expect(triageRow).toBeVisible();
+  // First (highest-util) subnet row = Subnet Alpha.
+  await expect(rows.first()).toContainText('Subnet Alpha');
+  await rows.first().click();
 
-    const subnetRow = page.locator('#subnet-subnet-1');
-    await expect(subnetRow).toBeVisible();
+  // Hash gains the subnet param.
+  await expect(page).toHaveURL(/subnet=/);
 
-    await triageRow.locator('.triage-view').click();
+  // Drill panel: back button + Alpha's two matching leases.
+  await expect(page.getByRole('button', { name: /Back/ })).toBeVisible();
+  await expect(page.locator('.panel')).toContainText('Subnet Alpha');
+  await expect(page.locator('.panel table.dt tbody tr')).toHaveCount(2);
 
-    // drillTo (src/lib/drilldown.ts) adds 'drill-highlight' synchronously
-    // on click; toHaveClass polls/retries so this is not a race even though
-    // React 18 StrictMode (src/main.tsx) double-invokes effects on mount —
-    // the highlight is applied imperatively via the DOM, not through React
-    // state, so it isn't affected by the double-fetch landmine documented
-    // in tests/triage-landing.spec.ts.
-    await expect(subnetRow).toHaveClass(/drill-highlight/);
-
-    // drillTo removes the class again after HIGHLIGHT_MS (2000ms).
-    await expect(subnetRow).not.toHaveClass(/drill-highlight/, {
-      timeout: 3000,
-    });
-  });
+  // Back -> subnet table restored.
+  await page.getByRole('button', { name: /Back/ }).click();
+  await expect(page).not.toHaveURL(/subnet=/);
+  await expect(page.locator('table.dt tbody tr.clickable').first()).toContainText('Subnet Alpha');
 });
