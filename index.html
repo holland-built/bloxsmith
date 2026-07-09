@@ -924,7 +924,214 @@ function AccountSlot(){
 // ═══ END: AUTH ═══
 
 // ═══ REGION: OVERVIEW ═══
-const OverviewTab=()=><Stub name="Overview"/>;
+/* Overview — health strip, KPI row, top subnets by util, triage preview, DNS volume.
+   Scoped styles injected once (same pattern as AUTH region). */
+(function injectOverviewStyles(){
+  if(document.getElementById('bx-ov-styles')) return;
+  const s=document.createElement('style');s.id='bx-ov-styles';
+  s.textContent=`
+  .ov{max-width:1200px;margin:0 auto;}
+  .ov-sec{margin-bottom:32px;}
+  .ov-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+  .ov-head-l{display:flex;align-items:baseline;gap:12px;min-width:0;}
+  .ov-title{margin:0;font-size:13px;font-weight:600;color:var(--text);}
+  .ov-aside{font-size:11px;color:var(--text-dim);white-space:nowrap;}
+  .ov-link{font-size:11px;color:var(--accent-text);background:transparent;border:none;padding:0;}
+  .ov-strip{display:flex;flex-wrap:wrap;gap:8px;}
+  .ov-cell{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);}
+  .ov-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
+  .ov-svc{font-size:12px;font-weight:500;color:var(--text);}
+  .ov-svclbl{font-size:12px;color:var(--text-dim);}
+  .ov-meta{font-size:11px;color:var(--text-dim);}
+  .ov-kpis{display:flex;flex-wrap:wrap;}
+  .ov-kpi{flex:1 1 0;min-width:130px;padding:4px 16px;border-right:1px solid var(--border);}
+  .ov-kpi:first-child{padding-left:0;}
+  .ov-kpi:last-child{border-right:none;}
+  .ov-kpi-n{font-size:28px;line-height:1.2;color:var(--text);}
+  .ov-kpi-l{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+  .ov-row{display:flex;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s ease;}
+  .ov-row:hover{background:var(--hover);}
+  .ov-sub-name{flex:0 0 200px;min-width:0;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ov-sub-cidr{flex:0 0 150px;font-size:11px;color:var(--text-dim);}
+  .ov-bar{flex:1 1 auto;height:4px;border-radius:2px;background:var(--raised);overflow:hidden;}
+  .ov-bar-fill{height:100%;}
+  .ov-pct{flex:0 0 44px;text-align:right;font-size:11px;color:var(--text);}
+  .ov-ev{display:flex;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--border);font-size:12px;}
+  .ov-sev{flex:0 0 64px;font-size:11px;text-transform:uppercase;}
+  .ov-q{flex:1 1 auto;min-width:0;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;}
+  .ov-dev{flex:0 1 auto;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ov-when{flex:0 0 72px;text-align:right;color:var(--text-dim);font-size:11px;}
+  .ov-bars{display:flex;align-items:flex-end;gap:8px;height:120px;}
+  .ov-bcol{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;}
+  .ov-b{width:100%;max-width:56px;background:var(--accent);border-radius:2px 2px 0 0;}
+  .ov-blbl{font-size:11px;color:var(--text-dim);}
+  .ov-empty{font-size:12px;color:var(--text-faint);padding:8px 4px;}
+  @media (max-width:768px){.ov-sub-name{flex-basis:120px;}.ov-sub-cidr{flex-basis:110px;}}
+  `;
+  document.head.appendChild(s);
+})();
+
+const OV_SEV_RANK={critical:0,high:1,medium:2,low:3};
+function ovSevColor(sev){
+  const v=String(sev||'').toLowerCase();
+  if(v==='critical') return 'var(--crit)';
+  if(v==='high') return 'var(--warn)';
+  return 'var(--text-dim)';
+}
+function ovUtilColor(u){ return u>85?'var(--crit)':u>70?'var(--warn)':'var(--accent)'; }
+function ovDotColor(status){
+  return status==='crit'?'var(--crit)':status==='warn'?'var(--warn)':'var(--ok)';
+}
+
+function OvSection({title,aside,link,api,children}){
+  return <section className="ov-sec">
+    <div className="ov-head">
+      <div className="ov-head-l">
+        <h2 className="ov-title">{title}</h2>
+        {aside?<span className="ov-aside mono">{aside}</span>:null}
+        {link||null}
+      </div>
+      <Freshness at={api.fetchedAt} error={api.error} onRetry={api.refetch}/>
+    </div>
+    {api.loading&&!api.data?<Skeleton rows={3}/>:children}
+  </section>;
+}
+
+function OverviewTab(){
+  const health=useApi('/api/hub/health',{poll:60000});
+  const data=useApi('/api/data');
+  const sec=useApi('/api/hub/security');
+  const dns=useApi('/api/dns-analytics');
+
+  // ── KPI derivations (case-tolerant) ──
+  const d=data.data||{};
+  const subnets=Array.isArray(d.subnets)?d.subnets:[];
+  const leases=Array.isArray(d.leases)?d.leases:[];
+  const zones=Array.isArray(d.zones)?d.zones:[];
+  const hosts=Array.isArray(d.hosts)?d.hosts:[];
+  const activeLeases=leases.filter(l=>String(l.state||'').toLowerCase()==='active').length;
+  const hostsOnline=hosts.filter(h=>/^(online|up)$/i.test(String(h.status||''))).length;
+  const counts=(sec.data&&sec.data.counts)||{};
+  const threats1h=Object.values(counts).reduce((a,b)=>a+(Number(b)||0),0);
+
+  // ── Top-5 subnets by util ──
+  const topSubs=useMemo(()=>[...subnets].sort((a,b)=>(b.util||0)-(a.util||0)).slice(0,5),[subnets]);
+
+  // ── Triage preview: top-5 unacked, severity-ranked ──
+  const acks=LS.get('acks',{});
+  const events=useMemo(()=>{
+    const all=(sec.data&&Array.isArray(sec.data.events))?sec.data.events:[];
+    return all
+      .filter(e=>!acks[String(e.event_time)+'|'+String(e.qname)])
+      .sort((a,b)=>{
+        const ra=OV_SEV_RANK[String(a.severity||'').toLowerCase()];
+        const rb=OV_SEV_RANK[String(b.severity||'').toLowerCase()];
+        return (ra===undefined?9:ra)-(rb===undefined?9:rb);
+      })
+      .slice(0,5);
+  },[sec.data]);
+
+  // ── DNS volume: defensive key inspection on first row ──
+  const volSeries=useMemo(()=>{
+    const vol=(dns.data&&Array.isArray(dns.data.volume))?dns.data.volume:[];
+    if(!vol.length) return [];
+    const row0=vol[0],keys=Object.keys(row0);
+    const numKey=keys.find(k=>{
+      const v=row0[k];
+      if(typeof v==='number') return true;
+      return typeof v==='string'&&v!==''&&!isNaN(Number(v))&&!/[-T:]/.test(v);
+    });
+    const dateKey=keys.find(k=>k!==numKey&&row0[k]!=null&&!isNaN(Date.parse(row0[k])));
+    if(!numKey||!dateKey) return [];
+    return vol.map(r=>({t:r[dateKey],v:Number(r[numKey])||0}))
+      .sort((a,b)=>new Date(a.t)-new Date(b.t))
+      .slice(-7);
+  },[dns.data]);
+  const volMax=Math.max(1,...volSeries.map(p=>p.v));
+  const volTotal=volSeries.reduce((a,p)=>a+p.v,0);
+  const dayLabel=(t)=>{
+    const dt=new Date(t);
+    return isNaN(dt.getTime())?String(t).slice(5,10):dt.toLocaleDateString(undefined,{weekday:'short'});
+  };
+
+  // Vault locked → render nothing; the gate handles it. (After all hooks.)
+  if(health.locked||data.locked||sec.locked||dns.locked) return null;
+
+  const kpis=[
+    {n:subnets.length,l:'Subnets'},
+    {n:activeLeases,l:'Active leases'},
+    {n:zones.length,l:'Zones'},
+    {n:hostsOnline+'/'+hosts.length,l:'Hosts online'},
+    {n:threats1h,l:'Threats 1h'},
+  ];
+
+  return <div className="ov">
+
+    <OvSection title="Service health" api={health}>
+      {Array.isArray(health.data)&&health.data.length
+        ? <div className="ov-strip">
+            {health.data.map((s,i)=><div key={s.name||i} className="ov-cell">
+              <span className="ov-dot" style={{background:ovDotColor(s.status)}}/>
+              <span className="ov-svc">{s.name}</span>
+              <span className="ov-svclbl">{s.statusLabel}</span>
+              <span className="ov-meta mono">{s.meta}</span>
+            </div>)}
+          </div>
+        : <div className="ov-empty">No services reported</div>}
+    </OvSection>
+
+    <OvSection title="Key metrics" api={data}>
+      <div className="ov-kpis">
+        {kpis.map(k=><div key={k.l} className="ov-kpi">
+          <div className="ov-kpi-n mono">{typeof k.n==='number'?k.n.toLocaleString():k.n}</div>
+          <div className="ov-kpi-l">{k.l}</div>
+        </div>)}
+      </div>
+    </OvSection>
+
+    <OvSection title="Top subnets by utilization" api={data}>
+      {topSubs.length
+        ? topSubs.map((s,i)=><div key={s.id||s.addr||i} className="ov-row" role="button" tabIndex={0}
+            onClick={()=>nav('network',{subnet:s.id||s.addr})}
+            onKeyDown={e=>{if(e.key==='Enter')nav('network',{subnet:s.id||s.addr});}}>
+            <span className="ov-sub-name">{s.name||s.addr}</span>
+            <span className="ov-sub-cidr mono">{s.addr}{s.cidr?'/'+s.cidr:''}</span>
+            <span className="ov-bar"><span className="ov-bar-fill" style={{width:Math.min(100,s.util||0)+'%',background:ovUtilColor(s.util||0)}}/></span>
+            <span className="ov-pct mono">{(s.util||0)}%</span>
+          </div>)
+        : <div className="ov-empty">No subnets</div>}
+    </OvSection>
+
+    <OvSection title="Triage"
+      aside={'critical '+(counts.critical||0)+' · high '+(counts.high||0)}
+      link={<button className="ov-link" onClick={()=>nav('security')}>View all →</button>}
+      api={sec}>
+      {events.length
+        ? events.map((e,i)=><div key={String(e.event_time)+'|'+String(e.qname)+i} className="ov-ev">
+            <span className="ov-sev mono" style={{color:ovSevColor(e.severity)}}>{String(e.severity||'—')}</span>
+            <span className="ov-q mono">{e.qname}</span>
+            <span className="ov-dev">{e.device}</span>
+            <span className="ov-when mono">{relAge(e.event_time)}</span>
+          </div>)
+        : <div className="ov-empty">No unacknowledged events</div>}
+    </OvSection>
+
+    <OvSection title="DNS volume — 7 days"
+      aside={volSeries.length?volTotal.toLocaleString()+' queries':null}
+      api={dns}>
+      {volSeries.length
+        ? <div className="ov-bars">
+            {volSeries.map((p,i)=><div key={i} className="ov-bcol">
+              <span className="ov-b" title={p.v.toLocaleString()}
+                style={{height:Math.max(2,Math.round(p.v/volMax*96))+'px'}}/>
+              <span className="ov-blbl mono">{dayLabel(p.t)}</span>
+            </div>)}
+          </div>
+        : <div className="ov-empty">No volume data</div>}
+    </OvSection>
+
+  </div>;
+}
 // ═══ END: OVERVIEW ═══
 
 // ═══ REGION: NETDNS ═══
