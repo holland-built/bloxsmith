@@ -1485,7 +1485,244 @@ function InfraTab({vaultTick}={}){
 // ═══ END: INFRA ═══
 
 // ═══ REGION: SECURITY ═══
-const SecurityTab=()=><Stub name="Security"/>;
+/* Security region — triage inbox, threat lookup, domain panels, SOC insights,
+   actions. Reuses useApi, DataTable, Freshness, toast, LS, Skeleton, relAge, tokens. */
+const SEC_SEV_RANK={critical:0,high:1,medium:2,low:3};
+const secSevColor=s=>({critical:'var(--crit)',high:'var(--warn)'})[String(s||'').toLowerCase()]||'var(--text-dim)';
+const secAckKey=e=>(e.event_time||'')+'|'+(e.qname||'');
+function secHumanize(k){return String(k).replace(/^InsightsSummaryView\./,'').replace(/[_.]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()).trim();}
+function secAutoCols(rows){
+  const first=(rows||[]).find(r=>r&&typeof r==='object')||{};
+  return Object.keys(first).map(k=>({key:k,label:secHumanize(k),mono:typeof first[k]==='number',align:typeof first[k]==='number'?'right':'left'}));
+}
+function secEvtAge(t){
+  if(t==null||t==='') return '—';
+  let ms;
+  if(typeof t==='number') ms=t<1e12?t*1000:t;
+  else if(/^\d+$/.test(String(t))){const n=Number(t);ms=n<1e12?n*1000:n;}
+  else ms=new Date(t).getTime();
+  if(isNaN(ms)) return String(t);
+  return relAge(new Date(ms));
+}
+function SecHead({title,at,onRetry,error,children}){
+  return <div style={{display:'flex',alignItems:'center',gap:'var(--s3)',marginBottom:'var(--s3)',flexWrap:'wrap'}}>
+    <h2 style={{margin:0,fontSize:'var(--t13)',fontWeight:600}}>{title}</h2>
+    {children}
+    <span style={{marginLeft:'auto'}}><Freshness at={at} onRetry={onRetry} error={error}/></span>
+  </div>;
+}
+function SecSection({title,children}){
+  return <section>
+    <h3 style={{margin:'0 0 var(--s2)',fontSize:'var(--t12)',fontWeight:600,color:'var(--text-dim)'}}>{title}</h3>
+    {children}
+  </section>;
+}
+const secChip=active=>({height:22,padding:'0 var(--s2)',fontSize:'var(--t11)',background:'transparent',color:active?'var(--accent-text)':'var(--text-dim)',border:'1px solid '+(active?'var(--accent)':'var(--border)'),borderRadius:'var(--r-ctl)',cursor:'pointer'});
+function SecChips({options,value,onChange}){
+  return <span style={{display:'inline-flex',gap:'var(--s1)'}}>
+    {options.map(o=><button key={o.v} style={secChip(value===o.v)} onClick={()=>onChange(o.v)}>{o.label}</button>)}
+  </span>;
+}
+
+function SecTriageInbox(){
+  const {data,error,fetchedAt,refetch,loading}=useApi('/api/hub/security',{poll:60000});
+  const [sevF,setSevF]=useState('all');
+  const [actF,setActF]=useState('all');
+  const [acks,setAcks]=useState(()=>LS.get('acks',{}));
+  const toggleAck=e=>{const k=secAckKey(e);setAcks(p=>{const n={...p};if(n[k])delete n[k];else n[k]=true;LS.set('acks',n);return n;});};
+  const clearAcks=()=>{setAcks({});LS.set('acks',{});};
+  if(loading&&!data) return <div><SecHead title="Triage inbox"/><Skeleton rows={8}/></div>;
+  const d=data||{};
+  const counts=d.counts||{};
+  const events=Array.isArray(d.events)?d.events:[];
+  let rows=events.filter(e=>{
+    const sev=String(e.severity||'').toLowerCase();
+    if(sevF!=='all'&&sev!==sevF) return false;
+    const act=String(e.policy_action||'').toLowerCase();
+    if(actF==='blocked'&&!(act==='block'||act==='redirect')) return false;
+    if(actF==='logged'&&act!=='log') return false;
+    return true;
+  });
+  rows=rows.map((e,i)=>({e,i})).sort((A,B)=>{
+    const aa=acks[secAckKey(A.e)]?1:0,ab=acks[secAckKey(B.e)]?1:0;
+    if(aa!==ab) return aa-ab;
+    const ra=SEC_SEV_RANK[String(A.e.severity||'').toLowerCase()]??9,rb=SEC_SEV_RANK[String(B.e.severity||'').toLowerCase()]??9;
+    if(ra!==rb) return ra-rb;
+    return String(B.e.event_time||'').localeCompare(String(A.e.event_time||''));
+  }).map(x=>x.e);
+  return <div>
+    <SecHead title="Triage inbox" at={fetchedAt} onRetry={refetch} error={error}>
+      <span className="mono" style={{fontSize:'var(--t12)'}}>
+        <span style={{color:'var(--crit)'}}>critical {counts.critical||0}</span>{' · '}
+        <span style={{color:'var(--warn)'}}>high {counts.high||0}</span>{' · '}
+        <span style={{color:'var(--text-dim)'}}>medium {counts.medium||0}</span>{' · '}
+        <span style={{color:'var(--text-dim)'}}>low {counts.low||0}</span>
+      </span>
+      <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+        {(d.blocked||0)+' blocked · '+(d.logged||0)+' logged · '+(d.total||0)+' total'}
+      </span>
+    </SecHead>
+    <div style={{display:'flex',alignItems:'center',gap:'var(--s3)',marginBottom:'var(--s3)',flexWrap:'wrap'}}>
+      <SecChips value={sevF} onChange={setSevF} options={[{v:'all',label:'all'},{v:'critical',label:'critical'},{v:'high',label:'high'},{v:'medium',label:'medium'},{v:'low',label:'low'}]}/>
+      <span style={{width:1,height:16,background:'var(--border)'}}/>
+      <SecChips value={actF} onChange={setActF} options={[{v:'all',label:'all'},{v:'blocked',label:'blocked'},{v:'logged',label:'logged'}]}/>
+      <button className="fresh-retry" style={{marginLeft:'auto'}} onClick={clearAcks}>Clear acks</button>
+    </div>
+    <div className="tbl-wrap">
+      <table className="dt">
+        <thead><tr>
+          <th style={{width:28}} aria-label="Acknowledge"></th>
+          <th>Severity</th><th>Query</th><th>Action</th><th>Feed</th><th>Device</th><th className="num">Time</th>
+        </tr></thead>
+        <tbody>
+          {rows.length===0
+            ? <tr><td className="dt-empty" colSpan={7}>No events</td></tr>
+            : rows.map((e,i)=>{
+                const acked=!!acks[secAckKey(e)];
+                return <tr key={secAckKey(e)+'#'+i} style={{opacity:acked?0.45:1}}>
+                  <td><input type="checkbox" checked={acked} onChange={()=>toggleAck(e)} aria-label="Acknowledge event"/></td>
+                  <td className="mono" style={{color:secSevColor(e.severity),textTransform:'uppercase'}}>{e.severity||'—'}</td>
+                  <td className="mono">{e.qname||'—'}</td>
+                  <td>{e.policy_action||'—'}</td>
+                  <td style={{color:'var(--text-dim)'}}>{e.feed_name||'—'}</td>
+                  <td>{e.device||'—'}</td>
+                  <td className="num mono" style={{color:'var(--text-faint)'}}>{secEvtAge(e.event_time)}</td>
+                </tr>;
+              })}
+        </tbody>
+      </table>
+    </div>
+  </div>;
+}
+
+function SecEntities({entities}){
+  if(entities==null) return null;
+  if(Array.isArray(entities)){
+    if(!entities.length) return <div className="dt-empty">No matches</div>;
+    if(typeof entities[0]==='object'&&entities[0]) return <DataTable cols={secAutoCols(entities)} rows={entities} csvName="threat-lookup"/>;
+  }
+  return <pre className="mono" style={{fontSize:'var(--t11)',color:'var(--text-dim)',whiteSpace:'pre-wrap',margin:0,padding:'var(--s3)',background:'var(--raised)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)',maxHeight:320,overflow:'auto'}}>{JSON.stringify(entities,null,2)}</pre>;
+}
+function SecThreatLookup(){
+  const [q,setQ]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [res,setRes]=useState(null);
+  const [err,setErr]=useState(null);
+  const [confirm,setConfirm]=useState(null);
+  const lookup=async()=>{
+    const query=q.trim(); if(!query) return;
+    setBusy(true);setErr(null);setRes(null);setConfirm(null);
+    try{
+      const r=await fetch('/api/threat-lookup?q='+encodeURIComponent(query),{cache:'no-store'});
+      const body=await r.json().catch(()=>null);
+      if(!r.ok||(body&&body.error)) setErr((body&&body.error)||('HTTP '+r.status));
+      else setRes(body||{entities:[],query});
+    }catch(e){setErr(String((e&&e.message)||e));}
+    setBusy(false);
+  };
+  const write=async(kind)=>{
+    const domain=q.trim(); if(!domain) return;
+    const url=kind==='block'?'/api/block-domain':'/api/unblock-domain';
+    setConfirm(null);
+    try{
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
+      const body=await r.json().catch(()=>({}));
+      if(r.status===401) toast('Requires bridge token','err');
+      else if(r.ok&&body.ok) toast((kind==='block'?'Blocked ':'Unblocked ')+domain,'ok');
+      else toast(body.error||('HTTP '+r.status),'err');
+    }catch(e){toast(String((e&&e.message)||e),'err');}
+  };
+  return <div>
+    <SecHead title="Threat lookup"/>
+    <div style={{display:'flex',gap:'var(--s2)',marginBottom:'var(--s3)',flexWrap:'wrap'}}>
+      <input className="mono" value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')lookup();}}
+        placeholder="domain, IP, or host…" aria-label="Threat lookup query"
+        style={{flex:'1 1 260px',minWidth:200,height:28,padding:'0 var(--s3)',fontSize:'var(--t12)',color:'var(--text)',background:'var(--raised)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)'}}/>
+      <button className="btn" onClick={lookup} disabled={busy||!q.trim()}>{busy?'Looking up…':'Lookup'}</button>
+    </div>
+    {err&&<div className="dt-empty" style={{color:'var(--crit)'}}>{err}</div>}
+    {res&&<div style={{marginBottom:'var(--s3)'}}><SecEntities entities={res.entities}/></div>}
+    <div style={{display:'flex',alignItems:'center',gap:'var(--s2)',flexWrap:'wrap'}}>
+      {confirm==='block'
+        ? <><span style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>Block {q.trim()}?</span>
+            <button className="btn" onClick={()=>write('block')}>Confirm block</button>
+            <button className="btn btn-ghost" onClick={()=>setConfirm(null)}>Cancel</button></>
+        : <button className="btn" disabled={!q.trim()} onClick={()=>setConfirm('block')}>Block domain</button>}
+      {confirm==='unblock'
+        ? <><span style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>Unblock {q.trim()}?</span>
+            <button className="btn" onClick={()=>write('unblock')}>Confirm unblock</button>
+            <button className="btn btn-ghost" onClick={()=>setConfirm(null)}>Cancel</button></>
+        : <button className="btn btn-ghost" disabled={!q.trim()} onClick={()=>setConfirm('unblock')}>Unblock domain</button>}
+    </div>
+  </div>;
+}
+
+function SecArrayTable({rows,csvName}){
+  if(!Array.isArray(rows)||!rows.length) return <div className="dt-empty">None</div>;
+  if(typeof rows[0]!=='object'||rows[0]===null) return <DataTable cols={[{key:'value',label:'Value'}]} rows={rows.map(v=>({value:v}))} csvName={csvName}/>;
+  return <DataTable cols={secAutoCols(rows)} rows={rows} csvName={csvName}/>;
+}
+function SecRoaming({re}){
+  if(!re||typeof re!=='object') return null;
+  const byStatus=re.by_status||{};
+  const tc=Array.isArray(re.top_countries)?re.top_countries:[];
+  return <SecSection title="Roaming endpoints">
+    <div style={{display:'flex',alignItems:'baseline',gap:'var(--s4)',marginBottom:'var(--s2)',flexWrap:'wrap'}}>
+      <span className="mono" style={{fontSize:'var(--t28)',fontWeight:600}}>{re.total||0}</span>
+      <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>
+        {Object.entries(byStatus).map(([k,v])=>k+' '+v).join(' · ')||'no status data'}
+      </span>
+    </div>
+    {tc.length>0&&<DataTable cols={[{key:'country',label:'Country'},{key:'count',label:'Endpoints',mono:true,align:'right'}]}
+      rows={tc.map(p=>Array.isArray(p)?{country:p[0],count:p[1]}:p)} csvName="roaming-countries"/>}
+  </SecSection>;
+}
+function SecDomainPanels(){
+  const {data,error,fetchedAt,refetch,loading}=useApi('/api/hub/domains');
+  if(loading&&!data) return <div><SecHead title="Domain protection"/><Skeleton rows={10}/></div>;
+  const d=data||{};
+  const hosts=d.host_inventory&&Array.isArray(d.host_inventory.hosts)?d.host_inventory.hosts:(Array.isArray(d.hosts)?d.hosts:null);
+  return <div>
+    <SecHead title="Domain protection" at={fetchedAt} onRetry={refetch} error={error}/>
+    <div style={{display:'flex',flexDirection:'column',gap:'var(--s6)'}}>
+      {Array.isArray(d.threat_feeds)&&d.threat_feeds.length>0&&<SecSection title="Threat feeds"><SecArrayTable rows={d.threat_feeds} csvName="threat-feeds"/></SecSection>}
+      {Array.isArray(d.named_lists)&&d.named_lists.length>0&&<SecSection title="Named lists"><SecArrayTable rows={d.named_lists} csvName="named-lists"/></SecSection>}
+      {Array.isArray(d.security_policies)&&d.security_policies.length>0&&<SecSection title="Security policies"><SecArrayTable rows={d.security_policies} csvName="security-policies"/></SecSection>}
+      {d.roaming_endpoints&&<SecRoaming re={d.roaming_endpoints}/>}
+      {Array.isArray(d.anycast_ha)&&d.anycast_ha.length>0&&<SecSection title="Anycast HA"><SecArrayTable rows={d.anycast_ha} csvName="anycast-ha"/></SecSection>}
+      {Array.isArray(d.dfp_services)&&d.dfp_services.length>0&&<SecSection title="DFP services"><SecArrayTable rows={d.dfp_services} csvName="dfp-services"/></SecSection>}
+      {hosts&&hosts.length>0&&<SecSection title="Hosts"><SecArrayTable rows={hosts} csvName="hosts"/></SecSection>}
+    </div>
+  </div>;
+}
+
+function SecInsights(){
+  const {data,error,fetchedAt,refetch,loading}=useApi('/api/insights');
+  if(loading&&!data) return <div><SecHead title="SOC insights"/><Skeleton rows={6}/></div>;
+  const rows=!data?[]:(Array.isArray(data)?data:(data.data||data.results||data.items||[]));
+  return <div>
+    <SecHead title="SOC insights" at={fetchedAt} onRetry={refetch} error={error}/>
+    {rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} csvName="soc-insights"/>:<div className="dt-empty">No insights</div>}
+  </div>;
+}
+function SecActions(){
+  const {data,error,fetchedAt,refetch,loading}=useApi('/api/actions');
+  if(loading&&!data) return <div><SecHead title="Actions"/><Skeleton rows={6}/></div>;
+  const rows=!data?[]:(Array.isArray(data)?data:(data.actions||data.results||data.data||[]));
+  return <div>
+    <SecHead title="Actions" at={fetchedAt} onRetry={refetch} error={error}/>
+    {rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} csvName="actions"/>:<div className="dt-empty">No actions</div>}
+  </div>;
+}
+
+const SecurityTab=()=>
+  <div style={{maxWidth:1200,margin:'0 auto',display:'flex',flexDirection:'column',gap:'var(--s8)'}}>
+    <SecTriageInbox/>
+    <SecThreatLookup/>
+    <SecDomainPanels/>
+    <SecInsights/>
+    <SecActions/>
+  </div>;
 // ═══ END: SECURITY ═══
 
 // ═══ REGION: ASKGLOBAL ═══
