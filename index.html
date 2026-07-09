@@ -1345,7 +1345,6 @@ function leasesInSubnet(leases, subnet) {
 }
 
 const NDA='NstarDnsActivity.';
-const NETDNS_WRAP={maxWidth:1200,margin:'0 auto',display:'flex',flexDirection:'column',gap:'var(--s8)'};
 function utilColor(u){return u>85?'var(--crit)':u>70?'var(--warn)':'var(--accent)';}
 /* inline flat utilization bar + mono % (no gradients/shadows) */
 function UtilBar(v){
@@ -1380,13 +1379,38 @@ const NET_LEASE_COLS=[
 function NetworkTab(){
   const {params}=useRoute();
   const {data,error,locked,loading,fetchedAt,refetch}=useData();
+  const {delta}=useSnapshots();
   if(locked) return null;
-  if(loading&&!data) return <div style={{maxWidth:1200,margin:'0 auto'}}><Skeleton rows={8}/></div>;
-  if(error) return <div style={{maxWidth:1200,margin:'0 auto'}}><Freshness error onRetry={refetch}/></div>;
+  if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
+  if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
   const subnets=(data&&data.subnets)||[];
   const leases=(data&&data.leases)||[];
   const drillKey=params.subnet||null;
   const drill=drillKey?subnets.find(s=>s.addr===drillKey||String(s.id)===drillKey):null;
+  const drillLeases=drill?leasesInSubnet(leases,drill):[];
+
+  // ── Synthesis band derivations ──
+  const utilOf=s=>Number(s&&s.util)||0;
+  const gt85=subnets.filter(s=>utilOf(s)>85).length;
+  const b7085=subnets.filter(s=>{const u=utilOf(s);return u>=70&&u<=85;}).length;
+  const activeLeases=leases.filter(l=>String(l.state||'').toLowerCase()==='active').length;
+  const sorted=[...subnets].sort((a,b)=>utilOf(b)-utilOf(a));
+  const worst=sorted[0]||null;
+  const nearCount=subnets.filter(s=>utilOf(s)>70).length;
+  const tone=gt85>0?'crit':b7085>0?'warn':'ok';
+  const verdict=tone==='ok'
+    ? 'DHCP capacity healthy — no subnet above 85%'
+    : nearCount+' subnet'+(nearCount===1?'':'s')+' near exhaustion — worst: '+((worst&&(worst.name||worst.addr))||'—')+' at '+(worst?utilOf(worst):0)+'%';
+  const facts=[
+    {label:'Subnets >85%',value:gt85,delta:{v:delta('subnets.gt85'),good:'down'}},
+    {label:'Watch 70-85%',value:b7085,delta:delta('subnets.b7085')},
+    {label:'Active leases',value:activeLeases.toLocaleString(),delta:{v:delta('leases.active'),good:'up'}},
+    {label:'Subnets total',value:subnets.length,delta:{v:delta('subnets.n'),good:'up'}},
+  ];
+  const chips=sorted.slice(0,3).map(s=>({
+    label:(s.name||s.addr||'—')+' · '+utilOf(s)+'%',
+    onClick:()=>nav('network',{subnet:s.addr||s.id}),
+  }));
 
   const subnetCols=[
     {key:'name',label:'Subnet'},
@@ -1395,32 +1419,34 @@ function NetworkTab(){
     {key:'site',label:'Site',hideSm:true},
   ];
 
-  return <div style={NETDNS_WRAP}>
+  return <div className="page">
+    <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
     <section>
       <SectionHead title={drill?'Subnet detail':'Subnets'}>
         <Freshness at={fetchedAt} onRetry={refetch}/>
       </SectionHead>
       {drillKey
-        ? <div className="panel" style={{padding:'var(--s4)'}}>
-            {drill
-              ? <React.Fragment>
-                  <div style={{display:'flex',alignItems:'center',gap:'var(--s3)',marginBottom:'var(--s3)'}}>
-                    <button className="btn btn-ghost" onClick={()=>history.back()}>← Back</button>
-                    <span style={{fontWeight:600}}>{drill.name}</span>
-                    <span className="mono" style={{color:'var(--text-dim)'}}>{drill.addr}/{drill.cidr}</span>
-                    <span className="mono" style={{marginLeft:'auto',color:utilColor(drill.util||0)}}>{drill.util||0}%</span>
-                  </div>
-                  {(()=>{const sl=leasesInSubnet(leases,drill);
-                    return sl.length
-                      ? <DataTable cols={NET_LEASE_COLS} rows={sl} defaultSort={{key:'addr',dir:'asc'}}
-                          csvName={'leases-'+(drill.addr||drill.id)}/>
-                      : <div className="dt-empty">No leases in this subnet</div>;})()}
-                </React.Fragment>
-              : <React.Fragment>
+        ? (drill
+            ? <div className="grid-2">
+                <div className="panel" style={{padding:'var(--s4)'}}>
                   <button className="btn btn-ghost" onClick={()=>history.back()}>← Back</button>
-                  <div className="dt-empty">Subnet not found</div>
-                </React.Fragment>}
-          </div>
+                  <div style={{marginTop:'var(--s3)',fontWeight:600}}>{drill.name}</div>
+                  <div className="mono" style={{color:'var(--text-dim)',marginTop:'var(--s1)'}}>{drill.addr}/{drill.cidr}</div>
+                  <div style={{marginTop:'var(--s3)'}}>{UtilBar(drill.util||0)}</div>
+                  <div className="mono" style={{marginTop:'var(--s3)',color:'var(--text-dim)',fontSize:'var(--t12)'}}>
+                    {drillLeases.length} lease{drillLeases.length===1?'':'s'} in subnet</div>
+                </div>
+                <div>
+                  {drillLeases.length
+                    ? <DataTable cols={NET_LEASE_COLS} rows={drillLeases} defaultSort={{key:'addr',dir:'asc'}}
+                        csvName={'leases-'+(drill.addr||drill.id)}/>
+                    : <div className="dt-empty">No leases in this subnet</div>}
+                </div>
+              </div>
+            : <div className="panel" style={{padding:'var(--s4)'}}>
+                <button className="btn btn-ghost" onClick={()=>history.back()}>← Back</button>
+                <div className="dt-empty">Subnet not found</div>
+              </div>)
         : <DataTable cols={subnetCols} rows={subnets} defaultSort={{key:'util',dir:'desc'}}
             onRowClick={r=>nav('network',{subnet:r.addr||r.id})} csvName="subnets"/>}
     </section>
@@ -1434,9 +1460,10 @@ function NetworkTab(){
 function DnsTab(){
   const {data,error,locked,loading,fetchedAt,refetch}=useData();
   const an=useApi('/api/dns-analytics');
+  const {delta}=useSnapshots();
   if(locked) return null;
-  if(loading&&!data) return <div style={{maxWidth:1200,margin:'0 auto'}}><Skeleton rows={8}/></div>;
-  if(error) return <div style={{maxWidth:1200,margin:'0 auto'}}><Freshness error onRetry={refetch}/></div>;
+  if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
+  if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
   const zones=(data&&data.zones)||[];
   const zoneCols=[
     {key:'fqdn',label:'Zone',mono:true,align:'left'},
@@ -1465,13 +1492,39 @@ function DnsTab(){
   ];
   const anLoading=an.loading&&!an.data;
 
-  return <div style={NETDNS_WRAP}>
+  // ── Synthesis band derivations ──
+  const issueCount=zones.filter(z=>Array.isArray(z.issues)&&z.issues.length>0).length;
+  const anomalyCount=zones.filter(z=>z.anomaly).length;
+  const volCounts=volume.map(r=>Number(r[NDA+'total_query_count'])||0);
+  const volTotal=volCounts.reduce((a,b)=>a+b,0);
+  const volAvg=volCounts.length?volTotal/volCounts.length:0;
+  const volLast=volCounts.length?volCounts[volCounts.length-1]:0;
+  const volPct=volAvg?Math.round((volLast-volAvg)/volAvg*100):0;
+  const pctStr=(volPct>=0?'+':'')+volPct+'%';
+  const tone=(issueCount>0||anomalyCount>0)?'crit':'ok';
+  const verdict=tone==='ok'
+    ? 'DNS healthy — no zone issues, volume steady'
+    : (issueCount>0?issueCount+' zone'+(issueCount===1?'':'s')+' with issues'
+        :anomalyCount+' volume anomaly flag'+(anomalyCount===1?'':'s'))+'; volume '+pctStr+' vs weekly average';
+  const facts=[
+    {label:'Zones',value:zones.length,delta:{v:delta('zones.n'),good:'up'}},
+    {label:'Zones w/ issues',value:issueCount,delta:{v:delta('zones.issues'),good:'down'}},
+    {label:'Anomalies',value:anomalyCount},
+    {label:'7d volume',value:volTotal.toLocaleString()+' ('+pctStr+')'},
+  ];
+  const chips=zones
+    .filter(z=>(Array.isArray(z.issues)&&z.issues.length>0)||z.anomaly)
+    .slice(0,3).map(z=>({label:z.fqdn||'—'}));
+
+  return <div className="page">
+    <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
     <section>
       <SectionHead title="DNS zones">
         <Freshness at={fetchedAt} onRetry={refetch}/>
       </SectionHead>
       <DataTable cols={zoneCols} rows={zones} defaultSort={{key:'fqdn',dir:'asc'}} csvName="zones"/>
     </section>
+    <div className="grid-3">
     <section>
       <SectionHead title="Query volume · 7d">
         <Freshness at={an.fetchedAt} onRetry={an.refetch} error={an.error?true:undefined}/>
@@ -1511,6 +1564,7 @@ function DnsTab(){
             </div>
           : <div className="dt-empty">No query-type data</div>}
     </section>
+    </div>
   </div>;
 }
 // ═══ END: NETDNS ═══
