@@ -1705,7 +1705,7 @@ function InfraTab({vaultTick}={}){
     return {
       hostNames:[...hSet].sort((a,b)=>a.localeCompare(b)),
       metricNames:[...mSet].sort((a,b)=>a.localeCompare(b)),
-      pivot:pv, hotSet:hot,
+      pivot:pv, hotSet:hot, hotByHost,
     };
   },[metricRows]);
 
