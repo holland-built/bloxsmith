@@ -1236,8 +1236,8 @@ function Skeleton({rows=4}){
 /* ─────────────────────────────────────────────────────────────
    6. Hash router — parse #tab?k=v. Legacy redirects. nav() helper.
    ───────────────────────────────────────────────────────────── */
-const TABS=['overview','daily','network','dns','infra','security','audit','provision','selfservice'];
-const TAB_LABELS={overview:'Overview',daily:'Daily',network:'Network',dns:'DNS',infra:'Infra',security:'Security',audit:'Audit',provision:'Provision',selfservice:'Self-Service'};
+const TABS=['overview','daily','network','dns','infra','security','audit','provision','drift','selfservice'];
+const TAB_LABELS={overview:'Overview',daily:'Daily',network:'Network',dns:'DNS',infra:'Infra',security:'Security',audit:'Audit',provision:'Provision',drift:'Drift',selfservice:'Self-Service'};
 const LEGACY={home:'overview',map:'network',dhcp:'network',ipam:'network',dns:'dns',
   security:'security',assets:'infra',audit:'audit',search:'overview',ask:'overview',hub:'overview',
   summary:'daily',trends:'daily'};
@@ -4652,12 +4652,40 @@ function AuditTab(){
 }
 
 // ═══ REGION: PROVISION ═══
-/* SelfServiceTab — self-service IP allocation form. POSTs /api/selfservice/allocate
-   (subnet_id OR tag_key/tag_value + count + name, optional dns block). Dry-run
-   defaults ON so a first submit never mutates anything. */
+/* RTYPE_HINTS/RTYPE_OPTIONS — DNS Records mode uses ONE value input (not
+   per-type structured fields); the placeholder changes by type so the user
+   knows the expected format. Backend parses the raw string. */
+const RTYPE_OPTIONS=['A','AAAA','CNAME','MX','TXT','SRV','PTR','NS','CAA','DNAME'];
+const RTYPE_HINTS={
+  A:'192.0.2.10',
+  AAAA:'2001:db8::10',
+  CNAME:'target.example.com.',
+  MX:'10 mail.example.com.',
+  TXT:'"some text"',
+  SRV:'10 0 443 host.example.com.',
+  PTR:'host.example.com.',
+  NS:'ns1.example.com.',
+  CAA:'0 issue "letsencrypt.org"',
+  DNAME:'target.example.com.',
+};
+
+/* SelfServiceTab — 4-mode self-service surface (mirrors ProvisionTab's
+   mode-switch pattern):
+   - Allocate: original self-service IP allocation form (unchanged), POSTs
+     /api/selfservice/allocate (subnet_id OR tag_key/tag_value + count + name,
+     optional dns block). Dry-run defaults ON.
+   - DNS Records: full CRUD against /api/dns/records for a chosen zone.
+   - IP Manager: subnet availability + allocated-address release.
+   - Inventory: read-only cascading drilldown (space→subnet→addresses,
+     zone→records). No write buttons.
+   All hooks run unconditionally above the locked-gate so switching modes
+   never violates hooks-before-return. */
 function SelfServiceTab(){
   const {locked}=useData();
   const zonesApi=useApi('/api/dns/zones');
+  const [mode,setMode]=useState('allocate'); // 'allocate' | 'dns' | 'ipman' | 'inventory'
+
+  // Allocate mode (unchanged).
   const [subnetId,setSubnetId]=useState('');
   const [tagKey,setTagKey]=useState('');
   const [tagValue,setTagValue]=useState('');
@@ -4672,9 +4700,188 @@ function SelfServiceTab(){
   const [busy,setBusy]=useState(false);
   const [result,setResult]=useState(null);
   const [err,setErr]=useState(null);
+
+  // DNS Records mode.
+  const [dnsZoneId,setDnsZoneId]=useState('');
+  const recordsApi=useApi(dnsZoneId?('/api/dns/records?zone='+encodeURIComponent(dnsZoneId)):null);
+  const [addName,setAddName]=useState('');
+  const [addType,setAddType]=useState('A');
+  const [addValue,setAddValue]=useState('');
+  const [addTtl,setAddTtl]=useState('');
+  const [addComment,setAddComment]=useState('');
+  const [addBusy,setAddBusy]=useState(false);
+  const [addErr,setAddErr]=useState(null);
+  const [editingId,setEditingId]=useState(null);
+  const [editValue,setEditValue]=useState('');
+  const [editTtl,setEditTtl]=useState('');
+  const [editComment,setEditComment]=useState('');
+  const [editDisabled,setEditDisabled]=useState(false);
+  const [editBusy,setEditBusy]=useState(false);
+  const [deletingId,setDeletingId]=useState(null);
+
+  // IP Manager + Inventory share the space list.
+  const spacesApi=useApi('/api/ipam/spaces');
+
+  // IP Manager mode.
+  const [ipSpace,setIpSpace]=useState('');
+  const [ipBlock,setIpBlock]=useState('');
+  const ipBlocksApi=useApi(ipSpace?('/api/ipam/blocks?space='+encodeURIComponent(ipSpace)):null);
+  const [ipSubnetId,setIpSubnetId]=useState('');
+  const ipSubnetsApi=useApi(ipSpace?('/api/ipam/subnets?space='+encodeURIComponent(ipSpace)+(ipBlock?('&block='+encodeURIComponent(ipBlock)):'')):null);
+  const availApi=useApi(ipSubnetId?('/api/ipam/availability?subnet='+encodeURIComponent(ipSubnetId)):null);
+  const addrApi=useApi(ipSubnetId?('/api/ipam/addresses?subnet='+encodeURIComponent(ipSubnetId)):null);
+  const [releasingId,setReleasingId]=useState(null);
+
+  // Inventory mode (read-only) — its own drilldown state, independent of IP Manager.
+  const [invSpace,setInvSpace]=useState('');
+  const [invBlock,setInvBlock]=useState('');
+  const invBlocksApi=useApi(invSpace?('/api/ipam/blocks?space='+encodeURIComponent(invSpace)):null);
+  const [invSubnetId,setInvSubnetId]=useState('');
+  const invSubnetsApi=useApi(invSpace?('/api/ipam/subnets?space='+encodeURIComponent(invSpace)+(invBlock?('&block='+encodeURIComponent(invBlock)):'')):null);
+  const invAddrApi=useApi(invSubnetId?('/api/ipam/addresses?subnet='+encodeURIComponent(invSubnetId)):null);
+  const [invZoneId,setInvZoneId]=useState('');
+  const invRecordsApi=useApi(invZoneId?('/api/dns/records?zone='+encodeURIComponent(invZoneId)):null);
+
   if(locked) return null;
 
   const zones=(zonesApi.data&&zonesApi.data.zones)||[];
+  const spaces=(spacesApi.data&&spacesApi.data.spaces)||[];
+  const records=Array.isArray(recordsApi.data)?recordsApi.data:[];
+  const ipBlocks=(ipBlocksApi.data&&ipBlocksApi.data.blocks)||[];
+  const ipSubnets=Array.isArray(ipSubnetsApi.data)?ipSubnetsApi.data:[];
+  const availability=availApi.data||null;
+  const addresses=Array.isArray(addrApi.data)?addrApi.data:[];
+  const invBlocks=(invBlocksApi.data&&invBlocksApi.data.blocks)||[];
+  const invSubnets=Array.isArray(invSubnetsApi.data)?invSubnetsApi.data:[];
+  const invAddresses=Array.isArray(invAddrApi.data)?invAddrApi.data:[];
+  const invRecords=Array.isArray(invRecordsApi.data)?invRecordsApi.data:[];
+
+  const addRecord=()=>{
+    if(!dnsZoneId||addBusy) return;
+    setAddBusy(true);setAddErr(null);
+    const body={zone_id:dnsZoneId,name_in_zone:addName,type:addType,value:addValue};
+    if(addTtl!=='') body.ttl=Number(addTtl);
+    if(addComment) body.comment=addComment;
+    fetch('/api/dns/records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(async r=>{
+        const j=await r.json().catch(()=>({}));
+        setAddBusy(false);
+        if(!r.ok||j.error||j.ok===false){
+          const msg=(j&&j.error)||('HTTP '+r.status);
+          setAddErr(msg);toast('Add record failed: '+msg,'err');return;
+        }
+        setAddName('');setAddValue('');setAddTtl('');setAddComment('');setAddErr(null);
+        toast('Record added','ok');recordsApi.refetch();
+      })
+      .catch(e=>{setAddBusy(false);const msg=String((e&&e.message)||e);setAddErr(msg);toast('Add record failed — '+msg,'err');});
+  };
+
+  const startEdit=(r)=>{
+    setEditingId(r.id);setEditValue(r.dns_rdata||'');
+    setEditTtl(r.ttl!=null?String(r.ttl):'');setEditComment(r.comment||'');setEditDisabled(!!r.disabled);
+  };
+  const cancelEdit=()=>setEditingId(null);
+  const saveEdit=()=>{
+    if(editBusy||editingId==null) return;
+    setEditBusy(true);
+    const body={id:editingId,value:editValue,comment:editComment,disabled:editDisabled};
+    body.ttl=editTtl!==''?Number(editTtl):undefined;
+    fetch('/api/dns/records',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(async r=>{
+        const j=await r.json().catch(()=>({}));
+        setEditBusy(false);
+        if(!r.ok||j.error||j.ok===false){
+          const msg=(j&&j.error)||('HTTP '+r.status);
+          toast('Edit failed: '+msg,'err');return;
+        }
+        setEditingId(null);toast('Record updated','ok');recordsApi.refetch();
+      })
+      .catch(e=>{setEditBusy(false);toast('Edit failed — '+String((e&&e.message)||e),'err');});
+  };
+  const deleteRecord=(r)=>{
+    const label=(r.type||'')+' record '+(r.name_in_zone||'@')+' → '+(r.dns_rdata||'');
+    if(!window.confirm('Delete '+label+'?')) return;
+    setDeletingId(r.id);
+    fetch('/api/dns/records/'+encodeURIComponent(r.id),{method:'DELETE'})
+      .then(async resp=>{
+        const j=await resp.json().catch(()=>({}));
+        setDeletingId(null);
+        if(!resp.ok||j.error||j.ok===false){
+          const msg=(j&&j.error)||('HTTP '+resp.status);
+          toast('Delete failed: '+msg,'err');return;
+        }
+        toast('Record deleted','ok');recordsApi.refetch();
+      })
+      .catch(e=>{setDeletingId(null);toast('Delete failed — '+String((e&&e.message)||e),'err');});
+  };
+
+  const recordCols=[
+    {key:'name_in_zone',label:'Name',primary:true,render:v=>v||'@'},
+    {key:'type',label:'Type',mono:true},
+    {key:'ttl',label:'TTL',mono:true,align:'right',render:(v,r)=>r.id===editingId
+      ?<input className="vault-in" style={{width:70}} type="number" min="0" value={editTtl} onChange={e=>setEditTtl(e.target.value)}/>
+      :v},
+    {key:'dns_rdata',label:'Value',mono:true,render:(v,r)=>r.id===editingId
+      ?<input className="vault-in" value={editValue} onChange={e=>setEditValue(e.target.value)}/>
+      :(v||'—')},
+    {key:'comment',label:'Comment',render:(v,r)=>r.id===editingId
+      ?<input className="vault-in" value={editComment} onChange={e=>setEditComment(e.target.value)}/>
+      :(v||'—')},
+    {key:'disabled',label:'Disabled',render:(v,r)=>r.id===editingId
+      ?<input type="checkbox" checked={editDisabled} onChange={e=>setEditDisabled(e.target.checked)}/>
+      :(v?'yes':'no')},
+    {key:'actions',label:'',render:(_,r)=>r.id===editingId
+      ?<span style={{display:'flex',gap:6}}>
+          <button className="btn" disabled={editBusy} onClick={saveEdit}>{editBusy?'Saving…':'Save'}</button>
+          <button className="btn" disabled={editBusy} onClick={cancelEdit}>Cancel</button>
+        </span>
+      :<span style={{display:'flex',gap:6}}>
+          <button className="btn" onClick={()=>startEdit(r)}>Edit</button>
+          <button className="btn" disabled={deletingId===r.id} onClick={()=>deleteRecord(r)}>{deletingId===r.id?'Deleting…':'Delete'}</button>
+        </span>},
+  ];
+
+  const releaseAddress=(r)=>{
+    const label='address '+(r.address||r.name||r.id);
+    if(!window.confirm('Release '+label+'?')) return;
+    setReleasingId(r.id);
+    fetch('/api/ipam/addresses/'+encodeURIComponent(r.id),{method:'DELETE'})
+      .then(async resp=>{
+        let j=null;try{j=await resp.json();}catch(e){j=null;}
+        setReleasingId(null);
+        if(!resp.ok||(j&&j.error)||(j&&j.ok===false)){
+          const msg=(j&&j.error)||('HTTP '+resp.status);
+          toast('Release failed: '+msg,'err');return;
+        }
+        toast('Address released','ok');addrApi.refetch();availApi.refetch();
+      })
+      .catch(e=>{setReleasingId(null);toast('Release failed — '+String((e&&e.message)||e),'err');});
+  };
+
+  const addrCols=[
+    {key:'address',label:'Address',mono:true,primary:true},
+    {key:'name',label:'Name',render:v=>v||'—'},
+    {key:'comment',label:'Comment',render:v=>v||'—'},
+    {key:'state',label:'State',render:v=>StateText(v)},
+    {key:'actions',label:'',render:(_,r)=>
+      <button className="btn" disabled={releasingId===r.id} onClick={()=>releaseAddress(r)}>{releasingId===r.id?'Releasing…':'Release'}</button>},
+  ];
+
+  const invAddrCols=[
+    {key:'address',label:'Address',mono:true,primary:true},
+    {key:'name',label:'Name',render:v=>v||'—'},
+    {key:'comment',label:'Comment',render:v=>v||'—'},
+    {key:'state',label:'State',render:v=>StateText(v)},
+  ];
+  const invRecordCols=[
+    {key:'name_in_zone',label:'Name',primary:true,render:v=>v||'@'},
+    {key:'type',label:'Type',mono:true},
+    {key:'ttl',label:'TTL',mono:true,align:'right'},
+    {key:'dns_rdata',label:'Value',mono:true,render:v=>v||'—'},
+    {key:'comment',label:'Comment',render:v=>v||'—'},
+    {key:'disabled',label:'Disabled',render:v=>v?'yes':'no'},
+  ];
+  const subnetLabel=s=>(s.address||'')+(s.cidr?('/'+s.cidr):'')+(s.name?(' — '+s.name):'');
 
   const submit=()=>{
     setBusy(true);setErr(null);setResult(null);
@@ -4702,8 +4909,14 @@ function SelfServiceTab(){
   };
 
   return <div className="page fadein">
-    <SectionRule title="Self-service allocation"/>
-    <div className="grid">
+    <SectionRule title="Self-Service"/>
+    <div className="dly-seg" role="group" aria-label="Self-service mode" style={{marginBottom:'var(--s3)'}}>
+      <button className={'dly-seg-btn'+(mode==='allocate'?' on':'')} onClick={()=>setMode('allocate')}>Allocate</button>
+      <button className={'dly-seg-btn'+(mode==='dns'?' on':'')} onClick={()=>setMode('dns')}>DNS Records</button>
+      <button className={'dly-seg-btn'+(mode==='ipman'?' on':'')} onClick={()=>setMode('ipman')}>IP Manager</button>
+      <button className={'dly-seg-btn'+(mode==='inventory'?' on':'')} onClick={()=>setMode('inventory')}>Inventory</button>
+    </div>
+    {mode==='allocate'?<div className="grid">
       <Panel title="Request">
         <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
           <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
@@ -4775,7 +4988,150 @@ function SelfServiceTab(){
         </div>:null}
       </Panel>:null}
       {err?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{err}</div></Panel>:null}
-    </div>
+    </div>:null}
+    {mode==='dns'?<div className="grid">
+      <Panel title="Zone">
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Zone
+            <select className="vault-in" value={dnsZoneId} onChange={e=>setDnsZoneId(e.target.value)}>
+              <option value="">{zonesApi.loading?'Loading zones…':'Select a zone'}</option>
+              {zones.map(z=><option key={z.id} value={z.id}>{z.fqdn}</option>)}
+            </select>
+          </label>
+        </div>
+      </Panel>
+      {dnsZoneId?<Panel title="Add record">
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Name
+            <input className="vault-in" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="host (blank = @)"/>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Type
+            <select className="vault-in" value={addType} onChange={e=>setAddType(e.target.value)}>
+              {RTYPE_OPTIONS.map(t=><option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Value
+            <input className="vault-in" value={addValue} onChange={e=>setAddValue(e.target.value)} placeholder={RTYPE_HINTS[addType]||'value'}/>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            TTL (optional)
+            <input className="vault-in" type="number" min="0" value={addTtl} onChange={e=>setAddTtl(e.target.value)} placeholder="default"/>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Comment (optional)
+            <input className="vault-in" value={addComment} onChange={e=>setAddComment(e.target.value)}/>
+          </label>
+          <button className="btn" disabled={addBusy||!addValue} onClick={addRecord}>{addBusy?'Adding…':'Add record'}</button>
+          {addErr?<div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>{addErr}</div>:null}
+        </div>
+      </Panel>:null}
+      <Panel title="Records" api={dnsZoneId?recordsApi:undefined}>
+        {!dnsZoneId?<div className="dt-empty">Select a zone</div>
+          :recordsApi.loading?<div className="dt-empty">Loading…</div>
+          :records.length===0?<div className="dt-empty">No records</div>
+          :<DataTable tableId="ss-dns-records" rowKey={r=>r.id} cols={recordCols} rows={records}
+              defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}/>}
+      </Panel>
+    </div>:null}
+    {mode==='ipman'?<div className="grid">
+      <Panel title="Subnet">
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Space
+            <select className="vault-in" value={ipSpace} onChange={e=>{setIpSpace(e.target.value);setIpBlock('');setIpSubnetId('');}}>
+              <option value="">{spacesApi.loading?'Loading spaces…':'Select a space'}</option>
+              {spaces.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Block (optional)
+            <select className="vault-in" value={ipBlock} onChange={e=>{setIpBlock(e.target.value);setIpSubnetId('');}} disabled={!ipSpace}>
+              <option value="">{ipBlocksApi.loading?'Loading blocks…':'All blocks'}</option>
+              {ipBlocks.map(b=><option key={b.id} value={b.id}>{b.name||b.cidr||b.address}</option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Subnet
+            <select className="vault-in" value={ipSubnetId} onChange={e=>setIpSubnetId(e.target.value)} disabled={!ipSpace}>
+              <option value="">{ipSubnetsApi.loading?'Loading subnets…':'Select a subnet'}</option>
+              {ipSubnets.map(s=><option key={s.id} value={s.id}>{subnetLabel(s)}</option>)}
+            </select>
+          </label>
+        </div>
+      </Panel>
+      {ipSubnetId?<Panel title="Availability" api={availApi}>
+        {availability?<div style={{display:'flex',flexDirection:'column',gap:'var(--s2)'}}>
+            {UtilBar(availability.pct)}
+            <div className="mono" style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>
+              {availability.used ?? 0} used · {availability.free ?? 0} free · {availability.total ?? 0} total
+            </div>
+          </div>
+          :<div className="dt-empty">{availApi.loading?'Loading…':'No data'}</div>}
+      </Panel>:null}
+      <Panel title="Addresses" api={ipSubnetId?addrApi:undefined}>
+        {!ipSubnetId?<div className="dt-empty">Select a subnet</div>
+          :addrApi.loading?<div className="dt-empty">Loading…</div>
+          :addresses.length===0?<div className="dt-empty">No allocated addresses</div>
+          :<DataTable tableId="ss-ip-addresses" rowKey={r=>r.id} cols={addrCols} rows={addresses}
+              defaultSort={{key:'address',dir:'asc'}} filterable filterKeys={['address','name','comment']}/>}
+      </Panel>
+    </div>:null}
+    {mode==='inventory'?<div className="grid">
+      <Panel title="Space / Block / Subnet">
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Space
+            <select className="vault-in" value={invSpace} onChange={e=>{setInvSpace(e.target.value);setInvBlock('');setInvSubnetId('');}}>
+              <option value="">{spacesApi.loading?'Loading spaces…':'Select a space'}</option>
+              {spaces.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Block (optional)
+            <select className="vault-in" value={invBlock} onChange={e=>{setInvBlock(e.target.value);setInvSubnetId('');}} disabled={!invSpace}>
+              <option value="">{invBlocksApi.loading?'Loading blocks…':'All blocks'}</option>
+              {invBlocks.map(b=><option key={b.id} value={b.id}>{b.name||b.cidr||b.address}</option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Subnet
+            <select className="vault-in" value={invSubnetId} onChange={e=>setInvSubnetId(e.target.value)} disabled={!invSpace}>
+              <option value="">{invSubnetsApi.loading?'Loading subnets…':'Select a subnet'}</option>
+              {invSubnets.map(s=><option key={s.id} value={s.id}>{subnetLabel(s)}</option>)}
+            </select>
+          </label>
+        </div>
+      </Panel>
+      <Panel title="Addresses" api={invSubnetId?invAddrApi:undefined}>
+        {!invSubnetId?<div className="dt-empty">Select a subnet</div>
+          :invAddrApi.loading?<div className="dt-empty">Loading…</div>
+          :invAddresses.length===0?<div className="dt-empty">No addresses</div>
+          :<DataTable tableId="ss-inv-addresses" rowKey={r=>r.id} cols={invAddrCols} rows={invAddresses}
+              defaultSort={{key:'address',dir:'asc'}} filterable filterKeys={['address','name','comment']}/>}
+      </Panel>
+      <Panel title="Zone">
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Zone
+            <select className="vault-in" value={invZoneId} onChange={e=>setInvZoneId(e.target.value)}>
+              <option value="">{zonesApi.loading?'Loading zones…':'Select a zone'}</option>
+              {zones.map(z=><option key={z.id} value={z.id}>{z.fqdn}</option>)}
+            </select>
+          </label>
+        </div>
+      </Panel>
+      <Panel title="Records" api={invZoneId?invRecordsApi:undefined}>
+        {!invZoneId?<div className="dt-empty">Select a zone</div>
+          :invRecordsApi.loading?<div className="dt-empty">Loading…</div>
+          :invRecords.length===0?<div className="dt-empty">No records</div>
+          :<DataTable tableId="ss-inv-records" rowKey={r=>r.id} cols={invRecordCols} rows={invRecords}
+              defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}/>}
+      </Panel>
+    </div>:null}
   </div>;
 }
 
@@ -4808,6 +5164,7 @@ function ProvisionTab(){
   // Full site mode.
   const templatesApi=useApi('/api/templates');
   const [siteTemplate,setSiteTemplate]=useState('');
+  const [siteSpace,setSiteSpace]=useState('');
   const [siteDry,setSiteDry]=useState(true);
   const [siteLog,setSiteLog]=useState([]);
   const [siteStreaming,setSiteStreaming]=useState(false);
@@ -4815,8 +5172,18 @@ function ProvisionTab(){
   const [siteErr,setSiteErr]=useState(null);
   const siteEsRef=useRef(null);
 
+  // Per-site teardown (site mode).
+  const [siteTeardownDry,setSiteTeardownDry]=useState(true);
+  const [siteTeardownConfirm,setSiteTeardownConfirm]=useState('');
+  const [siteTeardownLog,setSiteTeardownLog]=useState([]);
+  const [siteTeardownStreaming,setSiteTeardownStreaming]=useState(false);
+  const [siteTeardownResult,setSiteTeardownResult]=useState(null);
+  const [siteTeardownErr,setSiteTeardownErr]=useState(null);
+  const siteTeardownEsRef=useRef(null);
+
   // Seed demo mode.
   const [seedRegions,setSeedRegions]=useState({amer:true,emea:true,apac:true});
+  const [seedSpace,setSeedSpace]=useState('');
   const [seedDry,setSeedDry]=useState(true);
   const [seedLog,setSeedLog]=useState([]);
   const [seedRows,setSeedRows]=useState({});
@@ -4825,12 +5192,24 @@ function ProvisionTab(){
   const [seedErr,setSeedErr]=useState(null);
   const seedEsRef=useRef(null);
 
+  // Seed demo teardown (Phase 2) — live (dry-off) runs require typing DELETE.
+  const [teardownDry,setTeardownDry]=useState(true);
+  const [teardownConfirm,setTeardownConfirm]=useState('');
+  const [teardownLog,setTeardownLog]=useState([]);
+  const [teardownRows,setTeardownRows]=useState({});
+  const [teardownStreaming,setTeardownStreaming]=useState(false);
+  const [teardownSummary,setTeardownSummary]=useState(null);
+  const [teardownErr,setTeardownErr]=useState(null);
+  const teardownEsRef=useRef(null);
+
   useEffect(()=>{ setSpace(params.space||''); },[params.space]);
   // Cleanup: close any live streams on unmount so none leak past this tab.
   useEffect(()=>()=>{
     if(esRef.current){ esRef.current.close(); esRef.current=null; }
     if(siteEsRef.current){ siteEsRef.current.close(); siteEsRef.current=null; }
+    if(siteTeardownEsRef.current){ siteTeardownEsRef.current.close(); siteTeardownEsRef.current=null; }
     if(seedEsRef.current){ seedEsRef.current.close(); seedEsRef.current=null; }
+    if(teardownEsRef.current){ teardownEsRef.current.close(); teardownEsRef.current=null; }
   },[]);
 
   if(locked) return null;
@@ -4864,6 +5243,7 @@ function ProvisionTab(){
     if(siteStreaming||siteEsRef.current) return; // guard: never open a second concurrent stream
     setSiteLog([]);setSiteSuccess(null);setSiteErr(null);setSiteStreaming(true);
     const qs=new URLSearchParams({template:siteTemplate,dry:siteDry?'1':'0'});
+    if(siteSpace) qs.set('ip_space',siteSpace);
     const es=new EventSource('/api/provision/site/stream?'+qs.toString());
     siteEsRef.current=es;
     const stop=()=>{ if(siteEsRef.current){ siteEsRef.current.close(); siteEsRef.current=null; } setSiteStreaming(false); };
@@ -4880,6 +5260,30 @@ function ProvisionTab(){
     };
   };
 
+  const siteTeardownStart=()=>{
+    if(siteTeardownStreaming||siteTeardownEsRef.current) return; // guard: never open a second concurrent stream
+    if(!siteTeardownDry&&!siteTeardownConfirm.trim()){ toast('Type the site name to confirm','err'); return; }
+    if(!siteTeardownDry&&!window.confirm("This permanently deletes the site '"+siteTemplate+"' and its objects. Continue?")) return;
+    setSiteTeardownLog([]);setSiteTeardownResult(null);setSiteTeardownErr(null);setSiteTeardownStreaming(true);
+    const qs=new URLSearchParams({template:siteTemplate,dry:siteTeardownDry?'1':'0'});
+    if(siteSpace) qs.set('ip_space',siteSpace);
+    if(!siteTeardownDry) qs.set('confirm',siteTeardownConfirm.trim());
+    const es=new EventSource('/api/teardown/site/stream?'+qs.toString());
+    siteTeardownEsRef.current=es;
+    const stop=()=>{ if(siteTeardownEsRef.current){ siteTeardownEsRef.current.close(); siteTeardownEsRef.current=null; } setSiteTeardownStreaming(false); };
+    es.onmessage=(e)=>{
+      let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
+      setSiteTeardownLog(prev=>[...prev,j]);
+      if(j&&j.error){ setSiteTeardownErr(j.error); stop(); toast('Site teardown failed: '+j.error,'err'); }
+      else if(j&&j.done){ setSiteTeardownResult(j.result||null); stop(); toast('Site torn down','ok'); }
+    };
+    es.onerror=()=>{
+      if(!siteTeardownEsRef.current) return; // already closed via done/error message
+      setSiteTeardownErr(prev=>prev||'Stream connection error');
+      stop();
+    };
+  };
+
   const seedStart=()=>{
     if(seedStreaming||seedEsRef.current) return; // guard: never open a second concurrent stream
     const regionList=Object.keys(seedRegions).filter(r=>seedRegions[r]);
@@ -4887,6 +5291,7 @@ function ProvisionTab(){
     if(!seedDry&&!window.confirm('This writes many real objects to the live portal. Continue?')) return;
     setSeedLog([]);setSeedRows({});setSeedSummary(null);setSeedErr(null);setSeedStreaming(true);
     const qs=new URLSearchParams({dry:seedDry?'1':'0',regions:regionList.join(',')});
+    if(seedSpace) qs.set('ip_space',seedSpace);
     const es=new EventSource('/api/provision/seed-demo/stream?'+qs.toString());
     seedEsRef.current=es;
     const stop=()=>{ if(seedEsRef.current){ seedEsRef.current.close(); seedEsRef.current=null; } setSeedStreaming(false); };
@@ -4900,6 +5305,32 @@ function ProvisionTab(){
     es.onerror=()=>{
       if(!seedEsRef.current) return; // already closed via done/error message
       setSeedErr(prev=>prev||'Stream connection error');
+      stop();
+    };
+  };
+
+  const teardownStart=()=>{
+    if(teardownStreaming||teardownEsRef.current) return; // guard: never open a second concurrent stream
+    if(!teardownDry&&teardownConfirm.trim()!=='DELETE'){ toast('Type DELETE to confirm live teardown','err'); return; }
+    const regionList=Object.keys(seedRegions).filter(r=>seedRegions[r]);
+    if(!regionList.length){ toast('Select at least one region','err'); return; }
+    if(!teardownDry&&!window.confirm('This permanently deletes every seed-created object in '+(seedSpace||'the default space')+'. Continue?')) return;
+    setTeardownLog([]);setTeardownRows({});setTeardownSummary(null);setTeardownErr(null);setTeardownStreaming(true);
+    const qs=new URLSearchParams({dry:teardownDry?'1':'0',regions:regionList.join(','),confirm:teardownDry?'':'DELETE'});
+    if(seedSpace) qs.set('ip_space',seedSpace);
+    const es=new EventSource('/api/teardown/seed-demo/stream?'+qs.toString());
+    teardownEsRef.current=es;
+    const stop=()=>{ if(teardownEsRef.current){ teardownEsRef.current.close(); teardownEsRef.current=null; } setTeardownStreaming(false); };
+    es.onmessage=(e)=>{
+      let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
+      setTeardownLog(prev=>[...prev,j]);
+      if(j&&j.template){ setTeardownRows(prev=>({...prev,[j.template]:{phase:j.phase,error:j.error}})); }
+      if(j&&j.error&&!j.template){ setTeardownErr(j.error); stop(); toast('Teardown failed: '+j.error,'err'); }
+      else if(j&&j.done){ setTeardownSummary(j.summary||null); stop(); toast('Teardown complete','ok'); }
+    };
+    es.onerror=()=>{
+      if(!teardownEsRef.current) return; // already closed via done/error message
+      setTeardownErr(prev=>prev||'Stream connection error');
       stop();
     };
   };
@@ -4971,6 +5402,13 @@ function ProvisionTab(){
       <Panel title="Request">
         <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
           <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            IP space (override)
+            <select className="vault-in" value={siteSpace} onChange={e=>setSiteSpace(e.target.value)}>
+              <option value="">— template default —</option>
+              {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
             Template
             <select className="vault-in" value={siteTemplate} onChange={e=>setSiteTemplate(e.target.value)}>
               <option value="">{templatesApi.loading?'Loading templates…':'Select a template'}</option>
@@ -4984,6 +5422,22 @@ function ProvisionTab(){
             <span>Dry-run (no changes made)</span>
           </label>
           <button className="btn" disabled={siteStreaming||!siteTemplate} onClick={siteStart}>{siteStreaming?'Provisioning…':'Provision site'}</button>
+          <div style={{borderTop:'1px solid var(--border)',marginTop:'var(--s3)',paddingTop:'var(--s3)',display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+            <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>
+              Tear down this site — permanently deletes its provisioned objects.
+            </div>
+            <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+              <input type="checkbox" checked={siteTeardownDry} onChange={e=>setSiteTeardownDry(e.target.checked)}/>
+              <span>Dry-run (no changes made)</span>
+            </label>
+            {!siteTeardownDry?<label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+              Type the site name to confirm
+              <input className="vault-in" value={siteTeardownConfirm} onChange={e=>setSiteTeardownConfirm(e.target.value)} placeholder={siteTemplate||'site name'}/>
+            </label>:null}
+            <button className="btn" disabled={siteTeardownStreaming||!siteTemplate||(!siteTeardownDry&&!siteTeardownConfirm.trim())} onClick={siteTeardownStart}>
+              {siteTeardownStreaming?'Tearing down…':'Tear down this site'}
+            </button>
+          </div>
         </div>
       </Panel>
       <Panel title="Live log">
@@ -4999,6 +5453,17 @@ function ProvisionTab(){
         <div className="mono" style={{fontSize:'var(--t12)'}}>{JSON.stringify(siteSuccess)}</div>
       </Panel>:null}
       {siteErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{siteErr}</div></Panel>:null}
+      {siteTeardownLog.length?<Panel title="Teardown log">
+        <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+          {siteTeardownLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
+            {l.error?('✕ '+l.error):l.done?'✓ done':(l.step||JSON.stringify(l))}
+          </div>)}
+        </div>
+      </Panel>:null}
+      {siteTeardownResult?<Panel title="Teardown result">
+        <div className="mono" style={{fontSize:'var(--t12)'}}>{JSON.stringify(siteTeardownResult)}</div>
+      </Panel>:null}
+      {siteTeardownErr?<Panel title="Teardown error"><div className="mono" style={{color:'var(--crit)'}}>{siteTeardownErr}</div></Panel>:null}
     </div>:null}
     {mode==='seed'?<div className="grid">
       <Panel title="Seed multi-region demo data">
@@ -5011,13 +5476,33 @@ function ProvisionTab(){
               <input type="checkbox" checked={!!seedRegions[r]} onChange={e=>setSeedRegions(prev=>({...prev,[r]:e.target.checked}))}/>
               <span>{r.toUpperCase()}</span>
             </label>)}
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            IP space (override)
+            <select className="vault-in" value={seedSpace} onChange={e=>setSeedSpace(e.target.value)}>
+              <option value="">— template default —</option>
+              {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
+            </select>
+          </label>
           <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
             <input type="checkbox" checked={seedDry} onChange={e=>setSeedDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
-          <div style={{display:'flex',gap:'var(--s3)'}}>
-            <button className="btn" disabled={seedStreaming} onClick={seedStart}>{seedStreaming?'Seeding…':'Seed Demo Data'}</button>
-            <button className="btn" disabled title="Coming in a later phase">Tear down demo (Phase 2)</button>
+          <button className="btn" disabled={seedStreaming} onClick={seedStart}>{seedStreaming?'Seeding…':'Seed Demo Data'}</button>
+          <div style={{borderTop:'1px solid var(--border)',marginTop:'var(--s3)',paddingTop:'var(--s3)',display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+            <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>
+              Tear down demo — permanently deletes every seed-created object in {seedSpace||'the default space'}.
+            </div>
+            <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+              <input type="checkbox" checked={teardownDry} onChange={e=>setTeardownDry(e.target.checked)}/>
+              <span>Dry-run (no changes made)</span>
+            </label>
+            {!teardownDry?<label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+              Type DELETE to confirm
+              <input className="vault-in" value={teardownConfirm} onChange={e=>setTeardownConfirm(e.target.value)} placeholder="DELETE"/>
+            </label>:null}
+            <button className="btn" disabled={teardownStreaming||(!teardownDry&&teardownConfirm.trim()!=='DELETE')} onClick={teardownStart}>
+              {teardownStreaming?'Tearing down…':'Tear down demo'}
+            </button>
           </div>
         </div>
       </Panel>
@@ -5046,10 +5531,127 @@ function ProvisionTab(){
         </div>
       </Panel>:null}
       {seedErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{seedErr}</div></Panel>:null}
+      <Panel title="Teardown progress">
+        {Object.keys(teardownRows).length===0
+          ? <div className="dt-empty">No output yet</div>
+          : <div style={{display:'flex',flexDirection:'column',gap:2}}>
+              {Object.entries(teardownRows).map(([tpl,row])=>
+                <div key={tpl} className="mono" style={{fontSize:'var(--t12)',color:row.error?'var(--crit)':'var(--text-dim)'}}>
+                  {tpl}: {row.error?('✕ '+row.error):(row.phase||'…')}
+                </div>)}
+            </div>}
+      </Panel>
+      <Panel title="Teardown log">
+        {teardownLog.length===0
+          ? <div className="dt-empty">No output yet</div>
+          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+              {teardownLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
+                {l.error?(l.template?('✕ '+l.template+': '+l.error):('✕ '+l.error)):l.done?'✓ done':(l.template?(l.template+' — '+(l.phase||'')):(l.step||JSON.stringify(l)))}
+              </div>)}
+            </div>}
+      </Panel>
+      {teardownSummary?<Panel title="Teardown summary">
+        <div className="mono" style={{fontSize:'var(--t12)'}}>
+          Succeeded: {teardownSummary.succeeded ?? 0} · Failed: {teardownSummary.failed ?? 0} · Skipped: {teardownSummary.skipped ?? 0}
+        </div>
+      </Panel>:null}
+      {teardownErr?<Panel title="Teardown error"><div className="mono" style={{color:'var(--crit)'}}>{teardownErr}</div></Panel>:null}
     </div>:null}
   </div>;
 }
 // ═══ END: PROVISION ═══
+
+/* DriftTab — read-only: pick a site template (+ optional ip_space override),
+   POST /api/drift/check, render a status chip + drifts grouped by category.
+   No writes, no dry-run toggle, no confirm gate — nothing here mutates. */
+function DriftTab(){
+  const {locked}=useData();
+  const templatesApi=useApi('/api/templates');
+  const spacesApi=useApi('/api/ipam/spaces');
+  const [template,setTemplate]=useState('');
+  const [ipSpace,setIpSpace]=useState('');
+  const [checking,setChecking]=useState(false);
+  const [result,setResult]=useState(null);
+  const [err,setErr]=useState(null);
+  if(locked) return null;
+
+  const templates=(Array.isArray(templatesApi.data)?templatesApi.data:[]).filter(t=>!t.type||t.type==='site');
+  const spaces=(spacesApi.data&&spacesApi.data.spaces)||[];
+
+  const check=()=>{
+    if(checking||!template) return;
+    setChecking(true);setResult(null);setErr(null);
+    fetch('/api/drift/check',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({template,ip_space:ipSpace||undefined})})
+      .then(async r=>{
+        let body=null; try{body=await r.json();}catch(e){body=null;}
+        if(!r.ok||(body&&body.error)){ setErr((body&&body.error)||('HTTP '+r.status)); setChecking(false); return; }
+        setResult(body); setChecking(false);
+      })
+      .catch(e=>{ setErr(String((e&&e.message)||e)); setChecking(false); });
+  };
+
+  const groups={};
+  if(result&&Array.isArray(result.drifts)){
+    result.drifts.forEach(d=>{
+      const cat=d.category||'other';
+      (groups[cat]||(groups[cat]=[])).push(d);
+    });
+  }
+
+  return <div className="page fadein">
+    <SectionRule title="Drift"/>
+    <div className="grid">
+      <Panel title="Check drift">
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Template
+            <select className="vault-in" value={template} onChange={e=>setTemplate(e.target.value)}>
+              <option value="">{templatesApi.loading?'Loading templates…':'Select a template'}</option>
+              {templates.map(t=><option key={t.name} value={t.name}>
+                {t.name+' — '+(t.region||'')+'/'+(t.environment||'')}
+              </option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            IP space (override)
+            <select className="vault-in" value={ipSpace} onChange={e=>setIpSpace(e.target.value)}>
+              <option value="">— template default —</option>
+              {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
+            </select>
+          </label>
+          <button className="btn" disabled={checking||!template} onClick={check}>{checking?'Checking…':'Check drift'}</button>
+        </div>
+      </Panel>
+      {result?<Panel title="Result">
+        {result.found===false
+          ? <div className="dt-empty">Site not found for this template</div>
+          : <>
+              <div style={{display:'flex',alignItems:'center',gap:'var(--s3)',marginBottom:'var(--s3)'}}>
+                <span className="mono" style={{fontSize:'var(--t12)'}}>{result.site||template}</span>
+                <span className="chip" style={{color:result.drifted?'var(--crit)':'var(--ok)',borderColor:result.drifted?'var(--crit)':'var(--ok)'}}>
+                  {result.drifted?('✗ '+((result.drifts&&result.drifts.length)||0)+' items'):'✓ no drift'}
+                </span>
+                {result.subnet_count!=null?<span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>{result.subnet_count} subnets</span>:null}
+              </div>
+              {result.summary?<div className="mono" style={{fontSize:'var(--t12)',color:'var(--text-dim)',marginBottom:'var(--s3)'}}>{result.summary}</div>:null}
+              {Object.keys(groups).length===0
+                ? <div className="dt-empty">No drift items</div>
+                : Object.entries(groups).map(([cat,items])=>
+                    <div key={cat} style={{marginBottom:'var(--s3)'}}>
+                      <div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)',textTransform:'uppercase',marginBottom:4}}>{cat}</div>
+                      <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                        {items.map((d,i)=><div key={i} className="mono" style={{fontSize:'var(--t12)',color:secSevColor(d.severity)}}>
+                          {d.message}
+                        </div>)}
+                      </div>
+                    </div>)}
+            </>}
+      </Panel>:null}
+      {err?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{err}</div></Panel>:null}
+    </div>
+  </div>;
+}
 
 /* subsequence match — chars of needle appear in order within hay (fuzzy go-to). */
 function subseqMatch(needle,hay){
@@ -5242,6 +5844,7 @@ const TAB_COMPONENTS={
   security:SecurityTab,
   audit:AuditTab,
   provision:ProvisionTab,
+  drift:DriftTab,
   selfservice:SelfServiceTab,
 };
 
