@@ -1643,6 +1643,444 @@ def list_templates() -> list:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Phase-2: lifecycle (teardown/retag) + monitoring (drift) — port of Chris
+# Marrison's UDDI Automation Toolkit site/decommission.py, block/decommission.py,
+# retag.py, core.py::detect_drift, and site/query.py. Mirrors the Phase-1
+# provisioning idioms above: direct REST via _rest_get/_rest_write, ProvisionError
+# instead of sys.exit, dataclass configs, emit()-based SSE progress.
+#
+# CRITICAL: every lookup here is tag-scoped using the leading-underscore
+# _tfilter query param — never the bare (no-underscore) param name the
+# reference toolkit's client.py sends, since this app talks direct REST
+# rather than through that client. Every `tags.X==` clause from the
+# reference source is split out into its own _tfilter, leaving only
+# structural clauses (space==, address==, cidr==) in _filter.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DecommissionConfig:
+    """Site-teardown config. Mirrors SiteConfig's field set (dns_zone
+    derivation must match provisioning exactly so decommission finds what
+    provisioning created)."""
+    site: str
+    ip_space: str
+    dns_parent: str
+    dns_view: str
+    keep_zone: bool = False
+    dry_run: bool = False
+
+    @property
+    def dns_zone(self) -> str:
+        return f"site-{self.site}.{self.dns_parent}"
+
+
+def template_to_decommission_config(template: dict, params: dict) -> DecommissionConfig:
+    """Merge a site template + request params into a DecommissionConfig.
+    Precedence: params > template > hardcoded fallback — same tier order as
+    template_to_site_config. Port of site/decommission.py's config resolution
+    (which in the reference CLI is CLI-flags > template > INI)."""
+    site_sec = template.get("site") or {}
+    net_sec = template.get("network") or {}
+    dns_sec = template.get("dns") or {}
+
+    def resolve(param_val, yaml_val, fallback=""):
+        if param_val not in (None, ""):
+            return param_val
+        if yaml_val not in (None, ""):
+            return yaml_val
+        return fallback
+
+    site = resolve(params.get("site"), site_sec.get("name"))
+    if not site:
+        raise ProvisionError("site is required")
+    site = str(site).lower()
+    ip_space = resolve(params.get("ip_space"), net_sec.get("ip_space"), DEFAULT_IP_SPACE)
+    dns_parent = resolve(params.get("dns_parent"), dns_sec.get("parent"), DEFAULT_DNS_PARENT)
+    dns_view = resolve(params.get("dns_view"), dns_sec.get("view"), "default")
+    keep_zone = _truthy(params.get("keep_zone"), False)
+
+    return DecommissionConfig(site=site, ip_space=ip_space, dns_parent=dns_parent, dns_view=dns_view,
+                               keep_zone=keep_zone, dry_run=_truthy_dry(params.get("dry")))
+
+
+# ---------------------------------------------------------------------------
+# Block re-tag — port of retag.py
+# ---------------------------------------------------------------------------
+
+def _find_blocks_for_retag(space_id: str, template: str, address: str, cidr, site: str) -> list:
+    """Resolve candidate blocks by Template tag, Site tag, or address+cidr (in
+    that precedence — mirrors retag.py's find_blocks, extended with the
+    Template-tag lookup this app's teardown/provisioning flows tag with)."""
+    params = {"_filter": f'space=="{space_id}"'}
+    if template:
+        params["_tfilter"] = f'Template=="{template}"'
+    elif site:
+        params["_tfilter"] = f'Site=="{site}"'
+    elif address and cidr not in (None, ""):
+        params["_filter"] += f' and address=="{address}" and cidr=={int(cidr)}'
+    else:
+        raise ProvisionError("template, site, or address+cidr is required")
+    return _rest_get("/api/ddi/v1/ipam/address_block", params)
+
+
+def _retag_block(block: dict, status: str, dry_run: bool) -> dict:
+    """Set a block's Status tag (and clear site-scoping fields when returning
+    it to the pool). Port of retag.py::retag."""
+    tags = dict(block.get("tags") or {})
+    tags["Status"] = status
+    if status == "available":
+        tags["Site"] = "unassigned"
+        tags["Location"] = ""
+        tags["Provisioned"] = ""
+        tags["Decommissioned"] = ""
+    addr = f'{block.get("address", "")}/{block.get("cidr", "")}'
+    if not dry_run:
+        _, http_status = _rest_write("PATCH", f'/api/ddi/v1/{block["id"]}', body={"tags": tags})
+        if not (http_status and 200 <= http_status < 300):
+            raise ProvisionError(f"Failed to retag block {addr}: status {http_status}")
+    return {"address": addr, "id": block.get("id", ""), "status": status}
+
+
+# ---------------------------------------------------------------------------
+# Address-block decommission — port of block/decommission.py
+# ---------------------------------------------------------------------------
+
+class BlockDecommissioner:
+    """Deletes address blocks tagged Template==<name>, deepest-child-first
+    (highest cidr first) so children are removed before their parents. Port
+    of block/decommission.py::BlockDecommissioner, tag-scoped only (the
+    reference toolkit's address/cidr fallback is dropped — this app's
+    teardown route always supplies a template name)."""
+
+    def __init__(self, name: str, ip_space: str, dry_run: bool, emit) -> None:
+        self.name = name
+        self.ip_space = ip_space
+        self.dry_run = dry_run
+        self.emit = emit
+        self._space_id = ""
+
+    def find_blocks(self) -> list:
+        return _rest_get("/api/ddi/v1/ipam/address_block", {
+            "_filter": f'space=="{self._space_id}"', "_tfilter": f'Template=="{self.name}"'})
+
+    def delete_blocks(self, blocks: list) -> list:
+        ordered = sorted(blocks, key=lambda b: int(b.get("cidr", 0)), reverse=True)
+        deleted = []
+        mode = "[DRY-RUN] " if self.dry_run else ""
+        for block in ordered:
+            block_id = block.get("id", "")
+            addr = f'{block.get("address", "")}/{block.get("cidr", "")}'
+            status = (block.get("tags") or {}).get("Status", "")
+            self.emit({"step": f"{mode}Deleting block: {addr}  status={status}  id={block_id}"})
+            if not self.dry_run:
+                _, http_status = _rest_write("DELETE", f"/api/ddi/v1/{block_id}")
+                if not (http_status and 200 <= http_status < 300):
+                    raise ProvisionError(f"Failed to delete block {addr}: status {http_status}")
+            deleted.append({"address": addr, "id": block_id, "status": status})
+        return deleted
+
+    def decommission(self) -> dict:
+        space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{self.ip_space}"'})
+        if not space_results:
+            raise ProvisionError(f"IP space not found: {self.ip_space}")
+        self._space_id = space_results[0]["id"]
+        blocks = self.find_blocks()
+        deleted = self.delete_blocks(blocks)
+        return {"name": self.name, "ip_space": self.ip_space, "blocks_deleted": deleted, "dry_run": self.dry_run}
+
+
+# ---------------------------------------------------------------------------
+# Site decommission — port of site/decommission.py
+# ---------------------------------------------------------------------------
+
+class SiteDecommissioner:
+    """Tag-driven site teardown — the exact reverse of SiteProvisioner. Port
+    of site/decommission.py::SiteDecommissioner, adapted to direct REST calls
+    + SSE emit.
+
+    FAIL-FORWARD, NOT reversible: unlike provisioning's transactional
+    rollback-on-failure, every step here IS a delete — there is nothing safe
+    to "undo" a delete into. On any API error mid-sequence a ProvisionError
+    propagates out of decommission(); the caller (the SSE route) emits it and
+    stops. Whatever was deleted before the failure stays deleted, and the
+    emitted step log is the record of exactly how far teardown got.
+
+    Ordering is LOAD-BEARING, do not reorder:
+      1. resolve ip_space + dns_view
+      2. find subnets (space== + tags.Site==, i.e. _filter + _tfilter)
+      3. delete forward DNS zone (unless keep_zone)
+      4. delete DHCP ranges (tags.Site==, i.e. _tfilter)
+      5. delete reverse zones (computed FQDN per subnet)
+      6. delete subnets — releases DHCP-bound host addresses
+      7. delete hosts LAST, matched by dns_zone FQDN suffix — a DHCP-bound
+         host address reports "in use" and refuses deletion until step 6
+         releases it, so hosts must come after subnets, not before.
+
+    The pool address block is shared and never tagged for the site, so it is
+    neither discovered nor touched here.
+    """
+
+    def __init__(self, cfg: DecommissionConfig, emit) -> None:
+        self.cfg = cfg
+        self.emit = emit
+        self._space_id = ""
+        self._view_id = ""
+
+    def resolve_ip_space(self) -> str:
+        results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{self.cfg.ip_space}"'})
+        if not results:
+            raise ProvisionError(f"IP space not found: {self.cfg.ip_space}")
+        self._space_id = results[0]["id"]
+        return self._space_id
+
+    def resolve_dns_view(self) -> str:
+        results = _rest_get("/api/ddi/v1/dns/view", {"_filter": f'name=="{self.cfg.dns_view}"'})
+        if not results:
+            raise ProvisionError(f"DNS view not found: {self.cfg.dns_view}")
+        self._view_id = results[0]["id"]
+        return self._view_id
+
+    def find_subnets(self) -> list:
+        return _rest_get("/api/ddi/v1/ipam/subnet", {
+            "_filter": f'space=="{self._space_id}"', "_tfilter": f'Site=="{self.cfg.site}"'})
+
+    def delete_dns_zone(self) -> bool:
+        fqdn = self.cfg.dns_zone
+        if self.cfg.keep_zone:
+            self.emit({"step": f"keep_zone set — skipping forward zone: {fqdn}"})
+            return False
+        mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+        self.emit({"step": f"{mode}Looking up forward DNS zone: {fqdn}  view={self.cfg.dns_view}"})
+        existing = _rest_get("/api/ddi/v1/dns/auth_zone",
+                              {"_filter": f'fqdn=="{fqdn}." and view=="{self._view_id}"'})
+        if not existing:
+            self.emit({"step": f"  Zone not found — nothing to delete: {fqdn}"})
+            return False
+        zone_id = existing[0].get("id", "")
+        self.emit({"step": f"{mode}Deleting forward DNS zone: {fqdn}  id={zone_id}"})
+        if not self.cfg.dry_run:
+            _, status = _rest_write("DELETE", f"/api/ddi/v1/{zone_id}")
+            if not (status and 200 <= status < 300):
+                raise ProvisionError(f"Failed to delete DNS zone {fqdn}: status {status}")
+        return True
+
+    def delete_dhcp_ranges(self) -> list:
+        ranges = _rest_get("/api/ddi/v1/ipam/range", {
+            "_filter": f'space=="{self._space_id}"', "_tfilter": f'Site=="{self.cfg.site}"'})
+        deleted = []
+        mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+        for r in ranges:
+            range_id = r.get("id", "")
+            self.emit({"step": f'{mode}Deleting DHCP range {r.get("start", "")}-{r.get("end", "")}  id={range_id}'})
+            if not self.cfg.dry_run:
+                _, status = _rest_write("DELETE", f"/api/ddi/v1/{range_id}")
+                if not (status and 200 <= status < 300):
+                    raise ProvisionError(f"Failed to delete DHCP range {range_id}: status {status}")
+            deleted.append({"id": range_id, "start": r.get("start", ""), "end": r.get("end", "")})
+        return deleted
+
+    def delete_reverse_zones(self, subnets: list) -> list:
+        deleted = []
+        mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+        for subnet in subnets:
+            try:
+                fqdn = _cidr_to_reverse_zone(subnet["address"], int(subnet["cidr"]))
+            except (KeyError, ValueError, TypeError):
+                continue
+            existing = _rest_get("/api/ddi/v1/dns/auth_zone",
+                                  {"_filter": f'fqdn=="{fqdn}" and view=="{self._view_id}"'})
+            if not existing:
+                continue
+            zone_id = existing[0].get("id", "")
+            self.emit({"step": f"{mode}Deleting reverse DNS zone: {fqdn}  id={zone_id}"})
+            if not self.cfg.dry_run:
+                _, status = _rest_write("DELETE", f"/api/ddi/v1/{zone_id}")
+                if not (status and 200 <= status < 300):
+                    raise ProvisionError(f"Failed to delete reverse zone {fqdn}: status {status}")
+            deleted.append({"id": zone_id, "fqdn": fqdn})
+        return deleted
+
+    def delete_subnets(self, subnets: list) -> list:
+        deleted = []
+        mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+        for subnet in subnets:
+            subnet_id = subnet.get("id", "")
+            addr = f'{subnet.get("address", "")}/{subnet.get("cidr", "")}'
+            self.emit({"step": f'{mode}Deleting subnet: {addr}  name={subnet.get("name", "")}  id={subnet_id}'})
+            if not self.cfg.dry_run:
+                _, status = _rest_write("DELETE", f"/api/ddi/v1/{subnet_id}")
+                if not (status and 200 <= status < 300):
+                    raise ProvisionError(f"Failed to delete subnet {addr}: status {status}")
+            deleted.append({"address": addr, "name": subnet.get("name", ""), "id": subnet_id})
+        return deleted
+
+    def delete_hosts(self) -> list:
+        # subnets-before-hosts (see class docstring): a DHCP-bound host address
+        # is "in use" until the subnet delete above releases it, so hosts must
+        # be matched + deleted last, by FQDN suffix rather than subnet membership.
+        suffix = f".{self.cfg.dns_zone}"
+        all_hosts = _rest_get("/api/ddi/v1/ipam/host", {"_limit": 1000})
+        site_hosts = [h for h in all_hosts if str(h.get("name", "")).endswith(suffix)]
+        deleted = []
+        mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+        for host in site_hosts:
+            host_id = host.get("id", "")
+            fqdn = host.get("name", host_id)
+            self.emit({"step": f"{mode}Deleting host: {fqdn}  id={host_id}"})
+            if not self.cfg.dry_run:
+                _, status = _rest_write("DELETE", f"/api/ddi/v1/{host_id}")
+                if not (status and 200 <= status < 300):
+                    raise ProvisionError(f"Failed to delete host {fqdn}: status {status}")
+            deleted.append({"fqdn": fqdn, "id": host_id})
+        return deleted
+
+    def decommission(self) -> dict:
+        result = {"site": self.cfg.site, "ip_space": self.cfg.ip_space, "dry_run": self.cfg.dry_run,
+                  "dns_zone_fqdn": self.cfg.dns_zone, "dns_zone_deleted": False,
+                  "dhcp_ranges_deleted": [], "reverse_zones_deleted": [],
+                  "subnets_deleted": [], "hosts_deleted": []}
+
+        self.resolve_ip_space()
+        self.resolve_dns_view()
+
+        subnets = self.find_subnets()
+        if not subnets:
+            self.emit({"step": f"No subnets tagged Site={self.cfg.site} found — will still check zone/hosts"})
+
+        result["dns_zone_deleted"] = self.delete_dns_zone()
+        result["dhcp_ranges_deleted"] = self.delete_dhcp_ranges()
+        result["reverse_zones_deleted"] = self.delete_reverse_zones(subnets)
+        result["subnets_deleted"] = self.delete_subnets(subnets)
+        result["hosts_deleted"] = self.delete_hosts()
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Drift detection — read-only, port of site/query.py::SiteQuerier.query() +
+# core.py::detect_drift
+# ---------------------------------------------------------------------------
+
+def query_site_live(cfg) -> dict:
+    """Read-only live-state snapshot of a site, shaped for detect_drift().
+    Compact port of site/query.py::SiteQuerier.query() — drops the CLI
+    dataclass ceremony and only keeps what detect_drift needs: subnets (with
+    tags + hosts) and forward-zone presence. Never writes. cfg may be any
+    config exposing .site/.ip_space/.dns_view/.dns_zone (SiteConfig or
+    DecommissionConfig both qualify)."""
+    space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{cfg.ip_space}"'})
+    if not space_results:
+        raise ProvisionError(f"IP space not found: {cfg.ip_space}")
+    space_id = space_results[0]["id"]
+    view_results = _rest_get("/api/ddi/v1/dns/view", {"_filter": f'name=="{cfg.dns_view}"'})
+    if not view_results:
+        raise ProvisionError(f"DNS view not found: {cfg.dns_view}")
+    view_id = view_results[0]["id"]
+
+    subnets_raw = _rest_get("/api/ddi/v1/ipam/subnet", {
+        "_filter": f'space=="{space_id}"', "_tfilter": f'Site=="{cfg.site}"'})
+    found = bool(subnets_raw)
+    all_hosts = _rest_get("/api/ddi/v1/ipam/host", {"_limit": 1000}) if subnets_raw else []
+
+    subnets_out = []
+    for subnet in subnets_raw:
+        try:
+            net = ipaddress.ip_network(f'{subnet["address"]}/{subnet["cidr"]}', strict=False)
+        except (KeyError, ValueError, TypeError):
+            net = None
+        hosts_out = []
+        if net is not None:
+            for host in all_hosts:
+                for addr_entry in host.get("addresses") or []:
+                    try:
+                        ip = ipaddress.ip_address(addr_entry.get("address", ""))
+                    except ValueError:
+                        continue
+                    if ip in net:
+                        hosts_out.append({"name": host.get("name", "")})
+                        break
+        stags = subnet.get("tags") or {}
+        subnets_out.append({
+            "id": subnet.get("id", ""), "address": subnet.get("address", ""), "cidr": subnet.get("cidr", ""),
+            "name": subnet.get("name", "") or stags.get("Name", ""), "tags": stags, "hosts": hosts_out,
+        })
+
+    zone_results = _rest_get("/api/ddi/v1/dns/auth_zone",
+                              {"_filter": f'fqdn=="{cfg.dns_zone}." and view=="{view_id}"'})
+    zone = zone_results[0] if zone_results else {}
+
+    return {"site": cfg.site, "found": found, "subnets": subnets_out,
+            "dns_zone_found": bool(zone), "dns_zone_fqdn": zone.get("fqdn", cfg.dns_zone)}
+
+
+def detect_drift(template: dict, live: dict, site_name: str = "") -> dict:
+    """Compare a template's expected state against a live query result.
+    Verbatim port of core.py::detect_drift (pure — no API calls; the caller
+    supplies `live` from query_site_live())."""
+    drifts = []
+
+    def _drift(category, severity, field, message):
+        drifts.append({"category": category, "severity": severity, "field": field, "message": message})
+
+    resolved_site = site_name or live.get("site", "")
+
+    live_subnets = live.get("subnets") or []
+    if not (live_subnets or live.get("found")):
+        _drift("site", "error", "site", "Site is not provisioned — no subnets found")
+        return {"site": resolved_site, "found": False, "drifted": True, "subnet_count": 0,
+                "drifts": drifts, "summary": {"total": 1, "errors": 1, "warnings": 0}}
+
+    net = template.get("network") or {}
+    dns = template.get("dns") or {}
+    tags_tmpl = template.get("tags") or {}
+    live_tags = (live_subnets[0].get("tags") or {}) if live_subnets else {}
+
+    expected_subnet_names = {str(s.get("name", "")).strip() for s in (net.get("subnets") or [])
+                             if str(s.get("name", "")).strip()}
+    live_subnet_names = {str(s.get("name", "")).strip() for s in live_subnets
+                         if str(s.get("name", "")).strip()}
+    for name in sorted(expected_subnet_names - live_subnet_names):
+        _drift("subnet", "error", f"network.subnets[{name}]", f"Expected subnet {name!r} not found in API")
+    for name in sorted(live_subnet_names - expected_subnet_names):
+        _drift("subnet", "warning", f"subnet:{name}", f"Subnet {name!r} exists in API but is not in the template")
+
+    wants_zone = bool(dns.get("create_zone"))
+    zone_found = bool(live.get("dns_zone_found"))
+    if wants_zone and not zone_found:
+        _drift("dns", "error", "dns.create_zone", "Template specifies create_zone: true but no DNS zone was found")
+    elif not wants_zone and zone_found:
+        fqdn = live.get("dns_zone_fqdn", "")
+        _drift("dns", "warning", "dns.create_zone",
+               f"DNS zone {fqdn!r} exists in API but template does not specify create_zone: true")
+
+    for key, expected_val in sorted(tags_tmpl.items()):
+        live_val = live_tags.get(key)
+        if live_val is None:
+            _drift("tags", "warning", f"tags.{key}", f"Tag {key!r} missing from subnet tags (expected {str(expected_val)!r})")
+        elif str(live_val) != str(expected_val):
+            _drift("tags", "warning", f"tags.{key}",
+                   f"Tag {key!r}: expected {str(expected_val)!r}, live value is {str(live_val)!r}")
+
+    expected_hosts = {str(h.get("hostname", "")).strip() for h in (template.get("hosts") or [])
+                      if str(h.get("hostname", "")).strip()}
+    live_hosts = set()
+    for subnet in live_subnets:
+        for h in subnet.get("hosts") or []:
+            raw = h.get("name") or h.get("id") or ""
+            base = str(raw).split(".")[0].strip()
+            if base:
+                live_hosts.add(base)
+    for hostname in sorted(expected_hosts - live_hosts):
+        _drift("hosts", "warning", f"hosts[{hostname}]", f"Expected host {hostname!r} not found in any subnet")
+    for hostname in sorted(live_hosts - expected_hosts):
+        _drift("hosts", "info", f"host:{hostname}", f"Host {hostname!r} exists in API but is not in the template")
+
+    errors = sum(1 for d in drifts if d["severity"] == "error")
+    warnings = sum(1 for d in drifts if d["severity"] in ("warning", "info"))
+    return {"site": resolved_site, "found": True, "drifted": len(drifts) > 0, "subnet_count": len(live_subnets),
+            "drifts": drifts, "summary": {"total": len(drifts), "errors": errors, "warnings": warnings}}
+
+
 # ── encrypted vault (multi-tenant key store) ──────────────────────────────────
 # Keys are secrets the bridge must *replay* to Infoblox, so they're stored
 # reversibly — but encrypted at rest (Fernet/AES) under a key derived from a
@@ -4013,6 +4451,113 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/provision/seed-demo/stream", e); emit({"error": str(e)})
             return
+        elif path == "/api/teardown/site/stream":
+            # SSE progress stream for tag-driven site decommission (Phase-2
+            # port of Chris Marrison's UDDI toolkit site/decommission.py).
+            # FAIL-FORWARD: a mid-sequence API error is emitted and stops the
+            # stream — there is no rollback for a teardown (see SiteDecommissioner).
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Accel-Buffering", "no")
+            self._send_cors_origin()
+            self.end_headers()
+
+            def emit(obj):
+                try:
+                    self.wfile.write(("data: " + json.dumps(obj) + "\n\n").encode())
+                    self.wfile.flush()
+                except Exception:
+                    pass  # client disconnected mid-stream — nothing to recover
+
+            try:
+                name = qp.get("template", "").strip()
+                if not name:
+                    emit({"error": "template is required"}); return
+                template = load_template(name)
+                cfg = template_to_decommission_config(template, qp)
+                if not cfg.dry_run and qp.get("confirm", "") != cfg.site:
+                    emit({"error": "confirmation required"}); return
+                emit({"step": f"Decommissioning site: {cfg.site}"})
+                result = SiteDecommissioner(cfg, emit).decommission()
+                emit({"done": True, "result": result})
+            except ProvisionError as e:
+                emit({"error": str(e)})
+            except Exception as e:
+                _log_exc("/api/teardown/site/stream", e); emit({"error": str(e)})
+            return
+        elif path == "/api/teardown/seed-demo/stream":
+            # SSE batch stream: inverse of /api/provision/seed-demo/stream —
+            # decommissions every seeded site template, then the regional
+            # address-block pool LAST (mirrors seed's "blocks first" by doing
+            # the reverse: blocks last, since sites depend on the pool blocks
+            # existing while they're being torn down).
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            dry = _truthy_dry(qp.get("dry"))
+            regions_raw = qp.get("regions", "amer,emea,apac")
+            regions = [r.strip().lower() for r in regions_raw.split(",") if r.strip()] or ["amer", "emea", "apac"]
+            ip_space_override = qp.get("ip_space", "").strip() or None
+            confirm = qp.get("confirm", "")
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Accel-Buffering", "no")
+            self._send_cors_origin()
+            self.end_headers()
+
+            def emit(obj):
+                try:
+                    self.wfile.write(("data: " + json.dumps(obj) + "\n\n").encode())
+                    self.wfile.flush()
+                except Exception:
+                    pass  # client disconnected mid-stream — nothing to recover
+
+            if not dry and confirm != "DELETE":
+                emit({"error": "confirmation required"}); return
+
+            summary = {"succeeded": [], "failed": [], "skipped": []}
+            try:
+                site_templates = []
+                for region in regions:
+                    region_dir = os.path.join(TEMPLATES_DIR, region)
+                    if os.path.isdir(region_dir):
+                        site_templates.extend(sorted(glob.glob(os.path.join(region_dir, "*", "site-*.yaml"))))
+
+                for tpath in site_templates:
+                    rel = os.path.relpath(tpath, TEMPLATES_DIR)
+                    try:
+                        template = load_template(rel)
+                        cfg = template_to_decommission_config(
+                            template, {"dry": "1" if dry else "0", "ip_space": ip_space_override})
+
+                        def _forward(obj, _rel=rel):
+                            emit({"step": f"[{_rel}] {obj['step']}"} if "step" in obj else obj)
+
+                        SiteDecommissioner(cfg, _forward).decommission()
+                        summary["succeeded"].append(rel)
+                    except Exception as exc:
+                        summary["failed"].append(rel)
+                        emit({"template": rel, "error": str(exc)})
+
+                emit({"step": "Decommissioning regional address-block pool…"})
+                try:
+                    block_template = load_template("blocks/regional_address_blocks.yaml")
+                    block_name = str(block_template.get("name") or "")
+                    block_ip_space = ip_space_override or block_template.get("ip_space") or DEFAULT_IP_SPACE
+                    BlockDecommissioner(block_name, block_ip_space, dry, emit).decommission()
+                except ProvisionError as exc:
+                    emit({"template": "blocks/regional_address_blocks.yaml", "error": str(exc)})
+
+                emit({"done": True, "summary": summary})
+            except Exception as e:
+                _log_exc("/api/teardown/seed-demo/stream", e); emit({"error": str(e)})
+            return
         elif path.lstrip("/") in _STATIC_FILES:
             self._file(path.lstrip("/"))  # _file validates realpath before serving
         elif not path.startswith("/api/"):
@@ -4203,6 +4748,71 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"error": str(e)}, 400)
             except Exception as e:
                 _log_exc("/api/provision/block", e); self._json({"error": "internal error"}, 500)
+        elif self.path == "/api/teardown/block":
+            # Address-block decommission (Phase-2 port of Chris Marrison's
+            # UDDI toolkit block/decommission.py). Not a stream — a single
+            # result. Live (non-dry) runs require confirm == template name.
+            try:
+                name = str(body.get("template", "")).strip()
+                if not name:
+                    self._json({"error": "template is required"}, 400)
+                else:
+                    template = load_template(name)
+                    ip_space = str(body.get("ip_space") or template.get("ip_space") or DEFAULT_IP_SPACE).strip()
+                    dry = _truthy_dry(body.get("dry"))
+                    block_name = str(template.get("name") or name).strip()
+                    if not dry and str(body.get("confirm", "")) != name:
+                        self._json({"error": "confirmation required"}, 400)
+                    else:
+                        result = BlockDecommissioner(block_name, ip_space, dry, lambda _obj: None).decommission()
+                        self._json({"result": result})
+            except ProvisionError as e:
+                self._json({"error": str(e)}, 400)
+            except Exception as e:
+                _log_exc("/api/teardown/block", e); self._json({"error": "internal error"}, 500)
+        elif self.path == "/api/retag/block":
+            # Set a block's Status tag (and clear site-scoping fields when
+            # returning it to the pool). Phase-2 port of retag.py. Not gated
+            # by the confirm-token safety net below (a Status re-tag doesn't
+            # delete anything) — same trust level as /api/provision/block.
+            try:
+                template_name = str(body.get("template", "")).strip()
+                site = str(body.get("site", "")).strip()
+                address = str(body.get("address", "")).strip()
+                cidr = body.get("cidr")
+                status = str(body.get("status") or "available").strip()
+                ip_space = str(body.get("ip_space") or DEFAULT_IP_SPACE).strip()
+                dry = _truthy_dry(body.get("dry"))
+                space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{ip_space}"'})
+                if not space_results:
+                    self._json({"error": f"IP space not found: {ip_space}"}, 400)
+                else:
+                    space_id = space_results[0]["id"]
+                    blocks = _find_blocks_for_retag(space_id, template_name, address, cidr, site)
+                    changed = [_retag_block(b, status, dry) for b in blocks]
+                    self._json({"status": status, "changed": changed, "dry_run": dry})
+            except ProvisionError as e:
+                self._json({"error": str(e)}, 400)
+            except Exception as e:
+                _log_exc("/api/retag/block", e); self._json({"error": "internal error"}, 500)
+        elif self.path == "/api/drift/check":
+            # Read-only comparison of a site template's expected state against
+            # its live API state. Phase-2 port of core.py::detect_drift +
+            # site/query.py's live-query. No writes, no dry, no confirm.
+            try:
+                name = str(body.get("template", "")).strip()
+                if not name:
+                    self._json({"error": "template is required"}, 400)
+                else:
+                    template = load_template(name)
+                    params = {"ip_space": body.get("ip_space")}
+                    cfg = template_to_site_config(template, params)
+                    live = query_site_live(cfg)
+                    self._json(detect_drift(template, live, cfg.site))
+            except ProvisionError as e:
+                self._json({"error": str(e)}, 400)
+            except Exception as e:
+                _log_exc("/api/drift/check", e); self._json({"error": "internal error"}, 500)
         else:
             self._json({"error": "not found"}, 404)
 
