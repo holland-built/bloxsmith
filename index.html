@@ -3658,6 +3658,10 @@ function SecurityTab(){
   .ask-in{flex:1 1 auto;height:36px;padding:0 12px;font-size:13px;color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);}
   .ask-in:focus{border-color:var(--accent);}
   .ask-busy{margin-top:8px;font-size:12px;color:var(--text-faint);}
+  .ai-ctx{font-size:11px;color:var(--text-faint);}
+  .ai-convo{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;}
+  .ai-empty{font-size:12px;color:var(--text-faint);padding:8px 0;}
+  .ai-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px solid var(--border);}
   .ask-item{padding:16px;}
   .ask-q{font-size:12px;color:var(--text-dim);margin-bottom:8px;}
   .ask-a{font-size:13px;line-height:1.5;color:var(--text);white-space:pre-wrap;}
@@ -3796,6 +3800,13 @@ function AiDrawer({open,onClose,initialQ}){
   const [items,setItems]=useState([]); // newest first, capped at 5
   const askedRef=useRef(null);
   const inRef=useRef(null);
+  const [ctx,setCtx]=useState('');
+  // Live short context label (mirrors what buildContext() sends on submit).
+  useEffect(()=>{
+    const upd=()=>{try{const {tab}=parseHash();setCtx((typeof TAB_LABELS!=='undefined'&&TAB_LABELS[tab])||tab||'');}catch(e){setCtx('');}};
+    upd(); window.addEventListener('hashchange',upd);
+    return ()=>window.removeEventListener('hashchange',upd);
+  },[]);
   const push=entry=>setItems(list=>[{id:Date.now()+Math.random(),...entry},...list].slice(0,5));
   // Implicit tab context — current route + active DataTable state (filter/selection).
   const buildContext=()=>{
@@ -3842,13 +3853,17 @@ function AiDrawer({open,onClose,initialQ}){
     if(q&&askedRef.current!==q){ askedRef.current=q; setInput(q); submit(q); }
   },[open,initialQ]); // eslint-disable-line
 
-  // ── suggested questions (real inventory numbers) ──
-  const nSub=((data&&data.subnets)||[]).length;
+  // ── suggested questions (real inventory numbers + threat-intel-aware) ──
   const nZone=((data&&data.zones)||[]).length;
   const nHost=((data&&data.hosts)||[]).length;
+  // A real flagged domain from the live security events (highest-severity first).
+  const evs=(data&&Array.isArray(data.events))?data.events:[];
+  const flagged=((evs.find(e=>/crit|high/i.test(String(e&&e.severity||'')))||evs[0]||{}).qname)||'';
   const ask=q=>{setInput(q);submit(q);};
   const suggestions=[
     'Which subnets are nearly full?',
+    flagged?'Is '+flagged+' malicious?':'Which domains are on threat feeds?',
+    'Any lookalike domains of my brand?',
     'Are any of my '+nZone+' DNS zones misconfigured?',
     'Which of '+nHost+' hosts are offline?',
     'What changed in the last 24 hours?',
@@ -3862,7 +3877,31 @@ function AiDrawer({open,onClose,initialQ}){
       <button className="peek-close" aria-label="Close AI assistant" onClick={onClose}>✕</button>
     </div>
     <div className="ai-drawer-body">
-      <div>
+      <div className="ai-ctx mono">Context: {ctx?ctx+' tab':'dashboard'}</div>
+      <div className="ai-convo">
+        {items.length===0&&!busy&&
+          <div className="ai-empty">Ask a question or pick a suggestion below.</div>}
+        {items.map(it=>
+          <div key={it.id} className="panel ask-item">
+            <div className="ask-q mono">&gt; {it.q}</div>
+            {it.error
+              ? <div className="ask-err">{it.error}</div>
+              : <div className="ask-a prose">{it.answer}</div>}
+            {!!(it.suggestions&&it.suggestions.length)&&<div className="ask-chips">
+              {it.suggestions.map((sg,i)=>
+                <button key={i} className="chip chip-btn" onClick={()=>ask(sg)}>{sg}</button>)}
+            </div>}
+            {!!(it.trace&&it.trace.length)&&<div className="ask-trace mono">
+              {it.trace.map((t,i)=><div key={i} className="ask-trace-row">
+                <span>{t.tool}</span> <span className="args">{JSON.stringify(t.args)}</span>
+              </div>)}
+            </div>}
+          </div>)}
+      </div>
+      <div className="ai-foot">
+        <div className="ask-chips">
+          {suggestions.map((sg,i)=><button key={i} className="chip chip-btn" onClick={()=>ask(sg)}>{sg}</button>)}
+        </div>
         <div className="ask-bar">
           <input ref={inRef} className="ask-in mono" placeholder="Ask about your network…"
             value={input} onChange={e=>setInput(e.target.value)}
@@ -3870,31 +3909,12 @@ function AiDrawer({open,onClose,initialQ}){
             aria-label="Natural-language query"/>
           <button className="btn" style={{height:36}} onClick={()=>submit()} disabled={busy||!input.trim()}>Ask</button>
         </div>
-        {busy&&<div className="ask-busy mono">Querying… (LLM — may take a moment)</div>}
+        {busy&&<div className="ask-busy mono">Analyzing…</div>}
+        <details className="ai-disclosure">
+          <summary>Alerts</summary>
+          <AlertRulesPanel/>
+        </details>
       </div>
-      <div className="ask-chips">
-        {suggestions.map((sg,i)=><button key={i} className="chip chip-btn" onClick={()=>ask(sg)}>{sg}</button>)}
-      </div>
-      {items.map(it=>
-        <div key={it.id} className="panel ask-item">
-          <div className="ask-q mono">&gt; {it.q}</div>
-          {it.error
-            ? <div className="ask-err">{it.error}</div>
-            : <div className="ask-a">{it.answer}</div>}
-          {!!(it.suggestions&&it.suggestions.length)&&<div className="ask-chips">
-            {it.suggestions.map((sg,i)=>
-              <button key={i} className="chip chip-btn" onClick={()=>ask(sg)}>{sg}</button>)}
-          </div>}
-          {!!(it.trace&&it.trace.length)&&<div className="ask-trace mono">
-            {it.trace.map((t,i)=><div key={i} className="ask-trace-row">
-              <span>{t.tool}</span> <span className="args">{JSON.stringify(t.args)}</span>
-            </div>)}
-          </div>}
-        </div>)}
-      <details className="ai-disclosure">
-        <summary>Alerts</summary>
-        <AlertRulesPanel/>
-      </details>
     </div>
   </aside>;
 }
@@ -3950,6 +3970,7 @@ function AuditTab(){
             ? <div className="dt-empty">Failed to load audit log — <button className="fresh-retry" onClick={refetch}>Retry</button></div>
             : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}} csvName="audit"
                 tableId="audit" rowKey={r=>String(r.id??((r.ts||'')+'|'+(r.user||'')+'|'+(r.action||'')))}
+                maxRows={50} problemsOnly={{test:r=>/fail/i.test(String(r.result||'')),label:'Failures only',default:false}}
                 selectable filterable filterKeys={['user','resource','action']}/>}
     </div>
   </div>;
