@@ -565,6 +565,49 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("String(e.event_time)+'|'+String(e.qname)",
                             "ack composite key (event_time|qname) missing")
 
+    # ── power-interaction layer ────────────────────────────────────────────────
+
+    def test_power_datatable_props(self):
+        # DataTable's optional power props are destructured in its signature.
+        for prop in ("renderPeek", "selectable", "bulkActions", "rowKey",
+                     "initialPeekKey", "filterable"):
+            self.assertContains(prop, f"DataTable power prop '{prop}' missing")
+
+    def test_peek_drawer(self):
+        self.assertContains("function PeekDrawer", "PeekDrawer component missing")
+        self.assertContains('className="peek"', "peek drawer class missing")
+        self.assertContains("aria-activedescendant",
+                            "aria-activedescendant (keyboard cursor link) missing")
+
+    def test_keyboard_nav(self):
+        # global keydown handler dispatches j/k to the active table's imperative api
+        self.assertContains("const PowerCtx=", "PowerCtx registry missing")
+        self.assertContains("function usePower", "usePower hook missing")
+        self.assertContains("window.addEventListener('keydown'",
+                            "global keydown listener missing")
+        self.assertContains("e.key==='j'", "j-key cursor-down binding missing")
+
+    def test_sparkline(self):
+        self.assertContains("function Sparkline", "Sparkline component missing")
+        # no-fabrication guard: fewer than 2 points renders nothing
+        self.assertContains("v.length<2", "Sparkline <2-point guard missing")
+        self.assertIn(">=2", self.html, "Sparkline series >=2 guard string missing")
+
+    def test_density_toggle(self):
+        self.assertContains("LS.set('density'", "density persistence missing")
+        self.assertContains("--row-h", "--row-h density CSS var missing")
+        self.assertContains("data-density", "data-density attribute selector missing")
+
+    def test_watchlist(self):
+        self.assertTrue(
+            "LS.get('watchlist'" in self.html or "LS.set('watchlist'" in self.html,
+            "watchlist localStorage access missing")
+
+    def test_action_bar(self):
+        self.assertContains("action-bar", "action-bar bulk-action class missing")
+        self.assertContains("Export CSV", "Export CSV built-in bulk action missing")
+        self.assertContains("label:'Copy'", "Copy built-in bulk action missing")
+
 
 # ── main ──────────────────────────────────────────────────────────────────────
 

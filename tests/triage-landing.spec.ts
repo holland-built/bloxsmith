@@ -34,16 +34,22 @@ test('critical event sorts first, ack persists across reload', async ({ page }) 
   await expect(rows.first()).toContainText('critical');
   await expect(rows.first()).toContainText(CRIT_QNAME);
 
-  // Ack the critical event via its row checkbox.
+  // Ack the critical event via its ack checkbox. The triage table is now also
+  // selectable (adds a leading "Select row" checkbox), so target the ack box by
+  // its aria-label rather than the ambiguous input[type="checkbox"].
   const critRow = rows.filter({ hasText: CRIT_QNAME });
-  const critBox = critRow.locator('input[type="checkbox"]');
+  const critBox = critRow.locator('input[aria-label="Acknowledge event"]');
   await critBox.check();
   await expect(critBox).toBeChecked();
-  // Row is visually acked (dimmed to opacity 0.45).
-  await expect(critRow).toHaveCSS('opacity', '0.45');
+  // The rebuilt generic DataTable no longer dims acked rows (opacity 0.45 was
+  // dropped); ack now registers via the checked box + the row sinking below all
+  // still-unacked events. Assert that sink: the (formerly first) critical event
+  // is no longer the top row.
+  await expect(rows.first()).not.toContainText(CRIT_QNAME);
+  await expect(critRow.locator('input[aria-label="Acknowledge event"]')).toBeChecked();
 
   // Reload with the same mock -> ack restored from localStorage.
   await page.reload();
   const critRowAfter = page.locator('table.dt tbody tr').filter({ hasText: CRIT_QNAME });
-  await expect(critRowAfter.locator('input[type="checkbox"]')).toBeChecked();
+  await expect(critRowAfter.locator('input[aria-label="Acknowledge event"]')).toBeChecked();
 });
