@@ -19,6 +19,9 @@ from socketserver import ThreadingMixIn
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.client.session import ClientSession
 from cryptography.fernet import Fernet, InvalidToken
+import glob, ipaddress
+import yaml
+from dataclasses import dataclass, field
 
 # ── credentials (load .env if present, never hardcode tokens) ─────────────────
 _env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -733,6 +736,912 @@ def _selfservice_allocate(body: dict) -> tuple:
             out["record"] = {"ok": False, "status": rstatus, "detail": rresp}
 
     return out, 200
+
+# ── Phase-1 provisioning: template engine (port of Chris Marrison's UDDI ─────
+#    Automation Toolkit — core.py + block/provision.py + site/provision.py).
+#    Orchestration is ported, not the CLI/argparse/INI-file plumbing: request
+#    params take the place of CLI flags, and the only remaining precedence
+#    tier is YAML template value → hardcoded fallback (no env/INI tier).
+class ProvisionError(Exception):
+    """Raised instead of sys.exit() by the ported toolkit functions so a bad
+    template or a failed API call turns into a JSON/SSE error response
+    instead of killing the server process."""
+    pass
+
+TEMPLATES_DIR = os.environ.get("TEMPLATES_DIR", os.path.join(DIR, "templates"))
+# Hardcoded fallbacks substituting for the reference toolkit's uddi.ini
+# [DEFAULTS] tier, which this port drops (no INI/env config file here).
+DEFAULT_IP_SPACE   = "default"
+DEFAULT_DNS_PARENT = "internal.example.com"
+
+
+def load_template(name: str) -> dict:
+    """Load + parse a YAML template by path relative to TEMPLATES_DIR. Port of
+    core.load_yaml_template, adapted to raise ProvisionError instead of
+    sys.exit and to reject paths that escape TEMPLATES_DIR."""
+    safe = str(name or "").strip()
+    if not safe:
+        raise ProvisionError("template name is required")
+    base = os.path.realpath(TEMPLATES_DIR)
+    path = os.path.realpath(os.path.join(base, safe))
+    if path != base and not path.startswith(base + os.sep):
+        raise ProvisionError(f"invalid template name: {name}")
+    try:
+        with open(path, "r") as fh:
+            data = yaml.safe_load(fh)
+    except FileNotFoundError:
+        raise ProvisionError(f"template not found: {name}")
+    except yaml.YAMLError as exc:
+        raise ProvisionError(f"invalid YAML in {name}: {exc}")
+    if not isinstance(data, dict):
+        raise ProvisionError(f"template must be a mapping at the top level: {name}")
+    return data
+
+
+# ---------------------------------------------------------------------------
+# Template type + validation — pure port of core.py, no API calls.
+# ---------------------------------------------------------------------------
+
+TEMPLATE_TYPES = ("site", "address-block", "dns")
+
+
+def template_type(template: dict) -> str:
+    """Classify a parsed template as 'site', 'address-block', 'dns', or
+    'unknown'. Honours an explicit type: field; otherwise infers from the
+    distinguishing top-level section. Port of core.template_type."""
+    explicit = str(template.get("type", "")).strip().lower()
+    if explicit in TEMPLATE_TYPES:
+        return explicit
+    if template.get("address_blocks") is not None:
+        return "address-block"
+    if template.get("zones") is not None:
+        return "dns"
+    if template.get("site") is not None or template.get("network") is not None:
+        return "site"
+    return "unknown"
+
+
+SUPPORTED_RECORD_TYPES = ("A", "AAAA", "CNAME", "MX", "TXT", "PTR")
+
+
+def build_record_body(zone_id: str, record: dict) -> dict:
+    """Build a POST /dns/record body from a template record definition. Port
+    of core.build_record_body — raises ValueError on a malformed record."""
+    rtype = str(record.get("type", "")).strip().upper()
+    if rtype not in SUPPORTED_RECORD_TYPES:
+        raise ValueError(f"Unsupported record type {rtype!r}; supported: {', '.join(SUPPORTED_RECORD_TYPES)}")
+    raw = record.get("rdata")
+    if rtype in ("A", "AAAA"):
+        rdata = {"address": str(raw)}
+    elif rtype == "CNAME":
+        rdata = {"cname": str(raw)}
+    elif rtype == "TXT":
+        rdata = {"text": str(raw)}
+    elif rtype == "PTR":
+        rdata = {"dname": str(raw)}
+    else:  # MX
+        if not isinstance(raw, dict):
+            raise ValueError("MX rdata must be a mapping with preference and exchange")
+        pref = raw.get("preference", raw.get("pref"))
+        exchange = raw.get("exchange", "")
+        if pref is None or not exchange:
+            raise ValueError("MX rdata requires both preference and exchange")
+        rdata = {"preference": int(pref), "exchange": str(exchange)}
+    name = str(record.get("name", "")).strip()
+    if name == "@":
+        name = ""
+    body = {"name_in_zone": name, "zone": zone_id, "type": rtype, "rdata": rdata}
+    if record.get("ttl") is not None:
+        body["ttl"] = int(record["ttl"])
+    return body
+
+
+def _validate_site(template: dict, errors: list, warnings: list) -> None:
+    """Structural validation of a site template. Port of core._validate_site."""
+    def _err(f, m): errors.append({"field": f, "message": m})
+    def _warn(f, m): warnings.append({"field": f, "message": m})
+
+    site = template.get("site") or {}
+    if not isinstance(site, dict):
+        _err("site", "Must be a mapping"); site = {}
+    name = str(site.get("name", "")).strip()
+    if not name:
+        _err("site.name", "Required and must be non-empty")
+    elif " " in name:
+        _warn("site.name", "Contains spaces — consider hyphens for DNS compatibility")
+    if not site.get("region"):
+        _warn("site.region", "Not specified — useful for block-selection filtering")
+    if not site.get("environment"):
+        _warn("site.environment", "Not specified")
+
+    net = template.get("network") or {}
+    if net and not isinstance(net, dict):
+        _err("network", "Must be a mapping"); net = {}
+    if not net.get("ip_space"):
+        _warn("network.ip_space", f"Not set — falls back to {DEFAULT_IP_SPACE!r}")
+
+    subnet_size = net.get("subnet_size")
+    if subnet_size is not None:
+        try:
+            sz = int(subnet_size)
+            if not 8 <= sz <= 30:
+                _err("network.subnet_size", f"CIDR prefix {sz} is outside valid range 8-30")
+        except (TypeError, ValueError):
+            _err("network.subnet_size", f"Must be an integer, got {subnet_size!r}")
+
+    subnet_names = set()
+    subnets = net.get("subnets") or []
+    if subnets and not isinstance(subnets, list):
+        _err("network.subnets", "Must be a list"); subnets = []
+    for i, s in enumerate(subnets):
+        pfx = f"network.subnets[{i}]"
+        if not isinstance(s, dict):
+            _err(pfx, "Each subnet must be a mapping"); continue
+        sname = str(s.get("name", "")).strip()
+        if not sname:
+            _warn(f"{pfx}.name", "Subnet name is empty")
+        else:
+            if sname in subnet_names:
+                _err(f"{pfx}.name", f"Duplicate subnet name {sname!r}")
+            subnet_names.add(sname)
+        if not s.get("purpose"):
+            _warn(f"{pfx}.purpose", "No purpose specified")
+        cidr = s.get("cidr")
+        if cidr is not None:
+            try:
+                c = int(cidr)
+                if not 8 <= c <= 30:
+                    _err(f"{pfx}.cidr", f"CIDR prefix {c} is outside valid range 8-30")
+            except (TypeError, ValueError):
+                _err(f"{pfx}.cidr", f"Must be an integer, got {cidr!r}")
+        if s.get("dhcp"):
+            for off_key in ("dhcp_start", "dhcp_end"):
+                val = s.get(off_key)
+                if val is not None:
+                    try:
+                        v = int(val)
+                        if not 1 <= v <= 254:
+                            _err(f"{pfx}.{off_key}", f"Host offset {v} outside 1-254")
+                    except (TypeError, ValueError):
+                        _err(f"{pfx}.{off_key}", f"Must be an integer, got {val!r}")
+
+    dns = template.get("dns") or {}
+    if dns and not isinstance(dns, dict):
+        _err("dns", "Must be a mapping"); dns = {}
+    if not dns.get("parent"):
+        _warn("dns.parent", f"Not set — falls back to {DEFAULT_DNS_PARENT!r}")
+    for bool_key in ("create_zone", "create_reverse_zone"):
+        val = dns.get(bool_key)
+        if val is not None and not isinstance(val, bool):
+            _err(f"dns.{bool_key}", f"Must be true or false, got {val!r}")
+
+    hosts = template.get("hosts") or []
+    if hosts and not isinstance(hosts, list):
+        _err("hosts", "Must be a list"); hosts = []
+    for i, h in enumerate(hosts):
+        pfx = f"hosts[{i}]"
+        if not isinstance(h, dict):
+            _err(pfx, "Each host must be a mapping"); continue
+        if not h.get("hostname"):
+            _err(f"{pfx}.hostname", "hostname is required")
+        ref = str(h.get("subnet", "")).strip()
+        if ref and subnet_names and ref not in subnet_names:
+            _err(f"{pfx}.subnet", f"References unknown subnet {ref!r}; defined: {sorted(subnet_names)}")
+
+    tags = template.get("tags") or {}
+    if tags and not isinstance(tags, dict):
+        _err("tags", "Must be a mapping of key: value pairs")
+    elif tags:
+        for k, v in tags.items():
+            if not isinstance(k, str):
+                _err("tags", f"Tag key {k!r} must be a string")
+            if v is not None and not isinstance(v, (str, int, float, bool)):
+                _warn(f"tags.{k}", f"Value {v!r} is not a scalar")
+
+
+def _validate_block(template: dict, errors: list, warnings: list) -> None:
+    """Structural validation of an address-block template (recursive over
+    nested children). Port of core._validate_block."""
+    def _err(f, m): errors.append({"field": f, "message": m})
+    def _warn(f, m): warnings.append({"field": f, "message": m})
+
+    if not str(template.get("name", "")).strip():
+        _warn("name", "No template name — used to tag and later find created blocks")
+
+    blocks = template.get("address_blocks")
+    if not blocks:
+        _err("address_blocks", "Required and must be a non-empty list"); blocks = []
+    elif not isinstance(blocks, list):
+        _err("address_blocks", "Must be a list"); blocks = []
+
+    def _check_block(block, pfx, parent_net):
+        if not isinstance(block, dict):
+            _err(pfx, "Each block must be a mapping"); return
+        addr = str(block.get("address", "")).strip()
+        cidr = block.get("cidr")
+        net = None
+        if not addr:
+            _err(f"{pfx}.address", "Required")
+        if cidr is None:
+            _err(f"{pfx}.cidr", "Required")
+        else:
+            try:
+                c = int(cidr)
+                if not 8 <= c <= 30:
+                    _err(f"{pfx}.cidr", f"CIDR prefix {c} is outside valid range 8-30")
+                elif addr:
+                    net = ipaddress.ip_network(f"{addr}/{c}", strict=False)
+            except (TypeError, ValueError) as exc:
+                _err(f"{pfx}.cidr", f"Invalid address/cidr: {exc}")
+        if net is not None and parent_net is not None:
+            if not (net.subnet_of(parent_net) and net != parent_net):
+                _err(pfx, f"{net} is not contained within parent {parent_net}")
+        if parent_net is None:
+            if not block.get("region"):
+                _warn(f"{pfx}.region", "No region — site discovery filters on Region")
+            if not block.get("environment"):
+                _warn(f"{pfx}.environment", "No environment — site discovery filters on Environment")
+        children = block.get("children") or []
+        if children and not isinstance(children, list):
+            _err(f"{pfx}.children", "Must be a list"); children = []
+        for j, child in enumerate(children):
+            _check_block(child, f"{pfx}.children[{j}]", net)
+
+    for i, block in enumerate(blocks):
+        _check_block(block, f"address_blocks[{i}]", None)
+
+
+def _validate_dns(template: dict, errors: list, warnings: list) -> None:
+    """Structural validation of a dns template. Port of core._validate_dns."""
+    def _err(f, m): errors.append({"field": f, "message": m})
+
+    zones = template.get("zones")
+    if not zones:
+        _err("zones", "Required and must be a non-empty list"); zones = []
+    elif not isinstance(zones, list):
+        _err("zones", "Must be a list"); zones = []
+
+    for i, zone in enumerate(zones):
+        pfx = f"zones[{i}]"
+        if not isinstance(zone, dict):
+            _err(pfx, "Each zone must be a mapping"); continue
+        if not str(zone.get("fqdn", "")).strip():
+            _err(f"{pfx}.fqdn", "Required and must be non-empty")
+        kind = str(zone.get("kind", "forward")).strip().lower()
+        if kind not in ("forward", "reverse"):
+            _err(f"{pfx}.kind", f"Must be 'forward' or 'reverse', got {kind!r}")
+        records = zone.get("records") or []
+        if records and not isinstance(records, list):
+            _err(f"{pfx}.records", "Must be a list"); records = []
+        for j, rec in enumerate(records):
+            rpfx = f"{pfx}.records[{j}]"
+            if not isinstance(rec, dict):
+                _err(rpfx, "Each record must be a mapping"); continue
+            try:
+                build_record_body("validate", rec)
+            except (ValueError, TypeError) as exc:
+                _err(rpfx, str(exc))
+
+
+def validate_template(template: dict, template_name: str = "") -> dict:
+    """Validate a parsed template against its type's schema. Purely
+    structural — never contacts the API. Port of core.validate_template."""
+    errors, warnings = [], []
+    ttype = template_type(template)
+    if ttype == "address-block":
+        _validate_block(template, errors, warnings)
+    elif ttype == "dns":
+        _validate_dns(template, errors, warnings)
+    else:
+        _validate_site(template, errors, warnings)
+    return {"valid": len(errors) == 0, "template": template_name, "type": ttype,
+            "errors": errors, "warnings": warnings}
+
+
+# ---------------------------------------------------------------------------
+# Address-block provisioning — port of block/provision.py
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BlockConfig:
+    name: str
+    ip_space: str
+    dry_run: bool = False
+    extra_tags: dict = field(default_factory=dict)
+    blocks: list = field(default_factory=list)
+
+
+def _parse_blocks(raw_blocks: list) -> list:
+    """Recursively normalize raw YAML block mappings, filling defaults. Port
+    of block.provision._parse_blocks (dict-based instead of a dataclass since
+    nothing here needs argparse-style attribute defaults)."""
+    parsed = []
+    for raw in raw_blocks or []:
+        if not isinstance(raw, dict):
+            continue
+        parsed.append({
+            "address": str(raw.get("address", "")).strip(),
+            "cidr": raw.get("cidr"),
+            "region": str(raw.get("region", "")),
+            "environment": str(raw.get("environment", "")),
+            "status": str(raw.get("status", "available")),
+            "location": str(raw.get("location", "")),
+            "comment": str(raw.get("comment", "")),
+            "tags": {k: str(v) for k, v in (raw.get("tags") or {}).items()},
+            "children": _parse_blocks(raw.get("children") or []),
+        })
+    return parsed
+
+
+def _truthy(raw, default=False) -> bool:
+    """Parse a bool that may arrive as a real JSON bool (POST body) or a
+    string (query string): absent → default; '0'/'false'/'no'/'' → False;
+    anything else (including a real Python bool) → that bool / True.
+    Needed because bool("false") is True in Python — a raw bool() call on a
+    query-string value would silently invert every '0'/'false' the caller sends."""
+    if raw is None:
+        return default
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() not in ("0", "false", "no", "")
+
+
+def _truthy_dry(raw) -> bool:
+    """dry param parsing shared by every provisioning route: absent → dry-run
+    (safe default); '0'/'false'/'no' → live; anything else → dry-run."""
+    return _truthy(raw, default=True)
+
+
+def _resolve_bool(param_val, yaml_val) -> bool:
+    """Resolve a boolean field: params (CLI-flag stand-in) > YAML template
+    value. param_val may be a query-string '0'/'1' or a JSON bool/absent."""
+    if param_val not in (None, ""):
+        return _truthy(param_val)
+    return bool(yaml_val)
+
+
+def template_to_block_config(template: dict, params: dict) -> BlockConfig:
+    """Merge an address-block template + request params into a BlockConfig.
+    Precedence: params (stands in for CLI flags) > template > hardcoded
+    fallback. Drops the CLI/env/INI tiers of block.provision.
+    template_to_block_config; raises ProvisionError instead of sys.exit."""
+    name = params.get("name") or template.get("name") or ""
+    ip_space = params.get("ip_space") or template.get("ip_space") or DEFAULT_IP_SPACE
+    blocks = _parse_blocks(template.get("address_blocks") or [])
+    if not blocks:
+        raise ProvisionError("address_blocks (non-empty list) is required")
+    extra_tags = {k: str(v) for k, v in (template.get("tags") or {}).items()}
+    return BlockConfig(name=name, ip_space=ip_space,
+                        dry_run=_truthy_dry(params.get("dry")),
+                        extra_tags=extra_tags, blocks=blocks)
+
+
+class BlockProvisioner:
+    """Creates address blocks (and nested children) from a BlockConfig using
+    direct REST calls. Idempotent via _exists() (skips blocks that already
+    exist) — this app has no decommission path yet, so idempotency is the
+    Phase-1 substitute for teardown. Port of block.provision.BlockProvisioner."""
+
+    def __init__(self, cfg: BlockConfig, emit) -> None:
+        self.cfg = cfg
+        self.emit = emit
+        self._space_id = ""
+
+    def _block_tags(self, bdef: dict) -> dict:
+        tags = {**self.cfg.extra_tags}
+        if self.cfg.name:
+            tags["Template"] = self.cfg.name
+        if bdef.get("region"):
+            tags["Region"] = bdef["region"]
+        if bdef.get("environment"):
+            tags["Environment"] = bdef["environment"]
+        if bdef.get("status"):
+            tags["Status"] = bdef["status"]
+        if bdef.get("location"):
+            tags["Location"] = bdef["location"]
+        tags.update(bdef.get("tags") or {})
+        return tags
+
+    def _exists(self, bdef: dict) -> bool:
+        results = _rest_get("/api/ddi/v1/ipam/address_block", {
+            "filter": f'space=="{self._space_id}" and address=="{bdef["address"]}" and cidr=={int(bdef["cidr"])}'})
+        return bool(results)
+
+    def _create_block(self, bdef: dict, parent_net, result: dict) -> None:
+        try:
+            net = ipaddress.ip_network(f'{bdef.get("address")}/{int(bdef["cidr"])}', strict=False)
+        except (TypeError, ValueError) as exc:
+            raise ProvisionError(f'Invalid block {bdef.get("address")}/{bdef.get("cidr")}: {exc}')
+        if parent_net is not None and not (net.subnet_of(parent_net) and net != parent_net):
+            raise ProvisionError(f"Child {net} is not contained within parent {parent_net}")
+
+        tags = self._block_tags(bdef)
+        mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+        self.emit({"step": f"{mode}Creating address block {net}  status={bdef.get('status', '')}"})
+
+        if self.cfg.dry_run:
+            result["blocks_created"].append({"address": str(net.network_address), "cidr": int(bdef["cidr"]),
+                                              "id": "(dry-run)", "status": bdef.get("status", "")})
+        elif self._exists(bdef):
+            self.emit({"step": f"  Already exists — skipping: {net}"})
+        else:
+            body = {"address": str(net.network_address), "cidr": int(bdef["cidr"]), "space": self._space_id,
+                     "comment": bdef.get("comment", ""), "tags": tags}
+            resp, status = _rest_write("POST", "/api/ddi/v1/ipam/address_block", body)
+            if status not in (200, 201) or resp is None:
+                raise ProvisionError(f"Failed to create block {net}: status {status} {resp}")
+            block = resp.get("result", {}) if isinstance(resp, dict) else {}
+            self.emit({"step": f"  Created block id={block.get('id')}"})
+            result["blocks_created"].append({"address": str(net.network_address), "cidr": int(bdef["cidr"]),
+                                              "id": block.get("id", ""), "status": bdef.get("status", "")})
+
+        for child in bdef.get("children") or []:
+            self._create_block(child, net, result)
+
+    def _rollback(self, result: dict) -> None:
+        self.emit({"step": "Rolling back created address blocks…"})
+        for block in reversed(result["blocks_created"]):
+            block_id = block.get("id", "")
+            if not block_id or block_id == "(dry-run)":
+                continue
+            _, status = _rest_write("DELETE", f"/api/ddi/v1/{block_id}")
+            if not (status and 200 <= status < 300):
+                self.emit({"step": f"  Rollback: failed to delete block id={block_id}"})
+
+    def provision(self) -> dict:
+        result = {"name": self.cfg.name, "ip_space": self.cfg.ip_space,
+                  "blocks_created": [], "dry_run": self.cfg.dry_run}
+        space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"filter": f'name=="{self.cfg.ip_space}"'})
+        if not space_results:
+            raise ProvisionError(f"IP space not found: {self.cfg.ip_space}")
+        self._space_id = space_results[0]["id"]
+        try:
+            for bdef in self.cfg.blocks:
+                self._create_block(bdef, None, result)
+        except Exception as exc:
+            if not self.cfg.dry_run:
+                self.emit({"step": f"Block provisioning failed ({exc}) — initiating rollback"})
+                self._rollback(result)
+            raise
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Site provisioning — port of site/provision.py
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SubnetDef:
+    name: str
+    purpose: str
+    dhcp: str = "false"
+    cidr: "int | None" = None
+    dhcp_start: "int | None" = None
+    dhcp_end: "int | None" = None
+
+
+@dataclass
+class HostDef:
+    hostname: str
+    subnet: str
+    comment: str = ""
+
+
+@dataclass
+class SiteConfig:
+    site: str
+    region: str
+    environment: str
+    location: str
+    ip_space: str
+    dns_parent: str
+    dns_view: str
+    owner: str
+    subnet_size: int
+    dry_run: bool
+    create_zone: bool = False
+    create_reverse_zone: bool = False
+    if_not_exists: bool = False
+    extra_tags: dict = field(default_factory=dict)
+    subnet_plan: list = field(default_factory=list)
+    hosts: list = field(default_factory=list)
+
+    @property
+    def dns_zone(self) -> str:
+        return f"site-{self.site}.{self.dns_parent}"
+
+
+def template_to_site_config(template: dict, params: dict) -> SiteConfig:
+    """Merge a site template + request params into a SiteConfig. Precedence:
+    params (stands in for CLI flags) > YAML template > hardcoded fallback.
+    Drops the CLI/env/INI tiers of site.provision.template_to_site_config;
+    raises ProvisionError instead of sys.exit."""
+    site_sec = template.get("site") or {}
+    net_sec = template.get("network") or {}
+    dns_sec = template.get("dns") or {}
+    tags_sec = template.get("tags") or {}
+    hosts_sec = template.get("hosts") or []
+    subnets_sec = net_sec.get("subnets") or []
+
+    def resolve(param_val, yaml_val, fallback=""):
+        if param_val not in (None, ""):
+            return param_val
+        if yaml_val not in (None, ""):
+            return yaml_val
+        return fallback
+
+    site = resolve(params.get("site"), site_sec.get("name"))
+    region = resolve(params.get("region"), site_sec.get("region"))
+    environment = resolve(params.get("environment"), site_sec.get("environment"))
+    ip_space = resolve(params.get("ip_space"), net_sec.get("ip_space"), DEFAULT_IP_SPACE)
+    dns_parent = resolve(params.get("dns_parent"), dns_sec.get("parent"), DEFAULT_DNS_PARENT)
+
+    missing = [label for label, value in
+               [("site", site), ("region", region), ("environment", environment),
+                ("ip_space", ip_space), ("dns_parent", dns_parent)] if not value]
+    if missing:
+        raise ProvisionError(f"Required values missing: {', '.join(missing)}")
+    site = str(site).lower()
+
+    location = resolve(params.get("location"), site_sec.get("location"), str(site).capitalize())
+    dns_view = resolve(params.get("dns_view"), dns_sec.get("view"), "default")
+    owner = resolve(None, tags_sec.get("Owner") or site_sec.get("owner"), "network-team")
+    subnet_size_raw = resolve(params.get("subnet_size"), net_sec.get("subnet_size"), 24)
+    try:
+        subnet_size = int(subnet_size_raw)
+    except (TypeError, ValueError):
+        raise ProvisionError(f"subnet_size must be an integer, got {subnet_size_raw!r}")
+
+    subnet_plan = [
+        SubnetDef(name=s.get("name", f'{site}-{s.get("purpose", "net")}'),
+                  purpose=s.get("purpose", "general"),
+                  dhcp=str(s.get("dhcp", False)).lower(),
+                  cidr=s.get("cidr"), dhcp_start=s.get("dhcp_start"), dhcp_end=s.get("dhcp_end"))
+        for s in subnets_sec if isinstance(s, dict)
+    ]
+    if not subnet_plan:
+        subnet_plan = [
+            SubnetDef(name=f"{site}-mgmt", purpose="mgmt", dhcp="false"),
+            SubnetDef(name=f"{site}-lan", purpose="user-lan", dhcp="true"),
+            SubnetDef(name=f"{site}-server", purpose="server", dhcp="false"),
+        ]
+
+    host_list = []
+    for h in hosts_sec:
+        if not isinstance(h, dict) or "hostname" not in h:
+            continue
+        default_subnet = subnet_plan[0].name if subnet_plan else f"{site}-mgmt"
+        host_list.append(HostDef(hostname=h["hostname"], subnet=h.get("subnet", default_subnet),
+                                  comment=h.get("comment", "")))
+    if not host_list:
+        host_list = [HostDef(hostname="gw01", subnet=subnet_plan[0].name,
+                              comment=f"{site.capitalize()} site gateway")]
+
+    extra_tags = {k: str(v) for k, v in tags_sec.items()}
+    create_zone = _resolve_bool(params.get("create_zone"), dns_sec.get("create_zone", False))
+    create_reverse_zone = _resolve_bool(params.get("create_reverse_zone"), dns_sec.get("create_reverse_zone", False))
+    if_not_exists = _resolve_bool(params.get("if_not_exists"), False)
+
+    return SiteConfig(site=site, region=region, environment=environment, location=location,
+                       ip_space=ip_space, dns_parent=dns_parent, dns_view=dns_view, owner=owner,
+                       subnet_size=subnet_size, dry_run=_truthy_dry(params.get("dry")),
+                       create_zone=create_zone, create_reverse_zone=create_reverse_zone,
+                       if_not_exists=if_not_exists, extra_tags=extra_tags,
+                       subnet_plan=subnet_plan, hosts=host_list)
+
+
+def _block_sort_key(block: dict) -> tuple:
+    """Deterministic candidate-block ordering: lowest address, then cidr, so
+    repeated runs pick the same pool block. Port of site.provision._block_sort_key."""
+    try:
+        addr_int = int(ipaddress.ip_address(block.get("address", "")))
+    except ValueError:
+        addr_int = 1 << 128
+    try:
+        cidr = int(block.get("cidr", 0))
+    except (TypeError, ValueError):
+        cidr = 0
+    return (addr_int, cidr)
+
+
+class SiteProvisioner:
+    """Discovers a pool address block by Region/Environment/Status tags,
+    carves subnets, creates DHCP ranges + forward/reverse DNS zones, and
+    provisions IPAM hosts with DNS A/PTR records. Idempotent via
+    find_existing_site() + if_not_exists — this app has no decommission path
+    yet, so idempotency is the Phase-1 substitute for teardown. Port of
+    site.provision.SiteProvisioner.
+
+    GOTCHA: nextavailablesubnet is a create-and-allocate POST in this API (it
+    both proposes AND reserves the subnet in one call, unlike the reference
+    toolkit's read-only GET-then-separate-POST /ipam/subnet two-step) — see
+    _create_subnet(). The dry-run preview path uses GET instead, since it
+    must not create anything.
+    """
+
+    def __init__(self, cfg: SiteConfig, emit) -> None:
+        self.cfg = cfg
+        self.emit = emit
+        self._space_id = ""
+        self._view_id = ""
+        self._zone_id = ""
+        self._zone_created = False
+
+    def resolve_ip_space(self) -> str:
+        results = _rest_get("/api/ddi/v1/ipam/ip_space", {"filter": f'name=="{self.cfg.ip_space}"'})
+        if not results:
+            raise ProvisionError(f"IP space not found: {self.cfg.ip_space}")
+        self._space_id = results[0]["id"]
+        return self._space_id
+
+    def find_existing_site(self) -> list:
+        return _rest_get("/api/ddi/v1/ipam/subnet", {
+            "filter": f'space=="{self._space_id}"', "tfilter": f'Site=="{self.cfg.site}"'})
+
+    def find_available_block(self) -> dict:
+        results = _rest_get("/api/ddi/v1/ipam/address_block", {
+            "filter": f'space=="{self._space_id}"',
+            "tfilter": f'Region=="{self.cfg.region}" and Environment=="{self.cfg.environment}" and Status=="available"'})
+        if not results:
+            raise ProvisionError(
+                f"No available address block found for Region={self.cfg.region} Environment={self.cfg.environment}")
+        return min(results, key=_block_sort_key)
+
+    def resolve_dns_view(self) -> str:
+        results = _rest_get("/api/ddi/v1/dns/view", {"filter": f'name=="{self.cfg.dns_view}"'})
+        if not results:
+            raise ProvisionError(f"DNS view not found: {self.cfg.dns_view}")
+        self._view_id = results[0]["id"]
+        return self._view_id
+
+    def _create_subnet(self, block_id: str, sdef: SubnetDef, result: dict) -> dict:
+        """Carve one subnet from block_id. block_id must be the FULL-form id
+        (e.g. 'ipam/address_block/<uuid>') straight from the block object —
+        do not re-prefix 'ipam/address_block/' onto it."""
+        cidr = sdef.cidr if sdef.cidr is not None else self.cfg.subnet_size
+        tags = {"Site": self.cfg.site, "Region": self.cfg.region, "Environment": self.cfg.environment,
+                "Owner": self.cfg.owner, "Purpose": sdef.purpose, "DHCP": sdef.dhcp, "Name": sdef.name,
+                **{k: v for k, v in self.cfg.extra_tags.items() if k != "Owner"}}
+        mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+        self.emit({"step": f"{mode}Creating subnet /{cidr}  name={sdef.name}  purpose={sdef.purpose}"})
+
+        if self.cfg.dry_run:
+            # Preview only — GET nextavailablesubnet does not create anything.
+            preview = _rest_get(f"/api/ddi/v1/{block_id}/nextavailablesubnet", {"cidr": int(cidr), "count": 1})
+            subnet_addr = preview[0].get("address", "") if preview else ""
+            result["subnets"].append({"address": f"{subnet_addr}/{cidr}", "name": sdef.name, "id": "(dry-run)"})
+            return {"dry_run": True, "address": subnet_addr, "cidr": cidr, "name": sdef.name, "tags": tags}
+
+        body = {"name": sdef.name, "space": self._space_id,
+                "comment": f"{self.cfg.site.capitalize()} site - {sdef.purpose} network", "tags": tags}
+        resp, status = _rest_write("POST", f"/api/ddi/v1/{block_id}/nextavailablesubnet",
+                                    body=body, params={"cidr": int(cidr)})
+        if status not in (200, 201) or resp is None:
+            raise ProvisionError(f"Failed to create subnet {sdef.name}: status {status} {resp}")
+        rows = (resp.get("results") or ([resp["result"]] if resp.get("result") else [])) if isinstance(resp, dict) else []
+        subnet = rows[0] if rows else {}
+        if not subnet.get("address"):
+            raise ProvisionError(f"No free /{cidr} subnet available in block for {sdef.name}")
+        self.emit({"step": f"  Created subnet id={subnet.get('id')}"})
+        result["subnets"].append({"address": f'{subnet.get("address")}/{subnet.get("cidr", cidr)}',
+                                   "name": sdef.name, "id": subnet.get("id", "")})
+        return subnet
+
+    def create_dhcp_range(self, subnet: dict, sdef: SubnetDef, result: dict) -> None:
+        start_off = sdef.dhcp_start if sdef.dhcp_start is not None else 10
+        end_off = sdef.dhcp_end if sdef.dhcp_end is not None else 250
+        try:
+            net = ipaddress.ip_network(f'{subnet.get("address", "")}/{subnet.get("cidr", self.cfg.subnet_size)}',
+                                        strict=False)
+        except ValueError as exc:
+            self.emit({"step": f"  Cannot compute DHCP range for {sdef.name}: {exc}"})
+            return
+        start_ip, end_ip = str(net.network_address + start_off), str(net.network_address + end_off)
+        mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+        self.emit({"step": f"{mode}Creating DHCP range {start_ip}-{end_ip}  subnet={sdef.name}"})
+        if self.cfg.dry_run:
+            result["dhcp_ranges"].append({"id": "(dry-run)", "start": start_ip, "end": end_ip, "name": f"{sdef.name}-dhcp"})
+            return
+        body = {"start": start_ip, "end": end_ip, "space": self._space_id,
+                "comment": f"DHCP range for {sdef.name}",
+                "tags": {"Site": self.cfg.site, "Purpose": sdef.purpose, "Name": f"{sdef.name}-dhcp", **self.cfg.extra_tags}}
+        resp, status = _rest_write("POST", "/api/ddi/v1/ipam/range", body)
+        if status not in (200, 201) or resp is None:
+            raise ProvisionError(f"Failed to create DHCP range for {sdef.name}: status {status} {resp}")
+        rng = resp.get("result", {}) if isinstance(resp, dict) else {}
+        result["dhcp_ranges"].append({"id": rng.get("id", ""), "start": start_ip, "end": end_ip, "name": f"{sdef.name}-dhcp"})
+
+    def create_dns_zone(self) -> dict:
+        fqdn = self.cfg.dns_zone
+        mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+        self.emit({"step": f"{mode}Ensuring DNS zone exists: {fqdn}  view={self.cfg.dns_view}"})
+        if self.cfg.dry_run:
+            return {"dry_run": True, "fqdn": fqdn, "id": "(dry-run)"}
+        existing = _rest_get("/api/ddi/v1/dns/auth_zone", {"filter": f'fqdn=="{fqdn}." and view=="{self._view_id}"'})
+        if existing:
+            zone = existing[0]
+            self._zone_id = zone["id"]
+            self.emit({"step": f"  Zone already exists: {fqdn}  id={self._zone_id} — skipping creation"})
+            return zone
+        if not self.cfg.create_zone:
+            raise ProvisionError(
+                f'DNS zone "{fqdn}" does not exist in view "{self.cfg.dns_view}"; set dns.create_zone: true to create it')
+        resp, status = _rest_write("POST", "/api/ddi/v1/dns/auth_zone",
+                                    {"fqdn": fqdn, "view": self._view_id, "primary_type": "cloud"})
+        if status not in (200, 201) or resp is None:
+            raise ProvisionError(f"Failed to create DNS zone {fqdn}: status {status} {resp}")
+        zone = resp.get("result", {}) if isinstance(resp, dict) else {}
+        self._zone_id = zone.get("id", "")
+        self._zone_created = True
+        self.emit({"step": f"  Created zone id={self._zone_id}"})
+        return zone
+
+    def create_reverse_zone(self, subnet_addr: str, cidr: int) -> dict:
+        # _cidr_to_reverse_zone (defined above, already shipped for the
+        # ad-hoc self-service subnet wizard) returns the fqdn WITH a trailing
+        # dot — reused as-is rather than re-porting core.reverse_zone_fqdn.
+        fqdn = _cidr_to_reverse_zone(subnet_addr, cidr)
+        if cidr not in (8, 16, 24) and cidr < 24:
+            self.emit({"step": f"  Warning: /{cidr} spans multiple reverse zones; only {fqdn} will be created"})
+        mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+        self.emit({"step": f"{mode}Ensuring reverse DNS zone: {fqdn}  view={self.cfg.dns_view}"})
+        if self.cfg.dry_run:
+            return {"dry_run": True, "fqdn": fqdn, "id": "(dry-run)"}
+        existing = _rest_get("/api/ddi/v1/dns/auth_zone", {"filter": f'fqdn=="{fqdn}" and view=="{self._view_id}"'})
+        if existing:
+            zone = existing[0]
+            self.emit({"step": f"  Reverse zone already exists: {fqdn}  id={zone.get('id')}"})
+            return zone
+        resp, status = _rest_write("POST", "/api/ddi/v1/dns/auth_zone",
+                                    {"fqdn": fqdn, "view": self._view_id, "primary_type": "cloud"})
+        if status not in (200, 201) or resp is None:
+            raise ProvisionError(f"Failed to create reverse zone {fqdn}: status {status} {resp}")
+        zone = resp.get("result", {}) if isinstance(resp, dict) else {}
+        self.emit({"step": f"  Created reverse zone id={zone.get('id')}"})
+        return zone
+
+    def create_subnets(self, block: dict, result: dict) -> dict:
+        created = {}
+        block_id = block["id"]
+        for sdef in self.cfg.subnet_plan:
+            subnet = self._create_subnet(block_id, sdef, result)
+            if sdef.dhcp == "true":
+                self.create_dhcp_range(subnet, sdef, result)
+            if self.cfg.create_reverse_zone and subnet.get("address"):
+                zone = self.create_reverse_zone(subnet["address"], int(subnet.get("cidr", self.cfg.subnet_size)))
+                result["reverse_zones"].append({"id": zone.get("id", "(dry-run)"), "fqdn": zone.get("fqdn", "")})
+            created[sdef.name] = subnet
+        return created
+
+    def provision_hosts(self, subnets: dict) -> list:
+        subnet_offsets: dict = {}
+        results = []
+        for hdef in self.cfg.hosts:
+            subnet = subnets.get(hdef.subnet)
+            if subnet is None:
+                self.emit({"step": f'Host {hdef.hostname} references unknown subnet "{hdef.subnet}" — skipping'})
+                continue
+            base_addr = subnet.get("address", "")
+            cidr = subnet.get("cidr", self.cfg.subnet_size)
+            offset = subnet_offsets.get(hdef.subnet, 1)
+            subnet_offsets[hdef.subnet] = offset + 1
+            try:
+                net = ipaddress.ip_network(f"{base_addr}/{cidr}", strict=False)
+                host_addr = net.network_address + offset
+            except ValueError as exc:
+                self.emit({"step": f"Cannot compute IP for host {hdef.hostname}: {exc} — skipping"})
+                continue
+            if host_addr not in net:
+                self.emit({"step": f"Host {hdef.hostname} offset {offset} falls outside subnet {net} — skipping"})
+                continue
+            host_ip = str(host_addr)
+            fqdn = f"{hdef.hostname}.{self.cfg.dns_zone}"
+            mode = "[DRY-RUN] " if self.cfg.dry_run else ""
+            self.emit({"step": f"{mode}Provisioning host: {fqdn} -> {host_ip}  (subnet={hdef.subnet})"})
+            if self.cfg.dry_run:
+                results.append({"dry_run": True, "fqdn": fqdn, "ip": host_ip, "hostname": hdef.hostname, "id": "(dry-run)"})
+                continue
+            body = {
+                "name": fqdn, "comment": hdef.comment or f"{self.cfg.site.capitalize()} - {hdef.hostname}",
+                "addresses": [{"address": host_ip, "space": self._space_id}],
+                "auto_generate_records": True,
+                "host_names": [{"name": hdef.hostname, "zone": self._zone_id, "primary_name": True}],
+            }
+            resp, status = _rest_write("POST", "/api/ddi/v1/ipam/host", body)
+            if status not in (200, 201) or resp is None:
+                raise ProvisionError(f"Failed to create host {hdef.hostname}: status {status} {resp}")
+            host = resp.get("result", {}) if isinstance(resp, dict) else {}
+            self.emit({"step": f"  Created host id={host.get('id')}"})
+            results.append({"fqdn": fqdn, "ip": host_ip, "hostname": hdef.hostname, "id": host.get("id", "(dry-run)")})
+        return results
+
+    def _rollback(self, partial: dict) -> None:
+        self.emit({"step": "Rolling back partial site provisioning…"})
+        for h in reversed(partial["hosts"]):
+            hid = h.get("id", "")
+            if hid and hid != "(dry-run)":
+                _rest_write("DELETE", f"/api/ddi/v1/{hid}")
+        if self._zone_created and partial["dns_zone_id"] not in ("", "(dry-run)"):
+            _rest_write("DELETE", f'/api/ddi/v1/{partial["dns_zone_id"]}')
+        for rz in reversed(partial["reverse_zones"]):
+            rid = rz.get("id", "")
+            if rid and rid != "(dry-run)":
+                _rest_write("DELETE", f"/api/ddi/v1/{rid}")
+        for r in reversed(partial["dhcp_ranges"]):
+            rid = r.get("id", "")
+            if rid and rid != "(dry-run)":
+                _rest_write("DELETE", f"/api/ddi/v1/{rid}")
+        for s in reversed(partial["subnets"]):
+            sid = s.get("id", "")
+            if sid and sid != "(dry-run)":
+                _rest_write("DELETE", f"/api/ddi/v1/{sid}")
+        # The pool block is shared and untagged by this flow, so nothing to reset there.
+
+    def provision(self) -> dict:
+        result = {"block_id": "", "block_address": "", "subnets": [], "dhcp_ranges": [],
+                  "dns_zone_id": "", "dns_zone_fqdn": "", "reverse_zones": [], "hosts": [],
+                  "dry_run": self.cfg.dry_run, "skipped": False, "skip_reason": ""}
+        try:
+            self.resolve_ip_space()
+            existing = self.find_existing_site()
+            if existing:
+                first = existing[0]
+                msg = (f"Site {self.cfg.site!r} is already provisioned "
+                       f'({len(existing)} subnet(s), e.g. {first.get("address")}/{first.get("cidr")})')
+                if self.cfg.if_not_exists:
+                    self.emit({"step": f"{msg} — skipping (if_not_exists)"})
+                    result["skipped"] = True
+                    result["skip_reason"] = "already provisioned"
+                else:
+                    raise ProvisionError(f"{msg} — pass if_not_exists to skip")
+            else:
+                block = self.find_available_block()
+                result["block_id"] = block.get("id", "")
+                result["block_address"] = f'{block["address"]}/{block["cidr"]}'
+                self.resolve_dns_view()
+                subnets = self.create_subnets(block, result)
+                zone = self.create_dns_zone()
+                result["dns_zone_id"] = zone.get("id", "(dry-run)")
+                result["dns_zone_fqdn"] = zone.get("fqdn", self.cfg.dns_zone)
+                hosts = self.provision_hosts(subnets)
+                result["hosts"] = [{"fqdn": h.get("fqdn", ""), "ip": h.get("ip", ""),
+                                     "hostname": h.get("hostname", ""), "id": h.get("id", "(dry-run)")} for h in hosts]
+        except Exception as exc:
+            if not self.cfg.dry_run:
+                self.emit({"step": f"Provisioning failed ({exc}) — initiating rollback"})
+                self._rollback(result)
+            raise
+        return result
+
+
+def list_templates() -> list:
+    """Recursively scan TEMPLATES_DIR for YAML templates and summarize each
+    for the template picker. Skips shared/placeholder scaffolding files."""
+    out = []
+    base = os.path.realpath(TEMPLATES_DIR)
+    for path in sorted(glob.glob(os.path.join(base, "**", "*.y*ml"), recursive=True)):
+        rel = os.path.relpath(path, base)
+        base_name = os.path.basename(path)
+        if base_name.startswith("_shared") or "SITENAME" in base_name.upper():
+            continue
+        try:
+            with open(path, "r") as fh:
+                data = yaml.safe_load(fh)
+        except (OSError, yaml.YAMLError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        site_sec = data.get("site") or {}
+        validation = validate_template(data, rel)
+        out.append({
+            "name": rel, "type": validation["type"],
+            "site": site_sec.get("name", data.get("name", "")),
+            "region": site_sec.get("region", ""),
+            "environment": site_sec.get("environment", ""),
+            "valid": validation["valid"],
+        })
+    return out
+
 
 # ── encrypted vault (multi-tenant key store) ──────────────────────────────────
 # Keys are secrets the bridge must *replay* to Infoblox, so they're stored
@@ -2978,8 +3887,12 @@ class Handler(BaseHTTPRequestHandler):
                 body = {}
                 if name: body["name"] = name
                 if comment: body["comment"] = comment
+                # `block` is the FULL-form resource id returned by /api/ipam/blocks
+                # (e.g. "ipam/address_block/<uuid>") — do not re-prefix
+                # "ipam/address_block/" onto it (that would double-prefix and 404).
+                # Normalized to match SiteProvisioner._create_subnet's convention.
                 result, status = _rest_write(
-                    "POST", f"/api/ddi/v1/ipam/address_block/{block}/nextavailablesubnet",
+                    "POST", f"/api/ddi/v1/{block}/nextavailablesubnet",
                     body=body or None, params={"cidr": int(cidr)})
                 emit({"step": "Subnet allocation result", "status": status, "result": result})
                 subnet = {}
@@ -2996,6 +3909,106 @@ class Handler(BaseHTTPRequestHandler):
                     "id": subnet.get("id"), "address": subnet.get("address"), "cidr": subnet.get("cidr")}})
             except Exception as e:
                 emit({"error": str(e)})
+            return
+        elif path == "/api/templates":
+            try:
+                self._json(list_templates())
+            except Exception as e:
+                _log_exc("/api/templates", e); self._json({"error": "internal error"}, 500)
+        elif path == "/api/provision/site/stream":
+            # SSE progress stream for template-driven site provisioning
+            # (Phase-1 port of Chris Marrison's UDDI toolkit site provisioner).
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Accel-Buffering", "no")
+            self._send_cors_origin()
+            self.end_headers()
+
+            def emit(obj):
+                try:
+                    self.wfile.write(("data: " + json.dumps(obj) + "\n\n").encode())
+                    self.wfile.flush()
+                except Exception:
+                    pass  # client disconnected mid-stream — nothing to recover
+
+            try:
+                name = qp.get("template", "").strip()
+                if not name:
+                    emit({"error": "template is required"}); return
+                template = load_template(name)
+                cfg = template_to_site_config(template, qp)
+                emit({"step": f"Provisioning site: {cfg.site}"})
+                result = SiteProvisioner(cfg, emit).provision()
+                emit({"done": True, "result": result})
+            except ProvisionError as e:
+                emit({"error": str(e)})
+            except Exception as e:
+                _log_exc("/api/provision/site/stream", e); emit({"error": str(e)})
+            return
+        elif path == "/api/provision/seed-demo/stream":
+            # SSE batch stream: seeds the regional address-block pool, then
+            # provisions all site templates in-process (in-process, not the
+            # reference toolkit's subprocess-per-template batch.py model —
+            # per-template failures are caught and reported without aborting).
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            dry = _truthy_dry(qp.get("dry"))
+            regions_raw = qp.get("regions", "amer,emea,apac")
+            regions = [r.strip().lower() for r in regions_raw.split(",") if r.strip()] or ["amer", "emea", "apac"]
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Accel-Buffering", "no")
+            self._send_cors_origin()
+            self.end_headers()
+
+            def emit(obj):
+                try:
+                    self.wfile.write(("data: " + json.dumps(obj) + "\n\n").encode())
+                    self.wfile.flush()
+                except Exception:
+                    pass  # client disconnected mid-stream — nothing to recover
+
+            summary = {"succeeded": [], "failed": [], "skipped": []}
+            try:
+                emit({"step": "Seeding blocks…"})
+                try:
+                    block_template = load_template("blocks/regional_address_blocks.yaml")
+                    block_cfg = template_to_block_config(block_template, {"dry": "1" if dry else "0"})
+                    BlockProvisioner(block_cfg, emit).provision()
+                except ProvisionError as exc:
+                    emit({"template": "blocks/regional_address_blocks.yaml", "error": str(exc)})
+
+                site_templates = []
+                for region in regions:
+                    region_dir = os.path.join(TEMPLATES_DIR, region)
+                    if os.path.isdir(region_dir):
+                        site_templates.extend(sorted(glob.glob(os.path.join(region_dir, "*", "site-*.yaml"))))
+
+                for tpath in site_templates:
+                    rel = os.path.relpath(tpath, TEMPLATES_DIR)
+                    try:
+                        template = load_template(rel)
+                        cfg = template_to_site_config(template, {"dry": "1" if dry else "0", "if_not_exists": True})
+
+                        def _forward(obj, _rel=rel):
+                            emit({"step": f"[{_rel}] {obj['step']}"} if "step" in obj else obj)
+
+                        result = SiteProvisioner(cfg, _forward).provision()
+                        (summary["skipped"] if result["skipped"] else summary["succeeded"]).append(rel)
+                    except Exception as exc:
+                        summary["failed"].append(rel)
+                        emit({"template": rel, "error": str(exc)})
+
+                emit({"done": True, "summary": summary})
+            except Exception as e:
+                _log_exc("/api/provision/seed-demo/stream", e); emit({"error": str(e)})
             return
         elif path.lstrip("/") in _STATIC_FILES:
             self._file(path.lstrip("/"))  # _file validates realpath before serving
@@ -3158,6 +4171,35 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/selfservice/allocate", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
+        elif self.path == "/api/templates/validate":
+            # Pure structural validation — never contacts the Infoblox API.
+            try:
+                name = str(body.get("name", "")).strip()
+                template = load_template(name)
+                v = validate_template(template, name)
+                self._json({"valid": v["valid"], "type": v["type"], "errors": v["errors"], "warnings": v["warnings"]})
+            except ProvisionError as e:
+                self._json({"valid": False, "type": "unknown",
+                             "errors": [{"field": "template", "message": str(e)}], "warnings": []})
+            except Exception as e:
+                _log_exc("/api/templates/validate", e); self._json({"error": "internal error"}, 500)
+        elif self.path == "/api/provision/block":
+            # Address-block provisioning (Phase-1 port of Chris Marrison's
+            # UDDI toolkit block provisioner). Not a stream — a single result.
+            try:
+                name = str(body.get("template", "")).strip()
+                if not name:
+                    self._json({"error": "template is required"}, 400)
+                else:
+                    template = load_template(name)
+                    params = {"ip_space": body.get("ip_space"), "dry": body.get("dry")}
+                    cfg = template_to_block_config(template, params)
+                    result = BlockProvisioner(cfg, lambda _obj: None).provision()
+                    self._json({"blocks_created": result["blocks_created"]})
+            except ProvisionError as e:
+                self._json({"error": str(e)}, 400)
+            except Exception as e:
+                _log_exc("/api/provision/block", e); self._json({"error": "internal error"}, 500)
         else:
             self._json({"error": "not found"}, 404)
 

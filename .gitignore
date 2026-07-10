@@ -76,3 +76,6 @@ mockups/
 
 # saved-view runtime store (VAULT_DIR)
 views/
+
+# Third-party demo templates — fetched at build (scripts/fetch_templates.py), never published (ccmarris/uddi_automation_toolkit)
+templates/
