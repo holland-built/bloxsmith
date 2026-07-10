@@ -1121,8 +1121,8 @@ function Skeleton({rows=4}){
 /* ─────────────────────────────────────────────────────────────
    6. Hash router — parse #tab?k=v. Legacy redirects. nav() helper.
    ───────────────────────────────────────────────────────────── */
-const TABS=['overview','daily','network','dns','infra','security','audit'];
-const TAB_LABELS={overview:'Overview',daily:'Daily',network:'Network',dns:'DNS',infra:'Infra',security:'Security',audit:'Audit'};
+const TABS=['overview','daily','network','dns','infra','security','audit','provision','selfservice'];
+const TAB_LABELS={overview:'Overview',daily:'Daily',network:'Network',dns:'DNS',infra:'Infra',security:'Security',audit:'Audit',provision:'Provision',selfservice:'Self-Service'};
 const LEGACY={home:'overview',map:'network',dhcp:'network',ipam:'network',dns:'dns',
   security:'security',assets:'infra',audit:'audit',search:'overview',ask:'overview',hub:'overview',
   summary:'daily',trends:'daily'};
@@ -3192,6 +3192,7 @@ function NetworkTab(){
                       <div className="d">{(s.name||'—')+' · '+(s.site||'—')}</div>
                     </div>
                     {UtilBar(s.util||0)}
+                    {i===0?<button className="btn" onClick={e=>{e.stopPropagation();nav('provision',{space:'',cidr:24,from:s.addr});}}>Provision subnet →</button>:null}
                   </div>;
                 })}
               </div>
@@ -4523,6 +4524,247 @@ function AuditTab(){
   </div>;
 }
 
+// ═══ REGION: PROVISION ═══
+/* SelfServiceTab — self-service IP allocation form. POSTs /api/selfservice/allocate
+   (subnet_id OR tag_key/tag_value + count + name, optional dns block). Dry-run
+   defaults ON so a first submit never mutates anything. */
+function SelfServiceTab(){
+  const {locked}=useData();
+  const zonesApi=useApi('/api/dns/zones');
+  const [subnetId,setSubnetId]=useState('');
+  const [tagKey,setTagKey]=useState('');
+  const [tagValue,setTagValue]=useState('');
+  const [count,setCount]=useState(1);
+  const [name,setName]=useState('');
+  const [dnsOn,setDnsOn]=useState(false);
+  const [zoneId,setZoneId]=useState('');
+  const [recName,setRecName]=useState('');
+  const [recType,setRecType]=useState('A');
+  const [recValue,setRecValue]=useState('');
+  const [dry,setDry]=useState(true);
+  const [busy,setBusy]=useState(false);
+  const [result,setResult]=useState(null);
+  const [err,setErr]=useState(null);
+  if(locked) return null;
+
+  const zones=(zonesApi.data&&zonesApi.data.zones)||[];
+
+  const submit=()=>{
+    setBusy(true);setErr(null);setResult(null);
+    const body={
+      count:Number(count)||1,
+      name,
+      dry,
+    };
+    if(subnetId) body.subnet_id=subnetId;
+    if(tagKey) body.tag_key=tagKey;
+    if(tagValue) body.tag_value=tagValue;
+    if(dnsOn) body.dns={zone_id:zoneId,name:recName,type:recType,value:recValue};
+    fetch('/api/selfservice/allocate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(async r=>{
+        const j=await r.json().catch(()=>({}));
+        setBusy(false);
+        if(!r.ok||j.ok===false){
+          const msg=(j&&j.error)||('HTTP '+r.status);
+          setErr(msg);toast('Allocation failed: '+msg,'err');return;
+        }
+        setResult(j);
+        toast((dry?'Dry run':'Allocation')+' complete','ok');
+      })
+      .catch(e=>{setBusy(false);const msg=String((e&&e.message)||e);setErr(msg);toast('Allocation failed — '+msg,'err');});
+  };
+
+  return <div className="page fadein">
+    <SectionRule title="Self-service allocation"/>
+    <div className="grid">
+      <Panel title="Request">
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Subnet ID (or leave blank and use tag key/value below)
+            <input className="vault-in" value={subnetId} onChange={e=>setSubnetId(e.target.value)} placeholder="subnet id"/>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Tag key
+            <input className="vault-in" value={tagKey} onChange={e=>setTagKey(e.target.value)} placeholder="env"/>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Tag value
+            <input className="vault-in" value={tagValue} onChange={e=>setTagValue(e.target.value)} placeholder="prod"/>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Count
+            <input className="vault-in" type="number" min="1" value={count} onChange={e=>setCount(e.target.value)}/>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Name
+            <input className="vault-in" value={name} onChange={e=>setName(e.target.value)} placeholder="requester / purpose"/>
+          </label>
+          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <input type="checkbox" checked={dnsOn} onChange={e=>setDnsOn(e.target.checked)}/>
+            <span>Create DNS record</span>
+          </label>
+          {dnsOn?<div style={{display:'flex',flexDirection:'column',gap:'var(--s3)',paddingLeft:'var(--s4)'}}>
+            <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+              Zone
+              <select className="vault-in" value={zoneId} onChange={e=>setZoneId(e.target.value)}>
+                <option value="">{zonesApi.loading?'Loading zones…':'Select a zone'}</option>
+                {zones.map(z=><option key={z.id} value={z.id}>{z.fqdn}</option>)}
+              </select>
+            </label>
+            <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+              Record name
+              <input className="vault-in" value={recName} onChange={e=>setRecName(e.target.value)} placeholder="host"/>
+            </label>
+            <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+              Type
+              <select className="vault-in" value={recType} onChange={e=>setRecType(e.target.value)}>
+                <option value="A">A</option>
+                <option value="AAAA">AAAA</option>
+                <option value="CNAME">CNAME</option>
+                <option value="TXT">TXT</option>
+              </select>
+            </label>
+            <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+              Value
+              <input className="vault-in" value={recValue} onChange={e=>setRecValue(e.target.value)} placeholder="auto-fills from allocated IP if blank"/>
+            </label>
+          </div>:null}
+          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <input type="checkbox" checked={dry} onChange={e=>setDry(e.target.checked)}/>
+            <span>Dry-run (no changes made)</span>
+          </label>
+          <button className="btn" disabled={busy||!name} onClick={submit}>{busy?'Submitting…':'Submit'}</button>
+        </div>
+      </Panel>
+      {result?<Panel title="Result">
+        <div className="mono" style={{fontSize:'var(--t12)'}}>
+          {(result.addresses||[]).length} address{(result.addresses||[]).length===1?'':'es'} allocated{result.dry?' (dry run)':''}
+        </div>
+        <div style={{marginTop:'var(--s2)',display:'flex',flexDirection:'column',gap:2}}>
+          {(result.addresses||[]).map((a,i)=><div key={i} className="mono" style={{fontSize:'var(--t12)'}}>{typeof a==='string'?a:JSON.stringify(a)}</div>)}
+        </div>
+        {result.record?<div className="mono" style={{marginTop:'var(--s3)',fontSize:'var(--t12)',color:'var(--text-dim)'}}>
+          Record: {JSON.stringify(result.record)}
+        </div>:null}
+      </Panel>:null}
+      {err?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{err}</div></Panel>:null}
+    </div>
+  </div>;
+}
+
+/* ProvisionTab — deep-linkable subnet provisioning wizard, streamed over SSE from
+   /api/provision/stream. EventSource lives in a ref: closed on {done}/{error} AND
+   on unmount cleanup, and start() refuses to open a second stream while one is live. */
+function ProvisionTab(){
+  const {params}=useRoute();
+  const {locked}=useData();
+  const spacesApi=useApi('/api/ipam/spaces');
+  const [space,setSpace]=useState(params.space||'');
+  const [block,setBlock]=useState(params.block||'');
+  const blocksApi=useApi(space?('/api/ipam/blocks?space='+encodeURIComponent(space)):null);
+  const [cidr,setCidr]=useState(params.cidr||24);
+  const [name,setName]=useState(params.from||params.name||'');
+  const [comment,setComment]=useState('');
+  const [makeZone,setMakeZone]=useState(false);
+  const [dry,setDry]=useState(true);
+  const [log,setLog]=useState([]);
+  const [streaming,setStreaming]=useState(false);
+  const [success,setSuccess]=useState(null);
+  const [streamErr,setStreamErr]=useState(null);
+  const esRef=useRef(null);
+
+  useEffect(()=>{ setSpace(params.space||''); },[params.space]);
+  // Cleanup: close any live stream on unmount so it never leaks past this tab.
+  useEffect(()=>()=>{ if(esRef.current){ esRef.current.close(); esRef.current=null; } },[]);
+
+  if(locked) return null;
+
+  const spaces=(spacesApi.data&&spacesApi.data.spaces)||[];
+  const blocks=(blocksApi.data&&blocksApi.data.blocks)||[];
+
+  const start=()=>{
+    if(streaming||esRef.current) return; // guard: never open a second concurrent stream
+    setLog([]);setSuccess(null);setStreamErr(null);setStreaming(true);
+    const qs=new URLSearchParams({space,block,cidr:String(cidr||24),name,comment,
+      make_zone:makeZone?'1':'0',dry:dry?'1':'0'});
+    const es=new EventSource('/api/provision/stream?'+qs.toString());
+    esRef.current=es;
+    const stop=()=>{ if(esRef.current){ esRef.current.close(); esRef.current=null; } setStreaming(false); };
+    es.onmessage=(e)=>{
+      let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
+      setLog(prev=>[...prev,j]);
+      if(j&&j.error){ setStreamErr(j.error); stop(); toast('Provision failed: '+j.error,'err'); }
+      else if(j&&j.done){ setSuccess(j.subnet||null); stop(); toast('Subnet provisioned','ok'); }
+    };
+    es.onerror=()=>{
+      if(!esRef.current) return; // already closed via done/error message
+      setStreamErr(prev=>prev||'Stream connection error');
+      stop();
+    };
+  };
+
+  return <div className="page fadein">
+    <SectionRule title="Provision subnet"/>
+    <div className="grid">
+      <Panel title="Request">
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Space
+            <select className="vault-in" value={space} onChange={e=>{setSpace(e.target.value);setBlock('');}}>
+              <option value="">{spacesApi.loading?'Loading spaces…':'Select a space'}</option>
+              {spaces.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Block
+            <select className="vault-in" value={block} onChange={e=>setBlock(e.target.value)} disabled={!space}>
+              <option value="">{blocksApi.loading?'Loading blocks…':'Select a block'}</option>
+              {blocks.map(b=><option key={b.id} value={b.id}>{b.name||b.cidr||b.address}</option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            CIDR
+            <input className="vault-in" type="number" min="1" max="32" value={cidr} onChange={e=>setCidr(e.target.value)}/>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Name
+            <input className="vault-in" value={name} onChange={e=>setName(e.target.value)} placeholder="subnet name"/>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Comment
+            <input className="vault-in" value={comment} onChange={e=>setComment(e.target.value)} placeholder="optional"/>
+          </label>
+          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <input type="checkbox" checked={makeZone} onChange={e=>setMakeZone(e.target.checked)}/>
+            <span>Create matching DNS zone</span>
+          </label>
+          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <input type="checkbox" checked={dry} onChange={e=>setDry(e.target.checked)}/>
+            <span>Dry-run (no changes made)</span>
+          </label>
+          <button className="btn" disabled={streaming||!space} onClick={start}>{streaming?'Provisioning…':'Provision'}</button>
+        </div>
+      </Panel>
+      <Panel title="Live log">
+        {log.length===0
+          ? <div className="dt-empty">No output yet</div>
+          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+              {log.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
+                {l.error?('✕ '+l.error):l.done?('✓ done — subnet '+((l.subnet&&(l.subnet.address||l.subnet.id))||'')):(l.step||JSON.stringify(l))}
+              </div>)}
+            </div>}
+      </Panel>
+      {success?<Panel title="Success">
+        <div className="mono" style={{fontSize:'var(--t12)'}}>
+          Subnet id: {success.id ?? '—'} · {success.address||''}{success.cidr?('/'+success.cidr):''}
+        </div>
+      </Panel>:null}
+      {streamErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{streamErr}</div></Panel>:null}
+    </div>
+  </div>;
+}
+// ═══ END: PROVISION ═══
+
 /* subsequence match — chars of needle appear in order within hay (fuzzy go-to). */
 function subseqMatch(needle,hay){
   if(!needle) return false;
@@ -4713,6 +4955,8 @@ const TAB_COMPONENTS={
   infra:InfraTab,
   security:SecurityTab,
   audit:AuditTab,
+  provision:ProvisionTab,
+  selfservice:SelfServiceTab,
 };
 
 /* ─────────────────────────────────────────────────────────────
