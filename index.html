@@ -40,6 +40,7 @@ try{
   --ok:#0cce6b; --warn:#f5a623; --crit:#ff4444;
   --scrim:rgba(0,0,0,.6); --crit-tint:rgba(255,68,68,.08); --crit-tint-border:rgba(255,68,68,.3); --warn-tint:rgba(245,166,35,.14);
   --accent-contrast:#fff; --logo-chip:#fff;
+  --accent-dim:rgba(0,112,243,.14); --ok-dim:rgba(12,206,107,.13); --warn-dim:rgba(245,166,35,.13); --crit-dim:rgba(255,68,68,.13); --border2:#1c1c1c;
 
   --t11:11px; --t12:12px; --t13:13px; --t14:14px; --t16:16px; --t20:20px; --t28:28px;
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s12:48px;
@@ -53,7 +54,8 @@ try{
   --text:#171717;--text-dim:#525252;--text-faint:#737373;
   --accent:#0070f3;--accent-text:#0057c2;
   --ok:#047857;--warn:#b45309;--crit:#dc2626;
-  --scrim:rgba(0,0,0,.35);--crit-tint:rgba(220,38,38,.06);--crit-tint-border:rgba(220,38,38,.3);--warn-tint:rgba(180,83,9,.12);}
+  --scrim:rgba(0,0,0,.35);--crit-tint:rgba(220,38,38,.06);--crit-tint-border:rgba(220,38,38,.3);--warn-tint:rgba(180,83,9,.12);
+  --accent-dim:rgba(0,96,208,.09);--ok-dim:rgba(10,143,77,.10);--warn-dim:rgba(185,118,26,.10);--crit-dim:rgba(217,32,32,.09);--border2:#efefef;}
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
 body{
@@ -198,7 +200,7 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 .stub-name{font-size:var(--t16);font-weight:600;color:var(--text-dim);}
 .stub-sub{font-size:var(--t12);color:var(--text-faint);}
 
-.main{padding:var(--s6);width:100%;}
+.main{padding:var(--s6);width:100%;max-width:1680px;margin:0 auto;transition:padding-right .16s ease;}
 
 /* ── shared layout + synthesis primitives ── */
 .page{display:flex;flex-direction:column;gap:var(--s6);}
@@ -348,13 +350,105 @@ table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-al
 .groupbar{display:flex;flex-direction:column;gap:var(--s1);width:100%;min-width:0;}
 .groupbar-row{display:flex;align-items:center;gap:var(--s2);min-width:0;}
 .groupbar-row.clickable{cursor:pointer;}
-.groupbar-l{flex:0 0 40%;font-size:var(--t12);color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.groupbar-track{flex:1 1 auto;height:14px;background:var(--raised);border-radius:var(--r-ctl);overflow:hidden;min-width:0;}
-.groupbar-fill{height:100%;}
+.groupbar-l{flex:0 0 40%;font-size:11.5px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'GeistMono','SFMono-Regular',ui-monospace,monospace;}
+.groupbar-track{flex:1 1 auto;height:8px;background:var(--border);border-radius:4px;overflow:hidden;min-width:0;}
+.groupbar-fill{height:100%;border-radius:4px;}
 .groupbar-v{flex:0 0 auto;font-size:var(--t11);color:var(--text);min-width:40px;text-align:right;}
 .groupbar-more{font-size:var(--t11);color:var(--text-faint);padding:var(--s1) 0;}
 .hovercard{position:relative;display:inline-block;}
 .hovercard-pop{position:fixed;z-index:85;max-width:280px;padding:var(--s3);font-size:var(--t12);color:var(--text);}
+
+/* ── refined mockup design system (shared, ported from mockup-refined.html) ── */
+/* drawer reflow: main shrinks beside the right drawers; overlay kept on mobile */
+html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
+@media (max-width:900px){html[data-drawer="open"] .main{padding-right:revert;}}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.sd{width:7px;height:7px;border-radius:50%;flex:none;display:inline-block;}
+.sd.ok{background:var(--ok);}
+.sd.warn{background:var(--warn);}
+.sd.crit{background:var(--crit);animation:pulse 2s infinite;}
+.sd.pulse{animation:pulse 2.4s ease-in-out infinite;}
+
+.pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:14px 15px;display:flex;flex-direction:column;min-width:0;}
+.pcard>h3{font-size:12.5px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin:0;}
+.pcard>h3 .side{color:var(--text-faint);font-weight:500;font-size:11px;display:inline-flex;align-items:center;gap:var(--s2);flex:none;}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:12px;align-items:start;min-width:0;}
+.grid-dense{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:12px;align-items:start;min-width:0;}
+.grid>*,.grid-dense>*{min-width:0;}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:10px;}
+.kpi{padding:12px 13px;border-radius:var(--r-panel);background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;transition:border-color .16s ease,transform .16s ease;min-width:0;}
+.kpi:hover{border-color:var(--border-strong);transform:translateY(-2px);}
+.kpi .lbl{display:flex;align-items:center;justify-content:space-between;color:var(--text-dim);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
+.kpi .num{font-family:'GeistMono',ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:26px;font-weight:500;letter-spacing:-1px;margin-top:5px;line-height:1;}
+.kpi .sub{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint);margin-top:4px;min-width:0;}
+.kpi .sub .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.trend{font-family:'GeistMono',ui-monospace,monospace;font-weight:500;flex:none;}
+.trend.up{color:var(--ok);}
+.trend.dn{color:var(--crit);}
+.trend.fl{color:var(--text-faint);}
+.kpi svg.spark,.kpi svg.rowspark{position:absolute;right:10px;bottom:9px;opacity:.9;}
+
+.sev{font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r-ctl);text-transform:uppercase;letter-spacing:.3px;flex:none;display:inline-block;}
+.sev.crit{background:var(--crit-dim);color:var(--crit);}
+.sev.high{background:var(--warn-dim);color:var(--warn);}
+.sev.med{background:var(--accent-dim);color:var(--accent-text);}
+.sev.low{background:var(--raised);color:var(--text-dim);}
+
+.sec-h{display:flex;align-items:center;gap:9px;margin:0 2px;}
+.sec-h h2{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text-dim);margin:0;}
+.sec-h .rule{flex:1;height:1px;background:var(--border);}
+
+.issues{display:flex;flex-direction:column;min-width:0;}
+.issue{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .12s ease;min-width:0;}
+.issue:last-child{border-bottom:0;}
+.issue:hover{background:var(--raised);}
+.issue .rank{font-family:'GeistMono',ui-monospace,monospace;color:var(--text-faint);font-size:11px;width:16px;flex:none;}
+.issue .body{flex:1;min-width:0;}
+.issue .body .t{font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.issue .body .d{color:var(--text-faint);font-size:11px;font-family:'GeistMono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.ubar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;min-width:52px;}
+.ubar>i{display:block;height:100%;border-radius:3px;}
+
+.sites{display:flex;flex-direction:column;gap:9px;}
+.siterow{display:flex;align-items:center;gap:10px;min-width:0;}
+.siterow .nm{width:96px;font-size:11.5px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'GeistMono',ui-monospace,monospace;flex:none;}
+.siterow .track{flex:1;height:8px;border-radius:4px;background:var(--border);overflow:hidden;min-width:0;}
+.siterow .track>i{display:block;height:100%;border-radius:4px;}
+.siterow .pc{width:38px;text-align:right;font-family:'GeistMono',ui-monospace,monospace;font-size:11.5px;flex:none;}
+
+.tag{font-size:10px;padding:1px 6px;border-radius:var(--r-ctl);background:var(--raised);color:var(--text-dim);font-family:'GeistMono',ui-monospace,monospace;white-space:nowrap;display:inline-block;max-width:92px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+.rowspark{width:56px;height:16px;flex:none;}
+
+.svc{display:flex;flex-direction:column;gap:2px;padding:7px 12px;border-radius:var(--r-ctl);background:var(--raised);border:1px solid var(--border);min-width:118px;}
+.svc .t{display:flex;align-items:center;gap:6px;font-weight:600;font-size:12px;}
+.svc .m{font-size:11px;color:var(--text-faint);}
+
+/* refined table skin — visual only, keeps table.dt class names/behavior */
+table.dt thead th{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);}
+table.dt tbody td{border-bottom-color:var(--border2);}
+
+/* donut legend pct column + row hover (Donut restyle) */
+.donut-leg{padding:2px 4px;border-radius:var(--r-ctl);transition:background .12s ease;}
+.donut-leg:hover{background:var(--raised);}
+.donut-leg-pct{color:var(--text-faint);font-size:11px;min-width:34px;text-align:right;font-family:'GeistMono',ui-monospace,monospace;flex:none;}
+
+/* histogram hover value + volume-histogram bar polish */
+.histbar-bar:hover,.vh-bar:hover{filter:brightness(1.25);}
+
+/* HoverDetail — cursor-following, edge-aware floating card (singleton portal) */
+.hoverdetail{position:fixed;z-index:80;min-width:200px;max-width:260px;left:0;top:0;padding:11px 12px;border-radius:8px;background:var(--raised);border:1px solid var(--border);box-shadow:0 12px 40px rgba(0,0,0,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .13s ease,transform .13s ease;font-size:12px;}
+.hoverdetail.show{opacity:1;transform:translateY(0);}
+.hoverdetail .hh{font-weight:600;font-family:'GeistMono',ui-monospace,monospace;margin-bottom:6px;display:flex;align-items:center;gap:7px;}
+.hoverdetail .kv{display:flex;justify-content:space-between;gap:14px;padding:2px 0;color:var(--text-dim);}
+.hoverdetail .kv b{color:var(--text);font-family:'GeistMono',ui-monospace,monospace;font-weight:500;}
+.hoverdetail .mini{height:26px;margin-top:7px;}
+
+.fadein{animation:fade .5s ease both;}
+@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
 </style>
 </head>
 <body>
@@ -538,17 +632,21 @@ function Toasts(){
    cols:{key,label,mono,align,render,width}
    ───────────────────────────────────────────────────────────── */
 /* ── Sparkline (F7) — ~15-line SVG, normalized to the viewBox, guards flat/empty ── */
-function Sparkline({values,width=72,height=18}){
+function Sparkline({values,width=72,height=18,color,fill}){
   const v=Array.isArray(values)?values.filter(x=>typeof x==='number'&&isFinite(x)):[];
   if(v.length<2) return null;
   const min=Math.min(...v),max=Math.max(...v),span=(max-min)||1;
+  const col=color||'var(--accent)';
   const pts=v.map((n,i)=>{
     const x=(i/(v.length-1))*width;
-    const y=height-((n-min)/span)*height;
-    return x.toFixed(1)+','+y.toFixed(1);
-  }).join(' ');
+    const y=height-((n-min)/span)*(height-3)-1.5;
+    return [x,y];
+  });
+  const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const area='M0 '+height+' '+pts.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+' L'+width+' '+height+' Z';
   return <svg className="spark" width={width} height={height} viewBox={'0 0 '+width+' '+height} aria-hidden="true">
-    <polyline fill="none" stroke="var(--accent)" strokeWidth="1.5" points={pts}/>
+    {fill?<path d={area} fill={col} opacity="0.12"/>:null}
+    <path d={line} fill="none" stroke={col} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
   </svg>;
 }
 
@@ -1495,13 +1593,17 @@ function Delta({v,good}){
    facts: [{label,value,delta}] where delta is a number (good='up') or {v,good}.
    chips: [{label,onClick}]. */
 function SynthBand({tone,verdict,facts,chips}){
-  const dot=tone==='crit'?'var(--crit)':tone==='warn'?'var(--warn)':'var(--ok)';
+  // refined verdict band: FLAT severity tint + 3px left stripe (no gradient),
+  // pulsing status dot, 15px/600 title, 12.5px dim subline with <b> facts.
+  const t=tone==='crit'?'crit':tone==='warn'?'warn':'ok';
+  const dot='var(--'+t+')';
   const fx=Array.isArray(facts)?facts:[];
   const cx=Array.isArray(chips)?chips:[];
-  return <div className="band" role="status">
+  return <div className="band" role="status"
+    style={{background:'var(--'+t+'-dim)',borderLeft:'3px solid var(--'+t+')'}}>
     <div className="band-verdict">
-      <span className="band-dot" style={{background:dot}}/>
-      <span className="prose" style={{fontSize:16,fontWeight:600,lineHeight:1.4}}>{verdict||'—'}</span>
+      <span className="band-dot sd pulse" style={{background:dot}}/>
+      <span className="prose" style={{fontSize:15,fontWeight:600,lineHeight:1.4}}>{verdict||'—'}</span>
     </div>
     {fx.length?<div className="band-facts">
       {fx.map((f,i)=>{
@@ -1509,17 +1611,25 @@ function SynthBand({tone,verdict,facts,chips}){
         const hasV=f&&f.value!=null&&f.value!=='';
         return <div className="band-fact" key={i}>
           <span className="band-fact-l">{f&&f.label!=null?f.label:'—'}</span>
-          <span className="band-fact-v mono">
-            {hasV?f.value:'—'}
+          <span className="band-fact-v mono" style={{fontSize:'12.5px'}}>
+            <b style={{color:'var(--text)',fontWeight:600}}>{hasV?f.value:'—'}</b>
             {d!=null?<Delta v={typeof d==='object'?d.v:d} good={typeof d==='object'?d.good:'up'}/>:null}
           </span>
         </div>;
       })}
     </div>:null}
     {cx.length?<div className="band-chips">
-      {cx.map((c,i)=><button className="chip band-chip" key={i}
-        style={{cursor:c&&c.onClick?'pointer':'default'}}
-        onClick={c&&c.onClick?c.onClick:undefined}>{c&&c.label!=null?c.label:'—'}</button>)}
+      {cx.map((c,i)=>{
+        // service chip (.svc, 2-line) when meta/status/name present; else button chip
+        const isSvc=c&&(c.meta!=null||c.status!=null||c.name!=null);
+        if(isSvc) return <div className="svc" key={i}>
+          <div className="t"><span className={'sd '+(c.status||'ok')}/>{c.name!=null?c.name:c.label}</div>
+          {c.meta!=null?<div className="m">{c.meta}</div>:null}
+        </div>;
+        return <button className="chip band-chip" key={i}
+          style={{cursor:c&&c.onClick?'pointer':'default'}}
+          onClick={c&&c.onClick?c.onClick:undefined}>{c&&c.label!=null?c.label:'—'}</button>;
+      })}
     </div>:null}
   </div>;
 }
@@ -1670,7 +1780,7 @@ function VolumeHistogram({rows,tsKey,buckets,onRange,selected}){
       {counts.map((c,i)=>{
         const bwU=100/n,gap=Math.min(bwU*0.2,0.6),x=i*bwU+gap/2,w=Math.max(0.2,bwU-gap);
         const bh=(c/peak)*38,y=40-bh;
-        return <rect key={i} className="vh-bar" x={x} y={y} width={w} height={bh}
+        return <rect key={i} className="vh-bar" x={x} y={y} width={w} height={bh} rx="0.4"
           fill={bucketSel(i)?'var(--accent-text)':'var(--accent)'} vectorEffect="non-scaling-stroke">
           <title>{c+' · '+fmt(min+i*bw)}</title>
         </rect>;
@@ -1686,7 +1796,7 @@ function VolumeHistogram({rows,tsKey,buckets,onRange,selected}){
 
 /* ── Donut (shared) — slices=[{label,value,color}]. Hard-caps at 5 slices
    (top-4 + folded "other"), center total, side legend w/ counts. Guards empty/zero. ── */
-function Donut({slices,size=120}){
+function Donut({slices,size=120,centerValue,centerLabel}){
   const raw=(Array.isArray(slices)?slices:[]).filter(s=>s&&(Number(s.value)||0)>0);
   const total=raw.reduce((a,s)=>a+(Number(s.value)||0),0);
   if(!raw.length||total<=0) return <div style={{color:'var(--text-faint)',fontSize:'var(--t12)',padding:'var(--s3)'}}>No data</div>;
@@ -1708,14 +1818,22 @@ function Donut({slices,size=120}){
           stroke={s.color} strokeWidth={stroke}
           strokeDasharray={s.dash+' '+(C-s.dash)} strokeDashoffset={s.offset}/>)}
       </g>
-      <text x={cx} y={cx} textAnchor="middle" dominantBaseline="central" className="mono"
-        fontSize={size*0.22} fontWeight="600" fill="var(--text)">{total}</text>
+      {centerLabel!=null
+        ? <React.Fragment>
+            <text x={cx} y={cx-size*0.05} textAnchor="middle" dominantBaseline="central" className="mono"
+              fontSize={size*0.20} fontWeight="600" fill="var(--text)">{centerValue!=null?centerValue:total}</text>
+            <text x={cx} y={cx+size*0.12} textAnchor="middle" dominantBaseline="central"
+              fontSize={size*0.085} fill="var(--text-faint)" style={{textTransform:'uppercase',letterSpacing:'.4px'}}>{centerLabel}</text>
+          </React.Fragment>
+        : <text x={cx} y={cx} textAnchor="middle" dominantBaseline="central" className="mono"
+            fontSize={size*0.22} fontWeight="600" fill="var(--text)">{centerValue!=null?centerValue:total}</text>}
     </svg>
     <div className="donut-legend">
       {parts.map((p,i)=><div key={i} className="donut-leg">
         <span className="donut-leg-dot" style={{background:p.color||'var(--accent)'}}/>
         <span className="donut-leg-l">{p.label}</span>
         <span className="donut-leg-v mono">{Number(p.value)||0}</span>
+        <span className="donut-leg-pct mono">{total>0?Math.round((Number(p.value)||0)/total*100):0}%</span>
       </div>)}
     </div>
   </div>;
@@ -1733,8 +1851,9 @@ function HistogramBar({buckets,onClick}){
       {bs.map((b,i)=>{
         const bw=100/n,gap=Math.min(bw*0.2,2),x=i*bw+gap/2,w=Math.max(0.5,bw-gap);
         const c=Number(b.count)||0,bh=(c/peak)*38,y=40-bh;
-        return <rect key={i} className={onClick?'histbar-bar':undefined} x={x} y={y} width={w} height={Math.max(0,bh)}
-          fill={b.color||'var(--accent)'} vectorEffect="non-scaling-stroke"
+        const fill=b.color||(b.util!=null?utilColor(b.util):'var(--accent)');
+        return <rect key={i} className="histbar-bar" x={x} y={y} width={w} height={Math.max(0,bh)}
+          fill={fill} vectorEffect="non-scaling-stroke"
           onClick={onClick?()=>onClick(b,i):undefined}>
           <title>{(b.label||'')+' · '+c}</title></rect>;
       })}
@@ -1823,6 +1942,161 @@ function trendCell(valuesFn){
     const clean=Array.isArray(arr)?arr.filter(x=>typeof x==='number'&&isFinite(x)):[];
     return clean.length>=2?<Sparkline values={clean}/>:<span className="mono" style={{color:'var(--text-faint)'}}>—</span>;
   };
+}
+
+/* ─────────────────────────────────────────────────────────────
+   REFINED DISPLAY SYSTEM (shared, ported from mockup-refined.html)
+   useCountUp / MiniBars / KpiSpark / HoverDetail+useHoverDetail /
+   Panel / SectionRule / utilColor / DrawerShift. Neutral, outside all
+   regions; wired into tabs by region agents. Read mockup-refined.html
+   for the exact visual (CSS ~14-176, JS helpers ~275-451).
+   ───────────────────────────────────────────────────────────── */
+
+/* utilColor(u) — REUSED: a top-level function utilColor already exists (NETDNS
+   region). Babel compiles this file in strict/module mode, which forbids a
+   duplicate declaration, so the shared block references the hoisted one rather
+   than redeclaring it. Region agents removing their local copy must relocate the
+   canonical definition here (85 crit / 70 warn / 25 accent / else ok). */
+
+/* esc — minimal HTML escape for the HoverDetail innerHTML portal. */
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+/* sparkSVG — string sparkline (mockup sparkLine) for the imperative HoverDetail card. */
+function sparkSVG(vals,w,h,col,fill){
+  const v=(Array.isArray(vals)?vals:[]).filter(x=>typeof x==='number'&&isFinite(x));
+  if(v.length<2) return '';
+  const mn=Math.min(...v),mx=Math.max(...v),rng=(mx-mn)||1;
+  const pts=v.map((n,i)=>[i/(v.length-1)*w,h-((n-mn)/rng)*(h-3)-1.5]);
+  const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const area='M0 '+h+' '+pts.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+' L'+w+' '+h+' Z';
+  return '<svg width="'+w+'" height="'+h+'">'+(fill?'<path d="'+area+'" fill="'+col+'" opacity=".12"/>':'')
+    +'<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+}
+
+/* useCountUp(target,dur=650) — cubic ease-out RAF counter; reduced-motion → instant.
+   Keyed to mount + value identity so poll re-renders don't restart it. */
+function useCountUp(target,dur){
+  const to=Number(target)||0;
+  const D=dur==null?650:dur;
+  const reduce=()=>{try{return matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(e){return false;}};
+  const [n,setN]=useState(()=>reduce()?to:0);
+  useEffect(()=>{
+    if(reduce()||!isFinite(to)||D<=0){setN(to);return;}
+    let raf=0,start=null,alive=true;
+    const step=t=>{
+      if(!alive) return;
+      if(start==null) start=t;
+      const p=Math.min(1,(t-start)/D);
+      setN(Math.round((1-Math.pow(1-p,3))*to));
+      if(p<1) raf=requestAnimationFrame(step);
+    };
+    setN(0); raf=requestAnimationFrame(step);
+    return ()=>{alive=false;if(raf)cancelAnimationFrame(raf);};
+  },[to,D]);
+  return n;
+}
+
+/* MiniBars({values,width=56,height=16,color}) — SVG rect bars (mockup miniBars). */
+function MiniBars({values,width=56,height=16,color}){
+  const v=Array.isArray(values)?values.filter(x=>typeof x==='number'&&isFinite(x)):[];
+  if(v.length<2) return null;
+  const mx=Math.max(...v)||1,bw=width/v.length,col=color||'var(--accent)';
+  return <svg className="rowspark" viewBox={'0 0 '+width+' '+height} width={width} height={height}
+      preserveAspectRatio="none" aria-hidden="true">
+    {v.map((n,i)=>{const bh=Math.max(1,(n/mx)*height);
+      return <rect key={i} x={(i*bw+0.5).toFixed(1)} y={(height-bh).toFixed(1)}
+        width={(bw-1).toFixed(1)} height={bh.toFixed(1)} rx="0.5" fill={col}/>;})}
+  </svg>;
+}
+
+/* KpiSpark({label,value,sub,trend,trendDir,values,color,fill,bars}) — KPI tile with
+   count-up number + bottom-right sparkline (MiniBars when bars). trendDir up|dn|flat. */
+function KpiSpark({label,value,sub,trend,trendDir,values,color,fill,bars}){
+  const isNum=typeof value==='number'&&isFinite(value);
+  const counted=useCountUp(isNum?value:0);
+  const disp=isNum?counted.toLocaleString():(value==null?'—':value);
+  const tc=trendDir==='dn'?'dn':(trendDir==='flat'||trendDir==='fl')?'fl':'up';
+  const col=color||'var(--accent)';
+  return <div className="kpi">
+    <div className="lbl">{label}</div>
+    <div className="num">{disp}</div>
+    <div className="sub">
+      {trend!=null?<span className={'trend '+tc}>{trend}</span>:null}
+      {sub!=null?<span className="txt">{sub}</span>:null}
+    </div>
+    {values?(bars?<MiniBars values={values} width={64} height={26} color={col}/>
+      :<Sparkline values={values} width={64} height={26} color={col} fill={fill}/>):null}
+  </div>;
+}
+
+/* HoverDetail — singleton, cursor-following, edge-aware floating card (mockup #hc).
+   Mount <HoverDetail/> once (in Shell); useHoverDetail().bind({title,rows,spark})
+   returns the mouse/focus handlers. Pointer-events:none; flavor only. */
+let _hdEl=null;
+function HoverDetail(){
+  const ref=useRef(null);
+  useEffect(()=>{_hdEl=ref.current;return ()=>{if(_hdEl===ref.current)_hdEl=null;};},[]);
+  return <div ref={ref} className="hoverdetail" aria-hidden="true"/>;
+}
+function moveHoverDetail(clientX,clientY){
+  const el=_hdEl; if(!el) return;
+  const pad=14,w=el.offsetWidth,h=el.offsetHeight;
+  let x=clientX+16,y=clientY+16;
+  if(x+w>window.innerWidth-pad) x=clientX-w-16;
+  if(y+h>window.innerHeight-pad) y=clientY-h-16;
+  el.style.left=Math.max(pad,x)+'px'; el.style.top=Math.max(pad,y)+'px';
+}
+function showHoverDetail(d,clientX,clientY){
+  const el=_hdEl; if(!el||!d) return;
+  const rows=Array.isArray(d.rows)?d.rows:[];
+  const spark=(Array.isArray(d.spark)&&d.spark.length>=2)
+    ? '<div class="mini">'+sparkSVG(d.spark,236,26,'var(--accent)',true)+'</div>' : '';
+  el.innerHTML='<div class="hh"><span class="sd" style="background:var(--accent)"></span>'+esc(d.title)+'</div>'
+    +rows.map(r=>'<div class="kv"><span>'+esc(r[0])+'</span><b>'+esc(r[1])+'</b></div>').join('')+spark;
+  el.classList.add('show'); moveHoverDetail(clientX,clientY);
+}
+function hideHoverDetail(){ if(_hdEl) _hdEl.classList.remove('show'); }
+function useHoverDetail(){
+  const bind=useCallback(d=>({
+    onMouseEnter:e=>showHoverDetail(d,e.clientX,e.clientY),
+    onMouseMove:e=>{ if(_hdEl&&_hdEl.classList.contains('show')) moveHoverDetail(e.clientX,e.clientY); },
+    onMouseLeave:hideHoverDetail,
+    onFocus:e=>{const r=e.currentTarget.getBoundingClientRect();showHoverDetail(d,r.left+r.width/2,r.bottom);},
+    onBlur:hideHoverDetail,
+  }),[]);
+  return {bind};
+}
+
+/* Panel({title,side,api,children,empty}) — .pcard wrapper (header + optional .side /
+   Freshness). Renders null when empty (dead-section suppression). */
+function Panel({title,side,api,children,empty}){
+  if(empty) return null;
+  let sideNode=side;
+  if(sideNode==null&&api) sideNode=<Freshness at={api.fetchedAt} error={api.error} onRetry={api.refetch}/>;
+  return <div className="pcard">
+    {(title!=null||sideNode!=null)?<h3>
+      <span>{title}</span>
+      {sideNode!=null?<span className="side">{sideNode}</span>:null}
+    </h3>:null}
+    {children}
+  </div>;
+}
+
+/* SectionRule({title}) — .sec-h heading with trailing rule. */
+function SectionRule({title}){
+  return <div className="sec-h"><h2>{title}</h2><span className="rule"/></div>;
+}
+
+/* DrawerShift — reflows .main beside the right drawers. Sets html[data-drawer]
+   from usePower().peek + aiOpen; CSS pads .main (overlay kept on mobile). */
+function DrawerShift({aiOpen}){
+  const power=usePower();
+  const open=!!((power&&power.peek)||aiOpen);
+  useEffect(()=>{
+    document.documentElement.dataset.drawer=open?'open':'';
+    return ()=>{document.documentElement.dataset.drawer='';};
+  },[open]);
+  return null;
 }
 
 /* AiExplain — modal (reuses .palette-scrim) that correlates the given rows via
@@ -4244,6 +4518,8 @@ function Shell(){
       <PeekDrawer/>
       <Toasts/>
       <SnapshotWriter/>
+      <DrawerShift aiOpen={aiOpen}/>
+      <HoverDetail/>
     </div>
   </PowerProvider>;
 }
