@@ -293,6 +293,55 @@ table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-al
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{transition:none!important;animation:none!important;}
 }
+
+/* ── AI drawer (non-modal, persists across tabs; borrows .peek visuals) ── */
+.ai-drawer{
+  position:fixed;top:48px;right:0;bottom:0;width:min(420px,100vw);
+  background:var(--surface);border-left:1px solid var(--border);
+  z-index:65;overflow-y:auto;animation:peek-in .16s ease;
+  display:flex;flex-direction:column;
+}
+.ai-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3) var(--s4);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;}
+.ai-drawer-title{font-size:var(--t13);font-weight:600;color:var(--text);}
+.ai-drawer-body{flex:1 1 auto;padding:var(--s4);min-width:0;display:flex;flex-direction:column;gap:var(--s4);}
+.ai-disclosure summary{cursor:pointer;font-size:var(--t12);color:var(--text-dim);padding:var(--s2) 0;list-style:none;}
+.ai-disclosure summary::-webkit-details-marker{display:none;}
+.ai-disclosure summary::before{content:'▸ ';color:var(--text-faint);}
+.ai-disclosure[open] summary::before{content:'▾ ';}
+
+/* ── DataTable "show all/fewer" footer + problems toggle ── */
+.dt-more{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) var(--s3);font-size:var(--t12);color:var(--text-dim);}
+.dt-more-btn{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;}
+.prob-toggle{display:inline-flex;align-items:center;gap:var(--s2);height:26px;padding:0 var(--s2);font-size:var(--t12);color:var(--text-dim);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+.prob-toggle[aria-pressed="true"]{color:var(--text);border-color:var(--border-strong);background:var(--hover);}
+.prob-count{font-size:var(--t11);color:var(--text-faint);}
+.prob-none{display:flex;align-items:center;gap:var(--s2);padding:var(--s3);font-size:var(--t12);color:var(--text-faint);}
+.prob-none-btn{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;}
+
+/* ── problems badge (topbar) ── */
+.problems-badge{display:inline-flex;align-items:center;gap:var(--s1);height:26px;padding:0 var(--s2);font-size:var(--t11);color:var(--text-dim);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+.problems-badge.crit{color:var(--crit);border-color:var(--crit-tint-border);background:var(--crit-tint);}
+
+/* ── donut / histogram / grouped bar / hovercard primitives (viewBox-scaled) ── */
+.donut-wrap{display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;min-width:0;}
+.donut-svg{flex:0 0 auto;}
+.donut-legend{display:flex;flex-direction:column;gap:var(--s1);min-width:0;font-size:var(--t12);}
+.donut-leg{display:flex;align-items:center;gap:var(--s2);min-width:120px;}
+.donut-leg-dot{width:8px;height:8px;border-radius:2px;flex:0 0 auto;}
+.donut-leg-l{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.donut-leg-v{margin-left:auto;color:var(--text);}
+.histbar-svg{display:block;width:100%;}
+.histbar-bar{cursor:pointer;}
+.groupbar{display:flex;flex-direction:column;gap:var(--s1);width:100%;min-width:0;}
+.groupbar-row{display:flex;align-items:center;gap:var(--s2);min-width:0;}
+.groupbar-row.clickable{cursor:pointer;}
+.groupbar-l{flex:0 0 40%;font-size:var(--t12);color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.groupbar-track{flex:1 1 auto;height:14px;background:var(--raised);border-radius:var(--r-ctl);overflow:hidden;min-width:0;}
+.groupbar-fill{height:100%;}
+.groupbar-v{flex:0 0 auto;font-size:var(--t11);color:var(--text);min-width:40px;text-align:right;}
+.groupbar-more{font-size:var(--t11);color:var(--text-faint);padding:var(--s1) 0;}
+.hovercard{position:relative;display:inline-block;}
+.hovercard-pop{position:fixed;z-index:85;max-width:280px;padding:var(--s3);font-size:var(--t12);color:var(--text);}
 </style>
 </head>
 <body>
@@ -325,6 +374,35 @@ function downloadCSV(filename, rows, columns){
   a.download=filename;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+/* collapseIdentical(rows, sigFn, min=5) — pure helper. Groups rows whose sigFn(row)
+   returns a non-null signature into ONE synthetic row when a group has ≥min members:
+     {__group:sig, __count:n, __rows:[...], ...representative(first row)}
+   Rows with a null/undefined signature pass through untouched, in place. Callers set
+   rowKey to handle synthetic keys ('grp:'+__group) and intercept onRowClick when
+   r.__group to expand (caller-managed expandedSigs state). Order is preserved by the
+   first appearance of each signature. */
+function collapseIdentical(rows,sigFn,min){
+  const m=(min==null?5:min);
+  const list=Array.isArray(rows)?rows:[];
+  const groups=new Map();      // sig → [rows]
+  const order=[];              // entries: {sig} for a group, or {row} passthrough
+  list.forEach(r=>{
+    let sig=null; try{ sig=sigFn?sigFn(r):null; }catch(e){ sig=null; }
+    if(sig==null||sig===''){ order.push({row:r}); return; }
+    sig=String(sig);
+    if(!groups.has(sig)){ groups.set(sig,[]); order.push({sig}); }
+    groups.get(sig).push(r);
+  });
+  const out=[];
+  order.forEach(o=>{
+    if(o.row!==undefined){ out.push(o.row); return; }
+    const rws=groups.get(o.sig);
+    if(rws.length>=m){ out.push({...rws[0],__group:o.sig,__count:rws.length,__rows:rws}); }
+    else rws.forEach(r=>out.push(r));
+  });
+  return out;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -622,13 +700,17 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
      tableId, rowKey, renderPeek, selectable, bulkActions, filterable, filterKeys, initialPeekKey
    ───────────────────────────────────────────────────────────── */
 function DataTable({cols,rows,defaultSort,onRowClick,csvName,
-  tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey}){
+  tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
+  maxRows,problemsOnly}){
   const power=usePower();
   const id=tableId||(csvName?String(csvName):null);
   const [sort,setSort]=useState(defaultSort||null); // {key,dir}
   const [cursor,setCursor]=useState(-1);             // -1 = no visual until a key is pressed
   const [selected,setSelected]=useState(()=>new Set());
   const [filter,setFilter]=useState('');
+  const [showAll,setShowAll]=useState(false);        // maxRows expander
+  const [probOn,setProbOn]=useState(()=> problemsOnly ? LS.get('probs.'+(id||'x'),!!problemsOnly.default) : false);
+  const setProb=v=>{ setProbOn(v); if(id) LS.set('probs.'+id,v); };
   const {flashed,flash}=useRowFlash();
   const columns=cols||[];
   const data=rows||[];
@@ -640,12 +722,18 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
 
   const keyOf=useCallback((r,i)=>rowKey?String(rowKey(r)):String(i),[rowKey]);
 
+  // problemsOnly toggle is applied FIRST when building the visible set.
+  const probTest=useCallback(r=>{ if(!problemsOnly) return false; try{return !!problemsOnly.test(r);}catch(e){return false;} },[problemsOnly]);
+  const probRows=useMemo(()=> problemsOnly ? data.filter(probTest) : null,[data,problemsOnly,probTest]);
+  const probCount=probRows?probRows.length:0;
+  const base=(problemsOnly&&probOn)?probRows:data;
+
   const filtered=useMemo(()=>{
-    if(!filterable||!filter.trim()) return data;
+    if(!filterable||!filter.trim()) return base;
     const t=filter.trim().toLowerCase();
     const keys=(filterKeys&&filterKeys.length)?filterKeys:columns.map(c=>c.key);
-    return data.filter(r=>keys.some(k=>String(r[k]??'').toLowerCase().includes(t)));
-  },[data,filter,filterable,filterKeys,columns]);
+    return base.filter(r=>keys.some(k=>String(r[k]??'').toLowerCase().includes(t)));
+  },[base,filter,filterable,filterKeys,columns]);
 
   const sorted=useMemo(()=>{
     if(!sort||!sort.key) return filtered;
@@ -660,6 +748,9 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     });
   },[filtered,sort]);
 
+  // maxRows: cap the rendered/cursor/peek domain; CSV still exports full `sorted`.
+  const visible=(maxRows&&!showAll)?sorted.slice(0,maxRows):sorted;
+
   const toggle=(key)=>setSort(s=>{
     if(!s||s.key!==key) return {key,dir:'asc'};
     if(s.dir==='asc') return {key,dir:'desc'};
@@ -672,7 +763,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const scrollTo=i=>{ const rid=rowIdOf(i); const el=rid&&document.getElementById(rid); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'}); };
   const openPeekAt=i=>{
     if(!power||!renderPeek) return;
-    const r=sorted[i]; if(!r) return;
+    const r=visible[i]; if(!r) return;
     power.setPeek({tableId:id,render:renderPeek,row:r,
       title:String((columns[0]&&r[columns[0].key])||keyOf(r,i)),
       onFull:onRowClick?()=>onRowClick(r,i):null, returnFocus:wrapRef.current});
@@ -681,12 +772,12 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const clearSel=()=>{ setSelected(new Set()); lastClickRef.current=null; };
 
   const check=(key,shift)=>{
-    const i=sorted.findIndex((r,idx)=>keyOf(r,idx)===key);
+    const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key);
     setSelected(prev=>{
       const n=new Set(prev);
       if(shift&&lastClickRef.current!=null&&i>=0){
         const a=Math.min(lastClickRef.current,i),b=Math.max(lastClickRef.current,i);
-        for(let j=a;j<=b;j++) n.add(keyOf(sorted[j],j));
+        for(let j=a;j<=b;j++) n.add(keyOf(visible[j],j));
       } else { if(n.has(key)) n.delete(key); else n.add(key); }
       return n;
     });
@@ -723,21 +814,21 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
 
   // Imperative api — reassigned each render so closures see current state.
   apiRef.current={
-    move(delta){ setCursor(c=>{ let n=c<0?0:c+delta; n=Math.max(0,Math.min(sorted.length-1,n)); scrollTo(n); syncPeek(n); return n; }); return true; },
-    openCursor(){ const i=cursor<0?0:cursor; const r=sorted[i]; if(!r) return false;
+    move(delta){ setCursor(c=>{ let n=c<0?0:c+delta; n=Math.max(0,Math.min(visible.length-1,n)); scrollTo(n); syncPeek(n); return n; }); return true; },
+    openCursor(){ const i=cursor<0?0:cursor; const r=visible[i]; if(!r) return false;
       if(renderPeek){ setCursor(i); openPeekAt(i); return true; }
       if(onRowClick){ onRowClick(r,i); return true; } return false; },
-    toggleSelect(){ if(!selectable||cursor<0||cursor>=sorted.length) return false; check(keyOf(sorted[cursor],cursor),false); return true; },
+    toggleSelect(){ if(!selectable||cursor<0||cursor>=visible.length) return false; check(keyOf(visible[cursor],cursor),false); return true; },
     focusFilter(){ if(!filterable) return false; if(filterRef.current){ filterRef.current.focus(); return true; } return false; },
-    gotoTop(){ if(!sorted.length) return false; setCursor(0); scrollTo(0); syncPeek(0); return true; },
-    gotoBottom(){ if(!sorted.length) return false; const i=sorted.length-1; setCursor(i); scrollTo(i); syncPeek(i); return true; },
+    gotoTop(){ if(!visible.length) return false; setCursor(0); scrollTo(0); syncPeek(0); return true; },
+    gotoBottom(){ if(!visible.length) return false; const i=visible.length-1; setCursor(i); scrollTo(i); syncPeek(i); return true; },
     clearOrCursor(){ if(selected.size>0){ clearSel(); return true; } if(cursor>=0){ setCursor(-1); return true; } return false; },
-    activate(key){ const i=sorted.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return; if(onRowClick) onRowClick(sorted[i],i); },
+    activate(key){ const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return; if(onRowClick) onRowClick(visible[i],i); },
     check,
     getState(){
       const keyRow=new Map(); data.forEach((r,i)=>keyRow.set(keyOf(r,i),r));
       const selRows=[...selected].map(k=>keyRow.get(k)).filter(Boolean);
-      return {selected,selectedRows:selRows,cursorRow:(cursor>=0&&cursor<sorted.length)?sorted[cursor]:null,buildActions};
+      return {selected,selectedRows:selRows,cursorRow:(cursor>=0&&cursor<visible.length)?visible[cursor]:null,buildActions,filter};
     },
   };
 
@@ -749,29 +840,43 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   },[id]); // eslint-disable-line
 
   // Keep the cursor in range when the visible list shrinks.
-  useEffect(()=>{ setCursor(c=>c>=sorted.length?sorted.length-1:c); },[sorted.length]);
+  useEffect(()=>{ setCursor(c=>c>=visible.length?visible.length-1:c); },[visible.length]);
 
   // initialPeekKey → open peek once for the matching row (nav {peek:key} handoff).
+  // Safety: if the key isn't in `visible` but IS in full data, reveal it once
+  // (expand maxRows + turn problemsOnly off), then re-run finds it.
   useEffect(()=>{
     if(initRef.current||!initialPeekKey||!renderPeek) return;
-    const i=sorted.findIndex((r,idx)=>keyOf(r,idx)===String(initialPeekKey));
-    if(i>=0){ initRef.current=true; setCursor(i); openPeekAt(i); }
-  },[initialPeekKey,sorted]); // eslint-disable-line
+    const key=String(initialPeekKey);
+    const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key);
+    if(i>=0){ initRef.current=true; setCursor(i); openPeekAt(i); return; }
+    if(data.some((r,idx)=>keyOf(r,idx)===key)){
+      if(problemsOnly&&probOn) setProb(false);
+      if(maxRows&&!showAll) setShowAll(true);
+    }
+  },[initialPeekKey,visible]); // eslint-disable-line
 
-  const allKeys=sorted.map((r,i)=>keyOf(r,i));
+  const allKeys=visible.map((r,i)=>keyOf(r,i));
   const allSel=allKeys.length>0&&allKeys.every(k=>selected.has(k));
   const toggleAll=()=>setSelected(prev=>{ const n=new Set(prev); if(allSel) allKeys.forEach(k=>n.delete(k)); else allKeys.forEach(k=>n.add(k)); return n; });
 
-  const showToolbar=csvName||filterable;
+  const showToolbar=csvName||filterable||problemsOnly;
+  const noIssues=problemsOnly&&probOn&&probCount===0;
   return <div ref={wrapRef}
     tabIndex={id?0:undefined}
     aria-activedescendant={(id&&cursor>=0)?rowIdOf(cursor):undefined}
     onMouseEnter={id&&power?()=>power.setActive(id):undefined}
     onFocus={id&&power?()=>power.setActive(id):undefined}
     style={id?{outline:'none'}:undefined}>
-    {showToolbar&&<div className="dt-toolbar" style={filterable?{justifyContent:'space-between'}:null}>
-      {filterable?<input ref={filterRef} className="dt-filter mono" value={filter}
-        onChange={e=>setFilter(e.target.value)} placeholder="Filter…" aria-label="Filter rows"/>:null}
+    {showToolbar&&<div className="dt-toolbar" style={{justifyContent:(filterable||problemsOnly)?'space-between':'flex-end'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'var(--s2)',minWidth:0}}>
+        {filterable?<input ref={filterRef} className="dt-filter mono" value={filter}
+          onChange={e=>setFilter(e.target.value)} placeholder="Filter…" aria-label="Filter rows"/>:null}
+        {problemsOnly?<button className="prob-toggle" aria-pressed={probOn} onClick={()=>setProb(!probOn)}>
+          <span>{problemsOnly.label||'Problems only'}</span>
+          <span className="prob-count mono">{probCount} of {data.length}</span>
+        </button>:null}
+      </div>
       {csvName?<button className="btn btn-ghost" onClick={()=>downloadCSV(String(csvName)+'.csv',sorted,columns)}>CSV</button>:null}
     </div>}
     <div className="tbl-wrap">
@@ -785,9 +890,13 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
           </th>)}
         </tr></thead>
         <tbody>
-          {sorted.length===0
-            ? <tr><td className="dt-empty" colSpan={(columns.length||1)+(selectable?1:0)}>No data</td></tr>
-            : sorted.map((r,ri)=>{
+          {visible.length===0
+            ? <tr><td className="dt-empty" colSpan={(columns.length||1)+(selectable?1:0)}>
+                {noIssues
+                  ? <span className="prob-none">No issues · <button className="prob-none-btn" onClick={()=>setProb(false)}>Show all {data.length}</button></span>
+                  : 'No data'}
+              </td></tr>
+            : visible.map((r,ri)=>{
                 const rk=keyOf(r,ri);
                 return <DTRow key={rk} r={r} rkey={rk} cols={columns} rowId={rowIdOf(ri)}
                   isCursor={ri===cursor} isSel={selected.has(rk)} isFlash={flashed.has(rk)}
@@ -796,6 +905,12 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         </tbody>
       </table>
     </div>
+    {maxRows&&sorted.length>maxRows?<div className="dt-more">
+      {showAll
+        ? <button className="dt-more-btn" onClick={()=>setShowAll(false)}>Show fewer</button>
+        : <><span className="mono">Showing {visible.length} of {sorted.length}</span><span>·</span>
+            <button className="dt-more-btn" onClick={()=>setShowAll(true)}>Show all</button></>}
+    </div>:null}
     {selectable&&selected.size>0?<ActionBar count={selected.size} actions={buildActions(apiRef.current.getState().selectedRows)} onClear={clearSel}/>:null}
   </div>;
 }
@@ -812,10 +927,10 @@ function Skeleton({rows=4}){
 /* ─────────────────────────────────────────────────────────────
    6. Hash router — parse #tab?k=v. Legacy redirects. nav() helper.
    ───────────────────────────────────────────────────────────── */
-const TABS=['overview','daily','network','dns','infra','security','audit','ask'];
-const TAB_LABELS={overview:'Overview',daily:'Daily',network:'Network',dns:'DNS',infra:'Infra',security:'Security',audit:'Audit',ask:'Ask'};
+const TABS=['overview','daily','network','dns','infra','security','audit'];
+const TAB_LABELS={overview:'Overview',daily:'Daily',network:'Network',dns:'DNS',infra:'Infra',security:'Security',audit:'Audit'};
 const LEGACY={home:'overview',map:'network',dhcp:'network',ipam:'network',dns:'dns',
-  security:'security',assets:'infra',audit:'audit',search:'ask',hub:'overview',
+  security:'security',assets:'infra',audit:'audit',search:'overview',ask:'overview',hub:'overview',
   summary:'daily',trends:'daily'};
 
 function parseHash(){
@@ -824,10 +939,14 @@ function parseHash(){
   const qi=h.indexOf('?');
   let tab=qi>=0?h.slice(0,qi):h;
   const qs=qi>=0?h.slice(qi+1):'';
-  if(LEGACY[tab]) tab=LEGACY[tab];
-  if(!TABS.includes(tab)) tab='overview';
   const params={};
   if(qs) new URLSearchParams(qs).forEach((v,k)=>{params[k]=v;});
+  // Ask retired to a drawer: detect the old #ask / #search route BEFORE the legacy
+  // remap so its query is carried and the drawer opens (params.drawer='1').
+  const wantsDrawer=(tab==='ask'||tab==='search');
+  if(LEGACY[tab]) tab=LEGACY[tab];
+  if(!TABS.includes(tab)) tab='overview';
+  if(wantsDrawer) params.drawer='1';
   return {tab,params};
 }
 function nav(tab,params){
@@ -1638,6 +1757,116 @@ function VolumeHistogram({rows,tsKey,buckets,onRange,selected}){
       {labels.map((l,i)=><span key={i}>{l}</span>)}
     </div>
   </div>;
+}
+
+/* ── Donut (shared) — slices=[{label,value,color}]. Hard-caps at 5 slices
+   (top-4 + folded "other"), center total, side legend w/ counts. Guards empty/zero. ── */
+function Donut({slices,size=120}){
+  const raw=(Array.isArray(slices)?slices:[]).filter(s=>s&&(Number(s.value)||0)>0);
+  const total=raw.reduce((a,s)=>a+(Number(s.value)||0),0);
+  if(!raw.length||total<=0) return <div style={{color:'var(--text-faint)',fontSize:'var(--t12)',padding:'var(--s3)'}}>No data</div>;
+  const desc=[...raw].sort((a,b)=>(Number(b.value)||0)-(Number(a.value)||0));
+  let parts=desc;
+  if(desc.length>5){
+    const tail=desc.slice(4);
+    parts=[...desc.slice(0,4),{label:'other',value:tail.reduce((a,s)=>a+(Number(s.value)||0),0),color:'var(--text-faint)'}];
+  }
+  const stroke=Math.max(10,Math.round(size*0.16));
+  const r=(size-stroke)/2, C=2*Math.PI*r, cx=size/2;
+  let acc=0;
+  const segs=parts.map(s=>{ const dash=((Number(s.value)||0)/total)*C; const seg={color:s.color||'var(--accent)',dash,offset:-acc}; acc+=dash; return seg; });
+  const aria='Donut chart, total '+total+': '+parts.map(p=>p.label+' '+(Number(p.value)||0)).join(', ');
+  return <div className="donut-wrap" role="img" aria-label={aria}>
+    <svg className="donut-svg" width={size} height={size} viewBox={'0 0 '+size+' '+size}>
+      <g transform={'rotate(-90 '+cx+' '+cx+')'}>
+        {segs.map((s,i)=><circle key={i} cx={cx} cy={cx} r={r} fill="none"
+          stroke={s.color} strokeWidth={stroke}
+          strokeDasharray={s.dash+' '+(C-s.dash)} strokeDashoffset={s.offset}/>)}
+      </g>
+      <text x={cx} y={cx} textAnchor="middle" dominantBaseline="central" className="mono"
+        fontSize={size*0.22} fontWeight="600" fill="var(--text)">{total}</text>
+    </svg>
+    <div className="donut-legend">
+      {parts.map((p,i)=><div key={i} className="donut-leg">
+        <span className="donut-leg-dot" style={{background:p.color||'var(--accent)'}}/>
+        <span className="donut-leg-l">{p.label}</span>
+        <span className="donut-leg-v mono">{Number(p.value)||0}</span>
+      </div>)}
+    </div>
+  </div>;
+}
+
+/* ── HistogramBar (shared) — buckets=[{label,count,color}], 4-6 vertical bars +
+   counts, viewBox-scaled (width:100%, no fixed-px overflow). Optional onClick(b,i). ── */
+function HistogramBar({buckets,onClick}){
+  const bs=(Array.isArray(buckets)?buckets:[]).filter(Boolean);
+  if(!bs.length) return <div style={{color:'var(--text-faint)',fontSize:'var(--t12)',padding:'var(--s3)'}}>No data</div>;
+  const peak=Math.max(1,...bs.map(b=>Number(b.count)||0)),n=bs.length;
+  return <div style={{width:'100%',minWidth:0}}>
+    <svg className="histbar-svg" viewBox="0 0 100 40" height={110} preserveAspectRatio="none"
+        role="img" aria-label={'Histogram: '+bs.map(b=>(b.label||'')+' '+(Number(b.count)||0)).join(', ')}>
+      {bs.map((b,i)=>{
+        const bw=100/n,gap=Math.min(bw*0.2,2),x=i*bw+gap/2,w=Math.max(0.5,bw-gap);
+        const c=Number(b.count)||0,bh=(c/peak)*38,y=40-bh;
+        return <rect key={i} className={onClick?'histbar-bar':undefined} x={x} y={y} width={w} height={Math.max(0,bh)}
+          fill={b.color||'var(--accent)'} vectorEffect="non-scaling-stroke"
+          onClick={onClick?()=>onClick(b,i):undefined}>
+          <title>{(b.label||'')+' · '+c}</title></rect>;
+      })}
+    </svg>
+    <div className="mono" style={{display:'flex',fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:'var(--s1)'}}>
+      {bs.map((b,i)=><span key={i} style={{flex:'1 1 0',textAlign:'center',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.label} {Number(b.count)||0}</span>)}
+    </div>
+  </div>;
+}
+
+/* ── GroupedBar (shared) — rows=[{label,value,detail,color}], horizontal bars,
+   label left (ellipsis), mono value right, cap at max=24 with "+N more". onClick(r,i). ── */
+function GroupedBar({rows,max=24,onClick}){
+  const rs=(Array.isArray(rows)?rows:[]).filter(Boolean);
+  if(!rs.length) return <div style={{color:'var(--text-faint)',fontSize:'var(--t12)',padding:'var(--s3)'}}>No data</div>;
+  const peak=Math.max(1,...rs.map(r=>Number(r.value)||0));
+  const shown=rs.slice(0,max),extra=rs.length-shown.length;
+  return <div className="groupbar" role="list">
+    {shown.map((r,i)=>{
+      const v=Number(r.value)||0,pct=Math.max(0,Math.min(100,(v/peak)*100));
+      return <div key={i} className={'groupbar-row'+(onClick?' clickable':'')} role="listitem"
+        title={r.detail!=null?String(r.detail):undefined}
+        tabIndex={onClick?0:undefined} onClick={onClick?()=>onClick(r,i):undefined}
+        onKeyDown={onClick?e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onClick(r,i);}}:undefined}>
+        <span className="groupbar-l" title={String(r.label||'')}>{r.label}</span>
+        <span className="groupbar-track"><span className="groupbar-fill" style={{width:pct+'%',background:r.color||'var(--accent)'}}/></span>
+        <span className="groupbar-v mono">{v}</span>
+      </div>;
+    })}
+    {extra>0?<div className="groupbar-more">+{extra} more</div>:null}
+  </div>;
+}
+
+/* ── HoverCard (shared) — inline-block wrapper; shows a positioned .panel on
+   mouseenter/focus, hides on leave/blur/Escape. Fixed-position, viewport-clamped.
+   Flavor only (non-essential info). trigger is tabbable; aria-describedby wired. ── */
+function HoverCard({content,trigger}){
+  const [open,setOpen]=useState(false);
+  const [pos,setPos]=useState({x:0,y:0});
+  const wrapRef=useRef(null);
+  const idRef=useRef('hc-'+Math.random().toString(36).slice(2,8));
+  const show=()=>{
+    const el=wrapRef.current; if(!el) return;
+    const r=el.getBoundingClientRect(),vw=window.innerWidth,vh=window.innerHeight;
+    let x=Math.max(8,Math.min(r.left,vw-288)),y=r.bottom+6;
+    if(y>vh-40) y=Math.max(8,r.top-6);
+    setPos({x,y}); setOpen(true);
+  };
+  const hide=()=>setOpen(false);
+  return <span className="hovercard" ref={wrapRef} tabIndex={0}
+    aria-describedby={open?idRef.current:undefined}
+    onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
+    onKeyDown={e=>{if(e.key==='Escape')hide();}}>
+    {trigger}
+    {open?<span id={idRef.current} role="tooltip" className="panel hovercard-pop"
+      style={{left:pos.x,top:pos.y}}>{content}</span>:null}
+  </span>;
 }
 
 /* heatCell(valueFn?, {warn,crit,mode,fmt}) — factory returning a DataTable
@@ -3458,21 +3687,36 @@ function AlertRulesPanel(){
   </div>;
 }
 
-/* AskTab — natural-language query console over POST /api/query. */
-function AskTab(){
-  const {params}=useRoute();
+/* AiDrawer — non-modal right-side AI console over POST /api/query. Mounted in
+   Shell (persists across tab switches). This is a functional prop-shell rename of
+   the former AskTab; R5 fills/polishes the content. The submit builds an implicit
+   context string from the current route + active table state (filter/selection). */
+function AiDrawer({open,onClose,initialQ}){
+  const power=usePower();
   const {data}=useData();
   const [input,setInput]=useState('');
   const [busy,setBusy]=useState(false);
   const [items,setItems]=useState([]); // newest first, capped at 5
   const askedRef=useRef(null);
+  const inRef=useRef(null);
   const push=entry=>setItems(list=>[{id:Date.now()+Math.random(),...entry},...list].slice(0,5));
+  // Implicit tab context — current route + active DataTable state (filter/selection).
+  const buildContext=()=>{
+    try{
+      const {tab}=parseHash();
+      const a=power&&power.getActive&&power.getActive();
+      const st=a&&a.api&&a.api.current&&a.api.current.getState&&a.api.current.getState();
+      return 'User is on the '+tab+' tab'
+        +(st&&st.filter?', table filter "'+st.filter+'"':'')
+        +(st&&st.selected&&st.selected.size?', '+st.selected.size+' rows selected':'')+'.';
+    }catch(e){ return ''; }
+  };
   const submit=(qArg)=>{
     const q=String(qArg!=null?qArg:input).trim();
     if(!q||busy) return;
     setBusy(true);
     fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({question:q,context:''})})
+      body:JSON.stringify({question:q,context:buildContext()})})
       .then(async r=>{const j=await r.json().catch(()=>null);return {r,j};})
       .then(({r,j})=>{
         if(r.status===503||(j&&j.locked)){
@@ -3492,62 +3736,70 @@ function AskTab(){
       .catch(()=>toast('Query failed — server unreachable','err'))
       .finally(()=>setBusy(false));
   };
-  // Palette hands off "#ask?q=…": prefill + submit once per distinct q.
+  // Focus the input when the drawer opens (non-modal — no focus trap).
+  useEffect(()=>{ if(open&&inRef.current) inRef.current.focus(); },[open]);
+  // initialQ handoff (palette / bx:ai-open / #ask?q=…): prefill + submit once per distinct q.
   useEffect(()=>{
-    const q=params&&params.q;
+    if(!open) return;
+    const q=initialQ;
     if(q&&askedRef.current!==q){ askedRef.current=q; setInput(q); submit(q); }
-  },[params&&params.q]);
+  },[open,initialQ]); // eslint-disable-line
 
-  // ── Context band — inventory scope + real-numbered suggested questions ──
+  // ── suggested questions (real inventory numbers) ──
   const nSub=((data&&data.subnets)||[]).length;
   const nZone=((data&&data.zones)||[]).length;
   const nHost=((data&&data.hosts)||[]).length;
-  const ar={...ALERT_DEFAULTS,...LS.get('alertRules',{})};
-  const alertsArmed=ar.subnetUtilOn||ar.hostOfflineOn;
-  const verdict='Ask anything about your network — '+nSub+' subnets, '+nZone+' zones, '+nHost+' hosts indexed';
-  const facts=[{label:'Alert rules',value:alertsArmed?'Armed':'Disarmed'}];
   const ask=q=>{setInput(q);submit(q);};
-  const chips=[
-    {label:'Which subnets are nearly full?',onClick:()=>ask('Which subnets are nearly full?')},
-    {label:'Are any of my '+nZone+' DNS zones misconfigured?',onClick:()=>ask('Are any of my '+nZone+' DNS zones misconfigured?')},
-    {label:'Which of '+nHost+' hosts are offline?',onClick:()=>ask('Which of '+nHost+' hosts are offline?')},
-    {label:'What changed in the last 24 hours?',onClick:()=>ask('What changed in the last 24 hours?')},
+  const suggestions=[
+    'Which subnets are nearly full?',
+    'Are any of my '+nZone+' DNS zones misconfigured?',
+    'Which of '+nHost+' hosts are offline?',
+    'What changed in the last 24 hours?',
   ];
 
-  return <div className="page">
-    <SynthBand tone="ok" verdict={verdict} facts={facts} chips={chips}/>
-    <div className="grid-2">
-      <div className="prose" style={{display:'flex',flexDirection:'column',gap:'var(--s5)'}}>
-        <div>
-          <div className="ask-bar">
-            <input className="ask-in mono" placeholder="Ask about your network… e.g. Which subnets are nearly full?"
-              value={input} onChange={e=>setInput(e.target.value)}
-              onKeyDown={e=>{if(e.key==='Enter')submit();}}
-              aria-label="Natural-language query" autoFocus/>
-            <button className="btn" style={{height:36}} onClick={()=>submit()} disabled={busy||!input.trim()}>Ask</button>
-          </div>
-          {busy&&<div className="ask-busy mono">Querying… (LLM — may take a moment)</div>}
-        </div>
-        {items.map(it=>
-          <div key={it.id} className="panel ask-item">
-            <div className="ask-q mono">&gt; {it.q}</div>
-            {it.error
-              ? <div className="ask-err">{it.error}</div>
-              : <div className="ask-a">{it.answer}</div>}
-            {!!(it.suggestions&&it.suggestions.length)&&<div className="ask-chips">
-              {it.suggestions.map((sg,i)=>
-                <button key={i} className="chip chip-btn" onClick={()=>{setInput(sg);submit(sg);}}>{sg}</button>)}
-            </div>}
-            {!!(it.trace&&it.trace.length)&&<div className="ask-trace mono">
-              {it.trace.map((t,i)=><div key={i} className="ask-trace-row">
-                <span>{t.tool}</span> <span className="args">{JSON.stringify(t.args)}</span>
-              </div>)}
-            </div>}
-          </div>)}
-      </div>
-      <AlertRulesPanel/>
+  if(!open) return null;
+  return <aside className="ai-drawer" role="complementary" aria-label="AI assistant"
+    onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();onClose();}}}>
+    <div className="ai-drawer-head">
+      <span className="ai-drawer-title">Ask AI</span>
+      <button className="peek-close" aria-label="Close AI assistant" onClick={onClose}>✕</button>
     </div>
-  </div>;
+    <div className="ai-drawer-body">
+      <div>
+        <div className="ask-bar">
+          <input ref={inRef} className="ask-in mono" placeholder="Ask about your network…"
+            value={input} onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>{if(e.key==='Enter')submit();}}
+            aria-label="Natural-language query"/>
+          <button className="btn" style={{height:36}} onClick={()=>submit()} disabled={busy||!input.trim()}>Ask</button>
+        </div>
+        {busy&&<div className="ask-busy mono">Querying… (LLM — may take a moment)</div>}
+      </div>
+      <div className="ask-chips">
+        {suggestions.map((sg,i)=><button key={i} className="chip chip-btn" onClick={()=>ask(sg)}>{sg}</button>)}
+      </div>
+      {items.map(it=>
+        <div key={it.id} className="panel ask-item">
+          <div className="ask-q mono">&gt; {it.q}</div>
+          {it.error
+            ? <div className="ask-err">{it.error}</div>
+            : <div className="ask-a">{it.answer}</div>}
+          {!!(it.suggestions&&it.suggestions.length)&&<div className="ask-chips">
+            {it.suggestions.map((sg,i)=>
+              <button key={i} className="chip chip-btn" onClick={()=>ask(sg)}>{sg}</button>)}
+          </div>}
+          {!!(it.trace&&it.trace.length)&&<div className="ask-trace mono">
+            {it.trace.map((t,i)=><div key={i} className="ask-trace-row">
+              <span>{t.tool}</span> <span className="args">{JSON.stringify(t.args)}</span>
+            </div>)}
+          </div>}
+        </div>)}
+      <details className="ai-disclosure">
+        <summary>Alerts</summary>
+        <AlertRulesPanel/>
+      </details>
+    </div>
+  </aside>;
 }
 
 /* AuditTab — audit rows from /api/data .auditLogs ({ts,user,action,resource,result}). */
@@ -3637,7 +3889,8 @@ function CommandPalette({open,onClose}){
   const needle=typed.toLowerCase();
   const base=[
     ...TABS.map(t=>({label:'Go to '+TAB_LABELS[t],kind:'nav',run:()=>{nav(t);onClose();}})),
-    {label:'Alert rules',kind:'nav',run:()=>{nav('ask');onClose();}},
+    {label:'Ask AI',kind:'ai',run:()=>{onClose();window.dispatchEvent(new CustomEvent('bx:ai-open',{detail:{q:''}}));}},
+    {label:'Alert rules',kind:'nav',run:()=>{onClose();window.dispatchEvent(new CustomEvent('bx:ai-open',{detail:{q:''}}));}},
     ...views.map(v=>({label:'View: '+v.name,kind:'view',run:()=>{onClose();applyViewByName(v.name);}})),
   ];
   // F8a — contextual bulk actions for the active table's selection (or its cursor row as a 1-row selection).
@@ -3656,7 +3909,7 @@ function CommandPalette({open,onClose}){
   }
   const items=[...ctxItems,...base.filter(c=>c.label.toLowerCase().includes(needle))];
   if(typed){
-    items.push({label:'Ask: '+typed,kind:'ask',run:()=>{onClose();nav('ask',{q:typed});}});
+    items.push({label:'Ask: '+typed,kind:'ask',run:()=>{onClose();window.dispatchEvent(new CustomEvent('bx:ai-open',{detail:{q:typed||''}}));}});
     items.push({label:'Block domain: '+typed,kind:'block',run:()=>setConfirmBlock(typed)});
     // F8b — fuzzy go-to jump into subnets / zones / hosts (subsequence match, cap 8).
     const dd=data||{};
@@ -3795,7 +4048,6 @@ const TAB_COMPONENTS={
   infra:InfraTab,
   security:SecurityTab,
   audit:AuditTab,
-  ask:AskTab,
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -3831,7 +4083,29 @@ function DensityToggle(){
   </button>;
 }
 
-function TopBar({tab,org,fresh,onPalette}){
+/* ProblemsBadge — topbar chip summarizing the network's open problems. Count =
+   unacked-critical threats + subnets over 85% util + offline hosts. Crit-tinted
+   when >0, hidden at 0. Click navigates to the dominant contributor. */
+function ProblemsBadge(){
+  const {data}=useData();
+  const sec=useApi('/api/hub/security');
+  const acks=LS.get('acks',{});
+  const events=(sec.data&&Array.isArray(sec.data.events))?sec.data.events:[];
+  const unackedCrit=events.filter(e=>String(e.severity||'').toLowerCase()==='critical'
+    &&!acks[String(e.event_time)+'|'+String(e.qname)]).length;
+  const hotSubs=((data&&data.subnets)||[]).filter(s=>(Number(s.util)||0)>85).length;
+  const offline=((data&&data.hosts)||[]).filter(h=>/^(down|offline)$/i.test(String(h.status||''))).length;
+  const total=unackedCrit+hotSubs+offline;
+  if(total<=0) return null;
+  const go=()=>{ if(unackedCrit>0) nav('security'); else if(hotSubs>0) nav('network'); else nav('infra'); };
+  return <button className="problems-badge crit" onClick={go}
+    title={unackedCrit+' unacked critical · '+hotSubs+' subnets >85% · '+offline+' offline'}
+    aria-label={total+' problems need attention'}>
+    <span className="mono">● {total}</span>
+  </button>;
+}
+
+function TopBar({tab,org,fresh,onPalette,onAi}){
   const {orgName}=useAuth();
   const orgLabel=orgName||org;
   return <header className="topbar">
@@ -3848,6 +4122,11 @@ function TopBar({tab,org,fresh,onPalette}){
     </nav>
     <div className="topbar-right">
       {fresh}
+      <ProblemsBadge/>
+      <button className="kbd" onClick={onAi} aria-label="Open AI assistant"
+        title="AI assistant — ⌘I / Ctrl-I">
+        <span>AI</span><span className="mono">⌘I</span>
+      </button>
       <AccountSlot/>
       <DensityToggle/>
       <ThemeToggle/>
@@ -3859,10 +4138,14 @@ function TopBar({tab,org,fresh,onPalette}){
 }
 
 function Shell(){
-  const {tab}=useRoute();
+  const route=useRoute();
+  const tab=route.tab;
   const [org]=useState(null);        // A2 fills real org name
   const [paletteOpen,setPaletteOpen]=useState(false);
+  const [aiOpen,setAiOpen]=useState(false);
+  const [aiQ,setAiQ]=useState('');
   const [vaultTick,setVaultTick]=useState(0);
+  const drawerRef=useRef(null);      // last-handled route-drawer signature (open-once)
 
   // Re-check vault status whenever any request reports it locked.
   useEffect(()=>{
@@ -3874,27 +4157,47 @@ function Shell(){
     return ()=>window.removeEventListener('bx:vault-locked',onLocked);
   },[]);
 
-  // ⌘K / Ctrl-K toggles the palette.
+  // ⌘K toggles the palette; ⌘I toggles the AI drawer.
   useEffect(()=>{
     const onKey=(e)=>{
       if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){
         e.preventDefault();setPaletteOpen(o=>!o);
+      }
+      if((e.metaKey||e.ctrlKey)&&(e.key==='i'||e.key==='I')){
+        e.preventDefault();setAiOpen(o=>!o);
       }
     };
     window.addEventListener('keydown',onKey);
     return ()=>window.removeEventListener('keydown',onKey);
   },[]);
 
+  // window 'bx:ai-open' (detail.q) → open drawer + carry query.
+  useEffect(()=>{
+    const on=e=>{ const q=(e&&e.detail&&e.detail.q)||''; setAiQ(q); setAiOpen(true); };
+    window.addEventListener('bx:ai-open',on);
+    return ()=>window.removeEventListener('bx:ai-open',on);
+  },[]);
+
+  // Legacy #ask / #search deep-link → parseHash set params.drawer; open once.
+  useEffect(()=>{
+    if(route.params&&route.params.drawer){
+      const q=route.params.q||'';
+      const sig=(route.params.drawer||'')+'|'+q;
+      if(drawerRef.current!==sig){ drawerRef.current=sig; setAiQ(q); setAiOpen(true); }
+    }
+  },[route]);
+
   const Active=TAB_COMPONENTS[tab]||OverviewTab;
   const fresh=<span className="fresh-slot"/>; // A2 wires real freshness
 
   return <PowerProvider>
     <div>
-      <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)}/>
+      <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)} onAi={()=>setAiOpen(true)}/>
       <main className="main" key={tab}>
         <Active vaultTick={vaultTick}/>
       </main>
       <CommandPalette open={paletteOpen} onClose={()=>setPaletteOpen(false)}/>
+      <AiDrawer open={aiOpen} onClose={()=>setAiOpen(false)} initialQ={aiQ}/>
       <PeekDrawer/>
       <Toasts/>
       <SnapshotWriter/>
