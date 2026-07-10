@@ -3766,7 +3766,7 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
       return <input type="checkbox" checked={acked} onClick={ev=>ev.stopPropagation()} onChange={()=>toggleAck(e)} aria-label="Acknowledge event"/>;
     }},
     {key:'severity',label:'Severity',mono:true,render:v=><span style={{color:secSevColor(v),textTransform:'uppercase'}}>{v||'—'}</span>},
-    {key:'qname',label:'Query',mono:true,copy:true,render:v=>v||'—'},
+    {key:'qname',label:'Query',mono:true,copy:true,primary:true,render:v=>v||'—'},
     {key:'spark',label:'24h',render:(_,e)=>{const arr=activityByQname[e.qname];if(!arr)return <span className="mono" style={{color:'var(--text-faint)'}}>—</span>;const nz=arr.filter(x=>x>0).length;return nz>=2?<MiniBars values={arr} width={64} height={16}/>:<span className="mono" style={{color:'var(--text-faint)'}}>—</span>;}},
     {key:'policy_action',label:'Action',render:v=>v||'—'},
     {key:'feed_name',label:'Feed',hideSm:true,render:(v,e)=>{
@@ -3826,7 +3826,7 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
       ? <div className="dt-empty">No events</div>
       : <DataTable cols={cols} rows={rows} tableId="triage"
           rowKey={r=>String(r.event_time)+'|'+String(r.qname)}
-          maxRows={50}
+          scrollBody={480} columnToggle
           problemsOnly={{label:'Hide acked',test:e=>!acks[secAckKey(e)],default:true}}
           selectable bulkActions={bulkActions} initialPeekKey={initialPeekKey}
           renderPeek={e=><SecEventPeek e={e} acks={acks} toggleAck={toggleAck} onExplain={onExplain}/>}/>}
@@ -3986,28 +3986,27 @@ function SecDomainPanels(){
 }
 
 function SecInsights(){
-  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/insights');
+  // Empty/unavailable → render nothing (no header, no box). Perpetually empty on
+  // stateless tenants; only wrap real rows in a Panel of their own.
+  const api=useApi('/api/insights');
+  const {data,locked}=api;
   if(locked) return null;
-  if(loading&&!data) return <div><SecHead title="SOC insights"/><Skeleton rows={6}/></div>;
   const rows=!data?[]:(Array.isArray(data)?data:(data.data||data.results||data.items||[]));
-  return <div>
-    <SecHead title="SOC insights" at={fetchedAt} onRetry={refetch} error={error}/>
-    {error&&!rows.length
-      ? <div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div>
-      : rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} maxRows={50} csvName="soc-insights"/>:<div className="dt-empty">No insights</div>}
-  </div>;
+  if(!rows.length) return null;
+  return <Panel title="SOC insights" api={api}>
+    <DataTable cols={secAutoCols(rows)} rows={rows} maxRows={50} csvName="soc-insights"/>
+  </Panel>;
 }
 function SecActions(){
-  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/actions');
+  // Empty/unavailable → render nothing (no header, no box). Only real rows get a Panel.
+  const api=useApi('/api/actions');
+  const {data,locked}=api;
   if(locked) return null;
-  if(loading&&!data) return <div><SecHead title="Actions"/><Skeleton rows={6}/></div>;
   const rows=!data?[]:(Array.isArray(data)?data:(data.actions||data.results||data.data||[]));
-  return <div>
-    <SecHead title="Actions" at={fetchedAt} onRetry={refetch} error={error}/>
-    {error&&!rows.length
-      ? <div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div>
-      : rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} maxRows={50} csvName="actions"/>:<div className="dt-empty">No actions</div>}
-  </div>;
+  if(!rows.length) return null;
+  return <Panel title="Actions" api={api}>
+    <DataTable cols={secAutoCols(rows)} rows={rows} maxRows={50} csvName="actions"/>
+  </Panel>;
 }
 
 function SecLookalikes(){
@@ -4019,7 +4018,7 @@ function SecLookalikes(){
   if(error&&!data) return <div><SecHead title="Lookalike domains" at={fetchedAt} onRetry={refetch} error={error}/><div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div></div>;
   const rows=Array.isArray(d.domains)?d.domains:[];
   const cols=[
-    {key:'lookalike',label:'Lookalike',mono:true,copy:true,render:v=>v||'—'},
+    {key:'lookalike',label:'Lookalike',mono:true,copy:true,primary:true,render:v=>v||'—'},
     {key:'target',label:'Target',mono:true,render:v=><span style={{color:'var(--text-dim)'}}>{v||'—'}</span>},
     {key:'reason',label:'Reason',hideSm:true,render:v=>v||'—'},
     {key:'suspicious',label:'Suspicious',render:heatCell(r=>r.suspicious?1:0,{crit:1,fmt:(v,r)=>r.suspicious?'yes':'no'})},
@@ -4048,7 +4047,7 @@ function SecLookalikes(){
     {rows.length===0
       ? <div className="dt-empty">No lookalike domains</div>
       : <DataTable cols={cols} rows={rows} tableId="lookalikes" csvName="lookalike-domains"
-          maxRows={50} rowKey={r=>String(r.lookalike)} selectable bulkActions={bulkActions}/>}
+          scrollBody={480} rowKey={r=>String(r.lookalike)} selectable bulkActions={bulkActions}/>}
   </div>;
 }
 function SecSynthBand({api,acks,setSevF,triageRef}){
@@ -4126,8 +4125,8 @@ function SecurityTab(){
     <div className="grid-dense">
       <Panel><SecThreatLookup/></Panel>
       <Panel><SecLookalikes/></Panel>
-      <Panel><SecInsights/></Panel>
-      <Panel><SecActions/></Panel>
+      <SecInsights/>
+      <SecActions/>
       <Panel><SecDomainPanels/></Panel>
     </div>
     {ai.node}
