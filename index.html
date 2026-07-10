@@ -129,6 +129,13 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
   font-size:var(--t11);color:var(--text-dim);
   background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);
 }
+/* AI trigger — prominent accented feature button, distinct from the neutral kbd chips */
+.ai-trigger{
+  padding:0 var(--s3);font-size:var(--t12);font-weight:600;
+  background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent-text);
+  transition:background .12s ease,border-color .12s ease;
+}
+.ai-trigger:hover{background:var(--accent-dim);border-color:var(--accent-text);}
 
 /* ── freshness pill ── */
 .fresh{
@@ -312,12 +319,13 @@ table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-al
 /* ── AI drawer (non-modal, persists across tabs; borrows .peek visuals) ── */
 .ai-drawer{
   position:fixed;top:48px;right:0;bottom:0;width:min(420px,100vw);
-  background:var(--surface);border-left:1px solid var(--border);
-  z-index:65;overflow-y:auto;animation:peek-in .16s ease;
+  background:var(--surface);border-left:2px solid var(--accent);
+  z-index:65;overflow-y:auto;animation:peek-in .2s cubic-bezier(.2,.8,.2,1);
   display:flex;flex-direction:column;
 }
 .ai-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3) var(--s4);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;}
-.ai-drawer-title{font-size:var(--t13);font-weight:600;color:var(--text);}
+.ai-drawer-title{display:inline-flex;align-items:center;gap:var(--s2);font-size:var(--t13);font-weight:600;color:var(--text);}
+.ai-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 auto;}
 .ai-drawer-body{flex:1 1 auto;padding:var(--s4);min-width:0;display:flex;flex-direction:column;gap:var(--s4);}
 .ai-disclosure summary{cursor:pointer;font-size:var(--t12);color:var(--text-dim);padding:var(--s2) 0;list-style:none;}
 .ai-disclosure summary::-webkit-details-marker{display:none;}
@@ -332,6 +340,24 @@ table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-al
 .prob-count{font-size:var(--t11);color:var(--text-faint);}
 .prob-none{display:flex;align-items:center;gap:var(--s2);padding:var(--s3);font-size:var(--t12);color:var(--text-faint);}
 .prob-none-btn{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;}
+
+/* ── scrollBody: bounded scroll region + sticky header (collapsed borders don't
+   stick → a box-shadow stands in for the bottom border) ── */
+.dt-scroll{position:relative;}
+.dt-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 1px 0 var(--border);}
+.dt-count{color:var(--text-faint);}
+/* primary column: identifier stays fully readable; other columns keep ellipsis */
+table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:visible;text-overflow:clip;}
+/* ── columnToggle: ⋯ Cols chooser menu (reuses the views-menu overlay pattern) ── */
+.dt-tools{display:flex;align-items:center;gap:var(--s2);flex:0 0 auto;}
+.dt-cols-slot{position:relative;display:inline-flex;}
+.dt-cols-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:61;width:200px;max-height:60vh;overflow-y:auto;padding:var(--s1);}
+.dt-cols-item{display:flex;align-items:center;gap:var(--s2);padding:5px 8px;font-size:var(--t12);color:var(--text);border-radius:var(--r-ctl);cursor:pointer;}
+.dt-cols-item:hover{background:var(--hover);}
+.dt-cols-item input{cursor:pointer;}
+.dt-cols-item input:disabled{cursor:default;}
+/* ValueBands active chip */
+.band-chip.active{border-color:var(--accent);color:var(--text);}
 
 /* ── problems badge (topbar) ── */
 .problems-badge{display:inline-flex;align-items:center;gap:var(--s1);height:26px;padding:0 var(--s2);font-size:var(--t11);color:var(--text-dim);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
@@ -377,6 +403,8 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:12px;align-items:start;min-width:0;}
 .grid-dense{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:12px;align-items:start;min-width:0;}
 .grid>*,.grid-dense>*{min-width:0;}
+/* balance an odd trailing panel: span it full-width so it never orphans in a 2-col row */
+.grid-dense>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
 
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:10px;}
 .kpi{padding:12px 13px;border-radius:var(--r-panel);background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;transition:border-color .16s ease,transform .16s ease;min-width:0;}
@@ -795,11 +823,15 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
       <input type="checkbox" checked={isSel} onChange={()=>{}} aria-label="Select row"/>
     </td>:null}
     {cols.map(c=>{
-      let content;
-      if(c.spark){ const sv=c.spark(r); content=(Array.isArray(sv)&&sv.length>=2)?<Sparkline values={sv}/>:(c.render?c.render(r[c.key],r):'—'); }
-      else content=c.render?c.render(r[c.key],r):(r[c.key]??'');
-      return <td key={c.key} className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')}
-        style={c.width?{width:c.width}:null}>{content}</td>;
+      let content; const raw=r[c.key];
+      if(c.spark){ const sv=c.spark(r); content=(Array.isArray(sv)&&sv.length>=2)?<Sparkline values={sv}/>:(c.render?c.render(raw,r):'—'); }
+      else content=c.render?c.render(raw,r):(raw??'');
+      // native tooltip = full value on hover (zero-cost reveal for truncated cells)
+      const tip=(typeof raw==='string'||typeof raw==='number')?String(raw):undefined;
+      const st=(c.primary||c.width)?{...(c.width?{width:c.width}:{}),...(c.primary?{minWidth:c.minWidth||120}:{})}:null;
+      return <td key={c.key} title={tip}
+        className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
+        style={st}>{content}</td>;
     })}
   </tr>;
 });
@@ -812,7 +844,7 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
    ───────────────────────────────────────────────────────────── */
 function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
-  maxRows,problemsOnly}){
+  maxRows,problemsOnly,scrollBody,columnToggle}){
   const power=usePower();
   const id=tableId||(csvName?String(csvName):null);
   const [sort,setSort]=useState(defaultSort||null); // {key,dir}
@@ -820,6 +852,11 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const [selected,setSelected]=useState(()=>new Set());
   const [filter,setFilter]=useState('');
   const [showAll,setShowAll]=useState(false);        // maxRows expander
+  const [renderLimit,setRenderLimit]=useState(300);  // scrollBody progressive render window
+  const scrollPx=scrollBody===true?420:scrollBody;   // scrollBody:true → 420px
+  // columnToggle: hidden column keys (persisted per tableId). Stale keys are ignored on read.
+  const [hiddenCols,setHiddenCols]=useState(()=> (columnToggle&&id)?LS.get('cols.'+id,[]):[]);
+  const [colsMenu,setColsMenu]=useState(false);
   const [probOn,setProbOn]=useState(()=> problemsOnly ? LS.get('probs.'+(id||'x'),!!problemsOnly.default) : false);
   const setProb=v=>{ setProbOn(v); if(id) LS.set('probs.'+id,v); };
   const {flashed,flash}=useRowFlash();
@@ -859,8 +896,24 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     });
   },[filtered,sort]);
 
-  // maxRows: cap the rendered/cursor/peek domain; CSV still exports full `sorted`.
-  const visible=(maxRows&&!showAll)?sorted.slice(0,maxRows):sorted;
+  // maxRows/scrollBody: cap the rendered domain; CSV/filter/sort keep full `sorted`.
+  // scrollBody renders a progressive window (renderLimit); maxRows keeps the legacy cap.
+  const visible=sorted.slice(0, scrollBody?renderLimit:(maxRows&&!showAll?maxRows:Infinity));
+
+  // columnToggle: effective (rendered) columns = defined cols minus hidden.
+  // Never yields an empty set; CSV/peek-title still use the full `columns`.
+  const effCols=useMemo(()=>{
+    if(!columnToggle||!hiddenCols.length) return columns;
+    const keep=columns.filter(c=>!hiddenCols.includes(c.key));
+    return keep.length?keep:columns;
+  },[columns,hiddenCols,columnToggle]);
+  const toggleCol=(key)=>setHiddenCols(prev=>{
+    const has=prev.includes(key);
+    const next=has?prev.filter(k=>k!==key):[...prev,key];
+    if(!has && (columns.length-next.length)<1) return prev; // never hide the last column
+    if(id) LS.set('cols.'+id,next);
+    return next;
+  });
 
   const toggle=(key)=>setSort(s=>{
     if(!s||s.key!==key) return {key,dir:'asc'};
@@ -871,10 +924,12 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const align=(c)=>c.align||(c.mono?'right':'left');
   const isNum=(c)=>align(c)==='right';
   const rowIdOf=i=>id?(id+'-r-'+i):null;
-  const scrollTo=i=>{ const rid=rowIdOf(i); const el=rid&&document.getElementById(rid); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'}); };
+  const scrollTo=i=>{ const rid=rowIdOf(i);
+    const go=()=>{ const el=rid&&document.getElementById(rid); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'}); };
+    go(); if(scrollBody) requestAnimationFrame(go); }; // scrollBody: retry after progressive render paints the row
   const openPeekAt=i=>{
     if(!power||!renderPeek) return;
-    const r=visible[i]; if(!r) return;
+    const r=(scrollBody?sorted:visible)[i]; if(!r) return;
     power.setPeek({tableId:id,render:renderPeek,row:r,
       title:String((columns[0]&&r[columns[0].key])||keyOf(r,i)),
       onFull:onRowClick?()=>onRowClick(r,i):null, returnFocus:wrapRef.current});
@@ -925,14 +980,14 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
 
   // Imperative api — reassigned each render so closures see current state.
   apiRef.current={
-    move(delta){ setCursor(c=>{ let n=c<0?0:c+delta; n=Math.max(0,Math.min(visible.length-1,n)); scrollTo(n); syncPeek(n); return n; }); return true; },
+    move(delta){ const len=scrollBody?sorted.length:visible.length; setCursor(c=>{ let n=c<0?0:c+delta; n=Math.max(0,Math.min(len-1,n)); if(scrollBody) setRenderLimit(rl=>Math.max(rl,n+50)); scrollTo(n); syncPeek(n); return n; }); return true; },
     openCursor(){ const i=cursor<0?0:cursor; const r=visible[i]; if(!r) return false;
       if(renderPeek){ setCursor(i); openPeekAt(i); return true; }
       if(onRowClick){ onRowClick(r,i); return true; } return false; },
     toggleSelect(){ if(!selectable||cursor<0||cursor>=visible.length) return false; check(keyOf(visible[cursor],cursor),false); return true; },
     focusFilter(){ if(!filterable) return false; if(filterRef.current){ filterRef.current.focus(); return true; } return false; },
     gotoTop(){ if(!visible.length) return false; setCursor(0); scrollTo(0); syncPeek(0); return true; },
-    gotoBottom(){ if(!visible.length) return false; const i=visible.length-1; setCursor(i); scrollTo(i); syncPeek(i); return true; },
+    gotoBottom(){ const len=scrollBody?sorted.length:visible.length; if(!len) return false; const i=len-1; if(scrollBody) setRenderLimit(rl=>Math.max(rl,len)); setCursor(i); scrollTo(i); syncPeek(i); return true; },
     clearOrCursor(){ if(selected.size>0){ clearSel(); return true; } if(cursor>=0){ setCursor(-1); return true; } return false; },
     activate(key){ const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return; if(onRowClick) onRowClick(visible[i],i); },
     check,
@@ -963,7 +1018,8 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     if(i>=0){ initRef.current=true; setCursor(i); openPeekAt(i); return; }
     if(data.some((r,idx)=>keyOf(r,idx)===key)){
       if(problemsOnly&&probOn) setProb(false);
-      if(maxRows&&!showAll) setShowAll(true);
+      if(scrollBody) setRenderLimit(Infinity);        // reveal whole set so the target row renders
+      else if(maxRows&&!showAll) setShowAll(true);
     }
   },[initialPeekKey,visible]); // eslint-disable-line
 
@@ -971,8 +1027,12 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const allSel=allKeys.length>0&&allKeys.every(k=>selected.has(k));
   const toggleAll=()=>setSelected(prev=>{ const n=new Set(prev); if(allSel) allKeys.forEach(k=>n.delete(k)); else allKeys.forEach(k=>n.add(k)); return n; });
 
-  const showToolbar=csvName||filterable||problemsOnly;
+  const showToolbar=csvName||filterable||problemsOnly||columnToggle;
   const noIssues=problemsOnly&&probOn&&probCount===0;
+  // scrollBody: grow the progressive render window as the user nears the bottom.
+  const onBodyScroll=(e)=>{ const el=e.currentTarget;
+    if(el.scrollHeight-el.scrollTop-el.clientHeight<200)
+      setRenderLimit(rl=>rl<sorted.length?Math.min(sorted.length,rl+300):rl); };
   return <div ref={wrapRef}
     tabIndex={id?0:undefined}
     aria-activedescendant={(id&&cursor>=0)?rowIdOf(cursor):undefined}
@@ -988,35 +1048,58 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
           <span className="prob-count mono">{probCount} of {data.length}</span>
         </button>:null}
       </div>
-      {csvName?<button className="btn btn-ghost" onClick={()=>downloadCSV(String(csvName)+'.csv',sorted,columns)}>CSV</button>:null}
+      <div className="dt-tools">
+        {columnToggle?<div className="dt-cols-slot">
+          <button className="btn btn-ghost" onClick={()=>setColsMenu(v=>!v)}
+            aria-haspopup="true" aria-expanded={colsMenu} title="Show/hide columns">⋯ Cols</button>
+          {colsMenu?<><div className="views-overlay" onClick={()=>setColsMenu(false)}/>
+            <div className="panel dt-cols-menu" role="menu">
+              {columns.map(c=>{
+                const hidden=hiddenCols.includes(c.key);
+                const lastVisible=!hidden && (columns.length-hiddenCols.length)<=1;
+                return <label key={c.key} className="dt-cols-item">
+                  <input type="checkbox" checked={!hidden} disabled={lastVisible}
+                    onChange={()=>toggleCol(c.key)}/>
+                  <span>{c.label||c.key}</span>
+                </label>;
+              })}
+            </div></>:null}
+        </div>:null}
+        {csvName?<button className="btn btn-ghost" onClick={()=>downloadCSV(String(csvName)+'.csv',sorted,columns)}>CSV</button>:null}
+      </div>
     </div>}
-    <div className="tbl-wrap">
+    <div className={"tbl-wrap"+(scrollBody?" dt-scroll":"")}
+      style={scrollBody?{maxHeight:scrollPx+'px',overflowY:'auto'}:undefined}
+      onScroll={scrollBody?onBodyScroll:undefined}>
       <table className="dt">
         <thead><tr>
           {selectable?<th className="dt-check"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all rows"/></th>:null}
-          {columns.map(c=><th key={c.key} className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')}
-            style={c.width?{width:c.width}:null} onClick={()=>toggle(c.key)}>
+          {effCols.map(c=><th key={c.key} className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
+            style={(c.primary||c.width)?{...(c.width?{width:c.width}:{}),...(c.primary?{minWidth:c.minWidth||120}:{})}:null} onClick={()=>toggle(c.key)}>
             {c.label||c.key}
             <span className="sort-ind">{sort&&sort.key===c.key?(sort.dir==='asc'?'↑':'↓'):''}</span>
           </th>)}
         </tr></thead>
         <tbody>
           {visible.length===0
-            ? <tr><td className="dt-empty" colSpan={(columns.length||1)+(selectable?1:0)}>
+            ? <tr><td className="dt-empty" colSpan={(effCols.length||1)+(selectable?1:0)}>
                 {noIssues
                   ? <span className="prob-none">No issues · <button className="prob-none-btn" onClick={()=>setProb(false)}>Show all {data.length}</button></span>
                   : 'No data'}
               </td></tr>
             : visible.map((r,ri)=>{
                 const rk=keyOf(r,ri);
-                return <DTRow key={rk} r={r} rkey={rk} cols={columns} rowId={rowIdOf(ri)}
+                return <DTRow key={rk} r={r} rkey={rk} cols={effCols} rowId={rowIdOf(ri)}
                   isCursor={ri===cursor} isSel={selected.has(rk)} isFlash={flashed.has(rk)}
                   clickable={!!onRowClick} selectable={!!selectable} rowApi={apiRef}/>;
               })}
         </tbody>
       </table>
     </div>
-    {maxRows&&sorted.length>maxRows?<div className="dt-more">
+    {scrollBody&&sorted.length>30?<div className="dt-more">
+      <span className="dt-count mono">{sorted.length} rows</span>
+    </div>:null}
+    {!scrollBody&&maxRows&&sorted.length>maxRows?<div className="dt-more">
       {showAll
         ? <button className="dt-more-btn" onClick={()=>setShowAll(false)}>Show fewer</button>
         : <><span className="mono">Showing {visible.length} of {sorted.length}</span><span>·</span>
@@ -1861,6 +1944,34 @@ function HistogramBar({buckets,onClick}){
     <div className="mono" style={{display:'flex',fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:'var(--s1)'}}>
       {bs.map((b,i)=><span key={i} style={{flex:'1 1 0',textAlign:'center',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.label} {Number(b.count)||0}</span>)}
     </div>
+  </div>;
+}
+
+/* ── ValueBands (shared) — value-range filter chips WITH live counts. Pure/controlled.
+   props: rows, valueFn(row)→number, bands=[{id,label,test(v)→bool}], value(active id|null),
+   onChange(id|null). Each chip shows "{label} · {count}"; active chip gets an accent border;
+   clicking the active chip clears (toggles to null). Exported for region tabs (subnet fill %, etc).
+   Canonical util bands: UTIL_BANDS. ── */
+const UTIL_BANDS=[
+  {id:'100',label:'100%',test:u=>u>=100},
+  {id:'9099',label:'90-99%',test:u=>u>=90&&u<100},
+  {id:'7089',label:'70-89%',test:u=>u>=70&&u<90},
+  {id:'lt70',label:'<70%',test:u=>u<70},
+];
+function ValueBands({rows,valueFn,bands,value,onChange}){
+  const rs=Array.isArray(rows)?rows:[];
+  const bs=(Array.isArray(bands)?bands:[]).filter(Boolean);
+  if(!bs.length) return null;
+  return <div className="band-chips" role="group" aria-label="Value filter">
+    {bs.map(b=>{
+      let count=0;
+      for(const r of rs){ try{ if(b.test(valueFn?valueFn(r):r)) count++; }catch(e){} }
+      const active=value===b.id;
+      return <button key={b.id} type="button"
+        className={"chip band-chip"+(active?" active":"")} aria-pressed={active}
+        onClick={()=>onChange&&onChange(active?null:b.id)}>
+        {(b.label!=null?b.label:b.id)+' · '+count}</button>;
+    })}
   </div>;
 }
 
@@ -4249,7 +4360,7 @@ function AiDrawer({open,onClose,initialQ}){
   return <aside className="ai-drawer" role="complementary" aria-label="AI assistant"
     onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();onClose();}}}>
     <div className="ai-drawer-head">
-      <span className="ai-drawer-title">Ask AI</span>
+      <span className="ai-drawer-title"><span className="ai-dot"/>Ask AI</span>
       <button className="peek-close" aria-label="Close AI assistant" onClick={onClose}>✕</button>
     </div>
     <div className="ai-drawer-body">
@@ -4626,7 +4737,7 @@ function TopBar({tab,org,fresh,onPalette,onAi}){
       <ProblemsBadge/>
       <button className="kbd ai-trigger" onClick={onAi} aria-label="Open AI assistant"
         title="AI assistant — ⌘I / Ctrl-I">
-        <span>AI</span><span className="mono">⌘I</span>
+        <span>Ask AI</span><span className="mono">⌘I</span>
       </button>
       <AccountSlot/>
       <DensityToggle/>
