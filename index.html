@@ -2589,9 +2589,11 @@ function NetworkTab(){
     });
     return h;
   },[fetchedAt]);
-  // Capacity-map (Treemap) show/hide. null → default (shown when subnets.length>=3).
-  // MUST run before any early return (hooks-order rule).
-  const [showMap,setShowMap]=useState(null);
+  // NETDNS region UI state — MUST run before any early return (hooks-order rule).
+  // siteFilter: click a site bar to AND-filter the subnet table (null = all sites).
+  // expandedSigs: 100%-util collapse groups the user has expanded (see collapseIdentical).
+  const [siteFilter,setSiteFilter]=useState(null);
+  const [expandedSigs,setExpandedSigs]=useState(()=>new Set());
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
@@ -2625,34 +2627,61 @@ function NetworkTab(){
   }));
 
   const subnetCols=[
-    {key:'name',label:'Subnet'},
+    {key:'name',label:'Subnet',render:(v,r)=>r.__group
+      ? <span className="mono" style={{color:'var(--text-dim)',fontSize:'var(--t12)'}}>{r.__count} subnets at 100% ({(r.__group.split('|')[1])||''}) · Expand</span>
+      : (v||'—')},
     {key:'addr',label:'Network',mono:true,align:'left',render:(v,r)=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')},
     {key:'util',label:'Utilization',align:'right',render:v=>UtilBar(v)},
     {key:'trend',label:'Trend',align:'left',spark:r=>histByAddr[r.addr]},
     {key:'site',label:'Site',hideSm:true},
   ];
 
-  // Capacity map: area ∝ address capacity (subnet.total, else 2^(32-cidr) /prefix size),
-  // colour = same util→ok/warn/crit token the util bar uses, grouped by site.
-  const mapOpen=showMap==null?subnets.length>=3:showMap;
+  // ── Capacity-by-site groups + top consumers (replaces the sparse treemap) ──
+  const totalOf=s=>Number(s.total)||Math.pow(2,32-(Number(s.cidr)||32));
+  const siteMap=new Map();
+  subnets.forEach(s=>{
+    const site=s.site||'—';
+    let g=siteMap.get(site); if(!g){g={site,count:0,sum:0,worst:0};siteMap.set(site,g);}
+    const u=utilOf(s); g.count++; g.sum+=u; if(u>g.worst) g.worst=u;
+  });
+  const siteRows=[...siteMap.values()].map(g=>({
+    label:g.site, value:g.worst, site:g.site,
+    detail:g.count+' subnet'+(g.count===1?'':'s')+' · avg '+Math.round(g.sum/g.count)+'%',
+    color:utilColor(g.worst),
+  })).sort((a,b)=>b.value-a.value);
+  const topN=[...subnets].sort((a,b)=>utilOf(b)-utilOf(a)||totalOf(b)-totalOf(a)).slice(0,15);
+  // Subnet table rows: AND the active site filter, then collapse 100%-util noise
+  // (≥5 rows sharing a /cidr → one "N subnets at 100%" group) unless that signature
+  // was expanded. DataTable's own problemsOnly (>70%) then filters on top of this.
+  const siteFiltered=siteFilter?subnets.filter(s=>(s.site||'—')===siteFilter):subnets;
+  const subnetRows=collapseIdentical(siteFiltered,
+    s=>{const sg=utilOf(s)===100?('100|/'+(s.cidr||'')):null; return (sg&&expandedSigs.has(sg))?null:sg;}, 5);
 
   return <div className="page">
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
     {!drillKey&&subnets.length>0?<section>
-      <SectionHead title="Capacity map">
-        <button className="btn btn-ghost" onClick={()=>setShowMap(!mapOpen)} aria-expanded={mapOpen}>
-          {mapOpen?'Hide':'Show'}
-        </button>
+      <SectionHead title="Capacity by site">
+        {siteFilter?<button className="btn btn-ghost" onClick={()=>setSiteFilter(null)}>Filter: {siteFilter} ✕</button>:null}
       </SectionHead>
-      {mapOpen?<div className="panel" style={{padding:'var(--s3)'}}>
-        <Treemap items={subnets}
-          sizeKey={s=>Number(s.total)||Math.pow(2,32-(Number(s.cidr)||32))}
-          colorFn={s=>utilColor(utilOf(s))}
-          groupKey={s=>s.site||'—'}
-          labelKey={s=>s.name||s.addr}
-          onClick={s=>nav('network',{subnet:s.addr||s.id})}
-          height={220}/>
-      </div>:null}
+      <div className="grid-2">
+        <div className="panel" style={{padding:'var(--s3)'}}>
+          <div className="band-fact-l" style={{marginBottom:'var(--s2)'}}>Worst utilization by site</div>
+          <GroupedBar rows={siteRows} max={24}
+            onClick={r=>setSiteFilter(sf=>sf===r.site?null:r.site)}/>
+        </div>
+        <div className="panel" style={{padding:'var(--s3)'}}>
+          <div className="band-fact-l" style={{marginBottom:'var(--s2)'}}>Top capacity consumers</div>
+          <div style={{display:'flex',flexDirection:'column',gap:'var(--s1)'}}>
+            {topN.map((s,i)=>{const go=()=>nav('network',{subnet:s.addr||s.id});
+              return <div key={i} className="clickable" role="button" tabIndex={0} onClick={go}
+                onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}
+                style={{display:'flex',alignItems:'center',gap:'var(--s3)',justifyContent:'space-between',padding:'2px 0',cursor:'pointer'}}>
+                <span className="mono" style={{fontSize:'var(--t12)',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{(s.addr||'')+(s.cidr?('/'+s.cidr):'')}</span>
+                {UtilBar(s.util||0)}
+              </div>;})}
+          </div>
+        </div>
+      </div>
     </section>:null}
     <section>
       <SectionHead title={drill?'Subnet detail':'Subnets'}>
@@ -2681,9 +2710,12 @@ function NetworkTab(){
                 <button className="btn btn-ghost" onClick={()=>history.back()}>← Back</button>
                 <div className="dt-empty">Subnet not found</div>
               </div>)
-        : <DataTable cols={subnetCols} rows={subnets} defaultSort={{key:'util',dir:'desc'}}
-            onRowClick={r=>nav('network',{subnet:r.addr||r.id})} csvName="subnets"
-            tableId="subnets" rowKey={r=>String(r.addr||r.id)} selectable
+        : <DataTable cols={subnetCols} rows={subnetRows} defaultSort={{key:'util',dir:'desc'}}
+            maxRows={50}
+            problemsOnly={{label:'Problems only',test:s=>utilOf(s)>70,default:true}}
+            onRowClick={r=>{ if(r.__group){ setExpandedSigs(prev=>{const n=new Set(prev); if(n.has(r.__group)) n.delete(r.__group); else n.add(r.__group); return n;}); return; } nav('network',{subnet:r.addr||r.id}); }}
+            csvName="subnets"
+            tableId="subnets" rowKey={r=>r.__group?('grp:'+r.__group):String(r.addr||r.id)} selectable
             filterable filterKeys={['addr','name','site']}
             initialPeekKey={params.peek}
             renderPeek={row=>{
@@ -2702,14 +2734,16 @@ function NetworkTab(){
               </div>;
             }}
             bulkActions={sel=>[{label:'Copy CIDRs',run:()=>{
-              const txt=sel.map(r=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')).join('\n');
+              const rows=sel.filter(r=>!r.__group);
+              const txt=rows.map(r=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')).join('\n');
               if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
-              toast('Copied '+sel.length+' CIDR'+(sel.length===1?'':'s'),'ok');
+              toast('Copied '+rows.length+' CIDR'+(rows.length===1?'':'s'),'ok');
             }}]}/>}
     </section>
     <section>
       <SectionHead title={'All leases · '+leases.length}/>
       <DataTable cols={NET_LEASE_COLS} rows={leases} defaultSort={{key:'addr',dir:'asc'}} csvName="leases"
+        maxRows={50}
         tableId="all-leases" rowKey={r=>String(r.ip||r.addr||r.mac)} selectable/>
     </section>
   </div>;
@@ -2783,6 +2817,8 @@ function DnsTab(){
         <Freshness at={fetchedAt} onRetry={refetch}/>
       </SectionHead>
       <DataTable cols={zoneCols} rows={zones} defaultSort={{key:'fqdn',dir:'asc'}} csvName="zones"
+        maxRows={50}
+        problemsOnly={{label:'Problems only',test:z=>(z.issues&&z.issues.length)||z.anomaly,default:true}}
         tableId="zones" rowKey={r=>String(r.fqdn)} selectable
         filterable filterKeys={['fqdn','view']}
         initialPeekKey={params.peek}
