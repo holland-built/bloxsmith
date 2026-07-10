@@ -427,8 +427,8 @@ BLOCK_LIST_ID   = os.environ.get("BLOCK_LIST_ID", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 # LLM config — works with Groq or any OpenAI-compatible provider, no code edits.
 # LLM_API_KEY falls back to GROQ_API_KEY for back-compat.
-LLM_API_KEY  = os.environ.get("LLM_API_KEY", GROQ_API_KEY)
-LLM_MODEL    = os.environ.get("LLM_MODEL", "qwen/qwen3-32b")
+LLM_API_KEY  = os.environ.get("LLM_API_KEY") or GROQ_API_KEY  # `or`, not default: an empty env var must still fall back to GROQ_API_KEY
+LLM_MODEL    = os.environ.get("LLM_MODEL") or "qwen/qwen3-32b"  # `or`, not default: an empty env var must still fall back to the default model
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "")  # blank = Groq default endpoint
 DIR          = os.path.dirname(os.path.abspath(__file__))
 _STATIC_FILES = frozenset(os.listdir(DIR))  # cached once; avoids O(n) fs hit per request
