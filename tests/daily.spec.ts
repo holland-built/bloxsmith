@@ -10,7 +10,8 @@ test('daily renders delta tiles, open-issues rollup, and first-visit note', asyn
   await expect(page.locator('.tabbar')).toBeVisible();
 
   // Narrative sentence element is present (fallback copy is fine; LLM path optional).
-  const lead = page.locator('.dly-lead');
+  // v2: the narrative lead is now the shared SynthBand verdict at the top of the tab.
+  const lead = page.locator('.band .band-verdict');
   await expect(lead).toBeVisible({ timeout: 15000 });
   await expect(lead).not.toHaveText('');
 
