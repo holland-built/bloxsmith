@@ -3165,6 +3165,7 @@ function InfraTab({vaultTick}={}){
 
   // Sensor grid is overwhelming by default — hide behind a disclosure.
   const [showSensors,setShowSensors]=useState(false);
+  const {bind:hoverBind}=useHoverDetail();
 
   const hosts=(data&&data.hosts)||[];
   const metricRows=(mx.data&&mx.data.metrics)||[];
@@ -3264,61 +3265,92 @@ function InfraTab({vaultTick}={}){
   ];
   const chips=offlineHosts.map(h=>({label:h.name,onClick:()=>nav('infra',{host:h.name})}));
 
+  const statusMix=[online,degraded,offline];
+  const kpiTiles=[
+    {label:'Online',value:online,sub:'of '+total,color:'var(--ok)',values:statusMix},
+    {label:'Degraded',value:degraded,color:'var(--warn)',values:statusMix},
+    {label:'Offline',value:offline,color:'var(--crit)',values:statusMix},
+    {label:'Types',value:byType.length,sub:byType.length===1?'host type':'host types',color:'var(--accent)',values:byType.map(t=>t[1])},
+  ];
+  const attention=[...offlineHosts,...degradedHosts];
+  const attnSev=h=>/^(down|offline)$/i.test(String(h.status||''))?'crit':'high';
+
   return <div className="infra-page">
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
 
-    <div className="grid-2">
-      <div className="infra-sec">
-        <div className="infra-head">
-          <span className="infra-h">Hosts</span>
-          <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
-        </div>
-        {loading&&!data ? <Skeleton rows={6}/>
-          : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
-              csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}
-              maxRows={50}
-              problemsOnly={{label:'Needs attention',test:h=>!/^(online|up)$/i.test(String(h.status||'')),default:hosts.length>50}}
-              {...{tableId:'hosts'}} rowKey={r=>String(r.name||r.id)}
-              selectable filterable filterKeys={['name','ip','type','status']}
-              initialPeekKey={params.peek}
-              bulkActions={rws=>[{label:'Copy IPs',run:()=>{
-                const ips=rws.map(r=>String(r.ip||'')).filter(Boolean);
-                if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(ips.join('\n'));
-                toast('Copied '+ips.length+' IP'+(ips.length===1?'':'s'),'ok');
-              }}]}
-              renderPeek={row=>{
-                const hm=metricRows.filter(r=>r[M_HOST]===row.name).map(r=>({m:r[M_NAME],v:r[M_VAL]}));
-                return <div className="infra-peek">
-                  <div className="infra-panel-row"><span>Host</span><span className="mono">{row.name}</span></div>
-                  <div className="infra-panel-row"><span>IP</span><span className="mono">{row.ip||'—'}</span></div>
-                  <div className="infra-panel-row"><span>Type</span><span>{row.type||'—'}</span></div>
-                  <div className="infra-panel-row"><span>Status</span><span className="mono infra-st" style={{color:infraStatusColor(row.status)}}>{row.status||'—'}</span></div>
-                  <div className="infra-panel-div"/>
-                  <div className="infra-panel-h">Metrics</div>
-                  {hm.length
-                    ? hm.map((x,i)=><div key={i} className="infra-panel-row"><span>{x.m}</span><span className="mono">{fmtMetric(x.v)==null?'·':fmtMetric(x.v)}</span></div>)
-                    : <div className="infra-dim">No metrics reported</div>}
-                </div>;
-              }}/>}
-      </div>
-
-      <div className="infra-panel">
-        <div className="infra-panel-h">Status</div>
-        <div className="infra-stat"><span className="infra-stat-dot" style={{background:'var(--ok)'}}/><span className="infra-stat-l">Online</span><span className="infra-stat-v mono">{online}</span></div>
-        <div className="infra-stat"><span className="infra-stat-dot" style={{background:'var(--warn)'}}/><span className="infra-stat-l">Degraded</span><span className="infra-stat-v mono">{degraded}</span></div>
-        <div className="infra-stat"><span className="infra-stat-dot" style={{background:'var(--crit)'}}/><span className="infra-stat-l">Offline</span><span className="infra-stat-v mono">{offline}</span></div>
-        <div className="infra-panel-div"/>
-        <div className="infra-panel-h">By type</div>
-        {byType.length
-          ? byType.map(([t,c])=><div key={t} className="infra-panel-row"><span>{t}</span><span className="mono">{c}</span></div>)
-          : <div className="infra-dim">No hosts</div>}
-        {hottest?<React.Fragment>
-          <div className="infra-panel-div"/>
-          <div className="infra-panel-h">Hottest host</div>
-          <button className="infra-panel-btn" onClick={()=>{setShowSensors(true);nav('infra',{host:hottest});}}>{hottest} — {hotByHost[hottest]} sensors hot →</button>
-        </React.Fragment>:null}
-      </div>
+    <div className="kpis">
+      {kpiTiles.map(k=><KpiSpark key={k.label} label={k.label} value={k.value} sub={k.sub}
+        color={k.color} values={k.values} bars/>)}
     </div>
+
+    <div className="grid">
+      <Panel title="Needs attention" side={attention.length+(attention.length===1?' host':' hosts')}>
+        {attention.length
+          ? <div className="issues">
+              {attention.map((h,i)=><div key={h.name||i} className="issue" role="button" tabIndex={0}
+                  onClick={()=>nav('infra',{host:h.name})}
+                  onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();nav('infra',{host:h.name});}}}
+                  {...hoverBind({title:h.name,rows:[['IP',h.ip||'—'],['Type',h.type||'—'],['Status',h.status||'—']]})}>
+                <span className={'sev '+attnSev(h)}>{attnSev(h)==='crit'?'offline':'degraded'}</span>
+                <div className="body">
+                  <div className="t">{h.name}</div>
+                  <div className="d mono">{h.ip||'—'}{h.type?' · '+h.type:''}</div>
+                </div>
+              </div>)}
+            </div>
+          : <div className="infra-dim">All {total} hosts online</div>}
+      </Panel>
+
+      <Panel title="Status" side={total+' hosts'}>
+        <Donut slices={[
+          {label:'online',value:online,color:'var(--ok)'},
+          {label:'degraded',value:degraded,color:'var(--warn)'},
+          {label:'offline',value:offline,color:'var(--crit)'},
+        ]} centerValue={offline} centerLabel="offline"/>
+      </Panel>
+
+      <Panel title="By type" side={byType.length+(byType.length===1?' type':' types')}>
+        {byType.length
+          ? <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              {byType.map(([t,c])=><div key={t} className="infra-panel-row"><span>{t}</span><span className="mono">{c}</span></div>)}
+            </div>
+          : <div className="infra-dim">No hosts</div>}
+      </Panel>
+
+      <Panel title="Hottest host" empty={!hottest}>
+        <button className="infra-panel-btn" onClick={()=>{setShowSensors(true);nav('infra',{host:hottest});}}>{hottest} — {hottest?hotByHost[hottest]:0} sensors hot →</button>
+      </Panel>
+    </div>
+
+    <Panel title="Hosts" side={<Freshness at={fetchedAt} error={error} onRetry={refetch}/>}>
+      {loading&&!data ? <Skeleton rows={6}/>
+        : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
+            csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}
+            maxRows={50}
+            problemsOnly={{label:'Needs attention',test:h=>!/^(online|up)$/i.test(String(h.status||'')),default:hosts.length>50}}
+            {...{tableId:'hosts'}} rowKey={r=>String(r.name||r.id)}
+            selectable filterable filterKeys={['name','ip','type','status']}
+            initialPeekKey={params.peek}
+            bulkActions={rws=>[{label:'Copy IPs',run:()=>{
+              const ips=rws.map(r=>String(r.ip||'')).filter(Boolean);
+              if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(ips.join('\n'));
+              toast('Copied '+ips.length+' IP'+(ips.length===1?'':'s'),'ok');
+            }}]}
+            renderPeek={row=>{
+              const hm=metricRows.filter(r=>r[M_HOST]===row.name).map(r=>({m:r[M_NAME],v:r[M_VAL]}));
+              return <div className="infra-peek">
+                <div className="infra-panel-row"><span>Host</span><span className="mono">{row.name}</span></div>
+                <div className="infra-panel-row"><span>IP</span><span className="mono">{row.ip||'—'}</span></div>
+                <div className="infra-panel-row"><span>Type</span><span>{row.type||'—'}</span></div>
+                <div className="infra-panel-row"><span>Status</span><span className="mono infra-st" style={{color:infraStatusColor(row.status)}}>{row.status||'—'}</span></div>
+                <div className="infra-panel-div"/>
+                <div className="infra-panel-h">Metrics</div>
+                {hm.length
+                  ? hm.map((x,i)=><div key={i} className="infra-panel-row"><span>{x.m}</span><span className="mono">{fmtMetric(x.v)==null?'·':fmtMetric(x.v)}</span></div>)
+                  : <div className="infra-dim">No metrics reported</div>}
+              </div>;
+            }}/>}
+    </Panel>
 
     <div className="infra-sec">
       <div className="infra-head">
@@ -3497,7 +3529,7 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
     }},
     {key:'severity',label:'Severity',mono:true,render:v=><span style={{color:secSevColor(v),textTransform:'uppercase'}}>{v||'—'}</span>},
     {key:'qname',label:'Query',mono:true,copy:true,render:v=>v||'—'},
-    {key:'spark',label:'24h',render:()=>'—',spark:e=>{const arr=activityByQname[e.qname];if(!arr)return null;const nz=arr.filter(x=>x>0).length;return nz>=2?arr:null;}},
+    {key:'spark',label:'24h',render:(_,e)=>{const arr=activityByQname[e.qname];if(!arr)return <span className="mono" style={{color:'var(--text-faint)'}}>—</span>;const nz=arr.filter(x=>x>0).length;return nz>=2?<MiniBars values={arr} width={64} height={16}/>:<span className="mono" style={{color:'var(--text-faint)'}}>—</span>;}},
     {key:'policy_action',label:'Action',render:v=>v||'—'},
     {key:'feed_name',label:'Feed',hideSm:true,render:(v,e)=>{
       if(!v) return <span style={{color:'var(--text-dim)'}}>—</span>;
@@ -3815,7 +3847,23 @@ function SecSynthBand({api,acks,setSevF,triageRef}){
     uHigh>0?{label:'Triage '+uHigh+' high', onClick:()=>jump('high')}:null,
     topDev?{label:'Top target: '+topDev, onClick:()=>jump(uCrit>0?'critical':'all')}:null,
   ].filter(Boolean);
-  return <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>;
+  const counts=d.counts||{};
+  const sevChips=[
+    {k:'critical',c:'crit',n:counts.critical},
+    {k:'high',c:'high',n:counts.high},
+    {k:'medium',c:'med',n:counts.medium},
+    {k:'low',c:'low',n:counts.low},
+  ];
+  return <React.Fragment>
+    <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
+    <div style={{display:'flex',gap:'var(--s2)',flexWrap:'wrap'}}>
+      {sevChips.map(s=><button key={s.k} className="svc" onClick={()=>jump(s.k)}
+          style={{cursor:'pointer',flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:'var(--s3)'}}>
+        <span className={'sev '+s.c}>{s.k}</span>
+        <span className="mono">{s.n||0}</span>
+      </button>)}
+    </div>
+  </React.Fragment>;
 }
 
 function SecurityTab(){
@@ -3831,17 +3879,19 @@ function SecurityTab(){
   const secEvents=sec.data&&Array.isArray(sec.data.events)?sec.data.events:[];
   return <div className="page">
     <SecSynthBand api={sec} acks={acks} setSevF={setSevF} triageRef={triageRef}/>
-    {secEvents.length>0&&<VolumeHistogram rows={secEvents} tsKey="event_time" buckets={48} onRange={setRange} selected={range}/>}
-    <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} setAcks={setAcks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef} initialPeekKey={route.params.peek} range={range} onExplain={ai.open}/>
-    <div className="grid-2">
-      <SecThreatLookup/>
-      <SecLookalikes/>
+    <Panel title="Event volume" side="brush to filter" empty={secEvents.length===0}>
+      <VolumeHistogram rows={secEvents} tsKey="event_time" buckets={48} onRange={setRange} selected={range}/>
+    </Panel>
+    <Panel>
+      <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} setAcks={setAcks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef} initialPeekKey={route.params.peek} range={range} onExplain={ai.open}/>
+    </Panel>
+    <div className="grid-dense">
+      <Panel><SecThreatLookup/></Panel>
+      <Panel><SecLookalikes/></Panel>
+      <Panel><SecInsights/></Panel>
+      <Panel><SecActions/></Panel>
+      <Panel><SecDomainPanels/></Panel>
     </div>
-    <div className="grid-2">
-      <SecInsights/>
-      <SecActions/>
-    </div>
-    <SecDomainPanels/>
     {ai.node}
   </div>;
 }
