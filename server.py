@@ -647,18 +647,156 @@ def _rest_write(method: str, path: str, body: dict | None = None, params: dict |
         return None, None
 
 def _dns_rdata(rtype: str, value: str) -> dict:
-    """Presentation-format value → API rdata dict. Trimmed port of the reference
-    client.py's _rdata_str_to_dict — covers the common record types used by the
-    self-service allocate flow; falls back to a generic PRESENTATION subfield."""
+    """Presentation-format value → API rdata dict. Full port of the reference
+    client.py's _rdata_str_to_dict — covers A/AAAA/CNAME/PTR/NS/DNAME/TXT/MX/
+    SRV/CAA, falling back to a generic PRESENTATION subfield for other types.
+    Raises ValueError on missing/malformed fields, mirroring the reference."""
     rtype = (rtype or "").upper().strip()
     v = (value or "").strip()
+    if not v:
+        raise ValueError(f"rdata is required for {rtype} records")
     if rtype in ("A", "AAAA"):
         return {"address": v}
     if rtype == "CNAME":
         return {"cname": v}
     if rtype in ("PTR", "NS"):
         return {"dname": v}
+    if rtype == "DNAME":
+        return {"target": v}
+    if rtype == "TXT":
+        if v.startswith('"') and v.endswith('"') and len(v) >= 2:
+            v = v[1:-1]
+        return {"text": v}
+    if rtype == "MX":
+        parts = v.split(None, 1)
+        if len(parts) != 2:
+            raise ValueError(f'MX rdata must be "preference exchange" (e.g. "10 mail.example.com."), got: {v!r}')
+        try:
+            return {"preference": int(parts[0]), "exchange": parts[1]}
+        except ValueError:
+            raise ValueError(f"MX preference must be an integer, got: {parts[0]!r}")
+    if rtype == "SRV":
+        parts = v.split(None, 3)
+        if len(parts) != 4:
+            raise ValueError(f'SRV rdata must be "priority weight port target" (e.g. "10 0 443 host.example.com."), got: {v!r}')
+        try:
+            return {"priority": int(parts[0]), "weight": int(parts[1]), "port": int(parts[2]), "target": parts[3]}
+        except ValueError as exc:
+            raise ValueError(f"SRV rdata contains non-integer field: {exc}")
+    if rtype == "CAA":
+        parts = v.split(None, 2)
+        if len(parts) != 3:
+            raise ValueError(f'CAA rdata must be "flags tag value" (e.g. "0 issue letsencrypt.org"), got: {v!r}')
+        try:
+            return {"flags": int(parts[0]), "tag": parts[1], "value": parts[2]}
+        except ValueError:
+            raise ValueError(f"CAA flags must be an integer, got: {parts[0]!r}")
+    # Generic fallback — wrap as PRESENTATION subfield
     return {"subfields": [{"type": "PRESENTATION", "value": v}]}
+
+
+def _dns_record_create(body: dict) -> tuple:
+    """Build + POST a single DNS record. Port of portal.py's create_dns_record
+    validation (name_in_zone/zone_id/type/value all required) plus client.py's
+    create_dns_record body shape. `view` is deliberately never included: the
+    API treats zone+view as mutually exclusive creation paths and rejects the
+    combination with a 400 when zone is already set."""
+    zone_id = str(body.get("zone_id") or "").strip()
+    name_in_zone = body.get("name_in_zone")
+    rtype = str(body.get("type") or "").strip().upper()
+    value = str(body.get("value") or "").strip()
+    dry = bool(body.get("dry"))
+
+    if not rtype:
+        return {"ok": False, "error": "type is required"}, 400
+    if not zone_id:
+        return {"ok": False, "error": "zone_id is required"}, 400
+    if name_in_zone is None or str(name_in_zone).strip() == "":
+        return {"ok": False, "error": 'name_in_zone is required (use "@" for the zone apex)'}, 400
+    if not value:
+        return {"ok": False, "error": f"value is required for {rtype} records"}, 400
+
+    name_in_zone = str(name_in_zone).strip()
+    if name_in_zone == "@":
+        name_in_zone = ""
+
+    try:
+        rdata = _dns_rdata(rtype, value)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}, 400
+
+    record_body = {"name_in_zone": name_in_zone, "zone": zone_id, "type": rtype, "rdata": rdata}
+    if body.get("ttl") is not None:
+        try:
+            record_body["ttl"] = int(body["ttl"])
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "ttl must be an integer"}, 400
+    if body.get("comment"):
+        record_body["comment"] = str(body["comment"])
+
+    if dry:
+        return {"ok": True, "dry_run": True, "record": record_body}, 200
+
+    resp, status = _rest_write("POST", "/api/ddi/v1/dns/record", record_body)
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"create failed (status {status})", "detail": resp}, status or 502
+
+    rec = resp.get("result") if isinstance(resp, dict) else None
+    return {"ok": True, "record": rec or resp}, status
+
+
+def _dns_record_update(body: dict) -> tuple:
+    """Read-modify-write PATCH for a single DNS record (port of client.py's
+    modify_dns_record). Only rebuilds fields the caller supplied — never
+    blind-writes the full record, which would risk clobbering read-only
+    fields. Falls back from PATCH to PUT if the upstream API rejects PATCH
+    with 405 (some Infoblox record endpoints only accept PUT for updates)."""
+    record_id = str(body.get("id") or "").strip()
+    if not record_id:
+        return {"ok": False, "error": "id is required"}, 400
+    dry = bool(body.get("dry"))
+
+    current, cur_status = _rest_get_ex(f"/api/ddi/v1/dns/record/{record_id}")
+    if cur_status != 200 or not isinstance(current, dict):
+        return {"ok": False, "error": f"record not found (status {cur_status})"}, (cur_status or 502)
+    cur_record = current.get("result") or current
+    cur_type = str(cur_record.get("type") or "").upper()
+
+    update_body = {}
+    if body.get("value") is not None:
+        try:
+            update_body["rdata"] = _dns_rdata(cur_type, str(body["value"]))
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}, 400
+    if body.get("ttl") is not None:
+        try:
+            update_body["ttl"] = int(body["ttl"])
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "ttl must be an integer"}, 400
+    if body.get("comment") is not None:
+        update_body["comment"] = str(body["comment"])
+    if body.get("disabled") is not None:
+        update_body["disabled"] = bool(body["disabled"])
+
+    if not update_body:
+        return {"ok": False, "error": "no fields to update (value/ttl/comment/disabled)"}, 400
+
+    if dry:
+        return {"ok": True, "dry_run": True, "id": record_id, "would_update": update_body}, 200
+
+    resp, status = _rest_write("PATCH", f"/api/ddi/v1/dns/record/{record_id}", update_body)
+    method_used = "PATCH"
+    if status == 405:
+        # PATCH-then-PUT fallback: this environment cannot be live-tested
+        # against the real API, so if PATCH is rejected as unsupported we
+        # retry the same minimal body with PUT before giving up.
+        resp, status = _rest_write("PUT", f"/api/ddi/v1/dns/record/{record_id}", update_body)
+        method_used = "PUT"
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"update failed (status {status})", "detail": resp, "method": method_used}, status or 502
+
+    rec = resp.get("result") if isinstance(resp, dict) else None
+    return {"ok": True, "method": method_used, "record": rec or resp}, 200
 
 def _cidr_to_reverse_zone(address: str, prefix_len: int) -> str:
     """Derive the in-addr.arpa reverse zone FQDN for an IPv4 network. Port of the
@@ -4287,6 +4425,90 @@ class Handler(BaseHTTPRequestHandler):
                 })
             except Exception as e:
                 _log_exc("/api/dns/zones", e); self._json({"error": "internal error"}, 500)
+        elif path == "/api/dns/records":
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            try:
+                zone = qp.get("zone", "").strip()
+                if not zone:
+                    self._json({"error": "zone is required"}, 400)
+                else:
+                    filt = [f'zone=="{zone}"']
+                    if qp.get("type"):
+                        filt.append(f'type=="{qp["type"].strip().upper()}"')
+                    if qp.get("name"):
+                        filt.append(f'name_in_zone=="{qp["name"]}"')
+                    records = _rest_get("/api/ddi/v1/dns/record", {"_filter": " and ".join(filt)})
+                    self._json({"records": [
+                        {"id": r.get("id"), "name_in_zone": r.get("name_in_zone"), "type": r.get("type"),
+                         "ttl": r.get("ttl"), "dns_rdata": r.get("dns_rdata"), "comment": r.get("comment"),
+                         "disabled": r.get("disabled")} for r in (records or [])
+                    ]})
+            except Exception as e:
+                _log_exc("/api/dns/records", e); self._json({"error": "internal error"}, 500)
+        elif path == "/api/ipam/addresses":
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            try:
+                subnet = qp.get("subnet", "").strip()
+                if not subnet:
+                    self._json({"error": "subnet is required"}, 400)
+                else:
+                    addrs = _rest_get("/api/ddi/v1/ipam/address", {"_filter": f'subnet=="{subnet}"'})
+                    self._json({"addresses": [
+                        {"id": a.get("id"), "address": a.get("address"), "name": a.get("name"),
+                         "comment": a.get("comment"), "state": a.get("state")} for a in (addrs or [])
+                    ]})
+            except Exception as e:
+                _log_exc("/api/ipam/addresses", e); self._json({"error": "internal error"}, 500)
+        elif path == "/api/ipam/availability":
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            try:
+                subnet = qp.get("subnet", "").strip()
+                if not subnet:
+                    self._json({"error": "subnet is required"}, 400)
+                else:
+                    data, status = _rest_get_ex(f"/api/ddi/v1/ipam/subnet/{subnet}", {"_fields": "id,address,cidr,utilization"})
+                    if status != 200 or not isinstance(data, dict):
+                        self._json({"error": f"subnet lookup failed (status {status})"}, status or 502)
+                    else:
+                        s = data.get("result") or data
+                        util = s.get("utilization") or {}
+                        used = util.get("used")
+                        total = util.get("total") or util.get("dhcp_total") or util.get("static_total")
+                        free = util.get("free")
+                        if free is None and used is not None and total is not None:
+                            try: free = int(total) - int(used)
+                            except (TypeError, ValueError): free = None
+                        pct = util.get("utilization") or util.get("percent") or util.get("pct")
+                        self._json({
+                            "id": s.get("id"), "address": s.get("address"), "cidr": s.get("cidr"),
+                            "utilization": {"used": used, "total": total, "free": free, "pct": pct},
+                        })
+            except Exception as e:
+                _log_exc("/api/ipam/availability", e); self._json({"error": "internal error"}, 500)
+        elif path == "/api/ipam/subnets":
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            try:
+                filt = []
+                if qp.get("space"):
+                    filt.append(f'space=="{qp["space"]}"')
+                if qp.get("block"):
+                    filt.append(f'parent=="{qp["block"]}"')
+                params = {"_filter": " and ".join(filt)} if filt else None
+                subnets = _rest_get("/api/ddi/v1/ipam/subnet", params)
+                self._json({"subnets": [
+                    {"id": s.get("id"), "address": s.get("address"), "cidr": s.get("cidr"),
+                     "name": s.get("name"), "utilization": s.get("utilization")} for s in (subnets or [])
+                ]})
+            except Exception as e:
+                _log_exc("/api/ipam/subnets", e); self._json({"error": "internal error"}, 500)
         elif path == "/api/provision/stream":
             # SSE progress stream for the self-service subnet provisioning wizard.
             # ThreadingMixIn gives this connection its own thread, so blocking
@@ -4719,6 +4941,15 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/selfservice/allocate", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
+        elif self.path == "/api/dns/records":
+            # State-changing write, same precedent as /api/selfservice/allocate:
+            # gated by the vault-unlocked check above only, no X-Auth-Token.
+            try:
+                result, status = _dns_record_create(body)
+                self._json(result, status)
+            except Exception as e:
+                _log_exc("/api/dns/records", e)
+                self._json({"ok": False, "error": "internal error"}, 500)
         elif self.path == "/api/templates/validate":
             # Pure structural validation — never contacts the Infoblox API.
             try:
@@ -4816,6 +5047,33 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json({"error": "not found"}, 404)
 
+    def do_PATCH(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (ValueError, TypeError):
+            self._json({"error": "invalid Content-Length"}, 400); return
+        if length < 0 or length > self.MAX_BODY:
+            self.send_error(413, "Request Too Large")
+            return
+        try:
+            body = json.loads(self.rfile.read(length) or b"{}") if length else {}
+        except (json.JSONDecodeError, ValueError):
+            self._json({"error": "invalid JSON body"}, 400); return
+        if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
+            self._json({"error": "vault locked", "locked": True}, 503); return
+        path = self.path.split("?")[0]
+        if path == "/api/dns/records":
+            # Single-record read-modify-write; explicit id only, no filter-based
+            # bulk update. Same trust level as /api/selfservice/allocate.
+            try:
+                result, status = _dns_record_update(body)
+                self._json(result, status)
+            except Exception as e:
+                _log_exc("/api/dns/records PATCH", e)
+                self._json({"ok": False, "error": "internal error"}, 500)
+            return
+        self._json({"error": "not found"}, 404)
+
     def do_DELETE(self):
         path = self.path.split("?")[0]
         if path.startswith("/api/views/"):
@@ -4826,6 +5084,36 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": True} if ok else {"error": "not found"}, 200 if ok else 404)
             except Exception as e:
                 _log_exc("/api/views/delete", e); self._json({"error": "internal error"}, 500)
+            return
+        if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
+            self._json({"error": "vault locked", "locked": True}, 503); return
+        if path.startswith("/api/dns/records/"):
+            # Explicit id only — never delete-by-filter.
+            record_id = path[len("/api/dns/records/"):].strip("/")
+            if not record_id:
+                self._json({"error": "id is required"}, 400); return
+            try:
+                resp, status = _rest_write("DELETE", f"/api/ddi/v1/dns/record/{record_id}")
+                if status in (200, 204, 404):
+                    self._json({"ok": True})
+                else:
+                    self._json({"ok": False, "error": f"delete failed (status {status})", "detail": resp}, status or 502)
+            except Exception as e:
+                _log_exc("/api/dns/records DELETE", e); self._json({"ok": False, "error": "internal error"}, 500)
+            return
+        if path.startswith("/api/ipam/addresses/"):
+            # Explicit id only — never delete-by-filter.
+            addr_id = path[len("/api/ipam/addresses/"):].strip("/")
+            if not addr_id:
+                self._json({"error": "id is required"}, 400); return
+            try:
+                resp, status = _rest_write("DELETE", f"/api/ddi/v1/ipam/address/{addr_id}")
+                if status in (200, 204, 404):
+                    self._json({"ok": True})
+                else:
+                    self._json({"ok": False, "error": f"delete failed (status {status})", "detail": resp}, status or 502)
+            except Exception as e:
+                _log_exc("/api/ipam/addresses DELETE", e); self._json({"ok": False, "error": "internal error"}, 500)
             return
         self._json({"error": "not found"}, 404)
 
@@ -4842,7 +5130,7 @@ class Handler(BaseHTTPRequestHandler):
     def _cors(self):
         self.send_response(200)
         self._send_cors_origin()
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token")
 
     def _json(self, data, status=200):
