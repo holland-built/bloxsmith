@@ -2043,10 +2043,24 @@ function NetworkTab(){
     onClick:()=>nav('network',{subnet:s.addr||s.id}),
   }));
 
+  // histByAddr — per-subnet util history from the snapshot store. Each snapshot day
+  // holds subnets.top:[{a,u}]; assemble values=[u per day] keyed by addr. Only subnets
+  // present across ≥2 days get a series → the Trend sparkline renders honestly (no fabrication).
+  const histByAddr=useMemo(()=>{
+    const days=(readSnaps().days||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const h={};
+    days.forEach(d=>{
+      const top=(d&&d.subnets&&Array.isArray(d.subnets.top))?d.subnets.top:[];
+      top.forEach(t=>{ if(t&&t.a!=null&&typeof t.u==='number'){ (h[t.a]||(h[t.a]=[])).push(t.u); } });
+    });
+    return h;
+  },[fetchedAt]);
+
   const subnetCols=[
     {key:'name',label:'Subnet'},
     {key:'addr',label:'Network',mono:true,align:'left',render:(v,r)=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')},
     {key:'util',label:'Utilization',align:'right',render:v=>UtilBar(v)},
+    {key:'trend',label:'Trend',align:'left',spark:r=>histByAddr[r.addr]},
     {key:'site',label:'Site',hideSm:true},
   ];
 
@@ -2070,7 +2084,8 @@ function NetworkTab(){
                 <div>
                   {drillLeases.length
                     ? <DataTable cols={NET_LEASE_COLS} rows={drillLeases} defaultSort={{key:'addr',dir:'asc'}}
-                        csvName={'leases-'+(drill.addr||drill.id)}/>
+                        csvName={'leases-'+(drill.addr||drill.id)}
+                        tableId={'drill-leases-'+(drill.addr||drill.id)} rowKey={r=>String(r.ip||r.addr||r.mac)} selectable/>
                     : <div className="dt-empty">No leases in this subnet</div>}
                 </div>
               </div>
@@ -2079,16 +2094,41 @@ function NetworkTab(){
                 <div className="dt-empty">Subnet not found</div>
               </div>)
         : <DataTable cols={subnetCols} rows={subnets} defaultSort={{key:'util',dir:'desc'}}
-            onRowClick={r=>nav('network',{subnet:r.addr||r.id})} csvName="subnets"/>}
+            onRowClick={r=>nav('network',{subnet:r.addr||r.id})} csvName="subnets"
+            tableId="subnets" rowKey={r=>String(r.addr||r.id)} selectable
+            filterable filterKeys={['addr','name','site']}
+            initialPeekKey={params.peek}
+            renderPeek={row=>{
+              const rl=leasesInSubnet(leases,row);
+              return <div>
+                <div style={{fontWeight:600}}>{row.name||'—'}</div>
+                <div className="mono" style={{color:'var(--text-dim)',marginTop:'var(--s1)'}}>{(row.addr||'')+(row.cidr?('/'+row.cidr):'')}</div>
+                <div style={{marginTop:'var(--s3)'}}>{UtilBar(row.util||0)}</div>
+                <div style={{marginTop:'var(--s2)',fontSize:'var(--t12)',color:'var(--text-dim)'}}>Site: {row.site||'—'}</div>
+                <div className="mono" style={{marginTop:'var(--s3)',color:'var(--text-dim)',fontSize:'var(--t12)'}}>{rl.length} lease{rl.length===1?'':'s'} in subnet</div>
+                <div style={{marginTop:'var(--s2)',display:'flex',flexDirection:'column',gap:2}}>
+                  {rl.slice(0,20).map((l,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',gap:'var(--s3)',fontSize:'var(--t12)'}}>
+                    <span className="mono">{l.addr||'—'}</span>{StateText(l.state)}</div>)}
+                  {rl.length>20?<div style={{fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:2}}>+{rl.length-20} more</div>:null}
+                </div>
+              </div>;
+            }}
+            bulkActions={sel=>[{label:'Copy CIDRs',run:()=>{
+              const txt=sel.map(r=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')).join('\n');
+              if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+              toast('Copied '+sel.length+' CIDR'+(sel.length===1?'':'s'),'ok');
+            }}]}/>}
     </section>
     <section>
       <SectionHead title={'All leases · '+leases.length}/>
-      <DataTable cols={NET_LEASE_COLS} rows={leases} defaultSort={{key:'addr',dir:'asc'}} csvName="leases"/>
+      <DataTable cols={NET_LEASE_COLS} rows={leases} defaultSort={{key:'addr',dir:'asc'}} csvName="leases"
+        tableId="all-leases" rowKey={r=>String(r.ip||r.addr||r.mac)} selectable/>
     </section>
   </div>;
 }
 
 function DnsTab(){
+  const {params}=useRoute();
   const {data,error,locked,loading,fetchedAt,refetch}=useData();
   const an=useApi('/api/dns-analytics');
   const {delta}=useSnapshots();
@@ -2153,7 +2193,40 @@ function DnsTab(){
       <SectionHead title="DNS zones">
         <Freshness at={fetchedAt} onRetry={refetch}/>
       </SectionHead>
-      <DataTable cols={zoneCols} rows={zones} defaultSort={{key:'fqdn',dir:'asc'}} csvName="zones"/>
+      <DataTable cols={zoneCols} rows={zones} defaultSort={{key:'fqdn',dir:'asc'}} csvName="zones"
+        tableId="zones" rowKey={r=>String(r.fqdn)} selectable
+        filterable filterKeys={['fqdn','view']}
+        initialPeekKey={params.peek}
+        renderPeek={row=><div>
+          <div className="mono" style={{fontWeight:600}}>{row.fqdn}</div>
+          <div style={{marginTop:'var(--s2)',fontSize:'var(--t12)',color:'var(--text-dim)'}}>View: {row.view||'—'}</div>
+          <div className="mono" style={{marginTop:'var(--s1)',fontSize:'var(--t12)',color:'var(--text-dim)'}}>TTL: {row.ttl??'—'}</div>
+          <div style={{marginTop:'var(--s3)'}}>
+            <div className="band-fact-l">Issues</div>
+            {(Array.isArray(row.issues)&&row.issues.length)
+              ? <div className="mono" style={{fontSize:'var(--t12)',color:'var(--crit)',marginTop:2}}>{row.issues.join(', ')}</div>
+              : <div style={{fontSize:'var(--t12)',color:'var(--text-faint)',marginTop:2}}>none</div>}
+          </div>
+          {row.anomaly?<div className="mono" style={{marginTop:'var(--s2)',fontSize:'var(--t11)',color:'var(--warn)'}}>anomaly flagged</div>:null}
+        </div>}
+        bulkActions={sel=>[{
+          label:'Block domain',
+          confirm:'Block '+sel.length+' domain'+(sel.length===1?'':'s')+'?',
+          flash:true,
+          run:()=>{
+            sel.forEach(z=>{
+              const domain=z.fqdn;
+              fetch('/api/block-domain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})})
+                .then(async r=>{
+                  const j=await r.json().catch(()=>({}));
+                  if(r.status===401) toast('Block '+domain+' — requires bridge token','err');
+                  else if(r.ok&&j.ok!==false) toast('Blocked '+domain,'ok');
+                  else toast('Block '+domain+' failed: '+((j&&j.error)||('HTTP '+r.status)),'err');
+                })
+                .catch(()=>toast('Block '+domain+' failed — server unreachable','err'));
+            });
+          }
+        }]}/>
     </section>
     <div className="grid-3">
     <section>
