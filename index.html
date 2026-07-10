@@ -2407,7 +2407,9 @@ function InfraTab({vaultTick}={}){
         </div>
         {mx.loading&&!mx.data ? <Skeleton rows={5}/>
           : drillRows.length===0 ? <div className="infra-dim">No metrics reported</div>
-          : <DataTable cols={drillCols} rows={drillRows} defaultSort={{key:'metric',dir:'asc'}}/>}
+          : <DataTable cols={drillCols} rows={drillRows} defaultSort={{key:'metric',dir:'asc'}}
+              tableId="host-metrics" rowKey={r=>String(r.metric)} selectable
+              csvName={'infra-'+hostParam+'-metrics'}/>}
       </div>
     </div>;
   }
@@ -2446,7 +2448,29 @@ function InfraTab({vaultTick}={}){
         </div>
         {loading&&!data ? <Skeleton rows={6}/>
           : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
-              csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}/>}
+              csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}
+              {...{tableId:'hosts'}} rowKey={r=>String(r.name||r.id)}
+              selectable filterable filterKeys={['name','ip','type','status']}
+              initialPeekKey={params.peek}
+              bulkActions={rws=>[{label:'Copy IPs',run:()=>{
+                const ips=rws.map(r=>String(r.ip||'')).filter(Boolean);
+                if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(ips.join('\n'));
+                toast('Copied '+ips.length+' IP'+(ips.length===1?'':'s'),'ok');
+              }}]}
+              renderPeek={row=>{
+                const hm=metricRows.filter(r=>r[M_HOST]===row.name).map(r=>({m:r[M_NAME],v:r[M_VAL]}));
+                return <div className="infra-peek">
+                  <div className="infra-panel-row"><span>Host</span><span className="mono">{row.name}</span></div>
+                  <div className="infra-panel-row"><span>IP</span><span className="mono">{row.ip||'—'}</span></div>
+                  <div className="infra-panel-row"><span>Type</span><span>{row.type||'—'}</span></div>
+                  <div className="infra-panel-row"><span>Status</span><span className="mono infra-st" style={{color:infraStatusColor(row.status)}}>{row.status||'—'}</span></div>
+                  <div className="infra-panel-div"/>
+                  <div className="infra-panel-h">Metrics</div>
+                  {hm.length
+                    ? hm.map((x,i)=><div key={i} className="infra-panel-row"><span>{x.m}</span><span className="mono">{fmtMetric(x.v)==null?'·':fmtMetric(x.v)}</span></div>)
+                    : <div className="infra-dim">No metrics reported</div>}
+                </div>;
+              }}/>}
       </div>
 
       <div className="infra-panel">
