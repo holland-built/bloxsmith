@@ -2426,7 +2426,7 @@ function InfraTab({vaultTick}={}){
    actions. Reuses useApi, DataTable, Freshness, toast, LS, Skeleton, relAge, tokens. */
 const SEC_SEV_RANK={critical:0,high:1,medium:2,low:3};
 const secSevColor=s=>({critical:'var(--crit)',high:'var(--warn)'})[String(s||'').toLowerCase()]||'var(--text-dim)';
-const secAckKey=e=>(e.event_time||'')+'|'+(e.qname||'');
+const secAckKey=e=>String(e.event_time)+'|'+String(e.qname);
 function secHumanize(k){return String(k).replace(/^InsightsSummaryView\./,'').replace(/[_.]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()).trim();}
 function secAutoCols(rows){
   const first=(rows||[]).find(r=>r&&typeof r==='object')||{};
@@ -2461,9 +2461,80 @@ function SecChips({options,value,onChange}){
   </span>;
 }
 
-function SecTriageInbox({api,sevF,setSevF,acks,toggleAck,clearAcks,triageRef}){
+/* Peek (F4) — full event detail with inline ack toggle + two-step Block. */
+function SecEventPeek({e,acks,toggleAck}){
+  const [acked,setAcked]=useState(!!acks[secAckKey(e)]);
+  const [confirm,setConfirm]=useState(false);
+  const [blocking,setBlocking]=useState(false);
+  const fields=[
+    ['Time',secEvtAge(e.event_time)+' · '+String(e.event_time??'—')],
+    ['Query',e.qname],
+    ['Severity',e.severity],
+    ['Action',e.policy_action],
+    ['Feed',e.feed_name],
+    ['Threat',e.threat_indicator],
+    ['Device',e.device],
+    ['Network',e.network],
+  ];
+  const doBlock=async()=>{
+    const domain=String(e.qname||'').trim(); if(!domain) return;
+    setConfirm(false);setBlocking(true);
+    try{
+      const r=await fetch('/api/block-domain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
+      const body=await r.json().catch(()=>({}));
+      if(r.status===401) toast('Blocking requires bridge token','err');
+      else if(r.ok&&body.ok) toast('Blocked '+domain,'ok');
+      else toast(body.error||('HTTP '+r.status),'err');
+    }catch(err){toast(String((err&&err.message)||err),'err');}
+    setBlocking(false);
+  };
+  return <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+    <dl style={{margin:0,display:'grid',gridTemplateColumns:'auto 1fr',gap:'var(--s1) var(--s3)',fontSize:'var(--t12)'}}>
+      {fields.map(([k,v])=><React.Fragment key={k}>
+        <dt style={{color:'var(--text-dim)'}}>{k}</dt>
+        <dd className="mono" style={{margin:0,color:k==='Severity'?secSevColor(v):'var(--text)',wordBreak:'break-all'}}>{v==null||v===''?'—':String(v)}</dd>
+      </React.Fragment>)}
+    </dl>
+    <label style={{display:'flex',alignItems:'center',gap:'var(--s2)',fontSize:'var(--t12)'}}>
+      <input type="checkbox" checked={acked} onChange={()=>{setAcked(x=>!x);toggleAck(e);}}/>
+      Acknowledged
+    </label>
+    <div>
+      {confirm
+        ? <span style={{display:'inline-flex',gap:'var(--s2)',alignItems:'center',flexWrap:'wrap'}}>
+            <span style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>Block {e.qname}?</span>
+            <button className="btn" disabled={blocking} onClick={doBlock}>Confirm</button>
+            <button className="btn btn-ghost" onClick={()=>setConfirm(false)}>Cancel</button>
+          </span>
+        : <button className="btn" disabled={!e.qname||blocking} onClick={()=>setConfirm(true)}>{blocking?'Blocking…':'Block domain'}</button>}
+    </div>
+  </div>;
+}
+
+function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triageRef,initialPeekKey}){
   const {data,error,locked,fetchedAt,refetch,loading}=api;
   const [actF,setActF]=useState('all');
+  // Real 24h activity — bucket ALL events per qname by hour-of-day from real event_time.
+  const activityByQname=useMemo(()=>{
+    const evs=(data&&Array.isArray(data.events))?data.events:[];
+    const parseHour=t=>{
+      if(t==null||t==='') return null;
+      let ms;
+      if(typeof t==='number') ms=t<1e12?t*1000:t;
+      else if(/^\d+$/.test(String(t))){const n=Number(t);ms=n<1e12?n*1000:n;}
+      else ms=new Date(t).getTime();
+      if(isNaN(ms)) return null;
+      return new Date(ms).getHours();
+    };
+    const m={};
+    evs.forEach(e=>{
+      const q=e&&e.qname; if(!q) return;
+      const h=parseHour(e.event_time); if(h==null) return;
+      if(!m[q]) m[q]=new Array(24).fill(0);
+      m[q][h]++;
+    });
+    return m;
+  },[data]);
   if(locked) return null;
   if(loading&&!data) return <div><SecHead title="Triage inbox"/><Skeleton rows={8}/></div>;
   const d=data||{};
@@ -2484,6 +2555,42 @@ function SecTriageInbox({api,sevF,setSevF,acks,toggleAck,clearAcks,triageRef}){
     if(ra!==rb) return ra-rb;
     return String(B.e.event_time||'').localeCompare(String(A.e.event_time||''));
   }).map(x=>x.e);
+  const cols=[
+    {key:'ack',label:'',width:28,render:(_,e)=>{
+      const acked=!!acks[secAckKey(e)];
+      return <input type="checkbox" checked={acked} onClick={ev=>ev.stopPropagation()} onChange={()=>toggleAck(e)} aria-label="Acknowledge event"/>;
+    }},
+    {key:'severity',label:'Severity',mono:true,render:v=><span style={{color:secSevColor(v),textTransform:'uppercase'}}>{v||'—'}</span>},
+    {key:'qname',label:'Query',mono:true,copy:true,render:v=>v||'—'},
+    {key:'spark',label:'24h',render:()=>'—',spark:e=>{const arr=activityByQname[e.qname];if(!arr)return null;const nz=arr.filter(x=>x>0).length;return nz>=2?arr:null;}},
+    {key:'policy_action',label:'Action',render:v=>v||'—'},
+    {key:'feed_name',label:'Feed',hideSm:true,render:v=><span style={{color:'var(--text-dim)'}}>{v||'—'}</span>},
+    {key:'device',label:'Device',hideSm:true,render:v=>v||'—'},
+    {key:'event_time',label:'Time',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
+  ];
+  const bulkActions=(rws)=>[
+    {label:'Ack '+rws.length,flash:true,run:()=>{
+      const prev={...acks};
+      const next={...acks};
+      rws.forEach(e=>{next[secAckKey(e)]=true;});
+      setAcks(next);LS.set('acks',next);
+      toast(rws.length+' acked','ok',{duration:5000,action:{label:'Undo',run:()=>{setAcks(prev);LS.set('acks',prev);}}});
+    }},
+    {label:'Block domains',confirm:'Block '+rws.length+' domain'+(rws.length===1?'':'s')+'?',flash:true,run:async()=>{
+      const domains=[...new Set(rws.map(e=>e.qname).filter(Boolean))];
+      let ok=0,fail=0,auth=false;
+      for(const domain of domains){
+        try{
+          const r=await fetch('/api/block-domain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
+          if(r.status===401){auth=true;break;}
+          const body=await r.json().catch(()=>({}));
+          if(r.ok&&body.ok)ok++;else fail++;
+        }catch(e){fail++;}
+      }
+      if(auth) toast('Blocking requires bridge token','err');
+      else toast(ok+' domain'+(ok===1?'':'s')+' blocked'+(fail?' · '+fail+' failed':''),(fail&&!ok)?'err':'ok');
+    }},
+  ];
   return <div ref={triageRef}>
     <SecHead title="Triage inbox" at={fetchedAt} onRetry={refetch} error={error}>
       <span className="mono" style={{fontSize:'var(--t12)'}}>
@@ -2502,30 +2609,12 @@ function SecTriageInbox({api,sevF,setSevF,acks,toggleAck,clearAcks,triageRef}){
       <SecChips value={actF} onChange={setActF} options={[{v:'all',label:'all'},{v:'blocked',label:'blocked'},{v:'logged',label:'logged'}]}/>
       <button className="fresh-retry" style={{marginLeft:'auto'}} onClick={clearAcks}>Clear acks</button>
     </div>
-    <div className="tbl-wrap">
-      <table className="dt">
-        <thead><tr>
-          <th style={{width:28}} aria-label="Acknowledge"></th>
-          <th>Severity</th><th>Query</th><th>Action</th><th className="hide-sm">Feed</th><th className="hide-sm">Device</th><th className="num">Time</th>
-        </tr></thead>
-        <tbody>
-          {rows.length===0
-            ? <tr><td className="dt-empty" colSpan={7}>No events</td></tr>
-            : rows.map((e,i)=>{
-                const acked=!!acks[secAckKey(e)];
-                return <tr key={secAckKey(e)+'#'+i} style={{opacity:acked?0.45:1}}>
-                  <td><input type="checkbox" checked={acked} onChange={()=>toggleAck(e)} aria-label="Acknowledge event"/></td>
-                  <td className="mono" style={{color:secSevColor(e.severity),textTransform:'uppercase'}}>{e.severity||'—'}</td>
-                  <td className="mono">{e.qname||'—'}</td>
-                  <td>{e.policy_action||'—'}</td>
-                  <td className="hide-sm" style={{color:'var(--text-dim)'}}>{e.feed_name||'—'}</td>
-                  <td className="hide-sm">{e.device||'—'}</td>
-                  <td className="num mono" style={{color:'var(--text-faint)'}}>{secEvtAge(e.event_time)}</td>
-                </tr>;
-              })}
-        </tbody>
-      </table>
-    </div>
+    {rows.length===0
+      ? <div className="dt-empty">No events</div>
+      : <DataTable cols={cols} rows={rows} tableId="triage"
+          rowKey={r=>String(r.event_time)+'|'+String(r.qname)}
+          selectable bulkActions={bulkActions} initialPeekKey={initialPeekKey}
+          renderPeek={e=><SecEventPeek e={e} acks={acks} toggleAck={toggleAck}/>}/>}
   </div>;
 }
 
@@ -2696,6 +2785,7 @@ function SecSynthBand({api,acks,setSevF,triageRef}){
 
 function SecurityTab(){
   const sec=useApi('/api/hub/security',{poll:60000});
+  const route=useRoute();
   const [sevF,setSevF]=useState('all');
   const [acks,setAcks]=useState(()=>LS.get('acks',{}));
   const triageRef=useRef(null);
@@ -2703,7 +2793,7 @@ function SecurityTab(){
   const clearAcks=()=>{setAcks({});LS.set('acks',{});};
   return <div className="page">
     <SecSynthBand api={sec} acks={acks} setSevF={setSevF} triageRef={triageRef}/>
-    <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef}/>
+    <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} setAcks={setAcks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef} initialPeekKey={route.params.peek}/>
     <div className="grid-2">
       <SecThreatLookup/>
       <SecInsights/>
