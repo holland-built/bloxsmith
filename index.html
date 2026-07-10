@@ -3369,6 +3369,7 @@ function DnsTab(){
   .infra-panel-div{height:1px;background:var(--border);margin:2px 0;}
   .infra-panel-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--text-dim);}
   .infra-panel-btn{font-size:12px;color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;text-align:left;}
+  .infra-page .grid-dense .issues{max-height:340px;overflow-y:auto;}
   `;
   document.head.appendChild(s);
 })();
@@ -3482,7 +3483,7 @@ function InfraTab({vaultTick}={}){
 
   // ── Host inventory ──
   const hostCols=[
-    {key:'name',label:'Host'},
+    {key:'name',label:'Host',primary:true},
     {key:'ip',label:'IP',mono:true},
     {key:'type',label:'Type',hideSm:true},
     {key:'status',label:'Status',render:v=><span className="mono infra-st" style={{color:infraStatusColor(v)}}>{v||'—'}</span>},
@@ -3508,7 +3509,7 @@ function InfraTab({vaultTick}={}){
     {label:'Online',value:online,sub:'of '+total,color:'var(--ok)',values:statusMix},
     {label:'Degraded',value:degraded,color:'var(--warn)',values:statusMix},
     {label:'Offline',value:offline,color:'var(--crit)',values:statusMix},
-    {label:'Types',value:byType.length,sub:byType.length===1?'host type':'host types',color:'var(--accent)',values:byType.map(t=>t[1])},
+    ...(byType.length>1?[{label:'Types',value:byType.length,sub:'host types',color:'var(--accent)',values:byType.map(t=>t[1])}]:[]),
   ];
   const attention=[...offlineHosts,...degradedHosts];
   const attnSev=h=>/^(down|offline)$/i.test(String(h.status||''))?'crit':'high';
@@ -3521,7 +3522,7 @@ function InfraTab({vaultTick}={}){
         color={k.color} values={k.values} bars/>)}
     </div>
 
-    <div className="grid">
+    <div className="grid-dense">
       <Panel title="Needs attention" side={attention.length+(attention.length===1?' host':' hosts')}>
         {attention.length
           ? <div className="issues">
@@ -3547,7 +3548,7 @@ function InfraTab({vaultTick}={}){
         ]} centerValue={offline} centerLabel="offline"/>
       </Panel>
 
-      <Panel title="By type" side={byType.length+(byType.length===1?' type':' types')}>
+      <Panel title="By type" empty={byType.length<2} side={byType.length+(byType.length===1?' type':' types')}>
         {byType.length
           ? <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
               {byType.map(([t,c])=><div key={t} className="infra-panel-row"><span>{t}</span><span className="mono">{c}</span></div>)}
@@ -3564,7 +3565,7 @@ function InfraTab({vaultTick}={}){
       {loading&&!data ? <Skeleton rows={6}/>
         : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
             csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}
-            maxRows={50}
+            scrollBody={480} columnToggle
             problemsOnly={{label:'Needs attention',test:h=>!/^(online|up)$/i.test(String(h.status||'')),default:hosts.length>50}}
             {...{tableId:'hosts'}} rowKey={r=>String(r.name||r.id)}
             selectable filterable filterKeys={['name','ip','type','status']}
