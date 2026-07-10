@@ -246,9 +246,8 @@ table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-al
 .heat{display:inline-block;padding:0 var(--s2);border-radius:var(--r-ctl);}
 .heat-warn{background:var(--warn-tint);}
 .heat-crit{background:var(--crit-tint);}
-/* display-form primitives (Treemap / VolumeHistogram) — viewBox-scaled, overflow-safe */
-.tm-svg,.vh-svg{display:block;width:100%;}
-.tm-cell{cursor:pointer;}
+/* display-form primitives (VolumeHistogram) — viewBox-scaled, overflow-safe */
+.vh-svg{display:block;width:100%;}
 .vh-bar{cursor:pointer;}
 
 .action-bar{
@@ -287,8 +286,17 @@ table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-al
 @media (max-width:640px){
   .hide-sm{display:none;}
   .kbd{display:none;}
+  .kbd.ai-trigger{display:inline-flex;}
+  .ai-trigger .mono{display:none;}
+  .views-slot{display:none;}
   .topbar-right .acct-trigger{max-width:140px;}
+  .acct-trigger .nm{display:none;}
   .topbar{gap:var(--s2);padding:0 var(--s2);}
+  /* DataTable toolbar must shrink to fit: the fixed-width filter + prob-toggle
+     otherwise overflow their row on narrow screens. */
+  .dt-filter{min-width:0;}
+  .prob-toggle{min-width:0;}
+  .prob-count{display:none;}
 }
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{transition:none!important;animation:none!important;}
@@ -1593,100 +1601,12 @@ function SnapshotWriter(){
 }
 
 /* ─────────────────────────────────────────────────────────────
-   SHARED DISPLAY-FORM PRIMITIVES — Treemap, VolumeHistogram, heatCell/
+   SHARED DISPLAY-FORM PRIMITIVES — VolumeHistogram, heatCell/
    trendCell, AiExplain. SVG/CSS only (no chart lib), all width:100% and
    viewBox-scaled so they never cause horizontal overflow at 375px. Token
    colors only; wired into tabs by later agents. Not a region body.
    ───────────────────────────────────────────────────────────── */
 
-/* tmSlice — recursive slice-and-dice: split a value-sorted list near the
-   half-area point, alternating orientation, filling a rect into `out`. */
-function tmSlice(items,x,y,w,h,horiz,out){
-  if(!items.length||w<=0||h<=0) return;
-  if(items.length===1){ out.push({...items[0],x,y,w,h}); return; }
-  const total=items.reduce((s,it)=>s+it._v,0)||1;
-  const half=total/2; let run=0,best=0,bestDiff=Infinity;
-  for(let k=0;k<items.length-1;k++){ run+=items[k]._v; const d=Math.abs(run-half); if(d<bestDiff){bestDiff=d;best=k;} }
-  const left=items.slice(0,best+1),right=items.slice(best+1);
-  const lv=left.reduce((s,it)=>s+it._v,0);
-  if(horiz){ const lw=w*lv/total; tmSlice(left,x,y,lw,h,false,out); tmSlice(right,x+lw,y,w-lw,h,false,out); }
-  else { const lh=h*lv/total; tmSlice(left,x,y,w,lh,true,out); tmSlice(right,x,y+lh,w,h-lh,true,out); }
-}
-/* tmCollapse — sort desc, keep the meaningful cells, fold the small tail into
-   one synthetic "+N more" cell (share < minShare), capped at 80 cells. */
-function tmCollapse(list,total){
-  const t=total||1;
-  const big=list.filter(p=>p._v/t>=0.008).sort((a,b)=>b._v-a._v).slice(0,80);
-  const keep=new Set(big);
-  const rest=list.filter(p=>!keep.has(p));
-  if(rest.length){
-    const sum=rest.reduce((s,p)=>s+p._v,0);
-    if(sum>0) big.push({_v:sum,_l:'+'+rest.length+' more',_c:'var(--raised)',_more:rest.length,item:null});
-  }
-  return big;
-}
-function Treemap({items,sizeKey,colorFn,groupKey,onClick,labelKey,height=220}){
-  const prepared=useMemo(()=>{
-    const list=Array.isArray(items)?items:[];
-    return list.map(it=>({
-      item:it,
-      _v:Math.max(0,Number(sizeKey?sizeKey(it):(it&&it.value))||0),
-      _l:String((labelKey?labelKey(it):(it&&(it.label||it.name)))??''),
-      _c:(colorFn?colorFn(it):null)||'var(--accent)',
-    })).filter(p=>p._v>0);
-  },[items,sizeKey,labelKey,colorFn]);
-
-  const {cells,headers}=useMemo(()=>{
-    const cells=[],headers=[];
-    if(!prepared.length) return {cells,headers};
-    const H=60;
-    if(groupKey){
-      const groups=new Map();
-      prepared.forEach(p=>{ const g=String(groupKey(p.item)??'—'); if(!groups.has(g)) groups.set(g,[]); groups.get(g).push(p); });
-      const arr=[...groups.entries()].map(([g,l])=>({g,l,v:l.reduce((s,p)=>s+p._v,0)})).sort((a,b)=>b.v-a.v);
-      const grand=arr.reduce((s,x)=>s+x.v,0)||1; let y=0;
-      arr.forEach(gr=>{
-        const bh=(gr.v/grand)*H; if(bh<=0.5) return;
-        const headH=bh>=8?4.5:0;
-        if(headH) headers.push({g:gr.g,x:0,y});
-        tmSlice(tmCollapse(gr.l,gr.v),0,y+headH,100,Math.max(0.5,bh-headH),true,cells);
-        y+=bh;
-      });
-    } else {
-      const total=prepared.reduce((s,p)=>s+p._v,0);
-      tmSlice(tmCollapse(prepared,total),0,0,100,H,true,cells);
-    }
-    return {cells,headers};
-  },[prepared,groupKey]);
-
-  if(!prepared.length) return <div style={{color:'var(--text-faint)',fontSize:'var(--t12)',padding:'var(--s3)'}}>No data</div>;
-  const clickable=c=>!!(onClick&&c.item);
-  const hit=c=>{ if(clickable(c)) onClick(c.item); };
-  return <svg className="tm-svg" viewBox="0 0 100 60" height={height} preserveAspectRatio="none"
-      role="group" aria-label="Treemap">
-    {cells.map((c,i)=>{
-      const fs=3.2,cpu=1.75,maxc=Math.max(0,Math.floor((c.w-2)/cpu));
-      let lbl=c._l||''; if(lbl.length>maxc) lbl=maxc>1?lbl.slice(0,maxc-1)+'…':'';
-      const showText=c.w>10&&c.h>6&&lbl;
-      return <g key={i}>
-        <rect className={clickable(c)?'tm-cell':undefined} x={c.x} y={c.y} width={Math.max(0,c.w)} height={Math.max(0,c.h)}
-          rx="0.6" fill={c._c} stroke="var(--border)" strokeWidth="1" vectorEffect="non-scaling-stroke"
-          role={clickable(c)?'button':undefined} tabIndex={clickable(c)?0:undefined}
-          onClick={clickable(c)?()=>hit(c):undefined}
-          onKeyDown={clickable(c)?e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();hit(c);}}:undefined}>
-          <title>{(c._l||'—')+' · '+(c._more?c._more+' items':c._v)}</title>
-        </rect>
-        {showText?<text x={c.x+1} y={c.y+(c.h>10?4:c.h/2+1.1)} fontSize={fs}
-          fill="var(--accent-contrast)" style={{pointerEvents:'none'}}>{lbl}</text>:null}
-      </g>;
-    })}
-    {headers.map((hd,i)=>{
-      let g=hd.g||''; if(g.length>56) g=g.slice(0,55)+'…';
-      return <text key={'h'+i} x={hd.x+1} y={hd.y+3.4} fontSize="3.2" fontWeight="600"
-        fill="var(--text-dim)" style={{pointerEvents:'none'}}>{g}</text>;
-    })}
-  </svg>;
-}
 
 /* parseTs — tolerant timestamp → ms epoch (number s/ms, Date, or ISO/string). */
 function parseTs(v){
@@ -4241,7 +4161,7 @@ function TopBar({tab,org,fresh,onPalette,onAi}){
     <div className="topbar-right">
       {fresh}
       <ProblemsBadge/>
-      <button className="kbd" onClick={onAi} aria-label="Open AI assistant"
+      <button className="kbd ai-trigger" onClick={onAi} aria-label="Open AI assistant"
         title="AI assistant — ⌘I / Ctrl-I">
         <span>AI</span><span className="mono">⌘I</span>
       </button>
