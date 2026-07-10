@@ -2079,6 +2079,37 @@ function OverviewTab(){
   // ── Top-5 subnets by util ──
   const topSubs=useMemo(()=>[...subnets].sort((a,b)=>(b.util||0)-(a.util||0)).slice(0,5),[subnets]);
 
+  // ── Fleet mix: host-health part-whole (donut) + util distribution (histogram) ──
+  const hostSlices=useMemo(()=>{
+    let online=0,degraded=0,offline=0,other=0;
+    for(const h of hosts){
+      const st=String(h.status||'');
+      if(/^(online|up)$/i.test(st)) online++;
+      else if(/^(degraded|warn|warning)$/i.test(st)) degraded++;
+      else if(/^(offline|down|off)$/i.test(st)) offline++;
+      else other++;
+    }
+    return [
+      {label:'online',value:online,color:'var(--ok)'},
+      {label:'degraded',value:degraded,color:'var(--warn)'},
+      {label:'offline',value:offline,color:'var(--crit)'},
+      {label:'other',value:other,color:'var(--text-faint)'},
+    ];
+  },[hosts]);
+  const utilBuckets=useMemo(()=>{
+    let a=0,b=0,c=0,e=0;
+    for(const s of subnets){
+      const u=Number(s.util)||0;
+      if(u<50) a++; else if(u<80) b++; else if(u<95) c++; else e++;
+    }
+    return [
+      {label:'0-50',count:a,color:'var(--accent)'},
+      {label:'50-80',count:b,color:'var(--accent)'},
+      {label:'80-95',count:c,color:'var(--warn)'},
+      {label:'95-100+',count:e,color:'var(--crit)'},
+    ];
+  },[subnets]);
+
   // ── Triage preview: top-5 unacked, severity-ranked ──
   const acks=LS.get('acks',{});
   const events=useMemo(()=>{
@@ -2188,6 +2219,19 @@ function OverviewTab(){
           <div className="ov-kpi-n mono">{typeof k.n==='number'?k.n.toLocaleString():k.n}</div>
           <div className="ov-kpi-l">{k.l}</div>
         </div>)}
+      </div>
+    </OvSection>
+
+    <OvSection title="Fleet mix" api={data}>
+      <div className="grid-2">
+        <div>
+          <div className="ov-blbl" style={{marginBottom:'8px'}}>Host health</div>
+          <Donut slices={hostSlices}/>
+        </div>
+        <div>
+          <div className="ov-blbl" style={{marginBottom:'8px'}}>Subnet utilization</div>
+          <HistogramBar buckets={utilBuckets} onClick={()=>nav('network')}/>
+        </div>
       </div>
     </OvSection>
 
