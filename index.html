@@ -2316,6 +2316,9 @@ function NetworkTab(){
     });
     return h;
   },[fetchedAt]);
+  // Capacity-map (Treemap) show/hide. null → default (shown when subnets.length>=3).
+  // MUST run before any early return (hooks-order rule).
+  const [showMap,setShowMap]=useState(null);
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
@@ -2356,8 +2359,28 @@ function NetworkTab(){
     {key:'site',label:'Site',hideSm:true},
   ];
 
+  // Capacity map: area ∝ address capacity (subnet.total, else 2^(32-cidr) /prefix size),
+  // colour = same util→ok/warn/crit token the util bar uses, grouped by site.
+  const mapOpen=showMap==null?subnets.length>=3:showMap;
+
   return <div className="page">
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
+    {!drillKey&&subnets.length>0?<section>
+      <SectionHead title="Capacity map">
+        <button className="btn btn-ghost" onClick={()=>setShowMap(!mapOpen)} aria-expanded={mapOpen}>
+          {mapOpen?'Hide':'Show'}
+        </button>
+      </SectionHead>
+      {mapOpen?<div className="panel" style={{padding:'var(--s3)'}}>
+        <Treemap items={subnets}
+          sizeKey={s=>Number(s.total)||Math.pow(2,32-(Number(s.cidr)||32))}
+          colorFn={s=>utilColor(utilOf(s))}
+          groupKey={s=>s.site||'—'}
+          labelKey={s=>s.name||s.addr}
+          onClick={s=>nav('network',{subnet:s.addr||s.id})}
+          height={220}/>
+      </div>:null}
+    </section>:null}
     <section>
       <SectionHead title={drill?'Subnet detail':'Subnets'}>
         <Freshness at={fetchedAt} onRetry={refetch}/>
@@ -2431,7 +2454,8 @@ function DnsTab(){
   const zoneCols=[
     {key:'fqdn',label:'Zone',mono:true,align:'left'},
     {key:'view',label:'View',hideSm:true},
-    {key:'ttl',label:'TTL',mono:true,align:'right'},
+    {key:'ttl',label:'TTL',mono:true,align:'right',
+      render:heatCell(r=>Number(r.ttl),{warn:60,crit:86400,mode:'range'})},
     {key:'issues',label:'Issues',align:'left',render:v=>(v&&v.length)
       ? <span className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>{v.join(', ')}</span> : ''},
     {key:'anomaly',label:'Flag',align:'left',render:v=>v
