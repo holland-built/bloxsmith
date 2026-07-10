@@ -132,6 +132,42 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIsInstance(d, dict)
 
+    # ── threat-intel + degraded-widget endpoints (new build) ──────────────────
+
+    def test_api_dossier(self):
+        # External-intel dossier: 200 with a `sources` payload OR `unavailable`
+        # (Threat IQ is tenant-gated — skip like the LLM-flake tests when absent).
+        status, d = get_json("/api/dossier?q=eicar.co")
+        self.assertEqual(status, 200)
+        self.assertTrue("sources" in d or "unavailable" in d,
+                        f"dossier missing both 'sources' and 'unavailable': {list(d)[:8]}")
+        if d.get("unavailable"):
+            self.skipTest("dossier unavailable (Threat IQ not entitled on this tenant)")
+        self.assertIn("summary", d, "entitled dossier must carry a 'summary'")
+
+    def test_api_lookalikes(self):
+        status, d = get_json("/api/lookalikes")
+        self.assertEqual(status, 200)
+        self.assertTrue("domains" in d or "unavailable" in d,
+                        f"lookalikes missing both 'domains' and 'unavailable': {list(d)[:8]}")
+        if "domains" in d:
+            self.assertIsInstance(d["domains"], list, "'domains' must be a list")
+
+    def _assert_no_500(self, path):
+        # Degraded-widget contract: the widget endpoint must degrade to a 200
+        # envelope (real data OR {"data":[], "unavailable":...}), never 500.
+        try:
+            status, ct, body = get(path)
+        except HTTPError as e:
+            self.fail(f"{path} returned HTTP {e.code}, must never 500 (degrade to 200 envelope)")
+        self.assertEqual(status, 200, f"{path} returned {status}, must never 500")
+
+    def test_api_insights_no_500(self):
+        self._assert_no_500("/api/insights")
+
+    def test_api_actions_no_500(self):
+        self._assert_no_500("/api/actions")
+
     def test_api_dns_analytics_shape(self):
         status, d = get_json("/api/dns-analytics")
         self.assertEqual(status, 200)
@@ -609,6 +645,35 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("action-bar", "action-bar bulk-action class missing")
         self.assertContains("Export CSV", "Export CSV built-in bulk action missing")
         self.assertContains("label:'Copy'", "Copy built-in bulk action missing")
+
+    # ── display-form primitives (new build) ────────────────────────────────────
+
+    def _region(self, name):
+        s = self.html.index("REGION: " + name)
+        e = self.html.index("END: " + name, s)
+        return self.html[s:e]
+
+    def test_display_primitives(self):
+        # Treemap / VolumeHistogram / heatCell / trendCell / AiExplain all defined.
+        for needle in ("function Treemap", "VolumeHistogram", "function heatCell",
+                       "trendCell", "AiExplain"):
+            self.assertContains(needle, f"display primitive '{needle}' missing")
+
+    def test_dossier_wired(self):
+        # External-intel (Dossier) lookup wired into the SECURITY region.
+        self.assertIn("/api/dossier", self._region("SECURITY"),
+                      "/api/dossier not referenced inside the SECURITY region")
+
+    def test_lookalikes_wired(self):
+        self.assertIn("/api/lookalikes", self._region("SECURITY"),
+                      "/api/lookalikes not referenced inside the SECURITY region")
+
+    def test_treemap_wired(self):
+        # Capacity map in NETDNS renders a Treemap over the subnet list.
+        net = self._region("NETDNS")
+        self.assertIn("Capacity map", net, "Capacity map section missing from NETDNS")
+        self.assertIn("<Treemap items={subnets}", net,
+                      "Treemap not wired into the NETDNS Capacity map")
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
