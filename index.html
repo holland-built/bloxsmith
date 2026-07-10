@@ -1121,8 +1121,8 @@ function Skeleton({rows=4}){
 /* ─────────────────────────────────────────────────────────────
    6. Hash router — parse #tab?k=v. Legacy redirects. nav() helper.
    ───────────────────────────────────────────────────────────── */
-const TABS=['overview','daily','network','dns','infra','security','audit','provision','selfservice'];
-const TAB_LABELS={overview:'Overview',daily:'Daily',network:'Network',dns:'DNS',infra:'Infra',security:'Security',audit:'Audit',provision:'Provision',selfservice:'Self-Service'};
+const TABS=['overview','daily','network','dns','infra','security','audit','provision','drift','selfservice'];
+const TAB_LABELS={overview:'Overview',daily:'Daily',network:'Network',dns:'DNS',infra:'Infra',security:'Security',audit:'Audit',provision:'Provision',drift:'Drift',selfservice:'Self-Service'};
 const LEGACY={home:'overview',map:'network',dhcp:'network',ipam:'network',dns:'dns',
   security:'security',assets:'infra',audit:'audit',search:'overview',ask:'overview',hub:'overview',
   summary:'daily',trends:'daily'};
@@ -4689,6 +4689,15 @@ function ProvisionTab(){
   const [siteErr,setSiteErr]=useState(null);
   const siteEsRef=useRef(null);
 
+  // Per-site teardown (site mode).
+  const [siteTeardownDry,setSiteTeardownDry]=useState(true);
+  const [siteTeardownConfirm,setSiteTeardownConfirm]=useState('');
+  const [siteTeardownLog,setSiteTeardownLog]=useState([]);
+  const [siteTeardownStreaming,setSiteTeardownStreaming]=useState(false);
+  const [siteTeardownResult,setSiteTeardownResult]=useState(null);
+  const [siteTeardownErr,setSiteTeardownErr]=useState(null);
+  const siteTeardownEsRef=useRef(null);
+
   // Seed demo mode.
   const [seedRegions,setSeedRegions]=useState({amer:true,emea:true,apac:true});
   const [seedSpace,setSeedSpace]=useState('');
@@ -4700,12 +4709,24 @@ function ProvisionTab(){
   const [seedErr,setSeedErr]=useState(null);
   const seedEsRef=useRef(null);
 
+  // Seed demo teardown (Phase 2) — live (dry-off) runs require typing DELETE.
+  const [teardownDry,setTeardownDry]=useState(true);
+  const [teardownConfirm,setTeardownConfirm]=useState('');
+  const [teardownLog,setTeardownLog]=useState([]);
+  const [teardownRows,setTeardownRows]=useState({});
+  const [teardownStreaming,setTeardownStreaming]=useState(false);
+  const [teardownSummary,setTeardownSummary]=useState(null);
+  const [teardownErr,setTeardownErr]=useState(null);
+  const teardownEsRef=useRef(null);
+
   useEffect(()=>{ setSpace(params.space||''); },[params.space]);
   // Cleanup: close any live streams on unmount so none leak past this tab.
   useEffect(()=>()=>{
     if(esRef.current){ esRef.current.close(); esRef.current=null; }
     if(siteEsRef.current){ siteEsRef.current.close(); siteEsRef.current=null; }
+    if(siteTeardownEsRef.current){ siteTeardownEsRef.current.close(); siteTeardownEsRef.current=null; }
     if(seedEsRef.current){ seedEsRef.current.close(); seedEsRef.current=null; }
+    if(teardownEsRef.current){ teardownEsRef.current.close(); teardownEsRef.current=null; }
   },[]);
 
   if(locked) return null;
@@ -4756,6 +4777,30 @@ function ProvisionTab(){
     };
   };
 
+  const siteTeardownStart=()=>{
+    if(siteTeardownStreaming||siteTeardownEsRef.current) return; // guard: never open a second concurrent stream
+    if(!siteTeardownDry&&!siteTeardownConfirm.trim()){ toast('Type the site name to confirm','err'); return; }
+    if(!siteTeardownDry&&!window.confirm("This permanently deletes the site '"+siteTemplate+"' and its objects. Continue?")) return;
+    setSiteTeardownLog([]);setSiteTeardownResult(null);setSiteTeardownErr(null);setSiteTeardownStreaming(true);
+    const qs=new URLSearchParams({template:siteTemplate,dry:siteTeardownDry?'1':'0'});
+    if(siteSpace) qs.set('ip_space',siteSpace);
+    if(!siteTeardownDry) qs.set('confirm',siteTeardownConfirm.trim());
+    const es=new EventSource('/api/teardown/site/stream?'+qs.toString());
+    siteTeardownEsRef.current=es;
+    const stop=()=>{ if(siteTeardownEsRef.current){ siteTeardownEsRef.current.close(); siteTeardownEsRef.current=null; } setSiteTeardownStreaming(false); };
+    es.onmessage=(e)=>{
+      let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
+      setSiteTeardownLog(prev=>[...prev,j]);
+      if(j&&j.error){ setSiteTeardownErr(j.error); stop(); toast('Site teardown failed: '+j.error,'err'); }
+      else if(j&&j.done){ setSiteTeardownResult(j.result||null); stop(); toast('Site torn down','ok'); }
+    };
+    es.onerror=()=>{
+      if(!siteTeardownEsRef.current) return; // already closed via done/error message
+      setSiteTeardownErr(prev=>prev||'Stream connection error');
+      stop();
+    };
+  };
+
   const seedStart=()=>{
     if(seedStreaming||seedEsRef.current) return; // guard: never open a second concurrent stream
     const regionList=Object.keys(seedRegions).filter(r=>seedRegions[r]);
@@ -4777,6 +4822,32 @@ function ProvisionTab(){
     es.onerror=()=>{
       if(!seedEsRef.current) return; // already closed via done/error message
       setSeedErr(prev=>prev||'Stream connection error');
+      stop();
+    };
+  };
+
+  const teardownStart=()=>{
+    if(teardownStreaming||teardownEsRef.current) return; // guard: never open a second concurrent stream
+    if(!teardownDry&&teardownConfirm.trim()!=='DELETE'){ toast('Type DELETE to confirm live teardown','err'); return; }
+    const regionList=Object.keys(seedRegions).filter(r=>seedRegions[r]);
+    if(!regionList.length){ toast('Select at least one region','err'); return; }
+    if(!teardownDry&&!window.confirm('This permanently deletes every seed-created object in '+(seedSpace||'the default space')+'. Continue?')) return;
+    setTeardownLog([]);setTeardownRows({});setTeardownSummary(null);setTeardownErr(null);setTeardownStreaming(true);
+    const qs=new URLSearchParams({dry:teardownDry?'1':'0',regions:regionList.join(','),confirm:teardownDry?'':'DELETE'});
+    if(seedSpace) qs.set('ip_space',seedSpace);
+    const es=new EventSource('/api/teardown/seed-demo/stream?'+qs.toString());
+    teardownEsRef.current=es;
+    const stop=()=>{ if(teardownEsRef.current){ teardownEsRef.current.close(); teardownEsRef.current=null; } setTeardownStreaming(false); };
+    es.onmessage=(e)=>{
+      let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
+      setTeardownLog(prev=>[...prev,j]);
+      if(j&&j.template){ setTeardownRows(prev=>({...prev,[j.template]:{phase:j.phase,error:j.error}})); }
+      if(j&&j.error&&!j.template){ setTeardownErr(j.error); stop(); toast('Teardown failed: '+j.error,'err'); }
+      else if(j&&j.done){ setTeardownSummary(j.summary||null); stop(); toast('Teardown complete','ok'); }
+    };
+    es.onerror=()=>{
+      if(!teardownEsRef.current) return; // already closed via done/error message
+      setTeardownErr(prev=>prev||'Stream connection error');
       stop();
     };
   };
@@ -4868,6 +4939,22 @@ function ProvisionTab(){
             <span>Dry-run (no changes made)</span>
           </label>
           <button className="btn" disabled={siteStreaming||!siteTemplate} onClick={siteStart}>{siteStreaming?'Provisioning…':'Provision site'}</button>
+          <div style={{borderTop:'1px solid var(--border)',marginTop:'var(--s3)',paddingTop:'var(--s3)',display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+            <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>
+              Tear down this site — permanently deletes its provisioned objects.
+            </div>
+            <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+              <input type="checkbox" checked={siteTeardownDry} onChange={e=>setSiteTeardownDry(e.target.checked)}/>
+              <span>Dry-run (no changes made)</span>
+            </label>
+            {!siteTeardownDry?<label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+              Type the site name to confirm
+              <input className="vault-in" value={siteTeardownConfirm} onChange={e=>setSiteTeardownConfirm(e.target.value)} placeholder={siteTemplate||'site name'}/>
+            </label>:null}
+            <button className="btn" disabled={siteTeardownStreaming||!siteTemplate||(!siteTeardownDry&&!siteTeardownConfirm.trim())} onClick={siteTeardownStart}>
+              {siteTeardownStreaming?'Tearing down…':'Tear down this site'}
+            </button>
+          </div>
         </div>
       </Panel>
       <Panel title="Live log">
@@ -4883,6 +4970,17 @@ function ProvisionTab(){
         <div className="mono" style={{fontSize:'var(--t12)'}}>{JSON.stringify(siteSuccess)}</div>
       </Panel>:null}
       {siteErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{siteErr}</div></Panel>:null}
+      {siteTeardownLog.length?<Panel title="Teardown log">
+        <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+          {siteTeardownLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
+            {l.error?('✕ '+l.error):l.done?'✓ done':(l.step||JSON.stringify(l))}
+          </div>)}
+        </div>
+      </Panel>:null}
+      {siteTeardownResult?<Panel title="Teardown result">
+        <div className="mono" style={{fontSize:'var(--t12)'}}>{JSON.stringify(siteTeardownResult)}</div>
+      </Panel>:null}
+      {siteTeardownErr?<Panel title="Teardown error"><div className="mono" style={{color:'var(--crit)'}}>{siteTeardownErr}</div></Panel>:null}
     </div>:null}
     {mode==='seed'?<div className="grid">
       <Panel title="Seed multi-region demo data">
@@ -4906,9 +5004,22 @@ function ProvisionTab(){
             <input type="checkbox" checked={seedDry} onChange={e=>setSeedDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
-          <div style={{display:'flex',gap:'var(--s3)'}}>
-            <button className="btn" disabled={seedStreaming} onClick={seedStart}>{seedStreaming?'Seeding…':'Seed Demo Data'}</button>
-            <button className="btn" disabled title="Coming in a later phase">Tear down demo (Phase 2)</button>
+          <button className="btn" disabled={seedStreaming} onClick={seedStart}>{seedStreaming?'Seeding…':'Seed Demo Data'}</button>
+          <div style={{borderTop:'1px solid var(--border)',marginTop:'var(--s3)',paddingTop:'var(--s3)',display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+            <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>
+              Tear down demo — permanently deletes every seed-created object in {seedSpace||'the default space'}.
+            </div>
+            <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+              <input type="checkbox" checked={teardownDry} onChange={e=>setTeardownDry(e.target.checked)}/>
+              <span>Dry-run (no changes made)</span>
+            </label>
+            {!teardownDry?<label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+              Type DELETE to confirm
+              <input className="vault-in" value={teardownConfirm} onChange={e=>setTeardownConfirm(e.target.value)} placeholder="DELETE"/>
+            </label>:null}
+            <button className="btn" disabled={teardownStreaming||(!teardownDry&&teardownConfirm.trim()!=='DELETE')} onClick={teardownStart}>
+              {teardownStreaming?'Tearing down…':'Tear down demo'}
+            </button>
           </div>
         </div>
       </Panel>
@@ -4937,10 +5048,127 @@ function ProvisionTab(){
         </div>
       </Panel>:null}
       {seedErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{seedErr}</div></Panel>:null}
+      <Panel title="Teardown progress">
+        {Object.keys(teardownRows).length===0
+          ? <div className="dt-empty">No output yet</div>
+          : <div style={{display:'flex',flexDirection:'column',gap:2}}>
+              {Object.entries(teardownRows).map(([tpl,row])=>
+                <div key={tpl} className="mono" style={{fontSize:'var(--t12)',color:row.error?'var(--crit)':'var(--text-dim)'}}>
+                  {tpl}: {row.error?('✕ '+row.error):(row.phase||'…')}
+                </div>)}
+            </div>}
+      </Panel>
+      <Panel title="Teardown log">
+        {teardownLog.length===0
+          ? <div className="dt-empty">No output yet</div>
+          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+              {teardownLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
+                {l.error?(l.template?('✕ '+l.template+': '+l.error):('✕ '+l.error)):l.done?'✓ done':(l.template?(l.template+' — '+(l.phase||'')):(l.step||JSON.stringify(l)))}
+              </div>)}
+            </div>}
+      </Panel>
+      {teardownSummary?<Panel title="Teardown summary">
+        <div className="mono" style={{fontSize:'var(--t12)'}}>
+          Succeeded: {teardownSummary.succeeded ?? 0} · Failed: {teardownSummary.failed ?? 0} · Skipped: {teardownSummary.skipped ?? 0}
+        </div>
+      </Panel>:null}
+      {teardownErr?<Panel title="Teardown error"><div className="mono" style={{color:'var(--crit)'}}>{teardownErr}</div></Panel>:null}
     </div>:null}
   </div>;
 }
 // ═══ END: PROVISION ═══
+
+/* DriftTab — read-only: pick a site template (+ optional ip_space override),
+   POST /api/drift/check, render a status chip + drifts grouped by category.
+   No writes, no dry-run toggle, no confirm gate — nothing here mutates. */
+function DriftTab(){
+  const {locked}=useData();
+  const templatesApi=useApi('/api/templates');
+  const spacesApi=useApi('/api/ipam/spaces');
+  const [template,setTemplate]=useState('');
+  const [ipSpace,setIpSpace]=useState('');
+  const [checking,setChecking]=useState(false);
+  const [result,setResult]=useState(null);
+  const [err,setErr]=useState(null);
+  if(locked) return null;
+
+  const templates=(Array.isArray(templatesApi.data)?templatesApi.data:[]).filter(t=>!t.type||t.type==='site');
+  const spaces=(spacesApi.data&&spacesApi.data.spaces)||[];
+
+  const check=()=>{
+    if(checking||!template) return;
+    setChecking(true);setResult(null);setErr(null);
+    fetch('/api/drift/check',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({template,ip_space:ipSpace||undefined})})
+      .then(async r=>{
+        let body=null; try{body=await r.json();}catch(e){body=null;}
+        if(!r.ok||(body&&body.error)){ setErr((body&&body.error)||('HTTP '+r.status)); setChecking(false); return; }
+        setResult(body); setChecking(false);
+      })
+      .catch(e=>{ setErr(String((e&&e.message)||e)); setChecking(false); });
+  };
+
+  const groups={};
+  if(result&&Array.isArray(result.drifts)){
+    result.drifts.forEach(d=>{
+      const cat=d.category||'other';
+      (groups[cat]||(groups[cat]=[])).push(d);
+    });
+  }
+
+  return <div className="page fadein">
+    <SectionRule title="Drift"/>
+    <div className="grid">
+      <Panel title="Check drift">
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Template
+            <select className="vault-in" value={template} onChange={e=>setTemplate(e.target.value)}>
+              <option value="">{templatesApi.loading?'Loading templates…':'Select a template'}</option>
+              {templates.map(t=><option key={t.name} value={t.name}>
+                {t.name+' — '+(t.region||'')+'/'+(t.environment||'')}
+              </option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            IP space (override)
+            <select className="vault-in" value={ipSpace} onChange={e=>setIpSpace(e.target.value)}>
+              <option value="">— template default —</option>
+              {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
+            </select>
+          </label>
+          <button className="btn" disabled={checking||!template} onClick={check}>{checking?'Checking…':'Check drift'}</button>
+        </div>
+      </Panel>
+      {result?<Panel title="Result">
+        {result.found===false
+          ? <div className="dt-empty">Site not found for this template</div>
+          : <>
+              <div style={{display:'flex',alignItems:'center',gap:'var(--s3)',marginBottom:'var(--s3)'}}>
+                <span className="mono" style={{fontSize:'var(--t12)'}}>{result.site||template}</span>
+                <span className="chip" style={{color:result.drifted?'var(--crit)':'var(--ok)',borderColor:result.drifted?'var(--crit)':'var(--ok)'}}>
+                  {result.drifted?('✗ '+((result.drifts&&result.drifts.length)||0)+' items'):'✓ no drift'}
+                </span>
+                {result.subnet_count!=null?<span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>{result.subnet_count} subnets</span>:null}
+              </div>
+              {result.summary?<div className="mono" style={{fontSize:'var(--t12)',color:'var(--text-dim)',marginBottom:'var(--s3)'}}>{result.summary}</div>:null}
+              {Object.keys(groups).length===0
+                ? <div className="dt-empty">No drift items</div>
+                : Object.entries(groups).map(([cat,items])=>
+                    <div key={cat} style={{marginBottom:'var(--s3)'}}>
+                      <div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)',textTransform:'uppercase',marginBottom:4}}>{cat}</div>
+                      <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                        {items.map((d,i)=><div key={i} className="mono" style={{fontSize:'var(--t12)',color:secSevColor(d.severity)}}>
+                          {d.message}
+                        </div>)}
+                      </div>
+                    </div>)}
+            </>}
+      </Panel>:null}
+      {err?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{err}</div></Panel>:null}
+    </div>
+  </div>;
+}
 
 /* subsequence match — chars of needle appear in order within hay (fuzzy go-to). */
 function subseqMatch(needle,hay){
@@ -5133,6 +5361,7 @@ const TAB_COMPONENTS={
   security:SecurityTab,
   audit:AuditTab,
   provision:ProvisionTab,
+  drift:DriftTab,
   selfservice:SelfServiceTab,
 };
 
