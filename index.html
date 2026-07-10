@@ -2011,6 +2011,19 @@ function NetworkTab(){
   const {params}=useRoute();
   const {data,error,locked,loading,fetchedAt,refetch}=useData();
   const {delta}=useSnapshots();
+  // histByAddr — per-subnet util history from the snapshot store. Each snapshot day
+  // holds subnets.top:[{a,u}]; assemble values=[u per day] keyed by addr. Only subnets
+  // present across ≥2 days get a series → the Trend sparkline renders honestly (no fabrication).
+  // MUST run before any early return (hooks-order rule).
+  const histByAddr=useMemo(()=>{
+    const days=(readSnaps().days||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const h={};
+    days.forEach(d=>{
+      const top=(d&&d.subnets&&Array.isArray(d.subnets.top))?d.subnets.top:[];
+      top.forEach(t=>{ if(t&&t.a!=null&&typeof t.u==='number'){ (h[t.a]||(h[t.a]=[])).push(t.u); } });
+    });
+    return h;
+  },[fetchedAt]);
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
@@ -2042,19 +2055,6 @@ function NetworkTab(){
     label:(s.name||s.addr||'—')+' · '+utilOf(s)+'%',
     onClick:()=>nav('network',{subnet:s.addr||s.id}),
   }));
-
-  // histByAddr — per-subnet util history from the snapshot store. Each snapshot day
-  // holds subnets.top:[{a,u}]; assemble values=[u per day] keyed by addr. Only subnets
-  // present across ≥2 days get a series → the Trend sparkline renders honestly (no fabrication).
-  const histByAddr=useMemo(()=>{
-    const days=(readSnaps().days||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-    const h={};
-    days.forEach(d=>{
-      const top=(d&&d.subnets&&Array.isArray(d.subnets.top))?d.subnets.top:[];
-      top.forEach(t=>{ if(t&&t.a!=null&&typeof t.u==='number'){ (h[t.a]||(h[t.a]=[])).push(t.u); } });
-    });
-    return h;
-  },[fetchedAt]);
 
   const subnetCols=[
     {key:'name',label:'Subnet'},
