@@ -1590,6 +1590,7 @@ function OverviewTab(){
   },[dns.data]);
   const volMax=Math.max(1,...volSeries.map(p=>p.v));
   const volTotal=volSeries.reduce((a,p)=>a+p.v,0);
+  const volValues=volSeries.map(p=>p.v); // real 7 daily totals for the inline sparkline
   const dayLabel=(t)=>{
     const dt=new Date(t);
     return isNaN(dt.getTime())?String(t).slice(5,10):dt.toLocaleDateString(undefined,{weekday:'short'});
@@ -1701,7 +1702,10 @@ function OverviewTab(){
     </div>
 
     <OvSection title="DNS volume — 7 days"
-      aside={volSeries.length?volTotal.toLocaleString()+' queries':null}
+      aside={volSeries.length?<span style={{display:'inline-flex',alignItems:'center',gap:8}}>
+        {volTotal.toLocaleString()+' queries'}
+        <Sparkline values={volValues}/>
+      </span>:null}
       api={dns}>
       {volSeries.length
         ? <div className="ov-bars">
@@ -2948,13 +2952,7 @@ function AskTab(){
 const AUDIT_ACT_COLOR={CREATE:'var(--ok)',DELETE:'var(--crit)',UPDATE:'var(--warn)'};
 function AuditTab(){
   const {data,error,locked,fetchedAt,refetch,loading}=useData();
-  const [q,setQ]=useState('');
   const rows=(data&&(data.auditLogs||data.audit))||[];
-  const filtered=useMemo(()=>{
-    const t=q.trim().toLowerCase();
-    if(!t) return rows;
-    return rows.filter(r=>[r.user,r.resource,r.action].some(v=>String(v||'').toLowerCase().includes(t)));
-  },[rows,q]);
   const cols=[
     {key:'ts',label:'Time',mono:true,align:'left',width:190},
     {key:'user',label:'User'},
@@ -2989,10 +2987,7 @@ function AuditTab(){
 
   return <div className="page">
     <SynthBand tone={tone} verdict={verdict} facts={facts}/>
-    <div style={{display:'flex',alignItems:'center',gap:12}}>
-      <input className="ask-in mono" style={{maxWidth:320,height:32,flex:'0 1 320px'}}
-        placeholder="Filter user / resource / action…" value={q} onChange={e=>setQ(e.target.value)}
-        aria-label="Filter audit log"/>
+    <div style={{display:'flex',alignItems:'center',gap:12,justifyContent:'flex-end'}}>
       <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
     </div>
     <div className="panel" style={{padding:'4px 12px 12px'}}>
@@ -3002,7 +2997,9 @@ function AuditTab(){
           ? <div className="dt-empty">Vault locked — unlock to load the audit log.</div>
           : error
             ? <div className="dt-empty">Failed to load audit log — <button className="fresh-retry" onClick={refetch}>Retry</button></div>
-            : <DataTable cols={cols} rows={filtered} defaultSort={{key:'ts',dir:'desc'}} csvName="audit"/>}
+            : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}} csvName="audit"
+                tableId="audit" rowKey={r=>String(r.id??((r.ts||'')+'|'+(r.user||'')+'|'+(r.action||'')))}
+                selectable filterable filterKeys={['user','resource','action']}/>}
     </div>
   </div>;
 }
