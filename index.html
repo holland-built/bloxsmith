@@ -3212,7 +3212,14 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
     {key:'qname',label:'Query',mono:true,copy:true,render:v=>v||'—'},
     {key:'spark',label:'24h',render:()=>'—',spark:e=>{const arr=activityByQname[e.qname];if(!arr)return null;const nz=arr.filter(x=>x>0).length;return nz>=2?arr:null;}},
     {key:'policy_action',label:'Action',render:v=>v||'—'},
-    {key:'feed_name',label:'Feed',hideSm:true,render:v=><span style={{color:'var(--text-dim)'}}>{v||'—'}</span>},
+    {key:'feed_name',label:'Feed',hideSm:true,render:(v,e)=>{
+      if(!v) return <span style={{color:'var(--text-dim)'}}>—</span>;
+      const ind=e.threat_indicator;
+      return <HoverCard trigger={<span style={{color:'var(--text-dim)',borderBottom:'1px dotted var(--border)'}}>{v}</span>}
+        content={<span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-dim)',wordBreak:'break-all'}}>
+          <span style={{color:'var(--text-faint)'}}>Feed </span>{v}{ind?<><br/><span style={{color:'var(--text-faint)'}}>Indicator </span>{String(ind)}</>:null}
+        </span>}/>;
+    }},
     {key:'device',label:'Device',hideSm:true,render:v=>v||'—'},
     {key:'event_time',label:'Time',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
   ];
@@ -3262,6 +3269,8 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
       ? <div className="dt-empty">No events</div>
       : <DataTable cols={cols} rows={rows} tableId="triage"
           rowKey={r=>String(r.event_time)+'|'+String(r.qname)}
+          maxRows={50}
+          problemsOnly={{label:'Hide acked',test:e=>!acks[secAckKey(e)],default:true}}
           selectable bulkActions={bulkActions} initialPeekKey={initialPeekKey}
           renderPeek={e=><SecEventPeek e={e} acks={acks} toggleAck={toggleAck} onExplain={onExplain}/>}/>}
   </div>;
@@ -3428,7 +3437,7 @@ function SecInsights(){
     <SecHead title="SOC insights" at={fetchedAt} onRetry={refetch} error={error}/>
     {error&&!rows.length
       ? <div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div>
-      : rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} csvName="soc-insights"/>:<div className="dt-empty">No insights</div>}
+      : rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} maxRows={50} csvName="soc-insights"/>:<div className="dt-empty">No insights</div>}
   </div>;
 }
 function SecActions(){
@@ -3440,7 +3449,7 @@ function SecActions(){
     <SecHead title="Actions" at={fetchedAt} onRetry={refetch} error={error}/>
     {error&&!rows.length
       ? <div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div>
-      : rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} csvName="actions"/>:<div className="dt-empty">No actions</div>}
+      : rows.length?<DataTable cols={secAutoCols(rows)} rows={rows} maxRows={50} csvName="actions"/>:<div className="dt-empty">No actions</div>}
   </div>;
 }
 
@@ -3482,7 +3491,7 @@ function SecLookalikes(){
     {rows.length===0
       ? <div className="dt-empty">No lookalike domains</div>
       : <DataTable cols={cols} rows={rows} tableId="lookalikes" csvName="lookalike-domains"
-          rowKey={r=>String(r.lookalike)} selectable bulkActions={bulkActions}/>}
+          maxRows={50} rowKey={r=>String(r.lookalike)} selectable bulkActions={bulkActions}/>}
   </div>;
 }
 function SecSynthBand({api,acks,setSevF,triageRef}){
