@@ -15,13 +15,14 @@ test('daily renders delta tiles, open-issues rollup, and first-visit note', asyn
   await expect(lead).toBeVisible({ timeout: 15000 });
   await expect(lead).not.toHaveText('');
 
-  // Delta-tiles region with at least one tile.
-  await expect(page.locator('.dly-tiles')).toBeVisible();
-  await expect(page.locator('.dly-tile').first()).toBeVisible();
+  // Delta-tiles region with at least one tile (now shared KpiSpark tiles: .kpis > .kpi).
+  await expect(page.locator('.kpis')).toBeVisible();
+  await expect(page.locator('.kpi').first()).toBeVisible();
 
   // "Open issues" rollup section exists.
   await expect(page.locator('.main').getByText('Open issues', { exact: true })).toBeVisible();
 
   // First visit (no prior snapshot) -> the first-visit note is shown.
-  await expect(page.locator('.dly-note')).toContainText('First visit');
+  // (.dly-note is now reused by the current-state panels, so scope to the note itself.)
+  await expect(page.locator('.dly-note').filter({ hasText: 'First visit' })).toBeVisible();
 });

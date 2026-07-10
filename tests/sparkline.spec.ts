@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
 
-// Sparklines on the #security triage table's "24h" column. A series only renders
-// when a qname has >=2 distinct non-zero activity hours (no-fabrication guard):
-//   - two events, same qname, different hours  -> svg.spark rendered
-//   - each qname once (single hour)            -> NO svg.spark, even with rows
+// 24h activity trend on the #security triage table's "24h" column. It's now a
+// MiniBars primitive (svg.rowspark), and only renders when a qname has >=2 distinct
+// non-zero activity hours (no-fabrication guard):
+//   - two events, same qname, different hours  -> svg.rowspark rendered
+//   - each qname once (single hour)            -> NO svg.rowspark, even with rows
 
 const TREND = {
   counts: { high: 2 },
@@ -27,7 +28,7 @@ test('a qname with >=2 active hours renders a sparkline', async ({ page }) => {
   );
   await page.goto('/#security');
   await expect(page.locator('table.dt tbody tr').first()).toBeVisible();
-  await expect(page.locator('svg.spark').first()).toBeVisible();
+  await expect(page.locator('table.dt svg.rowspark').first()).toBeVisible();
 });
 
 test('single-occurrence series render NO sparkline (no fabrication)', async ({ page }) => {
@@ -37,6 +38,6 @@ test('single-occurrence series render NO sparkline (no fabrication)', async ({ p
   await page.goto('/#security');
   // Rows exist...
   await expect(page.locator('table.dt tbody tr').first()).toBeVisible();
-  // ...but nothing qualifies for a sparkline.
-  await expect(page.locator('svg.spark')).toHaveCount(0);
+  // ...but nothing qualifies for a 24h trend.
+  await expect(page.locator('table.dt svg.rowspark')).toHaveCount(0);
 });

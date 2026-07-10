@@ -35,16 +35,17 @@ test('overview renders the DNS health cell and KPI numbers', async ({ page }) =>
 
   await page.goto('/#overview');
 
-  // Service-health cell with DNS + healthy label + an ok (green) dot.
-  const dnsCell = page.locator('.ov-cell').filter({ hasText: 'DNS' });
+  // Service-health chip (now a .svc chip inside the SynthBand) with DNS + its
+  // meta line + an ok (green) status dot.
+  const dnsCell = page.locator('.svc').filter({ hasText: 'DNS' });
   await expect(dnsCell).toBeVisible();
-  await expect(dnsCell).toContainText('healthy');
-  const dot = dnsCell.locator('.ov-dot');
+  await expect(dnsCell).toContainText('3/3 up'); // .svc .m meta
+  const dot = dnsCell.locator('.sd.ok');
   await expect(dot).toHaveCSS('background-color', 'rgb(12, 206, 107)'); // var(--ok)
 
   // KPI numbers render (subnets/leases/zones/hosts/threats).
-  const kpis = page.locator('.ov-kpi-n');
+  const kpis = page.locator('.kpi .num');
   await expect(kpis.first()).toBeVisible();
   expect(await kpis.count()).toBeGreaterThan(0);
-  await expect(page.locator('.ov-kpi').filter({ hasText: 'Subnets' })).toContainText('1');
+  await expect(page.locator('.kpi').filter({ hasText: 'Subnets' })).toContainText('1');
 });
