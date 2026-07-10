@@ -28,7 +28,7 @@ test('network capacity renders per-site GroupedBar and no treemap', async ({ pag
   await expect(page.locator('.groupbar-row')).toHaveCount(3);
 
   // Top consumers list is present.
-  await expect(page.getByText('Top capacity consumers')).toBeVisible();
+  await expect(page.getByText('Top consumers')).toBeVisible();
 
   // The old Treemap is gone: no SVG treemap, and the "Capacity map" label is absent.
   await expect(page.locator('.tm-svg')).toHaveCount(0);
@@ -43,7 +43,8 @@ test('clicking a site bar filters the subnet table by that site', async ({ page 
   await page.goto('/#network', { waitUntil: 'networkidle' });
   await expect(page.locator('.groupbar')).toBeVisible();
 
-  // Click the first (worst) site bar -> a "Filter: <site>" chip appears.
+  // Click the first (worst) site bar -> the site filter engages: a "Clear ✕" chip
+  // appears (in the "Capacity by site" panel header) to drop the active site filter.
   await page.locator('.groupbar-row').first().click();
-  await expect(page.locator('.btn-ghost').filter({ hasText: /^Filter:/ })).toBeVisible();
+  await expect(page.locator('.chip').filter({ hasText: 'Clear' })).toBeVisible();
 });
