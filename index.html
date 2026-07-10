@@ -2884,6 +2884,9 @@ function InfraTab({vaultTick}={}){
   // Re-fetch both feeds once a vault unlock is reported upstream.
   useEffect(()=>{ if(vaultTick){ refetch(); mx.refetch(); } },[vaultTick]);
 
+  // Sensor grid is overwhelming by default — hide behind a disclosure.
+  const [showSensors,setShowSensors]=useState(false);
+
   const hosts=(data&&data.hosts)||[];
   const metricRows=(mx.data&&mx.data.metrics)||[];
 
@@ -2994,6 +2997,8 @@ function InfraTab({vaultTick}={}){
         {loading&&!data ? <Skeleton rows={6}/>
           : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
               csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}
+              maxRows={50}
+              problemsOnly={{label:'Needs attention',test:h=>!/^(online|up)$/i.test(String(h.status||'')),default:hosts.length>50}}
               {...{tableId:'hosts'}} rowKey={r=>String(r.name||r.id)}
               selectable filterable filterKeys={['name','ip','type','status']}
               initialPeekKey={params.peek}
@@ -3031,17 +3036,20 @@ function InfraTab({vaultTick}={}){
         {hottest?<React.Fragment>
           <div className="infra-panel-div"/>
           <div className="infra-panel-h">Hottest host</div>
-          <button className="infra-panel-btn" onClick={()=>nav('infra',{host:hottest})}>{hottest} — {hotByHost[hottest]} sensors hot →</button>
+          <button className="infra-panel-btn" onClick={()=>{setShowSensors(true);nav('infra',{host:hottest});}}>{hottest} — {hotByHost[hottest]} sensors hot →</button>
         </React.Fragment>:null}
       </div>
     </div>
 
     <div className="infra-sec">
       <div className="infra-head">
-        <span className="infra-h">Sensors</span>
-        <Freshness at={mx.fetchedAt} error={mx.error} onRetry={mx.refetch}/>
+        <button className="infra-panel-btn infra-h" style={{cursor:'pointer'}} onClick={()=>setShowSensors(v=>!v)}>
+          {showSensors ? 'Hide sensor grid' : 'Show sensor grid ('+hostNames.length+' hosts × '+metricNames.length+' metrics)'}
+        </button>
+        {showSensors ? <Freshness at={mx.fetchedAt} error={mx.error} onRetry={mx.refetch}/> : null}
       </div>
-      {mx.loading&&!mx.data ? <Skeleton rows={6}/>
+      {!showSensors ? null
+        : mx.loading&&!mx.data ? <Skeleton rows={6}/>
         : metricNames.length===0 ? <div className="infra-dim">No metrics reported</div>
         : <div className="sensor-wrap">
             <table className="sensor">
