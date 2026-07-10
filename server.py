@@ -616,6 +616,124 @@ def _rest_get_ex(path: str, params: dict | None = None) -> tuple:
         print(f"  [warn] rest_get_ex {path}: {e}")
         return None, None
 
+def _rest_write(method: str, path: str, body: dict | None = None, params: dict | None = None) -> tuple:
+    """Direct Infoblox REST write (POST/PATCH/DELETE) → (parsed_json, http_status).
+    Mirrors _rest_get_ex's error handling. Callers pass the full path incl. the
+    /api/ddi/v1 prefix. Uses active tenant/account auth. status is None on a
+    network error (no HTTP response at all)."""
+    import urllib.request, urllib.parse, urllib.error
+    q = ("?" + urllib.parse.urlencode(params)) if params else ""
+    url = f"{BASE_URL}{path}{q}"
+    auth = MCP_HEADERS.get("Authorization") or API_KEY
+    data = json.dumps(body).encode() if body is not None else b""
+    req = urllib.request.Request(
+        url, data=data, method=method.upper(),
+        headers={"Authorization": auth, "Accept": "application/json", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=35) as r:
+            raw = r.read()
+            return (json.loads(raw) if raw else None), r.status
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = json.loads(e.read())
+        except Exception:
+            err_body = None
+        return err_body, e.code
+    except Exception as e:
+        print(f"  [warn] rest_write {method} {path}: {e}")
+        return None, None
+
+def _dns_rdata(rtype: str, value: str) -> dict:
+    """Presentation-format value → API rdata dict. Trimmed port of the reference
+    client.py's _rdata_str_to_dict — covers the common record types used by the
+    self-service allocate flow; falls back to a generic PRESENTATION subfield."""
+    rtype = (rtype or "").upper().strip()
+    v = (value or "").strip()
+    if rtype in ("A", "AAAA"):
+        return {"address": v}
+    if rtype == "CNAME":
+        return {"cname": v}
+    if rtype in ("PTR", "NS"):
+        return {"dname": v}
+    return {"subfields": [{"type": "PRESENTATION", "value": v}]}
+
+def _cidr_to_reverse_zone(address: str, prefix_len: int) -> str:
+    """Derive the in-addr.arpa reverse zone FQDN for an IPv4 network. Port of the
+    reference portal.py helper — supports /8, /16, /24 natural boundaries; other
+    prefix lengths fall back to the enclosing /8."""
+    import ipaddress
+    net = ipaddress.ip_network(f"{address}/{prefix_len}", strict=False)
+    octets = str(net.network_address).split(".")
+    if prefix_len >= 24:
+        significant = octets[:3]
+    elif prefix_len >= 16:
+        significant = octets[:2]
+    else:
+        significant = octets[:1]
+    return ".".join(reversed(significant)) + ".in-addr.arpa."
+
+def _selfservice_allocate(body: dict) -> tuple:
+    """Port of the reference allocate_ip (portal.py) using direct REST calls.
+    Resolves a subnet (directly by id, or by tag lookup), reserves the next
+    available IP(s), and optionally creates a DNS record for the first address.
+    Returns (result_dict, http_status)."""
+    subnet_id = str(body.get("subnet_id") or "").strip()
+    tag_key = str(body.get("tag_key") or "").strip()
+    tag_value = str(body.get("tag_value") or "").strip()
+    try:
+        count = int(body.get("count") or 1)
+    except (TypeError, ValueError):
+        count = 1
+    name = str(body.get("name") or "").strip()
+    dry = bool(body.get("dry"))
+    dns = body.get("dns") or None
+
+    if not subnet_id:
+        if not (tag_key and tag_value):
+            return {"ok": False, "error": "subnet_id or tag_key/tag_value required"}, 400
+        subnets = _rest_get("/api/ddi/v1/ipam/subnet", {"tfilter": f'{tag_key}=="{tag_value}"'})
+        if not subnets:
+            return {"ok": False, "error": f"No subnet found with tag {tag_key}=={tag_value}"}, 404
+        subnet_id = subnets[0].get("id")
+
+    if dry:
+        result = {"ok": True, "dry_run": True, "subnet_id": subnet_id, "would_allocate": count, "addresses": []}
+        if name:
+            result["name"] = name
+        if dns:
+            result["record"] = {"dry_run": True, **dns}
+        return result, 200
+
+    body_extra = {}
+    if name:
+        body_extra["name"] = name
+    resp, status = _rest_write(
+        "POST", f"/api/ddi/v1/ipam/subnet/{subnet_id}/nextavailableip",
+        body=body_extra or None, params={"count": count})
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"allocation failed (status {status})", "detail": resp}, status or 502
+
+    addresses = resp.get("results") if isinstance(resp, dict) else None
+    if not addresses and isinstance(resp, dict) and resp.get("result"):
+        addresses = [resp["result"]]
+    addresses = addresses or []
+    out = {"ok": True, "addresses": [{"id": a.get("id"), "address": a.get("address")} for a in addresses]}
+
+    if dns and addresses:
+        zone_id = str(dns.get("zone_id") or "")
+        rname = str(dns.get("name") or "")
+        rtype = str(dns.get("type") or "A").upper()
+        rvalue = str(dns.get("value") or addresses[0].get("address") or "")
+        record_body = {"name_in_zone": rname, "zone": zone_id, "type": rtype, "rdata": _dns_rdata(rtype, rvalue)}
+        rresp, rstatus = _rest_write("POST", "/api/ddi/v1/dns/record", body=record_body)
+        if rstatus in (200, 201) and isinstance(rresp, dict):
+            rec = rresp.get("result") or (rresp.get("results") or [None])[0]
+            out["record"] = {"ok": True, "id": (rec or {}).get("id"), "status": rstatus}
+        else:
+            out["record"] = {"ok": False, "status": rstatus, "detail": rresp}
+
+    return out, 200
+
 # ── encrypted vault (multi-tenant key store) ──────────────────────────────────
 # Keys are secrets the bridge must *replay* to Infoblox, so they're stored
 # reversibly — but encrypted at rest (Fernet/AES) under a key derived from a
@@ -2781,6 +2899,104 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc(f"/api/source/{sid}", e)
                 self._json({"error": "internal error"}, 500)
+        elif path == "/api/ipam/spaces":
+            try:
+                spaces = _rest_get("/api/ddi/v1/ipam/ip_space")
+                self._json({"spaces": [{"id": s.get("id"), "name": s.get("name")} for s in (spaces or [])]})
+            except Exception as e:
+                _log_exc("/api/ipam/spaces", e); self._json({"error": "internal error"}, 500)
+        elif path == "/api/ipam/blocks":
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            try:
+                rest_params = {}
+                filt = []
+                if qp.get("space"):
+                    filt.append(f'space=="{qp["space"]}"')
+                if filt:
+                    rest_params["filter"] = " and ".join(filt)
+                if qp.get("tag_key") and qp.get("tag_value"):
+                    rest_params["tfilter"] = f'{qp["tag_key"]}=="{qp["tag_value"]}"'
+                blocks = _rest_get("/api/ddi/v1/ipam/address_block", rest_params or None)
+                self._json({"blocks": [
+                    {"id": b.get("id"), "address": b.get("address"), "cidr": b.get("cidr"),
+                     "name": b.get("name"), "tags": b.get("tags")} for b in (blocks or [])
+                ]})
+            except Exception as e:
+                _log_exc("/api/ipam/blocks", e); self._json({"error": "internal error"}, 500)
+        elif path == "/api/dns/zones":
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            try:
+                view = qp.get("view", "")
+                views = _rest_get("/api/ddi/v1/dns/view")
+                zone_params = {"filter": f'view=="{view}"'} if view else None
+                zones = _rest_get("/api/ddi/v1/dns/auth_zone", zone_params)
+                self._json({
+                    "views": [{"id": v.get("id"), "name": v.get("name")} for v in (views or [])],
+                    "zones": [{"id": z.get("id"), "fqdn": z.get("fqdn"), "view": z.get("view")} for z in (zones or [])],
+                })
+            except Exception as e:
+                _log_exc("/api/dns/zones", e); self._json({"error": "internal error"}, 500)
+        elif path == "/api/provision/stream":
+            # SSE progress stream for the self-service subnet provisioning wizard.
+            # ThreadingMixIn gives this connection its own thread, so blocking
+            # between flushed events is fine — no async needed.
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            block = qp.get("block", "").strip()
+            cidr = qp.get("cidr", "24").strip() or "24"
+            name = qp.get("name", "").strip()
+            comment = qp.get("comment", "").strip()
+            make_zone = qp.get("make_zone", "0") == "1"
+            dry = qp.get("dry", "0") == "1"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("X-Accel-Buffering", "no")
+            self._send_cors_origin()
+            self.end_headers()
+
+            def emit(obj):
+                try:
+                    self.wfile.write(("data: " + json.dumps(obj) + "\n\n").encode())
+                    self.wfile.flush()
+                except Exception:
+                    pass  # client disconnected mid-stream — nothing to recover
+
+            try:
+                if not block:
+                    emit({"error": "block is required"}); return
+                emit({"step": f"Resolving block {block}…"})
+                if dry:
+                    emit({"step": f"[DRY-RUN] Would create /{cidr} in block {block}"})
+                    emit({"done": True, "subnet": {"id": None, "address": None, "cidr": cidr}})
+                    return
+                body = {}
+                if name: body["name"] = name
+                if comment: body["comment"] = comment
+                result, status = _rest_write(
+                    "POST", f"/api/ddi/v1/ipam/address_block/{block}/nextavailablesubnet",
+                    body=body or None, params={"cidr": int(cidr)})
+                emit({"step": "Subnet allocation result", "status": status, "result": result})
+                subnet = {}
+                if isinstance(result, dict):
+                    rows = result.get("results") or ([result["result"]] if result.get("result") else [])
+                    if rows:
+                        subnet = rows[0] or {}
+                if make_zone and subnet.get("address"):
+                    emit({"step": "Creating DNS zone…"})
+                    fqdn = _cidr_to_reverse_zone(subnet["address"], int(subnet.get("cidr") or cidr))
+                    zresult, zstatus = _rest_write("POST", "/api/ddi/v1/dns/auth_zone", body={"fqdn": fqdn})
+                    emit({"step": "Zone creation result", "status": zstatus, "result": zresult})
+                emit({"done": True, "subnet": {
+                    "id": subnet.get("id"), "address": subnet.get("address"), "cidr": subnet.get("cidr")}})
+            except Exception as e:
+                emit({"error": str(e)})
+            return
         elif path.lstrip("/") in _STATIC_FILES:
             self._file(path.lstrip("/"))  # _file validates realpath before serving
         elif not path.startswith("/api/"):
@@ -2932,6 +3148,15 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(unblock_domain(domain))
             except Exception as e:
                 _log_exc("/api/unblock-domain", e)
+                self._json({"ok": False, "error": "internal error"}, 500)
+        elif self.path == "/api/selfservice/allocate":
+            # State-changing write, but same precedent as /api/switch-account:
+            # gated by the vault-unlocked check above only, no X-Auth-Token.
+            try:
+                result, status = _selfservice_allocate(body)
+                self._json(result, status)
+            except Exception as e:
+                _log_exc("/api/selfservice/allocate", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
         else:
             self._json({"error": "not found"}, 404)
