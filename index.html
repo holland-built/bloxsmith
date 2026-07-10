@@ -35,7 +35,7 @@ try{
   color-scheme:dark;
   --bg:#000; --surface:#0a0a0a; --raised:#111; --hover:#1a1a1a;
   --border:#262626; --border-strong:#333;
-  --text:#ededed; --text-dim:#a1a1a1; --text-faint:#666;
+  --text:#ededed; --text-dim:#a1a1a1; --text-faint:#8a8a8a;
   --accent:#0070f3; --accent-text:#3291ff;
   --ok:#0cce6b; --warn:#f5a623; --crit:#ff4444;
   --scrim:rgba(0,0,0,.6); --crit-tint:rgba(255,68,68,.08); --crit-tint-border:rgba(255,68,68,.3); --warn-tint:rgba(245,166,35,.14);
@@ -51,7 +51,7 @@ try{
 [data-theme="light"]{color-scheme:light;
   --bg:#fafafa;--surface:#fff;--raised:#f2f2f2;--hover:#e8e8e8;
   --border:#e2e2e2;--border-strong:#cfcfcf;
-  --text:#171717;--text-dim:#525252;--text-faint:#737373;
+  --text:#171717;--text-dim:#525252;--text-faint:#5c5c5c;
   --accent:#0070f3;--accent-text:#0057c2;
   --ok:#047857;--warn:#b45309;--crit:#dc2626;
   --scrim:rgba(0,0,0,.35);--crit-tint:rgba(220,38,38,.06);--crit-tint-border:rgba(220,38,38,.3);--warn-tint:rgba(180,83,9,.12);
@@ -255,6 +255,19 @@ table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-al
 .heat{display:inline-block;padding:0 var(--s2);border-radius:var(--r-ctl);}
 .heat-warn{background:var(--warn-tint);}
 .heat-crit{background:var(--crit-tint);}
+/* ── global click-to-pivot / cross-filter ── */
+.pivot-cell{cursor:pointer;border-bottom:1px dotted var(--border-strong);border-radius:2px;padding:0 2px;transition:background .1s ease;}
+.pivot-cell:hover{color:var(--text);background:var(--accent-dim);}
+.pivot-cell.active{background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent-text);color:var(--accent-text);}
+.pivot-cell:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+.filter-bar{position:sticky;top:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);padding:var(--s2) var(--s4);background:var(--surface);border-bottom:1px solid var(--border);}
+.filter-bar-label{font-size:var(--t11);color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;}
+.filter-bar .chip.active{cursor:pointer;color:var(--accent-text);background:var(--accent-dim);border-color:var(--accent-text);height:22px;}
+.filter-bar .chip.active .x{margin-left:6px;color:var(--text-faint);}
+.filter-bar .chip.active:hover{color:var(--text);}
+.filter-bar .chip.active:hover .x{color:var(--text);}
+.filter-clear{height:22px;padding:0 var(--s2);font-size:var(--t11);color:var(--text-dim);background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+.filter-clear:hover{color:var(--text);border-color:var(--border-strong);}
 /* display-form primitives (VolumeHistogram) — viewBox-scaled, overflow-safe */
 .vh-svg{display:block;width:100%;}
 .vh-bar{cursor:pointer;}
@@ -419,7 +432,7 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .trend.fl{color:var(--text-faint);}
 .kpi svg.spark,.kpi svg.rowspark{position:absolute;right:10px;bottom:9px;opacity:.9;}
 
-.sev{font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r-ctl);text-transform:uppercase;letter-spacing:.3px;flex:none;display:inline-block;}
+.sev{font-size:11px;font-weight:600;padding:2px 7px;border-radius:var(--r-ctl);text-transform:uppercase;letter-spacing:.3px;flex:none;display:inline-block;}
 .sev.crit{background:var(--crit-dim);color:var(--crit);}
 .sev.high{background:var(--warn-dim);color:var(--warn);}
 .sev.med{background:var(--accent-dim);color:var(--accent-text);}
@@ -466,6 +479,7 @@ table.dt tbody td{border-bottom-color:var(--border2);}
 
 /* histogram hover value + volume-histogram bar polish */
 .histbar-bar:hover,.vh-bar:hover{filter:brightness(1.25);}
+.histbar-bar:focus-visible,.vh-bar:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;filter:brightness(1.25);}
 
 /* HoverDetail — cursor-following, edge-aware floating card (singleton portal) */
 .hoverdetail{position:fixed;z-index:80;min-width:200px;max-width:260px;left:0;top:0;padding:11px 12px;border-radius:8px;background:var(--raised);border:1px solid var(--border);box-shadow:0 12px 40px rgba(0,0,0,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .13s ease,transform .13s ease;font-size:12px;}
@@ -737,6 +751,84 @@ function PowerProvider({children}){
   return <PowerCtx.Provider value={val}>{children}</PowerCtx.Provider>;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Global click-to-pivot / cross-filter layer.
+   Filters = [{field,value,label}]. Clicking a CODED value anywhere adds a
+   filter; every DataTable AND-filters rows whose field matches one of ITS
+   columns (unrelated tables ignore it). Mirrored to the URL hash `f=` param
+   (field:value,…) via parseHash/nav so pivots are deep-linkable + survive reload.
+   ───────────────────────────────────────────────────────────── */
+// EXPLAIN — enum-code glossary. Default tooltip for coded/pivot columns so every
+// coded chip explains itself. Keyed by column key → lowercased value → text.
+const EXPLAIN={
+  severity:{critical:'Critical — immediate action required',high:'High — urgent review',medium:'Medium — monitor',low:'Low — informational',info:'Informational'},
+  policy_action:{block:'Blocked — request denied',blocked:'Blocked — request denied',redirect:'Redirected — sent to walled garden',log:'Logged — allowed but recorded',allow:'Allowed — permitted',allowed:'Allowed — permitted'},
+  state:{active:'Active — lease currently in use',free:'Free — address available',backup:'Backup — held by failover peer',expired:'Expired — past lease end',offered:'Offered — pending client ACK'},
+  status:{online:'Online — reachable',offline:'Offline — unreachable',active:'Active',inactive:'Inactive',degraded:'Degraded — partial availability'},
+};
+function explain(field,value){ const m=EXPLAIN[field]; if(!m||value==null) return null; return m[String(value).toLowerCase()]||null; }
+
+function parseFilterStr(s){
+  if(!s) return [];
+  return String(s).split(',').map(tok=>{
+    const ci=tok.indexOf(':'); if(ci<0) return null;
+    const field=decodeURIComponent(tok.slice(0,ci));
+    const value=decodeURIComponent(tok.slice(ci+1));
+    if(!field) return null;
+    return {field,value,label:(explain(field,value)?field+': '+value:field+': '+value)};
+  }).filter(Boolean);
+}
+function serializeFilters(arr){ return (arr||[]).map(f=>encodeURIComponent(f.field)+':'+encodeURIComponent(f.value)).join(','); }
+function parseFilterHash(){ const {params}=parseHash(); return parseFilterStr(params.f); }
+
+const FilterCtx=React.createContext(null);
+const NO_FILTERS={filters:[],add(){},remove(){},toggle(){},clear(){},has(){return false;}};
+function useFilters(){ return React.useContext(FilterCtx)||NO_FILTERS; }
+
+function FilterProvider({children}){
+  const [filters,setFilters]=useState(()=>parseFilterHash());
+  const ref=useRef(filters); ref.current=filters;
+  useEffect(()=>{
+    const on=()=>{ const next=parseFilterHash();
+      if(serializeFilters(next)!==serializeFilters(ref.current)) setFilters(next); };
+    window.addEventListener('hashchange',on);
+    return ()=>window.removeEventListener('hashchange',on);
+  },[]);
+  const write=useCallback(next=>{
+    setFilters(next); ref.current=next;
+    const {tab,params}=parseHash(); const p={...params};
+    const s=serializeFilters(next); if(s) p.f=s; else delete p.f;
+    nav(tab,p);
+  },[]);
+  const same=(f,field,value)=>f.field===field&&String(f.value)===String(value);
+  const add=useCallback((field,value,label)=>{ const cur=ref.current;
+    if(cur.some(f=>same(f,field,value))) return;
+    write([...cur,{field,value:String(value),label:label||(field+': '+value)}]); },[write]);
+  const remove=useCallback((field,value)=>{ write(ref.current.filter(f=>!same(f,field,value))); },[write]);
+  const toggle=useCallback((field,value,label)=>{ const cur=ref.current;
+    if(cur.some(f=>same(f,field,value))) write(cur.filter(f=>!same(f,field,value)));
+    else write([...cur,{field,value:String(value),label:label||(field+': '+value)}]); },[write]);
+  const clear=useCallback(()=>write([]),[write]);
+  const has=useCallback((field,value)=>ref.current.some(f=>same(f,field,value)),[]);
+  const val=useMemo(()=>({filters,add,remove,toggle,clear,has}),[filters,add,remove,toggle,clear,has]);
+  return <FilterCtx.Provider value={val}>{children}</FilterCtx.Provider>;
+}
+
+/* ── FilterBar — sticky strip of active pivots under the TopBar. Hidden when empty. ── */
+function FilterBar(){
+  const {filters,remove,clear}=useFilters();
+  if(!filters.length) return null;
+  return <div className="filter-bar" role="region" aria-label="Active filters">
+    <span className="filter-bar-label">Filters</span>
+    {filters.map((f,i)=><button key={f.field+'|'+f.value+'|'+i} className="chip active"
+      title={'Remove filter · '+(explain(f.field,f.value)||f.label)}
+      aria-label={'Remove filter '+f.label}
+      onClick={()=>remove(f.field,f.value)}>
+      {f.label}<span className="x">✕</span></button>)}
+    <button className="filter-clear" onClick={()=>clear()}>Clear all</button>
+  </div>;
+}
+
 /* ── PeekDrawer (F4) — conditionally mounted (unmounted = zero width, overflow-safe).
    Focuses close on open, traps Tab, returns focus to the table wrapper on close. ── */
 function PeekDrawer(){
@@ -813,6 +905,7 @@ function useRowFlash(){
 const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,selectable,rowApi}){
   const align=c=>c.align||(c.mono?'right':'left');
   const isNum=c=>align(c)==='right';
+  const fx=useFilters();
   return <tr id={rowId||undefined}
     className={(clickable?'clickable':'')+(isCursor?' cursor':'')+(isFlash?' flash':'')}
     aria-selected={isCursor?'true':undefined}
@@ -826,10 +919,24 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
       let content; const raw=r[c.key];
       if(c.spark){ const sv=c.spark(r); content=(Array.isArray(sv)&&sv.length>=2)?<Sparkline values={sv}/>:(c.render?c.render(raw,r):'—'); }
       else content=c.render?c.render(raw,r):(raw??'');
-      // native tooltip = full value on hover (zero-cost reveal for truncated cells)
-      const tip=(typeof raw==='string'||typeof raw==='number')?String(raw):undefined;
+      // tooltip contract: explicit tip/tipFn wins → EXPLAIN glossary for coded cells →
+      // raw value only for non-custom-rendered scalar cells (fixes useless title="92").
+      let tip;
+      if(typeof c.tipFn==='function'){ try{tip=c.tipFn(r);}catch(e){} }
+      else if(c.tip!=null) tip=c.tip;
+      if(tip==null) tip=explain(c.key,raw);
+      if(tip==null&&!c.render&&(typeof raw==='string'||typeof raw==='number')) tip=String(raw);
+      // pivot: clicking a coded value scopes every matching table/panel to it.
+      if(c.pivot&&raw!=null&&raw!==''){
+        const pv=String(raw), on=fx.has(c.key,pv), lbl=(c.label||c.key)+': '+pv;
+        const fire=e=>{ e.stopPropagation(); fx.toggle(c.key,pv,lbl); };
+        content=<span className={"pivot-cell"+(on?" active":"")} role="button" tabIndex={0}
+          title={tip||('Filter to '+lbl)} aria-pressed={on} aria-label={(on?'Remove filter ':'Filter to ')+lbl}
+          onClick={fire}
+          onKeyDown={e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fire(e); } }}>{content}</span>;
+      }
       const st=(c.primary||c.width)?{...(c.width?{width:c.width}:{}),...(c.primary?{minWidth:c.minWidth||120}:{})}:null;
-      return <td key={c.key} title={tip}
+      return <td key={c.key} title={c.pivot?undefined:tip}
         className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
         style={st}>{content}</td>;
     })}
@@ -846,6 +953,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
   maxRows,problemsOnly,scrollBody,columnToggle}){
   const power=usePower();
+  const {filters:globalFilters}=useFilters();
   const id=tableId||(csvName?String(csvName):null);
   const [sort,setSort]=useState(defaultSort||null); // {key,dir}
   const [cursor,setCursor]=useState(-1);             // -1 = no visual until a key is pressed
@@ -877,11 +985,18 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const base=(problemsOnly&&probOn)?probRows:data;
 
   const filtered=useMemo(()=>{
-    if(!filterable||!filter.trim()) return base;
-    const t=filter.trim().toLowerCase();
-    const keys=(filterKeys&&filterKeys.length)?filterKeys:columns.map(c=>c.key);
-    return base.filter(r=>keys.some(k=>String(r[k]??'').toLowerCase().includes(t)));
-  },[base,filter,filterable,filterKeys,columns]);
+    let out=base;
+    if(filterable&&filter.trim()){
+      const t=filter.trim().toLowerCase();
+      const keys=(filterKeys&&filterKeys.length)?filterKeys:columns.map(c=>c.key);
+      out=out.filter(r=>keys.some(k=>String(r[k]??'').toLowerCase().includes(t)));
+    }
+    // global cross-filter: AND every active filter whose field is a column of THIS table
+    // (filters for fields this table lacks are ignored, so unrelated tables don't blank).
+    const active=globalFilters.filter(f=>columns.some(c=>c.key===f.field));
+    if(active.length) out=out.filter(r=>active.every(f=>String(r[f.field])===String(f.value)));
+    return out;
+  },[base,filter,filterable,filterKeys,columns,globalFilters]);
 
   const sorted=useMemo(()=>{
     if(!sort||!sort.key) return filtered;
@@ -1863,8 +1978,12 @@ function VolumeHistogram({rows,tsKey,buckets,onRange,selected}){
       {counts.map((c,i)=>{
         const bwU=100/n,gap=Math.min(bwU*0.2,0.6),x=i*bwU+gap/2,w=Math.max(0.2,bwU-gap);
         const bh=(c/peak)*38,y=40-bh;
+        const pick=onRange?()=>onRange([min+i*bw,min+(i+1)*bw]):undefined;
         return <rect key={i} className="vh-bar" x={x} y={y} width={w} height={bh} rx="0.4"
-          fill={bucketSel(i)?'var(--accent-text)':'var(--accent)'} vectorEffect="non-scaling-stroke">
+          fill={bucketSel(i)?'var(--accent-text)':'var(--accent)'} vectorEffect="non-scaling-stroke"
+          tabIndex={onRange?0:undefined} role={onRange?'button':undefined}
+          aria-label={onRange?(c+' events at '+fmt(min+i*bw)+' — filter to this window'):undefined}
+          onKeyDown={onRange?(e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick();}}):undefined}>
           <title>{c+' · '+fmt(min+i*bw)}</title>
         </rect>;
       })}
@@ -1935,9 +2054,13 @@ function HistogramBar({buckets,onClick,axisTicks}){
         const bw=100/n,gap=Math.min(bw*0.2,2),x=i*bw+gap/2,w=Math.max(0.5,bw-gap);
         const c=Number(b.count)||0,bh=(c/peak)*38,y=40-bh;
         const fill=b.color||(b.util!=null?utilColor(b.util):'var(--accent)');
+        const act=onClick?()=>onClick(b,i):undefined;
         return <rect key={i} className="histbar-bar" x={x} y={y} width={w} height={Math.max(0,bh)}
           fill={fill} vectorEffect="non-scaling-stroke"
-          onClick={onClick?()=>onClick(b,i):undefined}>
+          onClick={act}
+          tabIndex={onClick?0:undefined} role={onClick?'button':undefined}
+          aria-label={onClick?((b.label||'bucket')+', '+c+' — filter'):undefined}
+          onKeyDown={onClick?(e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();act();}}):undefined}>
           <title>{(b.label||'')+' · '+c}</title></rect>;
       })}
     </svg>
@@ -2036,7 +2159,11 @@ function HoverCard({content,trigger}){
 function heatCell(a,b){
   const valueFn=typeof a==='function'?a:null;
   const opts=(b&&typeof b==='object')?b:((a&&typeof a==='object')?a:{});
-  const {warn,crit,mode='gt',fmt}=opts;
+  const {warn,crit,mode='gt',fmt,tip}=opts;
+  // threshold explainer shown as a native title on tinted cells (P1-2 tooltip contract).
+  const thresh=tip||(mode==='range'?('Flagged when value below '+warn+' or above '+crit)
+    :mode==='lt'?('Flagged when value at or below '+(crit!=null?crit:warn))
+    :('Flagged when value at or above '+(crit!=null?crit:warn)));
   return (v,row)=>{
     const raw=valueFn?valueFn(row):v;
     const num=Number(raw);
@@ -2047,7 +2174,7 @@ function heatCell(a,b){
       else cls=(crit!=null&&num>=crit)?'heat-crit':(warn!=null&&num>=warn?'heat-warn':'');
     }
     const disp=raw==null||raw===''?'—':(fmt?fmt(raw,row):raw);
-    return <span className={'heat'+(cls?' '+cls:'')}>{disp}</span>;
+    return <span className={'heat'+(cls?' '+cls:'')} title={cls?thresh:undefined}>{disp}</span>;
   };
 }
 /* trendCell(valuesFn) — factory returning a DataTable `render` that drops an
@@ -3034,7 +3161,7 @@ function SectionHead({title,children}){
 const NET_LEASE_COLS=[
   {key:'addr',label:'IP',mono:true,align:'left'},
   {key:'mac',label:'MAC',mono:true,align:'left',render:v=>v||'—'},
-  {key:'state',label:'State',align:'left',render:v=>StateText(v)},
+  {key:'state',label:'State',align:'left',pivot:true,render:v=>StateText(v)},
   {key:'host',label:'Host'},
 ];
 
@@ -3106,7 +3233,7 @@ function NetworkTab(){
     {key:'addr',label:'Network',mono:true,align:'left',render:(v,r)=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')},
     {key:'util',label:'Utilization',align:'right',render:v=>UtilBar(v)},
     {key:'trend',label:'Trend',align:'left',spark:r=>histByAddr[r.addr]},
-    {key:'site',label:'Site',hideSm:true},
+    {key:'site',label:'Site',hideSm:true,pivot:true},
   ];
 
   // ── Capacity-by-site groups + top consumers (replaces the sparse treemap) ──
@@ -3260,9 +3387,9 @@ function DnsTab(){
   const zones=(data&&data.zones)||[];
   const zoneCols=[
     {key:'fqdn',label:'Zone',mono:true,align:'left'},
-    {key:'view',label:'View',hideSm:true},
+    {key:'view',label:'View',hideSm:true,pivot:true},
     {key:'ttl',label:'TTL',mono:true,align:'right',
-      render:heatCell(r=>Number(r.ttl),{warn:60,crit:86400,mode:'range'})},
+      render:heatCell(r=>Number(r.ttl),{warn:60,crit:86400,mode:'range',tip:'Flagged: TTL under 60s or over 24h'})},
     {key:'issues',label:'Issues',align:'left',render:v=>(v&&v.length)
       ? <span className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>{v.join(', ')}</span> : ''},
     {key:'anomaly',label:'Flag',align:'left',render:v=>v
@@ -3539,8 +3666,8 @@ function InfraTab({vaultTick}={}){
   const hostCols=[
     {key:'name',label:'Host',primary:true},
     {key:'ip',label:'IP',mono:true},
-    {key:'type',label:'Type',hideSm:true},
-    {key:'status',label:'Status',render:v=><span className="mono infra-st" style={{color:infraStatusColor(v)}}>{v||'—'}</span>},
+    {key:'type',label:'Type',hideSm:true,pivot:true},
+    {key:'status',label:'Status',pivot:true,render:v=><span className="mono infra-st" style={{color:infraStatusColor(v)}}>{v||'—'}</span>},
   ];
 
   // ── Answer-first synthesis band ──
@@ -3820,11 +3947,11 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
       const acked=!!acks[secAckKey(e)];
       return <input type="checkbox" checked={acked} onClick={ev=>ev.stopPropagation()} onChange={()=>toggleAck(e)} aria-label="Acknowledge event"/>;
     }},
-    {key:'severity',label:'Severity',mono:true,render:v=><span style={{color:secSevColor(v),textTransform:'uppercase'}}>{v||'—'}</span>},
+    {key:'severity',label:'Severity',mono:true,pivot:true,render:v=><span style={{color:secSevColor(v),textTransform:'uppercase'}}>{v||'—'}</span>},
     {key:'qname',label:'Query',mono:true,copy:true,primary:true,render:v=>v||'—'},
     {key:'spark',label:'24h',render:(_,e)=>{const arr=activityByQname[e.qname];if(!arr)return <span className="mono" style={{color:'var(--text-faint)'}}>—</span>;const nz=arr.filter(x=>x>0).length;return nz>=2?<MiniBars values={arr} width={64} height={16}/>:<span className="mono" style={{color:'var(--text-faint)'}}>—</span>;}},
-    {key:'policy_action',label:'Action',render:v=>v||'—'},
-    {key:'feed_name',label:'Feed',hideSm:true,render:(v,e)=>{
+    {key:'policy_action',label:'Action',pivot:true,render:v=>v||'—'},
+    {key:'feed_name',label:'Feed',hideSm:true,pivot:true,render:(v,e)=>{
       if(!v) return <span style={{color:'var(--text-dim)'}}>—</span>;
       const ind=e.threat_indicator;
       return <HoverCard trigger={<span style={{color:'var(--text-dim)',borderBottom:'1px dotted var(--border)'}}>{v}</span>}
@@ -4076,7 +4203,7 @@ function SecLookalikes(){
     {key:'lookalike',label:'Lookalike',mono:true,copy:true,primary:true,render:v=>v||'—'},
     {key:'target',label:'Target',mono:true,render:v=><span style={{color:'var(--text-dim)'}}>{v||'—'}</span>},
     {key:'reason',label:'Reason',hideSm:true,render:v=>v||'—'},
-    {key:'suspicious',label:'Suspicious',render:heatCell(r=>r.suspicious?1:0,{crit:1,fmt:(v,r)=>r.suspicious?'yes':'no'})},
+    {key:'suspicious',label:'Suspicious',render:heatCell(r=>r.suspicious?1:0,{crit:1,tip:'Flagged: host marked suspicious',fmt:(v,r)=>r.suspicious?'yes':'no'})},
     {key:'detected_at',label:'Detected',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
   ];
   const bulkActions=rws=>[
@@ -5261,6 +5388,7 @@ function Shell(){
   return <PowerProvider>
     <div>
       <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)} onAi={()=>setAiOpen(true)}/>
+      <FilterBar/>
       <main className="main" key={tab}>
         <Active vaultTick={vaultTick}/>
       </main>
@@ -5276,7 +5404,7 @@ function Shell(){
 }
 
 function App(){
-  return <VaultGate><DataProvider><Shell/></DataProvider></VaultGate>;
+  return <VaultGate><DataProvider><FilterProvider><Shell/></FilterProvider></DataProvider></VaultGate>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
