@@ -4652,12 +4652,17 @@ function SelfServiceTab(){
   </div>;
 }
 
-/* ProvisionTab — deep-linkable subnet provisioning wizard, streamed over SSE from
-   /api/provision/stream. EventSource lives in a ref: closed on {done}/{error} AND
-   on unmount cleanup, and start() refuses to open a second stream while one is live. */
+/* ProvisionTab — 3-mode provisioning surface: Subnet (original deep-linkable
+   wizard, unchanged), Full site (template-driven site provision), Seed demo
+   (one-click multi-region demo data seed). All three modes stream over SSE
+   using the same EventSource-in-a-ref lifecycle: closed on {done}/{error} AND
+   on unmount cleanup, and start() refuses to open a second stream while one
+   is live. Each mode owns its own ref/log/streaming state so switching modes
+   never fights over a single stream. */
 function ProvisionTab(){
   const {params}=useRoute();
   const {locked}=useData();
+  const [mode,setMode]=useState('subnet'); // 'subnet' | 'site' | 'seed'
   const spacesApi=useApi('/api/ipam/spaces');
   const [space,setSpace]=useState(params.space||'');
   const [block,setBlock]=useState(params.block||'');
@@ -4673,14 +4678,39 @@ function ProvisionTab(){
   const [streamErr,setStreamErr]=useState(null);
   const esRef=useRef(null);
 
+  // Full site mode.
+  const templatesApi=useApi('/api/templates');
+  const [siteTemplate,setSiteTemplate]=useState('');
+  const [siteDry,setSiteDry]=useState(true);
+  const [siteLog,setSiteLog]=useState([]);
+  const [siteStreaming,setSiteStreaming]=useState(false);
+  const [siteSuccess,setSiteSuccess]=useState(null);
+  const [siteErr,setSiteErr]=useState(null);
+  const siteEsRef=useRef(null);
+
+  // Seed demo mode.
+  const [seedRegions,setSeedRegions]=useState({amer:true,emea:true,apac:true});
+  const [seedDry,setSeedDry]=useState(true);
+  const [seedLog,setSeedLog]=useState([]);
+  const [seedRows,setSeedRows]=useState({});
+  const [seedStreaming,setSeedStreaming]=useState(false);
+  const [seedSummary,setSeedSummary]=useState(null);
+  const [seedErr,setSeedErr]=useState(null);
+  const seedEsRef=useRef(null);
+
   useEffect(()=>{ setSpace(params.space||''); },[params.space]);
-  // Cleanup: close any live stream on unmount so it never leaks past this tab.
-  useEffect(()=>()=>{ if(esRef.current){ esRef.current.close(); esRef.current=null; } },[]);
+  // Cleanup: close any live streams on unmount so none leak past this tab.
+  useEffect(()=>()=>{
+    if(esRef.current){ esRef.current.close(); esRef.current=null; }
+    if(siteEsRef.current){ siteEsRef.current.close(); siteEsRef.current=null; }
+    if(seedEsRef.current){ seedEsRef.current.close(); seedEsRef.current=null; }
+  },[]);
 
   if(locked) return null;
 
   const spaces=(spacesApi.data&&spacesApi.data.spaces)||[];
   const blocks=(blocksApi.data&&blocksApi.data.blocks)||[];
+  const templates=Array.isArray(templatesApi.data)?templatesApi.data:[];
 
   const start=()=>{
     if(streaming||esRef.current) return; // guard: never open a second concurrent stream
@@ -4703,9 +4733,58 @@ function ProvisionTab(){
     };
   };
 
+  const siteStart=()=>{
+    if(siteStreaming||siteEsRef.current) return; // guard: never open a second concurrent stream
+    setSiteLog([]);setSiteSuccess(null);setSiteErr(null);setSiteStreaming(true);
+    const qs=new URLSearchParams({template:siteTemplate,dry:siteDry?'1':'0'});
+    const es=new EventSource('/api/provision/site/stream?'+qs.toString());
+    siteEsRef.current=es;
+    const stop=()=>{ if(siteEsRef.current){ siteEsRef.current.close(); siteEsRef.current=null; } setSiteStreaming(false); };
+    es.onmessage=(e)=>{
+      let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
+      setSiteLog(prev=>[...prev,j]);
+      if(j&&j.error){ setSiteErr(j.error); stop(); toast('Site provision failed: '+j.error,'err'); }
+      else if(j&&j.done){ setSiteSuccess(j.result||null); stop(); toast('Site provisioned','ok'); }
+    };
+    es.onerror=()=>{
+      if(!siteEsRef.current) return; // already closed via done/error message
+      setSiteErr(prev=>prev||'Stream connection error');
+      stop();
+    };
+  };
+
+  const seedStart=()=>{
+    if(seedStreaming||seedEsRef.current) return; // guard: never open a second concurrent stream
+    const regionList=Object.keys(seedRegions).filter(r=>seedRegions[r]);
+    if(!regionList.length){ toast('Select at least one region','err'); return; }
+    if(!seedDry&&!window.confirm('This writes many real objects to the live portal. Continue?')) return;
+    setSeedLog([]);setSeedRows({});setSeedSummary(null);setSeedErr(null);setSeedStreaming(true);
+    const qs=new URLSearchParams({dry:seedDry?'1':'0',regions:regionList.join(',')});
+    const es=new EventSource('/api/provision/seed-demo/stream?'+qs.toString());
+    seedEsRef.current=es;
+    const stop=()=>{ if(seedEsRef.current){ seedEsRef.current.close(); seedEsRef.current=null; } setSeedStreaming(false); };
+    es.onmessage=(e)=>{
+      let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
+      setSeedLog(prev=>[...prev,j]);
+      if(j&&j.template){ setSeedRows(prev=>({...prev,[j.template]:{phase:j.phase,error:j.error}})); }
+      if(j&&j.error&&!j.template){ setSeedErr(j.error); stop(); toast('Seed demo failed: '+j.error,'err'); }
+      else if(j&&j.done){ setSeedSummary(j.summary||null); stop(); toast('Seed demo complete','ok'); }
+    };
+    es.onerror=()=>{
+      if(!seedEsRef.current) return; // already closed via done/error message
+      setSeedErr(prev=>prev||'Stream connection error');
+      stop();
+    };
+  };
+
   return <div className="page fadein">
-    <SectionRule title="Provision subnet"/>
-    <div className="grid">
+    <SectionRule title="Provision"/>
+    <div className="dly-seg" role="group" aria-label="Provision mode" style={{marginBottom:'var(--s3)'}}>
+      <button className={'dly-seg-btn'+(mode==='subnet'?' on':'')} onClick={()=>setMode('subnet')}>Subnet</button>
+      <button className={'dly-seg-btn'+(mode==='site'?' on':'')} onClick={()=>setMode('site')}>Full site</button>
+      <button className={'dly-seg-btn'+(mode==='seed'?' on':'')} onClick={()=>setMode('seed')}>Seed demo</button>
+    </div>
+    {mode==='subnet'?<div className="grid">
       <Panel title="Request">
         <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
           <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
@@ -4760,7 +4839,87 @@ function ProvisionTab(){
         </div>
       </Panel>:null}
       {streamErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{streamErr}</div></Panel>:null}
-    </div>
+    </div>:null}
+    {mode==='site'?<div className="grid">
+      <Panel title="Request">
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            Template
+            <select className="vault-in" value={siteTemplate} onChange={e=>setSiteTemplate(e.target.value)}>
+              <option value="">{templatesApi.loading?'Loading templates…':'Select a template'}</option>
+              {templates.map(t=><option key={t.name} value={t.name}>
+                {t.name+' — '+(t.region||'')+'/'+(t.environment||'')+(t.valid===false?' (invalid)':'')}
+              </option>)}
+            </select>
+          </label>
+          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <input type="checkbox" checked={siteDry} onChange={e=>setSiteDry(e.target.checked)}/>
+            <span>Dry-run (no changes made)</span>
+          </label>
+          <button className="btn" disabled={siteStreaming||!siteTemplate} onClick={siteStart}>{siteStreaming?'Provisioning…':'Provision site'}</button>
+        </div>
+      </Panel>
+      <Panel title="Live log">
+        {siteLog.length===0
+          ? <div className="dt-empty">No output yet</div>
+          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+              {siteLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
+                {l.error?('✕ '+l.error):l.done?'✓ done':(l.step||JSON.stringify(l))}
+              </div>)}
+            </div>}
+      </Panel>
+      {siteSuccess?<Panel title="Success">
+        <div className="mono" style={{fontSize:'var(--t12)'}}>{JSON.stringify(siteSuccess)}</div>
+      </Panel>:null}
+      {siteErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{siteErr}</div></Panel>:null}
+    </div>:null}
+    {mode==='seed'?<div className="grid">
+      <Panel title="Seed multi-region demo data">
+        <div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)',marginBottom:'var(--s3)'}}>
+          Provisions a full set of demo sites, subnets, and zones across the selected regions from the template library. Dry-run is on by default — review the plan before writing real objects.
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+          {['amer','emea','apac'].map(r=>
+            <label key={r} style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+              <input type="checkbox" checked={!!seedRegions[r]} onChange={e=>setSeedRegions(prev=>({...prev,[r]:e.target.checked}))}/>
+              <span>{r.toUpperCase()}</span>
+            </label>)}
+          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <input type="checkbox" checked={seedDry} onChange={e=>setSeedDry(e.target.checked)}/>
+            <span>Dry-run (no changes made)</span>
+          </label>
+          <div style={{display:'flex',gap:'var(--s3)'}}>
+            <button className="btn" disabled={seedStreaming} onClick={seedStart}>{seedStreaming?'Seeding…':'Seed Demo Data'}</button>
+            <button className="btn" disabled title="Coming in a later phase">Tear down demo (Phase 2)</button>
+          </div>
+        </div>
+      </Panel>
+      <Panel title="Progress">
+        {Object.keys(seedRows).length===0
+          ? <div className="dt-empty">No output yet</div>
+          : <div style={{display:'flex',flexDirection:'column',gap:2}}>
+              {Object.entries(seedRows).map(([tpl,row])=>
+                <div key={tpl} className="mono" style={{fontSize:'var(--t12)',color:row.error?'var(--crit)':'var(--text-dim)'}}>
+                  {tpl}: {row.error?('✕ '+row.error):(row.phase||'…')}
+                </div>)}
+            </div>}
+      </Panel>
+      <Panel title="Live log">
+        {seedLog.length===0
+          ? <div className="dt-empty">No output yet</div>
+          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+              {seedLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
+                {l.error?(l.template?('✕ '+l.template+': '+l.error):('✕ '+l.error)):l.done?'✓ done':(l.template?(l.template+' — '+(l.phase||'')):JSON.stringify(l))}
+              </div>)}
+            </div>}
+      </Panel>
+      {seedSummary?<Panel title="Summary">
+        <div className="mono" style={{fontSize:'var(--t12)'}}>
+          Succeeded: {seedSummary.succeeded ?? 0} · Failed: {seedSummary.failed ?? 0} · Skipped: {seedSummary.skipped ?? 0}
+        </div>
+      </Panel>:null}
+      {seedErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{seedErr}</div></Panel>:null}
+    </div>:null}
   </div>;
 }
 // ═══ END: PROVISION ═══
