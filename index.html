@@ -2324,6 +2324,23 @@ function useAiExplain(){
 const OV_SEVMAP={HIGH:'high',CRITICAL:'crit',MEDIUM:'med',LOW:'low',INFO:'low'};
 function ovSevClass(sev){ return OV_SEVMAP[String(sev||'').toUpperCase()]||'low'; }
 
+/* OvPeek — region-local peek body (not a shared component). Renders a title,
+   optional sub-line, and a key/value list (skips empty values). Fed the same
+   field lists the old hover cards built, so clicking a preview row shows all. */
+function OvPeek({title,sub,rows}){
+  return <div>
+    <div style={{fontWeight:600}}>{title||'—'}</div>
+    {sub!=null&&sub!==''?<div className="mono" style={{color:'var(--text-dim)',marginTop:4,fontSize:'var(--t12)'}}>{sub}</div>:null}
+    <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:3}}>
+      {(rows||[]).filter(r=>r&&r[1]!=null&&r[1]!=='').map((r,i)=>
+        <div key={i} style={{display:'flex',justifyContent:'space-between',gap:12,fontSize:'var(--t12)'}}>
+          <span style={{color:'var(--text-faint)'}}>{r[0]}</span>
+          <span className="mono" style={{textAlign:'right'}}>{String(r[1])}</span>
+        </div>)}
+    </div>
+  </div>;
+}
+
 function OverviewTab(){
   const {bind}=useHoverDetail();
   const health=useApi('/api/hub/health',{poll:60000});
@@ -2331,6 +2348,7 @@ function OverviewTab(){
   const sec=useApi('/api/hub/security');
   const dns=useApi('/api/dns-analytics');
   const {delta}=useSnapshots();
+  const [band,setBand]=useState(null); // util-band filter for the capacity preview (UTIL_BANDS id | null)
 
   const d=data.data||{};
   const subnets=Array.isArray(d.subnets)?d.subnets:[];
@@ -2379,6 +2397,12 @@ function OverviewTab(){
 
   // ── top capacity subnets ──
   const topSubs=useMemo(()=>[...subnets].sort((a,b)=>util(b)-util(a)).slice(0,9),[subnets]);
+  // Preview rows for the DataTable — full sorted set, filtered to the active util band.
+  const bandDef=band?UTIL_BANDS.find(b=>b.id===band):null;
+  const subnetPreview=useMemo(()=>{
+    const base=bandDef?subnets.filter(s=>bandDef.test(util(s))):subnets;
+    return [...base].sort((a,b)=>util(b)-util(a));
+  },[subnets,band]); // eslint-disable-line
   const worst=topSubs[0]||null;
   const worstUtil=worst?util(worst):0;
   const gt85=subnets.filter(s=>util(s)>85).length;
@@ -2517,7 +2541,8 @@ function OverviewTab(){
           centerValue={hosts.length?Math.round(hostsBad/hosts.length*100)+'%':'0'} centerLabel="issues"/>
       </Panel>
       <Panel title="Subnet utilization" side={subnets.length.toLocaleString()+' subnets'}>
-        <HistogramBar buckets={utilBuckets} onClick={()=>nav('network')}/>
+        <HistogramBar buckets={utilBuckets} onClick={(b,i)=>{const u=i*5+2.5;const nb=u>=85?'85':u>=70?'7085':null;nav('network',nb?{band:nb}:undefined);}}/>
+        <ValueBands rows={subnets} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS} value={band} onChange={setBand}/>
       </Panel>
       <Panel title="Top issues" side="live">
         <div className="issues">
@@ -2536,33 +2561,82 @@ function OverviewTab(){
     <SectionRule title="Detail"/>
     <div className="grid-dense">
 
-      <Panel title="Top capacity subnets" side="by utilization" empty={!topSubs.length}>
-        <table className="ov-mt"><thead><tr><th>Subnet</th><th>Site</th><th className="r">Used</th><th style={{width:120}}>Util</th></tr></thead>
-        <tbody>{topSubs.map((s,i)=>{const c=utilColor(util(s));return <tr key={s.id||s.addr||i}
-            onClick={()=>nav('network',{subnet:s.id||s.addr})}
-            {...bind({title:(s.addr||s.name)+'/'+s.cidr,rows:[['used',s.used+' / '+s.total],['util',util(s)+'%'],['site',s.site]],spark:[util(s)*0.4,util(s)*0.6,util(s)*0.8,util(s)]})}>
-          <td><span className="code">{s.addr||s.name}/{s.cidr}</span></td>
-          <td className="mono" style={{color:'var(--text-faint)'}}>{s.site}</td>
-          <td className="r mono">{s.used}</td>
-          <td><div style={{display:'flex',alignItems:'center',gap:7}}>
-            <div className="ubar"><i style={{width:Math.max(4,util(s))+'%',background:c}}/></div>
-            <span className="mono" style={{width:30,textAlign:'right',color:c}}>{util(s)}%</span></div></td>
-        </tr>;})}</tbody></table>
+      <Panel title="Top capacity subnets" side={band?('band '+(bandDef&&bandDef.label)+' · '+subnetPreview.length):'by utilization'} empty={!subnets.length}>
+        <DataTable tableId="ov-subnets" csvName="top-capacity-subnets"
+          rows={subnetPreview} defaultSort={{key:'util',dir:'desc'}} maxRows={9}
+          rowKey={r=>String(r.addr||r.id)}
+          onRowClick={r=>nav('network',{subnet:r.addr||r.id})}
+          cols={[
+            {key:'addr',label:'Subnet',primary:true,minWidth:160,mono:true,
+              render:(v,r)=>(r.addr||r.name||'—')+(r.cidr?('/'+r.cidr):'')},
+            {key:'site',label:'Site',hideSm:true,render:v=>v||'—'},
+            {key:'used',label:'Used',mono:true,align:'right'},
+            {key:'util',label:'Util',align:'right',mono:true,
+              render:(v,r)=>{const u=util(r),c=utilColor(u);return <span style={{display:'inline-flex',alignItems:'center',gap:7,justifyContent:'flex-end'}}>
+                <span style={{position:'relative',display:'inline-block',width:56,height:6,borderRadius:3,background:'var(--border2)'}}>
+                  <i style={{position:'absolute',left:0,top:0,bottom:0,width:Math.max(4,u)+'%',borderRadius:3,background:c}}/></span>
+                <span className="mono" style={{width:34,textAlign:'right',color:c}}>{u}%</span></span>;}},
+          ]}
+          renderPeek={r=><OvPeek title={(r.addr||r.name||'—')+(r.cidr?('/'+r.cidr):'')} sub={r.name}
+            rows={[['Used',(r.used!=null?r.used:'—')+' / '+(r.total!=null?r.total:'—')],['Util',util(r)+'%'],['Site',r.site||'—'],['CIDR',r.cidr?('/'+r.cidr):'—']]}/>}/>
       </Panel>
 
       <Panel title="Security events" side={(Number(secData.total)||0)+' today · '+(Number(secData.blocked)||0)+' blocked'} empty={!secRows.length}>
-        <table className="ov-mt"><thead><tr><th>Threat</th><th style={{width:96}}>Feed</th><th style={{width:58}}>Sev</th><th className="r" style={{width:64}}>24h</th></tr></thead>
-        <tbody>{secRows.map((e,i)=>{const sc=ovSevClass(e.severity);const bad=(sc==='high'||sc==='crit');return <tr key={i}
-            onClick={()=>nav('security')}
-            {...bind({title:e.threat_indicator||e.qname,rows:[['action',e.policy_action],['feed',e.feed_name],['device',e.device],['network',e.network]],spark:secByHour})}>
-          <td style={{maxWidth:150,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}><span className="code">{e.qname}</span></td>
-          <td><span className="tag" title={e.feed_name}>{e.feed_name}</span></td>
-          <td><span className={'sev '+sc}>{e.severity||'INFO'}</span></td>
-          <td className="r"><MiniBars values={secByHour} width={56} height={16} color={bad?'var(--warn)':'var(--accent)'}/></td>
-        </tr>;})}</tbody></table>
+        <DataTable tableId="ov-secevents" csvName="security-events"
+          rows={secRows} rowKey={r=>String(r.qname||r.threat_indicator||'')+'|'+r.severity}
+          onRowClick={()=>nav('security')}
+          cols={[
+            {key:'qname',label:'Threat',primary:true,minWidth:170,mono:true,render:(v,r)=>v||r.threat_indicator||'—'},
+            {key:'feed_name',label:'Feed',hideSm:true,render:v=>v||'—'},
+            {key:'severity',label:'Sev',render:v=><span className={'sev '+ovSevClass(v)}>{v||'INFO'}</span>},
+          ]}
+          renderPeek={e=><OvPeek title={e.threat_indicator||e.qname||'threat'} sub={e.severity}
+            rows={[['Action',e.policy_action],['Feed',e.feed_name],['Device',e.device],['Network',e.network],['Query',e.qname]]}/>}/>
       </Panel>
 
-      <Panel title="Capacity by site" side="avg / worst" empty={!siteRows.length}>
+      <Panel title="DNS zones" side={zones.length.toLocaleString()+' total'} empty={!zones.length}>
+        <DataTable tableId="ov-zones" csvName="dns-zones" scrollBody={280}
+          rows={zones} rowKey={r=>String(r.fqdn||r.id)}
+          onRowClick={r=>nav('dns',{peek:r.fqdn})}
+          cols={[
+            {key:'fqdn',label:'Zone',primary:true,minWidth:180,mono:true},
+            {key:'view',label:'View',hideSm:true,render:v=>v||'—'},
+            {key:'ttl',label:'TTL',mono:true,align:'right',render:v=>v+'s'},
+            {key:'neg_ttl',label:'Neg',mono:true,align:'right',render:v=>v+'s'},
+          ]}
+          renderPeek={z=><OvPeek title={z.fqdn} sub={z.view}
+            rows={[['View',z.view],['TTL',z.ttl+'s'],['Neg-TTL',z.neg_ttl+'s'],['Issues',(z.issues&&z.issues.length)||0]]}/>}/>
+      </Panel>
+
+      <Panel title="Active leases" side={activeLeases.toLocaleString()+' active'} empty={!leases.length}>
+        <DataTable tableId="ov-leases" csvName="active-leases" scrollBody={280}
+          rows={leases} rowKey={r=>String(r.addr||r.ip||'')+'|'+String(r.mac||'')}
+          onRowClick={()=>nav('network')}
+          cols={[
+            {key:'addr',label:'Address',primary:true,minWidth:150,mono:true},
+            {key:'host',label:'Host',render:v=>v||'—'},
+            {key:'state',label:'State',align:'right',
+              render:v=>{const on=String(v||'').toLowerCase()==='active';return <span className="lchip" style={{color:on?'var(--ok)':'var(--warn)'}}>{v}</span>;}},
+          ]}
+          renderPeek={l=><OvPeek title={l.addr} sub={l.host}
+            rows={[['Host',l.host],['State',l.state],['MAC',l.mac],['Network',l.network]]}/>}/>
+      </Panel>
+
+      <Panel title="Hosts needing attention" side={hostsBad+' errors'} empty={!attnHosts.length}>
+        <DataTable tableId="ov-hosts" csvName="hosts-attention"
+          rows={attnHosts} rowKey={r=>String(r.name||r.id||r.ip)}
+          onRowClick={r=>nav('infra',{host:r.name})}
+          cols={[
+            {key:'name',label:'Host',primary:true,minWidth:150,render:v=>v||'—'},
+            {key:'ip',label:'Address',mono:true,render:v=>v||'—'},
+            {key:'status',label:'Status',align:'right',
+              render:v=>{const st=String(v||'').toLowerCase(),sv=st==='error'?'crit':st==='degraded'?'high':st==='offline'?'low':'med';return <span className={'sev '+sv}>{v}</span>;}},
+          ]}
+          renderPeek={h=><OvPeek title={h.name} sub={h.ip}
+            rows={[['IP',h.ip],['Type',h.type],['Status',h.status]]}/>}/>
+      </Panel>
+
+      <Panel title="Capacity by site" side="avg / worst" empty={siteRows.length<2}>
         <div className="sites ov-mt">
           {siteRows.map((s,i)=>{const c=utilColor(s.avg);return <div key={i} className="siterow">
             <div className="nm" title={s.nm}>{s.nm}</div>
@@ -2571,36 +2645,6 @@ function OverviewTab(){
             <span className="pc mono" style={{color:'var(--text-faint)'}} title="worst">{s.worst}%</span>
           </div>;})}
         </div>
-      </Panel>
-
-      <Panel title="DNS zones" side={zones.length.toLocaleString()+' total'} empty={!zones.length}>
-        <table className="ov-mt"><thead><tr><th>Zone</th><th>View</th><th className="r">TTL</th><th className="r">Neg</th></tr></thead>
-        <tbody>{zones.slice(0,9).map((z,i)=><tr key={z.id||i} onClick={()=>nav('dns')}
-            {...bind({title:z.fqdn,rows:[['view',z.view],['ttl',z.ttl+'s'],['neg-ttl',z.neg_ttl+'s'],['issues',(z.issues&&z.issues.length)||0]]})}>
-          <td><span className="code">{z.fqdn}</span></td>
-          <td className="mono" style={{color:'var(--text-faint)',whiteSpace:'nowrap',overflow:'hidden',maxWidth:120,textOverflow:'ellipsis'}}>{z.view}</td>
-          <td className="r mono">{z.ttl}s</td>
-          <td className="r mono" style={{color:'var(--text-faint)'}}>{z.neg_ttl}s</td>
-        </tr>)}</tbody></table>
-      </Panel>
-
-      <Panel title="Active leases" side={activeLeases.toLocaleString()+' active'} empty={!leases.length}>
-        <table className="ov-mt"><thead><tr><th>Address</th><th>Host</th><th className="r">State</th></tr></thead>
-        <tbody>{leases.slice(0,9).map((l,i)=>{const on=String(l.state||'').toLowerCase()==='active';return <tr key={i} onClick={()=>nav('network')}>
-          <td><span className="code">{l.addr}</span></td>
-          <td className="mono" style={{whiteSpace:'nowrap',overflow:'hidden',maxWidth:150,textOverflow:'ellipsis'}}>{l.host}</td>
-          <td className="r"><span className="lchip" style={{color:on?'var(--ok)':'var(--warn)'}}>{l.state}</span></td>
-        </tr>;})}</tbody></table>
-      </Panel>
-
-      <Panel title="Hosts needing attention" side={hostsBad+' errors'} empty={!attnHosts.length}>
-        <table className="ov-mt"><thead><tr><th>Host</th><th>Address</th><th className="r">Status</th></tr></thead>
-        <tbody>{attnHosts.map((h,i)=>{const st=String(h.status||'').toLowerCase();const sv=st==='error'?'crit':st==='degraded'?'high':st==='offline'?'low':'med';return <tr key={h.id||i} onClick={()=>nav('infra')}
-            {...bind({title:h.name,rows:[['ip',h.ip],['type',h.type],['status',h.status]]})}>
-          <td style={{whiteSpace:'nowrap',overflow:'hidden',maxWidth:150,textOverflow:'ellipsis'}}>{h.name}</td>
-          <td><span className="code">{h.ip}</span></td>
-          <td className="r"><span className={'sev '+sv}>{h.status}</span></td>
-        </tr>;})}</tbody></table>
       </Panel>
 
       <Panel title="DNS volume — 7d" side={volSeries.length?volTotal.toLocaleString()+' queries':null} empty={!volSeries.length}>
