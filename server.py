@@ -450,6 +450,12 @@ _FQDN_RE = re.compile(
     r'^(?=.{1,253}$)([a-zA-Z0-9_](?:[a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$'
 )
 
+# IPv4 / IPv6 detection for Dossier indicator-type inference & validation.
+_IP_RE = re.compile(
+    r'^(\d{1,3}\.){3}\d{1,3}$'                 # IPv4
+    r'|^(?=.*:)[0-9a-fA-F:]{2,45}$'            # IPv6 (loose; must contain a colon)
+)
+
 # ── Server-side TTL cache (5 min) ────────────────────────────────────────────
 import time as _time
 _START_TIME = _time.monotonic()   # used for post-restart apply cooldown
@@ -563,6 +569,25 @@ def _rest_get(path: str, params: dict | None = None) -> list:
     except Exception as e:
         print(f"  [warn] rest_get {path}: {e}")
         return []
+
+def _rest_get_ex(path: str, params: dict | None = None) -> tuple:
+    """Status-surfacing REST GET → (parsed_json, http_status). Unlike _rest_get,
+    this returns the raw parsed body (dict or list) plus the HTTP status code so
+    callers can branch on 403/entitlement. status is None on a network error.
+    Uses the active tenant/account auth. Does NOT modify _rest_get."""
+    import urllib.request, urllib.parse, urllib.error
+    q = ("?" + urllib.parse.urlencode(params)) if params else ""
+    url = f"{BASE_URL}{path}{q}"
+    auth = MCP_HEADERS.get("Authorization") or API_KEY
+    req = urllib.request.Request(url, headers={"Authorization": auth, "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=35) as r:
+            return json.loads(r.read()), r.status
+    except urllib.error.HTTPError as e:
+        return None, e.code
+    except Exception as e:
+        print(f"  [warn] rest_get_ex {path}: {e}")
+        return None, None
 
 # ── encrypted vault (multi-tenant key store) ──────────────────────────────────
 # Keys are secrets the bridge must *replay* to Infoblox, so they're stored
@@ -1718,7 +1743,7 @@ async def _handle_query_async(question: str, trace: list, context: str = "") -> 
     if not LLM_API_KEY:
         return "AI query requires LLM_API_KEY (or GROQ_API_KEY) in .env — add it and restart the server."
 
-    context = (context or "")[:2000]
+    context = (context or "")[:8000]
     user_msg = (context.strip() + "\n\n" + question) if context.strip() else question
     messages = [
         {"role": "system", "content": _AI_SYSTEM},
@@ -1828,30 +1853,70 @@ async def _fetch_actions_async() -> dict:
             return {"actions": [], "_raw": _tool_text(result)[:200]}
 
 def fetch_actions() -> dict:
-    return _run_async(_fetch_actions_async())
+    """IQ Actions (SOC incidents). Never raises/500s — the upstream
+    iq-actions_list_actions tool can error server-side; degrade gracefully so
+    the widget (and SOURCES['incidents']) shows 'unavailable' instead of failing."""
+    try:
+        data = _run_async(_fetch_actions_async())
+    except Exception as e:
+        _log_exc("fetch_actions", e)
+        return {"actions": [], "unavailable": "IQ Actions service unavailable (upstream error)."}
+    if not isinstance(data, dict):
+        return {"actions": [], "unavailable": "IQ Actions returned unexpected data."}
+    if "actions" not in data or data.get("actions") is None:
+        data["actions"] = []
+    if not data["actions"] and "unavailable" not in data:
+        data["unavailable"] = "No IQ Actions (SOC incidents) for this tenant."
+    return data
 
 # ── SOC Insights handler ──────────────────────────────────────────────────────
 
 async def _fetch_insights_async() -> dict:
+    # SOC Insights == "security actions" (SecurityActionSummaryView). The cube is
+    # already scoped to visible=true rows created in the last 30 days. On this
+    # cube totalEvents/totalVerifiedAssets/timeSaved are DIMENSIONS (per-row
+    # numbers), not measures — the only numeric measures are count/totalAssets/
+    # totalManualTime/totalAgentTime/totalTimeSaved. Using a dimension as a
+    # measure 400s, so we group by the per-insight fields and aggregate with count.
     async with _mcp_session() as session:
         return await _mcp_query_cube(
-            session, "InsightsSummaryView",
+            session, "SecurityActionSummaryView",
             measures=[
-                "InsightsSummaryView.totalEvents",
-                "InsightsSummaryView.totalVerifiedAssets",
-                "InsightsSummaryView.timeSaved",
+                "SecurityActionSummaryView.count",
+                "SecurityActionSummaryView.totalTimeSaved",
             ],
             dimensions=[
-                "InsightsSummaryView.name",
-                "InsightsSummaryView.severity",
-                "InsightsSummaryView.currentStatus",
+                "SecurityActionSummaryView.name",
+                "SecurityActionSummaryView.severity",
+                "SecurityActionSummaryView.currentStatus",
+                "SecurityActionSummaryView.totalEvents",
+                "SecurityActionSummaryView.totalVerifiedAssets",
+                "SecurityActionSummaryView.timeSaved",
             ],
-            order={"InsightsSummaryView.totalEvents": "desc"},
+            order={"SecurityActionSummaryView.count": "desc"},
             limit=20,
         )
 
 def fetch_insights() -> dict:
-    return _run_async(_fetch_insights_async())
+    """Return {"data":[...]} of SOC insights, or degrade to
+    {"data":[],"unavailable":...} — never raise/500 and never fabricate."""
+    ck = _cache_key("insights", "", None, False)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+    try:
+        raw = _run_async(_fetch_insights_async())
+    except Exception as e:
+        _log_exc("fetch_insights", e)
+        raw = {}
+    rows = raw.get("data", []) if isinstance(raw, dict) else []
+    if rows:
+        result = {"data": rows}
+    else:
+        result = {"data": [], "unavailable":
+                  "No SOC Insights (security actions) in the last 30 days for this tenant."}
+    _cache_set(ck, result)
+    return result
 
 # ── DNS Analytics handler ─────────────────────────────────────────────────────
 
@@ -1898,6 +1963,228 @@ async def _fetch_host_metrics_async() -> dict:
 
 def fetch_host_metrics() -> dict:
     return _run_async(_fetch_host_metrics_async())
+
+# ── Asset Inventory handler (SecurityActionAssets cube) ───────────────────────
+# No dedicated asset-inventory cube exists in this deployment (the 19 cubes are
+# DNS/DHCP/security-action/token only), so we use SecurityActionAssets — the
+# per-asset detail cube for security actions (30-day, visible=true scope).
+
+def _flatten_cube_row(r: dict) -> dict:
+    """Strip the 'Cube.' prefix from a cube row's keys: 'Cube.field' → 'field'."""
+    return {(k.split(".", 1)[1] if "." in k else k): v for k, v in r.items()}
+
+def norm_assets(rows: list) -> list:
+    out = []
+    for raw in rows:
+        r = _flatten_cube_row(raw)
+        out.append({
+            "device":    r.get("deviceName", "") or "",
+            "os":        r.get("os", "") or "",
+            "ip":        r.get("ipAddresses", "") or "",
+            "mac":       r.get("macAddresses", "") or "",
+            "vendor":    r.get("vendor", "") or "",
+            "region":    r.get("region", "") or "",
+            "risky":     r.get("isRisky"),
+            "verified":  r.get("isVerified"),
+            "last_seen": r.get("lastDetected", "") or "",
+            "count":     r.get("count"),
+        })
+    return out
+
+async def _fetch_assets_async() -> dict:
+    async with _mcp_session() as session:
+        inv_d, rollup_d, trend_d = await asyncio.gather(
+            _mcp_query_cube(session, "SecurityActionAssets",
+                measures=["SecurityActionAssets.count"],
+                dimensions=["SecurityActionAssets.deviceName", "SecurityActionAssets.os",
+                            "SecurityActionAssets.ipAddresses", "SecurityActionAssets.macAddresses",
+                            "SecurityActionAssets.vendor", "SecurityActionAssets.region",
+                            "SecurityActionAssets.isRisky", "SecurityActionAssets.isVerified",
+                            "SecurityActionAssets.lastDetected"],
+                order={"SecurityActionAssets.count": "desc"}, limit=500),
+            _mcp_query_cube(session, "SecurityActionAssets",
+                measures=["SecurityActionAssets.uniqueDevices", "SecurityActionAssets.count"],
+                dimensions=["SecurityActionAssets.os", "SecurityActionAssets.isVerified"],
+                order={"SecurityActionAssets.count": "desc"}, limit=50),
+            _mcp_query_cube(session, "SecurityActionAssets",
+                measures=["SecurityActionAssets.count"],
+                time_dims=[{"dimension": "SecurityActionAssets.createdAt",
+                            "dateRange": "30 days", "granularity": "day"}]),
+        )
+        return {"inventory": inv_d, "rollup": rollup_d, "trend": trend_d}
+
+def fetch_assets() -> dict:
+    """Asset inventory + rollup + discovery trend, or degrade to
+    {"assets":[],...,"unavailable":...}. Never raises/500, never fabricates."""
+    ck = _cache_key("assets", "", None, False)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+    try:
+        raw = _run_async(_fetch_assets_async())
+    except Exception as e:
+        _log_exc("fetch_assets", e)
+        raw = {}
+    assets = norm_assets(_results(raw.get("inventory", {}))) if isinstance(raw, dict) else []
+    rollup = [_flatten_cube_row(r) for r in _results(raw.get("rollup", {}))] if isinstance(raw, dict) else []
+    trend  = [_flatten_cube_row(r) for r in _results(raw.get("trend", {}))] if isinstance(raw, dict) else []
+    if assets or rollup or trend:
+        result = {"assets": assets, "rollup": rollup, "trend": trend, "unavailable": None}
+    else:
+        result = {"assets": [], "rollup": [], "trend": [], "unavailable":
+                  "No security-action assets in the last 30 days for this tenant."}
+    _cache_set(ck, result)
+    return result
+
+# ── Dossier handler (TIDE threat-intel indicator lookup, direct REST) ─────────
+
+def _infer_indicator_type(q: str) -> str:
+    return "ip" if _IP_RE.match(q or "") else "host"
+
+def norm_dossier(query: str, itype: str, results: list) -> dict:
+    """Flatten a Dossier /results payload (list of {params:{source},data:{...}})
+    into {query,type,summary,sources:[...]}. Per source we keep a compact,
+    size-bounded detail plus roll up cross-source threat signals."""
+    sources = []
+    summary = {"malicious": False, "max_threat_level": 0, "threat_classes": [],
+               "properties": [], "country": "", "registrar": "", "actor": ""}
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        src = (r.get("params") or {}).get("source", "")
+        data = r.get("data")
+        if not data or not isinstance(data, dict):
+            continue
+        entry = {"source": src}
+        # RPZ / threat feed records carry class + property + threat_level
+        recs = data.get("records")
+        if isinstance(recs, list) and recs:
+            entry["records"] = [{"class": x.get("class"), "property": x.get("property"),
+                                 "threat_level": x.get("threat_level"),
+                                 "feed": x.get("feed_name"), "detected": x.get("detected")}
+                                for x in recs[:10] if isinstance(x, dict)]
+            for x in recs:
+                if not isinstance(x, dict):
+                    continue
+                if x.get("class"):    summary["threat_classes"].append(x["class"])
+                if x.get("property"): summary["properties"].append(x["property"])
+                tl = x.get("threat_level")
+                if isinstance(tl, (int, float)):
+                    summary["max_threat_level"] = max(summary["max_threat_level"], tl)
+                    summary["malicious"] = True
+        if src == "geo":
+            entry["geo"] = {k: data.get(k) for k in
+                            ("country", "country_name", "city", "region", "asn", "org")
+                            if data.get(k)}
+            summary["country"] = (data.get("country_name") or data.get("country")
+                                  or summary["country"])
+        if src == "whois":
+            resp = data.get("response", data)
+            entry["whois"] = str(resp)[:600]
+            if isinstance(resp, dict):
+                summary["registrar"] = str(resp.get("registrar", "") or summary["registrar"])[:120]
+        if src in ("threat_actor",) and data.get("actor_name"):
+            entry["actor"] = {"name": data.get("actor_name"), "display": data.get("display_name"),
+                              "description": str(data.get("actor_description", ""))[:300]}
+            summary["actor"] = data.get("actor_name") or summary["actor"]
+        if "malware" in src:
+            attrs = (data.get("data") or {}).get("attributes") if isinstance(data.get("data"), dict) else None
+            if isinstance(attrs, dict):
+                entry["malware"] = {"reputation": attrs.get("reputation"),
+                                    "last_analysis_stats": attrs.get("last_analysis_stats"),
+                                    "categories": attrs.get("categories")}
+                stats = attrs.get("last_analysis_stats") or {}
+                if isinstance(stats, dict) and stats.get("malicious"):
+                    summary["malicious"] = True
+        # Fallback: keep a bounded raw slice so no source is silently dropped.
+        if len(entry) == 1:
+            entry["detail"] = json.dumps(data, default=str)[:400]
+        sources.append(entry)
+    summary["threat_classes"] = sorted(set(summary["threat_classes"]))[:15]
+    summary["properties"] = sorted(set(summary["properties"]))[:15]
+    return {"query": query, "type": itype, "summary": summary, "sources": sources,
+            "unavailable": None}
+
+def fetch_dossier(q: str, itype: str = "") -> dict:
+    """TIDE Dossier lookup for one indicator. Two REST calls: create the lookup
+    job (wait=true blocks until done), then read /jobs/{id}/results. Validates q
+    is a plausible FQDN/IP before forwarding. 403 → 'not entitled' degrade."""
+    q = (q or "").strip().lower()
+    if not q:
+        return {"query": "", "type": "", "summary": {}, "sources": [],
+                "unavailable": "query required"}
+    itype = (itype or "").strip().lower()
+    if itype not in ("host", "ip", "url"):
+        itype = _infer_indicator_type(q)
+    # Validate before forwarding (blocks junk / injection into the REST path).
+    if itype == "ip":
+        if not _IP_RE.match(q):
+            return {"query": q, "type": itype, "summary": {}, "sources": [],
+                    "unavailable": "invalid IP indicator"}
+    else:
+        if not _FQDN_RE.match(q):
+            return {"query": q, "type": itype, "summary": {}, "sources": [],
+                    "unavailable": "invalid domain indicator"}
+    ck = _cache_key("dossier", itype, {"q": q}, False)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+    job, st = _rest_get_ex(f"/tide/api/services/intel/lookup/indicator/{itype}",
+                           {"value": q, "wait": "true"})
+    if st == 403:
+        result = {"query": q, "type": itype, "summary": {}, "sources": [],
+                  "unavailable": "Dossier not entitled"}
+        _cache_set(ck, result)
+        return result
+    job_id = job.get("job_id") if isinstance(job, dict) else None
+    if not job_id:
+        return {"query": q, "type": itype, "summary": {}, "sources": [],
+                "unavailable": "Dossier lookup failed"}
+    res, _ = _rest_get_ex(f"/tide/api/services/intel/lookup/jobs/{job_id}/results")
+    results = res.get("results", []) if isinstance(res, dict) else []
+    result = norm_dossier(q, itype, results if isinstance(results, list) else [])
+    _cache_set(ck, result)
+    return result
+
+# ── Lookalike Domains handler (TDLAD, direct REST) ────────────────────────────
+
+def norm_lookalikes(domains_raw, targets_raw) -> dict:
+    dom_list = domains_raw.get("results", []) if isinstance(domains_raw, dict) else (domains_raw or [])
+    domains = [{
+        "lookalike":   d.get("lookalike_domain", ""),
+        "host":        d.get("lookalike_host", ""),
+        "target":      d.get("target_domain", ""),
+        "reason":      d.get("reason", ""),
+        "suspicious":  bool(d.get("suspicious")),
+        "detected_at": d.get("detected_at", ""),
+    } for d in dom_list if isinstance(d, dict)]
+    # lookalike_targets.results is an OBJECT {description,item_count,items:[...str]}
+    targets = []
+    if isinstance(targets_raw, dict):
+        res = targets_raw.get("results", {})
+        if isinstance(res, dict):
+            targets = [t for t in (res.get("items") or []) if isinstance(t, str)]
+        elif isinstance(res, list):
+            targets = [t.get("domain", t) if isinstance(t, dict) else t for t in res]
+    return {"domains": domains, "targets": targets, "unavailable": None}
+
+def fetch_lookalikes() -> dict:
+    """Lookalike (typosquat) domains + protected target list, via TDLAD REST.
+    Degrades to unavailable on 403/error; never raises/500."""
+    ck = _cache_key("lookalikes", "", None, False)
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached
+    dom, st1 = _rest_get_ex("/api/tdlad/v1/lookalike_domains", {"_limit": 500})
+    tgt, st2 = _rest_get_ex("/api/tdlad/v1/lookalike_targets")
+    if st1 == 403 and st2 == 403:
+        result = {"domains": [], "targets": [], "unavailable": "Lookalike Domains not entitled"}
+    elif dom is None and tgt is None:
+        result = {"domains": [], "targets": [], "unavailable": "Lookalike Domains service unavailable"}
+    else:
+        result = norm_lookalikes(dom, tgt)
+    _cache_set(ck, result)
+    return result
 
 # ── Threat Lookup handler ─────────────────────────────────────────────────────
 
@@ -2354,6 +2641,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(fetch_host_metrics())
             except Exception as e:
                 _log_exc("/api/host-metrics", e)
+                self._json({"error": "internal error"}, 500)
+        elif path == "/api/assets":
+            try:
+                self._json(fetch_assets())
+            except Exception as e:
+                _log_exc("/api/assets", e)
+                self._json({"error": "internal error"}, 500)
+        elif path == "/api/dossier":
+            from urllib.parse import parse_qs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            params = {k: v[0] for k, v in parse_qs(qs).items()}
+            try:
+                self._json(fetch_dossier(params.get("q", ""), params.get("type", "")))
+            except Exception as e:
+                _log_exc("/api/dossier", e)
+                self._json({"error": "internal error"}, 500)
+        elif path == "/api/lookalikes":
+            try:
+                self._json(fetch_lookalikes())
+            except Exception as e:
+                _log_exc("/api/lookalikes", e)
                 self._json({"error": "internal error"}, 500)
         elif path == "/api/hub/health":
             try: self._json(fetch_hub_health())
