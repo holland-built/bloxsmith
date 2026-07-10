@@ -2792,7 +2792,9 @@ function NetworkTab(){
   // siteFilter: click a site bar to AND-filter the subnet table (null = all sites).
   // expandedSigs: 100%-util collapse groups the user has expanded (see collapseIdentical).
   const [siteFilter,setSiteFilter]=useState(null);
+  const [band,setBand]=useState(null); // util-band quick-filter chip: '85' | '7085' | null
   const [expandedSigs,setExpandedSigs]=useState(()=>new Set());
+  const {bind}=useHoverDetail(); // cursor-following flavor card for subnet + top-consumer rows
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
@@ -2828,7 +2830,9 @@ function NetworkTab(){
   const subnetCols=[
     {key:'name',label:'Subnet',render:(v,r)=>r.__group
       ? <span className="mono" style={{color:'var(--text-dim)',fontSize:'var(--t12)'}}>{r.__count} subnets at 100% ({(r.__group.split('|')[1])||''}) · Expand</span>
-      : (v||'—')},
+      : <span {...bind({title:(r.addr||'')+(r.cidr?('/'+r.cidr):''),
+          rows:[['Util',utilOf(r)+'%'],['Site',r.site||'—'],['Leases',String(leasesInSubnet(leases,r).length)]],
+          spark:histByAddr[r.addr]})}>{v||'—'}</span>},
     {key:'addr',label:'Network',mono:true,align:'left',render:(v,r)=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')},
     {key:'util',label:'Utilization',align:'right',render:v=>UtilBar(v)},
     {key:'trend',label:'Trend',align:'left',spark:r=>histByAddr[r.addr]},
@@ -2844,52 +2848,39 @@ function NetworkTab(){
     const u=utilOf(s); g.count++; g.sum+=u; if(u>g.worst) g.worst=u;
   });
   const siteRows=[...siteMap.values()].map(g=>({
-    label:g.site, value:g.worst, site:g.site,
+    label:g.site, value:g.worst, site:g.site, count:g.count,
     detail:g.count+' subnet'+(g.count===1?'':'s')+' · avg '+Math.round(g.sum/g.count)+'%',
     color:utilColor(g.worst),
   })).sort((a,b)=>b.value-a.value);
   const topN=[...subnets].sort((a,b)=>utilOf(b)-utilOf(a)||totalOf(b)-totalOf(a)).slice(0,15);
-  // Subnet table rows: AND the active site filter, then collapse 100%-util noise
-  // (≥5 rows sharing a /cidr → one "N subnets at 100%" group) unless that signature
+  // Lease-state mix for the "Lease states" donut (Donut folds to 5 slices, tolerant of casing).
+  const leaseStateCounts={};
+  leases.forEach(l=>{const st=String(l.state||'unknown').toLowerCase();leaseStateCounts[st]=(leaseStateCounts[st]||0)+1;});
+  const leaseSlices=Object.keys(leaseStateCounts).map(k=>({label:k,value:leaseStateCounts[k],
+    color:k==='active'?'var(--ok)':k==='free'?'var(--text-faint)':(k==='expired'||k==='backup'||k==='offered')?'var(--warn)':'var(--accent)'}));
+  // Subnet table rows: AND the active site + util-band quick-filters, then collapse 100%-util
+  // noise (≥5 rows sharing a /cidr → one "N subnets at 100%" group) unless that signature
   // was expanded. DataTable's own problemsOnly (>70%) then filters on top of this.
-  const siteFiltered=siteFilter?subnets.filter(s=>(s.site||'—')===siteFilter):subnets;
-  const subnetRows=collapseIdentical(siteFiltered,
+  let subnetPool=siteFilter?subnets.filter(s=>(s.site||'—')===siteFilter):subnets;
+  if(band==='85') subnetPool=subnetPool.filter(s=>utilOf(s)>85);
+  else if(band==='7085') subnetPool=subnetPool.filter(s=>{const u=utilOf(s);return u>=70&&u<=85;});
+  const subnetRows=collapseIdentical(subnetPool,
     s=>{const sg=utilOf(s)===100?('100|/'+(s.cidr||'')):null; return (sg&&expandedSigs.has(sg))?null:sg;}, 5);
 
-  return <div className="page">
+  const chipStyle=on=>on
+    ? {cursor:'pointer',borderColor:'var(--accent)',color:'var(--text)',background:'var(--hover)'}
+    : {cursor:'pointer'};
+  const clearFilter=(siteFilter||band)?<button className="chip" style={{cursor:'pointer',borderColor:'var(--accent)',color:'var(--text)'}}
+    onClick={()=>{setSiteFilter(null);setBand(null);}}>Clear ✕</button>:null;
+
+  return <div className="page fadein">
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
-    {!drillKey&&subnets.length>0?<section>
-      <SectionHead title="Capacity by site">
-        {siteFilter?<button className="btn btn-ghost" onClick={()=>setSiteFilter(null)}>Filter: {siteFilter} ✕</button>:null}
-      </SectionHead>
-      <div className="grid-2">
-        <div className="panel" style={{padding:'var(--s3)'}}>
-          <div className="band-fact-l" style={{marginBottom:'var(--s2)'}}>Worst utilization by site</div>
-          <GroupedBar rows={siteRows} max={24}
-            onClick={r=>setSiteFilter(sf=>sf===r.site?null:r.site)}/>
-        </div>
-        <div className="panel" style={{padding:'var(--s3)'}}>
-          <div className="band-fact-l" style={{marginBottom:'var(--s2)'}}>Top capacity consumers</div>
-          <div style={{display:'flex',flexDirection:'column',gap:'var(--s1)'}}>
-            {topN.map((s,i)=>{const go=()=>nav('network',{subnet:s.addr||s.id});
-              return <div key={i} className="clickable" role="button" tabIndex={0} onClick={go}
-                onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}
-                style={{display:'flex',alignItems:'center',gap:'var(--s3)',justifyContent:'space-between',padding:'2px 0',cursor:'pointer'}}>
-                <span className="mono" style={{fontSize:'var(--t12)',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{(s.addr||'')+(s.cidr?('/'+s.cidr):'')}</span>
-                {UtilBar(s.util||0)}
-              </div>;})}
-          </div>
-        </div>
-      </div>
-    </section>:null}
-    <section>
-      <SectionHead title={drill?'Subnet detail':'Subnets'}>
-        <Freshness at={fetchedAt} onRetry={refetch}/>
-      </SectionHead>
-      {drillKey
-        ? (drill
-            ? <div className="grid-2">
-                <div className="panel" style={{padding:'var(--s4)'}}>
+    {drillKey
+      ? <section>
+          <SectionRule title="Subnet detail"/>
+          {drill
+            ? <div className="grid">
+                <div className="pcard">
                   <button className="btn btn-ghost" onClick={()=>history.back()}>← Back</button>
                   <div style={{marginTop:'var(--s3)',fontWeight:600}}>{drill.name}</div>
                   <div className="mono" style={{color:'var(--text-dim)',marginTop:'var(--s1)'}}>{drill.addr}/{drill.cidr}</div>
@@ -2897,54 +2888,94 @@ function NetworkTab(){
                   <div className="mono" style={{marginTop:'var(--s3)',color:'var(--text-dim)',fontSize:'var(--t12)'}}>
                     {drillLeases.length} lease{drillLeases.length===1?'':'s'} in subnet</div>
                 </div>
-                <div>
+                <Panel title={'Leases · '+drillLeases.length}>
                   {drillLeases.length
                     ? <DataTable cols={NET_LEASE_COLS} rows={drillLeases} defaultSort={{key:'addr',dir:'asc'}}
                         csvName={'leases-'+(drill.addr||drill.id)}
                         tableId={'drill-leases-'+(drill.addr||drill.id)} rowKey={r=>String(r.ip||r.addr||r.mac)} selectable/>
                     : <div className="dt-empty">No leases in this subnet</div>}
-                </div>
+                </Panel>
               </div>
-            : <div className="panel" style={{padding:'var(--s4)'}}>
+            : <div className="pcard">
                 <button className="btn btn-ghost" onClick={()=>history.back()}>← Back</button>
                 <div className="dt-empty">Subnet not found</div>
-              </div>)
-        : <DataTable cols={subnetCols} rows={subnetRows} defaultSort={{key:'util',dir:'desc'}}
-            maxRows={50}
-            problemsOnly={{label:'Problems only',test:s=>utilOf(s)>70,default:true}}
-            onRowClick={r=>{ if(r.__group){ setExpandedSigs(prev=>{const n=new Set(prev); if(n.has(r.__group)) n.delete(r.__group); else n.add(r.__group); return n;}); return; } nav('network',{subnet:r.addr||r.id}); }}
-            csvName="subnets"
-            tableId="subnets" rowKey={r=>r.__group?('grp:'+r.__group):String(r.addr||r.id)} selectable
-            filterable filterKeys={['addr','name','site']}
-            initialPeekKey={params.peek}
-            renderPeek={row=>{
-              const rl=leasesInSubnet(leases,row);
-              return <div>
-                <div style={{fontWeight:600}}>{row.name||'—'}</div>
-                <div className="mono" style={{color:'var(--text-dim)',marginTop:'var(--s1)'}}>{(row.addr||'')+(row.cidr?('/'+row.cidr):'')}</div>
-                <div style={{marginTop:'var(--s3)'}}>{UtilBar(row.util||0)}</div>
-                <div style={{marginTop:'var(--s2)',fontSize:'var(--t12)',color:'var(--text-dim)'}}>Site: {row.site||'—'}</div>
-                <div className="mono" style={{marginTop:'var(--s3)',color:'var(--text-dim)',fontSize:'var(--t12)'}}>{rl.length} lease{rl.length===1?'':'s'} in subnet</div>
-                <div style={{marginTop:'var(--s2)',display:'flex',flexDirection:'column',gap:2}}>
-                  {rl.slice(0,20).map((l,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',gap:'var(--s3)',fontSize:'var(--t12)'}}>
-                    <span className="mono">{l.addr||'—'}</span>{StateText(l.state)}</div>)}
-                  {rl.length>20?<div style={{fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:2}}>+{rl.length-20} more</div>:null}
-                </div>
-              </div>;
-            }}
-            bulkActions={sel=>[{label:'Copy CIDRs',run:()=>{
-              const rows=sel.filter(r=>!r.__group);
-              const txt=rows.map(r=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')).join('\n');
-              if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
-              toast('Copied '+rows.length+' CIDR'+(rows.length===1?'':'s'),'ok');
-            }}]}/>}
-    </section>
-    <section>
-      <SectionHead title={'All leases · '+leases.length}/>
-      <DataTable cols={NET_LEASE_COLS} rows={leases} defaultSort={{key:'addr',dir:'asc'}} csvName="leases"
-        maxRows={50}
-        tableId="all-leases" rowKey={r=>String(r.ip||r.addr||r.mac)} selectable/>
-    </section>
+              </div>}
+        </section>
+      : <React.Fragment>
+          <SectionRule title="Capacity & utilization"/>
+          <div className="grid">
+            <Panel title="Capacity by site" side={clearFilter} empty={siteRows.length===0}>
+              <GroupedBar rows={siteRows} max={24} onClick={r=>setSiteFilter(sf=>sf===r.site?null:r.site)}/>
+            </Panel>
+            <Panel title="Top consumers" empty={topN.length===0}>
+              <div className="issues">
+                {topN.map((s,i)=>{
+                  const go=()=>nav('network',{subnet:s.addr||s.id});
+                  const hb=bind({title:(s.addr||'')+(s.cidr?('/'+s.cidr):''),
+                    rows:[['Util',utilOf(s)+'%'],['Site',s.site||'—'],['Leases',String(leasesInSubnet(leases,s).length)]],
+                    spark:histByAddr[s.addr]});
+                  return <div key={i} className="issue" role="button" tabIndex={0}
+                    onClick={go} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}} {...hb}>
+                    <span className="rank mono">{i+1}</span>
+                    <div className="body">
+                      <div className="t mono">{(s.addr||'')+(s.cidr?('/'+s.cidr):'')}</div>
+                      <div className="d">{(s.name||'—')+' · '+(s.site||'—')}</div>
+                    </div>
+                    {UtilBar(s.util||0)}
+                  </div>;
+                })}
+              </div>
+            </Panel>
+            <div style={{gridColumn:'1/-1',display:'flex',flexWrap:'wrap',alignItems:'center',gap:'var(--s2)'}}>
+              <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>Filter</span>
+              <button className="chip" style={chipStyle(band==='85')} onClick={()=>setBand(b=>b==='85'?null:'85')}>&gt;85% · {gt85}</button>
+              <button className="chip" style={chipStyle(band==='7085')} onClick={()=>setBand(b=>b==='7085'?null:'7085')}>70-85% · {b7085}</button>
+              {siteRows.map((g,i)=><button key={i} className="chip" style={chipStyle(siteFilter===g.site)}
+                onClick={()=>setSiteFilter(sf=>sf===g.site?null:g.site)}>{g.site} · {g.count}</button>)}
+            </div>
+            <div style={{gridColumn:'1/-1'}}>
+              <Panel title="Subnets" side={<Freshness at={fetchedAt} onRetry={refetch}/>}>
+                <DataTable cols={subnetCols} rows={subnetRows} defaultSort={{key:'util',dir:'desc'}}
+                  maxRows={50}
+                  problemsOnly={{label:'Problems only',test:s=>utilOf(s)>70,default:true}}
+                  onRowClick={r=>{ if(r.__group){ setExpandedSigs(prev=>{const n=new Set(prev); if(n.has(r.__group)) n.delete(r.__group); else n.add(r.__group); return n;}); return; } nav('network',{subnet:r.addr||r.id}); }}
+                  csvName="subnets"
+                  tableId="subnets" rowKey={r=>r.__group?('grp:'+r.__group):String(r.addr||r.id)} selectable
+                  filterable filterKeys={['addr','name','site']}
+                  initialPeekKey={params.peek}
+                  renderPeek={row=>{
+                    const rl=leasesInSubnet(leases,row);
+                    return <div>
+                      <div style={{fontWeight:600}}>{row.name||'—'}</div>
+                      <div className="mono" style={{color:'var(--text-dim)',marginTop:'var(--s1)'}}>{(row.addr||'')+(row.cidr?('/'+row.cidr):'')}</div>
+                      <div style={{marginTop:'var(--s3)'}}>{UtilBar(row.util||0)}</div>
+                      <div style={{marginTop:'var(--s2)',fontSize:'var(--t12)',color:'var(--text-dim)'}}>Site: {row.site||'—'}</div>
+                      <div className="mono" style={{marginTop:'var(--s3)',color:'var(--text-dim)',fontSize:'var(--t12)'}}>{rl.length} lease{rl.length===1?'':'s'} in subnet</div>
+                      <div style={{marginTop:'var(--s2)',display:'flex',flexDirection:'column',gap:2}}>
+                        {rl.slice(0,20).map((l,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',gap:'var(--s3)',fontSize:'var(--t12)'}}>
+                          <span className="mono">{l.addr||'—'}</span>{StateText(l.state)}</div>)}
+                        {rl.length>20?<div style={{fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:2}}>+{rl.length-20} more</div>:null}
+                      </div>
+                    </div>;
+                  }}
+                  bulkActions={sel=>[{label:'Copy CIDRs',run:()=>{
+                    const rows=sel.filter(r=>!r.__group);
+                    const txt=rows.map(r=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')).join('\n');
+                    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+                    toast('Copied '+rows.length+' CIDR'+(rows.length===1?'':'s'),'ok');
+                  }}]}/>
+              </Panel>
+            </div>
+            <Panel title={'All leases · '+leases.length}>
+              <DataTable cols={NET_LEASE_COLS} rows={leases} defaultSort={{key:'addr',dir:'asc'}} csvName="leases"
+                maxRows={50}
+                tableId="all-leases" rowKey={r=>String(r.ip||r.addr||r.mac)} selectable/>
+            </Panel>
+            <Panel title="Lease states" side={<span className="mono" style={{color:'var(--text-faint)'}}>{leases.length}</span>} empty={leases.length===0}>
+              <Donut slices={leaseSlices} centerValue={leases.length} centerLabel="leases"/>
+            </Panel>
+          </div>
+        </React.Fragment>}
   </div>;
 }
 
@@ -2974,7 +3005,6 @@ function DnsTab(){
     queries:Number(r[NDA+'total_query_count'])||0}));
   const qtypes=((an.data&&an.data.query_types)||[]).map(r=>({
     type:r[NDA+'query_type']||'?',count:Number(r[NDA+'total_query_count'])||0}));
-  const vmax=Math.max(1,...volume.map(r=>Number(r[NDA+'total_query_count'])||0));
   const qmax=Math.max(1,...qtypes.map(q=>q.count));
   const fmtDay=(r)=>{const t=r[NDA+'timestamp.day']||r[NDA+'timestamp']||r.timestamp||'';
     const d=new Date(t);return isNaN(d)?String(t).slice(5,10):(d.getMonth()+1)+'/'+d.getDate();};
@@ -3009,12 +3039,17 @@ function DnsTab(){
     .filter(z=>(Array.isArray(z.issues)&&z.issues.length>0)||z.anomaly)
     .slice(0,3).map(z=>({label:z.fqdn||'—'}));
 
-  return <div className="page">
+  // Analytics panels render ONLY when their array is non-empty and no fetch error
+  // (graceful empties → no dead bands). If all three are empty, one side-meta note.
+  const volBuckets=volume.slice(0,7).map(r=>({label:fmtDay(r),count:Number(r[NDA+'total_query_count'])||0}));
+  const volEmpty=!(volume.length&&!an.error);
+  const clientsEmpty=!(clients.length&&!an.error);
+  const qtypesEmpty=!(qtypes.length&&!an.error);
+  const allEmpty=volEmpty&&clientsEmpty&&qtypesEmpty;
+
+  return <div className="page fadein">
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
-    <section>
-      <SectionHead title="DNS zones">
-        <Freshness at={fetchedAt} onRetry={refetch}/>
-      </SectionHead>
+    <Panel title="DNS zones" side={<Freshness at={fetchedAt} onRetry={refetch}/>}>
       <DataTable cols={zoneCols} rows={zones} defaultSort={{key:'fqdn',dir:'asc'}} csvName="zones"
         maxRows={50}
         problemsOnly={{label:'Problems only',test:z=>(z.issues&&z.issues.length)||z.anomaly,default:true}}
@@ -3051,48 +3086,34 @@ function DnsTab(){
             });
           }
         }]}/>
-    </section>
-    <div className="grid-3">
-    <section>
-      <SectionHead title="Query volume · 7d">
-        <Freshness at={an.fetchedAt} onRetry={an.refetch} error={an.error?true:undefined}/>
-      </SectionHead>
-      {anLoading
-        ? <Skeleton rows={3}/>
-        : volume.length
-          ? <div style={{display:'flex',alignItems:'flex-end',gap:'var(--s3)',padding:'var(--s3) 0'}}>
-              {volume.slice(0,7).map((r,i)=>{const c=Number(r[NDA+'total_query_count'])||0;
-                return <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:'var(--s1)',minWidth:0}}>
-                  <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>{c.toLocaleString()}</span>
-                  <span style={{width:'100%',background:'var(--accent)',borderRadius:'2px 2px 0 0',height:Math.round(c/vmax*80)+4}}/>
-                  <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>{fmtDay(r)}</span>
-                </div>;})}
-            </div>
-          : <div className="dt-empty">No volume data</div>}
-    </section>
-    <section>
-      <SectionHead title="Top clients"/>
-      {anLoading
-        ? <Skeleton rows={5}/>
-        : <DataTable cols={clientCols} rows={clients} defaultSort={{key:'queries',dir:'desc'}} csvName="top-clients"/>}
-    </section>
-    <section>
-      <SectionHead title="Query types"/>
-      {anLoading
-        ? <Skeleton rows={4}/>
-        : qtypes.length
-          ? <div style={{display:'flex',flexDirection:'column',gap:'var(--s2)'}}>
-              {qtypes.map((q,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:'var(--s3)'}}>
-                <span className="mono" style={{width:64,flex:'0 0 auto',color:'var(--text-dim)'}}>{q.type}</span>
-                <span style={{flex:1,height:8,background:'var(--raised)',borderRadius:2,overflow:'hidden'}}>
-                  <span style={{display:'block',height:'100%',width:Math.round(q.count/qmax*100)+'%',background:'var(--accent)'}}/>
-                </span>
-                <span className="mono" style={{width:72,textAlign:'right',flex:'0 0 auto'}}>{q.count.toLocaleString()}</span>
-              </div>)}
-            </div>
-          : <div className="dt-empty">No query-type data</div>}
-    </section>
-    </div>
+    </Panel>
+    {anLoading
+      ? <Skeleton rows={3}/>
+      : <React.Fragment>
+          <div className="sec-h">
+            <h2>DNS analytics</h2><span className="rule"/>
+            {allEmpty?<span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>DNS analytics unavailable</span>:null}
+          </div>
+          {allEmpty?null:<div className="grid-dense">
+            <Panel title="Query volume · 7d"
+              side={<Freshness at={an.fetchedAt} onRetry={an.refetch} error={an.error?true:undefined}/>}
+              empty={volEmpty}>
+              <HistogramBar buckets={volBuckets}/>
+            </Panel>
+            <Panel title="Top clients" empty={clientsEmpty}>
+              <DataTable cols={clientCols} rows={clients} defaultSort={{key:'queries',dir:'desc'}} csvName="top-clients"/>
+            </Panel>
+            <Panel title="Query types" empty={qtypesEmpty}>
+              <div className="sites">
+                {qtypes.map((q,i)=><div key={i} className="siterow">
+                  <span className="nm">{q.type}</span>
+                  <span className="track"><i style={{width:Math.round(q.count/qmax*100)+'%',background:'var(--accent)'}}/></span>
+                  <span className="pc mono">{q.count.toLocaleString()}</span>
+                </div>)}
+              </div>
+            </Panel>
+          </div>}
+        </React.Fragment>}
   </div>;
 }
 // ═══ END: NETDNS ═══
