@@ -2879,7 +2879,7 @@ function SecChips({options,value,onChange}){
 }
 
 /* Peek (F4) — full event detail with inline ack toggle + two-step Block. */
-function SecEventPeek({e,acks,toggleAck}){
+function SecEventPeek({e,acks,toggleAck,onExplain}){
   const [acked,setAcked]=useState(!!acks[secAckKey(e)]);
   const [confirm,setConfirm]=useState(false);
   const [blocking,setBlocking]=useState(false);
@@ -2916,7 +2916,7 @@ function SecEventPeek({e,acks,toggleAck}){
       <input type="checkbox" checked={acked} onChange={()=>{setAcked(x=>!x);toggleAck(e);}}/>
       Acknowledged
     </label>
-    <div>
+    <div style={{display:'flex',gap:'var(--s2)',alignItems:'center',flexWrap:'wrap'}}>
       {confirm
         ? <span style={{display:'inline-flex',gap:'var(--s2)',alignItems:'center',flexWrap:'wrap'}}>
             <span style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>Block {e.qname}?</span>
@@ -2924,11 +2924,12 @@ function SecEventPeek({e,acks,toggleAck}){
             <button className="btn btn-ghost" onClick={()=>setConfirm(false)}>Cancel</button>
           </span>
         : <button className="btn" disabled={!e.qname||blocking} onClick={()=>setConfirm(true)}>{blocking?'Blocking…':'Block domain'}</button>}
+      {onExplain&&<button className="btn btn-ghost" onClick={()=>onExplain([e])}>Explain</button>}
     </div>
   </div>;
 }
 
-function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triageRef,initialPeekKey}){
+function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triageRef,initialPeekKey,range,onExplain}){
   const {data,error,locked,fetchedAt,refetch,loading}=api;
   const [actF,setActF]=useState('all');
   // Real 24h activity — bucket ALL events per qname by hour-of-day from real event_time.
@@ -2963,6 +2964,7 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
     const act=String(e.policy_action||'').toLowerCase();
     if(actF==='blocked'&&!(act==='block'||act==='redirect')) return false;
     if(actF==='logged'&&act!=='log') return false;
+    if(range){const t=parseTs(e.event_time);if(!isFinite(t)||t<range[0]||t>range[1]) return false;}
     return true;
   });
   rows=rows.map((e,i)=>({e,i})).sort((A,B)=>{
@@ -3007,6 +3009,7 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
       if(auth) toast('Blocking requires bridge token','err');
       else toast(ok+' domain'+(ok===1?'':'s')+' blocked'+(fail?' · '+fail+' failed':''),(fail&&!ok)?'err':'ok');
     }},
+    ...(onExplain?[{label:'Explain '+rws.length,run:()=>onExplain(rws)}]:[]),
   ];
   return <div ref={triageRef}>
     <SecHead title="Triage inbox" at={fetchedAt} onRetry={refetch} error={error}>
@@ -3031,7 +3034,7 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
       : <DataTable cols={cols} rows={rows} tableId="triage"
           rowKey={r=>String(r.event_time)+'|'+String(r.qname)}
           selectable bulkActions={bulkActions} initialPeekKey={initialPeekKey}
-          renderPeek={e=><SecEventPeek e={e} acks={acks} toggleAck={toggleAck}/>}/>}
+          renderPeek={e=><SecEventPeek e={e} acks={acks} toggleAck={toggleAck} onExplain={onExplain}/>}/>}
   </div>;
 }
 
@@ -3043,15 +3046,63 @@ function SecEntities({entities}){
   }
   return <pre className="mono" style={{fontSize:'var(--t11)',color:'var(--text-dim)',whiteSpace:'pre-wrap',margin:0,padding:'var(--s3)',background:'var(--raised)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)',maxHeight:320,overflow:'auto'}}>{JSON.stringify(entities,null,2)}</pre>;
 }
+/* External intel (Dossier) — defensive render of /api/dossier summary + sources. */
+function SecDossierSourceVal({src}){
+  const bits=[];
+  if(Array.isArray(src.records)) bits.push(src.records.length+' record'+(src.records.length===1?'':'s'));
+  if(src.geo&&typeof src.geo==='object') bits.push('geo: '+[src.geo.country,src.geo.city].filter(Boolean).join(', '));
+  else if(src.geo) bits.push('geo: '+String(src.geo));
+  if(src.whois&&typeof src.whois==='object') bits.push('whois: '+[src.whois.registrar,src.whois.created].filter(Boolean).join(' · '));
+  else if(src.whois) bits.push('whois: '+String(src.whois));
+  if(src.actor) bits.push('actor: '+String(src.actor));
+  if(src.malware) bits.push('malware: '+(Array.isArray(src.malware)?src.malware.join(', '):String(src.malware)));
+  if(src.detail) bits.push(String(src.detail));
+  return <span style={{color:'var(--text-dim)',wordBreak:'break-word'}}>{bits.length?bits.join(' · '):'—'}</span>;
+}
+function SecDossier({dossier}){
+  if(!dossier) return null;
+  if(dossier.unavailable) return <div style={{color:'var(--text-faint)',fontSize:'var(--t11)',marginTop:'var(--s3)'}}>External intel unavailable: {String(dossier.unavailable)}</div>;
+  const sum=dossier.summary||{};
+  const sources=Array.isArray(dossier.sources)?dossier.sources:[];
+  const mal=!!sum.malicious;
+  const pill=(text,tone)=><span className="mono" style={{fontSize:'var(--t11)',padding:'1px var(--s2)',borderRadius:'var(--r-ctl)',color:tone==='crit'?'var(--crit)':'var(--ok)',border:'1px solid '+(tone==='crit'?'var(--crit)':'var(--border)')}}>{text}</span>;
+  const meta=[['Max threat level',sum.max_threat_level],['Country',sum.country],['Registrar',sum.registrar],['Actor',sum.actor]].filter(x=>x[1]!=null&&x[1]!=='');
+  const classes=Array.isArray(sum.threat_classes)?sum.threat_classes:[];
+  const props=Array.isArray(sum.properties)?sum.properties:[];
+  return <div style={{marginTop:'var(--s4)',paddingTop:'var(--s3)',borderTop:'1px solid var(--border)'}}>
+    <h3 style={{margin:'0 0 var(--s2)',fontSize:'var(--t12)',fontWeight:600,color:'var(--text-dim)'}}>External intel (Dossier)</h3>
+    <div style={{display:'flex',alignItems:'center',gap:'var(--s2)',flexWrap:'wrap',marginBottom:'var(--s2)'}}>
+      {mal?pill('malicious','crit'):pill('clean','ok')}
+      {sum.max_threat_level!=null&&<span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>threat {String(sum.max_threat_level)}</span>}
+      {(dossier.type||'')&&<span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>{String(dossier.type)}</span>}
+    </div>
+    {(classes.length||props.length)>0&&<div style={{display:'flex',gap:'var(--s1)',flexWrap:'wrap',marginBottom:'var(--s2)'}}>
+      {classes.map((c,i)=><span key={'c'+i} className="chip">{String(c)}</span>)}
+      {props.map((p,i)=><span key={'p'+i} className="chip" style={{color:'var(--text-faint)'}}>{String(p)}</span>)}
+    </div>}
+    {meta.length>0&&<dl style={{margin:'0 0 var(--s2)',display:'grid',gridTemplateColumns:'auto 1fr',gap:'2px var(--s3)',fontSize:'var(--t11)'}}>
+      {meta.map(([k,v])=><React.Fragment key={k}><dt style={{color:'var(--text-dim)'}}>{k}</dt><dd className="mono" style={{margin:0,wordBreak:'break-all'}}>{String(v)}</dd></React.Fragment>)}
+    </dl>}
+    {sources.length>0&&<DataTable csvName="dossier-sources"
+      cols={[{key:'source',label:'Source',mono:true,render:v=>v||'—'},{key:'_v',label:'Detail',render:(_,r)=><SecDossierSourceVal src={r}/>}]}
+      rows={sources.map((s,i)=>({...(s&&typeof s==='object'?s:{detail:s}),_k:i}))} rowKey={r=>r._k}/>}
+    {!sources.length&&<div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>No sources reported.</div>}
+  </div>;
+}
 function SecThreatLookup(){
   const [q,setQ]=useState('');
   const [busy,setBusy]=useState(false);
   const [res,setRes]=useState(null);
+  const [dossier,setDossier]=useState(null);
   const [err,setErr]=useState(null);
   const [confirm,setConfirm]=useState(null);
   const lookup=async()=>{
     const query=q.trim(); if(!query) return;
-    setBusy(true);setErr(null);setRes(null);setConfirm(null);
+    setBusy(true);setErr(null);setRes(null);setDossier(null);setConfirm(null);
+    fetch('/api/dossier?q='+encodeURIComponent(query),{cache:'no-store'})
+      .then(r=>r.json().catch(()=>null))
+      .then(j=>{if(j)setDossier(j);})
+      .catch(()=>{});
     try{
       const r=await fetch('/api/threat-lookup?q='+encodeURIComponent(query),{cache:'no-store'});
       const body=await r.json().catch(()=>null);
@@ -3082,7 +3133,8 @@ function SecThreatLookup(){
     </div>
     {err&&<div className="dt-empty" style={{color:'var(--crit)'}}>{err}</div>}
     {res&&<div style={{marginBottom:'var(--s3)'}}><SecEntities entities={res.entities}/></div>}
-    <div style={{display:'flex',alignItems:'center',gap:'var(--s2)',flexWrap:'wrap'}}>
+    <SecDossier dossier={dossier}/>
+    <div style={{display:'flex',alignItems:'center',gap:'var(--s2)',flexWrap:'wrap',marginTop:'var(--s3)'}}>
       {confirm==='block'
         ? <><span style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>Block {q.trim()}?</span>
             <button className="btn" onClick={()=>write('block')}>Confirm block</button>
@@ -3163,6 +3215,47 @@ function SecActions(){
   </div>;
 }
 
+function SecLookalikes(){
+  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/lookalikes');
+  if(locked) return null;
+  if(loading&&!data) return <div><SecHead title="Lookalike domains"/><Skeleton rows={8}/></div>;
+  const d=data||{};
+  if(d.unavailable) return <div><SecHead title="Lookalike domains" at={fetchedAt} onRetry={refetch} error={error}/><div className="dt-empty">Not entitled · {String(d.unavailable)}</div></div>;
+  if(error&&!data) return <div><SecHead title="Lookalike domains" at={fetchedAt} onRetry={refetch} error={error}/><div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div></div>;
+  const rows=Array.isArray(d.domains)?d.domains:[];
+  const cols=[
+    {key:'lookalike',label:'Lookalike',mono:true,copy:true,render:v=>v||'—'},
+    {key:'target',label:'Target',mono:true,render:v=><span style={{color:'var(--text-dim)'}}>{v||'—'}</span>},
+    {key:'reason',label:'Reason',hideSm:true,render:v=>v||'—'},
+    {key:'suspicious',label:'Suspicious',render:heatCell(r=>r.suspicious?1:0,{crit:1,fmt:(v,r)=>r.suspicious?'yes':'no'})},
+    {key:'detected_at',label:'Detected',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
+  ];
+  const bulkActions=rws=>[
+    {label:'Block domains',confirm:'Block '+rws.length+' domain'+(rws.length===1?'':'s')+'?',flash:true,run:async()=>{
+      const domains=[...new Set(rws.map(r=>r.lookalike).filter(Boolean))];
+      let ok=0,fail=0,auth=false;
+      for(const domain of domains){
+        try{
+          const r=await fetch('/api/block-domain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
+          if(r.status===401){auth=true;break;}
+          const body=await r.json().catch(()=>({}));
+          if(r.ok&&body.ok)ok++;else fail++;
+        }catch(e){fail++;}
+      }
+      if(auth) toast('Blocking requires bridge token','err');
+      else toast(ok+' domain'+(ok===1?'':'s')+' blocked'+(fail?' · '+fail+' failed':''),(fail&&!ok)?'err':'ok');
+    }},
+  ];
+  return <div>
+    <SecHead title="Lookalike domains" at={fetchedAt} onRetry={refetch} error={error}>
+      <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>{rows.length+' detected'+(Array.isArray(d.targets)&&d.targets.length?' · '+d.targets.length+' target'+(d.targets.length===1?'':'s'):'')}</span>
+    </SecHead>
+    {rows.length===0
+      ? <div className="dt-empty">No lookalike domains</div>
+      : <DataTable cols={cols} rows={rows} tableId="lookalikes" csvName="lookalike-domains"
+          rowKey={r=>String(r.lookalike)} selectable bulkActions={bulkActions}/>}
+  </div>;
+}
 function SecSynthBand({api,acks,setSevF,triageRef}){
   const {delta}=useSnapshots();
   if(!api||!api.data) return null;
@@ -3204,21 +3297,27 @@ function SecurityTab(){
   const sec=useApi('/api/hub/security',{poll:60000});
   const route=useRoute();
   const [sevF,setSevF]=useState('all');
+  const [range,setRange]=useState(null);
   const [acks,setAcks]=useState(()=>LS.get('acks',{}));
   const triageRef=useRef(null);
+  const ai=useAiExplain();
   const toggleAck=e=>{const k=secAckKey(e);setAcks(p=>{const n={...p};if(n[k])delete n[k];else n[k]=true;LS.set('acks',n);return n;});};
   const clearAcks=()=>{setAcks({});LS.set('acks',{});};
+  const secEvents=sec.data&&Array.isArray(sec.data.events)?sec.data.events:[];
   return <div className="page">
     <SecSynthBand api={sec} acks={acks} setSevF={setSevF} triageRef={triageRef}/>
-    <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} setAcks={setAcks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef} initialPeekKey={route.params.peek}/>
+    {secEvents.length>0&&<VolumeHistogram rows={secEvents} tsKey="event_time" buckets={48} onRange={setRange} selected={range}/>}
+    <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} setAcks={setAcks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef} initialPeekKey={route.params.peek} range={range} onExplain={ai.open}/>
     <div className="grid-2">
       <SecThreatLookup/>
-      <SecInsights/>
+      <SecLookalikes/>
     </div>
     <div className="grid-2">
-      <SecDomainPanels/>
+      <SecInsights/>
       <SecActions/>
     </div>
+    <SecDomainPanels/>
+    {ai.node}
   </div>;
 }
 // ═══ END: SECURITY ═══
