@@ -425,6 +425,16 @@ def apply_self_update():
 # Shared-secret for the state-changing write endpoint (/api/block-domain).
 # If unset, that write is disabled (401). Supply it via the X-Auth-Token header.
 DASHBOARD_TOKEN = os.environ.get("DASHBOARD_TOKEN", "")
+# Mutating routes (create/teardown/allocate) that must pass _write_ok() before
+# running — closes the unauthenticated-GET/CSRF hole. Exact paths; the DELETE
+# id-suffix routes are matched by prefix in _is_mutating().
+MUTATING_PATHS = frozenset({
+    "/api/provision/stream", "/api/provision/site/stream",
+    "/api/provision/seed-demo/stream", "/api/teardown/site/stream",
+    "/api/teardown/seed-demo/stream", "/api/selfservice/allocate",
+    "/api/dns/records", "/api/provision/block", "/api/teardown/block",
+    "/api/retag/block",
+})
 # Explicit, allowlisted block list id for /api/block-domain (no fuzzy name match).
 BLOCK_LIST_ID   = os.environ.get("BLOCK_LIST_ID", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
@@ -826,7 +836,7 @@ def _selfservice_allocate(body: dict) -> tuple:
     except (TypeError, ValueError):
         count = 1
     name = str(body.get("name") or "").strip()
-    dry = bool(body.get("dry"))
+    dry = _truthy_dry(body.get("dry"))  # safe default: preview unless dry=false/0
     dns = body.get("dns") or None
 
     if not subnet_id:
@@ -4201,12 +4211,69 @@ class Handler(BaseHTTPRequestHandler):
         supplied = self.headers.get("X-Auth-Token", "")
         return hmac.compare_digest(supplied, DASHBOARD_TOKEN)
 
+    @staticmethod
+    def _allowed_origins() -> set:
+        """Same-origin allowlist, shared by CORS reflection and the CSRF gate."""
+        return {f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}"}
+
+    def _token_query_matches(self) -> bool:
+        """SSE GET fallback: EventSource can't set headers, so accept a matching
+        ?token= query param (constant-time). Only meaningful when a token is set."""
+        if not DASHBOARD_TOKEN:
+            return False
+        from urllib.parse import parse_qs
+        qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+        supplied = (parse_qs(qs).get("token") or [""])[0]
+        return hmac.compare_digest(supplied, DASHBOARD_TOKEN)
+
+    def _same_origin(self) -> bool:
+        """True when the request is same-origin/loopback. A cross-site <img>/
+        <script>/link/EventSource carries a foreign Origin/Referer (blocked);
+        curl/EventSource from the local dashboard sends an allowlisted Referer or
+        no Origin at all — in which case only a loopback client is trusted."""
+        from urllib.parse import urlparse
+        ref = self.headers.get("Origin") or self.headers.get("Referer") or ""
+        if ref:
+            pu = urlparse(ref)
+            return f"{pu.scheme}://{pu.netloc}" in self._allowed_origins()
+        return self.client_address[0] in ("127.0.0.1", "::1")
+
+    def _write_ok(self) -> bool:
+        """Central authorization gate for mutating routes.
+        - Token configured  → require it (X-Auth-Token header OR ?token= query).
+        - No token (default) → allow only same-origin/loopback (blocks CSRF while
+          keeping the local dashboard working out of the box)."""
+        if DASHBOARD_TOKEN:
+            return self._authed() or self._token_query_matches()
+        return self._same_origin()
+
+    @staticmethod
+    def _is_mutating(path: str) -> bool:
+        return (path in MUTATING_PATHS
+                or path.startswith("/api/dns/records/")
+                or path.startswith("/api/ipam/addresses/"))
+
+    def _write_guard(self) -> bool:
+        """Call at the top of each verb dispatcher. If the path mutates and the
+        caller isn't authorized, emit 403 and return True (caller must return).
+        Read-only routes never match, so they're unaffected. For SSE GET this
+        sends a JSON 403 before the stream opens, which closes the EventSource."""
+        p = self.path.split("?")[0]
+        if self._is_mutating(p):
+            if not self._write_ok():
+                self._json({"error": "forbidden — write not authorized"}, 403)
+                return True
+            who = "loopback" if self.client_address[0] in ("127.0.0.1", "::1") else self.client_address[0]
+            print(f"[write-audit] {self.command} {p} authorized ({who})", file=sys.stderr)
+        return False
+
     def do_OPTIONS(self):
         self._cors()
         self.end_headers()
 
     def do_GET(self):
         path = self.path.split("?")[0]
+        if self._write_guard(): return
         if path == "/api/logo":
             import urllib.request, urllib.parse
             qs = dict(urllib.parse.parse_qsl(self.path.split("?",1)[1] if "?" in self.path else ""))
@@ -4521,7 +4588,7 @@ class Handler(BaseHTTPRequestHandler):
             name = qp.get("name", "").strip()
             comment = qp.get("comment", "").strip()
             make_zone = qp.get("make_zone", "0") == "1"
-            dry = qp.get("dry", "0") == "1"
+            dry = _truthy_dry(qp.get("dry"))  # safe default: preview unless dry=false/0
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
@@ -4801,6 +4868,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length) or b"{}") if length else {}
         except (json.JSONDecodeError, ValueError):
             self._json({"error": "invalid JSON body"}, 400); return
+        if self._write_guard(): return
         # vault control endpoints — reachable while locked (that's their purpose)
         if self.path == "/api/brand":
             domain = re.sub(r"[^a-zA-Z0-9.\-]", "", str(body.get("domain", "")))[:253]
@@ -5059,6 +5127,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length) or b"{}") if length else {}
         except (json.JSONDecodeError, ValueError):
             self._json({"error": "invalid JSON body"}, 400); return
+        if self._write_guard(): return
         if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
             self._json({"error": "vault locked", "locked": True}, 503); return
         path = self.path.split("?")[0]
@@ -5076,6 +5145,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         path = self.path.split("?")[0]
+        if self._write_guard(): return
         if path.startswith("/api/views/"):
             from urllib.parse import unquote
             name = unquote(path[len("/api/views/"):].strip("/"))
@@ -5120,9 +5190,7 @@ class Handler(BaseHTTPRequestHandler):
     def _send_cors_origin(self):
         # Reflect only an allowlisted same-host origin; never wildcard.
         origin = self.headers.get("Origin", "")
-        allowed = {
-            f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}",
-        }
+        allowed = self._allowed_origins()
         if origin in allowed:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
