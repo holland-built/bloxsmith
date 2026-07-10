@@ -482,6 +482,33 @@ def _cache_set(key, value):
 def cache_invalidate():
     _cache.clear()
 
+# ── server-side cache-warmer (keep data hot so no load is ever cold) ──────────
+WARM_INTERVAL = 240   # < CACHE_TTL (300) so cached entries never expire cold
+_warm_lock = threading.Lock()
+
+def _warm_tick():
+    if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
+        return
+    if not _warm_lock.acquire(blocking=False):
+        return
+    try:
+        auth_before = MCP_HEADERS.get("Authorization")
+        try: _maybe_refresh_jwt()
+        except Exception: pass
+        for fn in (fetch_dashboard_data, fetch_hub_health, fetch_hub_security, fetch_hub_domains):
+            try: fn()
+            except Exception as e: _log_exc("warm:"+fn.__name__, e)
+        if MCP_HEADERS.get("Authorization") != auth_before:
+            cache_invalidate()   # auth rotated mid-warm → drop rows keyed to the old tenant
+    finally:
+        _warm_lock.release()
+
+def _warm_loop():
+    _time.sleep(3)
+    while True:
+        _warm_tick()
+        _time.sleep(WARM_INTERVAL)
+
 # ── CSP account switching (portal-style sandbox switch, same API key) ─────────
 # The CSP identity API lists every account the key's user can act in, and
 # /v2/session/account_switch issues a Bearer JWT scoped to the chosen account.
@@ -727,6 +754,9 @@ def _apply_active():
     if _vault.get("llm_base"):  LLM_BASE_URL = _vault["llm_base"]
     if _vault.get("llm_model"): LLM_MODEL    = _vault["llm_model"]
     cache_invalidate()
+    # warm the new tenant's data immediately so the first post-unlock/switch load
+    # is a cache hit (non-blocking; _warm_tick self-guards via _warm_lock)
+    threading.Thread(target=_warm_tick, daemon=True).start()
 
 def vault_init(passphrase):
     with _vault_lock:
@@ -1592,6 +1622,7 @@ RULES:
 4. Always include 3-5 suggestions.
 5. Ambiguous term? Try multiple search_entity calls, get_subnets, get_dns, get_audit_logs.
 6. No data found? Suggest alternatives as plain English questions.
+7. For "is X malicious", "lookalikes of my brand", or "what assets", use dossier_lookup / lookalike_domains / asset_insights respectively.
 
 Output the JSON object and nothing else."""
 
@@ -1648,6 +1679,22 @@ _TOOLS = [
                 "limit": {"type": "integer", "description": "Number of top clients, default 10"},
             }},
     }},
+    {"type": "function", "function": {
+        "name": "dossier_lookup",
+        "description": "Threat-intel Dossier lookup for one indicator (domain or IP): returns maliciousness verdict, threat level, geo, whois, actor.",
+        "parameters": {"type": "object", "required": ["indicator"],
+            "properties": {"indicator": {"type": "string", "description": "A domain or IP address to look up, e.g. 'eicar.co' or '1.2.3.4'"}}},
+    }},
+    {"type": "function", "function": {
+        "name": "lookalike_domains",
+        "description": "List detected lookalike/typosquat domains targeting the protected brand.",
+        "parameters": {"type": "object", "properties": {}},
+    }},
+    {"type": "function", "function": {
+        "name": "asset_insights",
+        "description": "Security-action asset inventory (devices seen in security actions in the last 30 days).",
+        "parameters": {"type": "object", "properties": {}},
+    }},
 ]
 
 _MAX_TOOL_CHARS = 3000  # cap tool results to stay under TPM limits
@@ -1656,6 +1703,23 @@ async def _run_tool(name: str, args: dict) -> str:
     """Execute one tool call against MCP — opens its own session to avoid anyio/httpx conflicts."""
     print(f"  [AI tool] {name}({args})", flush=True)
     try:
+        # REST-based threat-intel/asset tools need no MCP session. Run their sync
+        # fetchers in a worker thread — they call asyncio.run() internally, which
+        # can't nest inside this already-running event loop.
+        if name in ("dossier_lookup", "lookalike_domains", "asset_insights"):
+            loop = asyncio.get_running_loop()
+            if name == "dossier_lookup":
+                d = await loop.run_in_executor(None, fetch_dossier, str(args.get("indicator", "")))
+                return json.dumps({"query": d.get("query"), "type": d.get("type"),
+                                   "summary": d.get("summary"), "unavailable": d.get("unavailable")}, default=str)
+            if name == "lookalike_domains":
+                d = await loop.run_in_executor(None, fetch_lookalikes)
+                return json.dumps({"domains": d.get("domains", [])[:50], "targets": d.get("targets", [])[:50],
+                                   "unavailable": d.get("unavailable")}, default=str)
+            if name == "asset_insights":
+                d = await loop.run_in_executor(None, fetch_assets)
+                return json.dumps({"assets": d.get("assets", [])[:50], "unavailable": d.get("unavailable")}, default=str)
+
         async with _mcp_session() as session:
 
             if name == "search_entity":
@@ -2985,6 +3049,8 @@ if __name__ == "__main__":
     print(f"Bloxsmith → http://{HOST}:{PORT}")
     print(f"MCP: {MCP_URL}")
     print("Ctrl+C to stop\n")
+    threading.Thread(target=_warm_loop, daemon=True, name="cache-warmer").start()
+    print(f"Cache-warmer started (every {WARM_INTERVAL}s).")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
