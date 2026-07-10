@@ -428,18 +428,18 @@ class FrontendStructureTests(unittest.TestCase):
 
     # ── new shell: tabs + router ───────────────────────────────────────────────
 
-    def test_seven_tab_ids(self):
+    def test_eight_tab_ids(self):
         self.assertContains(
-            "const TABS=['overview','network','dns','infra','security','audit','ask']",
-            "7-tab TABS array missing or reordered")
-        for t in ("overview", "network", "dns", "infra", "security", "audit", "ask"):
+            "const TABS=['overview','daily','network','dns','infra','security','audit','ask']",
+            "8-tab TABS array missing or reordered (daily must sit after overview)")
+        for t in ("overview", "daily", "network", "dns", "infra", "security", "audit", "ask"):
             self.assertContains(t + ":", f"tab id '{t}' missing from TAB_LABELS/TAB_COMPONENTS")
 
     def test_tab_components_map(self):
         self.assertContains("const TAB_COMPONENTS=", "TAB_COMPONENTS map missing")
         for comp in ("OverviewTab", "NetworkTab", "DnsTab", "InfraTab", "AuditTab", "AskTab"):
             self.assertContains("function " + comp, f"tab component {comp} missing")
-        self.assertContains("SecurityTab=", "SecurityTab missing")
+        self.assertContains("function SecurityTab", "SecurityTab missing")
 
     def test_legacy_hash_redirect_map(self):
         self.assertContains("const LEGACY={home:'overview'", "legacy redirect map missing")
@@ -491,17 +491,45 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("font-family:'Geist'", "Geist font-family not declared")
         self.assertContains("GeistMono", "GeistMono font-family not declared")
 
-    def test_no_light_mode_tokens(self):
-        # dark-only build: no theme-switch tokens or media queries for light
-        self.assertNotIn('data-theme="light"', self.html, "light-mode token block must not exist")
-        self.assertNotIn("prefers-color-scheme", self.html, "no color-scheme media query in dark-only build")
+    def test_light_mode_tokens(self):
+        # v2 ships a real light theme: [data-theme="light"] token block, a
+        # prefers-color-scheme default in the boot script, and light --bg value.
+        self.assertContains('[data-theme="light"]', "light-mode token block missing")
+        self.assertContains("prefers-color-scheme", "prefers-color-scheme default missing from boot script")
+        self.assertContains("--bg:#fafafa", "light --bg:#fafafa value missing")
+
+    def test_theme_toggle(self):
+        # persisted theme via LS 'theme' key (stored as bx.theme) + a ThemeToggle control
+        self.assertContains("bx.theme", "bx.theme localStorage key missing")
+        self.assertContains("LS.set('theme'", "theme persistence (LS.set('theme')) missing")
+        self.assertContains("function ThemeToggle", "ThemeToggle component missing")
+
+    def test_synth_band(self):
+        # synthesis band component defined exactly once
+        self.assertEqual(self.html.count("function SynthBand"), 1,
+                         "expected exactly one SynthBand definition")
+
+    def test_no_max_width_1200(self):
+        # v2 full-bleed: the old 1200px content caps were removed
+        self.assertNotIn("max-width:1200", self.html, "max-width:1200 cap must be gone (full-bleed)")
+        self.assertNotIn("maxWidth:1200", self.html, "maxWidth:1200 cap must be gone (full-bleed)")
+
+    def test_snapshot_module(self):
+        # daily-summary trend engine: snapshot store hook + writer
+        self.assertContains("useSnapshots", "useSnapshots hook missing")
+        self.assertContains("SnapshotWriter", "SnapshotWriter component missing")
+
+    def test_daily_view(self):
+        self.assertContains("DailyTab", "DailyTab component missing")
+        self.assertContains("dailyNarrative", "dailyNarrative missing")
 
     # ── region markers ─────────────────────────────────────────────────────────
 
     def test_region_markers(self):
-        # 6 regions × (REGION + END) × 2 markers-per-line = 24 occurrences
-        self.assertEqual(self.html.count("═══"), 24,
-                         "expected exactly 24 '═══' region markers")
+        # 7 regions × (REGION + END) × 2 markers-per-line = 28 occurrences
+        # (v2 added the DAILY region)
+        self.assertEqual(self.html.count("═══"), 28,
+                         "expected exactly 28 '═══' region markers")
 
     # ── hygiene ────────────────────────────────────────────────────────────────
 

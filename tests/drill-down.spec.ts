@@ -37,7 +37,10 @@ test('clicking a subnet row drills into leases, back restores the table', async 
   // Drill panel: back button + Alpha's two matching leases.
   await expect(page.getByRole('button', { name: /Back/ })).toBeVisible();
   await expect(page.locator('.panel')).toContainText('Subnet Alpha');
-  await expect(page.locator('.panel table.dt tbody tr')).toHaveCount(2);
+  // v2 re-layout: the drill leases DataTable is now a SIBLING of .panel inside a
+  // .grid-2 (the panel holds only the header/back button), and NetworkTab renders
+  // another table elsewhere — so scope to the drill grid that contains the panel.
+  await expect(page.locator('.grid-2:has(.panel) table.dt tbody tr')).toHaveCount(2);
 
   // Back -> subnet table restored.
   await page.getByRole('button', { name: /Back/ }).click();

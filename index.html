@@ -196,17 +196,18 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 
 /* ── shared layout + synthesis primitives ── */
 .page{display:flex;flex-direction:column;gap:var(--s6);}
-.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:var(--s6);align-items:start;}
-.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--s6);align-items:start;}
-.prose{max-width:72ch;}
-.band{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s5);width:100%;padding:var(--s5);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);}
-.band-verdict{display:flex;align-items:flex-start;gap:var(--s3);flex:1 1 320px;min-width:260px;}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr));gap:var(--s6);align-items:start;min-width:0;}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:var(--s6);align-items:start;min-width:0;}
+.grid-2>*,.grid-3>*{min-width:0;}
+.prose{max-width:72ch;min-width:0;overflow-wrap:anywhere;}
+.band{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s5);width:100%;min-width:0;padding:var(--s5);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);}
+.band-verdict{display:flex;align-items:flex-start;gap:var(--s3);flex:1 1 320px;min-width:0;overflow-wrap:anywhere;}
 .band-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;margin-top:5px;}
-.band-facts{display:flex;flex-wrap:wrap;gap:var(--s6);flex:1 1 auto;}
-.band-fact{display:flex;flex-direction:column;gap:2px;}
+.band-facts{display:flex;flex-wrap:wrap;gap:var(--s6);flex:1 1 auto;min-width:0;}
+.band-fact{display:flex;flex-direction:column;gap:2px;min-width:0;}
 .band-fact-l{font-size:var(--t11);color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
-.band-fact-v{font-size:var(--t16);color:var(--text);display:inline-flex;align-items:baseline;gap:var(--s2);}
-.band-chips{display:flex;flex-wrap:wrap;gap:var(--s2);flex:0 0 auto;align-items:center;}
+.band-fact-v{font-size:var(--t16);color:var(--text);display:inline-flex;align-items:baseline;gap:var(--s2);min-width:0;overflow-wrap:anywhere;}
+.band-chips{display:flex;flex-wrap:wrap;gap:var(--s2);flex:0 1 auto;min-width:0;align-items:center;}
 .band-chip{cursor:pointer;}
 .band-chip:hover{border-color:var(--border-strong);color:var(--text);}
 
@@ -1546,6 +1547,10 @@ function DailyTab(){
   const baseLabel=firstRun?'first check-in — no prior day yet'
     :(baseline?('vs '+baseline.date):(weekSnap||yesterdaySnap?'no comparison for this period':'no prior day yet'));
 
+  // Synthesis tone for the answer-first band (matches the narrative's health call).
+  const dlyTone=(uCrit>0||critThreats>0)?'crit'
+    :((gt85>0||hostsOffline>0||uHigh>0||zoneIssues>0)?'warn':'ok');
+
   return <div className="page">
 
     <div className="dly-head">
@@ -1564,9 +1569,7 @@ function DailyTab(){
       </div>
     </div>
 
-    <div className={'dly-lead prose'+(narrative?'':' dim')}>
-      {narrative||'Summarizing today’s network health…'}
-    </div>
+    <SynthBand tone={dlyTone} verdict={narrative||'Summarizing today’s network health…'} facts={[]} chips={[]}/>
 
     <div>
       <div className="dly-tiles">
@@ -1854,8 +1857,8 @@ function DnsTab(){
   if(document.getElementById('bx-infra-styles')) return;
   const s=document.createElement('style');s.id='bx-infra-styles';
   s.textContent=`
-  .infra-page{width:100%;display:flex;flex-direction:column;gap:32px;}
-  .infra-sec{display:flex;flex-direction:column;gap:12px;min-width:0;}
+  .infra-page{width:100%;max-width:100%;min-width:0;display:flex;flex-direction:column;gap:32px;}
+  .infra-sec{display:flex;flex-direction:column;gap:12px;min-width:0;max-width:100%;}
   .infra-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:20px;}
   .infra-h{font-size:13px;font-weight:600;color:var(--text);}
   .infra-dim{font-size:12px;color:var(--text-faint);padding:6px 0;}
@@ -1863,7 +1866,7 @@ function DnsTab(){
   .infra-back{font-size:12px;color:var(--accent-text);background:transparent;border:none;padding:0;}
   .infra-ip{font-size:12px;color:var(--text-dim);}
   .infra-st{font-size:11px;text-transform:uppercase;}
-  .sensor-wrap{overflow-x:auto;}
+  .sensor-wrap{max-width:100%;min-width:0;overflow-x:auto;}
   table.sensor{border-collapse:collapse;font-size:12px;white-space:nowrap;}
   table.sensor th{height:30px;padding:0 12px;font-size:11px;font-weight:500;color:var(--text-dim);
     text-transform:uppercase;text-align:right;border-bottom:1px solid var(--border);}

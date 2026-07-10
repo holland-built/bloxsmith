@@ -4,8 +4,9 @@ import { test, expect } from '@playwright/test';
 // box horizontally (excluding intentional overflow-x auto/scroll scrollers and
 // their descendants), and the document itself never exceeds the viewport width.
 
-const TABS = ['overview', 'network', 'dns', 'infra', 'security', 'audit', 'ask'];
+const TABS = ['overview', 'daily', 'network', 'dns', 'infra', 'security', 'audit', 'ask'];
 const VIEWPORTS = [
+  { w: 1440, h: 900 },
   { w: 1400, h: 900 },
   { w: 375, h: 812 },
 ];
@@ -45,9 +46,21 @@ function overflowProbe() {
   };
 }
 
+// v2 LAYOUT DEFECTS — FIXED:
+//  - infra overflow (sensor scroller now width-contained: max-width:100%/min-width:0
+//    on .sensor-wrap and its .infra-page/.infra-sec ancestors).
+//  - 375 grid collapse (.grid-2/.grid-3 now use minmax(min(Npx,100%),1fr)) and band
+//    text wraps (overflow-wrap:anywhere + min-width:0 on band containers).
+// No known overflow defects remain.
+const KNOWN_OVERFLOW = new Set<string>([]);
+
 for (const vp of VIEWPORTS) {
   for (const tab of TABS) {
     test(`no horizontal overflow on #${tab} at ${vp.w}x${vp.h}`, async ({ page }) => {
+      test.fixme(
+        KNOWN_OVERFLOW.has(`${tab}@${vp.w}`),
+        'v2 layout defect: horizontal overflow (infra band never wraps; .grid-2 does not collapse at 375)'
+      );
       await page.setViewportSize({ width: vp.w, height: vp.h });
       await page.goto('/#' + tab, { waitUntil: 'networkidle' });
       await expect(page.locator('.tabbar')).toBeVisible();
@@ -58,6 +71,18 @@ for (const vp of VIEWPORTS) {
       const res = await page.evaluate(overflowProbe);
       expect(res.count, `overflowing elements: ${JSON.stringify(res.offenders)}`).toBe(0);
       expect(res.docOverflow, 'document scrollWidth exceeds viewport').toBeLessThanOrEqual(1);
+
+      // VIEWPORT-FILL: v2 is full-bleed (no more max-width:1200 caps). The main
+      // content region must span (nearly) the whole window width at desktop.
+      if (vp.w >= 1000) {
+        const fill = await page.evaluate(() => {
+          const m = document.querySelector('.main') as HTMLElement | null;
+          if (!m) return { w: 0, inner: window.innerWidth };
+          return { w: m.getBoundingClientRect().width, inner: window.innerWidth };
+        });
+        expect(fill.w, `.main width ${fill.w} should fill >= 92% of innerWidth ${fill.inner}`)
+          .toBeGreaterThanOrEqual(0.92 * fill.inner);
+      }
     });
   }
 }

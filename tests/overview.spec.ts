@@ -3,6 +3,12 @@ import { test, expect } from '@playwright/test';
 // Mocks /api/hub/health and /api/data so the Overview health strip + KPI row
 // render deterministically. Secondary feeds are stubbed empty to keep it quiet.
 
+// v2 has a light/dark theme; Playwright's Desktop Chrome defaults to
+// colorScheme:'light', which the boot script honors (prefers-color-scheme) and
+// would swap --ok to its light value. Pin dark so the ok-dot color assertion
+// (var(--ok) == rgb(12,206,107)) stays deterministic.
+test.use({ colorScheme: 'dark' });
+
 const HEALTH = [{ name: 'DNS', status: 'ok', statusLabel: 'healthy', meta: '3/3 up' }];
 
 const DATA = {
