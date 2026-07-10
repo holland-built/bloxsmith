@@ -86,3 +86,42 @@ for (const vp of VIEWPORTS) {
     });
   }
 }
+
+// PEEK-OPEN PROBE: opening the row-detail peek (position:fixed drawer) must not
+// introduce horizontal overflow at desktop OR mobile, and the peek must be
+// unmounted (absent) while closed. Mocks /api/data so a subnet row always exists.
+const PEEK_DATA = {
+  subnets: [
+    { id: 's-a', name: 'Alpha Net', addr: '10.10.10.0', cidr: 24, util: 90, site: 'HQ' },
+    { id: 's-b', name: 'Beta Net',  addr: '10.20.20.0', cidr: 24, util: 40, site: 'DR' },
+  ],
+  leases: [], zones: [], hosts: [], auditLogs: [],
+};
+const PEEK_WRAP = 'div[tabindex="0"]:has(tr.clickable)';
+
+for (const w of [1400, 375]) {
+  test(`peek open on #network keeps zero horizontal overflow at ${w}`, async ({ page }) => {
+    await page.route('**/api/data', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PEEK_DATA) })
+    );
+    await page.setViewportSize({ width: w, height: 900 });
+    await page.goto('/#network', { waitUntil: 'networkidle' });
+    await expect(page.locator('.tabbar')).toBeVisible();
+
+    // Closed: the peek drawer is not in the DOM.
+    await expect(page.locator('.peek')).toHaveCount(0);
+
+    // Open the peek via keyboard (focus wrapper -> j -> Enter).
+    const wrap = page.locator(PEEK_WRAP);
+    await expect(wrap.locator('tr.clickable').first()).toBeVisible();
+    await wrap.focus();
+    await page.keyboard.press('j');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.peek')).toBeVisible();
+
+    const res = await page.evaluate(overflowProbe);
+    expect(res.count, `overflow with peek open: ${JSON.stringify(res.offenders)}`).toBe(0);
+    expect(res.docOverflow, 'document scrollWidth exceeds viewport with peek open')
+      .toBeLessThanOrEqual(1);
+  });
+}
