@@ -1924,7 +1924,7 @@ function Donut({slices,size=120,centerValue,centerLabel}){
 
 /* ── HistogramBar (shared) — buckets=[{label,count,color}], 4-6 vertical bars +
    counts, viewBox-scaled (width:100%, no fixed-px overflow). Optional onClick(b,i). ── */
-function HistogramBar({buckets,onClick}){
+function HistogramBar({buckets,onClick,axisTicks}){
   const bs=(Array.isArray(buckets)?buckets:[]).filter(Boolean);
   if(!bs.length) return <div style={{color:'var(--text-faint)',fontSize:'var(--t12)',padding:'var(--s3)'}}>No data</div>;
   const peak=Math.max(1,...bs.map(b=>Number(b.count)||0)),n=bs.length;
@@ -1941,9 +1941,14 @@ function HistogramBar({buckets,onClick}){
           <title>{(b.label||'')+' · '+c}</title></rect>;
       })}
     </svg>
-    <div className="mono" style={{display:'flex',fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:'var(--s1)'}}>
-      {bs.map((b,i)=><span key={i} style={{flex:'1 1 0',textAlign:'center',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.label} {Number(b.count)||0}</span>)}
-    </div>
+    {axisTicks
+      /* clean axis: only the labelled buckets (first/mid/last), no per-bucket count strip */
+      ? <div className="mono" style={{display:'flex',justifyContent:'space-between',fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:'var(--s1)'}}>
+          {bs.filter(b=>b.label!=null&&b.label!=='').slice(0,5).map((b,i)=><span key={i}>{b.label}</span>)}
+        </div>
+      : <div className="mono" style={{display:'flex',fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:'var(--s1)'}}>
+          {bs.map((b,i)=><span key={i} style={{flex:'1 1 0',textAlign:'center',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.label} {Number(b.count)||0}</span>)}
+        </div>}
   </div>;
 }
 
@@ -2305,10 +2310,12 @@ function useAiExplain(){
   const s=document.createElement('style');s.id='bx-ov-styles';
   s.textContent=`
   .ovx table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
-  .ovx thead th{text-align:left;color:var(--text-faint);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:6px 6px;border-bottom:1px solid var(--border);}
-  .ovx tbody td{padding:7px 6px;border-bottom:1px solid var(--border2);}
-  /* fixed layout + per-cell clip → preview tables always fit their ~300px panel, no horizontal scroll */
-  .ovx thead th,.ovx tbody td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+  .ovx thead th{text-align:left;color:var(--text-faint);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:6px 16px 6px 0;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .ovx tbody td{padding:7px 16px 7px 0;border-bottom:1px solid var(--border2);white-space:nowrap;}
+  /* fixed layout + a real right-pad gap: every cell (incl. the primary) clips with ellipsis, so
+     columns are always separated and nothing bleeds — no overlap, no horizontal scroll in the panel.
+     (Overrides the shared table.dt .dt-primary overflow:visible, which caused the bleed.) */
+  .ovx thead th,.ovx tbody td,.ovx table.dt td.dt-primary,.ovx table.dt th.dt-primary{overflow:hidden;text-overflow:ellipsis;}
   .ovx td .code,.ovx td .tag{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;}
   .ovx tbody tr{cursor:pointer;transition:background .1s ease;}
   .ovx tbody tr:hover{background:var(--raised);}
@@ -2317,6 +2324,10 @@ function useAiExplain(){
   .ovx .code{font-family:'GeistMono',ui-monospace,monospace;border-bottom:1px dotted var(--text-faint);cursor:help;}
   .ovx .lchip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r-ctl);text-transform:uppercase;letter-spacing:.3px;background:var(--raised);display:inline-block;}
   .ovx .ov-mt{margin-top:8px;}
+  /* DETAIL preview grid — wider min so 3-col previews fit without column collision (~3/row at 1600px) */
+  .ovx-detail{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr));gap:12px;align-items:start;min-width:0;}
+  .ovx-detail>*{min-width:0;}
+  .ovx-detail>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
   `;
   document.head.appendChild(s);
 })();
@@ -2541,7 +2552,7 @@ function OverviewTab(){
           centerValue={hosts.length?Math.round(hostsBad/hosts.length*100)+'%':'0'} centerLabel="issues"/>
       </Panel>
       <Panel title="Subnet utilization" side={subnets.length.toLocaleString()+' subnets'}>
-        <HistogramBar buckets={utilBuckets} onClick={(b,i)=>{const u=i*5+2.5;const nb=u>=85?'85':u>=70?'7085':null;nav('network',nb?{band:nb}:undefined);}}/>
+        <HistogramBar buckets={utilBuckets} axisTicks onClick={(b,i)=>{const u=i*5+2.5;const nb=u>=85?'85':u>=70?'7085':null;nav('network',nb?{band:nb}:undefined);}}/>
         <ValueBands rows={subnets} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS} value={band} onChange={setBand}/>
       </Panel>
       <Panel title="Top issues" side="live">
@@ -2559,18 +2570,16 @@ function OverviewTab(){
     </div>
 
     <SectionRule title="Detail"/>
-    <div className="grid-dense">
+    <div className="ovx-detail">
 
       <Panel title="Top capacity subnets" side={band?('band '+(bandDef&&bandDef.label)+' · '+subnetPreview.length):'by utilization'} empty={!subnets.length}>
         <DataTable tableId="ov-subnets" csvName="top-capacity-subnets"
-          rows={subnetPreview} defaultSort={{key:'util',dir:'desc'}} maxRows={9}
+          rows={subnetPreview.slice(0,9)} defaultSort={{key:'util',dir:'desc'}}
           rowKey={r=>String(r.addr||r.id)}
           onRowClick={r=>nav('network',{subnet:r.addr||r.id})}
           cols={[
-            {key:'addr',label:'Subnet',primary:true,minWidth:160,mono:true,
+            {key:'addr',label:'Subnet',primary:true,minWidth:150,mono:true,
               render:(v,r)=>(r.addr||r.name||'—')+(r.cidr?('/'+r.cidr):'')},
-            {key:'site',label:'Site',hideSm:true,render:v=>v||'—'},
-            {key:'used',label:'Used',mono:true,align:'right'},
             {key:'util',label:'Util',align:'right',mono:true,
               render:(v,r)=>{const u=util(r),c=utilColor(u);return <span style={{display:'inline-flex',alignItems:'center',gap:7,justifyContent:'flex-end'}}>
                 <span style={{position:'relative',display:'inline-block',width:56,height:6,borderRadius:3,background:'var(--border2)'}}>
@@ -2587,8 +2596,7 @@ function OverviewTab(){
           onRowClick={()=>nav('security')}
           cols={[
             {key:'qname',label:'Threat',primary:true,minWidth:170,mono:true,render:(v,r)=>v||r.threat_indicator||'—'},
-            {key:'feed_name',label:'Feed',hideSm:true,render:v=>v||'—'},
-            {key:'severity',label:'Sev',render:v=><span className={'sev '+ovSevClass(v)}>{v||'INFO'}</span>},
+            {key:'severity',label:'Sev',align:'right',render:v=><span className={'sev '+ovSevClass(v)}>{v||'INFO'}</span>},
           ]}
           renderPeek={e=><OvPeek title={e.threat_indicator||e.qname||'threat'} sub={e.severity}
             rows={[['Action',e.policy_action],['Feed',e.feed_name],['Device',e.device],['Network',e.network],['Query',e.qname]]}/>}/>
@@ -2600,9 +2608,7 @@ function OverviewTab(){
           onRowClick={r=>nav('dns',{peek:r.fqdn})}
           cols={[
             {key:'fqdn',label:'Zone',primary:true,minWidth:180,mono:true},
-            {key:'view',label:'View',hideSm:true,render:v=>v||'—'},
             {key:'ttl',label:'TTL',mono:true,align:'right',render:v=>v+'s'},
-            {key:'neg_ttl',label:'Neg',mono:true,align:'right',render:v=>v+'s'},
           ]}
           renderPeek={z=><OvPeek title={z.fqdn} sub={z.view}
             rows={[['View',z.view],['TTL',z.ttl+'s'],['Neg-TTL',z.neg_ttl+'s'],['Issues',(z.issues&&z.issues.length)||0]]}/>}/>
