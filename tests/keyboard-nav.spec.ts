@@ -6,11 +6,14 @@ import { test, expect } from '@playwright/test';
 // global keydown listener (PowerProvider) drives j/k/Enter/Arrow/Escape.
 // Uses REAL KeyboardEvents via page.keyboard.press after focusing the wrapper.
 
+// The subnet table ships problemsOnly (util>70) ON by default, so every mocked
+// row must be >70 to survive the filter (utils kept in descending order so the
+// util-desc default sort still yields Alpha, Beta, Gamma at indexes 0,1,2).
 const DATA = {
   subnets: [
     { id: 's-a', name: 'Alpha Net', addr: '10.10.10.0', cidr: 24, util: 90, site: 'HQ' },
-    { id: 's-b', name: 'Beta Net',  addr: '10.20.20.0', cidr: 24, util: 60, site: 'DR' },
-    { id: 's-c', name: 'Gamma Net', addr: '10.30.30.0', cidr: 24, util: 30, site: 'BR' },
+    { id: 's-b', name: 'Beta Net',  addr: '10.20.20.0', cidr: 24, util: 80, site: 'DR' },
+    { id: 's-c', name: 'Gamma Net', addr: '10.30.30.0', cidr: 24, util: 72, site: 'BR' },
   ],
   leases: [], zones: [], hosts: [], auditLogs: [],
 };

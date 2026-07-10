@@ -6,11 +6,14 @@ import { test, expect } from '@playwright/test';
 
 const WRAP = 'div[tabindex="0"]:has(tr.clickable)'; // subnets wrapper (clickable rows)
 
+// All three subnets are util>70 so they survive the table's default
+// problemsOnly (util>70) filter — the "select all visible" assertion needs all
+// three rendered (none at 100, so collapseIdentical never fires).
 const DATA = {
   subnets: [
     { id: 's-a', name: 'Alpha Net', addr: '10.10.10.0', cidr: 24, util: 90, site: 'HQ' },
-    { id: 's-b', name: 'Beta Net',  addr: '10.20.20.0', cidr: 24, util: 60, site: 'DR' },
-    { id: 's-c', name: 'Gamma Net', addr: '10.30.30.0', cidr: 24, util: 30, site: 'BR' },
+    { id: 's-b', name: 'Beta Net',  addr: '10.20.20.0', cidr: 24, util: 80, site: 'DR' },
+    { id: 's-c', name: 'Gamma Net', addr: '10.30.30.0', cidr: 24, util: 72, site: 'BR' },
   ],
   leases: [], zones: [], hosts: [], auditLogs: [],
 };
@@ -56,6 +59,14 @@ test('acking selected triage events flashes rows, toasts undo, and persists', as
 
   const rows = page.locator('table.dt tbody tr');
   await expect(rows.first()).toBeVisible();
+
+  // Triage now ships "Hide acked" ON by default, which would drop acked rows out
+  // of the visible set the instant they're acked (so the flash never renders).
+  // Turn it OFF first so acked rows stay put and can flash.
+  const hideAcked = page.locator('.prob-toggle').filter({ hasText: 'Hide acked' });
+  await expect(hideAcked).toHaveAttribute('aria-pressed', 'true');
+  await hideAcked.click();
+  await expect(hideAcked).toHaveAttribute('aria-pressed', 'false');
 
   // Select the first two events via the row-SELECT checkbox (not the ack column).
   await rows.nth(0).locator('input[aria-label="Select row"]').check();

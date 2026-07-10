@@ -30,6 +30,15 @@ test('critical event sorts first, ack persists across reload', async ({ page }) 
   const rows = page.locator('table.dt tbody tr');
   await expect(rows.first()).toBeVisible();
 
+  // Triage now ships "Hide acked" ON by default, which would remove the critical
+  // row the moment it's acked (so we could neither confirm the ack checkbox nor
+  // watch it sink). Turn it OFF; the toggle persists (tableId="triage" ->
+  // localStorage 'probs.triage'), so the acked row also stays visible on reload.
+  const hideAcked = page.locator('.prob-toggle').filter({ hasText: 'Hide acked' });
+  await expect(hideAcked).toHaveAttribute('aria-pressed', 'true');
+  await hideAcked.click();
+  await expect(hideAcked).toHaveAttribute('aria-pressed', 'false');
+
   // Critical is first (severity cell rendered uppercase).
   await expect(rows.first()).toContainText('critical');
   await expect(rows.first()).toContainText(CRIT_QNAME);

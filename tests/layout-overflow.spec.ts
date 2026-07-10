@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // box horizontally (excluding intentional overflow-x auto/scroll scrollers and
 // their descendants), and the document itself never exceeds the viewport width.
 
-const TABS = ['overview', 'daily', 'network', 'dns', 'infra', 'security', 'audit', 'ask'];
+const TABS = ['overview', 'daily', 'network', 'dns', 'infra', 'security', 'audit'];
 const VIEWPORTS = [
   { w: 1440, h: 900 },
   { w: 1400, h: 900 },
