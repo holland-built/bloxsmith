@@ -694,7 +694,7 @@ def _selfservice_allocate(body: dict) -> tuple:
     if not subnet_id:
         if not (tag_key and tag_value):
             return {"ok": False, "error": "subnet_id or tag_key/tag_value required"}, 400
-        subnets = _rest_get("/api/ddi/v1/ipam/subnet", {"tfilter": f'{tag_key}=="{tag_value}"'})
+        subnets = _rest_get("/api/ddi/v1/ipam/subnet", {"_tfilter": f'{tag_key}=="{tag_value}"'})
         if not subnets:
             return {"ok": False, "error": f"No subnet found with tag {tag_key}=={tag_value}"}, 404
         subnet_id = subnets[0].get("id")
@@ -1144,7 +1144,7 @@ class BlockProvisioner:
 
     def _exists(self, bdef: dict) -> bool:
         results = _rest_get("/api/ddi/v1/ipam/address_block", {
-            "filter": f'space=="{self._space_id}" and address=="{bdef["address"]}" and cidr=={int(bdef["cidr"])}'})
+            "_filter": f'space=="{self._space_id}" and address=="{bdef["address"]}" and cidr=={int(bdef["cidr"])}'})
         return bool(results)
 
     def _create_block(self, bdef: dict, parent_net, result: dict) -> None:
@@ -1191,7 +1191,7 @@ class BlockProvisioner:
     def provision(self) -> dict:
         result = {"name": self.cfg.name, "ip_space": self.cfg.ip_space,
                   "blocks_created": [], "dry_run": self.cfg.dry_run}
-        space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"filter": f'name=="{self.cfg.ip_space}"'})
+        space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{self.cfg.ip_space}"'})
         if not space_results:
             raise ProvisionError(f"IP space not found: {self.cfg.ip_space}")
         self._space_id = space_results[0]["id"]
@@ -1368,7 +1368,7 @@ class SiteProvisioner:
         self._zone_created = False
 
     def resolve_ip_space(self) -> str:
-        results = _rest_get("/api/ddi/v1/ipam/ip_space", {"filter": f'name=="{self.cfg.ip_space}"'})
+        results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{self.cfg.ip_space}"'})
         if not results:
             raise ProvisionError(f"IP space not found: {self.cfg.ip_space}")
         self._space_id = results[0]["id"]
@@ -1376,19 +1376,19 @@ class SiteProvisioner:
 
     def find_existing_site(self) -> list:
         return _rest_get("/api/ddi/v1/ipam/subnet", {
-            "filter": f'space=="{self._space_id}"', "tfilter": f'Site=="{self.cfg.site}"'})
+            "_filter": f'space=="{self._space_id}"', "_tfilter": f'Site=="{self.cfg.site}"'})
 
     def find_available_block(self) -> dict:
         results = _rest_get("/api/ddi/v1/ipam/address_block", {
-            "filter": f'space=="{self._space_id}"',
-            "tfilter": f'Region=="{self.cfg.region}" and Environment=="{self.cfg.environment}" and Status=="available"'})
+            "_filter": f'space=="{self._space_id}"',
+            "_tfilter": f'Region=="{self.cfg.region}" and Environment=="{self.cfg.environment}" and Status=="available"'})
         if not results:
             raise ProvisionError(
                 f"No available address block found for Region={self.cfg.region} Environment={self.cfg.environment}")
         return min(results, key=_block_sort_key)
 
     def resolve_dns_view(self) -> str:
-        results = _rest_get("/api/ddi/v1/dns/view", {"filter": f'name=="{self.cfg.dns_view}"'})
+        results = _rest_get("/api/ddi/v1/dns/view", {"_filter": f'name=="{self.cfg.dns_view}"'})
         if not results:
             raise ProvisionError(f"DNS view not found: {self.cfg.dns_view}")
         self._view_id = results[0]["id"]
@@ -1457,7 +1457,7 @@ class SiteProvisioner:
         self.emit({"step": f"{mode}Ensuring DNS zone exists: {fqdn}  view={self.cfg.dns_view}"})
         if self.cfg.dry_run:
             return {"dry_run": True, "fqdn": fqdn, "id": "(dry-run)"}
-        existing = _rest_get("/api/ddi/v1/dns/auth_zone", {"filter": f'fqdn=="{fqdn}." and view=="{self._view_id}"'})
+        existing = _rest_get("/api/ddi/v1/dns/auth_zone", {"_filter": f'fqdn=="{fqdn}." and view=="{self._view_id}"'})
         if existing:
             zone = existing[0]
             self._zone_id = zone["id"]
@@ -1487,7 +1487,7 @@ class SiteProvisioner:
         self.emit({"step": f"{mode}Ensuring reverse DNS zone: {fqdn}  view={self.cfg.dns_view}"})
         if self.cfg.dry_run:
             return {"dry_run": True, "fqdn": fqdn, "id": "(dry-run)"}
-        existing = _rest_get("/api/ddi/v1/dns/auth_zone", {"filter": f'fqdn=="{fqdn}" and view=="{self._view_id}"'})
+        existing = _rest_get("/api/ddi/v1/dns/auth_zone", {"_filter": f'fqdn=="{fqdn}" and view=="{self._view_id}"'})
         if existing:
             zone = existing[0]
             self.emit({"step": f"  Reverse zone already exists: {fqdn}  id={zone.get('id')}"})
@@ -3824,9 +3824,9 @@ class Handler(BaseHTTPRequestHandler):
                 if qp.get("space"):
                     filt.append(f'space=="{qp["space"]}"')
                 if filt:
-                    rest_params["filter"] = " and ".join(filt)
+                    rest_params["_filter"] = " and ".join(filt)
                 if qp.get("tag_key") and qp.get("tag_value"):
-                    rest_params["tfilter"] = f'{qp["tag_key"]}=="{qp["tag_value"]}"'
+                    rest_params["_tfilter"] = f'{qp["tag_key"]}=="{qp["tag_value"]}"'
                 blocks = _rest_get("/api/ddi/v1/ipam/address_block", rest_params or None)
                 self._json({"blocks": [
                     {"id": b.get("id"), "address": b.get("address"), "cidr": b.get("cidr"),
@@ -3841,7 +3841,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 view = qp.get("view", "")
                 views = _rest_get("/api/ddi/v1/dns/view")
-                zone_params = {"filter": f'view=="{view}"'} if view else None
+                zone_params = {"_filter": f'view=="{view}"'} if view else None
                 zones = _rest_get("/api/ddi/v1/dns/auth_zone", zone_params)
                 self._json({
                     "views": [{"id": v.get("id"), "name": v.get("name")} for v in (views or [])],
@@ -3960,6 +3960,9 @@ class Handler(BaseHTTPRequestHandler):
             dry = _truthy_dry(qp.get("dry"))
             regions_raw = qp.get("regions", "amer,emea,apac")
             regions = [r.strip().lower() for r in regions_raw.split(",") if r.strip()] or ["amer", "emea", "apac"]
+            # optional: override every template's ip_space so seeding targets a real
+            # space in this tenant (templates ship with a placeholder space name).
+            ip_space_override = qp.get("ip_space", "").strip() or None
 
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -3980,7 +3983,7 @@ class Handler(BaseHTTPRequestHandler):
                 emit({"step": "Seeding blocks…"})
                 try:
                     block_template = load_template("blocks/regional_address_blocks.yaml")
-                    block_cfg = template_to_block_config(block_template, {"dry": "1" if dry else "0"})
+                    block_cfg = template_to_block_config(block_template, {"dry": "1" if dry else "0", "ip_space": ip_space_override})
                     BlockProvisioner(block_cfg, emit).provision()
                 except ProvisionError as exc:
                     emit({"template": "blocks/regional_address_blocks.yaml", "error": str(exc)})
@@ -3995,7 +3998,7 @@ class Handler(BaseHTTPRequestHandler):
                     rel = os.path.relpath(tpath, TEMPLATES_DIR)
                     try:
                         template = load_template(rel)
-                        cfg = template_to_site_config(template, {"dry": "1" if dry else "0", "if_not_exists": True})
+                        cfg = template_to_site_config(template, {"dry": "1" if dry else "0", "if_not_exists": True, "ip_space": ip_space_override})
 
                         def _forward(obj, _rel=rel):
                             emit({"step": f"[{_rel}] {obj['step']}"} if "step" in obj else obj)

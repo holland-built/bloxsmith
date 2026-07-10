@@ -4681,6 +4681,7 @@ function ProvisionTab(){
   // Full site mode.
   const templatesApi=useApi('/api/templates');
   const [siteTemplate,setSiteTemplate]=useState('');
+  const [siteSpace,setSiteSpace]=useState('');
   const [siteDry,setSiteDry]=useState(true);
   const [siteLog,setSiteLog]=useState([]);
   const [siteStreaming,setSiteStreaming]=useState(false);
@@ -4690,6 +4691,7 @@ function ProvisionTab(){
 
   // Seed demo mode.
   const [seedRegions,setSeedRegions]=useState({amer:true,emea:true,apac:true});
+  const [seedSpace,setSeedSpace]=useState('');
   const [seedDry,setSeedDry]=useState(true);
   const [seedLog,setSeedLog]=useState([]);
   const [seedRows,setSeedRows]=useState({});
@@ -4737,6 +4739,7 @@ function ProvisionTab(){
     if(siteStreaming||siteEsRef.current) return; // guard: never open a second concurrent stream
     setSiteLog([]);setSiteSuccess(null);setSiteErr(null);setSiteStreaming(true);
     const qs=new URLSearchParams({template:siteTemplate,dry:siteDry?'1':'0'});
+    if(siteSpace) qs.set('ip_space',siteSpace);
     const es=new EventSource('/api/provision/site/stream?'+qs.toString());
     siteEsRef.current=es;
     const stop=()=>{ if(siteEsRef.current){ siteEsRef.current.close(); siteEsRef.current=null; } setSiteStreaming(false); };
@@ -4760,6 +4763,7 @@ function ProvisionTab(){
     if(!seedDry&&!window.confirm('This writes many real objects to the live portal. Continue?')) return;
     setSeedLog([]);setSeedRows({});setSeedSummary(null);setSeedErr(null);setSeedStreaming(true);
     const qs=new URLSearchParams({dry:seedDry?'1':'0',regions:regionList.join(',')});
+    if(seedSpace) qs.set('ip_space',seedSpace);
     const es=new EventSource('/api/provision/seed-demo/stream?'+qs.toString());
     seedEsRef.current=es;
     const stop=()=>{ if(seedEsRef.current){ seedEsRef.current.close(); seedEsRef.current=null; } setSeedStreaming(false); };
@@ -4844,6 +4848,13 @@ function ProvisionTab(){
       <Panel title="Request">
         <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
           <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            IP space (override)
+            <select className="vault-in" value={siteSpace} onChange={e=>setSiteSpace(e.target.value)}>
+              <option value="">— template default —</option>
+              {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
+            </select>
+          </label>
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
             Template
             <select className="vault-in" value={siteTemplate} onChange={e=>setSiteTemplate(e.target.value)}>
               <option value="">{templatesApi.loading?'Loading templates…':'Select a template'}</option>
@@ -4884,6 +4895,13 @@ function ProvisionTab(){
               <input type="checkbox" checked={!!seedRegions[r]} onChange={e=>setSeedRegions(prev=>({...prev,[r]:e.target.checked}))}/>
               <span>{r.toUpperCase()}</span>
             </label>)}
+          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            IP space (override)
+            <select className="vault-in" value={seedSpace} onChange={e=>setSeedSpace(e.target.value)}>
+              <option value="">— template default —</option>
+              {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
+            </select>
+          </label>
           <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
             <input type="checkbox" checked={seedDry} onChange={e=>setSeedDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
