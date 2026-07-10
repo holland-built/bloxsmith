@@ -17,7 +17,11 @@ try{
     _t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
   }
   document.documentElement.dataset.theme=_t;
-}catch(e){document.documentElement.dataset.theme='dark';}
+  var _d=localStorage.getItem('bx.density');
+  if(_d){_d=_d.replace(/^"|"$/g,'');}
+  if(_d!=='comfortable'&&_d!=='compact'){_d='compact';}
+  document.documentElement.dataset.density=_d;
+}catch(e){document.documentElement.dataset.theme='dark';document.documentElement.dataset.density='compact';}
 </script>
 <style>
 @font-face{font-family:'Geist';src:url('Geist-400.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap;}
@@ -40,7 +44,9 @@ try{
   --t11:11px; --t12:12px; --t13:13px; --t14:14px; --t16:16px; --t20:20px; --t28:28px;
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s12:48px;
   --r-ctl:4px; --r-panel:6px;
+  --row-h:28px; --dt-fs:var(--t12);
 }
+[data-density="comfortable"]{--row-h:32px;}
 [data-theme="light"]{color-scheme:light;
   --bg:#fafafa;--surface:#fff;--raised:#f2f2f2;--hover:#e8e8e8;
   --border:#e2e2e2;--border-strong:#cfcfcf;
@@ -135,10 +141,10 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
 
 /* ── table ── */
 .tbl-wrap{width:100%;overflow-x:auto;}
-table.dt{width:100%;border-collapse:collapse;font-size:var(--t12);}
+table.dt{width:100%;border-collapse:collapse;font-size:var(--dt-fs);}
 table.dt thead th{
   text-align:left;font-weight:500;color:var(--text-dim);
-  padding:0 var(--s3);height:32px;
+  padding:0 var(--s3);height:var(--row-h);
   border-bottom:1px solid var(--border);
   white-space:nowrap;user-select:none;cursor:pointer;
   background:var(--surface);
@@ -146,7 +152,7 @@ table.dt thead th{
 table.dt thead th.num{text-align:right;}
 table.dt thead th .sort-ind{color:var(--text-faint);margin-left:var(--s1);}
 table.dt tbody td{
-  padding:0 var(--s3);height:32px;
+  padding:0 var(--s3);height:var(--row-h);
   border-bottom:1px solid var(--border);
   color:var(--text);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;
@@ -225,6 +231,45 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 
 /* row-level focus ring for keyboard-tabbable clickable rows */
 table.dt tbody tr.clickable:focus-visible{box-shadow:inset 0 0 0 1px var(--accent-text);}
+
+/* ── power layer: keyboard cursor, row flash, selection, peek, action bar ── */
+table.dt tbody tr.cursor{background:var(--hover);box-shadow:inset 2px 0 0 var(--accent);}
+@keyframes bx-flash{0%{background:var(--hover);}100%{background:transparent;}}
+table.dt tbody tr.flash{animation:bx-flash .4s ease;}
+table.dt td.dt-check,table.dt th.dt-check{width:28px;text-align:center;padding:0 var(--s2);cursor:default;}
+table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-align:middle;}
+.dt-filter{height:26px;padding:0 var(--s2);font-size:var(--t12);color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);min-width:200px;}
+.dt-filter:focus{border-color:var(--accent);}
+.spark{display:inline-block;vertical-align:middle;}
+
+.action-bar{
+  position:fixed;left:50%;bottom:var(--s5);transform:translateX(-50%);z-index:75;
+  display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;
+  padding:var(--s2) var(--s3);
+  background:var(--raised);border:1px solid var(--border-strong);border-radius:var(--r-panel);
+  animation:ab-in .16s ease;
+}
+@keyframes ab-in{from{transform:translate(-50%,120%);opacity:0;}}
+.ab-count{font-size:var(--t12);color:var(--text-dim);padding-right:var(--s2);border-right:1px solid var(--border);}
+.ab-confirm{display:inline-flex;align-items:center;gap:var(--s2);font-size:var(--t12);color:var(--text-dim);}
+
+.toast{display:flex;align-items:center;gap:var(--s3);justify-content:space-between;}
+.toast-action{font-size:var(--t12);font-weight:500;color:var(--accent-text);background:transparent;border:none;padding:0;flex:0 0 auto;}
+
+.peek{
+  position:fixed;top:48px;right:0;bottom:0;width:min(420px,100vw);
+  background:var(--surface);border-left:1px solid var(--border);
+  z-index:70;overflow-y:auto;animation:peek-in .16s ease;
+  display:flex;flex-direction:column;
+}
+@keyframes peek-in{from{transform:translateX(100%);}}
+.peek-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3) var(--s4);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);}
+.peek-title{font-size:var(--t13);font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.peek-close{height:24px;width:24px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t14);color:var(--text-dim);background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);flex:0 0 auto;}
+.peek-close:hover{color:var(--text);border-color:var(--border-strong);}
+.peek-body{flex:1 1 auto;padding:var(--s4);min-width:0;}
+.peek-foot{padding:var(--s3) var(--s4);border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--surface);}
+.peek-full{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;}
 
 @media (max-width:768px){
   .brand-org{display:none;}
@@ -363,21 +408,28 @@ function Freshness({at,onRetry,error}){
    Flat, 1px border, text-only (no green checkmark icons).
    ───────────────────────────────────────────────────────────── */
 let _toastPush=null;let _toastSeq=0;
-function toast(msg,kind){
-  if(_toastPush) _toastPush({id:++_toastSeq,msg,kind:kind||'ok'});
+/* toast(msg,kind[,opts]) — opts={action:{label,run},duration}. The 2-arg form is
+   unchanged (default 4000ms, no action) so every existing caller is untouched. */
+function toast(msg,kind,opts){
+  if(_toastPush) _toastPush({id:++_toastSeq,msg,kind:kind||'ok',
+    action:opts&&opts.action,duration:(opts&&opts.duration)||4000});
 }
 function Toasts(){
   const [items,setItems]=useState([]);
   useEffect(()=>{
     _toastPush=(t)=>{
       setItems(list=>[...list,t]);
-      setTimeout(()=>setItems(list=>list.filter(x=>x.id!==t.id)),4000);
+      setTimeout(()=>setItems(list=>list.filter(x=>x.id!==t.id)),t.duration||4000);
     };
     return ()=>{_toastPush=null;};
   },[]);
+  const dismiss=id=>setItems(list=>list.filter(x=>x.id!==id));
   return <div className="toasts" role="status" aria-live="polite" aria-atomic="false"
     style={items.length?null:{pointerEvents:'none'}}>
-    {items.map(t=><div key={t.id} className={'toast '+(t.kind||'ok')}>{t.msg}</div>)}
+    {items.map(t=><div key={t.id} className={'toast '+(t.kind||'ok')}>
+      <span>{t.msg}</span>
+      {t.action?<button className="toast-action" onClick={()=>{try{t.action.run();}catch(e){} dismiss(t.id);}}>{t.action.label}</button>:null}
+    </div>)}
   </div>;
 }
 
@@ -385,15 +437,211 @@ function Toasts(){
    5. DataTable — sortable primitive with optional CSV export.
    cols:{key,label,mono,align,render,width}
    ───────────────────────────────────────────────────────────── */
-function DataTable({cols,rows,defaultSort,onRowClick,csvName}){
+/* ── Sparkline (F7) — ~15-line SVG, normalized to the viewBox, guards flat/empty ── */
+function Sparkline({values,width=72,height=18}){
+  const v=Array.isArray(values)?values.filter(x=>typeof x==='number'&&isFinite(x)):[];
+  if(v.length<2) return null;
+  const min=Math.min(...v),max=Math.max(...v),span=(max-min)||1;
+  const pts=v.map((n,i)=>{
+    const x=(i/(v.length-1))*width;
+    const y=height-((n-min)/span)*height;
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  return <svg className="spark" width={width} height={height} viewBox={'0 0 '+width+' '+height} aria-hidden="true">
+    <polyline fill="none" stroke="var(--accent)" strokeWidth="1.5" points={pts}/>
+  </svg>;
+}
+
+/* ── PowerCtx (F1) — registry of keyboard-driven tables + peek + density.
+   One global keydown listener (F2) dispatches to the active table's imperative api. ── */
+const PowerCtx=React.createContext(null);
+function usePower(){ return React.useContext(PowerCtx); }
+function PowerProvider({children}){
+  const tablesRef=useRef(new Map());   // id → {label, api:ref}
+  const activeRef=useRef(null);
+  const [activeId,setActiveId]=useState(null);
+  const [peek,setPeekState]=useState(null);
+  const peekRef=useRef(null);
+  const [density,setDensityState]=useState(()=>(typeof document!=='undefined'&&document.documentElement.dataset.density)||'compact');
+
+  const setActive=useCallback(id=>{ activeRef.current=id; setActiveId(id); },[]);
+  const setPeek=useCallback(p=>{ peekRef.current=p; setPeekState(p); },[]);
+  const closePeek=useCallback(()=>{ peekRef.current=null; setPeekState(null); },[]);
+  const register=useCallback((id,entry)=>{ tablesRef.current.set(id,entry); if(!activeRef.current) setActive(id); },[setActive]);
+  const unregister=useCallback(id=>{
+    tablesRef.current.delete(id);
+    if(peekRef.current&&peekRef.current.tableId===id){ peekRef.current=null; setPeekState(null); }
+    if(activeRef.current===id){ setActive(tablesRef.current.keys().next().value||null); }
+  },[setActive]);
+  const getActive=useCallback(()=> activeRef.current?tablesRef.current.get(activeRef.current):null,[]);
+  const setDensity=useCallback(v=>{ document.documentElement.dataset.density=v; LS.set('density',v); setDensityState(v); },[]);
+
+  useEffect(()=>{
+    const gg={t:0};
+    const onKey=e=>{
+      if(e.metaKey||e.ctrlKey||e.altKey) return; // leave ⌘K etc. alone
+      const t=e.target;
+      if(t&&t.closest&&t.closest('input,textarea,select,[contenteditable="true"]')) return;
+      if(document.querySelector('.palette-scrim,.vault-screen,.acct-menu,.views-menu')) return;
+      const entry=activeRef.current?tablesRef.current.get(activeRef.current):null;
+      const api=entry&&entry.api&&entry.api.current;
+      if(peekRef.current){
+        if(e.key==='Escape'){ e.preventDefault(); closePeek(); return; }
+        if((e.key==='j'||e.key==='ArrowDown')&&api){ e.preventDefault(); api.move(1); return; }
+        if((e.key==='k'||e.key==='ArrowUp')&&api){ e.preventDefault(); api.move(-1); return; }
+        return;
+      }
+      if(!api) return;
+      let handled=false;
+      if(e.key==='j'||e.key==='ArrowDown'){ api.move(1); handled=true; }
+      else if(e.key==='k'||e.key==='ArrowUp'){ api.move(-1); handled=true; }
+      else if(e.key==='Enter'){ handled=api.openCursor(); }
+      else if(e.key==='x'){ handled=api.toggleSelect(); }
+      else if(e.key==='/'){ handled=api.focusFilter(); }
+      else if(e.key==='G'){ handled=api.gotoBottom(); }
+      else if(e.key==='g'){ const now=Date.now(); if(now-gg.t<400){ handled=api.gotoTop(); gg.t=0; } else { gg.t=now; handled=true; } }
+      else if(e.key==='Escape'){ handled=api.clearOrCursor(); }
+      if(handled) e.preventDefault();
+    };
+    window.addEventListener('keydown',onKey);
+    return ()=>window.removeEventListener('keydown',onKey);
+  },[closePeek]);
+
+  const val={activeId,setActive,register,unregister,getActive,peek,setPeek,closePeek,density,setDensity};
+  return <PowerCtx.Provider value={val}>{children}</PowerCtx.Provider>;
+}
+
+/* ── PeekDrawer (F4) — conditionally mounted (unmounted = zero width, overflow-safe).
+   Focuses close on open, traps Tab, returns focus to the table wrapper on close. ── */
+function PeekDrawer(){
+  const power=usePower();
+  const peek=power&&power.peek;
+  const asideRef=useRef(null);
+  const closeRef=useRef(null);
+  const tid=peek?peek.tableId:null;
+  useEffect(()=>{
+    if(!peek) return;
+    const ret=peek.returnFocus;
+    if(closeRef.current) closeRef.current.focus();
+    return ()=>{ if(ret&&ret.focus){ try{ret.focus();}catch(e){}} };
+  },[tid]); // eslint-disable-line
+  if(!peek) return null;
+  const onKeyDown=e=>{
+    if(e.key==='Escape'){ e.preventDefault(); power.closePeek(); return; }
+    if(e.key==='Tab'&&asideRef.current){
+      const f=asideRef.current.querySelectorAll('button,a[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
+      if(!f.length) return;
+      const first=f[0],last=f[f.length-1];
+      if(e.shiftKey&&document.activeElement===first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey&&document.activeElement===last){ e.preventDefault(); first.focus(); }
+    }
+  };
+  return <aside className="peek" role="dialog" aria-modal="false" aria-label="Row detail"
+    ref={asideRef} onKeyDown={onKeyDown}>
+    <div className="peek-head">
+      <span className="peek-title mono">{peek.title||'Detail'}</span>
+      <button ref={closeRef} className="peek-close" aria-label="Close detail" onClick={()=>power.closePeek()}>✕</button>
+    </div>
+    <div className="peek-body">{peek.render?peek.render(peek.row):null}</div>
+    {peek.onFull?<div className="peek-foot">
+      <button className="peek-full" onClick={()=>{const f=peek.onFull;power.closePeek();f();}}>Open full view →</button>
+    </div>:null}
+  </aside>;
+}
+
+/* ── ActionBar (F3) — fixed bulk-action bar shown when a selection exists ── */
+function ActionBar({count,actions,onClear}){
+  const [confirm,setConfirm]=useState(null);
+  useEffect(()=>{setConfirm(null);},[count]);
+  return <div className="action-bar" role="toolbar" aria-label="Bulk actions">
+    <span className="ab-count mono">{count} selected</span>
+    {actions.map((a,i)=> confirm===i
+      ? <span key={i} className="ab-confirm">
+          <span>{typeof a.confirm==='string'?a.confirm:'Confirm?'}</span>
+          <button className="btn" onClick={()=>{try{a.run&&a.run();}catch(e){} setConfirm(null);}}>Yes</button>
+          <button className="btn btn-ghost" onClick={()=>setConfirm(null)}>No</button>
+        </span>
+      : <button key={i} className="btn" onClick={()=>a.confirm?setConfirm(i):(a.run&&a.run())}>{a.label}</button>)}
+    <button className="btn btn-ghost" onClick={onClear}>Clear</button>
+  </div>;
+}
+
+/* ── useRowFlash (F5) — flash(keys) tints rows for 400ms then clears ── */
+function useRowFlash(){
+  const [flashed,setFlashed]=useState(()=>new Set());
+  const timers=useRef([]);
+  const flash=useCallback(keys=>{
+    const ks=(keys||[]).map(String).filter(Boolean);
+    if(!ks.length) return;
+    setFlashed(prev=>{const n=new Set(prev);ks.forEach(k=>n.add(k));return n;});
+    const tm=setTimeout(()=>setFlashed(prev=>{const n=new Set(prev);ks.forEach(k=>n.delete(k));return n;}),400);
+    timers.current.push(tm);
+  },[]);
+  useEffect(()=>()=>{timers.current.forEach(clearTimeout);},[]);
+  return {flashed,flash};
+}
+
+/* ── DTRow (F3 perf) — memoized row so only cursor/selected/flashed rows re-render.
+   cursor/selected/flash arrive as row-scoped booleans; all callbacks come off a
+   stable ref (rowApi) so the memo holds across keypresses (subnet table = 5000 rows). ── */
+const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,selectable,rowApi}){
+  const align=c=>c.align||(c.mono?'right':'left');
+  const isNum=c=>align(c)==='right';
+  return <tr id={rowId||undefined}
+    className={(clickable?'clickable':'')+(isCursor?' cursor':'')+(isFlash?' flash':'')}
+    aria-selected={isCursor?'true':undefined}
+    role={clickable?'button':undefined} tabIndex={clickable?0:undefined}
+    onClick={clickable?()=>rowApi.current.activate(rkey):undefined}
+    onKeyDown={clickable?e=>{if(e.key==='Enter')rowApi.current.activate(rkey);}:undefined}>
+    {selectable?<td className="dt-check" onClick={e=>{e.stopPropagation();rowApi.current.check(rkey,e.shiftKey);}}>
+      <input type="checkbox" checked={isSel} onChange={()=>{}} aria-label="Select row"/>
+    </td>:null}
+    {cols.map(c=>{
+      let content;
+      if(c.spark){ const sv=c.spark(r); content=(Array.isArray(sv)&&sv.length>=2)?<Sparkline values={sv}/>:(c.render?c.render(r[c.key],r):'—'); }
+      else content=c.render?c.render(r[c.key],r):(r[c.key]??'');
+      return <td key={c.key} className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')}
+        style={c.width?{width:c.width}:null}>{content}</td>;
+    })}
+  </tr>;
+});
+
+/* ─────────────────────────────────────────────────────────────
+   5. DataTable — sortable primitive with optional CSV export.
+   cols:{key,label,mono,align,render,width,spark,copy}
+   New OPTIONAL power props (omitted ⇒ today's exact DOM/behavior):
+     tableId, rowKey, renderPeek, selectable, bulkActions, filterable, filterKeys, initialPeekKey
+   ───────────────────────────────────────────────────────────── */
+function DataTable({cols,rows,defaultSort,onRowClick,csvName,
+  tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey}){
+  const power=usePower();
+  const id=tableId||(csvName?String(csvName):null);
   const [sort,setSort]=useState(defaultSort||null); // {key,dir}
+  const [cursor,setCursor]=useState(-1);             // -1 = no visual until a key is pressed
+  const [selected,setSelected]=useState(()=>new Set());
+  const [filter,setFilter]=useState('');
+  const {flashed,flash}=useRowFlash();
   const columns=cols||[];
   const data=rows||[];
+  const wrapRef=useRef(null);
+  const filterRef=useRef(null);
+  const apiRef=useRef({});
+  const lastClickRef=useRef(null);
+  const initRef=useRef(false);
+
+  const keyOf=useCallback((r,i)=>rowKey?String(rowKey(r)):String(i),[rowKey]);
+
+  const filtered=useMemo(()=>{
+    if(!filterable||!filter.trim()) return data;
+    const t=filter.trim().toLowerCase();
+    const keys=(filterKeys&&filterKeys.length)?filterKeys:columns.map(c=>c.key);
+    return data.filter(r=>keys.some(k=>String(r[k]??'').toLowerCase().includes(t)));
+  },[data,filter,filterable,filterKeys,columns]);
 
   const sorted=useMemo(()=>{
-    if(!sort||!sort.key) return data;
+    if(!sort||!sort.key) return filtered;
     const {key,dir}=sort;const mul=dir==='desc'?-1:1;
-    return [...data].sort((a,b)=>{
+    return [...filtered].sort((a,b)=>{
       const av=a?.[key],bv=b?.[key];
       if(av==null&&bv==null) return 0;
       if(av==null) return 1;if(bv==null) return -1;
@@ -401,7 +649,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName}){
       if(an&&bn) return (av-bv)*mul;
       return String(av).localeCompare(String(bv),undefined,{numeric:true})*mul;
     });
-  },[data,sort]);
+  },[filtered,sort]);
 
   const toggle=(key)=>setSort(s=>{
     if(!s||s.key!==key) return {key,dir:'asc'};
@@ -411,14 +659,116 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName}){
 
   const align=(c)=>c.align||(c.mono?'right':'left');
   const isNum=(c)=>align(c)==='right';
+  const rowIdOf=i=>id?(id+'-r-'+i):null;
+  const scrollTo=i=>{ const rid=rowIdOf(i); const el=rid&&document.getElementById(rid); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'}); };
+  const openPeekAt=i=>{
+    if(!power||!renderPeek) return;
+    const r=sorted[i]; if(!r) return;
+    power.setPeek({tableId:id,render:renderPeek,row:r,
+      title:String((columns[0]&&r[columns[0].key])||keyOf(r,i)),
+      onFull:onRowClick?()=>onRowClick(r,i):null, returnFocus:wrapRef.current});
+  };
+  const syncPeek=i=>{ if(power&&power.peek&&power.peek.tableId===id) openPeekAt(i); };
+  const clearSel=()=>{ setSelected(new Set()); lastClickRef.current=null; };
 
-  return <div>
-    {csvName&&<div className="dt-toolbar">
-      <button className="btn btn-ghost" onClick={()=>downloadCSV(csvName+'.csv',sorted,columns)}>CSV</button>
+  const check=(key,shift)=>{
+    const i=sorted.findIndex((r,idx)=>keyOf(r,idx)===key);
+    setSelected(prev=>{
+      const n=new Set(prev);
+      if(shift&&lastClickRef.current!=null&&i>=0){
+        const a=Math.min(lastClickRef.current,i),b=Math.max(lastClickRef.current,i);
+        for(let j=a;j<=b;j++) n.add(keyOf(sorted[j],j));
+      } else { if(n.has(key)) n.delete(key); else n.add(key); }
+      return n;
+    });
+    if(i>=0) lastClickRef.current=i;
+  };
+
+  const buildActions=(rws)=>{
+    const acts=[];
+    if(csvName) acts.push({label:'Export CSV',run:()=>downloadCSV(String(csvName)+'-selected.csv',rws,columns)});
+    acts.push({label:'Copy',run:()=>{
+      const col=columns.find(c=>c.copy)||columns[0]||{key:'value'};
+      const txt=rws.map(r=>String(r[col.key]??'')).join('\n');
+      if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+      toast('Copied '+rws.length+' row'+(rws.length===1?'':'s'),'ok');
+    }});
+    acts.push({label:'Watchlist',run:()=>{
+      const prev=LS.get('watchlist',[]);
+      const {tab,params}=parseHash();
+      const adds=rws.map((r,i)=>({key:keyOf(r,i),label:String((columns[0]&&r[columns[0].key])||keyOf(r,i)),tab,params,added:Date.now()}));
+      LS.set('watchlist',[...prev,...adds]);
+      flash(adds.map(a=>a.key));
+      clearSel();
+      toast(adds.length+' added · Undo','ok',{duration:5000,action:{label:'Undo',run:()=>LS.set('watchlist',prev)}});
+    }});
+    if(typeof bulkActions==='function'){
+      (bulkActions(rws)||[]).forEach(a=>acts.push({...a,run:()=>{
+        const out=a.run&&a.run();
+        if(a.flash) flash(rws.map((r,i)=>keyOf(r,i)));
+        return out;
+      }}));
+    }
+    return acts;
+  };
+
+  // Imperative api — reassigned each render so closures see current state.
+  apiRef.current={
+    move(delta){ setCursor(c=>{ let n=c<0?0:c+delta; n=Math.max(0,Math.min(sorted.length-1,n)); scrollTo(n); syncPeek(n); return n; }); return true; },
+    openCursor(){ const i=cursor<0?0:cursor; const r=sorted[i]; if(!r) return false;
+      if(renderPeek){ setCursor(i); openPeekAt(i); return true; }
+      if(onRowClick){ onRowClick(r,i); return true; } return false; },
+    toggleSelect(){ if(!selectable||cursor<0||cursor>=sorted.length) return false; check(keyOf(sorted[cursor],cursor),false); return true; },
+    focusFilter(){ if(!filterable) return false; if(filterRef.current){ filterRef.current.focus(); return true; } return false; },
+    gotoTop(){ if(!sorted.length) return false; setCursor(0); scrollTo(0); syncPeek(0); return true; },
+    gotoBottom(){ if(!sorted.length) return false; const i=sorted.length-1; setCursor(i); scrollTo(i); syncPeek(i); return true; },
+    clearOrCursor(){ if(selected.size>0){ clearSel(); return true; } if(cursor>=0){ setCursor(-1); return true; } return false; },
+    activate(key){ const i=sorted.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return; if(onRowClick) onRowClick(sorted[i],i); },
+    check,
+    getState(){
+      const keyRow=new Map(); data.forEach((r,i)=>keyRow.set(keyOf(r,i),r));
+      const selRows=[...selected].map(k=>keyRow.get(k)).filter(Boolean);
+      return {selected,selectedRows:selRows,cursorRow:(cursor>=0&&cursor<sorted.length)?sorted[cursor]:null,buildActions};
+    },
+  };
+
+  // Register / unregister with the power layer (only powered when it has an id).
+  useEffect(()=>{
+    if(!id||!power) return;
+    power.register(id,{label:String(csvName||id),api:apiRef});
+    return ()=>power.unregister(id);
+  },[id]); // eslint-disable-line
+
+  // Keep the cursor in range when the visible list shrinks.
+  useEffect(()=>{ setCursor(c=>c>=sorted.length?sorted.length-1:c); },[sorted.length]);
+
+  // initialPeekKey → open peek once for the matching row (nav {peek:key} handoff).
+  useEffect(()=>{
+    if(initRef.current||!initialPeekKey||!renderPeek) return;
+    const i=sorted.findIndex((r,idx)=>keyOf(r,idx)===String(initialPeekKey));
+    if(i>=0){ initRef.current=true; setCursor(i); openPeekAt(i); }
+  },[initialPeekKey,sorted]); // eslint-disable-line
+
+  const allKeys=sorted.map((r,i)=>keyOf(r,i));
+  const allSel=allKeys.length>0&&allKeys.every(k=>selected.has(k));
+  const toggleAll=()=>setSelected(prev=>{ const n=new Set(prev); if(allSel) allKeys.forEach(k=>n.delete(k)); else allKeys.forEach(k=>n.add(k)); return n; });
+
+  const showToolbar=csvName||filterable;
+  return <div ref={wrapRef}
+    tabIndex={id?0:undefined}
+    aria-activedescendant={(id&&cursor>=0)?rowIdOf(cursor):undefined}
+    onMouseEnter={id&&power?()=>power.setActive(id):undefined}
+    onFocus={id&&power?()=>power.setActive(id):undefined}
+    style={id?{outline:'none'}:undefined}>
+    {showToolbar&&<div className="dt-toolbar" style={filterable?{justifyContent:'space-between'}:null}>
+      {filterable?<input ref={filterRef} className="dt-filter mono" value={filter}
+        onChange={e=>setFilter(e.target.value)} placeholder="Filter…" aria-label="Filter rows"/>:null}
+      {csvName?<button className="btn btn-ghost" onClick={()=>downloadCSV(String(csvName)+'.csv',sorted,columns)}>CSV</button>:null}
     </div>}
     <div className="tbl-wrap">
       <table className="dt">
         <thead><tr>
+          {selectable?<th className="dt-check"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all rows"/></th>:null}
           {columns.map(c=><th key={c.key} className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')}
             style={c.width?{width:c.width}:null} onClick={()=>toggle(c.key)}>
             {c.label||c.key}
@@ -427,20 +777,17 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName}){
         </tr></thead>
         <tbody>
           {sorted.length===0
-            ? <tr><td className="dt-empty" colSpan={columns.length||1}>No data</td></tr>
-            : sorted.map((r,ri)=><tr key={ri}
-                className={onRowClick?'clickable':''}
-                role={onRowClick?'button':undefined} tabIndex={onRowClick?0:undefined}
-                onClick={onRowClick?()=>onRowClick(r,ri):null}
-                onKeyDown={onRowClick?e=>{if(e.key==='Enter')onRowClick(r,ri);}:undefined}>
-                {columns.map(c=><td key={c.key} className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')}
-                  style={c.width?{width:c.width}:null}>
-                  {c.render?c.render(r[c.key],r):(r[c.key]??'')}
-                </td>)}
-              </tr>)}
+            ? <tr><td className="dt-empty" colSpan={(columns.length||1)+(selectable?1:0)}>No data</td></tr>
+            : sorted.map((r,ri)=>{
+                const rk=keyOf(r,ri);
+                return <DTRow key={rk} r={r} rkey={rk} cols={columns} rowId={rowIdOf(ri)}
+                  isCursor={ri===cursor} isSel={selected.has(rk)} isFlash={flashed.has(rk)}
+                  clickable={!!onRowClick} selectable={!!selectable} rowApi={apiRef}/>;
+              })}
         </tbody>
       </table>
     </div>
+    {selectable&&selected.size>0?<ActionBar count={selected.size} actions={buildActions(apiRef.current.getState().selectedRows)} onClear={clearSel}/>:null}
   </div>;
 }
 
@@ -2660,8 +3007,17 @@ function AuditTab(){
   </div>;
 }
 
+/* subsequence match — chars of needle appear in order within hay (fuzzy go-to). */
+function subseqMatch(needle,hay){
+  if(!needle) return false;
+  let i=0; for(let j=0;j<hay.length&&i<needle.length;j++){ if(hay[j]===needle[i]) i++; }
+  return i===needle.length;
+}
+
 /* CommandPalette — ⌘K overlay (Shell owns open state) + topbar ViewsMenu portal. */
 function CommandPalette({open,onClose}){
+  const power=usePower();
+  const {data}=useData();
   const inputRef=useRef(null);
   const [q,setQ]=useState('');
   const [sel,setSel]=useState(0);
@@ -2685,10 +3041,32 @@ function CommandPalette({open,onClose}){
     {label:'Alert rules',kind:'nav',run:()=>{nav('ask');onClose();}},
     ...views.map(v=>({label:'View: '+v.name,kind:'view',run:()=>{onClose();applyViewByName(v.name);}})),
   ];
-  const items=base.filter(c=>c.label.toLowerCase().includes(needle));
+  // F8a — contextual bulk actions for the active table's selection (or its cursor row as a 1-row selection).
+  const ctxItems=[];
+  if(open&&power&&power.getActive){
+    const entry=power.getActive();
+    const api=entry&&entry.api&&entry.api.current;
+    if(api&&api.getState){
+      const st=api.getState();
+      const rowsSel=st.selected&&st.selected.size>0?st.selectedRows:(st.cursorRow?[st.cursorRow]:[]);
+      if(rowsSel.length&&st.buildActions){
+        st.buildActions(rowsSel).forEach(a=>ctxItems.push({label:a.label+' ('+rowsSel.length+')',kind:'action',
+          run:()=>{onClose();try{a.run&&a.run();}catch(e){}}}));
+      }
+    }
+  }
+  const items=[...ctxItems,...base.filter(c=>c.label.toLowerCase().includes(needle))];
   if(typed){
     items.push({label:'Ask: '+typed,kind:'ask',run:()=>{onClose();nav('ask',{q:typed});}});
     items.push({label:'Block domain: '+typed,kind:'block',run:()=>setConfirmBlock(typed)});
+    // F8b — fuzzy go-to jump into subnets / zones / hosts (subsequence match, cap 8).
+    const dd=data||{};
+    const go=[];
+    const add=(label,fn)=>{ if(go.length<8&&label&&subseqMatch(needle,String(label).toLowerCase())) go.push({label:'Go: '+label,kind:'go',run:()=>{onClose();fn();}}); };
+    (Array.isArray(dd.subnets)?dd.subnets:[]).forEach(s=>{const l=s.addr||s.name;add(l,()=>nav('network',{peek:s.addr||s.name}));});
+    (Array.isArray(dd.zones)?dd.zones:[]).forEach(z=>add(z.fqdn,()=>nav('dns',{peek:z.fqdn})));
+    (Array.isArray(dd.hosts)?dd.hosts:[]).forEach(h=>add(h.name,()=>nav('infra',{peek:h.name})));
+    go.forEach(g=>items.push(g));
   }
   const runBlock=()=>{
     const domain=confirmBlock;
@@ -2839,6 +3217,21 @@ function ThemeToggle(){
   </button>;
 }
 
+/* DensityToggle — flips compact/comfortable row height + persists (LS.set('density',…)). */
+function DensityToggle(){
+  const [d,setD]=useState(()=>document.documentElement.dataset.density||'compact');
+  const toggle=()=>{
+    const next=d==='compact'?'comfortable':'compact';
+    document.documentElement.dataset.density=next;
+    LS.set('density',next);
+    setD(next);
+  };
+  return <button className="kbd" onClick={toggle}
+    aria-label="Toggle row density" title="Toggle compact / comfortable rows">
+    {d==='compact'?'Compact':'Comfort'}
+  </button>;
+}
+
 function TopBar({tab,org,fresh,onPalette}){
   const {orgName}=useAuth();
   const orgLabel=orgName||org;
@@ -2857,6 +3250,7 @@ function TopBar({tab,org,fresh,onPalette}){
     <div className="topbar-right">
       {fresh}
       <AccountSlot/>
+      <DensityToggle/>
       <ThemeToggle/>
       <button className="kbd" onClick={onPalette} aria-label="Open command palette" title="Command palette">
         <span className="mono">⌘K</span>
@@ -2895,15 +3289,18 @@ function Shell(){
   const Active=TAB_COMPONENTS[tab]||OverviewTab;
   const fresh=<span className="fresh-slot"/>; // A2 wires real freshness
 
-  return <div>
-    <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)}/>
-    <main className="main" key={tab}>
-      <Active vaultTick={vaultTick}/>
-    </main>
-    <CommandPalette open={paletteOpen} onClose={()=>setPaletteOpen(false)}/>
-    <Toasts/>
-    <SnapshotWriter/>
-  </div>;
+  return <PowerProvider>
+    <div>
+      <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)}/>
+      <main className="main" key={tab}>
+        <Active vaultTick={vaultTick}/>
+      </main>
+      <CommandPalette open={paletteOpen} onClose={()=>setPaletteOpen(false)}/>
+      <PeekDrawer/>
+      <Toasts/>
+      <SnapshotWriter/>
+    </div>
+  </PowerProvider>;
 }
 
 function App(){
