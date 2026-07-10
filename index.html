@@ -2193,14 +2193,18 @@ function useAiExplain(){
   if(document.getElementById('bx-ov-styles')) return;
   const s=document.createElement('style');s.id='bx-ov-styles';
   s.textContent=`
-  .ovx table{width:100%;border-collapse:collapse;font-size:12px;}
+  .ovx table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
   .ovx thead th{text-align:left;color:var(--text-faint);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:6px 6px;border-bottom:1px solid var(--border);}
   .ovx tbody td{padding:7px 6px;border-bottom:1px solid var(--border2);}
+  /* fixed layout + per-cell clip → preview tables always fit their ~300px panel, no horizontal scroll */
+  .ovx thead th,.ovx tbody td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+  .ovx td .code,.ovx td .tag{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;}
   .ovx tbody tr{cursor:pointer;transition:background .1s ease;}
   .ovx tbody tr:hover{background:var(--raised);}
   .ovx tbody tr:last-child td{border-bottom:0;}
   .ovx td.r,.ovx th.r{text-align:right;}
   .ovx .code{font-family:'GeistMono',ui-monospace,monospace;border-bottom:1px dotted var(--text-faint);cursor:help;}
+  .ovx .lchip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r-ctl);text-transform:uppercase;letter-spacing:.3px;background:var(--raised);display:inline-block;}
   .ovx .ov-mt{margin-top:8px;}
   `;
   document.head.appendChild(s);
@@ -2474,7 +2478,7 @@ function OverviewTab(){
         <tbody>{leases.slice(0,9).map((l,i)=>{const on=String(l.state||'').toLowerCase()==='active';return <tr key={i} onClick={()=>nav('network')}>
           <td><span className="code">{l.addr}</span></td>
           <td className="mono" style={{whiteSpace:'nowrap',overflow:'hidden',maxWidth:150,textOverflow:'ellipsis'}}>{l.host}</td>
-          <td className="r"><span className={'sd '+(on?'ok':'warn')} style={{display:'inline-block'}}/> <span style={{color:'var(--text-dim)'}}>{l.state}</span></td>
+          <td className="r"><span className="lchip" style={{color:on?'var(--ok)':'var(--warn)'}}>{l.state}</span></td>
         </tr>;})}</tbody></table>
       </Panel>
 
@@ -2684,6 +2688,11 @@ function DailyTab(){
     {l:'blocked',n:blocked,c:'var(--ok)'},
   ];
 
+  // ── Current-state panels (no history needed) — keep Daily full on first visit ──
+  const topSubs=sortedSubs.slice(0,10);
+  const attnHosts=hosts.filter(h=>!/^(online|up)$/i.test(String(h.status||''))).slice(0,10);
+  const issueZones=zones.filter(z=>Array.isArray(z.issues)&&z.issues.length>0).slice(0,10);
+
   // Vault locked → gate handles it (after all hooks). Loading → skeleton.
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
@@ -2779,6 +2788,43 @@ function DailyTab(){
             : <span className="dly-note" style={{marginTop:0}}>building history…</span>}</span>
           <span className="dly-trow-v mono">{ts.s.length?ts.s[ts.s.length-1]:'—'}</span>
         </div>)}
+      </Panel>
+
+      <Panel title="Top capacity subnets" side={<span className="mono">by utilization</span>} empty={!topSubs.length}>
+        <div className="issues">
+          {topSubs.map((s,i)=>{const u=Math.round(utilOf(s));const c=utilColor(u);return <div key={s.id||s.addr||i} className="issue" role="button" tabIndex={0}
+              onClick={()=>nav('network',{subnet:s.addr||s.id})} onKeyDown={e=>{if(e.key==='Enter')nav('network',{subnet:s.addr||s.id});}}
+              {...hover.bind({title:(s.addr||s.name||'subnet')+(s.cidr?'/'+s.cidr:''),rows:[['used',(s.used!=null?s.used:'—')+' / '+(s.total!=null?s.total:'—')],['util',u+'%'],['site',s.site||'—']],spark:[u*0.4,u*0.6,u*0.8,u]})}>
+            <span className="rank">{i+1}</span>
+            <div className="body"><div className="t mono">{s.addr||s.name}{s.cidr?'/'+s.cidr:''}</div><div className="d">{s.site||'—'}</div></div>
+            <div className="ubar" style={{flex:'none',width:56}}><i style={{width:Math.max(4,u)+'%',background:c}}/></div>
+            <span className="mono" style={{flex:'none',width:34,textAlign:'right',fontSize:11,color:c}}>{u}%</span>
+          </div>;})}
+        </div>
+      </Panel>
+
+      <Panel title="Hosts needing attention" side={<span className="mono">{attnHosts.length} of {nHost}</span>} empty={!attnHosts.length}>
+        <div className="issues">
+          {attnHosts.map((h,i)=>{const st=String(h.status||'').toLowerCase();const sv=st==='error'?'crit':st==='degraded'?'high':st==='offline'?'low':'med';return <div key={h.id||i} className="issue" role="button" tabIndex={0}
+              onClick={()=>nav('infra')} onKeyDown={e=>{if(e.key==='Enter')nav('infra');}}
+              {...hover.bind({title:h.name||'host',rows:[['ip',h.ip||'—'],['type',h.type||'—'],['status',h.status||'—']]})}>
+            <span className={'sd '+(sv==='crit'?'crit':'warn')}/>
+            <div className="body"><div className="t">{h.name||'—'}</div><div className="d">{h.ip||''}</div></div>
+            <span className={'sev '+sv}>{h.status||'—'}</span>
+          </div>;})}
+        </div>
+      </Panel>
+
+      <Panel title="DNS zones with issues" side={<span className="mono">{zoneIssues} of {nZone}</span>} empty={!issueZones.length}>
+        <div className="issues">
+          {issueZones.map((z,i)=>{const n=z.issues.length;return <div key={z.id||z.fqdn||i} className="issue" role="button" tabIndex={0}
+              onClick={()=>nav('dns')} onKeyDown={e=>{if(e.key==='Enter')nav('dns');}}
+              {...hover.bind({title:z.fqdn||'zone',rows:[['view',z.view||'—'],['ttl',z.ttl!=null?z.ttl+'s':'—'],['issues',n]]})}>
+            <span className="rank">{i+1}</span>
+            <div className="body"><div className="t mono">{z.fqdn||'—'}</div><div className="d">{(z.view||'—')+' · '+n+' issue'+(n===1?'':'s')}</div></div>
+            <span className="sev high">{n}</span>
+          </div>;})}
+        </div>
       </Panel>
 
     </div>
