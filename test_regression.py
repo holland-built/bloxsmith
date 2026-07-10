@@ -363,6 +363,35 @@ class BackendTests(unittest.TestCase):
                         "lookup took longer than data — threading may be broken")
 
 
+    # ── cache warmer + AI tools (calm-by-default build) ───────────────────────
+
+    def test_cache_warmer_source(self):
+        src = _server_src()
+        self.assertIn("_warm_loop", src, "_warm_loop cache-warmer missing from server.py")
+        self.assertIn("WARM_INTERVAL", src, "WARM_INTERVAL missing from server.py")
+        m = re.search(r"WARM_INTERVAL\s*=\s*(\d+)", src)
+        self.assertIsNotNone(m, "WARM_INTERVAL constant not assigned an int literal")
+        self.assertLess(int(m.group(1)), 300, "WARM_INTERVAL must be < 300s")
+
+    def test_ai_tools_registered(self):
+        src = _server_src()
+        for tool in ("dossier_lookup", "lookalike_domains", "asset_insights"):
+            self.assertIn(tool, src, f"AI tool '{tool}' missing from server.py")
+
+    def test_api_data_warm(self):
+        # Second sequential /api/data should be served warm (cache) — fast 200.
+        try:
+            s1, _ = get_json("/api/data")
+        except (HTTPError, URLError, OSError) as e:
+            self.skipTest(f"first /api/data errored: {e}")
+        if s1 != 200:
+            self.skipTest(f"first /api/data returned {s1}")
+        t0 = time.time()
+        s2, ct, _ = get("/api/data")
+        elapsed = time.time() - t0
+        self.assertEqual(s2, 200)
+        self.assertLess(elapsed, 1.5, f"warm /api/data took {elapsed:.2f}s (>1.5s)")
+
     # ── docker self-update tests ──────────────────────────────────────────────
 
     def test_api_update_status_shape(self):
@@ -466,23 +495,28 @@ class FrontendStructureTests(unittest.TestCase):
 
     # ── new shell: tabs + router ───────────────────────────────────────────────
 
-    def test_eight_tab_ids(self):
+    def test_seven_tab_ids(self):
+        # AI is now a drawer (not a tab): 7 tabs, no 'ask'.
         self.assertContains(
-            "const TABS=['overview','daily','network','dns','infra','security','audit','ask']",
-            "8-tab TABS array missing or reordered (daily must sit after overview)")
-        for t in ("overview", "daily", "network", "dns", "infra", "security", "audit", "ask"):
+            "const TABS=['overview','daily','network','dns','infra','security','audit']",
+            "7-tab TABS array missing or reordered (daily must sit after overview)")
+        for t in ("overview", "daily", "network", "dns", "infra", "security", "audit"):
             self.assertContains(t + ":", f"tab id '{t}' missing from TAB_LABELS/TAB_COMPONENTS")
 
     def test_tab_components_map(self):
         self.assertContains("const TAB_COMPONENTS=", "TAB_COMPONENTS map missing")
-        for comp in ("OverviewTab", "NetworkTab", "DnsTab", "InfraTab", "AuditTab", "AskTab"):
+        for comp in ("OverviewTab", "NetworkTab", "DnsTab", "InfraTab", "AuditTab", "AiDrawer"):
             self.assertContains("function " + comp, f"tab component {comp} missing")
         self.assertContains("function SecurityTab", "SecurityTab missing")
+        # AskTab is gone; the AI is a drawer, so TAB_COMPONENTS carries no 'ask:' entry.
+        tc = self.html[self.html.index("const TAB_COMPONENTS="):]
+        tc = tc[:tc.index("};")]
+        self.assertNotIn("ask:", tc, "TAB_COMPONENTS must not contain an 'ask:' entry")
 
     def test_legacy_hash_redirect_map(self):
         self.assertContains("const LEGACY={home:'overview'", "legacy redirect map missing")
         for pair in ("map:'network'", "dhcp:'network'", "ipam:'network'",
-                     "assets:'infra'", "search:'ask'", "hub:'overview'"):
+                     "assets:'infra'", "search:'overview'", "ask:'overview'", "hub:'overview'"):
             self.assertContains(pair, f"legacy redirect {pair} missing")
 
     # ── data / api plumbing ────────────────────────────────────────────────────
@@ -654,10 +688,12 @@ class FrontendStructureTests(unittest.TestCase):
         return self.html[s:e]
 
     def test_display_primitives(self):
-        # Treemap / VolumeHistogram / heatCell / trendCell / AiExplain all defined.
-        for needle in ("function Treemap", "VolumeHistogram", "function heatCell",
-                       "trendCell", "AiExplain"):
+        # Calm-by-default chart set: Donut / HistogramBar / GroupedBar / HoverCard /
+        # VolumeHistogram / Sparkline all defined; Treemap fully removed.
+        for needle in ("function Donut", "function HistogramBar", "function GroupedBar",
+                       "function HoverCard", "VolumeHistogram", "function Sparkline"):
             self.assertContains(needle, f"display primitive '{needle}' missing")
+        self.assertEqual(self.html.count("Treemap"), 0, "Treemap must be fully removed")
 
     def test_dossier_wired(self):
         # External-intel (Dossier) lookup wired into the SECURITY region.
@@ -668,12 +704,31 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn("/api/lookalikes", self._region("SECURITY"),
                       "/api/lookalikes not referenced inside the SECURITY region")
 
-    def test_treemap_wired(self):
-        # Capacity map in NETDNS renders a Treemap over the subnet list.
-        net = self._region("NETDNS")
-        self.assertIn("Capacity map", net, "Capacity map section missing from NETDNS")
-        self.assertIn("<Treemap items={subnets}", net,
-                      "Treemap not wired into the NETDNS Capacity map")
+    def test_network_charts(self):
+        # Network tab now renders a GroupedBar (per-site) instead of a Treemap.
+        self.assertContains("<GroupedBar", "GroupedBar not wired into the Network tab")
+        self.assertEqual(self.html.count("<Treemap"), 0, "Treemap markup must be absent")
+        self.assertEqual(self.html.count("Treemap"), 0,
+                         "Treemap must be fully removed (0 occurrences)")
+
+    def test_datatable_capped(self):
+        # DataTable caps default rows and offers a 'Show all' escape hatch + problems filter.
+        for needle in ("maxRows", "problemsOnly", "Show all", "dt-more"):
+            self.assertContains(needle, f"DataTable cap primitive '{needle}' missing")
+
+    def test_ai_drawer(self):
+        # The AI is a persistent drawer opened by an event + Cmd/Ctrl+I.
+        self.assertContains('className="ai-drawer"', "ai-drawer class missing")
+        self.assertContains("bx:ai-open", "bx:ai-open event missing")
+        self.assertContains("(e.metaKey||e.ctrlKey)&&(e.key==='i'",
+                            "Cmd/Ctrl+I AI-drawer binding missing")
+
+    def test_problems_badge(self):
+        self.assertContains("ProblemsBadge", "ProblemsBadge component missing")
+        self.assertContains("problems-badge", "problems-badge class missing")
+
+    def test_collapse_helper(self):
+        self.assertContains("collapseIdentical", "collapseIdentical helper missing")
 
 
 # ── main ──────────────────────────────────────────────────────────────────────

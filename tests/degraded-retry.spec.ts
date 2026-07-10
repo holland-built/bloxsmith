@@ -3,9 +3,11 @@ import { test, expect } from '@playwright/test';
 // /api/data fails (500) on the first call, succeeds afterward. NetworkTab surfaces
 // a "failed · Retry" indicator (Freshness error). Retry refetches -> table renders.
 
+// util>70 so the row survives the subnet table's default problemsOnly filter
+// and is actually rendered once the retry succeeds.
 const DATA = {
   subnets: [
-    { id: 's1', name: 'Prod Net', addr: '172.16.0.0', cidr: 24, util: 40, site: 'HQ' },
+    { id: 's1', name: 'Prod Net', addr: '172.16.0.0', cidr: 24, util: 80, site: 'HQ' },
   ],
   leases: [{ addr: '172.16.0.10', mac: 'de:ad:be:ef:00:10', state: 'active', host: 'prod-1' }],
   zones: [],
