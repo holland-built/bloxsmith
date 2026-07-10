@@ -3009,7 +3009,10 @@ function NetworkTab(){
   // siteFilter: click a site bar to AND-filter the subnet table (null = all sites).
   // expandedSigs: 100%-util collapse groups the user has expanded (see collapseIdentical).
   const [siteFilter,setSiteFilter]=useState(null);
-  const [band,setBand]=useState(null); // util-band quick-filter chip: '85' | '7085' | null
+  // util-band quick-filter chip, values are UTIL_BANDS ids: '100'|'9099'|'7089'|'lt70'|null.
+  // Seeded from route (Overview hands off nav('network',{band})); synced on param change.
+  const [band,setBand]=useState(params.band||null);
+  useEffect(()=>{setBand(params.band||null);},[params.band]);
   const [expandedSigs,setExpandedSigs]=useState(()=>new Set());
   const {bind}=useHoverDetail(); // cursor-following flavor card for subnet + top-consumer rows
   if(locked) return null;
@@ -3078,9 +3081,9 @@ function NetworkTab(){
   // Subnet table rows: AND the active site + util-band quick-filters, then collapse 100%-util
   // noise (≥5 rows sharing a /cidr → one "N subnets at 100%" group) unless that signature
   // was expanded. DataTable's own problemsOnly (>70%) then filters on top of this.
-  let subnetPool=siteFilter?subnets.filter(s=>(s.site||'—')===siteFilter):subnets;
-  if(band==='85') subnetPool=subnetPool.filter(s=>utilOf(s)>85);
-  else if(band==='7085') subnetPool=subnetPool.filter(s=>{const u=utilOf(s);return u>=70&&u<=85;});
+  const siteScoped=siteFilter?subnets.filter(s=>(s.site||'—')===siteFilter):subnets;
+  const activeBand=UTIL_BANDS.find(b=>b.id===band);
+  let subnetPool=activeBand?siteScoped.filter(s=>activeBand.test(utilOf(s))):siteScoped;
   const subnetRows=collapseIdentical(subnetPool,
     s=>{const sg=utilOf(s)===100?('100|/'+(s.cidr||'')):null; return (sg&&expandedSigs.has(sg))?null:sg;}, 5);
 
@@ -3145,15 +3148,14 @@ function NetworkTab(){
             </Panel>
             <div style={{gridColumn:'1/-1',display:'flex',flexWrap:'wrap',alignItems:'center',gap:'var(--s2)'}}>
               <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>Filter</span>
-              <button className="chip" style={chipStyle(band==='85')} onClick={()=>setBand(b=>b==='85'?null:'85')}>&gt;85% · {gt85}</button>
-              <button className="chip" style={chipStyle(band==='7085')} onClick={()=>setBand(b=>b==='7085'?null:'7085')}>70-85% · {b7085}</button>
+              <ValueBands rows={siteScoped} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS} value={band} onChange={setBand}/>
               {siteRows.map((g,i)=><button key={i} className="chip" style={chipStyle(siteFilter===g.site)}
                 onClick={()=>setSiteFilter(sf=>sf===g.site?null:g.site)}>{g.site} · {g.count}</button>)}
             </div>
             <div style={{gridColumn:'1/-1'}}>
               <Panel title="Subnets" side={<Freshness at={fetchedAt} onRetry={refetch}/>}>
                 <DataTable cols={subnetCols} rows={subnetRows} defaultSort={{key:'util',dir:'desc'}}
-                  maxRows={50}
+                  scrollBody={480}
                   problemsOnly={{label:'Problems only',test:s=>utilOf(s)>70,default:true}}
                   onRowClick={r=>{ if(r.__group){ setExpandedSigs(prev=>{const n=new Set(prev); if(n.has(r.__group)) n.delete(r.__group); else n.add(r.__group); return n;}); return; } nav('network',{subnet:r.addr||r.id}); }}
                   csvName="subnets"
@@ -3185,7 +3187,7 @@ function NetworkTab(){
             </div>
             <Panel title={'All leases · '+leases.length}>
               <DataTable cols={NET_LEASE_COLS} rows={leases} defaultSort={{key:'addr',dir:'asc'}} csvName="leases"
-                maxRows={50}
+                scrollBody={420}
                 tableId="all-leases" rowKey={r=>String(r.ip||r.addr||r.mac)} selectable/>
             </Panel>
             <Panel title="Lease states" side={<span className="mono" style={{color:'var(--text-faint)'}}>{leases.length}</span>} empty={leases.length===0}>
@@ -3257,7 +3259,7 @@ function DnsTab(){
     .slice(0,3).map(z=>({label:z.fqdn||'—'}));
 
   // Analytics panels render ONLY when their array is non-empty and no fetch error
-  // (graceful empties → no dead bands). If all three are empty, one side-meta note.
+  // (graceful empties → no dead bands). If all three are empty the whole analytics block renders nothing.
   const volBuckets=volume.slice(0,7).map(r=>({label:fmtDay(r),count:Number(r[NDA+'total_query_count'])||0}));
   const volEmpty=!(volume.length&&!an.error);
   const clientsEmpty=!(clients.length&&!an.error);
@@ -3268,7 +3270,7 @@ function DnsTab(){
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
     <Panel title="DNS zones" side={<Freshness at={fetchedAt} onRetry={refetch}/>}>
       <DataTable cols={zoneCols} rows={zones} defaultSort={{key:'fqdn',dir:'asc'}} csvName="zones"
-        maxRows={50}
+        scrollBody={480} columnToggle
         problemsOnly={{label:'Problems only',test:z=>(z.issues&&z.issues.length)||z.anomaly,default:true}}
         tableId="zones" rowKey={r=>String(r.fqdn)} selectable
         filterable filterKeys={['fqdn','view']}
@@ -3306,12 +3308,13 @@ function DnsTab(){
     </Panel>
     {anLoading
       ? <Skeleton rows={3}/>
+      : allEmpty
+      ? null
       : <React.Fragment>
           <div className="sec-h">
             <h2>DNS analytics</h2><span className="rule"/>
-            {allEmpty?<span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>DNS analytics unavailable</span>:null}
           </div>
-          {allEmpty?null:<div className="grid-dense">
+          <div className="grid-dense">
             <Panel title="Query volume · 7d"
               side={<Freshness at={an.fetchedAt} onRetry={an.refetch} error={an.error?true:undefined}/>}
               empty={volEmpty}>
@@ -3329,7 +3332,7 @@ function DnsTab(){
                 </div>)}
               </div>
             </Panel>
-          </div>}
+          </div>
         </React.Fragment>}
   </div>;
 }
