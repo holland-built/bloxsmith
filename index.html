@@ -4,8 +4,16 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>BloxSmith</title>
-<script src="react.min.js"></script>
-<script src="react-dom.min.js"></script>
+<script type="importmap">
+{ "imports": {
+  "react": "./vendor.react-19-2-7.8c3b2ed6.js",
+  "react/jsx-runtime": "./vendor.react-19-2-7-jsx-runtime.805ef1b3.js",
+  "react-dom": "./vendor.react-dom-19-2-7.4dd257fe.js",
+  "react-dom/client": "./vendor.react-dom-19-2-7-client.05c771c8.js",
+  "@astryxdesign/core": "./vendor.astryxdesign-core-0-1-4.d9d26976.js"
+}}
+</script>
+<link rel="stylesheet" href="vendor.astryx.css">
 <script src="babel.min.js"></script>
 <script>
 /* no-flash theme boot — runs before styles parse. bx.theme is stored as JSON
@@ -496,7 +504,13 @@ table.dt tbody td{border-bottom-color:var(--border2);}
 <body>
 <div id="root"></div>
 
-<script type="text/babel" data-presets="react">
+<script type="text/babel" data-type="module" data-presets="react">
+import React from "react";
+import { createPortal } from "react-dom";
+import { createRoot } from "react-dom/client";
+import * as Astryx from "@astryxdesign/core";
+const ReactDOM = { createRoot, createPortal };
+window.React = React; window.ReactDOM = ReactDOM; window.Astryx = Astryx;
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
 
 /* ─────────────────────────────────────────────────────────────

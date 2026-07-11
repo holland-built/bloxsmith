@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # App code + static assets (index.html, react/babel bundles, etc.)
 COPY server.py index.html ./
 COPY *.js ./
+COPY *.css ./
 COPY *.woff2 ./
 # Seed/provision templates are third-party (ccmarris/uddi_automation_toolkit) —
 # not committed to this repo; fetched at build. Mount a volume over /app/templates
