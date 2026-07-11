@@ -1218,7 +1218,7 @@ function buildPredicate(tokens, schema){
 
 function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
-  maxRows,problemsOnly,scrollBody,columnToggle}){
+  maxRows,problemsOnly,scrollBody,columnToggle,searchSchema}){
   const power=usePower();
   const {filters:globalFilters}=useFilters();
   const id=tableId||(csvName?String(csvName):null);
@@ -1254,19 +1254,22 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const probCount=probRows?probRows.length:0;
   const base=(problemsOnly&&probOn)?probRows:data;
 
+  // BQL search schema: filterKeys drives freeTextKeys (Phase A precedence); searchSchema deep-merges over auto-derived.
+  const _schema=useMemo(()=>deriveSchema(columns,base,{...(searchSchema||{}),filterKeys}),[columns,base,searchSchema,filterKeys]);
+
   const filtered=useMemo(()=>{
     let out=base;
     if(filterable&&filter.trim()){
-      const t=filter.trim().toLowerCase();
-      const keys=(filterKeys&&filterKeys.length)?filterKeys:columns.map(c=>c.key);
-      out=out.filter(r=>keys.some(k=>String(r[k]??'').toLowerCase().includes(t)));
+      const _tokens=parseQuery(filter);
+      const _pred=buildPredicate(_tokens,_schema);
+      out=out.filter(_pred);
     }
     // global cross-filter: AND every active filter whose field is a column of THIS table
     // (filters for fields this table lacks are ignored, so unrelated tables don't blank).
     const active=globalFilters.filter(f=>columns.some(c=>c.key===f.field));
     if(active.length) out=out.filter(r=>active.every(f=>String(r[f.field])===String(f.value)));
     return out;
-  },[base,filter,filterable,filterKeys,columns,globalFilters]);
+  },[base,filter,filterable,_schema,columns,globalFilters]);
 
   const sorted=useMemo(()=>{
     if(!sort||!sort.key) return filtered;
