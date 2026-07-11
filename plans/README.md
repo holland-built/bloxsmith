@@ -21,13 +21,13 @@ Session 4 (`/improve` against commit `61b1e6e`): audit of the unaudited provisio
 | 010 | [_csp_json type guard](010-csp-json-type-guard.md) | bug | S | P2 | DONE | — |
 | 011 | [asyncio timeout on _mcp_search](011-mcp-search-timeout.md) | reliability | S | P2 | DONE | — |
 | 012 | [aria-hidden/label on status dots](012-status-dot-aria.md) | a11y | S | P2 | DONE | — |
-| 013 | [Fix RED test baseline (structural marker/tab asserts)](013-fix-red-test-baseline.md) | test | S | P0 | TODO | — |
-| 014 | [CSP filter-injection escaper (~38 sites)](014-csp-filter-injection-escaper.md) | security | M | P0 | TODO | 013 |
-| 015 | [gzip JSON responses (`_json`)](015-gzip-json-responses.md) | perf | S | P0 | TODO | 013 |
-| 016 | [Allocate orphan-IP compensation + DNS validation](016-allocate-orphan-ip-compensation.md) | bug | M | P0 | TODO | 013 |
-| 017 | [Rollback failed-DELETE status checks](017-rollback-failed-delete-checks.md) | bug | S | P0 | TODO | 013 |
+| 013 | [Fix RED test baseline (structural marker/tab asserts)](013-fix-red-test-baseline.md) | test | S | P0 | DONE | — |
+| 014 | [CSP filter-injection escaper (~38 sites)](014-csp-filter-injection-escaper.md) | security | M | P0 | DONE | 013 |
+| 015 | [gzip JSON responses (`_json`)](015-gzip-json-responses.md) | perf | S | P0 | DONE | 013 |
+| 016 | [Allocate orphan-IP compensation + DNS validation](016-allocate-orphan-ip-compensation.md) | bug | M | P0 | DONE | 013 |
+| 017 | [Rollback failed-DELETE status checks](017-rollback-failed-delete-checks.md) | bug | S | P0 | DONE | 013 |
 
-Plans 001-012 DONE. **013-017 are OPEN (session 4).**
+Plans 001-017 DONE. **Session 4 (013-017) implemented in window-b @ 6fe4836** — reviewed hunk-by-hunk, 52-test offline suite green (incl. new ServerSecurityTests). End-to-end HTTP checks (gzip curl, SSE 400) pending a deploy window on the shared container.
 
 ## Dependency graph
 
