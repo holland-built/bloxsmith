@@ -241,8 +241,8 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 
 /* ── shared layout + synthesis primitives ── */
 .page{display:flex;flex-direction:column;gap:var(--s6);}
-.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr));gap:var(--s6);align-items:start;min-width:0;}
-.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:var(--s6);align-items:start;min-width:0;}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(460px,100%),1fr));gap:16px;align-items:start;min-width:0;}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:16px;align-items:start;min-width:0;}
 .grid-2>*,.grid-3>*{min-width:0;}
 .prose{max-width:72ch;min-width:0;overflow-wrap:anywhere;}
 .band{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s5);width:100%;min-width:0;padding:var(--s5);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);}
@@ -447,7 +447,7 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .grid-dense{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:16px;align-items:start;min-width:0;}
 .grid>*,.grid-dense>*{min-width:0;}
 /* balance an odd trailing panel: span it full-width so it never orphans in a 2-col row */
-.grid>.pcard:last-child:nth-child(odd),.grid-dense>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
+.grid>.pcard:last-child:nth-child(odd),.grid-dense>.pcard:last-child:nth-child(odd),.grid-2>.pcard:last-child:nth-child(odd),.grid-3>.pcard:last-child:nth-child(odd),.ovx-detail>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
 
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:10px;}
 .kpi{padding:12px 13px;border-radius:var(--r-panel);background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;transition:border-color .16s ease,transform .16s ease;min-width:0;}
@@ -998,8 +998,11 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const [showAll,setShowAll]=useState(false);        // maxRows expander
   const [renderLimit,setRenderLimit]=useState(300);  // scrollBody progressive render window
   const scrollPx=scrollBody===true?420:scrollBody;   // scrollBody:true → 420px
+  // Baseline affordances: CSV export + column chooser default on for row-heavy tables (opt-out via explicit prop).
+  const showCsv=csvName||(rows&&rows.length>12&&tableId);
+  const showCols=columnToggle||((cols||[]).length>6);
   // columnToggle: hidden column keys (persisted per tableId). Stale keys are ignored on read.
-  const [hiddenCols,setHiddenCols]=useState(()=> (columnToggle&&id)?LS.get('cols.'+id,[]):[]);
+  const [hiddenCols,setHiddenCols]=useState(()=> (showCols&&id)?LS.get('cols.'+id,[]):[]);
   const [colsMenu,setColsMenu]=useState(false);
   const [probOn,setProbOn]=useState(()=> problemsOnly ? LS.get('probs.'+(id||'x'),!!problemsOnly.default) : false);
   const setProb=v=>{ setProbOn(v); if(id) LS.set('probs.'+id,v); };
@@ -1054,10 +1057,10 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // columnToggle: effective (rendered) columns = defined cols minus hidden.
   // Never yields an empty set; CSV/peek-title still use the full `columns`.
   const effCols=useMemo(()=>{
-    if(!columnToggle||!hiddenCols.length) return columns;
+    if(!showCols||!hiddenCols.length) return columns;
     const keep=columns.filter(c=>!hiddenCols.includes(c.key));
     return keep.length?keep:columns;
-  },[columns,hiddenCols,columnToggle]);
+  },[columns,hiddenCols,showCols]);
   const toggleCol=(key)=>setHiddenCols(prev=>{
     const has=prev.includes(key);
     const next=has?prev.filter(k=>k!==key):[...prev,key];
@@ -1103,7 +1106,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
 
   const buildActions=(rws)=>{
     const acts=[];
-    if(csvName) acts.push({label:'Export CSV',run:()=>downloadCSV(String(csvName)+'-selected.csv',rws,columns)});
+    if(showCsv) acts.push({label:'Export CSV',run:()=>downloadCSV(String(csvName||tableId||'export')+'-selected.csv',rws,columns)});
     acts.push({label:'Copy',run:()=>{
       const col=columns.find(c=>c.copy)||columns[0]||{key:'value'};
       const txt=rws.map(r=>String(r[col.key]??'')).join('\n');
@@ -1179,7 +1182,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const toggleAll=()=>setSelected(prev=>{ const n=new Set(prev); if(allSel) allKeys.forEach(k=>n.delete(k)); else allKeys.forEach(k=>n.add(k)); return n; });
 
   const showFilter=filterable!==false&&(filterable||rows.length>12);
-  const showToolbar=csvName||showFilter||problemsOnly||columnToggle;
+  const showToolbar=showCsv||showFilter||problemsOnly||showCols;
   const noIssues=problemsOnly&&probOn&&probCount===0;
   // scrollBody: grow the progressive render window as the user nears the bottom.
   const onBodyScroll=(e)=>{ const el=e.currentTarget;
@@ -1201,7 +1204,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         </button>:null}
       </div>
       <div className="dt-tools">
-        {columnToggle?<div className="dt-cols-slot">
+        {showCols?<div className="dt-cols-slot">
           <button className="btn btn-ghost" onClick={()=>setColsMenu(v=>!v)}
             aria-haspopup="true" aria-expanded={colsMenu} title="Show/hide columns">⋯ Cols</button>
           {colsMenu?<><div className="views-overlay" onClick={()=>setColsMenu(false)}/>
@@ -1217,7 +1220,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
               })}
             </div></>:null}
         </div>:null}
-        {csvName?<button className="btn btn-ghost" onClick={()=>downloadCSV(String(csvName)+'.csv',sorted,columns)}>CSV</button>:null}
+        {showCsv?<button className="btn btn-ghost" onClick={()=>downloadCSV(String(csvName||tableId||'export')+'.csv',sorted,columns)}>CSV</button>:null}
       </div>
     </div>}
     <div className={"tbl-wrap"+(scrollBody?" dt-scroll":"")}
@@ -2489,9 +2492,8 @@ function useAiExplain(){
   .ovx .lchip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r-ctl);text-transform:uppercase;letter-spacing:.3px;background:var(--raised);display:inline-block;}
   .ovx .ov-mt{margin-top:8px;}
   /* DETAIL preview grid — wider min so 3-col previews fit without column collision (~3/row at 1600px) */
-  .ovx-detail{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr));gap:12px;align-items:start;min-width:0;}
+  .ovx-detail{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(460px,100%),1fr));gap:16px;align-items:start;min-width:0;}
   .ovx-detail>*{min-width:0;}
-  .ovx-detail>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
   `;
   document.head.appendChild(s);
 })();
@@ -2610,9 +2612,12 @@ function OverviewTab(){
 
   // ── capacity by site (real aggregation) ──
   const siteRows=useMemo(()=>{
+    // Backend defaults an untagged subnet's site to "–"; fall back to the /16 prefix so
+    // untagged subnets still group into meaningful buckets instead of collapsing to one.
+    const siteKey=s=>(s.site&&s.site!=='–')?s.site:(String(s.addr||'').split('.').slice(0,2).join('.')+'.0.0/16');
     const m={};
     for(const s of subnets){
-      const nm=(s.site&&s.site!=='–')?s.site:'unassigned';
+      const nm=siteKey(s);
       const u=util(s);
       const r=m[nm]||(m[nm]={nm,n:0,sum:0,worst:0});
       r.n++; r.sum+=u; if(u>r.worst) r.worst=u;
@@ -2680,7 +2685,7 @@ function OverviewTab(){
     {label:'DNS zones',value:zones.length,sub:uniqueViews+' views',...trend('zones.n',false),color:'var(--accent)'},
     {label:'Hosts',value:hosts.length,sub:hostsBad+' errors · '+hostsOnline+' online',...trend('hosts.online',false),values:hostBars,bars:1,color:'var(--crit)'},
     {label:'High threats',value:Number(counts.high)||0,sub:(Number(counts.critical)||0)+' crit · '+(Number(counts.low)||0)+' low',...trend('sec.high',true),values:secByHour,color:'var(--warn)',fill:1},
-    {label:'Blocked',value:Number(secData.blocked)||0,sub:'of '+(Number(secData.total)||0)+' events',...trend('sec.blocked',false),values:secByHour,color:'var(--ok)',fill:1},
+    {label:'Blocked',value:Number(secData.blocked)||0,sub:(Number(secData.total)||0)?('of '+Number(secData.total)+' events'):'no events today',...trend('sec.blocked',false),values:secByHour,color:'var(--ok)',fill:1},
   ];
 
   // ── top issues (same inputs as band issues) ──
@@ -3275,9 +3280,12 @@ function NetworkTab(){
 
   // ── Capacity-by-site groups + top consumers (replaces the sparse treemap) ──
   const totalOf=s=>Number(s.total)||Math.pow(2,32-(Number(s.cidr)||32));
+  // Backend defaults an untagged subnet's site to "–"; fall back to the /16 prefix so
+  // untagged subnets still group into meaningful buckets instead of collapsing to one.
+  const siteKey=s=>(s.site&&s.site!=='–')?s.site:(String(s.addr||'').split('.').slice(0,2).join('.')+'.0.0/16');
   const siteMap=new Map();
   subnets.forEach(s=>{
-    const site=s.site||'—';
+    const site=siteKey(s);
     let g=siteMap.get(site); if(!g){g={site,count:0,sum:0,worst:0};siteMap.set(site,g);}
     const u=utilOf(s); g.count++; g.sum+=u; if(u>g.worst) g.worst=u;
   });
@@ -3460,14 +3468,14 @@ function DnsTab(){
   const pctStr=(volPct>=0?'+':'')+volPct+'%';
   const tone=(issueCount>0||anomalyCount>0)?'crit':'ok';
   const verdict=tone==='ok'
-    ? 'DNS healthy — no zone issues, volume steady'
+    ? ('DNS healthy — no zone issues'+(volAvg>0&&volPct===0?', volume steady':''))
     : (issueCount>0?issueCount+' zone'+(issueCount===1?'':'s')+' with issues'
-        :anomalyCount+' volume anomaly flag'+(anomalyCount===1?'':'s'))+'; volume '+pctStr+' vs weekly average';
+        :anomalyCount+' volume anomaly flag'+(anomalyCount===1?'':'s'))+(volAvg>0?('; volume '+pctStr+' vs weekly average'):'');
   const facts=[
     {label:'Zones',value:zones.length,delta:{v:delta('zones.n'),good:'up'}},
     {label:'Zones w/ issues',value:issueCount,delta:{v:delta('zones.issues'),good:'down'}},
     {label:'Anomalies',value:anomalyCount},
-    {label:'7d volume',value:volTotal.toLocaleString()+' ('+pctStr+')'},
+    {label:'7d volume',value:volTotal.toLocaleString()+(volAvg>0?(' ('+pctStr+')'):'')},
   ];
   const chips=zones
     .filter(z=>(Array.isArray(z.issues)&&z.issues.length>0)||z.anomaly)
@@ -5667,7 +5675,7 @@ function DriftTab(){
               <div style={{display:'flex',alignItems:'center',gap:'var(--s3)',marginBottom:'var(--s3)'}}>
                 <span className="mono" style={{fontSize:'var(--t12)'}}>{result.site||template}</span>
                 <span className="chip" style={{color:result.drifted?'var(--crit)':'var(--ok)',borderColor:result.drifted?'var(--crit)':'var(--ok)'}}>
-                  {result.drifted?('✗ '+((result.drifts&&result.drifts.length)||0)+' items'):'✓ no drift'}
+                  {result.drifted?('✕ '+((result.drifts&&result.drifts.length)||0)+' items'):'✓ no drift'}
                 </span>
                 {result.subnet_count!=null?<span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>{result.subnet_count} subnets</span>:null}
               </div>
