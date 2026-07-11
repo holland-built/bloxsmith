@@ -7,7 +7,7 @@ Usage:  python3 server.py
 Then open:  http://localhost:8080
 """
 
-import asyncio, base64, hashlib, hmac, json, os, re, secrets, sys, threading
+import asyncio, base64, gzip, hashlib, hmac, json, os, re, secrets, sys, threading
 from contextlib import asynccontextmanager
 
 def _run_async(coro):
@@ -593,6 +593,29 @@ def switch_account(account_id: str) -> dict:
     cache_invalidate()  # cached rows belong to the previous tenant
     return {"ok": True, "active": account_id, "name": known[account_id]}
 
+_CSP_CTRL = re.compile(r'[\x00-\x1f\x7f]')
+_CSP_FIELD = re.compile(r'^[A-Za-z0-9_.\-]+$')
+
+def _cspq(v) -> str:
+    """Escape a value for safe interpolation into a CSP _filter/_tfilter
+    double-quoted clause. Backslash-escapes \\ and " so a user value can't
+    break out of its clause and rewrite the query. Rejects control characters
+    (raises ValueError -> map to HTTP 400). Preserves /, ., -, and spaces, so
+    Infoblox object IDs and FQDNs pass through unchanged."""
+    s = "" if v is None else str(v)
+    if _CSP_CTRL.search(s):
+        raise ValueError("invalid character in filter value")
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+def _cspq_field(v) -> str:
+    """Validate an unquoted CSP field name (left of ==). Tag keys are the only
+    user-supplied field names; they must be identifier-safe. Raises ValueError
+    (-> HTTP 400) on anything outside [A-Za-z0-9_.-]."""
+    s = "" if v is None else str(v)
+    if not _CSP_FIELD.match(s):
+        raise ValueError("invalid filter field name")
+    return s
+
 def _rest_get(path: str, params: dict | None = None) -> list:
     """Direct Infoblox REST GET → results list. Uses active tenant/account auth."""
     import urllib.request, urllib.parse
@@ -842,7 +865,11 @@ def _selfservice_allocate(body: dict) -> tuple:
     if not subnet_id:
         if not (tag_key and tag_value):
             return {"ok": False, "error": "subnet_id or tag_key/tag_value required"}, 400
-        subnets = _rest_get("/api/ddi/v1/ipam/subnet", {"_tfilter": f'{tag_key}=="{tag_value}"'})
+        try:
+            tag_filter = f'{_cspq_field(tag_key)}=="{_cspq(tag_value)}"'
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}, 400
+        subnets = _rest_get("/api/ddi/v1/ipam/subnet", {"_tfilter": tag_filter})
         if not subnets:
             return {"ok": False, "error": f"No subnet found with tag {tag_key}=={tag_value}"}, 404
         subnet_id = subnets[0].get("id")
@@ -854,6 +881,20 @@ def _selfservice_allocate(body: dict) -> tuple:
         if dns:
             result["record"] = {"dry_run": True, **dns}
         return result, 200
+
+    # Validate the DNS payload up front so a malformed type/value fails with a
+    # 400 BEFORE any IP is reserved (otherwise the reservation is orphaned and
+    # the ValueError surfaces as a bare 500 after the address is consumed).
+    if dns:
+        _rtype = str(dns.get("type") or "A").upper()
+        _rval = str(dns.get("value") or "").strip()
+        # For A/AAAA an empty value is later defaulted to the allocated address,
+        # so only pre-validate when a value was supplied or the type needs one.
+        if _rval or _rtype not in ("A", "AAAA"):
+            try:
+                _dns_rdata(_rtype, _rval)
+            except ValueError as e:
+                return {"ok": False, "error": f"invalid dns payload: {e}"}, 400
 
     body_extra = {}
     if name:
@@ -875,13 +916,38 @@ def _selfservice_allocate(body: dict) -> tuple:
         rname = str(dns.get("name") or "")
         rtype = str(dns.get("type") or "A").upper()
         rvalue = str(dns.get("value") or addresses[0].get("address") or "")
-        record_body = {"name_in_zone": rname, "zone": zone_id, "type": rtype, "rdata": _dns_rdata(rtype, rvalue)}
-        rresp, rstatus = _rest_write("POST", "/api/ddi/v1/dns/record", body=record_body)
+        try:
+            rdata = _dns_rdata(rtype, rvalue)
+        except ValueError as e:
+            rresp, rstatus = {"error": str(e)}, 400
+        else:
+            record_body = {"name_in_zone": rname, "zone": zone_id, "type": rtype, "rdata": rdata}
+            rresp, rstatus = _rest_write("POST", "/api/ddi/v1/dns/record", body=record_body)
+
         if rstatus in (200, 201) and isinstance(rresp, dict):
             rec = rresp.get("result") or (rresp.get("results") or [None])[0]
             out["record"] = {"ok": True, "id": (rec or {}).get("id"), "status": rstatus}
         else:
+            # Compensating release: the DNS step failed, so roll back the
+            # reservation(s) we just made — otherwise they are orphaned and
+            # will exhaust the subnet. Same delete-by-id path as the
+            # /api/ipam/addresses/{id} DELETE handler.
+            released, orphaned = [], []
+            for a in addresses:
+                aid = a.get("id")
+                if not aid:
+                    continue
+                _, dstatus = _rest_write("DELETE", f"/api/ddi/v1/ipam/address/{aid}")
+                (released if dstatus in (200, 204, 404) else orphaned).append(aid)
+            out["ok"] = False
             out["record"] = {"ok": False, "status": rstatus, "detail": rresp}
+            out["released"] = released
+            if orphaned:
+                # Could not roll back — report the ids explicitly so an operator
+                # can reclaim them manually. Do NOT retry blindly.
+                out["orphaned"] = orphaned
+            out["error"] = "dns record creation failed; reserved address(es) released"
+            return out, 502
 
     return out, 200
 
@@ -1294,7 +1360,7 @@ class BlockProvisioner:
 
     def _exists(self, bdef: dict) -> bool:
         results = _rest_get("/api/ddi/v1/ipam/address_block", {
-            "_filter": f'space=="{self._space_id}" and address=="{bdef["address"]}" and cidr=={int(bdef["cidr"])}'})
+            "_filter": f'space=="{_cspq(self._space_id)}" and address=="{_cspq(bdef["address"])}" and cidr=={int(bdef["cidr"])}'})
         return bool(results)
 
     def _create_block(self, bdef: dict, parent_net, result: dict) -> None:
@@ -1352,7 +1418,7 @@ class BlockProvisioner:
         self._resilient = resilient
         result = {"name": self.cfg.name, "ip_space": self.cfg.ip_space,
                   "blocks_created": [], "failed": [], "dry_run": self.cfg.dry_run}
-        space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{self.cfg.ip_space}"'})
+        space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{_cspq(self.cfg.ip_space)}"'})
         if not space_results:
             raise ProvisionError(f"IP space not found: {self.cfg.ip_space}")
         self._space_id = space_results[0]["id"]
@@ -1536,7 +1602,7 @@ class SiteProvisioner:
         self._zone_created = False
 
     def resolve_ip_space(self) -> str:
-        results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{self.cfg.ip_space}"'})
+        results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{_cspq(self.cfg.ip_space)}"'})
         if not results:
             raise ProvisionError(f"IP space not found: {self.cfg.ip_space}")
         self._space_id = results[0]["id"]
@@ -1544,27 +1610,27 @@ class SiteProvisioner:
 
     def find_existing_site(self) -> list:
         return _rest_get("/api/ddi/v1/ipam/subnet", {
-            "_filter": f'space=="{self._space_id}"', "_tfilter": f'Site=="{self.cfg.site}"'})
+            "_filter": f'space=="{_cspq(self._space_id)}"', "_tfilter": f'Site=="{_cspq(self.cfg.site)}"'})
 
     def find_available_block(self) -> dict:
         results = _rest_get("/api/ddi/v1/ipam/address_block", {
-            "_filter": f'space=="{self._space_id}"',
-            "_tfilter": f'Region=="{self.cfg.region}" and Environment=="{self.cfg.environment}" and Status=="available"'})
+            "_filter": f'space=="{_cspq(self._space_id)}"',
+            "_tfilter": f'Region=="{_cspq(self.cfg.region)}" and Environment=="{_cspq(self.cfg.environment)}" and Status=="available"'})
         if not results:
             # Fallback: match region + available, ignoring Environment. The site
             # templates and the block pool can use different env vocab (e.g. site
             # says "lab", the pool tags "development"), so an exact-env miss should
             # still allocate from any available block in the region.
             results = _rest_get("/api/ddi/v1/ipam/address_block", {
-                "_filter": f'space=="{self._space_id}"',
-                "_tfilter": f'Region=="{self.cfg.region}" and Status=="available"'})
+                "_filter": f'space=="{_cspq(self._space_id)}"',
+                "_tfilter": f'Region=="{_cspq(self.cfg.region)}" and Status=="available"'})
         if not results:
             raise ProvisionError(
                 f"No available address block found for Region={self.cfg.region} Environment={self.cfg.environment}")
         return min(results, key=_block_sort_key)
 
     def resolve_dns_view(self) -> str:
-        results = _rest_get("/api/ddi/v1/dns/view", {"_filter": f'name=="{self.cfg.dns_view}"'})
+        results = _rest_get("/api/ddi/v1/dns/view", {"_filter": f'name=="{_cspq(self.cfg.dns_view)}"'})
         if not results:
             raise ProvisionError(f"DNS view not found: {self.cfg.dns_view}")
         self._view_id = results[0]["id"]
@@ -1641,7 +1707,7 @@ class SiteProvisioner:
         self.emit({"step": f"{mode}Ensuring DNS zone exists: {fqdn}  view={self.cfg.dns_view}"})
         if self.cfg.dry_run:
             return {"dry_run": True, "fqdn": fqdn, "id": "(dry-run)"}
-        existing = _rest_get("/api/ddi/v1/dns/auth_zone", {"_filter": f'fqdn=="{fqdn}." and view=="{self._view_id}"'})
+        existing = _rest_get("/api/ddi/v1/dns/auth_zone", {"_filter": f'fqdn=="{_cspq(fqdn)}." and view=="{_cspq(self._view_id)}"'})
         if existing:
             zone = existing[0]
             self._zone_id = zone["id"]
@@ -1671,7 +1737,7 @@ class SiteProvisioner:
         self.emit({"step": f"{mode}Ensuring reverse DNS zone: {fqdn}  view={self.cfg.dns_view}"})
         if self.cfg.dry_run:
             return {"dry_run": True, "fqdn": fqdn, "id": "(dry-run)"}
-        existing = _rest_get("/api/ddi/v1/dns/auth_zone", {"_filter": f'fqdn=="{fqdn}" and view=="{self._view_id}"'})
+        existing = _rest_get("/api/ddi/v1/dns/auth_zone", {"_filter": f'fqdn=="{_cspq(fqdn)}" and view=="{_cspq(self._view_id)}"'})
         if existing:
             zone = existing[0]
             self.emit({"step": f"  Reverse zone already exists: {fqdn}  id={zone.get('id')}"})
@@ -1747,25 +1813,31 @@ class SiteProvisioner:
 
     def _rollback(self, partial: dict) -> None:
         self.emit({"step": "Rolling back partial site provisioning…"})
+        residual: list[dict] = []
+
+        def _del(obj_id: str, kind: str, label: str) -> None:
+            if not obj_id or obj_id == "(dry-run)":
+                return
+            _, status = _rest_write("DELETE", f"/api/ddi/v1/{obj_id}")
+            if not (status and 200 <= status < 300):
+                self.emit({"step": f"  Rollback: failed to delete {kind} id={obj_id} (status={status})"})
+                residual.append({"kind": kind, "id": obj_id, "label": label, "status": status})
+
         for h in reversed(partial["hosts"]):
-            hid = h.get("id", "")
-            if hid and hid != "(dry-run)":
-                _rest_write("DELETE", f"/api/ddi/v1/{hid}")
+            _del(h.get("id", ""), "host", h.get("fqdn", h.get("ip", "")))
         if self._zone_created and partial["dns_zone_id"] not in ("", "(dry-run)"):
-            _rest_write("DELETE", f'/api/ddi/v1/{partial["dns_zone_id"]}')
+            _del(partial["dns_zone_id"], "dns_zone", partial.get("dns_zone_fqdn", ""))
         for rz in reversed(partial["reverse_zones"]):
-            rid = rz.get("id", "")
-            if rid and rid != "(dry-run)":
-                _rest_write("DELETE", f"/api/ddi/v1/{rid}")
+            _del(rz.get("id", ""), "reverse_zone", rz.get("fqdn", ""))
         for r in reversed(partial["dhcp_ranges"]):
-            rid = r.get("id", "")
-            if rid and rid != "(dry-run)":
-                _rest_write("DELETE", f"/api/ddi/v1/{rid}")
+            _del(r.get("id", ""), "dhcp_range", "")
         for s in reversed(partial["subnets"]):
-            sid = s.get("id", "")
-            if sid and sid != "(dry-run)":
-                _rest_write("DELETE", f"/api/ddi/v1/{sid}")
+            _del(s.get("id", ""), "subnet", f'{s.get("address","")}/{s.get("cidr","")}')
         # The pool block is shared and untagged by this flow, so nothing to reset there.
+
+        partial["rollback_residual"] = residual
+        if residual:
+            self.emit({"step": f"  Rollback incomplete: {len(residual)} object(s) could not be deleted"})
 
     def provision(self) -> dict:
         result = {"block_id": "", "block_address": "", "subnets": [], "dhcp_ranges": [],
@@ -1902,13 +1974,13 @@ def _find_blocks_for_retag(space_id: str, template: str, address: str, cidr, sit
     """Resolve candidate blocks by Template tag, Site tag, or address+cidr (in
     that precedence — mirrors retag.py's find_blocks, extended with the
     Template-tag lookup this app's teardown/provisioning flows tag with)."""
-    params = {"_filter": f'space=="{space_id}"'}
+    params = {"_filter": f'space=="{_cspq(space_id)}"'}
     if template:
-        params["_tfilter"] = f'Template=="{template}"'
+        params["_tfilter"] = f'Template=="{_cspq(template)}"'
     elif site:
-        params["_tfilter"] = f'Site=="{site}"'
+        params["_tfilter"] = f'Site=="{_cspq(site)}"'
     elif address and cidr not in (None, ""):
-        params["_filter"] += f' and address=="{address}" and cidr=={int(cidr)}'
+        params["_filter"] += f' and address=="{_cspq(address)}" and cidr=={int(cidr)}'
     else:
         raise ProvisionError("template, site, or address+cidr is required")
     return _rest_get("/api/ddi/v1/ipam/address_block", params)
@@ -1952,7 +2024,7 @@ class BlockDecommissioner:
 
     def find_blocks(self) -> list:
         return _rest_get("/api/ddi/v1/ipam/address_block", {
-            "_filter": f'space=="{self._space_id}"', "_tfilter": f'Template=="{self.name}"'})
+            "_filter": f'space=="{_cspq(self._space_id)}"', "_tfilter": f'Template=="{_cspq(self.name)}"'})
 
     def delete_blocks(self, blocks: list) -> list:
         ordered = sorted(blocks, key=lambda b: int(b.get("cidr", 0)), reverse=True)
@@ -1971,7 +2043,7 @@ class BlockDecommissioner:
         return deleted
 
     def decommission(self) -> dict:
-        space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{self.ip_space}"'})
+        space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{_cspq(self.ip_space)}"'})
         if not space_results:
             raise ProvisionError(f"IP space not found: {self.ip_space}")
         self._space_id = space_results[0]["id"]
@@ -2018,14 +2090,14 @@ class SiteDecommissioner:
         self._view_id = ""
 
     def resolve_ip_space(self) -> str:
-        results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{self.cfg.ip_space}"'})
+        results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{_cspq(self.cfg.ip_space)}"'})
         if not results:
             raise ProvisionError(f"IP space not found: {self.cfg.ip_space}")
         self._space_id = results[0]["id"]
         return self._space_id
 
     def resolve_dns_view(self) -> str:
-        results = _rest_get("/api/ddi/v1/dns/view", {"_filter": f'name=="{self.cfg.dns_view}"'})
+        results = _rest_get("/api/ddi/v1/dns/view", {"_filter": f'name=="{_cspq(self.cfg.dns_view)}"'})
         if not results:
             raise ProvisionError(f"DNS view not found: {self.cfg.dns_view}")
         self._view_id = results[0]["id"]
@@ -2033,7 +2105,7 @@ class SiteDecommissioner:
 
     def find_subnets(self) -> list:
         return _rest_get("/api/ddi/v1/ipam/subnet", {
-            "_filter": f'space=="{self._space_id}"', "_tfilter": f'Site=="{self.cfg.site}"'})
+            "_filter": f'space=="{_cspq(self._space_id)}"', "_tfilter": f'Site=="{_cspq(self.cfg.site)}"'})
 
     def delete_dns_zone(self) -> bool:
         fqdn = self.cfg.dns_zone
@@ -2043,7 +2115,7 @@ class SiteDecommissioner:
         mode = "[DRY-RUN] " if self.cfg.dry_run else ""
         self.emit({"step": f"{mode}Looking up forward DNS zone: {fqdn}  view={self.cfg.dns_view}"})
         existing = _rest_get("/api/ddi/v1/dns/auth_zone",
-                              {"_filter": f'fqdn=="{fqdn}." and view=="{self._view_id}"'})
+                              {"_filter": f'fqdn=="{_cspq(fqdn)}." and view=="{_cspq(self._view_id)}"'})
         if not existing:
             self.emit({"step": f"  Zone not found — nothing to delete: {fqdn}"})
             return False
@@ -2057,7 +2129,7 @@ class SiteDecommissioner:
 
     def delete_dhcp_ranges(self) -> list:
         ranges = _rest_get("/api/ddi/v1/ipam/range", {
-            "_filter": f'space=="{self._space_id}"', "_tfilter": f'Site=="{self.cfg.site}"'})
+            "_filter": f'space=="{_cspq(self._space_id)}"', "_tfilter": f'Site=="{_cspq(self.cfg.site)}"'})
         deleted = []
         mode = "[DRY-RUN] " if self.cfg.dry_run else ""
         for r in ranges:
@@ -2079,7 +2151,7 @@ class SiteDecommissioner:
             except (KeyError, ValueError, TypeError):
                 continue
             existing = _rest_get("/api/ddi/v1/dns/auth_zone",
-                                  {"_filter": f'fqdn=="{fqdn}" and view=="{self._view_id}"'})
+                                  {"_filter": f'fqdn=="{_cspq(fqdn)}" and view=="{_cspq(self._view_id)}"'})
             if not existing:
                 continue
             zone_id = existing[0].get("id", "")
@@ -2158,17 +2230,17 @@ def query_site_live(cfg) -> dict:
     tags + hosts) and forward-zone presence. Never writes. cfg may be any
     config exposing .site/.ip_space/.dns_view/.dns_zone (SiteConfig or
     DecommissionConfig both qualify)."""
-    space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{cfg.ip_space}"'})
+    space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{_cspq(cfg.ip_space)}"'})
     if not space_results:
         raise ProvisionError(f"IP space not found: {cfg.ip_space}")
     space_id = space_results[0]["id"]
-    view_results = _rest_get("/api/ddi/v1/dns/view", {"_filter": f'name=="{cfg.dns_view}"'})
+    view_results = _rest_get("/api/ddi/v1/dns/view", {"_filter": f'name=="{_cspq(cfg.dns_view)}"'})
     if not view_results:
         raise ProvisionError(f"DNS view not found: {cfg.dns_view}")
     view_id = view_results[0]["id"]
 
     subnets_raw = _rest_get("/api/ddi/v1/ipam/subnet", {
-        "_filter": f'space=="{space_id}"', "_tfilter": f'Site=="{cfg.site}"'})
+        "_filter": f'space=="{_cspq(space_id)}"', "_tfilter": f'Site=="{_cspq(cfg.site)}"'})
     found = bool(subnets_raw)
     all_hosts = _rest_get("/api/ddi/v1/ipam/host", {"_limit": 1000}) if subnets_raw else []
 
@@ -2196,7 +2268,7 @@ def query_site_live(cfg) -> dict:
         })
 
     zone_results = _rest_get("/api/ddi/v1/dns/auth_zone",
-                              {"_filter": f'fqdn=="{cfg.dns_zone}." and view=="{view_id}"'})
+                              {"_filter": f'fqdn=="{_cspq(cfg.dns_zone)}." and view=="{_cspq(view_id)}"'})
     zone = zone_results[0] if zone_results else {}
 
     return {"site": cfg.site, "found": found, "subnets": subnets_out,
@@ -4507,16 +4579,18 @@ class Handler(BaseHTTPRequestHandler):
                 rest_params = {}
                 filt = []
                 if qp.get("space"):
-                    filt.append(f'space=="{qp["space"]}"')
+                    filt.append(f'space=="{_cspq(qp["space"])}"')
                 if filt:
                     rest_params["_filter"] = " and ".join(filt)
                 if qp.get("tag_key") and qp.get("tag_value"):
-                    rest_params["_tfilter"] = f'{qp["tag_key"]}=="{qp["tag_value"]}"'
+                    rest_params["_tfilter"] = f'{_cspq_field(qp["tag_key"])}=="{_cspq(qp["tag_value"])}"'
                 blocks = _rest_get("/api/ddi/v1/ipam/address_block", rest_params or None)
                 self._json({"blocks": [
                     {"id": b.get("id"), "address": b.get("address"), "cidr": b.get("cidr"),
                      "name": b.get("name"), "tags": b.get("tags")} for b in (blocks or [])
                 ]})
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
             except Exception as e:
                 _log_exc("/api/ipam/blocks", e); self._json({"error": "internal error"}, 500)
         elif path == "/api/dns/zones":
@@ -4526,12 +4600,14 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 view = qp.get("view", "")
                 views = _rest_get("/api/ddi/v1/dns/view")
-                zone_params = {"_filter": f'view=="{view}"'} if view else None
+                zone_params = {"_filter": f'view=="{_cspq(view)}"'} if view else None
                 zones = _rest_get("/api/ddi/v1/dns/auth_zone", zone_params)
                 self._json({
                     "views": [{"id": v.get("id"), "name": v.get("name")} for v in (views or [])],
                     "zones": [{"id": z.get("id"), "fqdn": z.get("fqdn"), "view": z.get("view")} for z in (zones or [])],
                 })
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
             except Exception as e:
                 _log_exc("/api/dns/zones", e); self._json({"error": "internal error"}, 500)
         elif path == "/api/dns/records":
@@ -4543,17 +4619,19 @@ class Handler(BaseHTTPRequestHandler):
                 if not zone:
                     self._json({"error": "zone is required"}, 400)
                 else:
-                    filt = [f'zone=="{zone}"']
+                    filt = [f'zone=="{_cspq(zone)}"']
                     if qp.get("type"):
-                        filt.append(f'type=="{qp["type"].strip().upper()}"')
+                        filt.append(f'type=="{_cspq(qp["type"].strip().upper())}"')
                     if qp.get("name"):
-                        filt.append(f'name_in_zone=="{qp["name"]}"')
+                        filt.append(f'name_in_zone=="{_cspq(qp["name"])}"')
                     records = _rest_get("/api/ddi/v1/dns/record", {"_filter": " and ".join(filt)})
                     self._json({"records": [
                         {"id": r.get("id"), "name_in_zone": r.get("name_in_zone"), "type": r.get("type"),
                          "ttl": r.get("ttl"), "dns_rdata": r.get("dns_rdata"), "comment": r.get("comment"),
                          "disabled": r.get("disabled")} for r in (records or [])
                     ]})
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
             except Exception as e:
                 _log_exc("/api/dns/records", e); self._json({"error": "internal error"}, 500)
         elif path == "/api/ipam/addresses":
@@ -4565,11 +4643,13 @@ class Handler(BaseHTTPRequestHandler):
                 if not subnet:
                     self._json({"error": "subnet is required"}, 400)
                 else:
-                    addrs = _rest_get("/api/ddi/v1/ipam/address", {"_filter": f'subnet=="{subnet}"'})
+                    addrs = _rest_get("/api/ddi/v1/ipam/address", {"_filter": f'subnet=="{_cspq(subnet)}"'})
                     self._json({"addresses": [
                         {"id": a.get("id"), "address": a.get("address"), "name": a.get("name"),
                          "comment": a.get("comment"), "state": a.get("state")} for a in (addrs or [])
                     ]})
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
             except Exception as e:
                 _log_exc("/api/ipam/addresses", e); self._json({"error": "internal error"}, 500)
         elif path == "/api/ipam/availability":
@@ -4607,15 +4687,17 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 filt = []
                 if qp.get("space"):
-                    filt.append(f'space=="{qp["space"]}"')
+                    filt.append(f'space=="{_cspq(qp["space"])}"')
                 if qp.get("block"):
-                    filt.append(f'parent=="{qp["block"]}"')
+                    filt.append(f'parent=="{_cspq(qp["block"])}"')
                 params = {"_filter": " and ".join(filt)} if filt else None
                 subnets = _rest_get("/api/ddi/v1/ipam/subnet", params)
                 self._json({"subnets": [
                     {"id": s.get("id"), "address": s.get("address"), "cidr": s.get("cidr"),
                      "name": s.get("name"), "utilization": s.get("utilization")} for s in (subnets or [])
                 ]})
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
             except Exception as e:
                 _log_exc("/api/ipam/subnets", e); self._json({"error": "internal error"}, 500)
         elif path == "/api/provision/stream":
@@ -5124,7 +5206,7 @@ class Handler(BaseHTTPRequestHandler):
                 status = str(body.get("status") or "available").strip()
                 ip_space = str(body.get("ip_space") or DEFAULT_IP_SPACE).strip()
                 dry = _truthy_dry(body.get("dry"))
-                space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{ip_space}"'})
+                space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{_cspq(ip_space)}"'})
                 if not space_results:
                     self._json({"error": f"IP space not found: {ip_space}"}, 400)
                 else:
@@ -5248,6 +5330,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self._send_cors_origin()
+        # Compress large JSON when the client advertises gzip. JSON gzips ~8-10x;
+        # /api/data is multi-MB and refetched often. Small bodies skip it (CPU not
+        # worth it, gzip can grow tiny payloads). SSE/static never reach here.
+        accept = self.headers.get("Accept-Encoding", "")
+        if len(body) > 1024 and "gzip" in accept.lower():
+            body = gzip.compress(body)
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

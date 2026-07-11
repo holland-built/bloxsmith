@@ -495,12 +495,24 @@ class FrontendStructureTests(unittest.TestCase):
 
     # ── new shell: tabs + router ───────────────────────────────────────────────
 
-    def test_seven_tab_ids(self):
-        # AI is now a drawer (not a tab): 7 tabs, no 'ask'.
-        self.assertContains(
-            "const TABS=['overview','daily','network','dns','infra','security','audit']",
-            "7-tab TABS array missing or reordered (daily must sit after overview)")
-        for t in ("overview", "daily", "network", "dns", "infra", "security", "audit"):
+    def test_core_tab_ids_in_order(self):
+        # Structural invariant, not a frozen snapshot: the TABS array must
+        # CONTAIN the required core tabs in this order. New tabs (provision,
+        # drift, …) may be appended/interleaved and auto-enroll. AI stays a
+        # drawer, so 'ask' must never be a tab.
+        REQUIRED = ["overview", "daily", "network", "dns", "infra", "security", "audit"]
+        m = re.search(r"const TABS=\[([^\]]*)\]", self.html)
+        self.assertIsNotNone(m, "const TABS=[...] array not found in index.html")
+        tabs = re.findall(r"'([a-z]+)'", m.group(1))
+        # every required tab present…
+        missing = [t for t in REQUIRED if t not in tabs]
+        self.assertEqual(missing, [], f"required tabs missing from TABS: {missing} (got {tabs})")
+        # …and in the required relative order (subsequence check)
+        pos = [tabs.index(t) for t in REQUIRED]
+        self.assertEqual(pos, sorted(pos),
+                         f"core tabs out of order in TABS: {tabs}")
+        self.assertNotIn("ask", tabs, f"'ask' must not be a tab (AI is a drawer): {tabs}")
+        for t in REQUIRED:
             self.assertContains(t + ":", f"tab id '{t}' missing from TAB_LABELS/TAB_COMPONENTS")
 
     def test_tab_components_map(self):
@@ -598,10 +610,16 @@ class FrontendStructureTests(unittest.TestCase):
     # ── region markers ─────────────────────────────────────────────────────────
 
     def test_region_markers(self):
-        # 7 regions × (REGION + END) × 2 markers-per-line = 28 occurrences
-        # (v2 added the DAILY region)
-        self.assertEqual(self.html.count("═══"), 28,
-                         "expected exactly 28 '═══' region markers")
+        # Structural invariant: every region is opened AND closed exactly once.
+        # Adding a region (e.g. PROVISION) no longer breaks this test.
+        opens = re.findall(r"REGION:\s*([A-Z0-9_]+)", self.html)
+        closes = re.findall(r"END:\s*([A-Z0-9_]+)", self.html)
+        self.assertGreater(len(opens), 0, "no REGION: markers found in index.html")
+        self.assertEqual(sorted(opens), sorted(closes),
+                         f"unbalanced region markers: opened={sorted(opens)} closed={sorted(closes)}")
+        # no duplicate region names (each opened once)
+        self.assertEqual(len(opens), len(set(opens)),
+                         f"duplicate REGION: names: {opens}")
 
     # ── hygiene ────────────────────────────────────────────────────────────────
 
@@ -731,6 +749,53 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("collapseIdentical", "collapseIdentical helper missing")
 
 
+class ServerSecurityTests(unittest.TestCase):
+    """Static (no running server) checks on server.py hardening from plans 014/015.
+    Extracts the CSP-filter escaper by symbol and exercises it directly — the module
+    can't be imported here (optional deps like groq), so we exec just the escaper block."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.src = open(SERVER, encoding="utf-8").read()
+        lines = cls.src.split("\n")
+        start = next(i for i, l in enumerate(lines) if l.startswith("_CSP_CTRL"))
+        end = next(i for i in range(start, len(lines))
+                   if lines[i].strip() == "return s" and "_cspq_field" in "\n".join(lines[start:i + 1]))
+        ns = {"re": re}
+        exec(compile("\n".join(lines[start:end + 1]), "<esc>", "exec"), ns)
+        cls.cspq = staticmethod(ns["_cspq"])
+        cls.cspf = staticmethod(ns["_cspq_field"])
+
+    def test_cspq_escapes_quote_and_backslash(self):
+        # A user value can't break out of its double-quoted CSP clause.
+        self.assertEqual(self.cspq('a"b'), 'a\\"b')
+        self.assertEqual(self.cspq("\\x"), "\\\\x")
+
+    def test_cspq_passes_through_ids_and_fqdns(self):
+        for v in ("host.example.com", "ipam/subnet/12-ab", "10.0.0.0"):
+            self.assertEqual(self.cspq(v), v, f"{v!r} must pass through unchanged")
+
+    def test_cspq_rejects_control_chars(self):
+        with self.assertRaises(ValueError):
+            self.cspq("x\x00y")
+
+    def test_cspq_field_allowlist(self):
+        self.assertEqual(self.cspf("tag.name-1"), "tag.name-1")
+        for bad in ("a b", 'a"b', "a==b", "a\x00b"):
+            with self.assertRaises(ValueError):
+                self.cspf(bad)
+
+    def test_no_unescaped_filter_interpolation(self):
+        # Every f-string CSP clause value must route through _cspq/int(); no raw =="{...}".
+        raw = re.findall(r'=="\{(?!_cspq|int\()', self.src)
+        self.assertEqual(raw, [], f"{len(raw)} unescaped CSP filter interpolation site(s) remain")
+
+    def test_json_gzip_wired(self):
+        # Plan 015: large JSON responses gzip when the client advertises it.
+        for needle in ("Content-Encoding", "gzip.compress", "Accept-Encoding"):
+            self.assertIn(needle, self.src, f"gzip primitive {needle!r} missing from server.py")
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -744,7 +809,10 @@ if __name__ == "__main__":
     if not server_up:
         print("⚠  Server not running on :8080 — skipping BackendTests")
         print("   Start with:  python3 server.py\n")
-        suite = unittest.TestLoader().loadTestsFromTestCase(FrontendStructureTests)
+        loader = unittest.TestLoader()
+        suite = unittest.TestSuite()
+        for cls in (FrontendStructureTests, ServerSecurityTests):
+            suite.addTests(loader.loadTestsFromTestCase(cls))
     else:
         suite = unittest.TestLoader().loadTestsFromModule(
             __import__(__name__)
