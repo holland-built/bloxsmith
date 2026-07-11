@@ -433,7 +433,7 @@ MUTATING_PATHS = frozenset({
     "/api/provision/seed-demo/stream", "/api/teardown/site/stream",
     "/api/teardown/seed-demo/stream", "/api/selfservice/allocate",
     "/api/dns/records", "/api/provision/block", "/api/teardown/block",
-    "/api/retag/block", "/api/alerts/snooze",
+    "/api/retag/block", "/api/alerts/snooze", "/api/edit",
 })
 # Explicit, allowlisted block list id for /api/block-domain (no fuzzy name match).
 BLOCK_LIST_ID   = os.environ.get("BLOCK_LIST_ID", "")
@@ -950,6 +950,323 @@ def _selfservice_allocate(body: dict) -> tuple:
             return out, 502
 
     return out, 200
+
+# ── Cloud Resource Editor — Phase 1 (resource-editor-plan-2026-07-11) ────────
+# Thin single-resource create/update endpoints for the 5 types not already
+# covered by /api/dns/records (DNS record) or /api/selfservice/allocate (IP
+# address). Same idiom as _dns_record_create/_dns_record_update above:
+# validate → _truthy_dry preview (no write) → _rest_write → (dict, status).
+# Delete is uniform across all 5 (DELETE /api/ddi/v1/{id}) and lives directly
+# in do_DELETE below rather than as a per-type function.
+
+def _edit_zone_create(body: dict) -> tuple:
+    """Create a DNS auth zone. Body shape ported from SiteProvisioner.
+    create_dns_zone's POST (server.py ~1719) — primary_type is always
+    "cloud"; view is the view *id*, not a name (caller resolves it)."""
+    fqdn = str(body.get("fqdn") or "").strip()
+    view = str(body.get("view") or "").strip()
+    if not fqdn:
+        return {"ok": False, "error": "fqdn is required"}, 400
+    if not view:
+        return {"ok": False, "error": "view is required"}, 400
+
+    zone_body = {"fqdn": fqdn, "view": view, "primary_type": "cloud"}
+    if body.get("comment"):
+        zone_body["comment"] = str(body["comment"])
+    if body.get("tags"):
+        zone_body["tags"] = body["tags"]
+
+    if _truthy_dry(body.get("dry")):
+        return {"ok": True, "dry_run": True, "would_create": zone_body}, 200
+
+    resp, status = _rest_write("POST", "/api/ddi/v1/dns/auth_zone", zone_body)
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"create failed (status {status})", "detail": resp}, status or 502
+    zone = resp.get("result") if isinstance(resp, dict) else None
+    return {"ok": True, "zone": zone or resp}, status
+
+
+def _edit_zone_update(body: dict) -> tuple:
+    """Read-modify-write PATCH for a DNS auth zone. Same PATCH→PUT fallback
+    idiom as _dns_record_update above."""
+    zone_id = str(body.get("id") or "").strip()
+    if not zone_id:
+        return {"ok": False, "error": "id is required"}, 400
+
+    update_body = {}
+    if body.get("comment") is not None:
+        update_body["comment"] = str(body["comment"])
+    if body.get("tags") is not None:
+        update_body["tags"] = body["tags"]
+    if body.get("disabled") is not None:
+        update_body["disabled"] = bool(body["disabled"])
+    if not update_body:
+        return {"ok": False, "error": "no fields to update (comment/tags/disabled)"}, 400
+
+    if _truthy_dry(body.get("dry")):
+        return {"ok": True, "dry_run": True, "id": zone_id, "would_update": update_body}, 200
+
+    resp, status = _rest_write("PATCH", f"/api/ddi/v1/{zone_id}", update_body)
+    method_used = "PATCH"
+    if status == 405:
+        resp, status = _rest_write("PUT", f"/api/ddi/v1/{zone_id}", update_body)
+        method_used = "PUT"
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"update failed (status {status})", "detail": resp, "method": method_used}, status or 502
+    zone = resp.get("result") if isinstance(resp, dict) else None
+    return {"ok": True, "method": method_used, "zone": zone or resp}, 200
+
+
+def _edit_subnet_create(body: dict) -> tuple:
+    """Carve a subnet from an address block. Two-step dance ported verbatim
+    from SiteProvisioner._create_subnet (server.py ~1639): nextavailablesubnet
+    rejects a request body ("body is not allowed"), so cidr/count go as query
+    params only, then a follow-up PATCH sets name/comment/tags. That PATCH is
+    mandatory, never skipped — tags are what the existing teardown/retag
+    flows use to find the subnet later; skipping it orphans the object the
+    same way _create_subnet's own comment warns about ("needed for teardown")."""
+    block_id = str(body.get("block_id") or "").strip()
+    cidr = body.get("cidr")
+    if not block_id:
+        return {"ok": False, "error": "block_id is required"}, 400
+    if cidr is None:
+        return {"ok": False, "error": "cidr is required"}, 400
+    try:
+        cidr = int(cidr)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "cidr must be an integer"}, 400
+
+    name = str(body.get("name") or "").strip()
+    tags = dict(body.get("tags") or {})
+    if name:
+        tags.setdefault("Name", name)
+    comment = str(body.get("comment") or "")
+
+    if _truthy_dry(body.get("dry")):
+        preview = _rest_get(f"/api/ddi/v1/{block_id}/nextavailablesubnet", {"cidr": cidr, "count": 1})
+        subnet_addr = preview[0].get("address", "") if preview else ""
+        would = {"address": subnet_addr, "cidr": cidr, "name": name, "comment": comment, "tags": tags}
+        return {"ok": True, "dry_run": True, "would_create": would}, 200
+
+    resp, status = _rest_write("POST", f"/api/ddi/v1/{block_id}/nextavailablesubnet",
+                                params={"cidr": cidr, "count": 1})
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"create failed (status {status})", "detail": resp}, status or 502
+    rows = (resp.get("results") or ([resp["result"]] if resp.get("result") else [])) if isinstance(resp, dict) else []
+    subnet = rows[0] if rows else {}
+    sid = subnet.get("id")
+    if not sid:
+        return {"ok": False, "error": "no free subnet available in block"}, 502
+
+    patch_body = {"tags": tags}
+    if name:
+        patch_body["name"] = name
+    if comment:
+        patch_body["comment"] = comment
+    presp, pstatus = _rest_write("PATCH", f"/api/ddi/v1/{sid}", body=patch_body)
+    if pstatus not in (200, 201):
+        return {"ok": False, "error": f"subnet created but tagging failed (needed for teardown): status {pstatus}",
+                "detail": presp, "id": sid}, pstatus or 502
+    subnet = (presp.get("result") if isinstance(presp, dict) else None) or subnet
+    return {"ok": True, "subnet": subnet}, 200
+
+
+def _edit_subnet_update(body: dict) -> tuple:
+    subnet_id = str(body.get("id") or "").strip()
+    if not subnet_id:
+        return {"ok": False, "error": "id is required"}, 400
+
+    update_body = {}
+    if body.get("name") is not None:
+        update_body["name"] = str(body["name"])
+    if body.get("comment") is not None:
+        update_body["comment"] = str(body["comment"])
+    if body.get("tags") is not None:
+        update_body["tags"] = body["tags"]
+    if body.get("disabled") is not None:
+        update_body["disabled"] = bool(body["disabled"])
+    if not update_body:
+        return {"ok": False, "error": "no fields to update (name/comment/tags/disabled)"}, 400
+
+    if _truthy_dry(body.get("dry")):
+        return {"ok": True, "dry_run": True, "id": subnet_id, "would_update": update_body}, 200
+
+    resp, status = _rest_write("PATCH", f"/api/ddi/v1/{subnet_id}", update_body)
+    method_used = "PATCH"
+    if status == 405:
+        resp, status = _rest_write("PUT", f"/api/ddi/v1/{subnet_id}", update_body)
+        method_used = "PUT"
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"update failed (status {status})", "detail": resp, "method": method_used}, status or 502
+    subnet = resp.get("result") if isinstance(resp, dict) else None
+    return {"ok": True, "method": method_used, "subnet": subnet or resp}, 200
+
+
+def _edit_block_create(body: dict) -> tuple:
+    """Create an address block. Body shape ported from BlockProvisioner.
+    _create_block (server.py ~1384). No update endpoint — the coverage
+    matrix (plan) lists address_block as create/delete only."""
+    address = str(body.get("address") or "").strip()
+    cidr = body.get("cidr")
+    space = str(body.get("space") or "").strip()
+    if not address:
+        return {"ok": False, "error": "address is required"}, 400
+    if cidr is None:
+        return {"ok": False, "error": "cidr is required"}, 400
+    try:
+        cidr = int(cidr)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "cidr must be an integer"}, 400
+    if not space:
+        return {"ok": False, "error": "space is required"}, 400
+
+    block_body = {"address": address, "cidr": cidr, "space": space,
+                  "comment": str(body.get("comment") or ""), "tags": body.get("tags") or {}}
+
+    if _truthy_dry(body.get("dry")):
+        return {"ok": True, "dry_run": True, "would_create": block_body}, 200
+
+    resp, status = _rest_write("POST", "/api/ddi/v1/ipam/address_block", block_body)
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"create failed (status {status})", "detail": resp}, status or 502
+    block = resp.get("result") if isinstance(resp, dict) else None
+    return {"ok": True, "block": block or resp}, status
+
+
+def _edit_range_create(body: dict) -> tuple:
+    """Create a DHCP range. Body shape ported from SiteProvisioner.
+    create_dhcp_range (server.py ~1698)."""
+    start = str(body.get("start") or "").strip()
+    end = str(body.get("end") or "").strip()
+    space = str(body.get("space") or "").strip()
+    if not start:
+        return {"ok": False, "error": "start is required"}, 400
+    if not end:
+        return {"ok": False, "error": "end is required"}, 400
+    if not space:
+        return {"ok": False, "error": "space is required"}, 400
+
+    range_body = {"start": start, "end": end, "space": space,
+                  "comment": str(body.get("comment") or ""), "tags": body.get("tags") or {}}
+
+    if _truthy_dry(body.get("dry")):
+        return {"ok": True, "dry_run": True, "would_create": range_body}, 200
+
+    resp, status = _rest_write("POST", "/api/ddi/v1/ipam/range", range_body)
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"create failed (status {status})", "detail": resp}, status or 502
+    rng = resp.get("result") if isinstance(resp, dict) else None
+    return {"ok": True, "range": rng or resp}, status
+
+
+def _edit_range_update(body: dict) -> tuple:
+    range_id = str(body.get("id") or "").strip()
+    if not range_id:
+        return {"ok": False, "error": "id is required"}, 400
+
+    update_body = {}
+    if body.get("start") is not None:
+        update_body["start"] = str(body["start"])
+    if body.get("end") is not None:
+        update_body["end"] = str(body["end"])
+    if body.get("comment") is not None:
+        update_body["comment"] = str(body["comment"])
+    if body.get("tags") is not None:
+        update_body["tags"] = body["tags"]
+    if body.get("disabled") is not None:
+        update_body["disabled"] = bool(body["disabled"])
+    if not update_body:
+        return {"ok": False, "error": "no fields to update (start/end/comment/tags/disabled)"}, 400
+
+    if _truthy_dry(body.get("dry")):
+        return {"ok": True, "dry_run": True, "id": range_id, "would_update": update_body}, 200
+
+    resp, status = _rest_write("PATCH", f"/api/ddi/v1/{range_id}", update_body)
+    method_used = "PATCH"
+    if status == 405:
+        resp, status = _rest_write("PUT", f"/api/ddi/v1/{range_id}", update_body)
+        method_used = "PUT"
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"update failed (status {status})", "detail": resp, "method": method_used}, status or 502
+    rng = resp.get("result") if isinstance(resp, dict) else None
+    return {"ok": True, "method": method_used, "range": rng or resp}, 200
+
+
+def _edit_host_create(body: dict) -> tuple:
+    """Create a host record. Body shape ported from SiteProvisioner.
+    provision_hosts (server.py ~1794) — addresses is the caller-supplied
+    list of {address, space} dicts (this thin endpoint doesn't compute an
+    offset IP the way the site provisioner does)."""
+    name = str(body.get("name") or "").strip()
+    addresses = body.get("addresses")
+    if not name:
+        return {"ok": False, "error": "name is required"}, 400
+    if not isinstance(addresses, list) or not addresses:
+        return {"ok": False, "error": "addresses is required (list of {address, space})"}, 400
+
+    host_body = {"name": name, "comment": str(body.get("comment") or ""), "addresses": addresses,
+                 "auto_generate_records": bool(body.get("auto_generate_records", True))}
+    if body.get("tags"):
+        host_body["tags"] = body["tags"]
+    if body.get("host_names"):
+        host_body["host_names"] = body["host_names"]
+
+    if _truthy_dry(body.get("dry")):
+        return {"ok": True, "dry_run": True, "would_create": host_body}, 200
+
+    resp, status = _rest_write("POST", "/api/ddi/v1/ipam/host", host_body)
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"create failed (status {status})", "detail": resp}, status or 502
+    host = resp.get("result") if isinstance(resp, dict) else None
+    return {"ok": True, "host": host or resp}, status
+
+
+def _edit_host_update(body: dict) -> tuple:
+    host_id = str(body.get("id") or "").strip()
+    if not host_id:
+        return {"ok": False, "error": "id is required"}, 400
+
+    update_body = {}
+    if body.get("name") is not None:
+        update_body["name"] = str(body["name"])
+    if body.get("comment") is not None:
+        update_body["comment"] = str(body["comment"])
+    if body.get("addresses") is not None:
+        update_body["addresses"] = body["addresses"]
+    if body.get("tags") is not None:
+        update_body["tags"] = body["tags"]
+    if not update_body:
+        return {"ok": False, "error": "no fields to update (name/comment/addresses/tags)"}, 400
+
+    if _truthy_dry(body.get("dry")):
+        return {"ok": True, "dry_run": True, "id": host_id, "would_update": update_body}, 200
+
+    resp, status = _rest_write("PATCH", f"/api/ddi/v1/{host_id}", update_body)
+    method_used = "PATCH"
+    if status == 405:
+        resp, status = _rest_write("PUT", f"/api/ddi/v1/{host_id}", update_body)
+        method_used = "PUT"
+    if status not in (200, 201) or resp is None:
+        return {"ok": False, "error": f"update failed (status {status})", "detail": resp, "method": method_used}, status or 502
+    host = resp.get("result") if isinstance(resp, dict) else None
+    return {"ok": True, "method": method_used, "host": host or resp}, 200
+
+
+# Dispatch dict for the /api/edit/<resource> routes below. address_block has
+# no "update" entry (create/delete only — see _edit_block_create docstring).
+_EDIT_RESOURCES = {
+    "dns_zone":      {"create": _edit_zone_create,   "update": _edit_zone_update},
+    "subnet":        {"create": _edit_subnet_create, "update": _edit_subnet_update},
+    "address_block": {"create": _edit_block_create},
+    "dhcp_range":    {"create": _edit_range_create,  "update": _edit_range_update},
+    "host":          {"create": _edit_host_create,   "update": _edit_host_update},
+}
+
+# Top-level result key each _edit_*_create/_update returns the written object
+# under — used only to pull an id for the audit-log detail (never logs the
+# rest of the body/response).
+_EDIT_RESULT_KEY = {"dns_zone": "zone", "subnet": "subnet", "address_block": "block",
+                     "dhcp_range": "range", "host": "host"}
 
 # ── Phase-1 provisioning: template engine (port of Chris Marrison's UDDI ─────
 #    Automation Toolkit — core.py + block/provision.py + site/provision.py).
@@ -4582,7 +4899,8 @@ class Handler(BaseHTTPRequestHandler):
     def _is_mutating(path: str) -> bool:
         return (path in MUTATING_PATHS
                 or path.startswith("/api/dns/records/")
-                or path.startswith("/api/ipam/addresses/"))
+                or path.startswith("/api/ipam/addresses/")
+                or path.startswith("/api/edit/"))
 
     def _actor(self) -> str:
         """Best-effort actor label for the audit log — no user accounts exist
@@ -5594,6 +5912,26 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/alerts/snooze", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
+        elif self.path.startswith("/api/edit/"):
+            # Cloud Resource Editor — Phase 1 (resource-editor-plan-2026-07-11).
+            # POST /api/edit/<resource> creates. Dry-run-default (_truthy_dry
+            # inside each _edit_*_create), operator-gated, audit-logged.
+            resource = self.path.split("?")[0][len("/api/edit/"):].strip("/")
+            resmap = _EDIT_RESOURCES.get(resource)
+            if resmap is None or "create" not in resmap:
+                self._json({"ok": False, "error": f"unknown resource: {resource}"}, 404); return
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator role required"}, 403); return
+            try:
+                result, status = resmap["create"](body)
+                self._json(result, status)
+                if result.get("ok") and not result.get("dry_run"):
+                    obj = result.get(_EDIT_RESULT_KEY.get(resource, ""), {})
+                    obj_id = obj.get("id") if isinstance(obj, dict) else None
+                    audit_append(f"edit-{resource}-create", self._actor(), {"id": obj_id})
+            except Exception as e:
+                _log_exc(f"/api/edit/{resource}", e)
+                self._json({"ok": False, "error": "internal error"}, 500)
         else:
             self._json({"error": "not found"}, 404)
 
@@ -5627,6 +5965,30 @@ class Handler(BaseHTTPRequestHandler):
                         "fields": [k for k in ("value", "ttl", "comment", "disabled") if body.get(k) is not None]})
             except Exception as e:
                 _log_exc("/api/dns/records PATCH", e)
+                self._json({"ok": False, "error": "internal error"}, 500)
+            return
+        if path.startswith("/api/edit/"):
+            # PATCH /api/edit/<resource>/<id> updates. Same dry-run-default,
+            # operator-gated, audit-logged idiom as the create route above.
+            from urllib.parse import unquote
+            parts = path[len("/api/edit/"):].strip("/").split("/", 1)
+            resource = parts[0] if parts else ""
+            obj_id = unquote(parts[1]) if len(parts) > 1 else ""
+            resmap = _EDIT_RESOURCES.get(resource)
+            if resmap is None or "update" not in resmap:
+                self._json({"ok": False, "error": f"unknown resource: {resource}"}, 404); return
+            if not obj_id:
+                self._json({"ok": False, "error": "id is required"}, 400); return
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator role required"}, 403); return
+            try:
+                body["id"] = obj_id  # path id always wins over any id in the body
+                result, status = resmap["update"](body)
+                self._json(result, status)
+                if result.get("ok") and not result.get("dry_run"):
+                    audit_append(f"edit-{resource}-update", self._actor(), {"id": obj_id})
+            except Exception as e:
+                _log_exc(f"/api/edit/{resource} PATCH", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
             return
         self._json({"error": "not found"}, 404)
@@ -5672,6 +6034,31 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"ok": False, "error": f"delete failed (status {status})", "detail": resp}, status or 502)
             except Exception as e:
                 _log_exc("/api/ipam/addresses DELETE", e); self._json({"ok": False, "error": "internal error"}, 500)
+            return
+        if path.startswith("/api/edit/"):
+            # DELETE /api/edit/<resource>/<id> — uniform across all 5 types
+            # (DELETE /api/ddi/v1/{id}), same idiom as /api/dns/records/{id}
+            # and /api/ipam/addresses/{id} above. No dry-run concept — every
+            # call here is a live write, so it's always audit-logged on ok.
+            from urllib.parse import unquote
+            parts = path[len("/api/edit/"):].strip("/").split("/", 1)
+            resource = parts[0] if parts else ""
+            obj_id = unquote(parts[1]) if len(parts) > 1 else ""
+            if resource not in _EDIT_RESOURCES:
+                self._json({"ok": False, "error": f"unknown resource: {resource}"}, 404); return
+            if not obj_id:
+                self._json({"error": "id is required"}, 400); return
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator role required"}, 403); return
+            try:
+                resp, status = _rest_write("DELETE", f"/api/ddi/v1/{obj_id}")
+                if status in (200, 204, 404):
+                    self._json({"ok": True})
+                    audit_append(f"edit-{resource}-delete", self._actor(), {"id": obj_id})
+                else:
+                    self._json({"ok": False, "error": f"delete failed (status {status})", "detail": resp}, status or 502)
+            except Exception as e:
+                _log_exc(f"/api/edit/{resource} DELETE", e); self._json({"ok": False, "error": "internal error"}, 500)
             return
         self._json({"error": "not found"}, 404)
 
