@@ -5315,6 +5315,9 @@ function SelfServiceTab(){
 function ProvisionTab(){
   const {params}=useRoute();
   const {locked}=useData();
+  const whoamiApi=useApi('/api/whoami');
+  const role=(whoamiApi.data&&whoamiApi.data.role)||'viewer';
+  const isAdmin=role==='admin';
   const [mode,setMode]=useState('subnet'); // 'subnet' | 'site' | 'seed'
   const spacesApi=useApi('/api/ipam/spaces');
   const [space,setSpace]=useState(params.space||'');
@@ -5432,6 +5435,7 @@ function ProvisionTab(){
 
   const siteTeardownStart=()=>{
     if(siteTeardownStreaming||siteTeardownEsRef.current) return; // guard: never open a second concurrent stream
+    if(!siteTeardownDry&&!isAdmin){ toast('Admin (dashboard token) required for live teardown','err'); return; }
     if(!siteTeardownDry&&!siteTeardownConfirm.trim()){ toast('Type the site name to confirm','err'); return; }
     if(!siteTeardownDry&&!window.confirm("This permanently deletes the site '"+siteTemplate+"' and its objects. Continue?")) return;
     setSiteTeardownLog([]);setSiteTeardownResult(null);setSiteTeardownErr(null);setSiteTeardownStreaming(true);
@@ -5481,6 +5485,7 @@ function ProvisionTab(){
 
   const teardownStart=()=>{
     if(teardownStreaming||teardownEsRef.current) return; // guard: never open a second concurrent stream
+    if(!teardownDry&&!isAdmin){ toast('Admin (dashboard token) required for live teardown','err'); return; }
     if(!teardownDry&&teardownConfirm.trim()!=='DELETE'){ toast('Type DELETE to confirm live teardown','err'); return; }
     const regionList=Object.keys(seedRegions).filter(r=>seedRegions[r]);
     if(!regionList.length){ toast('Select at least one region','err'); return; }
@@ -5506,7 +5511,10 @@ function ProvisionTab(){
   };
 
   return <div className="page fadein">
-    <SectionRule title="Provision"/>
+    <div style={{display:'flex',alignItems:'center',gap:'var(--s3)'}}>
+      <div style={{flex:1}}><SectionRule title="Provision"/></div>
+      <span className={'sev-badge '+(isAdmin?'ok':role==='operator'?'warn':'crit')}>{role.toUpperCase()}</span>
+    </div>
     <div className="dly-seg" role="group" aria-label="Provision mode" style={{marginBottom:'var(--s3)'}}>
       <button className={'dly-seg-btn'+(mode==='subnet'?' on':'')} onClick={()=>setMode('subnet')}>Subnet</button>
       <button className={'dly-seg-btn'+(mode==='site'?' on':'')} onClick={()=>setMode('site')}>Full site</button>
@@ -5600,11 +5608,11 @@ function ProvisionTab(){
               <input type="checkbox" checked={siteTeardownDry} onChange={e=>setSiteTeardownDry(e.target.checked)}/>
               <span>Dry-run (no changes made)</span>
             </label>
-            {!siteTeardownDry?<label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            {!siteTeardownDry?(isAdmin?<label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
               Type the site name to confirm
               <input className="vault-in" value={siteTeardownConfirm} onChange={e=>setSiteTeardownConfirm(e.target.value)} placeholder={siteTemplate||'site name'}/>
-            </label>:null}
-            <button className="btn" disabled={siteTeardownStreaming||!siteTemplate||(!siteTeardownDry&&!siteTeardownConfirm.trim())} onClick={siteTeardownStart}>
+            </label>:<div className="mono" style={{fontSize:'var(--t11)',color:'var(--warn)'}}>Admin (dashboard token) required for live teardown</div>):null}
+            <button className="btn" disabled={siteTeardownStreaming||!siteTemplate||(!siteTeardownDry&&(!isAdmin||!siteTeardownConfirm.trim()))} onClick={siteTeardownStart}>
               {siteTeardownStreaming?'Tearing down…':'Tear down this site'}
             </button>
           </div>
@@ -5666,11 +5674,11 @@ function ProvisionTab(){
               <input type="checkbox" checked={teardownDry} onChange={e=>setTeardownDry(e.target.checked)}/>
               <span>Dry-run (no changes made)</span>
             </label>
-            {!teardownDry?<label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            {!teardownDry?(isAdmin?<label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
               Type DELETE to confirm
               <input className="vault-in" value={teardownConfirm} onChange={e=>setTeardownConfirm(e.target.value)} placeholder="DELETE"/>
-            </label>:null}
-            <button className="btn" disabled={teardownStreaming||(!teardownDry&&teardownConfirm.trim()!=='DELETE')} onClick={teardownStart}>
+            </label>:<div className="mono" style={{fontSize:'var(--t11)',color:'var(--warn)'}}>Admin (dashboard token) required for live teardown</div>):null}
+            <button className="btn" disabled={teardownStreaming||(!teardownDry&&(!isAdmin||teardownConfirm.trim()!=='DELETE'))} onClick={teardownStart}>
               {teardownStreaming?'Tearing down…':'Tear down demo'}
             </button>
           </div>

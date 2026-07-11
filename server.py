@@ -4604,6 +4604,28 @@ class Handler(BaseHTTPRequestHandler):
             audit_append("write-authorized", who, {"method": self.command, "path": p})
         return False
 
+    # Lightweight RBAC (plan 019 Phase 3) — three ordered roles layered on top
+    # of the existing _write_ok()/_authed() gate. No sessions, no user store
+    # (see plan 019 scoping note): role is *resolved*, not authenticated
+    # separately, from the same shared-secret/loopback checks above.
+    _ROLE_ORDER = {"viewer": 0, "operator": 1, "admin": 2}
+
+    def _resolve_role(self) -> str:
+        if DASHBOARD_TOKEN and self._authed():
+            return "admin"
+        if self._write_ok():
+            return "operator"
+        return "viewer"
+
+    def _role_at_least(self, need: str) -> bool:
+        """Call BEFORE running a gated action. Returns False (and audit-logs
+        the denial) when the resolved role is below `need`."""
+        have = self._resolve_role()
+        if self._ROLE_ORDER[have] < self._ROLE_ORDER[need]:
+            audit_append("rbac_denied", have, {"required": need, "path": self.path.split("?")[0]})
+            return False
+        return True
+
     def do_OPTIONS(self):
         self._cors()
         self.end_headers()
@@ -4699,9 +4721,13 @@ class Handler(BaseHTTPRequestHandler):
             chain = audit_verify_chain()
             self._json({"entries": audit_read(), "chain_valid": chain["valid"], "broken_index": chain["broken_index"]})
         elif path == "/api/audit/export":
+            if not self._role_at_least("admin"):
+                self._json({"ok": False, "error": "admin required"}, 403); return
             chain = audit_verify_chain()
             self._json({"entries": audit_read(), "chain_valid": chain["valid"], "broken_index": chain["broken_index"],
                         "exported_at": _time.time(), "app_version": APP_VERSION})
+        elif path == "/api/whoami":
+            self._json({"role": self._resolve_role(), "token_auth": bool(DASHBOARD_TOKEN)})
         elif path == "/api/incidents":
             try:
                 data = fetch_dashboard_data()
@@ -4957,6 +4983,8 @@ class Handler(BaseHTTPRequestHandler):
             comment = qp.get("comment", "").strip()
             make_zone = qp.get("make_zone", "0") == "1"
             dry = _truthy_dry(qp.get("dry"))  # safe default: preview unless dry=false/0
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator required"}, 403); return
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
@@ -5020,6 +5048,8 @@ class Handler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs
             qs = self.path.split("?", 1)[1] if "?" in self.path else ""
             qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator required"}, 403); return
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
@@ -5069,6 +5099,8 @@ class Handler(BaseHTTPRequestHandler):
             # space in this tenant (templates ship with a placeholder space name).
             ip_space_override = qp.get("ip_space", "").strip() or None
 
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator required"}, 403); return
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
@@ -5132,6 +5164,8 @@ class Handler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs
             qs = self.path.split("?", 1)[1] if "?" in self.path else ""
             qp = {k: v[0] for k, v in parse_qs(qs).items()}
+            if not self._role_at_least("admin"):
+                self._json({"ok": False, "error": "admin required"}, 403); return
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
@@ -5183,6 +5217,8 @@ class Handler(BaseHTTPRequestHandler):
             ip_space_override = qp.get("ip_space", "").strip() or None
             confirm = qp.get("confirm", "")
 
+            if not self._role_at_least("admin"):
+                self._json({"ok": False, "error": "admin required"}, 403); return
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
@@ -5405,6 +5441,8 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/selfservice/allocate":
             # State-changing write, but same precedent as /api/switch-account:
             # gated by the vault-unlocked check above only, no X-Auth-Token.
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator required"}, 403); return
             try:
                 result, status = _selfservice_allocate(body)
                 self._json(result, status)
@@ -5418,6 +5456,8 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/dns/records":
             # State-changing write, same precedent as /api/selfservice/allocate:
             # gated by the vault-unlocked check above only, no X-Auth-Token.
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator required"}, 403); return
             try:
                 result, status = _dns_record_create(body)
                 self._json(result, status)
@@ -5443,6 +5483,8 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/provision/block":
             # Address-block provisioning (Phase-1 port of Chris Marrison's
             # UDDI toolkit block provisioner). Not a stream — a single result.
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator required"}, 403); return
             try:
                 name = str(body.get("template", "")).strip()
                 if not name:
@@ -5464,6 +5506,8 @@ class Handler(BaseHTTPRequestHandler):
             # Address-block decommission (Phase-2 port of Chris Marrison's
             # UDDI toolkit block/decommission.py). Not a stream — a single
             # result. Live (non-dry) runs require confirm == template name.
+            if not self._role_at_least("admin"):
+                self._json({"ok": False, "error": "admin required"}, 403); return
             try:
                 name = str(body.get("template", "")).strip()
                 if not name:
@@ -5489,6 +5533,8 @@ class Handler(BaseHTTPRequestHandler):
             # returning it to the pool). Phase-2 port of retag.py. Not gated
             # by the confirm-token safety net below (a Status re-tag doesn't
             # delete anything) — same trust level as /api/provision/block.
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator required"}, 403); return
             try:
                 template_name = str(body.get("template", "")).strip()
                 site = str(body.get("site", "")).strip()
@@ -5531,6 +5577,8 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/drift/check", e); self._json({"error": "internal error"}, 500)
         elif self.path == "/api/alerts/snooze":
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator required"}, 403); return
             try:
                 category = str(body.get("category", "")).strip()
                 try:
@@ -5568,6 +5616,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/dns/records":
             # Single-record read-modify-write; explicit id only, no filter-based
             # bulk update. Same trust level as /api/selfservice/allocate.
+            if not self._role_at_least("operator"):
+                self._json({"ok": False, "error": "operator required"}, 403); return
             try:
                 result, status = _dns_record_update(body)
                 self._json(result, status)

@@ -196,11 +196,36 @@ class BackendTests(unittest.TestCase):
         self.assertTrue(d["chain_valid"], f"audit chain broken at index {d.get('broken_index')}")
 
     def test_audit_export_is_json_pack(self):
+        # Plan 019 Phase 3: /api/audit/export is now admin-gated. This test
+        # environment has no DASHBOARD_TOKEN, so the resolved role tops out
+        # at operator — expect 403, not 200 (adaptation from Phase 1's test).
         status, d = get_json("/api/audit/export")
+        self.assertIn(status, (200, 403), f"unexpected status: {status}: {d}")
+        if status == 200:
+            for k in ("entries", "chain_valid", "broken_index", "exported_at", "app_version"):
+                self.assertIn(k, d, f"audit export missing key: {k}")
+            self.assertIsInstance(d["entries"], list)
+        else:
+            self.assertIn("error", d)
+
+    # ── RBAC (plan 019 Phase 3) ─────────────────────────────────────────────────
+
+    def test_whoami(self):
+        status, d = get_json("/api/whoami")
         self.assertEqual(status, 200)
-        for k in ("entries", "chain_valid", "broken_index", "exported_at", "app_version"):
-            self.assertIn(k, d, f"audit export missing key: {k}")
-        self.assertIsInstance(d["entries"], list)
+        self.assertIn("role", d)
+        self.assertIn(d["role"], ("viewer", "operator", "admin"))
+        self.assertIn("token_auth", d)
+        self.assertIsInstance(d["token_auth"], bool)
+
+    def test_teardown_block_requires_admin_without_token(self):
+        # Without a DASHBOARD_TOKEN, this test environment resolves to at
+        # most operator role — and docker's NAT can even make loopback
+        # resolve to viewer — so any non-2xx auth rejection is correct; the
+        # only wrong outcome is the teardown actually running (200).
+        status, d = post_json("/api/teardown/block", {"template": "nonexistent-template-rbac-probe"})
+        self.assertIn(status, (401, 403),
+                       f"teardown/block should be blocked without an admin token, got {status}: {d}")
 
     # ── incident correlation + snooze (plan 019 Phase 2) ───────────────────────
 
@@ -859,6 +884,13 @@ class FrontendStructureTests(unittest.TestCase):
                   "audit", "provision", "drift", "selfservice"):
             self.assertIn(t, tabs, f"pre-existing tab {t!r} was removed from TABS")
 
+    def test_provision_role_gated(self):
+        # Plan 019 Phase 3: ProvisionTab must know the caller's role (via
+        # /api/whoami) and gate live teardown on role==='admin'.
+        self.assertContains("/api/whoami", "ProvisionTab must fetch /api/whoami")
+        self.assertTrue("role==='admin'" in self.html or 'role==="admin"' in self.html,
+                         "no admin role check found in index.html")
+
 
 class ServerSecurityTests(unittest.TestCase):
     """Static (no running server) checks on server.py hardening from plans 014/015.
@@ -905,6 +937,16 @@ class ServerSecurityTests(unittest.TestCase):
         # Plan 015: large JSON responses gzip when the client advertises it.
         for needle in ("Content-Encoding", "gzip.compress", "Accept-Encoding"):
             self.assertIn(needle, self.src, f"gzip primitive {needle!r} missing from server.py")
+
+    def test_rbac_layer_present(self):
+        # Plan 019 Phase 3: lightweight three-role RBAC layered on _write_ok()/
+        # _write_guard() — no sessions, no FastAPI/authlib (that's the deferred
+        # OIDC/SCIM scope, see plan 019's scoping note).
+        for needle in ("_ROLE_ORDER", "def _resolve_role", "def _role_at_least",
+                       'audit_append("rbac_denied"'):
+            self.assertIn(needle, self.src, f"RBAC primitive {needle!r} missing from server.py")
+        self.assertNotIn("from fastapi", self.src)
+        self.assertNotIn("import authlib", self.src)
 
     def test_audit_module_wired(self):
         # Plan 019 Phase 1: hash-chained audit module + routes + central
