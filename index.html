@@ -121,8 +121,8 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
 
 /* ── top bar ── */
 .topbar{
-  display:flex;align-items:center;gap:var(--s4);
-  height:48px;padding:0 var(--s4);
+  display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;
+  min-height:48px;padding:0 var(--s4);
   border-bottom:1px solid var(--border);
   background:var(--surface);
   position:sticky;top:0;z-index:40;
@@ -134,7 +134,7 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
 
 .tabbar{
   display:flex;align-items:center;gap:var(--s1);
-  flex:1 1 auto;min-width:0;overflow-x:auto;
+  order:3;flex-basis:100%;min-width:0;overflow-x:auto;
   scrollbar-width:none;
 }
 .tabbar::-webkit-scrollbar{display:none;}

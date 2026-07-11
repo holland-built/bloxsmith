@@ -265,6 +265,26 @@ class BackendTests(unittest.TestCase):
         status, d = post_json("/api/alerts/snooze", {"minutes": 15})
         self.assertEqual(status, 400)
 
+    # ── Cloud Resource Editor — Phase 1 (resource-editor-plan-2026-07-11) ──────
+
+    def test_edit_zone_dry_returns_payload_no_write(self):
+        # No "dry" key sent → _truthy_dry defaults to a preview; nothing is
+        # ever written to the upstream API by this test.
+        status, d = post_json("/api/edit/dns_zone",
+                               {"fqdn": "test-edit-zone.example.com.", "view": "dns/view/test-id"})
+        self.assertEqual(status, 200, f"edit zone dry-run failed: {d}")
+        self.assertTrue(d.get("dry_run"), f"dry_run missing/false: {d}")
+        self.assertIn("would_create", d)
+
+    def test_edit_bad_resource_404(self):
+        status, d = post_json("/api/edit/nonsense", {})
+        self.assertEqual(status, 404)
+
+    def test_edit_missing_required_400(self):
+        # subnet create without block_id must 400 before any write attempt.
+        status, d = post_json("/api/edit/subnet", {"cidr": 28})
+        self.assertEqual(status, 400)
+
     def test_api_dns_analytics_shape(self):
         status, d = get_json("/api/dns-analytics")
         self.assertEqual(status, 200)
@@ -947,6 +967,21 @@ class ServerSecurityTests(unittest.TestCase):
             self.assertIn(needle, self.src, f"RBAC primitive {needle!r} missing from server.py")
         self.assertNotIn("from fastapi", self.src)
         self.assertNotIn("import authlib", self.src)
+
+    def test_edit_paths_mutating(self):
+        # resource-editor-plan-2026-07-11 Phase 1: /api/edit/* must be gated
+        # by _write_ok()/_write_guard() (MUTATING_PATHS exact entry + the
+        # _is_mutating prefix branch for the id-suffixed PATCH/DELETE routes),
+        # and every create/update/delete branch must be operator-gated and
+        # audit-logged.
+        self.assertIn('"/api/edit"', self.src, "MUTATING_PATHS missing /api/edit exact-path entry")
+        self.assertIn('path.startswith("/api/edit/")', self.src,
+                      "_is_mutating (or a route dispatcher) missing the /api/edit/ prefix check")
+        for verb in ("create", "update", "delete"):
+            needle = 'f"edit-{resource}-%s"' % verb
+            self.assertIn(needle, self.src, f"/api/edit {verb} branch missing its audit_append event name")
+        self.assertGreaterEqual(self.src.count('"operator role required"'), 3,
+                                 "expected an operator-role gate on each /api/edit verb (create/update/delete)")
 
     def test_audit_module_wired(self):
         # Plan 019 Phase 1: hash-chained audit module + routes + central
