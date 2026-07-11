@@ -1,0 +1,140 @@
+.vault-setup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg);
+  font-family: var(--font-ui);
+}
+
+.vault-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 340px;
+  background: var(--surface);
+  border: none;
+  box-shadow: var(--elev-raised);
+  border-radius: var(--r-card);
+  padding: 24px;
+}
+
+.vault-title {
+  margin: 0 0 4px;
+  font-size: var(--fs-lg);
+  color: var(--ink);
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-display);
+}
+
+.vault-caption {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+.vault-input {
+  background: var(--surface);
+  color: var(--ink);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: var(--fs-sm);
+  font-family: var(--font-ui);
+}
+
+.vault-input:focus {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.vault-button {
+  background: var(--surface);
+  color: var(--fg);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.vault-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.vault-error {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--danger);
+}
+
+.vault-divider {
+  border: none;
+  border-top: 1px solid var(--border-soft);
+  margin: 4px 0;
+}
+
+.vault-tenant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vault-tenant-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vault-tenant-label {
+  flex: 1;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vault-tenant-badge {
+  font-size: var(--fs-xs);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.vault-button--danger {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  box-shadow: none;
+}
+
+.vault-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: var(--font-ui);
+  text-align: left;
+}
+
+.vault-link:hover {
+  color: var(--ink);
+}
+
+.vault-caption--warn {
+  color: var(--danger);
+}

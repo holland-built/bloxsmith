@@ -1,0 +1,8 @@
+/* Vercel is light-first, single theme. Dark is intentionally a no-op alias:
+   [data-theme="dark"] inherits the light Vercel palette from :root so any
+   existing data-theme="dark" markup still renders the correct light look.
+   The former teal dark palette has been removed on purpose. */
+
+[data-theme="dark"] {
+  /* inherits :root (light Vercel) — no overrides */
+}

@@ -1,0 +1,29 @@
+.audit-export-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-ui);
+}
+
+.audit-export-button-button {
+  background: var(--surface);
+  color: var(--fg);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: var(--r-ctl);
+  padding: 4px 10px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.audit-export-button-button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.audit-export-button-error {
+  color: var(--danger);
+  font-size: var(--fs-xs);
+}

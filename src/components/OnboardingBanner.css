@@ -1,0 +1,45 @@
+.onboarding-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: none;
+  box-shadow: var(--elev-raised);
+  border-radius: var(--r-card);
+  padding: 8px 12px;
+  font-family: var(--font-ui);
+}
+
+.onboarding-banner p {
+  flex: 1;
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+}
+
+.onboarding-banner kbd {
+  display: inline-block;
+  background: var(--surface);
+  color: var(--ink);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border);
+  border-radius: var(--r-ctl);
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+}
+
+.onboarding-dismiss {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: var(--fs-md);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.onboarding-dismiss:hover {
+  color: var(--ink);
+}

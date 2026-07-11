@@ -1,0 +1,38 @@
+.lease-summary {
+  display: flex;
+  gap: 12px;
+}
+
+.lease-stat {
+  flex: 1;
+  background-color: var(--surface);
+  border: none;
+  box-shadow: var(--elev-raised);
+  border-radius: var(--r-card);
+  padding: 16px;
+}
+
+.lease-stat-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+}
+
+.lease-stat-active {
+  color: var(--green);
+}
+
+.lease-stat-expired {
+  color: var(--amber);
+}
+
+.lease-stat-subnets {
+  color: var(--ink);
+}
+
+.lease-stat-label {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
