@@ -1531,6 +1531,14 @@ class SiteProvisioner:
             "_filter": f'space=="{self._space_id}"',
             "_tfilter": f'Region=="{self.cfg.region}" and Environment=="{self.cfg.environment}" and Status=="available"'})
         if not results:
+            # Fallback: match region + available, ignoring Environment. The site
+            # templates and the block pool can use different env vocab (e.g. site
+            # says "lab", the pool tags "development"), so an exact-env miss should
+            # still allocate from any available block in the region.
+            results = _rest_get("/api/ddi/v1/ipam/address_block", {
+                "_filter": f'space=="{self._space_id}"',
+                "_tfilter": f'Region=="{self.cfg.region}" and Status=="available"'})
+        if not results:
             raise ProvisionError(
                 f"No available address block found for Region={self.cfg.region} Environment={self.cfg.environment}")
         return min(results, key=_block_sort_key)
@@ -1704,6 +1712,12 @@ class SiteProvisioner:
                 "host_names": [{"name": hdef.hostname, "zone": self._zone_id, "primary_name": True}],
             }
             resp, status = _rest_write("POST", "/api/ddi/v1/ipam/host", body)
+            if status == 409:
+                # host with this name+zone already exists — idempotent skip so
+                # re-seeding an existing site doesn't fail on hosts.
+                self.emit({"step": f"  Host {fqdn} already exists — skipping"})
+                results.append({"fqdn": fqdn, "ip": host_ip, "hostname": hdef.hostname, "id": "(exists)"})
+                continue
             if status not in (200, 201) or resp is None:
                 raise ProvisionError(f"Failed to create host {hdef.hostname}: status {status} {resp}")
             host = resp.get("result", {}) if isinstance(resp, dict) else {}
