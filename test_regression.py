@@ -911,6 +911,29 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertTrue("role==='admin'" in self.html or 'role==="admin"' in self.html,
                          "no admin role check found in index.html")
 
+    # ── resource editor tab (resource-editor-plan-2026-07-11, Phase 2) ────────
+
+    def test_editor_tab_registered(self):
+        self.assertContains("'editor'", "'editor' entry missing from TABS")
+        self.assertContains("editor:'Editor'", "editor label missing from TAB_LABELS")
+        self.assertContains("editor:EditorTab", "editor:EditorTab entry missing from TAB_COMPONENTS")
+        self.assertContains("function EditorTab", "EditorTab component missing")
+
+    def test_editor_field_specs(self):
+        self.assertContains("const FIELD_SPECS=", "FIELD_SPECS map missing")
+        fs = self.html[self.html.index("const FIELD_SPECS="):]
+        fs = fs[:fs.index("\nconst EDITOR_TYPES=")]
+        for res in ("dns_zone", "subnet", "address_block", "dhcp_range", "host"):
+            self.assertIn(res + ":", fs, f"FIELD_SPECS missing entry for {res!r}")
+
+    def test_editor_uses_design_system(self):
+        et = self.html[self.html.index("function EditorTab("):]
+        et = et[:et.index("\nfunction ", 1)]
+        self.assertIn("Panel", et, "EditorTab must use the Panel primitive")
+        self.assertIn("dly-seg", et, "EditorTab must use the dly-seg segmented picker")
+        self.assertIn("Astryx.Button", et, "EditorTab must use Astryx.Button")
+        self.assertIn("Dry-run", et, "EditorTab must offer a dry-run checkbox")
+
 
 class ServerSecurityTests(unittest.TestCase):
     """Static (no running server) checks on server.py hardening from plans 014/015.
