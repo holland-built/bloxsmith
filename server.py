@@ -2363,6 +2363,46 @@ VAULT_FILE = _resolve_vault_file()
 BRAND_FILE = os.path.join(os.path.dirname(VAULT_FILE), "brand.json")
 LOGO_FILE  = os.path.join(os.path.dirname(VAULT_FILE), "logo.png")
 
+# ── immutable audit log (SHA-256 hash chain) ──────────────────────────────────
+# Append-only, tamper-evident log of every authorized write + mutation. Each
+# entry hashes its own payload plus the previous entry's hash, so any edit or
+# deletion breaks the chain (detectable via audit_verify_chain()). Persisted on
+# the same mounted volume as the vault so it survives restarts/updates. Port of
+# Chris Marrison's backend/audit/log.py.
+_STATE_DIR = os.path.dirname(VAULT_FILE)
+AUDIT_LOG_FILE = os.path.join(_STATE_DIR, "audit_log.jsonl")
+_audit_lock = threading.Lock()
+
+def _audit_entry_hash(entry):
+    payload = {k: v for k, v in entry.items() if k != "hash"}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+def audit_read():
+    try:
+        with open(AUDIT_LOG_FILE) as f:
+            return [json.loads(l) for l in f if l.strip()]
+    except FileNotFoundError:
+        return []
+
+def audit_append(event, actor, detail=None):
+    with _audit_lock:
+        entries = audit_read()
+        prev = entries[-1]["hash"] if entries else "0" * 64
+        e = {"ts": _time.time(), "event": event, "actor": actor, "detail": detail or {}, "prev_hash": prev}
+        e["hash"] = _audit_entry_hash(e)
+        with open(AUDIT_LOG_FILE, "a") as f:
+            f.write(json.dumps(e) + "\n")
+        return e
+
+def audit_verify_chain():
+    entries = audit_read()
+    prev = "0" * 64
+    for i, e in enumerate(entries):
+        if e.get("prev_hash") != prev or _audit_entry_hash(e) != e.get("hash"):
+            return {"valid": False, "broken_index": i}
+        prev = e["hash"]
+    return {"valid": True, "broken_index": None}
+
 # ── saved views (dashboard layouts) ───────────────────────────────────────────
 # One JSON blob per view on the same mounted volume as the vault, so saved
 # layouts survive restarts/updates. Names are sanitized to a flat filename to
@@ -4393,6 +4433,11 @@ class Handler(BaseHTTPRequestHandler):
                 or path.startswith("/api/dns/records/")
                 or path.startswith("/api/ipam/addresses/"))
 
+    def _actor(self) -> str:
+        """Best-effort actor label for the audit log — no user accounts exist
+        (see plan 019 scoping note), so identify by loopback vs. remote IP."""
+        return "loopback" if self.client_address[0] in ("127.0.0.1", "::1") else self.client_address[0]
+
     def _write_guard(self) -> bool:
         """Call at the top of each verb dispatcher. If the path mutates and the
         caller isn't authorized, emit 403 and return True (caller must return).
@@ -4405,6 +4450,7 @@ class Handler(BaseHTTPRequestHandler):
                 return True
             who = "loopback" if self.client_address[0] in ("127.0.0.1", "::1") else self.client_address[0]
             print(f"[write-audit] {self.command} {p} authorized ({who})", file=sys.stderr)
+            audit_append("write-authorized", who, {"method": self.command, "path": p})
         return False
 
     def do_OPTIONS(self):
@@ -4498,6 +4544,13 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/actions", e)
                 self._json({"error": "internal error"}, 500)
+        elif path == "/api/audit/log":
+            chain = audit_verify_chain()
+            self._json({"entries": audit_read(), "chain_valid": chain["valid"], "broken_index": chain["broken_index"]})
+        elif path == "/api/audit/export":
+            chain = audit_verify_chain()
+            self._json({"entries": audit_read(), "chain_valid": chain["valid"], "broken_index": chain["broken_index"],
+                        "exported_at": _time.time(), "app_version": APP_VERSION})
         elif path == "/api/insights":
             try:
                 self._json(fetch_insights())
@@ -4784,7 +4837,11 @@ class Handler(BaseHTTPRequestHandler):
                     emit({"step": "Zone creation result", "status": zstatus, "result": zresult})
                 emit({"done": True, "subnet": {
                     "id": subnet.get("id"), "address": subnet.get("address"), "cidr": subnet.get("cidr")}})
+                audit_append("provision-subnet", self._actor(), {
+                    "block": block, "cidr": cidr, "subnet": subnet.get("address")})
             except Exception as e:
+                if not dry:
+                    audit_append("provision-subnet-error", self._actor(), {"block": block, "error": str(e)})
                 emit({"error": str(e)})
             return
         elif path == "/api/templates":
@@ -4821,9 +4878,15 @@ class Handler(BaseHTTPRequestHandler):
                 emit({"step": f"Provisioning site: {cfg.site}"})
                 result = SiteProvisioner(cfg, emit).provision()
                 emit({"done": True, "result": result})
+                if not cfg.dry_run:
+                    audit_append("provision-site", self._actor(), {"template": name, "site": cfg.site})
             except ProvisionError as e:
+                if "cfg" in locals() and not cfg.dry_run:
+                    audit_append("provision-site-error", self._actor(), {"template": name, "error": str(e)})
                 emit({"error": str(e)})
             except Exception as e:
+                if "cfg" in locals() and not cfg.dry_run:
+                    audit_append("provision-site-error", self._actor(), {"template": name, "error": str(e)})
                 _log_exc("/api/provision/site/stream", e); emit({"error": str(e)})
             return
         elif path == "/api/provision/seed-demo/stream":
@@ -4887,7 +4950,13 @@ class Handler(BaseHTTPRequestHandler):
                         emit({"template": rel, "error": str(exc)})
 
                 emit({"done": True, "summary": summary})
+                if not dry:
+                    audit_append("provision-seed-demo", self._actor(), {
+                        "regions": regions, "succeeded": len(summary["succeeded"]),
+                        "failed": len(summary["failed"]), "skipped": len(summary["skipped"])})
             except Exception as e:
+                if not dry:
+                    audit_append("provision-seed-demo-error", self._actor(), {"regions": regions, "error": str(e)})
                 _log_exc("/api/provision/seed-demo/stream", e); emit({"error": str(e)})
             return
         elif path == "/api/teardown/site/stream":
@@ -4923,9 +4992,15 @@ class Handler(BaseHTTPRequestHandler):
                 emit({"step": f"Decommissioning site: {cfg.site}"})
                 result = SiteDecommissioner(cfg, emit).decommission()
                 emit({"done": True, "result": result})
+                if not cfg.dry_run:
+                    audit_append("teardown-site", self._actor(), {"template": name, "site": cfg.site})
             except ProvisionError as e:
+                if "cfg" in locals() and not cfg.dry_run:
+                    audit_append("teardown-site-error", self._actor(), {"template": name, "error": str(e)})
                 emit({"error": str(e)})
             except Exception as e:
+                if "cfg" in locals() and not cfg.dry_run:
+                    audit_append("teardown-site-error", self._actor(), {"template": name, "error": str(e)})
                 _log_exc("/api/teardown/site/stream", e); emit({"error": str(e)})
             return
         elif path == "/api/teardown/seed-demo/stream":
@@ -4994,7 +5069,13 @@ class Handler(BaseHTTPRequestHandler):
                     emit({"template": "blocks/regional_address_blocks.yaml", "error": str(exc)})
 
                 emit({"done": True, "summary": summary})
+                if not dry:
+                    audit_append("teardown-seed-demo", self._actor(), {
+                        "regions": regions, "succeeded": len(summary["succeeded"]),
+                        "failed": len(summary["failed"]), "skipped": len(summary["skipped"])})
             except Exception as e:
+                if not dry:
+                    audit_append("teardown-seed-demo-error", self._actor(), {"regions": regions, "error": str(e)})
                 _log_exc("/api/teardown/seed-demo/stream", e); emit({"error": str(e)})
             return
         elif path.lstrip("/") in _STATIC_FILES:
@@ -5132,7 +5213,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not domain:
                     self._json({"ok": False, "error": "domain required"}, 400)
                 else:
-                    self._json(block_domain(domain))
+                    result = block_domain(domain)
+                    self._json(result)
+                    if result.get("ok"):
+                        audit_append("block-domain", self._actor(), {"domain": domain})
             except Exception as e:
                 _log_exc("/api/block-domain", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
@@ -5146,7 +5230,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not domain:
                     self._json({"ok": False, "error": "domain required"}, 400)
                 else:
-                    self._json(unblock_domain(domain))
+                    result = unblock_domain(domain)
+                    self._json(result)
+                    if result.get("ok"):
+                        audit_append("unblock-domain", self._actor(), {"domain": domain})
             except Exception as e:
                 _log_exc("/api/unblock-domain", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
@@ -5156,6 +5243,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 result, status = _selfservice_allocate(body)
                 self._json(result, status)
+                if result.get("ok") and not result.get("dry_run"):
+                    audit_append("selfservice-allocate", self._actor(), {
+                        "subnet_id": body.get("subnet_id"), "tag_key": body.get("tag_key"),
+                        "tag_value": body.get("tag_value"), "count": body.get("count")})
             except Exception as e:
                 _log_exc("/api/selfservice/allocate", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
@@ -5165,6 +5256,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 result, status = _dns_record_create(body)
                 self._json(result, status)
+                if result.get("ok") and not result.get("dry_run"):
+                    audit_append("dns-record-create", self._actor(), {
+                        "zone_id": body.get("zone_id"), "name_in_zone": body.get("name_in_zone"),
+                        "type": body.get("type")})
             except Exception as e:
                 _log_exc("/api/dns/records", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
@@ -5193,6 +5288,9 @@ class Handler(BaseHTTPRequestHandler):
                     cfg = template_to_block_config(template, params)
                     result = BlockProvisioner(cfg, lambda _obj: None).provision()
                     self._json({"blocks_created": result["blocks_created"]})
+                    if not result.get("dry_run"):
+                        audit_append("provision-block", self._actor(), {
+                            "template": name, "blocks_created": len(result.get("blocks_created") or [])})
             except ProvisionError as e:
                 self._json({"error": str(e)}, 400)
             except Exception as e:
@@ -5215,6 +5313,8 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         result = BlockDecommissioner(block_name, ip_space, dry, lambda _obj: None).decommission()
                         self._json({"result": result})
+                        if not dry:
+                            audit_append("teardown-block", self._actor(), {"template": name, "block": block_name})
             except ProvisionError as e:
                 self._json({"error": str(e)}, 400)
             except Exception as e:
@@ -5240,6 +5340,9 @@ class Handler(BaseHTTPRequestHandler):
                     blocks = _find_blocks_for_retag(space_id, template_name, address, cidr, site)
                     changed = [_retag_block(b, status, dry) for b in blocks]
                     self._json({"status": status, "changed": changed, "dry_run": dry})
+                    if not dry:
+                        audit_append("retag-block", self._actor(), {
+                            "template": template_name, "status": status, "count": len(changed)})
             except ProvisionError as e:
                 self._json({"error": str(e)}, 400)
             except Exception as e:
@@ -5287,6 +5390,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 result, status = _dns_record_update(body)
                 self._json(result, status)
+                if result.get("ok") and not result.get("dry_run"):
+                    audit_append("dns-record-update", self._actor(), {
+                        "id": body.get("id"),
+                        "fields": [k for k in ("value", "ttl", "comment", "disabled") if body.get(k) is not None]})
             except Exception as e:
                 _log_exc("/api/dns/records PATCH", e)
                 self._json({"ok": False, "error": "internal error"}, 500)
