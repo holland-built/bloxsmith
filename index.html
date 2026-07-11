@@ -14,6 +14,28 @@
 }}
 </script>
 <link rel="stylesheet" href="vendor.astryx.css">
+<style id="astryx-theme-map">
+/* Map Astryx design tokens onto the BloxSmith palette so Astryx components are
+   on-brand AND follow the app's [data-theme] toggle (Astryx's own light-dark()
+   keys off color-scheme, which the app pins to dark — so we override here). The
+   app's --accent/--text/--border/... already flip on data-theme, so pointing
+   Astryx tokens at them makes Astryx track the toggle automatically. */
+:root, [data-theme="dark"], [data-theme="light"] {
+  --color-accent: var(--accent);
+  --color-accent-muted: var(--accent-dim);
+  --color-on-accent: var(--accent-contrast);
+  --color-neutral: var(--surface);
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--text-dim);
+  --color-text-tertiary: var(--text-faint);
+  --color-border: var(--border);
+  --color-border-emphasized: var(--border-strong);
+  --color-tint-hover: var(--hover);
+  --color-overlay-hover: var(--hover);
+  --radius-element: var(--r-ctl);
+  --radius-container: var(--r-panel);
+}
+</style>
 <script src="babel.min.js"></script>
 <script>
 /* no-flash theme boot — runs before styles parse. bx.theme is stored as JSON
