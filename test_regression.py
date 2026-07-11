@@ -640,9 +640,16 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertNotIn("BloxOne", self.html, "'BloxOne' brand string must not appear")
 
     def test_react_script_tags(self):
-        self.assertContains('<script src="react.min.js">', "react.min.js script tag missing")
-        self.assertContains('<script src="react-dom.min.js">', "react-dom.min.js script tag missing")
+        # React 19 ESM boot (no UMD — React 19 ships none): importmap maps react/
+        # react-dom to local vendored files, Babel stays for in-browser JSX, and the
+        # app block runs as a module. See plans/018.
+        self.assertContains('<script type="importmap">', "React ESM importmap missing")
+        self.assertContains('"react": "./vendor.react-', "react importmap entry missing")
+        self.assertContains('"react-dom/client": "./vendor.react-dom-', "react-dom/client importmap entry missing")
         self.assertContains('<script src="babel.min.js">', "babel.min.js script tag missing")
+        self.assertContains('type="text/babel" data-type="module"', "app block must run as a Babel module")
+        # The dead UMD tags must be gone.
+        self.assertEqual(self.html.count('src="react.min.js"'), 0, "legacy UMD react.min.js tag must be removed")
 
     # ── acknowledgements ───────────────────────────────────────────────────────
 
