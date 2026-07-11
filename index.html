@@ -413,11 +413,11 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .pcard>h3{font-size:12.5px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin:0;}
 .pcard>h3 .side{color:var(--text-faint);font-weight:500;font-size:11px;display:inline-flex;align-items:center;gap:var(--s2);flex:none;}
 
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:12px;align-items:start;min-width:0;}
-.grid-dense{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:12px;align-items:start;min-width:0;}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr));gap:16px;align-items:start;min-width:0;}
+.grid-dense{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:16px;align-items:start;min-width:0;}
 .grid>*,.grid-dense>*{min-width:0;}
 /* balance an odd trailing panel: span it full-width so it never orphans in a 2-col row */
-.grid-dense>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
+.grid>.pcard:last-child:nth-child(odd),.grid-dense>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
 
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:10px;}
 .kpi{padding:12px 13px;border-radius:var(--r-panel);background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;transition:border-color .16s ease,transform .16s ease;min-width:0;}
@@ -854,7 +854,7 @@ function PeekDrawer(){
       else if(!e.shiftKey&&document.activeElement===last){ e.preventDefault(); first.focus(); }
     }
   };
-  return <aside className="peek" role="dialog" aria-modal="false" aria-label="Row detail"
+  return <aside className="peek" role="dialog" aria-modal="true" aria-label="Row detail"
     ref={asideRef} onKeyDown={onKeyDown}>
     <div className="peek-head">
       <span className="peek-title mono">{peek.title||'Detail'}</span>
@@ -1142,7 +1142,8 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const allSel=allKeys.length>0&&allKeys.every(k=>selected.has(k));
   const toggleAll=()=>setSelected(prev=>{ const n=new Set(prev); if(allSel) allKeys.forEach(k=>n.delete(k)); else allKeys.forEach(k=>n.add(k)); return n; });
 
-  const showToolbar=csvName||filterable||problemsOnly||columnToggle;
+  const showFilter=filterable!==false&&(filterable||rows.length>12);
+  const showToolbar=csvName||showFilter||problemsOnly||columnToggle;
   const noIssues=problemsOnly&&probOn&&probCount===0;
   // scrollBody: grow the progressive render window as the user nears the bottom.
   const onBodyScroll=(e)=>{ const el=e.currentTarget;
@@ -1154,9 +1155,9 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     onMouseEnter={id&&power?()=>power.setActive(id):undefined}
     onFocus={id&&power?()=>power.setActive(id):undefined}
     style={id?{outline:'none'}:undefined}>
-    {showToolbar&&<div className="dt-toolbar" style={{justifyContent:(filterable||problemsOnly)?'space-between':'flex-end'}}>
+    {showToolbar&&<div className="dt-toolbar" style={{justifyContent:(showFilter||problemsOnly)?'space-between':'flex-end'}}>
       <div style={{display:'flex',alignItems:'center',gap:'var(--s2)',minWidth:0}}>
-        {filterable?<input ref={filterRef} className="dt-filter mono" value={filter}
+        {showFilter?<input ref={filterRef} className="dt-filter mono" value={filter}
           onChange={e=>setFilter(e.target.value)} placeholder="Filter…" aria-label="Filter rows"/>:null}
         {problemsOnly?<button className="prob-toggle" aria-pressed={probOn} onClick={()=>setProb(!probOn)}>
           <span>{problemsOnly.label||'Problems only'}</span>
@@ -1168,7 +1169,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
           <button className="btn btn-ghost" onClick={()=>setColsMenu(v=>!v)}
             aria-haspopup="true" aria-expanded={colsMenu} title="Show/hide columns">⋯ Cols</button>
           {colsMenu?<><div className="views-overlay" onClick={()=>setColsMenu(false)}/>
-            <div className="panel dt-cols-menu" role="menu">
+            <div className="panel dt-cols-menu" role="group" aria-label="Toggle columns">
               {columns.map(c=>{
                 const hidden=hiddenCols.includes(c.key);
                 const lastVisible=!hidden && (columns.length-hiddenCols.length)<=1;
@@ -1797,10 +1798,10 @@ function SynthBand({tone,verdict,facts,chips}){
   const dot='var(--'+t+')';
   const fx=Array.isArray(facts)?facts:[];
   const cx=Array.isArray(chips)?chips:[];
-  return <div className="band" role="status"
+  return <div className="band" role="status" aria-live="polite"
     style={{background:'var(--'+t+'-dim)',borderLeft:'3px solid var(--'+t+')'}}>
     <div className="band-verdict">
-      <span className="band-dot sd pulse" style={{background:dot}}/>
+      <span className="band-dot sd pulse" aria-hidden="true" style={{background:dot}}/>
       <span className="prose" style={{fontSize:15,fontWeight:600,lineHeight:1.4}}>{verdict||'—'}</span>
     </div>
     {fx.length?<div className="band-facts">
@@ -2912,7 +2913,7 @@ function DailyTab(){
       .then(async r=>{const j=await r.json().catch(()=>null);return {r,j};})
       .then(({r,j})=>{
         const ans=(j&&typeof j.answer==='string')?j.answer.trim():'';
-        const bad=!r.ok||r.status===503||(j&&(j.error||j.locked))||!ans||DAILY_NO_KEY.test(ans);
+        const bad=!r.ok||r.status===503||(j&&(j.error||j.locked))||!ans||DAILY_NO_KEY.test(ans)||ans.length<12||/^(no content|n\/?a|none|null|undefined|no data)\.?$/i.test(ans);
         finish(bad?fallback:ans);
       })
       .catch(()=>finish(fallback))
@@ -3301,7 +3302,7 @@ function NetworkTab(){
       : <React.Fragment>
           <SectionRule title="Capacity & utilization"/>
           <div className="grid">
-            <Panel title="Capacity by site" side={clearFilter} empty={siteRows.length===0}>
+            <Panel title="Capacity by site" side={clearFilter} empty={siteRows.length<2}>
               <GroupedBar rows={siteRows} max={24} onClick={r=>setSiteFilter(sf=>sf===r.site?null:r.site)}/>
             </Panel>
             <Panel title="Top consumers" empty={topN.length===0}>
@@ -3319,7 +3320,7 @@ function NetworkTab(){
                       <div className="d">{(s.name||'—')+' · '+(s.site||'—')}</div>
                     </div>
                     {UtilBar(s.util||0)}
-                    {i===0?<button className="btn" onClick={e=>{e.stopPropagation();nav('provision',{space:'',cidr:24,from:s.addr});}}>Provision subnet →</button>:null}
+                    <button className="btn" onClick={e=>{e.stopPropagation();nav('provision',{space:'',cidr:24,from:s.addr});}}>Provision subnet →</button>
                   </div>;
                 })}
               </div>
