@@ -4670,7 +4670,7 @@ function AuditTab(){
 
     <Panel title="Audit log"
       side={<span style={{display:'inline-flex',alignItems:'center',gap:'var(--s3)'}}>
-        {chainValid!=null && <span className={'sev-badge '+(chainValid?'ok':'crit')}>{chainValid?'Chain valid':'Chain broken'}</span>}
+        {chainValid!=null && <Astryx.Badge variant={chainValid?'success':'error'} label={chainValid?'Chain valid':'Chain broken'}/>}
         <AuditExportButton/>
         <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
       </span>}>
@@ -4709,15 +4709,18 @@ function AuditExportButton(){
       setPending(false);
     }
   };
-  return <button className="btn" disabled={pending} onClick={handleExport}>{pending?'Exporting…':'Export Audit Log'}</button>;
+  return <Astryx.Button variant="primary" size="sm" isDisabled={pending} onClick={handleExport}>{pending?'Exporting…':'Export Audit Log'}</Astryx.Button>;
 }
 
 // ═══ REGION: INCIDENTS ═══
-/* SeverityBadge — port of src/components/SeverityBadge.tsx onto the existing
-   .sev-badge CSS (ok/warn/crit). */
+/* SeverityBadge — thin wrapper over Astryx <Badge> (real prop API: variant=
+   neutral|info|success|warning|error|<color-name>, label — Badge renders
+   [icon,label], NOT children). Keeps call sites (<SeverityBadge severity=.../>)
+   unchanged while swapping the old hand-rolled .sev-badge chip. */
+const SEVERITY_TO_ASTRYX_VARIANT={crit:'error',warn:'warning',ok:'success'};
 function SeverityBadge({severity}){
   const s=severity==='crit'?'crit':severity==='warn'?'warn':'ok';
-  return <span className={'sev-badge '+s}>{s.toUpperCase()}</span>;
+  return <Astryx.Badge variant={SEVERITY_TO_ASTRYX_VARIANT[s]} label={s.toUpperCase()}/>;
 }
 
 /* SnoozeControl — port of src/components/SnoozeControl.tsx. POSTs
@@ -4739,7 +4742,7 @@ function SnoozeControl({category,onSnoozed}){
       style={{height:26,fontSize:11,background:'var(--raised)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)',color:'var(--text)'}}>
       {SNOOZE_DURATIONS.map(d=><option key={d.minutes} value={d.minutes}>{d.label}</option>)}
     </select>
-    <button type="button" className="btn" disabled={pending} onClick={handleSnooze}>{pending?'Snoozing…':'Snooze'}</button>
+    <Astryx.Button type="button" variant="secondary" size="sm" isDisabled={pending} onClick={handleSnooze}>{pending?'Snoozing…':'Snooze'}</Astryx.Button>
   </span>;
 }
 
@@ -4796,14 +4799,16 @@ function IncidentsTab(){
     <SynthBand tone={tone} verdict={verdict} facts={[]}/>
 
     <Panel title="Triage" api={incApi}>
-      {incApi.loading&&!incApi.data
-        ? <Skeleton rows={4}/>
-        : incApi.locked
-          ? <div className="dt-empty">Vault locked — unlock to load incidents.</div>
-          : incidents.length===0
-            ? <div className="dt-empty">No issues detected — all metrics within normal thresholds.</div>
-            : <DataTable cols={triageCols} rows={incidents} rowKey={r=>r.key} tableId="incidents-triage"
-                csvName="incidents" maxRows={50}/>}
+      <Astryx.Card variant="default" padding={0}>
+        {incApi.loading&&!incApi.data
+          ? <Skeleton rows={4}/>
+          : incApi.locked
+            ? <div className="dt-empty">Vault locked — unlock to load incidents.</div>
+            : incidents.length===0
+              ? <div className="dt-empty">No issues detected — all metrics within normal thresholds.</div>
+              : <DataTable cols={triageCols} rows={incidents} rowKey={r=>r.key} tableId="incidents-triage"
+                  csvName="incidents" maxRows={50}/>}
+      </Astryx.Card>
     </Panel>
 
     <Panel title="SOC queue (IQ Actions)" api={actionsApi} empty={!actionsRows.length}>
