@@ -178,6 +178,15 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
   background:transparent;border:none;padding:0;
 }
 
+/* ── severity badge (audit chain status, etc.) ── */
+.sev-badge{
+  display:inline-flex;align-items:center;gap:var(--s2);
+  font-size:var(--t11);font-weight:600;text-transform:uppercase;letter-spacing:.02em;
+  padding:2px 8px;border-radius:var(--r-ctl);border:1px solid transparent;
+}
+.sev-badge.ok{color:var(--ok);border-color:var(--ok);background:var(--ok-dim);}
+.sev-badge.crit{color:var(--crit);border-color:var(--crit);background:var(--crit-dim);}
+
 /* ── table ── */
 .tbl-wrap{width:100%;overflow-x:auto;}
 table.dt{width:100%;border-collapse:collapse;font-size:var(--dt-fs);}
@@ -4632,56 +4641,38 @@ function AiDrawer({open,onClose,initialQ}){
   </aside>;
 }
 
-/* AuditTab — audit rows from /api/data .auditLogs ({ts,user,action,resource,result}). */
-const AUDIT_ACT_COLOR={CREATE:'var(--ok)',DELETE:'var(--crit)',UPDATE:'var(--warn)'};
+/* AuditTab — immutable audit log from /api/audit/log (SHA-256 hash-chained,
+   port of Chris Marrison's backend/audit/log.py). Chain integrity is
+   re-verified server-side on every poll; a broken chain means an entry was
+   edited or removed outside audit_append(). */
 function AuditTab(){
-  const {data,error,locked,fetchedAt,refetch,loading}=useData();
-  const rows=(data&&(data.auditLogs||data.audit))||[];
+  const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/audit/log',{poll:15000});
+  const rows=(data&&data.entries)||[];
+  const chainValid=data?data.chain_valid:null;
   const cols=[
-    {key:'ts',label:'Time',mono:true,align:'left',width:190},
-    {key:'user',label:'User'},
-    {key:'action',label:'Action',render:v=>{
-      const a=String(v||'').toUpperCase();
-      return <span className="mono" style={{fontSize:11,textTransform:'uppercase',color:AUDIT_ACT_COLOR[a]||'var(--text-dim)'}}>{a}</span>;
-    }},
-    {key:'resource',label:'Resource'},
-    {key:'result',label:'Result',render:v=>
-      <span style={{color:v==='failure'?'var(--crit)':'var(--text-dim)'}}>{v}</span>},
+    {key:'ts',label:'Time',mono:true,align:'left',width:190,
+      render:v=>v==null?'—':new Date(parseTs(v)).toLocaleString()},
+    {key:'actor',label:'Actor',mono:true},
+    {key:'event',label:'Event'},
+    {key:'detail',label:'Detail',render:v=>
+      <span className="mono" style={{fontSize:11,color:'var(--text-dim)'}}>{v&&Object.keys(v).length?JSON.stringify(v):'—'}</span>},
   ];
 
-  // ── Answer-first synthesis band (snapshot schema has no audit → no deltas) ──
-  const isFail=r=>String(r&&r.result||'').toLowerCase()==='failure';
   const total=rows.length;
-  const fails=rows.filter(isFail);
-  const deletes=rows.filter(r=>String(r&&r.action||'').toUpperCase()==='DELETE').length;
-  const actorCount={};
-  rows.forEach(r=>{const u=r&&r.user;if(u)actorCount[u]=(actorCount[u]||0)+1;});
-  const topActor=Object.keys(actorCount).reduce((b,u)=>actorCount[u]>(actorCount[b]||0)?u:b,null);
-  const recentFail=[...fails].sort((a,b)=>String(b.ts||'').localeCompare(String(a.ts||'')))[0];
-  const tone=fails.length>0?'crit':deletes>0?'warn':'ok';
-  const verdict=fails.length===0
-    ? 'No failed changes in the last '+total+' operations'
-    : fails.length+' failed operations — most recent by '+((recentFail&&recentFail.user)||'unknown');
+  const tone=chainValid===false?'crit':'ok';
+  const verdict=chainValid===false
+    ? 'Audit chain BROKEN at entry '+data.broken_index+' — log may have been tampered with'
+    : total+' audit '+(total===1?'entry':'entries')+', hash chain intact';
 
   return <div className="page">
     <SynthBand tone={tone} verdict={verdict} facts={[]}/>
 
-    <div className="grid fadein">
-      <Panel title="Activity" side={<span className="mono">{total} op{total===1?'':'s'}</span>} empty={rows.length===0}>
-        <VolumeHistogram rows={rows} tsKey="ts" buckets={24}/>
-      </Panel>
-      <Panel title="Signals" empty={rows.length===0}>
-        <div className="kpis">
-          <KpiSpark label="Failures" value={fails.length} sub={total+' total ops'}
-            trend={fails.length?'▲ '+fails.length:null} trendDir="dn" color="var(--crit)"/>
-          <KpiSpark label="Deletes" value={deletes} sub="destructive ops" color="var(--warn)"/>
-          <KpiSpark label="Top actor" value={topActor||'—'}
-            sub={topActor?actorCount[topActor]+' operation'+(actorCount[topActor]===1?'':'s'):'no activity'} color="var(--accent)"/>
-        </div>
-      </Panel>
-    </div>
-
-    <Panel title="Audit log" side={<Freshness at={fetchedAt} error={error} onRetry={refetch}/>}>
+    <Panel title="Audit log"
+      side={<span style={{display:'inline-flex',alignItems:'center',gap:'var(--s3)'}}>
+        {chainValid!=null && <span className={'sev-badge '+(chainValid?'ok':'crit')}>{chainValid?'Chain valid':'Chain broken'}</span>}
+        <AuditExportButton/>
+        <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
+      </span>}>
       {loading&&!data
         ? <Skeleton rows={6}/>
         : locked
@@ -4689,11 +4680,35 @@ function AuditTab(){
           : error
             ? <div className="dt-empty">Failed to load audit log — <button className="fresh-retry" onClick={refetch}>Retry</button></div>
             : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}} csvName="audit"
-                tableId="audit" rowKey={r=>String(r.id??((r.ts||'')+'|'+(r.user||'')+'|'+(r.action||'')))}
-                maxRows={50} problemsOnly={{test:r=>/fail/i.test(String(r.result||'')),label:'Failures only',default:false}}
-                selectable filterable filterKeys={['user','resource','action']}/>}
+                tableId="audit" rowKey={r=>String(r.hash||((r.ts||'')+'|'+(r.actor||'')+'|'+(r.event||'')))}
+                maxRows={50} selectable filterable filterKeys={['actor','event']}/>}
     </Panel>
   </div>;
+}
+
+/* AuditExportButton — downloads /api/audit/export as a JSON blob (port of
+   src/components/AuditExportButton.tsx). */
+function AuditExportButton(){
+  const [pending,setPending]=useState(false);
+  const handleExport=async()=>{
+    setPending(true);
+    try{
+      const r=await fetch('/api/audit/export');
+      if(!r.ok){toast('Export failed — HTTP '+r.status,'err');return;}
+      const payload=await r.json();
+      const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download='audit-export-'+Date.now()+'.json';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    }catch(e){
+      toast(String((e&&e.message)||e),'err');
+    }finally{
+      setPending(false);
+    }
+  };
+  return <button className="btn" disabled={pending} onClick={handleExport}>{pending?'Exporting…':'Export Audit Log'}</button>;
 }
 
 // ═══ REGION: PROVISION ═══

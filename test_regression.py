@@ -73,10 +73,15 @@ class BackendTests(unittest.TestCase):
         self.assertIn(b'<div id="root">', body)
 
     def test_static_files(self):
-        for f in ("react.min.js", "babel.min.js", "react-dom.min.js"):
+        # React 19 ESM boot: react/react-dom UMD are gone; the vendored ESM bundle +
+        # Babel serve as javascript, and the Astryx stylesheet as CSS. See plans/018.
+        for f in ("babel.min.js", "vendor.react-19-2-7.8c3b2ed6.js"):
             status, ct, _ = get(f"/{f}")
             self.assertEqual(status, 200, f"{f} returned {status}")
             self.assertIn("javascript", ct, f"{f} wrong content-type")
+        status, ct, _ = get("/vendor.astryx.css")
+        self.assertEqual(status, 200, f"vendor.astryx.css returned {status}")
+        self.assertIn("css", ct, "vendor.astryx.css wrong content-type")
 
     def test_404(self):
         # SPA fallback: non-API paths serve index.html (200); unknown /api/* paths 404
@@ -167,6 +172,35 @@ class BackendTests(unittest.TestCase):
 
     def test_api_actions_no_500(self):
         self._assert_no_500("/api/actions")
+
+    # ── immutable audit log (plan 019 Phase 1) ─────────────────────────────────
+
+    def test_audit_log_shape(self):
+        status, d = get_json("/api/audit/log")
+        self.assertEqual(status, 200)
+        self.assertIn("entries", d)
+        self.assertIsInstance(d["entries"], list)
+        self.assertIn("chain_valid", d)
+        self.assertIn("broken_index", d)
+        if d["entries"]:
+            entry = d["entries"][0]
+            for k in ("ts", "event", "actor", "detail", "prev_hash", "hash"):
+                self.assertIn(k, entry, f"audit entry missing key: {k}")
+
+    def test_audit_chain_valid(self):
+        # A fresh GET (which itself is not mutating) still triggers real
+        # write-authorized entries from prior test runs in this suite — the
+        # chain must always verify as intact.
+        status, d = get_json("/api/audit/log")
+        self.assertEqual(status, 200)
+        self.assertTrue(d["chain_valid"], f"audit chain broken at index {d.get('broken_index')}")
+
+    def test_audit_export_is_json_pack(self):
+        status, d = get_json("/api/audit/export")
+        self.assertEqual(status, 200)
+        for k in ("entries", "chain_valid", "broken_index", "exported_at", "app_version"):
+            self.assertIn(k, d, f"audit export missing key: {k}")
+        self.assertIsInstance(d["entries"], list)
 
     def test_api_dns_analytics_shape(self):
         status, d = get_json("/api/dns-analytics")
@@ -755,6 +789,17 @@ class FrontendStructureTests(unittest.TestCase):
     def test_collapse_helper(self):
         self.assertContains("collapseIdentical", "collapseIdentical helper missing")
 
+    def test_audit_tab_real_feed(self):
+        # Plan 019 Phase 1: AuditTab must read the real hash-chained audit log,
+        # not the old mock data.auditLogs/data.audit source, and offer a chain
+        # status badge + export button.
+        self.assertContains("useApi('/api/audit/log'", "AuditTab must poll /api/audit/log via useApi")
+        self.assertContains("AuditExportButton", "AuditExportButton component missing")
+        self.assertContains("/api/audit/export", "AuditExportButton must fetch /api/audit/export")
+        self.assertContains("sev-badge", "chain-valid sev-badge missing from AuditTab")
+        self.assertNotIn("data.auditLogs||data.audit", self.html,
+                         "AuditTab must no longer read the mock data.auditLogs/data.audit source")
+
 
 class ServerSecurityTests(unittest.TestCase):
     """Static (no running server) checks on server.py hardening from plans 014/015.
@@ -801,6 +846,22 @@ class ServerSecurityTests(unittest.TestCase):
         # Plan 015: large JSON responses gzip when the client advertises it.
         for needle in ("Content-Encoding", "gzip.compress", "Accept-Encoding"):
             self.assertIn(needle, self.src, f"gzip primitive {needle!r} missing from server.py")
+
+    def test_audit_module_wired(self):
+        # Plan 019 Phase 1: hash-chained audit module + routes + central
+        # write-authorized breadcrumb must all be present.
+        for needle in ("def audit_append", "def audit_read", "def audit_verify_chain",
+                       "_audit_entry_hash", "/api/audit/log", "/api/audit/export",
+                       'audit_append("write-authorized"'):
+            self.assertIn(needle, self.src, f"audit primitive {needle!r} missing from server.py")
+
+    def test_audit_persists_on_vault_volume(self):
+        # AUDIT_LOG_FILE must live next to VAULT_FILE (the mounted noc-vault
+        # volume), not a fresh/re-probed directory, so it survives restarts.
+        self.assertIn("AUDIT_LOG_FILE = os.path.join(_STATE_DIR", self.src,
+                      "AUDIT_LOG_FILE must be derived from the vault's state dir")
+        self.assertIn("_STATE_DIR = os.path.dirname(VAULT_FILE)", self.src,
+                      "_STATE_DIR must reuse VAULT_FILE's resolved directory, not re-probe")
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
