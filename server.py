@@ -1560,17 +1560,25 @@ class SiteProvisioner:
             result["subnets"].append({"address": f"{subnet_addr}/{cidr}", "name": sdef.name, "id": "(dry-run)"})
             return {"dry_run": True, "address": subnet_addr, "cidr": cidr, "name": sdef.name, "tags": tags}
 
-        body = {"name": sdef.name, "space": self._space_id,
-                "comment": f"{self.cfg.site.capitalize()} site - {sdef.purpose} network", "tags": tags}
+        # nextavailablesubnet carves + allocates but rejects a request body
+        # ("body is not allowed") — POST with query params only, then PATCH the
+        # new subnet to set name/comment/tags (tags are required for teardown).
         resp, status = _rest_write("POST", f"/api/ddi/v1/{block_id}/nextavailablesubnet",
-                                    body=body, params={"cidr": int(cidr)})
+                                    params={"cidr": int(cidr), "count": 1})
         if status not in (200, 201) or resp is None:
             raise ProvisionError(f"Failed to create subnet {sdef.name}: status {status} {resp}")
         rows = (resp.get("results") or ([resp["result"]] if resp.get("result") else [])) if isinstance(resp, dict) else []
         subnet = rows[0] if rows else {}
-        if not subnet.get("address"):
+        sid = subnet.get("id")
+        if not subnet.get("address") or not sid:
             raise ProvisionError(f"No free /{cidr} subnet available in block for {sdef.name}")
-        self.emit({"step": f"  Created subnet id={subnet.get('id')}"})
+        patch_body = {"name": sdef.name,
+                      "comment": f"{self.cfg.site.capitalize()} site - {sdef.purpose} network", "tags": tags}
+        presp, pstatus = _rest_write("PATCH", f"/api/ddi/v1/{sid}", body=patch_body)
+        if pstatus not in (200, 201):
+            raise ProvisionError(f"Subnet {sdef.name} created but tagging failed (needed for teardown): status {pstatus} {presp}")
+        subnet = (presp.get("result") if isinstance(presp, dict) else None) or subnet
+        self.emit({"step": f"  Created subnet id={sid}"})
         result["subnets"].append({"address": f'{subnet.get("address")}/{subnet.get("cidr", cidr)}',
                                    "name": sdef.name, "id": subnet.get("id", "")})
         return subnet
