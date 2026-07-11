@@ -995,6 +995,227 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
    New OPTIONAL power props (omitted ⇒ today's exact DOM/behavior):
      tableId, rowKey, renderPeek, selectable, bulkActions, filterable, filterKeys, initialPeekKey
    ───────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   BloxSmith Unified Search (BQL) — Phase A pure core.
+   parseQuery / deriveSchema / buildPredicate are schema-free-ish,
+   hook-free, JSX-free plain functions (usable in Node + browser).
+   Sentinel comments below let the test suite slice each block.
+   ───────────────────────────────────────────────────────────── */
+/* ==BQL:parseQuery:start== */
+function parseQuery(str){
+  // PURE, schema-free tokenizer. Never throws → on any error, one text token.
+  try{
+    if(str==null) return [];
+    var s=String(str);
+    if(s.trim()==='') return [];
+    // 1. split on top-level whitespace, quotes suspend splitting.
+    var chunks=[], buf='', inq=false;
+    for(var i=0;i<s.length;i++){
+      var ch=s[i];
+      if(ch==='"'){ inq=!inq; buf+=ch; continue; }
+      if(!inq && /\s/.test(ch)){ if(buf!==''){ chunks.push(buf); buf=''; } continue; }
+      buf+=ch;
+    }
+    if(buf!=='') chunks.push(buf);
+    var tokens=[];
+    for(var c=0;c<chunks.length;c++){
+      var chunk=chunks[c], negate=false;
+      // leading '-' negates; a lone '-' is literal text.
+      if(chunk.length>1 && chunk.charAt(0)==='-'){ negate=true; chunk=chunk.slice(1); }
+      var raw=chunk; // raw = chunk minus leading '-'
+      // quoted phrase (terminated or unterminated) → text token.
+      if(chunk.charAt(0)==='"'){
+        var inner=chunk.slice(1);
+        if(inner.length && inner.charAt(inner.length-1)==='"') inner=inner.slice(0,-1);
+        tokens.push({kind:'text', value:inner, quoted:true, negate:negate, raw:raw});
+        continue;
+      }
+      // find earliest operator; two-char (>=,<=) beats one-char at a match.
+      var opIdx=-1, op=null;
+      for(var k=0;k<chunk.length;k++){
+        var two=chunk.substr(k,2);
+        if(two==='>='||two==='<='){ opIdx=k; op=two; break; }
+        var one=chunk.charAt(k);
+        if(one==='>'||one==='<'||one==='='||one===':'){ opIdx=k; op=one; break; }
+      }
+      if(opIdx===-1){ tokens.push({kind:'text', value:chunk, negate:negate, raw:raw}); continue; }
+      var field=chunk.slice(0,opIdx).toLowerCase();
+      var rawval=chunk.slice(opIdx+op.length);
+      if(field===''){ tokens.push({kind:'text', value:chunk, negate:negate, raw:raw}); continue; }
+      // value shaping (mostly op ':')
+      var shape;
+      var rng=/^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$/.exec(rawval);
+      if(rng){
+        shape={op:'range', lo:Number(rng[1]), hi:Number(rng[2])};
+      } else if(rawval.indexOf(',')!==-1){
+        shape={op:'or', values:rawval.split(',').filter(function(x){return x!=='';})};
+      } else if(field==='cidr' && rawval.charAt(0)==='/'){
+        shape={op:'=', value:rawval.slice(1)};
+      } else if(/^\d+(?:\.\d+)?[mhd]$/.test(rawval)){
+        shape={op:op, value:rawval, age:true};
+      } else {
+        shape={op:op, value:rawval};
+      }
+      var tok={kind:'field', field:field};
+      for(var key in shape){ if(Object.prototype.hasOwnProperty.call(shape,key)) tok[key]=shape[key]; }
+      tok.negate=negate; tok.raw=raw;
+      tokens.push(tok);
+    }
+    return tokens;
+  }catch(e){
+    var v=(str==null)?'':String(str);
+    return v===''?[]:[{kind:'text', value:v, negate:false, raw:v}];
+  }
+}
+/* ==BQL:parseQuery:end== */
+
+/* ==BQL:deriveSchema:start== */
+function deriveSchema(cols, rows, searchSchema){
+  cols=cols||[]; rows=rows||[]; searchSchema=searchSchema||{};
+  var fields={}, ageKey=null;
+  var ageRe=/(^|_)(ts|time|date|seen|when|_at)$|age/;
+  for(var ci=0;ci<cols.length;ci++){
+    var col=cols[ci]; if(!col||!col.key) continue;
+    var key=col.key, samples=[];
+    for(var ri=0;ri<rows.length && samples.length<30;ri++){
+      var v=rows[ri]?rows[ri][key]:undefined;
+      if(v!==null && v!==undefined) samples.push(v);
+    }
+    var type, values=null;
+    if(samples.length && samples.every(function(x){return typeof x==='number';})) type='number';
+    else if(samples.length && samples.every(function(x){return typeof x==='boolean';})) type='boolean';
+    else if(samples.some(function(x){return Array.isArray(x);})) type='array';
+    else {
+      var distinct={}, n=0;
+      for(var si=0;si<samples.length;si++){ var sv=String(samples[si]); if(!Object.prototype.hasOwnProperty.call(distinct,sv)){ distinct[sv]=1; n++; } }
+      if(n<=12){ type='enum'; values=Object.keys(distinct); } else type='string';
+    }
+    var def={type:type, key:key};
+    if(values) def.values=values;
+    fields[key]=def;
+    // synthetic age field (first matching column wins)
+    if(ageKey===null){
+      var isAge=ageRe.test(key);
+      if(!isAge && samples.length){
+        isAge = samples.some(function(x){return typeof x==='string';}) &&
+                samples.every(function(x){return !isNaN(Date.parse(x));});
+      }
+      if(isAge) ageKey=key;
+    }
+  }
+  if(ageKey!==null) fields['age']={type:'age', key:ageKey};
+  // built-in aliases — keep only if the target field exists.
+  var aliases={}, builtin={sev:'severity', zone:'fqdn', ip:'addr', value:'dns_rdata'};
+  for(var a in builtin){ if(Object.prototype.hasOwnProperty.call(builtin,a) && fields[builtin[a]]) aliases[a]=builtin[a]; }
+  // freeTextKeys: searchSchema override → DataTable filterKeys → all col keys.
+  var freeTextKeys = (searchSchema.freeTextKeys && searchSchema.freeTextKeys.length) ? searchSchema.freeTextKeys
+    : (searchSchema.filterKeys && searchSchema.filterKeys.length) ? searchSchema.filterKeys
+    : cols.map(function(c){return c.key;});
+  // searchSchema deep-merges over auto-derived (per-field override).
+  if(searchSchema.aliases){ for(var ak in searchSchema.aliases){ if(Object.prototype.hasOwnProperty.call(searchSchema.aliases,ak)) aliases[ak]=searchSchema.aliases[ak]; } }
+  if(searchSchema.fields){ for(var fk in searchSchema.fields){ if(Object.prototype.hasOwnProperty.call(searchSchema.fields,fk)){ var base=fields[fk]||{}; var ov=searchSchema.fields[fk]||{}; var merged={}; for(var b in base){ if(Object.prototype.hasOwnProperty.call(base,b)) merged[b]=base[b]; } for(var o in ov){ if(Object.prototype.hasOwnProperty.call(ov,o)) merged[o]=ov[o]; } fields[fk]=merged; } } }
+  return {freeTextKeys:freeTextKeys, aliases:aliases, fields:fields};
+}
+/* ==BQL:deriveSchema:end== */
+
+/* ==BQL:buildPredicate:start== */
+function buildPredicate(tokens, schema){
+  tokens=tokens||[]; schema=schema||{};
+  var fields=schema.fields||{}, aliases=schema.aliases||{}, ftk=schema.freeTextKeys||[];
+  if(!tokens.length) return function(){ return true; };
+  function textMatch(value, row){
+    var needle=String(value).toLowerCase();
+    return ftk.some(function(k){ return String(row[k]??'').toLowerCase().includes(needle); });
+  }
+  function numCmp(op, n, tok){
+    switch(op){
+      case '=': return n===Number(tok.value);
+      case '>': return n>Number(tok.value);
+      case '>=': return n>=Number(tok.value);
+      case '<': return n<Number(tok.value);
+      case '<=': return n<=Number(tok.value);
+      case 'range': return n>=tok.lo && n<=tok.hi;
+      case 'or': return tok.values.some(function(x){ return n===Number(x); });
+      default: return n===Number(tok.value); // ':'
+    }
+  }
+  function numMatch(tok, v){
+    if(v===null||v===undefined||v==='') return false;
+    var n=Number(v);
+    if(isNaN(n)) return false;
+    return numCmp(tok.op, n, tok);
+  }
+  function strMatch(tok, v){
+    var s=String(v==null?'':v).toLowerCase();
+    if(tok.op==='=') return s===String(tok.value).toLowerCase();
+    if(tok.op==='or') return tok.values.some(function(x){ return s.indexOf(String(x).toLowerCase())!==-1; });
+    return s.indexOf(String(tok.value).toLowerCase())!==-1; // ':' / default
+  }
+  function boolMatch(tok, v){
+    var s=String(tok.value).toLowerCase();
+    var want = (s==='yes'||s==='true'||s==='1');
+    return (!!v)===want;
+  }
+  function arrMatch(tok, v){
+    var arr=Array.isArray(v)?v:[];
+    if(tok.op===':'){
+      var needle=String(tok.value).toLowerCase();
+      return arr.some(function(e){ return String(e).toLowerCase().indexOf(needle)!==-1; });
+    }
+    if(tok.op==='or'){
+      return tok.values.some(function(x){ var nx=String(x).toLowerCase(); return arr.some(function(e){ return String(e).toLowerCase().indexOf(nx)!==-1; }); });
+    }
+    return numCmp(tok.op, (Array.isArray(v)?v.length:0), tok); // numeric op → length
+  }
+  function ageMatch(tok, v){
+    var t=Date.parse(v);
+    if(isNaN(t)) return false;
+    var ageMs=Date.now()-t;
+    var m=/^(\d+(?:\.\d+)?)([mhd])$/.exec(String(tok.value));
+    var limit;
+    if(m){ var mult=(m[2]==='m')?60000:(m[2]==='h')?3600000:86400000; limit=Number(m[1])*mult; }
+    else limit=Number(tok.value);
+    switch(tok.op){
+      case '<': return ageMs<limit;
+      case '<=': return ageMs<=limit;
+      case '>': return ageMs>limit;
+      case '>=': return ageMs>=limit;
+      case '=': return ageMs===limit;
+      case 'range': return ageMs>=tok.lo && ageMs<=tok.hi;
+      default: return ageMs<=limit; // ':'
+    }
+  }
+  function matchToken(tok, row){
+    if(tok.kind==='text') return textMatch(tok.value, row);
+    var field=tok.field;
+    var canon = (aliases[field]!==undefined && aliases[field]!==null) ? aliases[field] : (fields[field]?field:null);
+    if(canon==null) return textMatch(tok.raw, row); // degrade unknown field → substring
+    var def=fields[canon];
+    if(!def) return textMatch(tok.raw, row);
+    var v=row[def.key];
+    switch(def.type){
+      case 'number': return numMatch(tok, v);
+      case 'boolean': return boolMatch(tok, v);
+      case 'array': return arrMatch(tok, v);
+      case 'age': return ageMatch(tok, v);
+      case 'cidr': return numMatch(tok, v); // parser already turned cidr:/30 → =30
+      case 'string':
+      case 'enum':
+      default: return strMatch(tok, v);
+    }
+  }
+  return function(row){
+    for(var i=0;i<tokens.length;i++){
+      var tok=tokens[i];
+      var res=matchToken(tok, row);
+      if(tok.negate) res=!res;
+      if(!res) return false;
+    }
+    return true;
+  };
+}
+/* ==BQL:buildPredicate:end== */
+
 function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
   maxRows,problemsOnly,scrollBody,columnToggle}){

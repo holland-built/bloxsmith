@@ -1092,6 +1092,133 @@ class ServerSecurityTests(unittest.TestCase):
             self.assertIn(needle, self.src, f"incidents primitive {needle!r} missing from server.py")
 
 
+class BqlParserTests(unittest.TestCase):
+    """BloxSmith Unified Search (BQL) Phase A — exercises the three PURE JS
+    functions (parseQuery/deriveSchema/buildPredicate) sliced by sentinel from
+    index.html and executed under Node (same extract-and-exec technique as the
+    _cspq / correlate server tests above, but for JS). Skips if `node` absent."""
+
+    SENTINELS = ("parseQuery", "deriveSchema", "buildPredicate")
+
+    @classmethod
+    def setUpClass(cls):
+        # NUL-safe read (index.html carries stray NUL bytes).
+        with open(HTML, "rb") as f:
+            cls.src = f.read().replace(b"\x00", b" ").decode("utf-8", "replace")
+
+    def _block(self, name):
+        a = self.src.index(f"/* ==BQL:{name}:start== */")
+        b = self.src.index(f"/* ==BQL:{name}:end== */")
+        self.assertLess(a, b, f"BQL sentinel block {name} malformed/missing")
+        return self.src[a:b]
+
+    def _node(self, harness):
+        import shutil, subprocess, tempfile
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node not found on PATH")
+        code = "\n".join(self._block(n) for n in self.SENTINELS) + "\n" + harness
+        with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False,
+                                         dir=os.environ.get("TMPDIR", "/tmp")) as f:
+            f.write(code)
+            path = f.name
+        try:
+            return subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+        finally:
+            os.unlink(path)
+
+    def test_bql_predicate_semantics(self):
+        # One Node run asserts the whole contract; exits 1 (with a FAIL line) on
+        # any mismatch so a red bar names the exact case that broke.
+        harness = r"""
+function iso(msAgo){ return new Date(Date.now()-msAgo).toISOString(); }
+const H=3600000, M=60000;
+const rows=[
+  {name:'alpha',   util:90,   severity:'critical', type:'A',   issues:['dup','stale'], seen:iso(1*H),  cidr:30, tag:'has foo:bar here'},
+  {name:'bravo',   util:80,   severity:'high',     type:'PTR', issues:[],              seen:iso(48*H), cidr:24, tag:'nothing'},
+  {name:'charlie', util:50,   severity:'low',      type:'A',   issues:['warn'],        seen:iso(2*H),  cidr:30, tag:'nothing'},
+  {name:'delta',   util:null, severity:'high',     type:'PTR', issues:['x'],           seen:iso(10*M), cidr:16, tag:'nothing'},
+];
+const cols=[{key:'name'},{key:'util'},{key:'severity'},{key:'type'},{key:'issues'},{key:'seen'},{key:'cidr'},{key:'tag'}];
+const schema=deriveSchema(cols, rows, {fields:{cidr:{type:'cidr'}}});
+let fails=0;
+function chk(label, cond){ if(!cond){ console.error('FAIL '+label); fails++; } }
+function names(q){ return rows.filter(buildPredicate(parseQuery(q), schema)).map(r=>r.name).sort(); }
+function eqArr(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
+
+// schema shape
+chk('alias sev->severity kept', schema.aliases.sev==='severity');
+chk('age synthetic field -> seen key', schema.fields.age && schema.fields.age.type==='age' && schema.fields.age.key==='seen');
+chk('freeTextKeys = all col keys', eqArr(schema.freeTextKeys, cols.map(c=>c.key)));
+chk('util typed number', schema.fields.util.type==='number');
+chk('severity typed enum', schema.fields.severity.type==='enum');
+chk('issues typed array', schema.fields.issues.type==='array');
+chk('cidr override type', schema.fields.cidr.type==='cidr');
+
+// bare word == substring
+chk('bare word substring', eqArr(names('charlie'), ['charlie']));
+// numeric >
+chk('util>85 numeric', eqArr(names('util>85'), ['alpha']));
+// range
+chk('util:70-89 range', eqArr(names('util:70-89'), ['bravo']));
+// OR + alias
+chk('sev:critical,high OR+alias', eqArr(names('sev:critical,high'), ['alpha','bravo','delta']));
+// alias single
+chk('alias sev:low', eqArr(names('sev:low'), ['charlie']));
+// negate
+chk('-type:PTR negate', eqArr(names('-type:PTR'), ['alpha','charlie']));
+// age
+chk('age<24h', eqArr(names('age<24h'), ['alpha','charlie','delta']));
+// cidr slash === numeric equality
+chk('cidr:/30 == cidr=30', eqArr(names('cidr:/30'), names('cidr=30')) && eqArr(names('cidr:/30'), ['alpha','charlie']));
+// array length
+chk('issues>0 array-length', eqArr(names('issues>0'), ['alpha','charlie','delta']));
+// unknown field degrades to substring (non-empty on a matching row)
+chk('foo:bar degrades to substring', names('foo:bar').length>=1 && names('foo:bar').indexOf('alpha')!==-1);
+// missing-number excluded from numeric compares (delta.util===null)
+chk('missing number excluded', names('util>0').indexOf('delta')===-1 && eqArr(names('util>0'), ['alpha','bravo','charlie']));
+// empty query matches everything
+chk('empty query all rows', names('').length===rows.length);
+
+if(fails){ console.error(fails+' BQL assertion(s) failed'); process.exit(1); }
+console.log('BQL_OK');
+"""
+        res = self._node(harness)
+        self.assertEqual(res.returncode, 0,
+                         f"BQL Node run failed:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
+        self.assertIn("BQL_OK", res.stdout)
+
+    def test_bql_blocks_are_valid_babel_module(self):
+        # The three sliced blocks must parse as valid JS inside the app's Babel
+        # module (same transform the browser applies to the text/babel script).
+        import shutil, subprocess, tempfile
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node not found on PATH")
+        babel = os.path.join(DIR, "babel.min.js")
+        if not os.path.exists(babel):
+            self.skipTest("babel.min.js not present")
+        blocks = "\n".join(self._block(n) for n in self.SENTINELS)
+        driver = (
+            "const Babel=require(" + repr(babel) + ");\n"
+            "const code=" + json.dumps(blocks) + ";\n"
+            "try{ Babel.transform(code,{presets:['react'],sourceType:'module'}); "
+            "console.log('BABEL_OK'); }\n"
+            "catch(e){ console.error(String(e && e.message || e)); process.exit(1); }\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".cjs", delete=False,
+                                         dir=os.environ.get("TMPDIR", "/tmp")) as f:
+            f.write(driver)
+            path = f.name
+        try:
+            res = subprocess.run([node, path], capture_output=True, text=True, timeout=60)
+        finally:
+            os.unlink(path)
+        self.assertEqual(res.returncode, 0,
+                         f"Babel could not parse BQL blocks:\nSTDERR:{res.stderr}")
+        self.assertIn("BABEL_OK", res.stdout)
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
