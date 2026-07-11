@@ -853,6 +853,48 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertEqual(self.html.count("Treemap"), 0,
                          "Treemap must be fully removed (0 occurrences)")
 
+    # ── Unified Search (BQL) Phase D — Network chip wall killed → query presets ──
+
+    def _network_tab(self):
+        # Slice the NetworkTab function body (OverviewTab's own capacity list is
+        # earlier in the file, so its siteRows.map chart is correctly excluded).
+        i = self.html.index("function NetworkTab(")
+        j = self.html.index("\nfunction ", i + 1)
+        return self.html[i:j]
+
+    def test_no_site_chip_wall(self):
+        # PHASE D: the per-site filter-chip wall (one <button> per /16 site group,
+        # rendered by siteRows.map(...) with a chipStyle) is GONE from NetworkTab,
+        # along with the siteFilter state that fed it. Users type `site:X` instead.
+        net = self._network_tab()
+        self.assertNotIn("siteRows.map", net,
+                         "NetworkTab still renders a per-site chip wall (siteRows.map)")
+        self.assertNotIn("chipStyle", net, "dead chipStyle helper still present in NetworkTab")
+        self.assertNotIn("setSiteFilter", self.html, "siteFilter state must be fully removed")
+        self.assertNotIn("useState(params.band", self.html, "Network band useState must be removed")
+
+    def test_valuebands_inject_query(self):
+        # Value-band chips are now one-click BQL presets that inject a util token
+        # into the subnets search (replacing any existing util token).
+        self.assertContains("const UTIL_BQL=", "UTIL_BQL preset→BQL map missing")
+        for bql in ("util>=100", "util:90-99", "util:70-89", "util<70"):
+            self.assertContains(bql, f"util-band preset BQL '{bql}' missing")
+        for fn in ("injectUtilBand", "injectSite"):
+            self.assertContains(fn, f"preset-injection helper '{fn}' missing")
+        # subnets DataTable is a controlled-search handoff (query/onQuery ⇄ sq= hash).
+        self.assertContains("query={subnetQuery} onQuery={setSubnetQuery}",
+                            "subnets DataTable missing controlled-query handoff")
+        self.assertContains("np.sq=subnetQuery", "subnets search not mirrored to the sq= hash")
+
+    def test_band_legacy_remap(self):
+        # parseHash translates legacy ?band=… deep links to ?sq=… (BQL) for one release.
+        ph = self.html[self.html.index("function parseHash("):]
+        ph = ph[:ph.index("\nfunction ", 1)]
+        self.assertIn("BAND2SQ", ph, "parseHash legacy band→sq map (BAND2SQ) missing")
+        self.assertIn("params.sq=BAND2SQ[params.band]", ph,
+                      "parseHash does not remap band→sq")
+        self.assertIn("delete params.band", ph, "parseHash does not drop the legacy band param")
+
     def test_datatable_capped(self):
         # DataTable caps default rows and offers a 'Show all' escape hatch + problems filter.
         for needle in ("maxRows", "problemsOnly", "Show all", "dt-more"):

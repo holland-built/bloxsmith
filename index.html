@@ -1218,14 +1218,19 @@ function buildPredicate(tokens, schema){
 
 function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
-  maxRows,problemsOnly,scrollBody,columnToggle,searchSchema}){
+  maxRows,problemsOnly,scrollBody,columnToggle,searchSchema,query,onQuery}){
   const power=usePower();
   const {filters:globalFilters}=useFilters();
   const id=tableId||(csvName?String(csvName):null);
   const [sort,setSort]=useState(defaultSort||null); // {key,dir}
   const [cursor,setCursor]=useState(-1);             // -1 = no visual until a key is pressed
   const [selected,setSelected]=useState(()=>new Set());
-  const [filter,setFilter]=useState('');
+  const [filterState,setFilterState]=useState('');
+  // Controlled-search handoff: when onQuery is supplied the parent owns the filter string
+  // (NetworkTab uses it to mirror the subnets search to the #…?sq= hash + inject util/site presets).
+  const filterControlled=typeof onQuery==='function';
+  const filter=filterControlled?(query||''):filterState;
+  const setFilter=filterControlled?onQuery:setFilterState;
   const [showAll,setShowAll]=useState(false);        // maxRows expander
   const [renderLimit,setRenderLimit]=useState(300);  // scrollBody progressive render window
   const scrollPx=scrollBody===true?420:scrollBody;   // scrollBody:true → 420px
@@ -1530,6 +1535,13 @@ function parseHash(){
   if(LEGACY[tab]) tab=LEGACY[tab];
   if(!TABS.includes(tab)) tab='overview';
   if(wantsDrawer) params.drawer='1';
+  // Legacy deep-link remap: Overview used to hand off util bands as ?band=… ; Phase D moved to
+  // ?sq=… (BQL). Translate old links for one release so bookmarks / history survive.
+  if(params.band!=null && params.sq==null){
+    var BAND2SQ={'100':'util>=100','9099':'util:90-99','7089':'util:70-89','lt70':'util<70','85':'util>=85','7085':'util>=70'};
+    if(BAND2SQ[params.band]) params.sq=BAND2SQ[params.band];
+    delete params.band;
+  }
   return {tab,params};
 }
 function nav(tab,params){
@@ -2955,7 +2967,7 @@ function OverviewTab(){
           centerValue={hosts.length?Math.round(hostsBad/hosts.length*100)+'%':'0'} centerLabel="issues"/>
       </Panel>
       <Panel title="Subnet utilization" side={subnets.length.toLocaleString()+' subnets'}>
-        <HistogramBar buckets={utilBuckets} axisTicks onClick={(b,i)=>{const u=i*5+2.5;const nb=u>=85?'85':u>=70?'7085':null;nav('network',nb?{band:nb}:undefined);}}/>
+        <HistogramBar buckets={utilBuckets} axisTicks onClick={(b,i)=>{const u=i*5+2.5;const sq=u>=85?'util>=85':u>=70?'util>=70':null;nav('network',sq?{sq:sq}:undefined);}}/>
         <ValueBands rows={subnets} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS} value={band} onChange={setBand}/>
       </Panel>
       <Panel title="Top issues" side="live">
@@ -3459,13 +3471,17 @@ function NetworkTab(){
     return h;
   },[fetchedAt]);
   // NETDNS region UI state — MUST run before any early return (hooks-order rule).
-  // siteFilter: click a site bar to AND-filter the subnet table (null = all sites).
   // expandedSigs: 100%-util collapse groups the user has expanded (see collapseIdentical).
-  const [siteFilter,setSiteFilter]=useState(null);
-  // util-band quick-filter chip, values are UTIL_BANDS ids: '100'|'9099'|'7089'|'lt70'|null.
-  // Seeded from route (Overview hands off nav('network',{band})); synced on param change.
-  const [band,setBand]=useState(params.band||null);
-  useEffect(()=>{setBand(params.band||null);},[params.band]);
+  // Unified BQL search: the subnets table is the single filter surface. Its search string is
+  // NetworkTab-owned — seeded from the #…?sq= hash and mirrored back to it (like the f= pivot
+  // mirror). Util-band presets + the "capacity by site" bars inject BQL tokens (util>=100,
+  // site:X) into it. There is NO per-site chip wall and no separate band/siteFilter state.
+  const [subnetQuery,setSubnetQuery]=useState(params.sq||'');
+  useEffect(()=>{
+    const {tab,params:hp}=parseHash(); const np={...hp};
+    if(subnetQuery&&subnetQuery.trim()) np.sq=subnetQuery.trim(); else delete np.sq;
+    if((np.sq||'')!==(hp.sq||'')) nav(tab,np); // never touches q (AI drawer)
+  },[subnetQuery]);
   const [expandedSigs,setExpandedSigs]=useState(()=>new Set());
   const {bind}=useHoverDetail(); // cursor-following flavor card for subnet + top-consumer rows
   const _whoNet=useApi('/api/whoami');
@@ -3538,20 +3554,18 @@ function NetworkTab(){
   leases.forEach(l=>{const st=String(l.state||'unknown').toLowerCase();leaseStateCounts[st]=(leaseStateCounts[st]||0)+1;});
   const leaseSlices=Object.keys(leaseStateCounts).map(k=>({label:k,value:leaseStateCounts[k],
     color:k==='active'?'var(--ok)':k==='free'?'var(--text-faint)':(k==='expired'||k==='backup'||k==='offered')?'var(--warn)':'var(--accent)'}));
-  // Subnet table rows: AND the active site + util-band quick-filters, then collapse 100%-util
-  // noise (≥5 rows sharing a /cidr → one "N subnets at 100%" group) unless that signature
-  // was expanded. DataTable's own problemsOnly (>70%) then filters on top of this.
-  const siteScoped=siteFilter?subnets.filter(s=>(s.site||'—')===siteFilter):subnets;
-  const activeBand=UTIL_BANDS.find(b=>b.id===band);
-  let subnetPool=activeBand?siteScoped.filter(s=>activeBand.test(utilOf(s))):siteScoped;
-  const subnetRows=collapseIdentical(subnetPool,
+  // The subnets table owns all filtering now via BQL (subnetQuery ⇄ sq=); no pre-scoping here.
+  // Still collapse 100%-util noise (≥5 rows sharing a /cidr → one group) unless expanded.
+  const subnetRows=collapseIdentical(subnets,
     s=>{const sg=utilOf(s)===100?('100|/'+(s.cidr||'')):null; return (sg&&expandedSigs.has(sg))?null:sg;}, 5);
 
-  const chipStyle=on=>on
-    ? {cursor:'pointer',borderColor:'var(--accent)',color:'var(--text)',background:'var(--hover)'}
-    : {cursor:'pointer'};
-  const clearFilter=(siteFilter||band)?<button className="chip" style={{cursor:'pointer',borderColor:'var(--accent)',color:'var(--text)'}}
-    onClick={()=>{setSiteFilter(null);setBand(null);}}>Clear ✕</button>:null;
+  // Util-band presets → BQL tokens injected into the subnets search (replace any existing util
+  // token; clicking the active band clears it). "Capacity by site" bars inject site:<name>.
+  const UTIL_BQL={'100':'util>=100','9099':'util:90-99','7089':'util:70-89','lt70':'util<70'};
+  const stripUtil=q=>String(q||'').split(/\s+/).filter(t=>t&&!/^-?util(:|>=|<=|>|<|=)/i.test(t)).join(' ');
+  const activeUtilBand=(()=>{const parts=String(subnetQuery).split(/\s+/);for(const id in UTIL_BQL){if(parts.indexOf(UTIL_BQL[id])!==-1)return id;}return null;})();
+  const injectUtilBand=id=>{const base=stripUtil(subnetQuery);setSubnetQuery((id==null||activeUtilBand===id)?base:((base?base+' ':'')+UTIL_BQL[id]));};
+  const injectSite=name=>{const base=String(subnetQuery).split(/\s+/).filter(t=>t&&t.toLowerCase().indexOf('site:')!==0).join(' ');setSubnetQuery((base?base+' ':'')+'site:'+name);};
 
   return <div className="page fadein">
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
@@ -3584,8 +3598,8 @@ function NetworkTab(){
       : <React.Fragment>
           <SectionRule title="Capacity & utilization"/>
           <div className="grid">
-            <Panel title="Capacity by site" side={clearFilter} empty={siteRows.length<2}>
-              <GroupedBar rows={siteRows} max={24} onClick={r=>setSiteFilter(sf=>sf===r.site?null:r.site)}/>
+            <Panel title="Capacity by site" empty={siteRows.length<2}>
+              <GroupedBar rows={siteRows} max={24} onClick={r=>injectSite(r.site)}/>
             </Panel>
             <Panel title="Top consumers" empty={topN.length===0}>
               <div className="issues">
@@ -3609,9 +3623,10 @@ function NetworkTab(){
             </Panel>
             <div style={{gridColumn:'1/-1',display:'flex',flexWrap:'wrap',alignItems:'center',gap:'var(--s2)'}}>
               <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>Filter</span>
-              <ValueBands rows={siteScoped} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS} value={band} onChange={setBand}/>
-              {siteRows.map((g,i)=><button key={i} className="chip" style={chipStyle(siteFilter===g.site)}
-                onClick={()=>setSiteFilter(sf=>sf===g.site?null:g.site)}>{g.site} · {g.count}</button>)}
+              <ValueBands rows={subnets} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS}
+                value={activeUtilBand} onChange={id=>injectUtilBand(id)}/>
+              <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+                Type <code>site:name</code> or <code>util&gt;=90</code> in the table search to scope by site</span>
             </div>
             <div style={{gridColumn:'1/-1'}}>
               <Panel title="Subnets" side={<Freshness at={fetchedAt} onRetry={refetch}/>}>
@@ -3621,7 +3636,7 @@ function NetworkTab(){
                   onRowClick={r=>{ if(r.__group){ setExpandedSigs(prev=>{const n=new Set(prev); if(n.has(r.__group)) n.delete(r.__group); else n.add(r.__group); return n;}); return; } nav('network',{subnet:r.addr||r.id}); }}
                   csvName="subnets"
                   tableId="subnets" rowKey={r=>r.__group?('grp:'+r.__group):String(r.addr||r.id)} selectable
-                  filterable filterKeys={['addr','name','site']}
+                  filterable filterKeys={['addr','name','site']} query={subnetQuery} onQuery={setSubnetQuery}
                   initialPeekKey={params.peek}
                   renderPeek={row=>{
                     const rl=leasesInSubnet(leases,row);
