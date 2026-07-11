@@ -934,6 +934,28 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn("Astryx.Button", et, "EditorTab must use Astryx.Button")
         self.assertIn("Dry-run", et, "EditorTab must offer a dry-run checkbox")
 
+    # ── resource editor — Phase 3 (deep-links + update/delete) ────────────────
+
+    def test_editor_deeplinks(self):
+        """Row-level Edit/New buttons in DnsTab/NetworkTab/InfraTab nav('editor',{...})
+        with a resource type. Require at least 2 of the 3 tab regions to carry one."""
+        self.assertIn("nav('editor',{", self.html,
+                      "no nav('editor',{...}) deep-links found in index.html")
+        present = [t for t in ("type:'dns_zone'", "type:'subnet'", "type:'host'")
+                   if ("nav('editor',{" + t) in self.html]
+        self.assertGreaterEqual(len(present), 2,
+                                f"expected editor deep-links for >=2 of dns_zone/subnet/host, found: {present}")
+
+    def test_editor_update_delete(self):
+        """EditorTab branches POST vs PATCH on an id and offers a DELETE flow."""
+        et = self.html[self.html.index("function EditorTab("):]
+        et = et[:et.index("\nfunction ", 1)]
+        self.assertIn("PATCH", et, "EditorTab must issue a PATCH for update mode")
+        self.assertIn("DELETE", et, "EditorTab must issue a DELETE for the delete flow")
+        self.assertIn("/api/edit/", self.html[self.html.index("const FIELD_SPECS="):],
+                      "editor forms must target /api/edit/ endpoints")
+        self.assertIn("editId", et, "EditorTab must track an editId (id-present edit mode)")
+
 
 class ServerSecurityTests(unittest.TestCase):
     """Static (no running server) checks on server.py hardening from plans 014/015.

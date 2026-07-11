@@ -3244,6 +3244,8 @@ function NetworkTab(){
   useEffect(()=>{setBand(params.band||null);},[params.band]);
   const [expandedSigs,setExpandedSigs]=useState(()=>new Set());
   const {bind}=useHoverDetail(); // cursor-following flavor card for subnet + top-consumer rows
+  const _whoNet=useApi('/api/whoami');
+  const canEdit=(((_whoNet.data&&_whoNet.data.role)||'viewer')!=='viewer');
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
@@ -3286,6 +3288,8 @@ function NetworkTab(){
     {key:'util',label:'Utilization',align:'right',render:v=>UtilBar(v)},
     {key:'trend',label:'Trend',align:'left',spark:r=>histByAddr[r.addr]},
     {key:'site',label:'Site',hideSm:true,pivot:true},
+    ...(canEdit?[{key:'__edit',label:'',align:'right',render:(v,r)=>r.__group?null:
+      <button className="btn" onClick={e=>{e.stopPropagation();nav('editor',{type:'subnet',id:r.id||r.addr,name:r.name,cidr:r.cidr});}}>Edit subnet</button>}]:[]),
   ];
 
   // ── Capacity-by-site groups + top consumers (replaces the sparse treemap) ──
@@ -3435,6 +3439,8 @@ function DnsTab(){
   const {params}=useRoute();
   const {data,error,locked,loading,fetchedAt,refetch}=useData();
   const an=useApi('/api/dns-analytics');
+  const _whoDns=useApi('/api/whoami');
+  const canEdit=(((_whoDns.data&&_whoDns.data.role)||'viewer')!=='viewer');
   const {delta}=useSnapshots();
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
@@ -3449,6 +3455,8 @@ function DnsTab(){
       ? <span className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>{v.join(', ')}</span> : ''},
     {key:'anomaly',label:'Flag',align:'left',render:v=>v
       ? <span className="mono" style={{fontSize:'var(--t11)',color:'var(--warn)'}}>anomaly</span> : ''},
+    ...(canEdit?[{key:'__edit',label:'',align:'right',render:(v,z)=>
+      <button className="btn" onClick={e=>{e.stopPropagation();nav('editor',{type:'dns_zone',id:z.id,fqdn:z.fqdn,view:z.view});}}>Edit</button>}]:[]),
   ];
 
   const volume=(an.data&&an.data.volume)||[];
@@ -3501,7 +3509,7 @@ function DnsTab(){
 
   return <div className="page fadein">
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
-    <Panel title="DNS zones" side={<Freshness at={fetchedAt} onRetry={refetch}/>}>
+    <Panel title="DNS zones" side={<div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>{canEdit?<button className="btn" onClick={()=>nav('editor',{type:'dns_zone'})}>New zone</button>:null}<Freshness at={fetchedAt} onRetry={refetch}/></div>}>
       <DataTable cols={zoneCols} rows={zones} defaultSort={{key:'fqdn',dir:'asc'}} csvName="zones"
         scrollBody={480} columnToggle
         problemsOnly={{label:'Problems only',test:z=>(z.issues&&z.issues.length)||z.anomaly,default:true}}
@@ -3634,6 +3642,8 @@ function InfraTab({vaultTick}={}){
   const hostParam=params.host||'';
   const {data,error,locked,loading,fetchedAt,refetch}=useData();
   const mx=useApi('/api/host-metrics');
+  const _whoInfra=useApi('/api/whoami');
+  const canEdit=(((_whoInfra.data&&_whoInfra.data.role)||'viewer')!=='viewer');
 
   // Re-fetch both feeds once a vault unlock is reported upstream.
   useEffect(()=>{ if(vaultTick){ refetch(); mx.refetch(); } },[vaultTick]);
@@ -3723,6 +3733,8 @@ function InfraTab({vaultTick}={}){
     {key:'ip',label:'IP',mono:true},
     {key:'type',label:'Type',hideSm:true,pivot:true},
     {key:'status',label:'Status',pivot:true,render:v=><span className="mono infra-st" style={{color:infraStatusColor(v)}}>{v||'—'}</span>},
+    ...(canEdit?[{key:'__edit',label:'',align:'right',render:(v,h)=>
+      <button className="btn" onClick={e=>{e.stopPropagation();nav('editor',{type:'host',id:h.id||h.name,name:h.name});}}>Edit</button>}]:[]),
   ];
 
   // ── Answer-first synthesis band ──
@@ -3797,7 +3809,7 @@ function InfraTab({vaultTick}={}){
       </Panel>
     </div>
 
-    <Panel title="Hosts" side={<Freshness at={fetchedAt} error={error} onRetry={refetch}/>}>
+    <Panel title="Hosts" side={<div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>{canEdit?<button className="btn" onClick={()=>nav('editor',{type:'host'})}>New host</button>:null}<Freshness at={fetchedAt} error={error} onRetry={refetch}/></div>}>
       {loading&&!data ? <Skeleton rows={6}/>
         : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
             csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}
@@ -5803,6 +5815,9 @@ const EDITOR_TYPES=[
   {key:'host',label:'Host'},
   {key:'tags',label:'Tags'},
 ];
+// Phase 3: which /api/edit types support PATCH update vs DELETE (per _EDIT_RESOURCES).
+const EDIT_UPDATE_TYPES=['dns_zone','subnet','dhcp_range','host'];
+const EDIT_DELETE_TYPES=['dns_zone','subnet','dhcp_range','host','address_block'];
 
 /* EditorTab — consolidated create surface for all 8 resource types (plan
    brainstorms/resource-editor-plan-2026-07-11.md, Phase 2). dns_record and
@@ -5820,6 +5835,7 @@ function EditorTab(){
   const isViewer=role==='viewer';
   const initialType=(params.type&&EDITOR_TYPES.some(t=>t.key===params.type))?params.type:'dns_record';
   const [type,setType]=useState(initialType);
+  const [editId,setEditId]=useState(params.id||null); // Phase 3: id present → edit (PATCH/DELETE) mode
   const [fields,setFields]=useState({});
   const [dry,setDry]=useState(true);
   const [busy,setBusy]=useState(false);
@@ -5838,6 +5854,8 @@ function EditorTab(){
   if(locked) return null;
 
   const spec=FIELD_SPECS[type];
+  const isUpdate=!!editId&&EDIT_UPDATE_TYPES.includes(type); // PATCH vs POST branch
+  const canDelete=!!editId&&EDIT_DELETE_TYPES.includes(type);
 
   const setField=(k,v)=>setFields(prev=>({...prev,[k]:v}));
 
@@ -5854,8 +5872,11 @@ function EditorTab(){
 
   const submit=()=>{
     if(!spec||busy) return;
-    const missing=spec.fields.find(f=>f.required&&!String(fields[f.key]||'').trim());
-    if(missing){ toast('Missing required field: '+missing.label,'err'); return; }
+    // Required-field check applies to create only — a PATCH update legitimately sends a partial body.
+    if(!isUpdate){
+      const missing=spec.fields.find(f=>f.required&&!String(fields[f.key]||'').trim());
+      if(missing){ toast('Missing required field: '+missing.label,'err'); return; }
+    }
     const body={};
     spec.fields.forEach(f=>{
       const raw=fields[f.key];
@@ -5866,17 +5887,44 @@ function EditorTab(){
       else body[f.key]=raw;
     });
     body.dry=dry;
+    // Branch POST /api/edit/<type>  vs  PATCH /api/edit/<type>/<id> purely on presence of an editId.
+    const method=isUpdate?'PATCH':'POST';
+    const url=isUpdate?(spec.endpoint+'/'+encodeURIComponent(editId)):spec.endpoint;
+    const verb=isUpdate?'update':'create';
     setBusy(true);setErr(null);setPreview(null);
-    vpost(spec.endpoint,body).then(({ok,data})=>{
-      setBusy(false);
-      const j=data||{};
-      if(!ok||j.error||j.ok===false){
-        const msg=(j&&j.error)||'request failed';
-        setErr(msg);toast((dry?'Dry run':spec.label+' create')+' failed: '+msg,'err');return;
-      }
-      if(dry){ setPreview(j); toast('Dry run complete','ok'); }
-      else { setPreview(null); setFields({}); toast(spec.label+' created','ok'); }
-    });
+    fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(async r=>({ok:r.ok,data:await r.json().catch(()=>({}))}))
+      .catch(()=>({ok:false,data:{error:'network error'}}))
+      .then(({ok,data})=>{
+        setBusy(false);
+        const j=data||{};
+        if(!ok||j.error||j.ok===false){
+          const msg=(j&&j.error)||'request failed';
+          setErr(msg);toast((dry?'Dry run':spec.label+' '+verb)+' failed: '+msg,'err');return;
+        }
+        if(dry){ setPreview(j); toast('Dry run complete','ok'); }
+        else { setPreview(null); if(!isUpdate) setFields({}); toast(spec.label+' '+verb+'d','ok'); }
+      });
+  };
+
+  // Delete flow — confirm, then DELETE /api/edit/<type>/<id>, toast, reset back to create mode.
+  const del=()=>{
+    if(!spec||!editId||busy) return;
+    if(!window.confirm('Delete this '+spec.label+'? This cannot be undone.')) return;
+    setBusy(true);setErr(null);setPreview(null);
+    fetch(spec.endpoint+'/'+encodeURIComponent(editId),{method:'DELETE'})
+      .then(async r=>({ok:r.ok,data:await r.json().catch(()=>({}))}))
+      .catch(()=>({ok:false,data:{error:'network error'}}))
+      .then(({ok,data})=>{
+        setBusy(false);
+        const j=data||{};
+        if(!ok||j.error||j.ok===false){
+          const msg=(j&&j.error)||'delete failed';
+          setErr(msg);toast(spec.label+' delete failed: '+msg,'err');return;
+        }
+        toast(spec.label+' deleted','ok');
+        setEditId(null);setFields({});setPreview(null);
+      });
   };
 
   const previewBody=preview?(preview.would_create||preview.would_update||preview):null;
@@ -5885,7 +5933,7 @@ function EditorTab(){
     <SectionRule title="Editor"/>
     <div className="dly-seg" role="group" aria-label="Editor resource type" style={{marginBottom:'var(--s3)'}}>
       {EDITOR_TYPES.map(t=>
-        <button key={t.key} className={'dly-seg-btn'+(type===t.key?' on':'')} onClick={()=>setType(t.key)}>{t.label}</button>)}
+        <button key={t.key} className={'dly-seg-btn'+(type===t.key?' on':'')} onClick={()=>{setType(t.key);setEditId(null);}}>{t.label}</button>)}
     </div>
     <div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)',marginBottom:'var(--s3)'}}>
       Editor-created subnets and address blocks are ad-hoc — unlike Provision, they are not tracked by a site template.
@@ -5894,7 +5942,7 @@ function EditorTab(){
     {(type==='dns_record'||type==='ip_address')
       ? <SelfServiceTab/>
       : <div className="grid">
-          <Panel title={(spec&&spec.label)+' — Create'}>
+          <Panel title={(spec&&spec.label)+(isUpdate?' — Update':' — Create')}>
             <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
               {spec&&spec.fields.map(f=>
                 <label key={f.key} className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
@@ -5909,8 +5957,10 @@ function EditorTab(){
               </label>
               {err?<div className="mono" style={{color:'var(--crit)',fontSize:'var(--t11)'}}>{err}</div>:null}
               <Astryx.Button variant="primary" isDisabled={busy||isViewer} onClick={submit}>
-                {busy?'Submitting…':(dry?'Preview':'Submit')}
+                {busy?'Submitting…':(dry?'Preview':(isUpdate?'Update':'Submit'))}
               </Astryx.Button>
+              {canDelete&&!isViewer?<button className="btn" style={{borderColor:'var(--crit)',color:'var(--crit)'}}
+                disabled={busy} onClick={del}>Delete {spec.label}</button>:null}
               {isViewer?<div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
                 Viewer role is read-only — creating resources requires operator or admin.
               </div>:null}
