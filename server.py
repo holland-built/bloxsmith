@@ -3688,21 +3688,47 @@ async def _fetch_insights_async() -> dict:
             limit=20,
         )
 
+def norm_insights(raw):
+    """Normalize BloxOne SOC Insights (/api/v1/insights) rows to the field
+    names the dead SecurityActionSummaryView cube used to produce (name/
+    severity/currentStatus/totalEvents/...), so any consumer sees a stable
+    contract regardless of which upstream source served it."""
+    out = []
+    for r in raw:
+        out.append({
+            "id":                  r.get("insightId", ""),
+            "name":                r.get("tFamily") or r.get("threatType") or r.get("insightId", ""),
+            "severity":            (r.get("priorityText") or "").lower() or "medium",
+            "currentStatus":       r.get("status", ""),
+            "totalEvents":         int(r.get("numEvents") or 0),
+            "totalVerifiedAssets": 0,
+            "timeSaved":           0,
+            "count":               1,
+            "totalTimeSaved":      0,
+            "feedSource":          r.get("feedSource", ""),
+            "startedAt":           r.get("startedAt", ""),
+            "mostRecentAt":        r.get("mostRecentAt", ""),
+        })
+    return out
+
 def fetch_insights() -> dict:
     """Return {"data":[...]} of SOC insights, or degrade to
-    {"data":[],"unavailable":...} — never raise/500 and never fabricate."""
+    {"data":[],"unavailable":...} — never raise/500 and never fabricate.
+    Uses the direct REST /api/v1/insights endpoint (verified to return 200
+    with an insightList — the SecurityActionSummaryView cube path above is
+    dead server-side, same as the other _mcp_query_cube callers)."""
     ck = _cache_key("insights", "", None, False)
     cached = _cache_get(ck)
     if cached is not None:
         return cached
     try:
-        raw = _run_async(_fetch_insights_async())
+        raw, _status = _rest_get_ex("/api/v1/insights", None)
     except Exception as e:
         _log_exc("fetch_insights", e)
-        raw = {}
-    rows = raw.get("data", []) if isinstance(raw, dict) else []
+        raw = None
+    rows = raw.get("insightList", []) if isinstance(raw, dict) else []
     if rows:
-        result = {"data": rows}
+        result = {"data": norm_insights(rows)}
     else:
         result = {"data": [], "unavailable":
                   "No SOC Insights (security actions) in the last 30 days for this tenant."}
