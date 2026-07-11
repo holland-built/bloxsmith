@@ -202,6 +202,44 @@ class BackendTests(unittest.TestCase):
             self.assertIn(k, d, f"audit export missing key: {k}")
         self.assertIsInstance(d["entries"], list)
 
+    # ── incident correlation + snooze (plan 019 Phase 2) ───────────────────────
+
+    def test_incidents_shape(self):
+        status, d = get_json("/api/incidents")
+        self.assertEqual(status, 200)
+        self.assertIn("incidents", d)
+        self.assertIn("snoozes", d)
+        self.assertIsInstance(d["incidents"], list)
+        self.assertIsInstance(d["snoozes"], dict)
+        if d["incidents"]:
+            inc = d["incidents"][0]
+            for k in ("key", "category", "severity", "count", "sample_entities",
+                      "first_detected_at", "message", "entity_type"):
+                self.assertIn(k, inc, f"incident missing key: {k}")
+
+    def test_mcp_events_no_500(self):
+        self._assert_no_500("/api/mcp/events")
+        status, d = get_json("/api/mcp/events")
+        self.assertEqual(status, 200)
+        self.assertIsInstance(d, list)
+
+    def test_snooze_roundtrip(self):
+        category = "test-snooze-category"
+        status, d = post_json("/api/alerts/snooze", {"category": category, "minutes": 15})
+        self.assertEqual(status, 200, f"snooze POST failed: {d}")
+        self.assertTrue(d.get("ok"), f"snooze not ok: {d}")
+        status, d = get_json("/api/incidents")
+        self.assertEqual(status, 200)
+        self.assertIn(category, d["snoozes"], "snoozed category missing from active_snoozes()")
+        self.assertFalse(
+            any(i["category"] == category for i in d["incidents"]),
+            "snoozed category still present in incidents (snooze not applied)")
+        # validation: missing/invalid minutes must 400, never silently succeed
+        status, d = post_json("/api/alerts/snooze", {"category": "x", "minutes": 0})
+        self.assertEqual(status, 400)
+        status, d = post_json("/api/alerts/snooze", {"minutes": 15})
+        self.assertEqual(status, 400)
+
     def test_api_dns_analytics_shape(self):
         status, d = get_json("/api/dns-analytics")
         self.assertEqual(status, 200)
@@ -800,6 +838,27 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertNotIn("data.auditLogs||data.audit", self.html,
                          "AuditTab must no longer read the mock data.auditLogs/data.audit source")
 
+    # ── incidents tab (plan 019 Phase 2) ────────────────────────────────────────
+
+    def test_incidents_tab_present(self):
+        self.assertContains("'incidents'", "'incidents' entry missing from TABS")
+        self.assertContains("incidents:'Incidents'", "incidents label missing from TAB_LABELS")
+        self.assertContains("incidents:IncidentsTab", "incidents:IncidentsTab entry missing from TAB_COMPONENTS")
+        for comp in ("function IncidentsTab", "function SeverityBadge", "function SnoozeControl"):
+            self.assertContains(comp, f"{comp} missing")
+        self.assertContains("/api/incidents", "IncidentsTab must fetch /api/incidents")
+        self.assertContains("/api/mcp/events", "IncidentsTab must fetch /api/mcp/events")
+        self.assertContains("/api/alerts/snooze", "SnoozeControl must POST /api/alerts/snooze")
+
+    def test_no_tab_removed(self):
+        # Adding the Incidents tab must not drop any pre-existing tab.
+        m = re.search(r"const TABS=\[([^\]]*)\]", self.html)
+        self.assertIsNotNone(m, "const TABS=[...] array not found in index.html")
+        tabs = re.findall(r"'([a-z]+)'", m.group(1))
+        for t in ("overview", "daily", "network", "dns", "infra", "security",
+                  "audit", "provision", "drift", "selfservice"):
+            self.assertIn(t, tabs, f"pre-existing tab {t!r} was removed from TABS")
+
 
 class ServerSecurityTests(unittest.TestCase):
     """Static (no running server) checks on server.py hardening from plans 014/015.
@@ -862,6 +921,53 @@ class ServerSecurityTests(unittest.TestCase):
                       "AUDIT_LOG_FILE must be derived from the vault's state dir")
         self.assertIn("_STATE_DIR = os.path.dirname(VAULT_FILE)", self.src,
                       "_STATE_DIR must reuse VAULT_FILE's resolved directory, not re-probe")
+
+    def test_correlate_groups_by_category(self):
+        # Plan 019 Phase 2: exec-extract the pure correlate() fn (+ its
+        # _SEVERITY_ORDER/_SAMPLE_CAP constants) by symbol, same technique as
+        # the _cspq escaper above — server.py can't be imported here (optional
+        # deps like groq/mcp).
+        lines = self.src.split("\n")
+        start = next(i for i, l in enumerate(lines) if l.startswith("_SEVERITY_ORDER = {"))
+        end = next(i for i in range(start, len(lines)) if lines[i].strip() == "return incidents")
+        ns = {}
+        exec(compile("\n".join(lines[start:end + 1]), "<esc>", "exec"), ns)
+        correlate = ns["correlate"]
+
+        self.assertEqual(correlate([]), [])
+
+        signals = [
+            {"category": "subnet-utilization", "severity": "warn", "entity_id": "s1",
+             "entity_type": "subnet", "detected_at": 100.0},
+            {"category": "subnet-utilization", "severity": "crit", "entity_id": "s2",
+             "entity_type": "subnet", "detected_at": 50.0},
+            {"category": "dns-ttl-anomaly", "severity": "warn", "entity_id": "z1",
+             "entity_type": "zone", "detected_at": 75.0},
+        ]
+        incidents = correlate(signals)
+        by_cat = {i["category"]: i for i in incidents}
+        self.assertEqual(set(by_cat), {"subnet-utilization", "dns-ttl-anomaly"})
+
+        su = by_cat["subnet-utilization"]
+        self.assertEqual(su["count"], 2, "2 same-category signals must collapse into 1 incident")
+        self.assertEqual(su["severity"], "crit", "incident severity must be the worst of its group")
+        self.assertEqual(su["sample_entities"], ["s1", "s2"])
+        self.assertEqual(su["first_detected_at"], 50.0, "must take the earliest detected_at")
+        self.assertEqual(su["entity_type"], "subnet")
+        self.assertEqual(su["key"], "subnet-utilization")
+
+        dt = by_cat["dns-ttl-anomaly"]
+        self.assertEqual(dt["count"], 1)
+        self.assertEqual(dt["severity"], "warn")
+
+    def test_incidents_primitives_wired(self):
+        # Correlate/signals/snooze module + routes must all be present.
+        for needle in ("def correlate(signals)", "def build_signals(data)",
+                       "def snooze(category, minutes)", "def is_snoozed(category)",
+                       "def active_snoozes()", "ALERT_STATE_FILE = os.path.join(_STATE_DIR",
+                       '"/api/incidents"', '"/api/mcp/events"', '"/api/alerts/snooze"',
+                       'audit_append("snooze"'):
+            self.assertIn(needle, self.src, f"incidents primitive {needle!r} missing from server.py")
 
 
 # ── main ──────────────────────────────────────────────────────────────────────

@@ -433,7 +433,7 @@ MUTATING_PATHS = frozenset({
     "/api/provision/seed-demo/stream", "/api/teardown/site/stream",
     "/api/teardown/seed-demo/stream", "/api/selfservice/allocate",
     "/api/dns/records", "/api/provision/block", "/api/teardown/block",
-    "/api/retag/block",
+    "/api/retag/block", "/api/alerts/snooze",
 })
 # Explicit, allowlisted block list id for /api/block-domain (no fuzzy name match).
 BLOCK_LIST_ID   = os.environ.get("BLOCK_LIST_ID", "")
@@ -2403,6 +2403,133 @@ def audit_verify_chain():
         prev = e["hash"]
     return {"valid": True, "broken_index": None}
 
+# ── incident correlation + snooze ──────────────────────────────────────────────
+# Port of Chris Marrison's backend/alerts/{correlate,signals,suppression}.py.
+# Persisted on the same mounted volume as the vault/audit log.
+ALERT_STATE_FILE = os.path.join(_STATE_DIR, "alert_state.json")
+
+_SEVERITY_ORDER = {"ok": 0, "warn": 1, "crit": 2}
+_SAMPLE_CAP = 5
+
+def correlate(signals):
+    """Group signals by category into a list of Incidents. v1: one incident
+    per category (key == category). Verbatim port of backend/alerts/
+    correlate.py (pure function, no I/O, stdlib only)."""
+    if not signals:
+        return []
+
+    groups = {}
+    for signal in signals:
+        groups.setdefault(signal["category"], []).append(signal)
+
+    incidents = []
+    for category, group in groups.items():
+        severity = max(group, key=lambda s: _SEVERITY_ORDER.get(s["severity"], 0))["severity"]
+        count = len(group)
+        sample_entities = [s["entity_id"] for s in group[:_SAMPLE_CAP]]
+        first_detected_at = min(s["detected_at"] for s in group)
+        message = f"{count} {category.replace('-', ' ')}"
+        entity_type = group[0]["entity_type"]
+        incidents.append({
+            "key": category,
+            "category": category,
+            "severity": severity,
+            "count": count,
+            "sample_entities": sample_entities,
+            "first_detected_at": first_detected_at,
+            "message": message,
+            "entity_type": entity_type,
+        })
+
+    return incidents
+
+def build_signals(data):
+    """Derive alert Signals from the assembled /api/data dashboard dict.
+    Adapted from backend/alerts/signals.py: this app's norm_subnets/norm_zones/
+    norm_leases records don't carry a precomputed 'severity' field (unlike the
+    3a vertical Chris's source read from), so severity is derived here — subnet
+    util thresholds mirror the client's UTIL_BANDS (>=90% crit, >=70% warn),
+    zone severity mirrors the 'anomaly' flag norm_zones already computes from
+    TTL issues, and lease severity mirrors the 'expired' state norm_leases maps
+    from the raw DHCP lease state."""
+    signals = []
+    now = _time.time()
+
+    for subnet in data.get("subnets", []):
+        util = subnet.get("util") or 0
+        severity = "crit" if util >= 90 else "warn" if util >= 70 else "ok"
+        if severity != "ok":
+            signals.append({
+                "source": "network",
+                "entity_type": "subnet",
+                "entity_id": subnet.get("id", ""),
+                "category": "subnet-utilization",
+                "severity": severity,
+                "message": f"{subnet.get('name', '')} at {util}% utilization",
+                "detected_at": now,
+            })
+
+    for zone in data.get("zones", []):
+        if zone.get("anomaly"):
+            signals.append({
+                "source": "network",
+                "entity_type": "zone",
+                "entity_id": zone.get("id", ""),
+                "category": "dns-ttl-anomaly",
+                "severity": "warn",
+                "message": f"{zone.get('fqdn', '')}: {', '.join(zone.get('issues') or [])}",
+                "detected_at": now,
+            })
+
+    for lease in data.get("leases", []):
+        if lease.get("state") == "expired":
+            signals.append({
+                "source": "network",
+                "entity_type": "lease",
+                "entity_id": lease.get("addr", ""),
+                "category": "dhcp-expired-lease",
+                "severity": "warn",
+                "message": f"Lease {lease.get('addr', '')} ({lease.get('host') or 'unknown host'}) expired",
+                "detected_at": now,
+            })
+
+    return signals
+
+# ── on-disk alert-snooze store (port of backend/alerts/suppression.py) ────────
+_alert_lock = threading.Lock()
+
+def _alert_load():
+    try:
+        with open(ALERT_STATE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _alert_save(d):
+    tmp = ALERT_STATE_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(d, f)
+    os.replace(tmp, ALERT_STATE_FILE)
+
+def snooze(category, minutes):
+    """Snooze a category for `minutes` from now (single locked critical section)."""
+    with _alert_lock:
+        d = _alert_load()
+        d[category] = _time.time() + minutes * 60
+        _alert_save(d)
+
+def is_snoozed(category):
+    with _alert_lock:
+        state = _alert_load()
+        return state.get(category, 0) > _time.time()
+
+def active_snoozes():
+    """Return only the still-active snooze entries (expired ones pruned)."""
+    with _alert_lock:
+        state = _alert_load()
+        now = _time.time()
+        return {k: v for k, v in state.items() if v > now}
+
 # ── saved views (dashboard layouts) ───────────────────────────────────────────
 # One JSON blob per view on the same mounted volume as the vault, so saved
 # layouts survive restarts/updates. Names are sanitized to a flat filename to
@@ -3700,6 +3827,30 @@ def fetch_actions() -> dict:
         data["unavailable"] = "No IQ Actions (SOC incidents) for this tenant."
     return data
 
+async def _fetch_mcp_events_async(limit: int = 50, offset: int = 0) -> dict:
+    async with _mcp_session() as session:
+        result = await session.call_tool(
+            "iq-actions_get_events",
+            {"limit": limit, "offset": offset},
+        )
+        try:
+            return json.loads(_tool_text(result))
+        except json.JSONDecodeError:
+            return {"events": [], "_raw": _tool_text(result)[:200]}
+
+def fetch_mcp_events(limit: int = 50, offset: int = 0) -> list:
+    """MCP anomaly event stream (iq-actions_get_events), mirroring
+    fetch_actions()'s degrade-to-empty contract — never raises/500s."""
+    try:
+        data = _run_async(_fetch_mcp_events_async(limit, offset))
+    except Exception as e:
+        _log_exc("fetch_mcp_events", e)
+        return []
+    if not isinstance(data, dict):
+        return []
+    events = data.get("events")
+    return events if isinstance(events, list) else []
+
 # ── SOC Insights handler ──────────────────────────────────────────────────────
 
 async def _fetch_insights_async() -> dict:
@@ -4551,6 +4702,20 @@ class Handler(BaseHTTPRequestHandler):
             chain = audit_verify_chain()
             self._json({"entries": audit_read(), "chain_valid": chain["valid"], "broken_index": chain["broken_index"],
                         "exported_at": _time.time(), "app_version": APP_VERSION})
+        elif path == "/api/incidents":
+            try:
+                data = fetch_dashboard_data()
+                incidents = [i for i in correlate(build_signals(data)) if not is_snoozed(i["category"])]
+                self._json({"incidents": incidents, "snoozes": active_snoozes()})
+            except Exception as e:
+                _log_exc("/api/incidents", e)
+                self._json({"incidents": [], "snoozes": {}})
+        elif path == "/api/mcp/events":
+            try:
+                self._json(fetch_mcp_events())
+            except Exception as e:
+                _log_exc("/api/mcp/events", e)
+                self._json([])
         elif path == "/api/insights":
             try:
                 self._json(fetch_insights())
@@ -5365,6 +5530,22 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"error": str(e)}, 400)
             except Exception as e:
                 _log_exc("/api/drift/check", e); self._json({"error": "internal error"}, 500)
+        elif self.path == "/api/alerts/snooze":
+            try:
+                category = str(body.get("category", "")).strip()
+                try:
+                    minutes = int(body.get("minutes"))
+                except (TypeError, ValueError):
+                    minutes = None
+                if not category or not minutes or minutes <= 0:
+                    self._json({"ok": False, "error": "category and minutes>0 are required"}, 400)
+                else:
+                    snooze(category, minutes)
+                    audit_append("snooze", self._actor(), {"category": category, "minutes": minutes})
+                    self._json({"ok": True, "category": category, "minutes": minutes})
+            except Exception as e:
+                _log_exc("/api/alerts/snooze", e)
+                self._json({"ok": False, "error": "internal error"}, 500)
         else:
             self._json({"error": "not found"}, 404)
 
