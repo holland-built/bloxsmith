@@ -1274,6 +1274,8 @@ class BlockProvisioner:
         self.cfg = cfg
         self.emit = emit
         self._space_id = ""
+        self._resilient = False  # set by provision(resilient=True): skip failed
+        # blocks and continue instead of rolling back the whole pool (seed use)
 
     def _block_tags(self, bdef: dict) -> dict:
         tags = {**self.cfg.extra_tags}
@@ -1324,7 +1326,14 @@ class BlockProvisioner:
                                               "id": block.get("id", ""), "status": bdef.get("status", "")})
 
         for child in bdef.get("children") or []:
-            self._create_block(child, net, result)
+            if self._resilient:
+                try:
+                    self._create_block(child, net, result)
+                except Exception as exc:
+                    self.emit({"step": f"  Skipping failed child block ({exc}) — continuing"})
+                    result.setdefault("failed", []).append(str(exc))
+            else:
+                self._create_block(child, net, result)
 
     def _rollback(self, result: dict) -> None:
         self.emit({"step": "Rolling back created address blocks…"})
@@ -1336,16 +1345,27 @@ class BlockProvisioner:
             if not (status and 200 <= status < 300):
                 self.emit({"step": f"  Rollback: failed to delete block id={block_id}"})
 
-    def provision(self) -> dict:
+    def provision(self, resilient: bool = False) -> dict:
+        """resilient=True (seed use): a failed block subtree is skipped and the
+        rest of the pool is kept — no rollback. Default (standalone block route):
+        atomic — any failure rolls back every block created in this call."""
+        self._resilient = resilient
         result = {"name": self.cfg.name, "ip_space": self.cfg.ip_space,
-                  "blocks_created": [], "dry_run": self.cfg.dry_run}
+                  "blocks_created": [], "failed": [], "dry_run": self.cfg.dry_run}
         space_results = _rest_get("/api/ddi/v1/ipam/ip_space", {"_filter": f'name=="{self.cfg.ip_space}"'})
         if not space_results:
             raise ProvisionError(f"IP space not found: {self.cfg.ip_space}")
         self._space_id = space_results[0]["id"]
         try:
             for bdef in self.cfg.blocks:
-                self._create_block(bdef, None, result)
+                if resilient:
+                    try:
+                        self._create_block(bdef, None, result)
+                    except Exception as exc:
+                        self.emit({"step": f"Skipping failed block subtree ({exc}) — continuing"})
+                        result["failed"].append(str(exc))
+                else:
+                    self._create_block(bdef, None, result)
         except Exception as exc:
             if not self.cfg.dry_run:
                 self.emit({"step": f"Block provisioning failed ({exc}) — initiating rollback"})
@@ -4733,7 +4753,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     block_template = load_template("blocks/regional_address_blocks.yaml")
                     block_cfg = template_to_block_config(block_template, {"dry": "1" if dry else "0", "ip_space": ip_space_override})
-                    BlockProvisioner(block_cfg, emit).provision()
+                    BlockProvisioner(block_cfg, emit).provision(resilient=True)
                 except ProvisionError as exc:
                     emit({"template": "blocks/regional_address_blocks.yaml", "error": str(exc)})
 
