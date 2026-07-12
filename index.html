@@ -422,7 +422,7 @@ table.dt tbody tr.cursor .row-copy-btn,
   transform:translateX(100%);visibility:hidden;pointer-events:none;
   transition:transform .2s cubic-bezier(.2,.8,.2,1),visibility 0s linear .2s;
 }
-.ai-drawer[data-open]{transform:translateX(0);visibility:visible;pointer-events:auto;transition:transform .2s cubic-bezier(.2,.8,.2,1),visibility 0s;}
+.ai-drawer[data-open]{transform:none;visibility:visible;pointer-events:auto;transition:transform .2s cubic-bezier(.2,.8,.2,1),visibility 0s;}
 .ai-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3) var(--s4);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;}
 .ai-drawer-title{display:inline-flex;align-items:center;gap:var(--s2);font-size:var(--t13);font-weight:600;color:var(--text);}
 .ai-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 auto;}
@@ -5418,7 +5418,7 @@ function AiDrawer({open,onClose,initialQ}){
   // off-canvas), so drive transform/visibility inline with !important — authoritative.
   useEffect(()=>{
     const el=drawerRef.current; if(!el) return;
-    el.style.setProperty('transform',open?'translateX(0)':'translateX(100%)','important');
+    el.style.setProperty('transform',open?'none':'translateX(100%)','important');
     el.style.setProperty('visibility',open?'visible':'hidden','important');
     el.style.setProperty('pointer-events',open?'auto':'none','important');
   },[open]);
@@ -7241,7 +7241,7 @@ function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
       {fresh}
       <ProblemsBadge/>
       <button className={"kbd ai-trigger"+(aiOpen?" ai-trigger--open":"")} onClick={onAi}
-        aria-label={aiOpen?"Close AI assistant":"Open AI assistant"} aria-expanded={aiOpen?'true':'false'}
+        aria-label="Open AI assistant" aria-expanded={aiOpen}
         title="AI assistant — ⌘I / Ctrl-I">
         <span>Ask AI</span><span className="mono">⌘I</span>
       </button>
