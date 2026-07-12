@@ -804,6 +804,19 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("useSnapshots", "useSnapshots hook missing")
         self.assertContains("SnapshotWriter", "SnapshotWriter component missing")
 
+    def test_compare_to_snapshot_diff(self):
+        # Row-level Compare-to-snapshot: pure diffRows() reuses the existing
+        # snapshot store (no parallel snapshot system), DataTable/DTRow render a
+        # +/~/- gutter glyph + aria label (never a color-only signal), and
+        # removed rows render as struck-through ghost rows.
+        self.assertContains("function diffRows(", "diffRows pure helper missing")
+        self.assertContains("dt-diff", "diff gutter column class missing")
+        self.assertContains("dt-ghost", "ghost/removed row class missing")
+        self.assertContains("Compare to snapshot", "Compare-to-snapshot toolbar affordance missing")
+        # HARD GATE: the gutter glyph must carry an aria label, not just a
+        # bare glyph/color — this is the string that renders it.
+        self.assertContains("aria-label={diff.label}", "diff glyph must carry an aria-label")
+
     def test_daily_view(self):
         self.assertContains("DailyTab", "DailyTab component missing")
         self.assertContains("dailyNarrative", "dailyNarrative missing")
