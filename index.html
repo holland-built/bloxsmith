@@ -2720,12 +2720,20 @@ function SnapshotWriter(){
       const active=leases.filter(l=>String(l.state||'').toLowerCase()==='active').length;
       const zoneIssues=zones.filter(z=>Array.isArray(z.issues)&&z.issues.length>0).length;
       const online=hosts.filter(h=>/^(online|up)$/i.test(String(h.status||''))).length;
+      // leaseTop/hostTop — Compare-to-snapshot row-level shape for the Leases and
+      // Hosts tables (mirrors subnets.top above). Leases/hosts have no natural
+      // "top" ranking like subnet util, so both are sorted by their row key for a
+      // deterministic, bounded (50-row) capture rather than an unbounded dump.
+      const leaseTop=[...leases].sort((a,b)=>String(a.addr||a.ip||'').localeCompare(String(b.addr||b.ip||'')))
+        .slice(0,50).map(l=>({a:l.addr||l.ip||'',s:l.state||'',h:l.host||''}));
+      const hostTop=[...hosts].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
+        .slice(0,50).map(h=>({n:h.name||'',s:h.status||''}));
       const base={
         date:todayISO(), ts:Date.now(),
         subnets:{n:subnets.length,gt85,b7085,top},
-        leases:{n:leases.length,active},
+        leases:{n:leases.length,active,top:leaseTop},
         zones:{n:zones.length,issues:zoneIssues},
-        hosts:{n:hosts.length,online,offline:hosts.length-online},
+        hosts:{n:hosts.length,online,offline:hosts.length-online,top:hostTop},
         sec:{crit:0,high:0,med:0,low:0,blocked:0,logged:0,total:0},
         dns7d:null,
       };
@@ -4010,10 +4018,12 @@ function NetworkTab(){
   const {params}=useRoute();
   const {data,error,locked,loading,fetchedAt,refetch}=useData();
   const {delta,prev}=useSnapshots();
-  // Compare-to-snapshot (subnets table only — it's the one table whose row-level
-  // shape [{a,u}] already lives in the snapshot store; see diffRows/snapKey).
+  // Compare-to-snapshot — subnets AND leases (both tables now have row-level
+  // shape in the snapshot store; see diffRows/snapKey/SnapshotWriter). Separate
+  // toggle state per table since each has its own "Compare" button.
   // MUST run before any early return (hooks-order rule).
   const [compareOn,setCompareOn]=useState(false);
+  const [leaseCompareOn,setLeaseCompareOn]=useState(false);
   // histByAddr — per-subnet util history from the snapshot store. Each snapshot day
   // holds subnets.top:[{a,u}]; assemble values=[u per day] keyed by addr. Only subnets
   // present across ≥2 days get a series → the Trend sparkline renders honestly (no fabrication).
@@ -4125,6 +4135,18 @@ function NetworkTab(){
     ?prev.subnets.top.map(t=>({addr:t.a,util:t.u})):[];
   const subnetDiff=(compareOn&&prev)
     ?diffRows(prevSubnetRows,subnetRows.filter(r=>!r.__group),r=>String(r.addr||r.id),['util'])
+    :null;
+
+  // Compare-to-snapshot (Leases): prev.leases.top mirrors the subnets top-N shape
+  // (bounded, sorted by addr — leases have no natural "top" ranking; see
+  // SnapshotWriter). Same scoping caveat as subnets: the diff runs against that
+  // bounded prior set, not full lease history, so a lease outside the captured
+  // top-50 will always read as "added" the first time it reappears.
+  const prevLeaseRows=(prev&&prev.leases&&Array.isArray(prev.leases.top))
+    ?prev.leases.top.map(t=>({addr:t.a,state:t.s,host:t.h})):[];
+  const leaseKeyFn=r=>String(r.ip||r.addr||r.mac);
+  const leaseDiff=(leaseCompareOn&&prev)
+    ?diffRows(prevLeaseRows,leases,leaseKeyFn,['state','host'])
     :null;
 
   // Util-band presets → BQL tokens injected into the subnets search (replace any existing util
@@ -4242,10 +4264,22 @@ function NetworkTab(){
                   }}]}/>
               </Panel>
             </div>
-            <Panel title={'All leases · '+leases.length}>
+            <Panel title={'All leases · '+leases.length} side={
+                <button className="btn btn-ghost" aria-pressed={leaseCompareOn}
+                  disabled={!prev} title={prev?'Diff current leases against yesterday\'s snapshot':'A prior daily snapshot is needed'}
+                  onClick={()=>{
+                    const next=!leaseCompareOn; setLeaseCompareOn(next);
+                    if(next&&prev){
+                      const d=diffRows(prevLeaseRows,leases,leaseKeyFn,['state','host']);
+                      let added=0,changed=0; d.byKey.forEach(v=>{if(v.type==='+')added++;else changed++;});
+                      toast(added+' added · '+changed+' changed · '+d.ghosts.length+' removed','ok');
+                    }
+                  }}>{leaseCompareOn?'Comparing leases':'Compare leases to snapshot'}</button>
+              }>
               <DataTable cols={NET_LEASE_COLS} rows={leases} defaultSort={{key:'addr',dir:'asc'}} csvName="leases"
                 scrollBody={420}
-                tableId="all-leases" rowKey={r=>String(r.ip||r.addr||r.mac)} selectable/>
+                tableId="all-leases" rowKey={leaseKeyFn} selectable
+                diffMap={leaseDiff?leaseDiff.byKey:null} diffGhosts={leaseDiff?leaseDiff.ghosts:null}/>
             </Panel>
             <Panel title="Lease states" side={<span className="mono" style={{color:'var(--text-faint)'}}>{leases.length}</span>} empty={leases.length===0}>
               <Donut slices={leaseSlices} centerValue={leases.length} centerLabel="leases"/>
@@ -4475,6 +4509,8 @@ function InfraTab({vaultTick}={}){
   // Sensor grid is overwhelming by default — hide behind a disclosure.
   const [showSensors,setShowSensors]=useState(false);
   const {bind:hoverBind}=useHoverDetail();
+  // Compare-to-snapshot (Hosts) — MUST run before any early return (hooks-order rule).
+  const [hostCompareOn,setHostCompareOn]=useState(false);
 
   const hosts=(data&&data.hosts)||[];
   const metricRows=(mx.data&&mx.data.metrics)||[];
@@ -4508,7 +4544,7 @@ function InfraTab({vaultTick}={}){
   },[metricRows]);
 
   // ── Synthesis derivations (host status + hottest, day-over-day delta) ──
-  const {delta}=useSnapshots();
+  const {delta,prev}=useSnapshots();
   const online=hosts.filter(h=>/^(online|up)$/i.test(String(h.status||''))).length;
   const degradedHosts=hosts.filter(h=>/^degraded$/i.test(String(h.status||'')));
   const offlineHosts=hosts.filter(h=>/^(down|offline)$/i.test(String(h.status||'')));
@@ -4550,6 +4586,17 @@ function InfraTab({vaultTick}={}){
       </div>
     </div>;
   }
+
+  // Compare-to-snapshot (Hosts): prev.hosts.top mirrors the subnets top-N shape
+  // (bounded, sorted by name — hosts have no natural "top" ranking; see
+  // SnapshotWriter). Same scoping caveat as subnets/leases: diff runs against
+  // that bounded prior set, not full host history.
+  const prevHostRows=(prev&&prev.hosts&&Array.isArray(prev.hosts.top))
+    ?prev.hosts.top.map(t=>({name:t.n,status:t.s})):[];
+  const hostKeyFn=r=>String(r.name||r.id);
+  const hostDiff=(hostCompareOn&&prev)
+    ?diffRows(prevHostRows,hosts,hostKeyFn,['status'])
+    :null;
 
   // ── Host inventory ──
   const hostCols=[
@@ -4641,13 +4688,25 @@ function InfraTab({vaultTick}={}){
       </Panel>
     </div>
 
-    <Panel title="Hosts" side={<div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>{canEdit?<button className="btn" onClick={()=>nav('editor',{type:'host'})}>New host</button>:null}<Freshness at={fetchedAt} error={error} onRetry={refetch}/></div>}>
+    <Panel title="Hosts" side={<div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+        <button className="btn btn-ghost" aria-pressed={hostCompareOn}
+          disabled={!prev} title={prev?'Diff current hosts against yesterday\'s snapshot':'A prior daily snapshot is needed'}
+          onClick={()=>{
+            const next=!hostCompareOn; setHostCompareOn(next);
+            if(next&&prev){
+              const d=diffRows(prevHostRows,hosts,hostKeyFn,['status']);
+              let added=0,changed=0; d.byKey.forEach(v=>{if(v.type==='+')added++;else changed++;});
+              toast(added+' added · '+changed+' changed · '+d.ghosts.length+' removed','ok');
+            }
+          }}>{hostCompareOn?'Comparing hosts':'Compare hosts to snapshot'}</button>
+        {canEdit?<button className="btn" onClick={()=>nav('editor',{type:'host'})}>New host</button>:null}<Freshness at={fetchedAt} error={error} onRetry={refetch}/></div>}>
       {loading&&!data ? <Skeleton rows={6}/>
         : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
             csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}
             scrollBody={480} columnToggle
             problemsOnly={{label:'Needs attention',test:h=>!/^(online|up)$/i.test(String(h.status||'')),default:hosts.length>50}}
-            {...{tableId:'hosts'}} rowKey={r=>String(r.name||r.id)}
+            {...{tableId:'hosts'}} rowKey={hostKeyFn}
+            diffMap={hostDiff?hostDiff.byKey:null} diffGhosts={hostDiff?hostDiff.ghosts:null}
             selectable filterable filterKeys={['name','ip','type','status']}
             searchSchema={{fields:{status:{type:'enum'}}}}
             initialPeekKey={params.peek}
