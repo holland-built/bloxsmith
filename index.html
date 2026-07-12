@@ -167,6 +167,7 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
   transition:background .12s ease,border-color .12s ease;
 }
 .ai-trigger:hover{background:var(--accent-dim);border-color:var(--accent-text);}
+.ai-trigger--open{background:var(--accent);color:#fff;border-color:var(--accent);}
 
 /* ── freshness pill ── */
 .fresh{
@@ -407,9 +408,14 @@ table.dt tbody tr.cursor .row-copy-btn,
 .ai-drawer{
   position:fixed;top:48px;right:0;bottom:0;width:min(420px,100vw);
   background:var(--surface);border-left:2px solid var(--accent);
-  z-index:65;overflow-y:auto;animation:peek-in .2s cubic-bezier(.2,.8,.2,1);
+  z-index:65;overflow-y:auto;
   display:flex;flex-direction:column;
+  /* stays mounted (conversation persists) — slides off-canvas instead of unmounting.
+     inline setProperty(!important) in AiDrawer is authoritative; this is the visual. */
+  transform:translateX(100%);visibility:hidden;pointer-events:none;
+  transition:transform .2s cubic-bezier(.2,.8,.2,1),visibility 0s linear .2s;
 }
+.ai-drawer[data-open]{transform:translateX(0);visibility:visible;pointer-events:auto;transition:transform .2s cubic-bezier(.2,.8,.2,1),visibility 0s;}
 .ai-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3) var(--s4);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;}
 .ai-drawer-title{display:inline-flex;align-items:center;gap:var(--s2);font-size:var(--t13);font-weight:600;color:var(--text);}
 .ai-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 auto;}
@@ -4993,6 +4999,7 @@ function AiDrawer({open,onClose,initialQ}){
   const [items,setItems]=useState([]); // newest first, capped at 5
   const askedRef=useRef(null);
   const inRef=useRef(null);
+  const drawerRef=useRef(null);
   const [ctx,setCtx]=useState('');
   // Live short context label (mirrors what buildContext() sends on submit).
   useEffect(()=>{
@@ -5037,8 +5044,29 @@ function AiDrawer({open,onClose,initialQ}){
       .catch(()=>toast('Query failed — server unreachable','err'))
       .finally(()=>setBusy(false));
   };
+  // Slide: CSS class alone proved unreliable here (computed transform stuck
+  // off-canvas), so drive transform/visibility inline with !important — authoritative.
+  useEffect(()=>{
+    const el=drawerRef.current; if(!el) return;
+    el.style.setProperty('transform',open?'translateX(0)':'translateX(100%)','important');
+    el.style.setProperty('visibility',open?'visible':'hidden','important');
+    el.style.setProperty('pointer-events',open?'auto':'none','important');
+  },[open]);
   // Focus the input when the drawer opens (non-modal — no focus trap).
   useEffect(()=>{ if(open&&inRef.current) inRef.current.focus(); },[open]);
+  // Click-off + window Escape close (trigger/toasts/action-bar exempt so they don't self-close).
+  useEffect(()=>{
+    if(!open) return;
+    const onDown=e=>{
+      const t=e.target;
+      if(t&&t.closest&&(t.closest('.ai-drawer')||t.closest('.ai-trigger')||t.closest('.toast')||t.closest('.action-bar'))) return;
+      onClose();
+    };
+    const onEsc=e=>{ if(e.key==='Escape'){ e.preventDefault(); onClose(); } };
+    document.addEventListener('pointerdown',onDown);
+    window.addEventListener('keydown',onEsc);
+    return ()=>{ document.removeEventListener('pointerdown',onDown); window.removeEventListener('keydown',onEsc); };
+  },[open,onClose]);
   // initialQ handoff (palette / bx:ai-open / #ask?q=…): prefill + submit once per distinct q.
   useEffect(()=>{
     if(!open) return;
@@ -5062,8 +5090,9 @@ function AiDrawer({open,onClose,initialQ}){
     'What changed in the last 24 hours?',
   ];
 
-  if(!open) return null;
-  return <aside className="ai-drawer" role="complementary" aria-label="AI assistant"
+  // Stays mounted across open/close so the conversation (items) survives — slide handled above.
+  return <aside ref={drawerRef} className="ai-drawer" role="complementary" aria-label="AI assistant"
+    data-open={open?'':undefined} aria-hidden={open?undefined:'true'}
     onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();onClose();}}}>
     <div className="ai-drawer-head">
       <span className="ai-drawer-title"><span className="ai-dot"/>Ask AI</span>
@@ -6785,7 +6814,7 @@ function ProblemsBadge(){
   </button>;
 }
 
-function TopBar({tab,org,fresh,onPalette,onAi}){
+function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
   const {orgName}=useAuth();
   const orgLabel=orgName||org;
   return <header className="topbar">
@@ -6803,7 +6832,8 @@ function TopBar({tab,org,fresh,onPalette,onAi}){
     <div className="topbar-right">
       {fresh}
       <ProblemsBadge/>
-      <button className="kbd ai-trigger" onClick={onAi} aria-label="Open AI assistant"
+      <button className={"kbd ai-trigger"+(aiOpen?" ai-trigger--open":"")} onClick={onAi}
+        aria-label={aiOpen?"Close AI assistant":"Open AI assistant"} aria-expanded={aiOpen?'true':'false'}
         title="AI assistant — ⌘I / Ctrl-I">
         <span>Ask AI</span><span className="mono">⌘I</span>
       </button>
@@ -6872,7 +6902,7 @@ function Shell(){
 
   return <PowerProvider>
     <div>
-      <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)} onAi={()=>setAiOpen(true)}/>
+      <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)} onAi={()=>setAiOpen(o=>!o)} aiOpen={aiOpen}/>
       <FilterBar/>
       <main className="main" key={tab}>
         <Active vaultTick={vaultTick}/>
