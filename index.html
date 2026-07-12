@@ -445,10 +445,20 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:visibl
 /* ── columnToggle: ⋯ Cols chooser menu (reuses the views-menu overlay pattern) ── */
 .dt-tools{display:flex;align-items:center;gap:var(--s2);flex:0 0 auto;}
 .dt-cols-slot{position:relative;display:inline-flex;}
-.dt-cols-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:61;width:200px;max-height:60vh;overflow-y:auto;padding:var(--s1);}
-.dt-cols-item{display:flex;align-items:center;gap:var(--s2);padding:5px 8px;font-size:var(--t12);color:var(--text);border-radius:var(--r-ctl);cursor:pointer;}
+.dt-cols-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:61;width:248px;max-height:60vh;overflow-y:auto;padding:var(--s1);}
+/* Feature 8: each row = checkbox+label (show/hide) + reorder/pin controls.
+   The controls sit OUTSIDE the <label> so clicking them doesn't also toggle
+   the checkbox; reorder is keyboard-reachable via the ↑/↓ buttons (not drag-only). */
+.dt-cols-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);border-radius:var(--r-ctl);}
 .dt-cols-item:hover{background:var(--hover);}
-.dt-cols-item input{cursor:pointer;}
+.dt-cols-item-label{display:flex;align-items:center;gap:var(--s2);padding:5px 8px;font-size:var(--t12);color:var(--text);cursor:pointer;flex:1 1 auto;min-width:0;}
+.dt-cols-item-label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dt-cols-item-label input{cursor:pointer;}
+.dt-cols-item-ctl{display:flex;align-items:center;gap:1px;flex:0 0 auto;padding-right:4px;}
+.dt-cols-move,.dt-cols-pin{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t12);color:var(--text-faint);background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-cols-move:hover,.dt-cols-pin:hover{color:var(--text);background:var(--hover);}
+.dt-cols-move:disabled{opacity:.35;cursor:default;}
+.dt-cols-pin[aria-pressed="true"]{color:var(--accent-text);}
 /* ── F5: on-demand facet popover (Filter button in dt-tools) — same overlay/panel
    pattern as .dt-cols-menu; value rows reuse the pivot-cell accent-for-active rule. ── */
 .dt-facet-slot{position:relative;display:inline-flex;}
@@ -487,7 +497,7 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:visibl
 .dt-nomatch{display:inline-flex;align-items:center;gap:var(--s2);flex-wrap:wrap;}
 .dt-nomatch code{color:var(--text);}
 .dt-clear-btn{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;}
-.dt-cols-item input:disabled{cursor:default;}
+.dt-cols-item-label input:disabled{cursor:default;}
 /* ValueBands active chip */
 .band-chip.active{border-color:var(--accent);color:var(--text);}
 
@@ -1378,6 +1388,25 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // columnToggle: hidden column keys (persisted per tableId). Stale keys are ignored on read.
   const [hiddenCols,setHiddenCols]=useState(()=> (showCols&&id)?LS.get('cols.'+id,[]):[]);
   const [colsMenu,setColsMenu]=useState(false);
+  // Feature 8: column reorder (keyed order array) + pin-first, persisted alongside
+  // the hidden-columns key above. colOrder is null until the user reorders at
+  // least once — effCols then falls back to declaration order.
+  const [colOrder,setColOrder]=useState(()=> (showCols&&id)?LS.get('cols.order.'+id,null):null);
+  const [pinnedCol,setPinnedCol]=useState(()=> (showCols&&id)?LS.get('cols.pin.'+id,null):null);
+  const colsMenuRef=useRef(null);
+  const colsBtnRef=useRef(null);
+  // Open -> focus the first enabled control inside the popover; Esc/overlay-click ->
+  // close + return focus to the Cols button (a11y hard gate: never leave focus
+  // stranded in a closed popover).
+  useEffect(()=>{
+    if(!colsMenu||!colsMenuRef.current) return;
+    const first=colsMenuRef.current.querySelector('input:not(:disabled),button:not(:disabled)');
+    if(first) first.focus();
+  },[colsMenu]);
+  const closeColsMenu=useCallback(()=>{
+    setColsMenu(false);
+    if(colsBtnRef.current) colsBtnRef.current.focus();
+  },[]);
   // ── F5: on-demand facet popover — top values+counts for this table's pivot
   // (cross-filterable) columns. Facet click funnels into the SAME fx.toggle used
   // by pivot-cell (~1055), so the resulting chip is the existing FilterBar chip.
@@ -1480,18 +1509,53 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // scrollBody renders a progressive window (renderLimit); maxRows keeps the legacy cap.
   const visible=sorted.slice(0, scrollBody?renderLimit:(maxRows&&!showAll?maxRows:Infinity));
 
-  // columnToggle: effective (rendered) columns = defined cols minus hidden.
+  // Feature 8: colOrder holds ALL column keys (visible + hidden) in the user's
+  // chosen order; stale keys drop out, new columns (schema change) append at
+  // the end — same "stale keys ignored" contract as hiddenCols above.
+  const orderedAll=useMemo(()=>{
+    if(!colOrder||!colOrder.length) return columns;
+    const byKey=new Map(columns.map(c=>[c.key,c]));
+    const out=colOrder.map(k=>byKey.get(k)).filter(Boolean);
+    columns.forEach(c=>{ if(!out.includes(c)) out.push(c); });
+    return out;
+  },[columns,colOrder]);
+  // columnToggle: effective (rendered) columns = ordered cols minus hidden, pinned first.
   // Never yields an empty set; CSV/peek-title still use the full `columns`.
   const effCols=useMemo(()=>{
-    if(!showCols||!hiddenCols.length) return columns;
-    const keep=columns.filter(c=>!hiddenCols.includes(c.key));
-    return keep.length?keep:columns;
-  },[columns,hiddenCols,showCols]);
+    if(!showCols) return columns;
+    let cs=orderedAll;
+    if(hiddenCols.length){
+      const keep=cs.filter(c=>!hiddenCols.includes(c.key));
+      cs=keep.length?keep:cs;
+    }
+    if(pinnedCol){
+      const pinned=cs.find(c=>c.key===pinnedCol);
+      if(pinned) cs=[pinned,...cs.filter(c=>c.key!==pinnedCol)];
+    }
+    return cs;
+  },[columns,hiddenCols,showCols,orderedAll,pinnedCol]);
   const toggleCol=(key)=>setHiddenCols(prev=>{
     const has=prev.includes(key);
     const next=has?prev.filter(k=>k!==key):[...prev,key];
     if(!has && (columns.length-next.length)<1) return prev; // never hide the last column
     if(id) LS.set('cols.'+id,next);
+    return next;
+  });
+  // moveCol: keyboard reorder (up/down buttons in the Cols popover, not drag-only).
+  // Operates on the full column list (orderedAll's key order) so boundary
+  // disabling matches what the menu itself renders.
+  const moveCol=(key,delta)=>setColOrder(prev=>{
+    const base=(prev&&prev.length)?prev.slice():columns.map(c=>c.key);
+    columns.forEach(c=>{ if(!base.includes(c.key)) base.push(c.key); });
+    const i=base.indexOf(key), j=i+delta;
+    if(i<0||j<0||j>=base.length) return prev;
+    [base[i],base[j]]=[base[j],base[i]];
+    if(id) LS.set('cols.order.'+id,base);
+    return base;
+  });
+  const togglePinCol=(key)=>setPinnedCol(prev=>{
+    const next=prev===key?null:key;
+    if(id) LS.set('cols.pin.'+id,next);
     return next;
   });
 
@@ -1850,18 +1914,32 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
             </div></>:null}
         </div>:null}
         {showCols?<div className="dt-cols-slot">
-          <button className="btn btn-ghost" onClick={()=>setColsMenu(v=>!v)}
-            aria-haspopup="true" aria-expanded={colsMenu} title="Show/hide columns">⋯ Cols</button>
-          {colsMenu?<><div className="views-overlay" onClick={()=>setColsMenu(false)}/>
-            <div className="panel dt-cols-menu" role="group" aria-label="Toggle columns">
-              {columns.map(c=>{
+          <button ref={colsBtnRef} className="btn btn-ghost" onClick={()=>setColsMenu(v=>!v)}
+            aria-haspopup="true" aria-expanded={colsMenu} title="Show/hide, reorder, and pin columns">⋯ Cols</button>
+          {colsMenu?<><div className="views-overlay" onClick={closeColsMenu}/>
+            <div className="panel dt-cols-menu" ref={colsMenuRef} role="group" aria-label="Manage columns"
+              onKeyDown={e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeColsMenu(); } }}>
+              {orderedAll.map((c,i)=>{
+                const label=c.label||c.key;
                 const hidden=hiddenCols.includes(c.key);
                 const lastVisible=!hidden && (columns.length-hiddenCols.length)<=1;
-                return <label key={c.key} className="dt-cols-item">
-                  <input type="checkbox" checked={!hidden} disabled={lastVisible}
-                    onChange={()=>toggleCol(c.key)}/>
-                  <span>{c.label||c.key}</span>
-                </label>;
+                const pinned=pinnedCol===c.key;
+                return <div key={c.key} className="dt-cols-item">
+                  <label className="dt-cols-item-label">
+                    <input type="checkbox" checked={!hidden} disabled={lastVisible}
+                      onChange={()=>toggleCol(c.key)} aria-label={(hidden?'Show ':'Hide ')+label+' column'}/>
+                    <span>{label}{pinned?' · Pinned':''}</span>
+                  </label>
+                  <span className="dt-cols-item-ctl">
+                    <button type="button" className="dt-cols-move" disabled={i===0}
+                      aria-label={'Move '+label+' up'} onClick={()=>moveCol(c.key,-1)}>↑</button>
+                    <button type="button" className="dt-cols-move" disabled={i===orderedAll.length-1}
+                      aria-label={'Move '+label+' down'} onClick={()=>moveCol(c.key,1)}>↓</button>
+                    <button type="button" className="dt-cols-pin" aria-pressed={pinned}
+                      aria-label={(pinned?'Unpin ':'Pin ')+label+' column'}
+                      onClick={()=>togglePinCol(c.key)}>{pinned?'★':'☆'}</button>
+                  </span>
+                </div>;
               })}
             </div></>:null}
         </div>:null}
