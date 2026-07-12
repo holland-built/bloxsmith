@@ -3714,6 +3714,7 @@ function NetworkTab(){
   },[subnetQuery]);
   const [expandedSigs,setExpandedSigs]=useState(()=>new Set());
   const {bind}=useHoverDetail(); // cursor-following flavor card for subnet + top-consumer rows
+  const flt=useFilters(); // "Capacity by site" bars → removable global site filter (FilterBar + Clear)
   const _whoNet=useApi('/api/whoami');
   const canEdit=(((_whoNet.data&&_whoNet.data.role)||'viewer')!=='viewer');
   if(locked) return null;
@@ -3795,7 +3796,6 @@ function NetworkTab(){
   const stripUtil=q=>String(q||'').split(/\s+/).filter(t=>t&&!/^-?util(:|>=|<=|>|<|=)/i.test(t)).join(' ');
   const activeUtilBand=(()=>{const parts=String(subnetQuery).split(/\s+/);for(const id in UTIL_BQL){if(parts.indexOf(UTIL_BQL[id])!==-1)return id;}return null;})();
   const injectUtilBand=id=>{const base=stripUtil(subnetQuery);setSubnetQuery((id==null||activeUtilBand===id)?base:((base?base+' ':'')+UTIL_BQL[id]));};
-  const injectSite=name=>{const base=String(subnetQuery).split(/\s+/).filter(t=>t&&t.toLowerCase().indexOf('site:')!==0).join(' ');setSubnetQuery((base?base+' ':'')+'site:'+name);};
 
   return <div className="page fadein">
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
@@ -3829,7 +3829,7 @@ function NetworkTab(){
           <SectionRule title="Capacity & utilization"/>
           <div className="grid">
             <Panel title="Capacity by site" empty={siteRows.length<2}>
-              <GroupedBar rows={siteRows} max={24} onClick={r=>injectSite(r.site)}/>
+              <GroupedBar rows={siteRows} max={24} onClick={r=>flt.toggle('site',r.site,'Site: '+r.site)}/>
             </Panel>
             <Panel title="Top consumers" empty={topN.length===0}>
               <div className="issues">
@@ -3965,9 +3965,11 @@ function DnsTab(){
     {label:'Anomalies',value:anomalyCount},
     {label:'7d volume',value:volTotal.toLocaleString()+(volAvg>0?(' ('+pctStr+')'):'')},
   ];
+  // D: problem-zone chips were dead labels — now isolate that zone in the table
+  // via a removable global filter on the fqdn column (clearable in FilterBar).
   const chips=zones
     .filter(z=>(Array.isArray(z.issues)&&z.issues.length>0)||z.anomaly)
-    .slice(0,3).map(z=>({label:z.fqdn||'—'}));
+    .slice(0,3).map(z=>({label:z.fqdn||'—',filter:{field:'fqdn',value:z.fqdn||'',label:'Zone: '+(z.fqdn||'—')}}));
 
   // Analytics panels render ONLY when their array is non-empty and no fetch error
   // (graceful empties → no dead bands). If all three are empty the whole analytics block renders nothing.
