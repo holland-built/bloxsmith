@@ -817,6 +817,14 @@ class FrontendStructureTests(unittest.TestCase):
         # bare glyph/color — this is the string that renders it.
         self.assertContains("aria-label={diff.label}", "diff glyph must carry an aria-label")
 
+    def test_compare_to_snapshot_leases_hosts(self):
+        # F7 extended beyond Subnets: Leases (Network tab) and Hosts (Infra tab)
+        # reuse diffRows()/dt-diff — no parallel diff mechanism or snapshot store.
+        self.assertContains("Compare leases to snapshot", "Leases Compare-to-snapshot toolbar affordance missing")
+        self.assertContains("Compare hosts to snapshot", "Hosts Compare-to-snapshot toolbar affordance missing")
+        self.assertContains("leases:{n:leases.length,active,top:leaseTop}", "SnapshotWriter missing leases row-level top-N capture")
+        self.assertContains("hosts:{n:hosts.length,online,offline:hosts.length-online,top:hostTop}", "SnapshotWriter missing hosts row-level top-N capture")
+
     def test_daily_view(self):
         self.assertContains("DailyTab", "DailyTab component missing")
         self.assertContains("dailyNarrative", "dailyNarrative missing")
