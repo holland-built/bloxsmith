@@ -804,6 +804,19 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("useSnapshots", "useSnapshots hook missing")
         self.assertContains("SnapshotWriter", "SnapshotWriter component missing")
 
+    def test_compare_to_snapshot_diff(self):
+        # Row-level Compare-to-snapshot: pure diffRows() reuses the existing
+        # snapshot store (no parallel snapshot system), DataTable/DTRow render a
+        # +/~/- gutter glyph + aria label (never a color-only signal), and
+        # removed rows render as struck-through ghost rows.
+        self.assertContains("function diffRows(", "diffRows pure helper missing")
+        self.assertContains("dt-diff", "diff gutter column class missing")
+        self.assertContains("dt-ghost", "ghost/removed row class missing")
+        self.assertContains("Compare to snapshot", "Compare-to-snapshot toolbar affordance missing")
+        # HARD GATE: the gutter glyph must carry an aria label, not just a
+        # bare glyph/color — this is the string that renders it.
+        self.assertContains("aria-label={diff.label}", "diff glyph must carry an aria-label")
+
     def test_daily_view(self):
         self.assertContains("DailyTab", "DailyTab component missing")
         self.assertContains("dailyNarrative", "dailyNarrative missing")
@@ -826,8 +839,8 @@ class FrontendStructureTests(unittest.TestCase):
 
     def test_no_emoji_in_babel_script(self):
         # pictographic emoji must be absent; monochrome UI glyphs are allowed
-        # (⌘ ✓ ✕ ← → ↑ ↓ · ● ○ ⟳ • … — box-drawing).
-        allowed = set('←→↑↓·●○⟳⌘•…—✕✓─═')
+        # (⌘ ✓ ✕ ← → ↑ ↓ · ● ○ ⟳ • … — box-drawing; ★ ☆ pin toggle).
+        allowed = set('←→↑↓·●○⟳⌘•…—✕✓─═★☆')
         emoji = re.compile('[\U0001F000-\U0001FAFF\U0001F1E6-\U0001F1FF️'
                            '☀-⛿⬀-⯿'
                            '\U0001F512\U0001F514\U0001F6E1]')
@@ -1110,6 +1123,38 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("copyCursorRow", "keyboard row-copy (cursor + shortcut) missing")
         self.assertContains("e.key==='y'", "'y' keyboard shortcut for row-copy missing")
 
+    def test_filter_facets_popover(self):
+        """F5: on-demand faceted Filter popover (dt-tools). Facet click funnels into
+        the SAME cross-filter mechanism pivot-cell already uses (fx.toggle/FilterCtx),
+        so the resulting chip is the existing FilterBar chip; removal announces via toast."""
+        self.assertContains("dt-facet-menu", "facet popover panel missing")
+        self.assertContains('aria-label="Filter by field values"', "Filter trigger button aria-label missing")
+        self.assertContains("facetCols=useMemo(()=>columns.filter(c=>c.pivot)", "facets must derive from pivot columns")
+        self.assertContains("onClick={()=>fx.toggle(g.key,fv.v,lbl)}", "facet click must funnel into fx.toggle (shared pivot mechanism)")
+        self.assertContains("if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeFacets(); }",
+                             "facet popover must close on Escape")
+        self.assertContains("if(facetBtnRef.current) facetBtnRef.current.focus();",
+                             "closing the facet popover must return focus to the trigger")
+        self.assertContains("toast('Filter removed · '+(label||existing.label)", "filter removal must announce via toast")
+
+    def test_column_manager(self):
+        """Feature 8: extends the existing dt-cols-menu show/hide popover with
+        keyboard reorder (per-row up/down, not drag-only), pin-first, and
+        per-tableId LS persistence for both, plus popover focus management
+        (open -> first control, Esc -> close + focus returns to the Cols button)."""
+        self.assertContains("const moveCol=(key,delta)=>setColOrder(prev=>", "column reorder handler missing")
+        self.assertContains("const togglePinCol=(key)=>setPinnedCol(prev=>", "column pin handler missing")
+        self.assertContains("LS.get('cols.order.'+id,null)", "column order must be read from per-tableId LS key")
+        self.assertContains("LS.set('cols.order.'+id,base)", "column order must persist to per-tableId LS key")
+        self.assertContains("LS.get('cols.pin.'+id,null)", "pinned column must be read from per-tableId LS key")
+        self.assertContains("LS.set('cols.pin.'+id,next)", "pinned column must persist to per-tableId LS key")
+        self.assertContains('aria-label={\'Move \'+label+\' up\'}', "reorder-up button must be labeled per column")
+        self.assertContains('aria-label={\'Move \'+label+\' down\'}', "reorder-down button must be labeled per column")
+        self.assertContains("if(first) first.focus();",
+                             "opening the Cols popover must focus its first enabled control")
+        self.assertContains("if(colsBtnRef.current) colsBtnRef.current.focus();",
+                             "closing the Cols popover must return focus to the Cols button")
+
 
 class ServerSecurityTests(unittest.TestCase):
     """Static (no running server) checks on server.py hardening from plans 014/015.
@@ -1252,7 +1297,7 @@ class BqlParserTests(unittest.TestCase):
     index.html and executed under Node (same extract-and-exec technique as the
     _cspq / correlate server tests above, but for JS). Skips if `node` absent."""
 
-    SENTINELS = ("parseQuery", "deriveSchema", "buildPredicate")
+    SENTINELS = ("parseQuery", "deriveSchema", "buildPredicate", "cleanBqlAnswer")
 
     @classmethod
     def setUpClass(cls):
@@ -1369,6 +1414,46 @@ console.log('AGE_OK');
         self.assertEqual(res.returncode, 0,
                          f"age-epoch Node run failed:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
         self.assertIn("AGE_OK", res.stdout)
+
+    def test_bql_last_preset_alias(self):
+        # Feature 6 (time-as-preset): `last:Nh`/`last:Nd`/`last:Nm` aliases onto
+        # the same synthetic age field as `age:Nh` (deriveSchema builtin alias
+        # last->age), so it rides the existing ageMatch comparator — within-window
+        # rows match, out-of-window rows are excluded. No new predicate branch.
+        harness = r"""
+function iso(msAgo){ return new Date(Date.now()-msAgo).toISOString(); }
+const H=3600000, M=60000;
+const rows=[
+  {name:'fresh',  seen:iso(1*H)},
+  {name:'stale',  seen:iso(48*H)},
+  {name:'recent', seen:iso(10*M)},
+];
+const cols=[{key:'name'},{key:'seen'}];
+const schema=deriveSchema(cols, rows, {});
+function names(q){ return rows.filter(buildPredicate(parseQuery(q), schema)).map(r=>r.name).sort(); }
+function eqArr(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
+let fails=0;
+function chk(l,c){ if(!c){ console.error('FAIL '+l); fails++; } }
+chk("'last' aliases onto synthetic age field", schema.aliases.last==='age');
+chk('last:24h includes fresh+recent, excludes stale', eqArr(names('last:24h'), ['fresh','recent']));
+chk('last:30m isolates recent only', eqArr(names('last:30m'), ['recent']));
+chk('last:7d includes all three', eqArr(names('last:7d'), ['fresh','recent','stale']));
+if(fails){ console.error(fails+' last-preset assertion(s) failed'); process.exit(1); }
+console.log('LAST_OK');
+"""
+        res = self._node(harness)
+        self.assertEqual(res.returncode, 0,
+                         f"last-preset Node run failed:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
+        self.assertIn("LAST_OK", res.stdout)
+
+    def test_clean_bql_answer_strips_wrapping(self):
+        # NL→BQL translator (Feature 4): the AI endpoint's free-text "answer" must
+        # be reduced to a bare, single-line query before it fills the search box —
+        # strip a ```-fenced block, wrapping quotes, and any trailing chatter line.
+        harness = "console.log(JSON.stringify(cleanBqlAnswer('```\\nutil>85\\n```\\nextra line')));"
+        res = self._node(harness)
+        self.assertEqual(res.stdout.strip(), json.dumps("util>85"),
+                         f"cleanBqlAnswer did not strip fences/trailing text:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
 
     def test_bql_blocks_are_valid_babel_module(self):
         # The three sliced blocks must parse as valid JS inside the app's Babel
