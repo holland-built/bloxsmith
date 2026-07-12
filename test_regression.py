@@ -610,6 +610,31 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("/api/logo", "logo source endpoint missing")
         self.assertContains("/api/brand", "brand endpoint missing")
 
+    # ── layout: deterministic stretch grids + height discipline (Phases A+B) ────
+
+    def test_grid_stretch(self):
+        # All 5 grid families dropped auto-fill for deterministic columns and
+        # stretch cards (paired with height caps). .ovx-detail lives in a
+        # JS-injected <style> string; the others in the main <style>.
+        for sel in (r"\.grid-2", r"\.grid-3", r"\.grid", r"\.grid-dense", r"\.ovx-detail"):
+            # anchor on the base rule (starts with display:grid); the responsive
+            # media-query overrides start with grid-template-columns and are skipped.
+            m = re.search(sel + r"\{display:grid;([^}]*)\}", self.html)
+            self.assertIsNotNone(m, f"grid base rule {sel} not found")
+            body = m.group(1)
+            self.assertIn("align-items:stretch", body, f"{sel} missing align-items:stretch")
+            self.assertIn("grid-auto-flow:dense", body, f"{sel} missing grid-auto-flow:dense")
+            self.assertNotIn("auto-fill", body, f"{sel} still uses auto-fill")
+
+    def test_height_tokens(self):
+        self.assertContains("--body-table:280px", "--body-table token missing")
+        self.assertContains("--body-chart:220px", "--body-chart token missing")
+        self.assertContains(".chart-body{", ".chart-body class missing")
+        for tid in ("ov-subnets", "ov-hosts"):
+            seg = self.html[self.html.index(f'tableId="{tid}"'):]
+            seg = seg[:seg.index("/>")]
+            self.assertIn("scrollBody={280}", seg, f"{tid} DataTable missing scrollBody={{280}}")
+
     # ── new shell: tabs + router ───────────────────────────────────────────────
 
     def test_core_tab_ids_in_order(self):
