@@ -998,6 +998,24 @@ class FrontendStructureTests(unittest.TestCase):
                       "editor forms must target /api/edit/ endpoints")
         self.assertIn("editId", et, "EditorTab must track an editId (id-present edit mode)")
 
+    def test_searchschema_present(self):
+        """Phase E: major DataTables carry an explicit searchSchema= override so BQL
+        power queries get reliable field types (not just 30-row auto-derivation)."""
+        self.assertIn("searchSchema={{", self.html, "no searchSchema overrides found")
+        # subnets: numeric util/cidr
+        self.assertIn("searchSchema={{fields:{util:{type:'number'},cidr:{type:'number',key:'cidr'}}}}",
+                      self.html, "subnets searchSchema (util/cidr number) missing")
+        # zones: numeric ttl + array issues + zone alias
+        self.assertIn("issues:{type:'array'}", self.html, "zones issues:{type:'array'} override missing")
+        self.assertIn("aliases:{zone:'fqdn'}", self.html, "zones zone->fqdn alias missing")
+        # hosts: enum status
+        self.assertIn("searchSchema={{fields:{status:{type:'enum'}}}}", self.html,
+                      "hosts status:{type:'enum'} override missing")
+        # security events: enum severity/policy_action + aliases
+        self.assertIn("policy_action:{type:'enum'}", self.html,
+                      "security policy_action:{type:'enum'} override missing")
+        self.assertIn("action:'policy_action'", self.html, "security action->policy_action alias missing")
+
 
 class ServerSecurityTests(unittest.TestCase):
     """Static (no running server) checks on server.py hardening from plans 014/015.
