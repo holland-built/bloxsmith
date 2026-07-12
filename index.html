@@ -6567,6 +6567,15 @@ function CommandPalette({open,onClose}){
     ...TABS.map(t=>({label:'Go to '+TAB_LABELS[t],kind:'nav',run:()=>{nav(t);onClose();}})),
     {label:'Ask AI',kind:'ai',run:()=>{onClose();window.dispatchEvent(new CustomEvent('bx:ai-open',{detail:{q:''}}));}},
     {label:'Alert rules',kind:'nav',run:()=>{onClose();window.dispatchEvent(new CustomEvent('bx:ai-open',{detail:{q:''}}));}},
+    // F3 — Copy link to this view. The hash already IS the canonical, deep-linkable
+    // URL (parseHash/nav, tab + ?params survive reload — see the router above), so
+    // this reuses location.href verbatim rather than re-serializing anything, and
+    // reuses the F1 toast/aria-live bus for the "Link copied" announcement.
+    {label:'Copy link to this view',kind:'action',run:()=>{
+      onClose();
+      if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(location.href);
+      toast('Link copied','ok',{duration:1500});
+    }},
     ...views.map(v=>({label:'View: '+v.name,kind:'view',run:()=>{onClose();applyViewByName(v.name);}})),
   ];
   // F8a — contextual bulk actions for the active table's selection (or its cursor row as a 1-row selection).
@@ -6828,6 +6837,12 @@ function TopBar({tab,org,fresh,onPalette,onAi}){
       <AccountSlot/>
       <DensityToggle/>
       <ThemeToggle/>
+      <button className="kbd" onClick={()=>{
+        if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(location.href);
+        toast('Link copied','ok',{duration:1500});
+      }} aria-label="Copy link to this view" title="Copy link to this view">
+        <span aria-hidden="true">⧉</span>
+      </button>
       <button className="kbd" onClick={onPalette} aria-label="Open command palette" title="Command palette">
         <span className="mono">⌘K</span>
       </button>
