@@ -442,6 +442,18 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:visibl
 .dt-cols-item{display:flex;align-items:center;gap:var(--s2);padding:5px 8px;font-size:var(--t12);color:var(--text);border-radius:var(--r-ctl);cursor:pointer;}
 .dt-cols-item:hover{background:var(--hover);}
 .dt-cols-item input{cursor:pointer;}
+/* ── F5: on-demand facet popover (Filter button in dt-tools) — same overlay/panel
+   pattern as .dt-cols-menu; value rows reuse the pivot-cell accent-for-active rule. ── */
+.dt-facet-slot{position:relative;display:inline-flex;}
+.dt-facet-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:61;width:240px;max-height:60vh;overflow-y:auto;padding:var(--s2);display:flex;flex-direction:column;gap:var(--s3);}
+.dt-facet-empty{padding:var(--s2);font-size:var(--t12);color:var(--text-faint);}
+.dt-facet-group{display:flex;flex-direction:column;gap:2px;}
+.dt-facet-label{font-size:var(--t11);text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);padding:2px 4px;}
+.dt-facet-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);width:100%;padding:5px 8px;font-size:var(--t12);color:var(--text-dim);text-align:left;background:transparent;border:1px solid transparent;border-radius:var(--r-ctl);cursor:pointer;transition:background .12s ease,border-color .12s ease;}
+.dt-facet-item:hover{background:var(--hover);color:var(--text);}
+.dt-facet-item.active{color:var(--accent-text);background:var(--accent-dim);border-color:var(--accent-text);}
+.dt-facet-count{color:var(--text-faint);font-family:'GeistMono',ui-monospace,monospace;}
+.dt-facet-item.active .dt-facet-count{color:var(--accent-text);}
 /* ── DataTable BQL search: typeahead popover + ? cheatsheet + no-match diag ── */
 .dt-search{position:relative;display:inline-flex;align-items:center;min-width:0;}
 .dt-search .dt-filter{padding-right:46px;}
@@ -922,10 +934,15 @@ function FilterProvider({children}){
   const add=useCallback((field,value,label)=>{ const cur=ref.current;
     if(cur.some(f=>same(f,field,value))) return;
     write([...cur,{field,value:String(value),label:label||(field+': '+value)}]); },[write]);
-  const remove=useCallback((field,value)=>{ write(ref.current.filter(f=>!same(f,field,value))); },[write]);
+  // remove(): announces the removal on the shared toast/aria-live bus (F5 facet-chip
+  // removal + FilterBar's × both funnel through here — no separate confirmation UI).
+  const remove=useCallback((field,value,label)=>{ const cur=ref.current;
+    const existing=cur.find(f=>same(f,field,value));
+    write(cur.filter(f=>!same(f,field,value)));
+    if(existing) toast('Filter removed · '+(label||existing.label),'ok',{duration:1500}); },[write]);
   const toggle=useCallback((field,value,label)=>{ const cur=ref.current;
-    if(cur.some(f=>same(f,field,value))) write(cur.filter(f=>!same(f,field,value)));
-    else write([...cur,{field,value:String(value),label:label||(field+': '+value)}]); },[write]);
+    if(cur.some(f=>same(f,field,value))) remove(field,value,label);
+    else write([...cur,{field,value:String(value),label:label||(field+': '+value)}]); },[write,remove]);
   const clear=useCallback(()=>write([]),[write]);
   const has=useCallback((field,value)=>ref.current.some(f=>same(f,field,value)),[]);
   const val=useMemo(()=>({filters,add,remove,toggle,clear,has}),[filters,add,remove,toggle,clear,has]);
@@ -941,7 +958,7 @@ function FilterBar(){
     {filters.map((f,i)=><button key={f.field+'|'+f.value+'|'+i} className="chip active"
       title={'Remove filter · '+(explain(f.field,f.value)||f.label)}
       aria-label={'Remove filter '+f.label}
-      onClick={()=>remove(f.field,f.value)}>
+      onClick={()=>remove(f.field,f.value,f.label)}>
       {f.label}<span className="x">✕</span></button>)}
     <button className="filter-clear" onClick={()=>clear()}>Clear all</button>
   </div>;
@@ -1326,7 +1343,8 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
   maxRows,problemsOnly,scrollBody,columnToggle,searchSchema,query,onQuery}){
   const power=usePower();
-  const {filters:globalFilters}=useFilters();
+  const fx=useFilters();
+  const {filters:globalFilters}=fx;
   const id=tableId||(csvName?String(csvName):null);
   const [sort,setSort]=useState(defaultSort||null); // {key,dir}
   const [cursor,setCursor]=useState(-1);             // -1 = no visual until a key is pressed
@@ -1346,6 +1364,11 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // columnToggle: hidden column keys (persisted per tableId). Stale keys are ignored on read.
   const [hiddenCols,setHiddenCols]=useState(()=> (showCols&&id)?LS.get('cols.'+id,[]):[]);
   const [colsMenu,setColsMenu]=useState(false);
+  // ── F5: on-demand facet popover — top values+counts for this table's pivot
+  // (cross-filterable) columns. Facet click funnels into the SAME fx.toggle used
+  // by pivot-cell (~1055), so the resulting chip is the existing FilterBar chip.
+  const [facetOpen,setFacetOpen]=useState(false);
+  const facetBtnRef=useRef(null);
   const [sugOpen,setSugOpen]=useState(false);    // BQL typeahead popover
   const [sugIdx,setSugIdx]=useState(-1);          // highlighted suggestion
   const [cheatOpen,setCheatOpen]=useState(false); // ? grammar cheatsheet
@@ -1392,6 +1415,25 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
 
   // BQL search schema: filterKeys drives freeTextKeys (Phase A precedence); searchSchema deep-merges over auto-derived.
   const _schema=useMemo(()=>deriveSchema(columns,base,{...(searchSchema||{}),filterKeys}),[columns,base,searchSchema,filterKeys]);
+
+  // F5 facets: pivot columns are this table's designated cross-filterable fields
+  // (same set the pivot-cell already scopes on). Counts computed from `base`
+  // (currently loaded rows, pre-filter) — matches the BQL typeahead's distinctVals precedent.
+  const facetCols=useMemo(()=>columns.filter(c=>c.pivot),[columns]);
+  const showFacets=facetCols.length>0;
+  const facetData=useMemo(()=>{
+    if(!facetOpen||!showFacets) return [];
+    return facetCols.map(c=>{
+      const counts={};
+      base.forEach(r=>{ const v=r[c.key]; if(v==null||v==='') return; const s=String(v); counts[s]=(counts[s]||0)+1; });
+      const values=Object.keys(counts).map(v=>({v,n:counts[v]})).sort((a,b)=>b.n-a.n).slice(0,8);
+      return {key:c.key,label:c.label||c.key,values};
+    }).filter(g=>g.values.length);
+  },[facetOpen,showFacets,facetCols,base]);
+  const closeFacets=useCallback(()=>{
+    setFacetOpen(false);
+    if(facetBtnRef.current) facetBtnRef.current.focus();
+  },[]);
 
   const filtered=useMemo(()=>{
     let out=base;
@@ -1557,7 +1599,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const toggleAll=()=>setSelected(prev=>{ const n=new Set(prev); if(allSel) allKeys.forEach(k=>n.delete(k)); else allKeys.forEach(k=>n.add(k)); return n; });
 
   const showFilter=filterable!==false&&(filterable||rows.length>12);
-  const showToolbar=showCsv||showFilter||problemsOnly||showCols;
+  const showToolbar=showCsv||showFilter||problemsOnly||showCols||showFacets;
   const noIssues=problemsOnly&&probOn&&probCount===0;
 
   // ── BQL typeahead: context-sensitive suggestions derived from input + schema ──
@@ -1764,6 +1806,31 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         </button>:null}
       </div>
       <div className="dt-tools">
+        {showFacets?<div className="dt-facet-slot">
+          <button ref={facetBtnRef} type="button" className="btn btn-ghost" onClick={()=>setFacetOpen(v=>!v)}
+            aria-haspopup="true" aria-expanded={facetOpen} aria-label="Filter by field values" title="Filter by field values">
+            Filter{globalFilters.some(f=>facetCols.some(c=>c.key===f.field))?' •':''}
+          </button>
+          {facetOpen?<><div className="views-overlay" onClick={closeFacets}/>
+            <div className="panel dt-facet-menu" role="dialog" aria-label="Filter by field values"
+              onKeyDown={e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeFacets(); } }}>
+              {facetData.length===0
+                ? <div className="dt-facet-empty">No values to filter</div>
+                : facetData.map(g=><div key={g.key} className="dt-facet-group">
+                    <div className="dt-facet-label">{g.label}</div>
+                    {g.values.map(fv=>{
+                      const on=fx.has(g.key,fv.v);
+                      const lbl=g.label+': '+fv.v;
+                      return <button key={fv.v} type="button" className={'dt-facet-item'+(on?' active':'')}
+                        aria-pressed={on} aria-label={(on?'Remove filter ':'Filter to ')+lbl}
+                        onClick={()=>fx.toggle(g.key,fv.v,lbl)}>
+                        <span className="dt-facet-val">{fv.v}</span>
+                        <span className="dt-facet-count mono">{fv.n}</span>
+                      </button>;
+                    })}
+                  </div>)}
+            </div></>:null}
+        </div>:null}
         {showCols?<div className="dt-cols-slot">
           <button className="btn btn-ghost" onClick={()=>setColsMenu(v=>!v)}
             aria-haspopup="true" aria-expanded={colsMenu} title="Show/hide columns">⋯ Cols</button>
