@@ -710,6 +710,19 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("function CommandPalette", "CommandPalette missing")
         self.assertContains("e.key==='k'||e.key==='K'", "Cmd/Ctrl-K binding missing")
 
+    def test_command_palette_actions(self):
+        # F2 — the palette runs ACTIONS (Export current view / Ask AI about
+        # selection), not just navigation. Both are built from the active
+        # table's getState() inside CommandPalette's ctxItems block.
+        self.assertContains("Export current view", "palette Export-current-view action missing")
+        self.assertContains("Ask AI about selection", "palette Ask-AI-about-selection action missing")
+        self.assertContains("rows:sorted,columns", "DataTable getState() must expose rows+columns for palette export")
+
+    def test_copy_link_action(self):
+        # F3 — "Copy link to this view" palette action copies location.href
+        # (the hash router already makes it canonical + deep-linkable).
+        self.assertContains("Copy link to this view", "palette Copy-link-to-this-view action missing")
+
     # ── unified search (BQL) discoverability layer ─────────────────────────────
 
     def test_search_typeahead(self):
