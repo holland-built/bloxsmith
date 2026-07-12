@@ -76,6 +76,7 @@ try{
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s12:48px;
   --r-ctl:4px; --r-panel:6px;
   --row-h:28px; --dt-fs:var(--t12);
+  --body-table:280px; --body-chart:220px;
 }
 [data-density="comfortable"]{--row-h:32px;}
 [data-theme="light"]{color-scheme:light;
@@ -251,8 +252,8 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 
 /* ── shared layout + synthesis primitives ── */
 .page{display:flex;flex-direction:column;gap:var(--s6);}
-.grid-2{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(460px,100%),1fr));gap:16px;align-items:start;min-width:0;}
-.grid-3{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:16px;align-items:start;min-width:0;}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
 .grid-2>*,.grid-3>*{min-width:0;}
 .prose{max-width:72ch;min-width:0;overflow-wrap:anywhere;}
 .band{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s5);width:100%;min-width:0;padding:var(--s5);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);}
@@ -341,6 +342,24 @@ table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-al
 .peek-foot{padding:var(--s3) var(--s4);border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--surface);}
 .peek-full{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;}
 
+/* ── responsive grid column counts + trailing-row fill resets ── */
+@media (max-width:1280px){
+  .grid,.grid-3{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .grid-dense{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .grid>.pcard:last-child:nth-child(n),.grid-3>.pcard:last-child:nth-child(n),.grid-dense>.pcard:last-child:nth-child(n){grid-column:auto;}
+  .grid>.pcard:last-child:nth-child(odd),.grid-3>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
+  .grid-dense>.pcard:nth-child(3n+1):last-child{grid-column:1/-1;}
+  .grid-dense>.pcard:nth-child(3n+2):last-child{grid-column:span 2;}
+}
+@media (max-width:960px){
+  .grid-dense{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .grid-dense>.pcard:last-child:nth-child(n){grid-column:auto;}
+  .grid-dense>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
+}
+@media (max-width:720px){
+  .grid,.grid-2,.grid-3,.grid-dense{grid-template-columns:minmax(0,1fr);}
+  .grid>.pcard:last-child:nth-child(n),.grid-2>.pcard:last-child:nth-child(n),.grid-3>.pcard:last-child:nth-child(n),.grid-dense>.pcard:last-child:nth-child(n){grid-column:auto;}
+}
 @media (max-width:768px){
   .brand-org{display:none;}
   .main{padding:var(--s4);}
@@ -468,15 +487,26 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .sd.crit{background:var(--crit);animation:pulse 2s infinite;}
 .sd.pulse{animation:pulse 2.4s ease-in-out infinite;}
 
-.pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:14px 15px;display:flex;flex-direction:column;min-width:0;}
+.pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:14px 15px;display:flex;flex-direction:column;min-width:0;height:100%;}
+.pbody-fill{flex:1 1 auto;min-height:0;}
+.span-2{grid-column:span 2;}
+.chart-body{height:var(--body-chart);display:flex;flex-direction:column;justify-content:center;}
 .pcard>h3{font-size:12.5px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin:0;}
 .pcard>h3 .side{color:var(--text-faint);font-weight:500;font-size:11px;display:inline-flex;align-items:center;gap:var(--s2);flex:none;}
 
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr));gap:16px;align-items:start;min-width:0;}
-.grid-dense{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:16px;align-items:start;min-width:0;}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+.grid-dense{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
 .grid>*,.grid-dense>*{min-width:0;}
-/* balance an odd trailing panel: span it full-width so it never orphans in a 2-col row */
-.grid>.pcard:last-child:nth-child(odd),.grid-dense>.pcard:last-child:nth-child(odd),.grid-2>.pcard:last-child:nth-child(odd),.grid-3>.pcard:last-child:nth-child(odd),.ovx-detail>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
+/* trailing-row fill: a lone/partial final row spans so it never leaves a blank column.
+   2-col grids (.grid-2,.ovx-detail): lone odd last child → full width.
+   3-col grids (.grid,.grid-3): 3n+1 lone → full; 3n+2 pair → 2nd spans 2 cols.
+   4-col (.grid-dense): 4n+1 lone → full; 4n+2 → span 3; 4n+3 → span 2. */
+.grid-2>.pcard:last-child:nth-child(odd),.ovx-detail>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
+.grid>.pcard:nth-child(3n+1):last-child,.grid-3>.pcard:nth-child(3n+1):last-child{grid-column:1/-1;}
+.grid>.pcard:nth-child(3n+2):last-child,.grid-3>.pcard:nth-child(3n+2):last-child{grid-column:span 2;}
+.grid-dense>.pcard:nth-child(4n+1):last-child{grid-column:1/-1;}
+.grid-dense>.pcard:nth-child(4n+2):last-child{grid-column:span 3;}
+.grid-dense>.pcard:nth-child(4n+3):last-child{grid-column:span 2;}
 
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:10px;}
 .kpi{padding:12px 13px;border-radius:var(--r-panel);background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;transition:border-color .16s ease,transform .16s ease;min-width:0;}
@@ -501,7 +531,7 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .sec-h h2{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text-dim);margin:0;}
 .sec-h .rule{flex:1;height:1px;background:var(--border);}
 
-.issues{display:flex;flex-direction:column;min-width:0;}
+.issues{display:flex;flex-direction:column;min-width:0;max-height:var(--body-chart);overflow-y:auto;}
 .issue{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .12s ease;min-width:0;}
 .issue:last-child{border-bottom:0;}
 .issue:hover{background:var(--raised);}
@@ -2884,8 +2914,9 @@ function useAiExplain(){
   .ovx .lchip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r-ctl);text-transform:uppercase;letter-spacing:.3px;background:var(--raised);display:inline-block;}
   .ovx .ov-mt{margin-top:8px;}
   /* DETAIL preview grid — wider min so 3-col previews fit without column collision (~3/row at 1600px) */
-  .ovx-detail{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(460px,100%),1fr));gap:16px;align-items:start;min-width:0;}
+  .ovx-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
   .ovx-detail>*{min-width:0;}
+  @media (max-width:720px){.ovx-detail{grid-template-columns:minmax(0,1fr);}}
   `;
   document.head.appendChild(s);
 })();
@@ -3109,12 +3140,16 @@ function OverviewTab(){
     <SectionRule title="Signals"/>
     <div className="grid">
       <Panel title="Host health" side={hosts.length.toLocaleString()+' hosts'}>
-        <Donut slices={hostSlices}
-          centerValue={hosts.length?Math.round(hostsBad/hosts.length*100)+'%':'0'} centerLabel="issues"/>
+        <div className="chart-body">
+          <Donut slices={hostSlices}
+            centerValue={hosts.length?Math.round(hostsBad/hosts.length*100)+'%':'0'} centerLabel="issues"/>
+        </div>
       </Panel>
       <Panel title="Subnet utilization" side={subnets.length.toLocaleString()+' subnets'}>
-        <HistogramBar buckets={utilBuckets} axisTicks onClick={(b,i)=>{const u=i*5+2.5;const sq=u>=85?'util>=85':u>=70?'util>=70':null;nav('network',sq?{sq:sq}:undefined);}}/>
-        <ValueBands rows={subnets} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS} value={band} onChange={setBand}/>
+        <div className="chart-body">
+          <HistogramBar buckets={utilBuckets} axisTicks onClick={(b,i)=>{const u=i*5+2.5;const sq=u>=85?'util>=85':u>=70?'util>=70':null;nav('network',sq?{sq:sq}:undefined);}}/>
+          <ValueBands rows={subnets} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS} value={band} onChange={setBand}/>
+        </div>
       </Panel>
       <Panel title="Top issues" side="live">
         <div className="issues">
@@ -3134,7 +3169,7 @@ function OverviewTab(){
     <div className="ovx-detail">
 
       <Panel title="Top capacity subnets" side={band?('band '+(bandDef&&bandDef.label)+' · '+subnetPreview.length):'by utilization'} empty={!subnets.length}>
-        <DataTable tableId="ov-subnets" csvName="top-capacity-subnets"
+        <DataTable tableId="ov-subnets" csvName="top-capacity-subnets" scrollBody={280}
           rows={subnetPreview.slice(0,9)} defaultSort={{key:'util',dir:'desc'}}
           rowKey={r=>String(r.addr||r.id)}
           onRowClick={r=>nav('network',{subnet:r.addr||r.id})}
@@ -3152,7 +3187,7 @@ function OverviewTab(){
       </Panel>
 
       <Panel title="Security events" side={(Number(secData.total)||0)+' today · '+(Number(secData.blocked)||0)+' blocked'} empty={!secRows.length}>
-        <DataTable tableId="ov-secevents" csvName="security-events"
+        <DataTable tableId="ov-secevents" csvName="security-events" scrollBody={280}
           rows={secRows} rowKey={r=>String(r.qname||r.threat_indicator||'')+'|'+r.severity}
           onRowClick={()=>nav('security')}
           cols={[
@@ -3190,7 +3225,7 @@ function OverviewTab(){
       </Panel>
 
       <Panel title="Hosts needing attention" side={hostsBad+' errors'} empty={!attnHosts.length}>
-        <DataTable tableId="ov-hosts" csvName="hosts-attention"
+        <DataTable tableId="ov-hosts" csvName="hosts-attention" scrollBody={280}
           rows={attnHosts} rowKey={r=>String(r.name||r.id||r.ip)}
           onRowClick={r=>nav('infra',{host:r.name})}
           cols={[
@@ -3949,7 +3984,7 @@ function DnsTab(){
               <HistogramBar buckets={volBuckets}/>
             </Panel>
             <Panel title="Top clients" empty={clientsEmpty}>
-              <DataTable cols={clientCols} rows={clients} defaultSort={{key:'queries',dir:'desc'}} csvName="top-clients"/>
+              <DataTable cols={clientCols} rows={clients} defaultSort={{key:'queries',dir:'desc'}} csvName="top-clients" scrollBody={280}/>
             </Panel>
             <Panel title="Query types" empty={qtypesEmpty}>
               <div className="sites">
@@ -4000,6 +4035,7 @@ function DnsTab(){
   .infra-panel-div{height:1px;background:var(--border);margin:2px 0;}
   .infra-panel-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--text-dim);}
   .infra-panel-btn{font-size:12px;color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;text-align:left;}
+  .infra-page .issues{max-height:var(--body-table);overflow-y:auto;}
   .infra-page .grid-dense .issues{max-height:340px;overflow-y:auto;}
   `;
   document.head.appendChild(s);
@@ -5931,7 +5967,7 @@ function ProvisionTab(){
       <button className={'dly-seg-btn'+(mode==='site'?' on':'')} onClick={()=>setMode('site')}>Full site</button>
       <button className={'dly-seg-btn'+(mode==='seed'?' on':'')} onClick={()=>setMode('seed')}>Seed demo</button>
     </div>
-    {mode==='subnet'?<div className="grid">
+    {mode==='subnet'?<div className="grid-2">
       <Panel title="Request">
         <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
           <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
@@ -5987,7 +6023,7 @@ function ProvisionTab(){
       </Panel>:null}
       {streamErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{streamErr}</div></Panel>:null}
     </div>:null}
-    {mode==='site'?<div className="grid">
+    {mode==='site'?<div className="grid-2">
       <Panel title="Request">
         <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
           <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
@@ -6054,7 +6090,7 @@ function ProvisionTab(){
       </Panel>:null}
       {siteTeardownErr?<Panel title="Teardown error"><div className="mono" style={{color:'var(--crit)'}}>{siteTeardownErr}</div></Panel>:null}
     </div>:null}
-    {mode==='seed'?<div className="grid">
+    {mode==='seed'?<div className="grid-2">
       <Panel title="Seed multi-region demo data">
         <div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)',marginBottom:'var(--s3)'}}>
           Provisions a full set of demo sites, subnets, and zones across the selected regions from the template library. Dry-run is on by default — review the plan before writing real objects.
@@ -6335,7 +6371,7 @@ function EditorTab(){
     {isViewer?<Astryx.Badge variant="warning" label="Viewer role — read-only"/>:null}
     {(type==='dns_record'||type==='ip_address')
       ? <SelfServiceTab/>
-      : <div className="grid">
+      : <div className="grid-2">
           <Panel title={(spec&&spec.label)+(isUpdate?' — Update':' — Create')}>
             <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
               {spec&&spec.fields.map(f=>
@@ -6412,7 +6448,7 @@ function DriftTab(){
 
   return <div className="page fadein">
     <SectionRule title="Drift"/>
-    <div className="grid">
+    <div className="grid-2">
       <Panel title="Check drift">
         <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
           <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
