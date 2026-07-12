@@ -1110,6 +1110,20 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("copyCursorRow", "keyboard row-copy (cursor + shortcut) missing")
         self.assertContains("e.key==='y'", "'y' keyboard shortcut for row-copy missing")
 
+    def test_filter_facets_popover(self):
+        """F5: on-demand faceted Filter popover (dt-tools). Facet click funnels into
+        the SAME cross-filter mechanism pivot-cell already uses (fx.toggle/FilterCtx),
+        so the resulting chip is the existing FilterBar chip; removal announces via toast."""
+        self.assertContains("dt-facet-menu", "facet popover panel missing")
+        self.assertContains('aria-label="Filter by field values"', "Filter trigger button aria-label missing")
+        self.assertContains("facetCols=useMemo(()=>columns.filter(c=>c.pivot)", "facets must derive from pivot columns")
+        self.assertContains("onClick={()=>fx.toggle(g.key,fv.v,lbl)}", "facet click must funnel into fx.toggle (shared pivot mechanism)")
+        self.assertContains("if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeFacets(); }",
+                             "facet popover must close on Escape")
+        self.assertContains("if(facetBtnRef.current) facetBtnRef.current.focus();",
+                             "closing the facet popover must return focus to the trigger")
+        self.assertContains("toast('Filter removed · '+(label||existing.label)", "filter removal must announce via toast")
+
 
 class ServerSecurityTests(unittest.TestCase):
     """Static (no running server) checks on server.py hardening from plans 014/015.
