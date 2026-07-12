@@ -709,6 +709,10 @@ class FrontendStructureTests(unittest.TestCase):
     def test_command_palette(self):
         self.assertContains("function CommandPalette", "CommandPalette missing")
         self.assertContains("e.key==='k'||e.key==='K'", "Cmd/Ctrl-K binding missing")
+        # H3: the palette combobox must expose the highlighted row to AT too.
+        self.assertContains("aria-activedescendant={(!confirmBlock&&items.length>0)?('pal-'+sel):undefined}",
+                             "command palette aria-activedescendant missing")
+        self.assertContains("id={'pal-'+i}", "palette row id missing (needed for aria-activedescendant)")
 
     def test_command_palette_actions(self):
         # F2 — the palette runs ACTIONS (Export current view / Ask AI about
@@ -730,21 +734,32 @@ class FrontendStructureTests(unittest.TestCase):
         # input + listbox of role="option" suggestions, driven by bqlSuggest.
         self.assertContains("const bqlSuggest=", "bqlSuggest typeahead memo missing")
         self.assertContains('className="dt-search"', "dt-search wrapper missing")
-        self.assertContains('className="panel dt-suggest"', "dt-suggest popover missing")
+        self.assertContains('className="panel dt-popover dt-suggest"', "dt-suggest popover missing")
         self.assertContains('role="listbox"', "suggestions listbox role missing")
         self.assertContains('role="combobox"', "filter combobox role missing")
         self.assertContains('role="option"', "suggestion option role missing")
         self.assertContains('aria-autocomplete="list"', "combobox aria-autocomplete missing")
+        # H3: the combobox must expose the keyboard-highlighted option to AT.
+        self.assertContains("aria-activedescendant={(sugOpen&&sugIdx>=0&&bqlSuggest.length>0)?('sug-'+sugIdx):undefined}",
+                             "search combobox aria-activedescendant missing")
+        self.assertContains("id={'sug-'+i}", "suggestion option id missing (needed for aria-activedescendant)")
 
     def test_search_cheatsheet(self):
         # The ? ghost button opens a one-card grammar reference panel.
-        self.assertContains('className="dt-cheat-btn"', "? cheatsheet button missing")
-        self.assertContains('className="panel dt-cheat"', "cheatsheet panel missing")
+        self.assertContains('className="dt-search-icon-btn dt-cheat-btn"', "? cheatsheet button missing")
+        self.assertContains('className="panel dt-popover dt-cheat"', "cheatsheet panel missing")
         self.assertContains(">Search syntax<", "cheatsheet heading missing")
         for g in ("field:value", "field=value", "exact match", "compare",
                   "range", "any of", "exclude"):
             self.assertContains(g, f"cheatsheet grammar row {g!r} missing")
         self.assertContains('className="dt-cheat-fields"', "cheatsheet field list missing")
+        # M4: the ? button must be keyboard-reachable (no tabIndex={-1} escape hatch).
+        self.assertNotIn('className="dt-search-icon-btn dt-cheat-btn" tabIndex={-1}', self.html,
+                          "? cheatsheet button must not be tabIndex={-1}")
+        # M5: cheatsheet dialog gets a real focus-in-on-open + Esc-close-to-trigger contract.
+        self.assertContains("cheatPanelRef.current.focus();", "cheatsheet dialog focus-in-on-open missing")
+        self.assertContains("if(cheatBtnRef.current) cheatBtnRef.current.focus();",
+                             "closing the cheatsheet must return focus to the ? trigger")
 
     def test_search_nomatch_diagnostic(self):
         # Zero-row query names the first token that took the count to 0 + Clear.
@@ -848,9 +863,13 @@ class FrontendStructureTests(unittest.TestCase):
     def test_no_emoji_in_babel_script(self):
         # pictographic emoji must be absent; monochrome UI glyphs are allowed
         # (⌘ ✓ ✕ ← → ↑ ↓ · ● ○ ⟳ • … — box-drawing; ★ ☆ pin toggle).
+        # Dingbats (U+2700-27BF) is included so stray pictographs like ✨
+        # (SPARKLES, U+2728) can't sneak back in — ✓/✕ (U+2713/2717) also live
+        # in that block, so they stay explicitly allow-listed below.
         allowed = set('←→↑↓·●○⟳⌘•…—✕✓─═★☆')
         emoji = re.compile('[\U0001F000-\U0001FAFF\U0001F1E6-\U0001F1FF️'
                            '☀-⛿⬀-⯿'
+                           '✀-➿'
                            '\U0001F512\U0001F514\U0001F6E1]')
         hits = sorted({m for m in emoji.findall(self.html)} - allowed)
         self.assertEqual(hits, [], f"emoji found in index.html: {hits}")
@@ -1144,6 +1163,28 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("if(facetBtnRef.current) facetBtnRef.current.focus();",
                              "closing the facet popover must return focus to the trigger")
         self.assertContains("toast('Filter removed · '+(label||existing.label)", "filter removal must announce via toast")
+        # H2: opening the facet popover must move focus into it (mirrors the Cols
+        # popover's ~1423 pattern) — otherwise Esc only works after manually Tabbing in.
+        self.assertContains("if(!facetOpen||!facetMenuRef.current) return;",
+                             "facet popover focus-in-on-open effect missing")
+        self.assertContains("facetMenuRef.current.querySelector('button:not(:disabled)')",
+                             "facet popover must focus its first control on open")
+
+    def test_nl_button_no_emoji(self):
+        # H1: the NL-translate button used a sparkles emoji (✨) as its label — the
+        # toolbar convention is a terse monochrome text tag, not a pictograph.
+        self.assertContains("{nlBusy?'…':'NL'}", "NL-translate button must render the text tag 'NL', not an emoji")
+        self.assertNotIn("✨", self.html, "sparkles emoji must not appear anywhere in index.html")
+        self.assertContains('aria-label="Translate to search query"', "NL button aria-label missing")
+
+    def test_nl_button_reveal_on_need(self):
+        # M1: the NL button was always-mounted + greyed at rest (standing chrome
+        # in every search field). It must now hide until the search field is
+        # focused or holds text, mirroring the .row-copy-btn reveal pattern.
+        self.assertContains(".dt-nl-btn{right:23px;opacity:0;pointer-events:none;}",
+                             "NL button must default to hidden (opacity:0) at rest")
+        self.assertContains(".dt-search:focus-within .dt-nl-btn:not(:disabled),",
+                             "NL button reveal-on-focus/non-empty rule missing")
 
     def test_column_manager(self):
         """Feature 8: extends the existing dt-cols-menu show/hide popover with
