@@ -3302,16 +3302,16 @@ function useAiExplain(){
 }
 
 // ═══ REGION: OVERVIEW ═══
-/* Overview — refined panels ported ~1:1 from mockup-refined.html.
-   Verdict band (+ service chips merged in) → 6 KPI tiles → Signals
-   (host-health donut / util histogram / top issues) → Detail grid of
-   preview panels. Real data only; built from Step-F shared primitives. */
+/* Overview — compact stat strip (6 tiles) → controls (Problems-only/All
+   scope segment + removable utilization-band chips) → detail grid: capacity
+   by site, host status donut + attention list, all-leases table, triage
+   queue with per-row provision action. Real data only. */
 (function injectOverviewStyles(){
   if(document.getElementById('bx-ov-styles')) return;
   const s=document.createElement('style');s.id='bx-ov-styles';
   s.textContent=`
   .ovx table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
-  .ovx thead th{text-align:left;color:var(--text-faint);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:6px 16px 6px 0;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .ovx thead th{text-align:left;color:var(--text-faint);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.1em;padding:6px 16px 6px 0;border-bottom:1px solid var(--border);white-space:nowrap;}
   .ovx tbody td{padding:7px 16px 7px 0;border-bottom:1px solid var(--border2);white-space:nowrap;}
   /* fixed layout + a real right-pad gap: every cell (incl. the primary) clips with ellipsis, so
      columns are always separated and nothing bleeds — no overlap, no horizontal scroll in the panel.
@@ -3350,6 +3350,7 @@ function useAiExplain(){
   .ovx .seg button{font:inherit;font-size:11px;cursor:pointer;border:0;background:var(--raised);color:var(--text-dim);padding:5px 11px;display:flex;align-items:center;gap:6px;border-right:1px solid var(--border);}
   .ovx .seg button:last-child{border-right:0;}
   .ovx .seg button[aria-pressed="true"]{background:var(--accent);color:#fff;font-weight:600;}
+  .ovx .seg button:focus-visible{outline:2px solid var(--accent-text);outline-offset:-2px;}
   .ovx .seg .glyph{width:12px;text-align:center;}
   .ovx .seg-lbl{font-size:11px;color:var(--text-faint);}
   .ovx .seg-lbl b{color:var(--text);font-weight:600;}
@@ -3358,7 +3359,8 @@ function useAiExplain(){
   .ovx .band-chip{display:inline-flex;align-items:center;gap:6px;height:auto;padding:3px 6px 3px 9px;cursor:pointer;}
   .ovx .band-chip .cnt{color:var(--text);font-weight:600;}
   .ovx .band-chip .x{color:var(--text-faint);width:13px;text-align:center;}
-  .ovx .band-chip.off{opacity:.5;text-decoration:line-through;text-decoration-color:var(--text-faint);}
+  .ovx .band-chip.off{color:var(--text-faint);text-decoration:line-through;text-decoration-color:var(--text-faint);}
+  .ovx .band-chip.off .cnt{color:var(--text-faint);}
 
   /* Triage queue rows — worst-first subnets + real action buttons. */
   .ovx .triage-row{display:grid;grid-template-columns:18px 1fr auto;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border2);align-items:center;}
@@ -3368,7 +3370,7 @@ function useAiExplain(){
   .ovx .triage-row .what .meta{font-size:10px;color:var(--text-dim);margin-top:2px;}
   .ovx .triage-row .act{display:flex;gap:5px;flex-wrap:wrap;}
   .ovx .btn-accent{background:var(--accent);border-color:var(--accent);color:#fff;}
-  .ovx .btn-accent:hover{background:var(--accent-text);border-color:var(--accent-text);}
+  .ovx .btn-accent:hover{background:var(--accent);border-color:var(--accent);}
   `;
   document.head.appendChild(s);
 })();
@@ -3553,7 +3555,7 @@ function OverviewTab(){
           {attnHosts.length?<div style={{marginTop:10,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:6}}>
             {attnHosts.map((h,i)=>{
               const st=String(h.status||'').toLowerCase();
-              const sv=/^(offline|down|off|error)$/.test(st)?'crit':/^(degraded|warn|warning)$/.test(st)?'high':'med';
+              const sv=/^(offline|down|off|error)$/.test(st)?'crit':/^(degraded|warn|warning)$/.test(st)?'high':'low';
               return <div key={h.id||h.name||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
                 <span className="mono" style={{fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.name||h.ip||'—'}</span>
                 <span className={'sev '+sv}>{h.status||'—'}</span>
@@ -3565,7 +3567,9 @@ function OverviewTab(){
 
       <div className="span-8">
         <Panel title="All leases" empty={!leases.length}
-          side={<span className="mono" style={{cursor:'help',textDecoration:'underline dotted'}}
+          side={<span className="mono" tabIndex={0}
+            aria-label={'Hidden columns: MAC address and Lease expires — not provided by this data source'}
+            style={{cursor:'help',textDecoration:'underline dotted'}}
             {...bind({title:'Hidden columns',rows:[['MAC address','not provided by this data source'],['Lease expires','not provided by this data source']]})}>
             {leases.length.toLocaleString()+' rows · '+activeLeases.toLocaleString()+' active · MAC column hidden ⓘ'}</span>}>
           <DataTable tableId="ov-leases" csvName="active-leases" scrollBody={280}
@@ -3574,7 +3578,7 @@ function OverviewTab(){
             cols={[
               {key:'addr',label:'IP address',primary:true,minWidth:150,mono:true},
               {key:'state',label:'State',align:'right',
-                render:v=>{const on=String(v||'').toLowerCase()==='active';return <span className="lchip" style={{color:on?'var(--ok)':'var(--warn)'}}>{v}</span>;}},
+                render:v=>{const on=String(v||'').toLowerCase()==='active';return <span className="lchip" style={{color:on?'var(--ok)':'var(--text-dim)'}}>{v}</span>;}},
               {key:'host',label:'Hostname',render:v=>v||'—'},
             ]}
             renderPeek={l=><OvPeek title={l.addr} sub={l.host}
@@ -3960,7 +3964,7 @@ function leasesInSubnet(leases, subnet) {
 }
 
 const NDA='NstarDnsActivity.';
-function utilColor(u){return u>85?'var(--crit)':u>70?'var(--warn)':'var(--accent)';}
+function utilColor(u){return u>85?'var(--crit)':u>70?'var(--warn)':'var(--ok)';}
 /* inline flat utilization bar + mono % (no gradients/shadows) */
 function UtilBar(v){
   const u=Math.max(0,Math.min(100,Number(v)||0));
