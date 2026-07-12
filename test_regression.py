@@ -568,6 +568,23 @@ class FrontendStructureTests(unittest.TestCase):
     def assertContains(self, needle, msg=None):
         self.assertIn(needle, self.html, msg or f"Missing: {needle!r}")
 
+    # ── AI drawer slide-in / keep-mounted (Phase C) ─────────────────────────────
+
+    def test_ai_drawer_slidein(self):
+        # Slide state is driven by the [data-open] attribute (never transitionend).
+        self.assertContains(".ai-drawer[data-open]",
+                            "AI drawer must expose the [data-open] slide state in CSS")
+        self.assertContains("data-open={open?'':undefined}",
+                            "AiDrawer <aside> must carry the data-open attribute")
+        # Keep-mounted: the old unmount-on-close guard is gone (conversation survives).
+        ad = self.html[self.html.index("function AiDrawer("):]
+        ad = ad[:ad.index("\nfunction ", 1)]
+        self.assertNotIn("if(!open) return null", ad,
+                        "AiDrawer must stay mounted when closed (no early return null)")
+        # Trigger reflects open state for a11y.
+        self.assertContains("aria-expanded={aiOpen}",
+                            "AI trigger button must expose aria-expanded")
+
     # ── ported auth invariants ─────────────────────────────────────────────────
 
     def test_vault_components_present(self):
@@ -1069,6 +1086,16 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn("policy_action:{type:'enum'}", self.html,
                       "security policy_action:{type:'enum'} override missing")
         self.assertIn("action:'policy_action'", self.html, "security action->policy_action alias missing")
+
+    def test_copy_cell_and_copy_row(self):
+        """Copy-cell/copy-row: DTRow copies a cell's raw value on click (non-clickable
+        rows only) and offers a row-JSON copy affordance + a keyboard shortcut
+        (cursor + 'y'), both confirmed via the shared toast/aria-live bus."""
+        self.assertContains("copyText(raw==null?'':String(raw))", "cell-copy clipboard write missing")
+        self.assertContains("row-copy-btn", "row-copy affordance (button) missing")
+        self.assertContains('aria-label="Copy row as JSON"', "row-copy button aria-label missing")
+        self.assertContains("copyCursorRow", "keyboard row-copy (cursor + shortcut) missing")
+        self.assertContains("e.key==='y'", "'y' keyboard shortcut for row-copy missing")
 
 
 class ServerSecurityTests(unittest.TestCase):
