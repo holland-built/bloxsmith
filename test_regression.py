@@ -976,7 +976,7 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("const UTIL_BQL=", "UTIL_BQL preset→BQL map missing")
         for bql in ("util>=100", "util:90-99", "util:70-89", "util<70"):
             self.assertContains(bql, f"util-band preset BQL '{bql}' missing")
-        for fn in ("injectUtilBand", "injectSite"):
+        for fn in ("injectUtilBand", "siteFilter"):
             self.assertContains(fn, f"preset-injection helper '{fn}' missing")
         # subnets DataTable is a controlled-search handoff (query/onQuery ⇄ sq= hash).
         self.assertContains("query={subnetQuery} onQuery={setSubnetQuery}",
