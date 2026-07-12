@@ -444,15 +444,22 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:visibl
 .dt-cols-item input{cursor:pointer;}
 /* ── DataTable BQL search: typeahead popover + ? cheatsheet + no-match diag ── */
 .dt-search{position:relative;display:inline-flex;align-items:center;min-width:0;}
-.dt-search .dt-filter{padding-right:24px;}
+.dt-search .dt-filter{padding-right:46px;}
 .dt-cheat-btn{position:absolute;right:1px;top:1px;height:24px;width:22px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t12);color:var(--text-faint);background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
 .dt-cheat-btn:hover{color:var(--text);}
+.dt-nl-btn{position:absolute;right:23px;top:1px;height:24px;width:22px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t12);color:var(--text-faint);background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-nl-btn:hover{color:var(--text);}
+.dt-nl-btn:disabled{opacity:.4;cursor:default;}
 .dt-suggest{position:absolute;left:0;top:calc(100% + 4px);z-index:62;width:min(340px,80vw);max-height:56vh;overflow-y:auto;padding:var(--s1);}
 .dt-sug-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-left:2px solid transparent;border-radius:var(--r-ctl);cursor:pointer;}
 .dt-sug-item:hover,.dt-sug-item.sel{background:var(--hover);border-left-color:var(--accent);}
 .dt-sug-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dt-sug-meta{font-size:var(--t11);color:var(--text-faint);flex:0 0 auto;}
 .dt-sug-tag{font-size:var(--t11);color:var(--text-dim);flex:0 0 auto;padding:0 5px;border:1px solid var(--border);border-radius:var(--r-ctl);}
+.dt-sug-recent{padding:0;}
+.dt-sug-recent-run{flex:1 1 auto;min-width:0;display:block;padding:6px 8px;background:transparent;border:none;color:inherit;font:inherit;text-align:left;cursor:pointer;}
+.dt-sug-pin{flex:0 0 auto;padding:4px 6px;background:transparent;border:none;color:var(--text-faint);font-size:var(--t12);cursor:pointer;border-radius:var(--r-ctl);}
+.dt-sug-pin:hover{color:var(--text);}
 .dt-cheat{position:absolute;right:0;top:calc(100% + 4px);z-index:62;width:min(360px,84vw);padding:var(--s3);}
 .dt-cheat h4{margin:0 0 6px;font-size:var(--t11);color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;}
 .dt-cheat-row{display:flex;gap:var(--s2);font-size:var(--t12);color:var(--text-dim);padding:3px 0;}
@@ -1298,6 +1305,23 @@ function buildPredicate(tokens, schema){
 }
 /* ==BQL:buildPredicate:end== */
 
+/* ==BQL:cleanBqlAnswer:start== */
+// Strips code fences / wrapping quotes / trailing chatter from an LLM's NL→BQL
+// translation answer down to a single-line query string. Pure, never throws.
+function cleanBqlAnswer(raw){
+  try{
+    var s=String(raw==null?'':raw).trim();
+    s=s.replace(/^```[a-zA-Z]*\n?/,'').replace(/```\s*$/,'').trim();
+    s=s.split('\n')[0].trim();
+    if(s.length>1){
+      var first=s.charAt(0), last=s.charAt(s.length-1);
+      if((first==='"'&&last==='"')||(first==='`'&&last==='`')) s=s.slice(1,-1).trim();
+    }
+    return s;
+  }catch(e){ return ''; }
+}
+/* ==BQL:cleanBqlAnswer:end== */
+
 function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
   maxRows,problemsOnly,scrollBody,columnToggle,searchSchema,query,onQuery}){
@@ -1327,6 +1351,28 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const [cheatOpen,setCheatOpen]=useState(false); // ? grammar cheatsheet
   const [probOn,setProbOn]=useState(()=> problemsOnly ? LS.get('probs.'+(id||'x'),!!problemsOnly.default) : false);
   const setProb=v=>{ setProbOn(v); if(id) LS.set('probs.'+id,v); };
+  const [nlBusy,setNlBusy]=useState(false); // NL→BQL translate in flight
+  // Recent-queries ring buffer (absorbed query history): {q,pinned}[], most-recent-first, cap 15.
+  const recentKey='recentQ.'+(id||'x');
+  const [recent,setRecent]=useState(()=>LS.get(recentKey,[]));
+  const pushRecent=q=>{
+    q=String(q||'').trim(); if(!q) return;
+    setRecent(list=>{
+      const idx=list.findIndex(e=>e.q===q);
+      const pinned=idx>=0?!!list[idx].pinned:false;
+      const rest=idx>=0?[...list.slice(0,idx),...list.slice(idx+1)]:list;
+      const next=[{q,pinned},...rest].slice(0,15);
+      LS.set(recentKey,next);
+      return next;
+    });
+  };
+  const togglePin=q=>{
+    setRecent(list=>{
+      const next=list.map(e=>e.q===q?{...e,pinned:!e.pinned}:e);
+      LS.set(recentKey,next);
+      return next;
+    });
+  };
   const {flashed,flash}=useRowFlash();
   const columns=cols||[];
   const data=rows||[];
@@ -1536,13 +1582,18 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     const frag=text.slice(sp+1), prefix=text.slice(0,sp+1);
     const out=[];
     if(text.trim()===''){
-      const numF=fkeys.filter(k=>fields[k].type==='number');
-      const enumF=fkeys.filter(k=>fields[k].type==='enum'&&fields[k].values&&fields[k].values.length);
-      if(numF.length){ const k=numF[0], r=numRange(fields[k].key);
-        if(r){ const hi=Math.round(r.mn+(r.mx-r.mn)*0.85); out.push({t:'ex',label:k+'>'+hi,insert:k+'>'+hi,meta:'example'}); } }
-      if(enumF.length){ const k=enumF[0]; out.push({t:'ex',label:k+':'+fields[k].values[0],insert:k+':'+fields[k].values[0],meta:'example'}); }
-      if(out.length<2&&fkeys.length){ const k=fkeys[0]; out.push({t:'ex',label:k+':…',insert:k+':',meta:'example'}); }
-      if(!out.length) out.push({t:'ex',label:'field:value',insert:'',meta:'example'});
+      // Recent-queries dropdown (absorbed query history): pinned first, then most-recent.
+      const hist=[...recent.filter(e=>e.pinned),...recent.filter(e=>!e.pinned)].slice(0,8);
+      hist.forEach(e=>out.push({t:'recent',label:e.q,value:e.q,pinned:!!e.pinned}));
+      if(!hist.length){
+        const numF=fkeys.filter(k=>fields[k].type==='number');
+        const enumF=fkeys.filter(k=>fields[k].type==='enum'&&fields[k].values&&fields[k].values.length);
+        if(numF.length){ const k=numF[0], r=numRange(fields[k].key);
+          if(r){ const hi=Math.round(r.mn+(r.mx-r.mn)*0.85); out.push({t:'ex',label:k+'>'+hi,insert:k+'>'+hi,meta:'example'}); } }
+        if(enumF.length){ const k=enumF[0]; out.push({t:'ex',label:k+':'+fields[k].values[0],insert:k+':'+fields[k].values[0],meta:'example'}); }
+        if(out.length<2&&fkeys.length){ const k=fkeys[0]; out.push({t:'ex',label:k+':…',insert:k+':',meta:'example'}); }
+        if(!out.length) out.push({t:'ex',label:'field:value',insert:'',meta:'example'});
+      }
       out.push({t:'help',label:'? syntax',meta:'grammar'});
       return out;
     }
@@ -1571,7 +1622,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     Object.keys(aliases).forEach(a=>{ if(a.toLowerCase().indexOf(q)===0&&fields[aliases[a]]) cand.push({name:a,type:fields[aliases[a]].type,alias:aliases[a]}); });
     cand.slice(0,8).forEach(c=>out.push({t:'field',label:c.name+':',insert:prefix+c.name+':',tag:typeTag(c.type),meta:c.alias?('→ '+c.alias):''}));
     return out;
-  },[showFilter,_schema,base,filter]);
+  },[showFilter,_schema,base,filter,recent]);
 
   // No-match diagnostic: cumulatively AND tokens left-to-right against `base`;
   // name the first token whose addition takes the visible count to zero.
@@ -1587,6 +1638,36 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     }
     return null;
   },[filterable,filter,base,_schema]);
+  // NL→BQL: sends the current (plain-English) input text to the existing
+  // /api/query AI endpoint with a translation-style prompt fed the table's
+  // real field names, then fills the search box with the generated query —
+  // visible and still editable, never a hidden black box.
+  const translateNL=()=>{
+    const q=filter.trim();
+    if(!q||nlBusy) return;
+    setNlBusy(true);
+    const fieldList=Object.keys(_schema.fields||{}).filter(k=>k!=='age').join(', ')||'(none)';
+    const prompt='Translate this into a single-line BQL search-box query for a data table. '
+      +'Only use these exact field names: '+fieldList+'. '
+      +'Syntax: field:value contains, field=value exact, field>N/>=N/<N/<=N compare (numbers or ages like 5m/2h/3d), '
+      +'field:lo-hi range, field:a,b any-of, -term exclude, bare words free text. '
+      +'Reply with ONLY the query string — no explanation, no markdown, no quotes.\n\nRequest: '+q;
+    fetch('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({question:prompt,context:''})})
+      .then(async r=>{const j=await r.json().catch(()=>null);return {r,j};})
+      .then(({r,j})=>{
+        if(r.status===503||(j&&j.locked)){ toast('Vault locked — unlock to translate.','err'); return; }
+        if(j&&j.error){ toast('Translate failed: '+String(j.error),'err'); return; }
+        const bql=cleanBqlAnswer((j&&typeof j.answer==='string')?j.answer:'');
+        if(!bql){ toast('No query generated','err'); return; }
+        setFilter(bql);
+        setSugOpen(false);
+        toast('Generated: '+bql,'ok');
+        if(filterRef.current) filterRef.current.focus();
+      })
+      .catch(()=>toast('Translate failed — server unreachable','err'))
+      .finally(()=>setNlBusy(false));
+  };
   // scrollBody: grow the progressive render window as the user nears the bottom.
   const onBodyScroll=(e)=>{ const el=e.currentTarget;
     if(el.scrollHeight-el.scrollTop-el.clientHeight<200)
@@ -1606,31 +1687,63 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
             onBlur={()=>setTimeout(()=>setSugOpen(false),120)}
             onKeyDown={e=>{
               if(e.key==='Escape'){ if(sugOpen||cheatOpen){ e.preventDefault(); e.stopPropagation(); setSugOpen(false); setCheatOpen(false); } return; }
+              if(e.key==='Enter'){
+                if(bqlSuggest.length&&sugOpen&&sugIdx>=0){
+                  const s=bqlSuggest[sugIdx];
+                  if(s){
+                    e.preventDefault();
+                    if(s.t==='help'){ setCheatOpen(true); setSugOpen(false); return; }
+                    if(s.t==='recent'){ setFilter(s.value); pushRecent(s.value); setSugOpen(false); setSugIdx(-1); return; }
+                    if(s.insert!=null){ setFilter(s.insert); setSugIdx(-1); return; }
+                  }
+                }
+                // No suggestion highlighted → this Enter commits the typed query: save to recent history.
+                if(filter.trim()) pushRecent(filter.trim());
+                setSugOpen(false);
+                return;
+              }
               if(!bqlSuggest.length) return;
               if(e.key==='ArrowDown'){ e.preventDefault(); setSugOpen(true); setSugIdx(i=>Math.min((i<0?-1:i)+1,bqlSuggest.length-1)); }
               else if(e.key==='ArrowUp'){ e.preventDefault(); setSugIdx(i=>Math.max(i-1,0)); }
-              else if((e.key==='Tab'||e.key==='Enter')&&sugOpen&&sugIdx>=0){
+              else if(e.key==='Tab'&&sugOpen&&sugIdx>=0){
                 const s=bqlSuggest[sugIdx]; if(!s) return; e.preventDefault();
                 if(s.t==='help'){ setCheatOpen(true); setSugOpen(false); }
+                else if(s.t==='recent'){ setFilter(s.value); setSugIdx(-1); }
                 else if(s.insert!=null){ setFilter(s.insert); setSugIdx(-1); }
               }
             }}
             placeholder="Filter…" aria-label="Filter rows"
             role="combobox" aria-autocomplete="list" aria-expanded={sugOpen&&bqlSuggest.length>0}/>
+          <button type="button" className="dt-nl-btn" aria-label="Translate to search query"
+            title="Translate plain English into a search query" disabled={nlBusy||!filter.trim()}
+            onMouseDown={e=>e.preventDefault()} onClick={translateNL}>{nlBusy?'…':'✨'}</button>
           <button type="button" className="dt-cheat-btn" tabIndex={-1} aria-label="Search syntax help"
             onMouseDown={e=>e.preventDefault()} onClick={()=>{setCheatOpen(v=>!v); setSugOpen(false);}}>?</button>
           {sugOpen&&bqlSuggest.length>0?<div className="panel dt-suggest" role="listbox" aria-label="Search suggestions">
-            {bqlSuggest.map((s,i)=><button key={s.t+':'+(s.label||i)} type="button"
-              className={'dt-sug-item'+(i===sugIdx?' sel':'')} role="option" aria-selected={i===sugIdx}
-              onMouseEnter={()=>setSugIdx(i)} onMouseDown={e=>e.preventDefault()}
-              onClick={()=>{ if(s.t==='help'){ setCheatOpen(true); setSugOpen(false); }
-                else if(s.insert!=null){ setFilter(s.insert); if(filterRef.current) filterRef.current.focus(); } }}>
-              <span className="dt-sug-label mono">{s.label}</span>
-              <span style={{display:'inline-flex',alignItems:'center',gap:'6px',flex:'0 0 auto'}}>
-                {s.tag?<span className="dt-sug-tag">{s.tag}</span>:null}
-                {s.meta?<span className="dt-sug-meta">{s.meta}</span>:null}
-              </span>
-            </button>)}
+            {bqlSuggest.map((s,i)=> s.t==='recent'
+              ? <div key={'recent:'+s.value} className={'dt-sug-item dt-sug-recent'+(i===sugIdx?' sel':'')} role="option" aria-selected={i===sugIdx}>
+                  <button type="button" className="dt-sug-recent-run"
+                    onMouseEnter={()=>setSugIdx(i)} onMouseDown={e=>e.preventDefault()}
+                    onClick={()=>{ setFilter(s.value); pushRecent(s.value); setSugOpen(false); if(filterRef.current) filterRef.current.focus(); }}>
+                    <span className="dt-sug-label mono">{s.label}</span>
+                  </button>
+                  <button type="button" className="dt-sug-pin" aria-pressed={!!s.pinned}
+                    aria-label={(s.pinned?'Unpin ':'Pin ')+s.label}
+                    onMouseDown={e=>e.preventDefault()} onClick={()=>togglePin(s.value)}>
+                    {s.pinned?'★':'☆'}
+                  </button>
+                </div>
+              : <button key={s.t+':'+(s.label||i)} type="button"
+                  className={'dt-sug-item'+(i===sugIdx?' sel':'')} role="option" aria-selected={i===sugIdx}
+                  onMouseEnter={()=>setSugIdx(i)} onMouseDown={e=>e.preventDefault()}
+                  onClick={()=>{ if(s.t==='help'){ setCheatOpen(true); setSugOpen(false); }
+                    else if(s.insert!=null){ setFilter(s.insert); if(filterRef.current) filterRef.current.focus(); } }}>
+                  <span className="dt-sug-label mono">{s.label}</span>
+                  <span style={{display:'inline-flex',alignItems:'center',gap:'6px',flex:'0 0 auto'}}>
+                    {s.tag?<span className="dt-sug-tag">{s.tag}</span>:null}
+                    {s.meta?<span className="dt-sug-meta">{s.meta}</span>:null}
+                  </span>
+                </button>)}
           </div>:null}
           {cheatOpen?<><div className="views-overlay" onClick={()=>setCheatOpen(false)}/>
             <div className="panel dt-cheat" role="dialog" aria-label="Search syntax">

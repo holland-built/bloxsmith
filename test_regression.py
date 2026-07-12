@@ -1252,7 +1252,7 @@ class BqlParserTests(unittest.TestCase):
     index.html and executed under Node (same extract-and-exec technique as the
     _cspq / correlate server tests above, but for JS). Skips if `node` absent."""
 
-    SENTINELS = ("parseQuery", "deriveSchema", "buildPredicate")
+    SENTINELS = ("parseQuery", "deriveSchema", "buildPredicate", "cleanBqlAnswer")
 
     @classmethod
     def setUpClass(cls):
@@ -1369,6 +1369,15 @@ console.log('AGE_OK');
         self.assertEqual(res.returncode, 0,
                          f"age-epoch Node run failed:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
         self.assertIn("AGE_OK", res.stdout)
+
+    def test_clean_bql_answer_strips_wrapping(self):
+        # NL→BQL translator (Feature 4): the AI endpoint's free-text "answer" must
+        # be reduced to a bare, single-line query before it fills the search box —
+        # strip a ```-fenced block, wrapping quotes, and any trailing chatter line.
+        harness = "console.log(JSON.stringify(cleanBqlAnswer('```\\nutil>85\\n```\\nextra line')));"
+        res = self._node(harness)
+        self.assertEqual(res.stdout.strip(), json.dumps("util>85"),
+                         f"cleanBqlAnswer did not strip fences/trailing text:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
 
     def test_bql_blocks_are_valid_babel_module(self):
         # The three sliced blocks must parse as valid JS inside the app's Babel
