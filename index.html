@@ -3325,16 +3325,53 @@ function useAiExplain(){
   .ovx .code{font-family:'GeistMono',ui-monospace,monospace;border-bottom:1px dotted var(--text-faint);cursor:help;}
   .ovx .lchip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r-ctl);text-transform:uppercase;letter-spacing:.3px;background:var(--raised);display:inline-block;}
   .ovx .ov-mt{margin-top:8px;}
-  /* DETAIL preview grid — wider min so 3-col previews fit without column collision (~3/row at 1600px) */
-  .ovx-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+  /* DETAIL grid (v1 Bloomberg layout) — 12-col span shell for the 5 dashboard panels. */
+  .ovx-detail{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
   .ovx-detail>*{min-width:0;}
-  @media (max-width:720px){.ovx-detail{grid-template-columns:minmax(0,1fr);}}
+  .ovx-detail .span-3{grid-column:span 3;}
+  .ovx-detail .span-4{grid-column:span 4;}
+  .ovx-detail .span-6{grid-column:span 6;}
+  .ovx-detail .span-8{grid-column:span 8;}
+  @media (max-width:1100px){.ovx-detail{grid-template-columns:minmax(0,1fr);}}
+
+  /* Compact inline stat strip — replaces the old full-width verdict banner. */
+  .ovx .statstrip{display:flex;flex-wrap:wrap;gap:0;margin:0 2px;border:1px solid var(--border);border-radius:var(--r-panel);background:var(--surface);overflow:hidden;}
+  .ovx .stat{padding:8px 16px;border-left:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0;flex:1 1 0;}
+  .ovx .stat:first-child{border-left:0;}
+  .ovx .stat .k{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;}
+  .ovx .stat .v{font-size:16px;font-weight:600;font-family:'GeistMono',ui-monospace,monospace;display:flex;align-items:baseline;gap:6px;}
+  .ovx .stat .v small{font-size:11px;font-weight:500;color:var(--text-faint);}
+  .ovx .stat .v.crit{color:var(--crit);}
+  .ovx .stat .v.warn{color:var(--warn);}
+
+  /* Control row — segmented Problems-only/All-subnets scope + removable util-band chips. */
+  .ovx .controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 2px;}
+  .ovx .seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r-ctl);overflow:hidden;}
+  .ovx .seg button{font:inherit;font-size:11px;cursor:pointer;border:0;background:var(--raised);color:var(--text-dim);padding:5px 11px;display:flex;align-items:center;gap:6px;border-right:1px solid var(--border);}
+  .ovx .seg button:last-child{border-right:0;}
+  .ovx .seg button[aria-pressed="true"]{background:var(--accent);color:#fff;font-weight:600;}
+  .ovx .seg .glyph{width:12px;text-align:center;}
+  .ovx .seg-lbl{font-size:11px;color:var(--text-faint);}
+  .ovx .seg-lbl b{color:var(--text);font-weight:600;}
+  .ovx .chips-lbl{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.4px;}
+  .ovx .chips{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+  .ovx .band-chip{display:inline-flex;align-items:center;gap:6px;height:auto;padding:3px 6px 3px 9px;cursor:pointer;}
+  .ovx .band-chip .cnt{color:var(--text);font-weight:600;}
+  .ovx .band-chip .x{color:var(--text-faint);width:13px;text-align:center;}
+  .ovx .band-chip.off{opacity:.5;text-decoration:line-through;text-decoration-color:var(--text-faint);}
+
+  /* Triage queue rows — worst-first subnets + real action buttons. */
+  .ovx .triage-row{display:grid;grid-template-columns:18px 1fr auto;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border2);align-items:center;}
+  .ovx .triage-row:last-child{border-bottom:0;}
+  .ovx .triage-row .idx{font-size:10px;color:var(--text-faint);text-align:right;}
+  .ovx .triage-row .what{min-width:0;}
+  .ovx .triage-row .what .meta{font-size:10px;color:var(--text-dim);margin-top:2px;}
+  .ovx .triage-row .act{display:flex;gap:5px;flex-wrap:wrap;}
+  .ovx .btn-accent{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .ovx .btn-accent:hover{background:var(--accent-text);border-color:var(--accent-text);}
   `;
   document.head.appendChild(s);
 })();
-
-const OV_SEVMAP={HIGH:'high',CRITICAL:'crit',MEDIUM:'med',LOW:'low',INFO:'low'};
-function ovSevClass(sev){ return OV_SEVMAP[String(sev||'').toUpperCase()]||'low'; }
 
 /* OvPeek — region-local peek body (not a shared component). Renders a title,
    optional sub-line, and a key/value list (skips empty values). Fed the same
@@ -3355,26 +3392,15 @@ function OvPeek({title,sub,rows}){
 
 function OverviewTab(){
   const {bind}=useHoverDetail();
-  const health=useApi('/api/hub/health',{poll:60000});
   const data=useData();
-  const sec=useApi('/api/hub/security');
-  const dns=useApi('/api/dns-analytics');
-  const {delta}=useSnapshots();
-  const [band,setBand]=useState(null); // util-band filter for the capacity preview (UTIL_BANDS id | null)
 
   const d=data.data||{};
   const subnets=Array.isArray(d.subnets)?d.subnets:[];
   const leases=Array.isArray(d.leases)?d.leases:[];
-  const zones=Array.isArray(d.zones)?d.zones:[];
   const hosts=Array.isArray(d.hosts)?d.hosts:[];
-  const secData=sec.data||{};
-  const events=Array.isArray(secData.events)?secData.events:[];
-  const counts=secData.counts||{};
-  const healthArr=Array.isArray(health.data)?health.data:[];
 
   const util=s=>Number(s.util)||0;
   const activeLeases=leases.filter(l=>String(l.state||'').toLowerCase()==='active').length;
-  const uniqueViews=useMemo(()=>new Set(zones.map(z=>z.view).filter(Boolean)).size,[zones]);
 
   // ── host status buckets ──
   const hostAgg=useMemo(()=>{
@@ -3388,64 +3414,38 @@ function OverviewTab(){
     }
     return {online,degraded,offline,other};
   },[hosts]);
-  const hostsOnline=hostAgg.online;
-  const hostsBad=hosts.length-hostsOnline;
-  const hostBars=[hostAgg.online,hostAgg.degraded,hostAgg.offline,hostAgg.other];
   const hostSlices=[
     {label:'online',value:hostAgg.online,color:'var(--ok)'},
     {label:'degraded',value:hostAgg.degraded,color:'var(--warn)'},
     {label:'offline',value:hostAgg.offline,color:'var(--crit)'},
     {label:'other',value:hostAgg.other,color:'var(--text-faint)'},
   ];
+  const attnHosts=hosts.filter(h=>!/^(online|up)$/i.test(String(h.status||''))).slice(0,6);
 
-  // ── subnet utilization histogram (20 buckets) ──
-  const utilHist=useMemo(()=>{
-    const b=Array(20).fill(0);
-    subnets.forEach(s=>{let i=Math.min(19,Math.floor(util(s)/100*20));if(i<0)i=0;b[i]++;});
-    return b;
-  },[subnets]);
-  const utilBuckets=utilHist.map((c,i)=>({label:i===0?'0%':i===10?'50%':i===19?'100%':'',count:c,color:utilColor(i*5+2.5)}));
-  const avgUtil=subnets.length?Math.round(subnets.reduce((a,s)=>a+util(s),0)/subnets.length):0;
-
-  // ── top capacity subnets ──
-  const topSubs=useMemo(()=>[...subnets].sort((a,b)=>util(b)-util(a)).slice(0,9),[subnets]);
-  // Preview rows for the DataTable — full sorted set, filtered to the active util band.
-  const bandDef=band?UTIL_BANDS.find(b=>b.id===band):null;
-  const subnetPreview=useMemo(()=>{
-    const base=bandDef?subnets.filter(s=>bandDef.test(util(s))):subnets;
-    return [...base].sort((a,b)=>util(b)-util(a));
-  },[subnets,band]); // eslint-disable-line
+  // ── stat-strip numbers (real, derived from the subnets already fetched) ──
+  const topSubs=useMemo(()=>[...subnets].sort((a,b)=>util(b)-util(a)),[subnets]);
   const worst=topSubs[0]||null;
   const worstUtil=worst?util(worst):0;
   const gt85=subnets.filter(s=>util(s)>85).length;
+  const nearExhaust=subnets.filter(s=>util(s)>=90).length;
+  const watch7085=subnets.filter(s=>{const u=util(s);return u>70&&u<=85;}).length;
 
-  // ── security events per hour (12 buckets, real event_time) ──
-  const secByHour=useMemo(()=>{
-    const n=12,b=Array(n).fill(0);
-    const times=events.map(e=>new Date(e.event_time).getTime()).filter(t=>isFinite(t));
-    if(!times.length) return b;
-    const now=Math.max(...times);
-    events.forEach(e=>{
-      const t=new Date(e.event_time).getTime();
-      if(!isFinite(t)) return;
-      const i=n-1-Math.min(n-1,Math.floor((now-t)/3600000));
-      if(i>=0&&i<n) b[i]++;
-    });
-    return b;
-  },[events]);
+  // ── control row: Problems-only scope + multi-select utilization-band chips ──
+  const [probOn,setProbOn]=useState(true);
+  const [bandsOn,setBandsOn]=useState(()=>UTIL_BANDS.map(b=>b.id)); // all bands active by default
+  const probPool=useMemo(()=>subnets.filter(s=>util(s)>70),[subnets]);
+  const probCount=probPool.length;
+  const toggleBand=id=>setBandsOn(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+  // Preview rows for Top consumers / Triage — Problems-only scope, then AND'd against
+  // whichever util bands are still selected (removable chips), worst-first.
+  const subnetPreview=useMemo(()=>{
+    const pool=probOn?probPool:subnets;
+    const active=UTIL_BANDS.filter(b=>bandsOn.includes(b.id));
+    const out=active.length?pool.filter(s=>active.some(b=>b.test(util(s)))):[];
+    return [...out].sort((a,b)=>util(b)-util(a));
+  },[subnets,probPool,probOn,bandsOn]); // eslint-disable-line
 
-  // ── dedup security events (top 9) ──
-  const secRows=useMemo(()=>{
-    const seen=new Set(),out=[];
-    for(const e of events){
-      const k=String(e.threat_indicator)+'|'+String(e.severity);
-      if(seen.has(k)) continue; seen.add(k); out.push(e);
-      if(out.length>=9) break;
-    }
-    return out;
-  },[events]);
-
-  // ── capacity by site (real aggregation) ──
+  // ── capacity by site (real aggregation, worst-first, full list — no artificial cap) ──
   const siteRows=useMemo(()=>{
     // Backend defaults an untagged subnet's site to "–"; fall back to the /16 prefix so
     // untagged subnets still group into meaningful buckets instead of collapsing to one.
@@ -3459,222 +3459,161 @@ function OverviewTab(){
     }
     return Object.values(m)
       .map(r=>({nm:r.nm,n:r.n,avg:Math.round(r.sum/r.n),worst:r.worst}))
-      .sort((a,b)=>b.avg-a.avg).slice(0,6);
+      .sort((a,b)=>b.avg-a.avg);
   },[subnets]);
 
-  // ── DNS 7-day volume (defensive key inspection; empty → panel suppressed) ──
-  const volSeries=useMemo(()=>{
-    const vol=(dns.data&&Array.isArray(dns.data.volume))?dns.data.volume:[];
-    if(!vol.length) return [];
-    const row0=vol[0],keys=Object.keys(row0);
-    const numKey=keys.find(k=>{const v=row0[k];if(typeof v==='number')return true;return typeof v==='string'&&v!==''&&!isNaN(Number(v))&&!/[-T:]/.test(v);});
-    const dateKey=keys.find(k=>k!==numKey&&row0[k]!=null&&!isNaN(Date.parse(row0[k])));
-    if(!numKey||!dateKey) return [];
-    return vol.map(r=>({t:r[dateKey],v:Number(r[numKey])||0})).sort((a,b)=>new Date(a.t)-new Date(b.t)).slice(-7);
-  },[dns.data]);
-  const volTotal=volSeries.reduce((a,p)=>a+p.v,0);
-  const volValues=volSeries.map(p=>p.v);
-  const volMax=Math.max(1,...volValues);
-  const dayLabel=(t)=>{const dt=new Date(t);return isNaN(dt.getTime())?String(t).slice(5,10):dt.toLocaleDateString(undefined,{weekday:'short'});};
-
-  // ── verdict band ──
-  const anyHealthCrit=healthArr.some(s=>s.status==='crit');
-  const anyHealthWarn=healthArr.some(s=>s.status==='warn');
-  const critHigh=(Number(counts.critical)||0)+(Number(counts.high)||0);
-  const bandTone=(anyHealthCrit||(Number(counts.critical)||0)>0||worstUtil>85)?'crit'
-    :(anyHealthWarn||(Number(counts.high)||0)>0||worstUtil>70)?'warn':'ok';
-  const bandIssues=[];
-  if(anyHealthCrit) bandIssues.push('service health degraded');
-  if(critHigh>0) bandIssues.push((Number(counts.critical)||0)+' critical / '+(Number(counts.high)||0)+' high threats blocked');
-  if(gt85>0) bandIssues.push(gt85+' subnet'+(gt85===1?'':'s')+' over 85%'+(worst?(' (worst '+(worst.name||worst.addr)+' '+worstUtil+'%)'):''));
-  else if(worstUtil>70) bandIssues.push('subnets nearing capacity (peak '+worstUtil+'%)');
-  if(hostsBad>0) bandIssues.push(hostsBad+' host'+(hostsBad===1?'':'s')+' reporting errors');
-  const bandVerdict=bandTone==='ok'
-    ? 'All systems healthy — no critical threats, capacity normal at '+avgUtil+'% avg utilization'
-    : bandIssues.slice(0,2).join(' · ').replace(/^./,c=>c.toUpperCase());
-  const dThreat=(()=>{const a=delta('sec.crit'),b=delta('sec.high');return (a==null&&b==null)?null:((a||0)+(b||0));})();
-  const bandFacts=[
-    {label:'Critical + high threats',value:critHigh,delta:{v:dThreat,good:'down'}},
-    {label:'Subnets >85%',value:gt85,delta:{v:delta('subnets.gt85'),good:'down'}},
-    {label:'Hosts w/ errors',value:hostsBad,delta:{v:delta('hosts.offline'),good:'down'}},
-    {label:'DNS 7d volume',value:volSeries.length?volTotal.toLocaleString():'—'},
-  ];
-  const svcChips=healthArr.map(s=>({name:s.name,status:s.status,meta:s.meta||s.statusLabel}));
-
-  // ── KPI delta → trend (no prior snapshot → no trend, no fabrication) ──
-  const trend=(path,goodDown)=>{
-    const dv=delta(path);
-    if(dv==null||dv===0) return {trend:null,trendDir:'flat'};
-    const up=dv>0, good=goodDown?!up:up;
-    return {trend:(up?'▲ ':'▼ ')+Math.abs(dv),trendDir:good?'up':'dn'};
-  };
-
   // Vault locked → render nothing; the gate handles it. (After all hooks.)
-  if(health.locked||data.locked||sec.locked||dns.locked) return null;
-
-  const attnHosts=hosts.filter(h=>!/^(online|up)$/i.test(String(h.status||''))).slice(0,9);
-
-  const kpis=[
-    {label:'Subnets',value:subnets.length,sub:avgUtil+'% avg · '+worstUtil+'% worst',...trend('subnets.n',false),values:utilHist.slice(0,16),color:'var(--accent)',fill:1},
-    {label:'Active leases',value:activeLeases,sub:'of '+leases.length.toLocaleString()+' leases',...trend('leases.active',false),color:'var(--ok)'},
-    {label:'DNS zones',value:zones.length,sub:uniqueViews+' views',...trend('zones.n',false),color:'var(--accent)'},
-    {label:'Hosts',value:hosts.length,sub:hostsBad+' errors · '+hostsOnline+' online',...trend('hosts.online',false),values:hostBars,bars:1,color:'var(--crit)'},
-    {label:'High threats',value:Number(counts.high)||0,sub:(Number(counts.critical)||0)+' crit · '+(Number(counts.low)||0)+' low',...trend('sec.high',true),values:secByHour,color:'var(--warn)',fill:1},
-    {label:'Blocked',value:Number(secData.blocked)||0,sub:(Number(secData.total)||0)?('of '+Number(secData.total)+' events'):'no events today',...trend('sec.blocked',false),values:secByHour,color:'var(--ok)',fill:1},
-  ];
-
-  // ── top issues (same inputs as band issues) ──
-  const issueList=[];
-  if(hostsBad>0) issueList.push({t:'Hosts reporting errors',d:hostsBad+' hosts · infra',sev:'high',
-    onClick:()=>nav('infra'),
-    hc:{title:'Host errors',rows:[['offline',hostAgg.offline],['degraded',hostAgg.degraded],['online',hostAgg.online]],spark:hostBars}});
-  if(events.length&&critHigh>0){ const e0=events[0]; const sc=ovSevClass(e0.severity);
-    issueList.push({t:e0.qname||e0.threat_indicator||'threat',d:(e0.severity||'HIGH')+' · '+e0.feed_name,sev:(sc==='low'?'high':sc),
-      onClick:()=>nav('security'),
-      hc:{title:e0.threat_indicator||e0.qname,rows:[['action',e0.policy_action],['device',e0.device],['feed',e0.feed_name]],spark:secByHour}}); }
-  healthArr.filter(s=>s.status!=='ok').slice(0,2).forEach(s=>issueList.push({
-    t:s.name+' '+(s.status==='crit'?'unhealthy':'degraded'),d:s.meta||s.statusLabel,sev:s.status==='crit'?'high':'med',
-    onClick:()=>nav('infra'),
-    hc:{title:s.name,rows:[['status',s.statusLabel],['detail',s.meta]]}}));
-  if(gt85>0) issueList.push({t:'Saturated subnets',d:'worst '+worstUtil+'% util',sev:'med',
-    onClick:()=>nav('network',{subnet:worst&&(worst.addr||worst.id)}),
-    hc:{title:'Capacity',rows:[['worst',worstUtil+'%'],['avg',avgUtil+'%'],['>85%',gt85]],spark:utilHist.slice(8)}});
-  const issues=issueList.slice(0,6);
+  if(data.locked) return null;
 
   return <div className="page ovx">
 
-    <SynthBand tone={bandTone} verdict={bandVerdict} facts={bandFacts} chips={svcChips}/>
-
-    <div className="kpis fadein">
-      {kpis.map(k=><KpiSpark key={k.label} {...k}/>)}
+    <div className="statstrip">
+      <div className="stat"><span className="k">Subnets</span><span className="v num">{subnets.length.toLocaleString()}</span></div>
+      <div className="stat"><span className="k">Near exhaustion</span>
+        <span className={'v num'+(nearExhaust>0?' crit':'')}>{nearExhaust}{worst?<small>worst {worstUtil}%</small>:null}</span></div>
+      <div className="stat"><span className="k">&gt;85%</span><span className={'v num'+(gt85>0?' warn':'')}>{gt85}</span></div>
+      <div className="stat"><span className="k">Watch 70-85%</span><span className="v num">{watch7085}</span></div>
+      <div className="stat"><span className="k">Active leases</span><span className="v num">{activeLeases.toLocaleString()}</span></div>
+      <div className="stat"><span className="k">Hosts</span>
+        <span className="v num">{hosts.length.toLocaleString()} <small>{hostAgg.online}/{hostAgg.degraded}/{hostAgg.offline}</small></span></div>
     </div>
 
-    <SectionRule title="Signals"/>
-    <div className="grid">
-      <Panel title="Host health" side={hosts.length.toLocaleString()+' hosts'}>
-        <div className="chart-body">
-          <Donut slices={hostSlices}
-            centerValue={hosts.length?Math.round(hostsBad/hosts.length*100)+'%':'0'} centerLabel="issues"/>
-        </div>
-      </Panel>
-      <Panel title="Subnet utilization" side={subnets.length.toLocaleString()+' subnets'}>
-        <div className="chart-body">
-          <HistogramBar buckets={utilBuckets} axisTicks onClick={(b,i)=>{const u=i*5+2.5;const sq=u>=85?'util>=85':u>=70?'util>=70':null;nav('network',sq?{sq:sq}:undefined);}}/>
-          <ValueBands rows={subnets} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS} value={band} onChange={setBand}/>
-        </div>
-      </Panel>
-      <Panel title="Top issues" side="live">
-        <div className="issues">
-          {issues.length
-            ? issues.map((x,i)=><div key={i} className="issue" role="button" tabIndex={0}
-                onClick={x.onClick} onKeyDown={e=>{if(e.key==='Enter')x.onClick();}} {...bind(x.hc)}>
-                <span className="rank">{i+1}</span>
-                <div className="body"><div className="t">{x.t}</div><div className="d">{x.d}</div></div>
-                <span className={'sev '+x.sev}>{x.sev}</span>
-              </div>)
-            : <div style={{color:'var(--text-faint)',fontSize:12,padding:'8px 4px'}}>No active issues</div>}
-        </div>
-      </Panel>
+    <div className="controls">
+      <div className="seg" role="group" aria-label="Filter scope">
+        <button type="button" aria-pressed={probOn} onClick={()=>setProbOn(true)}>
+          <span className="glyph" aria-hidden="true">{probOn?'●':'○'}</span>Problems only</button>
+        <button type="button" aria-pressed={!probOn} onClick={()=>setProbOn(false)}>
+          <span className="glyph" aria-hidden="true">{!probOn?'●':'○'}</span>All subnets</button>
+      </div>
+      <span className="seg-lbl">showing <b>{probCount}</b> problem subnet{probCount===1?'':'s'} of <b>{subnets.length}</b></span>
+
+      <span className="chips-lbl">Utilization band</span>
+      <div className="chips">
+        {UTIL_BANDS.map(b=>{
+          const cnt=subnets.filter(s=>b.test(util(s))).length;
+          const on=bandsOn.includes(b.id);
+          const dotColor=b.id==='lt70'?'var(--ok)':(b.id==='7089'?'var(--warn)':'var(--crit)');
+          return <button key={b.id} type="button" className={'chip band-chip'+(on?' active':' off')}
+            aria-pressed={on} onClick={()=>toggleBand(b.id)}>
+            <span aria-hidden="true" style={{width:7,height:7,borderRadius:2,background:dotColor,display:'inline-block'}}/>
+            {b.label}<span className="cnt num">{cnt}</span><span className="x">{on?'×':'+'}</span>
+          </button>;
+        })}
+      </div>
     </div>
 
-    <SectionRule title="Detail"/>
     <div className="ovx-detail">
 
-      <Panel title="Top capacity subnets" side={band?('band '+(bandDef&&bandDef.label)+' · '+subnetPreview.length):'by utilization'} empty={!subnets.length}>
-        <DataTable tableId="ov-subnets" csvName="top-capacity-subnets" scrollBody={280}
-          rows={subnetPreview.slice(0,9)} defaultSort={{key:'util',dir:'desc'}}
-          rowKey={r=>String(r.addr||r.id)}
-          onRowClick={r=>nav('network',{subnet:r.addr||r.id})}
-          cols={[
-            {key:'addr',label:'Subnet',primary:true,minWidth:150,mono:true,
-              render:(v,r)=>(r.addr||r.name||'—')+(r.cidr?('/'+r.cidr):'')},
-            {key:'util',label:'Util',align:'right',mono:true,
-              render:(v,r)=>{const u=util(r),c=utilColor(u);return <span style={{display:'inline-flex',alignItems:'center',gap:7,justifyContent:'flex-end'}}>
-                <span style={{position:'relative',display:'inline-block',width:56,height:6,borderRadius:3,background:'var(--border2)'}}>
-                  <i style={{position:'absolute',left:0,top:0,bottom:0,width:Math.max(4,u)+'%',borderRadius:3,background:c}}/></span>
-                <span className="mono" style={{width:34,textAlign:'right',color:c}}>{u}%</span></span>;}},
-          ]}
-          renderPeek={r=><OvPeek title={(r.addr||r.name||'—')+(r.cidr?('/'+r.cidr):'')} sub={r.name}
-            rows={[['Used',(r.used!=null?r.used:'—')+' / '+(r.total!=null?r.total:'—')],['Util',util(r)+'%'],['Site',r.site||'—'],['CIDR',r.cidr?('/'+r.cidr):'—']]}/>}/>
-      </Panel>
+      <div className="span-6">
+        <Panel title="Capacity by site" side={siteRows.length+' sites'} empty={siteRows.length<2}>
+          <div className="sites ov-mt">
+            {siteRows.map((s,i)=>{const c=utilColor(s.avg);
+              // drill: no table lives on Overview, so a site row jumps to Network with a
+              // removable global site filter pre-applied (carried in the #network?f= hash).
+              const go=()=>nav('network',{f:serializeFilters([{field:'site',value:s.nm}])});
+              return <div key={i} className="siterow clickable" role="button" tabIndex={0}
+              title={'Filter Network by '+s.nm} onClick={go}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}>
+              <div className="nm" title={s.nm}>{s.nm}</div>
+              <div className="track"><i style={{width:Math.max(3,s.avg)+'%',background:c}}/></div>
+              <span className="pc" style={{color:c}}>{s.avg}%</span>
+              <span className="pc mono" style={{color:'var(--text-faint)'}} title="worst">{s.worst}%</span>
+            </div>;})}
+          </div>
+        </Panel>
+      </div>
 
-      <Panel title="Security events" side={(Number(secData.total)||0)+' today · '+(Number(secData.blocked)||0)+' blocked'} empty={!secRows.length}>
-        <DataTable tableId="ov-secevents" csvName="security-events" scrollBody={280}
-          rows={secRows} rowKey={r=>String(r.qname||r.threat_indicator||'')+'|'+r.severity}
-          onRowClick={()=>nav('security')}
-          cols={[
-            {key:'qname',label:'Threat',primary:true,minWidth:170,mono:true,render:(v,r)=>v||r.threat_indicator||'—'},
-            {key:'severity',label:'Sev',align:'right',render:v=><span className={'sev '+ovSevClass(v)}>{v||'INFO'}</span>},
-          ]}
-          renderPeek={e=><OvPeek title={e.threat_indicator||e.qname||'threat'} sub={e.severity}
-            rows={[['Action',e.policy_action],['Feed',e.feed_name],['Device',e.device],['Network',e.network],['Query',e.qname]]}/>}/>
-      </Panel>
+      <div className="span-3">
+        <Panel title="Top consumers" side={<span className="mono">{subnetPreview.length} matching</span>}>
+          <div className="issues">
+            {subnetPreview.length
+              ? subnetPreview.slice(0,60).map((s,i)=>{
+                  const go=()=>nav('network',{subnet:s.addr||s.id});
+                  return <div key={s.id||s.addr||i} className="issue" role="button" tabIndex={0}
+                    onClick={go} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}>
+                    <span className="rank mono">{i+1}</span>
+                    <div className="body">
+                      <div className="t mono">{(s.addr||s.name||'—')+(s.cidr?('/'+s.cidr):'')}</div>
+                      <div className="d">{s.site||'—'}</div>
+                    </div>
+                    {UtilBar(util(s))}
+                  </div>;
+                })
+              : <div style={{color:'var(--text-faint)',fontSize:12,padding:'8px 4px'}}>No subnets match the current filters</div>}
+          </div>
+        </Panel>
+      </div>
 
-      <Panel title="DNS zones" side={zones.length.toLocaleString()+' total'} empty={!zones.length}>
-        <DataTable tableId="ov-zones" csvName="dns-zones" scrollBody={280}
-          rows={zones} rowKey={r=>String(r.fqdn||r.id)}
-          onRowClick={r=>nav('dns',{peek:r.fqdn})}
-          cols={[
-            {key:'fqdn',label:'Zone',primary:true,minWidth:180,mono:true},
-            {key:'ttl',label:'TTL',mono:true,align:'right',render:v=>v+'s'},
-          ]}
-          renderPeek={z=><OvPeek title={z.fqdn} sub={z.view}
-            rows={[['View',z.view],['TTL',z.ttl+'s'],['Neg-TTL',z.neg_ttl+'s'],['Issues',(z.issues&&z.issues.length)||0]]}/>}/>
-      </Panel>
+      <div className="span-3">
+        <Panel title="Host status" side={hosts.length.toLocaleString()+' hosts'}>
+          <div className="chart-body">
+            <Donut slices={hostSlices}
+              centerValue={hosts.length?Math.round(hostAgg.online/hosts.length*100)+'%':'0'} centerLabel="online"/>
+          </div>
+          {attnHosts.length?<div style={{marginTop:10,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:6}}>
+            {attnHosts.map((h,i)=>{
+              const st=String(h.status||'').toLowerCase();
+              const sv=/^(offline|down|off|error)$/.test(st)?'crit':/^(degraded|warn|warning)$/.test(st)?'high':'med';
+              return <div key={h.id||h.name||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                <span className="mono" style={{fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.name||h.ip||'—'}</span>
+                <span className={'sev '+sv}>{h.status||'—'}</span>
+              </div>;
+            })}
+          </div>:null}
+        </Panel>
+      </div>
 
-      <Panel title="Active leases" side={activeLeases.toLocaleString()+' active'} empty={!leases.length}>
-        <DataTable tableId="ov-leases" csvName="active-leases" scrollBody={280}
-          rows={leases} rowKey={r=>String(r.addr||r.ip||'')+'|'+String(r.mac||'')}
-          onRowClick={()=>nav('network')}
-          cols={[
-            {key:'addr',label:'Address',primary:true,minWidth:150,mono:true},
-            {key:'host',label:'Host',render:v=>v||'—'},
-            {key:'state',label:'State',align:'right',
-              render:v=>{const on=String(v||'').toLowerCase()==='active';return <span className="lchip" style={{color:on?'var(--ok)':'var(--warn)'}}>{v}</span>;}},
-          ]}
-          renderPeek={l=><OvPeek title={l.addr} sub={l.host}
-            rows={[['Host',l.host],['State',l.state],['MAC',l.mac],['Network',l.network]]}/>}/>
-      </Panel>
+      <div className="span-8">
+        <Panel title="All leases" empty={!leases.length}
+          side={<span className="mono" style={{cursor:'help',textDecoration:'underline dotted'}}
+            {...bind({title:'Hidden columns',rows:[['MAC address','not provided by this data source'],['Lease expires','not provided by this data source']]})}>
+            {leases.length.toLocaleString()+' rows · '+activeLeases.toLocaleString()+' active · MAC column hidden ⓘ'}</span>}>
+          <DataTable tableId="ov-leases" csvName="active-leases" scrollBody={280}
+            rows={leases} rowKey={r=>String(r.addr||r.ip||'')+'|'+String(r.host||'')}
+            onRowClick={()=>nav('network')}
+            cols={[
+              {key:'addr',label:'IP address',primary:true,minWidth:150,mono:true},
+              {key:'state',label:'State',align:'right',
+                render:v=>{const on=String(v||'').toLowerCase()==='active';return <span className="lchip" style={{color:on?'var(--ok)':'var(--warn)'}}>{v}</span>;}},
+              {key:'host',label:'Hostname',render:v=>v||'—'},
+            ]}
+            renderPeek={l=><OvPeek title={l.addr} sub={l.host}
+              rows={[['Host',l.host],['State',l.state],['Subnet',l.subnet]]}/>}/>
+        </Panel>
+      </div>
 
-      <Panel title="Hosts needing attention" side={hostsBad+' errors'} empty={!attnHosts.length}>
-        <DataTable tableId="ov-hosts" csvName="hosts-attention" scrollBody={280}
-          rows={attnHosts} rowKey={r=>String(r.name||r.id||r.ip)}
-          onRowClick={r=>nav('infra',{host:r.name})}
-          cols={[
-            {key:'name',label:'Host',primary:true,minWidth:150,render:v=>v||'—'},
-            {key:'ip',label:'Address',mono:true,render:v=>v||'—'},
-            {key:'status',label:'Status',align:'right',
-              render:v=>{const st=String(v||'').toLowerCase(),sv=st==='error'?'crit':st==='degraded'?'high':st==='offline'?'low':'med';return <span className={'sev '+sv}>{v}</span>;}},
-          ]}
-          renderPeek={h=><OvPeek title={h.name} sub={h.ip}
-            rows={[['IP',h.ip],['Type',h.type],['Status',h.status]]}/>}/>
-      </Panel>
-
-      <Panel title="Capacity by site" side="avg / worst" empty={siteRows.length<2}>
-        <div className="sites ov-mt">
-          {siteRows.map((s,i)=>{const c=utilColor(s.avg);
-            // drill: no table lives on Overview, so a site row jumps to Network with a
-            // removable global site filter pre-applied (carried in the #network?f= hash).
-            const go=()=>nav('network',{f:serializeFilters([{field:'site',value:s.nm}])});
-            return <div key={i} className="siterow clickable" role="button" tabIndex={0}
-            title={'Filter Network by '+s.nm} onClick={go}
-            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}>
-            <div className="nm" title={s.nm}>{s.nm}</div>
-            <div className="track"><i style={{width:Math.max(3,s.avg)+'%',background:c}}/></div>
-            <span className="pc" style={{color:c}}>{s.avg}%</span>
-            <span className="pc mono" style={{color:'var(--text-faint)'}} title="worst">{s.worst}%</span>
-          </div>;})}
-        </div>
-      </Panel>
-
-      <Panel title="DNS volume — 7d" side={volSeries.length?volTotal.toLocaleString()+' queries':null} empty={!volSeries.length}>
-        <div className="ov-mt" style={{display:'flex',alignItems:'flex-end',gap:6,height:96}}>
-          {volSeries.map((p,i)=><div key={i} style={{flex:'1 1 0',display:'flex',flexDirection:'column',alignItems:'center',gap:6,justifyContent:'flex-end'}}>
-            <span title={p.v.toLocaleString()} style={{width:'100%',maxWidth:40,background:'var(--accent)',borderRadius:'2px 2px 0 0',height:Math.max(2,Math.round(p.v/volMax*80))+'px'}}/>
-            <span className="mono" style={{fontSize:11,color:'var(--text-faint)'}}>{dayLabel(p.t)}</span>
-          </div>)}
-        </div>
-      </Panel>
+      <div className="span-4">
+        <Panel title="Triage queue" side={<span className={'sev '+(subnetPreview.length?'crit':'low')}>{subnetPreview.length+' need action'}</span>}>
+          {subnetPreview.length
+            ? subnetPreview.slice(0,6).map((s,i)=>{
+                const u=util(s);
+                const label=(s.addr||s.name||'—')+(s.cidr?('/'+s.cidr):'');
+                const free=(s.total!=null&&s.used!=null)?Math.max(0,s.total-s.used):null;
+                return <div className="triage-row" key={s.id||s.addr||i}>
+                  <span className="idx mono">{i+1}</span>
+                  <span className="what">
+                    <b className="mono">{label}</b> <span className={'sev '+(u>=90?'crit':u>70?'high':'med')}>{u}%</span>
+                    <div className="meta">{(s.site||'—')+(free!=null?(' · '+free+' free'):'')}</div>
+                  </span>
+                  <span className="act">
+                    <button type="button" className="btn btn-accent"
+                      {...bind({title:'Provision subnet',rows:[['Site',s.site],['Util',u+'%'],['Free',free!=null?free:'—']]})}
+                      onClick={()=>nav('provision',{space:'',cidr:24,from:s.addr})}>Provision →</button>
+                    <button type="button" className="btn"
+                      {...bind({title:'Review drift',rows:[['Subnet',label],['Site',s.site]]})}
+                      onClick={()=>nav('drift')}>Drift</button>
+                    <button type="button" className="btn"
+                      {...bind({title:'Self-service',rows:[['Subnet',label],['Site',s.site]]})}
+                      onClick={()=>nav('selfservice')}>Self-serve</button>
+                    <button type="button" className="btn"
+                      {...bind({title:'Open in editor',rows:[['Subnet',label],['Site',s.site]]})}
+                      onClick={()=>nav('editor',{type:'subnet',id:s.id||s.addr,name:s.name,cidr:s.cidr})}>Editor</button>
+                  </span>
+                </div>;
+              })
+            : <div style={{color:'var(--text-faint)',fontSize:12,padding:'10px 4px',textAlign:'center'}}>✓ No subnets need action</div>}
+        </Panel>
+      </div>
 
     </div>
   </div>;
