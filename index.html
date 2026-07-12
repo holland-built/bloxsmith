@@ -4222,7 +4222,15 @@ function InfraTab({vaultTick}={}){
     {label:'Offline',value:offline,delta:dOff},
     {label:'Hottest host',value:hottest||'—'},
   ];
-  const chips=offlineHosts.map(h=>({label:h.name,onClick:()=>nav('infra',{host:h.name})}));
+  // D: status filter chips built from the ACTUAL non-online status strings present
+  // (robust to down/offline/degraded) → toggles a global filter on the host table's
+  // `status` column (clearable in the top FilterBar). Then the offline-host drill chips.
+  const statusVals=[...new Set(hosts.map(h=>String(h.status||'')).filter(v=>v&&!/^(online|up)$/i.test(v)))];
+  const chips=[
+    ...statusVals.map(v=>{const n=hosts.filter(h=>String(h.status||'')===v).length;
+      return {label:'Only '+v+' · '+n,filter:{field:'status',value:v,label:'Status: '+v}};}),
+    ...offlineHosts.slice(0,2).map(h=>({label:h.name,onClick:()=>nav('infra',{host:h.name})})),
+  ];
 
   const statusMix=[online,degraded,offline];
   const kpiTiles=[
