@@ -2298,6 +2298,7 @@ function SynthBand({tone,verdict,facts,chips}){
   const dot='var(--'+t+')';
   const fx=Array.isArray(facts)?facts:[];
   const cx=Array.isArray(chips)?chips:[];
+  const flt=useFilters(); // chips carrying {filter:{field,value,label}} become click-to-filter pivots
   return <div className="band" role="status" aria-live="polite"
     style={{background:'var(--'+t+'-dim)',borderLeft:'3px solid var(--'+t+')'}}>
     <div className="band-verdict">
@@ -2325,6 +2326,15 @@ function SynthBand({tone,verdict,facts,chips}){
           <div className="t"><span className={'sd '+(c.status||'ok')}/>{c.name!=null?c.name:c.label}</div>
           {c.meta!=null?<div className="m">{c.meta}</div>:null}
         </div>;
+        // filter-chip: toggles a global filter pivot (clearable via FilterBar); active = highlighted
+        const fdef=c&&c.filter;
+        if(fdef&&fdef.field!=null){
+          const on=flt.has(fdef.field,fdef.value);
+          return <button className={"chip band-chip"+(on?" active":"")} key={i} aria-pressed={on}
+            title={(on?'Remove filter · ':'Filter · ')+(fdef.label||(fdef.field+': '+fdef.value))}
+            onClick={()=>flt.toggle(fdef.field,fdef.value,fdef.label||(c&&c.label))}>
+            {c&&c.label!=null?c.label:'—'}</button>;
+        }
         return <button className="chip band-chip" key={i}
           style={{cursor:c&&c.onClick?'pointer':'default'}}
           onClick={c&&c.onClick?c.onClick:undefined}>{c&&c.label!=null?c.label:'—'}</button>;
