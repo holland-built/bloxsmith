@@ -1476,7 +1476,8 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     getState(){
       const keyRow=new Map(); data.forEach((r,i)=>keyRow.set(keyOf(r,i),r));
       const selRows=[...selected].map(k=>keyRow.get(k)).filter(Boolean);
-      return {selected,selectedRows:selRows,cursorRow:(cursor>=0&&cursor<visible.length)?visible[cursor]:null,buildActions,filter};
+      return {selected,selectedRows:selRows,cursorRow:(cursor>=0&&cursor<visible.length)?visible[cursor]:null,buildActions,filter,
+        rows:sorted,columns};
     },
   };
 
@@ -6579,6 +6580,23 @@ function CommandPalette({open,onClose}){
       if(rowsSel.length&&st.buildActions){
         st.buildActions(rowsSel).forEach(a=>ctxItems.push({label:a.label+' ('+rowsSel.length+')',kind:'action',
           run:()=>{onClose();try{a.run&&a.run();}catch(e){}}}));
+      }
+      // F2 — "Export current view": CSV of the active table's full (filtered/sorted) rows.
+      if(st.rows&&st.rows.length&&st.columns){
+        ctxItems.push({label:'Export current view',kind:'action',
+          run:()=>{onClose();downloadCSV(String((entry&&entry.label)||'export')+'.csv',st.rows,st.columns);}});
+      }
+      // F2 — "Ask AI about selection": seed the AI drawer's initialQ with the selected rows
+      // (via the same bx:ai-open handoff the palette's other Ask actions already use).
+      if(rowsSel.length){
+        ctxItems.push({label:'Ask AI about selection ('+rowsSel.length+')',kind:'action',
+          run:()=>{
+            onClose();
+            const col=(st.columns&&st.columns[0])||{key:Object.keys(rowsSel[0]||{})[0]};
+            const names=rowsSel.slice(0,10).map(r=>String((col&&r[col.key])??'')).join(', ');
+            const q='Tell me about these '+rowsSel.length+' selected row'+(rowsSel.length===1?'':'s')+': '+names+(rowsSel.length>10?', …':'');
+            window.dispatchEvent(new CustomEvent('bx:ai-open',{detail:{q}}));
+          }});
       }
     }
   }
