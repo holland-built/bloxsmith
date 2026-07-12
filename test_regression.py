@@ -826,8 +826,8 @@ class FrontendStructureTests(unittest.TestCase):
 
     def test_no_emoji_in_babel_script(self):
         # pictographic emoji must be absent; monochrome UI glyphs are allowed
-        # (⌘ ✓ ✕ ← → ↑ ↓ · ● ○ ⟳ • … — box-drawing).
-        allowed = set('←→↑↓·●○⟳⌘•…—✕✓─═')
+        # (⌘ ✓ ✕ ← → ↑ ↓ · ● ○ ⟳ • … — box-drawing; ★ ☆ pin toggle).
+        allowed = set('←→↑↓·●○⟳⌘•…—✕✓─═★☆')
         emoji = re.compile('[\U0001F000-\U0001FAFF\U0001F1E6-\U0001F1FF️'
                            '☀-⛿⬀-⯿'
                            '\U0001F512\U0001F514\U0001F6E1]')
