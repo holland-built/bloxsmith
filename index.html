@@ -3637,6 +3637,7 @@ function NetworkTab(){
                   csvName="subnets"
                   tableId="subnets" rowKey={r=>r.__group?('grp:'+r.__group):String(r.addr||r.id)} selectable
                   filterable filterKeys={['addr','name','site']} query={subnetQuery} onQuery={setSubnetQuery}
+                  searchSchema={{fields:{util:{type:'number'},cidr:{type:'number',key:'cidr'}}}}
                   initialPeekKey={params.peek}
                   renderPeek={row=>{
                     const rl=leasesInSubnet(leases,row);
@@ -3754,6 +3755,7 @@ function DnsTab(){
         problemsOnly={{label:'Problems only',test:z=>(z.issues&&z.issues.length)||z.anomaly,default:true}}
         tableId="zones" rowKey={r=>String(r.fqdn)} selectable
         filterable filterKeys={['fqdn','view']}
+        searchSchema={{fields:{ttl:{type:'number'},issues:{type:'array'}},aliases:{zone:'fqdn'}}}
         initialPeekKey={params.peek}
         renderPeek={row=><div>
           <div className="mono" style={{fontWeight:600}}>{row.fqdn}</div>
@@ -4056,6 +4058,7 @@ function InfraTab({vaultTick}={}){
             problemsOnly={{label:'Needs attention',test:h=>!/^(online|up)$/i.test(String(h.status||'')),default:hosts.length>50}}
             {...{tableId:'hosts'}} rowKey={r=>String(r.name||r.id)}
             selectable filterable filterKeys={['name','ip','type','status']}
+            searchSchema={{fields:{status:{type:'enum'}}}}
             initialPeekKey={params.peek}
             bulkActions={rws=>[{label:'Copy IPs',run:()=>{
               const ips=rws.map(r=>String(r.ip||'')).filter(Boolean);
@@ -4312,7 +4315,8 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
     </div>
     {rows.length===0
       ? <div className="dt-empty">No events</div>
-      : <DataTable cols={cols} rows={rows} tableId="triage"
+      : <DataTable cols={cols} rows={rows} tableId="triage" filterable
+          searchSchema={{fields:{severity:{type:'enum'},policy_action:{type:'enum'}},aliases:{sev:'severity',action:'policy_action',query:'qname'}}}
           rowKey={r=>String(r.event_time)+'|'+String(r.qname)}
           scrollBody={480} columnToggle
           problemsOnly={{label:'Hide acked',test:e=>!acks[secAckKey(e)],default:true}}
@@ -5058,7 +5062,7 @@ function IncidentsTab(){
             : incidents.length===0
               ? <div className="dt-empty">No issues detected — all metrics within normal thresholds.</div>
               : <DataTable cols={triageCols} rows={incidents} rowKey={r=>r.key} tableId="incidents-triage"
-                  csvName="incidents" maxRows={50}/>}
+                  filterable searchSchema={{fields:{count:{type:'number'}}}} csvName="incidents" maxRows={50}/>}
       </Astryx.Card>
     </Panel>
 
@@ -5460,7 +5464,8 @@ function SelfServiceTab(){
           :recordsApi.loading?<div className="dt-empty">Loading…</div>
           :records.length===0?<div className="dt-empty">No records</div>
           :<DataTable tableId="ss-dns-records" rowKey={r=>r.id} cols={recordCols} rows={records}
-              defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}/>}
+              defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}
+              searchSchema={{fields:{ttl:{type:'number'}},aliases:{name:'name_in_zone',value:'dns_rdata'}}}/>}
       </Panel>
     </div>:null}
     {mode==='ipman'?<div className="grid">
@@ -5555,7 +5560,8 @@ function SelfServiceTab(){
           :invRecordsApi.loading?<div className="dt-empty">Loading…</div>
           :invRecords.length===0?<div className="dt-empty">No records</div>
           :<DataTable tableId="ss-inv-records" rowKey={r=>r.id} cols={invRecordCols} rows={invRecords}
-              defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}/>}
+              defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}
+              searchSchema={{fields:{ttl:{type:'number'}},aliases:{name:'name_in_zone',value:'dns_rdata'}}}/>}
       </Panel>
     </div>:null}
   </div>;
