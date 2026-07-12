@@ -1271,6 +1271,35 @@ class OverviewRedesignTests(unittest.TestCase):
             self.assertIn("bind({title:'" + action + "'", triage, f"{action} tooltip must use useHoverDetail().bind(), not native title=")
         self.assertNotIn("title='Provision", triage, "triage actions must not use a native title= tooltip")
 
+    def test_hover_descriptions_present_with_real_thresholds(self):
+        """Plain-English hover descriptions phase — every cryptic Overview number
+        must carry a bind() description that states the real threshold, not a
+        made-up one. See tests/overview-descriptions.spec.ts for DOM coverage."""
+        ov = self._overview_tab()
+        for needle in (
+            "Total subnets managed across all sites.",
+            "Subnets ≥90% full — new DHCP leases will start failing soon.",
+            "Subnets over 85% full (not counting exactly 85%)",
+            "Subnets between 71% and 85% full",
+            "DHCP leases currently marked active",
+            "online (reachable) / '+hostAgg.degraded+' degraded (reporting a warning)",
+            "Show only subnets in this utilization range",
+            "Average utilization across this site's",
+            "Worst single subnet in this site.",
+            "Subnets grouped by tagged site (or by /16 network when untagged).",
+            "Reachability of your '+hosts.length.toLocaleString()+' managed hosts",
+            "Host did not respond — down or unreachable.",
+        ):
+            self.assertIn(needle, ov, f"Missing hover description text: {needle!r}")
+        # Never fall back to a native title= for these new descriptions.
+        self.assertIn("useHoverDetail()", ov)
+
+    def test_top_consumers_no_lonely_dash(self):
+        ov = self._overview_tab()
+        top = ov[ov.index('title="Top consumers"'):ov.index('title="Host status"')]
+        self.assertIn("hasSite", top, "Top consumers must gate the site line on a real site tag")
+        self.assertNotIn("s.site||'—'", top, "Top consumers must not render a bare '—' when the site tag is missing")
+
 
 class ServerSecurityTests(unittest.TestCase):
     """Static (no running server) checks on server.py hardening from plans 014/015.

@@ -2871,8 +2871,12 @@ function VolumeHistogram({rows,tsKey,buckets,onRange,selected}){
 }
 
 /* ── Donut (shared) — slices=[{label,value,color}]. Hard-caps at 5 slices
-   (top-4 + folded "other"), center total, side legend w/ counts. Guards empty/zero. ── */
-function Donut({slices,size=120,centerValue,centerLabel}){
+   (top-4 + folded "other"), center total, side legend w/ counts. Guards empty/zero.
+   Optional centerDetail (string) and legendDetail(label,slice)=>string wire the
+   center + each legend row into useHoverDetail — no new tooltip system, callers
+   that don't pass them get the exact prior behavior. ── */
+function Donut({slices,size=120,centerValue,centerLabel,centerDetail,legendDetail}){
+  const {bind}=useHoverDetail();
   const raw=(Array.isArray(slices)?slices:[]).filter(s=>s&&(Number(s.value)||0)>0);
   const total=raw.reduce((a,s)=>a+(Number(s.value)||0),0);
   if(!raw.length||total<=0) return <div style={{color:'var(--text-faint)',fontSize:'var(--t12)',padding:'var(--s3)'}}>No data</div>;
@@ -2887,6 +2891,7 @@ function Donut({slices,size=120,centerValue,centerLabel}){
   let acc=0;
   const segs=parts.map(s=>{ const dash=((Number(s.value)||0)/total)*C; const seg={color:s.color||'var(--accent)',dash,offset:-acc}; acc+=dash; return seg; });
   const aria='Donut chart, total '+total+': '+parts.map(p=>p.label+' '+(Number(p.value)||0)).join(', ');
+  const centerBind=centerDetail?bind({title:centerLabel||'Total',rows:[['What it means',centerDetail]]}):null;
   return <div className="donut-wrap" role="img" aria-label={aria}>
     <svg className="donut-svg" width={size} height={size} viewBox={'0 0 '+size+' '+size}>
       <g transform={'rotate(-90 '+cx+' '+cx+')'}>
@@ -2895,22 +2900,27 @@ function Donut({slices,size=120,centerValue,centerLabel}){
           strokeDasharray={s.dash+' '+(C-s.dash)} strokeDashoffset={s.offset}/>)}
       </g>
       {centerLabel!=null
-        ? <React.Fragment>
+        ? <g tabIndex={centerDetail?0:undefined} style={centerDetail?{cursor:'help'}:undefined} {...(centerBind||{})}>
             <text x={cx} y={cx-size*0.05} textAnchor="middle" dominantBaseline="central" className="mono"
               fontSize={size*0.20} fontWeight="600" fill="var(--text)">{centerValue!=null?centerValue:total}</text>
             <text x={cx} y={cx+size*0.12} textAnchor="middle" dominantBaseline="central"
               fontSize={size*0.085} fill="var(--text-faint)" style={{textTransform:'uppercase',letterSpacing:'.4px'}}>{centerLabel}</text>
-          </React.Fragment>
+          </g>
         : <text x={cx} y={cx} textAnchor="middle" dominantBaseline="central" className="mono"
             fontSize={size*0.22} fontWeight="600" fill="var(--text)">{centerValue!=null?centerValue:total}</text>}
     </svg>
     <div className="donut-legend">
-      {parts.map((p,i)=><div key={i} className="donut-leg">
-        <span className="donut-leg-dot" style={{background:p.color||'var(--accent)'}}/>
-        <span className="donut-leg-l">{p.label}</span>
-        <span className="donut-leg-v mono">{Number(p.value)||0}</span>
-        <span className="donut-leg-pct mono">{total>0?Math.round((Number(p.value)||0)/total*100):0}%</span>
-      </div>)}
+      {parts.map((p,i)=>{
+        const detail=legendDetail?legendDetail(p.label,p):null;
+        return <div key={i} className="donut-leg" tabIndex={detail?0:undefined}
+          style={detail?{cursor:'help'}:undefined}
+          {...(detail?bind({title:p.label,rows:[['Count',Number(p.value)||0],['What it means',detail]]}):{})}>
+          <span className="donut-leg-dot" style={{background:p.color||'var(--accent)'}}/>
+          <span className="donut-leg-l">{p.label}</span>
+          <span className="donut-leg-v mono">{Number(p.value)||0}</span>
+          <span className="donut-leg-pct mono">{total>0?Math.round((Number(p.value)||0)/total*100):0}%</span>
+        </div>;
+      })}
     </div>
   </div>;
 }
@@ -3470,14 +3480,34 @@ function OverviewTab(){
   return <div className="page ovx">
 
     <div className="statstrip">
-      <div className="stat"><span className="k">Subnets</span><span className="v num">{subnets.length.toLocaleString()}</span></div>
-      <div className="stat"><span className="k">Near exhaustion</span>
+      <div className="stat" tabIndex={0} style={{cursor:'help'}}
+        {...bind({title:'Subnets',rows:[['What it means','Total subnets managed across all sites.']]})}>
+        <span className="k">Subnets</span><span className="v num">{subnets.length.toLocaleString()}</span></div>
+      <div className="stat" tabIndex={0} style={{cursor:'help'}}
+        {...bind({title:'Near exhaustion',rows:[
+          ['Threshold','Subnets ≥90% full — new DHCP leases will start failing soon.'],
+          ['worst N%',worst?('The single most-full subnet overall is at '+worstUtil+'%, whether or not any subnet is near exhaustion.'):'No subnets yet.'],
+        ]})}>
+        <span className="k">Near exhaustion</span>
         <span className={'v num'+(nearExhaust>0?' crit':'')}>{nearExhaust}{worst?<small>worst {worstUtil}%</small>:null}</span></div>
-      <div className="stat"><span className="k">&gt;85%</span><span className={'v num'+(gt85>0?' warn':'')}>{gt85}</span></div>
-      <div className="stat"><span className="k">Watch 70-85%</span><span className="v num">{watch7085}</span></div>
-      <div className="stat"><span className="k">Active leases</span><span className="v num">{activeLeases.toLocaleString()}</span></div>
-      <div className="stat"><span className="k">Hosts</span>
-        <span className="v num">{hosts.length.toLocaleString()} <small>{hostAgg.online}/{hostAgg.degraded}/{hostAgg.offline}</small></span></div>
+      <div className="stat" tabIndex={0} style={{cursor:'help'}}
+        {...bind({title:'>85% full',rows:[['Threshold','Subnets over 85% full (not counting exactly 85%) — plan additional capacity soon.']]})}>
+        <span className="k">&gt;85%</span><span className={'v num'+(gt85>0?' warn':'')}>{gt85}</span></div>
+      <div className="stat" tabIndex={0} style={{cursor:'help'}}
+        {...bind({title:'Watch 70-85%',rows:[['Threshold','Subnets between 71% and 85% full — healthy for now, but worth watching for growth.']]})}>
+        <span className="k">Watch 70-85%</span><span className="v num">{watch7085}</span></div>
+      <div className="stat" tabIndex={0} style={{cursor:'help'}}
+        {...bind({title:'Active leases',rows:[['What it means','DHCP leases currently marked active — i.e. currently allocated to a device.']]})}>
+        <span className="k">Active leases</span><span className="v num">{activeLeases.toLocaleString()}</span></div>
+      <div className="stat" tabIndex={0} style={{cursor:'help'}}
+        {...bind({title:'Hosts',rows:[
+          ['Total',hosts.length.toLocaleString()+' hosts'],
+          ['Reading the '+hostAgg.online+'/'+hostAgg.degraded+'/'+hostAgg.offline,hostAgg.online+' online (reachable) / '+hostAgg.degraded+' degraded (reporting a warning) / '+hostAgg.offline+' offline (unreachable)'+(hostAgg.other?' — '+hostAgg.other+' with an unrecognized status':'')+'.'],
+        ]})}>
+        <span className="k">Hosts</span>
+        <span className="v num">{hosts.length.toLocaleString()} <small>
+          <span style={{color:'var(--ok)'}}>{hostAgg.online}</span>/<span style={{color:'var(--warn)'}}>{hostAgg.degraded}</span>/<span style={{color:'var(--crit)'}}>{hostAgg.offline}</span>
+        </small></span></div>
     </div>
 
     <div className="controls">
@@ -3496,7 +3526,8 @@ function OverviewTab(){
           const on=bandsOn.includes(b.id);
           const dotColor=b.id==='lt70'?'var(--ok)':(b.id==='7089'?'var(--warn)':'var(--crit)');
           return <button key={b.id} type="button" className={'chip band-chip'+(on?' active':' off')}
-            aria-pressed={on} onClick={()=>toggleBand(b.id)}>
+            aria-pressed={on} onClick={()=>toggleBand(b.id)}
+            {...bind({title:b.label+' utilization',rows:[['What it means','Show only subnets in this utilization range — click to '+(on?'hide':'show')+'.'],['Currently matching',cnt+' subnet'+(cnt===1?'':'s')]]})}>
             <span aria-hidden="true" style={{width:7,height:7,borderRadius:2,background:dotColor,display:'inline-block'}}/>
             {b.label}<span className="cnt num">{cnt}</span><span className="x">{on?'×':'+'}</span>
           </button>;
@@ -3507,38 +3538,74 @@ function OverviewTab(){
     <div className="ovx-detail">
 
       <div className="span-6">
-        <Panel title="Capacity by site" side={siteRows.length+' sites'} empty={siteRows.length<2}>
+        <Panel title="Capacity by site" empty={siteRows.length<2}
+          side={<span className="mono" tabIndex={0} style={{cursor:'help'}}
+            {...bind({title:'Capacity by site',rows:[
+              ['Grouping','Subnets grouped by tagged site (or by /16 network when untagged).'],
+              ['Order','Worst-first, by average utilization.'],
+            ]})}>{siteRows.length+' sites'}</span>}>
           <div className="sites ov-mt">
+            {/* Column-label affordance so the two bare numbers below read as "avg / worst" —
+                inline-styled (not .pc) so it never matches the .siterow .pc value selectors
+                real data rows use (incl. overview-redesign.spec.ts fix 1). */}
+            {siteRows.length?<div className="siterow siterow-head" aria-hidden="true" style={{color:'var(--text-faint)',fontSize:10,textTransform:'uppercase',letterSpacing:'.4px'}}>
+              <span style={{width:96,flex:'none'}}/>
+              <span style={{flex:1}}/>
+              <span style={{width:38,textAlign:'right',flex:'none'}}>avg</span>
+              <span style={{width:38,textAlign:'right',flex:'none'}}>worst</span>
+            </div>:null}
             {siteRows.map((s,i)=>{const c=utilColor(s.avg);
               // drill: no table lives on Overview, so a site row jumps to Network with a
               // removable global site filter pre-applied (carried in the #network?f= hash).
               const go=()=>nav('network',{f:serializeFilters([{field:'site',value:s.nm}])});
+              // Note: only the row itself is a keyboard focus stop (role=button) — the two
+              // .pc numbers below get mouse-hover detail via bind() but are not separately
+              // tabbable, to avoid nesting focusable elements inside a role=button row. The
+              // row's title carries the same avg/worst meaning for keyboard/SR users.
               return <div key={i} className="siterow clickable" role="button" tabIndex={0}
-              title={'Filter Network by '+s.nm} onClick={go}
+              title={'Filter Network by '+s.nm+' — avg '+s.avg+'%, worst '+s.worst+'%'} onClick={go}
               onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}>
               <div className="nm" title={s.nm}>{s.nm}</div>
               <div className="track"><i style={{width:Math.max(3,s.avg)+'%',background:c}}/></div>
-              <span className="pc" style={{color:c}}>{s.avg}%</span>
-              <span className="pc mono" style={{color:'var(--text-faint)'}} title="worst">{s.worst}%</span>
+              <span className="pc" style={{color:c,cursor:'help'}}
+                {...bind({title:s.nm,rows:[['What it means',"Average utilization across this site's "+s.n+' subnet'+(s.n===1?'':'s')+'.']]})}>{s.avg}%</span>
+              <span className="pc mono" style={{color:'var(--text-faint)',cursor:'help'}}
+                {...bind({title:s.nm,rows:[['What it means','Worst single subnet in this site.']]})}>{s.worst}%</span>
             </div>;})}
           </div>
         </Panel>
       </div>
 
       <div className="span-3">
-        <Panel title="Top consumers" side={<span className="mono">{subnetPreview.length} matching</span>}>
+        <Panel title="Top consumers"
+          side={<span className="mono" tabIndex={0} style={{cursor:'help'}}
+            {...bind({title:'Top consumers',rows:[
+              ['Matching','Subnets passing the current scope + utilization-band filters.'],
+              ['Order','Worst-first by utilization.'],
+            ]})}>{subnetPreview.length} matching</span>}>
           <div className="issues">
             {subnetPreview.length
               ? subnetPreview.slice(0,60).map((s,i)=>{
                   const go=()=>nav('network',{subnet:s.addr||s.id});
+                  const label=(s.addr||s.name||'—')+(s.cidr?('/'+s.cidr):'');
+                  const u=util(s);
+                  const free=(s.total!=null&&s.used!=null)?Math.max(0,s.total-s.used):null;
+                  // "–" is the backend's sentinel for "no site tag" — never render it as a
+                  // bare dash line; the CIDR is already visible above, so just omit the line.
+                  const hasSite=!!s.site&&s.site!=='–'&&s.site!=='-';
                   return <div key={s.id||s.addr||i} className="issue" role="button" tabIndex={0}
-                    onClick={go} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}>
+                    onClick={go} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}
+                    {...bind({title:label,rows:[
+                      ['Site',hasSite?s.site:'Unscoped (no site tag)'],
+                      ['Utilization',u+'% of pool used'],
+                      ...(free!=null?[['Free addresses',free]]:[]),
+                    ]})}>
                     <span className="rank mono">{i+1}</span>
                     <div className="body">
-                      <div className="t mono">{(s.addr||s.name||'—')+(s.cidr?('/'+s.cidr):'')}</div>
-                      <div className="d">{s.site||'—'}</div>
+                      <div className="t mono">{label}</div>
+                      {hasSite?<div className="d">{s.site}</div>:null}
                     </div>
-                    {UtilBar(util(s))}
+                    {UtilBar(u)}
                   </div>;
                 })
               : <div style={{color:'var(--text-faint)',fontSize:12,padding:'8px 4px'}}>No subnets match the current filters</div>}
@@ -3550,13 +3617,25 @@ function OverviewTab(){
         <Panel title="Host status" side={hosts.length.toLocaleString()+' hosts'}>
           <div className="chart-body">
             <Donut slices={hostSlices}
-              centerValue={hosts.length?Math.round(hostAgg.online/hosts.length*100)+'%':'0'} centerLabel="online"/>
+              centerValue={hosts.length?Math.round(hostAgg.online/hosts.length*100)+'%':'0'} centerLabel="online"
+              centerDetail={'Reachability of your '+hosts.length.toLocaleString()+' managed hosts — the percentage that are currently online.'}
+              legendDetail={l=>({
+                online:'Host responded to reachability checks — considered healthy.',
+                degraded:'Host is reachable but reporting a warning status.',
+                offline:'Host did not respond — down or unreachable.',
+                other:"Status not recognized by the dashboard — not counted as online, degraded, or offline.",
+              }[l]||l)}/>
           </div>
           {attnHosts.length?<div style={{marginTop:10,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:6}}>
             {attnHosts.map((h,i)=>{
               const st=String(h.status||'').toLowerCase();
               const sv=/^(offline|down|off|error)$/.test(st)?'crit':/^(degraded|warn|warning)$/.test(st)?'high':'low';
-              return <div key={h.id||h.name||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+              const meaning=sv==='crit'?'Unreachable — investigate connectivity.':sv==='high'?'Reporting a warning — degraded but reachable.':'Status not recognized by the dashboard.';
+              const go=()=>nav('infra',{host:h.name});
+              return <div key={h.id||h.name||i} role="button" tabIndex={0} onClick={go}
+                onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}
+                style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,cursor:'pointer'}}
+                {...bind({title:'Host '+(h.name||h.ip||'—'),rows:[['Status',h.status||'—'],['What it means',meaning+' Click to investigate.']]})}>
                 <span className="mono" style={{fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.name||h.ip||'—'}</span>
                 <span className={'sev '+sv}>{h.status||'—'}</span>
               </div>;
