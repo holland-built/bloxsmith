@@ -451,7 +451,11 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:visibl
 /* ── columnToggle: ⋯ Cols chooser menu (reuses the views-menu overlay pattern) ── */
 .dt-tools{display:flex;align-items:center;gap:var(--s2);flex:0 0 auto;}
 .dt-cols-slot{position:relative;display:inline-flex;}
-.dt-cols-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:61;width:248px;max-height:60vh;overflow-y:auto;padding:var(--s1);}
+/* H4: shared anchored-popover base — every dt-*-menu/dt-suggest/dt-cheat/views-menu
+   panel is position:absolute + the same z-index/scroll-clamp defaults; each class
+   below now carries only its width/side/offset/padding diffs from this base. */
+.dt-popover{position:absolute;z-index:61;max-height:60vh;overflow-y:auto;}
+.dt-cols-menu{right:0;top:calc(100% + 6px);width:248px;padding:var(--s1);}
 /* Feature 8: each row = checkbox+label (show/hide) + reorder/pin controls.
    The controls sit OUTSIDE the <label> so clicking them doesn't also toggle
    the checkbox; reorder is keyboard-reachable via the ↑/↓ buttons (not drag-only). */
@@ -468,26 +472,36 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:visibl
 /* ── F5: on-demand facet popover (Filter button in dt-tools) — same overlay/panel
    pattern as .dt-cols-menu; value rows reuse the pivot-cell accent-for-active rule. ── */
 .dt-facet-slot{position:relative;display:inline-flex;}
-.dt-facet-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:61;width:240px;max-height:60vh;overflow-y:auto;padding:var(--s2);display:flex;flex-direction:column;gap:var(--s3);}
+.dt-facet-menu{right:0;top:calc(100% + 6px);width:240px;padding:var(--s2);display:flex;flex-direction:column;gap:var(--s3);}
 .dt-facet-empty{padding:var(--s2);font-size:var(--t12);color:var(--text-faint);}
 .dt-facet-group{display:flex;flex-direction:column;gap:2px;}
 .dt-facet-label{font-size:var(--t11);text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);padding:2px 4px;}
 .dt-facet-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);width:100%;padding:5px 8px;font-size:var(--t12);color:var(--text-dim);text-align:left;background:transparent;border:1px solid transparent;border-radius:var(--r-ctl);cursor:pointer;transition:background .12s ease,border-color .12s ease;}
 .dt-facet-item:hover{background:var(--hover);color:var(--text);}
 .dt-facet-item.active{color:var(--accent-text);background:var(--accent-dim);border-color:var(--accent-text);}
+/* M3: count stays faint/dim even when the row is active — the row already
+   signals active via accent text + border + dim bg, so no extra rule needed here. */
 .dt-facet-count{color:var(--text-faint);font-family:'GeistMono',ui-monospace,monospace;}
-.dt-facet-item.active .dt-facet-count{color:var(--accent-text);}
 /* ── DataTable BQL search: typeahead popover + ? cheatsheet + no-match diag ── */
 .dt-search{position:relative;display:inline-flex;align-items:center;min-width:0;}
 .dt-search .dt-filter{padding-right:46px;}
-.dt-cheat-btn{position:absolute;right:1px;top:1px;height:24px;width:22px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t12);color:var(--text-faint);background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
-.dt-cheat-btn:hover{color:var(--text);}
-.dt-nl-btn{position:absolute;right:23px;top:1px;height:24px;width:22px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t12);color:var(--text-faint);background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
-.dt-nl-btn:hover{color:var(--text);}
-.dt-nl-btn:disabled{opacity:.4;cursor:default;}
-.dt-suggest{position:absolute;left:0;top:calc(100% + 4px);z-index:62;width:min(340px,80vw);max-height:56vh;overflow-y:auto;padding:var(--s1);}
-.dt-sug-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-left:2px solid transparent;border-radius:var(--r-ctl);cursor:pointer;}
-.dt-sug-item:hover,.dt-sug-item.sel{background:var(--hover);border-left-color:var(--accent);}
+/* H4: dt-cheat-btn/dt-nl-btn share the same icon-button box; only `right` differs. */
+.dt-search-icon-btn{position:absolute;top:1px;height:24px;width:22px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t12);color:var(--text-faint);background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-search-icon-btn:hover{color:var(--text);}
+.dt-cheat-btn{right:1px;}
+/* M1: NL button is standing chrome at rest — hide it until the search field is
+   focused (dim, since empty text still leaves it non-functional) or the field
+   holds text (fully visible); mirrors the .row-copy-btn reveal-on-need pattern. */
+.dt-nl-btn{right:23px;opacity:0;pointer-events:none;}
+.dt-search:focus-within .dt-nl-btn:disabled{opacity:.4;cursor:default;}
+.dt-search:focus-within .dt-nl-btn:not(:disabled),
+.dt-nl-btn:not(:disabled){opacity:1;pointer-events:auto;}
+.dt-suggest{left:0;top:calc(100% + 4px);z-index:62;width:min(340px,80vw);max-height:56vh;padding:var(--s1);}
+/* M2: hover signals via background only (no accent stripe); selection keeps a
+   ≤1px accent marker — the 2px hover-triggered stripe is gone (DESIGN §6). */
+.dt-sug-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-left:1px solid transparent;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-sug-item:hover{background:var(--hover);}
+.dt-sug-item.sel{background:var(--hover);border-left-color:var(--accent);}
 .dt-sug-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dt-sug-meta{font-size:var(--t11);color:var(--text-faint);flex:0 0 auto;}
 .dt-sug-tag{font-size:var(--t11);color:var(--text-dim);flex:0 0 auto;padding:0 5px;border:1px solid var(--border);border-radius:var(--r-ctl);}
@@ -495,7 +509,7 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:visibl
 .dt-sug-recent-run{flex:1 1 auto;min-width:0;display:block;padding:6px 8px;background:transparent;border:none;color:inherit;font:inherit;text-align:left;cursor:pointer;}
 .dt-sug-pin{flex:0 0 auto;padding:4px 6px;background:transparent;border:none;color:var(--text-faint);font-size:var(--t12);cursor:pointer;border-radius:var(--r-ctl);}
 .dt-sug-pin:hover{color:var(--text);}
-.dt-cheat{position:absolute;right:0;top:calc(100% + 4px);z-index:62;width:min(360px,84vw);padding:var(--s3);}
+.dt-cheat{right:0;top:calc(100% + 4px);z-index:62;max-height:none;overflow-y:visible;width:min(360px,84vw);padding:var(--s3);}
 .dt-cheat h4{margin:0 0 6px;font-size:var(--t11);color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;}
 .dt-cheat-row{display:flex;gap:var(--s2);font-size:var(--t12);color:var(--text-dim);padding:3px 0;}
 .dt-cheat-row code{color:var(--accent-text);flex:0 0 96px;}
@@ -1420,9 +1434,12 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // by pivot-cell (~1055), so the resulting chip is the existing FilterBar chip.
   const [facetOpen,setFacetOpen]=useState(false);
   const facetBtnRef=useRef(null);
+  const facetMenuRef=useRef(null);
   const [sugOpen,setSugOpen]=useState(false);    // BQL typeahead popover
   const [sugIdx,setSugIdx]=useState(-1);          // highlighted suggestion
   const [cheatOpen,setCheatOpen]=useState(false); // ? grammar cheatsheet
+  const cheatBtnRef=useRef(null);
+  const cheatPanelRef=useRef(null);
   const [probOn,setProbOn]=useState(()=> problemsOnly ? LS.get('probs.'+(id||'x'),!!problemsOnly.default) : false);
   const setProb=v=>{ setProbOn(v); if(id) LS.set('probs.'+id,v); };
   const [nlBusy,setNlBusy]=useState(false); // NL→BQL translate in flight
@@ -1485,6 +1502,25 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     setFacetOpen(false);
     if(facetBtnRef.current) facetBtnRef.current.focus();
   },[]);
+  // H2: mirrors the Cols popover's focus-in-on-open (~1423-1427) — without this,
+  // Esc only closes the facet popover once the user has already Tabbed a focus
+  // target inside it, and screen readers never announce the popover opening.
+  useEffect(()=>{
+    if(!facetOpen||!facetMenuRef.current) return;
+    const first=facetMenuRef.current.querySelector('button:not(:disabled)');
+    if(first) first.focus();
+  },[facetOpen]);
+  // M5: cheatsheet dialog has no focusable content of its own (just text rows),
+  // so the panel itself is the focus target (tabIndex={-1}) — same close+return
+  // contract as closeFacets/closeColsMenu above.
+  const closeCheat=useCallback(()=>{
+    setCheatOpen(false);
+    if(cheatBtnRef.current) cheatBtnRef.current.focus();
+  },[]);
+  useEffect(()=>{
+    if(!cheatOpen||!cheatPanelRef.current) return;
+    cheatPanelRef.current.focus();
+  },[cheatOpen]);
 
   const filtered=useMemo(()=>{
     let out=base;
@@ -1845,15 +1881,16 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
               }
             }}
             placeholder="Filter…" aria-label="Filter rows"
-            role="combobox" aria-autocomplete="list" aria-expanded={sugOpen&&bqlSuggest.length>0}/>
-          <button type="button" className="dt-nl-btn" aria-label="Translate to search query"
+            role="combobox" aria-autocomplete="list" aria-expanded={sugOpen&&bqlSuggest.length>0}
+            aria-activedescendant={(sugOpen&&sugIdx>=0&&bqlSuggest.length>0)?('sug-'+sugIdx):undefined}/>
+          <button type="button" className="dt-search-icon-btn dt-nl-btn" aria-label="Translate to search query"
             title="Translate plain English into a search query" disabled={nlBusy||!filter.trim()}
-            onMouseDown={e=>e.preventDefault()} onClick={translateNL}>{nlBusy?'…':'✨'}</button>
-          <button type="button" className="dt-cheat-btn" tabIndex={-1} aria-label="Search syntax help"
+            onMouseDown={e=>e.preventDefault()} onClick={translateNL}>{nlBusy?'…':'NL'}</button>
+          <button ref={cheatBtnRef} type="button" className="dt-search-icon-btn dt-cheat-btn" aria-label="Search syntax help"
             onMouseDown={e=>e.preventDefault()} onClick={()=>{setCheatOpen(v=>!v); setSugOpen(false);}}>?</button>
-          {sugOpen&&bqlSuggest.length>0?<div className="panel dt-suggest" role="listbox" aria-label="Search suggestions">
+          {sugOpen&&bqlSuggest.length>0?<div className="panel dt-popover dt-suggest" role="listbox" aria-label="Search suggestions">
             {bqlSuggest.map((s,i)=> s.t==='recent'
-              ? <div key={'recent:'+s.value} className={'dt-sug-item dt-sug-recent'+(i===sugIdx?' sel':'')} role="option" aria-selected={i===sugIdx}>
+              ? <div key={'recent:'+s.value} id={'sug-'+i} className={'dt-sug-item dt-sug-recent'+(i===sugIdx?' sel':'')} role="option" aria-selected={i===sugIdx}>
                   <button type="button" className="dt-sug-recent-run"
                     onMouseEnter={()=>setSugIdx(i)} onMouseDown={e=>e.preventDefault()}
                     onClick={()=>{ setFilter(s.value); pushRecent(s.value); setSugOpen(false); if(filterRef.current) filterRef.current.focus(); }}>
@@ -1865,7 +1902,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
                     {s.pinned?'★':'☆'}
                   </button>
                 </div>
-              : <button key={s.t+':'+(s.label||i)} type="button"
+              : <button key={s.t+':'+(s.label||i)} id={'sug-'+i} type="button"
                   className={'dt-sug-item'+(i===sugIdx?' sel':'')} role="option" aria-selected={i===sugIdx}
                   onMouseEnter={()=>setSugIdx(i)} onMouseDown={e=>e.preventDefault()}
                   onClick={()=>{ if(s.t==='help'){ setCheatOpen(true); setSugOpen(false); }
@@ -1877,8 +1914,9 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
                   </span>
                 </button>)}
           </div>:null}
-          {cheatOpen?<><div className="views-overlay" onClick={()=>setCheatOpen(false)}/>
-            <div className="panel dt-cheat" role="dialog" aria-label="Search syntax">
+          {cheatOpen?<><div className="views-overlay" onClick={closeCheat}/>
+            <div ref={cheatPanelRef} tabIndex={-1} className="panel dt-popover dt-cheat" role="dialog" aria-label="Search syntax"
+              onKeyDown={e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeCheat(); } }}>
               <h4>Search syntax</h4>
               <div className="dt-cheat-row"><code>word</code><span>contains</span></div>
               <div className="dt-cheat-row"><code>field:value</code><span>contains</span></div>
@@ -1902,7 +1940,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
             Filter{globalFilters.some(f=>facetCols.some(c=>c.key===f.field))?' •':''}
           </button>
           {facetOpen?<><div className="views-overlay" onClick={closeFacets}/>
-            <div className="panel dt-facet-menu" role="dialog" aria-label="Filter by field values"
+            <div ref={facetMenuRef} className="panel dt-popover dt-facet-menu" role="dialog" aria-label="Filter by field values"
               onKeyDown={e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeFacets(); } }}>
               {facetData.length===0
                 ? <div className="dt-facet-empty">No values to filter</div>
@@ -1925,7 +1963,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
           <button ref={colsBtnRef} className="btn btn-ghost" onClick={()=>setColsMenu(v=>!v)}
             aria-haspopup="true" aria-expanded={colsMenu} title="Show/hide, reorder, and pin columns">⋯ Cols</button>
           {colsMenu?<><div className="views-overlay" onClick={closeColsMenu}/>
-            <div className="panel dt-cols-menu" ref={colsMenuRef} role="group" aria-label="Manage columns"
+            <div className="panel dt-popover dt-cols-menu" ref={colsMenuRef} role="group" aria-label="Manage columns"
               onKeyDown={e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeColsMenu(); } }}>
               {orderedAll.map((c,i)=>{
                 const label=c.label||c.key;
@@ -5303,14 +5341,14 @@ function SecurityTab(){
   .alerts-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);padding:6px 0;}
   .alerts-num{width:56px;height:26px;padding:0 8px;font-size:12px;color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);}
   .pal-list{margin-top:8px;max-height:320px;overflow-y:auto;padding:4px;}
-  .pal-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:8px 12px;font-size:12px;color:var(--text);text-align:left;background:transparent;border:none;border-left:2px solid transparent;cursor:pointer;}
+  .pal-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:8px 12px;font-size:12px;color:var(--text);text-align:left;background:transparent;border:none;border-left:1px solid transparent;cursor:pointer;}
   .pal-row.sel{background:var(--hover);border-left-color:var(--accent);}
   .pal-kind{font-size:11px;color:var(--text-faint);flex:0 0 auto;}
   .pal-empty{padding:12px;font-size:12px;color:var(--text-faint);text-align:center;}
   .pal-confirm{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;font-size:12px;color:var(--text);}
   .views-slot{position:relative;display:inline-flex;}
   .views-overlay{position:fixed;inset:0;z-index:60;}
-  .views-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:61;width:280px;max-height:60vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:6px;}
+  .views-menu{right:0;top:calc(100% + 6px);width:280px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:6px;}
   .views-folder{padding:6px 8px 2px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);}
   .views-row{display:flex;align-items:center;gap:4px;padding:0 2px;}
   .views-item{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;padding:6px 8px;font-size:12px;color:var(--text);text-align:left;background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
@@ -7118,7 +7156,8 @@ function CommandPalette({open,onClose}){
       <div className="palette" onClick={e=>e.stopPropagation()}>
         <input ref={inputRef} className="palette-in mono" value={q} onChange={e=>setQ(e.target.value)}
           onKeyDown={onKey} placeholder="Type a command, question, or domain…"
-          aria-label="Command palette" role="combobox" aria-expanded="true"/>
+          aria-label="Command palette" role="combobox" aria-expanded="true"
+          aria-activedescendant={(!confirmBlock&&items.length>0)?('pal-'+sel):undefined}/>
         <div className="panel pal-list" role="listbox" aria-label="Commands">
           {confirmBlock
             ? <div className="pal-confirm">
@@ -7132,7 +7171,7 @@ function CommandPalette({open,onClose}){
             : items.length===0
               ? <div className="pal-empty">No matching commands</div>
               : items.map((it,i)=>
-                <button key={it.kind+':'+it.label} className={'pal-row'+(i===sel?' sel':'')}
+                <button key={it.kind+':'+it.label} id={'pal-'+i} className={'pal-row'+(i===sel?' sel':'')}
                   role="option" aria-selected={i===sel}
                   onMouseEnter={()=>setSel(i)} onClick={()=>it.run()}>
                   <span>{it.label}</span>
@@ -7179,7 +7218,7 @@ function ViewsMenu(){
       title="Saved views" onClick={()=>setOpen(o=>!o)}>Views</button>
     {open&&<>
       <div className="views-overlay" onClick={()=>setOpen(false)}/>
-      <div className="views-menu" role="menu">
+      <div className="dt-popover views-menu" role="menu">
         <button className="views-item" onClick={()=>{setOpen(false);saveCurrent();}}>Save current…</button>
         <div className="views-divider"/>
         {err&&<div className="views-empty">{err}</div>}
