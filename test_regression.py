@@ -647,7 +647,12 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("--body-table:280px", "--body-table token missing")
         self.assertContains("--body-chart:220px", "--body-chart token missing")
         self.assertContains(".chart-body{", ".chart-body class missing")
-        for tid in ("ov-subnets", "ov-hosts"):
+        # ov-subnets / ov-hosts were retired in the v1 (Bloomberg-grid) Overview
+        # rebuild — Top capacity subnets and Hosts needing attention are now
+        # custom list panels (siteRows/attnHosts), not DataTables. ov-leases is
+        # the one Overview DataTable that survived; it must still carry the
+        # height token.
+        for tid in ("ov-leases",):
             seg = self.html[self.html.index(f'tableId="{tid}"'):]
             seg = seg[:seg.index("/>")]
             self.assertIn("scrollBody={280}", seg, f"{tid} DataTable missing scrollBody={{280}}")
@@ -1203,6 +1208,68 @@ class FrontendStructureTests(unittest.TestCase):
                              "opening the Cols popover must focus its first enabled control")
         self.assertContains("if(colsBtnRef.current) colsBtnRef.current.focus();",
                              "closing the Cols popover must return focus to the Cols button")
+
+
+class OverviewRedesignTests(unittest.TestCase):
+    """Static source assertions for the v1 (Bloomberg-grid) Overview rebuild —
+    brainstorms/design-bloxsmith-overview-plan-2026-07-12.md. Pure regex/substring
+    checks against index.html; no browser (see tests/overview-redesign.spec.ts for
+    the DOM-level Playwright coverage of the same 10 fixes)."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(HTML, encoding="utf-8") as f:
+            cls.html = f.read()
+
+    def _overview_tab(self):
+        i = self.html.index("function OverviewTab(")
+        j = self.html.index("\n// ═══ END: OVERVIEW", i)
+        return self.html[i:j]
+
+    def assertContains(self, needle, msg=None):
+        self.assertIn(needle, self.html, msg or f"Missing: {needle!r}")
+
+    def test_stat_strip_replaces_banner(self):
+        ov = self._overview_tab()
+        self.assertIn('className="statstrip"', ov, "compact stat strip missing from Overview")
+        self.assertNotIn("<SynthBand", ov, "old full-width verdict banner (SynthBand) must be gone from Overview")
+        self.assertNotIn('className="kpis fadein"', ov, "old big KPI tile banner must be gone from Overview")
+
+    def test_leases_table_no_mac_column(self):
+        ov = self._overview_tab()
+        leases_tbl = ov[ov.index('tableId="ov-leases"'):]
+        leases_tbl = leases_tbl[:leases_tbl.index("/>")]
+        self.assertNotIn("label:'MAC'", leases_tbl, "leases table must not render a MAC column")
+        self.assertIn("MAC column hidden", ov, "'MAC column hidden' note missing from the leases panel")
+
+    def test_problems_only_segmented_control(self):
+        ov = self._overview_tab()
+        self.assertIn('className="seg"', ov, "segmented Problems-only/All-subnets control missing")
+        self.assertIn("aria-pressed={probOn}", ov, "segmented control must expose aria-pressed state")
+
+    def test_band_chips_removable(self):
+        ov = self._overview_tab()
+        self.assertIn("toggleBand", ov, "utilization-band chips must be individually toggleable")
+        self.assertIn("bandsOn.includes", ov, "band chips must be multi-select (array membership), not single-select")
+
+    def test_host_status_donut(self):
+        ov = self._overview_tab()
+        self.assertIn("<Donut slices={hostSlices}", ov, "host-status donut missing")
+        self.assertIn("attnHosts", ov, "needs-attention host list missing from Host status panel")
+
+    def test_triage_queue_real_rows(self):
+        ov = self._overview_tab()
+        self.assertIn('className="triage-row"', ov, "triage queue rows missing")
+        for action in ("Provision", "Drift", "Self-serve", "Editor"):
+            self.assertIn(action, ov, f"triage queue missing the {action} action")
+        self.assertIn("No subnets need action", ov, "triage queue empty state missing")
+
+    def test_action_tooltips_use_hovercard_not_title(self):
+        ov = self._overview_tab()
+        triage = ov[ov.index('className="triage-row"'):]
+        for action in ("Provision subnet", "Review drift", "Self-service", "Open in editor"):
+            self.assertIn("bind({title:'" + action + "'", triage, f"{action} tooltip must use useHoverDetail().bind(), not native title=")
+        self.assertNotIn("title='Provision", triage, "triage actions must not use a native title= tooltip")
 
 
 class ServerSecurityTests(unittest.TestCase):

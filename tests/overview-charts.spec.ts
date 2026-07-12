@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
 
-// Overview "Fleet mix" renders a Donut (host health) + a HistogramBar (subnet
-// utilization). Mock minimal /api/data so both have non-empty series.
+// Overview's "Host status" panel renders a Donut (host health). The subnet
+// utilization HistogramBar was retired in the v1 (Bloomberg-grid) rebuild —
+// brainstorms/design-bloxsmith-overview-plan-2026-07-12.md — in favor of the
+// stat strip + capacity-by-site bars (tests/overview-redesign.spec.ts covers
+// the new structure). Mock minimal /api/data so the donut has a non-empty series.
 
 const DATA = {
   hosts: [
@@ -17,7 +20,7 @@ const DATA = {
   leases: [], zones: [], auditLogs: [], events: [],
 };
 
-test('overview shows a Donut svg and a HistogramBar svg', async ({ page }) => {
+test('overview shows a Donut svg', async ({ page }) => {
   await page.route('**/api/data', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(DATA) })
   );
@@ -25,5 +28,4 @@ test('overview shows a Donut svg and a HistogramBar svg', async ({ page }) => {
   await expect(page.locator('.tabbar')).toBeVisible();
 
   await expect(page.locator('svg.donut-svg')).toBeVisible();
-  await expect(page.locator('svg.histbar-svg')).toBeVisible();
 });
