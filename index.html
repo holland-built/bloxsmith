@@ -566,6 +566,8 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 
 .sites{display:flex;flex-direction:column;gap:9px;}
 .siterow{display:flex;align-items:center;gap:10px;min-width:0;}
+.siterow.clickable{cursor:pointer;border-radius:var(--r-ctl);padding:2px 4px;margin:0 -4px;transition:background .12s ease;}
+.siterow.clickable:hover,.siterow.clickable:focus-visible{background:var(--hover);outline:none;}
 .siterow .nm{width:96px;font-size:11.5px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'GeistMono',ui-monospace,monospace;flex:none;}
 .siterow .track{flex:1;height:8px;border-radius:4px;background:var(--border);overflow:hidden;min-width:0;}
 .siterow .track>i{display:block;height:100%;border-radius:4px;}
@@ -3289,7 +3291,13 @@ function OverviewTab(){
 
       <Panel title="Capacity by site" side="avg / worst" empty={siteRows.length<2}>
         <div className="sites ov-mt">
-          {siteRows.map((s,i)=>{const c=utilColor(s.avg);return <div key={i} className="siterow">
+          {siteRows.map((s,i)=>{const c=utilColor(s.avg);
+            // drill: no table lives on Overview, so a site row jumps to Network with a
+            // removable global site filter pre-applied (carried in the #network?f= hash).
+            const go=()=>nav('network',{f:serializeFilters([{field:'site',value:s.nm}])});
+            return <div key={i} className="siterow clickable" role="button" tabIndex={0}
+            title={'Filter Network by '+s.nm} onClick={go}
+            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}>
             <div className="nm" title={s.nm}>{s.nm}</div>
             <div className="track"><i style={{width:Math.max(3,s.avg)+'%',background:c}}/></div>
             <span className="pc" style={{color:c}}>{s.avg}%</span>
