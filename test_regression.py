@@ -718,6 +718,11 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("Ask AI about selection", "palette Ask-AI-about-selection action missing")
         self.assertContains("rows:sorted,columns", "DataTable getState() must expose rows+columns for palette export")
 
+    def test_copy_link_action(self):
+        # F3 — "Copy link to this view" palette action copies location.href
+        # (the hash router already makes it canonical + deep-linkable).
+        self.assertContains("Copy link to this view", "palette Copy-link-to-this-view action missing")
+
     # ── unified search (BQL) discoverability layer ─────────────────────────────
 
     def test_search_typeahead(self):
