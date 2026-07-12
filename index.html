@@ -249,7 +249,7 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 .stub-name{font-size:var(--t16);font-weight:600;color:var(--text-dim);}
 .stub-sub{font-size:var(--t12);color:var(--text-faint);}
 
-.main{padding:var(--s6);width:100%;max-width:none;margin:0;transition:padding-right .16s ease;}
+.main{padding:var(--s6);width:100%;max-width:min(100%,2040px);margin:0 auto;transition:padding-right .16s ease;}
 
 /* ── shared layout + synthesis primitives ── */
 .page{display:flex;flex-direction:column;gap:var(--s6);}
@@ -619,7 +619,7 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .siterow.clickable{cursor:pointer;border-radius:var(--r-ctl);padding:2px 4px;margin:0 -4px;transition:background .12s ease;}
 .siterow.clickable:hover,.siterow.clickable:focus-visible{background:var(--hover);outline:none;}
 .siterow .nm{width:96px;font-size:11.5px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'GeistMono',ui-monospace,monospace;flex:none;}
-.siterow .track{flex:1;height:8px;border-radius:4px;background:var(--border);overflow:hidden;min-width:0;}
+.siterow .track{flex:1;max-width:560px;height:8px;border-radius:4px;background:var(--border);overflow:hidden;min-width:0;}
 .siterow .track>i{display:block;height:100%;border-radius:4px;}
 .siterow .pc{width:38px;text-align:right;font-family:'GeistMono',ui-monospace,monospace;font-size:11.5px;flex:none;}
 
@@ -2066,6 +2066,22 @@ function Skeleton({rows=4}){
    ───────────────────────────────────────────────────────────── */
 const TABS=['overview','daily','network','dns','infra','security','incidents','audit','provision','drift','selfservice','editor'];
 const TAB_LABELS={overview:'Overview',daily:'Daily',network:'Network',dns:'DNS',infra:'Infra',security:'Security',incidents:'Incidents',audit:'Audit',provision:'Provision',drift:'Drift',selfservice:'Self-Service',editor:'Editor'};
+// Nav-tab hover descriptions — shown via useHoverDetail() in TopBar. Terse, accurate
+// one-liners on what each tab does + how to use it.
+const TAB_DESCRIPTIONS={
+  overview:'Health snapshot — capacity by site, top consumers, host status, and a worst-first triage queue.',
+  daily:'Daily ops digest — AI-generated summary of what changed, hourly lease activity, and open severities.',
+  network:'Subnets and DHCP leases — browse, filter, and drill into utilization and lease state.',
+  dns:'DNS zones and records — browse zone health, record counts, and lease-state breakdown.',
+  infra:'Infrastructure hosts — status, versions, and per-host detail.',
+  security:'Threat events from the Hub — severities, acknowledgements, and event detail.',
+  incidents:'Correlated incidents — triage queue, SOC actions, and a live anomaly-event stream.',
+  audit:'Immutable, hash-chained audit log of every action taken — chain integrity re-verified on every poll.',
+  provision:'Carve a new subnet from available address space — pick a parent block + prefix, or provision a full templated site.',
+  drift:'Compare running DHCP/DNS config to the source of truth; review + reconcile differences.',
+  selfservice:'Requests users have queued for address/space — approve or fulfill.',
+  editor:'Directly edit DNS/DHCP records + objects.',
+};
 const LEGACY={home:'overview',map:'network',dhcp:'network',ipam:'network',dns:'dns',
   security:'security',assets:'infra',audit:'audit',search:'overview',ask:'overview',hub:'overview',
   summary:'daily',trends:'daily'};
@@ -7345,6 +7361,7 @@ function ProblemsBadge(){
 function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
   const {orgName}=useAuth();
   const orgLabel=orgName||org;
+  const {bind}=useHoverDetail();
   return <header className="topbar">
     <div className="brand">
       <BrandLogo/>
@@ -7355,7 +7372,8 @@ function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
       {TABS.map(t=><button key={t}
         className={'tab'+(t===tab?' active':'')}
         aria-current={t===tab?'page':undefined}
-        onClick={()=>nav(t)}>{TAB_LABELS[t]}</button>)}
+        onClick={()=>nav(t)}
+        {...bind({title:TAB_LABELS[t],rows:[['What it does',TAB_DESCRIPTIONS[t]]]})}>{TAB_LABELS[t]}</button>)}
     </nav>
     <div className="topbar-right">
       {fresh}
