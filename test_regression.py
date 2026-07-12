@@ -668,6 +668,35 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("function CommandPalette", "CommandPalette missing")
         self.assertContains("e.key==='k'||e.key==='K'", "Cmd/Ctrl-K binding missing")
 
+    # ── unified search (BQL) discoverability layer ─────────────────────────────
+
+    def test_search_typeahead(self):
+        # DataTable filter grows a context-sensitive typeahead popover: combobox
+        # input + listbox of role="option" suggestions, driven by bqlSuggest.
+        self.assertContains("const bqlSuggest=", "bqlSuggest typeahead memo missing")
+        self.assertContains('className="dt-search"', "dt-search wrapper missing")
+        self.assertContains('className="panel dt-suggest"', "dt-suggest popover missing")
+        self.assertContains('role="listbox"', "suggestions listbox role missing")
+        self.assertContains('role="combobox"', "filter combobox role missing")
+        self.assertContains('role="option"', "suggestion option role missing")
+        self.assertContains('aria-autocomplete="list"', "combobox aria-autocomplete missing")
+
+    def test_search_cheatsheet(self):
+        # The ? ghost button opens a one-card grammar reference panel.
+        self.assertContains('className="dt-cheat-btn"', "? cheatsheet button missing")
+        self.assertContains('className="panel dt-cheat"', "cheatsheet panel missing")
+        self.assertContains(">Search syntax<", "cheatsheet heading missing")
+        for g in ("field:value", "field=value", "exact match", "compare",
+                  "range", "any of", "exclude"):
+            self.assertContains(g, f"cheatsheet grammar row {g!r} missing")
+        self.assertContains('className="dt-cheat-fields"', "cheatsheet field list missing")
+
+    def test_search_nomatch_diagnostic(self):
+        # Zero-row query names the first token that took the count to 0 + Clear.
+        self.assertContains("const bqlNoMatch=", "no-match diagnostic memo missing")
+        self.assertContains('className="dt-nomatch"', "no-match empty-state span missing")
+        self.assertContains('className="dt-clear-btn"', "no-match Clear button missing")
+
     # ── saved views ────────────────────────────────────────────────────────────
 
     def test_views_menu(self):
@@ -1247,6 +1276,34 @@ console.log('BQL_OK');
         self.assertEqual(res.returncode, 0,
                          f"BQL Node run failed:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
         self.assertIn("BQL_OK", res.stdout)
+
+    def test_bql_age_epoch(self):
+        # Regression: audit `ts` is epoch-SECONDS, so the age synthetic field must
+        # treat a numeric timestamp as seconds (Date.parse would give NaN). Also
+        # tolerate ms timestamps (>1e12) and leave ISO-string parsing intact.
+        harness = r"""
+const nowS=Math.floor(Date.now()/1000);
+const rows=[
+  {name:'fresh',   ts:nowS-3600},          // 1h ago  (epoch seconds)
+  {name:'stale',   ts:nowS-48*3600},       // 48h ago (epoch seconds)
+  {name:'freshMs', ts:Date.now()-3600000}, // 1h ago  (epoch ms, >1e12)
+];
+const cols=[{key:'name'},{key:'ts'}];
+const schema=deriveSchema(cols, rows, {});
+function names(q){ return rows.filter(buildPredicate(parseQuery(q), schema)).map(r=>r.name).sort(); }
+function eqArr(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
+let fails=0;
+function chk(l,c){ if(!c){ console.error('FAIL '+l); fails++; } }
+chk('age synthetic maps to ts key', schema.fields.age && schema.fields.age.key==='ts');
+chk('age<24h includes fresh (s) + freshMs (ms), excludes stale', eqArr(names('age<24h'), ['fresh','freshMs']));
+chk('age>24h isolates stale', eqArr(names('age>24h'), ['stale']));
+if(fails){ console.error(fails+' age-epoch assertion(s) failed'); process.exit(1); }
+console.log('AGE_OK');
+"""
+        res = self._node(harness)
+        self.assertEqual(res.returncode, 0,
+                         f"age-epoch Node run failed:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
+        self.assertIn("AGE_OK", res.stdout)
 
     def test_bql_blocks_are_valid_babel_module(self):
         # The three sliced blocks must parse as valid JS inside the app's Babel

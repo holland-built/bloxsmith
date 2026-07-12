@@ -408,6 +408,25 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:visibl
 .dt-cols-item{display:flex;align-items:center;gap:var(--s2);padding:5px 8px;font-size:var(--t12);color:var(--text);border-radius:var(--r-ctl);cursor:pointer;}
 .dt-cols-item:hover{background:var(--hover);}
 .dt-cols-item input{cursor:pointer;}
+/* ── DataTable BQL search: typeahead popover + ? cheatsheet + no-match diag ── */
+.dt-search{position:relative;display:inline-flex;align-items:center;min-width:0;}
+.dt-search .dt-filter{padding-right:24px;}
+.dt-cheat-btn{position:absolute;right:1px;top:1px;height:24px;width:22px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t12);color:var(--text-faint);background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-cheat-btn:hover{color:var(--text);}
+.dt-suggest{position:absolute;left:0;top:calc(100% + 4px);z-index:62;width:min(340px,80vw);max-height:56vh;overflow-y:auto;padding:var(--s1);}
+.dt-sug-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-left:2px solid transparent;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-sug-item:hover,.dt-sug-item.sel{background:var(--hover);border-left-color:var(--accent);}
+.dt-sug-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dt-sug-meta{font-size:var(--t11);color:var(--text-faint);flex:0 0 auto;}
+.dt-sug-tag{font-size:var(--t11);color:var(--text-dim);flex:0 0 auto;padding:0 5px;border:1px solid var(--border);border-radius:var(--r-ctl);}
+.dt-cheat{position:absolute;right:0;top:calc(100% + 4px);z-index:62;width:min(360px,84vw);padding:var(--s3);}
+.dt-cheat h4{margin:0 0 6px;font-size:var(--t11);color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;}
+.dt-cheat-row{display:flex;gap:var(--s2);font-size:var(--t12);color:var(--text-dim);padding:3px 0;}
+.dt-cheat-row code{color:var(--accent-text);flex:0 0 96px;}
+.dt-cheat-fields{margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:var(--t11);color:var(--text-faint);word-break:break-word;}
+.dt-nomatch{display:inline-flex;align-items:center;gap:var(--s2);flex-wrap:wrap;}
+.dt-nomatch code{color:var(--text);}
+.dt-clear-btn{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;}
 .dt-cols-item input:disabled{cursor:default;}
 /* ValueBands active chip */
 .band-chip.active{border-color:var(--accent);color:var(--text);}
@@ -1168,7 +1187,11 @@ function buildPredicate(tokens, schema){
     return numCmp(tok.op, (Array.isArray(v)?v.length:0), tok); // numeric op → length
   }
   function ageMatch(tok, v){
-    var t=Date.parse(v);
+    // epoch-seconds (or ms) numbers → treat as timestamp; else parse a date string.
+    var t;
+    if(typeof v==='number'){ t = v<1e12 ? v*1000 : v; }
+    else if(typeof v==='string' && v.trim()!=='' && /^\d+(?:\.\d+)?$/.test(v.trim())){ var nv=Number(v); t = nv<1e12 ? nv*1000 : nv; }
+    else { t = Date.parse(v); }
     if(isNaN(t)) return false;
     var ageMs=Date.now()-t;
     var m=/^(\d+(?:\.\d+)?)([mhd])$/.exec(String(tok.value));
@@ -1240,6 +1263,9 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // columnToggle: hidden column keys (persisted per tableId). Stale keys are ignored on read.
   const [hiddenCols,setHiddenCols]=useState(()=> (showCols&&id)?LS.get('cols.'+id,[]):[]);
   const [colsMenu,setColsMenu]=useState(false);
+  const [sugOpen,setSugOpen]=useState(false);    // BQL typeahead popover
+  const [sugIdx,setSugIdx]=useState(-1);          // highlighted suggestion
+  const [cheatOpen,setCheatOpen]=useState(false); // ? grammar cheatsheet
   const [probOn,setProbOn]=useState(()=> problemsOnly ? LS.get('probs.'+(id||'x'),!!problemsOnly.default) : false);
   const setProb=v=>{ setProbOn(v); if(id) LS.set('probs.'+id,v); };
   const {flashed,flash}=useRowFlash();
@@ -1423,6 +1449,80 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const showFilter=filterable!==false&&(filterable||rows.length>12);
   const showToolbar=showCsv||showFilter||problemsOnly||showCols;
   const noIssues=problemsOnly&&probOn&&probCount===0;
+
+  // ── BQL typeahead: context-sensitive suggestions derived from input + schema ──
+  // Operates on the in-progress fragment (text after the last space). Additive &
+  // degrades gracefully: no schema fields → generic `field:value` example only.
+  const bqlSuggest=useMemo(()=>{
+    if(!showFilter) return [];
+    const fields=_schema.fields||{}, aliases=_schema.aliases||{};
+    const fkeys=Object.keys(fields).filter(k=>k!=='age');
+    const typeTag=t=>(t==='number'||t==='age'||t==='cidr')?'num':t==='enum'?'enum':t==='boolean'?'bool':t==='array'?'list':'text';
+    const distinctVals=(key,filt,cap)=>{
+      const counts={};
+      for(let i=0;i<base.length;i++){ const v=base[i]?base[i][key]:undefined; if(v==null) continue;
+        (Array.isArray(v)?v:[v]).forEach(x=>{ const s=String(x);
+          if(filt&&s.toLowerCase().indexOf(String(filt).toLowerCase())===-1) return; counts[s]=(counts[s]||0)+1; }); }
+      return Object.keys(counts).map(k=>({v:k,n:counts[k]})).sort((a,b)=>b.n-a.n).slice(0,cap||8);
+    };
+    const numRange=(key)=>{ let mn=Infinity,mx=-Infinity;
+      for(let i=0;i<base.length;i++){ const v=Number(base[i]?base[i][key]:NaN); if(!isNaN(v)){ if(v<mn)mn=v; if(v>mx)mx=v; } }
+      return isFinite(mn)?{mn,mx}:null; };
+    const text=filter||'', sp=text.lastIndexOf(' ');
+    const frag=text.slice(sp+1), prefix=text.slice(0,sp+1);
+    const out=[];
+    if(text.trim()===''){
+      const numF=fkeys.filter(k=>fields[k].type==='number');
+      const enumF=fkeys.filter(k=>fields[k].type==='enum'&&fields[k].values&&fields[k].values.length);
+      if(numF.length){ const k=numF[0], r=numRange(fields[k].key);
+        if(r){ const hi=Math.round(r.mn+(r.mx-r.mn)*0.85); out.push({t:'ex',label:k+'>'+hi,insert:k+'>'+hi,meta:'example'}); } }
+      if(enumF.length){ const k=enumF[0]; out.push({t:'ex',label:k+':'+fields[k].values[0],insert:k+':'+fields[k].values[0],meta:'example'}); }
+      if(out.length<2&&fkeys.length){ const k=fkeys[0]; out.push({t:'ex',label:k+':…',insert:k+':',meta:'example'}); }
+      if(!out.length) out.push({t:'ex',label:'field:value',insert:'',meta:'example'});
+      out.push({t:'help',label:'? syntax',meta:'grammar'});
+      return out;
+    }
+    const m=/^(-?)([a-zA-Z0-9_]+)(>=|<=|[:=><])(.*)$/.exec(frag);
+    if(m){
+      const fld=m[2].toLowerCase(), op=m[3], valPart=m[4];
+      const canon=(aliases[fld]!=null)?aliases[fld]:(fields[fld]?fld:null);
+      const def=canon&&fields[canon];
+      if(def){
+        if(def.type==='number'||def.type==='cidr'||def.type==='age'){
+          const r=numRange(def.key);
+          if(r){
+            out.push({t:'op',label:fld+'>'+Math.round(r.mn+(r.mx-r.mn)*0.85),insert:prefix+fld+'>'+Math.round(r.mn+(r.mx-r.mn)*0.85),meta:'above'});
+            out.push({t:'op',label:fld+':'+r.mn+'-'+r.mx,insert:prefix+fld+':'+r.mn+'-'+r.mx,meta:'range '+r.mn+'–'+r.mx});
+            out.push({t:'op',label:fld+'>='+r.mn,insert:prefix+fld+'>='+r.mn,meta:'at least'});
+          } else out.push({t:'op',label:fld+'>value',insert:prefix+fld+'>',meta:'compare'});
+          return out;
+        }
+        distinctVals(def.key,valPart,8).forEach(d=>out.push({t:'val',label:fld+op+d.v,insert:prefix+fld+op+d.v,meta:d.n+' rows'}));
+        if(out.length) return out;
+      }
+    }
+    const q=frag.toLowerCase().replace(/^-/,'');
+    const cand=[];
+    fkeys.forEach(k=>{ if(k.toLowerCase().indexOf(q)===0) cand.push({name:k,type:fields[k].type}); });
+    Object.keys(aliases).forEach(a=>{ if(a.toLowerCase().indexOf(q)===0&&fields[aliases[a]]) cand.push({name:a,type:fields[aliases[a]].type,alias:aliases[a]}); });
+    cand.slice(0,8).forEach(c=>out.push({t:'field',label:c.name+':',insert:prefix+c.name+':',tag:typeTag(c.type),meta:c.alias?('→ '+c.alias):''}));
+    return out;
+  },[showFilter,_schema,base,filter]);
+
+  // No-match diagnostic: cumulatively AND tokens left-to-right against `base`;
+  // name the first token whose addition takes the visible count to zero.
+  const bqlNoMatch=useMemo(()=>{
+    if(!filterable||!filter.trim()||!base.length) return null;
+    const toks=parseQuery(filter);
+    if(!toks.length) return null;
+    let rws=base;
+    for(let i=0;i<toks.length;i++){
+      const next=rws.filter(buildPredicate([toks[i]],_schema));
+      if(next.length===0) return {token:(toks[i].raw||toks[i].value||String(toks[i].field||''))};
+      rws=next;
+    }
+    return null;
+  },[filterable,filter,base,_schema]);
   // scrollBody: grow the progressive render window as the user nears the bottom.
   const onBodyScroll=(e)=>{ const el=e.currentTarget;
     if(el.scrollHeight-el.scrollTop-el.clientHeight<200)
@@ -1435,8 +1535,52 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     style={id?{outline:'none'}:undefined}>
     {showToolbar&&<div className="dt-toolbar" style={{justifyContent:(showFilter||problemsOnly)?'space-between':'flex-end'}}>
       <div style={{display:'flex',alignItems:'center',gap:'var(--s2)',minWidth:0}}>
-        {showFilter?<input ref={filterRef} className="dt-filter mono" value={filter}
-          onChange={e=>setFilter(e.target.value)} placeholder="Filter…" aria-label="Filter rows"/>:null}
+        {showFilter?<div className="dt-search">
+          <input ref={filterRef} className="dt-filter mono" value={filter}
+            onChange={e=>{setFilter(e.target.value); setSugOpen(true); setSugIdx(-1);}}
+            onFocus={()=>setSugOpen(true)}
+            onBlur={()=>setTimeout(()=>setSugOpen(false),120)}
+            onKeyDown={e=>{
+              if(e.key==='Escape'){ if(sugOpen||cheatOpen){ e.preventDefault(); e.stopPropagation(); setSugOpen(false); setCheatOpen(false); } return; }
+              if(!bqlSuggest.length) return;
+              if(e.key==='ArrowDown'){ e.preventDefault(); setSugOpen(true); setSugIdx(i=>Math.min((i<0?-1:i)+1,bqlSuggest.length-1)); }
+              else if(e.key==='ArrowUp'){ e.preventDefault(); setSugIdx(i=>Math.max(i-1,0)); }
+              else if((e.key==='Tab'||e.key==='Enter')&&sugOpen&&sugIdx>=0){
+                const s=bqlSuggest[sugIdx]; if(!s) return; e.preventDefault();
+                if(s.t==='help'){ setCheatOpen(true); setSugOpen(false); }
+                else if(s.insert!=null){ setFilter(s.insert); setSugIdx(-1); }
+              }
+            }}
+            placeholder="Filter…" aria-label="Filter rows"
+            role="combobox" aria-autocomplete="list" aria-expanded={sugOpen&&bqlSuggest.length>0}/>
+          <button type="button" className="dt-cheat-btn" tabIndex={-1} aria-label="Search syntax help"
+            onMouseDown={e=>e.preventDefault()} onClick={()=>{setCheatOpen(v=>!v); setSugOpen(false);}}>?</button>
+          {sugOpen&&bqlSuggest.length>0?<div className="panel dt-suggest" role="listbox" aria-label="Search suggestions">
+            {bqlSuggest.map((s,i)=><button key={s.t+':'+(s.label||i)} type="button"
+              className={'dt-sug-item'+(i===sugIdx?' sel':'')} role="option" aria-selected={i===sugIdx}
+              onMouseEnter={()=>setSugIdx(i)} onMouseDown={e=>e.preventDefault()}
+              onClick={()=>{ if(s.t==='help'){ setCheatOpen(true); setSugOpen(false); }
+                else if(s.insert!=null){ setFilter(s.insert); if(filterRef.current) filterRef.current.focus(); } }}>
+              <span className="dt-sug-label mono">{s.label}</span>
+              <span style={{display:'inline-flex',alignItems:'center',gap:'6px',flex:'0 0 auto'}}>
+                {s.tag?<span className="dt-sug-tag">{s.tag}</span>:null}
+                {s.meta?<span className="dt-sug-meta">{s.meta}</span>:null}
+              </span>
+            </button>)}
+          </div>:null}
+          {cheatOpen?<><div className="views-overlay" onClick={()=>setCheatOpen(false)}/>
+            <div className="panel dt-cheat" role="dialog" aria-label="Search syntax">
+              <h4>Search syntax</h4>
+              <div className="dt-cheat-row"><code>word</code><span>contains</span></div>
+              <div className="dt-cheat-row"><code>field:value</code><span>contains</span></div>
+              <div className="dt-cheat-row"><code>field=value</code><span>exact match</span></div>
+              <div className="dt-cheat-row"><code>{'util>85'}</code><span>compare</span></div>
+              <div className="dt-cheat-row"><code>util:90-99</code><span>range</span></div>
+              <div className="dt-cheat-row"><code>a,b</code><span>any of</span></div>
+              <div className="dt-cheat-row"><code>-term</code><span>exclude</span></div>
+              <div className="dt-cheat-fields"><b>Fields:</b> {Object.keys(_schema.fields||{}).filter(k=>k!=='age').join(', ')||'—'}</div>
+            </div></>:null}
+        </div>:null}
         {problemsOnly?<button className="prob-toggle" aria-pressed={probOn} onClick={()=>setProb(!probOn)}>
           <span>{problemsOnly.label||'Problems only'}</span>
           <span className="prob-count mono">{probCount} of {data.length}</span>
@@ -1479,7 +1623,9 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
             ? <tr><td className="dt-empty" colSpan={(effCols.length||1)+(selectable?1:0)}>
                 {noIssues
                   ? <span className="prob-none">No issues · <button className="prob-none-btn" onClick={()=>setProb(false)}>Show all {data.length}</button></span>
-                  : 'No data'}
+                  : bqlNoMatch
+                    ? <span className="dt-nomatch">no rows — <code className="mono">{bqlNoMatch.token}</code> matches 0 <button className="dt-clear-btn" onClick={()=>setFilter('')}>Clear</button></span>
+                    : 'No data'}
               </td></tr>
             : visible.map((r,ri)=>{
                 const rk=keyOf(r,ri);
@@ -4903,7 +5049,10 @@ function AiDrawer({open,onClose,initialQ}){
    edited or removed outside audit_append(). */
 function AuditTab(){
   const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/audit/log',{poll:15000});
-  const rows=(data&&data.entries)||[];
+  // Expose a stringified `_detail` so free-text BQL search reaches the JSON detail
+  // blob (e.g. `teardown`) — the `detail` column itself stays the raw object.
+  const rows=useMemo(()=>((data&&data.entries)||[]).map(r=>({...r,
+    _detail:(r.detail&&typeof r.detail==='object'&&Object.keys(r.detail).length)?JSON.stringify(r.detail):''})),[data]);
   const chainValid=data?data.chain_valid:null;
   const cols=[
     {key:'ts',label:'Time',mono:true,align:'left',width:190,
@@ -4937,7 +5086,7 @@ function AuditTab(){
             ? <div className="dt-empty">Failed to load audit log — <button className="fresh-retry" onClick={refetch}>Retry</button></div>
             : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}} csvName="audit"
                 tableId="audit" rowKey={r=>String(r.hash||((r.ts||'')+'|'+(r.actor||'')+'|'+(r.event||'')))}
-                maxRows={50} selectable filterable filterKeys={['actor','event']}/>}
+                maxRows={50} selectable filterable filterKeys={['actor','event','_detail']}/>}
     </Panel>
   </div>;
 }
