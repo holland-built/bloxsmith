@@ -1137,6 +1137,24 @@ class FrontendStructureTests(unittest.TestCase):
                              "closing the facet popover must return focus to the trigger")
         self.assertContains("toast('Filter removed · '+(label||existing.label)", "filter removal must announce via toast")
 
+    def test_column_manager(self):
+        """Feature 8: extends the existing dt-cols-menu show/hide popover with
+        keyboard reorder (per-row up/down, not drag-only), pin-first, and
+        per-tableId LS persistence for both, plus popover focus management
+        (open -> first control, Esc -> close + focus returns to the Cols button)."""
+        self.assertContains("const moveCol=(key,delta)=>setColOrder(prev=>", "column reorder handler missing")
+        self.assertContains("const togglePinCol=(key)=>setPinnedCol(prev=>", "column pin handler missing")
+        self.assertContains("LS.get('cols.order.'+id,null)", "column order must be read from per-tableId LS key")
+        self.assertContains("LS.set('cols.order.'+id,base)", "column order must persist to per-tableId LS key")
+        self.assertContains("LS.get('cols.pin.'+id,null)", "pinned column must be read from per-tableId LS key")
+        self.assertContains("LS.set('cols.pin.'+id,next)", "pinned column must persist to per-tableId LS key")
+        self.assertContains('aria-label={\'Move \'+label+\' up\'}', "reorder-up button must be labeled per column")
+        self.assertContains('aria-label={\'Move \'+label+\' down\'}', "reorder-down button must be labeled per column")
+        self.assertContains("if(first) first.focus();",
+                             "opening the Cols popover must focus its first enabled control")
+        self.assertContains("if(colsBtnRef.current) colsBtnRef.current.focus();",
+                             "closing the Cols popover must return focus to the Cols button")
+
 
 class ServerSecurityTests(unittest.TestCase):
     """Static (no running server) checks on server.py hardening from plans 014/015.
