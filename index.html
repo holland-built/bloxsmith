@@ -289,6 +289,13 @@ table.dt tbody tr.flash{animation:bx-flash .4s ease;}
 table.dt td.dt-check,table.dt th.dt-check{width:28px;text-align:center;padding:0 var(--s2);cursor:default;}
 table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-align:middle;}
 
+/* ── Compare-to-snapshot gutter: glyph (+ / − / ~) + aria label is the ONLY diff
+   signal — no red/green tint (red is reserved for --crit). Neutral --text color,
+   AA in both themes since it's the same token used for primary cell text. ── */
+table.dt td.dt-diff,table.dt th.dt-diff{width:20px;text-align:center;padding:0;color:var(--text);}
+table.dt tbody tr.dt-ghost td{color:var(--text-dim);text-decoration:line-through;}
+table.dt tbody tr.dt-ghost td.dt-diff{text-decoration:none;}
+
 /* ── copy-cell / copy-row: no color signaling — text confirmation via the toast bus ── */
 table.dt tbody td.dt-copyable{cursor:copy;}
 table.dt tbody td:last-child{position:relative;}
@@ -1037,7 +1044,7 @@ function useRowFlash(){
 /* ── DTRow (F3 perf) — memoized row so only cursor/selected/flashed rows re-render.
    cursor/selected/flash arrive as row-scoped booleans; all callbacks come off a
    stable ref (rowApi) so the memo holds across keypresses (subnet table = 5000 rows). ── */
-const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,selectable,rowApi}){
+const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,selectable,rowApi,diff,showDiff}){
   const align=c=>c.align||(c.mono?'right':'left');
   const isNum=c=>align(c)==='right';
   const fx=useFilters();
@@ -1051,6 +1058,9 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
     role={clickable?'button':undefined} tabIndex={clickable?0:undefined}
     onClick={clickable?()=>rowApi.current.activate(rkey):undefined}
     onKeyDown={clickable?e=>{if(e.key==='Enter')rowApi.current.activate(rkey);}:undefined}>
+    {showDiff?<td className="dt-diff mono">
+      {diff?<span aria-label={diff.label} title={diff.label}>{diff.type}</span>:null}
+    </td>:null}
     {selectable?<td className="dt-check" onClick={e=>{e.stopPropagation();rowApi.current.check(rkey,e.shiftKey);}}>
       <input type="checkbox" checked={isSel} onChange={()=>{}} aria-label="Select row"/>
     </td>:null}
@@ -1344,7 +1354,8 @@ function cleanBqlAnswer(raw){
 
 function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
-  maxRows,problemsOnly,scrollBody,columnToggle,searchSchema,query,onQuery}){
+  maxRows,problemsOnly,scrollBody,columnToggle,searchSchema,query,onQuery,
+  diffMap,diffGhosts}){
   const power=usePower();
   const fx=useFilters();
   const {filters:globalFilters}=fx;
@@ -1862,6 +1873,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
       onScroll={scrollBody?onBodyScroll:undefined}>
       <table className="dt">
         <thead><tr>
+          {diffMap?<th className="dt-diff" aria-label="Diff status"></th>:null}
           {selectable?<th className="dt-check"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all rows"/></th>:null}
           {effCols.map(c=><th key={c.key} className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
             style={(c.primary||c.width)?{...(c.width?{width:c.width}:{}),...(c.primary?{minWidth:c.minWidth||120}:{})}:null} onClick={()=>toggle(c.key)}>
@@ -1871,7 +1883,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         </tr></thead>
         <tbody>
           {visible.length===0
-            ? <tr><td className="dt-empty" colSpan={(effCols.length||1)+(selectable?1:0)}>
+            ? <tr><td className="dt-empty" colSpan={(effCols.length||1)+(selectable?1:0)+(diffMap?1:0)}>
                 {noIssues
                   ? <span className="prob-none">No issues · <button className="prob-none-btn" onClick={()=>setProb(false)}>Show all {data.length}</button></span>
                   : bqlNoMatch
@@ -1882,8 +1894,24 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
                 const rk=keyOf(r,ri);
                 return <DTRow key={rk} r={r} rkey={rk} cols={effCols} rowId={rowIdOf(ri)}
                   isCursor={ri===cursor} isSel={selected.has(rk)} isFlash={flashed.has(rk)}
-                  clickable={!!onRowClick} selectable={!!selectable} rowApi={apiRef}/>;
+                  clickable={!!onRowClick} selectable={!!selectable} rowApi={apiRef}
+                  diff={diffMap?diffMap.get(rk):null} showDiff={!!diffMap}/>;
               })}
+          {/* Compare-to-snapshot ghosts: prior rows absent from the current table —
+              struck-through, non-interactive, glyph+label only (no color signal). */}
+          {diffGhosts&&diffGhosts.length?diffGhosts.map((r,gi)=>{
+            const gk='ghost-'+(rowKey?String(rowKey(r)):gi);
+            return <tr key={gk} className="dt-ghost">
+              {diffMap?<td className="dt-diff mono"><span aria-label="removed" title="removed">−</span></td>:null}
+              {selectable?<td className="dt-check"/>:null}
+              {effCols.map(c=>{
+                let content; const raw=r[c.key];
+                if(c.spark){ const sv=c.spark(r); content=(Array.isArray(sv)&&sv.length>=2)?<Sparkline values={sv}/>:'—'; }
+                else content=c.render?c.render(raw,r):(raw??'');
+                return <td key={c.key} className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')}>{content}</td>;
+              })}
+            </tr>;
+          }):null}
         </tbody>
       </table>
     </div>
@@ -2553,6 +2581,27 @@ function useSnapshots(){
     return cur-old;
   };
   return {prev,today,delta};
+}
+
+/* diffRows — pure row-level diff against a prior row set (Compare-to-snapshot).
+   prevRows/currRows: plain-object arrays. keyFn(row)=>string row identity.
+   compareKeys: value keys checked for "changed" (present in prevRow & currRow).
+   Returns {byKey:Map<key,{type:'+'|'~',label}>, ghosts:Array<row>} — ghosts are
+   prior rows absent from currRows (rendered as struck-through rows by the caller).
+   Signal is glyph+label only — no color/style decision made here. */
+function diffRows(prevRows,currRows,keyFn,compareKeys){
+  const prevMap=new Map((prevRows||[]).filter(Boolean).map(r=>[keyFn(r),r]));
+  const currMap=new Map((currRows||[]).filter(Boolean).map(r=>[keyFn(r),r]));
+  const byKey=new Map();
+  currMap.forEach((r,k)=>{
+    const p=prevMap.get(k);
+    if(!p){ byKey.set(k,{type:'+',label:'added'}); return; }
+    const changed=(compareKeys||[]).some(ck=>String(p[ck])!==String(r[ck]));
+    if(changed) byKey.set(k,{type:'~',label:'changed'});
+  });
+  const ghosts=[];
+  prevMap.forEach((r,k)=>{ if(!currMap.has(k)) ghosts.push(r); });
+  return {byKey,ghosts};
 }
 
 /* SnapshotWriter — mounted in Shell (inside DataProvider). On data present,
@@ -3858,7 +3907,11 @@ const NET_LEASE_COLS=[
 function NetworkTab(){
   const {params}=useRoute();
   const {data,error,locked,loading,fetchedAt,refetch}=useData();
-  const {delta}=useSnapshots();
+  const {delta,prev}=useSnapshots();
+  // Compare-to-snapshot (subnets table only — it's the one table whose row-level
+  // shape [{a,u}] already lives in the snapshot store; see diffRows/snapKey).
+  // MUST run before any early return (hooks-order rule).
+  const [compareOn,setCompareOn]=useState(false);
   // histByAddr — per-subnet util history from the snapshot store. Each snapshot day
   // holds subnets.top:[{a,u}]; assemble values=[u per day] keyed by addr. Only subnets
   // present across ≥2 days get a series → the Trend sparkline renders honestly (no fabrication).
@@ -3961,6 +4014,16 @@ function NetworkTab(){
   const subnetRows=collapseIdentical(subnets,
     s=>{const sg=utilOf(s)===100?('100|/'+(s.cidr||'')):null; return (sg&&expandedSigs.has(sg))?null:sg;}, 5);
 
+  // Compare-to-snapshot: prev.subnets.top is the only place the store keeps
+  // per-row shape ({a,u} = addr,util for the top-20 by utilization — see
+  // SnapshotWriter). Diffing against that (not a fresh snapshot system) means
+  // the comparison is necessarily scoped to that top-20 set, not every subnet.
+  const prevSubnetRows=(prev&&prev.subnets&&Array.isArray(prev.subnets.top))
+    ?prev.subnets.top.map(t=>({addr:t.a,util:t.u})):[];
+  const subnetDiff=(compareOn&&prev)
+    ?diffRows(prevSubnetRows,subnetRows.filter(r=>!r.__group),r=>String(r.addr||r.id),['util'])
+    :null;
+
   // Util-band presets → BQL tokens injected into the subnets search (replace any existing util
   // token; clicking the active band clears it). "Capacity by site" bars inject site:<name>.
   const UTIL_BQL={'100':'util>=100','9099':'util:90-99','7089':'util:70-89','lt70':'util<70'};
@@ -4031,13 +4094,26 @@ function NetworkTab(){
                 Type <code>site:name</code> or <code>util&gt;=90</code> in the table search to scope by site</span>
             </div>
             <div style={{gridColumn:'1/-1'}}>
-              <Panel title="Subnets" side={<Freshness at={fetchedAt} onRetry={refetch}/>}>
+              <Panel title="Subnets" side={<span style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+                  <button className="btn btn-ghost" aria-pressed={compareOn}
+                    disabled={!prev} title={prev?'Diff current top subnets against yesterday\'s snapshot':'A prior daily snapshot is needed'}
+                    onClick={()=>{
+                      const next=!compareOn; setCompareOn(next);
+                      if(next&&prev){
+                        const d=diffRows(prevSubnetRows,subnetRows.filter(r=>!r.__group),r=>String(r.addr||r.id),['util']);
+                        let added=0,changed=0; d.byKey.forEach(v=>{if(v.type==='+')added++;else changed++;});
+                        toast(added+' added · '+changed+' changed · '+d.ghosts.length+' removed','ok');
+                      }
+                    }}>{compareOn?'Comparing':'Compare to snapshot'}</button>
+                  <Freshness at={fetchedAt} onRetry={refetch}/>
+                </span>}>
                 <DataTable cols={subnetCols} rows={subnetRows} defaultSort={{key:'util',dir:'desc'}}
                   scrollBody={480}
                   problemsOnly={{label:'Problems only',test:s=>utilOf(s)>70,default:true}}
                   onRowClick={r=>{ if(r.__group){ setExpandedSigs(prev=>{const n=new Set(prev); if(n.has(r.__group)) n.delete(r.__group); else n.add(r.__group); return n;}); return; } nav('network',{subnet:r.addr||r.id}); }}
                   csvName="subnets"
                   tableId="subnets" rowKey={r=>r.__group?('grp:'+r.__group):String(r.addr||r.id)} selectable
+                  diffMap={subnetDiff?subnetDiff.byKey:null} diffGhosts={subnetDiff?subnetDiff.ghosts:null}
                   filterable filterKeys={['addr','name','site']} query={subnetQuery} onQuery={setSubnetQuery}
                   searchSchema={{fields:{util:{type:'number'},cidr:{type:'number',key:'cidr'}}}}
                   initialPeekKey={params.peek}
