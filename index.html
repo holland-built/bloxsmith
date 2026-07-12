@@ -288,6 +288,21 @@ table.dt tbody tr.cursor{background:var(--hover);box-shadow:inset 2px 0 0 var(--
 table.dt tbody tr.flash{animation:bx-flash .4s ease;}
 table.dt td.dt-check,table.dt th.dt-check{width:28px;text-align:center;padding:0 var(--s2);cursor:default;}
 table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-align:middle;}
+
+/* ── copy-cell / copy-row: no color signaling — text confirmation via the toast bus ── */
+table.dt tbody td.dt-copyable{cursor:copy;}
+table.dt tbody td:last-child{position:relative;}
+.row-copy-btn{
+  position:absolute;top:50%;right:var(--s2);transform:translateY(-50%);
+  width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;
+  font-size:11px;line-height:1;color:var(--text-dim);
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);
+  opacity:0;pointer-events:none;cursor:pointer;
+}
+table.dt tbody tr:hover .row-copy-btn,
+table.dt tbody tr:focus-within .row-copy-btn,
+table.dt tbody tr.cursor .row-copy-btn,
+.row-copy-btn:focus-visible{opacity:1;pointer-events:auto;}
 .dt-filter{height:26px;padding:0 var(--s2);font-size:var(--t12);color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);min-width:200px;}
 .dt-filter:focus{border-color:var(--accent);}
 .spark{display:inline-block;vertical-align:middle;}
@@ -832,6 +847,7 @@ function PowerProvider({children}){
       else if(e.key==='k'||e.key==='ArrowUp'){ api.move(-1); handled=true; }
       else if(e.key==='Enter'){ handled=api.openCursor(); }
       else if(e.key==='x'){ handled=api.toggleSelect(); }
+      else if(e.key==='y'){ handled=api.copyCursorRow(); }
       else if(e.key==='/'){ handled=api.focusFilter(); }
       else if(e.key==='G'){ handled=api.gotoBottom(); }
       else if(e.key==='g'){ const now=Date.now(); if(now-gg.t<400){ handled=api.gotoTop(); gg.t=0; } else { gg.t=now; handled=true; } }
@@ -1001,6 +1017,10 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
   const align=c=>c.align||(c.mono?'right':'left');
   const isNum=c=>align(c)==='right';
   const fx=useFilters();
+  // Copy-cell / copy-row: raw clipboard write + the shared toast/aria-live bus for
+  // a non-color confirmation (no new live-region — Toasts() already renders one).
+  const copyText=txt=>{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt); };
+  const copyRow=e=>{ e.stopPropagation(); copyText(JSON.stringify(r)); toast('Row copied (JSON)','ok',{duration:1500}); };
   return <tr id={rowId||undefined}
     className={(clickable?'clickable':'')+(isCursor?' cursor':'')+(isFlash?' flash':'')}
     aria-selected={isCursor?'true':undefined}
@@ -1010,7 +1030,7 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
     {selectable?<td className="dt-check" onClick={e=>{e.stopPropagation();rowApi.current.check(rkey,e.shiftKey);}}>
       <input type="checkbox" checked={isSel} onChange={()=>{}} aria-label="Select row"/>
     </td>:null}
-    {cols.map(c=>{
+    {cols.map((c,ci)=>{
       let content; const raw=r[c.key];
       if(c.spark){ const sv=c.spark(r); content=(Array.isArray(sv)&&sv.length>=2)?<Sparkline values={sv}/>:(c.render?c.render(raw,r):'—'); }
       else content=c.render?c.render(raw,r):(raw??'');
@@ -1031,9 +1051,18 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
           onKeyDown={e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fire(e); } }}>{content}</span>;
       }
       const st=(c.primary||c.width)?{...(c.width?{width:c.width}:{}),...(c.primary?{minWidth:c.minWidth||120}:{})}:null;
+      // Cell copy: plain click copies the raw value. Skipped when the row itself is
+      // clickable (row-click already owns that gesture — see DataTable's onRowClick)
+      // and on pivot cells (their click already toggles a cross-filter).
+      const copyCell=(clickable||c.pivot)?undefined:e=>{ e.stopPropagation(); copyText(raw==null?'':String(raw)); toast('Copied','ok',{duration:1500}); };
+      const isLast=ci===cols.length-1;
       return <td key={c.key} title={c.pivot?undefined:tip}
-        className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
-        style={st}>{content}</td>;
+        className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')+(copyCell?' dt-copyable':'')}
+        style={st} onClick={copyCell}>
+        {content}
+        {isLast?<button type="button" className="row-copy-btn" title="Copy row as JSON"
+          aria-label="Copy row as JSON" onClick={copyRow}>⧉</button>:null}
+      </td>;
     })}
   </tr>;
 });
@@ -1434,6 +1463,10 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
       if(renderPeek){ setCursor(i); openPeekAt(i); return true; }
       if(onRowClick){ onRowClick(r,i); return true; } return false; },
     toggleSelect(){ if(!selectable||cursor<0||cursor>=visible.length) return false; check(keyOf(visible[cursor],cursor),false); return true; },
+    copyCursorRow(){ if(cursor<0||cursor>=visible.length) return false;
+      const row=visible[cursor];
+      if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(JSON.stringify(row));
+      toast('Row copied (JSON)','ok',{duration:1500}); return true; },
     focusFilter(){ if(!filterable) return false; if(filterRef.current){ filterRef.current.focus(); return true; } return false; },
     gotoTop(){ if(!visible.length) return false; setCursor(0); scrollTo(0); syncPeek(0); return true; },
     gotoBottom(){ const len=scrollBody?sorted.length:visible.length; if(!len) return false; const i=len-1; if(scrollBody) setRenderLimit(rl=>Math.max(rl,len)); setCursor(i); scrollTo(i); syncPeek(i); return true; },
