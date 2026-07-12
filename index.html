@@ -1207,7 +1207,10 @@ function deriveSchema(cols, rows, searchSchema){
   }
   if(ageKey!==null) fields['age']={type:'age', key:ageKey};
   // built-in aliases — keep only if the target field exists.
-  var aliases={}, builtin={sev:'severity', zone:'fqdn', ip:'addr', value:'dns_rdata'};
+  // F6: 'last' aliases onto the same synthetic age field so `last:24h`/`last:7d`/
+  // `last:30m` rides the existing ageMatch comparator (op ':' ⇒ within-window) —
+  // no new predicate logic needed, just a friendlier alias name for time presets.
+  var aliases={}, builtin={sev:'severity', zone:'fqdn', ip:'addr', value:'dns_rdata', last:'age'};
   for(var a in builtin){ if(Object.prototype.hasOwnProperty.call(builtin,a) && fields[builtin[a]]) aliases[a]=builtin[a]; }
   // freeTextKeys: searchSchema override → DataTable filterKeys → all col keys.
   var freeTextKeys = (searchSchema.freeTextKeys && searchSchema.freeTextKeys.length) ? searchSchema.freeTextKeys
@@ -1556,6 +1559,10 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
       if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(JSON.stringify(row));
       toast('Row copied (JSON)','ok',{duration:1500}); return true; },
     focusFilter(){ if(!filterable) return false; if(filterRef.current){ filterRef.current.focus(); return true; } return false; },
+    // F6: imperative setter so the command palette can inject a query token
+    // (e.g. last:24h) into THIS table's own search input — same state the
+    // typed input already drives, no new global control.
+    setFilter(v){ if(!filterable) return false; setFilter(v); return true; },
     gotoTop(){ if(!visible.length) return false; setCursor(0); scrollTo(0); syncPeek(0); return true; },
     gotoBottom(){ const len=scrollBody?sorted.length:visible.length; if(!len) return false; const i=len-1; if(scrollBody) setRenderLimit(rl=>Math.max(rl,len)); setCursor(i); scrollTo(i); syncPeek(i); return true; },
     clearOrCursor(){ if(selected.size>0){ clearSel(); return true; } if(cursor>=0){ setCursor(-1); return true; } return false; },
@@ -6786,6 +6793,18 @@ function CommandPalette({open,onClose}){
             const q='Tell me about these '+rowsSel.length+' selected row'+(rowsSel.length===1?'':'s')+': '+names+(rowsSel.length>10?', …':'');
             window.dispatchEvent(new CustomEvent('bx:ai-open',{detail:{q}}));
           }});
+      }
+      // F6 — time-as-preset: inject last:Nh/last:Nd into the active table's OWN
+      // search input (same state F4's typeahead/history already drive). Deliberately
+      // NOT a global control — rides the normal query path, no hash/snapshot changes.
+      if(typeof api.setFilter==='function'){
+        [['Last 1h','last:1h'],['Last 24h','last:24h'],['Last 7d','last:7d']].forEach(([label,token])=>{
+          ctxItems.push({label,kind:'action',run:()=>{
+            onClose();
+            const cur=String(st.filter||'').replace(/(^|\s)-?last:\S+/gi,' ').trim();
+            api.setFilter(cur?cur+' '+token:token);
+          }});
+        });
       }
     }
   }

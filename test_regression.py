@@ -1384,6 +1384,37 @@ console.log('AGE_OK');
                          f"age-epoch Node run failed:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
         self.assertIn("AGE_OK", res.stdout)
 
+    def test_bql_last_preset_alias(self):
+        # Feature 6 (time-as-preset): `last:Nh`/`last:Nd`/`last:Nm` aliases onto
+        # the same synthetic age field as `age:Nh` (deriveSchema builtin alias
+        # last->age), so it rides the existing ageMatch comparator — within-window
+        # rows match, out-of-window rows are excluded. No new predicate branch.
+        harness = r"""
+function iso(msAgo){ return new Date(Date.now()-msAgo).toISOString(); }
+const H=3600000, M=60000;
+const rows=[
+  {name:'fresh',  seen:iso(1*H)},
+  {name:'stale',  seen:iso(48*H)},
+  {name:'recent', seen:iso(10*M)},
+];
+const cols=[{key:'name'},{key:'seen'}];
+const schema=deriveSchema(cols, rows, {});
+function names(q){ return rows.filter(buildPredicate(parseQuery(q), schema)).map(r=>r.name).sort(); }
+function eqArr(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
+let fails=0;
+function chk(l,c){ if(!c){ console.error('FAIL '+l); fails++; } }
+chk("'last' aliases onto synthetic age field", schema.aliases.last==='age');
+chk('last:24h includes fresh+recent, excludes stale', eqArr(names('last:24h'), ['fresh','recent']));
+chk('last:30m isolates recent only', eqArr(names('last:30m'), ['recent']));
+chk('last:7d includes all three', eqArr(names('last:7d'), ['fresh','recent','stale']));
+if(fails){ console.error(fails+' last-preset assertion(s) failed'); process.exit(1); }
+console.log('LAST_OK');
+"""
+        res = self._node(harness)
+        self.assertEqual(res.returncode, 0,
+                         f"last-preset Node run failed:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
+        self.assertIn("LAST_OK", res.stdout)
+
     def test_clean_bql_answer_strips_wrapping(self):
         # NL→BQL translator (Feature 4): the AI endpoint's free-text "answer" must
         # be reduced to a bare, single-line query before it fills the search box —
