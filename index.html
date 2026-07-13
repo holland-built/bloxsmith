@@ -311,17 +311,28 @@ table.dt tbody tr.dt-ghost td.dt-diff{text-decoration:none;}
 /* ── copy-cell / copy-row: no color signaling — text confirmation via the toast bus ── */
 table.dt tbody td.dt-copyable{cursor:copy;}
 table.dt tbody td:last-child{position:relative;}
-.row-copy-btn{
+/* row-copyas-wrap holds BOTH the original F1 "Copy row as JSON" button and the
+   Feature 6 "Copy as…" format-menu trigger — same reveal-on-hover/focus/cursor
+   contract the single button used to own, now applied to the pair. */
+.row-copyas-wrap{
   position:absolute;top:50%;right:var(--s2);transform:translateY(-50%);
+  display:flex;align-items:center;gap:4px;
+  opacity:0;pointer-events:none;
+}
+table.dt tbody tr:hover .row-copyas-wrap,
+table.dt tbody tr:focus-within .row-copyas-wrap,
+table.dt tbody tr.cursor .row-copyas-wrap,
+.row-copyas-wrap:focus-within{opacity:1;pointer-events:auto;}
+.row-copy-btn{
   width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;
   font-size:11px;line-height:1;color:var(--text-dim);
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);
-  opacity:0;pointer-events:none;cursor:pointer;
+  cursor:pointer;
 }
-table.dt tbody tr:hover .row-copy-btn,
-table.dt tbody tr:focus-within .row-copy-btn,
-table.dt tbody tr.cursor .row-copy-btn,
-.row-copy-btn:focus-visible{opacity:1;pointer-events:auto;}
+.row-copy-btn:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+.dt-copyas-menu{right:0;top:calc(100% + 4px);min-width:150px;padding:var(--s1);}
+.dt-copyas-item{display:block;width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-copyas-item:hover,.dt-copyas-item:focus-visible{background:var(--hover);}
 .dt-filter{height:26px;padding:0 var(--s2);font-size:var(--t12);color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);min-width:200px;}
 .dt-filter:focus{border-color:var(--accent);}
 .spark{display:inline-block;vertical-align:middle;}
@@ -692,16 +703,33 @@ const LS={
   del(key){try{localStorage.removeItem('bx.'+key);}catch(e){}},
 };
 
-/* downloadCSV — ported verbatim from prior build (helper for DataTable) */
+/* downloadCSV — ported verbatim from prior build (helper for DataTable).
+   csvRowLine is split out so the copy-as-format menu (row-copy-btn extension,
+   Feature 6) can reuse the exact same cell-escaping for a single-row CSV copy. */
+function csvRowLine(columns,row){ return columns.map(c=>JSON.stringify(row[c.key]??'')).join(','); }
 function downloadCSV(filename, rows, columns){
   const header=columns.map(c=>JSON.stringify(c.label||c.key||c)).join(',');
-  const body=rows.map(r=>columns.map(c=>JSON.stringify(r[c.key]??'')).join(',')).join('\n');
+  const body=rows.map(r=>csvRowLine(columns,r)).join('\n');
   const blob=new Blob([header+'\n'+body],{type:'text/csv'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download=filename;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+/* Copy-as-format serializers (Feature 6) — one row, four shapes. CSV/JSON reuse the
+   same serializers as CSV export / the existing row-JSON copy; BQL-filter and
+   Markdown are new but equally pure/testable in isolation. */
+function rowAsCSV(columns,row){
+  const header=columns.map(c=>JSON.stringify(c.label||c.key)).join(',');
+  return header+'\n'+csvRowLine(columns,row);
+}
+function rowAsBQL(columns,row){
+  return columns.filter(c=>c.key&&row[c.key]!=null&&row[c.key]!==''&&typeof row[c.key]!=='object')
+    .map(c=>c.key+':'+String(row[c.key])).join(' AND ');
+}
+function rowAsMarkdown(columns,row){
+  return '| '+columns.map(c=>{ const v=row[c.key]; return (v==null?'':String(v)).replace(/\|/g,'\\|'); }).join(' | ')+' |';
 }
 
 /* collapseIdentical(rows, sigFn, min=5) — pure helper. Groups rows whose sigFn(row)
@@ -1095,6 +1123,33 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
   // a non-color confirmation (no new live-region — Toasts() already renders one).
   const copyText=txt=>{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt); };
   const copyRow=e=>{ e.stopPropagation(); copyText(JSON.stringify(r)); toast('Row copied (JSON)','ok',{duration:1500}); };
+  // Feature 6 — "Copy as…" format menu: a small addition next to the existing F1
+  // row-copy button (⧉, unchanged — still one click → JSON). Formats operate on
+  // `cols` (the currently VISIBLE columns, same set the user sees) except JSON,
+  // which stays the full row like the ⧉ button always has.
+  const [copyAsOpen,setCopyAsOpen]=useState(false);
+  const copyAsBtnRef=useRef(null);
+  const copyAsMenuRef=useRef(null);
+  const closeCopyAs=()=>{ setCopyAsOpen(false); if(copyAsBtnRef.current) copyAsBtnRef.current.focus(); };
+  useEffect(()=>{
+    if(!copyAsOpen||!copyAsMenuRef.current) return;
+    const first=copyAsMenuRef.current.querySelector('button:not(:disabled)');
+    if(first) first.focus();
+  },[copyAsOpen]);
+  const moveCopyAsFocus=delta=>{
+    const btns=copyAsMenuRef.current?Array.from(copyAsMenuRef.current.querySelectorAll('button:not(:disabled)')):[];
+    if(!btns.length) return;
+    let i=btns.indexOf(document.activeElement);
+    i=(i+delta+btns.length)%btns.length;
+    btns[i].focus();
+  };
+  const COPY_AS_FORMATS=[
+    {id:'csv',label:'CSV',build:()=>rowAsCSV(cols,r)},
+    {id:'json',label:'JSON',build:()=>JSON.stringify(r)},
+    {id:'bql',label:'BQL filter',build:()=>rowAsBQL(cols,r)},
+    {id:'md',label:'Markdown',build:()=>rowAsMarkdown(cols,r)},
+  ];
+  const copyAsFormat=fmt=>{ copyText(fmt.build()); toast('Copied as '+fmt.label,'ok',{duration:1500}); closeCopyAs(); };
   return <tr id={rowId||undefined}
     className={(clickable?'clickable':'')+(isCursor?' cursor':'')+(isFlash?' flash':'')}
     aria-selected={isCursor?'true':undefined}
@@ -1137,8 +1192,25 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
         className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')+(copyCell?' dt-copyable':'')}
         style={st} onClick={copyCell}>
         {content}
-        {isLast?<button type="button" className="row-copy-btn" title="Copy row as JSON"
-          aria-label="Copy row as JSON" onClick={copyRow}>⧉</button>:null}
+        {isLast?<span className="row-copyas-wrap">
+          <button type="button" className="row-copy-btn" title="Copy row as JSON"
+            aria-label="Copy row as JSON" onClick={copyRow}>⧉</button>
+          <button type="button" ref={copyAsBtnRef} className="row-copy-btn" title="Copy row as…"
+            aria-label="Copy row as…" aria-haspopup="true" aria-expanded={copyAsOpen}
+            onClick={e=>{ e.stopPropagation(); setCopyAsOpen(v=>!v); }}>▾</button>
+          {copyAsOpen?<><div className="views-overlay" onClick={e=>{ e.stopPropagation(); closeCopyAs(); }}/>
+            <div ref={copyAsMenuRef} className="panel dt-popover dt-copyas-menu" role="menu" aria-label="Copy row as"
+              onClick={e=>e.stopPropagation()}
+              onKeyDown={e=>{
+                if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeCopyAs(); return; }
+                if(e.key==='ArrowDown'){ e.preventDefault(); moveCopyAsFocus(1); }
+                else if(e.key==='ArrowUp'){ e.preventDefault(); moveCopyAsFocus(-1); }
+              }}>
+              {COPY_AS_FORMATS.map(fmt=>
+                <button key={fmt.id} type="button" role="menuitem" className="dt-copyas-item"
+                  onClick={e=>{ e.stopPropagation(); copyAsFormat(fmt); }}>{fmt.label}</button>)}
+            </div></>:null}
+        </span>:null}
       </td>;
     })}
   </tr>;
@@ -1486,10 +1558,25 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const fx=useFilters();
   const {filters:globalFilters}=fx;
   const id=tableId||(csvName?String(csvName):null);
-  const [sort,setSort]=useState(defaultSort||null); // {key,dir}
+  // Shareable-URL view state (Feature 1): sort/colVis/own-filter are seeded from the
+  // hash (params namespaced `<id>.sort` / `<id>.cols` / `<id>.q`) so a pasted "Copy
+  // link" URL reopens the exact table view, not just the tab — same discipline the
+  // `f=` cross-filter mirror (FilterProvider, ~977) and the subnets `sq=` mirror
+  // (NetworkTab, ~4280) already use. The mirror-back effects live further down,
+  // once all three pieces of state exist.
+  const hashParams=id?parseHash().params:null;
+  const [sort,setSort]=useState(()=>{
+    const raw=hashParams&&hashParams[id+'.sort'];
+    if(raw){ const ci=raw.indexOf(':'); const key=ci>=0?raw.slice(0,ci):raw; const dir=ci>=0?raw.slice(ci+1):'asc';
+      if(key) return {key,dir:dir==='desc'?'desc':'asc'}; }
+    return defaultSort||null;
+  }); // {key,dir}
   const [cursor,setCursor]=useState(-1);             // -1 = no visual until a key is pressed
   const [selected,setSelected]=useState(()=>new Set());
-  const [filterState,setFilterState]=useState('');
+  const [filterState,setFilterState]=useState(()=>{
+    const raw=hashParams&&hashParams[id+'.q'];
+    return raw||'';
+  });
   // Controlled-search handoff: when onQuery is supplied the parent owns the filter string
   // (NetworkTab uses it to mirror the subnets search to the #…?sq= hash + inject util/site presets).
   const filterControlled=typeof onQuery==='function';
@@ -1501,8 +1588,15 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // Baseline affordances: CSV export + column chooser default on for row-heavy tables (opt-out via explicit prop).
   const showCsv=csvName||(rows&&rows.length>12&&tableId);
   const showCols=columnToggle||((cols||[]).length>6);
-  // columnToggle: hidden column keys (persisted per tableId). Stale keys are ignored on read.
-  const [hiddenCols,setHiddenCols]=useState(()=> (showCols&&id)?LS.get('cols.'+id,[]):[]);
+  // columnToggle: hidden column keys (persisted per tableId + mirrored to `<id>.cols` in
+  // the hash — hash wins on initial load so a shared link overrides local prefs; every
+  // local toggle afterward still updates BOTH, same as before). Stale keys are ignored on read.
+  const [hiddenCols,setHiddenCols]=useState(()=>{
+    if(!showCols||!id) return [];
+    const raw=hashParams&&hashParams[id+'.cols'];
+    if(raw!=null) return raw?raw.split(','):[];
+    return LS.get('cols.'+id,[]);
+  });
   const [colsMenu,setColsMenu]=useState(false);
   // Feature 8: column reorder (keyed order array) + pin-first, persisted alongside
   // the hidden-columns key above. colOrder is null until the user reorders at
@@ -1696,6 +1790,37 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     if(id) LS.set('cols.pin.'+id,next);
     return next;
   });
+
+  // Shareable-URL view state (Feature 1), mirror-back half: one-way state -> nav()
+  // writes, each guarded so it only calls nav() when the encoded value actually
+  // changed (same guard the `sq=`/`f=` mirrors use) — otherwise a hashchange from
+  // one effect would re-trigger the others. filterState only mirrors when this
+  // table owns its own search box (!filterControlled) — controlled tables (the
+  // subnets `sq=` case) keep their existing external mirror untouched.
+  useEffect(()=>{
+    if(!id) return;
+    const {tab,params}=parseHash(); const np={...params};
+    const key=id+'.sort';
+    const val=(sort&&sort.key)?(sort.key+':'+(sort.dir||'asc')):'';
+    if(val) np[key]=val; else delete np[key];
+    if((np[key]||'')!==(params[key]||'')) nav(tab,np);
+  },[id,sort]);
+  useEffect(()=>{
+    if(!id||!showCols) return;
+    const {tab,params}=parseHash(); const np={...params};
+    const key=id+'.cols';
+    const val=hiddenCols.join(',');
+    if(val) np[key]=val; else delete np[key];
+    if((np[key]||'')!==(params[key]||'')) nav(tab,np);
+  },[id,showCols,hiddenCols]);
+  useEffect(()=>{
+    if(!id||filterControlled||!filterable) return;
+    const {tab,params}=parseHash(); const np={...params};
+    const key=id+'.q';
+    const val=(filterState||'').trim();
+    if(val) np[key]=val; else delete np[key];
+    if((np[key]||'')!==(params[key]||'')) nav(tab,np);
+  },[id,filterControlled,filterable,filterState]);
 
   const toggle=(key)=>setSort(s=>{
     if(!s||s.key!==key) return {key,dir:'asc'};
