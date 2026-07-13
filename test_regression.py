@@ -1174,7 +1174,10 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("dt-facet-menu", "facet popover panel missing")
         self.assertContains('aria-label="Filter by field values"', "Filter trigger button aria-label missing")
         self.assertContains("facetCols=useMemo(()=>columns.filter(c=>c.pivot)", "facets must derive from pivot columns")
-        self.assertContains("onClick={()=>fx.toggle(g.key,fv.v,lbl)}", "facet click must funnel into fx.toggle (shared pivot mechanism)")
+        # Group C/3 extended the facet onClick to also mirror a BQL token into
+        # the search box (see test_facet_bql_sync below), but it must still
+        # call fx.toggle with these exact args — the shared pivot mechanism.
+        self.assertContains("fx.toggle(g.key,fv.v,lbl)", "facet click must funnel into fx.toggle (shared pivot mechanism)")
         self.assertContains("if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeFacets(); }",
                              "facet popover must close on Escape")
         self.assertContains("if(facetBtnRef.current) facetBtnRef.current.focus();",
@@ -1186,6 +1189,41 @@ class FrontendStructureTests(unittest.TestCase):
                              "facet popover focus-in-on-open effect missing")
         self.assertContains("facetMenuRef.current.querySelector('button:not(:disabled)')",
                              "facet popover must focus its first control on open")
+
+    def test_pivot_on_cell(self):
+        """Group C/2 — pivot-on-cell: ordinary (non-.pivot-cell) DataTable cells get
+        a right-click / Shift+F10 "Filter by this value" action that funnels into the
+        SAME fx.toggle used by .pivot-cell columns and the facet popover. Guarded so
+        it never hijacks a row that already owns the click gesture via onRowClick."""
+        self.assertContains("const canCellPivot=!c.pivot&&raw!=null&&raw!=='';",
+                             "canCellPivot guard (non-pivot columns with a real value) missing")
+        self.assertContains("const cellKeyboardPivot=canCellPivot&&!clickable;",
+                             "keyboard affordance must be scoped OFF for onRowClick rows (guard)")
+        self.assertContains("onContextMenu={canCellPivot?openPivotMenu:undefined}",
+                             "right-click must be available on every ordinary pivotable cell")
+        self.assertContains("(e.shiftKey&&e.key==='F10')||e.key==='ContextMenu'",
+                             "Shift+F10 / Menu key must open the cell pivot action")
+        self.assertContains("dt-cellpivot-menu", "cell pivot action menu class missing")
+        self.assertContains("role=\"menuitem\"", "cell pivot action must expose role=menuitem")
+        self.assertContains("fx.toggle(c.key,pv,lbl);\n        closePivotMenu(ci);",
+                             "cell pivot action must funnel into the shared fx.toggle mechanism")
+        self.assertContains("if(!wasOn) toast('Filtered to '+lbl", "cell pivot add must announce via toast")
+
+    def test_facet_bql_sync(self):
+        """Group C/3 — facet <-> BQL two-way sync: typing a field:value/field=value
+        query marks the matching facet item active (bqlHasEquality), and clicking a
+        facet mirrors a token into the table's own search box (mirrorFacetToken),
+        reconciled if the chip is later removed some other way (FilterBar ×)."""
+        self.assertContains("const bqlHasEquality=useCallback((field,value)=>{", "bqlHasEquality helper missing")
+        self.assertContains("const mirrorFacetToken=useCallback((field,value,adding)=>{", "mirrorFacetToken helper missing")
+        self.assertContains("const on=fx.has(g.key,fv.v)||bqlHasEquality(g.key,fv.v);",
+                             "facet 'active' state must OR fx.has with the parsed BQL text")
+        self.assertContains("mirrorFacetToken(g.key,fv.v,adding);", "facet click must mirror into the query text")
+        self.assertContains("if(adding) toast('Filtered to '+lbl", "facet add must announce via toast")
+        self.assertContains("const mirroredFacetTokens=useRef(new Map());",
+                             "mirror must track its own writes to reconcile external chip removal")
+        self.assertContains("if(!cur.size) return;\n    const stale=[];",
+                             "reconcile effect (stale mirrored tokens after external chip removal) missing")
 
     def test_nl_button_no_emoji(self):
         # H1: the NL-translate button used a sparkles emoji (✨) as its label — the
