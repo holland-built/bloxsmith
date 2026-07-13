@@ -51,13 +51,13 @@ for (const width of [1440, 1920, 2560]) {
     }
   });
 
-  test(`viewport ${width} — capacity bar tracks stay readable`, async ({ page }) => {
+  test(`viewport ${width} — capacity heatmap cells stay small and dense`, async ({ page }) => {
     await gotoOverview(page, width);
-    const widths = await page.locator('.siterow .track').evaluateAll(
+    const widths = await page.locator('.heatcell').evaluateAll(
       els => els.map(el => el.getBoundingClientRect().width)
     );
-    expect(widths.length).toBeGreaterThan(0);
-    for (const w of widths) expect(w).toBeLessThanOrEqual(561);
+    expect(widths.length).toBeGreaterThan(0); // one cell per site
+    for (const w of widths) expect(w).toBeLessThanOrEqual(40); // small colored cells, not bars
   });
 
   test(`viewport ${width} — stat strip renders one row of 6 (no wrap)`, async ({ page }) => {
