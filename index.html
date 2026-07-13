@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>BloxSmith</title>
+<title>Bloxsmith</title>
 <script type="importmap">
 { "imports": {
   "react": "./vendor.react-19-2-7.8c3b2ed6.js",
@@ -15,7 +15,7 @@
 </script>
 <link rel="stylesheet" href="vendor.astryx.css">
 <style id="astryx-theme-map">
-/* Map Astryx design tokens onto the BloxSmith palette so Astryx components are
+/* Map Astryx design tokens onto the Bloxsmith palette so Astryx components are
    on-brand AND follow the app's [data-theme] toggle (Astryx's own light-dark()
    keys off color-scheme, which the app pins to dark — so we override here). The
    app's --accent/--text/--border/... already flip on data-theme, so pointing
@@ -1775,7 +1775,7 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
      tableId, rowKey, renderPeek, selectable, bulkActions, filterable, filterKeys, initialPeekKey
    ───────────────────────────────────────────────────────────── */
 /* ─────────────────────────────────────────────────────────────
-   BloxSmith Unified Search (BQL) — Phase A pure core.
+   Bloxsmith Unified Search (BQL) — Phase A pure core.
    parseQuery / deriveSchema / buildPredicate are schema-free-ish,
    hook-free, JSX-free plain functions (usable in Node + browser).
    Sentinel comments below let the test suite slice each block.
@@ -3303,7 +3303,7 @@ function VaultSetup({onDone}) {
     if(ok&&data.ok) onDone(); else setErr(data.error||'Setup failed.');
   };
   return (<div className="vault-screen"><div className="vault-card">
-    <div className="vault-logo">BloxSmith</div>
+    <div className="vault-logo">Bloxsmith</div>
     <h1>Create your vault</h1>
     <p>Set a passphrase to encrypt your Infoblox tenant keys at rest. It is never stored — you re-enter it after a restart to unlock. There is no recovery if you forget it.</p>
     <label htmlFor="vs-pass">Passphrase</label>
@@ -3323,7 +3323,7 @@ function VaultUnlock({onDone}) {
     if(ok&&data.ok) onDone(); else setErr(data.error||'Unlock failed.');
   };
   return (<div className="vault-screen"><div className="vault-card">
-    <div className="vault-logo">BloxSmith</div>
+    <div className="vault-logo">Bloxsmith</div>
     <h1>Unlock vault</h1>
     <p>Enter your passphrase to decrypt your saved tenant keys.</p>
     <label htmlFor="vu-pass">Passphrase</label>
@@ -3363,7 +3363,7 @@ function VaultAddTenant({onDone, onCancel, first, editId, editLabel}) {
   };
   useEffect(()=>{ if(!onCancel)return; const h=e=>{if(e.key==='Escape')onCancel();}; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onCancel]);
   return (<div className="vault-screen" onClick={onCancel?()=>onCancel():undefined}><div className="vault-card" onClick={e=>e.stopPropagation()}>
-    <div className="vault-logo">BloxSmith</div>
+    <div className="vault-logo">Bloxsmith</div>
     <h1>{isEdit?`Replace key for ${editLabel||'connection'}`:(first?'Add your first connection':'Add a connection')}</h1>
     <p>{isEdit
       ? 'Paste a new Infoblox API key for this connection — e.g. when the old one was rejected or lacks account access. The connection re-names itself from the new key.'
@@ -6796,7 +6796,7 @@ function AlertRulesPanel(){
     const notify=m=>{
       toast(m,'warn');
       if(typeof Notification!=='undefined'&&Notification.permission==='granted'){
-        try{new Notification('BloxSmith alert',{body:m});}catch(e){}
+        try{new Notification('Bloxsmith alert',{body:m});}catch(e){}
       }
     };
     const check=()=>{
@@ -9250,7 +9250,7 @@ function UpdateBadge(){
     </div>}
     <span className="update-slot">
       <span className="mono update-version"
-        {...bind({title:'BloxSmith v'+current,rows:available?[['Current','v'+current],['Latest','v'+latest]]:[['Current','v'+current],['Status','Up to date']]})}>
+        {...bind({title:'Bloxsmith v'+current,rows:available?[['Current','v'+current],['Latest','v'+latest]]:[['Current','v'+current],['Status','Up to date']]})}>
         v{current}
       </span>
       {available&&(selfUpdate
@@ -9293,7 +9293,7 @@ function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
   return <header className="topbar">
     <div className="brand">
       <BrandLogo/>
-      <span className="brand-name">BloxSmith</span>
+      <span className="brand-name">Bloxsmith</span>
       {orgLabel?<span className="brand-org">{orgLabel}</span>:null}
     </div>
     <nav className="tabbar" aria-label="Sections">
@@ -9622,7 +9622,7 @@ function Wallboard(){
   const canRotate=VIEWS.length>1 && !reduceMotion();
   return <div className="wallboard" data-wall role="region" aria-label="Wallboard — NOC display">
     <div className="wall-topline">
-      <div className="wall-brand"><BrandLogo/><span className="wall-title">BloxSmith · NOC</span></div>
+      <div className="wall-brand"><BrandLogo/><span className="wall-title">Bloxsmith · NOC</span></div>
       <div className="wall-views" role="group" aria-label="Wallboard views">
         {VIEWS.map((v,i)=><span key={v.tab} className={'wall-view-dot'+(i===view?' active':'')}
           aria-current={i===view?'true':undefined}>{v.label}</span>)}
