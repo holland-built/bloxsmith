@@ -585,6 +585,41 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("aria-expanded={aiOpen}",
                             "AI trigger button must expose aria-expanded")
 
+    # ── P1/4 app-wide cross-filter: stat tiles + health strip ───────────────────
+
+    def test_host_status_tiles_cross_filter(self):
+        # The Overview "Hosts" card's online/degraded/offline numbers are real
+        # cross-filter buttons that toggle a FilterCtx scope on the shared `status`
+        # field (chip + `f=` hash + Infra-table filter), not inert colored spans.
+        self.assertContains("stat-crossfilter",
+                            "host-status cross-filter buttons (.stat-crossfilter) missing")
+        self.assertContains("hostScopeBtn(",
+                            "hostScopeBtn helper (host tile -> app scope) missing")
+        self.assertContains("fx.toggle('status',v,'Status: '+v)",
+                            "host tile must toggle the app-wide status FilterCtx scope")
+        # aria-pressed reflects the active scope (keyboard-reachable real button).
+        ov = self.html[self.html.index("function OverviewTab("):]
+        ov = ov[:ov.index("\nfunction ", 1)]
+        self.assertIn("aria-pressed={active}", ov,
+                      "host-status tile button must expose aria-pressed")
+        self.assertIn("data-scope=", ov, "host-status tile must carry data-scope")
+
+    def test_health_strip_present_and_mounted(self):
+        # Slim always-visible per-service health ribbon: component exists, is mounted
+        # in the shell, and renders a TEXT status label (never color-only) + sparkline.
+        self.assertContains("function HealthStrip(", "HealthStrip component missing")
+        self.assertContains("<HealthStrip/>", "HealthStrip not mounted in the shell")
+        self.assertContains("HEALTH_TXT=", "HealthStrip text status map (HEALTH_TXT) missing")
+        hs = self.html[self.html.index("function HealthStrip("):]
+        hs = hs[:hs.index("\nfunction ", 1)]
+        self.assertIn('className="health-status"', hs,
+                      "health segment must render a TEXT status label (not color-only)")
+        self.assertIn("<Sparkline", hs, "health segment must render a Sparkline")
+        self.assertIn("aria-pressed={active}", hs,
+                      "health segment button must expose aria-pressed for the active tab")
+        for svc in ("'DNS'", "'DHCP'", "'IPAM'", "'Security'"):
+            self.assertIn(svc, hs, f"health strip missing service {svc}")
+
     # ── ported auth invariants ─────────────────────────────────────────────────
 
     def test_vault_components_present(self):

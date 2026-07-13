@@ -4219,6 +4219,23 @@ function OverviewTab(){
   ];
   const attnHosts=hosts.filter(h=>!/^(online|up)$/i.test(String(h.status||''))).slice(0,6);
 
+  // P1/4 — host-status stat numbers become app-wide cross-filter buttons: clicking
+  // one toggles a FilterCtx scope on the shared `status` field (mirrored to the
+  // `f=` view-state hash, chip shown + clearable in the FilterBar, and applied to
+  // any table with a `status` column — e.g. Infra's host inventory). Announced on
+  // the shared aria-live toast bus on add (removal already toasts via fx.remove).
+  const hostScopeBtn=(v,n,color)=>{
+    const active=fx.has('status',v);
+    return <button type="button" className={'stat-crossfilter'+(active?' active':'')}
+      data-scope={'status:'+v} aria-pressed={active}
+      aria-label={'Filter to '+v+' hosts ('+n+') — app-wide scope'}
+      onClick={e=>{ e.stopPropagation(); const was=fx.has('status',v);
+        fx.toggle('status',v,'Status: '+v);
+        if(!was) toast('Filtered · Status: '+v,'ok',{duration:1500}); }}
+      style={{color,background:'none',border:'1px solid '+(active?'currentColor':'transparent'),
+        borderRadius:4,padding:'0 3px',font:'inherit',lineHeight:'inherit',cursor:'pointer'}}>{n}</button>;
+  };
+
   // ── stat-strip numbers (real, derived from the subnets already fetched) ──
   const topSubs=useMemo(()=>[...subnets].sort((a,b)=>util(b)-util(a)),[subnets]);
   const worst=topSubs[0]||null;
@@ -4310,8 +4327,8 @@ function OverviewTab(){
           ['Reading the '+hostAgg.online+'/'+hostAgg.degraded+'/'+hostAgg.offline,hostAgg.online+' online (reachable) / '+hostAgg.degraded+' degraded (reporting a warning) / '+hostAgg.offline+' offline (unreachable)'+(hostAgg.other?' — '+hostAgg.other+' with an unrecognized status':'')+'.'],
         ]})}>
         <span className="k">Hosts</span>
-        <span className="v num">{hosts.length.toLocaleString()} <small>
-          <span style={{color:'var(--ok)'}}>{hostAgg.online}</span>/<span style={{color:'var(--warn)'}}>{hostAgg.degraded}</span>/<span style={{color:'var(--crit)'}}>{hostAgg.offline}</span>
+        <span className="v num">{hosts.length.toLocaleString()} <small className="host-triad">
+          {hostScopeBtn('online',hostAgg.online,'var(--ok)')}/{hostScopeBtn('degraded',hostAgg.degraded,'var(--warn)')}/{hostScopeBtn('offline',hostAgg.offline,'var(--crit)')}
         </small></span></div>
     </div>
 
@@ -8266,6 +8283,70 @@ function ProblemsBadge(){
   </button>;
 }
 
+/* ── HealthStrip (P1/4) — slim, always-visible service-health ribbon under the
+   TopBar. One thin line: per-service dot (semantic color) + TEXT status label
+   (never color-only) + a tiny sparkline, for DNS / DHCP / IPAM / Security. Each
+   segment is a real button that navigates to that service's tab (aria-pressed
+   reflects the active tab). Health is derived from the same shared feeds the
+   tabs already read (no new heavy fetch beyond the small security hub call). ── */
+const HEALTH_TXT={ok:'Operational',warn:'Degraded',crit:'Critical'};
+function HealthStrip(){
+  const {data}=useData();
+  const sec=useApi('/api/hub/security');
+  const route=useRoute();
+  const d=data||{};
+  const subnets=Array.isArray(d.subnets)?d.subnets:[];
+  const zones=Array.isArray(d.zones)?d.zones:[];
+  const util=s=>Number(s.util)||0;
+
+  // DHCP / IPAM — capacity pressure across subnets (same thresholds Overview uses).
+  const bands=[0,0,0,0]; // <70, 70-89, 90-99, 100
+  subnets.forEach(s=>{const u=util(s); if(u>=100)bands[3]++; else if(u>=90)bands[2]++; else if(u>=70)bands[1]++; else bands[0]++;});
+  const near=subnets.filter(s=>util(s)>=90).length;
+  const over85=subnets.filter(s=>util(s)>85).length;
+  const tight=subnets.some(s=>util(s)>=95);
+
+  // DNS — zone health (unhealthy = a zone reporting a down/error/critical status).
+  const zHealthy=zones.filter(z=>/^(ok|healthy|active|up|)$/i.test(String(z.status||''))).length;
+  const zDown=zones.some(z=>/^(down|error|critical|fail)/i.test(String(z.status||'')));
+  const zBad=zones.length-zHealthy;
+
+  // Security — threat counts from the hub.
+  const sc=(sec.data&&sec.data.counts)||{};
+  const crit=Number(sc.critical)||0, high=Number(sc.high)||0, med=Number(sc.medium)||0;
+
+  const lvl=(isCrit,isWarn)=>isCrit?'crit':isWarn?'warn':'ok';
+  const col=sev=>'var(--'+(sev==='crit'?'crit':sev==='warn'?'warn':'ok')+')';
+  const services=[
+    {id:'dns',      label:'DNS',      tab:'dns',      sev:lvl(zDown, zBad>0),           values:[zHealthy, zones.length||0]},
+    {id:'dhcp',     label:'DHCP',     tab:'network',  sev:lvl(near>0, over85>0),        values:bands},
+    {id:'ipam',     label:'IPAM',     tab:'network',  sev:lvl(tight, over85>0),         values:bands},
+    {id:'security', label:'Security', tab:'security', sev:lvl(crit>0, high>0),          values:[crit,high,med]},
+  ];
+
+  return <div className="health-strip" role="group" aria-label="Service health"
+    style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',padding:'4px 16px',
+      borderBottom:'1px solid var(--border)',background:'var(--surface)',fontSize:12}}>
+    <span className="health-strip-label" style={{color:'var(--text-faint)',textTransform:'uppercase',letterSpacing:'.05em',fontSize:10}}>Service health</span>
+    {services.map(s=>{
+      const active=route.tab===s.tab;
+      return <button key={s.id} type="button" className={'health-seg '+s.sev+(active?' active':'')}
+        aria-pressed={active}
+        aria-label={s.label+' — '+HEALTH_TXT[s.sev]+'. Open the '+s.label+' section.'}
+        onClick={()=>nav(s.tab)}
+        style={{display:'inline-flex',alignItems:'center',gap:6,background:'none',
+          border:'1px solid '+(active?'var(--border-strong)':'transparent'),borderRadius:6,
+          padding:'2px 8px',color:'var(--text)',font:'inherit',cursor:'pointer'}}>
+        <i className={'health-dot '+s.sev} aria-hidden="true"
+          style={{width:8,height:8,borderRadius:'50%',background:col(s.sev),flex:'0 0 auto'}}/>
+        <span className="health-svc" style={{fontWeight:500}}>{s.label}</span>
+        <span className="health-status" style={{color:'var(--text-dim)'}}>{HEALTH_TXT[s.sev]}</span>
+        <Sparkline values={s.values} width={40} height={14} color={col(s.sev)}/>
+      </button>;
+    })}
+  </div>;
+}
+
 function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
   const {orgName}=useAuth();
   const orgLabel=orgName||org;
@@ -8357,6 +8438,7 @@ function Shell(){
   return <PowerProvider>
     <div>
       <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)} onAi={()=>setAiOpen(o=>!o)} aiOpen={aiOpen}/>
+      <HealthStrip/>
       <FilterBar/>
       <main className="main" key={tab}>
         <Active vaultTick={vaultTick}/>
