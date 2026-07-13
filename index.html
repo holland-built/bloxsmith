@@ -387,6 +387,19 @@ table.dt tbody tr.cursor .row-copyas-wrap,
 @keyframes ab-in{from{transform:translate(-50%,120%);opacity:0;}}
 .ab-count{font-size:var(--t12);color:var(--text-dim);padding-right:var(--s2);border-right:1px solid var(--border);}
 .ab-confirm{display:inline-flex;align-items:center;gap:var(--s2);font-size:var(--t12);color:var(--text-dim);}
+/* Copy-as menu on the action bar opens UPWARD (bar is pinned to the viewport bottom). */
+.ab-menu{top:auto;bottom:calc(100% + 4px);right:auto;left:0;}
+
+/* Shortcut-overlay (Feature 10) — neutral, plain-text modal. Accent-free. */
+.sc-scrim{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;
+  background:var(--scrim,rgba(0,0,0,.4));padding:var(--s4);}
+.sc-overlay{width:min(560px,100%);max-height:80vh;overflow-y:auto;padding:var(--s4);}
+.sc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3);}
+.sc-title{font-size:var(--t14);font-weight:600;color:var(--text);margin:0;}
+.sc-list{display:grid;grid-template-columns:auto 1fr;gap:var(--s2) var(--s3);margin:0;}
+.sc-row{display:contents;}
+.sc-row dt{margin:0;}
+.sc-row dd{margin:0;font-size:var(--t12);color:var(--text-dim);align-self:center;}
 
 .toast{display:flex;align-items:center;gap:var(--s3);justify-content:space-between;}
 .toast-action{font-size:var(--t12);font-weight:500;color:var(--accent-text);background:transparent;border:none;padding:0;flex:0 0 auto;}
@@ -1140,13 +1153,41 @@ function PeekDrawer(){
   </aside>;
 }
 
+/* ── AbMenu — a single ActionBar action that fans out into a small format menu
+   (Feature 8 "Copy as"). Reuses the DTRow copy-as popover styling + focus model:
+   open focuses first item, Arrow moves, Esc closes and returns focus to trigger. ── */
+function AbMenu({label,items}){
+  const [open,setOpen]=useState(false);
+  const btnRef=useRef(null),menuRef=useRef(null);
+  const close=()=>{ setOpen(false); if(btnRef.current) btnRef.current.focus(); };
+  useEffect(()=>{ if(!open||!menuRef.current) return;
+    const f=menuRef.current.querySelector('button:not(:disabled)'); if(f) f.focus(); },[open]);
+  const move=delta=>{ const b=menuRef.current?Array.from(menuRef.current.querySelectorAll('button:not(:disabled)')):[];
+    if(!b.length) return; let i=b.indexOf(document.activeElement); i=(i+delta+b.length)%b.length; b[i].focus(); };
+  return <span className="ab-menu-wrap" style={{position:'relative',display:'inline-flex'}}>
+    <button ref={btnRef} type="button" className="btn" aria-haspopup="true" aria-expanded={open}
+      aria-label={label} onClick={()=>setOpen(v=>!v)}>{label}<span aria-hidden="true"> ▾</span></button>
+    {open?<><div className="views-overlay" onClick={close}/>
+      <div ref={menuRef} className="panel dt-popover dt-copyas-menu ab-menu" role="menu" aria-label={label}
+        onClick={e=>e.stopPropagation()}
+        onKeyDown={e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); close(); }
+          else if(e.key==='ArrowDown'){ e.preventDefault(); move(1); }
+          else if(e.key==='ArrowUp'){ e.preventDefault(); move(-1); } }}>
+        {items.map((it,i)=><button key={i} type="button" role="menuitem" className="dt-copyas-item"
+          onClick={()=>{ try{it.run&&it.run();}catch(e){} close(); }}>{it.label}</button>)}
+      </div></>:null}
+  </span>;
+}
+
 /* ── ActionBar (F3) — fixed bulk-action bar shown when a selection exists ── */
 function ActionBar({count,actions,onClear}){
   const [confirm,setConfirm]=useState(null);
   useEffect(()=>{setConfirm(null);},[count]);
   return <div className="action-bar" role="toolbar" aria-label="Bulk actions">
-    <span className="ab-count mono">{count} selected</span>
-    {actions.map((a,i)=> confirm===i
+    <span className="ab-count mono" role="status" aria-live="polite">{count} selected</span>
+    {actions.map((a,i)=> a.menu
+      ? <AbMenu key={i} label={a.label} items={a.menu}/>
+      : confirm===i
       ? <span key={i} className="ab-confirm">
           <span>{typeof a.confirm==='string'?a.confirm:'Confirm?'}</span>
           <button className="btn" onClick={()=>{try{a.run&&a.run();}catch(e){} setConfirm(null);}}>Yes</button>
@@ -2077,6 +2118,39 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
       flash(adds.map(a=>a.key));
       clearSel();
       toast(adds.length+' added · Undo','ok',{duration:5000,action:{label:'Undo',run:()=>LS.set('watchlist',prev)}});
+    }});
+    // Feature 8 — READ-ONLY bulk verbs on the current selection. No mutations.
+    // 1) Export subset — the selected rows to CSV (works even where showCsv is off).
+    acts.push({label:'Export subset',run:()=>{
+      downloadCSV(String(csvName||tableId||'export')+'-subset.csv',rws,columns);
+      toast('Exported '+rws.length+' row'+(rws.length===1?'':'s'),'ok',{duration:1500});
+    }});
+    // 2) Copy as — Group B's serializers applied across the whole selection.
+    const copyBulk=txt=>{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt); };
+    const announce=fmt=>toast('Copied '+rws.length+' row'+(rws.length===1?'':'s')+' as '+fmt,'ok',{duration:1500});
+    acts.push({label:'Copy as',menu:[
+      {label:'CSV',run:()=>{ const h=columns.map(c=>JSON.stringify(c.label||c.key||c)).join(',');
+        copyBulk(h+'\n'+rws.map(r=>csvRowLine(columns,r)).join('\n')); announce('CSV'); }},
+      {label:'JSON',run:()=>{ copyBulk(JSON.stringify(rws)); announce('JSON'); }},
+      {label:'BQL filter',run:()=>{ copyBulk(rws.map(r=>'('+rowAsBQL(columns,r)+')').join(' OR ')); announce('BQL filter'); }},
+      {label:'Markdown',run:()=>{ const head='| '+columns.map(c=>String(c.label||c.key)).join(' | ')+' |';
+        const sep='| '+columns.map(()=>'---').join(' | ')+' |';
+        copyBulk([head,sep,...rws.map(r=>rowAsMarkdown(columns,r))].join('\n')); announce('Markdown'); }},
+    ]});
+    // 3) Pivot to filter — every field the selection SHARES a single scalar value on
+    // becomes a FilterCtx filter (funnels into the same fx used by cell-pivots).
+    acts.push({label:'Pivot to filter',run:()=>{
+      let added=0;
+      columns.forEach(c=>{
+        if(!c.key||String(c.key).startsWith('__')) return;
+        const vals=new Set();
+        for(const r of rws){ const v=r[c.key];
+          if(v==null||v===''||typeof v==='object'){ vals.add(' '); } else vals.add(String(v)); }
+        if(vals.size!==1) return;
+        const only=[...vals][0]; if(only===' ') return;
+        if(!fx.has(c.key,only)){ fx.add(c.key,only,(c.label||c.key)+': '+only); added++; }
+      });
+      toast(added?('Pivoted to '+added+' filter'+(added===1?'':'s')):'No shared values to pivot on',added?'ok':'err',{duration:1800});
     }});
     if(typeof bulkActions==='function'){
       (bulkActions(rws)||[]).forEach(a=>acts.push({...a,run:()=>{
@@ -7998,11 +8072,77 @@ function Shell(){
       <AiDrawer open={aiOpen} onClose={()=>setAiOpen(false)} initialQ={aiQ}/>
       <PeekDrawer/>
       <Toasts/>
+      <ShortcutsHelp/>
       <SnapshotWriter/>
       <DrawerShift aiOpen={aiOpen}/>
       <HoverDetail/>
     </div>
   </PowerProvider>;
+}
+
+/* ── ShortcutsHelp (Feature 10) — global "?" opens a focus-trapped modal listing
+   every app shortcut, including the verbs shipped across this plan. Esc closes and
+   returns focus to wherever it was. Plain-text rows, neutral (no color coding). ── */
+const SHORTCUTS=[
+  ['j  /  k','Move the row cursor down / up'],
+  ['g g  /  G','Jump to the first / last row'],
+  ['Enter','Open the focused row detail'],
+  ['x','Toggle selection on the cursor row'],
+  ['y','Copy the cursor row as JSON'],
+  ['/','Focus the table search'],
+  ['Shift + click','Add a column to the multi-sort (header)'],
+  ['Menu  /  Shift + F10','Pivot on the focused cell'],
+  ['Copy as…','Copy row / selection as CSV, JSON, BQL, or Markdown'],
+  ['Copy link','Copy a deep link to the current view'],
+  ['⌘ K','Open the command palette'],
+  ['⌘ I','Toggle the AI assistant'],
+  ['Esc','Close · clear selection'],
+  ['?','Show this shortcut help'],
+];
+function ShortcutsHelp(){
+  const [open,setOpen]=useState(false);
+  const dialogRef=useRef(null),returnRef=useRef(null);
+  useEffect(()=>{
+    const onKey=e=>{
+      if(e.key!=='?'||e.metaKey||e.ctrlKey||e.altKey) return;
+      const t=e.target;
+      if(t&&t.closest&&t.closest('input,textarea,select,[contenteditable="true"]')) return;
+      e.preventDefault();
+      returnRef.current=document.activeElement;
+      setOpen(true);
+    };
+    window.addEventListener('keydown',onKey);
+    return ()=>window.removeEventListener('keydown',onKey);
+  },[]);
+  const close=useCallback(()=>{ setOpen(false);
+    const r=returnRef.current; if(r&&r.focus){ try{r.focus();}catch(e){} } },[]);
+  useEffect(()=>{ if(!open||!dialogRef.current) return;
+    const f=dialogRef.current.querySelector('button'); if(f) f.focus(); },[open]);
+  if(!open) return null;
+  const onKeyDown=e=>{
+    if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); close(); return; }
+    if(e.key==='Tab'){
+      const f=dialogRef.current?Array.from(dialogRef.current.querySelectorAll('button,[href],[tabindex]:not([tabindex="-1"])')):[];
+      if(!f.length) return;
+      const first=f[0],last=f[f.length-1];
+      if(e.shiftKey&&document.activeElement===first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey&&document.activeElement===last){ e.preventDefault(); first.focus(); }
+    }
+  };
+  return <div className="sc-scrim" onClick={close}>
+    <div ref={dialogRef} className="sc-overlay panel" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts"
+      onClick={e=>e.stopPropagation()} onKeyDown={onKeyDown}>
+      <div className="sc-head">
+        <h2 className="sc-title">Keyboard shortcuts</h2>
+        <button className="btn btn-ghost" onClick={close} aria-label="Close shortcut help">Close</button>
+      </div>
+      <dl className="sc-list">
+        {SHORTCUTS.map(([k,d],i)=><div key={i} className="sc-row">
+          <dt><span className="kbd">{k}</span></dt><dd>{d}</dd>
+        </div>)}
+      </dl>
+    </div>
+  </div>;
 }
 
 function App(){
