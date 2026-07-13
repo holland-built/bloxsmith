@@ -206,8 +206,8 @@ table.dt thead th .sort-ind{color:var(--text-faint);margin-left:var(--s1);}
    shown only once 2+ sort keys are active (never color-only — the number itself
    IS the signal, same text badge in both themes). */
 table.dt thead th .sort-order{display:inline-flex;align-items:center;justify-content:center;
-  width:13px;height:13px;border-radius:50%;background:var(--accent);color:#fff;
-  font-size:9px;font-weight:700;margin-right:2px;vertical-align:1px;}
+  width:13px;height:13px;border-radius:50%;background:var(--accent);color:var(--accent-contrast);
+  font-size:var(--t11);font-weight:700;margin-right:2px;vertical-align:1px;}
 table.dt tbody td{
   padding:0 var(--s3);height:var(--row-h);
   border-bottom:1px solid var(--border);
@@ -1263,7 +1263,7 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
   return <tr id={rowId||undefined}
     className={(clickable?'clickable':'')+(isCursor?' cursor':'')+(isFlash?' flash':'')}
     aria-selected={isCursor?'true':undefined}
-    role={clickable?'button':undefined} tabIndex={clickable?0:undefined}
+    role="row" tabIndex={clickable?0:undefined}
     onClick={clickable?()=>rowApi.current.activate(rkey):undefined}
     onKeyDown={clickable?e=>{if(e.key==='Enter')rowApi.current.activate(rkey);}:undefined}>
     {showDiff?<td className="dt-diff mono">
@@ -2338,6 +2338,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
       setRenderLimit(rl=>rl<sorted.length?Math.min(sorted.length,rl+300):rl); };
   return <div ref={wrapRef}
     tabIndex={id?0:undefined}
+    role={id?'grid':undefined}
     aria-activedescendant={(id&&cursor>=0)?rowIdOf(cursor):undefined}
     onMouseEnter={id&&power?()=>power.setActive(id):undefined}
     onFocus={id&&power?()=>power.setActive(id):undefined}
@@ -3718,14 +3719,29 @@ function showHoverDetail(d,clientX,clientY){
   el.classList.add('show'); moveHoverDetail(clientX,clientY);
 }
 function hideHoverDetail(){ if(_hdEl) _hdEl.classList.remove('show'); }
+/* hoverDescText — flatten a HoverDetail descriptor's {title,rows} into one plain
+   string. The visual hovercard (.hoverdetail) is aria-hidden, so bind() also
+   stamps this as aria-description on the bound control — the same explanatory
+   copy is then in the accessibility tree for screen-reader users. */
+function hoverDescText(d){
+  if(!d) return '';
+  const rows=Array.isArray(d.rows)?d.rows:[];
+  const body=rows.map(r=>String(r[0])+': '+String(r[1])).join('. ');
+  const title=d.title!=null?String(d.title):'';
+  return (title?title+'. ':'')+body;
+}
 function useHoverDetail(){
-  const bind=useCallback(d=>({
+  const bind=useCallback(d=>{
+    const desc=hoverDescText(d);
+    return {
     onMouseEnter:e=>showHoverDetail(d,e.clientX,e.clientY),
     onMouseMove:e=>{ if(_hdEl&&_hdEl.classList.contains('show')) moveHoverDetail(e.clientX,e.clientY); },
     onMouseLeave:hideHoverDetail,
     onFocus:e=>{const r=e.currentTarget.getBoundingClientRect();showHoverDetail(d,r.left+r.width/2,r.bottom);},
     onBlur:hideHoverDetail,
-  }),[]);
+    ...(desc?{'aria-description':desc}:{}),
+    };
+  },[]);
   return {bind};
 }
 
