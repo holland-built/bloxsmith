@@ -346,6 +346,14 @@ table.dt tbody tr.cursor .row-copyas-wrap,
 .pivot-cell:hover{color:var(--text);background:var(--accent-dim);}
 .pivot-cell.active{background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent-text);color:var(--accent-text);}
 .pivot-cell:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+/* ── Group C/2: pivot-on-cell — ordinary (non-.pivot-cell) DataTable cells get a
+   right-click / Shift+F10 "Filter by this value" affordance, funneling into the
+   SAME fx.toggle used above. position:relative anchors the tiny action menu. ── */
+.dt-cell-pivot{position:relative;cursor:context-menu;}
+.dt-cell-pivot:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+.dt-cellpivot-menu{top:calc(100% + 4px);left:0;min-width:180px;padding:var(--s1);}
+.dt-cellpivot-item{display:block;width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-cellpivot-item:hover,.dt-cellpivot-item:focus-visible{background:var(--hover);}
 .filter-bar{position:sticky;top:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);padding:var(--s2) var(--s4);background:var(--surface);border-bottom:1px solid var(--border);}
 .filter-bar-label{font-size:var(--t11);color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;}
 .filter-bar .chip.active{cursor:pointer;color:var(--accent-text);background:var(--accent-dim);border-color:var(--accent-text);height:22px;}
@@ -1150,6 +1158,15 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
     {id:'md',label:'Markdown',build:()=>rowAsMarkdown(cols,r)},
   ];
   const copyAsFormat=fmt=>{ copyText(fmt.build()); toast('Copied as '+fmt.label,'ok',{duration:1500}); closeCopyAs(); };
+  // Group C/2 — pivot-on-cell: ordinary (non-.pivot-cell) data cells get a tiny
+  // "Filter by this value" action, funneling into the SAME fx.toggle/FilterCtx
+  // the .pivot-cell columns already use (~1188), reached via right-click
+  // (any row) or Shift+F10/Menu key (non-clickable rows only — clickable rows
+  // keep Tab/Enter for row activation; there the affordance is mouse-only so
+  // it never fights the row's own keyboard gesture).
+  const [pivotMenuCi,setPivotMenuCi]=useState(-1);
+  const pivotCellRefs=useRef({});
+  const closePivotMenu=ci=>{ setPivotMenuCi(-1); const el=pivotCellRefs.current[ci]; if(el&&el.focus) el.focus(); };
   return <tr id={rowId||undefined}
     className={(clickable?'clickable':'')+(isCursor?' cursor':'')+(isFlash?' flash':'')}
     aria-selected={isCursor?'true':undefined}
@@ -1187,11 +1204,49 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
       // clickable (row-click already owns that gesture — see DataTable's onRowClick)
       // and on pivot cells (their click already toggles a cross-filter).
       const copyCell=(clickable||c.pivot)?undefined:e=>{ e.stopPropagation(); copyText(raw==null?'':String(raw)); toast('Copied','ok',{duration:1500}); };
+      // canCellPivot: any ordinary (non-.pivot-cell) cell with a real value.
+      // Right-click always offers the action; the keyboard path (Shift+F10/Menu
+      // key + a focusable cell) is scoped to non-clickable rows (see closePivotMenu note above).
+      const canCellPivot=!c.pivot&&raw!=null&&raw!=='';
+      const cellKeyboardPivot=canCellPivot&&!clickable;
+      const cellMenuOpen=pivotMenuCi===ci;
+      const openPivotMenu=e=>{ e.preventDefault(); e.stopPropagation(); setPivotMenuCi(ci); };
+      const cellPivotOn=canCellPivot&&fx.has(c.key,String(raw));
+      const doCellPivot=e=>{
+        if(e) e.stopPropagation();
+        const pv=String(raw), lbl=(c.label||c.key)+': '+pv;
+        const wasOn=fx.has(c.key,pv);
+        fx.toggle(c.key,pv,lbl);
+        closePivotMenu(ci);
+        if(!wasOn) toast('Filtered to '+lbl,'ok',{duration:1500});
+      };
       const isLast=ci===cols.length-1;
       return <td key={c.key} title={c.pivot?undefined:tip}
-        className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')+(copyCell?' dt-copyable':'')}
-        style={st} onClick={copyCell}>
+        ref={canCellPivot?(el=>{pivotCellRefs.current[ci]=el;}):undefined}
+        className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')+(copyCell?' dt-copyable':'')+(canCellPivot?' dt-cell-pivot':'')}
+        style={st} onClick={copyCell}
+        onContextMenu={canCellPivot?openPivotMenu:undefined}
+        tabIndex={cellKeyboardPivot?0:undefined}
+        onKeyDown={cellKeyboardPivot?e=>{
+          if((e.shiftKey&&e.key==='F10')||e.key==='ContextMenu'){ e.preventDefault(); e.stopPropagation(); setPivotMenuCi(ci); }
+        }:undefined}>
         {content}
+        {cellMenuOpen?<><div className="views-overlay" onClick={e=>{ e.stopPropagation(); closePivotMenu(ci); }}/>
+          <div className="panel dt-popover dt-cellpivot-menu" role="menu" aria-label={'Actions for '+String(raw)}
+            onClick={e=>e.stopPropagation()}
+            onKeyDown={e=>{
+              // stopPropagation on EVERY key while the menu is open — without it,
+              // Enter bubbles to PowerProvider's global keydown listener (~936,
+              // which only excludes input/textarea/select, not popover buttons)
+              // and both fires this menu's Enter-activates-button AND the
+              // global "open peek for cursor row" shortcut at once.
+              if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closePivotMenu(ci); return; }
+              e.stopPropagation();
+            }}>
+            <button type="button" role="menuitem" className="dt-cellpivot-item" autoFocus onClick={doCellPivot}>
+              {(cellPivotOn?'Remove filter · ':'Filter by this value · ')}{String(raw)}
+            </button>
+          </div></>:null}
         {isLast?<span className="row-copyas-wrap">
           <button type="button" className="row-copy-btn" title="Copy row as JSON"
             aria-label="Copy row as JSON" onClick={copyRow}>⧉</button>
@@ -1671,6 +1726,69 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
 
   // BQL search schema: filterKeys drives freeTextKeys (Phase A precedence); searchSchema deep-merges over auto-derived.
   const _schema=useMemo(()=>deriveSchema(columns,base,{...(searchSchema||{}),filterKeys}),[columns,base,searchSchema,filterKeys]);
+
+  // Group C/3 — facet <-> BQL two-way sync. ONE query state: FilterCtx (fx) stays
+  // the cross-table source of truth (facet click still funnels into fx.toggle,
+  // unchanged — see filter-facets.spec.ts), and this table's own search text is
+  // kept in sync alongside it, both directions:
+  //   bqlHasEquality(field,value) — does the CURRENT typed query already assert
+  //     field=value/field:value? (resolves schema aliases so `sev:` still lights
+  //     up a "severity" facet group). Used as an OR alongside fx.has() so typing
+  //     BQL marks the matching facet item active even before any click.
+  //   mirrorFacetToken(field,value,adding) — after a facet click flips fx, also
+  //     add/remove the equivalent `field=value` token in the search box so the
+  //     box always shows valid BQL the parser understands. Values the tokenizer
+  //     can't represent unquoted (whitespace/comma/parens/quotes) skip the
+  //     mirror — the fx chip alone still filters, same as before this feature.
+  const bqlHasEquality=useCallback((field,value)=>{
+    const toks=parseQuery(filter);
+    const fieldLc=String(field).toLowerCase(), valLc=String(value).toLowerCase();
+    const aliases=_schema.aliases||{};
+    return toks.some(t=>{
+      if(t.kind!=='field'||t.negate) return false;
+      if(t.op!=='='&&t.op!==':') return false;
+      const canon=(aliases[t.field]!=null)?aliases[t.field]:t.field;
+      return canon===fieldLc && String(t.value).toLowerCase()===valLc;
+    });
+  },[filter,_schema]);
+  const SAFE_FACET_VAL=/^[^\s,()"]+$/;
+  // Tracks which "field=value" text tokens THIS mirror wrote on the facet's
+  // behalf (fieldLc\0valLc -> original-case {field,value}) — so the reconcile
+  // effect below only ever cleans up tokens IT added, never a token the user
+  // typed by hand (that one-way "typed BQL lights up a facet" read, point (a)
+  // above, must never get silently rewritten out from under them).
+  const mirroredFacetTokens=useRef(new Map());
+  const mirrorFacetToken=useCallback((field,value,adding)=>{
+    if(!SAFE_FACET_VAL.test(String(value))) return;
+    const key=String(field).toLowerCase()+' '+String(value).toLowerCase();
+    if(adding) mirroredFacetTokens.current.set(key,{field,value:String(value)});
+    else mirroredFacetTokens.current.delete(key);
+    const toks=parseQuery(filter);
+    const fieldLc=String(field).toLowerCase(), valLc=String(value).toLowerCase();
+    const kept=toks.filter(t=>!(t.kind==='field'&&!t.negate&&(t.op==='='||t.op===':')&&t.field===fieldLc&&String(t.value).toLowerCase()===valLc));
+    let rebuilt=kept.map(t=>t.kind==='bool'?t.raw:(t.negate?'-':'')+t.raw).join(' ');
+    if(adding) rebuilt=(rebuilt?rebuilt+' ':'')+field+'='+value;
+    setFilter(rebuilt);
+  },[filter,setFilter]);
+  // Reconcile: a chip we mirrored can also be removed some OTHER way (the
+  // FilterBar × / "Clear all", which call fx.remove/fx.clear directly, not
+  // through mirrorFacetToken) — strip its text token too, so the query box
+  // never shows a stale filter the chip row no longer backs.
+  useEffect(()=>{
+    const cur=mirroredFacetTokens.current;
+    if(!cur.size) return;
+    const stale=[];
+    cur.forEach((pair,key)=>{ if(!fx.has(pair.field,pair.value)) stale.push(key); });
+    if(!stale.length) return;
+    stale.forEach(key=>cur.delete(key));
+    const staleLc=stale.map(key=>key.split(' '));
+    const toks=parseQuery(filter);
+    const kept=toks.filter(t=>{
+      if(t.kind!=='field'||t.negate||(t.op!=='='&&t.op!==':')) return true;
+      return !staleLc.some(([f,v])=>t.field===f&&String(t.value).toLowerCase()===v);
+    });
+    setFilter(kept.map(t=>t.kind==='bool'?t.raw:(t.negate?'-':'')+t.raw).join(' '));
+  },[globalFilters]); // eslint-disable-line
 
   // F5 facets: pivot columns are this table's designated cross-filterable fields
   // (same set the pivot-cell already scopes on). Counts computed from `base`
@@ -2173,11 +2291,16 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
                 : facetData.map(g=><div key={g.key} className="dt-facet-group">
                     <div className="dt-facet-label">{g.label}</div>
                     {g.values.map(fv=>{
-                      const on=fx.has(g.key,fv.v);
+                      const on=fx.has(g.key,fv.v)||bqlHasEquality(g.key,fv.v);
                       const lbl=g.label+': '+fv.v;
                       return <button key={fv.v} type="button" className={'dt-facet-item'+(on?' active':'')}
                         aria-pressed={on} aria-label={(on?'Remove filter ':'Filter to ')+lbl}
-                        onClick={()=>fx.toggle(g.key,fv.v,lbl)}>
+                        onClick={()=>{
+                          const adding=!fx.has(g.key,fv.v);
+                          fx.toggle(g.key,fv.v,lbl);
+                          mirrorFacetToken(g.key,fv.v,adding);
+                          if(adding) toast('Filtered to '+lbl,'ok',{duration:1500});
+                        }}>
                         <span className="dt-facet-val">{fv.v}</span>
                         <span className="dt-facet-count mono">{fv.n}</span>
                       </button>;
