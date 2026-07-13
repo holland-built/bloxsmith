@@ -1328,10 +1328,10 @@ function FilterProvider({children}){
      • a relative preset token  — `15m` / `1h` / `24h` / `7d`  (window = now-N…now)
      • an absolute epoch window — `<fromMs>-<toMs>`            (from capture-to-zoom)  */
 const TIME_PRESETS=[
-  {k:'15m',label:'15m',ms:15*60000},
-  {k:'1h', label:'1h', ms:3600000},
-  {k:'24h',label:'24h',ms:86400000},
-  {k:'7d', label:'7d', ms:7*86400000},
+  {k:'15m',label:'15m',long:'15 minutes',ms:15*60000},
+  {k:'1h', label:'1h', long:'hour',ms:3600000},
+  {k:'24h',label:'24h',long:'24 hours',ms:86400000},
+  {k:'7d', label:'7d', long:'7 days',ms:7*86400000},
 ];
 /* timeWindowFor(token) → {from,to,label}|null. now-relative for presets, absolute
    for `<from>-<to>`. Returns null for unset/garbage → callers fall back to their
@@ -1372,13 +1372,17 @@ function TimeProvider({children}){
    pressed preset but the reset ("All") still clears it. Optional — unset = default. */
 function TimeRangeControl(){
   const {token,setRange}=useTimeRange();
-  return <div className="timerange" role="group" aria-label="Time range">
+  const {bind}=useHoverDetail();
+  return <div className="timerange" role="group" aria-label="Time range"
+    {...bind({title:'Time range',rows:[['What it does','Filters every chart & table on the page to a recent window'],['Presets','Last 15m · 1h · 24h · 7d, or All for no limit']]})}>
     {TIME_PRESETS.map(p=>
       <button key={p.k} type="button" className="tr-preset" data-preset={p.k}
         aria-pressed={token===p.k?'true':'false'}
         aria-label={'Last '+p.label}
+        {...bind({title:'Time range · last '+p.long,rows:[['What it does','Filters every chart & table to the last '+p.long],['Click again',token===p.k?'Clears it (show all time)':'Applies this window']]})}
         onClick={()=>setRange(token===p.k?null:p.k)}>{p.label}</button>)}
     <button type="button" className="tr-reset" aria-label="Clear time range (show all)"
+      {...bind({title:'Time range · All',rows:[['What it does','Removes the time filter — show data from all time'],['Enabled','Only when a range is active']]})}
       disabled={!token} onClick={()=>setRange(null)}>All</button>
   </div>;
 }
@@ -8831,6 +8835,7 @@ function CommandPalette({open,onClose}){
 
 /* ViewsMenu — topbar saved-views dropdown (GET/POST/DELETE /api/views). */
 function ViewsMenu(){
+  const {bind}=useHoverDetail();
   const [open,setOpen]=useState(false);
   const [views,setViews]=useState([]);
   const [err,setErr]=useState('');
@@ -8861,7 +8866,7 @@ function ViewsMenu(){
     .sort((a,b)=>{if(!a)return 1;if(!b)return -1;return a.localeCompare(b);});
   return <span className="views-slot">
     <button className="btn" aria-haspopup="menu" aria-expanded={open}
-      title="Saved views" onClick={()=>setOpen(o=>!o)}>Views</button>
+      {...bind({title:'Saved views',rows:[['What','Named snapshots of your filters & layout'],['Add','"Save current…" inside this menu']]})} onClick={()=>setOpen(o=>!o)}>Views</button>
     {open&&<>
       <div className="views-overlay" onClick={()=>setOpen(false)}/>
       <div className="dt-popover views-menu" role="menu">
@@ -8901,6 +8906,7 @@ function ViewsMenu(){
    "Watch current query…" saves whatever BQL query is in the current tab's sq=
    hash param; clicking a watch re-applies it via nav (the same sq= surface). */
 function WatchMenu(){
+  const {bind}=useHoverDetail();
   const [open,setOpen]=useState(false);
   const [watches,setWatches]=useState(()=>readWatches());
   const {data}=useData();
@@ -8932,7 +8938,7 @@ function WatchMenu(){
   return <span className="views-slot watch-slot">
     <button ref={btnRef} className="btn" aria-haspopup="menu" aria-expanded={open}
       aria-label={'Watches'+(watches.length?', '+watches.length+' saved':'')}
-      title="Watches — saved queries with a live match count" onClick={()=>setOpen(o=>!o)}>
+      {...bind({title:'Watches',rows:[['What','Saved searches with a live match count'],['Add','Search a table, then save the query']]})} onClick={()=>setOpen(o=>!o)}>
       Watches{watches.length?<span className="watch-badge mono" aria-hidden="true">{watches.length}</span>:null}
     </button>
     {open&&<>
@@ -9013,6 +9019,7 @@ function DensityToggle(){
    unacked-critical threats + subnets over 85% util + offline hosts. Crit-tinted
    when >0, hidden at 0. Click navigates to the dominant contributor. */
 function ProblemsBadge(){
+  const {bind}=useHoverDetail();
   const {data}=useData();
   const sec=useApi('/api/hub/security');
   const acks=LS.get('acks',{});
@@ -9025,7 +9032,7 @@ function ProblemsBadge(){
   if(total<=0) return null;
   const go=()=>{ if(unackedCrit>0) nav('security'); else if(hotSubs>0) nav('network'); else nav('infra'); };
   return <button className="problems-badge crit" onClick={go}
-    title={unackedCrit+' unacked critical · '+hotSubs+' subnets >85% · '+offline+' offline'}
+    {...bind({title:total+' issues need attention',rows:[['Unacked critical',unackedCrit],['Subnets >85% util',hotSubs],['Hosts offline',offline],['Click','Jumps to the biggest contributor']]})}
     aria-label={total+' problems need attention'}>
     <span className="mono">● {total}</span> issues
   </button>;
@@ -9106,9 +9113,11 @@ function ViewOptions(){
     window.addEventListener('keydown',onKey);
     return ()=>window.removeEventListener('keydown',onKey);
   },[open]);
+  const {bind}=useHoverDetail();
   return <span className="view-options">
     <button className="kbd" aria-haspopup="menu" aria-expanded={open}
-      aria-label="View options" title="View options — density, theme, wallboard"
+      aria-label="View options"
+      {...bind({title:'View options',rows:[['Density','Compact ↔ comfortable rows'],['Theme','Light ↔ dark'],['Wallboard','Full-screen NOC display (#wall)']]})}
       onClick={()=>setOpen(o=>!o)}>⚙</button>
     {open&&<>
       <div className="views-overlay" onClick={()=>setOpen(false)}/>
@@ -9142,9 +9151,9 @@ function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
     <div className="topbar-right">
       <span className="tb-group">{fresh}<TimeRangeControl/></span>
       <span className="tb-group"><ProblemsBadge/></span>
-      <span className="tb-group"><button className={"kbd ai-trigger"+(aiOpen?" ai-trigger--open":"")} onClick={onAi} aria-label="Open AI assistant" aria-expanded={aiOpen} title="AI assistant — ⌘I / Ctrl-I"><span>Ask AI</span><span className="mono">⌘I</span></button></span>
+      <span className="tb-group"><button className={"kbd ai-trigger"+(aiOpen?" ai-trigger--open":"")} onClick={onAi} aria-label="Open AI assistant" aria-expanded={aiOpen} {...bind({title:'Ask AI  ·  ⌘I',rows:[['What','Natural-language assistant over your live NOC data'],['Shortcut','⌘I / Ctrl-I']]})}><span>Ask AI</span><span className="mono">⌘I</span></button></span>
       <span className="tb-group tools-slot"></span>
-      <span className="tb-group"><button className="kbd" onClick={onPalette} aria-label="Open command palette" title="Command palette"><span className="mono">⌘K</span></button><ViewOptions/></span>
+      <span className="tb-group"><button className="kbd" onClick={onPalette} aria-label="Open command palette" {...bind({title:'Command palette  ·  ⌘K',rows:[['What','Jump to any tab or run an action instantly'],['Shortcut','⌘K / Ctrl-K']]})}><span className="mono">⌘K</span></button><ViewOptions/></span>
       <span className="tb-group"><AccountSlot/></span>
     </div>
   </header>;
