@@ -614,6 +614,21 @@ class FrontendStructureTests(unittest.TestCase):
             self.assertIn('<PageHeader title="' + title + '"', body,
                           f"{fn} must render <PageHeader title=\"{title}\" .../>")
 
+    def test_marris_tabs_carry_hover_descriptions(self):
+        # Provision / Drift / Self-Service (Marris provisioning surface) each expose
+        # plain-English hover descriptions via the shared useHoverDetail() popup —
+        # never native title=. Assert each tab pulls bind() from useHoverDetail and
+        # attaches a bound description with a plain-English "What it" row.
+        for fn in ("ProvisionTab", "DriftTab", "SelfServiceTab"):
+            body = self.html[self.html.index("function " + fn + "("):]
+            body = body[:body.index("\nfunction ", 1)]
+            self.assertIn("const {bind}=useHoverDetail();", body,
+                          f"{fn} must pull bind from useHoverDetail()")
+            self.assertIn("...bind({title:", body,
+                          f"{fn} must attach at least one bind() hover description")
+            self.assertIn("What it", body,
+                          f"{fn} hover descriptions must be plain-English ('What it does/means')")
+
     def test_auth_api_endpoints(self):
         for ep in ("/api/switch-account", "/api/vault/init", "/api/vault/unlock"):
             self.assertContains(ep, f"auth endpoint {ep} missing")
