@@ -1221,6 +1221,42 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("if(colsBtnRef.current) colsBtnRef.current.focus();",
                              "closing the Cols popover must return focus to the Cols button")
 
+    def test_view_state_hash_sync(self):
+        """Feature B1 — shareable-URL view state: DataTable mirrors its own sort,
+        hidden columns, and (when it owns its own search box) filter string to the
+        hash, namespaced `<tableId>.sort` / `<tableId>.cols` / `<tableId>.q`, and
+        restores them from the hash on mount — so 'Copy link to this view' (F3)
+        reproduces the exact table view, not just the tab. Extends, not forks: the
+        pre-existing `f=` pivot mirror (FilterProvider) and `sq=` subnets mirror
+        (NetworkTab) are untouched."""
+        self.assertContains("hashParams[id+'.sort']", "sort restore-from-hash read missing")
+        self.assertContains("hashParams[id+'.q']", "filter restore-from-hash read missing")
+        self.assertContains("hashParams[id+'.cols']", "hidden-columns restore-from-hash read missing")
+        self.assertContains("const key=id+'.sort';", "sort mirror-to-hash write missing")
+        self.assertContains("const key=id+'.cols';", "hidden-columns mirror-to-hash write missing")
+        self.assertContains("const key=id+'.q';", "filter mirror-to-hash write missing")
+        # Controlled tables (subnets' external sq= mirror) must be left alone —
+        # DataTable's own filter mirror only fires when it owns the search box.
+        self.assertContains("if(!id||filterControlled||!filterable) return;",
+                             "filter hash mirror must skip externally-controlled (onQuery) tables")
+
+    def test_copy_as_format_menu(self):
+        """Feature B6 — copy-as: extends the F1 row-copy affordance (⧉, unchanged)
+        with a second 'Copy as…' trigger opening a 4-format menu (CSV/JSON/BQL
+        filter/Markdown), keyboard-reachable (arrow+Enter, Esc returns focus to
+        the trigger), announced via the shared toast bus."""
+        self.assertContains("row-copyas-wrap", "copy-as wrapper (holds both row-copy buttons) missing")
+        self.assertContains('aria-label="Copy row as…"', "copy-as menu trigger aria-label missing")
+        self.assertContains('aria-label="Copy row as JSON"', "original F1 row-copy button must be unchanged")
+        self.assertContains('role="menu" aria-label="Copy row as"', "copy-as menu role/label missing")
+        self.assertContains("function rowAsCSV(columns,row)", "rowAsCSV serializer missing")
+        self.assertContains("function rowAsBQL(columns,row)", "rowAsBQL serializer missing")
+        self.assertContains("function rowAsMarkdown(columns,row)", "rowAsMarkdown serializer missing")
+        self.assertContains("toast('Copied as '+fmt.label", "copy-as must announce via the toast bus")
+        self.assertContains("moveCopyAsFocus", "arrow-key menu navigation missing")
+        self.assertContains("if(copyAsBtnRef.current) copyAsBtnRef.current.focus();",
+                             "closing the copy-as menu must return focus to its trigger")
+
 
 class OverviewRedesignTests(unittest.TestCase):
     """Static source assertions for the v1 (Bloomberg-grid) Overview rebuild —
