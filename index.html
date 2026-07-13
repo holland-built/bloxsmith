@@ -6481,6 +6481,7 @@ const RTYPE_HINTS={
    never violates hooks-before-return. */
 function SelfServiceTab(){
   const {locked}=useData();
+  const {bind}=useHoverDetail();
   const zonesApi=useApi('/api/dns/zones');
   const [mode,setMode]=useState('allocate'); // 'allocate' | 'dns' | 'ipman' | 'inventory'
 
@@ -6635,8 +6636,8 @@ function SelfServiceTab(){
           <button className="btn" disabled={editBusy} onClick={cancelEdit}>Cancel</button>
         </span>
       :<span style={{display:'flex',gap:6}}>
-          <button className="btn" onClick={()=>startEdit(r)}>Edit</button>
-          <button className="btn" disabled={deletingId===r.id} onClick={()=>deleteRecord(r)}>{deletingId===r.id?'Deleting…':'Delete'}</button>
+          <button className="btn" onClick={()=>startEdit(r)} {...bind({title:'Edit record',rows:[['What it does','Modify this record in place — change its value, TTL, comment, or disable it.']]})}>Edit</button>
+          <button className="btn" disabled={deletingId===r.id} onClick={()=>deleteRecord(r)} {...bind({title:'Delete record',rows:[['What it does','Permanently remove this DNS record from the zone.']]})}>{deletingId===r.id?'Deleting…':'Delete'}</button>
         </span>},
   ];
 
@@ -6663,7 +6664,7 @@ function SelfServiceTab(){
     {key:'comment',label:'Comment',render:v=>v||'—'},
     {key:'state',label:'State',render:v=>StateText(v)},
     {key:'actions',label:'',render:(_,r)=>
-      <button className="btn" disabled={releasingId===r.id} onClick={()=>releaseAddress(r)}>{releasingId===r.id?'Releasing…':'Release'}</button>},
+      <button className="btn" disabled={releasingId===r.id} onClick={()=>releaseAddress(r)} {...bind({title:'Release address',rows:[['What it does','Return this address to the free pool so it can be allocated again.']]})}>{releasingId===r.id?'Releasing…':'Release'}</button>},
   ];
 
   const invAddrCols=[
@@ -6710,51 +6711,64 @@ function SelfServiceTab(){
   return <div className="page fadein">
     <PageHeader title="Self-Service" subtitle="Requests users have queued for address space"/>
     <div className="dly-seg" role="group" aria-label="Self-service mode" style={{marginBottom:'var(--s3)'}}>
-      <button className={'dly-seg-btn'+(mode==='allocate'?' on':'')} onClick={()=>setMode('allocate')}>Allocate</button>
-      <button className={'dly-seg-btn'+(mode==='dns'?' on':'')} onClick={()=>setMode('dns')}>DNS Records</button>
-      <button className={'dly-seg-btn'+(mode==='ipman'?' on':'')} onClick={()=>setMode('ipman')}>IP Manager</button>
-      <button className={'dly-seg-btn'+(mode==='inventory'?' on':'')} onClick={()=>setMode('inventory')}>Inventory</button>
+      <button className={'dly-seg-btn'+(mode==='allocate'?' on':'')} onClick={()=>setMode('allocate')}
+        {...bind({title:'Allocate',rows:[['What it does','Grab the next free address (or addresses) from a subnet — or from whatever subnet matches a tag — and optionally create a DNS record in one step.']]})}>Allocate</button>
+      <button className={'dly-seg-btn'+(mode==='dns'?' on':'')} onClick={()=>setMode('dns')}
+        {...bind({title:'DNS Records',rows:[['What it does','Create, edit, or delete individual DNS records (A/AAAA/CNAME/MX/TXT/PTR/SRV) inside a chosen zone.']]})}>DNS Records</button>
+      <button className={'dly-seg-btn'+(mode==='ipman'?' on':'')} onClick={()=>setMode('ipman')}
+        {...bind({title:'IP Manager',rows:[['What it does','See how full a subnet is, and release addresses you no longer need back to the free pool.']]})}>IP Manager</button>
+      <button className={'dly-seg-btn'+(mode==='inventory'?' on':'')} onClick={()=>setMode('inventory')}
+        {...bind({title:'Inventory',rows:[['What it does','Read-only drilldown: browse IP spaces → blocks → subnets → addresses, and DNS zones → records. Nothing is changed.']]})}>Inventory</button>
     </div>
     {mode==='allocate'?<div className="grid">
       <Panel title="Request">
         <div className="form-col">
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Subnet ID',rows:[['What it does','Allocate from this exact subnet. Leave blank to instead find a subnet by tag (key/value below).']]})}>
             Subnet ID (or leave blank and use tag key/value below)
             <input className="vault-in" value={subnetId} onChange={e=>setSubnetId(e.target.value)} placeholder="subnet id"/>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Tag key',rows:[['What it does','Find a subnet by a tag name instead of an ID — e.g. region, environment, or status. Pairs with Tag value below.']]})}>
             Tag key
             <input className="vault-in" value={tagKey} onChange={e=>setTagKey(e.target.value)} placeholder="env"/>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Tag value',rows:[['What it does','The value that tag must equal — e.g. prod. The next free address is taken from the first subnet whose tag matches.']]})}>
             Tag value
             <input className="vault-in" value={tagValue} onChange={e=>setTagValue(e.target.value)} placeholder="prod"/>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Count',rows:[['What it does','How many next-available addresses to allocate in this one request.']]})}>
             Count
             <input className="vault-in" type="number" min="1" value={count} onChange={e=>setCount(e.target.value)}/>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Name',rows:[['What it does','Label recorded on the allocation — who requested it or what it is for (the Owner).']]})}>
             Name
             <input className="vault-in" value={name} onChange={e=>setName(e.target.value)} placeholder="requester / purpose"/>
           </label>
-          <label className="check-row">
+          <label className="check-row"
+            {...bind({title:'Create DNS record',rows:[['What it does','Also create a DNS record pointing at the address you just allocated, in the same step.']]})}>
             <input type="checkbox" checked={dnsOn} onChange={e=>setDnsOn(e.target.checked)}/>
             <span>Create DNS record</span>
           </label>
           {dnsOn?<div style={{display:'flex',flexDirection:'column',gap:'var(--s3)',paddingLeft:'var(--s4)'}}>
-            <label className="mono field-lbl">
+            <label className="mono field-lbl"
+              {...bind({title:'DNS zone',rows:[['What it does','The forward zone the new record is created in.']]})}>
               Zone
               <select className="vault-in" value={zoneId} onChange={e=>setZoneId(e.target.value)}>
                 <option value="">{zonesApi.loading?'Loading zones…':'Select a zone'}</option>
                 {zones.map(z=><option key={z.id} value={z.id}>{z.fqdn}</option>)}
               </select>
             </label>
-            <label className="mono field-lbl">
+            <label className="mono field-lbl"
+              {...bind({title:'Record name',rows:[['What it does','Host label within the zone — e.g. "web" becomes web.your-zone.']]})}>
               Record name
               <input className="vault-in" value={recName} onChange={e=>setRecName(e.target.value)} placeholder="host"/>
             </label>
-            <label className="mono field-lbl">
+            <label className="mono field-lbl"
+              {...bind({title:'Record type',rows:[['A','name → IPv4 address'],['AAAA','name → IPv6 address'],['CNAME','alias → another name'],['TXT','free text (SPF, verification)']]})}>
               Type
               <select className="vault-in" value={recType} onChange={e=>setRecType(e.target.value)}>
                 <option value="A">A</option>
@@ -6763,16 +6777,19 @@ function SelfServiceTab(){
                 <option value="TXT">TXT</option>
               </select>
             </label>
-            <label className="mono field-lbl">
+            <label className="mono field-lbl"
+              {...bind({title:'Record value',rows:[['What it does','What the record points to. Leave blank and it auto-fills with the IP just allocated.']]})}>
               Value
               <input className="vault-in" value={recValue} onChange={e=>setRecValue(e.target.value)} placeholder="auto-fills from allocated IP if blank"/>
             </label>
           </div>:null}
-          <label className="check-row">
+          <label className="check-row"
+            {...bind({title:'Dry-run',rows:[['What it does','Preview every step and make NO changes. Turn this off to actually allocate.']]})}>
             <input type="checkbox" checked={dry} onChange={e=>setDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
-          <button className="btn" disabled={busy||!name} onClick={submit}>{busy?'Submitting…':'Submit'}</button>
+          <button className="btn" disabled={busy||!name} onClick={submit}
+            {...bind({title:'Submit request',rows:[['What it does','Run the allocation — or, with Dry-run on, just preview it.']]})}>{busy?'Submitting…':'Submit'}</button>
         </div>
       </Panel>
       {result?<Panel title="Result">
@@ -6791,7 +6808,8 @@ function SelfServiceTab(){
     {mode==='dns'?<div className="grid">
       <Panel title="Zone">
         <div className="form-col">
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'DNS zone',rows:[['What it does','Pick the zone whose records you want to view and edit in the table below.']]})}>
             Zone
             <select className="vault-in" value={dnsZoneId} onChange={e=>setDnsZoneId(e.target.value)}>
               <option value="">{zonesApi.loading?'Loading zones…':'Select a zone'}</option>
@@ -6802,29 +6820,35 @@ function SelfServiceTab(){
       </Panel>
       {dnsZoneId?<Panel title="Add record">
         <div className="form-col">
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Record name',rows:[['What it does','Host label within the zone; leave blank for the zone apex (@).']]})}>
             Name
             <input className="vault-in" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="host (blank = @)"/>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Record type',rows:[['A / AAAA','name → IPv4 / IPv6 address'],['CNAME','alias to another name'],['MX','mail exchanger for the domain'],['TXT','free text (SPF, verification)'],['PTR','reverse lookup: IP → name'],['SRV','service location (host + port)']]})}>
             Type
             <select className="vault-in" value={addType} onChange={e=>setAddType(e.target.value)}>
               {RTYPE_OPTIONS.map(t=><option key={t} value={t}>{t}</option>)}
             </select>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Record value',rows:[['What it does','What this record points to; the exact format depends on the type above.']]})}>
             Value
             <input className="vault-in" value={addValue} onChange={e=>setAddValue(e.target.value)} placeholder={RTYPE_HINTS[addType]||'value'}/>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'TTL (seconds)',rows:[['What it does','How long resolvers may cache this record. Blank uses the zone default.']]})}>
             TTL (optional)
             <input className="vault-in" type="number" min="0" value={addTtl} onChange={e=>setAddTtl(e.target.value)} placeholder="default"/>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Comment',rows:[['What it does','Optional free-text note stored alongside the record.']]})}>
             Comment (optional)
             <input className="vault-in" value={addComment} onChange={e=>setAddComment(e.target.value)}/>
           </label>
-          <button className="btn" disabled={addBusy||!addValue} onClick={addRecord}>{addBusy?'Adding…':'Add record'}</button>
+          <button className="btn" disabled={addBusy||!addValue} onClick={addRecord}
+            {...bind({title:'Add record',rows:[['What it does','Create this record in the selected zone.']]})}>{addBusy?'Adding…':'Add record'}</button>
           {addErr?<div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>{addErr}</div>:null}
         </div>
       </Panel>:null}
@@ -6840,21 +6864,24 @@ function SelfServiceTab(){
     {mode==='ipman'?<div className="grid">
       <Panel title="Subnet">
         <div className="form-col">
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'IP space',rows:[['What it does','The top-level Infoblox address container to work inside.']]})}>
             Space
             <select className="vault-in" value={ipSpace} onChange={e=>{setIpSpace(e.target.value);setIpBlock('');setIpSubnetId('');}}>
               <option value="">{spacesApi.loading?'Loading spaces…':'Select a space'}</option>
               {spaces.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
             </select>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Address block',rows:[['What it does','Narrow to one block (a large CIDR range) within the space. Optional — leave as All blocks.']]})}>
             Block (optional)
             <select className="vault-in" value={ipBlock} onChange={e=>{setIpBlock(e.target.value);setIpSubnetId('');}} disabled={!ipSpace}>
               <option value="">{ipBlocksApi.loading?'Loading blocks…':'All blocks'}</option>
               {ipBlocks.map(b=><option key={b.id} value={b.id}>{b.name||b.cidr||b.address}</option>)}
             </select>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Subnet',rows:[['What it does','The subnet whose usage and allocated addresses you want to inspect and manage.']]})}>
             Subnet
             <select className="vault-in" value={ipSubnetId} onChange={e=>setIpSubnetId(e.target.value)} disabled={!ipSpace}>
               <option value="">{ipSubnetsApi.loading?'Loading subnets…':'Select a subnet'}</option>
@@ -6883,21 +6910,24 @@ function SelfServiceTab(){
     {mode==='inventory'?<div className="grid">
       <Panel title="Space / Block / Subnet">
         <div className="form-col">
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'IP space',rows:[['What it does','Start the read-only drilldown here: the Infoblox address container to browse.']]})}>
             Space
             <select className="vault-in" value={invSpace} onChange={e=>{setInvSpace(e.target.value);setInvBlock('');setInvSubnetId('');}}>
               <option value="">{spacesApi.loading?'Loading spaces…':'Select a space'}</option>
               {spaces.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
             </select>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Address block',rows:[['What it does','Narrow the drilldown to one block within the space. Optional.']]})}>
             Block (optional)
             <select className="vault-in" value={invBlock} onChange={e=>{setInvBlock(e.target.value);setInvSubnetId('');}} disabled={!invSpace}>
               <option value="">{invBlocksApi.loading?'Loading blocks…':'All blocks'}</option>
               {invBlocks.map(b=><option key={b.id} value={b.id}>{b.name||b.cidr||b.address}</option>)}
             </select>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Subnet',rows:[['What it does','Pick a subnet to list its addresses (read-only) on the right.']]})}>
             Subnet
             <select className="vault-in" value={invSubnetId} onChange={e=>setInvSubnetId(e.target.value)} disabled={!invSpace}>
               <option value="">{invSubnetsApi.loading?'Loading subnets…':'Select a subnet'}</option>
@@ -6915,7 +6945,8 @@ function SelfServiceTab(){
       </Panel>
       <Panel title="Zone">
         <div className="form-col">
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'DNS zone',rows:[['What it does','Browse this zone\'s DNS records read-only (DNS view → zone → records).']]})}>
             Zone
             <select className="vault-in" value={invZoneId} onChange={e=>setInvZoneId(e.target.value)}>
               <option value="">{zonesApi.loading?'Loading zones…':'Select a zone'}</option>
@@ -6946,6 +6977,7 @@ function SelfServiceTab(){
 function ProvisionTab(){
   const {params}=useRoute();
   const {locked}=useData();
+  const {bind}=useHoverDetail();
   const whoamiApi=useApi('/api/whoami');
   const role=(whoamiApi.data&&whoamiApi.data.role)||'viewer';
   const isAdmin=role==='admin';
@@ -7143,53 +7175,65 @@ function ProvisionTab(){
 
   return <div className="page fadein">
     <PageHeader title="Provision" subtitle="Carve new subnets or full sites from available address space"
-      actions={<span className={'sev-badge '+(isAdmin?'ok':role==='operator'?'warn':'crit')}>{role.toUpperCase()}</span>}/>
+      actions={<span className={'sev-badge '+(isAdmin?'ok':role==='operator'?'warn':'crit')}
+        {...bind({title:'Your role',rows:[['What it means','Your access level. Live (non-dry-run) teardown requires admin (a dashboard token).']]})}>{role.toUpperCase()}</span>}/>
     <div className="dly-seg" role="group" aria-label="Provision mode" style={{marginBottom:'var(--s3)'}}>
-      <button className={'dly-seg-btn'+(mode==='subnet'?' on':'')} onClick={()=>setMode('subnet')}>Subnet</button>
-      <button className={'dly-seg-btn'+(mode==='site'?' on':'')} onClick={()=>setMode('site')}>Full site</button>
-      <button className={'dly-seg-btn'+(mode==='seed'?' on':'')} onClick={()=>setMode('seed')}>Seed demo</button>
+      <button className={'dly-seg-btn'+(mode==='subnet'?' on':'')} onClick={()=>setMode('subnet')}
+        {...bind({title:'Subnet mode',rows:[['What it does','Carve a single new subnet from a block — optionally with a matching DNS zone.']]})}>Subnet</button>
+      <button className={'dly-seg-btn'+(mode==='site'?' on':'')} onClick={()=>setMode('site')}
+        {...bind({title:'Full site mode',rows:[['What it does','Provision an entire site from a template: blocks, subnets, DHCP ranges and DNS zones in one run.']]})}>Full site</button>
+      <button className={'dly-seg-btn'+(mode==='seed'?' on':'')} onClick={()=>setMode('seed')}
+        {...bind({title:'Seed demo mode',rows:[['What it does','One-click load of demo sites, subnets and zones across regions, from the template library.']]})}>Seed demo</button>
     </div>
     {mode==='subnet'?<div className="grid-2">
       <Panel title="Request">
         <div className="form-col">
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'IP space',rows:[['What it does','The Infoblox address container to provision the new subnet from.']]})}>
             Space
             <select className="vault-in" value={space} onChange={e=>{setSpace(e.target.value);setBlock('');}}>
               <option value="">{spacesApi.loading?'Loading spaces…':'Select a space'}</option>
               {spaces.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
             </select>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Address block',rows:[['What it does','The parent block the new subnet is carved out of.']]})}>
             Block
             <select className="vault-in" value={block} onChange={e=>setBlock(e.target.value)} disabled={!space}>
               <option value="">{blocksApi.loading?'Loading blocks…':'Select a block'}</option>
               {blocks.map(b=><option key={b.id} value={b.id}>{b.name||b.cidr||b.address}</option>)}
             </select>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Subnet size (CIDR prefix)',rows:[['What it does','Prefix length for the new subnet. Bigger number = smaller subnet.'],['Examples','/24 = 256 addresses · /26 = 64 · /30 = 4']]})}>
             CIDR
             <input className="vault-in" type="number" min="1" max="32" value={cidr} onChange={e=>setCidr(e.target.value)}/>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Name',rows:[['What it does','Label for the new subnet.']]})}>
             Name
             <input className="vault-in" value={name} onChange={e=>setName(e.target.value)} placeholder="subnet name"/>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Comment',rows:[['What it does','Optional free-text note stored on the subnet.']]})}>
             Comment
             <input className="vault-in" value={comment} onChange={e=>setComment(e.target.value)} placeholder="optional"/>
           </label>
-          <label className="check-row">
+          <label className="check-row"
+            {...bind({title:'Create matching DNS zone',rows:[['What it does','Also create the forward DNS zone for this subnet — not just the address space.']]})}>
             <input type="checkbox" checked={makeZone} onChange={e=>setMakeZone(e.target.checked)}/>
             <span>Create matching DNS zone</span>
           </label>
-          <label className="check-row">
+          <label className="check-row"
+            {...bind({title:'Dry-run',rows:[['What it does','Preview every provisioning step and make NO changes. Turn off to actually create.']]})}>
             <input type="checkbox" checked={dry} onChange={e=>setDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
-          <button className="btn" disabled={streaming||!space} onClick={start}>{streaming?'Provisioning…':'Provision'}</button>
+          <button className="btn" disabled={streaming||!space} onClick={start}
+            {...bind({title:'Provision',rows:[['What it does','Run the provision (or its dry-run preview); each step streams live in the log.']]})}>{streaming?'Provisioning…':'Provision'}</button>
         </div>
       </Panel>
-      <Panel title="Live log">
+      <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live output of each provisioning step, streamed from the server via SSE as it runs.']]})}>Live log</span>}>
         {log.length===0
           ? <div className="dt-empty">No output yet</div>
           : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
@@ -7208,14 +7252,16 @@ function ProvisionTab(){
     {mode==='site'?<div className="grid-2">
       <Panel title="Request">
         <div className="form-col">
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'IP space override',rows:[['What it does','Provision into this space instead of the template default. Blocks inside are found by Region + Environment + Status=available tags — no hardcoded CIDR.']]})}>
             IP space (override)
             <select className="vault-in" value={siteSpace} onChange={e=>setSiteSpace(e.target.value)}>
               <option value="">— template default —</option>
               {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
             </select>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Site template',rows:[['What it does','The site blueprint to provision. Its Region / Environment tags decide which available block gets used.'],['Format','name — Region/Environment (invalid templates are marked).']]})}>
             Template
             <select className="vault-in" value={siteTemplate} onChange={e=>setSiteTemplate(e.target.value)}>
               <option value="">{templatesApi.loading?'Loading templates…':'Select a template'}</option>
@@ -7224,30 +7270,36 @@ function ProvisionTab(){
               </option>)}
             </select>
           </label>
-          <label className="check-row">
+          <label className="check-row"
+            {...bind({title:'Dry-run',rows:[['What it does','Preview every step of the site build and make NO changes. Turn off to actually provision.']]})}>
             <input type="checkbox" checked={siteDry} onChange={e=>setSiteDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
-          <button className="btn" disabled={siteStreaming||!siteTemplate} onClick={siteStart}>{siteStreaming?'Provisioning…':'Provision site'}</button>
+          <button className="btn" disabled={siteStreaming||!siteTemplate} onClick={siteStart}
+            {...bind({title:'Provision site',rows:[['What it does','Build the whole site from the template — blocks, subnets, DHCP ranges and DNS zones — or preview it as a dry-run.']]})}>{siteStreaming?'Provisioning…':'Provision site'}</button>
           <div style={{borderTop:'1px solid var(--border)',marginTop:'var(--s3)',paddingTop:'var(--s3)',display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-            <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>
+            <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}
+              {...bind({title:'Tear down / decommission',rows:[['What it does','Undo a site provision — permanently delete every object it created.']]})}>
               Tear down this site — permanently deletes its provisioned objects.
             </div>
-            <label className="check-row">
+            <label className="check-row"
+              {...bind({title:'Dry-run',rows:[['What it does','Preview the teardown only — nothing is deleted. Turn off (admin) to actually decommission.']]})}>
               <input type="checkbox" checked={siteTeardownDry} onChange={e=>setSiteTeardownDry(e.target.checked)}/>
               <span>Dry-run (no changes made)</span>
             </label>
-            {!siteTeardownDry?(isAdmin?<label className="mono field-lbl">
+            {!siteTeardownDry?(isAdmin?<label className="mono field-lbl"
+              {...bind({title:'Confirm teardown',rows:[['What it does','Type the site name to unlock the live teardown — a safety gate against accidental deletion.']]})}>
               Type the site name to confirm
               <input className="vault-in" value={siteTeardownConfirm} onChange={e=>setSiteTeardownConfirm(e.target.value)} placeholder={siteTemplate||'site name'}/>
             </label>:<div className="mono" style={{fontSize:'var(--t11)',color:'var(--warn)'}}>Admin (dashboard token) required for live teardown</div>):null}
-            <button className="btn" disabled={siteTeardownStreaming||!siteTemplate||(!siteTeardownDry&&(!isAdmin||!siteTeardownConfirm.trim()))} onClick={siteTeardownStart}>
+            <button className="btn" disabled={siteTeardownStreaming||!siteTemplate||(!siteTeardownDry&&(!isAdmin||!siteTeardownConfirm.trim()))} onClick={siteTeardownStart}
+              {...bind({title:'Tear down this site',rows:[['What it does','Permanently delete this site\'s provisioned objects. This decommissions the site.']]})}>
               {siteTeardownStreaming?'Tearing down…':'Tear down this site'}
             </button>
           </div>
         </div>
       </Panel>
-      <Panel title="Live log">
+      <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live per-step output of the site build, streamed from the server via SSE.']]})}>Live log</span>}>
         {siteLog.length===0
           ? <div className="dt-empty">No output yet</div>
           : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
@@ -7279,41 +7331,49 @@ function ProvisionTab(){
         </div>
         <div className="form-col">
           {['amer','emea','apac'].map(r=>
-            <label key={r} className="check-row">
+            <label key={r} className="check-row"
+              {...bind({title:'Region — '+r.toUpperCase(),rows:[['What it does','Include this region\'s demo sites in the seed. Region is a lifecycle tag also used to discover which blocks to provision from.']]})}>
               <input type="checkbox" checked={!!seedRegions[r]} onChange={e=>setSeedRegions(prev=>({...prev,[r]:e.target.checked}))}/>
               <span>{r.toUpperCase()}</span>
             </label>)}
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'IP space override',rows:[['What it does','Seed into this space instead of each template\'s default.']]})}>
             IP space (override)
             <select className="vault-in" value={seedSpace} onChange={e=>setSeedSpace(e.target.value)}>
               <option value="">— template default —</option>
               {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
             </select>
           </label>
-          <label className="check-row">
+          <label className="check-row"
+            {...bind({title:'Dry-run',rows:[['What it does','Preview the seed plan and write NO objects. Turn off to create real demo data.']]})}>
             <input type="checkbox" checked={seedDry} onChange={e=>setSeedDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
-          <button className="btn" disabled={seedStreaming} onClick={seedStart}>{seedStreaming?'Seeding…':'Seed Demo Data'}</button>
+          <button className="btn" disabled={seedStreaming} onClick={seedStart}
+            {...bind({title:'Seed demo data',rows:[['What it does','Provision the selected regions\' demo sites, subnets and zones (or preview them with Dry-run on).']]})}>{seedStreaming?'Seeding…':'Seed Demo Data'}</button>
           <div style={{borderTop:'1px solid var(--border)',marginTop:'var(--s3)',paddingTop:'var(--s3)',display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-            <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>
+            <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}
+              {...bind({title:'Tear down demo',rows:[['What it does','Undo the seed — permanently delete every object it created in the target space.']]})}>
               Tear down demo — permanently deletes every seed-created object in {seedSpace||'the default space'}.
             </div>
-            <label className="check-row">
+            <label className="check-row"
+              {...bind({title:'Dry-run',rows:[['What it does','Preview the teardown — nothing is deleted. Turn off (admin) to remove seed data.']]})}>
               <input type="checkbox" checked={teardownDry} onChange={e=>setTeardownDry(e.target.checked)}/>
               <span>Dry-run (no changes made)</span>
             </label>
-            {!teardownDry?(isAdmin?<label className="mono field-lbl">
+            {!teardownDry?(isAdmin?<label className="mono field-lbl"
+              {...bind({title:'Confirm teardown',rows:[['What it does','Type DELETE to unlock live removal of every seed-created object — a safety gate.']]})}>
               Type DELETE to confirm
               <input className="vault-in" value={teardownConfirm} onChange={e=>setTeardownConfirm(e.target.value)} placeholder="DELETE"/>
             </label>:<div className="mono" style={{fontSize:'var(--t11)',color:'var(--warn)'}}>Admin (dashboard token) required for live teardown</div>):null}
-            <button className="btn" disabled={teardownStreaming||(!teardownDry&&(!isAdmin||teardownConfirm.trim()!=='DELETE'))} onClick={teardownStart}>
+            <button className="btn" disabled={teardownStreaming||(!teardownDry&&(!isAdmin||teardownConfirm.trim()!=='DELETE'))} onClick={teardownStart}
+              {...bind({title:'Tear down demo',rows:[['What it does','Permanently delete every seed-created object in the target space.']]})}>
               {teardownStreaming?'Tearing down…':'Tear down demo'}
             </button>
           </div>
         </div>
       </Panel>
-      <Panel title="Progress">
+      <Panel title={<span {...bind({title:'Progress',rows:[['What it does','Per-template status as each demo site is provisioned.']]})}>Progress</span>}>
         {Object.keys(seedRows).length===0
           ? <div className="dt-empty">No output yet</div>
           : <div style={{display:'flex',flexDirection:'column',gap:2}}>
@@ -7323,7 +7383,7 @@ function ProvisionTab(){
                 </div>)}
             </div>}
       </Panel>
-      <Panel title="Live log">
+      <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live per-step output of the seed run, streamed from the server via SSE.']]})}>Live log</span>}>
         {seedLog.length===0
           ? <div className="dt-empty">No output yet</div>
           : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
@@ -7595,6 +7655,7 @@ function EditorTab(){
    No writes, no dry-run toggle, no confirm gate — nothing here mutates. */
 function DriftTab(){
   const {locked}=useData();
+  const {bind}=useHoverDetail();
   const templatesApi=useApi('/api/templates');
   const spacesApi=useApi('/api/ipam/spaces');
   const [template,setTemplate]=useState('');
@@ -7633,7 +7694,8 @@ function DriftTab(){
     <div className="grid-2">
       <Panel title="Check drift">
         <div className="form-col">
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'Site template',rows:[['What it does','The site blueprint to check. Drift compares this template against what actually exists in Infoblox.']]})}>
             Template
             <select className="vault-in" value={template} onChange={e=>setTemplate(e.target.value)}>
               <option value="">{templatesApi.loading?'Loading templates…':'Select a template'}</option>
@@ -7642,14 +7704,16 @@ function DriftTab(){
               </option>)}
             </select>
           </label>
-          <label className="mono field-lbl">
+          <label className="mono field-lbl"
+            {...bind({title:'IP space override',rows:[['What it does','Check against this space instead of the template default.']]})}>
             IP space (override)
             <select className="vault-in" value={ipSpace} onChange={e=>setIpSpace(e.target.value)}>
               <option value="">— template default —</option>
               {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
             </select>
           </label>
-          <button className="btn" disabled={checking||!template} onClick={check}>{checking?'Checking…':'Check drift'}</button>
+          <button className="btn" disabled={checking||!template} onClick={check}
+            {...bind({title:'Check drift',rows:[['What it does','Compare your site template to the live Infoblox state and report the differences. Read-only — it changes nothing.']]})}>{checking?'Checking…':'Check drift'}</button>
         </div>
       </Panel>
       {result?<Panel title="Result">
@@ -7658,7 +7722,8 @@ function DriftTab(){
           : <>
               <div style={{display:'flex',alignItems:'center',gap:'var(--s3)',marginBottom:'var(--s3)'}}>
                 <span className="mono" style={{fontSize:'var(--t12)'}}>{result.site||template}</span>
-                <span className="chip" style={{color:result.drifted?'var(--crit)':'var(--ok)',borderColor:result.drifted?'var(--crit)':'var(--ok)'}}>
+                <span className="chip" style={{color:result.drifted?'var(--crit)':'var(--ok)',borderColor:result.drifted?'var(--crit)':'var(--ok)'}}
+                  {...bind({title:'Drift status',rows:[['✓ no drift','Live state matches the template — in sync.'],['✕ N items','N differences found between the template and live state.'],['Site not found','Never provisioned from this template.']]})}>
                   {result.drifted?('✕ '+((result.drifts&&result.drifts.length)||0)+' items'):'✓ no drift'}
                 </span>
                 {result.subnet_count!=null?<span className="mono field-lbl">{result.subnet_count} subnets</span>:null}
