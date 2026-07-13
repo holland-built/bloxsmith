@@ -602,6 +602,18 @@ class FrontendStructureTests(unittest.TestCase):
     def test_vpost_helper(self):
         self.assertContains("const vpost=", "vpost POST-JSON helper missing")
 
+    def test_pageheader_shared_and_used_by_functional_tabs(self):
+        # Shared PageHeader primitive exists (component + .page-head CSS)...
+        self.assertContains("function PageHeader(", "PageHeader component missing")
+        self.assertContains(".page-head{", "PageHeader .page-head CSS missing")
+        # ...and each of the 4 functional tabs mounts it at the top of its page.
+        for fn, title in (("SelfServiceTab", "Self-Service"), ("ProvisionTab", "Provision"),
+                          ("EditorTab", "Editor"), ("DriftTab", "Drift")):
+            body = self.html[self.html.index("function " + fn + "("):]
+            body = body[:body.index("\nfunction ", 1)]
+            self.assertIn('<PageHeader title="' + title + '"', body,
+                          f"{fn} must render <PageHeader title=\"{title}\" .../>")
+
     def test_auth_api_endpoints(self):
         for ep in ("/api/switch-account", "/api/vault/init", "/api/vault/unlock"):
             self.assertContains(ep, f"auth endpoint {ep} missing")
