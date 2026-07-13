@@ -3048,7 +3048,7 @@ function EmptyState({label,note,chips,onClear}){
 /* ─────────────────────────────────────────────────────────────
    6. Hash router — parse #tab?k=v. Legacy redirects. nav() helper.
    ───────────────────────────────────────────────────────────── */
-const TABS=['overview','daily','network','dns','infra','security','incidents','audit','provision','drift','selfservice','editor'];
+const TABS=['overview','daily','network','dns','infra','security','incidents','audit','provision'];
 const TAB_LABELS={overview:'Overview',daily:'Daily',network:'Network',dns:'DNS',infra:'Infra',security:'Security',incidents:'Incidents',audit:'Audit',provision:'Provision',drift:'Drift',selfservice:'Self-Service',editor:'Editor'};
 // Nav-tab hover descriptions — shown via useHoverDetail() in TopBar. Terse, accurate
 // one-liners on what each tab does + how to use it.
@@ -3086,6 +3086,10 @@ function parseHash(){
   // remap so its query is carried and the drawer opens (params.drawer='1').
   const wantsDrawer=(tab==='ask'||tab==='search');
   if(LEGACY[tab]) tab=LEGACY[tab];
+  // Legacy standalone routes for the write-surfaces now live under the Provision
+  // group as a ?tool= sub-route. Remap old hashes so deep-links/bookmarks survive.
+  const PROVISION_TOOL_ROUTES={selfservice:1,editor:1,drift:1};
+  if(PROVISION_TOOL_ROUTES[tab]){ params.tool=tab; tab='provision'; }
   if(!TABS.includes(tab)) tab='overview';
   if(wantsDrawer) params.drawer='1';
   // Legacy deep-link remap: Overview used to hand off util bands as ?band=… ; Phase D moved to
@@ -8379,8 +8383,6 @@ const FIELD_SPECS={
   ]},
 };
 const EDITOR_TYPES=[
-  {key:'dns_record',label:'DNS Record'},
-  {key:'ip_address',label:'IP Address'},
   {key:'dns_zone',label:'DNS Zone'},
   {key:'subnet',label:'Subnet'},
   {key:'address_block',label:'Address Block'},
@@ -8392,21 +8394,20 @@ const EDITOR_TYPES=[
 const EDIT_UPDATE_TYPES=['dns_zone','subnet','dhcp_range','host'];
 const EDIT_DELETE_TYPES=['dns_zone','subnet','dhcp_range','host','address_block'];
 
-/* EditorTab — consolidated create surface for all 8 resource types (plan
-   brainstorms/resource-editor-plan-2026-07-11.md, Phase 2). dns_record and
-   ip_address reuse SelfServiceTab wholesale (its DNS Records / Allocate
-   modes already cover those two types' create/update/delete). The other 6
-   types render a generic Panel form driven by FIELD_SPECS, dry-run-default
-   ON, role-gated below operator. Deep-link params (type + per-field
-   prefill, e.g. #editor?type=host&name=foo) seed the initial type/fields
-   so Phase 3 row-level Edit/New links can pre-fill this form. */
+/* EditorTab — consolidated create surface for the 6 FIELD_SPECS-backed resource
+   types (plan brainstorms/resource-editor-plan-2026-07-11.md, Phase 2; DNS Record
+   and IP Address are handled by SelfServiceTab, not duplicated here). Each type
+   renders a generic Panel form driven by FIELD_SPECS, dry-run-default ON,
+   role-gated below operator. Deep-link params (type + per-field prefill, e.g.
+   #editor?type=host&name=foo) seed the initial type/fields so Phase 3 row-level
+   Edit/New links can pre-fill this form. */
 function EditorTab(){
   const {params}=useRoute();
   const {locked}=useData();
   const whoamiApi=useApi('/api/whoami');
   const role=(whoamiApi.data&&whoamiApi.data.role)||'viewer';
   const isViewer=role==='viewer';
-  const initialType=(params.type&&EDITOR_TYPES.some(t=>t.key===params.type))?params.type:'dns_record';
+  const initialType=(params.type&&EDITOR_TYPES.some(t=>t.key===params.type))?params.type:'dns_zone';
   const [type,setType]=useState(initialType);
   const [editId,setEditId]=useState(params.id||null); // Phase 3: id present → edit (PATCH/DELETE) mode
   const [fields,setFields]=useState({});
@@ -8512,9 +8513,7 @@ function EditorTab(){
       Editor-created subnets and address blocks are ad-hoc — unlike Provision, they are not tracked by a site template.
     </div>
     {isViewer?<Astryx.Badge variant="warning" label="Viewer role — read-only"/>:null}
-    {(type==='dns_record'||type==='ip_address')
-      ? <SelfServiceTab/>
-      : <div className="grid-2">
+    <div className="grid-2">
           <Panel title={(spec&&spec.label)+(isUpdate?' — Update':' — Create')}>
             <div className="form-col">
               {spec&&spec.fields.map(f=>
@@ -8545,7 +8544,7 @@ function EditorTab(){
               {JSON.stringify(previewBody,null,2)}
             </pre>
           </Panel>:null}
-        </div>}
+        </div>
   </div>;
 }
 // ═══ END: EDITOR ═══
@@ -8709,6 +8708,8 @@ function CommandPalette({open,onClose}){
   const needle=typed.toLowerCase();
   const base=[
     ...TABS.map(t=>({label:'Go to '+TAB_LABELS[t],kind:'nav',run:()=>{nav(t);onClose();}})),
+    ...PROVISION_TOOLS.map(t=>({label:'Go to Provision · '+t.label,kind:'nav',
+      run:()=>{nav('provision',{tool:t.key});onClose();}})),
     {label:'Ask AI',kind:'ai',run:()=>{onClose();window.dispatchEvent(new CustomEvent('bx:ai-open',{detail:{q:''}}));}},
     {label:'Alert rules',kind:'nav',run:()=>{onClose();window.dispatchEvent(new CustomEvent('bx:ai-open',{detail:{q:''}}));}},
     // F3 — Copy link to this view. The hash already IS the canonical, deep-linkable
@@ -8967,6 +8968,31 @@ function WatchMenu(){
 }
 // ═══ END: ASKGLOBAL ═══
 
+const PROVISION_TOOLS=[
+  {key:'provision',  label:'Provision',    comp:ProvisionTab},
+  {key:'selfservice',label:'Self-Service', comp:SelfServiceTab},
+  {key:'editor',     label:'Editor',       comp:EditorTab},
+  {key:'drift',      label:'Drift',        comp:DriftTab},
+];
+// ProvisionGroupTab — one top-level tab that hosts the four write-surfaces as a
+// .dly-seg sub-tab bar. Active tool comes from ?tool= (default 'provision').
+function ProvisionGroupTab(props){
+  const {params}=useRoute();
+  const found=PROVISION_TOOLS.find(t=>t.key===params.tool);
+  const active=found?found.key:'provision';
+  const Active=(found||PROVISION_TOOLS[0]).comp;
+  return <div className="page fadein">
+    <div className="dly-seg" role="group" aria-label="Provisioning tools"
+         style={{marginBottom:'var(--s3)'}}>
+      {PROVISION_TOOLS.map(t=>
+        <button key={t.key} className={'dly-seg-btn'+(t.key===active?' on':'')}
+          aria-current={t.key===active?'page':undefined}
+          onClick={()=>nav('provision',{tool:t.key})}>{t.label}</button>)}
+    </div>
+    <Active {...props}/>
+  </div>;
+}
+
 const TAB_COMPONENTS={
   overview:OverviewTab,
   daily:DailyTab,
@@ -8976,10 +9002,7 @@ const TAB_COMPONENTS={
   security:SecurityTab,
   incidents:IncidentsTab,
   audit:AuditTab,
-  provision:ProvisionTab,
-  drift:DriftTab,
-  selfservice:SelfServiceTab,
-  editor:EditorTab,
+  provision:ProvisionGroupTab,
 };
 
 /* ─────────────────────────────────────────────────────────────

@@ -1405,13 +1405,21 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("/api/alerts/snooze", "SnoozeControl must POST /api/alerts/snooze")
 
     def test_no_tab_removed(self):
-        # Adding the Incidents tab must not drop any pre-existing tab.
+        # Adding the Incidents tab must not drop any pre-existing tab. Plan 020
+        # grouped drift/selfservice/editor under the single 'provision' top-level
+        # tab as PROVISION_TOOLS sub-routes — assert the group survives and every
+        # tool is still reachable, not that they remain separate top-level TABS.
         m = re.search(r"const TABS=\[([^\]]*)\]", self.html)
         self.assertIsNotNone(m, "const TABS=[...] array not found in index.html")
         tabs = re.findall(r"'([a-z]+)'", m.group(1))
         for t in ("overview", "daily", "network", "dns", "infra", "security",
-                  "audit", "provision", "drift", "selfservice"):
+                  "audit", "provision"):
             self.assertIn(t, tabs, f"pre-existing tab {t!r} was removed from TABS")
+        self.assertContains("const PROVISION_TOOLS=", "PROVISION_TOOLS group map missing")
+        pt = self.html[self.html.index("const PROVISION_TOOLS="):]
+        pt = pt[:pt.index("];")]
+        for t in ("provision", "selfservice", "editor", "drift"):
+            self.assertIn("key:'" + t + "'", pt, f"tool {t!r} missing from PROVISION_TOOLS group")
 
     def test_provision_role_gated(self):
         # Plan 019 Phase 3: ProvisionTab must know the caller's role (via
@@ -1423,9 +1431,14 @@ class FrontendStructureTests(unittest.TestCase):
     # ── resource editor tab (resource-editor-plan-2026-07-11, Phase 2) ────────
 
     def test_editor_tab_registered(self):
-        self.assertContains("'editor'", "'editor' entry missing from TABS")
+        # Plan 020: 'editor' is no longer a standalone top-level tab — it's grouped
+        # under 'provision' as a PROVISION_TOOLS sub-route (ProvisionGroupTab).
         self.assertContains("editor:'Editor'", "editor label missing from TAB_LABELS")
-        self.assertContains("editor:EditorTab", "editor:EditorTab entry missing from TAB_COMPONENTS")
+        self.assertContains("const PROVISION_TOOLS=", "PROVISION_TOOLS group map missing")
+        pt = self.html[self.html.index("const PROVISION_TOOLS="):]
+        pt = pt[:pt.index("];")]
+        self.assertIn("key:'editor'", pt, "'editor' tool missing from PROVISION_TOOLS group")
+        self.assertIn("comp:EditorTab", pt, "editor tool must map to EditorTab component")
         self.assertContains("function EditorTab", "EditorTab component missing")
 
     def test_editor_field_specs(self):
