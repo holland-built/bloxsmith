@@ -744,6 +744,30 @@ class FrontendStructureTests(unittest.TestCase):
         # (the hash router already makes it canonical + deep-linkable).
         self.assertContains("Copy link to this view", "palette Copy-link-to-this-view action missing")
 
+    # ── Group E: read-only bulk actions + shortcut overlay ─────────────────────
+
+    def test_bulk_readonly_actions(self):
+        # Feature 8 — the selection ActionBar gains three READ-ONLY verbs built in
+        # DataTable.buildActions: Export subset (downloadCSV), Copy as (a fan-out
+        # menu reusing the Group B serializers), Pivot to filter (fx.add of shared
+        # values). Count is live-announced. No mutation verbs are added.
+        self.assertContains("label:'Export subset'", "bulk Export-subset action missing")
+        self.assertContains("label:'Copy as',menu:[", "bulk Copy-as fan-out menu missing")
+        self.assertContains("label:'Pivot to filter'", "bulk Pivot-to-filter action missing")
+        self.assertContains("function AbMenu(", "ActionBar fan-out menu component missing")
+        self.assertContains('role="status" aria-live="polite">{count} selected',
+                            "ActionBar selection count is not live-announced")
+
+    def test_shortcut_overlay(self):
+        # Feature 10 — a global "?" opens a focus-trapped, plain-text shortcut
+        # overlay (role=dialog, aria-modal) that lists the plan's new verbs.
+        self.assertContains("function ShortcutsHelp(", "ShortcutsHelp overlay component missing")
+        self.assertContains('aria-label="Keyboard shortcuts"', "shortcut overlay dialog label missing")
+        self.assertContains("if(e.key!=='?'", "'?' key handler for shortcut overlay missing")
+        self.assertContains("<ShortcutsHelp/>", "ShortcutsHelp not mounted in the Shell tree")
+        for verb in ("Shift + click", "Copy as", "Copy link", "Pivot on the focused cell"):
+            self.assertIn(verb, self.html, f"shortcut overlay missing verb: {verb!r}")
+
     # ── unified search (BQL) discoverability layer ─────────────────────────────
 
     def test_search_typeahead(self):
