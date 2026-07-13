@@ -342,7 +342,7 @@ table.dt tbody tr.dt-ghost td.dt-diff{text-decoration:none;}
 
 /* ── copy-cell / copy-row: no color signaling — text confirmation via the toast bus ── */
 table.dt tbody td.dt-copyable{cursor:copy;}
-table.dt tbody td:last-child{position:relative;}
+table.dt tbody td:last-child,table.dt tbody td.dt-copy-host{position:relative;}
 /* row-copyas-wrap holds BOTH the original F1 "Copy row as JSON" button and the
    Feature 6 "Copy as…" format-menu trigger — same reveal-on-hover/focus/cursor
    contract the single button used to own, now applied to the pair. */
@@ -1717,10 +1717,14 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
         closePivotMenu(ci);
         if(!wasOn) toast('Filtered to '+lbl,'ok',{duration:1500});
       };
-      const isLast=ci===cols.length-1;
+      // Copy-row buttons anchor to the last DATA column — when the trailing
+      // column is the __edit action column, back up one so the hover-revealed
+      // ⧉/▾ pair doesn't paint over the Edit button.
+      const copyHostCi=cols.length-((cols[cols.length-1]||{}).key==='__edit'?2:1);
+      const isLast=ci===copyHostCi;
       return <td key={c.key} title={(c.pivot||isId)?undefined:tip}
         ref={canCellPivot?(el=>{pivotCellRefs.current[ci]=el;}):undefined}
-        className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')+(copyCell?' dt-copyable':'')+(canCellPivot?' dt-cell-pivot':'')}
+        className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')+(copyCell?' dt-copyable':'')+(canCellPivot?' dt-cell-pivot':'')+(isLast?' dt-copy-host':'')}
         style={st} onClick={copyCell}
         onContextMenu={canCellPivot?openPivotMenu:undefined}
         tabIndex={cellKeyboardPivot?0:undefined}
@@ -2950,7 +2954,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
               style={(c.primary||c.width)?{...(c.width?{width:c.width}:{}),...(c.primary?{minWidth:c.minWidth||120}:{})}:null}
               aria-sort={sEntry?(sEntry.dir==='asc'?'ascending':'descending'):'none'}
               onClick={e=>clickSort(c.key,e.shiftKey)}>
-              {c.label||c.key}
+              {c.label!=null?c.label:c.key}
               <span className="sort-ind">{badge?<b className="sort-order">{badge}</b>:null}{arrow}</span>
             </th>;
           })}
