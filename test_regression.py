@@ -1651,6 +1651,59 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("['p','Pin the row to the scratchpad'],",
                             "shortcut overlay must document the `p` macro")
 
+    # ── P1 slice 7: watch expressions + delta-since-last-visit ──────────────────
+
+    def test_watch_expressions_reuse_saved_query_infra(self):
+        """A watch is a saved BQL query (name+tab+query) in the shared bx. LS
+        namespace, with a LIVE match count computed client-side via the existing
+        parseQuery/deriveSchema/buildPredicate. No backend alert engine, no second
+        store. Clicking a watch re-applies it through the existing sq= hash surface."""
+        # Client-side store keyed off the shared LS helper (bx.watches) — not a server.
+        self.assertContains("const WATCH_KEY='watches';",
+                            "watches must persist under the shared bx. LS namespace")
+        self.assertContains("function readWatches(",
+                            "readWatches() must read the LS-backed watch list")
+        self.assertContains("function addWatch(",
+                            "addWatch() must exist")
+        # Live count reuses the EXACT BQL pipeline the table search uses.
+        self.assertContains("function watchCount(",
+                            "watchCount() must compute a live match count")
+        self.assertContains("buildPredicate(parseQuery(watch.query),schema)",
+                            "watch count must reuse parseQuery/buildPredicate (no new matcher)")
+        # Topbar menu, mounted alongside ViewsMenu; apply re-uses nav + the sq= surface.
+        self.assertContains("function WatchMenu(",
+                            "WatchMenu topbar dropdown must exist")
+        self.assertContains("ReactDOM.createPortal(<WatchMenu/>,slot)",
+                            "WatchMenu must mount in the topbar (portal), like ViewsMenu")
+        self.assertContains("nav(w.tab,{sq:w.query})",
+                            "clicking a watch must re-apply its query via nav + the sq= hash")
+        self.assertContains('className="watch-count mono"',
+                            "each watch row must render its live match count as text")
+
+    def test_delta_since_last_visit_reuses_snapshot_infra(self):
+        """Per-tab '+N new / ~M changed since last visit' chip built on the EXISTING
+        snapshot store (readSnaps) + diffRows; the only new state is a per-tab
+        last-visit timestamp in bx.tabVisit LS. Signal is glyph+text (monochrome,
+        the shared .dt-diff +/~ vocabulary), never color-only."""
+        self.assertContains("const VISIT_KEY='tabVisit';",
+                            "last-visit timestamps must persist under the shared bx. LS namespace")
+        self.assertContains("function baselineSnap(",
+                            "baselineSnap() must pick the snapshot at/after the last visit")
+        self.assertContains("function DeltaChip(",
+                            "DeltaChip component must exist")
+        # Reuses the existing snapshot + row-diff machinery (no second snapshot system).
+        self.assertContains("diffRows(cfg.prevRows(base),rows,cfg.key,cfg.cmp)",
+                            "delta must diff current rows against the prior snapshot via diffRows")
+        self.assertContains("<DeltaChip tab={tab} key={'delta-'+tab}/>",
+                            "DeltaChip must be mounted per-tab in the Shell (outside .main)")
+        # Glyph+count text, not color-only: reuses the .dt-diff +/~ vocabulary.
+        self.assertContains('className="delta-chip mono"',
+                            "delta chip must render as a monochrome glyph+text chip")
+        self.assertContains('className="delta-glyph"',
+                            "delta counts must carry a +/~ glyph (not color alone)")
+        self.assertContains('<span className="dt-diff mono"><span aria-label={it.tag}',
+                            "surfaced rows must reuse the shared dt-diff glyph+aria-label vocabulary")
+
 
 class OverviewRedesignTests(unittest.TestCase):
     """Static source assertions for the v1 (Bloomberg-grid) Overview rebuild —
