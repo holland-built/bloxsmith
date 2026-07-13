@@ -9177,6 +9177,7 @@ function ViewOptions(){
   .update-menu-head{font-size:var(--t12);font-weight:600;color:var(--text);}
   .update-menu-err{font-size:var(--t11);color:var(--crit);}
   .update-menu-link{font-size:var(--t11);color:var(--text-dim);text-decoration:underline;text-underline-offset:2px;}
+  .update-menu-status{font-size:var(--t11);color:var(--text-dim);padding:1px 0;}
   .update-progress{display:flex;flex-direction:column;gap:6px;}
   .update-progress-phase{font-size:var(--t12);color:var(--text-dim);}
   .update-progress-bar{height:4px;border-radius:2px;background:var(--raised);overflow:hidden;}
@@ -9206,7 +9207,6 @@ const UPDATE_PHASE_TXT={
 function UpdateBadge(){
   const {vault}=useAuth();
   const upd=vault&&vault.update;
-  const {bind}=useHoverDetail();
   const [open,setOpen]=useState(false);
   const [applying,setApplying]=useState(false);
   const [phase,setPhase]=useState('');
@@ -9266,8 +9266,32 @@ function UpdateBadge(){
     startPoll();
   };
 
+  const [checking,setChecking]=useState(false);
+  const [checkMsg,setCheckMsg]=useState('');
+  const [override,setOverride]=useState(null); // fresh /api/update/check result, overrides the once-fetched vault.update
+  const checkNow=async()=>{
+    setChecking(true); setCheckMsg('');
+    try{
+      const r=await fetch('/api/update/check',{cache:'no-store'});
+      const d=await r.json();
+      setOverride(d);
+      setCheckMsg(d.available?('Update available → v'+d.latest):'Up to date');
+    }catch(e){ setCheckMsg('Check failed — try again'); }
+    setChecking(false);
+  };
+  const doRollback=async()=>{
+    setErr('');
+    const {ok,data}=await vpost('/api/update/rollback-apply',{});
+    if(!ok||!data||data.ok===false){
+      setErr((data&&data.error)||'Could not start rollback'); return;
+    }
+    startIdRef.current=(override||upd).instance_id;
+    setApplying(true); setPhase('checking'); setPct(0);
+    startPoll();
+  };
+
   if(!upd) return null;
-  const {current,latest,available,url,selfUpdate,cooldown}=upd;
+  const {current,latest,available,url,selfUpdate,cooldown,prevVersion}=override||upd;
 
   return <>
     {rollback&&<div className="update-rollback-banner" role="status">
@@ -9275,8 +9299,10 @@ function UpdateBadge(){
       <button className="update-rollback-x" onClick={dismissRollback} aria-label="Dismiss rollback notice">✕</button>
     </div>}
     <span className="update-slot">
-      <span className="mono update-version"
-        {...bind({title:'Bloxsmith v'+current,rows:available?[['Current','v'+current],['Latest','v'+latest]]:[['Current','v'+current],['Status','Up to date']]})}>
+      <span className="mono update-version" role="button" tabIndex={0} style={{cursor:'pointer'}}
+        aria-haspopup="menu" aria-expanded={open} aria-label={'Bloxsmith v'+current+' — updates'}
+        onClick={()=>setOpen(o=>!o)}
+        onKeyDown={e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); setOpen(o=>!o); } }}>
         v{current}
       </span>
       {available&&(selfUpdate
@@ -9289,16 +9315,23 @@ function UpdateBadge(){
             <span className="update-dot" aria-hidden="true"/>update available → v{latest}
           </a>
       )}
-      {open&&selfUpdate&&<>
+      {open&&<>
         <div className="views-overlay" onClick={()=>{ if(!applying) setOpen(false); }}/>
         <div className="update-menu" role="menu">
-          <div className="update-menu-head">Update to v{latest}</div>
+          <div className="update-menu-head">{available?('Update to v'+latest):('Bloxsmith v'+current)}</div>
           {!applying?(<>
             {err&&<div className="update-menu-err">{err}</div>}
-            <button className="btn" disabled={cooldown>0} onClick={apply}>
+            {checkMsg&&<div className="update-menu-status mono">{checkMsg}</div>}
+            {available&&selfUpdate&&<button className="btn" disabled={cooldown>0} onClick={apply}>
               {cooldown>0?('Try again in '+cooldown+'s'):'Update now'}
+            </button>}
+            <button className="btn" disabled={checking} onClick={checkNow}>
+              {checking?'Checking…':'Check now'}
             </button>
-            {url&&<a className="update-menu-link" href={url} target="_blank" rel="noopener noreferrer">View release notes</a>}
+            {selfUpdate&&prevVersion&&<button className="btn" disabled={cooldown>0} onClick={doRollback}>
+              Rollback to v{prevVersion}
+            </button>}
+            {url&&available&&<a className="update-menu-link" href={url} target="_blank" rel="noopener noreferrer">View release notes</a>}
           </>):(
             <div className="update-progress">
               <div className="update-progress-phase">{UPDATE_PHASE_TXT[phase]||phase||'Working…'}</div>
