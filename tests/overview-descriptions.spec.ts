@@ -70,22 +70,24 @@ test('stat KPI is keyboard-accessible via focus, not just hover', async ({ page 
   await expect(card).toContainText('offline');
 });
 
-test('capacity-by-site avg number hover explains what it means', async ({ page }) => {
+test('capacity-heatmap cell hover shows avg + worst + subnet count', async ({ page }) => {
   await gotoOverview(page);
-  const avg = page.locator('.siterow:not(.siterow-head) .pc:not(.mono)').first();
-  await avg.hover();
+  const cell = page.locator('.heatcell').first();
+  await cell.hover();
   const card = page.locator('.hoverdetail.show');
   await expect(card).toBeVisible();
-  await expect(card).toContainText('Average utilization');
+  await expect(card).toContainText('Avg');
+  await expect(card).toContainText('Worst');
+  await expect(card).toContainText('Subnets');
 });
 
-test('capacity-by-site worst number hover is distinct from avg', async ({ page }) => {
+test('capacity-heatmap panel side badge explains the site grouping', async ({ page }) => {
   await gotoOverview(page);
-  const worst = page.locator('.siterow:not(.siterow-head) .pc.mono').first();
-  await worst.hover();
+  const side = page.locator('.pcard', { hasText: 'Capacity heatmap' }).locator('.side');
+  await side.hover();
   const card = page.locator('.hoverdetail.show');
   await expect(card).toBeVisible();
-  await expect(card).toContainText('Worst single subnet');
+  await expect(card).toContainText('Subnets grouped by tagged site');
 });
 
 test('utilization-band chip hover explains the toggle', async ({ page }) => {

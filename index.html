@@ -3420,6 +3420,31 @@ function useAiExplain(){
   .ovx .triage-row .act{display:flex;gap:5px;flex-wrap:wrap;}
   .ovx .btn-accent{background:var(--accent);border-color:var(--accent);color:#fff;}
   .ovx .btn-accent:hover{background:var(--accent);border-color:var(--accent);}
+
+  /* Capacity heatmap — replaces the old scrolling Capacity-by-site bar list.
+     No color-only state: every band/cell also carries a text label (legend)
+     and a hover/focus detail card with the real numbers. */
+  .ovx .dist-wrap{display:flex;flex-direction:column;gap:var(--s2);}
+  .ovx .dist-bar{display:flex;height:22px;border-radius:var(--r-ctl);overflow:hidden;border:1px solid var(--border);}
+  .ovx .dist-seg{border:0;padding:0;min-width:2px;cursor:pointer;transition:opacity .12s ease;}
+  .ovx .dist-seg.off{opacity:.3;}
+  .ovx .dist-seg:focus-visible{outline:2px solid var(--accent-text);outline-offset:-2px;}
+  .ovx .dist-legend{display:flex;gap:var(--s4);flex-wrap:wrap;font-size:11px;color:var(--text-dim);}
+  .ovx .dist-legend b{color:var(--text);font-weight:600;}
+  .ovx .sw{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px;flex:none;}
+  .ovx .sw.crit{background:var(--crit);}
+  .ovx .sw.warn{background:var(--warn);}
+  .ovx .sw.ok{background:var(--ok);opacity:.6;}
+
+  .ovx .heatmap-wrap{margin-top:var(--s4);}
+  .ovx .heatmap{display:grid;grid-template-columns:repeat(auto-fill,minmax(14px,1fr));gap:3px;}
+  .ovx .heatcell{aspect-ratio:1;border-radius:2px;cursor:pointer;min-width:0;}
+  .ovx .heatcell:hover,.ovx .heatcell:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;z-index:1;}
+  .ovx .heatcell.crit{background:var(--crit);}
+  .ovx .heatcell.warn{background:var(--warn);}
+  .ovx .heatcell.ok{background:var(--ok);opacity:.6;}
+  .ovx .heatmap-legend{display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;font-size:11px;color:var(--text-dim);margin-top:var(--s2);}
+  .ovx .heatmap-note{margin-left:auto;color:var(--text-faint);}
   `;
   document.head.appendChild(s);
 })();
@@ -3487,6 +3512,13 @@ function OverviewTab(){
   const probPool=useMemo(()=>subnets.filter(s=>util(s)>70),[subnets]);
   const probCount=probPool.length;
   const toggleBand=id=>setBandsOn(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+  // Per-band subnet counts (shared by the control-row chips AND the capacity-heatmap
+  // distribution bar below — single source of truth, one semantic color per band).
+  const bandCounts=useMemo(()=>UTIL_BANDS.map(b=>({
+    ...b,
+    cnt:subnets.filter(s=>b.test(util(s))).length,
+    color:b.id==='lt70'?'var(--ok)':(b.id==='7089'?'var(--warn)':'var(--crit)'),
+  })),[subnets]); // eslint-disable-line
   // Preview rows for Top consumers / Triage — Problems-only scope, then AND'd against
   // whichever util bands are still selected (removable chips), worst-first.
   const subnetPreview=useMemo(()=>{
@@ -3560,15 +3592,13 @@ function OverviewTab(){
 
       <span className="chips-lbl">Utilization band</span>
       <div className="chips">
-        {UTIL_BANDS.map(b=>{
-          const cnt=subnets.filter(s=>b.test(util(s))).length;
+        {bandCounts.map(b=>{
           const on=bandsOn.includes(b.id);
-          const dotColor=b.id==='lt70'?'var(--ok)':(b.id==='7089'?'var(--warn)':'var(--crit)');
           return <button key={b.id} type="button" className={'chip band-chip'+(on?' active':' off')}
             aria-pressed={on} onClick={()=>toggleBand(b.id)}
-            {...bind({title:b.label+' utilization',rows:[['What it means','Show only subnets in this utilization range — click to '+(on?'hide':'show')+'.'],['Currently matching',cnt+' subnet'+(cnt===1?'':'s')]]})}>
-            <span aria-hidden="true" style={{width:7,height:7,borderRadius:2,background:dotColor,display:'inline-block'}}/>
-            {b.label}<span className="cnt num">{cnt}</span><span className="x">{on?'×':'+'}</span>
+            {...bind({title:b.label+' utilization',rows:[['What it means','Show only subnets in this utilization range — click to '+(on?'hide':'show')+'.'],['Currently matching',b.cnt+' subnet'+(b.cnt===1?'':'s')]]})}>
+            <span aria-hidden="true" style={{width:7,height:7,borderRadius:2,background:b.color,display:'inline-block'}}/>
+            {b.label}<span className="cnt num">{b.cnt}</span><span className="x">{on?'×':'+'}</span>
           </button>;
         })}
       </div>
@@ -3577,40 +3607,53 @@ function OverviewTab(){
     <div className="ovx-detail">
 
       <div className="span-6">
-        <Panel title="Capacity by site" empty={siteRows.length<2}
+        <Panel title="Capacity heatmap" empty={siteRows.length<2}
           side={<span className="mono" tabIndex={0} style={{cursor:'help'}}
-            {...bind({title:'Capacity by site',rows:[
+            {...bind({title:'Capacity heatmap',rows:[
               ['Grouping','Subnets grouped by tagged site (or by /16 network when untagged).'],
               ['Order','Worst-first, by average utilization.'],
             ]})}>{siteRows.length+' sites'}</span>}>
-          <div className="sites ov-mt">
-            {/* Column-label affordance so the two bare numbers below read as "avg / worst" —
-                inline-styled (not .pc) so it never matches the .siterow .pc value selectors
-                real data rows use (incl. overview-redesign.spec.ts fix 1). */}
-            {siteRows.length?<div className="siterow siterow-head" aria-hidden="true" style={{color:'var(--text-faint)',fontSize:10,textTransform:'uppercase',letterSpacing:'.4px'}}>
-              <span style={{width:96,flex:'none'}}/>
-              <span style={{flex:1}}/>
-              <span style={{width:38,textAlign:'right',flex:'none'}}>avg</span>
-              <span style={{width:38,textAlign:'right',flex:'none'}}>worst</span>
-            </div>:null}
-            {siteRows.map((s,i)=>{const c=utilColor(s.avg);
-              // drill: no table lives on Overview, so a site row jumps to Network with a
-              // removable global site filter pre-applied (carried in the #network?f= hash).
-              const go=()=>nav('network',{f:serializeFilters([{field:'site',value:s.nm}])});
-              // Note: only the row itself is a keyboard focus stop (role=button) — the two
-              // .pc numbers below get mouse-hover detail via bind() but are not separately
-              // tabbable, to avoid nesting focusable elements inside a role=button row. The
-              // row's title carries the same avg/worst meaning for keyboard/SR users.
-              return <div key={i} className="siterow clickable" role="button" tabIndex={0}
-              title={'Filter Network by '+s.nm+' — avg '+s.avg+'%, worst '+s.worst+'%'} onClick={go}
-              onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}>
-              <div className="nm" title={s.nm}>{s.nm}</div>
-              <div className="track"><i style={{width:Math.max(3,s.avg)+'%',background:c}}/></div>
-              <span className="pc" style={{color:c,cursor:'help'}}
-                {...bind({title:s.nm,rows:[['What it means',"Average utilization across this site's "+s.n+' subnet'+(s.n===1?'':'s')+'.']]})}>{s.avg}%</span>
-              <span className="pc mono" style={{color:'var(--text-faint)',cursor:'help'}}
-                {...bind({title:s.nm,rows:[['What it means','Worst single subnet in this site.']]})}>{s.worst}%</span>
-            </div>;})}
+          {/* Utilization distribution — segmented bar of the 4 UTIL_BANDS counts.
+              Click a segment to toggle that band (same bandsOn/toggleBand state as
+              the control-row chips above — the two stay in sync). */}
+          <div className="dist-wrap ov-mt">
+            <div className="dist-bar" role="group" aria-label="Utilization distribution — click a band to filter">
+              {bandCounts.map(b=>{
+                const on=bandsOn.includes(b.id);
+                return <button key={b.id} type="button" className={'dist-seg'+(on?'':' off')}
+                  style={{flex:b.cnt||0.0001,background:b.color}}
+                  aria-pressed={on} onClick={()=>toggleBand(b.id)}
+                  {...bind({title:b.label+' utilization',rows:[
+                    ['Count',b.cnt+' subnet'+(b.cnt===1?'':'s')],
+                    ['What it means','Click to '+(on?'hide':'show')+' this band — same filter as the chips above.'],
+                  ]})}/>;
+              })}
+            </div>
+            <div className="dist-legend">
+              {bandCounts.map(b=><span key={b.id}><i className="sw" style={{background:b.color}}/>{b.label}<b className="mono"> {b.cnt}</b></span>)}
+            </div>
+          </div>
+
+          {/* Capacity heatmap — every site as one small colored cell, worst-first
+              (siteRows is already sorted worst-first). Hover/focus = avg/worst/subnet
+              count; click drills into Network scoped to that site. */}
+          <div className="heatmap-wrap">
+            <div className="heatmap" role="list" aria-label={siteRows.length+' sites, worst-first'}>
+              {siteRows.map((s,i)=>{
+                const bnd=s.avg>=90?'crit':s.avg>=70?'warn':'ok';
+                const go=()=>nav('network',{f:serializeFilters([{field:'site',value:s.nm}])});
+                return <div key={s.nm+'|'+i} className={'heatcell '+bnd} role="button" tabIndex={0}
+                  aria-label={s.nm+' — avg '+s.avg+'%, worst '+s.worst+'%, '+s.n+' subnet'+(s.n===1?'':'s')}
+                  onClick={go} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}
+                  {...bind({title:s.nm,rows:[['Avg',s.avg+'%'],['Worst',s.worst+'%'],['Subnets',s.n]]})}/>;
+              })}
+            </div>
+            <div className="heatmap-legend">
+              <span><i className="sw crit"/>Exhausted ≥90%</span>
+              <span><i className="sw warn"/>Warning 70-89%</span>
+              <span><i className="sw ok"/>Healthy &lt;70%</span>
+              <span className="heatmap-note">click a cell to drill into Network</span>
+            </div>
           </div>
         </Panel>
       </div>

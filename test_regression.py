@@ -1296,8 +1296,6 @@ class OverviewRedesignTests(unittest.TestCase):
             "DHCP leases currently marked active",
             "online (reachable) / '+hostAgg.degraded+' degraded (reporting a warning)",
             "Show only subnets in this utilization range",
-            "Average utilization across this site's",
-            "Worst single subnet in this site.",
             "Subnets grouped by tagged site (or by /16 network when untagged).",
             "Reachability of your '+hosts.length.toLocaleString()+' managed hosts",
             "Host did not respond — down or unreachable.",
@@ -1305,6 +1303,20 @@ class OverviewRedesignTests(unittest.TestCase):
             self.assertIn(needle, ov, f"Missing hover description text: {needle!r}")
         # Never fall back to a native title= for these new descriptions.
         self.assertIn("useHoverDetail()", ov)
+
+    def test_capacity_heatmap_replaces_site_bar_list(self):
+        """Capacity-by-site 502-row .siterow bar list → distribution bar +
+        per-site heatmap. See tests/capacity-heatmap.spec.ts for DOM coverage."""
+        ov = self._overview_tab()
+        self.assertNotIn('className="siterow', ov, "old .siterow bar-list markup must be gone from Overview")
+        self.assertNotIn('className="sites ov-mt"', ov, "old .sites bar-list wrapper must be gone from Overview")
+        self.assertIn('className="dist-bar"', ov, "utilization distribution segmented bar missing")
+        self.assertIn("toggleBand(b.id)", ov)
+        self.assertIn('className="heatmap"', ov, "capacity heatmap grid missing")
+        self.assertIn("siteRows.map", ov, "heatmap must render one cell per siteRow")
+        self.assertIn("bnd=s.avg>=90?'crit':s.avg>=70?'warn':'ok'", ov,
+                      "heatmap cell band thresholds must match the contract (crit>=90, warn 70-89, ok<70)")
+        self.assertIn('className="heatmap-legend"', ov, "heatmap legend missing (no color-only state)")
 
     def test_top_consumers_no_lonely_dash(self):
         ov = self._overview_tab()

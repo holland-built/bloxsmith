@@ -67,16 +67,21 @@ test('fix 7 — compact stat strip replaces the big banner', async ({ page }) =>
   await expect(page.locator('.kpis')).toHaveCount(0);
 });
 
-test('fix 1 — capacity by site is real, varied, worst-first', async ({ page }) => {
+test('fix 1 — capacity heatmap is real, varied, worst-first (replaces the site bar list)', async ({ page }) => {
   await gotoOverview(page);
-  const names = page.locator('.siterow .nm');
-  await expect(names.nth(0)).toHaveText('HQ');
-  await expect(names.nth(1)).toHaveText('DC-WEST');
-  await expect(names.nth(2)).toHaveText('LAB');
-  const pcts = page.locator('.siterow .pc').first();
-  // three distinct averages prove these aren't fake all-100 grey bars.
-  const values = await page.locator('.siterow .pc:not(.mono)').allTextContents();
-  expect(values).toEqual(['96%', '81%', '35%']);
+  // the old scrolling .siterow bar list is gone entirely.
+  await expect(page.locator('.siterow')).toHaveCount(0);
+  // one heat cell per site, worst-first, colored by band — HQ (96% avg) →
+  // crit, DC-WEST (81% avg) → warn, LAB (35% avg) → ok.
+  const cells = page.locator('.heatcell');
+  await expect(cells).toHaveCount(3);
+  await expect(cells.nth(0)).toHaveClass(/crit/);
+  await expect(cells.nth(1)).toHaveClass(/warn/);
+  await expect(cells.nth(2)).toHaveClass(/ok/);
+  await cells.nth(0).hover();
+  const card = page.locator('.hoverdetail.show');
+  await expect(card).toContainText('HQ');
+  await expect(card).toContainText('96%');
 });
 
 test('fix 2 — top consumers scrolls past the first few rows', async ({ page }) => {
