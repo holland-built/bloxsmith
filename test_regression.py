@@ -585,6 +585,60 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("aria-expanded={aiOpen}",
                             "AI trigger button must expose aria-expanded")
 
+    # ── P1 slice 5: time & graph interaction system ─────────────────────────────
+
+    def test_time_range_folds_into_view_state_hash(self):
+        # Global time window travels in the EXISTING hash serializer as `t=` (same
+        # parseHash/nav path as f= / <id>.q) — no second store, no snapshot desync.
+        self.assertContains("function TimeProvider(",
+                            "Global time-range provider must exist")
+        self.assertContains("function useTimeRange(",
+                            "useTimeRange hook must exist")
+        self.assertContains("function timeWindowFor(",
+                            "timeWindowFor() must resolve preset/absolute tokens")
+        self.assertContains("parseHash().params.t",
+                            "TimeProvider must seed the window from the `t=` hash param")
+        self.assertContains("const TIME_PRESETS=",
+                            "Time presets (15m/1h/24h/7d) must be declared")
+        # Provider is mounted app-wide (inside FilterProvider) so every tab reads it.
+        self.assertContains("<FilterProvider><TimeProvider><Shell/>",
+                            "TimeProvider must wrap Shell app-wide")
+        # Snapshot keying / data-fetch left untouched: useSnapshots + DataProvider intact.
+        self.assertContains("function useSnapshots(",
+                            "useSnapshots must remain (time picker must not touch it)")
+
+    def test_time_range_control_in_topbar(self):
+        # Header control: preset buttons (keyboard-reachable) + reset ("All").
+        self.assertContains("function TimeRangeControl(",
+                            "TopBar time-range control must exist")
+        self.assertContains('<TimeRangeControl/>',
+                            "TimeRangeControl must be mounted in the TopBar")
+        self.assertContains('className="tr-preset"',
+                            "Time presets must render as buttons")
+        self.assertContains('data-preset=',
+                            "Preset buttons must carry data-preset for deep-linking")
+
+    def test_volume_histogram_interaction_kit(self):
+        # Crosshair readout, annotation ticks, capture-to-zoom, window band — all in
+        # the shared VolumeHistogram primitive (no forked chart lib).
+        vh = self.html[self.html.index("function VolumeHistogram("):]
+        vh = vh[:vh.index("\nfunction ", 1)]
+        self.assertIn("vh-crosshair", vh, "Crosshair cursor must render")
+        self.assertIn("vh-readout", vh, "Crosshair value+timestamp readout must render")
+        self.assertIn("vh-annot", vh, "Audit annotation ticks must render")
+        self.assertIn("onZoom", vh, "Capture-to-zoom callback must be wired")
+        self.assertIn("windowRange", vh, "Global window band must be read")
+        # Monochrome + text (no color-only): annotation marks use text tokens, not hue.
+        self.assertIn("vh-annot-mark", vh, "Annotation marks must be present")
+
+    def test_security_wires_time_interactions(self):
+        # SecurityTab feeds audit annotations + capture-to-zoom + reset into the chart.
+        sec = self.html[self.html.index("function SecurityTab("):]
+        sec = sec[:sec.index("// ═══ END: SECURITY")]
+        self.assertIn("useTimeRange()", sec, "SecurityTab must read the global time window")
+        self.assertIn("auditLogs", sec, "SecurityTab must source annotations from auditLogs")
+        self.assertIn("vh-reset", sec, "A reset-zoom affordance must be offered")
+
     # ── P1/4 app-wide cross-filter: stat tiles + health strip ───────────────────
 
     def test_host_status_tiles_cross_filter(self):
