@@ -629,6 +629,35 @@ class FrontendStructureTests(unittest.TestCase):
             self.assertIn("What it", body,
                           f"{fn} hover descriptions must be plain-English ('What it does/means')")
 
+    def test_marris_tabs_reskinned_to_shared_primitives(self):
+        # Content reskin of the Marris provisioning surface to the app's shared
+        # design primitives (presentation only — no fetch/handler/SSE change).
+        # DriftTab: the drift result renders via the shared glyph-diff vocabulary
+        # (dt-diff cells + / − / ~ + text label), NOT a color-only severity list.
+        self.assertContains("function driftMark(", "driftMark glyph classifier missing")
+        drift = self.html[self.html.index("function DriftTab("):]
+        drift = drift[:drift.index("\nfunction ", 1)]
+        self.assertIn('className="dt-diff mono"', drift,
+                      "DriftTab result must render the shared dt-diff glyph column")
+        self.assertIn("driftMark(d)", drift,
+                      "DriftTab must classify each drift item via driftMark()")
+        self.assertNotIn("secSevColor(d.severity)", drift,
+                         "DriftTab drift items must not be color-only (no secSevColor severity coloring)")
+        # SelfServiceTab: every tabular panel renders the shared DataTable (tableId),
+        # not hand-rolled rows — inline edit/delete survive as row-action renderers.
+        ss = self.html[self.html.index("function SelfServiceTab("):]
+        ss = ss[:ss.index("\nfunction ", 1)]
+        for tid in ("ss-dns-records", "ss-ip-addresses", "ss-inv-addresses", "ss-inv-records"):
+            self.assertIn('tableId="' + tid + '"', ss,
+                          f"SelfServiceTab tabular panel must render DataTable tableId=\"{tid}\"")
+        # ProvisionTab: form + streaming-log sections wrapped in the shared Panel/.pcard,
+        # mode controls use the shared segmented-control primitive.
+        prov = self.html[self.html.index("function ProvisionTab("):]
+        prov = prov[:prov.index("\nfunction ", 1)]
+        self.assertIn("<Panel title=", prov, "ProvisionTab sections must use the shared Panel")
+        self.assertIn('className="dly-seg"', prov,
+                      "ProvisionTab mode controls must use the shared segmented-control")
+
     def test_auth_api_endpoints(self):
         for ep in ("/api/switch-account", "/api/vault/init", "/api/vault/unlock"):
             self.assertContains(ep, f"auth endpoint {ep} missing")
