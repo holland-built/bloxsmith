@@ -171,6 +171,12 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
 }
 .ai-trigger:hover{background:var(--accent-dim);border-color:var(--accent-text);}
 .ai-trigger--open{background:var(--accent);color:#fff;border-color:var(--accent);}
+/* topbar-right cluster grouping — logical groups separated by thin dividers */
+.tb-group{display:inline-flex;align-items:center;gap:var(--s2);}
+.tb-group:not(:empty) + .tb-group:not(:empty)::before{content:'';width:1px;height:18px;background:var(--border-strong);margin:0 var(--s1);flex:0 0 auto;}
+.view-options{position:relative;display:inline-flex;}
+.view-options-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;display:flex;flex-direction:column;gap:var(--s1);padding:var(--s2);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.view-options-menu .kbd{width:100%;justify-content:flex-start;}
 
 /* ── freshness pill ── */
 .fresh{
@@ -8687,7 +8693,7 @@ function CommandPalette({open,onClose}){
   const [blocking,setBlocking]=useState(false);
   const [slot,setSlot]=useState(null);
   // Mount the saved-views dropdown into the topbar without editing Shell.
-  useEffect(()=>{setSlot(document.querySelector('.topbar-right'));},[]);
+  useEffect(()=>{setSlot(document.querySelector('.tools-slot'));},[]);
   useEffect(()=>{
     if(!open) return;
     setQ('');setSel(0);setConfirmBlock(null);
@@ -9021,7 +9027,7 @@ function ProblemsBadge(){
   return <button className="problems-badge crit" onClick={go}
     title={unackedCrit+' unacked critical · '+hotSubs+' subnets >85% · '+offline+' offline'}
     aria-label={total+' problems need attention'}>
-    <span className="mono">● {total}</span>
+    <span className="mono">● {total}</span> issues
   </button>;
 }
 
@@ -9089,6 +9095,33 @@ function HealthStrip(){
   </div>;
 }
 
+/* ViewOptions — ⚙ popover consolidating the three display toggles (density, theme,
+   wallboard) into one control. Open/overlay-click/Escape interaction mirrors ViewsMenu;
+   the Wall button calls the module-level enterWall() (global, in scope everywhere). */
+function ViewOptions(){
+  const [open,setOpen]=useState(false);
+  useEffect(()=>{
+    if(!open) return;
+    const onKey=e=>{ if(e.key==='Escape') setOpen(false); };
+    window.addEventListener('keydown',onKey);
+    return ()=>window.removeEventListener('keydown',onKey);
+  },[open]);
+  return <span className="view-options">
+    <button className="kbd" aria-haspopup="menu" aria-expanded={open}
+      aria-label="View options" title="View options — density, theme, wallboard"
+      onClick={()=>setOpen(o=>!o)}>⚙</button>
+    {open&&<>
+      <div className="views-overlay" onClick={()=>setOpen(false)}/>
+      <div className="view-options-menu" role="menu">
+        <DensityToggle/>
+        <ThemeToggle/>
+        <button className="kbd wall-toggle" onClick={enterWall}
+          aria-label="Enter wallboard mode" title="Wallboard — no-chrome NOC display">Wall</button>
+      </div>
+    </>}
+  </span>;
+}
+
 function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
   const {orgName}=useAuth();
   const orgLabel=orgName||org;
@@ -9107,24 +9140,12 @@ function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
         {...bind({title:TAB_LABELS[t],rows:[['What it does',TAB_DESCRIPTIONS[t]]]})}>{TAB_LABELS[t]}</button>)}
     </nav>
     <div className="topbar-right">
-      {fresh}
-      <TimeRangeControl/>
-      <ProblemsBadge/>
-      <button className={"kbd ai-trigger"+(aiOpen?" ai-trigger--open":"")} onClick={onAi}
-        aria-label="Open AI assistant" aria-expanded={aiOpen}
-        title="AI assistant — ⌘I / Ctrl-I">
-        <span>Ask AI</span><span className="mono">⌘I</span>
-      </button>
-      <AccountSlot/>
-      <DensityToggle/>
-      <ThemeToggle/>
-      <button className="kbd wall-toggle" onClick={enterWall}
-        aria-label="Enter wallboard (NOC display) mode" title="Wallboard — no-chrome NOC display (#wall)">
-        <span>Wall</span>
-      </button>
-      <button className="kbd" onClick={onPalette} aria-label="Open command palette" title="Command palette">
-        <span className="mono">⌘K</span>
-      </button>
+      <span className="tb-group">{fresh}<TimeRangeControl/></span>
+      <span className="tb-group"><ProblemsBadge/></span>
+      <span className="tb-group"><button className={"kbd ai-trigger"+(aiOpen?" ai-trigger--open":"")} onClick={onAi} aria-label="Open AI assistant" aria-expanded={aiOpen} title="AI assistant — ⌘I / Ctrl-I"><span>Ask AI</span><span className="mono">⌘I</span></button></span>
+      <span className="tb-group tools-slot"></span>
+      <span className="tb-group"><button className="kbd" onClick={onPalette} aria-label="Open command palette" title="Command palette"><span className="mono">⌘K</span></button><ViewOptions/></span>
+      <span className="tb-group"><AccountSlot/></span>
     </div>
   </header>;
 }
