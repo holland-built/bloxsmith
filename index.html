@@ -3061,10 +3061,7 @@ const TAB_DESCRIPTIONS={
   security:'Threat events from the Hub — severities, acknowledgements, and event detail.',
   incidents:'Correlated incidents — triage queue, SOC actions, and a live anomaly-event stream.',
   audit:'Immutable, hash-chained audit log of every action taken — chain integrity re-verified on every poll.',
-  provision:'Carve a new subnet from available address space — pick a parent block + prefix, or provision a full templated site.',
-  drift:'Compare running DHCP/DNS config to the source of truth; review + reconcile differences.',
-  selfservice:'Requests users have queued for address/space — approve or fulfill.',
-  editor:'Directly edit DNS/DHCP records + objects.',
+  provision:'Provisioning workspace — Provision (carve subnets/sites), Self-Service (allocate addresses), Editor (edit DNS/DHCP objects), and Drift (reconcile config). Per-tool detail lives on the sub-tab bar.',
 };
 const LEGACY={home:'overview',map:'network',dhcp:'network',ipam:'network',dns:'dns',
   security:'security',assets:'infra',audit:'audit',search:'overview',ask:'overview',hub:'overview',
@@ -8969,15 +8966,16 @@ function WatchMenu(){
 // ═══ END: ASKGLOBAL ═══
 
 const PROVISION_TOOLS=[
-  {key:'provision',  label:'Provision',    comp:ProvisionTab},
-  {key:'selfservice',label:'Self-Service', comp:SelfServiceTab},
-  {key:'editor',     label:'Editor',       comp:EditorTab},
-  {key:'drift',      label:'Drift',        comp:DriftTab},
+  {key:'provision',  label:'Provision',    comp:ProvisionTab,   desc:'Carve a new subnet from available address space — pick a parent block + prefix, or provision a full templated site.'},
+  {key:'selfservice',label:'Self-Service', comp:SelfServiceTab, desc:'Grab the next free address (or a batch) from a subnet or tag match, and optionally create its DNS record in one step.'},
+  {key:'editor',     label:'Editor',       comp:EditorTab,      desc:'Directly create or edit DNS/DHCP objects — zones, subnets, blocks, ranges, hosts, and tags.'},
+  {key:'drift',      label:'Drift',        comp:DriftTab,       desc:'Compare running DHCP/DNS config to its source-of-truth template; review + reconcile differences.'},
 ];
 // ProvisionGroupTab — one top-level tab that hosts the four write-surfaces as a
 // .dly-seg sub-tab bar. Active tool comes from ?tool= (default 'provision').
 function ProvisionGroupTab(props){
   const {params}=useRoute();
+  const {bind}=useHoverDetail();
   const found=PROVISION_TOOLS.find(t=>t.key===params.tool);
   const active=found?found.key:'provision';
   const Active=(found||PROVISION_TOOLS[0]).comp;
@@ -8987,7 +8985,8 @@ function ProvisionGroupTab(props){
       {PROVISION_TOOLS.map(t=>
         <button key={t.key} className={'dly-seg-btn'+(t.key===active?' on':'')}
           aria-current={t.key===active?'page':undefined}
-          onClick={()=>nav('provision',{tool:t.key})}>{t.label}</button>)}
+          onClick={()=>nav('provision',{tool:t.key})}
+          {...bind({title:t.label,rows:[['What it does',t.desc]]})}>{t.label}</button>)}
     </div>
     <Active {...props}/>
   </div>;
