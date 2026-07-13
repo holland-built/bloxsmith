@@ -391,6 +391,33 @@ table.dt tbody tr.cursor .row-copyas-wrap,
 /* display-form primitives (VolumeHistogram) — viewBox-scaled, overflow-safe */
 .vh-svg{display:block;width:100%;}
 .vh-bar{cursor:pointer;}
+/* ── time & graph interaction (P1 slice 5) — crosshair, annotations, zoom band,
+   global time-range control. Monochrome + text (no color-only), token-driven. ── */
+.vh-wrap{position:relative;width:100%;min-width:0;}
+.vh-crosshair{stroke:var(--text-dim);stroke-width:0.5;stroke-dasharray:1.5 1.5;pointer-events:none;vector-effect:non-scaling-stroke;}
+.vh-window{fill:var(--accent);opacity:0.10;pointer-events:none;}
+.vh-annot-hit{fill:transparent;cursor:help;}
+.vh-annot-mark{fill:var(--text-faint);pointer-events:none;}
+.vh-annot:hover .vh-annot-mark,.vh-annot:focus-visible .vh-annot-mark{fill:var(--text);}
+.vh-annot:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+.vh-readout{position:absolute;top:0;transform:translateX(-50%);pointer-events:none;
+  background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);
+  padding:1px var(--s2);font-family:'GeistMono',ui-monospace,monospace;font-size:var(--t11);
+  color:var(--text);white-space:nowrap;z-index:2;box-shadow:0 1px 4px rgba(0,0,0,0.25);}
+.vh-reset{height:22px;padding:0 var(--s2);font-size:var(--t11);color:var(--text-dim);
+  background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+.vh-reset:hover{color:var(--text);border-color:var(--border-strong);}
+/* global time-range control (TopBar) — segmented preset buttons + reset */
+.timerange{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--border);
+  border-radius:var(--r-ctl);padding:2px;background:var(--surface);}
+.tr-preset,.tr-reset{height:22px;min-width:30px;padding:0 var(--s2);font-size:var(--t11);
+  font-family:'GeistMono',ui-monospace,monospace;color:var(--text-dim);background:transparent;
+  border:0;border-radius:calc(var(--r-ctl) - 1px);cursor:pointer;}
+.tr-preset:hover,.tr-reset:hover{color:var(--text);background:var(--raised);}
+.tr-preset:focus-visible,.tr-reset:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+.tr-preset[aria-pressed="true"]{color:var(--accent-contrast);background:var(--accent);}
+.tr-reset{border-left:1px solid var(--border);margin-left:2px;border-radius:0 calc(var(--r-ctl) - 1px) calc(var(--r-ctl) - 1px) 0;}
+@media (prefers-reduced-motion:no-preference){.vh-readout{transition:left 60ms linear;}}
 
 .action-bar{
   position:fixed;left:50%;bottom:var(--s5);transform:translateX(-50%);z-index:75;
@@ -1150,6 +1177,73 @@ function FilterProvider({children}){
   const has=useCallback((field,value)=>ref.current.some(f=>same(f,field,value)),[]);
   const val=useMemo(()=>({filters,add,remove,toggle,clear,has}),[filters,add,remove,toggle,clear,has]);
   return <FilterCtx.Provider value={val}>{children}</FilterCtx.Provider>;
+}
+
+/* ── Global time-range (P1 slice 5, part 1) ───────────────────────────────────
+   A single app-level time window, serialized into the EXISTING view-state hash
+   as `t=` (same parseHash/nav path as `f=` / `<id>.q`) so it travels with the
+   shareable URL and NEVER desyncs the deep-link — the reason the earlier global
+   picker was deferred. It touches ONLY the hash; snapshot keying + data-fetch
+   (useSnapshots/useData) are untouched, so day-over-day deltas stay stable.
+
+   `t=` holds one of two shapes, both round-trippable and backward-compatible
+   (unset ⇒ current behavior):
+     • a relative preset token  — `15m` / `1h` / `24h` / `7d`  (window = now-N…now)
+     • an absolute epoch window — `<fromMs>-<toMs>`            (from capture-to-zoom)  */
+const TIME_PRESETS=[
+  {k:'15m',label:'15m',ms:15*60000},
+  {k:'1h', label:'1h', ms:3600000},
+  {k:'24h',label:'24h',ms:86400000},
+  {k:'7d', label:'7d', ms:7*86400000},
+];
+/* timeWindowFor(token) → {from,to,label}|null. now-relative for presets, absolute
+   for `<from>-<to>`. Returns null for unset/garbage → callers fall back to their
+   own (pre-existing) domain, keeping every chart backward-compatible. */
+function timeWindowFor(token){
+  if(!token) return null;
+  const p=TIME_PRESETS.find(p=>p.k===token);
+  if(p){ const to=Date.now(); return {from:to-p.ms,to,label:p.label}; }
+  const m=/^(\d+)-(\d+)$/.exec(token);
+  if(m){ const from=Number(m[1]),to=Number(m[2]); if(isFinite(from)&&isFinite(to)&&to>from) return {from,to,label:'custom'}; }
+  return null;
+}
+const TimeCtx=React.createContext(null);
+const NO_TIME={token:null,window:null,setRange(){}};
+function useTimeRange(){ return React.useContext(TimeCtx)||NO_TIME; }
+function TimeProvider({children}){
+  const [token,setToken]=useState(()=>parseHash().params.t||null);
+  const ref=useRef(token); ref.current=token;
+  useEffect(()=>{
+    const on=()=>{ const next=parseHash().params.t||null; if(next!==ref.current) setToken(next); };
+    window.addEventListener('hashchange',on);
+    return ()=>window.removeEventListener('hashchange',on);
+  },[]);
+  // setRange mirrors to the hash the same guarded way the `f=`/`<id>.q` mirrors do.
+  const setRange=useCallback(next=>{
+    setToken(next); ref.current=next;
+    const {tab,params}=parseHash(); const p={...params};
+    if(next) p.t=next; else delete p.t;
+    nav(tab,p);
+  },[]);
+  const win=useMemo(()=>timeWindowFor(token),[token]);
+  const val=useMemo(()=>({token,window:win,setRange}),[token,win,setRange]);
+  return <TimeCtx.Provider value={val}>{children}</TimeCtx.Provider>;
+}
+
+/* TimeRangeControl — TopBar segmented presets + reset. Buttons (keyboard-reachable
+   by default); the active preset is aria-pressed. An absolute zoom window shows no
+   pressed preset but the reset ("All") still clears it. Optional — unset = default. */
+function TimeRangeControl(){
+  const {token,setRange}=useTimeRange();
+  return <div className="timerange" role="group" aria-label="Time range">
+    {TIME_PRESETS.map(p=>
+      <button key={p.k} type="button" className="tr-preset" data-preset={p.k}
+        aria-pressed={token===p.k?'true':'false'}
+        aria-label={'Last '+p.label}
+        onClick={()=>setRange(token===p.k?null:p.k)}>{p.label}</button>)}
+    <button type="button" className="tr-reset" aria-label="Clear time range (show all)"
+      disabled={!token} onClick={()=>setRange(null)}>All</button>
+  </div>;
 }
 
 /* ── FilterBar — sticky strip of active pivots under the TopBar. Hidden when empty. ── */
@@ -3487,10 +3581,20 @@ function parseTs(v){
   const n=Number(v); if(isFinite(n)&&String(v).trim()!=='') return n<1e12?n*1000:n;
   const d=Date.parse(v); return isNaN(d)?NaN:d;
 }
-function VolumeHistogram({rows,tsKey,buckets,onRange,selected}){
+/* VolumeHistogram — time-bucketed event volume with the full P1-slice-5 interaction
+   kit. New props are ALL optional (unset ⇒ pre-existing behavior, backward-compatible):
+     • onZoom(range)   — capture-to-zoom: a drag-select also reports its window here
+                         (the caller sets the GLOBAL time range from it). Single-bucket
+                         clicks stay local (onRange only) so bucket-filtering is unchanged.
+     • annotations     — [{ts,title,rows}] audit/config-change ticks overlaid on the
+                         time axis; each is a focusable monochrome mark + hover detail.
+     • windowRange     — [from,to] ms of the active global window, shaded as a band. */
+function VolumeHistogram({rows,tsKey,buckets,onRange,selected,onZoom,annotations,windowRange}){
   const svgRef=useRef(null);
   const dragRef=useRef(null);           // {u0} while dragging
   const [drag,setDrag]=useState(null);  // {a,b} in 0..100 units
+  const [cross,setCross]=useState(null);// {u,i,count} crosshair readout on hover
+  const {bind}=useHoverDetail();        // annotation hover cards (reuses the singleton)
 
   const model=useMemo(()=>{
     const ts=(Array.isArray(rows)?rows:[]).map(r=>parseTs(tsKey?(typeof tsKey==='function'?tsKey(r):r[tsKey]):r&&r.ts)).filter(t=>isFinite(t));
@@ -3506,33 +3610,51 @@ function VolumeHistogram({rows,tsKey,buckets,onRange,selected}){
   if(!model) return null;
   const {min,max,span,n,bw,counts,peak}=model;
   const uToT=u=>min+(u/100)*span;
+  const tToU=t=>((t-min)/span)*100;
+  const uToBucket=u=>{ let i=Math.floor((u/100)*n); if(i>=n)i=n-1; if(i<0)i=0; return i; };
   const clientToU=px=>{ const el=svgRef.current; if(!el) return 0; const r=el.getBoundingClientRect(); return Math.max(0,Math.min(100,((px-r.left)/r.width)*100)); };
   const bucketSel=i=>{ if(!selected) return false; const c=min+(i+0.5)*bw; return c>=selected[0]&&c<=selected[1]; };
 
-  const onDown=e=>{ const u=clientToU(e.clientX); dragRef.current={u0:u}; setDrag({a:u,b:u}); if(e.currentTarget.setPointerCapture){try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}} };
-  const onMove=e=>{ if(!dragRef.current) return; const u=clientToU(e.clientX); setDrag({a:dragRef.current.u0,b:u}); };
+  const onDown=e=>{ const u=clientToU(e.clientX); dragRef.current={u0:u}; setDrag({a:u,b:u}); setCross(null); if(e.currentTarget.setPointerCapture){try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}} };
+  const onMove=e=>{
+    const u=clientToU(e.clientX);
+    if(dragRef.current){ setDrag({a:dragRef.current.u0,b:u}); return; }
+    const i=uToBucket(u); setCross({u,i,count:counts[i]});   // crosshair readout (part 3)
+  };
   const onUp=e=>{
     const d=dragRef.current; dragRef.current=null; const cur=drag; setDrag(null);
-    if(!d||!onRange) return;
+    if(!d) return;
     const u1=clientToU(e.clientX);
-    if(Math.abs(u1-d.u0)<1.5){ let i=Math.floor((d.u0/100)*n); if(i>=n)i=n-1; if(i<0)i=0; onRange([min+i*bw,min+(i+1)*bw]); }
-    else { const t0=uToT(Math.min(d.u0,u1)),t1=uToT(Math.max(d.u0,u1)); onRange([t0,t1]); }
+    if(Math.abs(u1-d.u0)<1.5){ const i=uToBucket(d.u0); if(onRange) onRange([min+i*bw,min+(i+1)*bw]); }   // single bucket → local only
+    else { const t0=uToT(Math.min(d.u0,u1)),t1=uToT(Math.max(d.u0,u1)); if(onRange) onRange([t0,t1]); if(onZoom) onZoom([t0,t1]); }  // drag → local + global zoom
     void cur;
   };
+  const clearAll=()=>{ if(onRange) onRange(null); if(onZoom) onZoom(null); };
 
   const fmt=t=>{ const d=new Date(t); return span>2*86400000?d.toLocaleDateString([],{month:'short',day:'numeric'}):d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); };
+  const fmtFull=t=>{ const d=new Date(t); return d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); };
   const labels=[0,0.33,0.66,1].map(f=>fmt(min+f*span));
   const total=counts.reduce((s,c)=>s+c,0);
+  // window band (part 1 read-back) clipped to the visible domain
+  const win=(Array.isArray(windowRange)&&windowRange.length===2)?[Math.max(0,tToU(windowRange[0])),Math.min(100,tToU(windowRange[1]))]:null;
+  const winVisible=win&&win[1]>0&&win[0]<100&&win[1]>win[0];
+  // annotation ticks (part 4) — only those inside the domain
+  const annots=(Array.isArray(annotations)?annotations:[])
+    .map(a=>({...a,ts:parseTs(a.ts)})).filter(a=>isFinite(a.ts)&&a.ts>=min&&a.ts<=max)
+    .map(a=>({...a,u:tToU(a.ts)}));
 
   return <div style={{width:'100%',minWidth:0}}>
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'var(--s2)',marginBottom:'var(--s1)'}}>
       <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>{total} event{total===1?'':'s'}</span>
-      {selected?<button className="chip vh-clear" style={{cursor:'pointer'}} onClick={()=>onRange&&onRange(null)}>Clear ✕</button>:null}
+      {selected?<button className="chip vh-clear" style={{cursor:'pointer'}} onClick={clearAll}>Clear ✕</button>:null}
     </div>
+    <div className="vh-wrap">
     <svg ref={svgRef} className="vh-svg" viewBox="0 0 100 40" height={120} preserveAspectRatio="none"
         role="img" aria-label={'Volume histogram — '+total+' events'}
         style={{touchAction:'none'}}
-        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={e=>{if(dragRef.current)onUp(e);}}>
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
+        onPointerLeave={e=>{ if(dragRef.current){onUp(e);} setCross(null); }}>
+      {winVisible?<rect className="vh-window" x={win[0]} y={0} width={win[1]-win[0]} height={40}/>:null}
       {counts.map((c,i)=>{
         const bwU=100/n,gap=Math.min(bwU*0.2,0.6),x=i*bwU+gap/2,w=Math.max(0.2,bwU-gap);
         const bh=(c/peak)*38,y=40-bh;
@@ -3547,7 +3669,23 @@ function VolumeHistogram({rows,tsKey,buckets,onRange,selected}){
       })}
       {drag?<rect x={Math.min(drag.a,drag.b)} y={0} width={Math.abs(drag.a-drag.b)} height={40}
         fill="var(--accent)" opacity="0.15" style={{pointerEvents:'none'}}/>:null}
+      {annots.map((a,i)=>{
+        const who=a.who||a.user||'', what=a.what||a.action||'', rowsD=a.rows||[
+          ['Who',who||'—'],['What',what||'—'],['When',fmtFull(a.ts)]];
+        const title=a.title||(what?what+' · '+who:'Change');
+        return <g key={'an'+i} className="vh-annot" tabIndex={0} role="img"
+            aria-label={'Change annotation — '+title+' at '+fmtFull(a.ts)}
+            {...bind({title,rows:rowsD})}>
+          <rect className="vh-annot-hit" x={a.u-1.5} y={0} width={3} height={40}/>
+          <path className="vh-annot-mark" d={'M'+(a.u-1)+',0 L'+(a.u+1)+',0 L'+a.u+',3 Z'}/>
+          <rect className="vh-annot-mark" x={a.u-0.12} y={0} width={0.24} height={7}/>
+          <title>{title+' · '+fmtFull(a.ts)}</title>
+        </g>;
+      })}
+      {cross?<line className="vh-crosshair" x1={cross.u} y1={0} x2={cross.u} y2={40}/>:null}
     </svg>
+    {cross?<div className="vh-readout" style={{left:cross.u+'%'}}>{cross.count} event{cross.count===1?'':'s'} · {fmt(uToT(cross.u))}</div>:null}
+    </div>
     <div className="mono" style={{display:'flex',justifyContent:'space-between',fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:'var(--s1)'}}>
       {labels.map((l,i)=><span key={i}>{l}</span>)}
     </div>
@@ -6159,6 +6297,8 @@ function SecSynthBand({api,acks,setSevF,triageRef}){
 function SecurityTab(){
   const sec=useApi('/api/hub/security',{poll:60000});
   const route=useRoute();
+  const time=useTimeRange();                 // global time window (P1 slice 5)
+  const {data:allData}=useData();            // shared feed — carries auditLogs for annotations
   const [sevF,setSevF]=useState('all');
   const [range,setRange]=useState(null);
   const [acks,setAcks]=useState(()=>LS.get('acks',{}));
@@ -6167,13 +6307,30 @@ function SecurityTab(){
   const toggleAck=e=>{const k=secAckKey(e);setAcks(p=>{const n={...p};if(n[k])delete n[k];else n[k]=true;LS.set('acks',n);return n;});};
   const clearAcks=()=>{setAcks({});LS.set('acks',{});};
   const secEvents=sec.data&&Array.isArray(sec.data.events)?sec.data.events:[];
+  // Event annotations (part 4): audit/config-change ticks from the shared feed's
+  // auditLogs (norm_audit → {ts,user,action,resource,result}). Empty ⇒ no ticks.
+  const auditLogs=(allData&&Array.isArray(allData.auditLogs))?allData.auditLogs:[];
+  const annotations=auditLogs.map(a=>({ts:a.ts,who:a.user,what:a.action,
+    title:(a.action||'change')+' · '+(a.resource||''),
+    rows:[['Who',a.user||'—'],['What',((a.action||'')+' '+(a.resource||'')).trim()||'—'],
+          ['When',a.ts||'—'],['Result',a.result||'—']]}));
+  const tWin=time.window;
+  // Capture-to-zoom (part 2): a drag reports its window here; encode it as an
+  // absolute `<from>-<to>` token in the global time hash. null ⇒ clear.
+  const onZoom=r=>time.setRange(r?(Math.round(r[0])+'-'+Math.round(r[1])):null);
+  // The triage inbox is a time-filtered table: it reads the local brush range if
+  // set, else the global window — so a global preset/zoom narrows it too (part 1).
+  const effRange=range||(tWin?[tWin.from,tWin.to]:null);
+  const resetZoom=<button className="vh-reset" onClick={()=>{time.setRange(null);setRange(null);}}
+    aria-label="Reset zoom — clear the time window">Reset zoom ✕</button>;
   return <div className="page">
     <SecSynthBand api={sec} acks={acks} setSevF={setSevF} triageRef={triageRef}/>
-    <Panel title="Event volume" side="brush to filter" empty={secEvents.length===0}>
-      <VolumeHistogram rows={secEvents} tsKey="event_time" buckets={48} onRange={setRange} selected={range}/>
+    <Panel title="Event volume" side={time.token?resetZoom:'brush to filter'} empty={secEvents.length===0}>
+      <VolumeHistogram rows={secEvents} tsKey="event_time" buckets={48} onRange={setRange} selected={range}
+        onZoom={onZoom} annotations={annotations} windowRange={tWin?[tWin.from,tWin.to]:null}/>
     </Panel>
     <Panel>
-      <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} setAcks={setAcks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef} initialPeekKey={route.params.peek} range={range} onExplain={ai.open}/>
+      <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} setAcks={setAcks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef} initialPeekKey={route.params.peek} range={effRange} onExplain={ai.open}/>
     </Panel>
     <div className="grid-dense">
       <Panel><SecThreatLookup/></Panel>
@@ -8366,6 +8523,7 @@ function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
     </nav>
     <div className="topbar-right">
       {fresh}
+      <TimeRangeControl/>
       <ProblemsBadge/>
       <button className={"kbd ai-trigger"+(aiOpen?" ai-trigger--open":"")} onClick={onAi}
         aria-label="Open AI assistant" aria-expanded={aiOpen}
@@ -8521,7 +8679,7 @@ function ShortcutsHelp(){
 }
 
 function App(){
-  return <VaultGate><DataProvider><FilterProvider><Shell/></FilterProvider></DataProvider></VaultGate>;
+  return <VaultGate><DataProvider><FilterProvider><TimeProvider><Shell/></TimeProvider></FilterProvider></DataProvider></VaultGate>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
