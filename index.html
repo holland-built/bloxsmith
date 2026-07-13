@@ -202,6 +202,12 @@ table.dt thead th{
 }
 table.dt thead th.num{text-align:right;}
 table.dt thead th .sort-ind{color:var(--text-faint);margin-left:var(--s1);}
+/* Feature 7 — multi-sort order badge: a small numbered circle ahead of the arrow,
+   shown only once 2+ sort keys are active (never color-only — the number itself
+   IS the signal, same text badge in both themes). */
+table.dt thead th .sort-order{display:inline-flex;align-items:center;justify-content:center;
+  width:13px;height:13px;border-radius:50%;background:var(--accent);color:#fff;
+  font-size:9px;font-weight:700;margin-right:2px;vertical-align:1px;}
 table.dt tbody td{
   padding:0 var(--s3);height:var(--row-h);
   border-bottom:1px solid var(--border);
@@ -294,8 +300,13 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 /* row-level focus ring for keyboard-tabbable clickable rows */
 table.dt tbody tr.clickable:focus-visible{box-shadow:inset 0 0 0 1px var(--accent-text);}
 
-/* ── power layer: keyboard cursor, row flash, selection, peek, action bar ── */
-table.dt tbody tr.cursor{background:var(--hover);box-shadow:inset 2px 0 0 var(--accent);}
+/* ── power layer: keyboard cursor, row flash, selection, peek, action bar ──
+   Feature 5: the cursor row is NOT color-only — a full inset ring (all four
+   sides, like the focus-visible ring above) is the real signal, on top of the
+   background tint + left accent bar; aria-selected + aria-activedescendant
+   (DTRow/DataTable) carry the same state for assistive tech. */
+table.dt tbody tr.cursor{background:var(--hover);
+  box-shadow:inset 2px 0 0 var(--accent),inset 0 0 0 1px var(--accent-text);}
 @keyframes bx-flash{0%{background:var(--hover);}100%{background:transparent;}}
 table.dt tbody tr.flash{animation:bx-flash .4s ease;}
 table.dt td.dt-check,table.dt th.dt-check{width:28px;text-align:center;padding:0 var(--s2);cursor:default;}
@@ -930,6 +941,19 @@ function PowerProvider({children}){
   },[setActive]);
   const getActive=useCallback(()=> activeRef.current?tablesRef.current.get(activeRef.current):null,[]);
   const setDensity=useCallback(v=>{ document.documentElement.dataset.density=v; LS.set('density',v); setDensityState(v); },[]);
+  // Feature 9 — is a DataTable with a `field` column currently mounted anywhere
+  // on THIS page? Lets a widget (the capacity heatmap) decide, at click time,
+  // between cross-filtering a co-located table in place (fx.toggle) vs. navigating
+  // to a page that has one (nav-drill) — see OverviewTab's heatcell onClick.
+  const hasField=useCallback(field=>{
+    for(const entry of tablesRef.current.values()){
+      const api=entry&&entry.api&&entry.api.current;
+      if(!api||typeof api.getState!=='function') continue;
+      let st; try{ st=api.getState(); }catch(e){ continue; }
+      if(st&&Array.isArray(st.columns)&&st.columns.some(c=>c&&c.key===field)) return true;
+    }
+    return false;
+  },[]);
 
   useEffect(()=>{
     const gg={t:0};
@@ -963,7 +987,7 @@ function PowerProvider({children}){
     return ()=>window.removeEventListener('keydown',onKey);
   },[closePeek]);
 
-  const val={activeId,setActive,register,unregister,getActive,peek,setPeek,closePeek,density,setDensity};
+  const val={activeId,setActive,register,unregister,getActive,peek,setPeek,closePeek,density,setDensity,hasField};
   return <PowerCtx.Provider value={val}>{children}</PowerCtx.Provider>;
 }
 
@@ -996,6 +1020,34 @@ function parseFilterStr(s){
 }
 function serializeFilters(arr){ return (arr||[]).map(f=>encodeURIComponent(f.field)+':'+encodeURIComponent(f.value)).join(','); }
 function parseFilterHash(){ const {params}=parseHash(); return parseFilterStr(params.f); }
+// Range-aware cross-filter matching (Feature 9): FilterCtx filters are normally an
+// exact string match (see DataTable's `active` filter below). A value shaped like
+// "lo-hi" (e.g. the capacity-heatmap util bands: "90-99", "100-999999") is instead
+// matched as an inclusive numeric range — same lo-hi convention the BQL range
+// syntax (util:90-99) already uses elsewhere, just applied to a plain scalar
+// column instead of the search box. Any non-numeric-range value falls back to the
+// existing exact-match behavior untouched.
+const RANGE_VALUE_RE=/^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$/;
+function filterMatchesRow(row,f){
+  const m=RANGE_VALUE_RE.exec(String(f.value));
+  if(m){
+    const n=Number(row[f.field]);
+    if(isNaN(n)) return false;
+    return n>=Number(m[1])&&n<=Number(m[2]);
+  }
+  return String(row[f.field])===String(f.value);
+}
+// Feature 7 — multi-column sort hash codec. Single-key form ("key:dir") is
+// byte-identical to the pre-multi-sort format so old links / saved views still
+// parse; a comma joins additional keys ("a:asc,b:desc") in priority order.
+function parseSortParam(raw){
+  if(!raw) return [];
+  return String(raw).split(',').map(tok=>{
+    const ci=tok.indexOf(':'); const key=ci>=0?tok.slice(0,ci):tok; const dir=ci>=0?tok.slice(ci+1):'asc';
+    return key?{key,dir:dir==='desc'?'desc':'asc'}:null;
+  }).filter(Boolean);
+}
+function serializeSortParam(arr){ return (arr||[]).map(s=>s.key+':'+(s.dir||'asc')).join(','); }
 
 const FilterCtx=React.createContext(null);
 const NO_FILTERS={filters:[],add(){},remove(){},toggle(){},clear(){},has(){return false;}};
@@ -1620,12 +1672,16 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // (NetworkTab, ~4280) already use. The mirror-back effects live further down,
   // once all three pieces of state exist.
   const hashParams=id?parseHash().params:null;
+  // Feature 7 — multi-column sort. `sort` is always an ORDERED ARRAY of {key,dir}
+  // (was a single {key,dir}|null object) — [] = unsorted, [a] = single-sort (the
+  // common case, and the ONLY shape ever written to the hash so `<id>.sort` stays
+  // byte-compatible with the old "key:dir" format — see serializeSortParam), [a,b,…]
+  // = shift-click-appended secondary/tertiary keys, applied in order, stable.
   const [sort,setSort]=useState(()=>{
     const raw=hashParams&&hashParams[id+'.sort'];
-    if(raw){ const ci=raw.indexOf(':'); const key=ci>=0?raw.slice(0,ci):raw; const dir=ci>=0?raw.slice(ci+1):'asc';
-      if(key) return {key,dir:dir==='desc'?'desc':'asc'}; }
-    return defaultSort||null;
-  }); // {key,dir}
+    if(raw) return parseSortParam(raw);
+    return defaultSort?[defaultSort]:[];
+  });
   const [cursor,setCursor]=useState(-1);             // -1 = no visual until a key is pressed
   const [selected,setSelected]=useState(()=>new Set());
   const [filterState,setFilterState]=useState(()=>{
@@ -1838,20 +1894,28 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     // global cross-filter: AND every active filter whose field is a column of THIS table
     // (filters for fields this table lacks are ignored, so unrelated tables don't blank).
     const active=globalFilters.filter(f=>columns.some(c=>c.key===f.field));
-    if(active.length) out=out.filter(r=>active.every(f=>String(r[f.field])===String(f.value)));
+    if(active.length) out=out.filter(r=>active.every(f=>filterMatchesRow(r,f)));
     return out;
   },[base,filter,filterable,_schema,columns,globalFilters]);
 
   const sorted=useMemo(()=>{
-    if(!sort||!sort.key) return filtered;
-    const {key,dir}=sort;const mul=dir==='desc'?-1:1;
+    if(!sort||!sort.length) return filtered;
     return [...filtered].sort((a,b)=>{
-      const av=a?.[key],bv=b?.[key];
-      if(av==null&&bv==null) return 0;
-      if(av==null) return 1;if(bv==null) return -1;
-      const an=typeof av==='number',bn=typeof bv==='number';
-      if(an&&bn) return (av-bv)*mul;
-      return String(av).localeCompare(String(bv),undefined,{numeric:true})*mul;
+      for(let i=0;i<sort.length;i++){
+        const {key,dir}=sort[i];const mul=dir==='desc'?-1:1;
+        const av=a?.[key],bv=b?.[key];
+        let cmp;
+        if(av==null&&bv==null) cmp=0;
+        else if(av==null) cmp=1;
+        else if(bv==null) cmp=-1;
+        else{
+          const an=typeof av==='number',bn=typeof bv==='number';
+          cmp=(an&&bn)?(av-bv):String(av).localeCompare(String(bv),undefined,{numeric:true});
+        }
+        cmp*=mul;
+        if(cmp!==0) return cmp;
+      }
+      return 0;
     });
   },[filtered,sort]);
 
@@ -1919,7 +1983,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     if(!id) return;
     const {tab,params}=parseHash(); const np={...params};
     const key=id+'.sort';
-    const val=(sort&&sort.key)?(sort.key+':'+(sort.dir||'asc')):'';
+    const val=serializeSortParam(sort);
     if(val) np[key]=val; else delete np[key];
     if((np[key]||'')!==(params[key]||'')) nav(tab,np);
   },[id,sort]);
@@ -1940,11 +2004,32 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     if((np[key]||'')!==(params[key]||'')) nav(tab,np);
   },[id,filterControlled,filterable,filterState]);
 
-  const toggle=(key)=>setSort(s=>{
-    if(!s||s.key!==key) return {key,dir:'asc'};
-    if(s.dir==='asc') return {key,dir:'desc'};
-    return null;
-  });
+  // Feature 7 — header click. Plain click ALWAYS collapses to a fresh single-sort
+  // on that column (dropping any secondary/tertiary keys) — except when it's
+  // already the sole active key, where it keeps the old asc→desc→(clear) cycle.
+  // Shift+click appends `key` as the next-priority sort key (stable, in order);
+  // shift-clicking a key already IN the list cycles its own direction the same
+  // asc→desc→(drop-from-list) way, without disturbing the other active keys.
+  const clickSort=(key,shift)=>{
+    if(shift){
+      setSort(cur=>{
+        const list=cur||[];
+        const idx=list.findIndex(s=>s.key===key);
+        if(idx<0) return [...list,{key,dir:'asc'}];
+        if(list[idx].dir==='asc'){ const next=list.slice(); next[idx]={key,dir:'desc'}; return next; }
+        return list.filter(s=>s.key!==key);
+      });
+      return;
+    }
+    setSort(cur=>{
+      const list=cur||[];
+      if(list.length===1&&list[0].key===key){
+        if(list[0].dir==='asc') return [{key,dir:'desc'}];
+        return [];
+      }
+      return [{key,dir:'asc'}];
+    });
+  };
 
   const align=(c)=>c.align||(c.mono?'right':'left');
   const isNum=(c)=>align(c)==='right';
@@ -2348,11 +2433,22 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         <thead><tr>
           {diffMap?<th className="dt-diff" aria-label="Diff status"></th>:null}
           {selectable?<th className="dt-check"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all rows"/></th>:null}
-          {effCols.map(c=><th key={c.key} className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
-            style={(c.primary||c.width)?{...(c.width?{width:c.width}:{}),...(c.primary?{minWidth:c.minWidth||120}:{})}:null} onClick={()=>toggle(c.key)}>
-            {c.label||c.key}
-            <span className="sort-ind">{sort&&sort.key===c.key?(sort.dir==='asc'?'↑':'↓'):''}</span>
-          </th>)}
+          {effCols.map(c=>{
+            const sIdx=(sort||[]).findIndex(s=>s.key===c.key);
+            const sEntry=sIdx>=0?sort[sIdx]:null;
+            // Order badge (1·2·3…) only appears once 2+ sort keys are active — a
+            // single active key keeps the bare arrow (unchanged text, old tests
+            // assert `.sort-ind` is exactly '↑'/'↓').
+            const badge=(sEntry&&sort.length>1)?String(sIdx+1):'';
+            const arrow=sEntry?(sEntry.dir==='asc'?'↑':'↓'):'';
+            return <th key={c.key} className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
+              style={(c.primary||c.width)?{...(c.width?{width:c.width}:{}),...(c.primary?{minWidth:c.minWidth||120}:{})}:null}
+              aria-sort={sEntry?(sEntry.dir==='asc'?'ascending':'descending'):'none'}
+              onClick={e=>clickSort(c.key,e.shiftKey)}>
+              {c.label||c.key}
+              <span className="sort-ind">{badge?<b className="sort-order">{badge}</b>:null}{arrow}</span>
+            </th>;
+          })}
         </tr></thead>
         <tbody>
           {visible.length===0
@@ -3769,6 +3865,12 @@ function useAiExplain(){
   .ovx .dist-seg:focus-visible{outline:2px solid var(--accent-text);outline-offset:-2px;}
   .ovx .dist-legend{display:flex;gap:var(--s4);flex-wrap:wrap;font-size:11px;color:var(--text-dim);}
   .ovx .dist-legend b{color:var(--text);font-weight:600;}
+  /* Feature 9 — legend swatches are now real buttons (same toggleBandCross as the
+     dist-seg bar), so they need button-reset styling to keep the original plain-text look. */
+  .ovx .dist-legend-sw{font:inherit;font-size:11px;color:var(--text-dim);background:none;border:0;padding:0;
+    cursor:pointer;display:inline-flex;align-items:center;transition:opacity .12s ease;}
+  .ovx .dist-legend-sw.off{opacity:.4;}
+  .ovx .dist-legend-sw:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
   .ovx .sw{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px;flex:none;}
   .ovx .sw.crit{background:var(--crit);}
   .ovx .sw.warn{background:var(--warn);}
@@ -3804,9 +3906,16 @@ function OvPeek({title,sub,rows}){
   </div>;
 }
 
+// Feature 9 — util-band id → inclusive "lo-hi" range string, the same convention
+// filterMatchesRow (~998) understands. '100' is open-ended above so it's given a
+// generous ceiling rather than a real upper bound.
+const UTIL_BAND_RANGE={'100':'100-999999','9099':'90-99','7089':'70-89','lt70':'0-69'};
+
 function OverviewTab(){
   const {bind}=useHoverDetail();
   const data=useData();
+  const power=usePower();
+  const fx=useFilters();
 
   const d=data.data||{};
   const subnets=Array.isArray(d.subnets)?d.subnets:[];
@@ -3850,6 +3959,19 @@ function OverviewTab(){
   const probPool=useMemo(()=>subnets.filter(s=>util(s)>70),[subnets]);
   const probCount=probPool.length;
   const toggleBand=id=>setBandsOn(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+  // Feature 9 — capacity-panel band trigger (distribution-bar segment / legend
+  // swatch ONLY, not the control-row chips above): keeps the existing local
+  // preview-scope toggle AND ALSO writes a real, shareable FilterCtx cross-filter
+  // (mirrored to the `f=` hash like any other pivot) using the lo-hi range
+  // convention filterMatchesRow understands — so it stays live wherever the user
+  // navigates next, on any table with a `util` column (e.g. Network's subnets
+  // table), not just as an Overview-local preview filter.
+  const toggleBandCross=id=>{
+    toggleBand(id);
+    const range=UTIL_BAND_RANGE[id];
+    const band=UTIL_BANDS.find(b=>b.id===id);
+    if(range) fx.toggle('util',range,'Utilization: '+(band?band.label:id));
+  };
   // Per-band subnet counts (shared by the control-row chips AND the capacity-heatmap
   // distribution bar below — single source of truth, one semantic color per band).
   const bandCounts=useMemo(()=>UTIL_BANDS.map(b=>({
@@ -3952,23 +4074,32 @@ function OverviewTab(){
               ['Order','Worst-first, by average utilization.'],
             ]})}>{siteRows.length+' sites'}</span>}>
           {/* Utilization distribution — segmented bar of the 4 UTIL_BANDS counts.
-              Click a segment to toggle that band (same bandsOn/toggleBand state as
-              the control-row chips above — the two stay in sync). */}
+              Click a segment (or a legend swatch below) to toggle that band's local
+              preview scope AND write a live FilterCtx cross-filter (toggleBandCross,
+              Feature 9) — in place, no navigation; it just also stays active for
+              whichever table (anywhere) happens to have a `util` column. */}
           <div className="dist-wrap ov-mt">
             <div className="dist-bar" role="group" aria-label="Utilization distribution — click a band to filter">
               {bandCounts.map(b=>{
                 const on=bandsOn.includes(b.id);
                 return <button key={b.id} type="button" className={'dist-seg'+(on?'':' off')}
                   style={{flex:b.cnt||0.0001,background:b.color}}
-                  aria-pressed={on} onClick={()=>toggleBand(b.id)}
+                  aria-pressed={on} onClick={()=>toggleBandCross(b.id)}
                   {...bind({title:b.label+' utilization',rows:[
                     ['Count',b.cnt+' subnet'+(b.cnt===1?'':'s')],
-                    ['What it means','Click to '+(on?'hide':'show')+' this band — same filter as the chips above.'],
+                    ['What it means','Click to '+(on?'hide':'show')+' this band — cross-filters live, same as the legend below.'],
                   ]})}/>;
               })}
             </div>
             <div className="dist-legend">
-              {bandCounts.map(b=><span key={b.id}><i className="sw" style={{background:b.color}}/>{b.label}<b className="mono"> {b.cnt}</b></span>)}
+              {bandCounts.map(b=>{
+                const on=bandsOn.includes(b.id);
+                return <button key={b.id} type="button" className={'dist-legend-sw'+(on?'':' off')}
+                  aria-pressed={on} aria-label={(on?'Hide ':'Show ')+b.label+' utilization band'}
+                  onClick={()=>toggleBandCross(b.id)}>
+                  <i className="sw" style={{background:b.color}}/>{b.label}<b className="mono"> {b.cnt}</b>
+                </button>;
+              })}
             </div>
           </div>
 
@@ -3979,7 +4110,15 @@ function OverviewTab(){
             <div className="heatmap" role="list" aria-label={siteRows.length+' sites, worst-first'}>
               {siteRows.map((s,i)=>{
                 const bnd=s.avg>=90?'crit':s.avg>=70?'warn':'ok';
-                const go=()=>nav('network',{f:serializeFilters([{field:'site',value:s.nm}])});
+                // Feature 9 — if a DataTable with a `site` column is already mounted
+                // on THIS page, cross-filter it in place (fx.toggle) instead of
+                // navigating away; otherwise fall back to the original nav-drill
+                // (Overview's own "All leases" table has no `site` column, so today
+                // this always nav-drills — same behavior as before this feature).
+                const go=()=>{
+                  if(power&&power.hasField&&power.hasField('site')) fx.toggle('site',s.nm,'Site: '+s.nm);
+                  else nav('network',{f:serializeFilters([{field:'site',value:s.nm}])});
+                };
                 return <div key={s.nm+'|'+i} className={'heatcell '+bnd} role="button" tabIndex={0}
                   aria-label={s.nm+' — avg '+s.avg+'%, worst '+s.worst+'%, '+s.n+' subnet'+(s.n===1?'':'s')}
                   onClick={go} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}

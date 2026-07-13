@@ -1295,6 +1295,50 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("if(copyAsBtnRef.current) copyAsBtnRef.current.focus();",
                              "closing the copy-as menu must return focus to its trigger")
 
+    def test_vim_row_nav_guarded(self):
+        """Feature 5 — j/k/g/G/x/Enter//' cursor keys (PowerProvider's global
+        keydown listener) must all be gated by the same not-in-input guard, and
+        the cursor row must carry a non-color-only signal (ring + aria state)."""
+        for key in ("'j'", "'k'", "'x'", "'g'", "'G'"):
+            self.assertContains(f"e.key==={key}", f"PowerProvider must handle key {key}")
+        self.assertContains("t.closest('input,textarea,select,[contenteditable=\"true\"]')",
+                             "global keydown listener must guard against typing in inputs")
+        self.assertContains("aria-activedescendant={(id&&cursor>=0)?rowIdOf(cursor):undefined}",
+                             "table wrapper must expose aria-activedescendant for the cursor row")
+        self.assertContains("aria-selected={isCursor?'true':undefined}",
+                             "cursor row must expose aria-selected (non-color-only signal)")
+        self.assertContains("inset 0 0 0 1px var(--accent-text)", "cursor row must render a visible ring, not just a background tint")
+
+    def test_multi_column_sort(self):
+        """Feature 7 — shift-click appends a secondary/tertiary sort key (stable,
+        in order); plain click resets to single-sort; aria-sort + an order badge
+        mark each active column; the hash codec stays backward-compatible with
+        the old single-key 'key:dir' format."""
+        self.assertContains("function parseSortParam(raw)", "multi-sort hash parser missing")
+        self.assertContains("function serializeSortParam(arr)", "multi-sort hash serializer missing")
+        self.assertContains("const clickSort=(key,shift)=>{", "header click handler must accept a shift flag")
+        self.assertContains("onClick={e=>clickSort(c.key,e.shiftKey)}", "header onClick must pass shiftKey through")
+        self.assertContains('aria-sort={sEntry?(sEntry.dir===\'asc\'?\'ascending\':\'descending\'):\'none\'}',
+                             "sorted header must expose aria-sort")
+        self.assertContains('className="sort-order"', "multi-sort order badge missing")
+        # Backward compat: a lone sort key still serializes to the old bare "key:dir" form.
+        self.assertContains("(arr||[]).map(s=>s.key+':'+(s.dir||'asc')).join(',')",
+                             "serializeSortParam must degrade to the old single-key format for one entry")
+
+    def test_heatmap_table_crossfilter(self):
+        """Feature 9 — a distribution-band segment/legend-swatch cross-filters via
+        FilterCtx in place (toggleBandCross); a heatmap cell funnels into
+        fx.toggle instead of nav ONLY when a co-located table exposes the
+        matching column (PowerCtx.hasField), else it keeps the original nav-drill."""
+        self.assertContains("const hasField=useCallback(field=>{", "PowerCtx must expose hasField for co-located-table detection")
+        self.assertContains("hasField", "PowerCtx value object must publish hasField")
+        self.assertContains("const toggleBandCross=id=>{", "capacity-panel band trigger must cross-filter via FilterCtx")
+        self.assertContains("function filterMatchesRow(row,f)", "range-aware cross-filter matcher missing")
+        self.assertContains("if(power&&power.hasField&&power.hasField('site')) fx.toggle('site',s.nm,'Site: '+s.nm);",
+                             "heatmap cell must cross-filter in place when a co-located table has a `site` column")
+        self.assertContains("else nav('network',{f:serializeFilters([{field:'site',value:s.nm}])});",
+                             "heatmap cell must still nav-drill when no co-located table matches")
+
 
 class OverviewRedesignTests(unittest.TestCase):
     """Static source assertions for the v1 (Bloomberg-grid) Overview rebuild —
