@@ -1548,6 +1548,27 @@ chk('missing number excluded', names('util>0').indexOf('delta')===-1 && eqArr(na
 // empty query matches everything
 chk('empty query all rows', names('').length===rows.length);
 
+// ── F4: operator richness ──────────────────────────────────────────────
+// != comparator (string field) — same result set as the existing '-' negate,
+// via a wholly different code path (numCmp/strMatch '!=' branch).
+chk('type!=PTR comparator', eqArr(names('type!=PTR'), ['alpha','charlie']));
+chk('type!=PTR matches -type:PTR', eqArr(names('type!=PTR'), names('-type:PTR')));
+// ~ contains / !~ excludes (type-agnostic substring)
+chk('tag~foo contains', eqArr(names('tag~foo'), ['alpha']));
+chk('tag!~foo excludes', eqArr(names('tag!~foo'), ['bravo','charlie','delta']));
+// IN(a,b,c) set membership — same shape/result as the comma shorthand
+chk('severity:IN(critical,high) set', eqArr(names('severity:IN(critical,high)'), names('sev:critical,high')));
+// AND — explicit keyword / && symbol both no-ops vs. bare-space (backward-compat)
+chk('explicit AND == bare-space', eqArr(names('type:A AND util>60'), names('type:A util>60')));
+chk('&& == bare-space', eqArr(names('type:A && util>60'), names('type:A util>60')));
+chk('AND narrows correctly', eqArr(names('type:A AND util>60'), ['alpha']));
+// OR — union across two independent AND-groups; || is a synonym
+chk('OR unions groups', eqArr(names('type:PTR OR util>85'), ['alpha','bravo','delta']));
+chk('|| == OR', eqArr(names('type:PTR || util>85'), names('type:PTR OR util>85')));
+// NOT — bare word and leading '!' both equivalent to the existing leading '-'
+chk('NOT term == -term', eqArr(names('NOT type:PTR'), names('-type:PTR')));
+chk('!term == -term', eqArr(names('!type:PTR'), names('-type:PTR')));
+
 if(fails){ console.error(fails+' BQL assertion(s) failed'); process.exit(1); }
 console.log('BQL_OK');
 """
@@ -1614,6 +1635,37 @@ console.log('LAST_OK');
         self.assertEqual(res.returncode, 0,
                          f"last-preset Node run failed:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
         self.assertIn("LAST_OK", res.stdout)
+
+    def test_bql_cidr_contains(self):
+        # Feature 4 (operator richness): `field>>CIDR` and the built-in `in:`
+        # alias both mean "row's address value falls inside this CIDR block" —
+        # bypasses def.type entirely (works whether or not the field is
+        # explicitly typed 'cidr'), reusing a small local ip4-to-int helper
+        # since no such helper existed anywhere else in the codebase.
+        harness = r"""
+const rows=[
+  {name:'net1', addr:'10.1.0.0'},
+  {name:'net2', addr:'10.200.5.1'},
+  {name:'net3', addr:'172.16.0.5'},
+  {name:'net4', addr:'11.0.0.1'},
+];
+const cols=[{key:'name'},{key:'addr'}];
+const schema=deriveSchema(cols, rows, {});
+function names(q){ return rows.filter(buildPredicate(parseQuery(q), schema)).map(r=>r.name).sort(); }
+function eqArr(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
+let fails=0;
+function chk(l,c){ if(!c){ console.error('FAIL '+l); fails++; } }
+chk("'in' aliases onto addr field", schema.aliases.in==='addr');
+chk('addr>>10.0.0.0/8 CIDR-contains', eqArr(names('addr>>10.0.0.0/8'), ['net1','net2']));
+chk('in:10.0.0.0/8 alias == addr>> form', eqArr(names('in:10.0.0.0/8'), names('addr>>10.0.0.0/8')));
+chk('addr>>172.16.0.0/16 isolates net3', eqArr(names('addr>>172.16.0.0/16'), ['net3']));
+if(fails){ console.error(fails+' cidr-contains assertion(s) failed'); process.exit(1); }
+console.log('CIDR_OK');
+"""
+        res = self._node(harness)
+        self.assertEqual(res.returncode, 0,
+                         f"cidr-contains Node run failed:\nSTDOUT:{res.stdout}\nSTDERR:{res.stderr}")
+        self.assertIn("CIDR_OK", res.stdout)
 
     def test_clean_bql_answer_strips_wrapping(self):
         # NL→BQL translator (Feature 4): the AI endpoint's free-text "answer" must
