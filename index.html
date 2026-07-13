@@ -253,6 +253,17 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 
 /* ── shared layout + synthesis primitives ── */
 .page{display:flex;flex-direction:column;gap:var(--s6);}
+/* PageHeader — consistent tab-level title/subtitle/actions row (see PageHeader() fn). */
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s4);margin:0 2px var(--s4);}
+.page-head-main{min-width:0;}
+.page-title{font-size:var(--t16);font-weight:600;margin:0;letter-spacing:-.2px;color:var(--text);}
+.page-sub{font-size:var(--t12);color:var(--text-dim);margin:2px 0 0;}
+.page-actions{display:flex;gap:var(--s2);flex-wrap:wrap;flex:none;}
+/* form utilities — used by the provisioning/editor/drift/self-service tabs whose forms
+   are stacks of labeled inputs, so per-field styling isn't repeated inline. */
+.field-lbl{font-size:var(--t11);color:var(--text-faint);}
+.form-col{display:flex;flex-direction:column;gap:var(--s3);}
+.check-row{display:flex;align-items:center;gap:var(--s2);}
 .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
 .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
 .grid-2>*,.grid-3>*{min-width:0;}
@@ -3230,6 +3241,18 @@ function SectionRule({title}){
   return <div className="sec-h"><h2>{title}</h2><span className="rule"/></div>;
 }
 
+/* PageHeader({title,subtitle,actions}) — consistent tab-level page header
+   (title + optional subtitle + optional right-aligned actions). */
+function PageHeader({title,subtitle,actions}){
+  return <div className="page-head">
+    <div className="page-head-main">
+      <h2 className="page-title">{title}</h2>
+      {subtitle?<p className="page-sub">{subtitle}</p>:null}
+    </div>
+    {actions?<div className="page-actions">{actions}</div>:null}
+  </div>;
+}
+
 /* DrawerShift — reflows .main beside the right drawers. Sets html[data-drawer]
    from usePower().peek + aiOpen; CSS pads .main (overlay kept on mobile). */
 function DrawerShift({aiOpen}){
@@ -6091,7 +6114,7 @@ function SelfServiceTab(){
   };
 
   return <div className="page fadein">
-    <SectionRule title="Self-Service"/>
+    <PageHeader title="Self-Service" subtitle="Requests users have queued for address space"/>
     <div className="dly-seg" role="group" aria-label="Self-service mode" style={{marginBottom:'var(--s3)'}}>
       <button className={'dly-seg-btn'+(mode==='allocate'?' on':'')} onClick={()=>setMode('allocate')}>Allocate</button>
       <button className={'dly-seg-btn'+(mode==='dns'?' on':'')} onClick={()=>setMode('dns')}>DNS Records</button>
@@ -6100,44 +6123,44 @@ function SelfServiceTab(){
     </div>
     {mode==='allocate'?<div className="grid">
       <Panel title="Request">
-        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+        <div className="form-col">
+          <label className="mono field-lbl">
             Subnet ID (or leave blank and use tag key/value below)
             <input className="vault-in" value={subnetId} onChange={e=>setSubnetId(e.target.value)} placeholder="subnet id"/>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Tag key
             <input className="vault-in" value={tagKey} onChange={e=>setTagKey(e.target.value)} placeholder="env"/>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Tag value
             <input className="vault-in" value={tagValue} onChange={e=>setTagValue(e.target.value)} placeholder="prod"/>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Count
             <input className="vault-in" type="number" min="1" value={count} onChange={e=>setCount(e.target.value)}/>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Name
             <input className="vault-in" value={name} onChange={e=>setName(e.target.value)} placeholder="requester / purpose"/>
           </label>
-          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+          <label className="check-row">
             <input type="checkbox" checked={dnsOn} onChange={e=>setDnsOn(e.target.checked)}/>
             <span>Create DNS record</span>
           </label>
           {dnsOn?<div style={{display:'flex',flexDirection:'column',gap:'var(--s3)',paddingLeft:'var(--s4)'}}>
-            <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            <label className="mono field-lbl">
               Zone
               <select className="vault-in" value={zoneId} onChange={e=>setZoneId(e.target.value)}>
                 <option value="">{zonesApi.loading?'Loading zones…':'Select a zone'}</option>
                 {zones.map(z=><option key={z.id} value={z.id}>{z.fqdn}</option>)}
               </select>
             </label>
-            <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            <label className="mono field-lbl">
               Record name
               <input className="vault-in" value={recName} onChange={e=>setRecName(e.target.value)} placeholder="host"/>
             </label>
-            <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            <label className="mono field-lbl">
               Type
               <select className="vault-in" value={recType} onChange={e=>setRecType(e.target.value)}>
                 <option value="A">A</option>
@@ -6146,12 +6169,12 @@ function SelfServiceTab(){
                 <option value="TXT">TXT</option>
               </select>
             </label>
-            <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            <label className="mono field-lbl">
               Value
               <input className="vault-in" value={recValue} onChange={e=>setRecValue(e.target.value)} placeholder="auto-fills from allocated IP if blank"/>
             </label>
           </div>:null}
-          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+          <label className="check-row">
             <input type="checkbox" checked={dry} onChange={e=>setDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
@@ -6173,8 +6196,8 @@ function SelfServiceTab(){
     </div>:null}
     {mode==='dns'?<div className="grid">
       <Panel title="Zone">
-        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+        <div className="form-col">
+          <label className="mono field-lbl">
             Zone
             <select className="vault-in" value={dnsZoneId} onChange={e=>setDnsZoneId(e.target.value)}>
               <option value="">{zonesApi.loading?'Loading zones…':'Select a zone'}</option>
@@ -6184,26 +6207,26 @@ function SelfServiceTab(){
         </div>
       </Panel>
       {dnsZoneId?<Panel title="Add record">
-        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+        <div className="form-col">
+          <label className="mono field-lbl">
             Name
             <input className="vault-in" value={addName} onChange={e=>setAddName(e.target.value)} placeholder="host (blank = @)"/>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Type
             <select className="vault-in" value={addType} onChange={e=>setAddType(e.target.value)}>
               {RTYPE_OPTIONS.map(t=><option key={t} value={t}>{t}</option>)}
             </select>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Value
             <input className="vault-in" value={addValue} onChange={e=>setAddValue(e.target.value)} placeholder={RTYPE_HINTS[addType]||'value'}/>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             TTL (optional)
             <input className="vault-in" type="number" min="0" value={addTtl} onChange={e=>setAddTtl(e.target.value)} placeholder="default"/>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Comment (optional)
             <input className="vault-in" value={addComment} onChange={e=>setAddComment(e.target.value)}/>
           </label>
@@ -6222,22 +6245,22 @@ function SelfServiceTab(){
     </div>:null}
     {mode==='ipman'?<div className="grid">
       <Panel title="Subnet">
-        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+        <div className="form-col">
+          <label className="mono field-lbl">
             Space
             <select className="vault-in" value={ipSpace} onChange={e=>{setIpSpace(e.target.value);setIpBlock('');setIpSubnetId('');}}>
               <option value="">{spacesApi.loading?'Loading spaces…':'Select a space'}</option>
               {spaces.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
             </select>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Block (optional)
             <select className="vault-in" value={ipBlock} onChange={e=>{setIpBlock(e.target.value);setIpSubnetId('');}} disabled={!ipSpace}>
               <option value="">{ipBlocksApi.loading?'Loading blocks…':'All blocks'}</option>
               {ipBlocks.map(b=><option key={b.id} value={b.id}>{b.name||b.cidr||b.address}</option>)}
             </select>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Subnet
             <select className="vault-in" value={ipSubnetId} onChange={e=>setIpSubnetId(e.target.value)} disabled={!ipSpace}>
               <option value="">{ipSubnetsApi.loading?'Loading subnets…':'Select a subnet'}</option>
@@ -6265,22 +6288,22 @@ function SelfServiceTab(){
     </div>:null}
     {mode==='inventory'?<div className="grid">
       <Panel title="Space / Block / Subnet">
-        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+        <div className="form-col">
+          <label className="mono field-lbl">
             Space
             <select className="vault-in" value={invSpace} onChange={e=>{setInvSpace(e.target.value);setInvBlock('');setInvSubnetId('');}}>
               <option value="">{spacesApi.loading?'Loading spaces…':'Select a space'}</option>
               {spaces.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
             </select>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Block (optional)
             <select className="vault-in" value={invBlock} onChange={e=>{setInvBlock(e.target.value);setInvSubnetId('');}} disabled={!invSpace}>
               <option value="">{invBlocksApi.loading?'Loading blocks…':'All blocks'}</option>
               {invBlocks.map(b=><option key={b.id} value={b.id}>{b.name||b.cidr||b.address}</option>)}
             </select>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Subnet
             <select className="vault-in" value={invSubnetId} onChange={e=>setInvSubnetId(e.target.value)} disabled={!invSpace}>
               <option value="">{invSubnetsApi.loading?'Loading subnets…':'Select a subnet'}</option>
@@ -6297,8 +6320,8 @@ function SelfServiceTab(){
               defaultSort={{key:'address',dir:'asc'}} filterable filterKeys={['address','name','comment']}/>}
       </Panel>
       <Panel title="Zone">
-        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+        <div className="form-col">
+          <label className="mono field-lbl">
             Zone
             <select className="vault-in" value={invZoneId} onChange={e=>setInvZoneId(e.target.value)}>
               <option value="">{zonesApi.loading?'Loading zones…':'Select a zone'}</option>
@@ -6525,10 +6548,8 @@ function ProvisionTab(){
   };
 
   return <div className="page fadein">
-    <div style={{display:'flex',alignItems:'center',gap:'var(--s3)'}}>
-      <div style={{flex:1}}><SectionRule title="Provision"/></div>
-      <span className={'sev-badge '+(isAdmin?'ok':role==='operator'?'warn':'crit')}>{role.toUpperCase()}</span>
-    </div>
+    <PageHeader title="Provision" subtitle="Carve new subnets or full sites from available address space"
+      actions={<span className={'sev-badge '+(isAdmin?'ok':role==='operator'?'warn':'crit')}>{role.toUpperCase()}</span>}/>
     <div className="dly-seg" role="group" aria-label="Provision mode" style={{marginBottom:'var(--s3)'}}>
       <button className={'dly-seg-btn'+(mode==='subnet'?' on':'')} onClick={()=>setMode('subnet')}>Subnet</button>
       <button className={'dly-seg-btn'+(mode==='site'?' on':'')} onClick={()=>setMode('site')}>Full site</button>
@@ -6536,38 +6557,38 @@ function ProvisionTab(){
     </div>
     {mode==='subnet'?<div className="grid-2">
       <Panel title="Request">
-        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+        <div className="form-col">
+          <label className="mono field-lbl">
             Space
             <select className="vault-in" value={space} onChange={e=>{setSpace(e.target.value);setBlock('');}}>
               <option value="">{spacesApi.loading?'Loading spaces…':'Select a space'}</option>
               {spaces.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
             </select>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Block
             <select className="vault-in" value={block} onChange={e=>setBlock(e.target.value)} disabled={!space}>
               <option value="">{blocksApi.loading?'Loading blocks…':'Select a block'}</option>
               {blocks.map(b=><option key={b.id} value={b.id}>{b.name||b.cidr||b.address}</option>)}
             </select>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             CIDR
             <input className="vault-in" type="number" min="1" max="32" value={cidr} onChange={e=>setCidr(e.target.value)}/>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Name
             <input className="vault-in" value={name} onChange={e=>setName(e.target.value)} placeholder="subnet name"/>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Comment
             <input className="vault-in" value={comment} onChange={e=>setComment(e.target.value)} placeholder="optional"/>
           </label>
-          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+          <label className="check-row">
             <input type="checkbox" checked={makeZone} onChange={e=>setMakeZone(e.target.checked)}/>
             <span>Create matching DNS zone</span>
           </label>
-          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+          <label className="check-row">
             <input type="checkbox" checked={dry} onChange={e=>setDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
@@ -6592,15 +6613,15 @@ function ProvisionTab(){
     </div>:null}
     {mode==='site'?<div className="grid-2">
       <Panel title="Request">
-        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+        <div className="form-col">
+          <label className="mono field-lbl">
             IP space (override)
             <select className="vault-in" value={siteSpace} onChange={e=>setSiteSpace(e.target.value)}>
               <option value="">— template default —</option>
               {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
             </select>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             Template
             <select className="vault-in" value={siteTemplate} onChange={e=>setSiteTemplate(e.target.value)}>
               <option value="">{templatesApi.loading?'Loading templates…':'Select a template'}</option>
@@ -6609,7 +6630,7 @@ function ProvisionTab(){
               </option>)}
             </select>
           </label>
-          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+          <label className="check-row">
             <input type="checkbox" checked={siteDry} onChange={e=>setSiteDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
@@ -6618,11 +6639,11 @@ function ProvisionTab(){
             <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>
               Tear down this site — permanently deletes its provisioned objects.
             </div>
-            <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <label className="check-row">
               <input type="checkbox" checked={siteTeardownDry} onChange={e=>setSiteTeardownDry(e.target.checked)}/>
               <span>Dry-run (no changes made)</span>
             </label>
-            {!siteTeardownDry?(isAdmin?<label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            {!siteTeardownDry?(isAdmin?<label className="mono field-lbl">
               Type the site name to confirm
               <input className="vault-in" value={siteTeardownConfirm} onChange={e=>setSiteTeardownConfirm(e.target.value)} placeholder={siteTemplate||'site name'}/>
             </label>:<div className="mono" style={{fontSize:'var(--t11)',color:'var(--warn)'}}>Admin (dashboard token) required for live teardown</div>):null}
@@ -6662,20 +6683,20 @@ function ProvisionTab(){
         <div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)',marginBottom:'var(--s3)'}}>
           Provisions a full set of demo sites, subnets, and zones across the selected regions from the template library. Dry-run is on by default — review the plan before writing real objects.
         </div>
-        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+        <div className="form-col">
           {['amer','emea','apac'].map(r=>
-            <label key={r} style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <label key={r} className="check-row">
               <input type="checkbox" checked={!!seedRegions[r]} onChange={e=>setSeedRegions(prev=>({...prev,[r]:e.target.checked}))}/>
               <span>{r.toUpperCase()}</span>
             </label>)}
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             IP space (override)
             <select className="vault-in" value={seedSpace} onChange={e=>setSeedSpace(e.target.value)}>
               <option value="">— template default —</option>
               {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
             </select>
           </label>
-          <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+          <label className="check-row">
             <input type="checkbox" checked={seedDry} onChange={e=>setSeedDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
@@ -6684,11 +6705,11 @@ function ProvisionTab(){
             <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>
               Tear down demo — permanently deletes every seed-created object in {seedSpace||'the default space'}.
             </div>
-            <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <label className="check-row">
               <input type="checkbox" checked={teardownDry} onChange={e=>setTeardownDry(e.target.checked)}/>
               <span>Dry-run (no changes made)</span>
             </label>
-            {!teardownDry?(isAdmin?<label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+            {!teardownDry?(isAdmin?<label className="mono field-lbl">
               Type DELETE to confirm
               <input className="vault-in" value={teardownConfirm} onChange={e=>setTeardownConfirm(e.target.value)} placeholder="DELETE"/>
             </label>:<div className="mono" style={{fontSize:'var(--t11)',color:'var(--warn)'}}>Admin (dashboard token) required for live teardown</div>):null}
@@ -6927,7 +6948,7 @@ function EditorTab(){
   const previewBody=preview?(preview.would_create||preview.would_update||preview):null;
 
   return <div className="page fadein">
-    <SectionRule title="Editor"/>
+    <PageHeader title="Editor" subtitle="Directly edit DNS/DHCP records and objects"/>
     <div className="dly-seg" role="group" aria-label="Editor resource type" style={{marginBottom:'var(--s3)'}}>
       {EDITOR_TYPES.map(t=>
         <button key={t.key} className={'dly-seg-btn'+(type===t.key?' on':'')} onClick={()=>{setType(t.key);setEditId(null);}}>{t.label}</button>)}
@@ -6940,15 +6961,15 @@ function EditorTab(){
       ? <SelfServiceTab/>
       : <div className="grid-2">
           <Panel title={(spec&&spec.label)+(isUpdate?' — Update':' — Create')}>
-            <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+            <div className="form-col">
               {spec&&spec.fields.map(f=>
-                <label key={f.key} className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+                <label key={f.key} className="mono field-lbl">
                   {f.label}{f.required?' *':''}
                   <input className="vault-in" type={f.kind==='number'?'number':'text'}
                     value={fields[f.key]||''} placeholder={f.placeholder||''}
                     onChange={e=>setField(f.key,e.target.value)}/>
                 </label>)}
-              <label style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+              <label className="check-row">
                 <input type="checkbox" checked={dry} onChange={e=>setDry(e.target.checked)}/>
                 Dry-run (no changes)
               </label>
@@ -6958,7 +6979,7 @@ function EditorTab(){
               </Astryx.Button>
               {canDelete&&!isViewer?<button className="btn" style={{borderColor:'var(--crit)',color:'var(--crit)'}}
                 disabled={busy} onClick={del}>Delete {spec.label}</button>:null}
-              {isViewer?<div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+              {isViewer?<div className="mono field-lbl">
                 Viewer role is read-only — creating resources requires operator or admin.
               </div>:null}
             </div>
@@ -7014,11 +7035,11 @@ function DriftTab(){
   }
 
   return <div className="page fadein">
-    <SectionRule title="Drift"/>
+    <PageHeader title="Drift" subtitle="Compare running DHCP/DNS config to source of truth"/>
     <div className="grid-2">
       <Panel title="Check drift">
-        <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+        <div className="form-col">
+          <label className="mono field-lbl">
             Template
             <select className="vault-in" value={template} onChange={e=>setTemplate(e.target.value)}>
               <option value="">{templatesApi.loading?'Loading templates…':'Select a template'}</option>
@@ -7027,7 +7048,7 @@ function DriftTab(){
               </option>)}
             </select>
           </label>
-          <label className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+          <label className="mono field-lbl">
             IP space (override)
             <select className="vault-in" value={ipSpace} onChange={e=>setIpSpace(e.target.value)}>
               <option value="">— template default —</option>
@@ -7046,7 +7067,7 @@ function DriftTab(){
                 <span className="chip" style={{color:result.drifted?'var(--crit)':'var(--ok)',borderColor:result.drifted?'var(--crit)':'var(--ok)'}}>
                   {result.drifted?('✕ '+((result.drifts&&result.drifts.length)||0)+' items'):'✓ no drift'}
                 </span>
-                {result.subnet_count!=null?<span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>{result.subnet_count} subnets</span>:null}
+                {result.subnet_count!=null?<span className="mono field-lbl">{result.subnet_count} subnets</span>:null}
               </div>
               {result.summary?<div className="mono" style={{fontSize:'var(--t12)',color:'var(--text-dim)',marginBottom:'var(--s3)'}}>{result.summary}</div>:null}
               {Object.keys(groups).length===0
