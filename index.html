@@ -359,6 +359,17 @@ table.dt tbody tr.cursor .row-copyas-wrap,
 .dt-copyas-menu{right:0;top:calc(100% + 4px);min-width:150px;padding:var(--s1);}
 .dt-copyas-item{display:block;width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
 .dt-copyas-item:hover,.dt-copyas-item:focus-visible{background:var(--hover);}
+/* KebabMenu (⋮) — compact icon trigger; reuses .dt-copyas-menu for the popover. */
+.kebab-btn{width:28px;padding:0;justify-content:center;font-size:var(--t14,15px);line-height:1;}
+.kebab-menu{min-width:180px;}
+.kebab-menu.kebab-left{right:auto;left:0;}
+/* Marris example callout — clearly-labeled illustrative sample (not real data). */
+.marris-example{border:1px dashed var(--border-strong,var(--border));border-radius:var(--r-ctl);
+  padding:var(--s3);margin-top:var(--s3);background:var(--raised);}
+.marris-example .mx-head{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s2);}
+.marris-example .mx-tag{font-size:var(--t11);font-weight:600;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--text-dim);border:1px solid var(--border);border-radius:var(--r-ctl);padding:1px var(--s2);}
+.marris-example pre.mx-body{margin:0;font-size:var(--t11);white-space:pre-wrap;color:var(--text-dim);}
 .dt-filter{height:26px;padding:0 var(--s2);font-size:var(--t12);color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);min-width:200px;}
 .dt-filter:focus{border-color:var(--accent);}
 .spark{display:inline-block;vertical-align:middle;}
@@ -1465,6 +1476,40 @@ function AbMenu({label,items}){
           else if(e.key==='ArrowDown'){ e.preventDefault(); move(1); }
           else if(e.key==='ArrowUp'){ e.preventDefault(); move(-1); } }}>
         {items.map((it,i)=><button key={i} type="button" role="menuitem" className="dt-copyas-item"
+          onClick={()=>{ try{it.run&&it.run();}catch(e){} close(); }}>{it.label}</button>)}
+      </div></>:null}
+  </span>;
+}
+
+/* KebabMenu — the ONE shared overflow-menu (⋮) primitive. Mirrors AbMenu's
+   open/close + focus-management (Esc closes and returns focus to the trigger,
+   ↑/↓ roves, first item auto-focused on open) but presents as a compact icon
+   button for SECONDARY / less-frequent actions. RISK CONTROL: primary and
+   destructive actions stay visible+labeled OUTSIDE the kebab — only truly
+   secondary actions belong here. Reusable app-wide, including on DataTable
+   rows (pass a per-row `label` for the a11y name). Reuses the dt-popover /
+   dt-copyas-* styles so no bespoke menu chrome. */
+function KebabMenu({label,items,align}){
+  const [open,setOpen]=useState(false);
+  const btnRef=useRef(null),menuRef=useRef(null);
+  const name=label||'More actions';
+  const close=()=>{ setOpen(false); if(btnRef.current) btnRef.current.focus(); };
+  useEffect(()=>{ if(!open||!menuRef.current) return;
+    const f=menuRef.current.querySelector('button:not(:disabled)'); if(f) f.focus(); },[open]);
+  const move=delta=>{ const b=menuRef.current?Array.from(menuRef.current.querySelectorAll('button:not(:disabled)')):[];
+    if(!b.length) return; let i=b.indexOf(document.activeElement); i=(i+delta+b.length)%b.length; b[i].focus(); };
+  const its=(items||[]).filter(Boolean);
+  return <span className="kebab-wrap" style={{position:'relative',display:'inline-flex'}}>
+    <button ref={btnRef} type="button" className="btn kebab-btn" aria-haspopup="menu" aria-expanded={open}
+      aria-label={name} title={name} onClick={()=>setOpen(v=>!v)}><span aria-hidden="true">⋮</span></button>
+    {open?<><div className="views-overlay" onClick={close}/>
+      <div ref={menuRef} className={'panel dt-popover dt-copyas-menu kebab-menu'+(align==='left'?' kebab-left':'')} role="menu" aria-label={name}
+        onClick={e=>e.stopPropagation()}
+        onKeyDown={e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); close(); }
+          else if(e.key==='ArrowDown'){ e.preventDefault(); move(1); }
+          else if(e.key==='ArrowUp'){ e.preventDefault(); move(-1); } }}>
+        {its.map((it,i)=><button key={i} type="button" role="menuitem" className="dt-copyas-item kebab-item"
+          disabled={!!it.disabled}
           onClick={()=>{ try{it.run&&it.run();}catch(e){} close(); }}>{it.label}</button>)}
       </div></>:null}
   </span>;
@@ -7128,6 +7173,91 @@ const RTYPE_HINTS={
   DNAME:'target.example.com.',
 };
 
+/* MARRIS_EXAMPLES — inline illustrative templates + sample data so the
+   provisioning tabs (Provision / Drift / Self-Service) teach themselves
+   instead of opening empty. Grounded in Chris Marris's UDDI automation /
+   self-service toolkit schemas + the Universal DDI API guide. These are
+   PREFILL / SAMPLE-RENDER only: the UI loads them with one click and NEVER
+   auto-submits or calls a real API. Clearly labeled "Example" in the UI. */
+const MARRIS_EXAMPLES={
+  provision:{
+    // Full-site template — london / EMEA / production, 3 subnets + DNS + hosts.
+    site:{
+      site:'london', region:'EMEA', environment:'production',
+      subnets:[
+        {role:'mgmt',   cidr:24, dhcp:false},
+        {role:'lan',    cidr:24, dhcp:true, dhcp_range:{start_offset:10, end_offset:250}},
+        {role:'server', cidr:24, dhcp:false},
+      ],
+      dns:{ parent_zone:'internal.example.com', hosts:['gw01','dns01'] },
+      tags:{ Owner:'neteng', CostCentre:'CC-1000' },
+    },
+    // Prefill for the (editable) Subnet-mode form — a single LAN subnet from the
+    // london site. Space/Block stay user-picked (they are live IDs); the plain
+    // fields below are illustrative and safe to seed.
+    subnetForm:{ cidr:24, name:'london-lan', comment:'EMEA / production — LAN subnet (example)', makeZone:true },
+    // Regional address-block pool — Global /8 → region×env /16 children.
+    addressBlock:{
+      global:'10.0.0.0/8',
+      children:[
+        {region:'AMER', environment:'prod', cidr:16, address:'10.10.0.0'},
+        {region:'AMER', environment:'dev',  cidr:16, address:'10.11.0.0'},
+        {region:'EMEA', environment:'prod', cidr:16, address:'10.20.0.0'},
+        {region:'EMEA', environment:'dev',  cidr:16, address:'10.21.0.0'},
+        {region:'APAC', environment:'prod', cidr:16, address:'10.30.0.0'},
+        {region:'APAC', environment:'dev',  cidr:16, address:'10.31.0.0'},
+      ],
+      tags:{ Region:'<region>', Environment:'<env>', Status:'available' },
+    },
+    // DNS zone example — corp.example.com with A / CNAME / MX records.
+    dns:{
+      zone:'corp.example.com',
+      records:[
+        {name:'www', type:'A',     value:'10.20.0.10'},
+        {name:'app', type:'CNAME', value:'www.corp.example.com.'},
+        {name:'@',   type:'MX',    value:'10 mail.corp.example.com.'},
+      ],
+    },
+  },
+  // Worked "template vs live" drift result — some in-sync, one changed, one missing.
+  drift:{
+    site:'london',
+    items:[
+      {mark:'=', label:'in sync',  message:"Subnet 'mgmt' 10.20.0.0/24 matches the template"},
+      {mark:'=', label:'in sync',  message:"Zone 'internal.example.com' matches the template"},
+      {mark:'~', label:'changed',  message:"Tag 'Owner': expected 'neteng', live value is 'unknown'"},
+      {mark:'−', label:'missing',  message:"Host 'dns01' is in the template but not live"},
+    ],
+  },
+  // Self-service prefills — next-free allocate by tag + a DNS record create.
+  selfservice:{
+    allocate:{ tagKey:'environment', tagValue:'prod', count:1, name:'example-app-01',
+               note:'next-free /24 host from environment=prod' },
+    dns:{ zone:'corp.example.com', name:'example-web', type:'A', value:'10.20.0.42' },
+  },
+};
+
+/* MarrisExampleDiff — sample-render of MARRIS_EXAMPLES.drift in the shared
+   dt-diff glyph vocabulary (=/~/− etc), monochrome + text label per glyph
+   (no color-only), wrapped in a clearly-labeled .marris-example callout. */
+function MarrisExampleDiff(){
+  const ex=MARRIS_EXAMPLES.drift;
+  return <div className="marris-example">
+    <div className="mx-head">
+      <span className="mx-tag">Example</span>
+      <span className="mono" style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>
+        {ex.site} — illustrative drift result, not real data
+      </span>
+    </div>
+    <table className="dt"><tbody>
+      {ex.items.map((d,i)=><tr key={i}>
+        <td className="dt-diff mono"><span aria-label={d.label} title={d.label}>{d.mark}</span></td>
+        <td className="mono" style={{fontSize:'var(--t12)'}}>{d.message}</td>
+      </tr>)}
+    </tbody></table>
+  </div>;
+}
+
 /* SelfServiceTab — 4-mode self-service surface (mirrors ProvisionTab's
    mode-switch pattern):
    - Allocate: original self-service IP allocation form (unchanged), POSTs
@@ -7160,6 +7290,7 @@ function SelfServiceTab(){
   const [busy,setBusy]=useState(false);
   const [result,setResult]=useState(null);
   const [err,setErr]=useState(null);
+  const [ssExample,setSsExample]=useState(false); // show the allocate example note after "Try example"
 
   // DNS Records mode.
   const [dnsZoneId,setDnsZoneId]=useState('');
@@ -7368,6 +7499,19 @@ function SelfServiceTab(){
       .catch(e=>{setBusy(false);const msg=String((e&&e.message)||e);setErr(msg);toast('Allocation failed — '+msg,'err');});
   };
 
+  // Example prefill (secondary, kebab): seeds the allocate form with illustrative
+  // values — next-free /24 host from environment=prod. Prefill only, never submits.
+  const loadAllocateExample=()=>{
+    const ex=MARRIS_EXAMPLES.selfservice.allocate;
+    setSubnetId('');setTagKey(ex.tagKey);setTagValue(ex.tagValue);
+    setCount(ex.count);setName(ex.name);setDnsOn(false);setResult(null);setErr(null);setSsExample(true);
+    toast('Example loaded — review, nothing submitted','ok',{duration:1800});
+  };
+  const resetAllocate=()=>{
+    setSubnetId('');setTagKey('');setTagValue('');setCount(1);setName('');setDnsOn(false);
+    setZoneId('');setRecName('');setRecType('A');setRecValue('');setResult(null);setErr(null);setSsExample(false);
+  };
+
   return <div className="page fadein">
     <PageHeader title="Self-Service" subtitle="Requests users have queued for address space"/>
     <div className="dly-seg" role="group" aria-label="Self-service mode" style={{marginBottom:'var(--s3)'}}>
@@ -7448,8 +7592,20 @@ function SelfServiceTab(){
             <input type="checkbox" checked={dry} onChange={e=>setDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
-          <button className="btn" disabled={busy||!name} onClick={submit}
-            {...bind({title:'Submit request',rows:[['What it does','Run the allocation — or, with Dry-run on, just preview it.']]})}>{busy?'Submitting…':'Submit'}</button>
+          <div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <button className="btn" disabled={busy||!name} onClick={submit}
+              {...bind({title:'Submit request',rows:[['What it does','Run the allocation — or, with Dry-run on, just preview it.']]})}>{busy?'Submitting…':'Submit'}</button>
+            <KebabMenu label="More allocate actions" items={[
+              {label:'Try example', run:loadAllocateExample},
+              {label:'Reset form', run:resetAllocate},
+            ]}/>
+          </div>
+          {ssExample?<div className="marris-example">
+            <div className="mx-head"><span className="mx-tag">Example</span>
+              <span className="mono" style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>prefilled — nothing submitted</span></div>
+            <pre className="mx-body mono">{MARRIS_EXAMPLES.selfservice.allocate.note}
+{'\n'}allocate: environment=prod · count 1 · name example-app-01</pre>
+          </div>:null}
         </div>
       </Panel>
       {result?<Panel title="Result">
@@ -7656,6 +7812,9 @@ function ProvisionTab(){
   const [success,setSuccess]=useState(null);
   const [streamErr,setStreamErr]=useState(null);
   const esRef=useRef(null);
+  // Marris examples (secondary, kebab): 'site'|'addressBlock'|'dns' = which
+  // illustrative example callout to sample-render. Prefill / sample only.
+  const [examplePanel,setExamplePanel]=useState(null);
 
   // Full site mode.
   const templatesApi=useApi('/api/templates');
@@ -7833,6 +7992,37 @@ function ProvisionTab(){
     };
   };
 
+  // Subnet-mode "Load example": prefill the editable form from the london site
+  // template's LAN subnet + open the site-template example callout. Space/Block
+  // stay user-picked (live IDs). Prefill only — never opens a stream / submits.
+  const loadSubnetExample=()=>{
+    const ex=MARRIS_EXAMPLES.provision.subnetForm;
+    setCidr(ex.cidr);setName(ex.name);setComment(ex.comment);setMakeZone(ex.makeZone);
+    setExamplePanel('site');
+    toast('Example loaded — review, nothing provisioned','ok',{duration:1800});
+  };
+  const copyExample=(obj,what)=>{
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(JSON.stringify(obj,null,2)); }catch(e){}
+    toast((what||'Example')+' copied (JSON)','ok',{duration:1500});
+  };
+  const resetSubnet=()=>{ setCidr(24);setName('');setComment('');setMakeZone(false);setExamplePanel(null); };
+  // MarrisExamplePanel — render the named provision example as a labeled callout.
+  const ExamplePanel=()=>{
+    if(!examplePanel) return null;
+    const P=MARRIS_EXAMPLES.provision;
+    let title='', body='';
+    if(examplePanel==='site'){ title='Site template — london / EMEA / production';
+      body=JSON.stringify(P.site,null,2); }
+    else if(examplePanel==='addressBlock'){ title='Address-block pool — Global /8 → region×env /16';
+      body=JSON.stringify(P.addressBlock,null,2); }
+    else { title='DNS zone — corp.example.com'; body=JSON.stringify(P.dns,null,2); }
+    return <div className="marris-example">
+      <div className="mx-head"><span className="mx-tag">Example</span>
+        <span className="mono" style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>{title} — illustrative, not real data</span></div>
+      <pre className="mx-body mono">{body}</pre>
+    </div>;
+  };
+
   return <div className="page fadein">
     <PageHeader title="Provision" subtitle="Carve new subnets or full sites from available address space"
       actions={<span className={'sev-badge '+(isAdmin?'ok':role==='operator'?'warn':'crit')}
@@ -7889,8 +8079,16 @@ function ProvisionTab(){
             <input type="checkbox" checked={dry} onChange={e=>setDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
-          <button className="btn" disabled={streaming||!space} onClick={start}
-            {...bind({title:'Provision',rows:[['What it does','Run the provision (or its dry-run preview); each step streams live in the log.']]})}>{streaming?'Provisioning…':'Provision'}</button>
+          <div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <button className="btn" disabled={streaming||!space} onClick={start}
+              {...bind({title:'Provision',rows:[['What it does','Run the provision (or its dry-run preview); each step streams live in the log.']]})}>{streaming?'Provisioning…':'Provision'}</button>
+            <KebabMenu label="More provision actions" items={[
+              {label:'Load example', run:loadSubnetExample},
+              {label:'Copy example (JSON)', run:()=>copyExample(MARRIS_EXAMPLES.provision.site,'Site template')},
+              {label:'Reset form', run:resetSubnet},
+            ]}/>
+          </div>
+          <ExamplePanel/>
         </div>
       </Panel>
       <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live output of each provisioning step, streamed from the server via SSE as it runs.']]})}>Live log</span>}>
@@ -7935,8 +8133,17 @@ function ProvisionTab(){
             <input type="checkbox" checked={siteDry} onChange={e=>setSiteDry(e.target.checked)}/>
             <span>Dry-run (no changes made)</span>
           </label>
-          <button className="btn" disabled={siteStreaming||!siteTemplate} onClick={siteStart}
-            {...bind({title:'Provision site',rows:[['What it does','Build the whole site from the template — blocks, subnets, DHCP ranges and DNS zones — or preview it as a dry-run.']]})}>{siteStreaming?'Provisioning…':'Provision site'}</button>
+          <div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <button className="btn" disabled={siteStreaming||!siteTemplate} onClick={siteStart}
+              {...bind({title:'Provision site',rows:[['What it does','Build the whole site from the template — blocks, subnets, DHCP ranges and DNS zones — or preview it as a dry-run.']]})}>{siteStreaming?'Provisioning…':'Provision site'}</button>
+            <KebabMenu label="More site actions" items={[
+              {label:'Load site example', run:()=>setExamplePanel('site')},
+              {label:'Load address-block example', run:()=>setExamplePanel('addressBlock')},
+              {label:'Load DNS example', run:()=>setExamplePanel('dns')},
+              {label:'Copy site template (JSON)', run:()=>copyExample(MARRIS_EXAMPLES.provision.site,'Site template')},
+            ]}/>
+          </div>
+          <ExamplePanel/>
           <div style={{borderTop:'1px solid var(--border)',marginTop:'var(--s3)',paddingTop:'var(--s3)',display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
             <div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}
               {...bind({title:'Tear down / decommission',rows:[['What it does','Undo a site provision — permanently delete every object it created.']]})}>
@@ -8334,6 +8541,7 @@ function DriftTab(){
   const [checking,setChecking]=useState(false);
   const [result,setResult]=useState(null);
   const [err,setErr]=useState(null);
+  const [showExample,setShowExample]=useState(false); // sample-render an illustrative drift result
   if(locked) return null;
 
   const templates=(Array.isArray(templatesApi.data)?templatesApi.data:[]).filter(t=>!t.type||t.type==='site');
@@ -8383,8 +8591,14 @@ function DriftTab(){
               {spaces.map(sp=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
             </select>
           </label>
-          <button className="btn" disabled={checking||!template} onClick={check}
-            {...bind({title:'Check drift',rows:[['What it does','Compare your site template to the live Infoblox state and report the differences. Read-only — it changes nothing.']]})}>{checking?'Checking…':'Check drift'}</button>
+          <div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <button className="btn" disabled={checking||!template} onClick={check}
+              {...bind({title:'Check drift',rows:[['What it does','Compare your site template to the live Infoblox state and report the differences. Read-only — it changes nothing.']]})}>{checking?'Checking…':'Check drift'}</button>
+            <KebabMenu label="More drift actions" items={[
+              {label:showExample?'Hide example':'Show example', run:()=>setShowExample(v=>!v)},
+            ]}/>
+          </div>
+          {showExample?<MarrisExampleDiff/>:null}
         </div>
       </Panel>
       {result?<Panel title="Result">
