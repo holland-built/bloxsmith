@@ -9,5 +9,5 @@
 	basic_auth {
 		{$BASIC_AUTH_USER:-admin} {$BASIC_AUTH_HASH}
 	}
-	reverse_proxy infoblox-noc:8080
+	reverse_proxy bloxsmith:8080
 }

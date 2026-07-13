@@ -2,7 +2,7 @@ name: Publish Docker image
 
 # Builds the dashboard image and pushes it to GitHub Container Registry (GHCR)
 # on every push to master and on version tags (vX.Y.Z). End users then just
-# `docker pull ghcr.io/<owner>/infoblox-noc-dashboard:latest` — no build needed.
+# `docker pull ghcr.io/holland-built/bloxsmith:latest` — no build needed.
 
 on:
   push:

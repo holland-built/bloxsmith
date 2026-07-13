@@ -1,11 +1,13 @@
 # Deployment & reference
 
-Full reference for the Infoblox NOC Dashboard. For the 30-second start see the
+Full reference for **Bloxsmith**. For the 30-second start see the
 [README](../README.md#quick-start); this doc covers every install path, the
 environment variables, LLM providers, and security.
 
+- [SE demo path (run-image.sh)](#se-demo-path-run-imagesh)
+- [Customer path (compose)](#customer-path-compose)
+- [Updating](#updating)
 - [Install from the prebuilt image](#install-from-the-prebuilt-image)
-- [Deploy options (script / LAN / Compose / secure proxy)](#deploy-options)
 - [Build from source (dev)](#build-from-source-dev)
 - [Getting the keys](#getting-the-keys)
 - [Using a different LLM provider](#using-a-different-llm-provider)
@@ -16,6 +18,103 @@ environment variables, LLM providers, and security.
 
 ---
 
+## SE demo path (run-image.sh)
+
+You're an Infoblox SE showing this on a laptop or a customer LAN, and don't want
+a git checkout. `run-image.sh` wraps pull + run:
+
+```bash
+curl -fsSL -O https://raw.githubusercontent.com/holland-built/bloxsmith/master/run-image.sh
+chmod +x run-image.sh
+./run-image.sh              # localhost → http://localhost:8080
+LAN=1 ./run-image.sh        # LAN → binds 0.0.0.0, prints http://<host-ip>:8080
+```
+
+It also prompts for an optional vault auto-unlock passphrase, saving it to
+`~/.noc-vault-pass` (`0600`) and mounting it (see [Auto-unlock](#auto-unlock-after-an-upgrade)),
+and it mounts `/var/run/docker.sock` so the in-app self-update works (set
+`NO_DOCKER_SOCKET=1` to disable).
+
+Re-running `./run-image.sh` always re-pulls `:latest` — see [Updating](#updating)
+for the full picture.
+
+> ⚠️ **No login on LAN.** Anyone who can reach the port can use the dashboard.
+> On a trusted LAN, keep the vault **locked** when not presenting (don't set an
+> auto-unlock passphrase). On an untrusted network, use the `secure` Caddy profile
+> or a VPN.
+
+---
+
+## Customer path (compose)
+
+You're self-hosting this permanently on a server/VM (Proxmox, NUC, cloud).
+**Compose** is recommended — env vars (including the Watchtower fallback wiring)
+survive Docker restarts automatically, and the compose file mounts the Docker
+socket so the in-app self-update works.
+
+```bash
+git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
+cp .env.example .env        # fill in INFOBLOX_API_KEY; WATCHTOWER_TOKEN is pre-set
+docker compose up -d                       # dashboard (loopback)
+BIND=0.0.0.0 docker compose up -d          # expose on the LAN
+docker compose --profile secure up -d      # + Caddy reverse proxy (TLS + basic-auth)
+```
+
+> **Updating `.env`:** after `git pull`, compare `.env` with `.env.example` — add any
+> new variables shown in the example; your existing values are preserved.
+
+For the `secure` profile set `BIND=127.0.0.1` (dashboard stays loopback, all access
+goes through Caddy on `:8443`) and a basic-auth hash in `.env`:
+
+```bash
+docker run --rm caddy caddy hash-password -p 'yourpassword'   # paste into BASIC_AUTH_HASH
+```
+
+| Scenario | Command | URL |
+|----------|---------|-----|
+| Localhost (compose) | `docker compose up -d` | http://localhost:8080 |
+| Server (LAN, compose) | `BIND=0.0.0.0 docker compose up -d` | http://host-ip:8080 |
+| Server (secure) | `docker compose --profile secure up -d` | https://host-ip:8443 (login) |
+| Desktop / no-clone | `./run-image.sh` | http://localhost:8080 |
+
+Tenant keys live AES-encrypted in the `noc-vault` Docker volume — they survive
+updates, restarts, and container recreation. For unattended restarts (no browser
+step to re-enter the passphrase), see `VAULT_PASSPHRASE_FILE` in
+[Auto-unlock](#auto-unlock-after-an-upgrade).
+
+---
+
+## Updating
+
+**SE demo:** re-run `./run-image.sh` (always pulls `:latest`), or use the in-app
+**Update now** button.
+
+**Customer:** `docker compose pull && docker compose up -d`, or use the in-app
+**Update now** button.
+
+The server checks GitHub Releases for `holland-built/bloxsmith` once a day in the
+background (current version is `1.0.<commit-count>`) and exposes
+`update:{current,latest,available,url,selfUpdate,cooldown}` in
+`GET /api/vault/status`. `GET /api/update/check` forces an immediate check;
+`DISABLE_UPDATE_CHECK=1` opts out entirely. The browser never contacts GitHub
+directly — the server does the check and the browser just reads the status.
+
+Clicking **Update now** pre-pulls the `:latest` image over the mounted Docker
+socket, health-checks the candidate before switching to it, and recreates itself.
+If the new image fails its health check, it auto-rolls back to the previous image
+(tagged `bloxsmith:rollback`). This requires `/var/run/docker.sock` to be mounted,
+which `run-image.sh` and compose both do by default (`NO_DOCKER_SOCKET=1` or
+removing the socket line disables it).
+
+Compose also ships a Watchtower sidecar in HTTP-API mode (no polling) as an
+alternate trigger; the in-app button does not require it.
+
+There is **no unattended auto-update and no polling updater** — the daily check
+only surfaces availability. Applying an update is always a user action, whether
+that's the button click or the manual command above.
+
+---
+
 ## Install from the prebuilt image
 
 No source checkout, no build — just Docker. Every push to `master` and every
@@ -23,10 +122,10 @@ No source checkout, no build — just Docker. Every push to `master` and every
 release via [CI](../.github/workflows/docker-publish.yml).
 
 ```bash
-docker run -d --name infoblox-mcp -p 127.0.0.1:8080:8080 \
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
   -v noc-vault:/vault \
   --restart unless-stopped \
-  ghcr.io/holland-built/infoblox-noc-dashboard:latest
+  ghcr.io/holland-built/bloxsmith:latest
 # → http://localhost:8080   (loopback only; use BIND=0.0.0.0 / the script to expose on the LAN)
 ```
 
@@ -43,71 +142,14 @@ Pin a release with a tag (`:v1.0.0`, `:1.0.0`, or `:1.0`) instead of `:latest`.
 > Drop `-v noc-vault:/vault` in that case.
 
 > **Make the GHCR package public (one-time)** so others pull without a login:
-> `github.com/users/holland-built/packages/container/infoblox-noc-dashboard/settings`
+> `github.com/users/holland-built/packages/container/bloxsmith/settings`
 > → *Change visibility* → **Public**. The source repo can stay private; package
 > visibility is independent. (Otherwise each user runs `docker login ghcr.io` with a
 > token that has `read:packages`.)
 
----
-
-## Deploy options
-
-**Compose** is recommended for servers and always-on installs — env vars (including
-Watchtower wiring) survive Docker restarts automatically.
-
-Clone the repo, copy the env template, and start:
-
-```bash
-git clone https://github.com/holland-built/infoblox-noc-dashboard infoblox-noc && cd infoblox-noc
-cp .env.example .env        # fill in INFOBLOX_API_KEY; WATCHTOWER_TOKEN is pre-set
-docker compose up -d                       # dashboard + self-update sidecar (loopback)
-BIND=0.0.0.0 docker compose up -d          # expose on the LAN
-docker compose --profile secure up -d      # + Caddy reverse proxy (TLS + basic-auth)
-```
-
-> **Updating `.env`:** after `git pull`, compare `.env` with `.env.example` — add any
-> new variables shown in the example; your existing values are preserved.
-
-For the `secure` profile set `BIND=127.0.0.1` (dashboard stays loopback, all access
-goes through Caddy on `:8443`) and a basic-auth hash in `.env`:
-
-```bash
-docker run --rm caddy caddy hash-password -p 'yourpassword'   # paste into BASIC_AUTH_HASH
-```
-
-### Alternative: `run-image.sh` (no clone needed)
-
-Wraps pull + run, starts a Watchtower sidecar, and re-pulls `:latest` on every run.
-Use this for desktop or SE demo setups where you don't want a git checkout:
-
-```bash
-curl -fsSL -O https://raw.githubusercontent.com/holland-built/infoblox-noc-dashboard/master/run-image.sh
-chmod +x run-image.sh
-./run-image.sh              # localhost → http://localhost:8080
-LAN=1 ./run-image.sh        # LAN → binds 0.0.0.0, prints http://<host-ip>:8080
-```
-
-It also prompts for an optional vault auto-unlock passphrase, saving it to
-`~/.noc-vault-pass` (`0600`) and mounting it (see [Auto-unlock](#auto-unlock-after-an-upgrade)).
-
-| Scenario | Command | URL |
-|----------|---------|-----|
-| Localhost (compose) | `docker compose up -d` | http://localhost:8080 |
-| Server (LAN, compose) | `BIND=0.0.0.0 docker compose up -d` | http://host-ip:8080 |
-| Server (secure) | `docker compose --profile secure up -d` | https://host-ip:8443 (login) |
-| Desktop / no-clone | `./run-image.sh` | http://localhost:8080 |
-
-**Updating:** click the version badge → **Update now** (Watchtower pulls `:latest`
-and recreates the container; the vault volume survives). Or pull and restart manually:
-
-```bash
-docker compose pull && docker compose up -d
-```
-
-> ⚠️ **No login on LAN.** Anyone who can reach the port can use the dashboard.
-> On a trusted LAN, keep the vault **locked** when not presenting (don't set an
-> auto-unlock passphrase). On an untrusted network, use the `secure` Caddy profile
-> or a VPN.
+This manual `docker run` is the always-works fallback behind both the
+[SE demo path](#se-demo-path-run-imagesh) and the
+[Customer path](#customer-path-compose) above.
 
 ---
 
@@ -116,7 +158,7 @@ docker compose pull && docker compose up -d
 Use this if you're developing or want to build locally instead of pulling the image.
 
 ```bash
-git clone https://github.com/holland-built/infoblox-noc-dashboard infoblox-noc && cd infoblox-noc
+git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
 ./run.sh
 # update later:  git pull && ./run.sh
 ```
@@ -134,17 +176,17 @@ The API key is **never baked into the image** — injected at runtime as an env 
 
 ```bash
 cp .env.example .env        # then edit .env with your keys
-docker build -t infoblox-mcp .
-docker run -d --name infoblox-mcp -p 127.0.0.1:8080:8080 --env-file .env -e HOST=0.0.0.0 \
-  --restart unless-stopped infoblox-mcp   # loopback only; drop 127.0.0.1: to expose on the LAN
+docker build -t bloxsmith .
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 --env-file .env -e HOST=0.0.0.0 \
+  --restart unless-stopped bloxsmith   # loopback only; drop 127.0.0.1: to expose on the LAN
 ```
 
 ### Manage
 
 ```bash
-docker logs -f infoblox-mcp     # watch logs
-docker rm -f infoblox-mcp       # stop + remove
-docker start infoblox-mcp       # restart existing
+docker logs -f bloxsmith     # watch logs
+docker rm -f bloxsmith       # stop + remove
+docker start bloxsmith       # restart existing
 PORT=8090 ./run.sh              # run on a different port
 ```
 
@@ -252,7 +294,8 @@ Set `HOST=0.0.0.0` to expose beyond localhost (the Docker image does this for yo
 | `BIND`             |          | `127.0.0.1`              | Host bind for the script/compose; `0.0.0.0` = LAN |
 | `HOST`             |          | `localhost` (`0.0.0.0` in Docker) | App bind address                    |
 | `PORT`             |          | `8080`                   | HTTP port                                    |
-| `WATCHTOWER_TOKEN` |          | _(generated/default)_    | Shared secret for the self-update sidecar API |
+| `DISABLE_UPDATE_CHECK` |      | _(unset)_                | Set to `1` to opt out of the daily GitHub Releases update check |
+| `WATCHTOWER_TOKEN` |          | _(generated/default)_    | Shared secret for the optional Watchtower sidecar's HTTP API (alternate update trigger) |
 
 ---
 
@@ -266,12 +309,12 @@ Supply it at boot and the dashboard comes up live with no browser step:
 ```bash
 # Preferred: a mounted secret file (kept out of `docker inspect` / process env)
 printf '%s' 'your-vault-passphrase' > ~/.noc-vault-pass && chmod 600 ~/.noc-vault-pass
-docker run -d --name infoblox-mcp -p 127.0.0.1:8080:8080 \
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
   -v noc-vault:/vault \
   -v ~/.noc-vault-pass:/run/secrets/vault_pass:ro \
   -e VAULT_PASSPHRASE_FILE=/run/secrets/vault_pass \
   --restart unless-stopped \
-  ghcr.io/holland-built/infoblox-noc-dashboard:latest
+  ghcr.io/holland-built/bloxsmith:latest
 
 # Simpler (less secure — visible in `docker inspect`):
 #   -e VAULT_PASSPHRASE='your-vault-passphrase'
@@ -285,6 +328,9 @@ Keys stay AES-encrypted on disk; whoever can read the passphrase source can decr
 the vault, so a stolen `vault.json` alone is useless. A wrong/missing passphrase
 just falls back to manual unlock in the browser.
 
+For unattended restarts on the [Customer path](#customer-path-compose), set
+`VAULT_PASSPHRASE_FILE` in `.env` so a server reboot doesn't require a browser visit.
+
 ---
 
 ## Security notes
@@ -297,6 +343,8 @@ just falls back to manual unlock in the browser.
   can use your Infoblox key indirectly. The script/compose publish on **`127.0.0.1`
   by default**; `BIND=0.0.0.0` exposes on the LAN, and only then behind your own
   auth/TLS (the `secure` Caddy profile, or a VPN).
+- The compose file mounts the Docker socket into the app for self-update; remove
+  that line if you don't want the dashboard to have Docker control.
 - If a token is ever exposed, **rotate it** in the CSP portal — scrubbing files does not revoke it.
 
 See [SECURITY.md](../SECURITY.md) for the policy and how to report a vulnerability,
