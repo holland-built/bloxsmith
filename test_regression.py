@@ -899,6 +899,45 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertNotIn("max-width:1200", self.html, "max-width:1200 cap must be gone (full-bleed)")
         self.assertNotIn("maxWidth:1200", self.html, "maxWidth:1200 cap must be gone (full-bleed)")
 
+    def test_panel_size_scale_tokens(self):
+        # Shared panel-size scale — one source of truth for body heights.
+        for tok in ("--panel-sm:220px", "--panel-md:340px", "--panel-lg:560px"):
+            self.assertContains(tok, f"panel-size token {tok!r} missing")
+        # size classes route through the scale
+        for cls in (".pcard.sz-sm{min-height:var(--panel-sm)",
+                    ".pcard.sz-md{min-height:var(--panel-md)",
+                    ".pcard.sz-lg{min-height:var(--panel-lg)"):
+            self.assertContains(cls, f"panel size class {cls!r} missing")
+        # DataTable scrollBody default reads the token (no ad-hoc 420 fallback)
+        self.assertContains("scrollBody===true?'var(--panel-md)'",
+                            "DataTable scrollBody default must route through --panel-md")
+        # ad-hoc panel-body max-heights were rerouted to the scale
+        self.assertNotIn("max-height:340px", self.html, "ad-hoc 340px max-height must use --panel-md")
+        self.assertNotIn("maxHeight:320,", self.html, "ad-hoc maxHeight:320 must use --panel-md")
+
+    def test_panel_maximize_on_shared_component(self):
+        # Maximize affordance + fullscreen overlay live on the shared Panel.
+        pan = self.html[self.html.index("function Panel("):]
+        pan = pan[:pan.index("\nfunction ", 1)]
+        self.assertIn("function Panel({title,side,api,children,empty,size})", self.html,
+                      "Panel must accept a size prop")
+        self.assertIn('className="pcard-max"', pan, "Panel header must render the maximize button")
+        self.assertIn('aria-label={"Maximize "', pan, "maximize button must be labeled")
+        self.assertIn('className="pcard-overlay panel"', pan, "Panel must render a fullscreen overlay")
+        self.assertIn('role="dialog"', pan, "maximize overlay must be a dialog")
+        self.assertIn("e.key==='Escape'", pan, "overlay must close on Escape")
+        self.assertIn("returnRef.current=document.activeElement", pan,
+                      "maximize must capture the trigger for focus return")
+        self.assertIn("try{r.focus();}", pan, "maximize must return focus to the trigger")
+
+    def test_compact_incident_strip(self):
+        # The tall incidents SynthBand is now a dense inline strip (keeps --crit).
+        self.assertContains(".inc-strip{", "compact incident strip CSS missing")
+        inc = self.html[self.html.index("function IncidentsTab("):]
+        inc = inc[:inc.index("// ═══ END: INCIDENTS")]
+        self.assertIn('className={"inc-strip "+tone}', inc, "IncidentsTab must render the compact strip")
+        self.assertNotIn("<SynthBand", inc, "IncidentsTab must not use the tall SynthBand banner")
+
     def test_snapshot_module(self):
         # daily-summary trend engine: snapshot store hook + writer
         self.assertContains("useSnapshots", "useSnapshots hook missing")

@@ -77,6 +77,9 @@ try{
   --r-ctl:4px; --r-panel:6px;
   --row-h:28px; --dt-fs:var(--t12);
   --body-table:280px; --body-chart:220px;
+  /* Panel-size scale — one source of truth for panel/table/chart body heights.
+     Panel `size` prop (sm/md/lg) + rerouted ad-hoc max-heights all read these. */
+  --panel-sm:220px; --panel-md:340px; --panel-lg:560px;
 }
 [data-density="comfortable"]{--row-h:32px;}
 [data-theme="light"]{color-scheme:light;
@@ -618,6 +621,29 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .chart-body{height:var(--body-chart);display:flex;flex-direction:column;justify-content:center;}
 .pcard>h3{font-size:12.5px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin:0;}
 .pcard>h3 .side{color:var(--text-faint);font-weight:500;font-size:11px;display:inline-flex;align-items:center;gap:var(--s2);flex:none;}
+/* Panel size floor — routes through the --panel-* scale so boxes stay consistent
+   and a panel like Triage is never cramped. Optional; unset panels are unchanged. */
+.pcard.sz-sm{min-height:var(--panel-sm);}
+.pcard.sz-md{min-height:var(--panel-md);}
+.pcard.sz-lg{min-height:var(--panel-lg);}
+/* Maximize affordance (shared Panel header) + fullscreen overlay. */
+.pcard-max{background:none;border:0;cursor:pointer;color:var(--text-faint);font-size:13px;line-height:1;padding:2px 4px;border-radius:var(--r-ctl);display:inline-flex;align-items:center;flex:none;}
+.pcard-max:hover{color:var(--text);background:var(--hover);}
+.pcard-max:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+.pcard-scrim{position:fixed;inset:0;z-index:92;display:flex;align-items:stretch;justify-content:center;background:rgba(0,0,0,.55);padding:var(--s5);}
+.pcard-overlay{width:100%;max-width:1600px;height:100%;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:var(--s5);animation:fade .12s ease;}
+.pcard-overlay-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3);}
+.pcard-overlay-title{font-size:var(--t14);font-weight:600;margin:0;}
+.pcard-overlay-body{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;}
+/* Maximized panel gives its table/chart the viewport. */
+.pcard-overlay-body .dt-scroll{max-height:none!important;}
+.pcard-overlay-body .chart-body{height:auto!important;flex:1 1 auto;min-height:var(--panel-md);}
+.pcard-max-note{color:var(--text-faint);font-size:var(--t12);padding:var(--s3);}
+/* Compact incident strip — dense inline replacement for the tall answer band,
+   keeps the --crit accent + text. */
+.inc-strip{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) var(--s3);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);font-size:var(--t13);color:var(--text);}
+.inc-strip .sd{margin:0 2px;}
+.inc-strip-txt{min-width:0;overflow-wrap:anywhere;font-weight:500;}
 
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
 .grid-dense{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
@@ -1736,7 +1762,8 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const setFilter=filterControlled?onQuery:setFilterState;
   const [showAll,setShowAll]=useState(false);        // maxRows expander
   const [renderLimit,setRenderLimit]=useState(300);  // scrollBody progressive render window
-  const scrollPx=scrollBody===true?420:scrollBody;   // scrollBody:true → 420px
+  // scrollBody: default (true) reads the shared --panel-md token; a number → px.
+  const scrollPx=scrollBody===true?'var(--panel-md)':(typeof scrollBody==='number'?scrollBody+'px':scrollBody);
   // Baseline affordances: CSV export + column chooser default on for row-heavy tables (opt-out via explicit prop).
   const showCsv=csvName||(rows&&rows.length>12&&tableId);
   const showCols=columnToggle||((cols||[]).length>6);
@@ -2502,7 +2529,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
       </div>
     </div>}
     <div className={"tbl-wrap"+(scrollBody?" dt-scroll":"")}
-      style={scrollBody?{maxHeight:scrollPx+'px',overflowY:'auto'}:undefined}
+      style={scrollBody?{maxHeight:scrollPx,overflowY:'auto'}:undefined}
       onScroll={scrollBody?onBodyScroll:undefined}>
       <table className="dt">
         <thead><tr>
@@ -3747,16 +3774,52 @@ function useHoverDetail(){
 
 /* Panel({title,side,api,children,empty}) — .pcard wrapper (header + optional .side /
    Freshness). Renders null when empty (dead-section suppression). */
-function Panel({title,side,api,children,empty}){
+function Panel({title,side,api,children,empty,size}){
   if(empty) return null;
+  const [maxed,setMaxed]=useState(false);
+  const overlayRef=useRef(null),returnRef=useRef(null);
   let sideNode=side;
   if(sideNode==null&&api) sideNode=<Freshness at={api.fetchedAt} error={api.error} onRetry={api.refetch}/>;
-  return <div className="pcard">
-    {(title!=null||sideNode!=null)?<h3>
-      <span>{title}</span>
-      {sideNode!=null?<span className="side">{sideNode}</span>:null}
-    </h3>:null}
-    {children}
+  const hasHead=title!=null||sideNode!=null;
+  const open=useCallback(()=>{ returnRef.current=document.activeElement; setMaxed(true); },[]);
+  const close=useCallback(()=>{ setMaxed(false);
+    const r=returnRef.current; if(r&&r.focus){ try{r.focus();}catch(e){} } },[]);
+  // Focus into the overlay + trap Tab / close on Esc — mirrors ShortcutsHelp.
+  useEffect(()=>{ if(!maxed||!overlayRef.current) return;
+    const f=overlayRef.current.querySelector('button'); if(f) f.focus(); },[maxed]);
+  const onKeyDown=e=>{
+    if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); close(); return; }
+    if(e.key==='Tab'){
+      const f=overlayRef.current?Array.from(overlayRef.current.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')):[];
+      if(!f.length) return;
+      const first=f[0],last=f[f.length-1];
+      if(e.shiftKey&&document.activeElement===first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey&&document.activeElement===last){ e.preventDefault(); first.focus(); }
+    }
+  };
+  const maxBtn=hasHead?<button type="button" className="pcard-max" title="Maximize"
+    aria-label={"Maximize "+(title!=null?title:"panel")} onClick={open}>⤢</button>:null;
+  const head=hasHead?<h3>
+    <span>{title}</span>
+    <span className="side">{sideNode}{maxBtn}</span>
+  </h3>:null;
+  return <div className={"pcard"+(size?(" sz-"+size):"")}>
+    {head}
+    {maxed
+      ? <div className="pcard-max-note">Maximized — press Esc or Close to return.</div>
+      : children}
+    {maxed?<div className="pcard-scrim" onClick={close}>
+      <div ref={overlayRef} className="pcard-overlay panel" role="dialog" aria-modal="true"
+        aria-label={(title!=null?title:"Panel")+" (maximized)"}
+        onClick={e=>e.stopPropagation()} onKeyDown={onKeyDown}>
+        <div className="pcard-overlay-head">
+          <h3 className="pcard-overlay-title">{title!=null?title:"Panel"}</h3>
+          <button type="button" className="btn btn-ghost" onClick={close}
+            aria-label={"Close maximized "+(title!=null?title:"panel")}>Close</button>
+        </div>
+        <div className="pcard-overlay-body">{children}</div>
+      </div>
+    </div>:null}
   </div>;
 }
 
@@ -4315,7 +4378,7 @@ function OverviewTab(){
       </div>
 
       <div className="span-4">
-        <Panel title="Triage queue" side={<span className={'sev '+(subnetPreview.length?'crit':'low')}>{subnetPreview.length+' need action'}</span>}>
+        <Panel title="Triage queue" size="md" side={<span className={'sev '+(subnetPreview.length?'crit':'low')}>{subnetPreview.length+' need action'}</span>}>
           {subnetPreview.length
             ? subnetPreview.slice(0,6).map((s,i)=>{
                 const u=util(s);
@@ -5180,7 +5243,7 @@ function DnsTab(){
   .infra-panel-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--text-dim);}
   .infra-panel-btn{font-size:12px;color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;text-align:left;}
   .infra-page .issues{max-height:var(--body-table);overflow-y:auto;}
-  .infra-page .grid-dense .issues{max-height:340px;overflow-y:auto;}
+  .infra-page .grid-dense .issues{max-height:var(--panel-md);overflow-y:auto;}
   `;
   document.head.appendChild(s);
 })();
@@ -5690,7 +5753,7 @@ function SecEntities({entities}){
     if(!entities.length) return <div className="dt-empty">No matches</div>;
     if(typeof entities[0]==='object'&&entities[0]) return <DataTable cols={secAutoCols(entities)} rows={entities} csvName="threat-lookup"/>;
   }
-  return <pre className="mono" style={{fontSize:'var(--t11)',color:'var(--text-dim)',whiteSpace:'pre-wrap',margin:0,padding:'var(--s3)',background:'var(--raised)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)',maxHeight:320,overflow:'auto'}}>{JSON.stringify(entities,null,2)}</pre>;
+  return <pre className="mono" style={{fontSize:'var(--t11)',color:'var(--text-dim)',whiteSpace:'pre-wrap',margin:0,padding:'var(--s3)',background:'var(--raised)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)',maxHeight:'var(--panel-md)',overflow:'auto'}}>{JSON.stringify(entities,null,2)}</pre>;
 }
 /* External intel (Dossier) — defensive render of /api/dossier summary + sources. */
 function SecDossierSourceVal({src}){
@@ -6011,7 +6074,7 @@ function SecurityTab(){
   .ask-trace-row .args{color:var(--text-faint);}
   .alerts-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);padding:6px 0;}
   .alerts-num{width:56px;height:26px;padding:0 8px;font-size:12px;color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);}
-  .pal-list{margin-top:8px;max-height:320px;overflow-y:auto;padding:4px;}
+  .pal-list{margin-top:8px;max-height:var(--panel-md);overflow-y:auto;padding:4px;}
   .pal-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:8px 12px;font-size:12px;color:var(--text);text-align:left;background:transparent;border:none;border-left:1px solid transparent;cursor:pointer;}
   .pal-row.sel{background:var(--hover);border-left-color:var(--accent);}
   .pal-kind{font-size:11px;color:var(--text-faint);flex:0 0 auto;}
@@ -6436,9 +6499,13 @@ function IncidentsTab(){
   const eventsCols=eventsRows.length?secAutoCols(eventsRows):[];
 
   return <div className="page">
-    <SynthBand tone={tone} verdict={verdict} facts={[]}/>
+    <div className={"inc-strip "+tone} role="status" aria-live="polite"
+      style={{borderLeft:'3px solid var(--'+tone+')'}}>
+      <span className={"sd pulse "+tone} aria-hidden="true"/>
+      <span className="inc-strip-txt">{verdict}</span>
+    </div>
 
-    <Panel title="Triage" api={incApi}>
+    <Panel title="Triage" api={incApi} size="md">
       <Astryx.Card variant="default" padding={0}>
         {incApi.loading&&!incApi.data
           ? <Skeleton rows={4}/>
@@ -7252,7 +7319,7 @@ function ProvisionTab(){
       <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live output of each provisioning step, streamed from the server via SSE as it runs.']]})}>Live log</span>}>
         {log.length===0
           ? <div className="dt-empty">No output yet</div>
-          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
               {log.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
                 {l.error?('✕ '+l.error):l.done?('✓ done — subnet '+((l.subnet&&(l.subnet.address||l.subnet.id))||'')):(l.step||JSON.stringify(l))}
               </div>)}
@@ -7318,7 +7385,7 @@ function ProvisionTab(){
       <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live per-step output of the site build, streamed from the server via SSE.']]})}>Live log</span>}>
         {siteLog.length===0
           ? <div className="dt-empty">No output yet</div>
-          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
               {siteLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
                 {l.error?('✕ '+l.error):l.done?'✓ done':(l.step||JSON.stringify(l))}
               </div>)}
@@ -7329,7 +7396,7 @@ function ProvisionTab(){
       </Panel>:null}
       {siteErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{siteErr}</div></Panel>:null}
       {siteTeardownLog.length?<Panel title="Teardown log">
-        <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+        <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
           {siteTeardownLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
             {l.error?('✕ '+l.error):l.done?'✓ done':(l.step||JSON.stringify(l))}
           </div>)}
@@ -7402,7 +7469,7 @@ function ProvisionTab(){
       <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live per-step output of the seed run, streamed from the server via SSE.']]})}>Live log</span>}>
         {seedLog.length===0
           ? <div className="dt-empty">No output yet</div>
-          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
               {seedLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
                 {l.error?(l.template?('✕ '+l.template+': '+l.error):('✕ '+l.error)):l.done?'✓ done':(l.template?(l.template+' — '+(l.phase||'')):JSON.stringify(l))}
               </div>)}
@@ -7427,7 +7494,7 @@ function ProvisionTab(){
       <Panel title="Teardown log">
         {teardownLog.length===0
           ? <div className="dt-empty">No output yet</div>
-          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:320,overflow:'auto'}}>
+          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
               {teardownLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
                 {l.error?(l.template?('✕ '+l.template+': '+l.error):('✕ '+l.error)):l.done?'✓ done':(l.template?(l.template+' — '+(l.phase||'')):(l.step||JSON.stringify(l)))}
               </div>)}
