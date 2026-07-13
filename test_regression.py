@@ -1604,6 +1604,53 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("else nav('network',{f:serializeFilters([{field:'site',value:s.nm}])});",
                              "heatmap cell must still nav-drill when no co-located table matches")
 
+    def test_entity_triage_cluster(self):
+        """P1 slice 6 — entity-triage cluster (peek trace + pin scratchpad + macros),
+        all built on ONE shared entity inference and the EXISTING peek/LS/nav infra.
+        No forked drawer or second storage system."""
+        # Shared entity model + trace + scratchpad plumbing (pure helpers).
+        self.assertContains("function entityOf(row,tableId){",
+                            "entityOf() must infer the entity + BQL predicate for a row")
+        self.assertContains("function traceTo(tab,ent){",
+                            "traceTo() cross-tab trace must exist")
+        self.assertContains("nav(tab,{f:ent.pred.field+':'+ent.pred.value})",
+                            "trace must reuse nav + the shared `f=` cross-filter (BQL predicate)")
+        self.assertContains("const SCRATCH_KEY='scratchpad';",
+                            "scratchpad must key off the shared LS helper (bx.scratchpad)")
+        self.assertContains("function pinEntity(ent){",
+                            "pinEntity() must exist")
+        self.assertContains("LS.set(SCRATCH_KEY,",
+                            "scratchpad must persist via the existing LS helper, not a new store")
+        # ONE shared EntityPeek reused by the single PeekDrawer (no second drawer).
+        self.assertContains("function EntityPeek(",
+                            "shared EntityPeek block must exist")
+        self.assertContains("<EntityPeek row={peek.row} tableId={peek.tableId}",
+                            "PeekDrawer must render the shared EntityPeek (unified, not forked)")
+        self.assertContains('className="ep-trace-btn"',
+                            "EntityPeek must render cross-tab trace buttons")
+        self.assertContains("const TRACE_TARGETS=",
+                            "trace targets (DHCP/DNS/Audit/Security) must be declared")
+        # On-demand scratchpad tray (focus-managed dialog, exports via existing serializers).
+        self.assertContains("function Scratchpad(",
+                            "Scratchpad tray component must exist")
+        self.assertContains("<Scratchpad/>",
+                            "Scratchpad must be mounted in the Shell")
+        self.assertContains('className="scratch-badge"',
+                            "on-demand pin badge must exist (no standing chrome)")
+        self.assertContains('role="dialog" aria-modal="true" aria-label="Scratchpad"',
+                            "scratchpad tray must be a focus-trapped dialog")
+        self.assertContains("downloadCSV('scratchpad.csv'",
+                            "tray export must reuse the existing downloadCSV helper")
+        # Keyboard macros o/t/p wired into the existing PowerProvider vim-nav + listed in help.
+        self.assertContains("pinTarget(){",
+                            "DataTable must expose pinTarget() for the `p` macro")
+        self.assertContains("else if(e.key==='o'){ handled=api.openCursor(); }",
+                            "`o` macro must open the peek")
+        self.assertContains("['t','Trace the row across DHCP / DNS / Audit / Security'],",
+                            "shortcut overlay must document the `t` macro")
+        self.assertContains("['p','Pin the row to the scratchpad'],",
+                            "shortcut overlay must document the `p` macro")
+
 
 class OverviewRedesignTests(unittest.TestCase):
     """Static source assertions for the v1 (Bloomberg-grid) Overview rebuild —
