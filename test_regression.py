@@ -765,6 +765,47 @@ class FrontendStructureTests(unittest.TestCase):
     def test_data_table_primitive(self):
         self.assertContains("function DataTable", "DataTable primitive missing")
 
+    # ── site-wide cell-legibility system (P0 slice 2) ──────────────────────────
+    def test_cell_legibility_id_renderer(self):
+        # One shared identifier renderer: middle-truncate + hover-full + click-copy.
+        self.assertContains("function IdCell(", "shared IdCell identifier renderer missing")
+        self.assertContains("function looksLikeId(", "looksLikeId auto-detect helper missing")
+        self.assertContains("useHoverDetail(", "IdCell must reuse useHoverDetail for hover-full")
+        # Structural middle-truncation: flexing head (ellipsis) + fixed tail.
+        for sel in (".dt-id{", ".dt-id .dt-id-head", ".dt-id .dt-id-tail"):
+            self.assertContains(sel, f"cell-legibility id CSS {sel!r} missing")
+        # Keyboard reachable + copies the FULL value (not truncated text).
+        self.assertContains("tabIndex={0}")
+        self.assertContains("navigator.clipboard.writeText(full)",
+                            "IdCell must copy the full identifier value")
+        # DTRow wires the id column type (explicit opt-in OR auto-detect on plain cells).
+        self.assertContains("c.id===true||c.type==='id'",
+                            "DTRow must recognise the id column type")
+
+    def test_cell_legibility_table_fit_default(self):
+        # table-layout:fixed is the shared default so tables fit (no h-scroll).
+        self.assertContains("table.dt{width:100%;border-collapse:collapse;"
+                            "font-size:var(--dt-fs);table-layout:fixed;}",
+                            "table.dt must default to table-layout:fixed")
+        # Primary column clips with ellipsis now (no more overflow:visible bleed).
+        self.assertContains("table.dt td.dt-primary,table.dt th.dt-primary{"
+                            "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
+                            "dt-primary must ellipsize under the table-fit default")
+        self.assertNotIn("table.dt td.dt-primary,table.dt th.dt-primary{"
+                         "white-space:nowrap;overflow:visible;text-overflow:clip;}",
+                         self.html)
+        # Hide-all-empty-columns pruning in effCols.
+        self.assertContains("const pruneEmpty=", "effCols must prune all-empty columns")
+
+    def test_cell_legibility_applied_to_target_columns(self):
+        # Triage ENTITIES + Security Lookalike domain/target columns use the id type.
+        self.assertContains("{key:'sample_entities',label:'Entities',id:true",
+                            "Triage Entities column must use the id column type")
+        self.assertContains("{key:'lookalike',label:'Lookalike',mono:true,copy:true,primary:true,id:true",
+                            "Lookalike domain column must use the id column type")
+        self.assertContains("{key:'target',label:'Target',mono:true,id:true",
+                            "Lookalike target column must use the id column type")
+
     # ── command palette + Cmd/Ctrl-K ───────────────────────────────────────────
 
     def test_command_palette(self):
