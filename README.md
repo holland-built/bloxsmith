@@ -25,33 +25,50 @@ browser ──HTTP──▶ bridge (server.py) ──MCP──▶ csp.infoblox.c
 
 Prereq: **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows) or Docker Engine (Linux: `curl -fsSL https://get.docker.com | sh`).
 
-**Compose path (recommended for servers and always-on installs)** — Watchtower wiring persists across Docker restarts automatically:
+### Path A — SE demo (laptop / LAN, no clone)
+
+You're an Infoblox SE showing this on your laptop or a customer LAN in the next five minutes.
 
 ```bash
-git clone https://github.com/holland-built/infoblox-noc-dashboard && cd infoblox-noc-dashboard
-cp .env.example .env   # fill in INFOBLOX_API_KEY (and optionally GROQ_API_KEY)
-docker compose up -d   # → http://localhost:8080
+curl -fsSL -O https://raw.githubusercontent.com/holland-built/bloxsmith/master/run-image.sh && chmod +x run-image.sh
+./run-image.sh             # your machine → http://localhost:8080
+LAN=1 ./run-image.sh       # demo box → prints http://<host-ip>:8080 for the room
 ```
 
-**No-clone path (desktop / SE demo)** — no git required, just Docker:
+Re-running always pulls `:latest`. The script also offers a vault auto-unlock passphrase, saved to `~/.noc-vault-pass` (`0600`).
+
+> ⚠️ **LAN mode has no login.** Anyone on the network can reach the dashboard and query your Infoblox tenant. Keep the vault **locked** when not presenting, or use Path B's secure proxy.
+
+### Path B — Customer install (always-on server, compose)
+
+You're self-hosting this permanently on a server/VM (Proxmox, NUC, cloud).
 
 ```bash
-curl -fsSL -O https://raw.githubusercontent.com/holland-built/infoblox-noc-dashboard/master/run-image.sh && chmod +x run-image.sh
-./run-image.sh             # on your machine → http://localhost:8080
-LAN=1 ./run-image.sh       # on a server → prints http://<server-ip>:8080
+git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
+cp .env.example .env                       # optional: pre-set keys; blank = in-app vault
+docker compose up -d                       # loopback only → http://localhost:8080
+BIND=0.0.0.0 docker compose up -d          # expose on the LAN (no login — see warning)
+docker compose --profile secure up -d      # + Caddy TLS + basic-auth on :8443 (recommended for LAN)
 ```
 
-First open: pick a passphrase, add your [Infoblox API key](#get-your-infoblox-api-key) — keys are AES-encrypted in the `noc-vault` volume.
+Tenant keys live AES-encrypted in the `noc-vault` Docker volume — they survive updates, restarts, and container recreation.
 
-> ⚠️ **LAN mode has no login.** Anyone on the network can reach it — keep the vault **locked** when you're not presenting, or use the secure proxy (see deployment guide).
+First open (either path): pick a passphrase, add your [Infoblox API key](#get-your-infoblox-api-key).
 
 ## Updating
 
-Click the version badge → **Update now**. A Watchtower sidecar pulls the new image and restarts — no shell, no re-pull. Your vault survives. Or update manually:
+Bloxsmith checks GitHub once a day in the background for a newer release (server-side; disable with `DISABLE_UPDATE_CHECK=1`). Nothing updates automatically — applying is always your call.
+
+Click the version badge → **Update now**. The app pulls the new image over the Docker socket, health-checks it, and swaps itself — automatic rollback if the new version fails to start. Available whenever the Docker socket is mounted (run-image.sh and compose both do by default).
+
+Or update manually:
 
 ```bash
-docker compose pull && docker compose up -d
+docker compose pull && docker compose up -d    # customer/compose
+./run-image.sh                                 # SE demo — re-running always pulls :latest
 ```
+
+Your vault (tenant keys, passphrase) lives in the `noc-vault` volume and survives every update.
 
 ## Get your Infoblox API key
 
@@ -64,15 +81,15 @@ docker compose pull && docker compose up -d
 
 ```bash
 # Single key, skip the vault:
-docker run -d --name infoblox-mcp -p 127.0.0.1:8080:8080 \
-  -e INFOBLOX_API_KEY="Token <key>" ghcr.io/holland-built/infoblox-noc-dashboard:latest
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
+  -e INFOBLOX_API_KEY="Token <key>" ghcr.io/holland-built/bloxsmith:latest
 
 # Compose (always-on servers / Proxmox):
 BIND=0.0.0.0 docker compose up -d              # LAN
 docker compose --profile secure up -d          # + Caddy TLS + basic-auth
 
 # Build from source (dev):
-git clone https://github.com/holland-built/infoblox-noc-dashboard && cd infoblox-noc-dashboard && ./run.sh
+git clone https://github.com/holland-built/bloxsmith && cd bloxsmith && ./run.sh
 ```
 
 Full steps, the deploy matrix, auto-unlock, and pinning → **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.

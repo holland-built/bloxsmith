@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Infoblox NOC Dashboard — Docker installer.
+# Bloxsmith — build-from-source Docker installer.
 # Builds the image and runs it, prompting the installer for the API key at run time.
 # The key is NEVER baked into the image; it is passed as a runtime env var.
 set -euo pipefail
 
-IMAGE="infoblox-mcp"
-NAME="infoblox-mcp"
+IMAGE="bloxsmith"
+NAME="bloxsmith"
 PORT="${PORT:-8080}"
 BIND="${BIND:-127.0.0.1}"   # host interface to publish on; loopback by default. Set BIND=0.0.0.0 to expose on the LAN.
 VOLUME="${VOLUME:-noc-vault}"   # named volume holding the encrypted vault
@@ -13,7 +13,7 @@ INFOBLOX_URL="${INFOBLOX_URL:-https://csp.infoblox.com}"
 
 cd "$(dirname "$0")"
 
-echo "── Infoblox NOC Dashboard installer ─────────────────────────────"
+echo "── Bloxsmith installer (build from source) ──────────────────────"
 
 # ── Infoblox API key (optional) ──────────────────────────────────────
 # Leave blank to use the in-app encrypted vault (set a passphrase + add tenant

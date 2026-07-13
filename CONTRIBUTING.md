@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in improving the Infoblox NOC Dashboard. This is a small
+Thanks for your interest in improving Bloxsmith. This is a small
 demo/dashboard tool — contributions that keep it simple and dependency-light are
 most welcome.
 

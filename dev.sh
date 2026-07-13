@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 
 [[ -f .env ]] || { echo "ERROR: no .env — copy .env.example to .env and add your INFOBLOX_API_KEY." >&2; exit 1; }
 
-NAME=infoblox-mcp
+NAME=bloxsmith
 PORT="${PORT:-8080}"
 BIND="${BIND:-127.0.0.1}"   # loopback by default; BIND=0.0.0.0 to expose on the LAN
 
