@@ -46,7 +46,8 @@ test('clicking the OFFLINE host-status tile sets an app scope chip, encodes it i
 
   const offBtn = page.locator('.stat-crossfilter[data-scope="status:offline"]');
   await expect(offBtn).toBeVisible();
-  await expect(offBtn).toHaveText('1');                 // the single offline host
+  await expect(offBtn).toContainText('1');              // the single offline host
+  await expect(offBtn).toContainText('down');           // visible text cue, not color-only (H1 audit fix)
   await expect(offBtn).toHaveAttribute('aria-pressed', 'false');
 
   await offBtn.click();
