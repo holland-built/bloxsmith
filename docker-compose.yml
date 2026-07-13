@@ -4,8 +4,9 @@
 #   BIND=0.0.0.0 docker compose up -d   # expose on the LAN (no login — keep vault locked)
 #   docker compose --profile secure up -d   # add a TLS + basic-auth reverse proxy
 #
-# Self-update: click "Update now" in the app — Watchtower pulls :latest and
-# recreates the labeled dashboard service. Same mechanism as run-image.sh.
+# Self-update: click "Update now" in the app — the app pulls :latest over the
+# Docker socket, health-checks a candidate, and recreates itself (auto-rollback
+# on failure). Or run: docker compose pull && docker compose up -d
 # Copy .env.example to .env to set BIND/PORT/token/auth.
 
 services:
@@ -17,6 +18,7 @@ services:
       - "${BIND:-127.0.0.1}:${PORT:-8080}:8080"
     volumes:
       - noc-vault:/vault
+      - /var/run/docker.sock:/var/run/docker.sock   # in-app "Update now" self-update; remove to disable
     environment:
       INFOBLOX_URL: ${INFOBLOX_URL:-https://csp.infoblox.com}
       # single-key mode (optional) — leave unset to use the in-app encrypted vault
@@ -44,7 +46,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       DOCKER_API_VERSION: "1.44"          # modern daemons reject Watchtower's old default
-      WATCHTOWER_HTTP_API_UPDATE: "true"  # update only on button press, no polling
+      WATCHTOWER_HTTP_API_UPDATE: "true"  # HTTP-API mode, no polling (alternate trigger; the in-app button uses the Docker socket)
       WATCHTOWER_HTTP_API_TOKEN: ${WATCHTOWER_TOKEN:-noc-local-update-token}
       WATCHTOWER_LABEL_ENABLE: "true"     # only touch the labeled dashboard
       WATCHTOWER_CLEANUP: "true"
