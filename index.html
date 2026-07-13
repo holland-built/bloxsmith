@@ -9125,7 +9125,7 @@ function HealthStrip(){
   </div>;
 }
 
-/* ViewOptions — ⚙ popover consolidating the three display toggles (density, theme,
+/* ViewOptions — gear-icon popover consolidating the three display toggles (density, theme,
    wallboard) into one control. Open/overlay-click/Escape interaction mirrors ViewsMenu;
    the Wall button calls the module-level enterWall() (global, in scope everywhere). */
 function ViewOptions(){
@@ -9141,7 +9141,7 @@ function ViewOptions(){
     <button className="kbd" aria-haspopup="menu" aria-expanded={open}
       aria-label="View options"
       {...bind({title:'View options',rows:[['Density','Compact ↔ comfortable rows'],['Theme','Light ↔ dark'],['Wallboard','Full-screen NOC display (#wall)']]})}
-      onClick={()=>setOpen(o=>!o)}>⚙</button>
+      onClick={()=>setOpen(o=>!o)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{display:'block'}}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     {open&&<>
       <div className="views-overlay" onClick={()=>setOpen(false)}/>
       <div className="view-options-menu" role="menu">
