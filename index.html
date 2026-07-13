@@ -3714,6 +3714,86 @@ function SnapshotWriter(){
 }
 
 /* ─────────────────────────────────────────────────────────────
+   Delta-since-last-visit (P1 slice 7) — a per-tab "+N new / ~M
+   changed" chip. REUSES the existing snapshot store (readSnaps) +
+   diffRows; the only new state is a per-tab last-visit timestamp in
+   bx.tabVisit LS. No second snapshot system. Signal is glyph+text
+   (monochrome, reuses the .dt-diff +/~ vocabulary) — never color-only.
+   ───────────────────────────────────────────────────────────── */
+const VISIT_KEY='tabVisit';
+// DELTA_TABS — which tabs carry a per-row snapshot shape to diff against. Maps
+// current rows (from /api/data) + a prior-snapshot-day → the same {row} arrays
+// diffRows already consumes (mirrors NetworkTab/InfraTab's Compare buttons).
+const DELTA_TABS={
+  network:{
+    rows:d=>Array.isArray(d.subnets)?d.subnets:[],
+    key:r=>String(r.addr||r.id), cmp:['util'], label:r=>r.name||r.addr||r.id,
+    prevRows:day=>(day&&day.subnets&&Array.isArray(day.subnets.top))?day.subnets.top.map(t=>({addr:t.a,util:t.u})):[],
+  },
+  infra:{
+    rows:d=>Array.isArray(d.hosts)?d.hosts:[],
+    key:r=>String(r.name||''), cmp:['status'], label:r=>r.name,
+    prevRows:day=>(day&&day.hosts&&Array.isArray(day.hosts.top))?day.hosts.top.map(t=>({name:t.n,status:t.s})):[],
+  },
+};
+// baselineSnap — the snapshot the tab looked like AT the user's last visit: the
+// most recent snapshot day on-or-before that visit; falls back to the prior day
+// (same "most recent day < today" rule useSnapshots.prev uses).
+function baselineSnap(lastVisitTs){
+  const days=(readSnaps().days||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  if(!days.length) return null;
+  if(lastVisitTs){
+    const lv=new Date(lastVisitTs).toISOString().slice(0,10);
+    const onOrBefore=days.filter(d=>d&&d.date<=lv).slice(-1)[0];
+    if(onOrBefore) return onOrBefore;
+  }
+  const ti=todayISO();
+  return days.filter(d=>d&&d.date<ti).slice(-1)[0]||null;
+}
+function DeltaChip({tab}){
+  const {data}=useData();
+  const cfg=DELTA_TABS[tab];
+  // Freeze the PRE-visit timestamp for this tab (useState initializer runs before
+  // the record-visit effect below), so the chip diffs against the last time the
+  // user actually saw the tab — not "now".
+  const [baseTs]=useState(()=>{ const v=LS.get(VISIT_KEY,{})||{}; return (v[tab]&&v[tab].ts)||null; });
+  const [open,setOpen]=useState(false);
+  // Record this visit so the NEXT visit compares against now. Read-modify-write of
+  // the shared bx.tabVisit map only — never touches the snapshot/data feeds.
+  useEffect(()=>{
+    if(!cfg) return;
+    const v=LS.get(VISIT_KEY,{})||{}; v[tab]={ts:Date.now(),date:todayISO()}; LS.set(VISIT_KEY,v);
+  },[tab,cfg]);
+  if(!cfg||!data) return null;
+  const rows=cfg.rows(data);
+  const base=baselineSnap(baseTs);
+  if(!base) return null;
+  const {byKey}=diffRows(cfg.prevRows(base),rows,cfg.key,cfg.cmp);
+  let added=0,changed=0; byKey.forEach(m=>{ if(m.type==='+')added++; else if(m.type==='~')changed++; });
+  if(added===0&&changed===0) return null;
+  const items=[];
+  rows.forEach(r=>{ const m=byKey.get(cfg.key(r)); if(m) items.push({label:cfg.label(r),mark:m.type,tag:m.label}); });
+  return <div className="delta-wrap">
+    <button className="delta-chip mono" aria-expanded={open}
+      aria-label={added+' new, '+changed+' changed since your last visit — show'}
+      onClick={()=>setOpen(o=>!o)}>
+      <span className="delta-since">Since last visit</span>
+      {added>0?<span className="delta-seg"><span className="delta-glyph" aria-hidden="true">+</span>{added} new</span>:null}
+      {changed>0?<span className="delta-seg"><span className="delta-glyph" aria-hidden="true">~</span>{changed} changed</span>:null}
+    </button>
+    {open&&<>
+      <div className="views-overlay" onClick={()=>setOpen(false)}/>
+      <div className="dt-popover delta-pop" role="menu" aria-label="Rows changed since last visit">
+        {items.map((it,i)=><div key={i} className="delta-pop-row">
+          <span className="dt-diff mono"><span aria-label={it.tag} title={it.tag}>{it.mark}</span></span>
+          <span className="vname">{it.label}</span>
+        </div>)}
+      </div>
+    </>}
+  </div>;
+}
+
+/* ─────────────────────────────────────────────────────────────
    SHARED DISPLAY-FORM PRIMITIVES — VolumeHistogram, heatCell/
    trendCell, AiExplain. SVG/CSS only (no chart lib), all width:100% and
    viewBox-scaled so they never cause horizontal overflow at 375px. Token
@@ -6539,6 +6619,19 @@ function SecurityTab(){
   .views-confirm-q{flex:1;padding:0 6px;font-size:11px;color:var(--crit);}
   .views-divider{height:1px;margin:6px 8px;background:var(--border);}
   .views-empty{padding:8px;font-size:11px;color:var(--text-faint);}
+  /* Watch expressions — reuse .views-* chrome; badge/count are text-only. */
+  .watch-badge{margin-left:6px;padding:0 5px;min-width:16px;height:15px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1;color:var(--text-dim);background:var(--raised);border:1px solid var(--border);border-radius:8px;}
+  .watch-item .watch-count{flex:0 0 auto;padding:0 6px;font-size:11px;color:var(--text-dim);background:var(--raised);border:1px solid var(--border);border-radius:8px;}
+  /* Delta-since-last-visit — subtle monochrome strip; glyph+count, never color-only. */
+  .delta-wrap{position:relative;display:flex;justify-content:flex-end;padding:4px 16px 0;}
+  .delta-chip{display:inline-flex;align-items:center;gap:8px;padding:2px 10px;font-size:11px;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+  .delta-chip:hover{border-color:var(--border-strong);}
+  .delta-since{color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;font-size:10px;}
+  .delta-seg{display:inline-flex;align-items:center;gap:3px;color:var(--text);}
+  .delta-glyph{color:var(--text);font-weight:600;}
+  .delta-pop{right:16px;top:calc(100% + 4px);width:280px;max-height:320px;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:6px;}
+  .delta-pop-row{display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:12px;color:var(--text);}
+  .delta-pop-row .vname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   `;
   document.head.appendChild(s);
 })();
@@ -6563,6 +6656,46 @@ function applyViewByName(name){
       else toast('Legacy view — no route stored','warn');
     })
     .catch(()=>toast('Could not load view "'+name+'"','err'));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Watch expressions (P1 slice 7) — a "watch" is just a saved BQL
+   query (name + tab + query string) persisted in the SAME bx. LS
+   namespace as saved views/scratchpad. Poor-man's alerting: a live
+   MATCH COUNT is computed client-side from the shared /api/data feed
+   via the existing parseQuery/deriveSchema/buildPredicate — no alert
+   engine, no polling, no server. Clicking a watch re-applies its
+   query through the existing sq= hash surface (nav). On-demand only.
+   ───────────────────────────────────────────────────────────── */
+const WATCH_KEY='watches';
+function readWatches(){ const v=LS.get(WATCH_KEY,[]); return Array.isArray(v)?v:[]; }
+function writeWatches(list){ LS.set(WATCH_KEY,Array.isArray(list)?list:[]); try{window.dispatchEvent(new CustomEvent('bx:watches'));}catch(e){} }
+function addWatch(w){ if(!w||!w.name) return; const list=readWatches().filter(x=>x.name!==w.name); list.push(w); writeWatches(list); }
+function removeWatch(name){ writeWatches(readWatches().filter(x=>x.name!==name)); }
+// watchRows — the primary-entity rows for a tab, read from the shared /api/data
+// body (same accessor the tab components use). Watches count against these.
+function watchRows(data,tab){
+  if(!data||typeof data!=='object') return [];
+  switch(tab){
+    case 'dns': return Array.isArray(data.zones)?data.zones:[];
+    case 'infra': return Array.isArray(data.hosts)?data.hosts:[];
+    case 'network':
+    default: return Array.isArray(data.subnets)?data.subnets:[];
+  }
+}
+// watchCount — live count of rows matching a watch's BQL query. Reuses the exact
+// parse → schema → predicate pipeline the table search uses, so counts match the
+// filtered view. Never throws (bad query → 0).
+function watchCount(data,watch){
+  if(!watch||!watch.query) return 0;
+  const rows=watchRows(data,watch.tab);
+  if(!rows.length) return 0;
+  try{
+    const cols=Object.keys(rows[0]||{}).map(k=>({key:k}));
+    const schema=deriveSchema(cols,rows,{});
+    const pred=buildPredicate(parseQuery(watch.query),schema);
+    return rows.filter(pred).length;
+  }catch(e){ return 0; }
 }
 
 /* Alert rules — LS-only thresholds polled against /api/data every 120s. */
@@ -8419,6 +8552,7 @@ function CommandPalette({open,onClose}){
     else if(e.key==='Enter'){e.preventDefault();const it=items[sel];if(it)it.run();}
   };
   return <>
+    {slot?ReactDOM.createPortal(<WatchMenu/>,slot):null}
     {slot?ReactDOM.createPortal(<ViewsMenu/>,slot):null}
     {open&&<div className="palette-scrim" onClick={onClose}>
       <div className="palette" onClick={e=>e.stopPropagation()}>
@@ -8512,6 +8646,59 @@ function ViewsMenu(){
                   </>}
             </div>)}
         </div>)}
+      </div>
+    </>}
+  </span>;
+}
+
+/* WatchMenu — topbar saved-query dropdown. Mirrors ViewsMenu's markup/interaction
+   (reuses .views-* classes) but is 100% client-side: watches live in bx.watches
+   LS and each row shows a LIVE match count against the shared /api/data feed.
+   "Watch current query…" saves whatever BQL query is in the current tab's sq=
+   hash param; clicking a watch re-applies it via nav (the same sq= surface). */
+function WatchMenu(){
+  const [open,setOpen]=useState(false);
+  const [watches,setWatches]=useState(()=>readWatches());
+  const {data}=useData();
+  const {tab,params}=useRoute();
+  const curQuery=((params&&params.sq)||'').trim();
+  useEffect(()=>{
+    const on=()=>setWatches(readWatches());
+    window.addEventListener('bx:watches',on);
+    return ()=>window.removeEventListener('bx:watches',on);
+  },[]);
+  const save=()=>{
+    if(!curQuery){ toast('No active query to watch — search a table first','warn'); return; }
+    const name=window.prompt('Save current query as a watch:',curQuery);
+    if(!name||!name.trim()) return;
+    addWatch({name:name.trim(),tab,query:curQuery,created:Date.now()});
+    setWatches(readWatches());
+    toast('Watch "'+name.trim()+'" saved','ok');
+  };
+  const apply=w=>{ setOpen(false); nav(w.tab,{sq:w.query}); toast('Watch "'+w.name+'" applied','ok'); };
+  const del=name=>{ removeWatch(name); setWatches(readWatches()); };
+  return <span className="views-slot watch-slot">
+    <button className="btn" aria-haspopup="menu" aria-expanded={open}
+      title="Watches — saved queries with a live match count" onClick={()=>setOpen(o=>!o)}>
+      Watches{watches.length?<span className="watch-badge mono" aria-hidden="true">{watches.length}</span>:null}
+    </button>
+    {open&&<>
+      <div className="views-overlay" onClick={()=>setOpen(false)}/>
+      <div className="dt-popover views-menu" role="menu">
+        <button className="views-item" onClick={()=>save()}>Watch current query…</button>
+        <div className="views-divider"/>
+        {watches.length===0&&<div className="views-empty">No watches yet — search a table, then save the query.</div>}
+        {watches.map(w=>{
+          const n=watchCount(data,w);
+          return <div key={w.name} className="views-row watch-row">
+            <button className="views-item watch-item" style={{flex:1}} onClick={()=>apply(w)}>
+              <span className="vname">{w.name}</span>
+              <span className="watch-count mono" aria-label={n+' matching row'+(n===1?'':'s')}>{n}</span>
+            </button>
+            <button className="views-mini crit" aria-label={'Delete watch '+w.name}
+              onClick={()=>del(w.name)}>✕</button>
+          </div>;
+        })}
       </div>
     </>}
   </span>;
@@ -8746,6 +8933,7 @@ function Shell(){
       <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)} onAi={()=>setAiOpen(o=>!o)} aiOpen={aiOpen}/>
       <HealthStrip/>
       <FilterBar/>
+      <DeltaChip tab={tab} key={'delta-'+tab}/>
       <main className="main" key={tab}>
         <Active vaultTick={vaultTick}/>
       </main>
