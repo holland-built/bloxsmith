@@ -747,6 +747,67 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertIn('className="dly-seg"', prov,
                       "ProvisionTab mode controls must use the shared segmented-control")
 
+    def test_marris_kebab_shared_component(self):
+        # P2 slice 8: a single shared KebabMenu (⋮) primitive consolidates SECONDARY
+        # actions on the Marris tabs. It mirrors AbMenu's accessibility contract:
+        # icon trigger with aria-haspopup=menu / aria-expanded, a role="menu" popover
+        # of role="menuitem" buttons, Esc-close + focus-return, arrow-key roving.
+        self.assertContains("function KebabMenu(", "shared KebabMenu component missing")
+        kebab = self.html[self.html.index("function KebabMenu("):]
+        kebab = kebab[:kebab.index("\nfunction ", 1)]
+        self.assertIn('className="btn kebab-btn"', kebab, "KebabMenu trigger must use .kebab-btn")
+        self.assertIn('aria-haspopup="menu"', kebab, "KebabMenu trigger must declare aria-haspopup=menu")
+        self.assertIn("aria-expanded={open}", kebab, "KebabMenu trigger must expose aria-expanded")
+        self.assertIn('role="menu"', kebab, "KebabMenu popover must be role=menu")
+        self.assertIn('role="menuitem"', kebab, "KebabMenu items must be role=menuitem")
+        self.assertIn("e.key==='Escape'", kebab, "KebabMenu must close on Escape")
+        self.assertIn("btnRef.current.focus()", kebab, "KebabMenu must return focus to its trigger on close")
+        self.assertIn(".kebab-btn{", self.html, "KebabMenu compact-icon CSS missing")
+        # Each Marris tab wires the shared KebabMenu for its secondary actions.
+        for fn in ("ProvisionTab", "DriftTab", "SelfServiceTab"):
+            body = self.html[self.html.index("function " + fn + "("):]
+            body = body[:body.index("\nfunction ", 1)]
+            self.assertIn("<KebabMenu", body, f"{fn} must use the shared KebabMenu for secondary actions")
+        # RISK CONTROL: the destructive action stays a VISIBLE, labeled button —
+        # never demoted into a kebab menuitem.
+        prov = self.html[self.html.index("function ProvisionTab("):]
+        prov = prov[:prov.index("\nfunction ", 1)]
+        self.assertIn("Tear down this site", prov,
+                      "destructive teardown must remain a visible, labeled action")
+        self.assertNotIn("{label:'Tear down this site'", prov,
+                         "destructive teardown must NOT be buried inside the kebab menu")
+
+    def test_marris_real_examples_seeded(self):
+        # P2 slice 8: inline MARRIS_EXAMPLES seed real, illustrative templates/sample
+        # data so the tabs teach themselves. Prefill / sample-render ONLY — the loaders
+        # must never call a real API (function-preserving: no fetch / EventSource added).
+        self.assertContains("const MARRIS_EXAMPLES=", "MARRIS_EXAMPLES seed constant missing")
+        ex = self.html[self.html.index("const MARRIS_EXAMPLES="):]
+        ex = ex[:ex.index("\nfunction ", 1)]
+        # Provision site template (london / EMEA / production, subnets + DNS parent + hosts + tags).
+        for tok in ("site:'london'", "region:'EMEA'", "environment:'production'",
+                    "internal.example.com", "gw01", "dns01", "Owner:'neteng'", "CostCentre"):
+            self.assertIn(tok, ex, f"Provision site example missing {tok!r}")
+        # Address-block regional pool + DNS zone example.
+        self.assertIn("global:'10.0.0.0/8'", ex, "address-block example pool missing")
+        self.assertIn("zone:'corp.example.com'", ex, "DNS zone example missing")
+        # Drift worked example — in-sync + changed + missing, rendered via shared glyph-diff.
+        self.assertIn("label:'in sync'", ex, "drift example must include in-sync items")
+        self.assertIn("label:'changed'", ex, "drift example must include a changed item")
+        self.assertIn("label:'missing'", ex, "drift example must include a missing item")
+        self.assertContains("function MarrisExampleDiff(", "example glyph-diff renderer missing")
+        mdiff = self.html[self.html.index("function MarrisExampleDiff("):]
+        mdiff = mdiff[:mdiff.index("\nfunction ", 1)]
+        self.assertIn('className="dt-diff mono"', mdiff,
+                      "drift example must reuse the shared dt-diff glyph column")
+        self.assertNotIn("fetch(", mdiff, "example render must not call any API")
+        # Self-service allocate prefill (tag environment=prod).
+        self.assertIn("tagKey:'environment'", ex, "self-service allocate example missing tag prefill")
+        self.assertIn("tagValue:'prod'", ex, "self-service allocate example missing tag value")
+        # Examples are clearly LABELED as examples in the UI.
+        self.assertIn('className="mx-tag"', self.html, "example callout must carry an 'Example' label")
+        self.assertIn(".marris-example{", self.html, "example callout styling missing")
+
     def test_auth_api_endpoints(self):
         for ep in ("/api/switch-account", "/api/vault/init", "/api/vault/unlock"):
             self.assertContains(ep, f"auth endpoint {ep} missing")
