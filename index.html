@@ -461,6 +461,44 @@ table.dt tbody tr.cursor .row-copyas-wrap,
 .peek-foot{padding:var(--s3) var(--s4);border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--surface);}
 .peek-full{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;}
 
+/* ── EntityPeek (slice 6) — shared trace/pin block inside the peek ── */
+.ep{margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--border);display:flex;flex-direction:column;gap:var(--s3);}
+.ep-sec-label{font-size:var(--t11);text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);margin-bottom:var(--s2);}
+.ep-audit{display:flex;justify-content:space-between;gap:var(--s3);font-size:var(--t12);padding:2px 0;}
+.ep-audit-ev{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ep-audit-meta{color:var(--text-faint);flex:0 0 auto;}
+.ep-empty{font-size:var(--t12);color:var(--text-faint);}
+.ep-traces{display:flex;flex-wrap:wrap;gap:var(--s2);}
+.ep-trace-btn{font-size:var(--t12);color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);padding:2px var(--s2);}
+.ep-trace-btn:hover,.ep-trace-btn:focus-visible{border-color:var(--accent);color:var(--accent-text);outline:none;}
+.ep-pin{align-self:flex-start;font-size:var(--t12);font-weight:600;color:var(--accent-contrast);background:var(--accent);border:1px solid var(--accent);border-radius:var(--r-ctl);padding:3px var(--s3);}
+.ep-pin:hover,.ep-pin:focus-visible{filter:brightness(1.08);outline:none;}
+
+/* ── Scratchpad (slice 6) — on-demand floating badge + tray overlay ── */
+.scratch-badge{position:fixed;right:var(--s4);bottom:var(--s4);z-index:75;display:inline-flex;align-items:center;gap:var(--s2);
+  font-size:var(--t12);font-weight:600;color:var(--text);background:var(--surface);
+  border:1px solid var(--border);border-left:2px solid var(--accent);border-radius:var(--r-ctl);
+  padding:var(--s2) var(--s3);box-shadow:0 2px 8px rgba(0,0,0,.18);}
+.scratch-badge:hover,.scratch-badge:focus-visible{border-color:var(--accent);outline:none;}
+.scratch-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:0 0 auto;}
+.scratch-badge-n{color:var(--accent-text);}
+.scratch-scrim{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4);}
+.scratch-tray{width:min(520px,100%);max-height:80vh;overflow-y:auto;padding:var(--s4);display:flex;flex-direction:column;}
+.scratch-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3);}
+.scratch-title{font-size:var(--t14);font-weight:600;color:var(--text);margin:0;}
+.scratch-title-n{color:var(--text-faint);font-size:var(--t12);margin-left:var(--s1);}
+.scratch-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
+.scratch-item{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) 0;border-bottom:1px solid var(--border);}
+.scratch-kind{font-size:var(--t11);text-transform:uppercase;letter-spacing:.03em;color:var(--text-faint);flex:0 0 auto;min-width:52px;}
+.scratch-label{font-size:var(--t12);color:var(--text);flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.scratch-item-acts{display:flex;gap:var(--s2);flex:0 0 auto;}
+.scratch-trace{font-size:var(--t11);color:var(--text);background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);padding:1px var(--s2);}
+.scratch-trace:hover,.scratch-trace:focus-visible{border-color:var(--accent);color:var(--accent-text);outline:none;}
+.scratch-rm{font-size:var(--t12);color:var(--text-dim);background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);width:22px;height:22px;line-height:1;}
+.scratch-rm:hover,.scratch-rm:focus-visible{color:var(--text);border-color:var(--border-strong);outline:none;}
+.scratch-foot{display:flex;gap:var(--s2);margin-top:var(--s3);flex-wrap:wrap;}
+.scratch-clear{margin-left:auto;}
+
 /* ── responsive grid column counts + trailing-row fill resets ── */
 @media (max-width:1280px){
   .grid,.grid-3{grid-template-columns:repeat(2,minmax(0,1fr));}
@@ -873,6 +911,60 @@ function collapseIdentical(rows,sigFn,min){
 }
 
 /* ─────────────────────────────────────────────────────────────
+   Entity-triage cluster (P1 slice 6) — shared plumbing for the
+   peek's trace buttons, the pin-to-scratchpad tray, and the
+   keyboard macros. All four features key off ONE inferred entity.
+   ───────────────────────────────────────────────────────────── */
+/* entityOf(row,tableId) → {kind,key,label,pred} | null. Infers what a table row
+   represents (subnet / lease / zone / host / event / audit) and the single BQL
+   predicate {field,value} that identifies it across DDI planes (the IP is the
+   universal join key where present). Pure — used by trace, pin, and macros. */
+function entityOf(row,tableId){
+  if(!row||typeof row!=='object') return null;
+  const tid=String(tableId||'');
+  const ip=row.addr||row.ip;
+  let kind,field,value;
+  if(tid.indexOf('subnet')>=0||(row.cidr!=null&&(row.util!=null||ip!=null))){ kind='subnet'; field='addr'; value=row.addr||row.id; }
+  else if(tid.indexOf('lease')>=0||row.mac!=null||(ip!=null&&row.state!=null)){ kind='lease'; field='addr'; value=ip||row.mac; }
+  else if(row.fqdn!=null){ kind='zone'; field='fqdn'; value=row.fqdn; }
+  else if(tid.indexOf('host')>=0||(row.status!=null&&(row.version!=null||row.name!=null))){ kind='host'; field='host'; value=row.name||row.host||row.hostname; }
+  else if(row.qname!=null||row.event_time!=null){ kind='event'; field='qname'; value=row.qname||row.query; }
+  else if(row.event!=null&&(row.actor!=null||row.hash!=null)){ kind='audit'; field='actor'; value=row.actor; }
+  else { kind='record'; field='id'; value=row.id||ip||row.name; }
+  value=value==null?'':String(value);
+  return {kind,key:kind+':'+value,label:value||kind,pred:{field,value}};
+}
+// The cross-tab trace targets: label → destination tab. One-click DDI-plane hops.
+const TRACE_TARGETS=[
+  {label:'Show in DHCP',tab:'network'},
+  {label:'Show in DNS',tab:'dns'},
+  {label:'Show in Audit',tab:'audit'},
+  {label:'Show in Security',tab:'security'},
+];
+// traceTo — nav to a plane carrying the entity's BQL predicate in the shared `f=`
+// cross-filter param (field:value IS a BQL predicate; every DataTable on the
+// destination that owns that column AND-filters to it). Reuses nav — no new route.
+function traceTo(tab,ent){ if(!ent||!ent.pred) return; nav(tab,{f:ent.pred.field+':'+ent.pred.value}); }
+
+/* Scratchpad — session pin tray, persisted via the shared LS helper (bx.scratchpad).
+   pinEntity/unpinEntity mutate LS + fire a 'bx:scratch' event the <Scratchpad/>
+   tray subscribes to (same broadcast pattern as the toast bus). On-demand only —
+   the tray/badge render nothing when empty. */
+const SCRATCH_KEY='scratchpad';
+function scratchList(){ const v=LS.get(SCRATCH_KEY,[]); return Array.isArray(v)?v:[]; }
+function pinEntity(ent){
+  if(!ent||!ent.key) return false;
+  const cur=scratchList();
+  if(cur.some(e=>e.key===ent.key)){ toast('Already pinned · '+(ent.label||ent.key),'ok',{duration:1500}); return false; }
+  LS.set(SCRATCH_KEY,[...cur,{key:ent.key,kind:ent.kind,label:ent.label,pred:ent.pred,added:Date.now()}]);
+  window.dispatchEvent(new CustomEvent('bx:scratch'));
+  toast('Pinned · '+(ent.label||ent.key),'ok',{duration:1500});
+  return true;
+}
+function unpinEntity(key){ LS.set(SCRATCH_KEY,scratchList().filter(e=>e.key!==key)); window.dispatchEvent(new CustomEvent('bx:scratch')); }
+function clearScratch(){ LS.set(SCRATCH_KEY,[]); window.dispatchEvent(new CustomEvent('bx:scratch')); }
+
+/* ─────────────────────────────────────────────────────────────
    2. useApi — fetch hook with vault-lock handling.
    Locked-handling pattern ported from prior build: a JSON body of
    {locked:true} or {error:'vault locked'}, or HTTP 503, is treated as
@@ -1060,6 +1152,10 @@ function PowerProvider({children}){
         if(e.key==='Escape'){ e.preventDefault(); closePeek(); return; }
         if((e.key==='j'||e.key==='ArrowDown')&&api){ e.preventDefault(); api.move(1); return; }
         if((e.key==='k'||e.key==='ArrowUp')&&api){ e.preventDefault(); api.move(-1); return; }
+        // Macros while the peek is open: p pins THIS entity, t jumps focus to its
+        // trace buttons (slice 6 — o is a no-op here, the peek is already open).
+        if(e.key==='p'){ e.preventDefault(); const pk=peekRef.current; pinEntity(entityOf(pk&&pk.row,pk&&pk.tableId)); return; }
+        if(e.key==='t'){ e.preventDefault(); const b=document.querySelector('.peek .ep-trace-btn'); if(b) b.focus(); return; }
         return;
       }
       if(!api) return;
@@ -1067,6 +1163,11 @@ function PowerProvider({children}){
       if(e.key==='j'||e.key==='ArrowDown'){ api.move(1); handled=true; }
       else if(e.key==='k'||e.key==='ArrowUp'){ api.move(-1); handled=true; }
       else if(e.key==='Enter'){ handled=api.openCursor(); }
+      // Slice 6 macros on the cursor row: o open peek, t trace (open peek + focus
+      // its trace buttons), p pin to scratchpad. y (copy id) already exists below.
+      else if(e.key==='o'){ handled=api.openCursor(); }
+      else if(e.key==='t'){ handled=api.openCursor(); if(handled) requestAnimationFrame(()=>{ const b=document.querySelector('.peek .ep-trace-btn'); if(b) b.focus(); }); }
+      else if(e.key==='p'){ let row=null; try{ row=api.pinTarget&&api.pinTarget(); }catch(_){} if(row){ pinEntity(entityOf(row,activeRef.current)); handled=true; } }
       else if(e.key==='x'){ handled=api.toggleSelect(); }
       else if(e.key==='y'){ handled=api.copyCursorRow(); }
       else if(e.key==='/'){ handled=api.focusFilter(); }
@@ -1261,6 +1362,47 @@ function FilterBar(){
   </div>;
 }
 
+/* ── EntityPeek (slice 6) — the ONE shared triage block rendered inside every
+   peek: recent audit lines for the entity + cross-tab trace buttons + a pin
+   button. Reused by PeekDrawer for whatever row/tableId produced the peek, so
+   there's no second drawer/storage — trace reuses nav+`f=`, pin reuses the LS
+   scratchpad. Data comes from the already-mounted /api/data feed (no new fetch). */
+function EntityPeek({row,tableId,onClose}){
+  const ent=entityOf(row,tableId);
+  const data=useData();
+  if(!ent) return null;
+  const d=(data&&data.data)||{};
+  const logs=Array.isArray(d.auditLogs)?d.auditLogs:(Array.isArray(d.audit)?d.audit:[]);
+  const needle=(ent.pred&&ent.pred.value||'').toLowerCase();
+  // Recent audit lines that mention this entity (best-effort scan of every field).
+  const related=needle?logs.filter(l=>{
+    try{ return Object.values(l).some(v=>v!=null&&String(v).toLowerCase().indexOf(needle)>=0); }catch(_){ return false; }
+  }).slice(0,3):[];
+  const pin=()=>{ pinEntity(ent); };
+  return <div className="ep">
+    <div className="ep-sec">
+      <div className="ep-sec-label">Recent audit</div>
+      {related.length
+        ? related.map((l,i)=><div key={i} className="ep-audit mono">
+            <span className="ep-audit-ev">{String(l.event||l.action||'—')}</span>
+            <span className="ep-audit-meta">{String(l.actor||l.who||'')}{l.ts?' · '+relAge(l.ts):''}</span>
+          </div>)
+        : <div className="ep-empty">No audit lines for this entity.</div>}
+    </div>
+    <div className="ep-sec">
+      <div className="ep-sec-label">Trace across planes</div>
+      <div className="ep-traces">
+        {TRACE_TARGETS.map(t=>
+          <button key={t.tab} type="button" className="ep-trace-btn"
+            aria-label={t.label+' — filter to '+ent.pred.field+':'+ent.pred.value}
+            onClick={()=>{ if(onClose) onClose(); traceTo(t.tab,ent); }}>{t.label}</button>)}
+      </div>
+    </div>
+    <button type="button" className="ep-pin" onClick={pin}
+      aria-label={'Pin '+ent.label+' to the scratchpad'}>Pin to scratchpad</button>
+  </div>;
+}
+
 /* ── PeekDrawer (F4) — conditionally mounted (unmounted = zero width, overflow-safe).
    Focuses close on open, traps Tab, returns focus to the table wrapper on close. ── */
 function PeekDrawer(){
@@ -1292,7 +1434,10 @@ function PeekDrawer(){
       <span className="peek-title mono">{peek.title||'Detail'}</span>
       <button ref={closeRef} className="peek-close" aria-label="Close detail" onClick={()=>power.closePeek()}>✕</button>
     </div>
-    <div className="peek-body">{peek.render?peek.render(peek.row):null}</div>
+    <div className="peek-body">
+      {peek.render?peek.render(peek.row):null}
+      <EntityPeek row={peek.row} tableId={peek.tableId} onClose={()=>power.closePeek()}/>
+    </div>
     {peek.onFull?<div className="peek-foot">
       <button className="peek-full" onClick={()=>{const f=peek.onFull;power.closePeek();f();}}>Open full view →</button>
     </div>:null}
@@ -2370,6 +2515,9 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
       const row=visible[cursor];
       if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(JSON.stringify(row));
       toast('Row copied (JSON)','ok',{duration:1500}); return true; },
+    // Slice 6 — the row the `p` (pin) macro targets: the cursor row, or the first
+    // row when no cursor is set yet (mirrors openCursor's cursor<0?0 default).
+    pinTarget(){ const i=cursor<0?0:cursor; return (scrollBody?sorted:visible)[i]||null; },
     focusFilter(){ if(!filterable) return false; if(filterRef.current){ filterRef.current.focus(); return true; } return false; },
     // F6: imperative setter so the command palette can inject a query token
     // (e.g. last:24h) into THIS table's own search input — same state the
@@ -8604,6 +8752,7 @@ function Shell(){
       <CommandPalette open={paletteOpen} onClose={()=>setPaletteOpen(false)}/>
       <AiDrawer open={aiOpen} onClose={()=>setAiOpen(false)} initialQ={aiQ}/>
       <PeekDrawer/>
+      <Scratchpad/>
       <Toasts/>
       <ShortcutsHelp/>
       <SnapshotWriter/>
@@ -8619,7 +8768,9 @@ function Shell(){
 const SHORTCUTS=[
   ['j  /  k','Move the row cursor down / up'],
   ['g g  /  G','Jump to the first / last row'],
-  ['Enter','Open the focused row detail'],
+  ['Enter  /  o','Open the row detail (peek)'],
+  ['t','Trace the row across DHCP / DNS / Audit / Security'],
+  ['p','Pin the row to the scratchpad'],
   ['x','Toggle selection on the cursor row'],
   ['y','Copy the cursor row as JSON'],
   ['/','Focus the table search'],
@@ -8676,6 +8827,76 @@ function ShortcutsHelp(){
       </dl>
     </div>
   </div>;
+}
+
+/* ── Scratchpad (slice 6) — the on-demand pin tray. A floating "Pinned (N)" badge
+   appears ONLY when pins exist (no standing chrome); it toggles a focus-trapped
+   overlay listing the pinned entities with per-row trace/remove + whole-tray
+   export (Copy JSON / Copy text / CSV — reuses copyText + downloadCSV). State is
+   the LS scratchpad, refreshed on the shared 'bx:scratch' broadcast. ── */
+function Scratchpad(){
+  const [items,setItems]=useState(()=>scratchList());
+  const [open,setOpen]=useState(false);
+  const badgeRef=useRef(null),dialogRef=useRef(null);
+  useEffect(()=>{
+    const on=()=>setItems(scratchList());
+    window.addEventListener('bx:scratch',on);
+    window.addEventListener('storage',on);   // cross-tab / reload safety
+    return ()=>{ window.removeEventListener('bx:scratch',on); window.removeEventListener('storage',on); };
+  },[]);
+  useEffect(()=>{ if(!items.length) setOpen(false); },[items.length]);
+  useEffect(()=>{ if(!open||!dialogRef.current) return;
+    const f=dialogRef.current.querySelector('button'); if(f) f.focus(); },[open]);
+  const close=useCallback(()=>{ setOpen(false); const b=badgeRef.current; if(b&&b.focus){ try{b.focus();}catch(_){} } },[]);
+  const copyText=txt=>{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt); };
+  const exportCols=[{key:'kind',label:'Kind'},{key:'label',label:'Entity'},{key:'field',label:'Field'},{key:'value',label:'Value'}];
+  const flatRows=()=>items.map(e=>({kind:e.kind,label:e.label,field:e.pred&&e.pred.field,value:e.pred&&e.pred.value}));
+  const copyJSON=()=>{ copyText(JSON.stringify(items,null,2)); toast('Copied '+items.length+' pin'+(items.length===1?'':'s')+' as JSON','ok',{duration:1500}); };
+  const copyTextList=()=>{ copyText(items.map(e=>e.label).join('\n')); toast('Copied '+items.length+' pin'+(items.length===1?'':'s'),'ok',{duration:1500}); };
+  const csv=()=>{ downloadCSV('scratchpad.csv',flatRows(),exportCols); toast('Exported '+items.length+' pin'+(items.length===1?'':'s'),'ok',{duration:1500}); };
+  if(!items.length&&!open) return null;
+  const onKeyDown=e=>{
+    if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); close(); return; }
+    if(e.key==='Tab'&&dialogRef.current){
+      const f=Array.from(dialogRef.current.querySelectorAll('button,[href],[tabindex]:not([tabindex="-1"])'));
+      if(!f.length) return; const first=f[0],last=f[f.length-1];
+      if(e.shiftKey&&document.activeElement===first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey&&document.activeElement===last){ e.preventDefault(); first.focus(); }
+    }
+  };
+  return <>
+    <button ref={badgeRef} className="scratch-badge" aria-haspopup="dialog" aria-expanded={open?'true':'false'}
+      aria-label={'Scratchpad — '+items.length+' pinned'} onClick={()=>setOpen(o=>!o)}>
+      <span className="scratch-badge-dot" aria-hidden="true"/>Pinned <span className="scratch-badge-n mono">{items.length}</span>
+    </button>
+    {open?<div className="scratch-scrim" onClick={close}>
+      <div ref={dialogRef} className="scratch-tray panel" role="dialog" aria-modal="true" aria-label="Scratchpad"
+        onClick={e=>e.stopPropagation()} onKeyDown={onKeyDown}>
+        <div className="scratch-head">
+          <h2 className="scratch-title">Scratchpad <span className="mono scratch-title-n">{items.length}</span></h2>
+          <button className="btn btn-ghost" onClick={close} aria-label="Close scratchpad">Close</button>
+        </div>
+        <ul className="scratch-list">
+          {items.map(e=><li key={e.key} className="scratch-item">
+            <span className="scratch-kind">{e.kind}</span>
+            <span className="scratch-label mono">{e.label}</span>
+            <span className="scratch-item-acts">
+              <button className="scratch-trace" aria-label={'Trace '+e.label+' in DHCP'}
+                onClick={()=>{ close(); traceTo('network',{pred:e.pred}); }}>Trace</button>
+              <button className="scratch-rm" aria-label={'Remove '+e.label+' from scratchpad'}
+                onClick={()=>unpinEntity(e.key)}>✕</button>
+            </span>
+          </li>)}
+        </ul>
+        <div className="scratch-foot">
+          <button className="btn" onClick={copyJSON}>Copy JSON</button>
+          <button className="btn" onClick={copyTextList}>Copy text</button>
+          <button className="btn" onClick={csv}>CSV</button>
+          <button className="btn btn-ghost scratch-clear" onClick={()=>clearScratch()}>Clear all</button>
+        </div>
+      </div>
+    </div>:null}
+  </>;
 }
 
 function App(){
