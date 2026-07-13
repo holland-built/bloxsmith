@@ -1765,6 +1765,49 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains('<span className="dt-diff mono"><span aria-label={it.tag}',
                             "surfaced rows must reuse the shared dt-diff glyph+aria-label vocabulary")
 
+    # ── Wallboard (NOC-TV) mode + first-run ghost tour (P2 slice 9, final) ───────
+
+    def test_wallboard_mode(self):
+        # #wall is a no-chrome overlay route (flagged in parseHash), the Shell swaps
+        # in the Wallboard instead of the TopBar/nav, and the Wallboard reuses the
+        # existing HealthStrip (health tiles) + a tab body (Overview carries the
+        # capacity heatmap + worst-offenders + triage). Esc / a corner control exit.
+        self.assertContains("function Wallboard(", "Wallboard component missing")
+        self.assertContains("if(tab==='wall') return {tab:'overview',params,wall:true}",
+                            "parseHash must flag the #wall route")
+        self.assertContains("if(route.wall){", "Shell must swap in the Wallboard for #wall")
+        self.assertContains("<Wallboard/>", "Wallboard not mounted for the wall route")
+        self.assertContains("function enterWall(", "header wallboard toggle helper missing")
+        self.assertContains("function exitWall(", "wallboard exit helper missing")
+        self.assertContains('className="kbd wall-toggle"', "TopBar wallboard toggle button missing")
+        wb = self.html[self.html.index("function Wallboard("):]
+        wb = wb[:wb.index("\nfunction ", 1)]
+        self.assertIn("<HealthStrip/>", wb, "wallboard must reuse the HealthStrip health tiles")
+        self.assertIn("TAB_COMPONENTS[cur.tab]", wb, "wallboard must render a reused tab body (heatmap/triage)")
+        self.assertIn("e.key==='Escape'", wb, "wallboard must exit on Esc")
+        self.assertIn("reduceMotion()", wb, "wallboard auto-rotate must honor reduced-motion")
+        self.assertIn("setInterval", wb, "wallboard must support ~30s auto-rotation")
+        self.assertIn("aria-label={paused?'Resume auto-rotation':'Pause auto-rotation'}", wb,
+                      "wallboard auto-rotation must be pausable + keyboard reachable")
+
+    def test_first_run_ghost_tour(self):
+        # One-time, non-modal callouts pointing at the 5 power features; "seen" persists
+        # in LS (bx.tourSeen); re-summonable from the "?" overlay via the bx:tour event.
+        self.assertContains("function GhostTour(", "GhostTour component missing")
+        self.assertContains("<GhostTour/>", "GhostTour not mounted in the Shell tree")
+        self.assertContains("const TOUR_KEY='tourSeen'", "tour 'seen' LS key missing")
+        self.assertContains("Show tour again", "re-summon control missing from the '?' overlay")
+        self.assertContains("new CustomEvent('bx:tour')", "'?' overlay must broadcast bx:tour to re-summon")
+        gt = self.html[self.html.index("const TOUR_STEPS="):]
+        gt = gt[:gt.index("function App(")]
+        for feat in ("BQL search", "Command palette", "Pivot on cell", "Compare snapshots", "Vim row-nav"):
+            self.assertIn(feat, gt, f"ghost tour missing power feature: {feat!r}")
+        self.assertIn("LS.set(TOUR_KEY,true)", gt, "dismiss must persist 'seen' in LS")
+        self.assertIn("bx:tour", gt, "GhostTour must listen for the re-summon event")
+        self.assertIn("aria-label=\"Skip the feature tour\"", gt, "tour must always offer a skip/dismiss")
+        # Non-modal — never an aria-modal dialog that could block the app.
+        self.assertNotIn('aria-modal="true"', gt, "the ghost tour must never be a modal dialog")
+
 
 class OverviewRedesignTests(unittest.TestCase):
     """Static source assertions for the v1 (Bloomberg-grid) Overview rebuild —
