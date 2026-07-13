@@ -226,6 +226,14 @@ table.dt tbody tr{transition:background .1s ease;}
 table.dt tbody tr.clickable{cursor:pointer;}
 table.dt tbody tr.clickable:hover{background:var(--hover);}
 .dt-empty{color:var(--text-faint);padding:var(--s3);text-align:center;}
+/* ── shared state triad (empty / error) ── */
+.dt-state{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s4) var(--s3);text-align:center;}
+.dt-empty-title{color:var(--text);font-size:var(--t13);font-weight:500;}
+.dt-empty-note{color:var(--text-faint);font-size:var(--t12);}
+.dt-empty-chips{display:inline-flex;flex-wrap:wrap;gap:var(--s2);justify-content:center;}
+.dt-error{color:var(--crit);}
+.dt-error-msg{display:inline-flex;align-items:baseline;gap:var(--s1);color:var(--crit);font-size:var(--t12);}
+.dt-error-tag{font-weight:600;text-transform:uppercase;letter-spacing:.02em;font-size:var(--t11);}
 .dt-toolbar{display:flex;align-items:center;justify-content:flex-end;padding:var(--s2) 0;}
 
 /* ── toasts ── */
@@ -2318,6 +2326,17 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const showFilter=filterable!==false&&(filterable||rows.length>12);
   const showToolbar=showCsv||showFilter||problemsOnly||showCols||showFacets;
   const noIssues=problemsOnly&&probOn&&probCount===0;
+  // Shared empty-state inputs: which filters are actively hiding rows — this
+  // table's own BQL/text query AND any cross-filter chip whose field is a column
+  // here — plus one action that clears exactly those (funnels through the same
+  // setFilter / fx.remove the FilterBar × already uses).
+  const ownFilterActive=!!(filterable&&filter.trim());
+  const crossFilters=useMemo(()=>globalFilters.filter(f=>columns.some(c=>c.key===f.field)),[globalFilters,columns]);
+  const anyFilterActive=ownFilterActive||crossFilters.length>0;
+  const clearAllFilters=useCallback(()=>{
+    if(ownFilterActive) setFilter('');
+    crossFilters.forEach(f=>fx.remove(f.field,f.value,f.label));
+  },[ownFilterActive,crossFilters,fx,setFilter]);
 
   // ── BQL typeahead: context-sensitive suggestions derived from input + schema ──
   // Operates on the in-progress fragment (text after the last space). Additive &
@@ -2625,9 +2644,14 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
             ? <tr><td className="dt-empty" colSpan={(effCols.length||1)+(selectable?1:0)+(diffMap?1:0)}>
                 {noIssues
                   ? <span className="prob-none">No issues · <button className="prob-none-btn" onClick={()=>setProb(false)}>Show all {data.length}</button></span>
-                  : bqlNoMatch
-                    ? <span className="dt-nomatch">no rows — <code className="mono">{bqlNoMatch.token}</code> matches 0 <button className="dt-clear-btn" onClick={()=>setFilter('')}>Clear</button></span>
-                    : 'No data'}
+                  : anyFilterActive
+                    ? <EmptyState
+                        note={bqlNoMatch
+                          ? <span className="dt-nomatch">no rows — <code className="mono">{bqlNoMatch.token}</code> matches 0</span>
+                          : 'Active filters are hiding all rows.'}
+                        chips={[...(ownFilterActive?[filter.trim()]:[]),...crossFilters.map(f=>f.label)]}
+                        onClear={clearAllFilters}/>
+                    : <EmptyState label="No rows"/>}
               </td></tr>
             : visible.map((r,ri)=>{
                 const rk=keyOf(r,ri);
@@ -2673,6 +2697,35 @@ function Skeleton({rows=4}){
   return <div aria-busy="true" aria-label="Loading" style={{padding:'6px 2px'}}>
     {Array.from({length:rows}).map((_,i)=>
       <span key={i} className="skel skel-row" style={{width:widths[i%widths.length]+'%'}}/>)}
+  </div>;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Shared state triad — Loading / Empty / Error. Loading is <Skeleton/>
+   (above); Empty + Error live here. ONE standard render every panel and
+   table inherits so a blank dark surface never reads as "broken".
+   ───────────────────────────────────────────────────────────── */
+
+// ErrorState — inline, semantic (--crit + the literal word "Error", never
+// color alone), shows the ACTUAL message and a real, keyboard-reachable Retry.
+function ErrorState({error,onRetry}){
+  const msg=(error&&error!==true)?String((error&&error.message)||error):'Request failed';
+  return <div className="dt-state dt-error" role="alert">
+    <span className="dt-error-msg"><span className="dt-error-tag">Error</span>{msg}</span>
+    {onRetry?<button type="button" className="fresh-retry" onClick={onRetry}>Retry</button>:null}
+  </div>;
+}
+
+// EmptyState — "No rows". When filters/BQL are hiding the rows, say so, show the
+// active filter chips, and offer a one-click Clear that actually drops them.
+function EmptyState({label,note,chips,onClear}){
+  return <div className="dt-state dt-empty-state" aria-live="polite">
+    <span className="dt-empty-title">{label||'No rows'}</span>
+    {note?<span className="dt-empty-note">{note}</span>:null}
+    {chips&&chips.length?<span className="dt-empty-chips">
+      {chips.map((c,i)=><span key={i} className="chip">{c}</span>)}
+    </span>:null}
+    {onClear?<button type="button" className="dt-clear-btn" onClick={onClear}>Clear filters</button>:null}
   </div>;
 }
 
@@ -5541,6 +5594,7 @@ function InfraTab({vaultTick}={}){
           }}>{hostCompareOn?'Comparing hosts':'Compare hosts to snapshot'}</button>
         {canEdit?<button className="btn" onClick={()=>nav('editor',{type:'host'})}>New host</button>:null}<Freshness at={fetchedAt} error={error} onRetry={refetch}/></div>}>
       {loading&&!data ? <Skeleton rows={6}/>
+        : error&&!data ? <ErrorState error={error} onRetry={refetch}/>
         : <DataTable cols={hostCols} rows={hosts} defaultSort={{key:'name',dir:'asc'}}
             csvName="infra-hosts" onRowClick={r=>nav('infra',{host:r.name})}
             scrollBody={480} columnToggle
@@ -5950,7 +6004,7 @@ function SecDomainPanels(){
   const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/hub/domains');
   if(locked) return null;
   if(loading&&!data) return <div><SecHead title="Domain protection"/><Skeleton rows={10}/></div>;
-  if(error&&!data) return <div><SecHead title="Domain protection" at={fetchedAt} onRetry={refetch} error={error}/><div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div></div>;
+  if(error&&!data) return <div><SecHead title="Domain protection" at={fetchedAt} onRetry={refetch} error={error}/><ErrorState error={error} onRetry={refetch}/></div>;
   const d=data||{};
   const hosts=d.host_inventory&&Array.isArray(d.host_inventory.hosts)?d.host_inventory.hosts:(Array.isArray(d.hosts)?d.hosts:null);
   return <div>
@@ -5997,7 +6051,7 @@ function SecLookalikes(){
   if(loading&&!data) return <div><SecHead title="Lookalike domains"/><Skeleton rows={8}/></div>;
   const d=data||{};
   if(d.unavailable) return <div><SecHead title="Lookalike domains" at={fetchedAt} onRetry={refetch} error={error}/><div className="dt-empty">Not entitled · {String(d.unavailable)}</div></div>;
-  if(error&&!data) return <div><SecHead title="Lookalike domains" at={fetchedAt} onRetry={refetch} error={error}/><div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div></div>;
+  if(error&&!data) return <div><SecHead title="Lookalike domains" at={fetchedAt} onRetry={refetch} error={error}/><ErrorState error={error} onRetry={refetch}/></div>;
   const rows=Array.isArray(d.domains)?d.domains:[];
   const cols=[
     {key:'lookalike',label:'Lookalike',mono:true,copy:true,primary:true,id:true,render:v=>v||'—'},
@@ -6450,7 +6504,7 @@ function AuditTab(){
         : locked
           ? <div className="dt-empty">Vault locked — unlock to load the audit log.</div>
           : error
-            ? <div className="dt-empty">Failed to load audit log — <button className="fresh-retry" onClick={refetch}>Retry</button></div>
+            ? <ErrorState error={error} onRetry={refetch}/>
             : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}} csvName="audit"
                 tableId="audit" rowKey={r=>String(r.hash||((r.ts||'')+'|'+(r.actor||'')+'|'+(r.event||'')))}
                 maxRows={50} selectable filterable filterKeys={['actor','event','_detail']}/>}
@@ -7005,7 +7059,7 @@ function SelfServiceTab(){
       </Panel>:null}
       <Panel title="Records" api={dnsZoneId?recordsApi:undefined}>
         {!dnsZoneId?<div className="dt-empty">Select a zone</div>
-          :recordsApi.loading?<div className="dt-empty">Loading…</div>
+          :recordsApi.loading?<Skeleton rows={3}/>
           :records.length===0?<div className="dt-empty">No records</div>
           :<DataTable tableId="ss-dns-records" rowKey={r=>r.id} cols={recordCols} rows={records}
               defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}
@@ -7052,7 +7106,7 @@ function SelfServiceTab(){
       </Panel>:null}
       <Panel title="Addresses" api={ipSubnetId?addrApi:undefined}>
         {!ipSubnetId?<div className="dt-empty">Select a subnet</div>
-          :addrApi.loading?<div className="dt-empty">Loading…</div>
+          :addrApi.loading?<Skeleton rows={3}/>
           :addresses.length===0?<div className="dt-empty">No allocated addresses</div>
           :<DataTable tableId="ss-ip-addresses" rowKey={r=>r.id} cols={addrCols} rows={addresses}
               defaultSort={{key:'address',dir:'asc'}} filterable filterKeys={['address','name','comment']}/>}
@@ -7089,7 +7143,7 @@ function SelfServiceTab(){
       </Panel>
       <Panel title="Addresses" api={invSubnetId?invAddrApi:undefined}>
         {!invSubnetId?<div className="dt-empty">Select a subnet</div>
-          :invAddrApi.loading?<div className="dt-empty">Loading…</div>
+          :invAddrApi.loading?<Skeleton rows={3}/>
           :invAddresses.length===0?<div className="dt-empty">No addresses</div>
           :<DataTable tableId="ss-inv-addresses" rowKey={r=>r.id} cols={invAddrCols} rows={invAddresses}
               defaultSort={{key:'address',dir:'asc'}} filterable filterKeys={['address','name','comment']}/>}
@@ -7108,7 +7162,7 @@ function SelfServiceTab(){
       </Panel>
       <Panel title="Records" api={invZoneId?invRecordsApi:undefined}>
         {!invZoneId?<div className="dt-empty">Select a zone</div>
-          :invRecordsApi.loading?<div className="dt-empty">Loading…</div>
+          :invRecordsApi.loading?<Skeleton rows={3}/>
           :invRecords.length===0?<div className="dt-empty">No records</div>
           :<DataTable tableId="ss-inv-records" rowKey={r=>r.id} cols={invRecordCols} rows={invRecords}
               defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}
