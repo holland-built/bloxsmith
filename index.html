@@ -194,8 +194,12 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
 .sev-badge.crit{color:var(--crit);border-color:var(--crit);background:var(--crit-dim);}
 
 /* ── table ── */
+/* table-fit default (site-wide): fixed layout + per-cell ellipsis means every
+   table divides the width it's given and clips overlong cells instead of forcing
+   a horizontal scrollbar. overflow-x:auto stays only as a last-resort safety when
+   the sum of explicit column min-widths genuinely can't fit. */
 .tbl-wrap{width:100%;overflow-x:auto;}
-table.dt{width:100%;border-collapse:collapse;font-size:var(--dt-fs);}
+table.dt{width:100%;border-collapse:collapse;font-size:var(--dt-fs);table-layout:fixed;}
 table.dt thead th{
   text-align:left;font-weight:500;color:var(--text-dim);
   padding:0 var(--s3);height:var(--row-h);
@@ -503,8 +507,22 @@ table.dt tbody tr.cursor .row-copyas-wrap,
 .dt-scroll{position:relative;}
 .dt-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 1px 0 var(--border);}
 .dt-count{color:var(--text-faint);}
-/* primary column: identifier stays fully readable; other columns keep ellipsis */
-table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:visible;text-overflow:clip;}
+/* primary column: under the table-fit default it clips with ellipsis like every
+   other cell (an .dt-id renderer, below, keeps long identifiers legible via
+   middle-truncation instead of bleeding across neighbouring columns). */
+table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* ── .dt-id: the site-wide identifier renderer (long UUIDs / paths / FQDNs).
+   Middle-truncation via a flexing head (ellipsizes) + a fixed tail (last chars
+   always visible); monospace + tabular for scan-alignment; click / Enter copies
+   the FULL value; hover / focus reveals it in the shared hovercard. Accent is
+   identity-only (hover/focus affordance), never the data signal. */
+.dt-id{display:inline-flex;align-items:baseline;max-width:100%;min-width:0;
+  font-family:'GeistMono',ui-monospace,monospace;font-variant-numeric:tabular-nums;
+  cursor:pointer;vertical-align:bottom;border-radius:var(--r-ctl);}
+.dt-id .dt-id-head{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.dt-id .dt-id-tail{flex:0 0 auto;white-space:nowrap;}
+.dt-id:hover{color:var(--accent-text);}
+.dt-id:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
 /* ── columnToggle: ⋯ Cols chooser menu (reuses the views-menu overlay pattern) ── */
 .dt-tools{display:flex;align-items:center;gap:var(--s2);flex:0 0 auto;}
 .dt-cols-slot{position:relative;display:inline-flex;}
@@ -1242,6 +1260,39 @@ function useRowFlash(){
 /* ── DTRow (F3 perf) — memoized row so only cursor/selected/flashed rows re-render.
    cursor/selected/flash arrive as row-scoped booleans; all callbacks come off a
    stable ref (rowApi) so the memo holds across keypresses (subnet table = 5000 rows). ── */
+/* looksLikeId — conservative auto-detect for the .dt-id treatment: long UUIDs,
+   slash-paths (ipam/subnet/…), and long dotted FQDNs. Only ever applied to plain
+   (un-rendered) cells, so a column's own renderer always wins. */
+function looksLikeId(v){
+  if(typeof v!=='string') return false;
+  const s=v;
+  if(s.length<18||/\s/.test(s)) return false;
+  return /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i.test(s)      // uuid
+    || (s.indexOf('/')>=0)                                    // path-style id
+    || (/^[^@]+\.[^@]+$/.test(s)&&s.length>=28);              // long FQDN
+}
+/* IdCell — the ONE shared identifier renderer (Part 1 of the cell-legibility
+   system). Middle-truncates value to head…tail, monospace, click/Enter copies the
+   full value (shared copyText + toast), hover/focus reveals it via useHoverDetail. */
+function IdCell({value,label}){
+  const {bind}=useHoverDetail();
+  const full=value==null?'':String(value);
+  if(!full||full==='—') return full||'—';
+  const TAIL=6;
+  const tail=full.length>TAIL+2?full.slice(-TAIL):'';
+  const head=tail?full.slice(0,full.length-TAIL):full;
+  const doCopy=e=>{ if(e)e.stopPropagation();
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(full);
+    toast('Copied','ok',{duration:1500}); };
+  return <span className="dt-id" role="button" tabIndex={0}
+    aria-label={(label?label+': ':'')+full+' — activate to copy'}
+    onClick={doCopy}
+    onKeyDown={e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); doCopy(e); } }}
+    {...bind({title:label||'Identifier',rows:[['Full value',full]]})}>
+    <span className="dt-id-head">{head}</span>
+    {tail?<span className="dt-id-tail">{tail}</span>:null}
+  </span>;
+}
 const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,selectable,rowApi,diff,showDiff}){
   const align=c=>c.align||(c.mono?'right':'left');
   const isNum=c=>align(c)==='right';
@@ -1300,7 +1351,12 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
     </td>:null}
     {cols.map((c,ci)=>{
       let content; const raw=r[c.key];
+      // Identifier cells (Part 1 of the cell-legibility system): explicit column
+      // opt-in (c.id / c.type==='id') OR conservative auto-detect on plain cells.
+      // Renders via the shared IdCell (middle-truncate + hover-full + click-copy).
+      const isId=c.id===true||c.type==='id'||(!c.render&&!c.spark&&looksLikeId(raw));
       if(c.spark){ const sv=c.spark(r); content=(Array.isArray(sv)&&sv.length>=2)?<Sparkline values={sv}/>:(c.render?c.render(raw,r):'—'); }
+      else if(isId){ const full=c.idText?c.idText(raw,r):(raw==null?'':String(raw)); content=<IdCell value={full} label={c.label||c.key}/>; }
       else content=c.render?c.render(raw,r):(raw??'');
       // tooltip contract: explicit tip/tipFn wins → EXPLAIN glossary for coded cells →
       // raw value only for non-custom-rendered scalar cells (fixes useless title="92").
@@ -1322,7 +1378,8 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
       // Cell copy: plain click copies the raw value. Skipped when the row itself is
       // clickable (row-click already owns that gesture — see DataTable's onRowClick)
       // and on pivot cells (their click already toggles a cross-filter).
-      const copyCell=(clickable||c.pivot)?undefined:e=>{ e.stopPropagation(); copyText(raw==null?'':String(raw)); toast('Copied','ok',{duration:1500}); };
+      // id cells own their own click-to-copy (of the FULL value) — skip the generic cell copy.
+      const copyCell=(clickable||c.pivot||isId)?undefined:e=>{ e.stopPropagation(); copyText(raw==null?'':String(raw)); toast('Copied','ok',{duration:1500}); };
       // canCellPivot: any ordinary (non-.pivot-cell) cell with a real value.
       // Right-click always offers the action; the keyboard path (Shift+F10/Menu
       // key + a focusable cell) is scoped to non-clickable rows (see closePivotMenu note above).
@@ -1340,7 +1397,7 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
         if(!wasOn) toast('Filtered to '+lbl,'ok',{duration:1500});
       };
       const isLast=ci===cols.length-1;
-      return <td key={c.key} title={c.pivot?undefined:tip}
+      return <td key={c.key} title={(c.pivot||isId)?undefined:tip}
         ref={canCellPivot?(el=>{pivotCellRefs.current[ci]=el;}):undefined}
         className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')+(copyCell?' dt-copyable':'')+(canCellPivot?' dt-cell-pivot':'')}
         style={st} onClick={copyCell}
@@ -2004,8 +2061,19 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // columnToggle: effective (rendered) columns = ordered cols minus hidden, pinned first.
   // Never yields an empty set; CSV/peek-title still use the full `columns`.
   const effCols=useMemo(()=>{
-    if(!showCols) return columns;
-    let cs=orderedAll;
+    // Part 2 of the cell-legibility system — hide-all-empty-columns by default:
+    // drop any PLAIN (un-rendered, non-spark, non-id) column whose value is empty
+    // in every row. Rendered/spark/id/keepEmpty columns are always kept (they can
+    // show content regardless of the raw value). Never yields an empty set.
+    const dataRows=rows||[];
+    const pruneEmpty=cs=>{
+      if(!dataRows.length) return cs;
+      const kept=cs.filter(c=> c.render||c.spark||c.id||c.type==='id'||c.keepEmpty
+        || dataRows.some(r=>{const v=r&&r[c.key]; return v!=null&&v!=='';}));
+      return kept.length?kept:cs;
+    };
+    if(!showCols) return pruneEmpty(columns);
+    let cs=pruneEmpty(orderedAll);
     if(hiddenCols.length){
       const keep=cs.filter(c=>!hiddenCols.includes(c.key));
       cs=keep.length?keep:cs;
@@ -2015,7 +2083,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
       if(pinned) cs=[pinned,...cs.filter(c=>c.key!==pinnedCol)];
     }
     return cs;
-  },[columns,hiddenCols,showCols,orderedAll,pinnedCol]);
+  },[columns,hiddenCols,showCols,orderedAll,pinnedCol,rows]);
   const toggleCol=(key)=>setHiddenCols(prev=>{
     const has=prev.includes(key);
     const next=has?prev.filter(k=>k!==key):[...prev,key];
@@ -5932,8 +6000,8 @@ function SecLookalikes(){
   if(error&&!data) return <div><SecHead title="Lookalike domains" at={fetchedAt} onRetry={refetch} error={error}/><div className="dt-empty">failed · <button className="fresh-retry" onClick={refetch}>Retry</button></div></div>;
   const rows=Array.isArray(d.domains)?d.domains:[];
   const cols=[
-    {key:'lookalike',label:'Lookalike',mono:true,copy:true,primary:true,render:v=>v||'—'},
-    {key:'target',label:'Target',mono:true,render:v=><span style={{color:'var(--text-dim)'}}>{v||'—'}</span>},
+    {key:'lookalike',label:'Lookalike',mono:true,copy:true,primary:true,id:true,render:v=>v||'—'},
+    {key:'target',label:'Target',mono:true,id:true,render:v=><span style={{color:'var(--text-dim)'}}>{v||'—'}</span>},
     {key:'reason',label:'Reason',hideSm:true,render:v=>v||'—'},
     {key:'suspicious',label:'Suspicious',render:heatCell(r=>r.suspicious?1:0,{crit:1,tip:'Flagged: host marked suspicious',fmt:(v,r)=>r.suspicious?'yes':'no'})},
     {key:'detected_at',label:'Detected',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
@@ -6482,7 +6550,7 @@ function IncidentsTab(){
     {key:'severity',label:'Sev',width:70,render:v=><SeverityBadge severity={v}/>},
     {key:'count',label:'Count',mono:true,align:'right',width:70},
     {key:'message',label:'Message'},
-    {key:'sample_entities',label:'Entities',render:v=>(Array.isArray(v)?v:[]).join(', ')||'—'},
+    {key:'sample_entities',label:'Entities',id:true,idText:v=>(Array.isArray(v)?v:[]).join(', '),render:v=>(Array.isArray(v)?v:[]).join(', ')||'—'},
     {key:'snooze',label:'',width:190,sortable:false,render:(_,row)=>
       <SnoozeControl category={row.category} onSnoozed={incApi.refetch}/>},
   ];
