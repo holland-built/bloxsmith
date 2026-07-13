@@ -863,6 +863,25 @@ const LS={
   del(key){try{localStorage.removeItem('bx.'+key);}catch(e){}},
 };
 
+/* Honor the OS reduced-motion setting for JS-driven motion (CSS transitions/animations
+   are already killed globally by the @media (prefers-reduced-motion) rule). Used by the
+   wallboard auto-rotate so a wall display never animates under reduce. */
+function reduceMotion(){ try{return matchMedia('(prefers-reduced-motion:reduce)').matches;}catch(e){return false;} }
+
+/* Wallboard (NOC-TV) mode — a no-chrome, zero-interaction full-screen view reached
+   via the #wall hash or the header toggle. _wallReturn remembers where to land on exit. */
+let _wallReturn='#overview';
+function enterWall(){
+  try{ const h=location.hash; _wallReturn=(h&&h!=='#'&&h!=='#wall')?h:'#overview'; }catch(e){ _wallReturn='#overview'; }
+  location.hash='#wall';
+}
+function exitWall(){ let r=_wallReturn||'#overview'; if(!r||r==='#wall'||r==='#') r='#overview'; location.hash=r; }
+const WALL_VIEWS=[
+  {tab:'overview',label:'Overview'},
+  {tab:'network', label:'Network'},
+  {tab:'security',label:'Security'},
+];
+
 /* downloadCSV — ported verbatim from prior build (helper for DataTable).
    csvRowLine is split out so the copy-as-format menu (row-copy-btn extension,
    Feature 6) can reuse the exact same cell-escaping for a single-row CSV copy. */
@@ -3049,6 +3068,10 @@ function parseHash(){
   const qs=qi>=0?h.slice(qi+1):'';
   const params={};
   if(qs) new URLSearchParams(qs).forEach((v,k)=>{params[k]=v;});
+  // Wallboard (NOC-TV) — #wall is a no-chrome overlay route, not a tab. Flag it here
+  // (before the legacy remap / TABS filter) so the Shell can swap in the Wallboard.
+  // The inner content defaults to the Overview view; params are still carried through.
+  if(tab==='wall') return {tab:'overview',params,wall:true};
   // Ask retired to a drawer: detect the old #ask / #search route BEFORE the legacy
   // remap so its query is carried and the drawer opens (params.drawer='1').
   const wantsDrawer=(tab==='ask'||tab==='search');
@@ -9082,6 +9105,10 @@ function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
       <AccountSlot/>
       <DensityToggle/>
       <ThemeToggle/>
+      <button className="kbd wall-toggle" onClick={enterWall}
+        aria-label="Enter wallboard (NOC display) mode" title="Wallboard — no-chrome NOC display (#wall)">
+        <span>Wall</span>
+      </button>
       <button className="kbd" onClick={onPalette} aria-label="Open command palette" title="Command palette">
         <span className="mono">⌘K</span>
       </button>
@@ -9142,6 +9169,13 @@ function Shell(){
   const Active=TAB_COMPONENTS[tab]||OverviewTab;
   const fresh=<span className="fresh-slot"/>; // A2 wires real freshness
 
+  // Wallboard (NOC-TV) mode swaps out ALL chrome — no TopBar / nav / FilterBar. Its own
+  // Esc + corner control return to the normal app. Still under the shared data/filter
+  // providers (wraps in PowerProvider like the normal shell) so reused widgets work.
+  if(route.wall){
+    return <PowerProvider><Wallboard/></PowerProvider>;
+  }
+
   return <PowerProvider>
     <div>
       <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)} onAi={()=>setAiOpen(o=>!o)} aiOpen={aiOpen}/>
@@ -9157,6 +9191,7 @@ function Shell(){
       <Scratchpad/>
       <Toasts/>
       <ShortcutsHelp/>
+      <GhostTour/>
       <SnapshotWriter/>
       <DrawerShift aiOpen={aiOpen}/>
       <HoverDetail/>
@@ -9220,7 +9255,10 @@ function ShortcutsHelp(){
       onClick={e=>e.stopPropagation()} onKeyDown={onKeyDown}>
       <div className="sc-head">
         <h2 className="sc-title">Keyboard shortcuts</h2>
-        <button className="btn btn-ghost" onClick={close} aria-label="Close shortcut help">Close</button>
+        <div className="sc-head-acts">
+          <button className="btn btn-ghost" onClick={()=>{ close(); try{window.dispatchEvent(new CustomEvent('bx:tour'));}catch(e){} }}>Show tour again</button>
+          <button className="btn btn-ghost" onClick={close} aria-label="Close shortcut help">Close</button>
+        </div>
       </div>
       <dl className="sc-list">
         {SHORTCUTS.map(([k,d],i)=><div key={i} className="sc-row">
@@ -9299,6 +9337,178 @@ function Scratchpad(){
       </div>
     </div>:null}
   </>;
+}
+
+/* ── Wallboard + first-run ghost tour styles (P2 slice 9) — scoped, tokens only,
+   status colors stay semantic, accent is identity-only. Bigger type for the wall
+   so tiles/heatmap/triage read from across a room. ── */
+(function injectWallTourStyles(){
+  if(document.getElementById('bx-walltour-styles')) return;
+  const s=document.createElement('style');s.id='bx-walltour-styles';
+  s.textContent=`
+  /* Wallboard shell — full-screen, no chrome. */
+  .wallboard{position:fixed;inset:0;z-index:120;display:flex;flex-direction:column;background:var(--bg);overflow:auto;font-size:15px;}
+  .wall-topline{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:10px 20px;border-bottom:1px solid var(--border);background:var(--surface);}
+  .wall-brand{display:flex;align-items:center;gap:10px;min-width:0;}
+  .wall-title{font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--text);white-space:nowrap;}
+  .wall-views{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;flex:1 1 auto;}
+  .wall-view-dot{font-size:13px;color:var(--text-faint);padding:2px 10px;border:1px solid transparent;border-radius:var(--r-ctl);}
+  .wall-view-dot.active{color:var(--text);font-weight:600;background:var(--raised);border-color:var(--border-strong);}
+  .wall-ctl{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+  .wall-btn{height:30px;padding:0 12px;font-size:13px;font-weight:500;color:var(--text);background:var(--raised);
+    border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+  .wall-btn:hover{border-color:var(--border-strong);}
+  .wall-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .wall-main{flex:1 1 auto;padding:16px 20px 28px;}
+  /* Room-legible bump for the reused Overview widgets (dense, just larger). */
+  .wallboard .statstrip .v.num{font-size:26px;}
+  .wallboard .statstrip .k{font-size:12px;}
+  .wallboard .heatcell{width:22px;height:22px;}
+  .wallboard .triage-row{font-size:14px;}
+  .wallboard .health-strip{font-size:13px;}
+
+  /* First-run ghost tour — non-modal corner callout, never blocks the app. */
+  .tour-callout{position:fixed;right:20px;bottom:20px;z-index:90;width:340px;max-width:calc(100vw - 40px);
+    background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-panel);
+    box-shadow:0 12px 34px rgba(0,0,0,.34);padding:14px 16px;color:var(--text);}
+  .tour-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+  .tour-eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);}
+  .tour-x{height:24px;padding:0 8px;font-size:11px;color:var(--text-dim);background:transparent;
+    border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+  .tour-x:hover{border-color:var(--border-strong);color:var(--text);}
+  .tour-x:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .tour-steps{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:2px;}
+  .tour-step{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-faint);padding:2px 0;}
+  .tour-step.active{color:var(--text);font-weight:600;}
+  .tour-step-dot{font-size:10px;color:var(--text-faint);}
+  .tour-step.active .tour-step-dot{color:var(--accent);}
+  .tour-body{border-top:1px solid var(--border);padding-top:10px;}
+  .tour-title{margin:0 0 4px;font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .tour-key{font-size:11px;color:var(--text-dim);background:var(--raised);border:1px solid var(--border);border-radius:4px;padding:1px 6px;}
+  .tour-desc{margin:0;font-size:12px;line-height:1.5;color:var(--text-dim);}
+  .tour-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;}
+  .tour-count{font-size:11px;color:var(--text-faint);}
+  .tour-acts{display:flex;gap:6px;}
+  .sc-head-acts{display:flex;align-items:center;gap:8px;}
+  `;
+  document.head.appendChild(s);
+})();
+
+/* Wallboard (NOC-TV) — reuses the existing HealthStrip (health tiles) + the tab bodies
+   (Overview carries the capacity heatmap, worst-offenders/top-consumers, and triage
+   queue). No new data path. Optional auto-rotation cycles a couple of views every ~30s,
+   pausable, and disabled entirely under reduced-motion. Esc / the corner Exit control
+   return to the app. Zero-interaction by design. */
+function Wallboard(){
+  const [view,setView]=useState(0);
+  const [paused,setPaused]=useState(false);
+  const exitRef=useRef(null);
+  const VIEWS=WALL_VIEWS;
+  // Esc exits back to the normal app.
+  useEffect(()=>{
+    const onKey=e=>{ if(e.key==='Escape'){ e.preventDefault(); exitWall(); } };
+    window.addEventListener('keydown',onKey);
+    return ()=>window.removeEventListener('keydown',onKey);
+  },[]);
+  // Auto-rotate ~30s — never under reduced-motion, never while paused.
+  useEffect(()=>{
+    if(paused||reduceMotion()||VIEWS.length<2) return;
+    const id=setInterval(()=>setView(v=>(v+1)%VIEWS.length),30000);
+    return ()=>clearInterval(id);
+  },[paused,VIEWS.length]);
+  useEffect(()=>{ if(exitRef.current){ try{exitRef.current.focus();}catch(e){} } },[]);
+  const cur=VIEWS[view]||VIEWS[0];
+  const Body=TAB_COMPONENTS[cur.tab]||OverviewTab;
+  const canRotate=VIEWS.length>1 && !reduceMotion();
+  return <div className="wallboard" data-wall role="region" aria-label="Wallboard — NOC display">
+    <div className="wall-topline">
+      <div className="wall-brand"><BrandLogo/><span className="wall-title">BloxSmith · NOC</span></div>
+      <div className="wall-views" role="tablist" aria-label="Wallboard views">
+        {VIEWS.map((v,i)=><span key={v.tab} className={'wall-view-dot'+(i===view?' active':'')}
+          aria-current={i===view?'true':undefined}>{v.label}</span>)}
+      </div>
+      <div className="wall-ctl">
+        {canRotate?<button className="wall-btn" onClick={()=>setPaused(p=>!p)} aria-pressed={paused}
+          aria-label={paused?'Resume auto-rotation':'Pause auto-rotation'}>{paused?'Paused':'Rotating'}</button>:null}
+        <button ref={exitRef} className="wall-btn wall-exit" onClick={exitWall}
+          aria-label="Exit wallboard mode (Esc)">Exit ✕</button>
+      </div>
+    </div>
+    <HealthStrip/>
+    <main className="wall-main" key={cur.tab}>
+      <Body/>
+    </main>
+    <Toasts/>
+    <HoverDetail/>
+  </div>;
+}
+
+/* First-run ghost tour — a one-time, non-modal set of callouts pointing at the 5 power
+   features. Shows once (persisted in LS bx.tourSeen), re-summonable from the "?" overlay
+   via the shared 'bx:tour' event. Never modal, never traps focus, always dismissible
+   (Skip / Esc). No JS motion (CSS entrance is killed globally under reduced-motion). */
+const TOUR_KEY='tourSeen';
+const TOUR_STEPS=[
+  {id:'bql',    title:'BQL search',        key:'/',     body:'Filter any table with field:value queries — press / to focus the search, then type e.g. util>85 or state:active.'},
+  {id:'palette',title:'Command palette',   key:'⌘K',    body:'Jump anywhere and run actions instantly — press ⌘K (Ctrl-K) to open the command palette.'},
+  {id:'pivot',  title:'Pivot on cell',     key:'Menu',  body:'Press the Menu key (or Shift+F10) on any focused cell to pivot the whole view on that value.'},
+  {id:'compare',title:'Compare snapshots', key:'',      body:'Every tab keeps a day-over-day snapshot — the delta chip shows what changed since your last visit, worst-first.'},
+  {id:'vim',    title:'Vim row-nav',       key:'j / k', body:'Drive the table from the keyboard: j / k to move the cursor, g g / G to jump, Enter to open a row.'},
+];
+function GhostTour(){
+  const [open,setOpen]=useState(false);
+  const [step,setStep]=useState(0);
+  // Auto-open once on first run.
+  useEffect(()=>{
+    if(!LS.get(TOUR_KEY,false)){ const t=setTimeout(()=>setOpen(true),400); return ()=>clearTimeout(t); }
+  },[]);
+  // Re-summon from the "?" overlay (or anywhere) via a broadcast.
+  useEffect(()=>{
+    const on=()=>{ setStep(0); setOpen(true); };
+    window.addEventListener('bx:tour',on);
+    return ()=>window.removeEventListener('bx:tour',on);
+  },[]);
+  const dismiss=useCallback(()=>{ setOpen(false); LS.set(TOUR_KEY,true); },[]);
+  // Keyboard-dismissible: Esc closes + persists. Non-modal — no focus trap.
+  useEffect(()=>{
+    if(!open) return;
+    const onKey=e=>{ if(e.key==='Escape'){ dismiss(); } };
+    window.addEventListener('keydown',onKey);
+    return ()=>window.removeEventListener('keydown',onKey);
+  },[open,dismiss]);
+  if(!open) return null;
+  const s=TOUR_STEPS[step]||TOUR_STEPS[0];
+  const last=step>=TOUR_STEPS.length-1;
+  const next=()=>{ if(last) dismiss(); else setStep(v=>v+1); };
+  const prev=()=>setStep(v=>Math.max(0,v-1));
+  const onCardKey=e=>{
+    if(e.key==='ArrowRight'){ e.preventDefault(); next(); }
+    else if(e.key==='ArrowLeft'){ e.preventDefault(); prev(); }
+  };
+  return <aside className="tour-callout" role="region" aria-label="Feature tour — 5 power features" onKeyDown={onCardKey}>
+    <div className="tour-head">
+      <span className="tour-eyebrow">New here? 5 power features</span>
+      <button className="tour-x" onClick={dismiss} aria-label="Skip the feature tour">Skip ✕</button>
+    </div>
+    <ol className="tour-steps">
+      {TOUR_STEPS.map((t,i)=><li key={t.id} className={'tour-step'+(i===step?' active':'')}
+        aria-current={i===step?'step':undefined}>
+        <span className="tour-step-dot" aria-hidden="true">{i===step?'●':'○'}</span>{t.title}
+      </li>)}
+    </ol>
+    <div className="tour-body">
+      <h3 className="tour-title">{s.title}{s.key?<span className="tour-key mono">{s.key}</span>:null}</h3>
+      <p className="tour-desc">{s.body}</p>
+    </div>
+    <div className="tour-foot">
+      <span className="tour-count mono">{step+1} / {TOUR_STEPS.length}</span>
+      <span className="tour-acts">
+        <button className="btn btn-ghost" onClick={prev} disabled={step===0}>Back</button>
+        <button className="btn" onClick={next}>{last?'Done':'Next'}</button>
+      </span>
+    </div>
+  </aside>;
 }
 
 function App(){
