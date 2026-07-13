@@ -893,6 +893,34 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains('className="dt-nomatch"', "no-match empty-state span missing")
         self.assertContains('className="dt-clear-btn"', "no-match Clear button missing")
 
+    # ── shared loading/empty/error state triad (P0 slice 3) ─────────────────────
+
+    def test_state_triad_shared_components(self):
+        # One standard render for each of the three data-surface states.
+        self.assertContains("function ErrorState(", "shared ErrorState component missing")
+        self.assertContains("function EmptyState(", "shared EmptyState component missing")
+        self.assertContains("function Skeleton(", "shared Skeleton (loading) component missing")
+        # Error is semantic (word "Error" + role=alert), not color-only, and shows
+        # the actual message plus a real Retry button.
+        self.assertContains('className="dt-state dt-error"', "ErrorState must use the shared dt-error skin")
+        self.assertContains('role="alert"', "ErrorState must announce via role=alert")
+        self.assertContains(">Error<", "ErrorState must carry the literal 'Error' tag (not color-only)")
+        # Empty is filter-aware: detects active filters and offers a real Clear action.
+        self.assertContains("const anyFilterActive=", "DataTable empty state must detect active filters")
+        self.assertContains("const clearAllFilters=", "DataTable empty state must offer a Clear-filters action")
+        self.assertContains(">Clear filters<", "EmptyState must expose a 'Clear filters' button")
+        self.assertContains('aria-live="polite"', "EmptyState must announce via aria-live")
+        # Error/empty CSS tokens are present and semantic (uses --crit).
+        self.assertContains(".dt-error{color:var(--crit);}", "dt-error must use the --crit status token")
+
+    def test_state_triad_wired_into_tabs(self):
+        # Call sites inherit the shared triad rather than bespoke blank/pill renders.
+        self.assertContains("<ErrorState error={error} onRetry={refetch}/>",
+                            "tab error paths must render the shared ErrorState")
+        # The old message-less 'failed · Retry' empty-cell render is gone.
+        self.assertNotIn('<div className="dt-empty">failed · <button className="fresh-retry"', self.html,
+                         "bespoke message-less error render must be replaced by ErrorState")
+
     # ── saved views ────────────────────────────────────────────────────────────
 
     def test_views_menu(self):
