@@ -154,6 +154,10 @@ def update_status(force=False):
                   "checkDisabled": UPDATE_CHECK_DISABLED, "selfUpdate": DOCKER_OK,
                   "cooldown": int(max(0, _APPLY_COOLDOWN - elapsed)) if cooling else 0,
                   "instance_id": _INSTANCE_ID}
+    # Expose the rollback target (only if it differs from the running version and
+    # self-update is wired) so the UI can show a one-click "Rollback to vX".
+    _prev = _read_prev_version()
+    result["prevVersion"] = _prev if (DOCKER_OK and _prev and _prev != APP_VERSION) else None
     # Auto-kick background pre-pull when update is available and idle
     with _update_lock:
         avail = _update_cache["available"]
@@ -222,10 +226,16 @@ def _run_prepull(image_ref):
             _pull_state.update(phase="error", error="pull failed")
 
 
-def apply_self_update():
-    """Inspect self, return HTTP response, then recreate in a detached thread."""
+def apply_self_update(rollback=False):
+    """Inspect self, return HTTP response, then recreate in a detached thread.
+
+    rollback=True recreates from the preserved previous image (bloxsmith:previous)
+    instead of pulling ghcr:latest — a deliberate downgrade to the last version.
+    """
     if not DOCKER_OK:
         return {"ok": False, "error": "docker socket not available"}
+    if rollback and not _read_prev_version():
+        return {"ok": False, "error": "no previous version recorded"}
     elapsed = _time.monotonic() - _START_TIME
     if elapsed < _APPLY_COOLDOWN:
         remaining = int(_APPLY_COOLDOWN - elapsed)
@@ -253,15 +263,31 @@ def apply_self_update():
                                         "PYTHON_SHA256=", "GPG_KEY="))]
             name = attrs.get("Name", "").lstrip("/")
             image = attrs.get("Config", {}).get("Image", "")
-            # Prefer the pre-pulled GHCR image so updates on locally-tagged
-            # containers (e.g. dev builds named 'bloxsmith') actually land
-            # on the new version rather than re-running the old local image.
-            ghcr_image = f"ghcr.io/{APP_REPO}:latest"
-            try:
-                client.images.get(ghcr_image)
-                image = ghcr_image
-            except Exception:
-                pass  # No GHCR image locally — use current container's image
+            # Preserve the outgoing image under a stable local tag + record its
+            # version, so a later manual rollback can recreate from it even after
+            # ghcr:latest has moved on. Forward updates only — a rollback must not
+            # overwrite the record of the version it is returning to.
+            if not rollback:
+                try:
+                    old_img_id = attrs.get("Image") or ""
+                    if old_img_id:
+                        client.images.get(old_img_id).tag("bloxsmith", "previous")
+                        _write_prev_version(APP_VERSION)
+                except Exception:
+                    pass
+            if rollback:
+                # Recreate from the preserved previous image; do NOT prefer ghcr:latest.
+                image = "bloxsmith:previous"
+            else:
+                # Prefer the pre-pulled GHCR image so updates on locally-tagged
+                # containers (e.g. dev builds named 'bloxsmith') actually land
+                # on the new version rather than re-running the old local image.
+                ghcr_image = f"ghcr.io/{APP_REPO}:latest"
+                try:
+                    client.images.get(ghcr_image)
+                    image = ghcr_image
+                except Exception:
+                    pass  # No GHCR image locally — use current container's image
             restart = cfg.get("RestartPolicy", {}).get("Name", "unless-stopped")
             labels = attrs.get("Config", {}).get("Labels") or {}
             networks = list((attrs.get("NetworkSettings") or {}).get("Networks", {}).keys())
@@ -2689,6 +2715,24 @@ LOGO_FILE  = os.path.join(os.path.dirname(VAULT_FILE), "logo.png")
 _STATE_DIR = os.path.dirname(VAULT_FILE)
 AUDIT_LOG_FILE = os.path.join(_STATE_DIR, "audit_log.jsonl")
 _audit_lock = threading.Lock()
+
+# Records the version we were on just before a forward self-update, so the UI
+# can offer a one-click rollback to it (the outgoing image is tagged
+# bloxsmith:previous by apply_self_update). Persisted to the vault volume so it
+# survives container recreation.
+_PREV_FILE = os.path.join(_STATE_DIR, "prev_version.json")
+def _write_prev_version(ver):
+    try:
+        with open(_PREV_FILE, "w") as f:
+            f.write(json.dumps({"version": ver}))
+    except Exception:
+        pass
+def _read_prev_version():
+    try:
+        with open(_PREV_FILE) as f:
+            return (json.load(f) or {}).get("version") or None
+    except Exception:
+        return None
 
 def _audit_entry_hash(entry):
     payload = {k: v for k, v in entry.items() if k != "hash"}
@@ -5683,6 +5727,10 @@ class Handler(BaseHTTPRequestHandler):
             if not MCP_HEADERS.get("Authorization") and not self._authed():
                 self._json({"ok": False, "error": "vault locked", "locked": True}, 401); return
             self._json(apply_self_update()); return
+        if self.path == "/api/update/rollback-apply":
+            if not MCP_HEADERS.get("Authorization") and not self._authed():
+                self._json({"ok": False, "error": "vault locked", "locked": True}, 401); return
+            self._json(apply_self_update(rollback=True)); return
         if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
             self._json({"error": "vault locked", "locked": True}, 503); return
         if self.path != "/api/switch-account":
