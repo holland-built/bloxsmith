@@ -92,6 +92,27 @@ function useRowFlash(){
 /* ── DTRow (F3 perf) — memoized row so only cursor/selected/flashed rows re-render.
    cursor/selected/flash arrive as row-scoped booleans; all callbacks come off a
    stable ref (rowApi) so the memo holds across keypresses (subnet table = 5000 rows). ── */
+/* safeCellContent — BUG1 guard: a raw API field (or a column render() return)
+   can be an object/array (e.g. a DNS SOA record). Handing that straight to
+   React throws #31 "Objects are not valid as a React child" with zero error
+   boundaries in this app → permanent white screen. Primitives/elements pass
+   through unchanged (zero visual diff for every existing table); booleans get
+   a visible 'true'/'false' (today they silently render nothing); objects/
+   arrays become a capped, single-line JSON preview. Never throws. */
+function safeCellContent(v){
+  try{
+    if(v==null) return '';
+    if(typeof v==='boolean') return v?'true':'false';
+    if(typeof v==='string'||typeof v==='number') return v;
+    if(React.isValidElement(v)) return v;
+    if(typeof v==='object'){
+      let s; try{s=JSON.stringify(v);}catch(e){s=String(v);}
+      s=s==null?'':String(s);
+      return s.length>200?s.slice(0,200)+'…':s;
+    }
+    return String(v);
+  }catch(e){ return ''; }
+}
 /* looksLikeId — conservative auto-detect for the .dt-id treatment: long UUIDs,
    slash-paths (ipam/subnet/…), and long dotted FQDNs. Only ever applied to plain
    (un-rendered) cells, so a column's own renderer always wins. */
@@ -182,7 +203,7 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
       const isId=c.id===true||c.type==='id'||(!c.render&&!c.spark&&looksLikeId(raw));
       if(c.spark){ const sv=c.spark(r); content=(Array.isArray(sv)&&sv.length>=2)?<Sparkline values={sv}/>:(c.render?c.render(raw,r):'—'); }
       else if(isId){ const full=c.idText?c.idText(raw,r):(raw==null?'':String(raw)); content=<IdCell value={full} label={c.label||c.key}/>; }
-      else content=c.render?c.render(raw,r):(raw??'');
+      else content=safeCellContent(c.render?c.render(raw,r):raw);
       // tooltip contract: explicit tip/tipFn wins → EXPLAIN glossary for coded cells →
       // raw value only for non-custom-rendered scalar cells (fixes useless title="92").
       let tip;
@@ -1430,7 +1451,18 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     <div className={"tbl-wrap"+(scrollBody?" dt-scroll":"")}
       style={scrollBody?{maxHeight:scrollPx,overflowY:'auto'}:undefined}
       onScroll={scrollBody?onBodyScroll:undefined}>
-      <table className="dt">
+      {/* min-width floor: table.dt is width:100%+table-layout:fixed (index.html), so
+          it always shrinks to the container and the .tbl-wrap overflow-x scroller
+          never engages — a 13-col table in a 313px panel gets ~24px/col and the
+          headers turn to mush. table-layout:fixed distributes the table's OWN
+          width (not per-cell min-width, which it ignores — see the width-vs-
+          min-width note on cells above), so this is set on <table> itself:
+          effCols.length * a ~90px readable floor, plus the narrower fixed-width
+          gutters (dt-check 28px, dt-diff 20px, dt-acts 28px — index.html
+          --dt-actions-w) that aren't part of effCols. Wide containers never see
+          this (the browser only enforces min-width once it exceeds 100%), so
+          ordinary 4-6 column tables are pixel-identical to before. */}
+      <table className="dt" style={{minWidth:effCols.length*90+(selectable?28:0)+(diffMap?20:0)+28}}>
         <thead><tr>
           {diffMap?<th className="dt-diff" aria-label="Diff status"></th>:null}
           {selectable?<th className="dt-check"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all rows"/></th>:null}
@@ -1442,7 +1474,11 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
             // assert `.sort-ind` is exactly '↑'/'↓').
             const badge=(sEntry&&sort.length>1)?String(sIdx+1):'';
             const arrow=sEntry?(sEntry.dir==='asc'?'↑':'↓'):'';
-            return <th key={c.key} className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
+            {/* title = the LABEL (never row data — see the custom-render tooltip leak fix):
+                headers are now clipped+ellipsised, so this is the only way to read a
+                truncated column name. */}
+            return <th key={c.key} title={String(c.label!=null?c.label:c.key)}
+              className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
               style={(()=>{const w=c.width!=null?c.width:(c.minWidth!=null?c.minWidth:(c.primary?120:null));return w!=null?{width:w}:null;})()}
               aria-sort={sEntry?(sEntry.dir==='asc'?'ascending':'descending'):'none'}
               tabIndex={0}
@@ -1487,7 +1523,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
               {effCols.map(c=>{
                 let content; const raw=r[c.key];
                 if(c.spark){ const sv=c.spark(r); content=(Array.isArray(sv)&&sv.length>=2)?<Sparkline values={sv}/>:'—'; }
-                else content=c.render?c.render(raw,r):(raw??'');
+                else content=safeCellContent(c.render?c.render(raw,r):raw);
                 return <td key={c.key} className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')}>{content}</td>;
               })}
             </tr>;

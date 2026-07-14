@@ -52,8 +52,17 @@ function IncidentsTab(){
   const crit=incidents.filter(i=>i.severity==='crit').length;
   const warn=incidents.filter(i=>i.severity==='warn').length;
   const tone=crit>0?'crit':warn>0?'warn':'ok';
+  // Each row is an aggregated category (e.g. "129 subnet utilization"), not one
+  // incident — incidents.length is always the category count, never the real
+  // volume. `count` carries the real per-category total; sum it for the true
+  // issue volume and for actual critical volume (not critical-category count).
+  // Number(...)||0 guards missing/non-numeric count so we never render NaN;
+  // fall total back to the category count only if no row carries a count at all.
+  const catCount=incidents.length;
+  const totalVol=incidents.reduce((s,i)=>s+(Number(i.count)||0),0)||catCount;
+  const critVol=incidents.filter(i=>i.severity==='crit').reduce((s,i)=>s+(Number(i.count)||0),0);
   const verdict=incidents.length
-    ? incidents.length+' active '+(incidents.length===1?'incident':'incidents')+(crit?(' · '+crit+' critical'):'')
+    ? totalVol+' active '+(totalVol===1?'issue':'issues')+' · '+catCount+' categor'+(catCount===1?'y':'ies')+(critVol?(' · '+critVol+' critical'):'')
     : 'No issues detected — all metrics within normal thresholds';
 
   const triageCols=[
