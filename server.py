@@ -100,6 +100,24 @@ _pull_state = {
 # Test Docker availability once at startup
 _, DOCKER_OK = _docker_client()
 
+# Running image digest, resolved once at startup so every audit entry can be
+# pinned to the exact image that produced it. Falls back to the app version
+# when Docker is unavailable or the digest can't be read. Never raises at import.
+def _resolve_image_digest():
+    if DOCKER_OK:
+        try:
+            client, _ = _docker_client()
+            cont = client.containers.get(os.environ.get("HOSTNAME", ""))
+            digs = cont.image.attrs.get("RepoDigests") or []
+            if digs:
+                # e.g. "repo@sha256:abc..." → "sha256:abc..."
+                return digs[0].split("@", 1)[-1]
+        except Exception as e:
+            print(f"  [warn] image digest lookup failed: {e}", file=sys.stderr)
+    return "app-v" + APP_VERSION
+
+_IMAGE_DIGEST = _resolve_image_digest()
+
 def _ver_n(v):
     """Extract the integer <n> from a '1.0.<n>' / 'v1.0.<n>' version; None if unparseable."""
     if not v:
@@ -582,6 +600,27 @@ def _csp_json(path: str, body: dict | None = None) -> dict:
     with urlopen(req, timeout=15) as r:
         parsed = json.loads(r.read())
         return parsed if isinstance(parsed, dict) else {}
+
+# Cached CSP actor identity (the human/service the API key belongs to), so tenant
+# writes can be attributed to a real portal user instead of just an IP. Resolved
+# at most once per JWT-refresh window; never raises — returns None on failure.
+_csp_identity_cache = {"value": None, "at": 0.0}
+
+def _csp_identity():
+    if _csp_identity_cache["value"] and _time.time() - _csp_identity_cache["at"] < _JWT_REFRESH_AFTER:
+        return _csp_identity_cache["value"]
+    try:
+        res = _csp_json("/v2/current_user").get("result", {}) or {}
+        ident = (res.get("email") or res.get("user_email")
+                 or (res.get("user") or {}).get("email")
+                 or (res.get("user") or {}).get("name")
+                 or res.get("name") or res.get("account_id") or None)
+        if ident:
+            _csp_identity_cache["value"] = ident
+            _csp_identity_cache["at"] = _time.time()
+        return ident
+    except Exception:
+        return _csp_identity_cache["value"]
 
 def list_accounts() -> dict:
     global _HOME_ACCOUNT_ID, _active_account_id
@@ -2749,7 +2788,9 @@ def audit_append(event, actor, detail=None):
     with _audit_lock:
         entries = audit_read()
         prev = entries[-1]["hash"] if entries else "0" * 64
-        e = {"ts": _time.time(), "event": event, "actor": actor, "detail": detail or {}, "prev_hash": prev}
+        # Pin every entry to the exact running image + process (chain-covered).
+        detail = {**(detail or {}), "image_digest": _IMAGE_DIGEST, "instance_id": _INSTANCE_ID}
+        e = {"ts": _time.time(), "event": event, "actor": actor, "detail": detail, "prev_hash": prev}
         e["hash"] = _audit_entry_hash(e)
         with open(AUDIT_LOG_FILE, "a") as f:
             f.write(json.dumps(e) + "\n")
@@ -4947,8 +4988,24 @@ class Handler(BaseHTTPRequestHandler):
                 or path.startswith("/api/edit/"))
 
     def _actor(self) -> str:
-        """Best-effort actor label for the audit log — no user accounts exist
-        (see plan 019 scoping note), so identify by loopback vs. remote IP."""
+        """Best-effort actor label for the audit log. Prefer the real CSP
+        identity behind the API key; else the active-tenant label; else fall
+        back to loopback vs. remote IP (preserved exactly for the no-identity
+        case)."""
+        try:
+            ident = _csp_identity()
+            if ident:
+                return ident
+        except Exception:
+            pass
+        try:
+            active = _vault.get("active")
+            if active:
+                for t in _vault.get("tenants", []):
+                    if t.get("id") == active and t.get("label"):
+                        return t["label"]
+        except Exception:
+            pass
         return "loopback" if self.client_address[0] in ("127.0.0.1", "::1") else self.client_address[0]
 
     def _write_guard(self) -> bool:
@@ -4961,7 +5018,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self._write_ok():
                 self._json({"error": "forbidden — write not authorized"}, 403)
                 return True
-            who = "loopback" if self.client_address[0] in ("127.0.0.1", "::1") else self.client_address[0]
+            who = self._actor()
             print(f"[write-audit] {self.command} {p} authorized ({who})", file=sys.stderr)
             audit_append("write-authorized", who, {"method": self.command, "path": p})
         return False
@@ -5089,7 +5146,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"entries": audit_read(), "chain_valid": chain["valid"], "broken_index": chain["broken_index"],
                         "exported_at": _time.time(), "app_version": APP_VERSION})
         elif path == "/api/whoami":
-            self._json({"role": self._resolve_role(), "token_auth": bool(DASHBOARD_TOKEN)})
+            _tenant = None
+            try:
+                _active = _vault.get("active")
+                if _active:
+                    _tenant = next((t.get("label") for t in _vault.get("tenants", [])
+                                    if t.get("id") == _active), None)
+            except Exception:
+                _tenant = None
+            self._json({"role": self._resolve_role(), "token_auth": bool(DASHBOARD_TOKEN),
+                        "actor": self._actor(), "tenant": _tenant})
         elif path == "/api/incidents":
             try:
                 data = fetch_dashboard_data()
