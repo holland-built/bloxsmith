@@ -49,7 +49,9 @@ jobs:
       # the same Node 24 setup above, BEFORE the image is built, so a type error
       # fails the build instead of shipping.
       - name: Type-check (tsc --noEmit)
-        run: npx -y typescript@latest tsc --noEmit -p tsconfig.json
+        # --package names the pkg that provides `tsc`; without it npx treats `tsc` as a
+        # source file and tsc errors TS5042 (project can't be mixed with source files).
+        run: npx -y --package typescript@latest tsc --noEmit -p tsconfig.json
 
       - name: Set up QEMU (for cross-arch builds)
         uses: docker/setup-qemu-action@v3
@@ -96,10 +98,16 @@ jobs:
       #   cosign verify ghcr.io/holland-built/bloxsmith:latest \
       #     --certificate-identity-regexp 'https://github.com/holland-built/bloxsmith/.+' \
       #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      # Signing is best-effort: it must NEVER block shipping the image or cutting the
+      # release. If keyless OIDC isn't enabled on the repo, these steps warn and the
+      # workflow continues (image is already pushed above). Enable signing later by
+      # confirming id-token permissions — no code change needed.
       - name: Install cosign
+        continue-on-error: true
         uses: sigstore/cosign-installer@v3
 
       - name: Sign the pushed image (keyless)
+        continue-on-error: true
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: cosign sign --yes ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
