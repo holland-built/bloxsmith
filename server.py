@@ -4193,7 +4193,10 @@ def _parse_ai_response(raw: str) -> dict:
 
 def handle_query(question: str, context: str = "") -> dict:
     trace: list = []
-    raw = _run_async(_handle_query_async(question, trace, context))
+    try:
+        raw = _run_async(asyncio.wait_for(_handle_query_async(question, trace, context), timeout=55))
+    except (asyncio.TimeoutError, TimeoutError):
+        raw = '{"answer": "AI query timed out — the request took too long. Try a narrower question.", "suggestions": ["show network summary", "show offline hosts", "list threat feeds", "show audit logs"]}'
     out = _parse_ai_response(raw)
     if trace:
         out["trace"] = trace  # ordered list of {tool, args} the LLM invoked
@@ -5030,7 +5033,16 @@ class Handler(BaseHTTPRequestHandler):
     _ROLE_ORDER = {"viewer": 0, "operator": 1, "admin": 2}
 
     def _resolve_role(self) -> str:
-        if DASHBOARD_TOKEN and self._authed():
+        if DASHBOARD_TOKEN:
+            if self._authed():
+                return "admin"
+            return "operator" if self._write_ok() else "viewer"
+        # Tokenless dev mode: the dashboard is bound to host loopback (BIND
+        # default 127.0.0.1), so anything reaching it already came via loopback.
+        # Inside the container the peer IP is the Docker gateway, never 127.0.0.1,
+        # so trust the same-origin signal (which the browser sends) → admin.
+        # Set DASHBOARD_TOKEN to require an explicit admin credential in prod.
+        if self._same_origin():
             return "admin"
         if self._write_ok():
             return "operator"
