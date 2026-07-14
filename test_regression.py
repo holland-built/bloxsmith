@@ -1897,8 +1897,12 @@ class OverviewRedesignTests(unittest.TestCase):
         self.assertIn("bandsOn.includes", ov, "band chips must be multi-select (array membership), not single-select")
 
     def test_host_status_donut(self):
+        # Host status renders the host-mix chart via the shared ChartView (pie/bar
+        # toggle), fed the hostSlices data — the earlier standalone <Donut> was
+        # refactored into ChartView's donut mode.
         ov = self._overview_tab()
-        self.assertIn("<Donut slices={hostSlices}", ov, "host-status donut missing")
+        self.assertIn("data={hostSlices}", ov, "host-status chart must be fed hostSlices")
+        self.assertIn("donut={{", ov, "host-status ChartView must use donut mode")
         self.assertIn("attnHosts", ov, "needs-attention host list missing from Host status panel")
 
     def test_triage_queue_real_rows(self):
