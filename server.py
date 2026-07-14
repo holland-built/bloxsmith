@@ -478,6 +478,14 @@ MUTATING_PATHS = frozenset({
     "/api/teardown/seed-demo/stream", "/api/selfservice/allocate",
     "/api/dns/records", "/api/provision/block", "/api/teardown/block",
     "/api/retag/block", "/api/alerts/snooze", "/api/edit",
+    # NOTE: /api/update/apply is deliberately NOT here. It looks like it belongs —
+    # replacing the running image is the most consequential write this app makes —
+    # but _write_guard gates on _write_ok(), a STRICTER and different rule than the
+    # handler's own _role_at_least("admin"). Adding it flips the endpoint to
+    # "forbidden — write not authorized" for callers who are admin but not
+    # write-authorized, i.e. it breaks the in-app Update button (verified live).
+    # Self-updates are audited by the apply/rollback handlers' own self-update-*
+    # entries instead, which carry the version transition rather than just a path.
 })
 # Explicit, allowlisted block list id for /api/block-domain (no fuzzy name match).
 BLOCK_LIST_ID   = os.environ.get("BLOCK_LIST_ID", "")

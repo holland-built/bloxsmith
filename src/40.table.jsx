@@ -622,7 +622,7 @@ function cleanBqlAnswer(raw){
 function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
   maxRows,problemsOnly,scrollBody,columnToggle,searchSchema,query,onQuery,
-  diffMap,diffGhosts}){
+  diffMap,diffGhosts,peekOnClick}){
   const power=usePower();
   const fx=useFilters();
   const {filters:globalFilters}=fx;
@@ -1117,7 +1117,15 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     gotoTop(){ if(!visible.length) return false; setCursor(0); scrollTo(0); syncPeek(0); return true; },
     gotoBottom(){ const len=scrollBody?sorted.length:visible.length; if(!len) return false; const i=len-1; if(scrollBody) setRenderLimit(rl=>Math.max(rl,len)); setCursor(i); scrollTo(i); syncPeek(i); return true; },
     clearOrCursor(){ if(selected.size>0){ clearSel(); return true; } if(cursor>=0){ setCursor(-1); return true; } return false; },
-    activate(key){ const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return; if(onRowClick) onRowClick(visible[i],i); },
+    // peekOnClick: opt-in mouse path to the peek. A peek otherwise opens ONLY on
+    // Enter/o over the cursor row, so on a table with renderPeek but no onRowClick
+    // (incidents, dns, security) a mouse user never discovers the drill-down at all.
+    // It is opt-in rather than implied by renderPeek because making rows clickable
+    // DISABLES click-to-copy on every cell (see copyCell above) — security/dns
+    // deliberately rely on that (copy-cell.spec.ts asserts it on #security).
+    activate(key){ const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return;
+      if(onRowClick){ onRowClick(visible[i],i); return; }
+      if(peekOnClick&&renderPeek){ setCursor(i); openPeekAt(i); } },
     check,
     getState(){
       const keyRow=new Map(); data.forEach((r,i)=>keyRow.set(keyOf(r,i),r));
@@ -1510,7 +1518,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
                 const rk=keyOf(r,ri);
                 return <DTRow key={rk} r={r} rkey={rk} cols={effCols} rowId={rowIdOf(ri)}
                   isCursor={ri===cursor} isSel={selected.has(rk)} isFlash={flashed.has(rk)}
-                  clickable={!!onRowClick} selectable={!!selectable} rowApi={apiRef}
+                  clickable={!!onRowClick||!!(peekOnClick&&renderPeek)} selectable={!!selectable} rowApi={apiRef}
                   diff={diffMap?diffMap.get(rk):null} showDiff={!!diffMap}/>;
               })}
           {/* Compare-to-snapshot ghosts: prior rows absent from the current table —
