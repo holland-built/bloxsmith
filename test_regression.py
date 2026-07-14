@@ -616,8 +616,9 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("const TIME_PRESETS=",
                             "Time presets (15m/1h/24h/7d) must be declared")
         # Provider is mounted app-wide (inside FilterProvider) so every tab reads it.
-        self.assertContains("<FilterProvider><TimeProvider><Shell/>",
-                            "TimeProvider must wrap Shell app-wide")
+        # Phase 2 inserts CommitProvider between TimeProvider and Shell.
+        self.assertContains("<FilterProvider><TimeProvider><CommitProvider><Shell/>",
+                            "TimeProvider must wrap Shell app-wide (CommitProvider nested inside)")
         # Snapshot keying / data-fetch left untouched: useSnapshots + DataProvider intact.
         self.assertContains("function useSnapshots(",
                             "useSnapshots must remain (time picker must not touch it)")
@@ -977,7 +978,9 @@ class FrontendStructureTests(unittest.TestCase):
         self.assertContains("function CommandPalette", "CommandPalette missing")
         self.assertContains("e.key==='k'||e.key==='K'", "Cmd/Ctrl-K binding missing")
         # H3: the palette combobox must expose the highlighted row to AT too.
-        self.assertContains("aria-activedescendant={(!confirmBlock&&items.length>0)?('pal-'+sel):undefined}",
+        # Phase 2 moved block-domain confirmation into the shared commit dialog, so the
+        # palette no longer has its own confirmBlock guard on the combobox.
+        self.assertContains("aria-activedescendant={items.length>0?('pal-'+sel):undefined}",
                              "command palette aria-activedescendant missing")
         self.assertContains("id={'pal-'+i}", "palette row id missing (needed for aria-activedescendant)")
 

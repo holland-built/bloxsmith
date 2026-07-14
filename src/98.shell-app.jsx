@@ -73,6 +73,7 @@ function Shell(){
       <PeekDrawer/>
       <Scratchpad/>
       <RollbackDock/>
+      <FirstRunWizard/>
       <Toasts/>
       <ShortcutsHelp/>
       <GhostTour/>

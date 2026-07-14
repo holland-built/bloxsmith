@@ -5,6 +5,7 @@ function ProvisionTab(){
   const whoamiApi=useApi('/api/whoami');
   const role=(whoamiApi.data&&whoamiApi.data.role)||'viewer';
   const isAdmin=role==='admin';
+  const {confirm:commit}=useCommit(); // shared confirm→diff dialog; alias to avoid name clashes
   const [mode,setMode]=useState('subnet'); // 'subnet' | 'site' | 'seed'
   const spacesApi=useApi('/api/ipam/spaces');
   const [space,setSpace]=useState(params.space||'');
@@ -127,50 +128,65 @@ function ProvisionTab(){
     if(siteTeardownStreaming||siteTeardownEsRef.current) return; // guard: never open a second concurrent stream
     if(!siteTeardownDry&&!isAdmin){ toast('Admin (dashboard token) required for live teardown','err'); return; }
     if(!siteTeardownDry&&!siteTeardownConfirm.trim()){ toast('Type the site name to confirm','err'); return; }
-    if(!siteTeardownDry&&!window.confirm("This permanently deletes the site '"+siteTemplate+"' and its objects. Continue?")) return;
-    setSiteTeardownLog([]);setSiteTeardownResult(null);setSiteTeardownErr(null);setSiteTeardownStreaming(true);
-    const qs=new URLSearchParams({template:siteTemplate,dry:siteTeardownDry?'1':'0'});
-    if(siteSpace) qs.set('ip_space',siteSpace);
-    if(!siteTeardownDry) qs.set('confirm',siteTeardownConfirm.trim());
-    const es=new EventSource('/api/teardown/site/stream?'+qs.toString());
-    siteTeardownEsRef.current=es;
-    const stop=()=>{ if(siteTeardownEsRef.current){ siteTeardownEsRef.current.close(); siteTeardownEsRef.current=null; } setSiteTeardownStreaming(false); };
-    es.onmessage=(e)=>{
-      let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
-      setSiteTeardownLog(prev=>[...prev,j]);
-      if(j&&j.error){ setSiteTeardownErr(j.error); stop(); toast('Site teardown failed: '+j.error,'err'); }
-      else if(j&&j.done){ setSiteTeardownResult(j.result||null); stop(); toast('Site torn down','ok'); }
+    const go=()=>{
+      setSiteTeardownLog([]);setSiteTeardownResult(null);setSiteTeardownErr(null);setSiteTeardownStreaming(true);
+      const qs=new URLSearchParams({template:siteTemplate,dry:siteTeardownDry?'1':'0'});
+      if(siteSpace) qs.set('ip_space',siteSpace);
+      if(!siteTeardownDry) qs.set('confirm',siteTeardownConfirm.trim());
+      const es=new EventSource('/api/teardown/site/stream?'+qs.toString());
+      siteTeardownEsRef.current=es;
+      const stop=()=>{ if(siteTeardownEsRef.current){ siteTeardownEsRef.current.close(); siteTeardownEsRef.current=null; } setSiteTeardownStreaming(false); };
+      es.onmessage=(e)=>{
+        let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
+        setSiteTeardownLog(prev=>[...prev,j]);
+        if(j&&j.error){ setSiteTeardownErr(j.error); stop(); toast('Site teardown failed: '+j.error,'err'); }
+        else if(j&&j.done){ setSiteTeardownResult(j.result||null); stop(); toast('Site torn down','ok'); }
+      };
+      es.onerror=()=>{
+        if(!siteTeardownEsRef.current) return; // already closed via done/error message
+        setSiteTeardownErr(prev=>prev||'Stream connection error');
+        stop();
+      };
     };
-    es.onerror=()=>{
-      if(!siteTeardownEsRef.current) return; // already closed via done/error message
-      setSiteTeardownErr(prev=>prev||'Stream connection error');
-      stop();
-    };
+    if(siteTeardownDry){ go(); return; } // dry-run deletes nothing → skip the confirm dialog
+    commit({verb:'teardown',resource:'site',label:siteTemplate,
+      summary:[{glyph:'−',text:'permanently delete site '+siteTemplate}],
+      danger:true,note:'Every object in this site will be permanently deleted.',
+      doneText:'Starting teardown…',run:async()=>({ok:true})})
+      .then(()=>go()).catch(()=>{});
   };
 
   const seedStart=()=>{
     if(seedStreaming||seedEsRef.current) return; // guard: never open a second concurrent stream
     const regionList=Object.keys(seedRegions).filter(r=>seedRegions[r]);
     if(!regionList.length){ toast('Select at least one region','err'); return; }
-    if(!seedDry&&!window.confirm('This writes many real objects to the live portal. Continue?')) return;
-    setSeedLog([]);setSeedRows({});setSeedSummary(null);setSeedErr(null);setSeedStreaming(true);
-    const qs=new URLSearchParams({dry:seedDry?'1':'0',regions:regionList.join(',')});
-    if(seedSpace) qs.set('ip_space',seedSpace);
-    const es=new EventSource('/api/provision/seed-demo/stream?'+qs.toString());
-    seedEsRef.current=es;
-    const stop=()=>{ if(seedEsRef.current){ seedEsRef.current.close(); seedEsRef.current=null; } setSeedStreaming(false); };
-    es.onmessage=(e)=>{
-      let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
-      setSeedLog(prev=>[...prev,j]);
-      if(j&&j.template){ setSeedRows(prev=>({...prev,[j.template]:{phase:j.phase,error:j.error}})); }
-      if(j&&j.error&&!j.template){ setSeedErr(j.error); stop(); toast('Seed demo failed: '+j.error,'err'); }
-      else if(j&&j.done){ setSeedSummary(j.summary||null); stop(); toast('Seed demo complete','ok'); }
+    const go=()=>{
+      setSeedLog([]);setSeedRows({});setSeedSummary(null);setSeedErr(null);setSeedStreaming(true);
+      const qs=new URLSearchParams({dry:seedDry?'1':'0',regions:regionList.join(',')});
+      if(seedSpace) qs.set('ip_space',seedSpace);
+      const es=new EventSource('/api/provision/seed-demo/stream?'+qs.toString());
+      seedEsRef.current=es;
+      const stop=()=>{ if(seedEsRef.current){ seedEsRef.current.close(); seedEsRef.current=null; } setSeedStreaming(false); };
+      es.onmessage=(e)=>{
+        let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
+        setSeedLog(prev=>[...prev,j]);
+        if(j&&j.template){ setSeedRows(prev=>({...prev,[j.template]:{phase:j.phase,error:j.error}})); }
+        if(j&&j.error&&!j.template){ setSeedErr(j.error); stop(); toast('Seed demo failed: '+j.error,'err'); }
+        else if(j&&j.done){ setSeedSummary(j.summary||null); stop(); toast('Seed demo complete','ok'); }
+      };
+      es.onerror=()=>{
+        if(!seedEsRef.current) return; // already closed via done/error message
+        setSeedErr(prev=>prev||'Stream connection error');
+        stop();
+      };
     };
-    es.onerror=()=>{
-      if(!seedEsRef.current) return; // already closed via done/error message
-      setSeedErr(prev=>prev||'Stream connection error');
-      stop();
-    };
+    if(seedDry){ go(); return; } // dry-run mutates nothing → skip the confirm dialog
+    const regions=regionList.map(r=>r.toUpperCase()).join(', ');
+    commit({verb:'provision',resource:'demo sites',label:'seed demo data',
+      summary:[{glyph:'+',text:'create demo sites across '+regions}],
+      danger:false,note:'Writes many real objects to the live tenant.',
+      doneText:'Starting live seed…',run:async()=>({ok:true})})
+      .then(()=>go()).catch(()=>{});
   };
 
   const teardownStart=()=>{
@@ -179,25 +195,32 @@ function ProvisionTab(){
     if(!teardownDry&&teardownConfirm.trim()!=='DELETE'){ toast('Type DELETE to confirm live teardown','err'); return; }
     const regionList=Object.keys(seedRegions).filter(r=>seedRegions[r]);
     if(!regionList.length){ toast('Select at least one region','err'); return; }
-    if(!teardownDry&&!window.confirm('This permanently deletes every seed-created object in '+(seedSpace||'the default space')+'. Continue?')) return;
-    setTeardownLog([]);setTeardownRows({});setTeardownSummary(null);setTeardownErr(null);setTeardownStreaming(true);
-    const qs=new URLSearchParams({dry:teardownDry?'1':'0',regions:regionList.join(','),confirm:teardownDry?'':'DELETE'});
-    if(seedSpace) qs.set('ip_space',seedSpace);
-    const es=new EventSource('/api/teardown/seed-demo/stream?'+qs.toString());
-    teardownEsRef.current=es;
-    const stop=()=>{ if(teardownEsRef.current){ teardownEsRef.current.close(); teardownEsRef.current=null; } setTeardownStreaming(false); };
-    es.onmessage=(e)=>{
-      let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
-      setTeardownLog(prev=>[...prev,j]);
-      if(j&&j.template){ setTeardownRows(prev=>({...prev,[j.template]:{phase:j.phase,error:j.error}})); }
-      if(j&&j.error&&!j.template){ setTeardownErr(j.error); stop(); toast('Teardown failed: '+j.error,'err'); }
-      else if(j&&j.done){ setTeardownSummary(j.summary||null); stop(); toast('Teardown complete','ok'); }
+    const go=()=>{
+      setTeardownLog([]);setTeardownRows({});setTeardownSummary(null);setTeardownErr(null);setTeardownStreaming(true);
+      const qs=new URLSearchParams({dry:teardownDry?'1':'0',regions:regionList.join(','),confirm:teardownDry?'':'DELETE'});
+      if(seedSpace) qs.set('ip_space',seedSpace);
+      const es=new EventSource('/api/teardown/seed-demo/stream?'+qs.toString());
+      teardownEsRef.current=es;
+      const stop=()=>{ if(teardownEsRef.current){ teardownEsRef.current.close(); teardownEsRef.current=null; } setTeardownStreaming(false); };
+      es.onmessage=(e)=>{
+        let j=null; try{ j=JSON.parse(e.data); }catch(parseErr){ return; }
+        setTeardownLog(prev=>[...prev,j]);
+        if(j&&j.template){ setTeardownRows(prev=>({...prev,[j.template]:{phase:j.phase,error:j.error}})); }
+        if(j&&j.error&&!j.template){ setTeardownErr(j.error); stop(); toast('Teardown failed: '+j.error,'err'); }
+        else if(j&&j.done){ setTeardownSummary(j.summary||null); stop(); toast('Teardown complete','ok'); }
+      };
+      es.onerror=()=>{
+        if(!teardownEsRef.current) return; // already closed via done/error message
+        setTeardownErr(prev=>prev||'Stream connection error');
+        stop();
+      };
     };
-    es.onerror=()=>{
-      if(!teardownEsRef.current) return; // already closed via done/error message
-      setTeardownErr(prev=>prev||'Stream connection error');
-      stop();
-    };
+    if(teardownDry){ go(); return; } // dry-run deletes nothing → skip the confirm dialog
+    commit({verb:'teardown',resource:'demo sites',label:'seed demo data',
+      summary:[{glyph:'−',text:'delete every seed-created object'}],
+      danger:true,note:'This permanently deletes every seed-created object in '+(seedSpace||'the default space')+'.',
+      doneText:'Starting teardown…',run:async()=>({ok:true})})
+      .then(()=>go()).catch(()=>{});
   };
 
   // Subnet-mode "Load example": prefill the editable form from the london site

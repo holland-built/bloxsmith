@@ -61,6 +61,7 @@ const EDIT_DELETE_TYPES=['dns_zone','subnet','dhcp_range','host','address_block'
 function EditorTab(){
   const {params}=useRoute();
   const {locked}=useData();
+  const {confirm}=useCommit();   // shared confirm→diff→rollback dialog for LIVE writes
   const whoamiApi=useApi('/api/whoami');
   const role=(whoamiApi.data&&whoamiApi.data.role)||'viewer';
   const isViewer=role==='viewer';
@@ -89,6 +90,9 @@ function EditorTab(){
   const canDelete=!!editId&&EDIT_DELETE_TYPES.includes(type);
 
   const setField=(k,v)=>setFields(prev=>({...prev,[k]:v}));
+
+  // Plain-English name for the object under edit — shown in the confirm dialog header/summary.
+  const objLabel=()=>String(fields.fqdn||fields.name||fields.cidr||fields.address||fields.start||editId||(spec&&spec.label)||'').trim()||(spec&&spec.label)||type;
 
   const parseTags=(str)=>{
     const out={};
@@ -121,41 +125,64 @@ function EditorTab(){
     // Branch POST /api/edit/<type>  vs  PATCH /api/edit/<type>/<id> purely on presence of an editId.
     const method=isUpdate?'PATCH':'POST';
     const url=isUpdate?(spec.endpoint+'/'+encodeURIComponent(editId)):spec.endpoint;
-    const verb=isUpdate?'update':'create';
-    setBusy(true);setErr(null);setPreview(null);
-    fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    const isRetag=type==='tags';
+    const verb=isRetag?'retag':(isUpdate?'update':'create');
+    // The network call — shared by the dry-run preview path and the live confirm dialog.
+    const doFetch=()=>fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
       .then(async r=>({ok:r.ok,data:await r.json().catch(()=>({}))}))
-      .catch(()=>({ok:false,data:{error:'network error'}}))
-      .then(({ok,data})=>{
+      .catch(()=>({ok:false,data:{error:'network error'}}));
+
+    // DRY-RUN — unchanged: mutates nothing, renders the preview, no confirm dialog.
+    if(dry){
+      setBusy(true);setErr(null);setPreview(null);
+      doFetch().then(({ok,data})=>{
         setBusy(false);
         const j=data||{};
         if(!ok||j.error||j.ok===false){
           const msg=(j&&j.error)||'request failed';
-          setErr(msg);toast((dry?'Dry run':spec.label+' '+verb)+' failed: '+msg,'err');return;
+          setErr(msg);toast('Dry run failed: '+msg,'err');return;
         }
-        if(dry){ setPreview(j); toast('Dry run complete','ok'); }
-        else { setPreview(null); if(!isUpdate) setFields({}); toast(spec.label+' '+verb+'d','ok'); }
+        setPreview(j); toast('Dry run complete','ok');
       });
+      return;
+    }
+
+    // LIVE — route the real write through the shared confirm→diff→rollback dialog.
+    const label=objLabel();
+    const past=verb==='retag'?'retagged':verb+'d'; // created / updated / retagged
+    confirm({
+      verb, resource:type, label,
+      summary:[{glyph:verb==='create'?'+':'~', text:verb+' '+spec.label+' '+label}],
+      danger:false, rollback:null,
+      doneText:spec.label+' '+past, errText:spec.label+' '+verb+' failed',
+      run:async()=>{
+        const {ok,data}=await doFetch();
+        const j=data||{};
+        if(!ok||j.error||j.ok===false) return {ok:false,error:(j&&j.error)||'request failed'};
+        return {ok:true,data:j};
+      },
+    }).then(()=>{ setErr(null);setPreview(null); if(!isUpdate) setFields({}); }).catch(()=>{});
   };
 
-  // Delete flow — confirm, then DELETE /api/edit/<type>/<id>, toast, reset back to create mode.
+  // Delete flow — route through the shared confirm dialog (danger → typed-DELETE gate),
+  // then DELETE /api/edit/<type>/<id>, and on success reset back to create mode.
   const del=()=>{
     if(!spec||!editId||busy) return;
-    if(!window.confirm('Delete this '+spec.label+'? This cannot be undone.')) return;
-    setBusy(true);setErr(null);setPreview(null);
-    fetch(spec.endpoint+'/'+encodeURIComponent(editId),{method:'DELETE'})
-      .then(async r=>({ok:r.ok,data:await r.json().catch(()=>({}))}))
-      .catch(()=>({ok:false,data:{error:'network error'}}))
-      .then(({ok,data})=>{
-        setBusy(false);
+    const label=objLabel();
+    confirm({
+      verb:'delete', resource:type, label,
+      summary:[{glyph:'−', text:'delete '+spec.label+' '+label}],
+      danger:true, note:'This permanently deletes the resource from the tenant.', rollback:null,
+      doneText:spec.label+' deleted', errText:spec.label+' delete failed',
+      run:async()=>{
+        const {ok,data}=await fetch(spec.endpoint+'/'+encodeURIComponent(editId),{method:'DELETE'})
+          .then(async r=>({ok:r.ok,data:await r.json().catch(()=>({}))}))
+          .catch(()=>({ok:false,data:{error:'network error'}}));
         const j=data||{};
-        if(!ok||j.error||j.ok===false){
-          const msg=(j&&j.error)||'delete failed';
-          setErr(msg);toast(spec.label+' delete failed: '+msg,'err');return;
-        }
-        toast(spec.label+' deleted','ok');
-        setEditId(null);setFields({});setPreview(null);
-      });
+        if(!ok||j.error||j.ok===false) return {ok:false,error:(j&&j.error)||'delete failed'};
+        return {ok:true};
+      },
+    }).then(()=>{ setEditId(null);setFields({});setPreview(null);setErr(null); }).catch(()=>{});
   };
 
   const previewBody=preview?(preview.would_create||preview.would_update||preview):null;
