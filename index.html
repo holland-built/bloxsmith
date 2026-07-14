@@ -267,7 +267,8 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
   background:var(--hover);opacity:.6;
 }
 .skel-row{height:14px;margin:var(--s2) 0;}
-.skel-note{display:block;font-size:var(--t12);color:var(--text-dim);margin:0 0 var(--s3);}
+.skel-note{display:flex;align-items:center;gap:var(--s2);font-size:var(--t12);color:var(--text-dim);margin:0 0 var(--s3);}
+.skel-spin{width:13px;height:13px;flex:none;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:boot-spin .7s linear infinite;}
 
 /* ── boot splash — static HTML inside #root so the very first paint is never a
    blank screen; React's root.render() replaces it once the app mounts. ── */
@@ -3042,7 +3043,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
 function Skeleton({rows=4,label}){
   const widths=[62,88,50,74,42,68];
   return <div aria-busy="true" aria-label={label||'Loading'} style={{padding:'6px 2px'}}>
-    {label?<span className="skel-note">{label}</span>:null}
+    {label?<span className="skel-note"><span className="skel-spin" aria-hidden="true"/>{label}</span>:null}
     {Array.from({length:rows}).map((_,i)=>
       <span key={i} className="skel skel-row" style={{width:widths[i%widths.length]+'%'}}/>)}
   </div>;
