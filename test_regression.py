@@ -21,12 +21,20 @@ SERVER = os.path.join(DIR, "server.py")
 
 def get(path, timeout=90):
     req = Request(BASE + path)
-    with urlopen(req, timeout=timeout) as r:
-        return r.status, r.headers.get("Content-Type", ""), r.read()
+    try:
+        with urlopen(req, timeout=timeout) as r:
+            return r.status, r.headers.get("Content-Type", ""), r.read()
+    except HTTPError as e:
+        # 4xx/5xx (e.g. admin-gated 403) are returned, not raised, so callers
+        # can assert on the status the way post() already allows.
+        return e.code, e.headers.get("Content-Type", ""), e.read()
 
 def post(path, body, timeout=90):
     data = json.dumps(body).encode()
-    req = Request(BASE + path, data=data, headers={"Content-Type": "application/json"})
+    # Origin header makes the harness same-origin so P2's CSRF write-gate
+    # (_write_ok → _same_origin when DASHBOARD_TOKEN is unset) admits the POST.
+    req = Request(BASE + path, data=data,
+                  headers={"Content-Type": "application/json", "Origin": BASE})
     try:
         with urlopen(req, timeout=timeout) as r:
             return r.status, r.read()
@@ -90,12 +98,10 @@ class BackendTests(unittest.TestCase):
         status, ct, body = get("/nonexistent-path-xyz")
         self.assertEqual(status, 200)
         self.assertIn("text/html", ct)
-        self.assertIn(b"<title>BloxSmith", body)
-        try:
-            get("/api/nonexistent-xyz")
-            self.fail("Expected 404 for unknown /api/* path")
-        except HTTPError as e:
-            self.assertEqual(e.code, 404)
+        self.assertIn(b"<title>Bloxsmith", body)
+        # get() now returns 4xx instead of raising, so assert on the status.
+        status, _, _ = get("/api/nonexistent-xyz")
+        self.assertEqual(status, 404, "Expected 404 for unknown /api/* path")
 
     def test_api_data_shape(self):
         status, d = get_json("/api/data")
@@ -125,12 +131,9 @@ class BackendTests(unittest.TestCase):
             self.assertIn(f, h, f"host missing field: {f}")
 
     def test_api_actions(self):
-        try:
-            status, d = get_json("/api/actions")
-        except HTTPError as e:
-            if e.code == 500:
-                self.skipTest("upstream Infoblox MCP 500 for this tenant")
-            raise
+        status, d = get_json("/api/actions")
+        if status == 500:
+            self.skipTest("upstream Infoblox MCP 500 for this tenant")
         self.assertEqual(status, 200)
         self.assertIsInstance(d, dict)
 
