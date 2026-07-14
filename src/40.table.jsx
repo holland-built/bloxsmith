@@ -132,34 +132,27 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
   // Copy-cell / copy-row: raw clipboard write + the shared toast/aria-live bus for
   // a non-color confirmation (no new live-region — Toasts() already renders one).
   const copyText=txt=>{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt); };
-  const copyRow=e=>{ e.stopPropagation(); copyText(JSON.stringify(r)); toast('Row copied (JSON)','ok',{duration:1500}); };
-  // Feature 6 — "Copy as…" format menu: a small addition next to the existing F1
-  // row-copy button (⧉, unchanged — still one click → JSON). Formats operate on
-  // `cols` (the currently VISIBLE columns, same set the user sees) except JSON,
-  // which stays the full row like the ⧉ button always has.
-  const [copyAsOpen,setCopyAsOpen]=useState(false);
-  const copyAsBtnRef=useRef(null);
-  const copyAsMenuRef=useRef(null);
-  const closeCopyAs=()=>{ setCopyAsOpen(false); if(copyAsBtnRef.current) copyAsBtnRef.current.focus(); };
-  useEffect(()=>{
-    if(!copyAsOpen||!copyAsMenuRef.current) return;
-    const first=copyAsMenuRef.current.querySelector('button:not(:disabled)');
-    if(first) first.focus();
-  },[copyAsOpen]);
-  const moveCopyAsFocus=delta=>{
-    const btns=copyAsMenuRef.current?Array.from(copyAsMenuRef.current.querySelectorAll('button:not(:disabled)')):[];
-    if(!btns.length) return;
-    let i=btns.indexOf(document.activeElement);
-    i=(i+delta+btns.length)%btns.length;
-    btns[i].focus();
-  };
+  // Row actions live in a dedicated trailing gutter (td.dt-acts) as ONE labeled
+  // KebabMenu — not the old hover-revealed ⧉/▾ pair inside the last data cell.
+  // That pair had three defects: it painted over the cell's own value (nothing
+  // reserved its lane), ⧉ duplicated the menu's own JSON item, and neither glyph
+  // said what it did. The menu also lived in a td with overflow:hidden, so it was
+  // CLIPPED to the 28px row band — only the first format was ever reachable.
+  // KebabMenu owns the open state, focus return, and ↑/↓ roving; the gutter cell
+  // sets overflow:visible so the popover is no longer cut off. Formats operate on
+  // `cols` (the currently VISIBLE columns) except JSON, which stays the full row.
   const COPY_AS_FORMATS=[
     {id:'csv',label:'CSV',build:()=>rowAsCSV(cols,r)},
     {id:'json',label:'JSON',build:()=>JSON.stringify(r)},
     {id:'bql',label:'BQL filter',build:()=>rowAsBQL(cols,r)},
     {id:'md',label:'Markdown',build:()=>rowAsMarkdown(cols,r)},
   ];
-  const copyAsFormat=fmt=>{ copyText(fmt.build()); toast('Copied as '+fmt.label,'ok',{duration:1500}); closeCopyAs(); };
+  const copyAsFormat=fmt=>{ copyText(fmt.build()); toast('Copied as '+fmt.label,'ok',{duration:1500}); };
+  // Per-row a11y name: 50 buttons all called "Row actions" is useless in a screen
+  // reader's element list, so qualify with the row's primary (or first) column value.
+  const nameCol=cols.find(c=>c.primary)||cols[0];
+  const rowName=nameCol?String(r[nameCol.key]??'').slice(0,60):'';
+  const actsLabel='Row actions'+(rowName?' — '+rowName:'');
   // Group C/2 — pivot-on-cell: ordinary (non-.pivot-cell) data cells get a tiny
   // "Filter by this value" action, funneling into the SAME fx.toggle/FilterCtx
   // the .pivot-cell columns already use (~1188), reached via right-click
@@ -236,14 +229,9 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
         closePivotMenu(ci);
         if(!wasOn) toast('Filtered to '+lbl,'ok',{duration:1500});
       };
-      // Copy-row buttons anchor to the last DATA column — when the trailing
-      // column is the __edit action column, back up one so the hover-revealed
-      // ⧉/▾ pair doesn't paint over the Edit button.
-      const copyHostCi=cols.length-((cols[cols.length-1]||{}).key==='__edit'?2:1);
-      const isLast=ci===copyHostCi;
       return <td key={c.key} title={(c.pivot||isId)?undefined:tip}
         ref={canCellPivot?(el=>{pivotCellRefs.current[ci]=el;}):undefined}
-        className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')+(copyCell?' dt-copyable':'')+(canCellPivot?' dt-cell-pivot':'')+(isLast?' dt-copy-host':'')}
+        className={(isNum(c)?'num ':'')+(c.mono?'mono':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')+(copyCell?' dt-copyable':'')+(canCellPivot?' dt-cell-pivot':'')}
         style={st} onClick={copyCell}
         onContextMenu={canCellPivot?openPivotMenu:undefined}
         tabIndex={cellKeyboardPivot?0:undefined}
@@ -267,27 +255,12 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
               {(cellPivotOn?'Remove filter · ':'Filter by this value · ')}{String(raw)}
             </button>
           </div></>:null}
-        {isLast?<span className="row-copyas-wrap">
-          <button type="button" className="row-copy-btn" title="Copy row as JSON"
-            aria-label="Copy row as JSON" onClick={copyRow}>⧉</button>
-          <button type="button" ref={copyAsBtnRef} className="row-copy-btn" title="Copy row as…"
-            aria-label="Copy row as…" aria-haspopup="true" aria-expanded={copyAsOpen}
-            onClick={e=>{ e.stopPropagation(); setCopyAsOpen(v=>!v); }}>▾</button>
-          {copyAsOpen?<><div className="views-overlay" onClick={e=>{ e.stopPropagation(); closeCopyAs(); }}/>
-            <div ref={copyAsMenuRef} className="panel dt-popover dt-copyas-menu" role="menu" aria-label="Copy row as"
-              onClick={e=>e.stopPropagation()}
-              onKeyDown={e=>{
-                if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeCopyAs(); return; }
-                if(e.key==='ArrowDown'){ e.preventDefault(); moveCopyAsFocus(1); }
-                else if(e.key==='ArrowUp'){ e.preventDefault(); moveCopyAsFocus(-1); }
-              }}>
-              {COPY_AS_FORMATS.map(fmt=>
-                <button key={fmt.id} type="button" role="menuitem" className="dt-copyas-item"
-                  onClick={e=>{ e.stopPropagation(); copyAsFormat(fmt); }}>{fmt.label}</button>)}
-            </div></>:null}
-        </span>:null}
       </td>;
     })}
+    <td className="dt-acts" onClick={e=>e.stopPropagation()}>
+      <KebabMenu label={actsLabel} items={COPY_AS_FORMATS.map(fmt=>
+        ({label:'Copy row as '+fmt.label, run:()=>copyAsFormat(fmt)}))}/>
+    </td>
   </tr>;
 });
 
@@ -1479,10 +1452,13 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
               <span className="sort-ind">{badge?<b className="sort-order">{badge}</b>:null}{arrow}</span>
             </th>;
           })}
+          {/* Row-actions gutter — deliberately unlabeled (an icon-only kebab needs no
+              column head); the a11y name lives on each row's own trigger. */}
+          <th className="dt-acts"></th>
         </tr></thead>
         <tbody>
           {visible.length===0
-            ? <tr><td className="dt-empty" colSpan={(effCols.length||1)+(selectable?1:0)+(diffMap?1:0)}>
+            ? <tr><td className="dt-empty" colSpan={(effCols.length||1)+1+(selectable?1:0)+(diffMap?1:0)}>
                 {noIssues
                   ? <span className="prob-none">No issues · <button className="prob-none-btn" onClick={()=>setProb(false)}>Show all {data.length}</button></span>
                   : anyFilterActive

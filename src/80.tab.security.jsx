@@ -136,7 +136,14 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
     return String(B.e.event_time||'').localeCompare(String(A.e.event_time||''));
   }).map(x=>x.e);
   const cols=[
-    {key:'ack',label:'',width:28,render:(_,e)=>{
+    // MUST stay labeled: this sits immediately right of DataTable's own row-select
+    // checkbox (td.dt-check), so two identical boxes end up side by side — one
+    // selects a row, this one MUTATES alert state. label:'' left the only
+    // distinction in an aria-label sighted users never see. 'Ack' is the whole
+    // affordance. Width is 48 (not 28) because thead th pads 0 var(--s3) each
+    // side: 28 left a 4px content box that clipped both the word and the
+    // checkbox itself into a half-drawn glyph.
+    {key:'ack',label:'Ack',width:48,render:(_,e)=>{
       const acked=!!acks[secAckKey(e)];
       return <input type="checkbox" checked={acked} onClick={ev=>ev.stopPropagation()} onChange={()=>toggleAck(e)} aria-label="Acknowledge event"/>;
     }},

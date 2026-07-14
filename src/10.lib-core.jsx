@@ -33,8 +33,8 @@ const WALL_VIEWS=[
 ];
 
 /* downloadCSV — ported verbatim from prior build (helper for DataTable).
-   csvRowLine is split out so the copy-as-format menu (row-copy-btn extension,
-   Feature 6) can reuse the exact same cell-escaping for a single-row CSV copy. */
+   csvRowLine is split out so the per-row copy-as-format menu (the dt-acts
+   KebabMenu) can reuse the exact same cell-escaping for a single-row CSV copy. */
 function csvRowLine(columns,row){ return columns.map(c=>JSON.stringify(row[c.key]??'')).join(','); }
 function downloadCSV(filename, rows, columns){
   const header=columns.map(c=>JSON.stringify(c.label||c.key||c)).join(',');
