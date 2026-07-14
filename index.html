@@ -3616,7 +3616,9 @@ function VaultGate({children}){
     window.addEventListener('bx:vault-locked',on);
     return ()=>window.removeEventListener('bx:vault-locked',on);
   },[refresh]);
-  if(!st) return <div className="vault-boot"><div className="vault-spinner"/></div>;
+  // Mirror the static #root boot-splash exactly, so React's first paint replaces
+  // it with an identical frame — no blink/content-jump from splash → bare spinner.
+  if(!st) return <div className="boot-splash"><div className="boot-spinner"/><div className="boot-title">Bloxsmith</div><div className="boot-note">Starting up…</div></div>;
   const wrap=kids=><AuthProvider vault={st} onVaultChange={refresh}>{kids}</AuthProvider>;
   if(!st.vaultMode) return wrap(children);
   if(st.ready)      return wrap(children);
@@ -4776,6 +4778,10 @@ function OverviewTab(){
 
   // Vault locked → render nothing; the gate handles it. (After all hooks.)
   if(data.locked) return null;
+  // First-load harvest → collecting indicator, not a misleading all-zeros board.
+  // Overview is the landing tab, so this is the first thing seen; matches the
+  // Daily/Network/DNS skeletons on the same shared /api/data feed.
+  if(data.loading&&!data.data) return <div className="page"><Skeleton rows={8} label="Collecting data from Infoblox — first load can take a minute…"/></div>;
 
   return <div className="page ovx">
 
