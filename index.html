@@ -742,6 +742,12 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .chart-body{height:var(--body-chart);display:flex;flex-direction:column;justify-content:center;}
 .pcard>h3{font-size:12.5px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin:0;flex-wrap:wrap;min-width:0;}
 .pcard>h3 .side{color:var(--text-faint);font-weight:500;font-size:11px;display:inline-flex;align-items:center;gap:var(--s2);flex:0 1 auto;min-width:0;flex-wrap:wrap;justify-content:flex-end;}
+.chart-seg{display:inline-flex;align-items:center;gap:6px;}
+.chart-seg button{font:inherit;font-size:11px;background:none;border:0;padding:0;cursor:pointer;color:var(--text-faint);line-height:1;}
+.chart-seg button[aria-pressed="true"]{color:var(--accent);font-weight:600;}
+.chart-seg button:hover{color:var(--text);}
+.chart-seg button:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px;border-radius:2px;}
+.chart-seg .sep{color:var(--border-strong);font-size:10px;user-select:none;}
 /* Panel size floor — routes through the --panel-* scale so boxes stay consistent
    and a panel like Triage is never cramped. Optional; unset panels are unchanged. */
 .pcard.sz-sm{min-height:var(--panel-sm);}
@@ -4178,6 +4184,37 @@ function GroupedBar({rows,max=24,onClick}){
   </div>;
 }
 
+/* ── Chart-type toggle (shared) — screenshot-style "Line · Bar · Pie" text control.
+   Canonical order line→bar→pie, filtered to allowed `types`. aria-pressed, active=accent. ── */
+const CHART_TYPE_ORDER=['line','bar','pie'];
+const CHART_TYPE_LABEL={line:'Line',bar:'Bar',pie:'Pie'};
+function ChartTypeToggle({value,onChange,types}){
+  const allow=CHART_TYPE_ORDER.filter(t=>(types||[]).includes(t));
+  if(allow.length<2) return null;
+  return <span className="chart-seg" role="group" aria-label="Chart type">
+    {allow.map((t,i)=><React.Fragment key={t}>
+      {i>0?<span className="sep" aria-hidden="true">·</span>:null}
+      <button type="button" aria-pressed={value===t}
+        onClick={()=>onChange&&onChange(t)}>{CHART_TYPE_LABEL[t]}</button>
+    </React.Fragment>)}
+  </span>;
+}
+/* useChartType(types,def) → [type, toggleNode]. def defaults to first allowed. */
+function useChartType(types,def){
+  const [t,setT]=useState(def||(types&&types[0]));
+  return [t,<ChartTypeToggle value={t} onChange={setT} types={types}/>];
+}
+/* ChartView({type,data,barMode,donut,onBar}) — one renderer, data=[{label,value,color}].
+   pie→Donut, line→Sparkline(values), bar→GroupedBar (or HistogramBar if barMode==='histogram'). */
+function ChartView({type,data,barMode,donut,onBar}){
+  const d=Array.isArray(data)?data:[];
+  if(type==='pie') return <Donut slices={d} {...(donut||{})}/>;
+  if(type==='line') return <Sparkline values={d.map(x=>Number(x.value)||0)}/>;
+  if(barMode==='histogram')
+    return <HistogramBar buckets={d.map(x=>({label:x.label,count:Number(x.value)||0,color:x.color}))} onClick={onBar}/>;
+  return <GroupedBar rows={d} onClick={onBar}/>;
+}
+
 /* ── HoverCard (shared) — inline-block wrapper; shows a positioned .panel on
    mouseenter/focus, hides on leave/blur/Escape. Fixed-position, viewport-clamped.
    Flavor only (non-essential info). trigger is tabbable; aria-describedby wired. ── */
@@ -4713,6 +4750,7 @@ function OverviewTab(){
     {label:'offline',value:hostAgg.offline,color:'var(--crit)'},
     {label:'other',value:hostAgg.other,color:'var(--text-faint)'},
   ];
+  const [hostChart,hostToggle]=useChartType(['pie','bar'],'pie');
   const attnHosts=hosts.filter(h=>!/^(online|up)$/i.test(String(h.status||''))).slice(0,6);
 
   // P1/4 — host-status stat numbers become app-wide cross-filter buttons: clicking
@@ -4961,17 +4999,17 @@ function OverviewTab(){
       </div>
 
       <div className="span-3">
-        <Panel title="Host status" side={hosts.length.toLocaleString()+' hosts'}>
+        <Panel title="Host status" side={<>{hostToggle}<span>{hosts.length.toLocaleString()+' hosts'}</span></>}>
           <div className="chart-body">
-            <Donut slices={hostSlices}
-              centerValue={hosts.length?Math.round(hostAgg.online/hosts.length*100)+'%':'0'} centerLabel="online"
-              centerDetail={'Reachability of your '+hosts.length.toLocaleString()+' managed hosts — the percentage that are currently online.'}
-              legendDetail={l=>({
+            <ChartView type={hostChart} data={hostSlices} donut={{
+              centerValue:hosts.length?Math.round(hostAgg.online/hosts.length*100)+'%':'0',centerLabel:"online",
+              centerDetail:'Reachability of your '+hosts.length.toLocaleString()+' managed hosts — the percentage that are currently online.',
+              legendDetail:l=>({
                 online:'Host responded to reachability checks — considered healthy.',
                 degraded:'Host is reachable but reporting a warning status.',
                 offline:'Host did not respond — down or unreachable.',
                 other:"Status not recognized by the dashboard — not counted as online, degraded, or offline.",
-              }[l]||l)}/>
+              }[l]||l)}}/>
           </div>
           {attnHosts.length?<div style={{marginTop:10,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:6}}>
             {attnHosts.map((h,i)=>{
@@ -5460,6 +5498,8 @@ function NetworkTab(){
   const flt=useFilters(); // "Capacity by site" bars → removable global site filter (FilterBar + Clear)
   const _whoNet=useApi('/api/whoami');
   const canEdit=(((_whoNet.data&&_whoNet.data.role)||'viewer')!=='viewer');
+  const [siteChart,siteToggle]=useChartType(['bar','pie'],'bar');
+  const [leaseChart,leaseToggle]=useChartType(['pie','bar'],'pie');
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8} label="Collecting data from Infoblox — first load can take a minute…"/></div>;
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
@@ -5593,8 +5633,8 @@ function NetworkTab(){
       : <React.Fragment>
           <SectionRule title="Capacity & utilization"/>
           <div className="grid">
-            <Panel title="Capacity by site" empty={siteRows.length<2}>
-              <GroupedBar rows={siteRows} max={24} onClick={r=>flt.toggle('site',r.site,'Site: '+r.site)}/>
+            <Panel title="Capacity by site" side={siteToggle} empty={siteRows.length<2}>
+              <ChartView type={siteChart} data={siteRows} onBar={r=>flt.toggle('site',r.site,'Site: '+r.site)}/>
             </Panel>
             <Panel title="Top consumers" empty={topN.length===0}>
               <div className="issues">
@@ -5689,8 +5729,8 @@ function NetworkTab(){
                 diffMap={leaseDiff?leaseDiff.byKey:null} diffGhosts={leaseDiff?leaseDiff.ghosts:null}/>
             </Panel>
             </div>
-            <Panel title="Lease states" side={<span className="mono" style={{color:'var(--text-faint)'}}>{leases.length}</span>} empty={leases.length===0}>
-              <Donut slices={leaseSlices} centerValue={leases.length} centerLabel="leases"/>
+            <Panel title="Lease states" side={<>{leaseToggle}<span className="mono" style={{color:'var(--text-faint)'}}>{leases.length}</span></>} empty={leases.length===0}>
+              <ChartView type={leaseChart} data={leaseSlices} donut={{centerValue:leases.length,centerLabel:"leases"}}/>
             </Panel>
           </div>
         </React.Fragment>}
@@ -5704,6 +5744,7 @@ function DnsTab(){
   const _whoDns=useApi('/api/whoami');
   const canEdit=(((_whoDns.data&&_whoDns.data.role)||'viewer')!=='viewer');
   const {delta}=useSnapshots();
+  const [volChart,volToggle]=useChartType(['bar','line'],'bar');
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8} label="Collecting data from Infoblox — first load can take a minute…"/></div>;
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
@@ -5822,9 +5863,9 @@ function DnsTab(){
           </div>
           <div className="grid-dense">
             <Panel title="Query volume · 7d"
-              side={<Freshness at={an.fetchedAt} onRetry={an.refetch} error={an.error?true:undefined}/>}
+              side={<>{volToggle}<Freshness at={an.fetchedAt} onRetry={an.refetch} error={an.error?true:undefined}/></>}
               empty={volEmpty}>
-              <HistogramBar buckets={volBuckets}/>
+              <ChartView type={volChart} data={volBuckets.map(b=>({label:b.label,value:b.count,color:b.color}))} barMode="histogram"/>
             </Panel>
             <Panel title="Top clients" empty={clientsEmpty}>
               <DataTable cols={clientCols} rows={clients} defaultSort={{key:'queries',dir:'desc'}} csvName="top-clients" scrollBody={280}/>
@@ -5919,6 +5960,7 @@ function InfraTab({vaultTick}={}){
   const {bind:hoverBind}=useHoverDetail();
   // Compare-to-snapshot (Hosts) — MUST run before any early return (hooks-order rule).
   const [hostCompareOn,setHostCompareOn]=useState(false);
+  const [infraChart,infraToggle]=useChartType(['pie','bar'],'pie');
 
   const hosts=(data&&data.hosts)||[];
   const metricRows=(mx.data&&mx.data.metrics)||[];
@@ -6075,13 +6117,13 @@ function InfraTab({vaultTick}={}){
           : <div className="infra-dim">All {total} hosts online</div>}
       </Panel>
 
-      <Panel title="Status" side={total+' hosts'}>
+      <Panel title="Status" side={<>{infraToggle}<span>{total+' hosts'}</span></>}>
         <div className="chart-body">
-          <Donut slices={[
+          <ChartView type={infraChart} data={[
             {label:'online',value:online,color:'var(--ok)'},
             {label:'degraded',value:degraded,color:'var(--warn)'},
             {label:'offline',value:offline,color:'var(--crit)'},
-          ]} centerValue={offline} centerLabel="offline"/>
+          ]} donut={{centerValue:offline,centerLabel:"offline"}}/>
         </div>
       </Panel>
 
