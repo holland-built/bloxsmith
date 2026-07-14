@@ -185,7 +185,10 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
 }
 .ai-trigger:hover{background:var(--accent-dim);border-color:var(--accent-text);}
 .ai-trigger--open{background:var(--accent);color:#fff;border-color:var(--accent);}
-.ai-trigger--accent{background:var(--accent-bg,#132a44);border-color:var(--accent,#4a9eff);color:var(--accent-text,#bcd9ff);}
+/* --accent-bg was never defined by either theme block, so it always fell back to a
+   hardcoded dark-navy hex while --accent-text kept flipping per theme (WCAG 2.18:1 in
+   light). Reuse .ai-trigger's already-themed accent-dim/accent-text pair instead. */
+.ai-trigger--accent{background:var(--accent-dim);border-color:var(--accent);color:var(--accent-text);}
 /* topbar-right cluster grouping — logical groups separated by thin dividers */
 .tb-group{display:inline-flex;align-items:center;gap:var(--s2);}
 .tb-group:not(:empty) + .tb-group:not(:empty)::before{content:'';width:1px;height:18px;background:var(--border-strong);margin:0 var(--s1);flex:0 0 auto;}
@@ -229,6 +232,12 @@ table.dt thead th{
   border-bottom:1px solid var(--border);
   white-space:nowrap;user-select:none;cursor:pointer;
   background:var(--surface);
+  /* tbody td has clipped+ellipsised since forever; th never did. With nowrap and
+     overflow:visible a long header spills straight out of its own cell and paints
+     over its neighbours — that's the unreadable run-together header mush
+     ("SEVCBRRCEMCSTAMTESRAVEDASESSRM"), not merely narrow columns. Match td; the
+     th's title attr carries the full label for anything ellipsised. */
+  overflow:hidden;text-overflow:ellipsis;
 }
 table.dt thead th.num{text-align:right;}
 table.dt thead th .sort-ind{color:var(--text-faint);margin-left:var(--s1);}

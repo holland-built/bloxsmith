@@ -252,7 +252,21 @@ function OverviewTab(){
               ['Matching','Subnets passing the current scope + utilization-band filters.'],
               ['Order','Worst-first by utilization.'],
             ]})}>{subnetPreview.length} matching</span>}>
-          <div className="issues">
+          {/* .issues' class-level max-height is a --body-chart (220px) token borrowed
+              from the chart-body panels; it doesn't track this pcard's actual height,
+              which grid-stretches to match its row (e.g. 638px next to Capacity
+              heatmap) — so the list was clamped to a tiny 220px scroller inside a much
+              taller, mostly-empty card. Override inline: fill the pcard's flex column
+              instead of a fixed pixel cap. */}
+          {/* .issues ships max-height:var(--body-chart) — a 220px cap borrowed from the
+              small chart bodies. This card is span-3 in a stretch row, so it's ~638px
+              tall (sized by the taller Capacity heatmap beside it): 3 rows showed and
+              the rest was dead void. Fill the card instead — but flex-BASIS must be 0,
+              not auto: with `auto` the list's full 60-row content still counts toward the
+              pcard's height, so the card grew to 2198px and dragged every sibling in the
+              row up with it. basis:0 + min-height:0 + the class's own overflow-y:auto =
+              the list takes only leftover space and scrolls inside it. */}
+          <div className="issues" style={{maxHeight:'none',flex:'1 1 0',minHeight:0}}>
             {subnetPreview.length
               ? subnetPreview.slice(0,60).map((s,i)=>{
                   const go=()=>nav('network',{subnet:s.addr||s.id});
