@@ -21,3 +21,10 @@ Dockerfile
 .dockerignore
 run.sh
 README.docker.md
+
+# Phase 1 build-time only — the runtime loads the precompiled app.bundle.js, so the
+# in-browser Babel and the JSX source never need to ship in the image.
+babel.min.js
+src
+scripts/build_ui.js
+scripts/_carve_once.py
