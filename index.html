@@ -76,6 +76,8 @@ try{
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s12:48px;
   --r-ctl:4px; --r-panel:6px;
   --row-h:28px; --dt-fs:var(--t12);
+  /* Trailing gutter column the per-row KebabMenu (⋮) lives in. */
+  --dt-actions-w:28px;
   --body-table:280px; --body-chart:220px;
   /* Panel-size scale — one source of truth for panel/table/chart body heights.
      Panel `size` prop (sm/md/lg) + rerouted ad-hoc max-heights all read these. */
@@ -367,26 +369,28 @@ table.dt tbody tr.dt-ghost td.dt-diff{text-decoration:none;}
 
 /* ── copy-cell / copy-row: no color signaling — text confirmation via the toast bus ── */
 table.dt tbody td.dt-copyable{cursor:copy;}
-table.dt tbody td:last-child,table.dt tbody td.dt-copy-host{position:relative;}
-/* row-copyas-wrap holds BOTH the original F1 "Copy row as JSON" button and the
-   Feature 6 "Copy as…" format-menu trigger — same reveal-on-hover/focus/cursor
-   contract the single button used to own, now applied to the pair. */
-.row-copyas-wrap{
-  position:absolute;top:50%;right:var(--s2);transform:translateY(-50%);
-  display:flex;align-items:center;gap:4px;
-  opacity:0;pointer-events:none;
+table.dt tbody td:last-child{position:relative;}
+/* ── Row-actions gutter (dt-acts) ──
+   Row actions are their OWN trailing column, mirroring the dt-check gutter on the
+   left, rather than floating inside the last data cell. That kills three bugs at
+   once: the buttons can no longer paint over a cell's value, the anchor stops
+   being positional ("last data column" moved whenever columns were reordered),
+   and — critically — overflow:visible lets the ⋮ popover escape the 28px row band.
+   It previously sat in a td with the inherited overflow:hidden, which clipped the
+   menu to one visible item; only the first format was ever reachable. */
+table.dt td.dt-acts,table.dt th.dt-acts{
+  width:var(--dt-actions-w);padding:0 var(--s1) 0 0;
+  text-align:center;overflow:visible;position:relative;
 }
-table.dt tbody tr:hover .row-copyas-wrap,
-table.dt tbody tr:focus-within .row-copyas-wrap,
-table.dt tbody tr.cursor .row-copyas-wrap,
-.row-copyas-wrap:focus-within{opacity:1;pointer-events:auto;}
-.row-copy-btn{
-  width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;
-  font-size:11px;line-height:1;color:var(--text-dim);
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);
-  cursor:pointer;
-}
-.row-copy-btn:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+/* Reveal on hover / keyboard focus / cursor row — same contract the old pair had,
+   plus [aria-expanded] so the trigger stays put while its menu is open. */
+table.dt tbody td.dt-acts .kebab-wrap{opacity:0;pointer-events:none;}
+table.dt tbody tr:hover .dt-acts .kebab-wrap,
+table.dt tbody tr:focus-within .dt-acts .kebab-wrap,
+table.dt tbody tr.cursor .dt-acts .kebab-wrap,
+table.dt tbody td.dt-acts .kebab-wrap:focus-within{opacity:1;pointer-events:auto;}
+/* .btn is 28px tall — full row height — so shrink the trigger inside a table row. */
+table.dt tbody td.dt-acts .kebab-btn{width:20px;height:20px;font-size:var(--t12);}
 .dt-copyas-menu{right:0;top:calc(100% + 4px);min-width:150px;padding:var(--s1);}
 .dt-copyas-item{display:block;width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
 .dt-copyas-item:hover,.dt-copyas-item:focus-visible{background:var(--hover);}
@@ -669,7 +673,7 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:hidden
 .dt-cheat-btn{right:1px;}
 /* M1: NL button is standing chrome at rest — hide it until the search field is
    focused (dim, since empty text still leaves it non-functional) or the field
-   holds text (fully visible); mirrors the .row-copy-btn reveal-on-need pattern. */
+   holds text (fully visible); mirrors the dt-acts kebab reveal-on-need pattern. */
 .dt-nl-btn{right:23px;opacity:0;pointer-events:none;}
 .dt-search:focus-within .dt-nl-btn:disabled{opacity:.4;cursor:default;}
 .dt-search:focus-within .dt-nl-btn:not(:disabled),

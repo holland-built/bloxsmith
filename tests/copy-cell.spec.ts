@@ -6,6 +6,12 @@ import { test, expect } from '@playwright/test';
 // navigation elsewhere in the app (subnets/infra rows keep click-to-open; those get
 // the row-JSON copy button + the 'y' keyboard shortcut instead — see index.html).
 
+// This spec mocks /api/hub/security outright, so it has no reason to run against
+// the live stack — the config's default baseURL. It was doing exactly that, which
+// meant it silently tested whatever image :8080 happened to be serving rather than
+// the working tree. Pin it to the static host the other mocked specs use.
+test.use({ baseURL: process.env.NOC_BASE || 'http://localhost:8091' });
+
 const SECURITY = {
   counts: { critical: 1, high: 1, medium: 1 }, blocked: 0, logged: 0, total: 3,
   events: [
@@ -53,8 +59,10 @@ test('the row-copy affordance copies the whole row as JSON', async ({ page }) =>
   const row = rows.first();
   await row.hover();
 
-  const copyBtn = row.getByRole('button', { name: 'Copy row as JSON' });
-  await copyBtn.click();
+  // Row actions are one kebab (⋮) in the trailing dt-acts gutter — JSON is a
+  // labeled item inside it, not a bare ⧉ glyph sitting on top of the last cell.
+  await row.getByRole('button', { name: 'Row actions — crit.example' }).click();
+  await page.getByRole('menuitem', { name: 'Copy row as JSON' }).click();
 
   const clip = await page.evaluate(() => navigator.clipboard.readText());
   const parsed = JSON.parse(clip);
@@ -62,7 +70,7 @@ test('the row-copy affordance copies the whole row as JSON', async ({ page }) =>
   expect(parsed.severity).toBe('critical');
 
   const live = page.locator('.toasts[aria-live="polite"]');
-  await expect(live).toContainText('Row copied');
+  await expect(live).toContainText('Copied as JSON');
 });
 
 test('keyboard: cursor + "y" copies the cursor row as JSON', async ({ page }) => {
