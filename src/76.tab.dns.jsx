@@ -4,6 +4,7 @@ function DnsTab(){
   const an=useApi('/api/dns-analytics');
   const _whoDns=useApi('/api/whoami');
   const canEdit=(((_whoDns.data&&_whoDns.data.role)||'viewer')!=='viewer');
+  const {confirm:commit}=useCommit();
   const {delta}=useSnapshots();
   const [volChart,volToggle]=useChartType(['bar','line'],'bar');
   if(locked) return null;
@@ -95,24 +96,35 @@ function DnsTab(){
           </div>
           {row.anomaly?<div className="mono" style={{marginTop:'var(--s2)',fontSize:'var(--t11)',color:'var(--warn)'}}>anomaly flagged</div>:null}
         </div>}
-        bulkActions={sel=>[{
-          label:'Block domain',
-          confirm:'Block '+sel.length+' domain'+(sel.length===1?'':'s')+'?',
-          flash:true,
-          run:()=>{
-            sel.forEach(z=>{
-              const domain=z.fqdn;
-              fetch('/api/block-domain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})})
-                .then(async r=>{
-                  const j=await r.json().catch(()=>({}));
-                  if(r.status===401) toast('Block '+domain+' — requires bridge token','err');
-                  else if(r.ok&&j.ok!==false) toast('Blocked '+domain,'ok');
-                  else toast('Block '+domain+' failed: '+((j&&j.error)||('HTTP '+r.status)),'err');
-                })
-                .catch(()=>toast('Block '+domain+' failed — server unreachable','err'));
-            });
-          }
-        }]}/>
+        bulkActions={sel=>{
+          // Route the bulk zone-block through the shared confirm→diff→rollback dialog:
+          // one decisive step showing the blast radius, then a one-click Unblock receipt.
+          const domains=[...new Set(sel.map(z=>z.fqdn).filter(Boolean))];
+          const N=domains.length;
+          const summary=domains.slice(0,8).map(d=>({glyph:'−',text:'block '+d}));
+          if(domains.length>8) summary.push({glyph:'−',text:'+'+(domains.length-8)+' more'});
+          const loop=async u=>{
+            let ok=0,fail=0;
+            for(const domain of domains){
+              try{
+                const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
+                const j=await r.json().catch(()=>({}));
+                if(r.ok&&j.ok!==false)ok++;else fail++;
+              }catch(e){fail++;}
+            }
+            return {ok,fail};
+          };
+          return [{
+            label:'Block domain',
+            flash:true,
+            run:()=>commit({
+              verb:'block', resource:'domains', label:N+' domains',
+              summary, danger:false, doneText:'Blocked '+N+' domains',
+              run:async()=>{const {ok,fail}=await loop('/api/block-domain');return {ok:fail===0,error:fail?fail+' failed':undefined,data:{ok,fail}};},
+              rollback:{label:'Unblock '+N+' domains', run:async()=>{const {fail}=await loop('/api/unblock-domain');return {ok:fail===0};}},
+            }).catch(()=>{}),
+          }];
+        }}/>
     </Panel>
     {anLoading
       ? <Skeleton rows={3}/>
