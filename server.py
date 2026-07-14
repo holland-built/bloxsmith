@@ -5176,6 +5176,23 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/incidents", e)
                 self._json({"incidents": [], "snoozes": {}})
+        elif path.startswith("/api/incidents/"):
+            # Drill-down for one category's full signal list (fetched on demand —
+            # /api/incidents itself only ships _SAMPLE_CAP entity ids per row).
+            # Untrusted path segment; only ever used as a dict/string comparison
+            # below, never interpolated into anything. Deliberately NOT filtered
+            # by is_snoozed() — a snoozed category must still be inspectable.
+            from urllib.parse import unquote
+            category = unquote(path[len("/api/incidents/"):].strip("/"))
+            try:
+                data = fetch_dashboard_data()
+                matches = [s for s in build_signals(data) if s["category"] == category]
+                count = len(matches)
+                self._json({"category": category, "count": count,
+                            "truncated": count > 500, "signals": matches[:500]})
+            except Exception as e:
+                _log_exc("/api/incidents/category", e)
+                self._json({"category": category, "count": 0, "truncated": False, "signals": []})
         elif path == "/api/mcp/events":
             try:
                 self._json(fetch_mcp_events())
@@ -5809,11 +5826,31 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "error": "admin required"}, 403); return
             if not MCP_HEADERS.get("Authorization") and not self._authed():
                 self._json({"ok": False, "error": "vault locked", "locked": True}, 401); return
-            self._json(apply_self_update()); return
+            result = apply_self_update()
+            # Audited BEFORE the detached recreate thread can tear the container
+            # down (apply_self_update only *starts* that thread; the actual
+            # rename/kill happens seconds later after a health probe), so the
+            # write lands on the same volume-backed log the outgoing process reads.
+            if result.get("ok"):
+                with _update_lock:
+                    target = _update_cache.get("latest") or ""
+                audit_append("self-update-apply", self._actor(),
+                              {"from_version": APP_VERSION, "to_version": target})
+            else:
+                audit_append("self-update-apply-failed", self._actor(),
+                              {"from_version": APP_VERSION, "error": result.get("error")})
+            self._json(result); return
         if self.path == "/api/update/rollback-apply":
             if not MCP_HEADERS.get("Authorization") and not self._authed():
                 self._json({"ok": False, "error": "vault locked", "locked": True}, 401); return
-            self._json(apply_self_update(rollback=True)); return
+            result = apply_self_update(rollback=True)
+            if result.get("ok"):
+                audit_append("self-update-rollback", self._actor(),
+                              {"from_version": APP_VERSION, "to_version": _read_prev_version() or ""})
+            else:
+                audit_append("self-update-rollback-failed", self._actor(),
+                              {"from_version": APP_VERSION, "error": result.get("error")})
+            self._json(result); return
         if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
             self._json({"error": "vault locked", "locked": True}, 503); return
         if self.path != "/api/switch-account":

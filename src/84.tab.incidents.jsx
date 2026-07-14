@@ -27,6 +27,70 @@ function SnoozeControl({category,onSnoozed}){
   </span>;
 }
 
+/* IncidentSignalsPeek — drills a triage row (one correlated category, e.g.
+   "129 subnet utilization") into its actual members. correlate() only keeps
+   sample_entities=group[:5] in the list payload, so this fetches the real,
+   uncapped set from /api/incidents/<category> — ON DEMAND: the effect fires
+   only when this component mounts (i.e. only when the peek opens for this
+   row), keyed+remounted per category via the `key` set at the call site, and
+   is fully separate from incApi's 20s poll (never re-runs on a re-render). */
+function IncidentSignalsPeek({row}){
+  const category=row.category||row.key;
+  const [state,setState]=useState({loading:true,error:null,data:null});
+  const load=()=>{
+    setState(s=>({...s,loading:true,error:null}));
+    const ctrl=new AbortController();
+    fetch('/api/incidents/'+encodeURIComponent(category),{cache:'no-store',signal:ctrl.signal})
+      .then(async r=>{
+        let body=null; try{body=await r.json();}catch(e){}
+        if(!r.ok||!body) throw new Error((body&&body.error)||('HTTP '+r.status));
+        setState({loading:false,error:null,data:body});
+      })
+      .catch(e=>{ if(e.name==='AbortError') return; setState({loading:false,error:String((e&&e.message)||e),data:null}); });
+    return ()=>ctrl.abort();
+  };
+  useEffect(load,[category]); // eslint-disable-line
+  const data=state.data;
+  const signals=(data&&Array.isArray(data.signals))?data.signals:[];
+  // count is the TRUE per-category total (pre-cap) — known instantly from the
+  // triage row itself, so the header reads correctly even before the fetch lands;
+  // once the fetch resolves, its count is the source of truth (same value, server-verified).
+  const trueCount=(data&&typeof data.count==='number')?data.count:(Number(row.count)||0);
+
+  const sigCols=[
+    {key:'entity_id',label:'Entity',id:true},
+    {key:'severity',label:'Sev',width:70,render:v=><SeverityBadge severity={v}/>},
+    {key:'message',label:'Message'},
+    {key:'detected_at',label:'Detected',mono:true,align:'right',render:v=>secEvtAge(v)},
+  ];
+
+  return <div>
+    <div style={{fontWeight:600}}>{row.message||category}</div>
+    <div style={{marginTop:4,display:'flex',alignItems:'center',gap:8,fontSize:'var(--t12)'}}>
+      <SeverityBadge severity={row.severity}/>
+      <span className="mono" style={{color:'var(--text-dim)'}}>{category}</span>
+      <span style={{color:'var(--text-faint)'}}>·</span>
+      <span className="mono" style={{color:'var(--text-dim)'}}>{trueCount.toLocaleString()} total</span>
+    </div>
+    {data&&data.truncated
+      ? <div style={{marginTop:8,fontSize:'var(--t12)',color:'var(--warn)'}}>
+          Showing {signals.length.toLocaleString()} of {trueCount.toLocaleString()} — list capped server-side.</div>
+      : null}
+    <div style={{marginTop:12}}>
+      {state.loading
+        ? <Skeleton rows={5}/>
+        : state.error
+          ? <div style={{fontSize:'var(--t12)',color:'var(--crit)'}}>
+              Failed to load signals: {state.error} <button className="btn btn-ghost" onClick={load}>Retry</button></div>
+          : signals.length===0
+            ? <div style={{fontSize:'var(--t12)',color:'var(--text-faint)'}}>No signals returned for this category.</div>
+            : <DataTable cols={sigCols} rows={signals} rowKey={(s,i)=>String(s.entity_id||i)+'|'+i}
+                tableId={'incidents-peek-'+category} csvName={'incident-'+category} scrollBody={340}
+                filterable maxRows={500}/>}
+    </div>
+  </div>;
+}
+
 /* MCP IQ Actions/events carry 'priority' (low/medium/high), not this app's
    ok/warn/crit vocabulary — map client-side, same as backend/data/fetch_mcp.py's
    _PRIORITY_MAP did server-side in the source app. */
@@ -101,7 +165,8 @@ function IncidentsTab(){
             : incidents.length===0
               ? <div className="dt-empty">No issues detected — all metrics within normal thresholds.</div>
               : <DataTable cols={triageCols} rows={incidents} rowKey={r=>r.key} tableId="incidents-triage"
-                  filterable searchSchema={{fields:{count:{type:'number'}}}} csvName="incidents" maxRows={50}/>}
+                  filterable searchSchema={{fields:{count:{type:'number'}}}} csvName="incidents" maxRows={50}
+                  renderPeek={row=><IncidentSignalsPeek row={row} key={row.category||row.key}/>}/>}
       </Astryx.Card>
     </Panel>
 
