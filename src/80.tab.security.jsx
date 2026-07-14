@@ -2,9 +2,43 @@ const SEC_SEV_RANK={critical:0,high:1,medium:2,low:3};
 const secSevColor=s=>({critical:'var(--crit)',high:'var(--warn)'})[String(s||'').toLowerCase()]||'var(--text-dim)';
 const secAckKey=e=>String(e.event_time)+'|'+String(e.qname);
 function secHumanize(k){return String(k).replace(/^InsightsSummaryView\./,'').replace(/[_.]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()).trim();}
-function secAutoCols(rows){
-  const first=(rows||[]).find(r=>r&&typeof r==='object')||{};
-  return Object.keys(first).map(k=>({key:k,label:secHumanize(k),mono:typeof first[k]==='number',align:typeof first[k]==='number'?'right':'left'}));
+function secAutoCols(rows,tableId){
+  // Sample up to 20 rows, not just the first — the first row can be missing keys others have.
+  const sample=(rows||[]).filter(r=>r&&typeof r==='object').slice(0,20);
+  const seen=new Set(),keys=[];
+  sample.forEach(r=>Object.keys(r).forEach(k=>{if(!seen.has(k)){seen.add(k);keys.push(k);}}));
+  // Dead columns (null/undefined/'' across the whole sample) waste width that matters.
+  const live=keys.filter(k=>sample.some(r=>r[k]!=null&&r[k]!==''));
+  // Priority: name/severity/status/counts first — opaque ids and duplicate timestamps last.
+  const rank=k=>{
+    const s=k.toLowerCase();
+    if(/name|title|label/.test(s)) return 0;
+    if(/severity|status|state/.test(s)) return 1;
+    if(/count|total|events|assets|saved/.test(s)) return 2;
+    if(/source|feed/.test(s)) return 3;
+    if(/time|date|started|recent/.test(s)) return 4;
+    if(s==='id'||/id$/.test(s)) return 5;
+    return 2.5;
+  };
+  const ordered=live.slice().sort((a,b)=>rank(a)-rank(b));
+  const cols=ordered.map(k=>{
+    const v=sample.map(r=>r[k]).find(x=>x!=null);
+    const isNum=typeof v==='number';
+    const isObj=v!=null&&typeof v==='object';
+    const s=k.toLowerCase();
+    const wide=/time|date|started|recent/.test(s)||s==='id'||/id$/.test(s);
+    // Object/array values: DataTable renders those safely elsewhere — don't let them claim width.
+    const minWidth=isObj?80:isNum?70:wide?140:110;
+    return {key:k,label:secHumanize(k),mono:isNum,align:isNum?'right':'left',minWidth};
+  });
+  // Cap what's visible by default in a narrow card; overflow columns stay reachable via the
+  // "⋯ Cols" manager (DataTable's own hiddenCols/LS convention — id = tableId||csvName) so
+  // nothing is silently dropped, just deferred. Only seeds once; a user's own toggle wins after.
+  const CAP=8;
+  if(tableId&&cols.length>CAP&&LS.get('cols.'+tableId,null)===null){
+    LS.set('cols.'+tableId,cols.slice(CAP).map(c=>c.key));
+  }
+  return cols;
 }
 function secEvtAge(t){
   if(t==null||t==='') return '—';
@@ -245,9 +279,14 @@ function SecDossierSourceVal({src}){
   else if(src.geo) bits.push('geo: '+String(src.geo));
   if(src.whois&&typeof src.whois==='object') bits.push('whois: '+[src.whois.registrar,src.whois.created].filter(Boolean).join(' · '));
   else if(src.whois) bits.push('whois: '+String(src.whois));
-  if(src.actor) bits.push('actor: '+String(src.actor));
-  if(src.malware) bits.push('malware: '+(Array.isArray(src.malware)?src.malware.join(', '):String(src.malware)));
-  if(src.detail) bits.push(String(src.detail));
+  // actor/malware/detail are free-shape upstream: String() on an object yields the
+  // useless "[object Object]" (seen live on a real google.com dossier). geo/whois
+  // above already special-case their object form; these three fell through. Route
+  // them via the shared safeCellContent so an object degrades to a readable JSON
+  // preview instead of leaking Object's default toString.
+  if(src.actor) bits.push('actor: '+safeCellContent(src.actor));
+  if(src.malware) bits.push('malware: '+(Array.isArray(src.malware)?src.malware.map(m=>safeCellContent(m)).join(', '):safeCellContent(src.malware)));
+  if(src.detail) bits.push(String(safeCellContent(src.detail)));
   return <span style={{color:'var(--text-dim)',wordBreak:'break-word'}}>{bits.length?bits.join(' · '):'—'}</span>;
 }
 function SecDossier({dossier}){
@@ -394,7 +433,7 @@ function SecInsights(){
   const rows=!data?[]:(Array.isArray(data)?data:(data.data||data.results||data.items||[]));
   if(!rows.length) return null;
   return <Panel title="SOC insights" api={api}>
-    <DataTable cols={secAutoCols(rows)} rows={rows} maxRows={50} csvName="soc-insights"/>
+    <DataTable cols={secAutoCols(rows,'soc-insights')} rows={rows} maxRows={50} csvName="soc-insights"/>
   </Panel>;
 }
 function SecActions(){
@@ -405,7 +444,7 @@ function SecActions(){
   const rows=!data?[]:(Array.isArray(data)?data:(data.actions||data.results||data.data||[]));
   if(!rows.length) return null;
   return <Panel title="Actions" api={api}>
-    <DataTable cols={secAutoCols(rows)} rows={rows} maxRows={50} csvName="actions"/>
+    <DataTable cols={secAutoCols(rows,'actions')} rows={rows} maxRows={50} csvName="actions"/>
   </Panel>;
 }
 
@@ -557,7 +596,10 @@ function SecurityTab(){
     </Panel>
     <div className="grid-dense">
       {/* Table-bearing cards span 2 tracks — FQDN columns are unreadable at 1-track width. */}
-      <div className="gd-wide"><Panel><SecThreatLookup/></Panel></div>
+      {/* alignSelf:start opts this card out of .grid-dense's align-items:stretch — it
+          otherwise inherits the row height of its tall SOC-insights row-mate, and
+          .pcard's own height:100% (shared by every panel) fills that void. */}
+      <div className="gd-wide" style={{alignSelf:'start'}}><Panel><SecThreatLookup/></Panel></div>
       <div className="gd-wide"><Panel><SecLookalikes/></Panel></div>
       <SecInsights/>
       <SecActions/>

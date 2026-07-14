@@ -752,6 +752,29 @@ function useHoverDetail(){
   return {bind};
 }
 
+/* PanelBoundary — catches THROWN render errors from a panel's children so one
+   broken card can't blank the whole app (zero error boundaries existed anywhere
+   in this codebase before this — confirmed via grep; a single render throw was
+   unmounting the entire dashboard to a permanent white screen). Fallback stays
+   inside the existing .pcard-max-note text style (no new tokens) + a .btn-ghost
+   Retry. componentDidUpdate resets on children identity change so fresh data
+   (a real re-render from the parent, not a timer tick) also clears a stuck error,
+   not just the manual Retry click. */
+class PanelBoundary extends React.Component{
+  constructor(p){ super(p); this.state={err:null}; }
+  static getDerivedStateFromError(err){ return {err}; }
+  componentDidCatch(err,info){ console.error('[PanelBoundary]',err,info); }
+  componentDidUpdate(prev){ if(this.state.err&&prev.children!==this.props.children) this.setState({err:null}); }
+  render(){
+    if(this.state.err) return <div className="pcard-max-note">
+      This panel failed to render.
+      <button type="button" className="btn btn-ghost" style={{marginLeft:'var(--s2)'}}
+        onClick={()=>this.setState({err:null})}>Retry</button>
+    </div>;
+    return this.props.children;
+  }
+}
+
 /* Panel({title,side,api,children,empty}) — .pcard wrapper (header + optional .side /
    Freshness). Renders null when empty (dead-section suppression). */
 function Panel({title,side,api,children,empty,size}){
@@ -787,7 +810,7 @@ function Panel({title,side,api,children,empty,size}){
     {head}
     {maxed
       ? <div className="pcard-max-note">Maximized — press Esc or Close to return.</div>
-      : children}
+      : <PanelBoundary>{children}</PanelBoundary>}
     {maxed?<div className="pcard-scrim" onClick={close}>
       <div ref={overlayRef} className="pcard-overlay panel" role="dialog" aria-modal="true"
         aria-label={(title!=null?title:"Panel")+" (maximized)"}
@@ -797,7 +820,7 @@ function Panel({title,side,api,children,empty,size}){
           <button type="button" className="btn btn-ghost" onClick={close}
             aria-label={"Close maximized "+(title!=null?title:"panel")}>Close</button>
         </div>
-        <div className="pcard-overlay-body">{children}</div>
+        <div className="pcard-overlay-body"><PanelBoundary>{children}</PanelBoundary></div>
       </div>
     </div>:null}
   </div>;
