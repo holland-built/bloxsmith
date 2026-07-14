@@ -1,3 +1,4 @@
+// @ts-check
 /* ─────────────────────────────────────────────────────────────
    Phase 2 — write-path safety: one shared confirm→diff→rollback dialog,
    persistent rollback receipts, and a visible demo-mode.
@@ -20,13 +21,14 @@
    }
    ───────────────────────────────────────────────────────────── */
 
+/** @type {Record<string, string>} */
 const GLYPH_LABEL = {'+':'added','~':'changed','−':'removed','-':'removed'};
 
 /* ── demo mode (LS 'mode'==='demo') — set by the first-run wizard's "load demo
    data" door; cleared only when a real tenant connects. Persistent + broadcast so
    the whole session stays visibly non-production. ── */
 function isDemoMode(){ return LS.get('mode', null) === 'demo'; }
-function setDemoMode(on){ LS.set('mode', on ? 'demo' : null); window.dispatchEvent(new CustomEvent('bx:mode')); }
+function setDemoMode(/** @type {boolean} */ on){ LS.set('mode', on ? 'demo' : null); window.dispatchEvent(new CustomEvent('bx:mode')); }
 function useDemoMode(){
   const [demo, setDemo] = useState(isDemoMode());
   useEffect(()=>{ const on=()=>setDemo(isDemoMode()); window.addEventListener('bx:mode', on);
@@ -38,9 +40,9 @@ function useDemoMode(){
 const RCPT_KEY='receipts';
 let _rcptSeq=0;
 function readReceipts(){ const v=LS.get(RCPT_KEY, []); return Array.isArray(v) ? v : []; }
-function writeReceipts(l){ LS.set(RCPT_KEY, l.slice(0,50)); window.dispatchEvent(new CustomEvent('bx:receipts')); }
-function pushReceipt(r){ writeReceipts([{...r, undone:false}, ...readReceipts()]); }
-function markReceiptUndone(id){ writeReceipts(readReceipts().map(r=> r.id===id ? {...r, undone:true} : r)); }
+function writeReceipts(/** @type {any[]} */ l){ LS.set(RCPT_KEY, l.slice(0,50)); window.dispatchEvent(new CustomEvent('bx:receipts')); }
+function pushReceipt(/** @type {any} */ r){ writeReceipts([{...r, undone:false}, ...readReceipts()]); }
+function markReceiptUndone(/** @type {any} */ id){ writeReceipts(readReceipts().map(r=> r.id===id ? {...r, undone:true} : r)); }
 function useReceipts(){
   const [list, setList] = useState(readReceipts());
   useEffect(()=>{ const on=()=>setList(readReceipts()); window.addEventListener('bx:receipts', on);
@@ -52,18 +54,37 @@ function useReceipts(){
 const CommitCtx=React.createContext(null);
 function useCommit(){ return React.useContext(CommitCtx) || {confirm: async()=>{ throw new Error('no CommitProvider'); }}; }
 
+/**
+ * The descriptor the commit dialog consumes. Every tenant-mutating write
+ * passes one of these to useCommit().confirm(). The `resource` union mirrors
+ * the server's edit resources plus the domain-facing labels the UI uses.
+ * @typedef {Object} MutationDescriptor
+ * @property {'create'|'update'|'delete'|'allocate'|'release'|'block'|'retag'|'provision'|'teardown'} verb
+ * @property {'dns_zone'|'subnet'|'address_block'|'dhcp_range'|'host'|'domain'|'domains'|'IP address'|'DNS record'|'site'|'demo sites'} resource
+ * @property {string} [label]
+ * @property {string} [tenantLabel]
+ * @property {{glyph:string,text:string}[]} [summary]
+ * @property {string} [note]
+ * @property {boolean} [danger]
+ * @property {string} [doneText]
+ * @property {string} [errText]
+ * @property {() => Promise<{ok?:boolean,data?:any,error?:string}>} run
+ * @property {{label:string, run:()=>Promise<{ok?:boolean}>}|null} [rollback]
+ */
+
+/** @param {{children: any}} props */
 function CommitProvider({children}){
   const [desc, setDesc] = useState(null);
   const resolver = useRef(null);
   const auth = useAuth();
   const tenant = (auth && (auth.activeAcctName || auth.orgName)) || 'this tenant';
 
-  const confirm = useCallback((d)=> new Promise((resolve, reject)=>{
+  const confirm = useCallback(/** @param {MutationDescriptor} d */ (d)=> new Promise((resolve, reject)=>{
     resolver.current = {resolve, reject};
     setDesc({...d, _tenant: d.tenantLabel || tenant});
   }), [tenant]);
 
-  const close = (result)=>{ const r = resolver.current; resolver.current = null; setDesc(null);
+  const close = (/** @type {any} */ result)=>{ const r = resolver.current; resolver.current = null; setDesc(null);
     if(r){ result ? r.resolve(result) : r.reject(new Error('cancelled')); } };
 
   return <CommitCtx.Provider value={{confirm}}>
@@ -72,6 +93,7 @@ function CommitProvider({children}){
   </CommitCtx.Provider>;
 }
 
+/** @param {{desc: any, onDone: any}} props */
 function CommitDialog({desc, onDone}){
   const demo = useDemoMode();
   const [busy, setBusy] = useState(false);
@@ -95,14 +117,14 @@ function CommitDialog({desc, onDone}){
       }
       toast(desc.doneText || ((desc.verb || 'change') + ' applied'), 'ok');
       onDone({ok:true, data: res && res.data});
-    }catch(e){ toast('Write failed: ' + ((e && e.message) || e), 'crit'); setBusy(false); }
+    }catch(e){ toast('Write failed: ' + ((e && /** @type {any} */(e).message) || e), 'crit'); setBusy(false); }
   };
 
   return ReactDOM.createPortal(
     <div className="commit-scrim" onClick={()=> !busy && onDone(null)}>
       <div className={'commit' + (danger ? ' danger' : '')} role="dialog" aria-modal="true"
-        aria-label="Confirm change" onClick={e=>e.stopPropagation()}
-        onKeyDown={e=>{ if(e.key === 'Escape' && !busy){ e.preventDefault(); onDone(null); } }}>
+        aria-label="Confirm change" onClick={(/** @type {any} */ e)=>e.stopPropagation()}
+        onKeyDown={(/** @type {any} */ e)=>{ if(e.key === 'Escape' && !busy){ e.preventDefault(); onDone(null); } }}>
         <div className="commit-head">
           <span className={'commit-verb' + (danger ? ' danger' : '')}>{(desc.verb || 'change').toUpperCase()}</span>
           <span className="commit-res mono">{desc.label || desc.resource}</span>
@@ -112,7 +134,7 @@ function CommitDialog({desc, onDone}){
         </div>
         {Array.isArray(desc.summary) && desc.summary.length ?
           <div className="commit-diff" role="group" aria-label="Blast radius">
-            {desc.summary.map((s,i)=>
+            {desc.summary.map((/** @type {any} */ s, /** @type {any} */ i)=>
               <div key={i} className="commit-diff-row">
                 <span className="dt-diff mono"><span aria-label={GLYPH_LABEL[s.glyph] || 'changed'}>{s.glyph || '~'}</span></span>
                 <span>{s.text}</span>
@@ -123,7 +145,7 @@ function CommitDialog({desc, onDone}){
           <div className="commit-type">
             <label>Type <b>DELETE</b> to confirm this permanent change</label>
             <input autoFocus className="commit-in mono" value={typed} placeholder="DELETE"
-              onChange={e=>setTyped(e.target.value)} onKeyDown={e=>{ if(e.key === 'Enter') run(); }}/>
+              onChange={(/** @type {any} */ e)=>setTyped(e.target.value)} onKeyDown={(/** @type {any} */ e)=>{ if(e.key === 'Enter') run(); }}/>
           </div> : null}
         <div className="commit-actions">
           <button type="button" className="btn" disabled={busy} onClick={()=>onDone(null)}>Cancel</button>
@@ -136,16 +158,17 @@ function CommitDialog({desc, onDone}){
 
 /* undo closures live in-memory (functions can't be JSON-persisted); the receipt in
    LS survives navigation for display, the closure survives for the session. */
+/** @type {Record<string, any>} */
 const _liveUndo = {};
 function _lastReceiptId(){ const l = readReceipts(); return l.length ? l[0].id : null; }
 
 /* RollbackDock — persistent, always-reachable undo for recent writes. Sits bottom-left;
    shows the newest few un-undone receipts with a real Undo button. */
 function RollbackDock(){
-  const list = useReceipts().filter(r=> !r.undone && _liveUndo[r.id]).slice(0, 3);
+  const list = useReceipts().filter((/** @type {any} */ r)=> !r.undone && _liveUndo[r.id]).slice(0, 3);
   const [busy, setBusy] = useState(null);
   if(!list.length) return null;
-  const undo = async (r)=>{
+  const undo = async (/** @type {any} */ r)=>{
     const fn = _liveUndo[r.id];
     if(!fn || busy) return;
     setBusy(r.id);
@@ -154,11 +177,11 @@ function RollbackDock(){
       if(res && res.ok !== false){ markReceiptUndone(r.id); delete _liveUndo[r.id];
         toast('Rolled back ' + (r.label || r.resource), 'ok'); }
       else toast('Rollback failed', 'crit');
-    }catch(e){ toast('Rollback failed: ' + ((e && e.message) || e), 'crit'); }
+    }catch(e){ toast('Rollback failed: ' + ((e && /** @type {any} */(e).message) || e), 'crit'); }
     setBusy(null);
   };
   return <div className="rollback-dock" role="region" aria-label="Undo recent changes">
-    {list.map(r=>
+    {list.map((/** @type {any} */ r)=>
       <div key={r.id} className="rollback-item">
         <span className="rollback-what"><b>{r.verb}</b> <span className="mono">{r.label}</span></span>
         <button type="button" className="rollback-undo" disabled={busy === r.id} onClick={()=>undo(r)}>
