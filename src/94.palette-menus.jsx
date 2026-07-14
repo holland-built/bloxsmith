@@ -8,18 +8,17 @@ function subseqMatch(needle,hay){
 function CommandPalette({open,onClose}){
   const power=usePower();
   const {data}=useData();
+  const {confirm:commit}=useCommit();
   const inputRef=useRef(null);
   const [q,setQ]=useState('');
   const [sel,setSel]=useState(0);
   const [views,setViews]=useState([]);
-  const [confirmBlock,setConfirmBlock]=useState(null);
-  const [blocking,setBlocking]=useState(false);
   const [slot,setSlot]=useState(null);
   // Mount the saved-views dropdown into the topbar without editing Shell.
   useEffect(()=>{setSlot(document.querySelector('.tools-slot'));},[]);
   useEffect(()=>{
     if(!open) return;
-    setQ('');setSel(0);setConfirmBlock(null);
+    setQ('');setSel(0);
     if(inputRef.current) inputRef.current.focus();
     fetch('/api/views').then(r=>r.ok?r.json():null).then(d=>setViews((d&&d.views)||[])).catch(()=>{});
   },[open]);
@@ -89,7 +88,7 @@ function CommandPalette({open,onClose}){
   const items=[...ctxItems,...base.filter(c=>c.label.toLowerCase().includes(needle))];
   if(typed){
     items.push({label:'Ask: '+typed,kind:'ask',run:()=>{onClose();window.dispatchEvent(new CustomEvent('bx:ai-open',{detail:{q:typed||''}}));}});
-    items.push({label:'Block domain: '+typed,kind:'block',run:()=>setConfirmBlock(typed)});
+    items.push({label:'Block domain: '+typed,kind:'block',run:()=>runBlock(typed)});
     // F8b — fuzzy go-to jump into subnets / zones / hosts (subsequence match, cap 8).
     const dd=data||{};
     const go=[];
@@ -99,23 +98,30 @@ function CommandPalette({open,onClose}){
     (Array.isArray(dd.hosts)?dd.hosts:[]).forEach(h=>add(h.name,()=>nav('infra',{peek:h.name})));
     go.forEach(g=>items.push(g));
   }
-  const runBlock=()=>{
-    const domain=confirmBlock;
-    if(!domain||blocking) return;
-    setBlocking(true);
-    fetch('/api/block-domain',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({domain})})
-      .then(async r=>{
+  // Route the palette's network-wide block through the shared confirm→diff→rollback
+  // dialog (same as SecThreatLookup). block/unblock are each other's inverse, so the
+  // write leaves a one-click rollback receipt. Palette closes on a successful commit.
+  const runBlock=(dom)=>{
+    const domain=String(dom||'').trim();
+    if(!domain) return;
+    const post=async u=>{
+      try{
+        const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
         const j=await r.json().catch(()=>({}));
-        if(r.ok&&j.ok!==false) toast('Blocked '+domain+' network-wide','ok');
-        else toast('Block failed: '+((j&&j.error)||('HTTP '+r.status)),'err');
-      })
-      .catch(()=>toast('Block failed — server unreachable','err'))
-      .finally(()=>{setBlocking(false);setConfirmBlock(null);onClose();});
+        if(r.ok&&j.ok!==false) return {ok:true,data:j};
+        return {ok:false,error:(j&&j.error)||('HTTP '+r.status)};
+      }catch(e){ return {ok:false,error:'server unreachable'}; }
+    };
+    commit({
+      verb:'block', resource:'domain', label:domain,
+      summary:[{glyph:'−',text:'block '+domain+' network-wide'}],
+      danger:false, doneText:'Blocked '+domain+' network-wide',
+      run:()=>post('/api/block-domain'),
+      rollback:{label:'Unblock '+domain, run:()=>post('/api/unblock-domain')},
+    }).then(()=>onClose()).catch(()=>{});
   };
   const onKey=e=>{
-    if(e.key==='Escape'){e.preventDefault(); if(confirmBlock) setConfirmBlock(null); else onClose(); return;}
-    if(confirmBlock){ if(e.key==='Enter'){e.preventDefault();runBlock();} return; }
+    if(e.key==='Escape'){e.preventDefault();onClose();return;}
     if(e.key==='ArrowDown'){e.preventDefault();setSel(s=>Math.min(s+1,Math.max(items.length-1,0)));}
     else if(e.key==='ArrowUp'){e.preventDefault();setSel(s=>Math.max(s-1,0));}
     else if(e.key==='Enter'){e.preventDefault();const it=items[sel];if(it)it.run();}
@@ -128,18 +134,9 @@ function CommandPalette({open,onClose}){
         <input ref={inputRef} className="palette-in mono" value={q} onChange={e=>setQ(e.target.value)}
           onKeyDown={onKey} placeholder="Type a command, question, or domain…"
           aria-label="Command palette" role="combobox" aria-expanded="true"
-          aria-activedescendant={(!confirmBlock&&items.length>0)?('pal-'+sel):undefined}/>
+          aria-activedescendant={items.length>0?('pal-'+sel):undefined}/>
         <div className="panel pal-list" role="listbox" aria-label="Commands">
-          {confirmBlock
-            ? <div className="pal-confirm">
-                <span>Block <span className="mono">{confirmBlock}</span> network-wide?</span>
-                <span style={{display:'inline-flex',gap:8}}>
-                  <button className="btn" style={{borderColor:'var(--crit)',color:'var(--crit)'}}
-                    disabled={blocking} onClick={runBlock}>{blocking?'Blocking…':'Confirm block'}</button>
-                  <button className="btn" disabled={blocking} onClick={()=>setConfirmBlock(null)}>Cancel</button>
-                </span>
-              </div>
-            : items.length===0
+          {items.length===0
               ? <div className="pal-empty">No matching commands</div>
               : items.map((it,i)=>
                 <button key={it.kind+':'+it.label} id={'pal-'+i} className={'pal-row'+(i===sel?' sel':'')}
