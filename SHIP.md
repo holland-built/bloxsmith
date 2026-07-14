@@ -19,3 +19,17 @@ Repo: `github.com/holland-built/bloxsmith`. Run `/release` from anywhere in the 
 
 ## Release
 - none — no GitHub tag/release step.
+
+## Enterprise deploy hardening
+CI signs every pushed image (keyless cosign / Sigstore OIDC) and type-checks the UI before building.
+
+- **Verify the signature** before trusting an image:
+  ```
+  cosign verify ghcr.io/holland-built/bloxsmith:latest \
+    --certificate-identity-regexp 'https://github.com/holland-built/bloxsmith/.+' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com
+  ```
+- **Pin by digest** in `docker-compose.yml` (`image: ghcr.io/holland-built/bloxsmith@sha256:<digest>`) for a reproducible, verifiable deploy. Resolve the digest with `docker buildx imagetools inspect …:latest`.
+- **Auto-update is opt-in.** The Watchtower sidecar is behind the `autoupdate` compose profile (OFF by default). Demo/laptop installs run `docker compose --profile autoupdate up -d`; enterprise updates deliberately on a pinned, verified schedule.
+- **In-app "Update now" is admin-only** (`/api/update/apply` requires an authenticated admin; read-only status/check stay open).
+- **Rollback:** `./rollback.sh` reverts a boot-failed image out-of-band (recreates from `bloxsmith:previous` or a pinned digest, reusing the `noc-vault` volume) — no running app required.
