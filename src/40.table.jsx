@@ -196,7 +196,12 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
       if(typeof c.tipFn==='function'){ try{tip=c.tipFn(r);}catch(e){} }
       else if(c.tip!=null) tip=c.tip;
       if(tip==null) tip=explain(c.key,raw);
-      if(tip==null&&(typeof raw==='string'||typeof raw==='number')) tip=String(raw);
+      // Raw-value fallback ONLY for plain, non-custom-rendered scalar cells. A cell with
+      // its own render() (e.g. "32m ago" whose raw is a full ISO timestamp, util bars,
+      // status badges) must not leak the raw value as a native title tooltip — that's the
+      // confusing "2026-07-14T10:46:20" popover over a relative-time cell. Columns that
+      // do want a tooltip set c.tip / c.tipFn explicitly.
+      if(tip==null&&!c.render&&!c.spark&&(typeof raw==='string'||typeof raw==='number')) tip=String(raw);
       // pivot: clicking a coded value scopes every matching table/panel to it.
       if(c.pivot&&raw!=null&&raw!==''){
         const pv=String(raw), on=fx.has(c.key,pv), lbl=(c.label||c.key)+': '+pv;
