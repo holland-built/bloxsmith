@@ -134,8 +134,12 @@ function IncidentsTab(){
     {key:'count',label:'Count',mono:true,align:'right',width:70},
     {key:'message',label:'Message'},
     {key:'sample_entities',label:'Entities',id:true,idText:v=>(Array.isArray(v)?v:[]).join(', '),render:v=>(Array.isArray(v)?v:[]).join(', ')||'—'},
+    // Rows are peekOnClick now, so this cell must swallow its own clicks — snoozing
+    // a category must never also drill into it.
     {key:'snooze',label:'',width:190,sortable:false,render:(_,row)=>
-      <SnoozeControl category={row.category} onSnoozed={incApi.refetch}/>},
+      <span onClick={e=>e.stopPropagation()}>
+        <SnoozeControl category={row.category} onSnoozed={incApi.refetch}/>
+      </span>},
   ];
 
   const actionsRows=Array.isArray(actionsApi.data)
@@ -166,7 +170,8 @@ function IncidentsTab(){
               ? <div className="dt-empty">No issues detected — all metrics within normal thresholds.</div>
               : <DataTable cols={triageCols} rows={incidents} rowKey={r=>r.key} tableId="incidents-triage"
                   filterable searchSchema={{fields:{count:{type:'number'}}}} csvName="incidents" maxRows={50}
-                  renderPeek={row=><IncidentSignalsPeek row={row} key={row.category||row.key}/>}/>}
+                  peekOnClick
+          renderPeek={row=><IncidentSignalsPeek row={row} key={row.category||row.key}/>}/>}
       </Astryx.Card>
     </Panel>
 
