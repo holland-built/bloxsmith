@@ -60,6 +60,7 @@ function Shell(){
 
   return <PowerProvider>
     <div>
+      <DemoChrome/>
       <TopBar tab={tab} org={org} fresh={fresh} onPalette={()=>setPaletteOpen(true)} onAi={()=>setAiOpen(o=>!o)} aiOpen={aiOpen}/>
       <HealthStrip/>
       <FilterBar/>
@@ -71,6 +72,8 @@ function Shell(){
       <AiDrawer open={aiOpen} onClose={()=>setAiOpen(false)} initialQ={aiQ}/>
       <PeekDrawer/>
       <Scratchpad/>
+      <RollbackDock/>
+      <FirstRunWizard/>
       <Toasts/>
       <ShortcutsHelp/>
       <GhostTour/>
@@ -394,7 +397,7 @@ function GhostTour(){
 }
 
 function App(){
-  return <VaultGate><DataProvider><FilterProvider><TimeProvider><Shell/></TimeProvider></FilterProvider></DataProvider></VaultGate>;
+  return <VaultGate><DataProvider><FilterProvider><TimeProvider><CommitProvider><Shell/></CommitProvider></TimeProvider></FilterProvider></DataProvider></VaultGate>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
