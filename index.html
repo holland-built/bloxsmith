@@ -65,6 +65,7 @@ try{
   color-scheme:dark;
   --bg:#000; --surface:#0a0a0a; --raised:#111; --hover:#1a1a1a;
   --border:#262626; --border-strong:#333;
+  --border-input:#5f5f5f; /* text-field boundary — ≥3:1 vs surface (WCAG 1.4.11) */
   --text:#ededed; --text-dim:#a1a1a1; --text-faint:#8a8a8a;
   --accent:#0070f3; --accent-text:#3291ff;
   --ok:#0cce6b; --warn:#f5a623; --crit:#ff4444;
@@ -84,7 +85,7 @@ try{
 [data-density="comfortable"]{--row-h:32px;}
 [data-theme="light"]{color-scheme:light;
   --bg:#fafafa;--surface:#fff;--raised:#f2f2f2;--hover:#e8e8e8;
-  --border:#e2e2e2;--border-strong:#cfcfcf;
+  --border:#e2e2e2;--border-strong:#cfcfcf;--border-input:#8a8a8a;
   --text:#171717;--text-dim:#525252;--text-faint:#5c5c5c;
   --accent:#0070f3;--accent-text:#0057c2;
   --ok:#047857;--warn:#b45309;--crit:#dc2626;
@@ -135,6 +136,18 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
 .brand-logo{width:24px;height:24px;border-radius:var(--r-ctl);display:flex;align-items:center;justify-content:center;background:var(--raised);border:1px solid var(--border);overflow:hidden;}
 .brand-name{font-size:var(--t13);font-weight:600;color:var(--text);}
 .brand-org{font-size:var(--t12);color:var(--text-dim);}
+
+/* Service-health strip (HealthStrip) — under the tabbar. */
+.health-strip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:4px 16px;border-bottom:1px solid var(--border);background:var(--surface);font-size:var(--t12);}
+.health-strip-label{color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;font-size:10px;}
+.health-seg{display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid transparent;border-radius:var(--r-panel);padding:2px 8px;color:var(--text);font:inherit;cursor:pointer;}
+.health-seg.active{border-color:var(--border-strong);}
+.health-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
+.health-dot.ok{background:var(--ok);}
+.health-dot.warn{background:var(--warn);}
+.health-dot.crit{background:var(--crit);}
+.health-svc{font-weight:500;}
+.health-status{color:var(--text-dim);}
 
 .tabbar{
   display:flex;align-items:center;gap:var(--s1);
@@ -243,7 +256,7 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 .dt-error{color:var(--crit);}
 .dt-error-msg{display:inline-flex;align-items:baseline;gap:var(--s1);color:var(--crit);font-size:var(--t12);}
 .dt-error-tag{font-weight:600;text-transform:uppercase;letter-spacing:.02em;font-size:var(--t11);}
-.dt-toolbar{display:flex;align-items:center;justify-content:flex-end;padding:var(--s2) 0;}
+.dt-toolbar{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;padding:var(--s2) 0;}
 
 /* ── toasts ── */
 .toasts{
@@ -295,7 +308,7 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 .form-col{display:flex;flex-direction:column;gap:var(--s3);}
 .check-row{display:flex;align-items:center;gap:var(--s2);}
 .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
-.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
 .grid-2>*,.grid-3>*{min-width:0;}
 .prose{max-width:72ch;min-width:0;overflow-wrap:anywhere;}
 .band{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s5);width:100%;min-width:0;padding:var(--s5);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);}
@@ -379,7 +392,7 @@ table.dt tbody tr.cursor .row-copyas-wrap,
 .marris-example .mx-tag{font-size:var(--t11);font-weight:600;text-transform:uppercase;letter-spacing:.04em;
   color:var(--text-dim);border:1px solid var(--border);border-radius:var(--r-ctl);padding:1px var(--s2);}
 .marris-example pre.mx-body{margin:0;font-size:var(--t11);white-space:pre-wrap;color:var(--text-dim);}
-.dt-filter{height:26px;padding:0 var(--s2);font-size:var(--t12);color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);min-width:200px;}
+.dt-filter{height:26px;padding:0 var(--s2);font-size:var(--t12);color:var(--text);background:var(--raised);border:1px solid var(--border-input);border-radius:var(--r-ctl);min-width:200px;}
 .dt-filter:focus{border-color:var(--accent);}
 .spark{display:inline-block;vertical-align:middle;}
 
@@ -519,23 +532,11 @@ table.dt tbody tr.cursor .row-copyas-wrap,
 .scratch-foot{display:flex;gap:var(--s2);margin-top:var(--s3);flex-wrap:wrap;}
 .scratch-clear{margin-left:auto;}
 
-/* ── responsive grid column counts + trailing-row fill resets ── */
-@media (max-width:1280px){
-  .grid,.grid-3{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .grid-dense{grid-template-columns:repeat(3,minmax(0,1fr));}
-  .grid>.pcard:last-child:nth-child(n),.grid-3>.pcard:last-child:nth-child(n),.grid-dense>.pcard:last-child:nth-child(n){grid-column:auto;}
-  .grid>.pcard:last-child:nth-child(odd),.grid-3>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
-  .grid-dense>.pcard:nth-child(3n+1):last-child{grid-column:1/-1;}
-  .grid-dense>.pcard:nth-child(3n+2):last-child{grid-column:span 2;}
-}
-@media (max-width:960px){
-  .grid-dense{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .grid-dense>.pcard:last-child:nth-child(n){grid-column:auto;}
-  .grid-dense>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
-}
+/* ── responsive grid column counts ── .grid/.grid-3/.grid-dense now self-size via
+   auto-fit (see base rules); only the fixed 2-col grid still needs a collapse. */
 @media (max-width:720px){
-  .grid,.grid-2,.grid-3,.grid-dense{grid-template-columns:minmax(0,1fr);}
-  .grid>.pcard:last-child:nth-child(n),.grid-2>.pcard:last-child:nth-child(n),.grid-3>.pcard:last-child:nth-child(n),.grid-dense>.pcard:last-child:nth-child(n){grid-column:auto;}
+  .grid-2{grid-template-columns:minmax(0,1fr);}
+  .grid-2>.pcard:last-child:nth-child(n){grid-column:auto;}
 }
 @media (max-width:768px){
   .brand-org{display:none;}
@@ -730,8 +731,8 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .pbody-fill{flex:1 1 auto;min-height:0;}
 .span-2{grid-column:span 2;}
 .chart-body{height:var(--body-chart);display:flex;flex-direction:column;justify-content:center;}
-.pcard>h3{font-size:12.5px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin:0;}
-.pcard>h3 .side{color:var(--text-faint);font-weight:500;font-size:11px;display:inline-flex;align-items:center;gap:var(--s2);flex:none;}
+.pcard>h3{font-size:12.5px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin:0;flex-wrap:wrap;min-width:0;}
+.pcard>h3 .side{color:var(--text-faint);font-weight:500;font-size:11px;display:inline-flex;align-items:center;gap:var(--s2);flex:0 1 auto;min-width:0;flex-wrap:wrap;justify-content:flex-end;}
 /* Panel size floor — routes through the --panel-* scale so boxes stay consistent
    and a panel like Triage is never cramped. Optional; unset panels are unchanged. */
 .pcard.sz-sm{min-height:var(--panel-sm);}
@@ -756,19 +757,20 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .inc-strip .sd{margin:0 2px;}
 .inc-strip-txt{min-width:0;overflow-wrap:anywhere;font-weight:500;}
 
-.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
-.grid-dense{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+/* Card grids track the CONTAINER, not the viewport: auto-fit adds/removes columns
+   as space allows (drawer open, narrow window), so a card that can't fit wraps to
+   the next row instead of crushing its content. Empty trailing tracks collapse,
+   so 3 cards on a wide screen still share the full width. */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+.grid-dense{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+/* Wide cards (tables) take 2 tracks; below ~560px there may be only 1 track, so revert. */
+.grid-dense>.gd-wide{grid-column:span 2;min-width:0;}
+@media (max-width:560px){.grid-dense>.gd-wide{grid-column:auto;}}
 .grid>*,.grid-dense>*{min-width:0;}
-/* trailing-row fill: a lone/partial final row spans so it never leaves a blank column.
-   2-col grids (.grid-2,.ovx-detail): lone odd last child → full width.
-   3-col grids (.grid,.grid-3): 3n+1 lone → full; 3n+2 pair → 2nd spans 2 cols.
-   4-col (.grid-dense): 4n+1 lone → full; 4n+2 → span 3; 4n+3 → span 2. */
+/* trailing-row fill: only the fixed 2-col grids keep nth-child span rules —
+   .grid/.grid-3/.grid-dense col counts now vary with the container (auto-fit),
+   so count-keyed spans would misfire; dense flow backfills holes instead. */
 .grid-2>.pcard:last-child:nth-child(odd),.ovx-detail>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
-.grid>.pcard:nth-child(3n+1):last-child,.grid-3>.pcard:nth-child(3n+1):last-child{grid-column:1/-1;}
-.grid>.pcard:nth-child(3n+2):last-child,.grid-3>.pcard:nth-child(3n+2):last-child{grid-column:span 2;}
-.grid-dense>.pcard:nth-child(4n+1):last-child{grid-column:1/-1;}
-.grid-dense>.pcard:nth-child(4n+2):last-child{grid-column:span 3;}
-.grid-dense>.pcard:nth-child(4n+3):last-child{grid-column:span 2;}
 
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:10px;}
 .kpi{padding:12px 13px;border-radius:var(--r-panel);background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;transition:border-color .16s ease,transform .16s ease;min-width:0;}
@@ -794,11 +796,11 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .sec-h .rule{flex:1;height:1px;background:var(--border);}
 
 .issues{display:flex;flex-direction:column;min-width:0;max-height:var(--body-chart);overflow-y:auto;}
-.issue{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .12s ease;min-width:0;}
+.issue{display:flex;align-items:center;gap:4px 10px;flex-wrap:wrap;padding:8px 6px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .12s ease;min-width:0;}
 .issue:last-child{border-bottom:0;}
 .issue:hover{background:var(--raised);}
 .issue .rank{font-family:'GeistMono',ui-monospace,monospace;color:var(--text-faint);font-size:11px;width:16px;flex:none;}
-.issue .body{flex:1;min-width:0;}
+.issue .body{flex:1 1 150px;min-width:0;}
 .issue .body .t{font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .issue .body .d{color:var(--text-faint);font-size:11px;font-family:'GeistMono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
@@ -1697,7 +1699,7 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
       if(typeof c.tipFn==='function'){ try{tip=c.tipFn(r);}catch(e){} }
       else if(c.tip!=null) tip=c.tip;
       if(tip==null) tip=explain(c.key,raw);
-      if(tip==null&&!c.render&&(typeof raw==='string'||typeof raw==='number')) tip=String(raw);
+      if(tip==null&&(typeof raw==='string'||typeof raw==='number')) tip=String(raw);
       // pivot: clicking a coded value scopes every matching table/panel to it.
       if(c.pivot&&raw!=null&&raw!==''){
         const pv=String(raw), on=fx.has(c.key,pv), lbl=(c.label||c.key)+': '+pv;
@@ -1707,7 +1709,10 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
           onClick={fire}
           onKeyDown={e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fire(e); } }}>{content}</span>;
       }
-      const st=(c.primary||c.width)?{...(c.width?{width:c.width}:{}),...(c.primary?{minWidth:c.minWidth||120}:{})}:null;
+      // table-layout:fixed ignores min-width — a col's floor must be a real `width`
+      // (fixed layout treats it as the column width; extra space still goes to the
+      // unsized cols). minWidth therefore maps to width here, not min-width.
+      const st=(()=>{const w=c.width!=null?c.width:(c.minWidth!=null?c.minWidth:(c.primary?120:null));return w!=null?{width:w}:null;})();
       // Cell copy: plain click copies the raw value. Skipped when the row itself is
       // clickable (row-click already owns that gesture — see DataTable's onRowClick)
       // and on pivot cells (their click already toggles a cross-filter).
@@ -2963,8 +2968,10 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
             const badge=(sEntry&&sort.length>1)?String(sIdx+1):'';
             const arrow=sEntry?(sEntry.dir==='asc'?'↑':'↓'):'';
             return <th key={c.key} className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
-              style={(c.primary||c.width)?{...(c.width?{width:c.width}:{}),...(c.primary?{minWidth:c.minWidth||120}:{})}:null}
+              style={(()=>{const w=c.width!=null?c.width:(c.minWidth!=null?c.minWidth:(c.primary?120:null));return w!=null?{width:w}:null;})()}
               aria-sort={sEntry?(sEntry.dir==='asc'?'ascending':'descending'):'none'}
+              tabIndex={0}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();clickSort(c.key,e.shiftKey);}}}
               onClick={e=>clickSort(c.key,e.shiftKey)}>
               {c.label!=null?c.label:c.key}
               <span className="sort-ind">{badge?<b className="sort-order">{badge}</b>:null}{arrow}</span>
@@ -3154,7 +3161,7 @@ function Stub({name}){
   .vault-card h1{font-size:16px;font-weight:600;margin:0 0 8px;color:var(--text);}
   .vault-card p{font-size:12px;line-height:1.5;color:var(--text-dim);margin:0 0 16px;}
   .vault-card label{display:block;font-size:11px;color:var(--text-dim);margin:12px 0 4px;}
-  .vault-in,.vault-preset{width:100%;height:32px;padding:0 10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:4px;}
+  .vault-in,.vault-preset{width:100%;height:32px;padding:0 10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--raised);border:1px solid var(--border-input);border-radius:4px;}
   .vault-in:focus,.vault-preset:focus{border-color:var(--accent);}
   .vault-preset{cursor:pointer;}
   .vault-err{margin-top:10px;font-size:12px;color:var(--crit);}
@@ -4550,7 +4557,17 @@ function useAiExplain(){
   .ovx-detail .span-4{grid-column:span 4;}
   .ovx-detail .span-6{grid-column:span 6;}
   .ovx-detail .span-8{grid-column:span 8;}
-  @media (max-width:1100px){.ovx-detail{grid-template-columns:minmax(0,1fr);}}
+  /* Intermediate step: below ~1366px a span-3/4 track is <300px — too narrow for
+     donut legends and action rows — so promote to half/full width before the
+     single-column collapse at 1100px. */
+  @media (min-width:1101px) and (max-width:1366px){
+    .ovx-detail .span-3,.ovx-detail .span-4{grid-column:span 6;}
+    .ovx-detail .span-6,.ovx-detail .span-8{grid-column:span 12;}
+  }
+  @media (max-width:1100px){
+    .ovx-detail{grid-template-columns:minmax(0,1fr);}
+    .ovx-detail .span-3,.ovx-detail .span-4,.ovx-detail .span-6,.ovx-detail .span-8{grid-column:auto;}
+  }
 
   /* Compact inline stat strip — replaces the old full-width verdict banner. */
   .ovx .statstrip{display:flex;flex-wrap:wrap;gap:0;margin:0 2px;border:1px solid var(--border);border-radius:var(--r-panel);background:var(--surface);overflow:hidden;}
@@ -4581,12 +4598,14 @@ function useAiExplain(){
   .ovx .band-chip.off .cnt{color:var(--text-faint);}
 
   /* Triage queue rows — worst-first subnets + real action buttons. */
-  .ovx .triage-row{display:grid;grid-template-columns:18px 1fr auto;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border2);align-items:center;}
+  /* Actions live on their own row under the label — an auto track of 4 buttons
+     (~300px max-content) starves the 1fr label to nothing in a span-4 card. */
+  .ovx .triage-row{display:grid;grid-template-columns:18px minmax(0,1fr);gap:4px 10px;padding:8px 4px;border-bottom:1px solid var(--border2);align-items:center;}
   .ovx .triage-row:last-child{border-bottom:0;}
   .ovx .triage-row .idx{font-size:10px;color:var(--text-faint);text-align:right;}
   .ovx .triage-row .what{min-width:0;}
   .ovx .triage-row .what .meta{font-size:10px;color:var(--text-dim);margin-top:2px;}
-  .ovx .triage-row .act{display:flex;gap:5px;flex-wrap:wrap;}
+  .ovx .triage-row .act{grid-column:2;display:flex;gap:5px;flex-wrap:wrap;}
   .ovx .btn-accent{background:var(--accent);border-color:var(--accent);color:#fff;}
   .ovx .btn-accent:hover{background:var(--accent);border-color:var(--accent);}
 
@@ -4967,9 +4986,8 @@ function OverviewTab(){
             rows={leases} rowKey={r=>String(r.addr||r.ip||'')+'|'+String(r.host||'')}
             onRowClick={()=>nav('network')}
             cols={[
-              {key:'addr',label:'IP address',primary:true,minWidth:150,mono:true},
-              {key:'state',label:'State',align:'right',
-                render:v=>{const on=String(v||'').toLowerCase()==='active';return <span className="lchip" style={{color:on?'var(--ok)':'var(--text-dim)'}}>{v}</span>;}},
+              {key:'addr',label:'IP address',primary:true,minWidth:150,mono:true,align:'left'},
+              {key:'state',label:'State',align:'left',render:v=>StateText(v)},
               {key:'host',label:'Hostname',render:v=>v||'—'},
             ]}
             renderPeek={l=><OvPeek title={l.addr} sub={l.host}
@@ -5380,8 +5398,8 @@ function SectionHead({title,children}){
 }
 
 const NET_LEASE_COLS=[
-  {key:'addr',label:'IP',mono:true,align:'left'},
-  {key:'mac',label:'MAC',mono:true,align:'left',render:v=>v||'—'},
+  {key:'addr',label:'IP',mono:true,align:'left',minWidth:130},
+  {key:'mac',label:'MAC',mono:true,align:'left',minWidth:132,render:v=>v||'—'},
   {key:'state',label:'State',align:'left',pivot:true,render:v=>StateText(v)},
   {key:'host',label:'Host'},
 ];
@@ -5636,6 +5654,7 @@ function NetworkTab(){
                   }}]}/>
               </Panel>
             </div>
+            <div style={{gridColumn:'1/-1',minWidth:0}}>
             <Panel title={'All leases · '+leases.length} side={
                 <button className="btn btn-ghost" aria-pressed={leaseCompareOn}
                   disabled={!prev} title={prev?'Diff current leases against yesterday\'s snapshot':'A prior daily snapshot is needed'}
@@ -5653,6 +5672,7 @@ function NetworkTab(){
                 tableId="all-leases" rowKey={leaseKeyFn} selectable
                 diffMap={leaseDiff?leaseDiff.byKey:null} diffGhosts={leaseDiff?leaseDiff.ghosts:null}/>
             </Panel>
+            </div>
             <Panel title="Lease states" side={<span className="mono" style={{color:'var(--text-faint)'}}>{leases.length}</span>} empty={leases.length===0}>
               <Donut slices={leaseSlices} centerValue={leases.length} centerLabel="leases"/>
             </Panel>
@@ -5673,7 +5693,7 @@ function DnsTab(){
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
   const zones=(data&&data.zones)||[];
   const zoneCols=[
-    {key:'fqdn',label:'Zone',mono:true,align:'left'},
+    {key:'fqdn',label:'Zone',mono:true,align:'left',minWidth:220},
     {key:'view',label:'View',hideSm:true,pivot:true},
     {key:'ttl',label:'TTL',mono:true,align:'right',
       render:heatCell(r=>Number(r.ttl),{warn:60,crit:86400,mode:'range',tip:'Flagged: TTL under 60s or over 24h'})},
@@ -5972,7 +5992,7 @@ function InfraTab({vaultTick}={}){
 
   // ── Host inventory ──
   const hostCols=[
-    {key:'name',label:'Host',primary:true},
+    {key:'name',label:'Host',primary:true,minWidth:240},
     {key:'ip',label:'IP',mono:true},
     {key:'type',label:'Type',hideSm:true,pivot:true},
     {key:'status',label:'Status',pivot:true,render:v=><span className="mono infra-st" style={{color:infraStatusColor(v)}}>{v||'—'}</span>},
@@ -6040,11 +6060,13 @@ function InfraTab({vaultTick}={}){
       </Panel>
 
       <Panel title="Status" side={total+' hosts'}>
-        <Donut slices={[
-          {label:'online',value:online,color:'var(--ok)'},
-          {label:'degraded',value:degraded,color:'var(--warn)'},
-          {label:'offline',value:offline,color:'var(--crit)'},
-        ]} centerValue={offline} centerLabel="offline"/>
+        <div className="chart-body">
+          <Donut slices={[
+            {label:'online',value:online,color:'var(--ok)'},
+            {label:'degraded',value:degraded,color:'var(--warn)'},
+            {label:'offline',value:offline,color:'var(--crit)'},
+          ]} centerValue={offline} centerLabel="offline"/>
+        </div>
       </Panel>
 
       <Panel title="By type" empty={byType.length<2} side={byType.length+(byType.length===1?' type':' types')}>
@@ -6280,7 +6302,7 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
       return <input type="checkbox" checked={acked} onClick={ev=>ev.stopPropagation()} onChange={()=>toggleAck(e)} aria-label="Acknowledge event"/>;
     }},
     {key:'severity',label:'Severity',mono:true,pivot:true,render:v=><span style={{color:secSevColor(v),textTransform:'uppercase'}}>{v||'—'}</span>},
-    {key:'qname',label:'Query',mono:true,copy:true,primary:true,render:v=>v||'—'},
+    {key:'qname',label:'Query',mono:true,copy:true,primary:true,minWidth:220,render:v=>v||'—'},
     {key:'spark',label:'24h',render:(_,e)=>{const arr=activityByQname[e.qname];if(!arr)return <span className="mono" style={{color:'var(--text-faint)'}}>—</span>;const nz=arr.filter(x=>x>0).length;return nz>=2?<MiniBars values={arr} width={64} height={16}/>:<span className="mono" style={{color:'var(--text-faint)'}}>—</span>;}},
     {key:'policy_action',label:'Action',pivot:true,render:v=>v||'—'},
     {key:'feed_name',label:'Feed',hideSm:true,pivot:true,render:(v,e)=>{
@@ -6657,11 +6679,12 @@ function SecurityTab(){
       <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} setAcks={setAcks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef} initialPeekKey={route.params.peek} range={effRange} onExplain={ai.open}/>
     </Panel>
     <div className="grid-dense">
-      <Panel><SecThreatLookup/></Panel>
-      <Panel><SecLookalikes/></Panel>
+      {/* Table-bearing cards span 2 tracks — FQDN columns are unreadable at 1-track width. */}
+      <div className="gd-wide"><Panel><SecThreatLookup/></Panel></div>
+      <div className="gd-wide"><Panel><SecLookalikes/></Panel></div>
       <SecInsights/>
       <SecActions/>
-      <Panel><SecDomainPanels/></Panel>
+      <div className="gd-wide"><Panel><SecDomainPanels/></Panel></div>
     </div>
     {ai.node}
   </div>;
@@ -6675,7 +6698,7 @@ function SecurityTab(){
   const s=document.createElement('style');s.id='bx-askglobal-styles';
   s.textContent=`
   .ask-bar{display:flex;gap:8px;}
-  .ask-in{flex:1 1 auto;height:36px;padding:0 12px;font-size:13px;color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);}
+  .ask-in{flex:1 1 auto;height:36px;padding:0 12px;font-size:13px;color:var(--text);background:var(--raised);border:1px solid var(--border-input);border-radius:var(--r-ctl);}
   .ask-in:focus{border-color:var(--accent);}
   .ask-busy{margin-top:8px;font-size:12px;color:var(--text-faint);}
   .ai-ctx{font-size:11px;color:var(--text-faint);}
@@ -9118,23 +9141,17 @@ function HealthStrip(){
     {id:'security', label:'Security', tab:'security', sev:lvl(crit>0, high>0),          values:[crit,high,med]},
   ];
 
-  return <div className="health-strip" role="group" aria-label="Service health"
-    style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',padding:'4px 16px',
-      borderBottom:'1px solid var(--border)',background:'var(--surface)',fontSize:12}}>
-    <span className="health-strip-label" style={{color:'var(--text-faint)',textTransform:'uppercase',letterSpacing:'.05em',fontSize:10}}>Service health</span>
+  return <div className="health-strip" role="group" aria-label="Service health">
+    <span className="health-strip-label">Service health</span>
     {services.map(s=>{
       const active=route.tab===s.tab;
       return <button key={s.id} type="button" className={'health-seg '+s.sev+(active?' active':'')}
         aria-pressed={active}
         aria-label={s.label+' — '+HEALTH_TXT[s.sev]+'. Open the '+s.label+' section.'}
-        onClick={()=>nav(s.tab)}
-        style={{display:'inline-flex',alignItems:'center',gap:6,background:'none',
-          border:'1px solid '+(active?'var(--border-strong)':'transparent'),borderRadius:6,
-          padding:'2px 8px',color:'var(--text)',font:'inherit',cursor:'pointer'}}>
-        <i className={'health-dot '+s.sev} aria-hidden="true"
-          style={{width:8,height:8,borderRadius:'50%',background:col(s.sev),flex:'0 0 auto'}}/>
-        <span className="health-svc" style={{fontWeight:500}}>{s.label}</span>
-        <span className="health-status" style={{color:'var(--text-dim)'}}>{HEALTH_TXT[s.sev]}</span>
+        onClick={()=>nav(s.tab)}>
+        <i className={'health-dot '+s.sev} aria-hidden="true"/>
+        <span className="health-svc">{s.label}</span>
+        <span className="health-status">{HEALTH_TXT[s.sev]}</span>
         <Sparkline values={s.values} width={40} height={14} color={col(s.sev)}/>
       </button>;
     })}
