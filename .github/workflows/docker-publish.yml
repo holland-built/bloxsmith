@@ -33,6 +33,17 @@ jobs:
         id: ver
         run: echo "version=1.0.$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
 
+      # Phase 1: index.html loads a precompiled app.bundle.js built from src/*.jsx.
+      # The bundle is committed (the image build stays python-only, no node stage),
+      # so this gate fails the build if someone edited src/ without rebuilding.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify UI bundle is current
+        run: node scripts/build_ui.js --check
+
       - name: Set up QEMU (for cross-arch builds)
         uses: docker/setup-qemu-action@v3
 
