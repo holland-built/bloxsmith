@@ -13,6 +13,7 @@ on:
 permissions:
   contents: write   # write: lets the master build cut a vX.Y.Z release
   packages: write
+  id-token: write   # keyless cosign signing via the Sigstore OIDC token
 
 # Run JS-based actions on Node 24 (Node 20 is deprecated on runners). Opt-in env
 # avoids churning every action's major version. Remove once the actions default
@@ -44,6 +45,12 @@ jobs:
       - name: Verify UI bundle is current
         run: node scripts/build_ui.js --check
 
+      # Scoped type gate (tsconfig.json is added by a companion change). Runs on
+      # the same Node 24 setup above, BEFORE the image is built, so a type error
+      # fails the build instead of shipping.
+      - name: Type-check (tsc --noEmit)
+        run: npx -y typescript@latest tsc --noEmit -p tsconfig.json
+
       - name: Set up QEMU (for cross-arch builds)
         uses: docker/setup-qemu-action@v3
 
@@ -70,6 +77,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -81,6 +89,20 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Keyless (OIDC) signing of the pushed image by digest. No private key —
+      # the signature is bound to this workflow's identity and stored in the
+      # registry's transparency log. Verify with:
+      #   cosign verify ghcr.io/holland-built/bloxsmith:latest \
+      #     --certificate-identity-regexp 'https://github.com/holland-built/bloxsmith/.+' \
+      #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the pushed image (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: cosign sign --yes ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
 
       # Auto-publish a GitHub Release for this build so the in-app update check
       # (which polls the Releases API) sees every master push. Runs only on the
