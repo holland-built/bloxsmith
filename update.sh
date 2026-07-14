@@ -3,6 +3,8 @@
 # Copies your local index.html into the running 'bloxsmith' container for fast
 # UI iteration. It does NOT update the app. To actually update, use the in-app
 # "Update now" button or:  docker compose pull && docker compose up -d
+# To REVERT a bad update (new image won't boot), use ./rollback.sh — it recreates
+# the container from bloxsmith:previous (or a pinned digest) without the app.
 set -euo pipefail
 
 CONTAINER="bloxsmith"   # the container serving http://127.0.0.1:8080

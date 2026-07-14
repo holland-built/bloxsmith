@@ -5790,6 +5790,11 @@ class Handler(BaseHTTPRequestHandler):
                 _pull_state.update(rolledback=False, rollback_from=None, rollback_to=None)
             self._json({"ok": True}); return
         if self.path == "/api/update/apply":
+            # Admin-only: a self-update recreates the container, so only an
+            # authenticated admin may trigger it. _role_at_least audits the
+            # denial; we return the 403 (read-only status/check stay ungated).
+            if not self._role_at_least("admin"):
+                self._json({"ok": False, "error": "admin required"}, 403); return
             if not MCP_HEADERS.get("Authorization") and not self._authed():
                 self._json({"ok": False, "error": "vault locked", "locked": True}, 401); return
             self._json(apply_self_update()); return
