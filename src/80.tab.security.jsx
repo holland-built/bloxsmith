@@ -38,8 +38,7 @@ function SecChips({options,value,onChange}){
 /* Peek (F4) — full event detail with inline ack toggle + two-step Block. */
 function SecEventPeek({e,acks,toggleAck,onExplain}){
   const [acked,setAcked]=useState(!!acks[secAckKey(e)]);
-  const [confirm,setConfirm]=useState(false);
-  const [blocking,setBlocking]=useState(false);
+  const {confirm:commit}=useCommit();
   const fields=[
     ['Time',secEvtAge(e.event_time)+' · '+String(e.event_time??'—')],
     ['Query',e.qname],
@@ -50,17 +49,27 @@ function SecEventPeek({e,acks,toggleAck,onExplain}){
     ['Device',e.device],
     ['Network',e.network],
   ];
-  const doBlock=async()=>{
-    const domain=String(e.qname||'').trim(); if(!domain) return;
-    setConfirm(false);setBlocking(true);
+  // Same shared confirm→diff→rollback dialog as the rest of the write paths; block
+  // and unblock are inverses so the operator gets a one-click rollback receipt.
+  const postDomain=async(domain,u)=>{
     try{
-      const r=await fetch('/api/block-domain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
+      const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
       const body=await r.json().catch(()=>({}));
-      if(r.status===401) toast('Blocking requires bridge token','err');
-      else if(r.ok&&body.ok) toast('Blocked '+domain,'ok');
-      else toast(body.error||('HTTP '+r.status),'err');
-    }catch(err){toast(String((err&&err.message)||err),'err');}
-    setBlocking(false);
+      if(r.status===401) return {ok:false,error:'requires bridge token'};
+      if(r.ok&&body.ok) return {ok:true,data:body};
+      return {ok:false,error:body.error||('HTTP '+r.status)};
+    }catch(err){ return {ok:false,error:String((err&&err.message)||err)}; }
+  };
+  const doBlock=()=>{
+    const domain=String(e.qname||'').trim(); if(!domain) return;
+    commit({
+      verb:'block', resource:'domain', label:domain,
+      summary:[{glyph:'−', text:'Block resolution of '+domain+' network-wide'}],
+      note:'Every client on this tenant will stop resolving the domain.',
+      doneText:'Blocked '+domain,
+      run:()=>postDomain(domain,'/api/block-domain'),
+      rollback:{label:'Unblock '+domain, run:()=>postDomain(domain,'/api/unblock-domain')},
+    }).catch(()=>{});
   };
   return <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
     <dl style={{margin:0,display:'grid',gridTemplateColumns:'auto 1fr',gap:'var(--s1) var(--s3)',fontSize:'var(--t12)'}}>
@@ -74,13 +83,7 @@ function SecEventPeek({e,acks,toggleAck,onExplain}){
       Acknowledged
     </label>
     <div style={{display:'flex',gap:'var(--s2)',alignItems:'center',flexWrap:'wrap'}}>
-      {confirm
-        ? <span style={{display:'inline-flex',gap:'var(--s2)',alignItems:'center',flexWrap:'wrap'}}>
-            <span style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>Block {e.qname}?</span>
-            <button className="btn" disabled={blocking} onClick={doBlock}>Confirm</button>
-            <button className="btn btn-ghost" onClick={()=>setConfirm(false)}>Cancel</button>
-          </span>
-        : <button className="btn" disabled={!e.qname||blocking} onClick={()=>setConfirm(true)}>{blocking?'Blocking…':'Block domain'}</button>}
+      <button className="btn" disabled={!e.qname} onClick={doBlock}>Block domain</button>
       {onExplain&&<button className="btn btn-ghost" onClick={()=>onExplain([e])}>Explain</button>}
     </div>
   </div>;
