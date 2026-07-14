@@ -262,10 +262,10 @@ function SecThreatLookup(){
   const [res,setRes]=useState(null);
   const [dossier,setDossier]=useState(null);
   const [err,setErr]=useState(null);
-  const [confirm,setConfirm]=useState(null);
+  const {confirm:commit}=useCommit();
   const lookup=async()=>{
     const query=q.trim(); if(!query) return;
-    setBusy(true);setErr(null);setRes(null);setDossier(null);setConfirm(null);
+    setBusy(true);setErr(null);setRes(null);setDossier(null);
     fetch('/api/dossier?q='+encodeURIComponent(query),{cache:'no-store'})
       .then(r=>r.json().catch(()=>null))
       .then(j=>{if(j)setDossier(j);})
@@ -278,17 +278,29 @@ function SecThreatLookup(){
     }catch(e){setErr(String((e&&e.message)||e));}
     setBusy(false);
   };
-  const write=async(kind)=>{
+  // Shared confirm→diff→rollback dialog. Block and unblock are each other's inverse,
+  // so every write leaves a real one-click rollback receipt.
+  const postDomain=async(domain,u)=>{
+    try{
+      const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
+      const body=await r.json().catch(()=>({}));
+      if(r.status===401) return {ok:false,error:'requires bridge token'};
+      if(r.ok&&body.ok) return {ok:true,data:body};
+      return {ok:false,error:body.error||('HTTP '+r.status)};
+    }catch(e){ return {ok:false,error:String((e&&e.message)||e)}; }
+  };
+  const doWrite=(kind)=>{
     const domain=q.trim(); if(!domain) return;
     const url=kind==='block'?'/api/block-domain':'/api/unblock-domain';
-    setConfirm(null);
-    try{
-      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
-      const body=await r.json().catch(()=>({}));
-      if(r.status===401) toast('Requires bridge token','err');
-      else if(r.ok&&body.ok) toast((kind==='block'?'Blocked ':'Unblocked ')+domain,'ok');
-      else toast(body.error||('HTTP '+r.status),'err');
-    }catch(e){toast(String((e&&e.message)||e),'err');}
+    const invUrl=kind==='block'?'/api/unblock-domain':'/api/block-domain';
+    commit({
+      verb:kind, resource:'domain', label:domain,
+      summary:[{glyph:kind==='block'?'−':'+', text:(kind==='block'?'Block resolution of ':'Restore resolution of ')+domain+' network-wide'}],
+      note:kind==='block'?'Every client on this tenant will stop resolving the domain.':'Clients on this tenant can resolve the domain again.',
+      doneText:(kind==='block'?'Blocked ':'Unblocked ')+domain,
+      run:()=>postDomain(domain,url),
+      rollback:{label:(kind==='block'?'Unblock ':'Re-block ')+domain, run:()=>postDomain(domain,invUrl)},
+    }).catch(()=>{});
   };
   return <div>
     <SecHead title="Threat lookup"/>
@@ -302,16 +314,8 @@ function SecThreatLookup(){
     {res&&<div style={{marginBottom:'var(--s3)'}}><SecEntities entities={res.entities}/></div>}
     <SecDossier dossier={dossier}/>
     <div style={{display:'flex',alignItems:'center',gap:'var(--s2)',flexWrap:'wrap',marginTop:'var(--s3)'}}>
-      {confirm==='block'
-        ? <><span style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>Block {q.trim()}?</span>
-            <button className="btn" onClick={()=>write('block')}>Confirm block</button>
-            <button className="btn btn-ghost" onClick={()=>setConfirm(null)}>Cancel</button></>
-        : <button className="btn" disabled={!q.trim()} onClick={()=>setConfirm('block')}>Block domain</button>}
-      {confirm==='unblock'
-        ? <><span style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>Unblock {q.trim()}?</span>
-            <button className="btn" onClick={()=>write('unblock')}>Confirm unblock</button>
-            <button className="btn btn-ghost" onClick={()=>setConfirm(null)}>Cancel</button></>
-        : <button className="btn btn-ghost" disabled={!q.trim()} onClick={()=>setConfirm('unblock')}>Unblock domain</button>}
+      <button className="btn" disabled={!q.trim()} onClick={()=>doWrite('block')}>Block domain</button>
+      <button className="btn btn-ghost" disabled={!q.trim()} onClick={()=>doWrite('unblock')}>Unblock domain</button>
     </div>
   </div>;
 }
