@@ -74,8 +74,10 @@ class BackendTests(unittest.TestCase):
 
     def test_static_files(self):
         # React 19 ESM boot: react/react-dom UMD are gone; the vendored ESM bundle +
-        # Babel serve as javascript, and the Astryx stylesheet as CSS. See plans/018.
-        for f in ("babel.min.js", "vendor.react-19-2-7.8c3b2ed6.js"):
+        # the compiled app bundle serve as javascript, the Astryx stylesheet as CSS.
+        # Phase 1: in-browser Babel is retired — app.bundle.js (precompiled from
+        # src/*.jsx) is the runtime JS asset. See plans/STACK-EVOLUTION-PLAN.md.
+        for f in ("app.bundle.js", "vendor.react-19-2-7.8c3b2ed6.js"):
             status, ct, _ = get(f"/{f}")
             self.assertEqual(status, 200, f"{f} returned {status}")
             self.assertIn("javascript", ct, f"{f} wrong content-type")
@@ -562,8 +564,21 @@ class FrontendStructureTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Phase 1: the SPA's JS moved out of an inline <script> into src/*.jsx
+        # fragments (compiled to app.bundle.js); CSS still lives inline in index.html.
+        # Concatenate index.html + the RAW JSX source so both CSS assertions (from the
+        # HTML) and JS assertions (from the source, verbatim-identical to the old inline
+        # script) resolve unchanged.
+        parts = []
         with open(HTML, encoding="utf-8") as f:
-            cls.html = f.read()
+            parts.append(f.read())
+        srcdir = os.path.join(DIR, "src")
+        if os.path.isdir(srcdir):
+            for name in sorted(os.listdir(srcdir)):
+                if name.endswith(".jsx"):
+                    with open(os.path.join(srcdir, name), encoding="utf-8") as f:
+                        parts.append(f.read())
+        cls.html = "\n".join(parts)
 
     def assertContains(self, needle, msg=None):
         self.assertIn(needle, self.html, msg or f"Missing: {needle!r}")
@@ -1225,13 +1240,17 @@ class FrontendStructureTests(unittest.TestCase):
 
     def test_react_script_tags(self):
         # React 19 ESM boot (no UMD — React 19 ships none): importmap maps react/
-        # react-dom to local vendored files, Babel stays for in-browser JSX, and the
-        # app block runs as a module. See plans/018.
+        # react-dom to local vendored files. Phase 1: in-browser Babel is retired —
+        # index.html loads the precompiled app.bundle.js as a native ES module.
+        # See plans/STACK-EVOLUTION-PLAN.md.
         self.assertContains('<script type="importmap">', "React ESM importmap missing")
         self.assertContains('"react": "./vendor.react-', "react importmap entry missing")
         self.assertContains('"react-dom/client": "./vendor.react-dom-', "react-dom/client importmap entry missing")
-        self.assertContains('<script src="babel.min.js">', "babel.min.js script tag missing")
-        self.assertContains('type="text/babel" data-type="module"', "app block must run as a Babel module")
+        self.assertContains('<script type="module" src="./app.bundle.js">',
+                            "index.html must load the compiled app.bundle.js as a native module")
+        # In-browser Babel must no longer be loaded at runtime.
+        self.assertEqual(self.html.count('<script src="babel.min.js">'), 0,
+                         "in-browser babel.min.js must not be loaded (retired in Phase 1)")
         # The dead UMD tags must be gone.
         self.assertEqual(self.html.count('src="react.min.js"'), 0, "legacy UMD react.min.js tag must be removed")
 
@@ -1830,8 +1849,21 @@ class OverviewRedesignTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Phase 1: the SPA's JS moved out of an inline <script> into src/*.jsx
+        # fragments (compiled to app.bundle.js); CSS still lives inline in index.html.
+        # Concatenate index.html + the RAW JSX source so both CSS assertions (from the
+        # HTML) and JS assertions (from the source, verbatim-identical to the old inline
+        # script) resolve unchanged.
+        parts = []
         with open(HTML, encoding="utf-8") as f:
-            cls.html = f.read()
+            parts.append(f.read())
+        srcdir = os.path.join(DIR, "src")
+        if os.path.isdir(srcdir):
+            for name in sorted(os.listdir(srcdir)):
+                if name.endswith(".jsx"):
+                    with open(os.path.join(srcdir, name), encoding="utf-8") as f:
+                        parts.append(f.read())
+        cls.html = "\n".join(parts)
 
     def _overview_tab(self):
         i = self.html.index("function OverviewTab(")
@@ -2070,9 +2102,18 @@ class BqlParserTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # NUL-safe read (index.html carries stray NUL bytes).
-        with open(HTML, "rb") as f:
-            cls.src = f.read().replace(b"\x00", b" ").decode("utf-8", "replace")
+        # NUL-safe read (index.html carries stray NUL bytes). Phase 1: the BQL sentinel
+        # blocks moved into src/*.jsx, so read index.html + the raw JSX source.
+        def _read(p):
+            with open(p, "rb") as f:
+                return f.read().replace(b"\x00", b" ").decode("utf-8", "replace")
+        parts = [_read(HTML)]
+        srcdir = os.path.join(DIR, "src")
+        if os.path.isdir(srcdir):
+            for name in sorted(os.listdir(srcdir)):
+                if name.endswith(".jsx"):
+                    parts.append(_read(os.path.join(srcdir, name)))
+        cls.src = "\n".join(parts)
 
     def _block(self, name):
         a = self.src.index(f"/* ==BQL:{name}:start== */")
