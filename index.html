@@ -35,6 +35,14 @@
   --radius-element: var(--r-ctl);
   --radius-container: var(--r-panel);
 }
+/* Astryx's button paints its variant BACKGROUND but declares no `color` of its own,
+   so the app's `button{color:inherit}` reset (~l.105) leaks whatever ancestor text
+   colour happens to be nearby. The Audit "Export Audit Log" primary sits inside the
+   panel header's <span class="side">, which is --text-faint: measured #5c5c5c on the
+   primary blue = 1.47:1 (AA needs 4.5). Inheriting a colour is never right for a
+   button whose background is fixed by its variant — pin the variant's own token so
+   placement can't decide legibility. */
+.astryx-button.primary{color:var(--color-on-accent);}
 </style>
 <script>
 /* no-flash theme boot — runs before styles parse. bx.theme is stored as JSON
