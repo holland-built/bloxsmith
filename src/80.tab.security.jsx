@@ -88,6 +88,7 @@ function SecEventPeek({e,acks,toggleAck,onExplain}){
 
 function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triageRef,initialPeekKey,range,onExplain}){
   const {data,error,locked,fetchedAt,refetch,loading}=api;
+  const {confirm:commit}=useCommit();
   const [actF,setActF]=useState('all');
   // Real 24h activity — bucket ALL events per qname by hour-of-day from real event_time.
   const activityByQname=useMemo(()=>{
@@ -159,19 +160,32 @@ function SecTriageInbox({api,sevF,setSevF,acks,setAcks,toggleAck,clearAcks,triag
       setAcks(next);LS.set('acks',next);
       toast(rws.length+' acked','ok',{duration:5000,action:{label:'Undo',run:()=>{setAcks(prev);LS.set('acks',prev);}}});
     }},
-    {label:'Block domains',confirm:'Block '+rws.length+' domain'+(rws.length===1?'':'s')+'?',flash:true,run:async()=>{
+    {label:'Block domains',flash:true,run:()=>{
+      // Bulk block routed through the shared confirm→diff→rollback dialog: the loop
+      // + ok/fail tally moves into run(); one Unblock receipt covers the whole batch.
       const domains=[...new Set(rws.map(e=>e.qname).filter(Boolean))];
-      let ok=0,fail=0,auth=false;
-      for(const domain of domains){
-        try{
-          const r=await fetch('/api/block-domain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
-          if(r.status===401){auth=true;break;}
-          const body=await r.json().catch(()=>({}));
-          if(r.ok&&body.ok)ok++;else fail++;
-        }catch(e){fail++;}
-      }
-      if(auth) toast('Blocking requires bridge token','err');
-      else toast(ok+' domain'+(ok===1?'':'s')+' blocked'+(fail?' · '+fail+' failed':''),(fail&&!ok)?'err':'ok');
+      const N=domains.length;
+      const summary=domains.slice(0,8).map(d=>({glyph:'−',text:'block '+d}));
+      if(domains.length>8) summary.push({glyph:'−',text:'+'+(domains.length-8)+' more'});
+      const loop=async u=>{
+        let ok=0,fail=0,auth=false;
+        for(const domain of domains){
+          try{
+            const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
+            if(r.status===401){auth=true;break;}
+            const body=await r.json().catch(()=>({}));
+            if(r.ok&&body.ok)ok++;else fail++;
+          }catch(e){fail++;}
+        }
+        return {ok,fail,auth};
+      };
+      return commit({
+        verb:'block', resource:'domains', label:N+' domains',
+        summary, danger:false, doneText:'Blocked '+N+' domains',
+        run:async()=>{const {ok,fail,auth}=await loop('/api/block-domain');
+          return {ok:!auth&&fail===0,error:auth?'requires bridge token':(fail?fail+' failed':undefined),data:{ok,fail}};},
+        rollback:{label:'Unblock '+N+' domains', run:async()=>{const {fail}=await loop('/api/unblock-domain');return {ok:fail===0};}},
+      }).catch(()=>{});
     }},
     ...(onExplain?[{label:'Explain '+rws.length,run:()=>onExplain(rws)}]:[]),
   ];
@@ -387,6 +401,7 @@ function SecActions(){
 
 function SecLookalikes(){
   const {data,error,locked,fetchedAt,refetch,loading}=useApi('/api/lookalikes');
+  const {confirm:commit}=useCommit();
   if(locked) return null;
   if(loading&&!data) return <div><SecHead title="Lookalike domains"/><Skeleton rows={8}/></div>;
   const d=data||{};
@@ -400,22 +415,35 @@ function SecLookalikes(){
     {key:'suspicious',label:'Suspicious',render:heatCell(r=>r.suspicious?1:0,{crit:1,tip:'Flagged: host marked suspicious',fmt:(v,r)=>r.suspicious?'yes':'no'})},
     {key:'detected_at',label:'Detected',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
   ];
-  const bulkActions=rws=>[
-    {label:'Block domains',confirm:'Block '+rws.length+' domain'+(rws.length===1?'':'s')+'?',flash:true,run:async()=>{
-      const domains=[...new Set(rws.map(r=>r.lookalike).filter(Boolean))];
+  const bulkActions=rws=>{
+    // Bulk block routed through the shared confirm→diff→rollback dialog: loop + tally
+    // move into run(); the batch gets a single Unblock rollback receipt.
+    const domains=[...new Set(rws.map(r=>r.lookalike).filter(Boolean))];
+    const N=domains.length;
+    const summary=domains.slice(0,8).map(d=>({glyph:'−',text:'block '+d}));
+    if(domains.length>8) summary.push({glyph:'−',text:'+'+(domains.length-8)+' more'});
+    const loop=async u=>{
       let ok=0,fail=0,auth=false;
       for(const domain of domains){
         try{
-          const r=await fetch('/api/block-domain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
+          const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain})});
           if(r.status===401){auth=true;break;}
           const body=await r.json().catch(()=>({}));
           if(r.ok&&body.ok)ok++;else fail++;
         }catch(e){fail++;}
       }
-      if(auth) toast('Blocking requires bridge token','err');
-      else toast(ok+' domain'+(ok===1?'':'s')+' blocked'+(fail?' · '+fail+' failed':''),(fail&&!ok)?'err':'ok');
-    }},
-  ];
+      return {ok,fail,auth};
+    };
+    return [
+      {label:'Block domains',flash:true,run:()=>commit({
+        verb:'block', resource:'domains', label:N+' domains',
+        summary, danger:false, doneText:'Blocked '+N+' domains',
+        run:async()=>{const {ok,fail,auth}=await loop('/api/block-domain');
+          return {ok:!auth&&fail===0,error:auth?'requires bridge token':(fail?fail+' failed':undefined),data:{ok,fail}};},
+        rollback:{label:'Unblock '+N+' domains', run:async()=>{const {fail}=await loop('/api/unblock-domain');return {ok:fail===0};}},
+      }).catch(()=>{})},
+    ];
+  };
   return <div>
     <SecHead title="Lookalike domains" at={fetchedAt} onRetry={refetch} error={error}>
       <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>{rows.length+' detected'+(Array.isArray(d.targets)&&d.targets.length?' · '+d.targets.length+' target'+(d.targets.length===1?'':'s'):'')}</span>

@@ -111,6 +111,7 @@ function MarrisExampleDiff(){
 function SelfServiceTab(){
   const {locked}=useData();
   const {bind}=useHoverDetail();
+  const {confirm}=useCommit();
   const zonesApi=useApi('/api/dns/zones');
   const [mode,setMode]=useState('allocate'); // 'allocate' | 'dns' | 'ipman' | 'inventory'
 
@@ -188,22 +189,31 @@ function SelfServiceTab(){
 
   const addRecord=()=>{
     if(!dnsZoneId||addBusy) return;
-    setAddBusy(true);setAddErr(null);
     const body={zone_id:dnsZoneId,name_in_zone:addName,type:addType,value:addValue};
     if(addTtl!=='') body.ttl=Number(addTtl);
     if(addComment) body.comment=addComment;
-    fetch('/api/dns/records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-      .then(async r=>{
-        const j=await r.json().catch(()=>({}));
-        setAddBusy(false);
-        if(!r.ok||j.error||j.ok===false){
-          const msg=(j&&j.error)||('HTTP '+r.status);
-          setAddErr(msg);toast('Add record failed: '+msg,'err');return;
-        }
-        setAddName('');setAddValue('');setAddTtl('');setAddComment('');setAddErr(null);
-        toast('Record added','ok');recordsApi.refetch();
-      })
-      .catch(e=>{setAddBusy(false);const msg=String((e&&e.message)||e);setAddErr(msg);toast('Add record failed — '+msg,'err');});
+    const nm=addName||'@';
+    confirm({
+      verb:'create', resource:'DNS record', label:nm+' '+addType,
+      summary:[{glyph:'+', text:'create '+addType+' record '+nm}],
+      danger:false, rollback:null, doneText:'Record added', errText:'Add record failed',
+      run:()=>{
+        setAddBusy(true);setAddErr(null);
+        return fetch('/api/dns/records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+          .then(async r=>{
+            const j=await r.json().catch(()=>({}));
+            setAddBusy(false);
+            if(!r.ok||j.error||j.ok===false){
+              const msg=(j&&j.error)||('HTTP '+r.status);
+              setAddErr(msg);return {ok:false,error:msg};
+            }
+            setAddName('');setAddValue('');setAddTtl('');setAddComment('');setAddErr(null);
+            recordsApi.refetch();
+            return {ok:true};
+          })
+          .catch(e=>{setAddBusy(false);const msg=String((e&&e.message)||e);setAddErr(msg);return {ok:false,error:msg};});
+      },
+    }).catch(()=>{});
   };
 
   const startEdit=(r)=>{
@@ -213,36 +223,55 @@ function SelfServiceTab(){
   const cancelEdit=()=>setEditingId(null);
   const saveEdit=()=>{
     if(editBusy||editingId==null) return;
-    setEditBusy(true);
+    const rec=records.find(r=>r.id===editingId);
+    const nm=(rec&&rec.name_in_zone)||'@';
     const body={id:editingId,value:editValue,comment:editComment,disabled:editDisabled};
     body.ttl=editTtl!==''?Number(editTtl):undefined;
-    fetch('/api/dns/records',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-      .then(async r=>{
-        const j=await r.json().catch(()=>({}));
-        setEditBusy(false);
-        if(!r.ok||j.error||j.ok===false){
-          const msg=(j&&j.error)||('HTTP '+r.status);
-          toast('Edit failed: '+msg,'err');return;
-        }
-        setEditingId(null);toast('Record updated','ok');recordsApi.refetch();
-      })
-      .catch(e=>{setEditBusy(false);toast('Edit failed — '+String((e&&e.message)||e),'err');});
+    confirm({
+      verb:'update', resource:'DNS record', label:nm,
+      summary:[{glyph:'~', text:'update record '+nm}],
+      danger:false, rollback:null, doneText:'Record updated', errText:'Edit failed',
+      run:()=>{
+        setEditBusy(true);
+        return fetch('/api/dns/records',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+          .then(async r=>{
+            const j=await r.json().catch(()=>({}));
+            setEditBusy(false);
+            if(!r.ok||j.error||j.ok===false){
+              const msg=(j&&j.error)||('HTTP '+r.status);
+              return {ok:false,error:msg};
+            }
+            setEditingId(null);recordsApi.refetch();
+            return {ok:true};
+          })
+          .catch(e=>{setEditBusy(false);return {ok:false,error:String((e&&e.message)||e)};});
+      },
+    }).catch(()=>{});
   };
   const deleteRecord=(r)=>{
-    const label=(r.type||'')+' record '+(r.name_in_zone||'@')+' → '+(r.dns_rdata||'');
-    if(!window.confirm('Delete '+label+'?')) return;
-    setDeletingId(r.id);
-    fetch('/api/dns/records/'+encodeURIComponent(r.id),{method:'DELETE'})
-      .then(async resp=>{
-        const j=await resp.json().catch(()=>({}));
-        setDeletingId(null);
-        if(!resp.ok||j.error||j.ok===false){
-          const msg=(j&&j.error)||('HTTP '+resp.status);
-          toast('Delete failed: '+msg,'err');return;
-        }
-        toast('Record deleted','ok');recordsApi.refetch();
-      })
-      .catch(e=>{setDeletingId(null);toast('Delete failed — '+String((e&&e.message)||e),'err');});
+    const nm=r.name_in_zone||'@';
+    const rdata=r.dns_rdata||'';
+    confirm({
+      verb:'delete', resource:'DNS record', label:nm,
+      summary:[{glyph:'−', text:'delete '+(r.type||'')+' record '+nm+' → '+rdata}],
+      danger:true, note:'This permanently removes the record from the tenant.',
+      rollback:null, doneText:'Record deleted', errText:'Delete failed',
+      run:()=>{
+        setDeletingId(r.id);
+        return fetch('/api/dns/records/'+encodeURIComponent(r.id),{method:'DELETE'})
+          .then(async resp=>{
+            const j=await resp.json().catch(()=>({}));
+            setDeletingId(null);
+            if(!resp.ok||j.error||j.ok===false){
+              const msg=(j&&j.error)||('HTTP '+resp.status);
+              return {ok:false,error:msg};
+            }
+            recordsApi.refetch();
+            return {ok:true};
+          })
+          .catch(e=>{setDeletingId(null);return {ok:false,error:String((e&&e.message)||e)};});
+      },
+    }).catch(()=>{});
   };
 
   const recordCols=[
@@ -272,20 +301,27 @@ function SelfServiceTab(){
   ];
 
   const releaseAddress=(r)=>{
-    const label='address '+(r.address||r.name||r.id);
-    if(!window.confirm('Release '+label+'?')) return;
-    setReleasingId(r.id);
-    fetch('/api/ipam/addresses/'+encodeURIComponent(r.id),{method:'DELETE'})
-      .then(async resp=>{
-        let j=null;try{j=await resp.json();}catch(e){j=null;}
-        setReleasingId(null);
-        if(!resp.ok||(j&&j.error)||(j&&j.ok===false)){
-          const msg=(j&&j.error)||('HTTP '+resp.status);
-          toast('Release failed: '+msg,'err');return;
-        }
-        toast('Address released','ok');addrApi.refetch();availApi.refetch();
-      })
-      .catch(e=>{setReleasingId(null);toast('Release failed — '+String((e&&e.message)||e),'err');});
+    const addr=r.address||r.name||r.id;
+    confirm({
+      verb:'release', resource:'IP address', label:addr,
+      summary:[{glyph:'−', text:'release '+addr}],
+      danger:true, rollback:null, doneText:'Address released', errText:'Release failed',
+      run:()=>{
+        setReleasingId(r.id);
+        return fetch('/api/ipam/addresses/'+encodeURIComponent(r.id),{method:'DELETE'})
+          .then(async resp=>{
+            let j=null;try{j=await resp.json();}catch(e){j=null;}
+            setReleasingId(null);
+            if(!resp.ok||(j&&j.error)||(j&&j.ok===false)){
+              const msg=(j&&j.error)||('HTTP '+resp.status);
+              return {ok:false,error:msg};
+            }
+            addrApi.refetch();availApi.refetch();
+            return {ok:true};
+          })
+          .catch(e=>{setReleasingId(null);return {ok:false,error:String((e&&e.message)||e)};});
+      },
+    }).catch(()=>{});
   };
 
   const addrCols=[
@@ -314,7 +350,6 @@ function SelfServiceTab(){
   const subnetLabel=s=>(s.address||'')+(s.cidr?('/'+s.cidr):'')+(s.name?(' — '+s.name):'');
 
   const submit=()=>{
-    setBusy(true);setErr(null);setResult(null);
     const body={
       count:Number(count)||1,
       name,
@@ -324,18 +359,32 @@ function SelfServiceTab(){
     if(tagKey) body.tag_key=tagKey;
     if(tagValue) body.tag_value=tagValue;
     if(dnsOn) body.dns={zone_id:zoneId,name:recName,type:recType,value:recValue};
-    fetch('/api/selfservice/allocate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-      .then(async r=>{
-        const j=await r.json().catch(()=>({}));
-        setBusy(false);
-        if(!r.ok||j.ok===false){
-          const msg=(j&&j.error)||('HTTP '+r.status);
-          setErr(msg);toast('Allocation failed: '+msg,'err');return;
-        }
-        setResult(j);
-        toast((dry?'Dry run':'Allocation')+' complete','ok');
-      })
-      .catch(e=>{setBusy(false);const msg=String((e&&e.message)||e);setErr(msg);toast('Allocation failed — '+msg,'err');});
+    // Fetch + panel state; no toast — caller (dry path) or the commit dialog (live path) toasts.
+    const doPost=()=>{
+      setBusy(true);setErr(null);setResult(null);
+      return fetch('/api/selfservice/allocate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(async r=>{
+          const j=await r.json().catch(()=>({}));
+          setBusy(false);
+          if(!r.ok||j.ok===false){
+            const msg=(j&&j.error)||('HTTP '+r.status);
+            setErr(msg);return {ok:false,error:msg};
+          }
+          setResult(j);
+          return {ok:true,data:j};
+        })
+        .catch(e=>{setBusy(false);const msg=String((e&&e.message)||e);setErr(msg);return {ok:false,error:msg};});
+    };
+    if(dry){
+      doPost().then(res=>{res.ok?toast('Dry run complete','ok'):toast('Allocation failed: '+res.error,'err');});
+      return;
+    }
+    confirm({
+      verb:'allocate', resource:'IP address', label:name,
+      summary:[{glyph:'+', text:'allocate '+(Number(count)||1)+' address(es)'+(dnsOn?' + DNS record':'')}],
+      danger:false, rollback:null, doneText:'Allocation complete', errText:'Allocation failed',
+      run:doPost,
+    }).catch(()=>{});
   };
 
   // Example prefill (secondary, kebab): seeds the allocate form with illustrative
