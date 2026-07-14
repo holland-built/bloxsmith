@@ -70,6 +70,17 @@ docker compose pull && docker compose up -d    # customer/compose
 
 Your vault (tenant keys, passphrase) lives in the `noc-vault` volume and survives every update.
 
+### Automatic updates — your choice at install
+
+Pick one; you are never forced into either:
+
+| Mode | How | Who it's for |
+|------|-----|--------------|
+| **Manual only (default)** | `docker compose up -d` | **Enterprise / production.** Nothing ever changes on its own; an admin clicks **Update now** (or runs the pull) when they choose. Recommended when the app holds live-tenant write credentials. |
+| **Auto-update** | `docker compose --profile autoupdate up -d` | **SE demo laptops.** A Watchtower sidecar pulls new releases automatically so a demo box is always current. |
+
+If a new image ever fails to boot, revert from the shell with `./rollback.sh` (works even when the app is down). Enterprise installs should also pin an exact, signed image by digest — see `SHIP.md`.
+
 ## Get your Infoblox API key
 
 1. Sign in to <https://csp.infoblox.com>.
