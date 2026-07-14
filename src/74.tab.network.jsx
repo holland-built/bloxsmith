@@ -218,7 +218,15 @@ function NetworkTab(){
               <ChartView type={siteChart} data={siteRows} onBar={r=>flt.toggle('site',r.site,'Site: '+r.site)}/>
             </Panel>
             <Panel title="Top consumers" empty={topN.length===0}>
-              <div className="issues">
+              {/* Same short-sheeting as Overview's Top consumers: .issues carries
+                  max-height:var(--body-chart) (220px, a small-chart token) but this card
+                  is stretched to ~568px by the taller "Capacity by site" beside it —
+                  measured 315px of dead void with rows still hidden. Fill the card and
+                  scroll inside it. basis MUST be 0, not auto, or the list's own content
+                  re-inflates the card and drags the whole grid row with it.
+                  Only correct where a taller sibling defines the row height — the Daily
+                  and Infra .issues lists SIZE their own cards, so they keep the cap. */}
+              <div className="issues" style={{maxHeight:'none',flex:'1 1 0',minHeight:0}}>
                 {topN.map((s,i)=>{
                   const go=()=>nav('network',{subnet:s.addr||s.id});
                   const hb=bind({title:(s.addr||'')+(s.cidr?('/'+s.cidr):''),
