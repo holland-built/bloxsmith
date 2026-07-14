@@ -280,6 +280,15 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
   background:var(--hover);opacity:.6;
 }
 .skel-row{height:14px;margin:var(--s2) 0;}
+.skel-note{display:block;font-size:var(--t12);color:var(--text-dim);margin:0 0 var(--s3);}
+
+/* ── boot splash — static HTML inside #root so the very first paint is never a
+   blank screen; React's root.render() replaces it once the app mounts. ── */
+.boot-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s3);background:var(--bg);}
+.boot-spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:boot-spin .7s linear infinite;}
+.boot-title{font-size:var(--t16);font-weight:600;color:var(--text);letter-spacing:.02em;}
+.boot-note{font-size:var(--t12);color:var(--text-dim);}
+@keyframes boot-spin{to{transform:rotate(360deg);}}
 
 /* ── stub ── */
 .stub{
@@ -849,7 +858,13 @@ table.dt tbody td{border-bottom-color:var(--border2);}
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root">
+  <div class="boot-splash">
+    <div class="boot-spinner"></div>
+    <div class="boot-title">Bloxsmith</div>
+    <div class="boot-note">Starting up&hellip;</div>
+  </div>
+</div>
 
 <script type="text/babel" data-type="module" data-presets="react">
 import React from "react";
@@ -3031,9 +3046,10 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
 }
 
 /* 9. Skeleton loader (shimmer-free). */
-function Skeleton({rows=4}){
+function Skeleton({rows=4,label}){
   const widths=[62,88,50,74,42,68];
-  return <div aria-busy="true" aria-label="Loading" style={{padding:'6px 2px'}}>
+  return <div aria-busy="true" aria-label={label||'Loading'} style={{padding:'6px 2px'}}>
+    {label?<span className="skel-note">{label}</span>:null}
     {Array.from({length:rows}).map((_,i)=>
       <span key={i} className="skel skel-row" style={{width:widths[i%widths.length]+'%'}}/>)}
   </div>;
@@ -5222,7 +5238,7 @@ function DailyTab(){
 
   // Vault locked → gate handles it (after all hooks). Loading → skeleton.
   if(locked) return null;
-  if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
+  if(loading&&!data) return <div className="page"><Skeleton rows={8} label="Collecting data from Infoblox — first load can take a minute…"/></div>;
 
   const baseLabel=firstRun?'first check-in — no prior day yet'
     :(baseline?('vs '+baseline.date):(weekSnap||yesterdaySnap?'no comparison for this period':'no prior day yet'));
@@ -5445,7 +5461,7 @@ function NetworkTab(){
   const _whoNet=useApi('/api/whoami');
   const canEdit=(((_whoNet.data&&_whoNet.data.role)||'viewer')!=='viewer');
   if(locked) return null;
-  if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
+  if(loading&&!data) return <div className="page"><Skeleton rows={8} label="Collecting data from Infoblox — first load can take a minute…"/></div>;
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
   const subnets=(data&&data.subnets)||[];
   const leases=(data&&data.leases)||[];
@@ -5689,7 +5705,7 @@ function DnsTab(){
   const canEdit=(((_whoDns.data&&_whoDns.data.role)||'viewer')!=='viewer');
   const {delta}=useSnapshots();
   if(locked) return null;
-  if(loading&&!data) return <div className="page"><Skeleton rows={8}/></div>;
+  if(loading&&!data) return <div className="page"><Skeleton rows={8} label="Collecting data from Infoblox — first load can take a minute…"/></div>;
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
   const zones=(data&&data.zones)||[];
   const zoneCols=[
