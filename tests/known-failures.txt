@@ -14,7 +14,6 @@
 # One test per line, exactly as Playwright reports it: <file> :: <title>
 audit-highs.spec.ts :: H2 — WatchMenu: role=menu, menuitems, first-item focus on open, Esc closes + returns focus
 density.spec.ts :: density toggle grows row height and persists across reload
-drill-down.spec.ts :: clicking a subnet row drills into leases, back restores the table
 lookalikes.spec.ts :: an unavailable lookalikes feed shows the not-entitled empty state
 lookalikes.spec.ts :: lookalikes panel renders the returned domains
 multi-sort.spec.ts :: a plain click resets to single-sort on that column, dropping secondary keys
@@ -25,11 +24,9 @@ network-charts.spec.ts :: clicking a site bar filters the subnet table by that s
 overview-redesign.spec.ts :: fix 7 — compact stat strip replaces the big banner
 pivot-cell.spec.ts :: keyboard: Shift+F10 on a focused ordinary cell opens the same pivot action
 pivot-cell.spec.ts :: right-click on an ordinary cell offers "Filter by this value" and narrows the table
-saved-views.spec.ts :: save, apply, and delete a saved view via the UI
 synthesis.spec.ts :: #ask leads with a synthesis .band above its table
 synthesis.spec.ts :: #overview leads with a synthesis .band above its table
 tab-consistency.spec.ts :: Editor renders its PageHeader + resource-type switcher
-theme.spec.ts :: toggle flips html[data-theme] and persists across reload
 time-graph.spec.ts :: time-range preset writes t= into the URL hash and is optional by default
 time-preset.spec.ts :: palette "Last 24h" preset injects last:24h into the active table search and narrows it
 time-preset.spec.ts :: palette "Last 7d" preset includes the 1h/10m rows but still excludes the 10-day-old row

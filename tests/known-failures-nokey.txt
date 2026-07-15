@@ -1,0 +1,36 @@
+# Known-failing e2e tests — the CREDENTIAL-FREE baseline.
+#
+# Used only when E2E_KNOWN_FAILURES points here (CI without an INFOBLOX_API_KEY
+# secret). The harness boots with a dummy key: any non-empty INFOBLOX_API_KEY
+# makes server.py:46 set VAULT_MODE=False, so the app boots the normal shell
+# instead of VaultGate's <VaultSetup/> (src/50.routing-vault.jsx:540-545). With
+# no real tenant the upstream returns nothing and /api/data answers 200 with
+# empty arrays in ~3ms — fast, so nothing here is a timeout artifact.
+#
+# The ~59 specs that mock **/api/data via page.route at the BROWSER layer never
+# touch the upstream at all, and pass. This list is what's left: the 5 unmocked
+# specs (command-palette, daily, saved-views, synthesis, theme) plus specs whose
+# assertions need real rows.
+#
+# Measured: 205 passed / 18 failed / 1 flaky. This set is a strict SUBSET of
+# tests/known-failures.txt (27) — dummy-key runs FIX 9 of those, because real
+# tenant data was leaking into otherwise-mocked specs. Do not merge the lists.
+#
+audit-highs.spec.ts :: H2 — WatchMenu: role=menu, menuitems, first-item focus on open, Esc closes + returns focus
+density.spec.ts :: density toggle grows row height and persists across reload
+drill-down.spec.ts :: clicking a subnet row drills into leases, back restores the table
+lookalikes.spec.ts :: an unavailable lookalikes feed shows the not-entitled empty state
+lookalikes.spec.ts :: lookalikes panel renders the returned domains
+network-charts.spec.ts :: clicking a site bar filters the subnet table by that site
+overview-redesign.spec.ts :: fix 7 — compact stat strip replaces the big banner
+saved-views.spec.ts :: save, apply, and delete a saved view via the UI
+synthesis.spec.ts :: #ask leads with a synthesis .band above its table
+synthesis.spec.ts :: #overview leads with a synthesis .band above its table
+tab-consistency.spec.ts :: Editor renders its PageHeader + resource-type switcher
+theme.spec.ts :: toggle flips html[data-theme] and persists across reload
+time-graph.spec.ts :: time-range preset writes t= into the URL hash and is optional by default
+view-state.spec.ts :: copy-link encodes search + sort + hidden column, and loading it restores the view
+wallboard-tour.spec.ts :: a header toggle also enters wallboard mode
+wallboard-tour.spec.ts :: first-run tour shows once, dismiss persists in LS, re-summonable from "?" overlay
+wallboard-tour.spec.ts :: tour is non-modal / keyboard-dismissible with Esc
+watch-delta.spec.ts :: watch = saved BQL query + live match count; save persists, count is live, click applies

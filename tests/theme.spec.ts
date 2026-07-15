@@ -12,7 +12,11 @@ test('toggle flips html[data-theme] and persists across reload', async ({ page }
   const before = await page.evaluate(() => document.documentElement.dataset.theme);
   expect(['light', 'dark']).toContain(before);
 
-  // The toggle button shows the OTHER theme's name (dark -> "Light").
+  // The theme toggle now lives two levels deep in the topbar overflow:
+  // ⋯ (MoreMenu) -> gear (ViewOptions, with density + wallboard) -> toggle.
+  // Both panels are display:none when closed, so open them in order.
+  await page.getByRole('button', { name: /^More tools/ }).click();
+  await page.getByRole('button', { name: 'View options' }).click();
   const toggle = page.getByRole('button', { name: 'Toggle color theme' });
   await expect(toggle).toBeVisible();
   await toggle.click();

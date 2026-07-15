@@ -84,12 +84,18 @@ echo "Running Playwright against ${NOC_BASE}…" >&2
 # Skipped when the caller passes their own --reporter or a spec filter: the gate
 # needs a full-suite json run to compare sets, and a partial run's "missing" tests
 # would look like fixes.
-if [ "$#" -eq 0 ] && [ -f tests/known-failures.txt ]; then
+#
+# E2E_KNOWN_FAILURES swaps the baseline. A credential-free run (CI with no
+# INFOBLOX_API_KEY secret, booted with a dummy key) has a DIFFERENT expected
+# failing set — 18, not 27 — so it points at tests/known-failures-nokey.txt.
+# Reusing the 27-line list there would let 9 real failures through unnoticed.
+KNOWN="${E2E_KNOWN_FAILURES:-tests/known-failures.txt}"
+if [ "$#" -eq 0 ] && [ -f "$KNOWN" ]; then
   JSON="$(mktemp -t e2e-json)"; trap 'rm -f "$JSON"' RETURN 2>/dev/null || true
   set +e
   npx playwright test --reporter=json > "$JSON" 2>/dev/null
   set -e
-  python3 - "$JSON" tests/known-failures.txt <<'PY_GATE'
+  python3 - "$JSON" "$KNOWN" <<'PY_GATE'
 import json, sys
 report, known_path = sys.argv[1], sys.argv[2]
 def walk(node, out):

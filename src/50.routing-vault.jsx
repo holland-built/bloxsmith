@@ -48,13 +48,20 @@ function parseHash(){
   }
   return {tab,params};
 }
-function nav(tab,params){
+/* nav(tab,params[,replace]) — writes the hash route.
+   replace=true swaps the current history entry instead of pushing a new one; use it
+   for state MIRRORS (a table serializing its own sort/cols/search into the URL) as
+   opposed to real user navigations. Without it, mounting a table spends a history
+   entry, so one user action costs two — and Back then only rewinds the mirror,
+   leaving the user stuck on the same screen. location.replace() still fires
+   hashchange for a hash-only change, so useRoute stays in sync either way. */
+function nav(tab,params,replace){
   const t=LEGACY[tab]||tab;
   let h='#'+t;
   if(params&&Object.keys(params).length){
     h+='?'+new URLSearchParams(params).toString();
   }
-  location.hash=h;
+  if(replace) location.replace(h); else location.hash=h;
 }
 function useRoute(){
   const [route,setRoute]=useState(parseHash());

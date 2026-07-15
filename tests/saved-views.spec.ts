@@ -5,6 +5,18 @@ import { test, expect } from '@playwright/test';
 
 const VIEW_NAME = 'e2e-test-view';
 
+// ViewsMenu portals into .tools-slot inside the topbar ⋯ overflow (MoreMenu),
+// which is display:none when closed — so the Views button is unreachable until
+// ⋯ is open. Open it on demand (it stays open between Views clicks, but a
+// reload resets it).
+async function openViews(page: import('@playwright/test').Page) {
+  const views = page.getByRole('button', { name: 'Views', exact: true });
+  if (!(await views.isVisible().catch(() => false))) {
+    await page.getByRole('button', { name: /^More tools/ }).click();
+  }
+  await views.click();
+}
+
 test('save, apply, and delete a saved view via the UI', async ({ page }) => {
   // Pre-clean any leftover from a previous failed run so re-runs pass.
   await page.request.delete('/api/views/' + encodeURIComponent(VIEW_NAME)).catch(() => {});
@@ -15,18 +27,15 @@ test('save, apply, and delete a saved view via the UI', async ({ page }) => {
   await page.goto('/#network');
   await expect(page.locator('.tabbar')).toBeVisible();
 
-  const viewsBtn = page.getByRole('button', { name: 'Views', exact: true });
-  await expect(viewsBtn).toBeVisible();
-
   // Save current view.
-  await viewsBtn.click();
+  await openViews(page);
   await page.locator('.views-item', { hasText: 'Save current…' }).click();
   // Toast confirms the POST landed.
   await expect(page.locator('.toast', { hasText: VIEW_NAME })).toBeVisible();
 
   // Reload -> view persisted server-side, appears in the menu.
   await page.reload();
-  await page.getByRole('button', { name: 'Views', exact: true }).click();
+  await openViews(page);
   const savedRow = page.locator('.views-row', { hasText: VIEW_NAME });
   await expect(savedRow).toBeVisible();
 
@@ -35,7 +44,7 @@ test('save, apply, and delete a saved view via the UI', async ({ page }) => {
   await expect(page.locator('.toast', { hasText: 'applied' })).toBeVisible();
 
   // Delete it: two-step confirm (✕ -> delete).
-  await page.getByRole('button', { name: 'Views', exact: true }).click();
+  await openViews(page);
   const row = page.locator('.views-row', { hasText: VIEW_NAME });
   await row.getByRole('button', { name: 'Delete view ' + VIEW_NAME }).click();
   await row.locator('.views-mini.crit', { hasText: 'delete' }).click();
