@@ -98,7 +98,16 @@ if [ "$#" -eq 0 ] && [ -f "$KNOWN" ]; then
   # showed up on a Linux CI runner. An explicit template works on both.
   JSON="$(mktemp "${TMPDIR:-/tmp}/e2e-json.XXXXXX")"
   set +e
-  npx playwright test --reporter=json > "$JSON" 2>/dev/null
+  # Keep stderr: when the json comes back empty the ONLY clue lives there, and
+  # discarding it turns "the report is empty" into an unfixable mystery (it did).
+  ERR="$(mktemp "${TMPDIR:-/tmp}/e2e-err.XXXXXX")"
+  npx playwright test --reporter=json > "$JSON" 2>"$ERR"
+  if [ ! -s "$JSON" ]; then
+    echo "e2e: playwright wrote no report. Its stderr:" >&2
+    tail -20 "$ERR" >&2
+    rm -f "$ERR"; exit 1
+  fi
+  rm -f "$ERR"
   set -e
   python3 - "$JSON" "$KNOWN" <<'PY_GATE'
 import json, sys
