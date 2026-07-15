@@ -32,11 +32,13 @@ if ! grep -q '^INFOBLOX_API_KEY=.\+' .env; then
   exit 1
 fi
 
+JSON=""   # set later if the known-failure gate runs; cleaned up by the same trap
 cleanup() {
   local code=$?
   echo "Tearing down ${NAME}…" >&2
   docker rm -f "$NAME" >/dev/null 2>&1 || true
   docker volume rm "$VOLUME" >/dev/null 2>&1 || true
+  [ -n "$JSON" ] && rm -f "$JSON"
   exit "$code"
 }
 # A single EXIT trap covers normal exit, errors (set -e), and signals (Ctrl-C) —
@@ -91,7 +93,10 @@ echo "Running Playwright against ${NOC_BASE}…" >&2
 # Reusing the 27-line list there would let 9 real failures through unnoticed.
 KNOWN="${E2E_KNOWN_FAILURES:-tests/known-failures.txt}"
 if [ "$#" -eq 0 ] && [ -f "$KNOWN" ]; then
-  JSON="$(mktemp -t e2e-json)"; trap 'rm -f "$JSON"' RETURN 2>/dev/null || true
+  # Portable across BSD/macOS and GNU/Linux: `mktemp -t PREFIX` is fine on macOS but
+  # GNU requires the template to end in XXXXXX ("too few X's in template") — which only
+  # showed up on a Linux CI runner. An explicit template works on both.
+  JSON="$(mktemp "${TMPDIR:-/tmp}/e2e-json.XXXXXX")"
   set +e
   npx playwright test --reporter=json > "$JSON" 2>/dev/null
   set -e
