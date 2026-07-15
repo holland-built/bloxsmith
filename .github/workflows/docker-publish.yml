@@ -22,6 +22,86 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Playwright against a throwaway container built from THIS commit (scripts/e2e.sh) —
+  # closes the gap where 46/64 specs inherited a live-stack baseURL and 5 commits
+  # shipped this year verified only by hand (see scripts/e2e.sh header).
+  #
+  # Deliberately has no `needs:`/`if:` tie to build-push and build-push has no
+  # `needs: e2e` either — they run in parallel, so a Playwright flake or the
+  # harness container's own startup time never slows or blocks the publish path.
+  # A failure here is a visible red X on the commit (and blocks the "Cut release"
+  # step below it only in spirit, not by CI mechanics) — not a hard release gate.
+  # Rationale: the harness rebuilds the whole image a second time from source,
+  # which is the slowest step in this file; gating `push: true` on that would
+  # turn every infra flake (e.g. registry hiccup) into a blocked release for a
+  # dashboard that today ships same-day fixes. Revisit once the quarantine list
+  # in scripts/e2e.sh's sibling specs is burned down and the suite is stable
+  # enough to trust as a hard gate.
+  # Gate: the harness needs a real tenant key (the app has no mock backend, and
+  # unmocked specs need live data). Rather than fail every push until someone adds
+  # the secret — a permanently-red CI is a CI nobody reads — detect it and let the
+  # e2e job SKIP. Skipped shows grey, not green: it can't be mistaken for "tests
+  # passed". Add INFOBLOX_API_KEY as a repo secret to switch e2e on.
+  # `secrets` is not readable from a job-level `if:`, hence this one-step job.
+  e2e-creds:
+    runs-on: ubuntu-latest
+    outputs:
+      present: ${{ steps.check.outputs.present }}
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.INFOBLOX_API_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::e2e skipped — no INFOBLOX_API_KEY secret. Add it to enable the Playwright harness."
+          fi
+
+  e2e:
+    needs: e2e-creds
+    if: needs.e2e-creds.outputs.present == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('playwright.config.ts') }}
+
+      - name: Install Playwright + Chromium
+        run: npx -y playwright@1.61.1 install --with-deps chromium
+
+      - name: Write .env for the harness
+        run: |
+          {
+            echo "INFOBLOX_URL=https://csp.infoblox.com"
+            echo "INFOBLOX_API_KEY=${INFOBLOX_API_KEY}"
+          } > .env
+        env:
+          INFOBLOX_API_KEY: ${{ secrets.INFOBLOX_API_KEY }}
+
+      - name: Run e2e harness
+        run: ./scripts/e2e.sh
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
   build-push:
     runs-on: ubuntu-latest
     steps:

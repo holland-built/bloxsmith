@@ -1,0 +1,12 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:8090",
+      "localStorage": [
+        { "name": "bx.tourSeen", "value": "true" },
+        { "name": "bx.wizardSeen", "value": "true" }
+      ]
+    }
+  ]
+}
