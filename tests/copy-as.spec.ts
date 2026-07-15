@@ -43,14 +43,19 @@ async function openMenu(page: any) {
   return trigger;
 }
 
-test('offers CSV, JSON, BQL filter, and Markdown formats', async ({ page }) => {
+test('offers View details, then CSV, JSON, BQL filter, and Markdown formats', async ({ page }) => {
   await mock(page);
   await page.goto('/#security');
   await openMenu(page);
 
   const menu = page.getByRole('menu', { name: ROW_ACTIONS });
   await expect(menu).toBeVisible();
+  // #security rows are deliberately NOT clickable (this very file's copy-cell
+  // sibling depends on a cell click meaning "copy"), so the kebab carries the
+  // peek's ONLY mouse path — "View details" — as its first item. Tables whose
+  // rows already open a peek on click don't get it; see showPeekItem in DataTable.
   await expect(menu.getByRole('menuitem')).toHaveText([
+    'View details',
     'Copy row as CSV', 'Copy row as JSON', 'Copy row as BQL filter', 'Copy row as Markdown',
   ]);
   // The old menu lived in an overflow:hidden cell and was clipped to the row band —
@@ -127,11 +132,12 @@ test('keyboard: arrow keys move focus within the menu, Escape closes and returns
   await page.goto('/#security');
   const trigger = await openMenu(page);
 
-  const firstItem = page.getByRole('menuitem', { name: 'Copy row as CSV' });
-  await expect(firstItem).toBeFocused();
+  // KebabMenu focuses its first item on open — which on #security is now
+  // "View details" (see the item-order assertion above), not the first format.
+  await expect(page.getByRole('menuitem', { name: 'View details' })).toBeFocused();
 
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('menuitem', { name: 'Copy row as JSON' })).toBeFocused();
+  await expect(page.getByRole('menuitem', { name: 'Copy row as CSV' })).toBeFocused();
 
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu', { name: ROW_ACTIONS })).toHaveCount(0);

@@ -2818,6 +2818,20 @@ def audit_verify_chain():
 # Persisted on the same mounted volume as the vault/audit log.
 ALERT_STATE_FILE = os.path.join(_STATE_DIR, "alert_state.json")
 
+# Persisted first-seen store for signal ages. build_signals() re-derives every
+# signal from scratch on every request (detected_at = now each time) since it
+# has no memory of prior polls -- without this, every "DETECTED" age in the
+# UI reads ~0s forever. Keyed by (category, entity_id) -> {"first","last"}.
+# Same mounted-volume shape as AUDIT_LOG_FILE/ALERT_STATE_FILE.
+FIRST_SEEN_FILE = os.path.join(_STATE_DIR, "first_seen.json")
+_first_seen_lock = threading.Lock()
+_FIRST_SEEN_GRACE_S = 15 * 60       # re-seen within this window keeps the original 'first' (flap protection)
+_FIRST_SEEN_RETENTION_S = 24 * 60 * 60  # entries not seen for longer than this are pruned
+# Reserved store key recording when we last polled, so downtime can be told apart
+# from a resolved condition. Contains no \x00, so it can never collide with a real
+# "{category}\x00{entity_id}" key.
+_FIRST_SEEN_META = "__meta__"
+
 _SEVERITY_ORDER = {"ok": 0, "warn": 1, "crit": 2}
 _SAMPLE_CAP = 5
 
@@ -2903,6 +2917,74 @@ def build_signals(data):
                 "detected_at": now,
             })
 
+    return signals
+
+def _first_seen_load():
+    try:
+        with open(FIRST_SEEN_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _first_seen_save(d):
+    tmp = FIRST_SEEN_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(d, f)
+    os.replace(tmp, FIRST_SEEN_FILE)
+
+def stamp_first_seen(signals):
+    """Rewrite each signal's detected_at (set to 'now' by build_signals, since
+    that function is pure/I-O-free and has no memory of prior polls) with a
+    persisted first-seen timestamp, so ages survive across the 20s poll and
+    container restarts. Key is (category, entity_id).
+
+    - Never seen before -> first = last = now (a genuinely new signal).
+    - Seen again within _FIRST_SEEN_GRACE_S of its last sighting -> keep the
+      original 'first', bump 'last'. Covers both normal persistence and a
+      transient-empty poll (a signal simply absent from one response is not
+      "gone", it just wasn't re-stamped that round -- its stored 'last' only
+      ages by the poll interval, well under the grace window).
+    - Seen again but the gap since 'last' exceeds the grace window -> treat as
+      a fresh occurrence (first = now). A subnet fixed last week and broken
+      again today must not inherit last week's age.
+    - Entries whose 'last' is older than _FIRST_SEEN_RETENTION_S are pruned so
+      the file can't grow forever.
+
+    Never raises into the caller: any failure (disk full, corrupt JSON, etc.)
+    leaves detected_at as build_signals set it (now) -- today's behaviour."""
+    try:
+        with _first_seen_lock:
+            store = _first_seen_load()
+            now = _time.time()
+            # A stale 'last' has TWO possible causes: the condition resolved, or we
+            # weren't watching (process down, container recreated, laptop asleep).
+            # Only the first should reset the age. Without this, any downtime longer
+            # than the grace window resets EVERY age to "0s ago" on the next poll —
+            # the exact bug this function exists to fix. Absence of evidence is not
+            # evidence of resolution, so when the gap is OUR gap, keep the age.
+            # Meta key holds no \x00, so it can never collide with a real
+            # "{category}\x00{entity_id}" key.
+            meta = store.get(_FIRST_SEEN_META) or {}
+            last_poll = meta.get("last_poll", 0)
+            we_were_away = bool(last_poll) and (now - last_poll) > _FIRST_SEEN_GRACE_S
+            for s in signals:
+                key = f"{s.get('category', '')}\x00{s.get('entity_id', '')}"
+                rec = store.get(key)
+                still_open = rec and (we_were_away
+                                      or (now - rec.get("last", 0)) <= _FIRST_SEEN_GRACE_S)
+                if still_open:
+                    rec["last"] = now
+                else:
+                    rec = {"first": now, "last": now}
+                store[key] = rec
+                s["detected_at"] = rec["first"]
+            cutoff = now - _FIRST_SEEN_RETENTION_S
+            store = {k: v for k, v in store.items()
+                     if k == _FIRST_SEEN_META or v.get("last", 0) >= cutoff}
+            store[_FIRST_SEEN_META] = {"last_poll": now}
+            _first_seen_save(store)
+    except Exception as e:
+        _log_exc("stamp_first_seen", e)
     return signals
 
 # ── on-disk alert-snooze store (port of backend/alerts/suppression.py) ────────
@@ -5179,7 +5261,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/incidents":
             try:
                 data = fetch_dashboard_data()
-                incidents = [i for i in correlate(build_signals(data)) if not is_snoozed(i["category"])]
+                incidents = [i for i in correlate(stamp_first_seen(build_signals(data))) if not is_snoozed(i["category"])]
                 self._json({"incidents": incidents, "snoozes": active_snoozes()})
             except Exception as e:
                 _log_exc("/api/incidents", e)
@@ -5194,7 +5276,7 @@ class Handler(BaseHTTPRequestHandler):
             category = unquote(path[len("/api/incidents/"):].strip("/"))
             try:
                 data = fetch_dashboard_data()
-                matches = [s for s in build_signals(data) if s["category"] == category]
+                matches = [s for s in stamp_first_seen(build_signals(data)) if s["category"] == category]
                 count = len(matches)
                 self._json({"category": category, "count": count,
                             "truncated": count > 500, "signals": matches[:500]})
