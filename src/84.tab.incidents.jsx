@@ -27,69 +27,15 @@ function SnoozeControl({category,onSnoozed}){
   </span>;
 }
 
-/* IncidentSignalsPeek — drills a triage row (one correlated category, e.g.
-   "129 subnet utilization") into its actual members. correlate() only keeps
-   sample_entities=group[:5] in the list payload, so this fetches the real,
-   uncapped set from /api/incidents/<category> — ON DEMAND: the effect fires
-   only when this component mounts (i.e. only when the peek opens for this
-   row), keyed+remounted per category via the `key` set at the call site, and
-   is fully separate from incApi's 20s poll (never re-runs on a re-render). */
-function IncidentSignalsPeek({row}){
-  const category=row.category||row.key;
-  const [state,setState]=useState({loading:true,error:null,data:null});
-  const load=()=>{
-    setState(s=>({...s,loading:true,error:null}));
-    const ctrl=new AbortController();
-    fetch('/api/incidents/'+encodeURIComponent(category),{cache:'no-store',signal:ctrl.signal})
-      .then(async r=>{
-        let body=null; try{body=await r.json();}catch(e){}
-        if(!r.ok||!body) throw new Error((body&&body.error)||('HTTP '+r.status));
-        setState({loading:false,error:null,data:body});
-      })
-      .catch(e=>{ if(e.name==='AbortError') return; setState({loading:false,error:String((e&&e.message)||e),data:null}); });
-    return ()=>ctrl.abort();
-  };
-  useEffect(load,[category]); // eslint-disable-line
-  const data=state.data;
-  const signals=(data&&Array.isArray(data.signals))?data.signals:[];
-  // count is the TRUE per-category total (pre-cap) — known instantly from the
-  // triage row itself, so the header reads correctly even before the fetch lands;
-  // once the fetch resolves, its count is the source of truth (same value, server-verified).
-  const trueCount=(data&&typeof data.count==='number')?data.count:(Number(row.count)||0);
-
-  const sigCols=[
-    {key:'entity_id',label:'Entity',id:true},
-    {key:'severity',label:'Sev',width:70,render:v=><SeverityBadge severity={v}/>},
-    {key:'message',label:'Message'},
-    {key:'detected_at',label:'Detected',mono:true,align:'right',render:v=>secEvtAge(v)},
-  ];
-
-  return <div>
-    <div style={{fontWeight:600}}>{row.message||category}</div>
-    <div style={{marginTop:4,display:'flex',alignItems:'center',gap:8,fontSize:'var(--t12)'}}>
-      <SeverityBadge severity={row.severity}/>
-      <span className="mono" style={{color:'var(--text-dim)'}}>{category}</span>
-      <span style={{color:'var(--text-faint)'}}>·</span>
-      <span className="mono" style={{color:'var(--text-dim)'}}>{trueCount.toLocaleString()} total</span>
-    </div>
-    {data&&data.truncated
-      ? <div style={{marginTop:8,fontSize:'var(--t12)',color:'var(--warn)'}}>
-          Showing {signals.length.toLocaleString()} of {trueCount.toLocaleString()} — list capped server-side.</div>
-      : null}
-    <div style={{marginTop:12}}>
-      {state.loading
-        ? <Skeleton rows={5}/>
-        : state.error
-          ? <div style={{fontSize:'var(--t12)',color:'var(--crit)'}}>
-              Failed to load signals: {state.error} <button className="btn btn-ghost" onClick={load}>Retry</button></div>
-          : signals.length===0
-            ? <div style={{fontSize:'var(--t12)',color:'var(--text-faint)'}}>No signals returned for this category.</div>
-            : <DataTable cols={sigCols} rows={signals} rowKey={(s,i)=>String(s.entity_id||i)+'|'+i}
-                tableId={'incidents-peek-'+category} csvName={'incident-'+category} scrollBody={340}
-                filterable maxRows={500}/>}
-    </div>
-  </div>;
-}
+/* incAckKey — the ack identity, same shape as Security's secAckKey (event_time|qname).
+   (category, entity_id) is stamp_first_seen's own key, so it survives a re-poll;
+   detected_at pins the ack to ONE OCCURRENCE. When a signal resolves and later
+   returns, stamp_first_seen issues a fresh `first` (15min grace, server.py:2827),
+   detected_at changes, and the row comes back UNACKED — a re-broken subnet is a
+   new problem, not one you already dismissed. Floor(): detected_at is a float
+   epoch, so a sub-second drift must not mint a new key.
+   Stale keys self-limit: an entry for a vanished occurrence is inert, Clear acks flushes. */
+const incAckKey=s=>s.category+'|'+s.entity_id+'|'+Math.floor(Number(s.detected_at)||0);
 
 /* MCP IQ Actions/events carry 'priority' (low/medium/high), not this app's
    ok/warn/crit vocabulary — map client-side, same as backend/data/fetch_mcp.py's
@@ -101,35 +47,30 @@ function mcpSeverity(row){
   return MCP_PRIORITY_TO_SEVERITY[p]||'ok';
 }
 
-/* incMessage — server.py:2855 builds the triage message as
-   f"{count} {category.replace('-',' ')}" → "129 subnet utilization", which reads as
-   a PROPERTY of one thing, not a set of 129 ("why only 3 incidents?"). Restate the
-   three known categories (server.py:2890/2902/2914) with a plural noun so the row
-   says what it contains. Unknown categories keep the server string verbatim.
-   PERMANENT FIX: one line in correlate() — server.py is out of scope here. */
-const INC_MESSAGE={
-  'subnet-utilization':c=>c+' subnet'+(c===1?'':'s')+' over threshold',
-  'dns-ttl-anomaly':c=>c+' zone'+(c===1?'':'s')+' with TTL anomalies',
-  'dhcp-expired-lease':c=>c+' expired lease'+(c===1?'':'s'),
-};
-function incMessage(row){
-  const f=INC_MESSAGE[row&&row.category];
-  return f?f(Number(row.count)||0):row.message;
-}
-
-/* IncEntitiesCell — sample_entities is group[:5]; rendering the join made the cell
-   read as THE entities. Show the first two as real IdCells (hover-full/click-copy
-   preserved) + the count that is actually behind the row. */
-const INC_ENT_SHOWN=2;
-function IncEntitiesCell({row}){
-  const sample=Array.isArray(row.sample_entities)?row.sample_entities:[];
-  if(!sample.length) return '—';
-  const shown=sample.slice(0,INC_ENT_SHOWN);
-  const more=Math.max(0,(Number(row.count)||sample.length)-shown.length);
-  return <span style={{display:'flex',alignItems:'center',gap:4,minWidth:0}}>
-    {shown.map((e,i)=><IdCell key={i} value={e} label="Entity"/>)}
-    {more?<span style={{flex:'0 0 auto',whiteSpace:'nowrap',color:'var(--text-dim)'}}>+{more} more</span>:null}
-  </span>;
+/* IncCategoryChips — the rollup, demoted from table rows to a filter/snooze strip.
+   Triage now lists individual signals, so `incidents` has one job left: name each
+   category, carry its true count, and host its SnoozeControl. Clicking a chip
+   filters the table to that category (74.tab.network.jsx:277's query/onQuery). */
+function IncCategoryChips({incidents,query,onQuery,onSnoozed}){
+  if(!incidents.length) return null;
+  return <div style={{display:'flex',alignItems:'center',gap:'var(--s3)',flexWrap:'wrap',marginBottom:'var(--s3)'}}>
+    {incidents.map(i=>{
+      const on=query===i.category;
+      return <span key={i.key||i.category}
+        style={{display:'inline-flex',alignItems:'center',gap:'var(--s2)',padding:'2px var(--s2)',
+          background:on?'var(--raised)':'transparent',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)'}}>
+        <button className="btn btn-ghost" aria-pressed={on}
+          title={on?'Clear this filter':'Filter Triage to '+i.category}
+          onClick={()=>onQuery(on?'':i.category)}
+          style={{display:'inline-flex',alignItems:'center',gap:'var(--s2)',fontSize:'var(--t12)'}}>
+          <span className={'sd '+(i.severity==='crit'?'crit':i.severity==='warn'?'warn':'ok')} aria-hidden="true"/>
+          <span className="mono">{(Number(i.count)||0).toLocaleString()}</span>
+          <span>{i.category}</span>
+        </button>
+        <SnoozeControl category={i.category} onSnoozed={onSnoozed}/>
+      </span>;
+    })}
+  </div>;
 }
 
 /* IncidentsTab — port of TriagePanel + McpIncidentQueue + McpEventStream onto
@@ -143,12 +84,23 @@ function IncidentsTab(){
   const actionsApi=useApi('/api/actions',{poll:30000});
   const eventsApi=useApi('/api/mcp/events',{poll:30000});
 
+  const [acks,setAcks]=useState(()=>LS.get('inc_acks',{}));
+  const [incQuery,setIncQuery]=useState('');
+  // 'inc_acks', NOT Security's 'acks' bucket: two different key shapes in one bucket
+  // would have each tab's Hide-acked reading the other's garbage.
+  const toggleAck=s=>{const k=incAckKey(s);setAcks(p=>{const n={...p};if(n[k])delete n[k];else n[k]=true;LS.set('inc_acks',n);return n;});};
+  const clearAcks=()=>{setAcks({});LS.set('inc_acks',{});};
+
   const incidents=(incApi.data&&incApi.data.incidents)||[];
+  // Tolerate a server that predates the signals feed: old shape → empty table +
+  // the existing dt-empty line, never a crash on undefined.
+  const signals=(incApi.data&&Array.isArray(incApi.data.signals))?incApi.data.signals:[];
+  const signalsTotal=(incApi.data&&typeof incApi.data.signals_total==='number')?incApi.data.signals_total:signals.length;
   const crit=incidents.filter(i=>i.severity==='crit').length;
   const warn=incidents.filter(i=>i.severity==='warn').length;
   const tone=crit>0?'crit':warn>0?'warn':'ok';
-  // Each row is an aggregated category (e.g. "129 subnet utilization"), not one
-  // incident — incidents.length is always the category count, never the real
+  // The banner still reads the ROLLUP, not the table: `incidents` is one entry per
+  // aggregated category, so incidents.length is the category count, never the real
   // volume. `count` carries the real per-category total; sum it for the true
   // issue volume and for actual critical volume (not critical-category count).
   // Number(...)||0 guards missing/non-numeric count so we never render NaN;
@@ -160,27 +112,21 @@ function IncidentsTab(){
     ? totalVol+' active '+(totalVol===1?'issue':'issues')+' · '+catCount+' categor'+(catCount===1?'y':'ies')+(critVol?(' · '+critVol+' critical'):'')
     : 'No issues detected — all metrics within normal thresholds';
 
-  // Message is transformed in the ROW DATA, not via a column render: a render would
-  // pin the column open against effCols' hide-all-empty pruning (40.table.jsx:915).
-  // Falsy messages pass through untouched so an empty column still prunes.
-  const triageRows=incidents.map(i=>i.message?{...i,message:incMessage(i)}:i);
-
   const triageCols=[
     // Persistent affordance that the row opens — never hover-gated. aria-expanded
     // lives on the <tr> (DTRow, 40.table.jsx), not here.
     {key:'__peek',label:'',width:24,sortable:false,
       render:()=><span aria-hidden="true" style={{color:'var(--text-faint)'}}>›</span>},
+    // Sits beside DataTable's own select box (td.dt-check), so it MUST stay labeled:
+    // that one selects, this one mutates ack state (80.tab.security.jsx:186's lesson).
+    {key:'ack',label:'Ack',width:48,sortable:false,render:(_,s)=>
+      <input type="checkbox" checked={!!acks[incAckKey(s)]} onClick={e=>e.stopPropagation()}
+        onChange={()=>toggleAck(s)} aria-label="Acknowledge signal"/>},
     {key:'severity',label:'Sev',width:70,render:v=><SeverityBadge severity={v}/>},
-    {key:'count',label:'Count',mono:true,align:'right',width:70},
+    {key:'entity_id',label:'Entity',id:true},
+    {key:'category',label:'Category',mono:true},
     {key:'message',label:'Message'},
-    {key:'sample_entities',label:'Entities',render:(_,row)=><IncEntitiesCell row={row}/>,
-      tipFn:r=>(r.sample_entities||[]).join(', ')+' — '+r.count+' total'},
-    // Rows are peekOnClick now, so this cell must swallow its own clicks — snoozing
-    // a category must never also drill into it.
-    {key:'snooze',label:'',width:190,sortable:false,render:(_,row)=>
-      <span onClick={e=>e.stopPropagation()}>
-        <SnoozeControl category={row.category} onSnoozed={incApi.refetch}/>
-      </span>},
+    {key:'detected_at',label:'Age',mono:true,align:'right',render:v=>secEvtAge(v)},
   ];
 
   const actionsRows=Array.isArray(actionsApi.data)
@@ -201,18 +147,55 @@ function IncidentsTab(){
       <span className="inc-strip-txt">{verdict}</span>
     </div>
 
-    <Panel title="Triage" api={incApi} size="md">
+    <IncCategoryChips incidents={incidents} query={incQuery} onQuery={setIncQuery}
+      onSnoozed={incApi.refetch}/>
+
+    <Panel title="Triage" api={incApi} size="md"
+      side={<button className="fresh-retry" onClick={clearAcks}>Clear acks</button>}>
       <Astryx.Card variant="default" padding={0}>
         {incApi.loading&&!incApi.data
           ? <Skeleton rows={4}/>
           : incApi.locked
             ? <div className="dt-empty">Vault locked — unlock to load incidents.</div>
-            : incidents.length===0
+            : signals.length===0
               ? <div className="dt-empty">No issues detected — all metrics within normal thresholds.</div>
-              : <DataTable cols={triageCols} rows={triageRows} rowKey={r=>r.key} tableId="incidents-triage"
-                  filterable searchSchema={{fields:{count:{type:'number'}}}} csvName="incidents" maxRows={50}
-                  peekOnClick
-          renderPeek={row=><IncidentSignalsPeek row={row} key={row.category||row.key}/>}/>}
+              : <React.Fragment>
+                  {incApi.data&&incApi.data.signals_truncated
+                    ? <div style={{padding:'var(--s2) var(--s3)',fontSize:'var(--t12)',color:'var(--warn)'}}>
+                        Showing {signals.length.toLocaleString()} of {signalsTotal.toLocaleString()} — list capped server-side.</div>
+                    : null}
+                  {/* No defaultSort: severity is a STRING, so sorting it desc reads
+                      warn > ok > crit — it would bury the criticals. The server
+                      already ships crit-first/oldest-first (server.py:5281), and an
+                      unset sort keeps input order (40.table.jsx:901). */}
+                  <DataTable cols={triageCols} rows={signals} tableId="incidents-triage"
+                    rowKey={r=>incAckKey(r)} scrollBody={480} filterable csvName="incidents"
+                    query={incQuery} onQuery={setIncQuery}
+                    searchSchema={{fields:{severity:{type:'enum'},category:{type:'enum'}},aliases:{sev:'severity',entity:'entity_id'}}}
+                    problemsOnly={{label:'Hide acked',test:s=>!acks[incAckKey(s)],default:true}}
+                    selectable bulkActions={sel=>[
+                      {label:'Ack '+sel.length,flash:true,run:()=>{
+                        const prev={...acks};
+                        const next={...acks};
+                        sel.forEach(s=>{next[incAckKey(s)]=true;});
+                        setAcks(next);LS.set('inc_acks',next);
+                        toast(sel.length+' acked','ok',{duration:5000,action:{label:'Undo',run:()=>{setAcks(prev);LS.set('inc_acks',prev);}}});
+                      }},
+                    ]}
+                    peekOnClick
+                    renderPeek={s=><div>
+                      <div style={{fontWeight:600}}>{s.message||s.category}</div>
+                      <div style={{marginTop:4,display:'flex',alignItems:'center',gap:8,fontSize:'var(--t12)'}}>
+                        <SeverityBadge severity={s.severity}/>
+                        <span className="mono" style={{color:'var(--text-dim)'}}>{s.category}</span>
+                        <span style={{color:'var(--text-faint)'}}>·</span>
+                        <span className="mono" style={{color:'var(--text-dim)'}}>{secEvtAge(s.detected_at)}</span>
+                      </div>
+                      <div style={{marginTop:'var(--s3)',fontSize:'var(--t12)',color:'var(--text-dim)'}}>
+                        Entity <IdCell value={s.entity_id} label="Entity"/>
+                      </div>
+                    </div>}/>
+                </React.Fragment>}
       </Astryx.Card>
     </Panel>
 

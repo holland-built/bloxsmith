@@ -2834,6 +2834,12 @@ _FIRST_SEEN_META = "__meta__"
 
 _SEVERITY_ORDER = {"ok": 0, "warn": 1, "crit": 2}
 _SAMPLE_CAP = 5
+# Safety valve for pathological tenants only. Designed for 5,000 signals: that is
+# ~700KB raw / ~60-100KB gzipped per 20s poll — the same order as /api/data
+# (5000 subnets + 1526 zones + 1197 leases), which already polls fine. The payload
+# was never the constraint; the per-signal file read in is_snoozed() was, hence the
+# single active_snoozes() load at the call site. Above this, drop the tail and say so.
+_SIGNALS_CAP = 2000
 
 def correlate(signals):
     """Group signals by category into a list of Incidents. v1: one incident
@@ -5261,11 +5267,26 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/incidents":
             try:
                 data = fetch_dashboard_data()
-                incidents = [i for i in correlate(stamp_first_seen(build_signals(data))) if not is_snoozed(i["category"])]
-                self._json({"incidents": incidents, "snoozes": active_snoozes()})
+                # One stamp_first_seen pass feeds BOTH shapes, so every individual
+                # signal ships the same real age the rollup rows already had.
+                signals = stamp_first_seen(build_signals(data))
+                # One snooze read, not one per signal: is_snoozed() takes the lock and
+                # re-reads the state file on every call, so 5,000 signals = 5,000 locked
+                # file reads per poll. Snoozing a category hides its rows AND its rollup —
+                # same semantics as before, now applied to both shapes.
+                snoozed = active_snoozes()
+                incidents = [i for i in correlate(signals) if i["category"] not in snoozed]
+                live = [s for s in signals if s["category"] not in snoozed]
+                # Order BEFORE the cap (crit first, oldest first) so a truncated tail can
+                # only ever drop the least important signals, never a critical one.
+                live.sort(key=lambda s: (-_SEVERITY_ORDER.get(s["severity"], 0), s["detected_at"]))
+                self._json({"incidents": incidents, "snoozes": snoozed,
+                            "signals": live[:_SIGNALS_CAP], "signals_total": len(live),
+                            "signals_truncated": len(live) > _SIGNALS_CAP})
             except Exception as e:
                 _log_exc("/api/incidents", e)
-                self._json({"incidents": [], "snoozes": {}})
+                self._json({"incidents": [], "snoozes": {}, "signals": [],
+                            "signals_total": 0, "signals_truncated": False})
         elif path.startswith("/api/incidents/"):
             # Drill-down for one category's full signal list (fetched on demand —
             # /api/incidents itself only ships _SAMPLE_CAP entity ids per row).

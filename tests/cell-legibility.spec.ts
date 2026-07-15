@@ -5,10 +5,20 @@ import { test, expect } from '@playwright/test';
 //   2. table-fit default — table-layout:fixed + per-cell ellipsis + hide-empty-columns,
 //      so NO table horizontally scrolls its container.
 // Exercised on the Incidents "Triage" table (#incidents, /api/incidents), whose
-// "Entities" column holds long UUID/path identifiers (ipam/subnet/<uuid>).
+// "Entity" column holds long UUID/path identifiers (ipam/subnet/<uuid>) — one per
+// individual signal row.
 
 const FULL_ID = 'ipam/subnet/004ad065-b3b3-4a2e-9c1f-88f2a1b9aea8b/address/10.42.128.64/host/really-long-hostname-segment-xyz';
 
+// Triage now lists INDIVIDUAL signals (server.py inlines them into /api/incidents
+// alongside the category rollup), so the long identifier lives in signals[].entity_id —
+// it used to be incidents[].sample_entities. `incidents` is kept: the rollup still
+// feeds the banner and per-category snooze. message:'' throughout is deliberate — it is
+// what the "all-empty column is hidden" test asserts on.
+const SIGNAL = (id: string, category: string, severity: string) => ({
+  source: category, entity_type: 'subnet', entity_id: id, category, severity,
+  message: '', detected_at: 1784000000,
+});
 const INCIDENTS = {
   incidents: [
     { key: 'k1', severity: 'critical', count: 12, message: '', category: 'ipam',
@@ -18,6 +28,13 @@ const INCIDENTS = {
     { key: 'k3', severity: 'medium', count: 3, message: '', category: 'dhcp',
       sample_entities: ['ipam/subnet/deadbeef-0000-1111-2222-333344445555'] },
   ],
+  signals: [
+    SIGNAL(FULL_ID, 'ipam', 'critical'),
+    SIGNAL('ipam/subnet/91f2c0de-77aa-4b1c-8e3d-1a2b3c4d5e6f', 'dns', 'high'),
+    SIGNAL('ipam/subnet/deadbeef-0000-1111-2222-333344445555', 'dhcp', 'medium'),
+  ],
+  signals_total: 3,
+  signals_truncated: false,
 };
 
 async function mock(page: any) {
@@ -118,6 +135,8 @@ test('an all-empty column is hidden by default', async ({ page }) => {
   const headers = await page.locator('table.dt thead th').allInnerTexts();
   const norm = headers.map(h => h.replace(/[↑↓\s]/g, '').toLowerCase());
   expect(norm).not.toContain('message');
-  // Sanity: the populated Entities column IS still shown.
-  expect(norm.some(h => h.includes('entities'))).toBeTruthy();
+  // Sanity: the populated id column IS still shown. It is "Entity" (singular) now —
+  // a row is ONE signal, so it holds one id. It read "Entities" while a row was a
+  // category standing for a list of sample_entities.
+  expect(norm.some(h => h.includes('entity'))).toBeTruthy();
 });
