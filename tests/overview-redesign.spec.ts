@@ -112,7 +112,11 @@ test('fix 5 — Problems-only/All-subnets segmented control has an explicit pres
   await expect(probBtn).toHaveAttribute('aria-pressed', 'true');
   await expect(allBtn).toHaveAttribute('aria-pressed', 'false');
 
-  const consumersSide = page.locator('.pcard', { hasText: 'Top consumers' }).locator('.side');
+  // Scope by the HEADING, not by card text: the Triage queue card now carries a
+  // "+N more — see Top consumers or open Network" hint, so `hasText:'Top consumers'`
+  // matches BOTH cards and trips strict mode. The panel's own h3 is the identity.
+  const consumersSide = page.locator('.pcard')
+    .filter({ has: page.getByRole('heading', { name: /^Top consumers/ }) }).locator('.side');
   await expect(consumersSide).toContainText('10 matching');
 
   await allBtn.click();
@@ -125,7 +129,11 @@ test('fix 6 — utilization-band chips are individually removable', async ({ pag
   await gotoOverview(page);
   const chip100 = page.locator('.band-chip', { hasText: '100%' });
   await expect(chip100).toHaveAttribute('aria-pressed', 'true');
-  const consumersSide = page.locator('.pcard', { hasText: 'Top consumers' }).locator('.side');
+  // Scope by the HEADING, not by card text: the Triage queue card now carries a
+  // "+N more — see Top consumers or open Network" hint, so `hasText:'Top consumers'`
+  // matches BOTH cards and trips strict mode. The panel's own h3 is the identity.
+  const consumersSide = page.locator('.pcard')
+    .filter({ has: page.getByRole('heading', { name: /^Top consumers/ }) }).locator('.side');
   await expect(consumersSide).toContainText('10 matching');
 
   await chip100.click();

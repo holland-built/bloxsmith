@@ -1,3 +1,9 @@
+// Render caps for the two subnetPreview lists. OV_SHOWN clears every problems-only
+// scope (the >70% pool is ~305), so it only bites under "All subnets"; OV_TRIAGE is a
+// deliberate top-N — each row is a heavy 4-button action card, not a browse surface.
+// Both are stated on screen when they bite; neither ever caps the underlying data.
+const OV_SHOWN=300, OV_TRIAGE=6;
+
 function OverviewTab(){
   const {bind}=useHoverDetail();
   const data=useData();
@@ -268,7 +274,7 @@ function OverviewTab(){
               the list takes only leftover space and scrolls inside it. */}
           <div className="issues" style={{maxHeight:'none',flex:'1 1 0',minHeight:0}}>
             {subnetPreview.length
-              ? subnetPreview.slice(0,60).map((s,i)=>{
+              ? subnetPreview.slice(0,OV_SHOWN).map((s,i)=>{
                   const go=()=>nav('network',{subnet:s.addr||s.id});
                   const label=(s.addr||s.name||'—')+(s.cidr?('/'+s.cidr):'');
                   const u=util(s);
@@ -292,6 +298,16 @@ function OverviewTab(){
                   </div>;
                 })
               : <div style={{color:'var(--text-faint)',fontSize:12,padding:'8px 4px'}}>No subnets match the current filters</div>}
+            {/* The side badge counts the whole match set; the list must reconcile with it.
+                It scrolls, so it shows everything up to OV_SHOWN — only the degenerate
+                "All subnets" scope (thousands of hover-bound, non-virtualized rows) hits
+                the cap, and then it says so rather than dropping rows in silence. */}
+            {subnetPreview.length>OV_SHOWN
+              ? <div role="button" tabIndex={0} onClick={()=>nav('network')}
+                  onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();nav('network');}}}
+                  style={{fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:2,cursor:'pointer',padding:'4px'}}>
+                  +{subnetPreview.length-OV_SHOWN} more — open Network for the full table</div>
+              : null}
           </div>
         </Panel>
       </div>
@@ -348,9 +364,11 @@ function OverviewTab(){
       </div>
 
       <div className="span-4">
-        <Panel title="Triage queue" size="md" side={<span className={'sev '+(subnetPreview.length?'crit':'low')}>{subnetPreview.length+' need action'}</span>}>
+        {/* The badge says "top 6 of N" whenever the cap bites — the list is a deliberate
+            top-N, so the number beside the title must not read as the whole queue. */}
+        <Panel title="Triage queue" size="md" side={<span className={'sev '+(subnetPreview.length?'crit':'low')}>{subnetPreview.length>OV_TRIAGE?('top '+OV_TRIAGE+' of '+subnetPreview.length+' need action'):(subnetPreview.length+' need action')}</span>}>
           {subnetPreview.length
-            ? subnetPreview.slice(0,6).map((s,i)=>{
+            ? subnetPreview.slice(0,OV_TRIAGE).map((s,i)=>{
                 const u=util(s);
                 const label=(s.addr||s.name||'—')+(s.cidr?('/'+s.cidr):'');
                 const free=(s.total!=null&&s.used!=null)?Math.max(0,s.total-s.used):null;
@@ -377,6 +395,12 @@ function OverviewTab(){
                 </div>;
               })
             : <div style={{color:'var(--text-faint)',fontSize:12,padding:'10px 4px',textAlign:'center'}}>✓ No subnets need action</div>}
+          {subnetPreview.length>OV_TRIAGE
+            ? <div role="button" tabIndex={0} onClick={()=>nav('network')}
+                onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();nav('network');}}}
+                style={{fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:2,cursor:'pointer',padding:'4px'}}>
+                +{subnetPreview.length-OV_TRIAGE} more — see Top consumers or open Network</div>
+            : null}
         </Panel>
       </div>
 
