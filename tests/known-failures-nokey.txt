@@ -24,7 +24,6 @@
 # Last measured: run for dc021dc on ubuntu-latest -> 207 passed / 17 failed.
 audit-highs.spec.ts :: H2 — WatchMenu: role=menu, menuitems, first-item focus on open, Esc closes + returns focus
 command-palette.spec.ts :: Control+k opens palette, filter -> Go to Network -> Enter navigates
-copy-link.spec.ts :: palette "Copy link to this view" copies the current URL and announces it
 density.spec.ts :: density toggle grows row height and persists across reload
 lookalikes.spec.ts :: an unavailable lookalikes feed shows the not-entitled empty state
 lookalikes.spec.ts :: lookalikes panel renders the returned domains
