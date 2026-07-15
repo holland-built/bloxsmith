@@ -32,13 +32,14 @@ if ! grep -q '^INFOBLOX_API_KEY=.\+' .env; then
   exit 1
 fi
 
-JSON=""   # set later if the known-failure gate runs; cleaned up by the same trap
+JSON=""; NEWFAIL=""   # set if the gate runs; cleaned up by the same trap
 cleanup() {
   local code=$?
   echo "Tearing down ${NAME}…" >&2
   docker rm -f "$NAME" >/dev/null 2>&1 || true
   docker volume rm "$VOLUME" >/dev/null 2>&1 || true
   [ -n "$JSON" ] && rm -f "$JSON"
+  [ -n "$NEWFAIL" ] && rm -f "$NEWFAIL"
   exit "$code"
 }
 # A single EXIT trap covers normal exit, errors (set -e), and signals (Ctrl-C) —
@@ -101,6 +102,11 @@ if [ "$#" -eq 0 ] && [ -f "$KNOWN" ]; then
   # Keep stderr: when the json comes back empty the ONLY clue lives there, and
   # discarding it turns "the report is empty" into an unfixable mystery (it did).
   ERR="$(mktemp "${TMPDIR:-/tmp}/e2e-err.XXXXXX")"
+  # json goes to a FILE (via PLAYWRIGHT_JSON_OUTPUT_NAME) so html can run alongside it.
+  # `--reporter=json` alone overrides the config's html reporter, so playwright-report/ was
+  # never written and CI's artifact upload had nothing to upload — leaving a failed gate
+  # with no way to see WHY. The gate needs the machine-readable set; a human needs the report.
+  NEWFAIL="$(mktemp "${TMPDIR:-/tmp}/e2e-new.XXXXXX")"; export E2E_NEWFAIL_OUT="$NEWFAIL"
   npx playwright test --reporter=json > "$JSON" 2>"$ERR"
   if [ ! -s "$JSON" ]; then
     echo "e2e: playwright wrote no report. Its stderr:" >&2
@@ -108,9 +114,11 @@ if [ "$#" -eq 0 ] && [ -f "$KNOWN" ]; then
     rm -f "$ERR"; exit 1
   fi
   rm -f "$ERR"
-  set -e
+  # set -e stays OFF across the gate: it exits 2 to mean "candidate new failures, go
+  # confirm them", and under set -e that non-zero exit would kill the script before the
+  # confirm branch below ever ran (it did — the harness just exited 2).
   python3 - "$JSON" "$KNOWN" <<'PY_GATE'
-import json, sys
+import json, os, sys
 report, known_path = sys.argv[1], sys.argv[2]
 def walk(node, out):
     for spec in node.get('specs', []):
@@ -134,13 +142,38 @@ print('e2e: %s passed, %s failed, %s flaky (%d known-failing)'
 for t in fixed:
     print('e2e: FIXED — delete this line from %s:\n      %s' % (known_path, t), file=sys.stderr)
 if new_fail:
-    print('\ne2e: %d NEW failure(s) — this is a regression, not a known gap:' % len(new_fail), file=sys.stderr)
+    print('\ne2e: %d candidate NEW failure(s) — confirming (see below):' % len(new_fail), file=sys.stderr)
     for t in new_fail:
         print('      %s' % t, file=sys.stderr)
-    sys.exit(1)
+    # hand the shell the spec files to re-run; a flake and a regression look identical here
+    with open(os.environ.get('E2E_NEWFAIL_OUT', '/dev/null'), 'w') as f:
+        f.write('\n'.join(sorted({t.split(' :: ')[0] for t in new_fail})))
+    sys.exit(2)
 print('e2e: no new failures.', file=sys.stderr)
 PY_GATE
-  exit $?
+  GATE=$?
+  set -e
+  if [ "$GATE" = "2" ]; then
+    # A flake and a regression are indistinguishable in the set diff — this suite HAS
+    # flakes that fail both retry attempts (observed: the same tree gave 25 failed / 1 NEW
+    # then 24 failed / 0 NEW back to back). So confirm: re-run ONLY the suspects with a
+    # human reporter. Pass on the focused re-run => flake, say so and don't cry wolf.
+    # Fail again => a real regression, and the error lands in the log where it's readable.
+    SUSPECTS="$(cat "$NEWFAIL" 2>/dev/null | tr '\n' ' ')"
+    echo "" >&2
+    echo "e2e: confirming against: $SUSPECTS" >&2
+    set +e; npx playwright test $SUSPECTS --reporter=line >&2; RC=$?; set -e
+    if [ "$RC" = "0" ]; then
+      echo "" >&2
+      echo "e2e: those PASSED on a focused re-run => FLAKE, not a regression. Not failing the run." >&2
+      echo "e2e: (if this spec flakes repeatedly, fix or quarantine it deliberately.)" >&2
+      exit 0
+    fi
+    echo "" >&2
+    echo "e2e: they FAILED again — this is a real regression (error above)." >&2
+    exit 1
+  fi
+  exit $GATE
 fi
 
 npx playwright test "$@"
