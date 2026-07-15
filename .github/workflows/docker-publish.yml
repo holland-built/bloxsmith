@@ -105,8 +105,14 @@ jobs:
         # Installing only `playwright` gets you the browsers and an unusable `test`
         # command: the run produced an EMPTY json report and the gate died with
         # "could not parse the playwright report". Pin matches the local version.
+        # Install into ./node_modules, NOT -g. playwright.config.ts starts with
+        # `import { defineConfig } from '@playwright/test'`, which node resolves from
+        # the repo directory — a global install does not satisfy that, so the config
+        # failed to load, playwright printed nothing to stdout, and the gate saw an
+        # empty report. A dev machine works because it has node_modules/@playwright.
+        # --no-save/--no-package-lock: this repo deliberately has no package.json.
         run: |
-          npm i -g @playwright/test@1.61.1
+          npm i --no-save --no-package-lock @playwright/test@1.61.1
           npx playwright install --with-deps chromium
 
       # Real key when the secret exists (covers the 5 unmocked specs too); else a
