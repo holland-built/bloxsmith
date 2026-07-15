@@ -14,6 +14,16 @@ const INCIDENTS = {
     { key: 'k1', severity: 'crit', count: 3, message: 'Subnet exhaustion critical', sample_entities: ['10.1.0.0/24'], category: 'subnet' },
     { key: 'k2', severity: 'warn', count: 1, message: 'Zone drift detected', sample_entities: ['corp.local'], category: 'zone' },
   ],
+  // Triage lists individual signals now (server inlines them next to the rollup);
+  // the panel/maximize assertions need rows, and rows come from signals[].
+  signals: [
+    { source:'subnet', entity_type:'subnet', entity_id:'10.1.0.0/24', category:'subnet',
+      severity:'crit', message:'Subnet exhaustion critical', detected_at:1784000000 },
+    { source:'dns', entity_type:'zone', entity_id:'zone/example.com', category:'dns',
+      severity:'warn', message:'TTL anomaly', detected_at:1784000000 },
+  ],
+  signals_total: 2,
+  signals_truncated: false,
 };
 
 async function gotoIncidents(page) {
