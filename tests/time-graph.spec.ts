@@ -21,10 +21,19 @@ test('time-range preset writes t= into the URL hash and is optional by default',
   const control = page.locator('.timerange');
   await expect(control).toBeVisible();
 
+  // The control is a dropdown, not an always-visible segmented group: the
+  // presets live in a popover behind .tr-trigger, and picking one closes it.
+  // So each pick is open-then-click.
+  await control.locator('.tr-trigger').click();
   const preset = control.locator('.tr-preset[data-preset="24h"]');
   await preset.click();
   await expect.poll(() => page.url()).toContain('t=24h');
-  await expect(preset).toHaveAttribute('aria-pressed', 'true');
+
+  // The active preset is marked with aria-current ("the current item in this
+  // menu"), which is what a role=menu popover uses — aria-pressed was the old
+  // segmented-toggle contract.
+  await control.locator('.tr-trigger').click();
+  await expect(preset).toHaveAttribute('aria-current', 'true');
 
   // Reset ("All") clears it — back to default behavior, no t=.
   await control.locator('.tr-reset').click();

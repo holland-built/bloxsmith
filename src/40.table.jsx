@@ -1361,6 +1361,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     if(el.scrollHeight-el.scrollTop-el.clientHeight<200)
       setRenderLimit(rl=>rl<sorted.length?Math.min(sorted.length,rl+300):rl); };
   return <div ref={wrapRef}
+    data-table-id={id||undefined}
     tabIndex={id?0:undefined}
     role={id?'grid':undefined}
     aria-activedescendant={(id&&cursor>=0)?rowIdOf(cursor):undefined}

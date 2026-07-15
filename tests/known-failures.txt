@@ -1,38 +1,24 @@
 # Known-failing e2e tests — the suite's honest baseline.
 #
-# Measured by scripts/e2e.sh against a container built from source. Every one of
-# these ALSO fails at bec9769 (pre-2026-07-14), verified by building that commit
-# and running its own specs against it: identical 196 passed / 27 failed / 1 flaky,
-# identical failing set. So they predate the harness — they are NOT quarantined
-# because they're unimportant, they're recorded because nobody has triaged them yet.
+# EMPTY. As of 2026-07-15 every test in this suite passes: 221 passed, 0 known-failing,
+# measured by scripts/e2e.sh against a container built from source.
 #
-# They are NOT test.fixme'd: fixme hides a test, and each of these may be a real
-# bug. e2e.sh compares the actual failing set against this file and fails only when
-# the set CHANGES — a new failure is a regression (red), a fixed one means delete
-# its line here. Burn this list down; don't grow it.
+# It was 27 when the harness was first built (196 passed / 27 failed). All 27 were
+# triaged one at a time — run it, read the real failure, read the source, decide REAL BUG
+# or STALE TEST, fix, re-run green. The tally: 26 stale tests, 1 real bug.
+#
+# The stale ones were not junk — they were true when written and never caught up. Two
+# structural changes account for nearly all of them:
+#   1. #security grew from one DataTable to many, so unscoped `table.dt tbody tr`
+#      selectors swept 754 rows instead of 3 and never reached their assertions. Every
+#      behavioural assertion passed FIRST TRY, unmodified, once scoped.
+#   2. The topbar consolidated behind the ⋯ overflow (⋯ -> gear -> control), whose panel
+#      is display:none when closed. Density, Wall, Watches, theme, saved views all moved.
+# The real bug: OverviewTab never rendered a SynthBand — the landing tab was the only one
+# that showed raw counters instead of an answer.
+#
+# KEEP IT EMPTY. e2e.sh fails the run when the failing set changes, so a new line here
+# means someone chose to accept a failure. Prefer fixing. If you must add one, add the
+# reason with it — a bare line is indistinguishable from a bug nobody looked at.
 #
 # One test per line, exactly as Playwright reports it: <file> :: <title>
-audit-highs.spec.ts :: H2 — WatchMenu: role=menu, menuitems, first-item focus on open, Esc closes + returns focus
-density.spec.ts :: density toggle grows row height and persists across reload
-lookalikes.spec.ts :: an unavailable lookalikes feed shows the not-entitled empty state
-lookalikes.spec.ts :: lookalikes panel renders the returned domains
-multi-sort.spec.ts :: a plain click resets to single-sort on that column, dropping secondary keys
-multi-sort.spec.ts :: hash carries the ordered multi-key list, and reloading it restores the order
-multi-sort.spec.ts :: order badges + aria-sort mark each active sort column
-multi-sort.spec.ts :: shift-click appends a secondary sort key, applied stably in order
-network-charts.spec.ts :: clicking a site bar filters the subnet table by that site
-overview-redesign.spec.ts :: fix 7 — compact stat strip replaces the big banner
-pivot-cell.spec.ts :: keyboard: Shift+F10 on a focused ordinary cell opens the same pivot action
-pivot-cell.spec.ts :: right-click on an ordinary cell offers "Filter by this value" and narrows the table
-synthesis.spec.ts :: #ask leads with a synthesis .band above its table
-synthesis.spec.ts :: #overview leads with a synthesis .band above its table
-tab-consistency.spec.ts :: Editor renders its PageHeader + resource-type switcher
-time-graph.spec.ts :: time-range preset writes t= into the URL hash and is optional by default
-time-preset.spec.ts :: palette "Last 24h" preset injects last:24h into the active table search and narrows it
-time-preset.spec.ts :: palette "Last 7d" preset includes the 1h/10m rows but still excludes the 10-day-old row
-time-preset.spec.ts :: typing last:24h in the search box filters to recent rows and excludes the out-of-window row
-view-state.spec.ts :: copy-link encodes search + sort + hidden column, and loading it restores the view
-wallboard-tour.spec.ts :: a header toggle also enters wallboard mode
-wallboard-tour.spec.ts :: first-run tour shows once, dismiss persists in LS, re-summonable from "?" overlay
-wallboard-tour.spec.ts :: tour is non-modal / keyboard-dismissible with Esc
-watch-delta.spec.ts :: watch = saved BQL query + live match count; save persists, count is live, click applies

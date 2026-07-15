@@ -30,27 +30,40 @@ test.beforeEach(async ({ context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 });
 
+// #security renders several DataTables now (triage, lookalikes, threat lookup,
+// the /api/hub/domains panels), so bare `.dt-filter` / `table.dt tbody tr` /
+// `th` are all ambiguous — `.dt-filter` alone hits 3 elements. This spec is
+// about the triage table only. DataTable stamps rows `id="<tableId>-r-<i>"`,
+// so the triage rows anchor a scope onto its wrapper (the element that owns a
+// .dt-toolbar directly AND contains those rows).
+const ROWS = 'table.dt tbody tr[id^="triage-r-"]';
+const TRIAGE = 'div:has(> .dt-toolbar):has(tr[id^="triage-r-"])';
+
 test('copy-link encodes search + sort + hidden column, and loading it restores the view', async ({ page }) => {
   await mock(page);
   await page.goto('/#security');
 
-  const rows = page.locator('table.dt tbody tr');
+  const triage = page.locator(TRIAGE);
+  const rows = page.locator(ROWS);
   await expect(rows.first()).toBeVisible();
 
   // 1. Search: scope to the two "log" events (action alias -> policy_action).
-  const filterInput = page.locator('.dt-filter');
+  const filterInput = triage.locator('.dt-filter');
   await filterInput.fill('action:log');
   await expect(rows).toHaveCount(2);
+  // Typing opens the BQL typeahead popover, which overlays the header row and
+  // swallows the sort click below. Escape closes it and keeps the query.
+  await filterInput.press('Escape');
 
   // 2. Sort by Query (qname) ascending.
-  await page.locator('th', { hasText: 'Query' }).click();
-  await expect(page.locator('th', { hasText: 'Query' }).locator('.sort-ind')).toHaveText('↑');
+  await triage.locator('th', { hasText: 'Query' }).click();
+  await expect(triage.locator('th', { hasText: 'Query' }).locator('.sort-ind')).toHaveText('↑');
 
   // 3. Hide the Device column via the Cols menu.
-  await page.locator('button', { hasText: '⋯ Cols' }).click();
+  await triage.locator('button', { hasText: '⋯ Cols' }).click();
   await page.getByLabel('Hide Device column').uncheck();
   await page.keyboard.press('Escape');
-  await expect(page.locator('th', { hasText: 'Device' })).toHaveCount(0);
+  await expect(triage.locator('th', { hasText: 'Device' })).toHaveCount(0);
 
   // 4. Copy link — the enriched hash must carry all three.
   await page.keyboard.press('Meta+k');
@@ -66,9 +79,9 @@ test('copy-link encodes search + sort + hidden column, and loading it restores t
 
   // 5. Loading that URL fresh restores search, sort, and hidden column.
   await page.goto(clip);
-  const rows2 = page.locator('table.dt tbody tr');
-  await expect(rows2).toHaveCount(2);
-  await expect(page.locator('.dt-filter')).toHaveValue('action:log');
-  await expect(page.locator('th', { hasText: 'Query' }).locator('.sort-ind')).toHaveText('↑');
-  await expect(page.locator('th', { hasText: 'Device' })).toHaveCount(0);
+  const triage2 = page.locator(TRIAGE);
+  await expect(page.locator(ROWS)).toHaveCount(2);
+  await expect(triage2.locator('.dt-filter')).toHaveValue('action:log');
+  await expect(triage2.locator('th', { hasText: 'Query' }).locator('.sort-ind')).toHaveText('↑');
+  await expect(triage2.locator('th', { hasText: 'Device' })).toHaveCount(0);
 });

@@ -136,9 +136,10 @@ function TimeProvider({children}){
   return <TimeCtx.Provider value={val}>{children}</TimeCtx.Provider>;
 }
 
-/* TimeRangeControl — TopBar segmented presets + reset. Buttons (keyboard-reachable
-   by default); the active preset is aria-pressed. An absolute zoom window shows no
-   pressed preset but the reset ("All") still clears it. Optional — unset = default. */
+/* TimeRangeControl — TopBar dropdown of presets + reset, behind a .tr-trigger.
+   Buttons (keyboard-reachable by default); the active preset is aria-current. An
+   absolute zoom window marks no preset current, but the reset ("All") still
+   clears it. Optional — unset = default. */
 function TimeRangeControl(){
   const {token,setRange}=useTimeRange();
   const {bind}=useHoverDetail();

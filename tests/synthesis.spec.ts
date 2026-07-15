@@ -4,7 +4,10 @@ import { test, expect } from '@playwright/test';
 // SynthBand component) rendered ABOVE its data table. Runs against the real app
 // (vault unlocked live), waiting for data so the band's verdict/facts populate.
 
-const TABS = ['overview', 'daily', 'network', 'dns', 'infra', 'security', 'audit', 'ask'];
+// 'ask' is NOT a tab: parseHash() maps #ask -> the overview tab with the AI drawer
+// open (params.drawer='1'), so an #ask case only re-tested OverviewTab. Dropped —
+// the 'overview' case below covers that exact component.
+const TABS = ['overview', 'daily', 'network', 'dns', 'infra', 'security', 'audit'];
 
 // DailyTab now leads with a real SynthBand (.band) like every other tab.
 const NO_BAND = new Set<string>([]);

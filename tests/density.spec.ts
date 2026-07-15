@@ -25,8 +25,14 @@ test('density toggle grows row height and persists across reload', async ({ page
   const compactH = await td.evaluate(el => el.getBoundingClientRect().height);
   expect(compactH, 'compact row ~28px').toBeLessThan(31);
 
-  // Flip to comfortable.
-  await page.getByRole('button', { name: 'Toggle row density' }).click();
+  // Flip to comfortable. The density toggle lives two levels deep in the topbar
+  // overflow: ⋯ (MoreMenu) -> gear (ViewOptions) -> toggle. Both panels are
+  // display:none when closed, so open them in order (same as theme.spec).
+  await page.getByRole('button', { name: /^More tools/ }).click();
+  await page.getByRole('button', { name: 'View options' }).click();
+  const densityToggle = page.getByRole('button', { name: 'Toggle row density' });
+  await expect(densityToggle).toBeVisible();
+  await densityToggle.click();
   const comfyH = await td.evaluate(el => el.getBoundingClientRect().height);
   expect(comfyH, 'comfortable row taller than compact').toBeGreaterThan(compactH);
 

@@ -33,7 +33,19 @@ function buildSecurity() {
   };
 }
 
-const ROWS = 'table.dt tbody tr';
+// The #security page renders MANY DataTables now (threat feeds, named lists,
+// security policies, roaming countries, hosts inventory — all fed by
+// /api/hub/domains, which this spec deliberately does NOT mock). A bare
+// `table.dt tbody tr` matches every row on the page (754 against a real
+// tenant), not just the triage inbox this spec is about.
+//
+// Scope to the triage table instead. DataTable stamps each row with
+// `id="<tableId>-r-<i>"` (rowIdOf), and the triage inbox is the only table
+// built with tableId="triage" — so the row id prefix is a stable anchor.
+const ROWS = 'table.dt tbody tr[id^="triage-r-"]';
+// ...and its search box is the .dt-filter in the same DataTable wrapper: the
+// element that owns a .dt-toolbar directly AND contains the triage rows.
+const FILTER = 'div:has(> .dt-toolbar):has(tr[id^="triage-r-"]) .dt-filter';
 
 async function mockSecurity(page) {
   await page.route('**/api/hub/security', route =>
@@ -49,7 +61,7 @@ test('typing last:24h in the search box filters to recent rows and excludes the 
   await expect(rows).toHaveCount(3);
   await expect(rows.filter({ hasText: 'stale.example' })).toHaveCount(1);
 
-  const filter = page.locator('.dt-filter');
+  const filter = page.locator(FILTER);
   await filter.fill('last:24h');
 
   await expect(rows).toHaveCount(2);
@@ -81,7 +93,7 @@ test('palette "Last 24h" preset injects last:24h into the active table search an
   await expect(page.locator('.palette-in')).toHaveCount(0);
 
   // Same input F4 (typeahead) uses — the token rides the normal query path.
-  const filter = page.locator('.dt-filter');
+  const filter = page.locator(FILTER);
   await expect(filter).toHaveValue('last:24h');
 
   await expect(rows).toHaveCount(2);
@@ -104,7 +116,7 @@ test('palette "Last 7d" preset includes the 1h/10m rows but still excludes the 1
   await expect(item).toBeVisible();
   await item.click();
 
-  const filter = page.locator('.dt-filter');
+  const filter = page.locator(FILTER);
   await expect(filter).toHaveValue('last:7d');
   await expect(rows).toHaveCount(2);
   await expect(rows.filter({ hasText: 'stale.example' })).toHaveCount(0);

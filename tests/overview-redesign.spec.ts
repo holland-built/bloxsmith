@@ -62,7 +62,15 @@ test('fix 7 — compact stat strip replaces the big banner', async ({ page }) =>
   await expect(strip.locator('.stat', { hasText: 'Watch 70-85%' })).toContainText('2');
   await expect(strip.locator('.stat', { hasText: 'Active leases' })).toContainText('3');
   await expect(strip.locator('.stat', { hasText: 'Hosts' })).toContainText('6');
-  await expect(strip.locator('.stat', { hasText: 'Hosts' })).toContainText('3/1/2');
+  // The host triad reads 3/1/2, but each number carries a per-state label
+  // (P1/4) and is its own app-wide cross-filter button -> "3 up/1 deg/2 down".
+  const hosts = strip.locator('.stat', { hasText: 'Hosts' });
+  await expect(hosts).toContainText('3 up/1 deg/2 down');
+  await expect(hosts.locator('[data-scope="status:online"]')).toHaveText('3 up');
+  await expect(hosts.locator('[data-scope="status:degraded"]')).toHaveText('1 deg');
+  await expect(hosts.locator('[data-scope="status:offline"]')).toHaveText('2 down');
+  // the plain 3/1/2 reading survives for screen readers.
+  await expect(hosts).toHaveAttribute('aria-description', /Reading the 3\/1\/2/);
   // the old KPI-tile banner is gone.
   await expect(page.locator('.kpis')).toHaveCount(0);
 });

@@ -44,10 +44,20 @@ test('watch = saved BQL query + live match count; save persists, count is live, 
   await expect(page.locator('.tabbar')).toBeVisible();
   await expect(page.locator('input.dt-filter').first()).toHaveValue('util>85');
 
+  // Watches lives in the topbar's "⋯" overflow (MoreMenu), so it has to be
+  // revealed first. Anchor the name: a bare 'Watches' substring also matches the
+  // overflow trigger itself (aria-label "More tools — Watches, Views, …"), and
+  // the trigger's own label grows a count once a watch exists ("Watches, 1 saved").
+  const watchesBtn = page.getByRole('button', { name: /^Watches(,|$)/ });
+  const openWatches = async () => {
+    if (!(await watchesBtn.isVisible()))
+      await page.getByRole('button', { name: /^More tools/ }).click();
+    await expect(watchesBtn).toBeVisible();
+    await watchesBtn.click();
+  };
+
   // Save the current query as a watch.
-  const watchesBtn = page.getByRole('button', { name: 'Watches' });
-  await expect(watchesBtn).toBeVisible();
-  await watchesBtn.click();
+  await openWatches();
   await page.locator('.views-item', { hasText: 'Watch current query' }).click();
   await expect(page.locator('.toast', { hasText: 'high-util' })).toBeVisible();
 
@@ -62,12 +72,13 @@ test('watch = saved BQL query + live match count; save persists, count is live, 
   await expect(row.locator('.watch-count')).toHaveText('2');
 
   // Close the menu, then move to another tab so applying the watch remounts
-  // Network fresh (and its search seeds from the sq= hash).
-  await page.locator('.views-overlay').click();
+  // Network fresh (and its search seeds from the sq= hash). The overlay closes
+  // only the watch dropdown; the MoreMenu it sits in stays open.
+  await page.locator('.views-overlay').first().click();
   await page.locator('.tabbar .tab', { hasText: 'Overview' }).click();
   await expect(page.locator('.tabbar .tab.active', { hasText: 'Overview' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Watches' }).click();
+  await openWatches();
   await expect(page.locator('.watch-row', { hasText: 'high-util' }).locator('.watch-count')).toHaveText('2');
   await page.locator('.watch-row', { hasText: 'high-util' }).locator('.watch-item').click();
 

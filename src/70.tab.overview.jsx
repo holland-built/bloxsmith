@@ -124,7 +124,34 @@ function OverviewTab(){
   // Daily/Network/DNS skeletons on the same shared /api/data feed.
   if(data.loading&&!data.data) return <div className="page"><Skeleton rows={8} label="Collecting data from Infoblox — first load can take a minute…"/></div>;
 
+  // Answer-first band. Every other tab opens with a verdict; Overview — the LANDING
+  // tab, the first thing anyone sees — opened with raw counters and made you derive it
+  // yourself. It never had one (git log -S SynthBand on this file is empty), so this is
+  // a gap against the v2 contract, not a regression. Must sit after the locked/loading
+  // returns above, or it renders a verdict over a locked vault.
+  // Every value here is already computed above; nothing new is fetched or derived.
+  const ovTone=nearExhaust>0?'crit':gt85>0?'warn':'ok';
+  const ovVerdict=ovTone==='ok'
+    ? 'Capacity is healthy — no subnet is above 85%.'
+    : ovTone==='warn'
+      ? gt85+' subnet'+(gt85===1?'':'s')+' above 85% — none critical yet.'
+      : nearExhaust+' subnet'+(nearExhaust===1?'':'s')+' at or above 90% — new DHCP leases will start failing.';
+  const ovFacts=[
+    {label:'near exhaustion',value:nearExhaust},
+    {label:'>85%',value:gt85},
+    {label:'watch 70-85%',value:watch7085},
+    {label:'active leases',value:activeLeases},
+    {label:'subnets',value:subnets.length},
+  ];
+  // NO chips: SynthBand renders them as .band-chip — the exact class AND labels the
+  // utilization-band control row below already uses. Passing chips here put a SECOND,
+  // identical set of band filters on the page. Three specs' strict-mode violations were
+  // the symptom; the duplicated control was the defect. The verdict and facts are what
+  // Overview was missing — the band filters already exist a few lines down.
+
   return <div className="page ovx">
+
+    <SynthBand tone={ovTone} verdict={ovVerdict} facts={ovFacts}/>
 
     <div className="statstrip">
       <div className="stat" tabIndex={0} style={{cursor:'help'}}
