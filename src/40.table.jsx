@@ -785,7 +785,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const mirroredFacetTokens=useRef(new Map());
   const mirrorFacetToken=useCallback((field,value,adding)=>{
     if(!SAFE_FACET_VAL.test(String(value))) return;
-    const key=String(field).toLowerCase()+' '+String(value).toLowerCase();
+    const key=String(field).toLowerCase()+'\u0000'+String(value).toLowerCase();
     if(adding) mirroredFacetTokens.current.set(key,{field,value:String(value)});
     else mirroredFacetTokens.current.delete(key);
     const toks=parseQuery(filter);
@@ -806,7 +806,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     cur.forEach((pair,key)=>{ if(!fx.has(pair.field,pair.value)) stale.push(key); });
     if(!stale.length) return;
     stale.forEach(key=>cur.delete(key));
-    const staleLc=stale.map(key=>key.split(' '));
+    const staleLc=stale.map(key=>key.split('\u0000'));
     const toks=parseQuery(filter);
     const kept=toks.filter(t=>{
       if(t.kind!=='field'||t.negate||(t.op!=='='&&t.op!==':')) return true;
@@ -965,7 +965,8 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     const key=id+'.sort';
     const val=serializeSortParam(sort);
     if(val) np[key]=val; else delete np[key];
-    if((np[key]||'')!==(params[key]||'')) nav(tab,np);
+    // replace, not push: this is a state mirror, not a navigation (see nav()).
+    if((np[key]||'')!==(params[key]||'')) nav(tab,np,true);
   },[id,sort]);
   useEffect(()=>{
     if(!id||!showCols) return;
@@ -973,7 +974,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     const key=id+'.cols';
     const val=hiddenCols.join(',');
     if(val) np[key]=val; else delete np[key];
-    if((np[key]||'')!==(params[key]||'')) nav(tab,np);
+    if((np[key]||'')!==(params[key]||'')) nav(tab,np,true);
   },[id,showCols,hiddenCols]);
   useEffect(()=>{
     if(!id||filterControlled||!filterable) return;
@@ -981,7 +982,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     const key=id+'.q';
     const val=(filterState||'').trim();
     if(val) np[key]=val; else delete np[key];
-    if((np[key]||'')!==(params[key]||'')) nav(tab,np);
+    if((np[key]||'')!==(params[key]||'')) nav(tab,np,true);
   },[id,filterControlled,filterable,filterState]);
 
   // Feature 7 — header click. Plain click ALWAYS collapses to a fresh single-sort
@@ -1084,9 +1085,9 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         if(!c.key||String(c.key).startsWith('__')) return;
         const vals=new Set();
         for(const r of rws){ const v=r[c.key];
-          if(v==null||v===''||typeof v==='object'){ vals.add(' '); } else vals.add(String(v)); }
+          if(v==null||v===''||typeof v==='object'){ vals.add('\u0000'); } else vals.add(String(v)); }
         if(vals.size!==1) return;
-        const only=[...vals][0]; if(only===' ') return;
+        const only=[...vals][0]; if(only==='\u0000') return;
         if(!fx.has(c.key,only)){ fx.add(c.key,only,(c.label||c.key)+': '+only); added++; }
       });
       toast(added?('Pivoted to '+added+' filter'+(added===1?'':'s')):'No shared values to pivot on',added?'ok':'err',{duration:1800});
