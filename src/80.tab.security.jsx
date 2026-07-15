@@ -1,7 +1,12 @@
 const SEC_SEV_RANK={critical:0,high:1,medium:2,low:3};
 const secSevColor=s=>({critical:'var(--crit)',high:'var(--warn)'})[String(s||'').toLowerCase()]||'var(--text-dim)';
 const secAckKey=e=>String(e.event_time)+'|'+String(e.qname);
-function secHumanize(k){return String(k).replace(/^InsightsSummaryView\./,'').replace(/[_.]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()).trim();}
+// SOC-insights keys humanize into headers wider than their column ('totalVerifiedAssets' →
+// 'Total Verified Assets', clipped to 'TOTALV…'). Exact-key only: unknown keys fall through
+// to the generic path, so the actions/events/threat-lookup tables sharing secAutoCols are
+// untouched. totalTimeSaved/timeSaved stay distinct — both can appear in one row.
+const SEC_LABELS={totalEvents:'Events',totalVerifiedAssets:'Verified',totalTimeSaved:'Total saved',timeSaved:'Saved'};
+function secHumanize(k){const s=String(k).replace(/^InsightsSummaryView\./,'');return SEC_LABELS[s]||s.replace(/[_.]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()).trim();}
 function secAutoCols(rows,tableId){
   // Sample up to 20 rows, not just the first — the first row can be missing keys others have.
   const sample=(rows||[]).filter(r=>r&&typeof r==='object').slice(0,20);
@@ -460,7 +465,9 @@ function SecLookalikes(){
   const cols=[
     {key:'lookalike',label:'Lookalike',mono:true,copy:true,primary:true,id:true,render:v=>v||'—'},
     {key:'target',label:'Target',mono:true,id:true,render:v=><span style={{color:'var(--text-dim)'}}>{v||'—'}</span>},
-    {key:'reason',label:'Reason',hideSm:true,render:v=>v||'—'},
+    // tipFn, not the raw-value fallback: render() suppresses it (40.table.jsx:218), so the
+    // full rationale — ~130 chars in a 61px cell — was unreachable without an explicit tip.
+    {key:'reason',label:'Reason',hideSm:true,render:v=>v||'—',tipFn:r=>r.reason||null},
     {key:'suspicious',label:'Suspicious',render:heatCell(r=>r.suspicious?1:0,{crit:1,tip:'Flagged: host marked suspicious',fmt:(v,r)=>r.suspicious?'yes':'no'})},
     {key:'detected_at',label:'Detected',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
   ];
