@@ -61,6 +61,17 @@ backend/data/alert_state.json.tmp
 # Audit log — runtime data (hash-chained, tamper-evident), never committed
 backend/data/audit_log.jsonl
 
+# Same runtime state, at the paths THIS app actually writes. server.py puts them
+# in _STATE_DIR = dirname(VAULT_FILE): under Docker that's the /vault volume, but
+# running server.py directly for local dev resolves it to the REPO ROOT — where
+# the backend/data/ rules above don't match and `git add -A` would sweep them in.
+# audit_log.jsonl carries actor identities and request paths; never commit it.
+/audit_log.jsonl
+/alert_state.json
+/alert_state.json.tmp
+/first_seen.json
+/first_seen.json.tmp
+
 # encrypted vault — never commit
 vault.json
 scripts/out_*.json

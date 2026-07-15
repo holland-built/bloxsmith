@@ -146,7 +146,7 @@ function IdCell({value,label}){
     {tail?<span className="dt-id-tail">{tail}</span>:null}
   </span>;
 }
-const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,selectable,rowApi,diff,showDiff}){
+const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,showPeekItem,selectable,rowApi,diff,showDiff}){
   const align=c=>c.align||(c.mono?'right':'left');
   const isNum=c=>align(c)==='right';
   const fx=useFilters();
@@ -279,8 +279,14 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
       </td>;
     })}
     <td className="dt-acts" onClick={e=>e.stopPropagation()}>
-      <KebabMenu label={actsLabel} items={COPY_AS_FORMATS.map(fmt=>
-        ({label:'Copy row as '+fmt.label, run:()=>copyAsFormat(fmt)}))}/>
+      <KebabMenu label={actsLabel} items={[
+        // "View details" — only the row's ONLY mouse path to the peek (see
+        // showPeekItem in DataTable). Opens the SAME peek Enter/o does, via the
+        // stable rowApi.current.peek() imperative entry point (not a fresh
+        // per-row closure — rowApi/rkey are already props, so this stays memo-safe).
+        ...(showPeekItem?[{label:'View details', run:()=>rowApi.current.peek(rkey)}]:[]),
+        ...COPY_AS_FORMATS.map(fmt=>({label:'Copy row as '+fmt.label, run:()=>copyAsFormat(fmt)})),
+      ]}/>
     </td>
   </tr>;
 });
@@ -1126,6 +1132,12 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     activate(key){ const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return;
       if(onRowClick){ onRowClick(visible[i],i); return; }
       if(peekOnClick&&renderPeek){ setCursor(i); openPeekAt(i); } },
+    // peek: the kebab's "View details" mouse path for tables that have renderPeek
+    // but whose rows AREN'T clickable (dns/security — see showPeekItem below).
+    // Same key->index resolution + cursor-sync as activate()'s peekOnClick branch,
+    // so keyboard nav continues from the row the mouse just opened.
+    peek(key){ if(!renderPeek) return; const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return;
+      setCursor(i); openPeekAt(i); },
     check,
     getState(){
       const keyRow=new Map(); data.forEach((r,i)=>keyRow.set(keyOf(r,i),r));
@@ -1159,6 +1171,12 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
       else if(maxRows&&!showAll) setShowAll(true);
     }
   },[initialPeekKey,visible]); // eslint-disable-line
+
+  // rowClickable mirrors activate()'s two mouse-gesture branches. showPeekItem is
+  // the kebab "View details" fallback for renderPeek tables that DON'T make rows
+  // clickable (dns/security — clickable rows disable click-to-copy, see copyCell).
+  const rowClickable=!!onRowClick||!!(peekOnClick&&renderPeek);
+  const showPeekItem=!!renderPeek&&!rowClickable;
 
   const allKeys=visible.map((r,i)=>keyOf(r,i));
   const allSel=allKeys.length>0&&allKeys.every(k=>selected.has(k));
@@ -1516,9 +1534,15 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
               </td></tr>
             : visible.map((r,ri)=>{
                 const rk=keyOf(r,ri);
+                // rowClickable/showPeekItem: same value for every row (not per-row),
+                // computed once here rather than as a fresh function passed to DTRow —
+                // keeps the prop a plain boolean so DTRow's memo still holds.
+                // showPeekItem: table has a peek AND rows have no other mouse path to
+                // it (onRowClick / peekOnClick already make the row itself clickable —
+                // adding the kebab item there would be a duplicate affordance).
                 return <DTRow key={rk} r={r} rkey={rk} cols={effCols} rowId={rowIdOf(ri)}
                   isCursor={ri===cursor} isSel={selected.has(rk)} isFlash={flashed.has(rk)}
-                  clickable={!!onRowClick||!!(peekOnClick&&renderPeek)} selectable={!!selectable} rowApi={apiRef}
+                  clickable={rowClickable} showPeekItem={showPeekItem} selectable={!!selectable} rowApi={apiRef}
                   diff={diffMap?diffMap.get(rk):null} showDiff={!!diffMap}/>;
               })}
           {/* Compare-to-snapshot ghosts: prior rows absent from the current table —
