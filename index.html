@@ -249,6 +249,10 @@ table.dt thead th{
 }
 table.dt thead th.num{text-align:right;}
 table.dt thead th .sort-ind{color:var(--text-faint);margin-left:var(--s1);}
+/* Unsorted columns still render the span (empty: no badge, no arrow), so its
+   margin stole 4px of label width from every header for nothing — and headers
+   clip+ellipsis now, so that 4px was real lost text. */
+table.dt thead th .sort-ind:empty{margin-left:0;}
 /* Feature 7 — multi-sort order badge: a small numbered circle ahead of the arrow,
    shown only once 2+ sort keys are active (never color-only — the number itself
    IS the signal, same text badge in both themes). */
@@ -576,6 +580,12 @@ table.dt tbody td.dt-acts .kebab-btn{width:20px;height:20px;font-size:var(--t12)
   .hide-sm{display:none;}
   .kbd{display:none;}
   .kbd.ai-trigger{display:inline-flex;}
+  /* The blanket .kbd hide above also killed the ⋯ trigger, which is the ONLY
+     mobile path to theme/density/views/palette/update — every one of those
+     controls is a .kbd behind it. Descendant selector (0-2-0) re-shows the
+     trigger and the panel's contents; the panel itself is display:none until
+     open, so nothing extra paints while closed. */
+  .more-menu .kbd{display:inline-flex;}
   .ai-trigger .mono{display:none;}
   .views-slot{display:none;}
   .topbar-right .acct-trigger{max-width:120px;}

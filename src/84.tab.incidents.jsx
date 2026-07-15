@@ -101,6 +101,37 @@ function mcpSeverity(row){
   return MCP_PRIORITY_TO_SEVERITY[p]||'ok';
 }
 
+/* incMessage — server.py:2855 builds the triage message as
+   f"{count} {category.replace('-',' ')}" → "129 subnet utilization", which reads as
+   a PROPERTY of one thing, not a set of 129 ("why only 3 incidents?"). Restate the
+   three known categories (server.py:2890/2902/2914) with a plural noun so the row
+   says what it contains. Unknown categories keep the server string verbatim.
+   PERMANENT FIX: one line in correlate() — server.py is out of scope here. */
+const INC_MESSAGE={
+  'subnet-utilization':c=>c+' subnet'+(c===1?'':'s')+' over threshold',
+  'dns-ttl-anomaly':c=>c+' zone'+(c===1?'':'s')+' with TTL anomalies',
+  'dhcp-expired-lease':c=>c+' expired lease'+(c===1?'':'s'),
+};
+function incMessage(row){
+  const f=INC_MESSAGE[row&&row.category];
+  return f?f(Number(row.count)||0):row.message;
+}
+
+/* IncEntitiesCell — sample_entities is group[:5]; rendering the join made the cell
+   read as THE entities. Show the first two as real IdCells (hover-full/click-copy
+   preserved) + the count that is actually behind the row. */
+const INC_ENT_SHOWN=2;
+function IncEntitiesCell({row}){
+  const sample=Array.isArray(row.sample_entities)?row.sample_entities:[];
+  if(!sample.length) return '—';
+  const shown=sample.slice(0,INC_ENT_SHOWN);
+  const more=Math.max(0,(Number(row.count)||sample.length)-shown.length);
+  return <span style={{display:'flex',alignItems:'center',gap:4,minWidth:0}}>
+    {shown.map((e,i)=><IdCell key={i} value={e} label="Entity"/>)}
+    {more?<span style={{flex:'0 0 auto',whiteSpace:'nowrap',color:'var(--text-dim)'}}>+{more} more</span>:null}
+  </span>;
+}
+
 /* IncidentsTab — port of TriagePanel + McpIncidentQueue + McpEventStream onto
    this app's DataTable/Panel/SynthBand idioms (pattern = AuditTab).
    - Triage: /api/incidents (server-correlated Signals from subnet/zone/lease
@@ -129,11 +160,21 @@ function IncidentsTab(){
     ? totalVol+' active '+(totalVol===1?'issue':'issues')+' · '+catCount+' categor'+(catCount===1?'y':'ies')+(critVol?(' · '+critVol+' critical'):'')
     : 'No issues detected — all metrics within normal thresholds';
 
+  // Message is transformed in the ROW DATA, not via a column render: a render would
+  // pin the column open against effCols' hide-all-empty pruning (40.table.jsx:915).
+  // Falsy messages pass through untouched so an empty column still prunes.
+  const triageRows=incidents.map(i=>i.message?{...i,message:incMessage(i)}:i);
+
   const triageCols=[
+    // Persistent affordance that the row opens — never hover-gated. aria-expanded
+    // lives on the <tr> (DTRow, 40.table.jsx), not here.
+    {key:'__peek',label:'',width:24,sortable:false,
+      render:()=><span aria-hidden="true" style={{color:'var(--text-faint)'}}>›</span>},
     {key:'severity',label:'Sev',width:70,render:v=><SeverityBadge severity={v}/>},
     {key:'count',label:'Count',mono:true,align:'right',width:70},
     {key:'message',label:'Message'},
-    {key:'sample_entities',label:'Entities',id:true,idText:v=>(Array.isArray(v)?v:[]).join(', '),render:v=>(Array.isArray(v)?v:[]).join(', ')||'—'},
+    {key:'sample_entities',label:'Entities',render:(_,row)=><IncEntitiesCell row={row}/>,
+      tipFn:r=>(r.sample_entities||[]).join(', ')+' — '+r.count+' total'},
     // Rows are peekOnClick now, so this cell must swallow its own clicks — snoozing
     // a category must never also drill into it.
     {key:'snooze',label:'',width:190,sortable:false,render:(_,row)=>
@@ -168,7 +209,7 @@ function IncidentsTab(){
             ? <div className="dt-empty">Vault locked — unlock to load incidents.</div>
             : incidents.length===0
               ? <div className="dt-empty">No issues detected — all metrics within normal thresholds.</div>
-              : <DataTable cols={triageCols} rows={incidents} rowKey={r=>r.key} tableId="incidents-triage"
+              : <DataTable cols={triageCols} rows={triageRows} rowKey={r=>r.key} tableId="incidents-triage"
                   filterable searchSchema={{fields:{count:{type:'number'}}}} csvName="incidents" maxRows={50}
                   peekOnClick
           renderPeek={row=><IncidentSignalsPeek row={row} key={row.category||row.key}/>}/>}

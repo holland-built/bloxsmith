@@ -146,7 +146,7 @@ function IdCell({value,label}){
     {tail?<span className="dt-id-tail">{tail}</span>:null}
   </span>;
 }
-const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,showPeekItem,selectable,rowApi,diff,showDiff}){
+const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,showPeekItem,isPeekOpen,selectable,rowApi,diff,showDiff}){
   const align=c=>c.align||(c.mono?'right':'left');
   const isNum=c=>align(c)==='right';
   const fx=useFilters();
@@ -183,9 +183,14 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
   const [pivotMenuCi,setPivotMenuCi]=useState(-1);
   const pivotCellRefs=useRef({});
   const closePivotMenu=ci=>{ setPivotMenuCi(-1); const el=pivotCellRefs.current[ci]; if(el&&el.focus) el.focus(); };
+  // aria-expanded only where the row's OWN click opens the peek (DataTable sends the
+  // flag there, undefined elsewhere) — on a nav row the click leaves the page, so
+  // announcing collapsed/expanded would lie. aria-controls is deliberately omitted:
+  // PeekDrawer's aside carries no DOM id to point at.
   return <tr id={rowId||undefined}
     className={(clickable?'clickable':'')+(isCursor?' cursor':'')+(isFlash?' flash':'')}
     aria-selected={isCursor?'true':undefined}
+    aria-expanded={isPeekOpen==null?undefined:(isPeekOpen?'true':'false')}
     role="row" tabIndex={clickable?0:undefined}
     onClick={clickable?()=>rowApi.current.activate(rkey):undefined}
     onKeyDown={clickable?e=>{if(e.key==='Enter')rowApi.current.activate(rkey);}:undefined}>
@@ -280,8 +285,8 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
     })}
     <td className="dt-acts" onClick={e=>e.stopPropagation()}>
       <KebabMenu label={actsLabel} items={[
-        // "View details" — only the row's ONLY mouse path to the peek (see
-        // showPeekItem in DataTable). Opens the SAME peek Enter/o does, via the
+        // "View details" — the row's guaranteed mouse path to the peek, on EVERY
+        // table (see showPeekItem in DataTable). Opens the SAME peek Enter/o does, via the
         // stable rowApi.current.peek() imperative entry point (not a fresh
         // per-row closure — rowApi/rkey are already props, so this stays memo-safe).
         ...(showPeekItem?[{label:'View details', run:()=>rowApi.current.peek(rkey)}]:[]),
@@ -624,6 +629,32 @@ function cleanBqlAnswer(raw){
   }catch(e){ return ''; }
 }
 /* ==BQL:cleanBqlAnswer:end== */
+
+/* defaultPeekRender — the row-detail every table gets when it ships no renderPeek of
+   its own (20 of 26 did): a plain label/value list. Built over the FULL `columns`, not
+   effCols — the peek is the recovery path for columns the table hid or pruned, same
+   convention as CSV (see ~906) — then any row key no column covers. Long/id-ish values
+   go through IdCell so nothing in the drawer truncates without a copy path. */
+function defaultPeekRender(columns){
+  const cols=columns||[];
+  const kv=(k,label,v)=>{
+    const content=(looksLikeId(v)||(typeof v==='string'&&v.length>28))
+      ? <IdCell value={v} label={label}/> : safeCellContent(v);
+    return <div key={k} style={{marginTop:'var(--s2)'}}>
+      <div className="band-fact-l">{label}</div>
+      <div className="mono" style={{fontSize:'var(--t12)',wordBreak:'break-word'}}>
+        {content===''?'—':content}</div>
+    </div>;
+  };
+  return row=>{
+    const r=row||{};
+    const covered=new Set(cols.map(c=>c.key));
+    return <div>
+      {cols.map((c,i)=>kv('c'+i,c.label||c.key,r[c.key]))}
+      {Object.keys(r).filter(k=>!covered.has(k)).map(k=>kv('x'+k,k,r[k]))}
+    </div>;
+  };
+}
 
 function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
@@ -1018,10 +1049,17 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const scrollTo=i=>{ const rid=rowIdOf(i);
     const go=()=>{ const el=rid&&document.getElementById(rid); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'}); };
     go(); if(scrollBody) requestAnimationFrame(go); }; // scrollBody: retry after progressive render paints the row
+  // effPeek: the table's own peek, else the generated one — so "View details" exists on
+  // every table instead of only the 6 that hand-wrote a renderPeek. Only the peek OPENERS
+  // switch to effPeek; the mouse-gesture branches (activate/rowClickable) still read the
+  // explicit renderPeek, so no table's rows become newly clickable (which would kill
+  // click-to-copy, see copyCell).
+  const genPeek=useMemo(()=>defaultPeekRender(columns),[columns]);
+  const effPeek=renderPeek||genPeek;
   const openPeekAt=i=>{
-    if(!power||!renderPeek) return;
+    if(!power||!effPeek) return;
     const r=(scrollBody?sorted:visible)[i]; if(!r) return;
-    power.setPeek({tableId:id,render:renderPeek,row:r,
+    power.setPeek({tableId:id,render:effPeek,row:r,
       title:String((columns[0]&&r[columns[0].key])||keyOf(r,i)),
       onFull:onRowClick?()=>onRowClick(r,i):null, returnFocus:wrapRef.current});
   };
@@ -1105,9 +1143,13 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // Imperative api — reassigned each render so closures see current state.
   apiRef.current={
     move(delta){ const len=scrollBody?sorted.length:visible.length; setCursor(c=>{ let n=c<0?0:c+delta; n=Math.max(0,Math.min(len-1,n)); if(scrollBody) setRenderLimit(rl=>Math.max(rl,n+50)); scrollTo(n); syncPeek(n); return n; }); return true; },
+    // Explicit props order FIRST: a table that hand-wrote a peek keeps Enter=peek, one
+    // with only onRowClick keeps Enter=navigate. The generated peek is the last resort,
+    // so effPeek can't silently flip an existing Enter from navigate to peek.
     openCursor(){ const i=cursor<0?0:cursor; const r=visible[i]; if(!r) return false;
       if(renderPeek){ setCursor(i); openPeekAt(i); return true; }
-      if(onRowClick){ onRowClick(r,i); return true; } return false; },
+      if(onRowClick){ onRowClick(r,i); return true; }
+      if(effPeek){ setCursor(i); openPeekAt(i); return true; } return false; },
     toggleSelect(){ if(!selectable||cursor<0||cursor>=visible.length) return false; check(keyOf(visible[cursor],cursor),false); return true; },
     copyCursorRow(){ if(cursor<0||cursor>=visible.length) return false;
       const row=visible[cursor];
@@ -1133,11 +1175,11 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     activate(key){ const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return;
       if(onRowClick){ onRowClick(visible[i],i); return; }
       if(peekOnClick&&renderPeek){ setCursor(i); openPeekAt(i); } },
-    // peek: the kebab's "View details" mouse path for tables that have renderPeek
-    // but whose rows AREN'T clickable (dns/security — see showPeekItem below).
-    // Same key->index resolution + cursor-sync as activate()'s peekOnClick branch,
-    // so keyboard nav continues from the row the mouse just opened.
-    peek(key){ if(!renderPeek) return; const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return;
+    // peek: the kebab's "View details" mouse path — now on every table (effPeek), incl.
+    // ones whose row click navigates instead (ov-leases/hosts/subnets), where it was the
+    // missing affordance. Same key->index resolution + cursor-sync as activate()'s
+    // peekOnClick branch, so keyboard nav continues from the row the mouse just opened.
+    peek(key){ if(!effPeek) return; const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key); if(i<0) return;
       setCursor(i); openPeekAt(i); },
     check,
     getState(){
@@ -1162,7 +1204,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // Safety: if the key isn't in `visible` but IS in full data, reveal it once
   // (expand maxRows + turn problemsOnly off), then re-run finds it.
   useEffect(()=>{
-    if(initRef.current||!initialPeekKey||!renderPeek) return;
+    if(initRef.current||!initialPeekKey||!effPeek) return;
     const key=String(initialPeekKey);
     const i=visible.findIndex((r,idx)=>keyOf(r,idx)===key);
     if(i>=0){ initRef.current=true; setCursor(i); openPeekAt(i); return; }
@@ -1173,11 +1215,19 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     }
   },[initialPeekKey,visible]); // eslint-disable-line
 
-  // rowClickable mirrors activate()'s two mouse-gesture branches. showPeekItem is
-  // the kebab "View details" fallback for renderPeek tables that DON'T make rows
-  // clickable (dns/security — clickable rows disable click-to-copy, see copyCell).
+  // rowClickable mirrors activate()'s two mouse-gesture branches — unchanged, and
+  // deliberately still keyed off the EXPLICIT renderPeek (see effPeek above).
+  // showPeekItem: the kebab "View details" is now unconditional, because effPeek means
+  // every table has a peek to open. It was suppressed on clickable rows as a duplicate
+  // affordance, but on nav rows (ov-leases/hosts/subnets) the click NAVIGATES — it never
+  // opened the peek — which orphaned those peeks from the mouse entirely. Where the click
+  // really does open the peek (peekOnClick) the item is a harmless second door, and the
+  // drawer's own "Open full view →" foot (onFull, openPeekAt) carries the nav path back.
   const rowClickable=!!onRowClick||!!(peekOnClick&&renderPeek);
-  const showPeekItem=!!renderPeek&&!rowClickable;
+  const showPeekItem=!!effPeek;
+  // rowExpands: rows whose OWN click opens the peek — the only ones aria-expanded can
+  // honestly describe (activate() gives onRowClick priority).
+  const rowExpands=!onRowClick&&!!(peekOnClick&&renderPeek);
 
   const allKeys=visible.map((r,i)=>keyOf(r,i));
   const allSel=allKeys.length>0&&allKeys.every(k=>selected.has(k));
@@ -1536,14 +1586,14 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
             : visible.map((r,ri)=>{
                 const rk=keyOf(r,ri);
                 // rowClickable/showPeekItem: same value for every row (not per-row),
-                // computed once here rather than as a fresh function passed to DTRow —
-                // keeps the prop a plain boolean so DTRow's memo still holds.
-                // showPeekItem: table has a peek AND rows have no other mouse path to
-                // it (onRowClick / peekOnClick already make the row itself clickable —
-                // adding the kebab item there would be a duplicate affordance).
+                // computed once above rather than as a fresh function passed to DTRow —
+                // keeps the prop a plain boolean so DTRow's memo still holds. isPeekOpen
+                // is per-row but still a plain boolean, and only two rows' values flip
+                // per open/close, so the memo keeps every other row from re-rendering.
                 return <DTRow key={rk} r={r} rkey={rk} cols={effCols} rowId={rowIdOf(ri)}
                   isCursor={ri===cursor} isSel={selected.has(rk)} isFlash={flashed.has(rk)}
                   clickable={rowClickable} showPeekItem={showPeekItem} selectable={!!selectable} rowApi={apiRef}
+                  isPeekOpen={rowExpands?!!(power&&power.peek&&power.peek.tableId===id&&power.peek.row===r):undefined}
                   diff={diffMap?diffMap.get(rk):null} showDiff={!!diffMap}/>;
               })}
           {/* Compare-to-snapshot ghosts: prior rows absent from the current table —
