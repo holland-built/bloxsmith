@@ -30,6 +30,19 @@ async function mock(page: any) {
   );
 }
 
+// The shared storageState (both playwright.config.ts and pw.diag.config.ts)
+// pre-seeds bx.tourSeen='true' so the first-run tour doesn't overlay every other
+// spec. These two tests are the ones that actually exercise the first run, so they
+// must clear that seed themselves. localStorage can only be touched once we're on
+// the origin, hence goto -> clear -> reload. A one-shot addInitScript would fight
+// the "reload → not shown again" assertion below, so don't use one.
+async function firstRun(page: any, hash: string) {
+  await page.goto('/' + hash, { waitUntil: 'networkidle' });
+  await page.evaluate(() => localStorage.removeItem('bx.tourSeen'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.locator('.tabbar')).toBeVisible();
+}
+
 test('#wall enters wallboard: chrome hidden, health tiles + worst-offenders + heatmap present, Esc exits', async ({ page }) => {
   await mock(page);
   await page.goto('/#wall', { waitUntil: 'networkidle' });
@@ -58,6 +71,11 @@ test('a header toggle also enters wallboard mode', async ({ page }) => {
   await page.goto('/#overview', { waitUntil: 'networkidle' });
   await expect(page.locator('.tabbar')).toBeVisible();
 
+  // The Wall button lives two levels deep in the topbar overflow:
+  // ⋯ (MoreMenu) -> gear (ViewOptions) -> Wall. Both panels are display:none
+  // when closed, so open them in order (same as theme.spec).
+  await page.getByRole('button', { name: /^More tools/ }).click();
+  await page.getByRole('button', { name: 'View options' }).click();
   await page.getByRole('button', { name: /wallboard/i }).click();
   await expect(page.locator('.wallboard')).toBeVisible();
   await expect(page.locator('.topbar')).toHaveCount(0);
@@ -65,8 +83,7 @@ test('a header toggle also enters wallboard mode', async ({ page }) => {
 
 test('first-run tour shows once, dismiss persists in LS, re-summonable from "?" overlay', async ({ page }) => {
   await mock(page);
-  await page.goto('/#overview', { waitUntil: 'networkidle' });
-  await expect(page.locator('.tabbar')).toBeVisible();
+  await firstRun(page, '#overview');
 
   const tour = page.locator('.tour-callout');
   await expect(tour).toBeVisible();
@@ -101,8 +118,7 @@ test('first-run tour shows once, dismiss persists in LS, re-summonable from "?" 
 
 test('tour is non-modal / keyboard-dismissible with Esc', async ({ page }) => {
   await mock(page);
-  await page.goto('/#overview', { waitUntil: 'networkidle' });
-  await expect(page.locator('.tabbar')).toBeVisible();
+  await firstRun(page, '#overview');
 
   const tour = page.locator('.tour-callout');
   await expect(tour).toBeVisible();

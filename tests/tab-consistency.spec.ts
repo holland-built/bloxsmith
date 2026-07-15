@@ -43,7 +43,10 @@ test('Provision renders its PageHeader + request form fields', async ({ page }) 
 test('Editor renders its PageHeader + resource-type switcher', async ({ page }) => {
   await gotoTab(page, 'editor');
   await expect(page.locator('.page-head .page-title', { hasText: 'Editor' }).first()).toBeVisible();
-  await expect(page.locator('.dly-seg-btn', { hasText: 'DNS Record' }).first()).toBeVisible();
+  // EDITOR_TYPES = DNS Zone / Subnet / Address Block / DHCP Range / Host / Tags.
+  // "DNS Record" (and IP Address) belong to SelfServiceTab by design and are
+  // deliberately not duplicated here — assert the real first switcher segment.
+  await expect(page.locator('.dly-seg-btn', { hasText: 'DNS Zone' }).first()).toBeVisible();
 });
 
 test('Drift renders its PageHeader + Check drift button', async ({ page }) => {

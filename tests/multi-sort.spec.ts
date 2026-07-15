@@ -28,18 +28,25 @@ async function mock(page) {
   );
 }
 
+// #security renders SEVERAL DataTables (triage, lookalikes, insights…) and more than
+// one of them has a "Severity" column — an unscoped page.locator('th') is a strict-mode
+// violation whose match count depends on which sibling tables have finished loading.
+// Everything here is scoped to the triage table via its DataTable root (data-table-id).
+const triage = (page) => page.locator('[data-table-id="triage"]');
+const th = (page, name: string) => triage(page).locator('th').filter({ hasText: name });
+
 test('shift-click appends a secondary sort key, applied stably in order', async ({ page }) => {
   await mock(page);
   await page.goto('/#security');
-  const rows = page.locator('table.dt tbody tr');
+  const rows = triage(page).locator('tbody tr');
   await expect(rows.first()).toBeVisible();
 
   // Primary: severity asc (critical < high alphabetically) — both criticals tie.
-  await page.locator('th', { hasText: 'Severity' }).click();
-  await expect(page.locator('th', { hasText: 'Severity' }).locator('.sort-ind')).toHaveText('↑');
+  await th(page, 'Severity').click();
+  await expect(th(page, 'Severity').locator('.sort-ind')).toHaveText('↑');
 
   // Secondary: shift-click Query asc — breaks the tie between the two criticals.
-  await page.locator('th', { hasText: 'Query' }).click({ modifiers: ['Shift'] });
+  await th(page, 'Query').click({ modifiers: ['Shift'] });
 
   await expect(rows).toHaveCount(3);
   const texts = await rows.evaluateAll(trs => trs.map(tr => tr.textContent || ''));
@@ -54,49 +61,49 @@ test('shift-click appends a secondary sort key, applied stably in order', async 
 test('order badges + aria-sort mark each active sort column', async ({ page }) => {
   await mock(page);
   await page.goto('/#security');
-  await expect(page.locator('table.dt tbody tr').first()).toBeVisible();
+  await expect(triage(page).locator('tbody tr').first()).toBeVisible();
 
-  await page.locator('th', { hasText: 'Severity' }).click();
-  await page.locator('th', { hasText: 'Query' }).click({ modifiers: ['Shift'] });
+  await th(page, 'Severity').click();
+  await th(page, 'Query').click({ modifiers: ['Shift'] });
 
-  const sevTh = page.locator('th', { hasText: 'Severity' });
-  const qTh = page.locator('th', { hasText: 'Query' });
+  const sevTh = th(page, 'Severity');
+  const qTh = th(page, 'Query');
   await expect(sevTh.locator('.sort-ind')).toHaveText('1↑');
   await expect(qTh.locator('.sort-ind')).toHaveText('2↑');
   await expect(sevTh).toHaveAttribute('aria-sort', 'ascending');
   await expect(qTh).toHaveAttribute('aria-sort', 'ascending');
-  await expect(page.locator('th', { hasText: 'Device' })).toHaveAttribute('aria-sort', 'none');
+  await expect(th(page, 'Device')).toHaveAttribute('aria-sort', 'none');
 });
 
 test('hash carries the ordered multi-key list, and reloading it restores the order', async ({ page }) => {
   await mock(page);
   await page.goto('/#security');
-  await expect(page.locator('table.dt tbody tr').first()).toBeVisible();
+  await expect(triage(page).locator('tbody tr').first()).toBeVisible();
 
-  await page.locator('th', { hasText: 'Severity' }).click();
-  await page.locator('th', { hasText: 'Query' }).click({ modifiers: ['Shift'] });
+  await th(page, 'Severity').click();
+  await th(page, 'Query').click({ modifiers: ['Shift'] });
 
   await expect(page).toHaveURL(/triage\.sort=severity%3Aasc%2Cqname%3Aasc/);
 
   await page.reload();
-  await expect(page.locator('table.dt tbody tr').first()).toBeVisible();
-  await expect(page.locator('th', { hasText: 'Severity' }).locator('.sort-ind')).toHaveText('1↑');
-  await expect(page.locator('th', { hasText: 'Query' }).locator('.sort-ind')).toHaveText('2↑');
+  await expect(triage(page).locator('tbody tr').first()).toBeVisible();
+  await expect(th(page, 'Severity').locator('.sort-ind')).toHaveText('1↑');
+  await expect(th(page, 'Query').locator('.sort-ind')).toHaveText('2↑');
 });
 
 test('a plain click resets to single-sort on that column, dropping secondary keys', async ({ page }) => {
   await mock(page);
   await page.goto('/#security');
-  await expect(page.locator('table.dt tbody tr').first()).toBeVisible();
+  await expect(triage(page).locator('tbody tr').first()).toBeVisible();
 
-  await page.locator('th', { hasText: 'Severity' }).click();
-  await page.locator('th', { hasText: 'Query' }).click({ modifiers: ['Shift'] });
+  await th(page, 'Severity').click();
+  await th(page, 'Query').click({ modifiers: ['Shift'] });
 
   // Plain click on Query — collapses to single-sort on Query only.
-  await page.locator('th', { hasText: 'Query' }).click();
-  await expect(page.locator('th', { hasText: 'Query' }).locator('.sort-ind')).toHaveText('↑');
-  await expect(page.locator('th', { hasText: 'Severity' }).locator('.sort-ind')).toHaveText('');
-  await expect(page.locator('th', { hasText: 'Severity' })).toHaveAttribute('aria-sort', 'none');
+  await th(page, 'Query').click();
+  await expect(th(page, 'Query').locator('.sort-ind')).toHaveText('↑');
+  await expect(th(page, 'Severity').locator('.sort-ind')).toHaveText('');
+  await expect(th(page, 'Severity')).toHaveAttribute('aria-sort', 'none');
   await expect(page).toHaveURL(/triage\.sort=qname%3Aasc/);
   await expect(page).not.toHaveURL(/severity/);
 });
@@ -104,7 +111,7 @@ test('a plain click resets to single-sort on that column, dropping secondary key
 test('single-sort hash format is unchanged (backward-compat with saved links)', async ({ page }) => {
   await mock(page);
   await page.goto('/#security');
-  await expect(page.locator('table.dt tbody tr').first()).toBeVisible();
-  await page.locator('th', { hasText: 'Query' }).click();
+  await expect(triage(page).locator('tbody tr').first()).toBeVisible();
+  await th(page, 'Query').click();
   await expect(page).toHaveURL(/triage\.sort=qname%3Aasc(?!%2C)/);
 });
