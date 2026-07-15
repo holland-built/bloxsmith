@@ -16,18 +16,23 @@
 # tests/known-failures.txt (27) — dummy-key runs FIX 9 of those, because real
 # tenant data was leaking into otherwise-mocked specs. Do not merge the lists.
 #
+#
+# PLATFORM NOTE: this baseline is enforced ONLY in CI (ubuntu-latest), so it must be
+# measured THERE. It was first generated on macOS and did not transfer: command-palette
+# (Control+k) and copy-link (clipboard permissions) fail on the Linux runner and pass on
+# a Mac. A baseline is platform-specific; regenerate it from a CI run, not a local one.
+# Last measured: run for dc021dc on ubuntu-latest -> 207 passed / 17 failed.
 audit-highs.spec.ts :: H2 — WatchMenu: role=menu, menuitems, first-item focus on open, Esc closes + returns focus
+command-palette.spec.ts :: Control+k opens palette, filter -> Go to Network -> Enter navigates
+copy-link.spec.ts :: palette "Copy link to this view" copies the current URL and announces it
 density.spec.ts :: density toggle grows row height and persists across reload
-drill-down.spec.ts :: clicking a subnet row drills into leases, back restores the table
 lookalikes.spec.ts :: an unavailable lookalikes feed shows the not-entitled empty state
 lookalikes.spec.ts :: lookalikes panel renders the returned domains
 network-charts.spec.ts :: clicking a site bar filters the subnet table by that site
 overview-redesign.spec.ts :: fix 7 — compact stat strip replaces the big banner
-saved-views.spec.ts :: save, apply, and delete a saved view via the UI
 synthesis.spec.ts :: #ask leads with a synthesis .band above its table
 synthesis.spec.ts :: #overview leads with a synthesis .band above its table
 tab-consistency.spec.ts :: Editor renders its PageHeader + resource-type switcher
-theme.spec.ts :: toggle flips html[data-theme] and persists across reload
 time-graph.spec.ts :: time-range preset writes t= into the URL hash and is optional by default
 view-state.spec.ts :: copy-link encodes search + sort + hidden column, and loading it restores the view
 wallboard-tour.spec.ts :: a header toggle also enters wallboard mode
