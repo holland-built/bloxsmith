@@ -132,7 +132,7 @@ st = d.get('stats', {})
 print('e2e: %s passed, %s failed, %s flaky (%d known-failing)'
       % (st.get('expected'), st.get('unexpected'), st.get('flaky'), len(known)), file=sys.stderr)
 for t in fixed:
-    print('e2e: FIXED — delete this line from tests/known-failures.txt:\n      %s' % t, file=sys.stderr)
+    print('e2e: FIXED — delete this line from %s:\n      %s' % (known_path, t), file=sys.stderr)
 if new_fail:
     print('\ne2e: %d NEW failure(s) — this is a regression, not a known gap:' % len(new_fail), file=sys.stderr)
     for t in new_fail:
