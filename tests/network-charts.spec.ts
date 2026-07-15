@@ -43,8 +43,25 @@ test('clicking a site bar filters the subnet table by that site', async ({ page 
   await page.goto('/#network', { waitUntil: 'networkidle' });
   await expect(page.locator('.groupbar')).toBeVisible();
 
-  // Click the first (worst) site bar -> the site filter engages: a "Clear ✕" chip
-  // appears (in the "Capacity by site" panel header) to drop the active site filter.
+  // Every subnet is listed before any site filter is applied.
+  const row = (n: string) => page.getByRole('row').filter({ hasText: n });
+  for (const n of ['Alpha Net', 'Beta Net', 'Gamma Net', 'Delta Net'])
+    await expect(row(n)).toHaveCount(1);
+
+  // Click the first (worst) site bar -> the site filter engages as a removable
+  // pivot in the global FilterBar, and the subnet table scopes to that site.
+  // (HQ is worst: Alpha Net @92%. HQ owns Alpha + Beta; DR/BR drop out.)
   await page.locator('.groupbar-row').first().click();
-  await expect(page.locator('.chip').filter({ hasText: 'Clear' })).toBeVisible();
+  const chip = page.locator('.filter-bar .chip').filter({ hasText: 'Site: HQ' });
+  await expect(chip).toBeVisible();
+  await expect(row('Alpha Net')).toHaveCount(1);
+  await expect(row('Beta Net')).toHaveCount(1);
+  await expect(row('Gamma Net')).toHaveCount(0);
+  await expect(row('Delta Net')).toHaveCount(0);
+
+  // The chip drops the filter: every subnet comes back and the bar goes away.
+  await chip.click();
+  await expect(page.locator('.filter-bar')).toHaveCount(0);
+  for (const n of ['Alpha Net', 'Beta Net', 'Gamma Net', 'Delta Net'])
+    await expect(row(n)).toHaveCount(1);
 });

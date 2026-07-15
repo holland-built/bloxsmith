@@ -21,6 +21,10 @@ const SECURITY = {
   ],
 };
 
+// #security renders several DataTables; an unscoped 'table.dt tbody tr' matches
+// every one of them (700+ rows). Scope to the triage table via its DataTable root.
+const triage = (page: any) => page.locator('[data-table-id="triage"]');
+
 async function mock(page: any) {
   await page.route('**/api/hub/security', (route: any) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SECURITY) })
@@ -31,7 +35,7 @@ test('right-click on an ordinary cell offers "Filter by this value" and narrows 
   await mock(page);
   await page.goto('/#security');
 
-  const rows = page.locator('table.dt tbody tr');
+  const rows = triage(page).locator('tbody tr');
   await expect(rows.first()).toBeVisible();
   await expect(rows).toHaveCount(3);
 
@@ -56,7 +60,7 @@ test('keyboard: Shift+F10 on a focused ordinary cell opens the same pivot action
   await mock(page);
   await page.goto('/#security');
 
-  const rows = page.locator('table.dt tbody tr');
+  const rows = triage(page).locator('tbody tr');
   await expect(rows.first()).toBeVisible();
 
   const cell = rows.nth(1).locator('td', { hasText: 'high.example' });
@@ -76,7 +80,7 @@ test('pivot columns are unaffected — no duplicate context menu on the existing
   await mock(page);
   await page.goto('/#security');
 
-  const rows = page.locator('table.dt tbody tr');
+  const rows = triage(page).locator('tbody tr');
   await expect(rows.first()).toBeVisible();
 
   // severity is already pivot:true — right-clicking it must NOT open the new

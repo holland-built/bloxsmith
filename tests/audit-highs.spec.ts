@@ -59,7 +59,13 @@ test('H2 — WatchMenu: role=menu, menuitems, first-item focus on open, Esc clos
   await mock(page);
   await page.goto('/#overview', { waitUntil: 'networkidle' });
 
-  const trigger = page.getByRole('button', { name: /Watches/ });
+  // WatchMenu portals into the .tools-slot inside the ⋯ MoreMenu panel, which is
+  // display:none while closed — open the overflow first (same as theme.spec).
+  await page.getByRole('button', { name: /^More tools/ }).click();
+
+  // Anchored: the ⋯ trigger's own aria-label also contains the word "Watches".
+  const trigger = page.getByRole('button', { name: /^Watches/ });
+  await expect(trigger).toBeVisible();
   await trigger.click();
 
   const menu = page.locator('.views-menu[role="menu"]');

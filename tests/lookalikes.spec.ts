@@ -22,7 +22,7 @@ test('lookalikes panel renders the returned domains', async ({ page }) => {
 
   await page.goto('/#security');
 
-  await expect(page.getByText('Lookalike domains')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lookalike domains' })).toBeVisible();
   await expect(page.getByText('g00gle.com')).toBeVisible();
   await expect(page.getByText('paypa1.com')).toBeVisible();
 });
@@ -32,6 +32,6 @@ test('an unavailable lookalikes feed shows the not-entitled empty state', async 
 
   await page.goto('/#security');
 
-  await expect(page.getByText('Lookalike domains')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lookalike domains' })).toBeVisible();
   await expect(page.getByText(/Not entitled/)).toBeVisible();
 });
