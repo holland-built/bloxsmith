@@ -5328,6 +5328,51 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/incidents/category", e)
                 self._json({"category": category, "count": 0, "truncated": False, "signals": []})
+        elif path == "/api/csp-audit":
+            # On-demand search over the CSP portal audit log, reaching PAST the 100-row
+            # window the dashboard poll carries. The tenant churns ~100 audit events every
+            # ~8 min (almost all automation), so a specific human action falls off that
+            # window fast — this lets you filter to it server-side.
+            # Params: q (free text → user_name/resource_type contains), kind
+            # (subject_type exact), since/until (created_at range, ISO8601).
+            from urllib.parse import parse_qs, urlparse
+            qs = parse_qs(urlparse(self.path).query)
+            g = lambda k: (qs.get(k, [""])[0] or "").strip()
+            q, kind, since, until = g("q"), g("kind"), g("since"), g("until")
+            try:
+                # INJECTION GUARD: user text goes into a _filter EXPRESSION string, so it
+                # must be neutralised. Infoblox _filter values are double-quoted; strip any
+                # double-quote/backslash from the input so it cannot break out of the quoted
+                # literal or terminate the expression. kind is allow-listed, not quoted-in.
+                def _lit(v):
+                    return '"' + str(v).replace("\\", "").replace('"', "") + '"'
+                clauses = []
+                if q:
+                    # contains-match across the two human-meaningful fields
+                    clauses.append("(user_name~" + _lit(q) + " or resource_type~" + _lit(q) + ")")
+                if kind in ("User", "Device", "Service"):
+                    clauses.append("subject_type==" + _lit(kind))
+                # created_at bounds — only accept ISO-ish values (digits/T/:/-/Z/.), reject the rest
+                _iso = lambda v: v if v and all(c in "0123456789TZ:-." for c in v) else ""
+                if _iso(since):
+                    clauses.append('created_at>=' + _lit(_iso(since)))
+                if _iso(until):
+                    clauses.append('created_at<=' + _lit(_iso(until)))
+                params = {"_limit": 500, "_order_by": "created_at desc"}
+                if clauses:
+                    params["_filter"] = " and ".join(clauses)
+                body, http = _rest_get_ex("/api/auditlog/v1/logs", params)
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "truncated": False, "status": "error"})
+                else:
+                    raw = (body.get("results", body.get("result", []))
+                           if isinstance(body, dict) else (body or []))
+                    rows = norm_audit(raw)
+                    self._json({"rows": rows, "count": len(rows),
+                                "truncated": len(rows) >= 500, "status": "ok"})
+            except Exception as e:
+                _log_exc("/api/csp-audit", e)
+                self._json({"rows": [], "count": 0, "truncated": False, "status": "error"})
         elif path == "/api/mcp/events":
             try:
                 self._json(fetch_mcp_events())

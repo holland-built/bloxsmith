@@ -335,10 +335,31 @@ function AuditTab(){
 function CspAuditPanel(){
   const feed=useData();
   const d=feed.data||{};
-  const rows=Array.isArray(d.auditLogs)?d.auditLogs:[];
+  const liveRows=Array.isArray(d.auditLogs)?d.auditLogs:[];
   // Empty and unavailable must NOT look identical — that ambiguity is exactly what let
   // this feed sit dead for months. _meta.auditLogs is 'ok'|'empty'|'error' from server.
-  const status=(d._meta&&d._meta.auditLogs)||(rows.length?'ok':null);
+  const liveStatus=(d._meta&&d._meta.auditLogs)||(liveRows.length?'ok':null);
+
+  // Server-side search reaches PAST the live 100-row poll window (the tenant churns ~100
+  // audit events every ~8 min, so a specific human action falls off the poll fast). When
+  // a search is active, its results replace the live view until cleared.
+  const [q,setQ]=useState(''), [kind,setKind]=useState(''), [since,setSince]=useState('');
+  const [search,setSearch]=useState(null); // null = showing the live feed
+  const [busy,setBusy]=useState(false);
+  const runSearch=async()=>{
+    if(!q&&!kind&&!since){ setSearch(null); return; }
+    setBusy(true);
+    const p=new URLSearchParams();
+    if(q) p.set('q',q); if(kind) p.set('kind',kind);
+    if(since){ const t=new Date(Date.now()-({'24h':864e5,'7d':6048e5,'30d':2592e6}[since]||0)); p.set('since',t.toISOString()); }
+    try{ const r=await fetch('/api/csp-audit?'+p.toString()); setSearch(await r.json()); }
+    catch(e){ setSearch({rows:[],count:0,status:'error'}); }
+    setBusy(false);
+  };
+  const clearSearch=()=>{ setQ(''); setKind(''); setSince(''); setSearch(null); };
+
+  const rows=search?(search.rows||[]):liveRows;
+  const status=search?search.status:liveStatus;
   const cols=[
     {key:'ts',label:'Time',mono:true,align:'left',width:190,
       render:v=>v?new Date(parseTs(v)).toLocaleString():'—'},
@@ -366,12 +387,33 @@ function CspAuditPanel(){
       Read-only activity from the Infoblox portal — who changed what in CSP. Separate from
       Bloxsmith's hash-chained action log above: different source, not chain-verified.
     </div>
+    {/* Search reaches past the live poll window — the only way to find a specific actor
+        or time older than the last ~8 minutes of churn. */}
+    <div style={{display:'flex',gap:'var(--s2)',alignItems:'center',flexWrap:'wrap',marginBottom:'var(--s2)'}}>
+      <input className="dt-filter mono" placeholder="Search CSP (user or resource)…" value={q}
+        onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')runSearch();}}
+        style={{minWidth:200}} aria-label="Search CSP audit"/>
+      <select value={kind} onChange={e=>setKind(e.target.value)} aria-label="Actor kind"
+        style={{height:28,fontSize:'var(--t12)',background:'var(--raised)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)'}}>
+        <option value="">Any kind</option><option value="User">User</option>
+        <option value="Device">Device</option><option value="Service">Service</option>
+      </select>
+      <select value={since} onChange={e=>setSince(e.target.value)} aria-label="Time range"
+        style={{height:28,fontSize:'var(--t12)',background:'var(--raised)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)'}}>
+        <option value="">Any time</option><option value="24h">Last 24h</option>
+        <option value="7d">Last 7d</option><option value="30d">Last 30d</option>
+      </select>
+      <button className="btn" disabled={busy} onClick={runSearch}>{busy?'Searching…':'Search'}</button>
+      {search?<button className="btn btn-ghost" onClick={clearSearch}>Clear · back to live</button>:null}
+      {search?<span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>
+        {search.status==='error'?'search failed':(search.count+' result'+(search.count===1?'':'s')+(search.truncated?' (capped at 500)':'')+' — searched CSP directly')}</span>:null}
+    </div>
     {feed.locked
       ? <div className="dt-empty">Vault locked — unlock to load the portal audit feed.</div>
       : status==='error'
-        ? <div className="dt-empty">Portal audit feed unavailable — CSP returned an error. (This is the external feed, not Bloxsmith's own log above.)</div>
+        ? <div className="dt-empty">{search?'Search failed — CSP returned an error (try fewer/simpler terms).':'Portal audit feed unavailable — CSP returned an error. (This is the external feed, not Bloxsmith’s own log above.)'}</div>
         : rows.length===0
-          ? <div className="dt-empty">No portal audit entries in the current window.</div>
+          ? <div className="dt-empty">{search?'No CSP entries match this search.':'No portal audit entries in the current window.'}</div>
           : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}}
               tableId="csp-audit" csvName="csp-audit" rowKey={r=>String(r.id||((r.ts||'')+'|'+(r.user||'')))}
               scrollBody={480} filterable filterKeys={['user','who_kind','who_role','action','resource','result']}/>}
