@@ -3692,6 +3692,12 @@ def norm_audit(raw):
         "id":       l.get("id",""),
         "ts":       l.get("created_at") or "",
         "user":     l.get("user_name") or l.get("user_email") or l.get("subject_type",""),
+        # subject_type (User/Device/Service) + the first role group make the actor
+        # legible: user_name is usually an opaque token (provider_id.xxx, device
+        # hostid), so "who" alone reads as noise. This tenant's audit is ~all machine
+        # traffic; the badge + role are what let you tell a person from a robot.
+        "who_kind": l.get("subject_type") or "",
+        "who_role": (l.get("subject_groups") or [None])[0] or "",
         "action":   (l.get("action") or l.get("http_method") or "READ").upper(),
         "resource": l.get("resource_type") or "",
         # http_code can be null/absent/non-numeric — int(None) crashes and would take

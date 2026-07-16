@@ -342,7 +342,19 @@ function CspAuditPanel(){
   const cols=[
     {key:'ts',label:'Time',mono:true,align:'left',width:190,
       render:v=>v?new Date(parseTs(v)).toLocaleString():'—'},
-    {key:'user',label:'Who',mono:true},
+    // WHO: kind badge (User/Device/Service) + the token + its role, so an opaque
+    // provider_id/hostid reads as "what kind of actor + which role" at a glance.
+    {key:'user',label:'Who',mono:true,minWidth:240,render:(v,r)=>
+      <span style={{display:'inline-flex',alignItems:'center',gap:'var(--s2)',minWidth:0}}>
+        {r.who_kind?<span className="badge" style={{fontSize:'var(--t10)',padding:'0 6px',
+          background:r.who_kind==='User'?'var(--accent-dim)':'var(--raised)',
+          color:r.who_kind==='User'?'var(--accent-text)':'var(--text-dim)',
+          border:'1px solid var(--border)',borderRadius:'var(--r-ctl)',flex:'0 0 auto'}}>{r.who_kind}</span>:null}
+        <span style={{display:'flex',flexDirection:'column',minWidth:0}}>
+          <IdCell value={v||'—'} label="Actor"/>
+          {r.who_role?<span style={{fontSize:'var(--t10)',color:'var(--text-faint)'}}>{r.who_role}</span>:null}
+        </span>
+      </span>},
     {key:'action',label:'Action'},
     {key:'resource',label:'Resource'},
     {key:'result',label:'Result',render:v=>
@@ -362,7 +374,7 @@ function CspAuditPanel(){
           ? <div className="dt-empty">No portal audit entries in the current window.</div>
           : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}}
               tableId="csp-audit" csvName="csp-audit" rowKey={r=>String(r.id||((r.ts||'')+'|'+(r.user||'')))}
-              scrollBody={480} filterable filterKeys={['user','action','resource','result']}/>}
+              scrollBody={480} filterable filterKeys={['user','who_kind','who_role','action','resource','result']}/>}
   </Panel>;
 }
 
