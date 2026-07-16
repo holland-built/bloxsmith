@@ -35,6 +35,12 @@
   --radius-element: var(--r-ctl);
   --radius-container: var(--r-panel);
 }
+/* Astryx's "default" Badge ships transparent — it reads as plain text next to the
+   filled success/error pills, so a table's badges don't look like one family. Give
+   it a neutral fill so every Astryx.Badge is the same pill shape (the success/error
+   variants already carry their own colour; only default was bare). Scoped to Badge —
+   Card.default is unaffected. */
+.astryx-badge.default{ background:var(--raised); color:var(--text-dim); }
 /* Astryx's button paints its variant BACKGROUND but declares no `color` of its own,
    so the app's `button{color:inherit}` reset (~l.105) leaks whatever ancestor text
    colour happens to be nearby. The Audit "Export Audit Log" primary sits inside the
