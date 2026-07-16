@@ -363,18 +363,17 @@ function CspAuditPanel(){
   const cols=[
     {key:'ts',label:'Time',mono:true,align:'left',width:190,
       render:v=>v?new Date(parseTs(v)).toLocaleString():'—'},
-    // WHO: kind badge (User/Device/Service) + the token + its role, so an opaque
-    // provider_id/hostid reads as "what kind of actor + which role" at a glance.
+    // WHO: the USERNAME is the primary text (that's who you're looking for); a small
+    // kind tag (person/device/service, derived from the username, not the misleading
+    // subject_type) sits beside it. The tag uses the SAME Astryx.Badge as Result, so
+    // every badge in this table shares one font/size/shape.
     {key:'user',label:'Who',mono:true,minWidth:240,render:(v,r)=>
       <span style={{display:'inline-flex',alignItems:'center',gap:'var(--s2)',minWidth:0}}>
-        {r.who_kind?<span className="badge" style={{fontSize:'var(--t10)',padding:'0 6px',
-          background:r.who_kind==='User'?'var(--accent-dim)':'var(--raised)',
-          color:r.who_kind==='User'?'var(--accent-text)':'var(--text-dim)',
-          border:'1px solid var(--border)',borderRadius:'var(--r-ctl)',flex:'0 0 auto'}}>{r.who_kind}</span>:null}
         <span style={{display:'flex',flexDirection:'column',minWidth:0}}>
           <IdCell value={v||'—'} label="Actor"/>
           {r.who_role?<span style={{fontSize:'var(--t10)',color:'var(--text-faint)'}}>{r.who_role}</span>:null}
         </span>
+        {r.who_kind?<Astryx.Badge variant="default" label={r.who_kind}/>:null}
       </span>},
     {key:'action',label:'Action'},
     {key:'resource',label:'Resource'},
