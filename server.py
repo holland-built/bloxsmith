@@ -5350,7 +5350,14 @@ class Handler(BaseHTTPRequestHandler):
                 if q:
                     # contains-match across the two human-meaningful fields
                     clauses.append("(user_name~" + _lit(q) + " or resource_type~" + _lit(q) + ")")
-                if kind in ("User", "Device", "Service"):
+                if kind == "people":
+                    # subject_type=="User" is USELESS for "show me people": Infoblox tags
+                    # provider_id/cloud-discovery SERVICE accounts as User too. A real person
+                    # is an email with none of the machine-token prefixes. Exclude those
+                    # prefixes (each _lit-neutralised) — verified this returns real humans.
+                    for pref in ("provider_id", "ngp.device", "service.", "federation", "test."):
+                        clauses.append("not user_name~" + _lit(pref))
+                elif kind in ("User", "Device", "Service"):
                     clauses.append("subject_type==" + _lit(kind))
                 # created_at bounds — only accept ISO-ish values (digits/T/:/-/Z/.), reject the rest
                 _iso = lambda v: v if v and all(c in "0123456789TZ:-." for c in v) else ""
