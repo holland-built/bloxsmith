@@ -3694,7 +3694,9 @@ def norm_audit(raw):
         "user":     l.get("user_name") or l.get("user_email") or l.get("subject_type",""),
         "action":   (l.get("action") or l.get("http_method") or "READ").upper(),
         "resource": l.get("resource_type") or "",
-        "result":   "failure" if int(l.get("http_code", 200)) >= 400 else "success",
+        # http_code can be null/absent/non-numeric — int(None) crashes and would take
+        # the WHOLE feed down (this is the row shape the live REST feed actually sends).
+        "result":   "failure" if (int(l["http_code"]) if str(l.get("http_code") or "").isdigit() else 200) >= 400 else "success",
     } for l in raw]
 
 # ── fetch all dashboard data ──────────────────────────────────────────────────
@@ -3768,7 +3770,20 @@ def fetch_dashboard_data() -> dict:
     hosts_d    = _rest_get("/api/infra/v1/detail_hosts", {"_limit": 500})
     policies_d = _rest_get("/api/atcfw/v1/security_policies", {"_limit": 200})
     feeds_d    = _rest_get("/api/atcfw/v1/named_lists", {"_limit": 200})
-    audit_d    = []
+    # CSP portal audit logs — REST, /api/auditlog/v1/logs (Swagger-documented, verified
+    # 200 with results[]). This was hardcoded `audit_d = []`, so portal activity never
+    # showed and the Security time-graph annotation ticks were silently dead. The MCP
+    # AuditLog service is NOT usable here: make_get_request stores a parquet but
+    # query_stored_data returns "No stored data found" (broken server-side — the same
+    # reason this whole path is REST). _rest_get_ex surfaces the http status so a broken
+    # feed ("audit_status" = error) is distinguishable from a genuinely empty one — the
+    # exact ambiguity that let this hole hide.
+    audit_body, audit_http = _rest_get_ex("/api/auditlog/v1/logs",
+                                          {"_limit": 100, "_order_by": "created_at desc"})
+    audit_d = (audit_body.get("results", audit_body.get("result", []))
+               if isinstance(audit_body, dict) else (audit_body or []))
+    audit_status = ("error" if (audit_http is None or audit_http >= 400)
+                    else "ok" if audit_d else "empty")
 
     view_map = {v.get("id", ""): v.get("name", "") for v in views_d}
 
@@ -3781,10 +3796,13 @@ def fetch_dashboard_data() -> dict:
         "secPolicies": norm_policies(policies_d),
         "feeds":       norm_feeds(feeds_d),
         "auditLogs":   norm_audit(audit_d),
+        # additive: per-feed availability so the UI can say "unavailable" vs "no entries".
+        "_meta":       {"auditLogs": audit_status},
     }
     print(f"  subnets={len(result['subnets'])} leases={len(result['leases'])} "
           f"zones={len(result['zones'])} hosts={len(result['hosts'])} "
-          f"policies={len(result['secPolicies'])} feeds={len(result['feeds'])}")
+          f"policies={len(result['secPolicies'])} feeds={len(result['feeds'])} "
+          f"audit={len(result['auditLogs'])}({audit_status})")
     _cache_set(ck, result)
     return result
 
