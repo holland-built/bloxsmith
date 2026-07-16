@@ -322,7 +322,48 @@ function AuditTab(){
                 tableId="audit" rowKey={r=>String(r.hash||((r.ts||'')+'|'+(r.actor||'')+'|'+(r.event||'')))}
                 maxRows={50} selectable filterable filterKeys={['actor','event','_detail']}/>}
     </Panel>
+
+    <CspAuditPanel/>
   </div>;
+}
+
+/* CspAuditPanel — the EXTERNAL portal audit feed (who did what in Infoblox CSP),
+   read off the shared /api/data feed as auditLogs (same accessor 80.tab.security uses
+   for its time-graph ticks). Kept SEPARATE from the local hash-chained log above: that
+   one is tamper-evident and covers actions taken in THIS app; this is Infoblox's own
+   record and is not chain-verified — different source, different trust. */
+function CspAuditPanel(){
+  const feed=useData();
+  const d=feed.data||{};
+  const rows=Array.isArray(d.auditLogs)?d.auditLogs:[];
+  // Empty and unavailable must NOT look identical — that ambiguity is exactly what let
+  // this feed sit dead for months. _meta.auditLogs is 'ok'|'empty'|'error' from server.
+  const status=(d._meta&&d._meta.auditLogs)||(rows.length?'ok':null);
+  const cols=[
+    {key:'ts',label:'Time',mono:true,align:'left',width:190,
+      render:v=>v?new Date(parseTs(v)).toLocaleString():'—'},
+    {key:'user',label:'Who',mono:true},
+    {key:'action',label:'Action'},
+    {key:'resource',label:'Resource'},
+    {key:'result',label:'Result',render:v=>
+      <Astryx.Badge variant={v==='failure'?'error':'success'} label={v||'—'}/>},
+  ];
+  return <Panel title="CSP portal audit — external"
+    side={<Freshness at={feed.data?feed.fetchedAt:null} error={feed.error} onRetry={feed.refetch}/>}>
+    <div style={{fontSize:'var(--t12)',color:'var(--text-dim)',marginBottom:'var(--s2)'}}>
+      Read-only activity from the Infoblox portal — who changed what in CSP. Separate from
+      Bloxsmith's hash-chained action log above: different source, not chain-verified.
+    </div>
+    {feed.locked
+      ? <div className="dt-empty">Vault locked — unlock to load the portal audit feed.</div>
+      : status==='error'
+        ? <div className="dt-empty">Portal audit feed unavailable — CSP returned an error. (This is the external feed, not Bloxsmith's own log above.)</div>
+        : rows.length===0
+          ? <div className="dt-empty">No portal audit entries in the current window.</div>
+          : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}}
+              tableId="csp-audit" csvName="csp-audit" rowKey={r=>String(r.id||((r.ts||'')+'|'+(r.user||'')))}
+              scrollBody={480} filterable filterKeys={['user','action','resource','result']}/>}
+  </Panel>;
 }
 
 /* AuditExportButton — downloads /api/audit/export as a JSON blob (port of
