@@ -3687,16 +3687,28 @@ def norm_feeds(raw):
         })
     return out
 
+def _audit_class(user_name, subject_type):
+    # subject_type is UNRELIABLE for person-vs-machine: Infoblox tags provider_id
+    # service accounts as "User". Classify off the username itself — a person is an
+    # email with none of the machine-token prefixes. Same rule as the People filter.
+    u = str(user_name or "").lower()
+    if u.startswith("ngp.device") or subject_type == "Device":
+        return "device"
+    if u.startswith(("provider_id", "service.", "federation")) or subject_type == "Service":
+        return "service"
+    if "@" in u:
+        return "person"
+    return (subject_type or "other").lower()
+
 def norm_audit(raw):
     return [{
         "id":       l.get("id",""),
         "ts":       l.get("created_at") or "",
         "user":     l.get("user_name") or l.get("user_email") or l.get("subject_type",""),
-        # subject_type (User/Device/Service) + the first role group make the actor
-        # legible: user_name is usually an opaque token (provider_id.xxx, device
-        # hostid), so "who" alone reads as noise. This tenant's audit is ~all machine
-        # traffic; the badge + role are what let you tell a person from a robot.
-        "who_kind": l.get("subject_type") or "",
+        # The username is the WHO. subject_type alone is noise ("User" on every row and
+        # wrong for provider tokens), so we DERIVE who_class (person/device/service) from
+        # the username pattern — that is the small kind tag the UI shows beside the name.
+        "who_kind": _audit_class(l.get("user_name"), l.get("subject_type")),
         "who_role": (l.get("subject_groups") or [None])[0] or "",
         "action":   (l.get("action") or l.get("http_method") or "READ").upper(),
         "resource": l.get("resource_type") or "",
