@@ -395,8 +395,12 @@ function CspAuditPanel(){
         style={{minWidth:200}} aria-label="Search CSP audit"/>
       <select value={kind} onChange={e=>setKind(e.target.value)} aria-label="Actor kind"
         style={{height:28,fontSize:'var(--t12)',background:'var(--raised)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)'}}>
-        <option value="">Any kind</option><option value="User">User</option>
-        <option value="Device">Device</option><option value="Service">Service</option>
+        <option value="">Any kind</option>
+        {/* "People only" excludes machine tokens by username pattern — the raw "User"
+            subject_type includes provider_id service accounts, so it is NOT "humans". */}
+        <option value="people">People only</option>
+        <option value="User">Subject: User</option>
+        <option value="Device">Subject: Device</option><option value="Service">Subject: Service</option>
       </select>
       <select value={since} onChange={e=>setSince(e.target.value)} aria-label="Time range"
         style={{height:28,fontSize:'var(--t12)',background:'var(--raised)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)'}}>
