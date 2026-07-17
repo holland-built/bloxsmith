@@ -1,21 +1,15 @@
 # Bloxsmith — Docker Compose deploy.
 #
-#   docker compose up -d                        # dashboard only (loopback); no auto-update sidecar
-#   docker compose --profile autoupdate up -d   # + Watchtower auto-update sidecar (demo laptops)
+#   docker compose up -d                        # dashboard only (loopback)
 #   BIND=0.0.0.0 docker compose up -d           # expose on the LAN (no login — keep vault locked)
 #   docker compose --profile secure up -d       # add a TLS + basic-auth reverse proxy
 #
-# Self-update: click "Update now" in the app — the app pulls :latest over the
-# Docker socket, health-checks a candidate, and recreates itself (auto-rollback
-# on failure). Or run: docker compose pull && docker compose up -d
+# Update: the app only SIGNALS when a newer version exists (banner in the ⋯ menu).
+# To apply it, double-click the update script for your OS that ships next to this
+# file (update.command on macOS, update.bat on Windows, update.sh on Linux), or run:
+#   docker compose pull && docker compose up -d
 # Out-of-band revert (boot-failed image): ./rollback.sh
 # Copy .env.example to .env to set BIND/PORT/token/auth.
-#
-# AUTO_UPDATE: the Watchtower sidecar is OFF by default. Enterprise deploys pin a
-# digest (see below) and update on a controlled, verified schedule — auto-pull is
-# opt-in only. Demo/laptop installs opt in with `--profile autoupdate`. The in-app
-# "Update now" button works either way (it drives the Docker socket directly and
-# does not need the sidecar).
 
 services:
   bloxsmith:
@@ -36,7 +30,7 @@ services:
       - "${BIND:-127.0.0.1}:${PORT:-8080}:8080"
     volumes:
       - noc-vault:/vault
-      - /var/run/docker.sock:/var/run/docker.sock   # in-app "Update now" self-update; remove to disable
+      - /var/run/docker.sock:/var/run/docker.sock   # leave for a separate cleanup pass
     environment:
       INFOBLOX_URL: ${INFOBLOX_URL:-https://csp.infoblox.com}
       # single-key mode (optional) — leave unset to use the in-app encrypted vault
@@ -49,28 +43,6 @@ services:
       # vault auto-unlock (optional) — skips passphrase prompt after restarts/updates
       VAULT_PASSPHRASE: ${VAULT_PASSPHRASE:-}
       VAULT_PASSPHRASE_FILE: ${VAULT_PASSPHRASE_FILE:-}
-      # wires the in-app "Update now" button to the Watchtower sidecar
-      WATCHTOWER_URL: http://noc-watchtower:8080/v1/update
-      WATCHTOWER_TOKEN: ${WATCHTOWER_TOKEN:-noc-local-update-token}
-    labels:
-      com.centurylinklabs.watchtower.enable: "true"
-    networks: [noc-net]
-
-  # Auto-update sidecar — OFF by default (enterprise pins + updates deliberately).
-  # Opt in on demo laptops: `docker compose --profile autoupdate up -d`.
-  noc-watchtower:
-    image: containrrr/watchtower
-    container_name: noc-watchtower
-    profiles: [autoupdate]
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      DOCKER_API_VERSION: "1.44"          # modern daemons reject Watchtower's old default
-      WATCHTOWER_HTTP_API_UPDATE: "true"  # HTTP-API mode, no polling (alternate trigger; the in-app button uses the Docker socket)
-      WATCHTOWER_HTTP_API_TOKEN: ${WATCHTOWER_TOKEN:-noc-local-update-token}
-      WATCHTOWER_LABEL_ENABLE: "true"     # only touch the labeled dashboard
-      WATCHTOWER_CLEANUP: "true"
     networks: [noc-net]
 
   # Opt-in reverse proxy: TLS (self-signed local CA) + basic-auth in front of the
