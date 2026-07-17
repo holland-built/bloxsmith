@@ -30,6 +30,5 @@ CI signs every pushed image (keyless cosign / Sigstore OIDC) and type-checks the
     --certificate-oidc-issuer https://token.actions.githubusercontent.com
   ```
 - **Pin by digest** in `docker-compose.yml` (`image: ghcr.io/holland-built/bloxsmith@sha256:<digest>`) for a reproducible, verifiable deploy. Resolve the digest with `docker buildx imagetools inspect …:latest`.
-- **Auto-update is opt-in.** The Watchtower sidecar is behind the `autoupdate` compose profile (OFF by default). Demo/laptop installs run `docker compose --profile autoupdate up -d`; enterprise updates deliberately on a pinned, verified schedule.
-- **In-app "Update now" is admin-only** (`/api/update/apply` requires an authenticated admin; read-only status/check stay open).
+- **Updating is explicit and script-driven.** The app only *signals* a newer version (banner in the ⋯ menu with a release-notes link); it never touches Docker. To apply, double-click the update script that ships next to the app (`update.command` on macOS, `update.bat` on Windows, `update.sh` on Linux), or run `docker compose pull && docker compose up -d`. Enterprise updates deliberately on a pinned, verified schedule.
 - **Rollback:** `./rollback.sh` reverts a boot-failed image out-of-band (recreates from `bloxsmith:previous` or a pinned digest, reusing the `noc-vault` volume) — no running app required.
