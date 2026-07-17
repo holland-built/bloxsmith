@@ -582,7 +582,7 @@ function ThreatRibbonPanel(){
           <div><span className="mono" style={{fontSize:'var(--t28)',fontWeight:600,color:'var(--crit)'}}>{totals.block}</span><div style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>Blocked</div></div>
           <div><span className="mono" style={{fontSize:'var(--t28)',fontWeight:600}}>{totals.allow}</span><div style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>Allowed</div></div>
         </div>
-        <DataTable cols={cols} rows={rows} rowKey={r=>String(r.day)+'|'+String(r.action)} tableId="csp-threats" csvName="csp-threats" defaultSort={{key:'day',dir:'desc'}}/>
+        <DataTable cols={cols} rows={rows} rowKey={r=>String(r.day)+'|'+String(r.action)} tableId="csp-threats" csvName="csp-threats" defaultSort={{key:'day',dir:'desc'}} scrollBody={480}/>
       </div>}
   </Panel>;
 }
@@ -607,7 +607,7 @@ function CtemExposurePanel(){
           <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>total exposures</span>
           {hourly.length>=2&&<Sparkline values={hourly} width={64} height={26}/>}
         </div>
-        {matrix.length>0&&<DataTable cols={cols} rows={matrix} rowKey={(r,i)=>String(r.severity)+'|'+String(r.priority)+'|'+i} tableId="csp-ctem-matrix" csvName="csp-ctem-matrix"/>}
+        {matrix.length>0&&<DataTable cols={cols} rows={matrix} rowKey={(r,i)=>String(r.severity)+'|'+String(r.priority)+'|'+i} tableId="csp-ctem-matrix" csvName="csp-ctem-matrix" scrollBody={480}/>}
         {d.last_scan_at&&<div style={{marginTop:'var(--s2)',fontSize:'var(--t11)',color:'var(--text-faint)'}}>Last scan: {String(d.last_scan_at)}</div>}
       </div>}
   </Panel>;
@@ -637,9 +637,11 @@ function CtemAssetsPanel(){
      : empty ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div>
         <div style={{marginBottom:'var(--s3)'}}><span className="mono" style={{fontSize:'var(--t28)',fontWeight:600}}>{d.asset_count||0}</span> <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>assets</span></div>
-        {chipRow('Providers',providers)}
-        {chipRow('Technologies',technologies,30)}
-        {chipRow('Ports',ports)}
+        <div style={{maxHeight:'var(--panel-md)',overflow:'auto'}}>
+          {chipRow('Providers',providers)}
+          {chipRow('Technologies',technologies,30)}
+          {chipRow('Ports',ports)}
+        </div>
       </div>}
   </Panel>;
 }
@@ -656,7 +658,7 @@ function SocInsightsPanel(){
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : enabled===false ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>SOC enforcement not enabled for this account</div>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
-     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id)} tableId="csp-soc" csvName="csp-soc"/>}
+     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id)} tableId="csp-soc" csvName="csp-soc" scrollBody={480}/>}
   </Panel>;
 }
 function SecurityTab(){
