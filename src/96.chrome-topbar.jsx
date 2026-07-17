@@ -138,192 +138,102 @@ function ViewOptions(){
   </span>;
 }
 
-/* ── UpdateBadge styles — scoped, tokens only, mirrors view-options/acct-menu
-   popover conventions already used in the topbar. ── */
+/* ── UpdateBadge styles — scoped, tokens only. Passive "update available" banner:
+   version chip + (when a newer release exists) the OS-relevant update script the
+   user double-clicks, with a hover/focus tooltip revealing the two docker commands
+   it runs. Mirrors the .script-peek behavior from the update-flow mockup. ── */
 (function injectUpdateStyles(){
   if(document.getElementById('bx-update-styles')) return;
   const s=document.createElement('style');s.id='bx-update-styles';
   s.textContent=`
-  .update-slot{position:relative;display:inline-flex;align-items:center;gap:var(--s2);}
+  .update-slot{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;font-size:var(--t12);}
   .update-version{color:var(--text-dim);}
-  .update-pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 var(--s2);
-    font-size:var(--t11);color:var(--accent-text);background:var(--accent-dim);
-    border:1px solid var(--accent);border-radius:var(--r-ctl);cursor:pointer;text-decoration:none;white-space:nowrap;}
-  .update-pill:hover{border-color:var(--accent-text);}
   .update-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:0 0 auto;}
-  .update-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:240px;
-    display:flex;flex-direction:column;gap:var(--s2);padding:var(--s3);
-    background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);
-    box-shadow:0 8px 24px rgba(0,0,0,.4);}
-  .update-menu-head{font-size:var(--t12);font-weight:600;color:var(--text);}
-  .update-menu-err{font-size:var(--t11);color:var(--crit);}
+  .update-avail{display:flex;flex-direction:column;align-items:flex-start;gap:6px;}
+  .update-avail-text{display:inline-flex;align-items:center;gap:6px;color:var(--accent-text);}
+  .update-avail-text b{font-weight:600;color:var(--accent-text);}
+  .update-uptodate{color:var(--text-dim);}
+  .update-script{position:relative;display:inline-flex;flex-direction:column;gap:1px;
+    padding:6px 10px;background:var(--raised);border:1px solid var(--border);
+    border-radius:var(--r-ctl);cursor:help;outline:none;}
+  .update-script:hover,.update-script:focus,.update-script:focus-visible{border-color:var(--accent);}
+  .update-script-name{font-size:var(--t11);color:var(--accent-text);}
+  .update-script-sub{font-size:var(--t11);color:var(--text-dim);}
+  .update-peek{position:absolute;bottom:calc(100% + 8px);left:0;z-index:70;min-width:220px;
+    display:flex;flex-direction:column;gap:3px;padding:10px 12px;
+    background:var(--surface);color:var(--text);border:1px solid var(--border-strong);
+    border-radius:var(--r-panel);box-shadow:0 8px 24px rgba(0,0,0,.4);
+    opacity:0;visibility:hidden;transform:translateY(4px);pointer-events:none;
+    transition:opacity .12s ease,transform .12s ease;}
+  .update-script:hover .update-peek,.update-script:focus .update-peek,
+  .update-script:focus-within .update-peek{opacity:1;visibility:visible;transform:translateY(0);}
+  .update-peek-head{font-size:var(--t11);text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);margin-bottom:2px;}
+  .update-peek-c{color:var(--text-dim);}
+  .update-peek-line{font-size:var(--t11);line-height:1.6;white-space:nowrap;color:var(--text);}
   .update-menu-link{font-size:var(--t11);color:var(--text-dim);text-decoration:underline;text-underline-offset:2px;}
-  .update-menu-status{font-size:var(--t11);color:var(--text-dim);padding:1px 0;}
-  .update-progress{display:flex;flex-direction:column;gap:6px;}
-  .update-progress-phase{font-size:var(--t12);color:var(--text-dim);}
-  .update-progress-bar{height:4px;border-radius:2px;background:var(--raised);overflow:hidden;}
-  .update-progress-fill{height:100%;background:var(--accent);transition:width .3s ease;}
-  .update-rollback-banner{position:fixed;top:0;left:0;right:0;z-index:150;display:flex;align-items:center;
-    justify-content:center;gap:12px;padding:8px 16px;font-size:var(--t12);color:var(--text);
-    background:var(--warn-tint);border-bottom:1px solid var(--border-strong);}
-  .update-rollback-x{height:22px;padding:0 8px;font-size:var(--t11);color:var(--text-dim);background:transparent;
-    border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
   `;
   document.head.appendChild(s);
 })();
 
-const UPDATE_PHASE_TXT={
-  idle:'Preparing…', prepulling:'Downloading update…', pulled:'Downloaded — starting…',
-  checking:'Checking new version…', recreating:'Restarting service…',
-  live:'Finishing up…', done:'Updated — reloading…', error:'Update failed',
-  rolledback:'Update failed — rolled back',
-};
+/* detectUpdateScript — client-side OS sniff → the update script the user double-clicks.
+   macOS → update.command, Windows → update.bat, Linux → update.sh (default .command).
+   Mirrors the mockup's navigator.userAgentData?.platform || navigator.platform logic. */
+function detectUpdateScript(){
+  const p=String((navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||'').toLowerCase();
+  if(p.indexOf('win')===0||p.indexOf('windows')!==-1) return {file:'update.bat',os:'Windows'};
+  if(p.indexOf('linux')!==-1||p.indexOf('x11')!==-1) return {file:'update.sh',os:'Linux'};
+  if(p.indexOf('mac')!==-1) return {file:'update.command',os:'macOS'};
+  return {file:'update.command',os:'macOS'};
+}
 
-/* UpdateBadge — version chip + self-update flow (topbar-right, next to AccountSlot).
-   Reuses the `update` object already carried on vault status (fetched once by
-   VaultGate) — no second poller for that. Only polls /api/update/status while an
-   update is actively applying, and checks /api/update/rollback-status once on
-   mount. Feature-detects vault.update so a File-mode/older server (no update key)
-   never crashes this. */
+/* UpdateBadge — passive "update available" banner (renders inside the ⋯ MoreMenu panel).
+   The app only SIGNALS: it shows the running version and, when a newer release exists,
+   names the OS-relevant update script the user double-clicks (docker compose pull &&
+   up -d, revealed on hover/focus) plus a release-notes link. It never applies, polls,
+   or rolls back — no /api/update/apply, /status, or /rollback-* calls. Checks once on
+   mount via GET /api/update/check; a small "Check now" re-hits the same endpoint. */
 function UpdateBadge(){
-  const {vault}=useAuth();
-  const upd=vault&&vault.update;
-  const [open,setOpen]=useState(false);
-  const [applying,setApplying]=useState(false);
-  const [phase,setPhase]=useState('');
-  const [pct,setPct]=useState(0);
-  const [err,setErr]=useState('');
-  const [rollback,setRollback]=useState(null);
-  const pollRef=useRef(null);
-  const startIdRef=useRef(null);
-
-  useEffect(()=>{
-    fetch('/api/update/rollback-status',{cache:'no-store'}).then(r=>r.json()).then(d=>{
-      if(d&&d.rolledback) setRollback(d);
-    }).catch(()=>{});
-  },[]);
-
-  useEffect(()=>{
-    if(!open) return;
-    const onKey=e=>{ if(e.key==='Escape'&&!applying) setOpen(false); };
-    window.addEventListener('keydown',onKey);
-    return ()=>window.removeEventListener('keydown',onKey);
-  },[open,applying]);
-
-  useEffect(()=>()=>{ if(pollRef.current) clearInterval(pollRef.current); },[]);
-
-  const stopPoll=()=>{ if(pollRef.current){ clearInterval(pollRef.current); pollRef.current=null; } };
-
-  const startPoll=()=>{
-    stopPoll();
-    pollRef.current=setInterval(async()=>{
-      try{
-        const r=await fetch('/api/update/status',{cache:'no-store'});
-        const d=await r.json();
-        if(d.instance_id&&startIdRef.current&&d.instance_id!==startIdRef.current){
-          stopPoll(); setPhase('done');
-          setTimeout(()=>window.location.reload(),600);
-          return;
-        }
-        setPhase(d.phase||''); setPct(Number(d.pct)||0);
-        if(d.phase==='rolledback'||d.phase==='error'){
-          stopPoll(); setApplying(false); setErr(d.error||'Update failed');
-        }
-      }catch(e){ /* server likely mid-recreate — keep polling silently */ }
-    },2000);
-  };
-
-  const dismissRollback=async()=>{ setRollback(null); await vpost('/api/update/rollback-clear',{}); };
-
-  const apply=async()=>{
-    setErr('');
-    const {ok,data}=await vpost('/api/update/apply',{});
-    if(!ok||!data||data.ok===false){
-      setErr(data&&data.error==='cooldown' ? ('Try again in '+(data.retry_after||0)+'s') : ((data&&data.error)||'Could not start update'));
-      return;
-    }
-    startIdRef.current=upd&&upd.instance_id;
-    setApplying(true); setPhase('checking'); setPct(0);
-    startPoll();
-  };
-
+  const [info,setInfo]=useState(null);      // {current,latest,available,url}
   const [checking,setChecking]=useState(false);
-  const [checkMsg,setCheckMsg]=useState('');
-  const [override,setOverride]=useState(null); // fresh /api/update/check result, overrides the once-fetched vault.update
-  const checkNow=async()=>{
-    setChecking(true); setCheckMsg('');
+  const check=async()=>{
+    setChecking(true);
     try{
       const r=await fetch('/api/update/check',{cache:'no-store'});
-      const d=await r.json();
-      setOverride(d);
-      setCheckMsg(d.available?('Update available → v'+d.latest):'Up to date');
-    }catch(e){ setCheckMsg('Check failed — try again'); }
+      setInfo(await r.json());
+    }catch(e){ /* older/File-mode server — stay silent */ }
     setChecking(false);
   };
-  const doRollback=async()=>{
-    setErr('');
-    const {ok,data}=await vpost('/api/update/rollback-apply',{});
-    if(!ok||!data||data.ok===false){
-      setErr((data&&data.error)||'Could not start rollback'); return;
-    }
-    startIdRef.current=(override||upd).instance_id;
-    setApplying(true); setPhase('checking'); setPct(0);
-    startPoll();
-  };
+  useEffect(()=>{ check(); },[]);
 
-  if(!upd) return null;
-  const {current,latest,available,url,selfUpdate,cooldown,prevVersion}=override||upd;
+  if(!info||info.current==null) return null;
+  const {current,latest,available,url}=info;
+  const script=detectUpdateScript();
 
-  return <>
-    {rollback&&<div className="update-rollback-banner" role="status">
-      <span>Rolled back from v{rollback.rollback_from} to v{rollback.rollback_to} — the update failed a health check.</span>
-      <button className="update-rollback-x" onClick={dismissRollback} aria-label="Dismiss rollback notice">✕</button>
-    </div>}
-    <span className="update-slot">
-      <span className="mono update-version" role="button" tabIndex={0} style={{cursor:'pointer'}}
-        aria-haspopup="menu" aria-expanded={open} aria-label={'Bloxsmith v'+current+' — updates'}
-        onClick={()=>setOpen(o=>!o)}
-        onKeyDown={e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); setOpen(o=>!o); } }}>
-        v{current}
-      </span>
-      {available&&(selfUpdate
-        ? <button className="update-pill" aria-haspopup="menu" aria-expanded={open}
-            aria-label={'Update available, v'+latest} onClick={()=>setOpen(o=>!o)}>
-            <span className="update-dot" aria-hidden="true"/>update available → v{latest}
-          </button>
-        : <a className="update-pill" href={url} target="_blank" rel="noopener noreferrer"
-            aria-label={'Update available, v'+latest+' — opens the GitHub release'}>
-            <span className="update-dot" aria-hidden="true"/>update available → v{latest}
-          </a>
-      )}
-      {open&&<>
-        <div className="views-overlay" onClick={()=>{ if(!applying) setOpen(false); }}/>
-        <div className="update-menu" role="menu">
-          <div className="update-menu-head">{available?('Update to v'+latest):('Bloxsmith v'+current)}</div>
-          {!applying?(<>
-            {err&&<div className="update-menu-err">{err}</div>}
-            {checkMsg&&<div className="update-menu-status mono">{checkMsg}</div>}
-            {available&&selfUpdate&&<button className="btn" disabled={cooldown>0} onClick={apply}>
-              {cooldown>0?('Try again in '+cooldown+'s'):'Update now'}
-            </button>}
-            <button className="btn" disabled={checking} onClick={checkNow}>
-              {checking?'Checking…':'Check now'}
-            </button>
-            {selfUpdate&&prevVersion&&<button className="btn" disabled={cooldown>0} onClick={doRollback}>
-              Rollback to v{prevVersion}
-            </button>}
-            {url&&available&&<a className="update-menu-link" href={url} target="_blank" rel="noopener noreferrer">View release notes</a>}
-          </>):(
-            <div className="update-progress">
-              <div className="update-progress-phase">{UPDATE_PHASE_TXT[phase]||phase||'Working…'}</div>
-              <div className="update-progress-bar"><div className="update-progress-fill" style={{width:Math.max(4,pct)+'%'}}/></div>
-              {err&&<div className="update-menu-err">{err}</div>}
-            </div>
-          )}
-        </div>
-      </>}
-    </span>
-  </>;
+  return <span className="update-slot">
+    <span className="mono update-version">Bloxsmith v{current}</span>
+    {available
+      ? <span className="update-avail">
+          <span className="update-avail-text">
+            <span className="update-dot" aria-hidden="true"/>Update available → <b>v{latest}</b>
+          </span>
+          <span className="update-script" tabIndex={0} role="button"
+            aria-label={'Double-click '+script.file+' to update ('+script.os+'). It runs docker compose pull, then docker compose up -d.'}>
+            <span className="update-peek mono" role="tooltip">
+              <span className="update-peek-head">what {script.file} runs</span>
+              <span className="update-peek-line update-peek-c"># get the new version + restart</span>
+              <span className="update-peek-line">docker compose pull</span>
+              <span className="update-peek-line">docker compose up -d</span>
+            </span>
+            <span className="mono update-script-name">{script.file}</span>
+            <span className="update-script-sub">{script.os} · double-click to update</span>
+          </span>
+          {url&&<a className="update-menu-link" href={url} target="_blank" rel="noopener noreferrer">View release notes</a>}
+        </span>
+      : <span className="update-uptodate">Up to date</span>}
+    <button className="kbd" disabled={checking} onClick={check}>
+      {checking?'Checking…':'Check now'}
+    </button>
+  </span>;
 }
 
 /* MoreMenu — topbar overflow: command palette, Watches/Views (portal target),
