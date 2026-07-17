@@ -214,7 +214,7 @@ function UpdateBadge(){
     {available
       ? <span className="update-avail">
           <span className="update-avail-text">
-            <span className="update-dot" aria-hidden="true"/>Update available → <b>v{latest}</b>
+            <span className="update-dot" aria-hidden="true"/>Update available → <b>{latest}</b>
           </span>
           <span className="update-script" tabIndex={0} role="button"
             aria-label={'Double-click '+script.file+' to update ('+script.os+'). It runs docker compose pull, then docker compose up -d.'}>

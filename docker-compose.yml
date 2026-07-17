@@ -30,7 +30,6 @@ services:
       - "${BIND:-127.0.0.1}:${PORT:-8080}:8080"
     volumes:
       - noc-vault:/vault
-      - /var/run/docker.sock:/var/run/docker.sock   # leave for a separate cleanup pass
     environment:
       INFOBLOX_URL: ${INFOBLOX_URL:-https://csp.infoblox.com}
       # single-key mode (optional) — leave unset to use the in-app encrypted vault
