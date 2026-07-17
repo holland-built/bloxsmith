@@ -207,7 +207,7 @@ function DnsQpsPanel(){
            <Sparkline values={values}/>
            <div>
              <div style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>current QPS</div>
-             <div className="mono" style={{fontSize:'var(--t16)',fontWeight:600}}>{current!==null?current.toLocaleString():'—'}</div>
+             <div className="kpi-num" style={{fontSize:'var(--t16)'}}>{current!==null?current.toLocaleString():'—'}</div>
            </div>
          </div>
          <DataTable cols={cols} rows={rows} scrollBody={220} csvName="dns-qps"/>
