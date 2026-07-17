@@ -971,6 +971,7 @@ function useAiExplain(){
   .ovx-detail .span-4{grid-column:span 4;}
   .ovx-detail .span-6{grid-column:span 6;}
   .ovx-detail .span-8{grid-column:span 8;}
+  .ovx-detail .span-12{grid-column:span 12;}
   /* Intermediate step: below ~1366px a span-3/4 track is <300px — too narrow for
      donut legends and action rows — so promote to half/full width before the
      single-column collapse at 1100px. */
@@ -980,7 +981,7 @@ function useAiExplain(){
   }
   @media (max-width:1100px){
     .ovx-detail{grid-template-columns:minmax(0,1fr);}
-    .ovx-detail .span-3,.ovx-detail .span-4,.ovx-detail .span-6,.ovx-detail .span-8{grid-column:auto;}
+    .ovx-detail .span-3,.ovx-detail .span-4,.ovx-detail .span-6,.ovx-detail .span-8,.ovx-detail .span-12{grid-column:auto;}
   }
 
   /* Compact inline stat strip — replaces the old full-width verdict banner. */
