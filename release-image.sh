@@ -18,7 +18,7 @@ IMAGE="ghcr.io/holland-built/bloxsmith"
 VERSION="1.0.$(git rev-list --count HEAD)"
 
 echo "▶ Building ${IMAGE}:${VERSION} (and :latest) from the current code…"
-docker build -t "${IMAGE}:latest" -t "${IMAGE}:v${VERSION}" .
+docker build --build-arg APP_VERSION="${VERSION}" -t "${IMAGE}:latest" -t "${IMAGE}:v${VERSION}" .
 
 echo "▶ Pushing to the registry…"
 docker push "${IMAGE}:latest"
