@@ -75,48 +75,9 @@ _APPLY_COOLDOWN = 60              # seconds after startup before apply is allowe
 _update_cache = {"checked_at": 0.0, "latest": None, "available": False, "html_url": None}
 _update_lock = threading.Lock()
 
-# Docker SDK self-update. The socket is mounted by run-image.sh unless
-# NO_DOCKER_SOCKET=1. If unavailable, DOCKER_OK stays False and the
-# "Update now" button is hidden.
-def _docker_client():
-    try:
-        import docker as _docker
-        return _docker.from_env(), True
-    except Exception:
-        return None, False
-
-_pull_lock = threading.Lock()
-_pull_state = {
-    "phase": "idle",
-    "pct": 0,
-    "layer_current": 0,
-    "layer_total": 0,
-    "stalled": False,
-    "error": None,
-    "rolledback": False,
-    "rollback_from": None,
-    "rollback_to": None,
-}
-# Test Docker availability once at startup
-_, DOCKER_OK = _docker_client()
-
-# Running image digest, resolved once at startup so every audit entry can be
-# pinned to the exact image that produced it. Falls back to the app version
-# when Docker is unavailable or the digest can't be read. Never raises at import.
-def _resolve_image_digest():
-    if DOCKER_OK:
-        try:
-            client, _ = _docker_client()
-            cont = client.containers.get(os.environ.get("HOSTNAME", ""))
-            digs = cont.image.attrs.get("RepoDigests") or []
-            if digs:
-                # e.g. "repo@sha256:abc..." → "sha256:abc..."
-                return digs[0].split("@", 1)[-1]
-        except Exception as e:
-            print(f"  [warn] image digest lookup failed: {e}", file=sys.stderr)
-    return "app-v" + APP_VERSION
-
-_IMAGE_DIGEST = _resolve_image_digest()
+# Running image tag used to pin audit entries. Docker-based digest resolution
+# was removed along with the self-update machinery; entries pin to the app version.
+_IMAGE_DIGEST = "app-v" + APP_VERSION
 
 def _ver_n(v):
     """Extract the integer <n> from a '1.0.<n>' / 'v1.0.<n>' version; None if unparseable."""
@@ -169,302 +130,11 @@ def update_status(force=False):
         cooling = elapsed < _APPLY_COOLDOWN
         result = {"current": APP_VERSION, "latest": _update_cache["latest"],
                   "available": _update_cache["available"], "url": _update_cache["html_url"],
-                  "checkDisabled": UPDATE_CHECK_DISABLED, "selfUpdate": DOCKER_OK,
+                  "checkDisabled": UPDATE_CHECK_DISABLED, "selfUpdate": False,
                   "cooldown": int(max(0, _APPLY_COOLDOWN - elapsed)) if cooling else 0,
                   "instance_id": _INSTANCE_ID}
-    # Expose the rollback target (only if it differs from the running version and
-    # self-update is wired) so the UI can show a one-click "Rollback to vX".
-    _prev = _read_prev_version()
-    result["prevVersion"] = _prev if (DOCKER_OK and _prev and _prev != APP_VERSION) else None
-    # Auto-kick background pre-pull when update is available and idle
-    with _update_lock:
-        avail = _update_cache["available"]
-    if avail and DOCKER_OK:
-        with _pull_lock:
-            current_phase = _pull_state["phase"]
-        if current_phase == "idle":
-            with _update_lock:
-                img = f"ghcr.io/{APP_REPO}:latest"
-            threading.Thread(target=_run_prepull, args=(img,), daemon=True).start()
+    result["prevVersion"] = None
     return result
-
-def _run_prepull(image_ref):
-    """Background thread: pull the new image while the container stays live.
-    Updates _pull_state with real layer progress from the Docker events stream."""
-    import time as _t
-    client, ok = _docker_client()
-    if not ok:
-        return
-    with _pull_lock:
-        _pull_state.update(phase="prepulling", pct=0, layer_current=0,
-                           layer_total=0, stalled=False, error=None)
-    layers_total = {}
-    layers_done = {}
-    last_event = _t.monotonic()
-    try:
-        for event in client.api.pull(image_ref, stream=True, decode=True):
-            last_event = _t.monotonic()
-            layer = event.get("id", "")
-            status = event.get("status", "")
-            detail = event.get("progressDetail") or {}
-            if status in ("Pulling fs layer", "Waiting"):
-                layers_total.setdefault(layer, 0)
-            elif status == "Pull complete":
-                if layer:
-                    layers_done[layer] = True
-                    layers_total.setdefault(layer, 1)
-            elif status == "Downloading" and detail:
-                cur = detail.get("current", 0)
-                tot = detail.get("total", 0) or 1
-                layers_total[layer] = tot
-                layers_done[layer] = cur
-            stalled = (_t.monotonic() - last_event) > 20
-            if stalled:
-                with _pull_lock:
-                    _pull_state.update(phase="error", error="pull stalled (no progress for 20 s)")
-                return
-            total_bytes = sum(layers_total.values()) or 1
-            done_bytes = sum(v if isinstance(v, int) else 0
-                             for v in layers_done.values())
-            pct = min(int(done_bytes * 100 / total_bytes), 99)
-            nl = len(layers_total)
-            nd = sum(1 for v in layers_done.values() if v is True)
-            with _pull_lock:
-                _pull_state.update(phase="prepulling", pct=pct,
-                                   layer_current=nd, layer_total=nl,
-                                   stalled=stalled, error=None)
-        with _pull_lock:
-            _pull_state.update(phase="pulled", pct=100,
-                               layer_current=len(layers_total),
-                               layer_total=len(layers_total),
-                               stalled=False, error=None)
-    except Exception as e:
-        _log_exc("_run_prepull", e)
-        with _pull_lock:
-            _pull_state.update(phase="error", error="pull failed")
-
-
-def apply_self_update(rollback=False):
-    """Inspect self, return HTTP response, then recreate in a detached thread.
-
-    rollback=True recreates from the preserved previous image (bloxsmith:previous)
-    instead of pulling ghcr:latest — a deliberate downgrade to the last version.
-    """
-    if not DOCKER_OK:
-        return {"ok": False, "error": "docker socket not available"}
-    if rollback and not _read_prev_version():
-        return {"ok": False, "error": "no previous version recorded"}
-    elapsed = _time.monotonic() - _START_TIME
-    if elapsed < _APPLY_COOLDOWN:
-        remaining = int(_APPLY_COOLDOWN - elapsed)
-        return {"ok": False, "error": "cooldown", "retry_after": remaining}
-    client, _ = _docker_client()
-    try:
-        container = client.containers.get(os.environ.get("HOSTNAME", ""))
-    except Exception as e:
-        _log_exc("apply_self_update", e)
-        return {"ok": False, "error": "cannot inspect container"}
-
-    def _do_recreate():
-        import time as _t, socket as _sock, json as _json, os as _os
-        from urllib.request import urlopen as _urlopen
-        _t.sleep(0.3)
-        with _pull_lock:
-            _pull_state.update(phase="recreating", error=None)
-        try:
-            attrs = container.attrs
-            cfg = attrs.get("HostConfig", {})
-            ports = cfg.get("PortBindings") or {}
-            vols = cfg.get("Binds") or []
-            env = [e for e in (attrs.get("Config", {}).get("Env") or [])
-                   if not e.startswith(("APP_VERSION=", "PATH=", "PYTHON_VERSION=",
-                                        "PYTHON_SHA256=", "GPG_KEY="))]
-            name = attrs.get("Name", "").lstrip("/")
-            image = attrs.get("Config", {}).get("Image", "")
-            # Preserve the outgoing image under a stable local tag + record its
-            # version, so a later manual rollback can recreate from it even after
-            # ghcr:latest has moved on. Forward updates only — a rollback must not
-            # overwrite the record of the version it is returning to.
-            if not rollback:
-                try:
-                    old_img_id = attrs.get("Image") or ""
-                    if old_img_id:
-                        client.images.get(old_img_id).tag("bloxsmith", "previous")
-                        _write_prev_version(APP_VERSION)
-                except Exception:
-                    pass
-            if rollback:
-                # Recreate from the preserved previous image; do NOT prefer ghcr:latest.
-                image = "bloxsmith:previous"
-            else:
-                # Prefer the pre-pulled GHCR image so updates on locally-tagged
-                # containers (e.g. dev builds named 'bloxsmith') actually land
-                # on the new version rather than re-running the old local image.
-                ghcr_image = f"ghcr.io/{APP_REPO}:latest"
-                try:
-                    client.images.get(ghcr_image)
-                    image = ghcr_image
-                except Exception:
-                    pass  # No GHCR image locally — use current container's image
-            restart = cfg.get("RestartPolicy", {}).get("Name", "unless-stopped")
-            labels = attrs.get("Config", {}).get("Labels") or {}
-            networks = list((attrs.get("NetworkSettings") or {}).get("Networks", {}).keys())
-
-            rollback_from = APP_VERSION
-            with _update_lock:
-                rollback_to = _update_cache.get("latest") or ""
-            try:
-                client.images.get(image).tag("bloxsmith", "rollback")
-            except Exception:
-                pass
-
-            ports_map = {}
-            for _k, _bindings in ports.items():
-                if _bindings:
-                    ports_map[_k] = [
-                        [b.get("HostIp") or "", b["HostPort"]] if b.get("HostIp")
-                        else int(b["HostPort"])
-                        for b in _bindings
-                    ]
-            tmp_name = name + "-retiring"
-            net = networks[0] if networks else None
-
-            candidate_name = name + "-candidate"
-            try:
-                client.containers.get(candidate_name).remove(force=True)
-            except Exception:
-                pass
-            with _pull_lock:
-                _pull_state.update(phase="checking", error=None)
-
-            # No port mapping — health probe uses docker exec (in-container),
-            # so no host port is needed and no conflict is possible.
-            candidate = client.containers.run(
-                image,
-                name=candidate_name,
-                environment=env,
-                volumes=vols,
-                restart_policy={},
-                labels=labels,
-                detach=True,
-            )
-
-            # Health probe via docker exec (in-container, network-agnostic).
-            # The server runs inside a container so 127.0.0.1:<host-port> is
-            # unreachable from here; exec runs inside the candidate instead.
-            def _wait_healthy(deadline=30, interval=2):
-                end = _t.monotonic() + deadline
-                while _t.monotonic() < end:
-                    try:
-                        result = candidate.exec_run(
-                            ["python3", "-c",
-                             "from urllib.request import urlopen;"
-                             "r=urlopen('http://127.0.0.1:8080/api/vault/status',timeout=3);"
-                             "exit(0 if r.status==200 else 1)"],
-                        )
-                        if result.exit_code == 0:
-                            return True
-                    except Exception:
-                        pass
-                    _t.sleep(interval)
-                return False
-
-            healthy = _wait_healthy()
-
-            if healthy:
-                try:
-                    candidate.stop(timeout=3)
-                    candidate.remove(force=True)
-                except Exception:
-                    pass
-                container.rename(tmp_name)
-                helper_script = (
-                    "import json,sys,time,docker\n"
-                    "c=docker.from_env()\n"
-                    "cfg=json.loads(sys.argv[1])\n"
-                    "time.sleep(3)\n"
-                    "try: c.containers.get(cfg['old']).remove(force=True)\n"
-                    "except Exception: pass\n"
-                    "try: c.images.pull(cfg['img'])\n"
-                    "except Exception: pass\n"
-                    "p={k:[tuple(b) if isinstance(b,list) else b for b in v]"
-                    " for k,v in cfg['ports'].items()}\n"
-                    "kw={'network':cfg['net']} if cfg.get('net') else {}\n"
-                    "c.containers.run(cfg['img'],detach=True,name=cfg['name'],"
-                    "environment=cfg['env'],ports=p,volumes=cfg['vols'],"
-                    "restart_policy={'Name':cfg['restart']},labels=cfg['labels'],**kw)\n"
-                )
-                cfg_json = _json.dumps({
-                    'old': tmp_name, 'img': image, 'name': name,
-                    'env': env, 'ports': ports_map, 'vols': vols,
-                    'restart': restart, 'labels': labels, 'net': net,
-                })
-                sock_vols = [v for v in vols if '.sock' in v]
-                try:
-                    client.containers.get(name + "-updater").remove(force=True)
-                except Exception:
-                    pass
-                client.containers.run(
-                    image,
-                    name=name + "-updater",
-                    command=['python3', '-c', helper_script, cfg_json],
-                    volumes=sock_vols,
-                    detach=True,
-                    remove=False,
-                )
-                with _pull_lock:
-                    _pull_state.update(phase="live", error=None)
-                _t.sleep(0.5)
-                _os.kill(1, 9)
-
-            else:
-                try:
-                    candidate.stop(timeout=3)
-                    candidate.remove(force=True)
-                except Exception:
-                    pass
-                try:
-                    orig = client.containers.get(name)
-                    if orig.status != "running":
-                        orig.start()
-                except Exception:
-                    pass
-                with _pull_lock:
-                    _pull_state.update(
-                        phase="rolledback",
-                        error="new image failed health check after 30 s",
-                        rolledback=True,
-                        rollback_from=rollback_from,
-                        rollback_to=rollback_to,
-                    )
-
-        except Exception as e:
-            try:
-                client.containers.get(name + "-candidate").remove(force=True)
-            except Exception:
-                pass
-            try:
-                container.rename(name)
-            except Exception:
-                pass
-            try:
-                orig = client.containers.get(name)
-                if orig.status != "running":
-                    orig.start()
-            except Exception:
-                pass
-            _log_exc("_do_recreate", e)
-            with _pull_lock:
-                _pull_state.update(
-                    phase="rolledback",
-                    error="recreate failed",
-                    rolledback=True,
-                    rollback_from=APP_VERSION,
-                    rollback_to="",
-                )
-
-    threading.Thread(target=_do_recreate, daemon=True).start()
-    return {"ok": True}
 
 # Shared-secret for the state-changing write endpoint (/api/block-domain).
 # If unset, that write is disabled (401). Supply it via the X-Auth-Token header.
@@ -478,14 +148,6 @@ MUTATING_PATHS = frozenset({
     "/api/teardown/seed-demo/stream", "/api/selfservice/allocate",
     "/api/dns/records", "/api/provision/block", "/api/teardown/block",
     "/api/retag/block", "/api/alerts/snooze", "/api/edit",
-    # NOTE: /api/update/apply is deliberately NOT here. It looks like it belongs —
-    # replacing the running image is the most consequential write this app makes —
-    # but _write_guard gates on _write_ok(), a STRICTER and different rule than the
-    # handler's own _role_at_least("admin"). Adding it flips the endpoint to
-    # "forbidden — write not authorized" for callers who are admin but not
-    # write-authorized, i.e. it breaks the in-app Update button (verified live).
-    # Self-updates are audited by the apply/rollback handlers' own self-update-*
-    # entries instead, which carry the version transition rather than just a path.
 })
 # Explicit, allowlisted block list id for /api/block-domain (no fuzzy name match).
 BLOCK_LIST_ID   = os.environ.get("BLOCK_LIST_ID", "")
@@ -2763,23 +2425,6 @@ _STATE_DIR = os.path.dirname(VAULT_FILE)
 AUDIT_LOG_FILE = os.path.join(_STATE_DIR, "audit_log.jsonl")
 _audit_lock = threading.Lock()
 
-# Records the version we were on just before a forward self-update, so the UI
-# can offer a one-click rollback to it (the outgoing image is tagged
-# bloxsmith:previous by apply_self_update). Persisted to the vault volume so it
-# survives container recreation.
-_PREV_FILE = os.path.join(_STATE_DIR, "prev_version.json")
-def _write_prev_version(ver):
-    try:
-        with open(_PREV_FILE, "w") as f:
-            f.write(json.dumps({"version": ver}))
-    except Exception:
-        pass
-def _read_prev_version():
-    try:
-        with open(_PREV_FILE) as f:
-            return (json.load(f) or {}).get("version") or None
-    except Exception:
-        return None
 
 def _audit_entry_hash(entry):
     payload = {k: v for k, v in entry.items() if k != "hash"}
@@ -5406,16 +5051,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json(vault_status()); return
         if path == "/api/update/check":
             self._json(update_status(force=True)); return
-        if path == "/api/update/status":
-            with _pull_lock:
-                self._json({**dict(_pull_state), "instance_id": _INSTANCE_ID}); return
-        if path == "/api/update/rollback-status":
-            with _pull_lock:
-                self._json({
-                    "rolledback": _pull_state["rolledback"],
-                    "rollback_from": _pull_state["rollback_from"],
-                    "rollback_to": _pull_state["rollback_to"],
-                }); return
         if path == "/api/sources":
             # Registry META only (no tenant data) — safe above the vault gate.
             self._json(sources_meta()); return
@@ -6433,45 +6068,6 @@ class Handler(BaseHTTPRequestHandler):
             if not MCP_HEADERS.get("Authorization") and not self._authed():
                 self._json({"ok": False, "error": "unauthorized"}, 401); return
             self._json(vault_reset()); return
-        if self.path == "/api/update/rollback-clear":
-            if not MCP_HEADERS.get("Authorization") and not self._authed():
-                self._json({"ok": False, "error": "unauthorized"}, 401); return
-            with _pull_lock:
-                _pull_state.update(rolledback=False, rollback_from=None, rollback_to=None)
-            self._json({"ok": True}); return
-        if self.path == "/api/update/apply":
-            # Admin-only: a self-update recreates the container, so only an
-            # authenticated admin may trigger it. _role_at_least audits the
-            # denial; we return the 403 (read-only status/check stay ungated).
-            if not self._role_at_least("admin"):
-                self._json({"ok": False, "error": "admin required"}, 403); return
-            if not MCP_HEADERS.get("Authorization") and not self._authed():
-                self._json({"ok": False, "error": "vault locked", "locked": True}, 401); return
-            result = apply_self_update()
-            # Audited BEFORE the detached recreate thread can tear the container
-            # down (apply_self_update only *starts* that thread; the actual
-            # rename/kill happens seconds later after a health probe), so the
-            # write lands on the same volume-backed log the outgoing process reads.
-            if result.get("ok"):
-                with _update_lock:
-                    target = _update_cache.get("latest") or ""
-                audit_append("self-update-apply", self._actor(),
-                              {"from_version": APP_VERSION, "to_version": target})
-            else:
-                audit_append("self-update-apply-failed", self._actor(),
-                              {"from_version": APP_VERSION, "error": result.get("error")})
-            self._json(result); return
-        if self.path == "/api/update/rollback-apply":
-            if not MCP_HEADERS.get("Authorization") and not self._authed():
-                self._json({"ok": False, "error": "vault locked", "locked": True}, 401); return
-            result = apply_self_update(rollback=True)
-            if result.get("ok"):
-                audit_append("self-update-rollback", self._actor(),
-                              {"from_version": APP_VERSION, "to_version": _read_prev_version() or ""})
-            else:
-                audit_append("self-update-rollback-failed", self._actor(),
-                              {"from_version": APP_VERSION, "error": result.get("error")})
-            self._json(result); return
         if VAULT_MODE and not MCP_HEADERS.get("Authorization"):
             self._json({"error": "vault locked", "locked": True}, 503); return
         if self.path != "/api/switch-account":
