@@ -287,7 +287,94 @@ function InfraTab({vaultTick}={}){
             </table>
           </div>}
     </div>
+
+    <div className="infra-sec">
+      <div className="infra-head"><span className="infra-h">CSP</span><MaintenancePill/></div>
+    </div>
+    <HostHealthPanel/>
+    <OnPremHostsPanel/>
+    <JobsPanel/>
+    <DfpServicesPanel/>
   </div>;
+}
+// ── CSP tiles (read-only, appended — see BUILD_SPEC.md) ──
+function cspStatusBadge(v){
+  const s=String(v||'').toLowerCase();
+  const variant=s==='online'?'success':s==='offline'?'error':'default';
+  return <Astryx.Badge variant={variant} label={v||'—'}/>;
+}
+function HostHealthPanel(){
+  const feed=useApi('/api/csp/host-health',{poll:15000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  const cols=[
+    {key:'name',label:'Name',primary:true,render:v=><IdCell value={v} label="Host"/>},
+    {key:'status',label:'Status',render:cspStatusBadge},
+    {key:'version',label:'Version',mono:true},
+    {key:'ip',label:'IP',mono:true},
+    {key:'nat_ip',label:'NAT IP',mono:true},
+    {key:'location',label:'Location'},
+  ];
+  return <Panel title="Host health" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.name)} tableId="csp-host-health" csvName="csp-host-health" filterable/>}
+  </Panel>;
+}
+function OnPremHostsPanel(){
+  const feed=useApi('/api/csp/onprem-hosts',{poll:30000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  const cols=[
+    {key:'name',label:'Name',primary:true},
+    {key:'ophid',label:'OPH ID',render:v=><IdCell value={v} label="OPH ID"/>},
+    {key:'app_count',label:'Apps',mono:true,align:'right'},
+  ];
+  return <Panel title="On-prem hosts" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.ophid||r.name)} tableId="csp-onprem-hosts" csvName="csp-onprem-hosts" scrollBody={480} filterable/>}
+  </Panel>;
+}
+function JobsPanel(){
+  const feed=useApi('/api/csp/jobs',{poll:15000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  const cols=[
+    {key:'created_at',label:'Created',mono:true},
+    {key:'type',label:'Type'},
+    {key:'status',label:'Status',render:cspStatusBadge},
+    {key:'user',label:'User'},
+  ];
+  return <Panel title="Jobs" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id||r.created_at)} tableId="csp-jobs" csvName="csp-jobs" defaultSort={{key:'created_at',dir:'desc'}}/>}
+  </Panel>;
+}
+function DfpServicesPanel(){
+  const feed=useApi('/api/csp/dfp',{poll:30000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  const cols=[
+    {key:'name',label:'Name',primary:true},
+    {key:'status',label:'Status',render:cspStatusBadge},
+  ];
+  return <Panel title="DFP services" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id||r.name)} tableId="csp-dfp" csvName="csp-dfp" scrollBody={480}/>}
+  </Panel>;
+}
+function MaintenancePill(){
+  const feed=useApi('/api/csp/maintenance',{poll:60000});
+  const enabled=feed.data&&feed.data.enabled;
+  const status=feed.data&&feed.data.status;
+  if(feed.error||status==='error') return null;
+  if(enabled==null) return null;
+  return enabled
+    ? <Astryx.Badge variant="warning" label="Maintenance ON"/>
+    : <Astryx.Badge variant="success" label="Operational"/>;
 }
 // ═══ END: INFRA ═══
 
