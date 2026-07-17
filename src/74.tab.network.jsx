@@ -323,6 +323,49 @@ function NetworkTab(){
             </Panel>
           </div>
         </React.Fragment>}
+    <IpamUtilPanel/>
+    <DhcpLeasesPanel/>
   </div>;
+}
+
+const IPAM_UTIL_COLS=[
+  {key:'label',label:'Space',align:'left',id:true},
+  {key:'used',label:'Used',align:'right',mono:true},
+  {key:'total',label:'Total',align:'right',mono:true},
+  {key:'pct',label:'Utilization',align:'right',mono:true,render:v=>(v===''||v==null)?'—':(isNaN(Number(v))?'—':Number(v)+'%')},
+];
+function IpamUtilPanel(){
+  const feed=useApi('/api/csp/ipam-util',{poll:30000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  return <Panel title="IPAM utilization" api={feed}>
+    {feed.error||status==='error'
+      ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+      : rows.length===0
+        ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+        : <DataTable cols={IPAM_UTIL_COLS} rows={rows} defaultSort={{key:'pct',dir:'desc'}}
+            filterable scrollBody={480} csvName="ipam-util" tableId="ipam-util" rowKey={r=>String(r.id||r.label)}/>}
+  </Panel>;
+}
+
+const DHCP_LEASE_COLS=[
+  {key:'address',label:'Address',align:'left',id:true},
+  {key:'hostname',label:'Hostname',align:'left',render:v=>v||'—'},
+  {key:'ends',label:'Ends',mono:true,render:v=>v||'—'},
+  {key:'hardware',label:'Hardware',mono:true,render:v=>v||'—'},
+  {key:'state',label:'State',align:'left',render:v=>StateText(v)},
+];
+function DhcpLeasesPanel(){
+  const feed=useApi('/api/csp/dhcp-leases',{poll:30000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  return <Panel title="DHCP leases" api={feed}>
+    {feed.error||status==='error'
+      ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+      : rows.length===0
+        ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+        : <DataTable cols={DHCP_LEASE_COLS} rows={rows} defaultSort={{key:'address',dir:'asc'}}
+            filterable scrollBody={480} csvName="dhcp-leases" tableId="dhcp-leases" rowKey={r=>r.address}/>}
+  </Panel>;
 }
 

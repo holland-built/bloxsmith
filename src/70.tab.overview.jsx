@@ -431,8 +431,58 @@ function OverviewTab(){
         </Panel>
       </div>
 
+      <div className="span-12">
+        <LicenseAlertsPanel/>
+      </div>
+
     </div>
   </div>;
+}
+// ── License & alerts tile (read-only, appended — see BUILD_SPEC.md) ──
+function ovxLicenseStateBadge(v){
+  const s=String(v||'').toLowerCase();
+  const variant=s==='active'?'success':s==='expired'?'error':'default';
+  return <Astryx.Badge variant={variant} label={v||'—'}/>;
+}
+function ovxAlertSevBadge(v){
+  const s=String(v||'').toLowerCase();
+  const variant=(s==='high'||s==='critical')?'error':s==='warning'?'warning':'default';
+  return <Astryx.Badge variant={variant} label={v||'—'}/>;
+}
+function ovxExpiryCell(v){
+  const t=v?Date.parse(v):NaN;
+  if(isNaN(t)) return <span className="mono">{v||'—'}</span>;
+  const days=Math.round((t-Date.now())/86400000);
+  const soon=days>=0&&days<=30;
+  return <span className="mono" style={soon?{color:'var(--sev-crit,#e5484d)',fontWeight:600}:undefined}>{v}</span>;
+}
+function LicenseAlertsPanel(){
+  const feed=useApi('/api/csp/license-alerts',{poll:300000});
+  const licenses=(feed.data&&feed.data.licenses)||[];
+  const alerts=(feed.data&&feed.data.alerts)||[];
+  const status=feed.data&&feed.data.status;
+  const licenseCols=[
+    {key:'type',label:'Type',primary:true},
+    {key:'state',label:'State',render:ovxLicenseStateBadge},
+    {key:'expiry',label:'Expiry',render:ovxExpiryCell},
+  ];
+  const alertCols=[
+    {key:'title',label:'Title',primary:true},
+    {key:'severity',label:'Severity',render:ovxAlertSevBadge},
+    {key:'created_at',label:'Created',mono:true},
+  ];
+  return <Panel title="Licenses & Portal Alerts" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : (licenses.length===0&&alerts.length===0) ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <>
+        {licenses.length===0
+          ? <div style={{padding:'8px 4px',color:'var(--text-faint)',fontSize:12}}>No licenses</div>
+          : <DataTable cols={licenseCols} rows={licenses} rowKey={r=>String(r.id||r.type)} tableId="ovx-licenses" csvName="ovx-licenses" scrollBody={220}/>}
+        {alerts.length===0
+          ? <div style={{padding:'8px 4px',color:'var(--text-faint)',fontSize:12}}>No alerts</div>
+          : <DataTable cols={alertCols} rows={alerts.slice(0,50)} rowKey={r=>String(r.id||r.title)} tableId="ovx-alerts" csvName="ovx-alerts" scrollBody={280}/>}
+       </>}
+  </Panel>;
 }
 // ═══ END: OVERVIEW ═══
 
