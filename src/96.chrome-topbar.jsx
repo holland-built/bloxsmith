@@ -332,9 +332,15 @@ function UpdateBadge(){
    because WatchMenu/ViewsMenu resolve their portal target once on mount. */
 function MoreMenu({onPalette}){
   const [open,setOpen]=useState(false);
-  useEffect(()=>{ if(!open) return; const on=e=>{ if(e.key==='Escape') setOpen(false); };
-    window.addEventListener('keydown',on); return ()=>window.removeEventListener('keydown',on); },[open]);
-  return <span className="more-menu" style={{position:'relative',display:'inline-flex'}}>
+  const rootRef=useRef(null);
+  useEffect(()=>{ if(!open) return;
+    const onKey=e=>{ if(e.key==='Escape') setOpen(false); };
+    const onDown=e=>{ if(rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+    window.addEventListener('keydown',onKey);
+    document.addEventListener('pointerdown',onDown,true);
+    return ()=>{ window.removeEventListener('keydown',onKey); document.removeEventListener('pointerdown',onDown,true); };
+  },[open]);
+  return <span ref={rootRef} className="more-menu" style={{position:'relative',display:'inline-flex'}}>
     <button className="kbd" aria-haspopup="menu" aria-expanded={open}
       aria-label="More tools — Watches, Views, command palette, display, software update"
       onClick={()=>setOpen(o=>!o)}>⋯</button>

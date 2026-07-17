@@ -318,7 +318,7 @@ function HostHealthPanel(){
   return <Panel title="Host health" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
-     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.name)} tableId="csp-host-health" csvName="csp-host-health" filterable/>}
+     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.name)} tableId="csp-host-health" csvName="csp-host-health" scrollBody={480} filterable/>}
   </Panel>;
 }
 function OnPremHostsPanel(){
@@ -349,7 +349,7 @@ function JobsPanel(){
   return <Panel title="Jobs" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
-     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id||r.created_at)} tableId="csp-jobs" csvName="csp-jobs" defaultSort={{key:'created_at',dir:'desc'}}/>}
+     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id||r.created_at)} tableId="csp-jobs" csvName="csp-jobs" defaultSort={{key:'created_at',dir:'desc'}} scrollBody={480}/>}
   </Panel>;
 }
 function DfpServicesPanel(){
