@@ -154,6 +154,72 @@ function DnsTab(){
             </Panel>
           </div>
         </React.Fragment>}
+    <DnsTilesRow/>
+  </div>;
+}
+function DnsServicesPanel(){
+  const feed=useApi('/api/csp/dns-services',{poll:30000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  const cols=[
+    {key:'name',label:'Name',align:'left',render:(v,r)=><IdCell value={v} label={r.id}/>},
+    {key:'comment',label:'Comment',align:'left'},
+    {key:'pool_id',label:'Pool ID',mono:true,align:'left'},
+  ];
+  return <Panel title="DNS services" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <DataTable cols={cols} rows={rows} filterable filterKeys={['name','comment']} scrollBody={360} csvName="dns-services"/>}
+  </Panel>;
+}
+
+function ZoneInventoryPanel(){
+  const feed=useApi('/api/csp/zones',{poll:30000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  const cols=[
+    {key:'fqdn',label:'Zone',mono:true,align:'left',render:(v,r)=><IdCell value={v} label={r.id}/>},
+    {key:'view',label:'View',align:'left'},
+    {key:'comment',label:'Comment',align:'left'},
+  ];
+  return <Panel title="Zone inventory" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <DataTable cols={cols} rows={rows} filterable filterKeys={['fqdn','view']} scrollBody={480} csvName="zone-inventory"/>}
+  </Panel>;
+}
+
+function DnsQpsPanel(){
+  const feed=useApi('/api/csp/dns-qps',{poll:30000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  const values=rows.map(r=>Number(r.avg_value)||0);
+  const current=values.length?values[values.length-1]:null;
+  const cols=[
+    {key:'hour',label:'Hour',align:'left'},
+    {key:'avg_value',label:'Avg QPS',mono:true,align:'right',render:v=>Number(v).toLocaleString()},
+  ];
+  return <Panel title="DNS QPS" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
+         <div style={{display:'flex',alignItems:'center',gap:'var(--s3)'}}>
+           <Sparkline values={values}/>
+           <div>
+             <div style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>current QPS</div>
+             <div className="mono" style={{fontSize:'var(--t16)',fontWeight:600}}>{current!==null?current.toLocaleString():'—'}</div>
+           </div>
+         </div>
+         <DataTable cols={cols} rows={rows} scrollBody={220} csvName="dns-qps"/>
+       </div>}
+  </Panel>;
+}
+
+function DnsTilesRow(){
+  return <div className="grid-dense">
+    <DnsServicesPanel/>
+    <ZoneInventoryPanel/>
+    <DnsQpsPanel/>
   </div>;
 }
 // ═══ END: NETDNS ═══
