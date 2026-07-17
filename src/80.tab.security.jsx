@@ -563,6 +563,102 @@ function SecSynthBand({api,acks,setSevF,triageRef}){
   </React.Fragment>;
 }
 
+function ThreatRibbonPanel(){
+  const feed=useApi('/api/csp/threats',{poll:30000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  const totals=rows.reduce((m,r)=>{const a=String(r.action||'').toLowerCase();const n=Number(r.requests)||0;
+    if(a==='block')m.block+=n;else if(a==='allow')m.allow+=n;return m;},{block:0,allow:0});
+  const cols=[
+    {key:'day',label:'Day',mono:true},
+    {key:'action',label:'Action',render:v=><Astryx.Badge variant={String(v||'').toLowerCase()==='block'?'error':'success'} label={v||'—'}/>},
+    {key:'requests',label:'Requests',mono:true,align:'right'},
+  ];
+  return <Panel title="Threat ribbon" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <div>
+        <div style={{display:'flex',gap:'var(--s5)',marginBottom:'var(--s3)'}}>
+          <div><span className="mono" style={{fontSize:'var(--t28)',fontWeight:600,color:'var(--crit)'}}>{totals.block}</span><div style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>Blocked</div></div>
+          <div><span className="mono" style={{fontSize:'var(--t28)',fontWeight:600}}>{totals.allow}</span><div style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>Allowed</div></div>
+        </div>
+        <DataTable cols={cols} rows={rows} rowKey={r=>String(r.day)+'|'+String(r.action)} tableId="csp-threats" csvName="csp-threats" defaultSort={{key:'day',dir:'desc'}}/>
+      </div>}
+  </Panel>;
+}
+function CtemExposurePanel(){
+  const feed=useApi('/api/csp/ctem-exposure',{poll:300000});
+  const d=(feed.data&&feed.data.data)||null;
+  const status=feed.data&&feed.data.status;
+  const matrix=(d&&Array.isArray(d.matrix))?d.matrix:[];
+  const hourly=(d&&Array.isArray(d.hourly_counts))?d.hourly_counts.map(Number).filter(isFinite):[];
+  const empty=!d||(!d.total_exposures&&!matrix.length&&!hourly.length);
+  const cols=[
+    {key:'severity',label:'Severity',mono:true},
+    {key:'priority',label:'Priority',mono:true},
+    {key:'count',label:'Count',mono:true,align:'right'},
+  ];
+  return <Panel title="CTEM exposure" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : empty ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <div>
+        <div style={{display:'flex',alignItems:'baseline',gap:'var(--s4)',marginBottom:'var(--s2)',flexWrap:'wrap'}}>
+          <span className="mono" style={{fontSize:'var(--t28)',fontWeight:600}}>{d.total_exposures||0}</span>
+          <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>total exposures</span>
+          {hourly.length>=2&&<Sparkline values={hourly} width={64} height={26}/>}
+        </div>
+        {matrix.length>0&&<DataTable cols={cols} rows={matrix} rowKey={(r,i)=>String(r.severity)+'|'+String(r.priority)+'|'+i} tableId="csp-ctem-matrix" csvName="csp-ctem-matrix"/>}
+        {d.last_scan_at&&<div style={{marginTop:'var(--s2)',fontSize:'var(--t11)',color:'var(--text-faint)'}}>Last scan: {String(d.last_scan_at)}</div>}
+      </div>}
+  </Panel>;
+}
+function CtemAssetsPanel(){
+  const feed=useApi('/api/csp/ctem-assets',{poll:300000});
+  const d=(feed.data&&feed.data.data)||null;
+  const status=feed.data&&feed.data.status;
+  const providers=(d&&Array.isArray(d.providers))?d.providers:[];
+  const technologies=(d&&Array.isArray(d.technologies))?d.technologies:[];
+  const ports=(d&&Array.isArray(d.ports))?d.ports:[];
+  const empty=!d||(!d.asset_count&&!providers.length&&!technologies.length&&!ports.length);
+  const chipRow=(label,arr,cap)=>{
+    if(!arr.length) return null;
+    const shown=cap?arr.slice(0,cap):arr;
+    const rest=arr.length-shown.length;
+    return <div style={{marginBottom:'var(--s3)'}}>
+      <div style={{fontSize:'var(--t11)',color:'var(--text-dim)',marginBottom:'var(--s1)'}}>{label}</div>
+      <div style={{display:'flex',gap:'var(--s1)',flexWrap:'wrap'}}>
+        {shown.map((s,i)=><Astryx.Badge key={label+i} variant="default" label={String(s)}/>)}
+        {rest>0&&<Astryx.Badge variant="default" label={'+'+rest+' more'}/>}
+      </div>
+    </div>;
+  };
+  return <Panel title="CTEM assets" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : empty ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <div>
+        <div style={{marginBottom:'var(--s3)'}}><span className="mono" style={{fontSize:'var(--t28)',fontWeight:600}}>{d.asset_count||0}</span> <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>assets</span></div>
+        {chipRow('Providers',providers)}
+        {chipRow('Technologies',technologies,30)}
+        {chipRow('Ports',ports)}
+      </div>}
+  </Panel>;
+}
+function SocInsightsPanel(){
+  const feed=useApi('/api/csp/soc',{poll:300000});
+  const rows=(feed.data&&feed.data.rows)||[];
+  const status=feed.data&&feed.data.status;
+  const enabled=feed.data&&feed.data.enabled;
+  const cols=[
+    {key:'id',label:'ID',render:v=><IdCell value={v} label="ID"/>},
+    {key:'name',label:'Name',primary:true},
+  ];
+  return <Panel title="SOC insights" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : enabled===false ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>SOC enforcement not enabled for this account</div>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id)} tableId="csp-soc" csvName="csp-soc"/>}
+  </Panel>;
+}
 function SecurityTab(){
   const sec=useApi('/api/hub/security',{poll:60000});
   const route=useRoute();
@@ -611,6 +707,12 @@ function SecurityTab(){
       <SecInsights/>
       <SecActions/>
       <div className="gd-wide"><Panel><SecDomainPanels/></Panel></div>
+    </div>
+    <div className="grid-dense">
+      <ThreatRibbonPanel/>
+      <CtemExposurePanel/>
+      <CtemAssetsPanel/>
+      <SocInsightsPanel/>
     </div>
     {ai.node}
   </div>;

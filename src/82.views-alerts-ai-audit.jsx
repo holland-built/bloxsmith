@@ -395,11 +395,11 @@ function CspAuditPanel(){
       <select value={kind} onChange={e=>setKind(e.target.value)} aria-label="Actor kind"
         style={{height:28,fontSize:'var(--t12)',background:'var(--raised)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)'}}>
         <option value="">Any kind</option>
-        {/* "People only" excludes machine tokens by username pattern — the raw "User"
-            subject_type includes provider_id service accounts, so it is NOT "humans". */}
+        {/* Person vs machine is by username pattern, NOT subject_type — Infoblox tags
+            provider_id service accounts as subject_type=="User", so a raw "User" filter
+            returns tokens, not humans. Only these two meaningful buckets are offered. */}
         <option value="people">People only</option>
-        <option value="User">Subject: User</option>
-        <option value="Device">Subject: Device</option><option value="Service">Subject: Service</option>
+        <option value="machines">Machines only</option>
       </select>
       <select value={since} onChange={e=>setSince(e.target.value)} aria-label="Time range"
         style={{height:28,fontSize:'var(--t12)',background:'var(--raised)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'var(--r-ctl)'}}>
