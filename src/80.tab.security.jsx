@@ -399,7 +399,7 @@ function SecRoaming({re}){
   const tc=Array.isArray(re.top_countries)?re.top_countries:[];
   return <SecSection title="Roaming endpoints">
     <div style={{display:'flex',alignItems:'baseline',gap:'var(--s4)',marginBottom:'var(--s2)',flexWrap:'wrap'}}>
-      <span className="mono" style={{fontSize:'var(--t28)',fontWeight:600}}>{re.total||0}</span>
+      <span className="kpi-num">{re.total||0}</span>
       <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>
         {Object.entries(byStatus).map(([k,v])=>k+' '+v).join(' · ')||'no status data'}
       </span>
@@ -579,8 +579,8 @@ function ThreatRibbonPanel(){
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div>
         <div style={{display:'flex',gap:'var(--s5)',marginBottom:'var(--s3)'}}>
-          <div><span className="mono" style={{fontSize:'var(--t28)',fontWeight:600,color:'var(--crit)'}}>{totals.block}</span><div style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>Blocked</div></div>
-          <div><span className="mono" style={{fontSize:'var(--t28)',fontWeight:600}}>{totals.allow}</span><div style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>Allowed</div></div>
+          <div><span className="kpi-num" style={{color:'var(--crit)'}}>{totals.block}</span><div style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>Blocked</div></div>
+          <div><span className="kpi-num">{totals.allow}</span><div style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>Allowed</div></div>
         </div>
         <DataTable cols={cols} rows={rows} rowKey={r=>String(r.day)+'|'+String(r.action)} tableId="csp-threats" csvName="csp-threats" defaultSort={{key:'day',dir:'desc'}} scrollBody={480}/>
       </div>}
@@ -603,7 +603,7 @@ function CtemExposurePanel(){
      : empty ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div>
         <div style={{display:'flex',alignItems:'baseline',gap:'var(--s4)',marginBottom:'var(--s2)',flexWrap:'wrap'}}>
-          <span className="mono" style={{fontSize:'var(--t28)',fontWeight:600}}>{d.total_exposures||0}</span>
+          <span className="kpi-num">{d.total_exposures||0}</span>
           <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>total exposures</span>
           {hourly.length>=2&&<Sparkline values={hourly} width={64} height={26}/>}
         </div>
@@ -636,7 +636,7 @@ function CtemAssetsPanel(){
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : empty ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div>
-        <div style={{marginBottom:'var(--s3)'}}><span className="mono" style={{fontSize:'var(--t28)',fontWeight:600}}>{d.asset_count||0}</span> <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>assets</span></div>
+        <div style={{marginBottom:'var(--s3)'}}><span className="kpi-num">{d.asset_count||0}</span> <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>assets</span></div>
         <div style={{maxHeight:'var(--panel-md)',overflow:'auto'}}>
           {chipRow('Providers',providers)}
           {chipRow('Technologies',technologies,30)}
