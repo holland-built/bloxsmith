@@ -3717,6 +3717,171 @@ def norm_audit(raw):
         "result":   "failure" if (int(l["http_code"]) if str(l.get("http_code") or "").isdigit() else 200) >= 400 else "success",
     } for l in raw]
 
+# ---- CSP tile endpoints (read-only proxies, see BUILD_SPEC.md) ----
+
+def _num(x):
+    # Guard every numeric coercion of an upstream field — a null must not crash the feed.
+    return int(x) if str(x if x is not None else "").isdigit() else 0
+
+def _mask_email(v):
+    # PII guard: keep only the local-part before "@". Never emit a full email.
+    s = str(v or "")
+    return s.split("@", 1)[0] if "@" in s else s
+
+def _norm_host_health(raw):
+    return [{
+        "name":    h.get("display_name", ""),
+        "status":  h.get("composite_status", ""),
+        "version": h.get("host_version", ""),
+        "ip":      h.get("ip_address", ""),
+        "nat_ip":  h.get("nat_ip", ""),
+        "location": h.get("location", ""),
+    } for h in raw]
+
+def _norm_onprem_hosts(raw):
+    return [{
+        "name":      h.get("display_name", ""),
+        "ophid":     h.get("ophid", ""),
+        "app_count": len(h.get("applications") or []),
+        "apps":      [a.get("name", a) if isinstance(a, dict) else a for a in (h.get("applications") or [])],
+    } for h in raw]
+
+def _norm_jobs(raw):
+    return [{
+        "id":         j.get("id", ""),
+        "created_at": j.get("created_at", ""),
+        "type":       j.get("task_type") or j.get("type", ""),
+        "status":     j.get("status", ""),
+        # PII: local-part only, never the full email.
+        "user":       _mask_email(j.get("user_email")),
+    } for j in raw]
+
+def _norm_dfp(raw):
+    return [{
+        "id":     d.get("id", ""),
+        "name":   d.get("name", ""),
+        "status": d.get("status") or d.get("state", ""),
+    } for d in raw]
+
+def _norm_dns_services(raw):
+    return [{
+        "id":      s.get("id", ""),
+        "name":    s.get("name", ""),
+        "comment": s.get("comment", ""),
+        "pool_id": s.get("pool_id", ""),
+    } for s in raw]
+
+def _norm_zones(raw):
+    return [{
+        "id":      z.get("id", ""),
+        "fqdn":    z.get("fqdn", ""),
+        "view":    z.get("view", ""),
+        "comment": z.get("comment", ""),
+    } for z in raw]
+
+def _norm_ipam_util(raw):
+    out = []
+    for i in raw:
+        util = i.get("utilization") or {}
+        out.append({
+            "id":    i.get("id", ""),
+            "label": i.get("label", ""),
+            "used":  _num(util.get("used")),
+            "total": _num(util.get("total")),
+            "pct":   util.get("utilization") or util.get("percent") or util.get("pct") or "",
+        })
+    return out
+
+def _norm_dhcp_leases(raw):
+    return [{
+        "address":  l.get("address", ""),
+        "hostname": l.get("hostname", ""),
+        "ends":     l.get("ends", ""),
+        "hardware": l.get("hardware", ""),
+        "state":    l.get("state", ""),
+    } for l in raw]
+
+def _cube_row(row, prefix):
+    # cubejs rows are keyed "Cube.field" — strip the known prefix off each key.
+    out = {}
+    for k, v in (row or {}).items():
+        out[k.split(".", 1)[1] if "." in k else k] = v
+    return out
+
+def _norm_threats(raw):
+    out = []
+    for r in raw:
+        flat = _cube_row(r, "PortunusAggThreat_ch")
+        out.append({
+            "action":   flat.get("action", ""),
+            "day":      flat.get("timestamp") or flat.get("day", ""),
+            "requests": _num(flat.get("requests")),
+        })
+    return out
+
+def _norm_dns_qps(raw):
+    out = []
+    for r in raw:
+        flat = _cube_row(r, "HostMetrics")
+        try:
+            avg = float(flat.get("avg_value") or 0)
+        except (TypeError, ValueError):
+            avg = 0
+        out.append({"hour": flat.get("timestamp") or flat.get("hour", ""), "avg_value": avg})
+    return out
+
+def _norm_ctem_exposure(stats, counts, matrix):
+    # stats = {last_discovery_at,last_scan_at}; counts = {count_24h/7d/30d,hourly_counts[]};
+    # matrix = {matrix:[{severity,priority,count}]}. Shapes verified live 2026-07-16.
+    stats  = stats  if isinstance(stats, dict)  else {}
+    counts = counts if isinstance(counts, dict) else {}
+    matrix = matrix if isinstance(matrix, dict) else {}
+    mrows  = matrix.get("matrix") if isinstance(matrix.get("matrix"), list) else []
+    hc     = counts.get("hourly_counts")
+    return {
+        "total_exposures": _num(counts.get("count_7d") or counts.get("count_24h")),
+        "count_24h":       _num(counts.get("count_24h")),
+        "count_7d":        _num(counts.get("count_7d")),
+        "count_30d":       _num(counts.get("count_30d")),
+        "hourly_counts":   [_num(x) for x in hc] if isinstance(hc, list) else [],
+        "last_scan_at":    stats.get("last_scan_at", ""),
+        "matrix": [{
+            "severity": m.get("severity", ""), "priority": m.get("priority", ""),
+            "count": _num(m.get("count")),
+        } for m in mrows],
+    }
+
+def _norm_ctem_assets(providers, technologies, ports, count):
+    # each sub-body is {providers:[str]} / {technologies:[str]} / {ports:[str]} / {count:int}.
+    def _strlist(b, key):
+        v = b.get(key) if isinstance(b, dict) else None
+        return v if isinstance(v, list) else []
+    return {
+        "providers":    _strlist(providers, "providers"),
+        "technologies": _strlist(technologies, "technologies"),
+        "ports":        _strlist(ports, "ports"),
+        "asset_count":  _num(count.get("count") if isinstance(count, dict) else 0),
+    }
+
+def _norm_soc(insight_types, enabled):
+    return {
+        "enabled": bool(enabled),
+        "types": [{"id": t.get("id", ""), "name": t.get("name", "")}
+                  for t in (insight_types if isinstance(insight_types, list) else [])],
+    }
+
+def _norm_license_alerts(licenses, alerts):
+    return {
+        "licenses": [{
+            "id": l.get("id", ""), "type": l.get("license_type") or l.get("type", ""),
+            "state": l.get("state", ""), "expiry": l.get("expiration_date") or l.get("expiry", ""),
+        } for l in (licenses if isinstance(licenses, list) else [])],
+        "alerts": [{
+            "id": a.get("id", ""), "title": a.get("title") or a.get("message", ""),
+            "severity": a.get("severity", ""), "created_at": a.get("created_at", ""),
+        } for a in (alerts if isinstance(alerts, list) else [])],
+    }
+
 # ── fetch all dashboard data ──────────────────────────────────────────────────
 
 async def _fetch_dashboard_async() -> dict:
@@ -5362,15 +5527,17 @@ class Handler(BaseHTTPRequestHandler):
                 if q:
                     # contains-match across the two human-meaningful fields
                     clauses.append("(user_name~" + _lit(q) + " or resource_type~" + _lit(q) + ")")
+                # Person vs machine is decided by the USERNAME, never subject_type: Infoblox
+                # tags provider_id/cloud-discovery SERVICE accounts as subject_type=="User",
+                # so a raw subject filter pulls tokens into "User" and confuses everyone.
+                _MACHINE = ("provider_id", "ngp.device", "service.", "federation", "test.")
                 if kind == "people":
-                    # subject_type=="User" is USELESS for "show me people": Infoblox tags
-                    # provider_id/cloud-discovery SERVICE accounts as User too. A real person
-                    # is an email with none of the machine-token prefixes. Exclude those
-                    # prefixes (each _lit-neutralised) — verified this returns real humans.
-                    for pref in ("provider_id", "ngp.device", "service.", "federation", "test."):
+                    # a real person = an email with none of the machine-token prefixes.
+                    for pref in _MACHINE:
                         clauses.append("not user_name~" + _lit(pref))
-                elif kind in ("User", "Device", "Service"):
-                    clauses.append("subject_type==" + _lit(kind))
+                elif kind == "machines":
+                    # any of the machine-token prefixes (verified _filter supports `or`).
+                    clauses.append("(" + " or ".join("user_name~" + _lit(p) for p in _MACHINE) + ")")
                 # created_at bounds — only accept ISO-ish values (digits/T/:/-/Z/.), reject the rest
                 _iso = lambda v: v if v and all(c in "0123456789TZ:-." for c in v) else ""
                 if _iso(since):
@@ -5935,6 +6102,261 @@ class Handler(BaseHTTPRequestHandler):
                     audit_append("teardown-seed-demo-error", self._actor(), {"regions": regions, "error": str(e)})
                 _log_exc("/api/teardown/seed-demo/stream", e); emit({"error": str(e)})
             return
+        # ---- CSP data tiles (read-only proxies, see BUILD_SPEC.md) ----
+        elif path == "/api/csp/host-health":
+            try:
+                body, http = _rest_get_ex("/api/infra/v1/detail_hosts", {
+                    "_limit": 500,
+                    "_fields": "display_name,composite_status,host_version,ip_address,nat_ip,location"})
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "status": "error"})
+                else:
+                    raw = (body.get("results", body.get("result", []))
+                           if isinstance(body, dict) else (body or []))
+                    rows = _norm_host_health(raw)
+                    self._json({"rows": rows, "count": len(rows),
+                                "status": "ok" if rows else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/host-health", e)
+                self._json({"rows": [], "count": 0, "status": "error"})
+        elif path == "/api/csp/onprem-hosts":
+            try:
+                body, http = _rest_get_ex("/api/host_app/v1/on_prem_hosts",
+                                           {"_fields": "display_name,ophid,applications"})
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "status": "error"})
+                else:
+                    raw = (body.get("results", body.get("result", []))
+                           if isinstance(body, dict) else (body or []))
+                    rows = _norm_onprem_hosts(raw)
+                    self._json({"rows": rows, "count": len(rows),
+                                "status": "ok" if rows else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/onprem-hosts", e)
+                self._json({"rows": [], "count": 0, "status": "error"})
+        elif path == "/api/csp/jobs":
+            try:
+                # origin=='0' (portal jobs) + a modest limit is the only combo that
+                # returns reliably: _order_by created_at desc times out / 429s, and an
+                # unbounded limit times out at 35s. See probe notes.
+                body, http = _rest_get_ex("/atlas-jobs-tasks/v1/jobs",
+                                           {"_limit": 50, "_filter": "origin=='0'"})
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "status": "error"})
+                else:
+                    raw = (body.get("results", body.get("result", []))
+                           if isinstance(body, dict) else (body or []))
+                    rows = _norm_jobs(raw)  # user_email masked to local-part inside
+                    self._json({"rows": rows, "count": len(rows),
+                                "status": "ok" if rows else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/jobs", e)
+                self._json({"rows": [], "count": 0, "status": "error"})
+        elif path == "/api/csp/dfp":
+            try:
+                body, http = _rest_get_ex("/api/atcdfp/v1/dfp_services")
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "status": "error"})
+                else:
+                    raw = (body.get("results", body.get("result", []))
+                           if isinstance(body, dict) else (body or []))
+                    rows = _norm_dfp(raw)
+                    self._json({"rows": rows, "count": len(rows),
+                                "status": "ok" if rows else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/dfp", e)
+                self._json({"rows": [], "count": 0, "status": "error"})
+        elif path == "/api/csp/maintenance":
+            # Not a rows feed — a single {enabled} bool the UI gates a pill on.
+            try:
+                body, http = _rest_get_ex("/atlas-maintenance-service/v1/check_global")
+                if http is None or http >= 400:
+                    self._json({"enabled": False, "status": "error"})
+                else:
+                    enabled = bool(isinstance(body, dict) and body.get("enabled"))
+                    self._json({"enabled": enabled, "status": "ok"})
+            except Exception as e:
+                _log_exc("/api/csp/maintenance", e)
+                self._json({"enabled": False, "status": "error"})
+        elif path == "/api/csp/threats":
+            try:
+                cube_query = json.dumps({
+                    "measures": ["PortunusAggThreat_ch.requests"],
+                    "dimensions": ["PortunusAggThreat_ch.action"],
+                    "timeDimensions": [{
+                        "dimension": "PortunusAggThreat_ch.timestamp",
+                        "dateRange": "last 7 days", "granularity": "day"}],
+                })
+                body, http = _rest_get_ex("/api/cubejs-security/v1/query", {"query": cube_query})
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "status": "error"})
+                else:
+                    raw = ((body.get("result") or {}).get("data", [])
+                           if isinstance(body, dict) else [])
+                    rows = _norm_threats(raw)
+                    self._json({"rows": rows, "count": len(rows),
+                                "status": "ok" if rows else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/threats", e)
+                self._json({"rows": [], "count": 0, "status": "error"})
+        elif path == "/api/csp/ctem-exposure":
+            # Merged: 3 sub-calls combined into one response. Any sub-error → status=error.
+            try:
+                stats_body, stats_http = _rest_get_ex("/api/attack-surface/v1/account/stats")
+                exp_body, exp_http = _rest_get_ex("/api/attack-surface/v1/exposures/metrics/counts-by-period")
+                matrix_body, matrix_http = _rest_get_ex("/api/attack-surface/v1/exposures/metrics/severity-priority-matrix")
+                codes = [stats_http, exp_http, matrix_http]
+                if any(c is None or c >= 400 for c in codes):
+                    self._json({"data": {}, "status": "error"})
+                else:
+                    # These sub-bodies are dicts keyed by their own field names, NOT
+                    # results/result lists — pass them whole; the norm reads the keys.
+                    data = _norm_ctem_exposure(stats_body, exp_body, matrix_body)
+                    self._json({"data": data, "status": "ok" if data.get("total_exposures") or data.get("matrix") else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/ctem-exposure", e)
+                self._json({"data": {}, "status": "error"})
+        elif path == "/api/csp/ctem-assets":
+            # Merged: 4 sub-calls combined into one response. Any sub-error → status=error.
+            try:
+                prov_body, prov_http = _rest_get_ex("/api/attack-surface/v1/providers")
+                tech_body, tech_http = _rest_get_ex("/api/attack-surface/v1/technologies")
+                ports_body, ports_http = _rest_get_ex("/api/attack-surface/v1/ports")
+                count_body, count_http = _rest_get_ex("/api/attack-surface/v1/assets/count", {"period": "7d"})
+                codes = [prov_http, tech_http, ports_http, count_http]
+                if any(c is None or c >= 400 for c in codes):
+                    self._json({"data": {}, "status": "error"})
+                else:
+                    # Sub-bodies are {providers:[str]} / {technologies:[str]} / {ports:[str]}
+                    # / {count:int} — pass whole; the norm pulls each list by key.
+                    data = _norm_ctem_assets(prov_body, tech_body, ports_body, count_body)
+                    self._json({"data": data, "status": "ok" if data.get("asset_count") or data.get("providers") else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/ctem-assets", e)
+                self._json({"data": {}, "status": "error"})
+        elif path == "/api/csp/soc":
+            # Gate: fetch enforcement flag first; UI uses it to decide whether to render.
+            try:
+                gate_body, gate_http = _rest_get_ex("/api/ris/v1/internal/soc_enforcement_enabled")
+                if gate_http is None or gate_http >= 400:
+                    self._json({"rows": [], "count": 0, "enabled": False, "status": "error"})
+                else:
+                    enabled = bool(isinstance(gate_body, dict) and gate_body.get("enabled"))
+                    types_body, types_http = _rest_get_ex("/api/ris/v1/insights/types")
+                    if types_http is None or types_http >= 400:
+                        self._json({"rows": [], "count": 0, "enabled": enabled, "status": "error"})
+                    else:
+                        # insight types come back under `insightTypes`, not results/result.
+                        raw = (types_body.get("insightTypes",
+                               types_body.get("results", types_body.get("result", [])))
+                               if isinstance(types_body, dict) else (types_body or []))
+                        data = _norm_soc(raw, enabled)
+                        self._json({"rows": data["types"], "count": len(data["types"]),
+                                    "enabled": enabled,
+                                    "status": "ok" if data["types"] else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/soc", e)
+                self._json({"rows": [], "count": 0, "enabled": False, "status": "error"})
+        elif path == "/api/csp/dns-services":
+            try:
+                body, http = _rest_get_ex("/api/ddi/v1/dns/service", {"_limit": 200})
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "status": "error"})
+                else:
+                    raw = (body.get("results", body.get("result", []))
+                           if isinstance(body, dict) else (body or []))
+                    rows = _norm_dns_services(raw)
+                    self._json({"rows": rows, "count": len(rows),
+                                "status": "ok" if rows else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/dns-services", e)
+                self._json({"rows": [], "count": 0, "status": "error"})
+        elif path == "/api/csp/zones":
+            try:
+                body, http = _rest_get_ex("/api/ddi/v1/dns/zone_child",
+                                           {"_limit": 500, "_filter": 'flat=="false"'})
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "status": "error"})
+                else:
+                    raw = (body.get("results", body.get("result", []))
+                           if isinstance(body, dict) else (body or []))
+                    rows = _norm_zones(raw)
+                    self._json({"rows": rows, "count": len(rows),
+                                "status": "ok" if rows else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/zones", e)
+                self._json({"rows": [], "count": 0, "status": "error"})
+        elif path == "/api/csp/dns-qps":
+            try:
+                cube_query = json.dumps({
+                    "measures": ["HostMetrics.avg_value"],
+                    "filters": [{"member": "HostMetrics.metric_name", "operator": "equals",
+                                 "values": ["dns_qps_iq"]}],
+                    "timeDimensions": [{
+                        "dimension": "HostMetrics.timestamp",
+                        "dateRange": "last 24 hours", "granularity": "hour"}],
+                })
+                body, http = _rest_get_ex("/api/cubejs/v1/query", {"query": cube_query})
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "status": "error"})
+                else:
+                    raw = ((body.get("result") or {}).get("data", [])
+                           if isinstance(body, dict) else [])
+                    rows = _norm_dns_qps(raw)
+                    self._json({"rows": rows, "count": len(rows),
+                                "status": "ok" if rows else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/dns-qps", e)
+                self._json({"rows": [], "count": 0, "status": "error"})
+        elif path == "/api/csp/ipam-util":
+            try:
+                body, http = _rest_get_ex("/api/ddi/v1/ipam/htree", {
+                    "view": "SPACE", "_limit": 500, "_fields": "id,label,utilization"})
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "status": "error"})
+                else:
+                    raw = (body.get("results", body.get("result", []))
+                           if isinstance(body, dict) else (body or []))
+                    rows = _norm_ipam_util(raw)
+                    self._json({"rows": rows, "count": len(rows),
+                                "status": "ok" if rows else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/ipam-util", e)
+                self._json({"rows": [], "count": 0, "status": "error"})
+        elif path == "/api/csp/dhcp-leases":
+            try:
+                body, http = _rest_get_ex("/api/ddi/v1/dhcp/lease", {
+                    "_limit": 200, "_fields": "address,hostname,ends,hardware,state"})
+                if http is None or http >= 400:
+                    self._json({"rows": [], "count": 0, "status": "error"})
+                else:
+                    raw = (body.get("results", body.get("result", []))
+                           if isinstance(body, dict) else (body or []))
+                    rows = _norm_dhcp_leases(raw)
+                    self._json({"rows": rows, "count": len(rows),
+                                "status": "ok" if rows else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/dhcp-leases", e)
+                self._json({"rows": [], "count": 0, "status": "error"})
+        elif path == "/api/csp/license-alerts":
+            # Merged: licenses + user_alerts combined into one response.
+            # Any sub-error → status=error (spec: "if ANY sub-call errors, status=error").
+            try:
+                lic_body, lic_http = _rest_get_ex("/licensing/v1/licenses", {"state": "all"})
+                alert_body, alert_http = _rest_get_ex("/atlas-notifications-mailbox/v1/user_alerts")
+                if (lic_http is None or lic_http >= 400) or (alert_http is None or alert_http >= 400):
+                    self._json({"licenses": [], "alerts": [], "status": "error"})
+                else:
+                    lic_raw = (lic_body.get("results", lic_body.get("result", []))
+                               if isinstance(lic_body, dict) else (lic_body or []))
+                    alert_raw = (alert_body.get("results", alert_body.get("result", []))
+                                 if isinstance(alert_body, dict) else (alert_body or []))
+                    data = _norm_license_alerts(lic_raw, alert_raw)
+                    self._json({"licenses": data["licenses"], "alerts": data["alerts"],
+                                "status": "ok" if (data["licenses"] or data["alerts"]) else "empty"})
+            except Exception as e:
+                _log_exc("/api/csp/license-alerts", e)
+                self._json({"licenses": [], "alerts": [], "status": "error"})
         elif path.lstrip("/") in _STATIC_FILES:
             self._file(path.lstrip("/"))  # _file validates realpath before serving
         elif not path.startswith("/api/"):
