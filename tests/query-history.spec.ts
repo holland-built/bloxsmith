@@ -25,7 +25,7 @@ test('a submitted query appears in the recent dropdown and can be re-run', async
   await page.goto('/#network');
   await expect(page.locator(WRAP).locator('tr.clickable').first()).toBeVisible();
 
-  const filter = page.locator('.dt-filter');
+  const filter = page.locator('[data-table-id="subnets"] .dt-filter');
 
   // Submit a query — Enter commits it to history.
   await filter.fill('site:HQ');
@@ -49,7 +49,7 @@ test('pinning a recent query is monochrome and persists across reload', async ({
   await page.goto('/#network');
   await expect(page.locator(WRAP).locator('tr.clickable').first()).toBeVisible();
 
-  const filter = page.locator('.dt-filter');
+  const filter = page.locator('[data-table-id="subnets"] .dt-filter');
   await filter.fill('util>85');
   await filter.press('Enter');
   await filter.fill('');

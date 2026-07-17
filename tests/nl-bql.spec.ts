@@ -37,7 +37,7 @@ test('translating plain English fills the search input with editable BQL', async
   await page.goto('/#network');
   await expect(page.locator(WRAP).locator('tr.clickable').first()).toBeVisible();
 
-  const filter = page.locator('.dt-filter');
+  const filter = page.locator('[data-table-id="subnets"] .dt-filter');
   await expect(filter).toBeVisible();
   await filter.fill('subnets that are almost full');
 
