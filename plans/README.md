@@ -29,6 +29,7 @@ Session 4 (`/improve` against commit `61b1e6e`): audit of the unaudited provisio
 | 023 | [⋯ More menu closes on outside-click](023-moremenu-outside-click-dismiss.md) | bug | S | P0 | TODO | — |
 | 024 | [Uniform max-height on all CSP tiles](024-csp-tile-height-caps.md) | bug/layout | M | P1 | TODO | — |
 | 025 | [Modernize shared Panel/DataTable styling](025-panel-datatable-modernization.md) | design | M | P2 | TODO | 024 |
+| 030 | [Go single-binary migration (embed UI, self-update, brew/winget)](030-go-single-binary-migration.md) | architecture | XL | P0 | TODO | — |
 
 **Session 5 (CSP-tiles UI polish, 023–025)** — planned @ `47568d3` after the 15 live CSP tiles shipped (v1.0.582). Three defects: P0 `⋯` menu lacks outside-click dismiss (has Escape only; siblings `ViewOptions`/`UpdateBadge` use a `views-overlay` — `MoreMenu` uses none); P1 `HostHealthPanel`/`JobsPanel` + the security KPI/chip/matrix panels have no height cap; P2 shared-styling taste pass (mono numerics, ≤8px radius, uniform spacing) gated behind P1. Execute 023 and 024 in parallel (independent files), 025 after 024.
 
