@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"bloxsmith/internal/account"
 	"bloxsmith/internal/ai"
 	"bloxsmith/internal/audit"
 	"bloxsmith/internal/cache"
@@ -135,6 +136,7 @@ func main() {
 		Edit:        edit.New(restClient),
 		Provision:   provision.New(restClient, cfg.TemplatesDir),
 		AI:          ai.New(llmCreds{cfg: cfg, v: v}, dash),
+		Account:     account.New(cfg.BaseURL, cfg.APIKey, auth, sharedCache),
 		Version:     version,
 		Static:      staticHandler(),
 		UpdateCheck: updateCheckHandler,

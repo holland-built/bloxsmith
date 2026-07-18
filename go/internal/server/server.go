@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 
+	"bloxsmith/internal/account"
 	"bloxsmith/internal/ai"
 	"bloxsmith/internal/audit"
 	"bloxsmith/internal/cache"
@@ -42,6 +43,7 @@ type Deps struct {
 	Edit         *edit.Client       // DNS + resource-editor write builders (Phase 1f)
 	Provision    *provision.Engine  // provisioning engines + templates (Phase 1g)
 	AI           *ai.Service        // /api/query NL assistant + LLM loop (Phase 1h)
+	Account      *account.Manager   // multi-account switching (Phase 1i)
 	Version      string
 	Static       http.Handler
 	UpdateCheck  http.HandlerFunc // real /api/update/check (network); from main
@@ -64,7 +66,14 @@ func New(d *Deps) http.Handler {
 	d.registerEditRoutes(mux)
 	d.registerProvisionRoutes(mux)
 	d.registerAIRoutes(mux)
+	d.registerAccountRoutes(mux)
+	d.registerThreatIntelRoutes(mux)
+	d.registerIPAMReadRoutes(mux)
 	mux.Handle("/", d.Static)
+
+	// VAULT_MODE lock (server.py 5065/6071): a chassis-level gate that 503s every
+	// tenant-data /api/ path until a key is active. No-op when VaultMode=false.
+	gated := d.Guard.VaultGate(d.Cfg.VaultMode, func() bool { return d.Auth.Value() != "" })(mux)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
@@ -74,7 +83,7 @@ func New(d *Deps) http.Handler {
 		if d.Guard.WriteGuard(w, r) {
 			return
 		}
-		mux.ServeHTTP(w, r)
+		gated.ServeHTTP(w, r)
 	})
 }
 
