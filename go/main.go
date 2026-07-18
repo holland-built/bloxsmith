@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"bloxsmith/internal/ai"
 	"bloxsmith/internal/audit"
 	"bloxsmith/internal/cache"
 	"bloxsmith/internal/config"
@@ -100,7 +101,9 @@ func main() {
 	// (1h) phases; /api/data itself uses REST (the parquet path is broken).
 	sharedCache := cache.New()
 	dash := dashboard.New(restClient, sharedCache)
-	_ = mcp.New(cfg.MCPURL, auth.Value)
+	// The MCP client backs the Phase 1h AI tool loop (dashboard.RunAITool);
+	// /api/data itself uses REST (the parquet path is broken).
+	dash.Mcp = mcp.New(cfg.MCPURL, auth.Value)
 
 	// Phase 1c local state stores, on the same dir as vault.json (server.py:2424
 	// _STATE_DIR = dirname(VAULT_FILE)), so they share the mounted volume.
@@ -131,6 +134,7 @@ func main() {
 		Dashboard:   dash,
 		Edit:        edit.New(restClient),
 		Provision:   provision.New(restClient, cfg.TemplatesDir),
+		AI:          ai.New(llmCreds{cfg: cfg, v: v}, dash),
 		Version:     version,
 		Static:      staticHandler(),
 		UpdateCheck: updateCheckHandler,
@@ -151,6 +155,30 @@ func main() {
 
 	log.Printf("bloxsmith %s serving on http://localhost:%s", version, cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, handler))
+}
+
+// llmCreds resolves the LLM api-key/base/model live, with the vault-over-env
+// precedence server.py applies on unlock (server.py:2790-2792): a value set in
+// the vault overrides the env-derived default.
+type llmCreds struct {
+	cfg *config.Config
+	v   *vault.Vault
+}
+
+func (c llmCreds) LLM() (key, base, model string) {
+	key, base, model = c.cfg.LLMAPIKey, c.cfg.LLMBaseURL, c.cfg.LLMModel
+	if c.v != nil {
+		if g := c.v.Groq; g != "" {
+			key = g
+		}
+		if b := c.v.LLMBase; b != "" {
+			base = b
+		}
+		if m := c.v.LLMModel; m != "" {
+			model = m
+		}
+	}
+	return
 }
 
 // updateCheckHandler is the real /api/update/check (Phase 0): reaches GitHub.
