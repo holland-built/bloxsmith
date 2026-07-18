@@ -1,0 +1,7 @@
+{
+  "sample_canonical": "{\"actor\": \"Z\\u00fcrich \\u2603 \\ud83d\\ude00\", \"detail\": {\"image_digest\": \"app-v1.2.3\", \"instance_id\": \"ab12cd34\", \"method\": \"POST\", \"minutes\": 5, \"path\": \"/api/edit/host\"}, \"event\": \"write-authorized\", \"prev_hash\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"ts\": 1752624000.123456}",
+  "sample_hash": "d32e0eacbfc21413f6afa785da470b42e525ba2dd88320fc7b99f732c9764a95",
+  "entry0_hash": "b2e0c1947a2f3bd3bc325408fc8e78565a0bca8b1afc6e80ea39a70709eeeb36",
+  "entry1_hash": "5331ad1a479bfae1a643d009fcb981a9af29cc057e66daa2a47205162d78acaf",
+  "entry2_hash": "9e591941ff357ef64778aa164d5c2c69334b0cc09958f28ce33f6c3d0df0b78d"
+}
