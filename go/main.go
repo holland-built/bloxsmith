@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"bloxsmith/internal/account"
 	"bloxsmith/internal/ai"
@@ -167,8 +169,36 @@ func main() {
 		},
 	})
 
+	// A graceful *http.Server (not http.ListenAndServe) so the self-updater can
+	// Shutdown() the listener and hand the port to its successor cleanly.
+	srv := &http.Server{Handler: handler}
+	shutdownServer = srv.Shutdown
+	ln, err := listenWithRetry(":"+cfg.Port, 5*time.Second)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("bloxsmith %s serving on http://localhost:%s", version, cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, handler))
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
+}
+
+// listenWithRetry binds addr, retrying briefly if the port is momentarily still
+// held by a predecessor mid-handoff (self-update restart). Any bind error is
+// retried until the deadline, so the successor grabs the socket the instant the
+// old process releases it instead of dying on EADDRINUSE.
+func listenWithRetry(addr string, within time.Duration) (net.Listener, error) {
+	deadline := time.Now().Add(within)
+	for {
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			return ln, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // llmCreds resolves the LLM api-key/base/model live, with the vault-over-env
@@ -182,13 +212,16 @@ type llmCreds struct {
 func (c llmCreds) LLM() (key, base, model string) {
 	key, base, model = c.cfg.LLMAPIKey, c.cfg.LLMBaseURL, c.cfg.LLMModel
 	if c.v != nil {
-		if g := c.v.Groq; g != "" {
+		// Read the mutable vault LLM state through the lock-guarded accessor —
+		// never the raw fields — so a concurrent unlock/lock/set can't race us.
+		g, b, m := c.v.LLMCreds()
+		if g != "" {
 			key = g
 		}
-		if b := c.v.LLMBase; b != "" {
+		if b != "" {
 			base = b
 		}
-		if m := c.v.LLMModel; m != "" {
+		if m != "" {
 			model = m
 		}
 	}

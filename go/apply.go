@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -36,6 +37,16 @@ import (
 var startTime = time.Now()
 
 const applyCooldown = 60 * time.Second
+
+// Size caps for the self-update download/extract path. A malicious or oversized
+// release asset (or a decompression bomb) must not be able to exhaust memory,
+// so every read is bounded.
+const (
+	maxArchiveBytes  = 200 << 20 // compressed archive
+	maxChecksumBytes = 4 << 20   // checksums.txt
+	maxJSONBytes     = 64 << 20  // GitHub release JSON
+	maxBinaryBytes   = 200 << 20 // a single extracted file
+)
 
 // updateProgress is the pollable {phase,pct} status the frontend reads from
 // GET /api/update/status. It replaces the old Python /api/update/status shape
@@ -113,7 +124,7 @@ func latestRelease() (ghRelease, error) {
 	if resp.StatusCode != 200 {
 		return rel, fmt.Errorf("github releases: HTTP %d", resp.StatusCode)
 	}
-	return rel, json.NewDecoder(resp.Body).Decode(&rel)
+	return rel, json.NewDecoder(io.LimitReader(resp.Body, maxJSONBytes)).Decode(&rel)
 }
 
 // archiveAssetName reproduces the goreleaser archive name_template in
@@ -142,7 +153,7 @@ func assetURL(rel ghRelease, name string) string {
 	return ""
 }
 
-func httpGetBytes(url string) ([]byte, error) {
+func httpGetBytes(url string, max int64) ([]byte, error) {
 	resp, err := (&http.Client{Timeout: 120 * time.Second}).Get(url)
 	if err != nil {
 		return nil, err
@@ -151,7 +162,16 @@ func httpGetBytes(url string) ([]byte, error) {
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("download %s: HTTP %d", url, resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	// Read at most max+1 so we can distinguish "exactly at cap" from "over cap"
+	// and reject oversized assets instead of silently truncating them.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > max {
+		return nil, fmt.Errorf("download %s exceeds size cap of %d bytes", url, max)
+	}
+	return data, nil
 }
 
 // checksumFor pulls the sha256 hex for a filename out of a goreleaser
@@ -180,12 +200,15 @@ func extractBinary(archive []byte, isZip bool) ([]byte, error) {
 		}
 		for _, f := range zr.File {
 			if baseName(f.Name) == want {
+				if f.UncompressedSize64 > maxBinaryBytes {
+					return nil, fmt.Errorf("archive entry %s too large (%d bytes)", f.Name, f.UncompressedSize64)
+				}
 				rc, err := f.Open()
 				if err != nil {
 					return nil, err
 				}
 				defer rc.Close()
-				return io.ReadAll(rc)
+				return readCapped(rc, f.Name)
 			}
 		}
 		return nil, fmt.Errorf("%s not found in archive", want)
@@ -205,10 +228,26 @@ func extractBinary(archive []byte, isZip bool) ([]byte, error) {
 			return nil, err
 		}
 		if baseName(hdr.Name) == want {
-			return io.ReadAll(tr)
+			if hdr.Size > maxBinaryBytes {
+				return nil, fmt.Errorf("archive entry %s too large (%d bytes)", hdr.Name, hdr.Size)
+			}
+			return readCapped(tr, hdr.Name)
 		}
 	}
 	return nil, fmt.Errorf("%s not found in archive", want)
+}
+
+// readCapped reads r with a hard byte cap so a lying archive header (declared
+// size small, actual stream huge) still can't exhaust memory during extraction.
+func readCapped(r io.Reader, name string) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, maxBinaryBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBinaryBytes {
+		return nil, fmt.Errorf("archive entry %s exceeds size cap of %d bytes", name, int64(maxBinaryBytes))
+	}
+	return data, nil
 }
 
 func baseName(p string) string {
@@ -230,6 +269,13 @@ func applyLatest() error {
 	if rel.Tag == "" {
 		return fmt.Errorf("no release tag found")
 	}
+	// Downgrade guard: only apply a release strictly newer than the running
+	// binary. Without this the update button would happily re-install the same
+	// version or roll BACK to an older "latest" — the CLI already gates on this
+	// via checkUpdate/verN, so match it here for the HTTP apply path.
+	if verN(rel.Tag) < 0 || verN(rel.Tag) <= verN(version) {
+		return fmt.Errorf("already up to date (current %s, latest %s)", version, rel.Tag)
+	}
 	progress.setVersion(rel.Tag)
 
 	archName := archiveAssetName(rel.Tag)
@@ -243,11 +289,11 @@ func applyLatest() error {
 	}
 
 	progress.set("downloading", 25)
-	archBytes, err := httpGetBytes(archAsset)
+	archBytes, err := httpGetBytes(archAsset, maxArchiveBytes)
 	if err != nil {
 		return err
 	}
-	sums, err := httpGetBytes(sumAsset)
+	sums, err := httpGetBytes(sumAsset, maxChecksumBytes)
 	if err != nil {
 		return err
 	}
@@ -280,8 +326,8 @@ func applyLatest() error {
 	}
 
 	progress.set("restarting", 95)
-	progress.set("done", 100)
-	// Graceful hand-off: spawn the freshly-swapped binary, then exit so it takes
+	// Graceful hand-off: spawn the freshly-swapped binary, and only once it has
+	// actually launched do we release our listen socket and exit so it can take
 	// over the port. Deferred slightly so the /api/update/apply response and a
 	// final /status poll can complete first.
 	go func() {
@@ -291,19 +337,46 @@ func applyLatest() error {
 	return nil
 }
 
+// shutdownServer gracefully stops the running HTTP server so the successor can
+// bind the port. main() sets it to the *http.Server's Shutdown; it is nil in
+// CLI (`bloxsmith update`) mode, where no server is running.
+var shutdownServer func(context.Context) error
+
 // restart re-execs the (now updated) binary and exits the current process. A
 // spawn+exit (rather than syscall.Exec) keeps the code identical on Windows,
 // where exec-in-place is unavailable.
 func restart() {
 	exe, err := os.Executable()
 	if err != nil {
+		exe = os.Args[0]
+	}
+	if handleRestart(exe) {
 		os.Exit(0)
 	}
+}
+
+// handleRestart launches the successor and, ONLY on a successful launch, releases
+// the listen socket. It returns true when the caller should exit. If the child
+// fails to start it reports phase=error and returns false WITHOUT releasing the
+// socket, so the old binary keeps serving and the service stays up (fixes the
+// EADDRINUSE race where the parent exited before the child could bind).
+func handleRestart(exe string) bool {
 	cmd := exec.Command(exe, os.Args[1:]...)
 	cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
 	cmd.Env = os.Environ()
-	_ = cmd.Start()
-	os.Exit(0)
+	if err := cmd.Start(); err != nil {
+		progress.fail(fmt.Errorf("restart: could not launch new binary, keeping the old one: %w", err))
+		return false
+	}
+	progress.set("done", 100)
+	// Release the port so the successor (which retries the bind with a short
+	// backoff in listenWithRetry) can take it over.
+	if shutdownServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = shutdownServer(ctx)
+		cancel()
+	}
+	return true
 }
 
 // applyUpdateHandler backs POST /api/update/apply. The admin RBAC gate + audit

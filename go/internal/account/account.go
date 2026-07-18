@@ -22,8 +22,8 @@ const cspTimeout = 15 * time.Second
 
 // Manager owns the account-switch state (server.py globals _HOME_ACCOUNT_ID /
 // _active_account_id / _jwt_issued_at). It rebinds the active auth by writing
-// the shared rest.Auth fallback slot, exactly as Python overwrites
-// MCP_HEADERS["Authorization"].
+// the shared rest.Auth override slot (consulted before the vault active key),
+// exactly as Python overwrites MCP_HEADERS["Authorization"].
 type Manager struct {
 	mu       sync.Mutex
 	baseURL  string
@@ -161,7 +161,11 @@ func (m *Manager) SwitchAccount(accountID string) (map[string]any, error) {
 		return map[string]any{"ok": false, "error": "unknown account"}, nil
 	}
 	if accountID == m.home {
-		m.auth.SetFallback(m.apiKey) // long-lived key beats a JWT
+		// Home account: clear the override so the resolver falls back to the
+		// normal active-tenant/env key (the long-lived key), undoing any prior
+		// switch. Clearing (not SetFallback) is what makes the switch actually
+		// take effect in vault mode, where active() would otherwise shadow it.
+		m.auth.SetOverride("")
 	} else {
 		resp, _, err := m.cspJSON("/v2/session/account_switch", map[string]any{"id": accountID})
 		if err != nil {
@@ -174,7 +178,9 @@ func (m *Manager) SwitchAccount(accountID string) (map[string]any, error) {
 		if jwt == "" {
 			return map[string]any{"ok": false, "error": "switch failed (no jwt in response)"}, nil
 		}
-		m.auth.SetFallback("Bearer " + jwt)
+		// Override wins over the vault active key, so the proxy uses THIS tenant's
+		// JWT immediately (no cross-tenant leak).
+		m.auth.SetOverride("Bearer " + jwt)
 		m.jwtIssue = time.Now()
 	}
 	m.active = accountID
