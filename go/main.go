@@ -14,8 +14,10 @@ import (
 	"bloxsmith/internal/cache"
 	"bloxsmith/internal/config"
 	"bloxsmith/internal/dashboard"
+	"bloxsmith/internal/edit"
 	"bloxsmith/internal/httpx"
 	"bloxsmith/internal/mcp"
+	"bloxsmith/internal/provision"
 	"bloxsmith/internal/rest"
 	"bloxsmith/internal/server"
 	"bloxsmith/internal/store"
@@ -127,6 +129,8 @@ func main() {
 		Store:       st,
 		Cache:       sharedCache,
 		Dashboard:   dash,
+		Edit:        edit.New(restClient),
+		Provision:   provision.New(restClient, cfg.TemplatesDir),
 		Version:     version,
 		Static:      staticHandler(),
 		UpdateCheck: updateCheckHandler,
