@@ -32,29 +32,29 @@ func TestDecryptsPythonFixture(t *testing.T) {
 		t.Fatalf("unlock python fixture: %v", err)
 	}
 
-	if !v.Unlocked {
+	if !v.unlocked {
 		t.Fatal("expected unlocked")
 	}
-	if v.Active == nil || *v.Active != "aabbccddeeff" {
-		t.Fatalf("active mismatch: %v", v.Active)
+	if v.active == nil || *v.active != "aabbccddeeff" {
+		t.Fatalf("active mismatch: %v", v.active)
 	}
-	if len(v.Tenants) != 2 {
-		t.Fatalf("want 2 tenants, got %d", len(v.Tenants))
+	if len(v.tenants) != 2 {
+		t.Fatalf("want 2 tenants, got %d", len(v.tenants))
 	}
 	want := []Tenant{
 		{ID: "aabbccddeeff", Label: "Demo Tenant", Key: "Token demo-key-not-real-123"},
 		{ID: "112233445566", Label: "Sandbox", Key: "Bearer eyJhbGciOiJIUzI1NiJ9.demo"},
 	}
 	for i, w := range want {
-		if v.Tenants[i] != w {
-			t.Fatalf("tenant[%d] = %+v, want %+v", i, v.Tenants[i], w)
+		if v.tenants[i] != w {
+			t.Fatalf("tenant[%d] = %+v, want %+v", i, v.tenants[i], w)
 		}
 	}
-	if v.Groq != "gsk_demo_not_real" {
-		t.Fatalf("groq mismatch: %q", v.Groq)
+	if v.groq != "gsk_demo_not_real" {
+		t.Fatalf("groq mismatch: %q", v.groq)
 	}
-	if v.LLMBase != "https://api.groq.com/openai/v1" || v.LLMModel != "qwen/qwen3-32b" {
-		t.Fatalf("llm cfg mismatch: base=%q model=%q", v.LLMBase, v.LLMModel)
+	if v.llmBase != "https://api.groq.com/openai/v1" || v.llmModel != "qwen/qwen3-32b" {
+		t.Fatalf("llm cfg mismatch: base=%q model=%q", v.llmBase, v.llmModel)
 	}
 
 	// Wrong passphrase must be rejected.
@@ -76,9 +76,9 @@ func TestRoundTripPythonReadable(t *testing.T) {
 		t.Fatalf("init: %v", err)
 	}
 	active := "t1"
-	v.Tenants = []Tenant{{ID: "t1", Label: "Roundtrip", Key: "Token rt-key"}}
-	v.Active = &active
-	v.Groq = "gsk_rt"
+	v.tenants = []Tenant{{ID: "t1", Label: "Roundtrip", Key: "Token rt-key"}}
+	v.active = &active
+	v.groq = "gsk_rt"
 	if err := v.Save(); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -99,8 +99,8 @@ func TestRoundTripPythonReadable(t *testing.T) {
 	if err := v3.Unlock("another-good-pass"); err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
-	if v3.Active == nil || *v3.Active != "t1" || len(v3.Tenants) != 1 ||
-		v3.Tenants[0].Key != "Token rt-key" || v3.Groq != "gsk_rt" {
+	if v3.active == nil || *v3.active != "t1" || len(v3.tenants) != 1 ||
+		v3.tenants[0].Key != "Token rt-key" || v3.groq != "gsk_rt" {
 		t.Fatalf("roundtrip data mismatch: %+v", v3)
 	}
 }
