@@ -10,13 +10,17 @@ import (
 	"strings"
 
 	"bloxsmith/internal/cache"
+	"bloxsmith/internal/mcp"
 	"bloxsmith/internal/rest"
 )
 
-// Service bundles the two dependencies every fetcher needs.
+// Service bundles the two dependencies every fetcher needs. Mcp is the
+// hand-rolled MCP client used only by the AI tool loop (RunAITool, Phase 1h);
+// the /api/data read path deliberately uses Rest (the parquet path is broken).
 type Service struct {
 	Rest  *rest.Client
 	Cache *cache.Cache
+	Mcp   *mcp.Client
 }
 
 // New builds the dashboard service.
