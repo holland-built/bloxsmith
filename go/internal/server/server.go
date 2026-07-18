@@ -16,7 +16,9 @@ import (
 	"bloxsmith/internal/cache"
 	"bloxsmith/internal/config"
 	"bloxsmith/internal/dashboard"
+	"bloxsmith/internal/edit"
 	"bloxsmith/internal/httpx"
+	"bloxsmith/internal/provision"
 	"bloxsmith/internal/rest"
 	"bloxsmith/internal/store"
 	"bloxsmith/internal/vault"
@@ -36,6 +38,8 @@ type Deps struct {
 	Store        *store.Store       // views + snooze + first-seen (Phase 1c)
 	Cache        *cache.Cache       // shared TTL cache (Phase 1d)
 	Dashboard    *dashboard.Service // /api/data + hub fetchers (Phase 1d)
+	Edit         *edit.Client       // DNS + resource-editor write builders (Phase 1f)
+	Provision    *provision.Engine  // provisioning engines + templates (Phase 1g)
 	Version      string
 	Static       http.Handler
 	UpdateCheck  http.HandlerFunc // real /api/update/check (network); from main
@@ -55,6 +59,8 @@ func New(d *Deps) http.Handler {
 	d.registerStateRoutes(mux)
 	d.registerDataRoutes(mux)
 	d.registerCSPRoutes(mux)
+	d.registerEditRoutes(mux)
+	d.registerProvisionRoutes(mux)
 	mux.Handle("/", d.Static)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
