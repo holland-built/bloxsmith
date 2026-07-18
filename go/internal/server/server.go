@@ -45,6 +45,7 @@ type Deps struct {
 	AI           *ai.Service        // /api/query NL assistant + LLM loop (Phase 1h)
 	Account      *account.Manager   // multi-account switching (Phase 1i)
 	Version      string
+	StateDir     string // dir of vault.json — holds brand.json / logo.png (server.py:2415)
 	Static       http.Handler
 	UpdateCheck  http.HandlerFunc // real /api/update/check (network); from main
 	UpdateStatus func() any       // lightweight update obj embedded in vault status
@@ -69,6 +70,9 @@ func New(d *Deps) http.Handler {
 	d.registerAccountRoutes(mux)
 	d.registerThreatIntelRoutes(mux)
 	d.registerIPAMReadRoutes(mux)
+	d.registerNOCRoutes(mux)
+	d.registerBrandRoutes(mux)
+	d.registerSecurityWriteRoutes(mux)
 	mux.Handle("/", d.Static)
 
 	// VAULT_MODE lock (server.py 5065/6071): a chassis-level gate that 503s every

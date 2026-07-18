@@ -133,6 +133,7 @@ func main() {
 		Store:       st,
 		Cache:       sharedCache,
 		Dashboard:   dash,
+		StateDir:    stateDir,
 		Edit:        edit.New(restClient),
 		Provision:   provision.New(restClient, cfg.TemplatesDir),
 		AI:          ai.New(llmCreds{cfg: cfg, v: v}, dash),
