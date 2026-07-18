@@ -294,6 +294,22 @@ func (v *Vault) ActiveKey() string {
 	return ""
 }
 
+// ActiveLabel returns the portal label of the active tenant, else "" — feeds
+// /api/whoami's "tenant" field (server.py:5095-5100).
+func (v *Vault) ActiveLabel() string {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.Active == nil {
+		return ""
+	}
+	for _, t := range v.Tenants {
+		if t.ID == *v.Active {
+			return t.Label
+		}
+	}
+	return ""
+}
+
 // PassphraseFromEnv ports _vault_passphrase_from_env (server.py:2756): prefer a
 // mounted VAULT_PASSPHRASE_FILE, else the VAULT_PASSPHRASE env var.
 func PassphraseFromEnv(passphrase, passphraseFile string) string {

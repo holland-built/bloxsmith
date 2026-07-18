@@ -13,28 +13,18 @@ import (
 // expects. The eight MCP-backed tools go through s.Mcp (make_get_request /
 // query_cube / network_entity_search) and the same norm_* shapers /api/data
 // uses. The three threat-intel tools (dossier_lookup / lookalike_domains /
-// asset_insights) depend on the TIDE/TDLAD REST fetchers that are NOT yet
-// ported to Go (their /api/dossier, /api/lookalikes, /api/assets endpoints are
-// deferred), so they return Python's own graceful "unavailable" degradation
-// shape rather than fabricate data.
+// asset_insights) call the ported TIDE/TDLAD/cube fetchers (FetchDossier /
+// FetchLookalikes / FetchAssets, Phase 1i) so the LLM sees real threat-intel
+// data with the same graceful "unavailable" degradation shape Python returns.
 func (s *Service) RunAITool(ctx context.Context, name string, args map[string]any) string {
-	// Threat-intel tools: no MCP session needed; return the unavailable shape.
+	// Threat-intel tools reuse the same fetchers backing /api/dossier|lookalikes|assets.
 	switch name {
 	case "dossier_lookup":
-		return jstr(map[string]any{
-			"query": aiStr(args["indicator"]), "type": "", "summary": map[string]any{},
-			"unavailable": "Dossier not available in the Go backend yet",
-		})
+		return jstr(s.FetchDossier(aiStr(args["indicator"]), aiStr(args["type"])))
 	case "lookalike_domains":
-		return jstr(map[string]any{
-			"domains": []any{}, "targets": []any{},
-			"unavailable": "Lookalike Domains not available in the Go backend yet",
-		})
+		return jstr(s.FetchLookalikes())
 	case "asset_insights":
-		return jstr(map[string]any{
-			"assets":      []any{},
-			"unavailable": "Asset insights not available in the Go backend yet",
-		})
+		return jstr(s.FetchAssets(ctx))
 	}
 
 	if s.Mcp == nil {
