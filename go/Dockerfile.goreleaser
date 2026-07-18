@@ -1,0 +1,22 @@
+# Consumed by goreleaser `dockers:` — the binary is already cross-compiled by the
+# `builds:` stage and dropped into the build context, so this is a single COPY
+# into a distroless base (no toolchain, no shell, ~2 MB over the binary itself).
+#
+# Same runtime env contract as the retired python Dockerfile, so the existing
+# docker-compose.yml + `noc-vault` volume keep working with zero changes.
+FROM gcr.io/distroless/static:latest
+
+WORKDIR /app
+COPY bloxsmith /app/bloxsmith
+
+ENV HOST=0.0.0.0 \
+    PORT=8080 \
+    VAULT_DIR=/vault \
+    TEMPLATES_DIR=/templates \
+    BLOXSMITH_IN_CONTAINER=1
+
+# Encrypted vault volume — carries over from the python image unchanged.
+VOLUME /vault
+EXPOSE 8080
+
+ENTRYPOINT ["/app/bloxsmith"]
