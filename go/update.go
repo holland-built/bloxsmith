@@ -3,13 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strconv"
 	"time"
-
-	"github.com/minio/selfupdate"
 )
 
 // appRepo is the GitHub repo the self-updater checks. Mirrors APP_REPO in
@@ -59,16 +56,4 @@ func checkUpdate() (updateStatus, error) {
 	st.Latest, st.URL = rel.Tag, rel.HTMLURL
 	st.Available = verN(rel.Tag) > verN(version) && verN(rel.Tag) >= 0
 	return st, nil
-}
-
-// applyUpdate downloads a release binary URL and swaps the running executable.
-// Compiled and wired; Phase 0 leaves the real download URL discovery to Phase 3
-// (goreleaser asset naming), so the CLI path is guarded behind an explicit URL.
-func applyUpdate(binURL string) error {
-	resp, err := http.Get(binURL)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	return selfupdate.Apply(io.Reader(resp.Body), selfupdate.Options{})
 }

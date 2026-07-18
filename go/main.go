@@ -54,21 +54,30 @@ func staticHandler() http.Handler {
 }
 
 func main() {
-	// CLI: `bloxsmith --version`, `bloxsmith update <url>`.
+	// CLI: `bloxsmith --version`, `bloxsmith update [--check]`.
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--version", "-v":
 			println("bloxsmith", version)
 			return
 		case "update":
-			if len(os.Args) < 3 {
-				log.Fatal("usage: bloxsmith update <binary-url>")
+			// Headless self-update for servers with no button: download the
+			// newest release archive, verify its checksum, swap this binary and
+			// re-exec. `--check` reports availability without applying. `--help`
+			// prints usage.
+			checkOnly := false
+			for _, a := range os.Args[2:] {
+				switch a {
+				case "--check":
+					checkOnly = true
+				case "--help", "-h":
+					println("usage: bloxsmith update [--check]")
+					println("  downloads the latest GitHub release, verifies its checksum,")
+					println("  swaps this binary in place and restarts. --check only reports.")
+					return
+				}
 			}
-			if err := applyUpdate(os.Args[2]); err != nil {
-				log.Fatal(err)
-			}
-			println("updated")
-			return
+			os.Exit(runUpdateCLI(checkOnly))
 		}
 	}
 
@@ -138,9 +147,11 @@ func main() {
 		Provision:   provision.New(restClient, cfg.TemplatesDir),
 		AI:          ai.New(llmCreds{cfg: cfg, v: v}, dash),
 		Account:     account.New(cfg.BaseURL, cfg.APIKey, auth, sharedCache),
-		Version:     version,
-		Static:      staticHandler(),
-		UpdateCheck: updateCheckHandler,
+		Version:        version,
+		Static:         staticHandler(),
+		UpdateCheck:    updateCheckHandler,
+		UpdateApply:    applyUpdateHandler,
+		UpdateProgress: updateProgressHandler,
 		UpdateStatus: func() any {
 			// Lightweight, non-blocking update object embedded in /api/vault/status
 			// (Python embeds update_status(); the network refresh happens on the
