@@ -139,6 +139,47 @@ func (g *Guard) WriteGuard(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
+// vaultGateGETExempt is the set of GET routes Python answers BEFORE the vault
+// gate (server.py 5009-5063): logo, brand, vault status, update check, sources,
+// views — registry/meta only, no tenant data leaks.
+var vaultGateGETExempt = map[string]bool{
+	"/api/logo": true, "/api/brand": true, "/api/vault/status": true,
+	"/api/update/check": true, "/api/sources": true, "/api/views": true,
+}
+
+// VaultGate is the VAULT_MODE lock (server.py GET 5065 / POST 6071): when the
+// server booted without an env API_KEY and no tenant key is active, no tenant
+// data may leave until the vault is unlocked — every /api/ path except the
+// registry/meta pre-gate routes returns 503 {"error":"vault locked","locked":
+// true}. authed reports whether an active Authorization is bound (Auth.Value()
+// != "" — the Go analogue of MCP_HEADERS.get("Authorization")). This is a no-op
+// when the server has an env API_KEY (vaultMode=false).
+func (g *Guard) VaultGate(vaultMode bool, authed func() bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if vaultMode && !authed() {
+				path := strings.SplitN(r.URL.Path, "?", 2)[0]
+				if strings.HasPrefix(path, "/api/") && !g.vaultExempt(r.Method, path) {
+					WriteJSON(w, r, http.StatusServiceUnavailable, g.Port,
+						map[string]any{"error": "vault locked", "locked": true})
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// vaultExempt mirrors Python's method-specific pre-gate ordering: GET exempts
+// the six registry routes; every non-GET verb exempts only /api/brand and the
+// /api/vault/* control routes (which run before the do_POST gate at 6071).
+func (g *Guard) vaultExempt(method, path string) bool {
+	if method == http.MethodGet {
+		return vaultGateGETExempt[path]
+	}
+	return path == "/api/brand" || strings.HasPrefix(path, "/api/vault/")
+}
+
 // ResolveRole ports _resolve_role (server.py:4977): the three ordered roles.
 // With a token configured, a valid token is admin, any other write-authorized
 // caller is operator, else viewer. Tokenless (dev) trusts same-origin/loopback
