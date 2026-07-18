@@ -47,8 +47,10 @@ type Deps struct {
 	Version      string
 	StateDir     string // dir of vault.json — holds brand.json / logo.png (server.py:2415)
 	Static       http.Handler
-	UpdateCheck  http.HandlerFunc // real /api/update/check (network); from main
-	UpdateStatus func() any       // lightweight update obj embedded in vault status
+	UpdateCheck    http.HandlerFunc // real /api/update/check (network); from main
+	UpdateStatus   func() any       // lightweight update obj embedded in vault status
+	UpdateApply    http.HandlerFunc // POST /api/update/apply download+verify+swap (Phase 3)
+	UpdateProgress http.HandlerFunc // GET /api/update/status pollable {phase,pct} (Phase 3)
 }
 
 // New builds the routed handler: OPTIONS preflight + write-guard wrap the mux,
@@ -59,6 +61,12 @@ func New(d *Deps) http.Handler {
 	mux.HandleFunc("GET /api/vault/status", d.vaultStatus)
 	if d.UpdateCheck != nil {
 		mux.HandleFunc("GET /api/update/check", d.UpdateCheck)
+	}
+	// Phase 3 self-update: apply is admin-gated + audited here; status is a
+	// read-only progress poll. Only wired for the binary (main passes non-nil).
+	if d.UpdateApply != nil {
+		mux.HandleFunc("POST /api/update/apply", d.updateApply)
+		mux.HandleFunc("GET /api/update/status", d.UpdateProgress)
 	}
 	d.registerVaultRoutes(mux)
 	d.registerStateRoutes(mux)
@@ -109,6 +117,25 @@ func (d *Deps) vaultStatus(w http.ResponseWriter, r *http.Request) {
 		upd = d.UpdateStatus()
 	}
 	d.json(w, r, http.StatusOK, d.Vault.Status(d.Version, d.Cfg.VaultMode, upd))
+}
+
+// --- POST /api/update/apply (Phase 3) ----------------------------------------
+
+// updateApply admin-gates the self-update, audit-logs the authorized apply, and
+// delegates to the download+verify+swap handler from main. The Go self-updater
+// is safe (it swaps only its own binary — no docker socket, no privilege), so
+// unlike the Docker banner this is a real one-click apply. Denials audit
+// rbac_denied and return 403; without admin auth a caller never reaches main.
+func (d *Deps) updateApply(w http.ResponseWriter, r *http.Request) {
+	role := d.Guard.ResolveRole(r)
+	if !httpx.RoleAtLeast(role, "admin") {
+		_, _ = d.Audit.Append("rbac_denied", role,
+			map[string]any{"required": "admin", "path": "/api/update/apply"})
+		d.json(w, r, http.StatusForbidden, map[string]any{"ok": false, "error": "admin required"})
+		return
+	}
+	_, _ = d.Audit.Append("update-apply", httpx.Actor(r), map[string]any{"from": d.Version})
+	d.UpdateApply(w, r)
 }
 
 // --- the 14 /api/vault/* POST routes -----------------------------------------

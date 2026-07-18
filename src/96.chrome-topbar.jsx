@@ -193,8 +193,9 @@ function detectUpdateScript(){
    or rolls back — no /api/update/apply, /status, or /rollback-* calls. Checks once on
    mount via GET /api/update/check; a small "Check now" re-hits the same endpoint. */
 function UpdateBadge(){
-  const [info,setInfo]=useState(null);      // {current,latest,available,url}
+  const [info,setInfo]=useState(null);      // {current,latest,available,url,selfUpdate}
   const [checking,setChecking]=useState(false);
+  const [apply,setApply]=useState(null);    // {phase,pct,error} while a self-update runs
   const check=async()=>{
     setChecking(true);
     try{
@@ -205,13 +206,51 @@ function UpdateBadge(){
   };
   useEffect(()=>{ check(); },[]);
 
+  /* One-click self-update (Go binary only, gated on selfUpdate:true). POST
+     /api/update/apply, then poll /api/update/status until the new binary swaps
+     in and restarts, then reload so the fresh UI loads. Docker builds return
+     selfUpdate:false and never reach this branch — they keep the passive script. */
+  const runApply=async()=>{
+    setApply({phase:'starting',pct:1});
+    try{
+      const r=await fetch('/api/update/apply',{method:'POST',cache:'no-store'});
+      if(!r.ok){ const j=await r.json().catch(()=>({})); setApply({phase:'error',pct:0,error:j.error||('HTTP '+r.status)}); return; }
+      const poll=setInterval(async()=>{
+        try{
+          const s=await fetch('/api/update/status',{cache:'no-store'}).then(x=>x.json());
+          setApply(s);
+          if(s.phase==='error'){ clearInterval(poll); return; }
+          if(s.phase==='done'||s.pct>=100){ clearInterval(poll); setTimeout(()=>location.reload(),2500); }
+        }catch(e){ /* server mid-restart — the swap is happening; reload shortly */
+          clearInterval(poll); setTimeout(()=>location.reload(),3000); }
+      },1200);
+    }catch(e){ setApply({phase:'error',pct:0,error:String(e)}); }
+  };
+
   if(!info||info.current==null) return null;
-  const {current,latest,available,url}=info;
+  const {current,latest,available,url,selfUpdate}=info;
   const script=detectUpdateScript();
 
   return <span className="update-slot">
     <span className="mono update-version">Bloxsmith v{current}</span>
-    {available
+    {available && selfUpdate
+      ? <span className="update-avail">
+          <span className="update-avail-text">
+            <span className="update-dot" aria-hidden="true"/>Update available → <b>{latest}</b>
+          </span>
+          {apply
+            ? <span className="update-applying mono" role="status" aria-live="polite">
+                {apply.phase==='error'
+                  ? <span className="update-apply-err">Update failed: {apply.error} (previous version kept)</span>
+                  : <span>{apply.phase}… {apply.pct||0}%{(apply.phase==='done'||apply.pct>=100)?' — restarting':''}</span>}
+              </span>
+            : <button className="kbd update-now-btn" onClick={runApply}
+                aria-label={'Update now to '+latest+' — downloads, verifies and restarts automatically'}>
+                Update now → <b>{latest}</b>
+              </button>}
+          {url&&<a className="update-menu-link" href={url} target="_blank" rel="noopener noreferrer">View release notes</a>}
+        </span>
+      : available
       ? <span className="update-avail">
           <span className="update-avail-text">
             <span className="update-dot" aria-hidden="true"/>Update available → <b>{latest}</b>
