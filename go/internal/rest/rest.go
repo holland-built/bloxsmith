@@ -29,6 +29,7 @@ const timeout = 35 * time.Second
 // (plans/README.md session-2) without changing behavior.
 type Auth struct {
 	mu       sync.RWMutex
+	override string        // portal account-switch key; consulted FIRST when set
 	fallback string        // API_KEY from the environment (server.py:41)
 	active   func() string // active tenant key, e.g. vault.ActiveKey
 }
@@ -43,6 +44,14 @@ func NewAuth(fallback string, active func() string) *Auth {
 func (a *Auth) Value() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
+	// A portal account switch takes precedence over everything: in vault mode
+	// active() is non-empty, so without this the switched-in JWT would be
+	// shadowed and REST calls would keep hitting the PRIOR tenant (cross-tenant
+	// leak). The override is set by account.SwitchAccount and cleared when
+	// switching back to the home account.
+	if a.override != "" {
+		return a.override
+	}
 	if a.active != nil {
 		if k := a.active(); k != "" {
 			return k
@@ -51,12 +60,23 @@ func (a *Auth) Value() string {
 	return a.fallback
 }
 
-// SetFallback replaces the env fallback key (used after an account switch that
-// re-mints a Bearer JWT — Phase 1d). Guarded so concurrent reads are safe.
+// SetFallback replaces the env fallback key. Guarded so concurrent reads are safe.
 func (a *Auth) SetFallback(k string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.fallback = k
+}
+
+// SetOverride sets (or, with "", clears) the account-switch Authorization slot
+// that Value() consults BEFORE the active-tenant key and the env fallback. This
+// is how a portal account switch actually takes effect through the same resolver
+// the REST proxy reads — matching Python's last-writer-wins auth slot where the
+// switch wins. Guarded so a concurrent request reads either the old or the new
+// value, never a torn one.
+func (a *Auth) SetOverride(k string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.override = k
 }
 
 // Client is the Infoblox REST proxy. Construct one per process.

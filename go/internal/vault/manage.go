@@ -151,7 +151,7 @@ func (v *Vault) UnlockR(passphrase string) map[string]any {
 func (v *Vault) AddTenant(label, key string, groq *string) map[string]any {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if !v.Unlocked {
+	if !v.unlocked {
 		return fail("locked")
 	}
 	nk := NormKey(key)
@@ -163,16 +163,16 @@ func (v *Vault) AddTenant(label, key string, groq *string) map[string]any {
 		if l := v.portalLabelForKeyUnlocked(nk); l != "" {
 			label = l
 		} else {
-			label = "Tenant " + strconv.Itoa(len(v.Tenants)+1)
+			label = "Tenant " + strconv.Itoa(len(v.tenants)+1)
 		}
 	}
 	tid := tokenHex(6)
-	v.Tenants = append(v.Tenants, Tenant{ID: tid, Label: label, Key: nk})
+	v.tenants = append(v.tenants, Tenant{ID: tid, Label: label, Key: nk})
 	if groq != nil {
-		v.Groq = strings.TrimSpace(*groq)
+		v.groq = strings.TrimSpace(*groq)
 	}
-	if v.Active == nil {
-		v.Active = &tid
+	if v.active == nil {
+		v.active = &tid
 	}
 	if err := v.save(); err != nil {
 		return fail(err.Error())
@@ -184,22 +184,22 @@ func (v *Vault) AddTenant(label, key string, groq *string) map[string]any {
 func (v *Vault) RemoveTenant(tid string) map[string]any {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if !v.Unlocked {
+	if !v.unlocked {
 		return fail("locked")
 	}
-	kept := v.Tenants[:0:0]
-	for _, t := range v.Tenants {
+	kept := v.tenants[:0:0]
+	for _, t := range v.tenants {
 		if t.ID != tid {
 			kept = append(kept, t)
 		}
 	}
-	v.Tenants = kept
-	if v.Active != nil && *v.Active == tid {
-		if len(v.Tenants) > 0 {
-			id := v.Tenants[0].ID
-			v.Active = &id
+	v.tenants = kept
+	if v.active != nil && *v.active == tid {
+		if len(v.tenants) > 0 {
+			id := v.tenants[0].ID
+			v.active = &id
 		} else {
-			v.Active = nil
+			v.active = nil
 		}
 	}
 	if err := v.save(); err != nil {
@@ -213,7 +213,7 @@ func (v *Vault) RemoveTenant(tid string) map[string]any {
 func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if !v.Unlocked {
+	if !v.unlocked {
 		return fail("locked")
 	}
 	nk := NormKey(key)
@@ -225,8 +225,8 @@ func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 		return fail("nothing to update")
 	}
 	idx := -1
-	for i := range v.Tenants {
-		if v.Tenants[i].ID == tid {
+	for i := range v.tenants {
+		if v.tenants[i].ID == tid {
 			idx = i
 			break
 		}
@@ -235,35 +235,35 @@ func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 		return fail("unknown connection")
 	}
 	if nk != "" {
-		v.Tenants[idx].Key = nk
+		v.tenants[idx].Key = nk
 		if lbl == "" { // new key, no explicit name → auto-resolve
 			if l := v.portalLabelForKeyUnlocked(nk); l != "" {
 				lbl = l
-			} else if v.Tenants[idx].Label != "" {
-				lbl = v.Tenants[idx].Label
+			} else if v.tenants[idx].Label != "" {
+				lbl = v.tenants[idx].Label
 			} else {
 				lbl = "Tenant " + strconv.Itoa(idx+1)
 			}
 		}
 	}
 	if lbl != "" {
-		v.Tenants[idx].Label = lbl
+		v.tenants[idx].Label = lbl
 	}
 	if err := v.save(); err != nil {
 		return fail(err.Error())
 	}
-	return map[string]any{"ok": true, "id": tid, "label": v.Tenants[idx].Label}
+	return map[string]any{"ok": true, "id": tid, "label": v.tenants[idx].Label}
 }
 
 // SetActive is vault_set_active (server.py:2933).
 func (v *Vault) SetActive(tid string) map[string]any {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if !v.Unlocked {
+	if !v.unlocked {
 		return fail("locked")
 	}
 	found := false
-	for _, t := range v.Tenants {
+	for _, t := range v.tenants {
 		if t.ID == tid {
 			found = true
 			break
@@ -273,7 +273,7 @@ func (v *Vault) SetActive(tid string) map[string]any {
 		return fail("unknown tenant")
 	}
 	id := tid
-	v.Active = &id
+	v.active = &id
 	if err := v.save(); err != nil {
 		return fail(err.Error())
 	}
@@ -296,15 +296,15 @@ func (v *Vault) ResetR() map[string]any {
 func (v *Vault) SetLLM(key string, baseURL, model *string) map[string]any {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if !v.Unlocked {
+	if !v.unlocked {
 		return fail("locked")
 	}
-	v.Groq = strings.TrimSpace(key)
+	v.groq = strings.TrimSpace(key)
 	if baseURL != nil {
-		v.LLMBase = strings.TrimSpace(*baseURL)
+		v.llmBase = strings.TrimSpace(*baseURL)
 	}
 	if model != nil {
-		v.LLMModel = strings.TrimSpace(*model)
+		v.llmModel = strings.TrimSpace(*model)
 	}
 	if err := v.save(); err != nil {
 		return fail(err.Error())
@@ -353,9 +353,9 @@ func (v *Vault) LLMTest(key string, baseURL, model *string, defaultModel string)
 	v.mu.Lock()
 	k := strings.TrimSpace(key)
 	if k == "" {
-		k = v.Groq
+		k = v.groq
 	}
-	base := v.LLMBase
+	base := v.llmBase
 	if baseURL != nil {
 		base = strings.TrimSpace(*baseURL)
 	}
@@ -364,7 +364,7 @@ func (v *Vault) LLMTest(key string, baseURL, model *string, defaultModel string)
 		mdl = *model
 	}
 	if mdl == "" {
-		mdl = v.LLMModel
+		mdl = v.llmModel
 	}
 	if mdl == "" {
 		mdl = defaultModel
@@ -400,14 +400,14 @@ func (v *Vault) LLMTest(key string, baseURL, model *string, defaultModel string)
 // for any tenant still labelled "Tenant N" or blank.
 func (v *Vault) RefreshNames() map[string]any {
 	v.mu.Lock()
-	if !v.Unlocked {
+	if !v.unlocked {
 		v.mu.Unlock()
 		return fail("locked")
 	}
 	// snapshot keys+labels to resolve without holding the lock across network I/O
 	type slot struct{ i int; key, label string }
 	var todo []slot
-	for i, t := range v.Tenants {
+	for i, t := range v.tenants {
 		if t.Label == "" || tenantNRe.MatchString(t.Label) {
 			todo = append(todo, slot{i, t.Key, t.Label})
 		}
@@ -418,8 +418,8 @@ func (v *Vault) RefreshNames() map[string]any {
 		nm := v.portalLabelForKey(s.key)
 		if nm != "" && nm != s.label {
 			v.mu.Lock()
-			if s.i < len(v.Tenants) && v.Tenants[s.i].Key == s.key {
-				v.Tenants[s.i].Label = nm
+			if s.i < len(v.tenants) && v.tenants[s.i].Key == s.key {
+				v.tenants[s.i].Label = nm
 				updated++
 			}
 			v.mu.Unlock()
@@ -438,28 +438,28 @@ func (v *Vault) RefreshNames() map[string]any {
 func (v *Vault) Status(version string, vaultMode bool, update any) map[string]any {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	tenants := make([]map[string]any, 0, len(v.Tenants))
-	for _, t := range v.Tenants {
+	tenants := make([]map[string]any, 0, len(v.tenants))
+	for _, t := range v.tenants {
 		tenants = append(tenants, map[string]any{"id": t.ID, "label": t.Label})
 	}
 	var active any
-	if v.Active != nil {
-		active = *v.Active
+	if v.active != nil {
+		active = *v.active
 	}
 	ready := (!vaultMode) || v.activeKeyLocked() != ""
 	return map[string]any{
 		"version":   version,
 		"vaultMode": vaultMode,
 		"exists":    v.Exists(),
-		"unlocked":  (!vaultMode) || v.Unlocked,
+		"unlocked":  (!vaultMode) || v.unlocked,
 		"ready":     ready,
 		"tenants":   tenants,
 		"active":    active,
-		"hasGroq":   v.Groq != "",
+		"hasGroq":   v.groq != "",
 		"llm": map[string]any{
-			"hasKey":   v.Groq != "",
-			"base_url": v.LLMBase,
-			"model":    v.LLMModel,
+			"hasKey":   v.groq != "",
+			"base_url": v.llmBase,
+			"model":    v.llmModel,
 		},
 		"update": update,
 	}
@@ -474,11 +474,11 @@ func (v *Vault) portalLabelForKeyUnlocked(key string) string { return v.portalLa
 
 // activeKeyLocked resolves the active tenant key assuming v.mu is held.
 func (v *Vault) activeKeyLocked() string {
-	if v.Active == nil {
+	if v.active == nil {
 		return ""
 	}
-	for _, t := range v.Tenants {
-		if t.ID == *v.Active {
+	for _, t := range v.tenants {
+		if t.ID == *v.active {
 			return t.Key
 		}
 	}

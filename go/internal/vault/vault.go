@@ -61,14 +61,35 @@ type Vault struct {
 	mu       sync.Mutex
 	path     string
 	BaseURL  string // Infoblox base URL for portal name/key lookups (INFOBLOX_URL)
-	Unlocked bool
-	Tenants  []Tenant
-	Active   *string
-	Groq     string
-	LLMBase  string
-	LLMModel string
+	// Mutable secret state — private and only touched while mu is held. External
+	// consumers must read it through the lock-guarded accessors (LLMCreds,
+	// ActiveKey, ActiveLabel, IsUnlocked, Snapshot) so a lock/unlock/set mutation
+	// can't race a read (data-race fix).
+	unlocked bool
+	tenants  []Tenant
+	active   *string
+	groq     string
+	llmBase  string
+	llmModel string
 	key      *fernet.Key // derived Fernet key
 	salt     string      // std-b64 salt (as stored)
+}
+
+// LLMCreds returns a lock-guarded snapshot of the stored LLM credentials (Groq
+// key, base URL, model). Callers outside the package MUST read the LLM config
+// through this — never the private fields — so a concurrent unlock/lock/set
+// can't race the read.
+func (v *Vault) LLMCreds() (groq, base, model string) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.groq, v.llmBase, v.llmModel
+}
+
+// IsUnlocked reports whether the vault is currently unlocked (lock-guarded).
+func (v *Vault) IsUnlocked() bool {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.unlocked
 }
 
 // ResolveFile ports _resolve_vault_file (server.py:2404). It tries VAULT_DIR
@@ -149,10 +170,10 @@ func (v *Vault) Init(passphrase string) error {
 	if err != nil {
 		return err
 	}
-	v.Unlocked = true
-	v.Tenants = nil
-	v.Active = nil
-	v.Groq, v.LLMBase, v.LLMModel = "", "", ""
+	v.unlocked = true
+	v.tenants = nil
+	v.active = nil
+	v.groq, v.llmBase, v.llmModel = "", "", ""
 	v.key = key
 	v.salt = base64.StdEncoding.EncodeToString(salt)
 	return v.save()
@@ -194,12 +215,12 @@ func (v *Vault) Unlock(passphrase string) error {
 	if err := json.Unmarshal(plain, &p); err != nil {
 		return ErrWrongPassphrase
 	}
-	v.Unlocked = true
-	v.Tenants = p.Tenants
-	v.Active = p.Active
-	v.Groq = p.Groq
-	v.LLMBase = p.LLMBase
-	v.LLMModel = p.LLMModel
+	v.unlocked = true
+	v.tenants = p.Tenants
+	v.active = p.Active
+	v.groq = p.Groq
+	v.llmBase = p.LLMBase
+	v.llmModel = p.LLMModel
 	v.key = key
 	v.salt = env.Salt
 	return nil
@@ -212,11 +233,11 @@ func (v *Vault) save() error {
 		return errors.New("vault locked")
 	}
 	p := payload{
-		Tenants:  v.Tenants,
-		Active:   v.Active,
-		Groq:     v.Groq,
-		LLMBase:  v.LLMBase,
-		LLMModel: v.LLMModel,
+		Tenants:  v.tenants,
+		Active:   v.active,
+		Groq:     v.groq,
+		LLMBase:  v.llmBase,
+		LLMModel: v.llmModel,
 	}
 	plain, err := json.Marshal(p)
 	if err != nil {
@@ -253,10 +274,10 @@ func (v *Vault) Save() error {
 func (v *Vault) Lock() {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	v.Unlocked = false
-	v.Tenants = nil
-	v.Active = nil
-	v.Groq = ""
+	v.unlocked = false
+	v.tenants = nil
+	v.active = nil
+	v.groq = ""
 	v.key = nil
 }
 
@@ -270,10 +291,10 @@ func (v *Vault) Reset() error {
 			return err
 		}
 	}
-	v.Unlocked = false
-	v.Tenants = nil
-	v.Active = nil
-	v.Groq, v.LLMBase, v.LLMModel = "", "", ""
+	v.unlocked = false
+	v.tenants = nil
+	v.active = nil
+	v.groq, v.llmBase, v.llmModel = "", "", ""
 	v.key = nil
 	v.salt = ""
 	return nil
@@ -283,11 +304,11 @@ func (v *Vault) Reset() error {
 func (v *Vault) ActiveKey() string {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if v.Active == nil {
+	if v.active == nil {
 		return ""
 	}
-	for _, t := range v.Tenants {
-		if t.ID == *v.Active {
+	for _, t := range v.tenants {
+		if t.ID == *v.active {
 			return t.Key
 		}
 	}
@@ -299,11 +320,11 @@ func (v *Vault) ActiveKey() string {
 func (v *Vault) ActiveLabel() string {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if v.Active == nil {
+	if v.active == nil {
 		return ""
 	}
-	for _, t := range v.Tenants {
-		if t.ID == *v.Active {
+	for _, t := range v.tenants {
+		if t.ID == *v.active {
 			return t.Label
 		}
 	}
