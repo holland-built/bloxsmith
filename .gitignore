@@ -90,3 +90,6 @@ views/
 
 # Third-party demo templates — fetched at build (scripts/fetch_templates.py), never published (ccmarris/uddi_automation_toolkit)
 templates/
+
+# cross-model critique scratch
+.xcheck/
