@@ -39,6 +39,45 @@ func LoadDotEnv(path string) {
 	}
 }
 
+// UserDir is the per-OS application config directory Bloxsmith owns:
+//
+//	macOS   ~/Library/Application Support/bloxsmith
+//	Linux   ~/.config/bloxsmith   (or $XDG_CONFIG_HOME/bloxsmith)
+//	Windows %AppData%\bloxsmith
+//
+// This is the same convention vault.ResolveFile already falls back to, so the
+// service's config and its vault.json land in one directory. It is the ONLY
+// config source a background service can rely on: launchd/systemd/SCM start the
+// process with a near-empty environment, so a key exported in the user's shell
+// or a .env sourced in Terminal is simply not there.
+func UserDir() string {
+	ucd, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(ucd, "bloxsmith")
+}
+
+// EnvFile is the .env the service reads inside UserDir.
+func EnvFile() string {
+	d := UserDir()
+	if d == "" {
+		return ""
+	}
+	return filepath.Join(d, ".env")
+}
+
+// LoadServiceEnv loads ONLY <UserDir>/.env. Used on the service code path: a
+// service has no shell environment and no meaningful working directory, so the
+// stable config-dir file is the single source of truth. Real environment
+// variables still win (LoadDotEnv is setdefault), which is what lets a systemd
+// unit or container override individual values.
+func LoadServiceEnv() {
+	if f := EnvFile(); f != "" {
+		LoadDotEnv(f)
+	}
+}
+
 // Config mirrors the module-level config constants server.py computes at import
 // (server.py:41-160). Field comments cite the Python source of truth.
 type Config struct {
