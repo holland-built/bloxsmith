@@ -33,7 +33,7 @@ CSP / Infoblox Portal platform itself (report those to Infoblox) and third-party
   another container) that can reach the port can use your Infoblox key indirectly,
   including switching CSP accounts. Only the destructive `block`/`unblock` writes are
   gated, by the `DASHBOARD_TOKEN` (`X-Auth-Token`) shared secret.
-- **Publish on `127.0.0.1` (the default).** `scripts/run.sh`/`run-image.sh` map the container
+- **Publish on `127.0.0.1` (the default).** `scripts/run.sh`/`scripts/run-image.sh` map the container
   to `127.0.0.1:<port>` so it is loopback-only; set `BIND=0.0.0.0` to expose it on the
   LAN, and only do that behind your own auth/TLS boundary. (`HOST=0.0.0.0` inside the
   image is correct — it lets the host port-mapping work; exposure is controlled by the

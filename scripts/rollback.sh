@@ -4,20 +4,20 @@
 # Use this when a new image WON'T BOOT and the in-app "Update now" auto-rollback
 # didn't save you (or the app process is unreachable). It recreates the container
 # from the preserved previous image WITHOUT needing the app running, reusing the
-# SAME named volume (noc-vault), port, and env as run-image.sh / docker-compose.yml
+# SAME named volume (noc-vault), port, and env as scripts/run-image.sh / docker-compose.yml
 # so your encrypted vault and settings survive untouched.
 #
 # The app keeps the prior image tagged `bloxsmith:previous` on every self-update
 # (see _do_recreate in server.py). This script recreates from that tag by default;
 # pass a pinned digest as $1 to revert to a specific known-good build instead.
 #
-#   ./rollback.sh                                   # revert to bloxsmith:previous
-#   ./rollback.sh ghcr.io/holland-built/bloxsmith@sha256:<digest>   # revert to a pinned build
+#   ./scripts/rollback.sh                                   # revert to bloxsmith:previous
+#   ./scripts/rollback.sh ghcr.io/holland-built/bloxsmith@sha256:<digest>   # revert to a pinned build
 #
 # For a Compose deploy, prefer the env-var revert shown at the end of this script.
 set -euo pipefail
 
-NAME="${NAME:-bloxsmith}"                         # container name (matches run-image.sh / compose)
+NAME="${NAME:-bloxsmith}"                         # container name (matches scripts/run-image.sh / compose)
 PORT="${PORT:-8080}"
 BIND="${BIND:-127.0.0.1}"                          # loopback by default; BIND=0.0.0.0 for LAN
 VOLUME="${VOLUME:-noc-vault}"                       # named volume holding the encrypted vault
@@ -34,7 +34,7 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   if [ "$IMAGE" = "bloxsmith:previous" ]; then
     echo "  The previous image is only preserved after an in-app self-update."
     echo "  Revert to a published build instead, e.g.:"
-    echo "    ./rollback.sh ghcr.io/holland-built/bloxsmith@sha256:<known-good-digest>"
+    echo "    ./scripts/rollback.sh ghcr.io/holland-built/bloxsmith@sha256:<known-good-digest>"
   else
     echo "  Pull it first:  docker pull \"$IMAGE\""
   fi

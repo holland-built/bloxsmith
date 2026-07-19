@@ -8,7 +8,7 @@
 # To apply it, double-click the update script for your OS that ships next to this
 # file (update.command on macOS, update.bat on Windows, update.sh on Linux), or run:
 #   docker compose pull && docker compose up -d
-# Out-of-band revert (boot-failed image): ./rollback.sh
+# Out-of-band revert (boot-failed image): ./scripts/rollback.sh
 # Copy .env.example to .env to set BIND/PORT/token/auth.
 
 services:
@@ -66,7 +66,7 @@ services:
 
 volumes:
   noc-vault:
-    name: noc-vault      # match run-image.sh volume name; vault survives run-image.sh ↔ compose switches
+    name: noc-vault      # match scripts/run-image.sh volume name; vault survives scripts/run-image.sh ↔ compose switches
   caddy-data:
 
 networks:

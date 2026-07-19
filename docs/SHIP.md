@@ -42,4 +42,4 @@ CI signs every pushed image (keyless cosign / Sigstore OIDC) and type-checks the
   ```
 - **Pin by digest** in `docker-compose.yml` (`image: ghcr.io/holland-built/bloxsmith@sha256:<digest>`) for a reproducible, verifiable deploy. Resolve the digest with `docker buildx imagetools inspect …:latest`.
 - **Updating is explicit and script-driven.** The app only *signals* a newer version (banner in the ⋯ menu with a release-notes link); it never touches Docker. To apply, double-click the update script that ships next to the app (`update.command` on macOS, `update.bat` on Windows, `update.sh` on Linux), or run `docker compose pull && docker compose up -d`. Enterprise updates deliberately on a pinned, verified schedule.
-- **Rollback:** `./rollback.sh` reverts a boot-failed image out-of-band (recreates from `bloxsmith:previous` or a pinned digest, reusing the `noc-vault` volume) — no running app required.
+- **Rollback:** `./scripts/rollback.sh` reverts a boot-failed image out-of-band (recreates from `bloxsmith:previous` or a pinned digest, reusing the `noc-vault` volume) — no running app required.

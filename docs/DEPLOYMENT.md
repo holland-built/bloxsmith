@@ -4,6 +4,7 @@ Full reference for **Bloxsmith**. For the 30-second start see the
 [README](../README.md#quick-start); this doc covers every install path, the
 environment variables, LLM providers, and security.
 
+- [Standalone binary (no Docker)](#standalone-binary-no-docker)
 - [SE demo path (run-image.sh)](#se-demo-path-run-imagesh)
 - [Customer path (compose)](#customer-path-compose)
 - [Updating](#updating)
@@ -18,16 +19,44 @@ environment variables, LLM providers, and security.
 
 ---
 
-## SE demo path (run-image.sh)
+## Standalone binary (no Docker)
 
-You're an Infoblox SE showing this on a laptop or a customer LAN, and don't want
-a git checkout. `run-image.sh` wraps pull + run:
+A single self-contained binary, published on GitHub Releases. Nothing else is
+required — no Docker, no Python, no checkout. macOS and Linux:
 
 ```bash
-curl -fsSL -O https://raw.githubusercontent.com/holland-built/bloxsmith/master/run-image.sh
-chmod +x run-image.sh
-./run-image.sh              # localhost → http://localhost:8080
-LAN=1 ./run-image.sh        # LAN → binds 0.0.0.0, prints http://<host-ip>:8080
+curl --proto '=https' --tlsv1.2 -fsSLo install.sh https://github.com/holland-built/bloxsmith/releases/latest/download/install.sh && less install.sh && sh install.sh
+```
+
+The two-step form is deliberate: you read the script before it runs. The
+installer detects your OS/arch, downloads the matching release asset, verifies
+its SHA-256 against the release's `checksums.txt` (**fail-closed** — a mismatch
+aborts without installing), and installs to `$HOME/.local/bin`. No sudo.
+
+| Flag | Effect |
+|------|--------|
+| `--version vX.Y.Z` | Pin an exact release instead of `latest` |
+| `--prefix DIR` | Install somewhere other than `$HOME/.local/bin` |
+| `--help` | Usage |
+
+Then `bloxsmith` starts it, `bloxsmith service install` registers it to run in
+the background at login, and `bloxsmith update` upgrades in place.
+
+> Checksum verification detects a corrupt or truncated download; it does **not**
+> prove publisher identity, since checksums ship alongside the archive.
+> Signature verification (cosign) is the planned hardening step.
+
+---
+
+## SE demo path (run-image.sh)
+
+You're an Infoblox SE showing this on a laptop or a customer LAN with Docker.
+`scripts/run-image.sh` wraps pull + run:
+
+```bash
+git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
+./scripts/run-image.sh              # localhost → http://localhost:8080
+LAN=1 ./scripts/run-image.sh        # LAN → binds 0.0.0.0, prints http://<host-ip>:8080
 ```
 
 It also prompts for an optional vault auto-unlock passphrase, saving it to
@@ -35,7 +64,7 @@ It also prompts for an optional vault auto-unlock passphrase, saving it to
 and it mounts `/var/run/docker.sock` so the in-app self-update works (set
 `NO_DOCKER_SOCKET=1` to disable).
 
-Re-running `./run-image.sh` always re-pulls `:latest` — see [Updating](#updating)
+Re-running `./scripts/run-image.sh` always re-pulls `:latest` — see [Updating](#updating)
 for the full picture.
 
 > ⚠️ **No login on LAN.** Anyone who can reach the port can use the dashboard.
@@ -75,7 +104,7 @@ docker run --rm caddy caddy hash-password -p 'yourpassword'   # paste into BASIC
 | Localhost (compose) | `docker compose up -d` | http://localhost:8080 |
 | Server (LAN, compose) | `BIND=0.0.0.0 docker compose up -d` | http://host-ip:8080 |
 | Server (secure) | `docker compose --profile secure up -d` | https://host-ip:8443 (login) |
-| Desktop / no-clone | `./run-image.sh` | http://localhost:8080 |
+| Desktop / no-clone | `./scripts/run-image.sh` | http://localhost:8080 |
 
 Tenant keys live AES-encrypted in the `noc-vault` Docker volume — they survive
 updates, restarts, and container recreation. For unattended restarts (no browser
@@ -86,7 +115,7 @@ step to re-enter the passphrase), see `VAULT_PASSPHRASE_FILE` in
 
 ## Updating
 
-**SE demo:** re-run `./run-image.sh` (always pulls `:latest`), or use the in-app
+**SE demo:** re-run `./scripts/run-image.sh` (always pulls `:latest`), or use the in-app
 **Update now** button.
 
 **Customer:** `docker compose pull && docker compose up -d`, or use the in-app
@@ -103,7 +132,7 @@ Clicking **Update now** pre-pulls the `:latest` image over the mounted Docker
 socket, health-checks the candidate before switching to it, and recreates itself.
 If the new image fails its health check, it auto-rolls back to the previous image
 (tagged `bloxsmith:rollback`). This requires `/var/run/docker.sock` to be mounted,
-which `run-image.sh` and compose both do by default (`NO_DOCKER_SOCKET=1` or
+which `scripts/run-image.sh` and compose both do by default (`NO_DOCKER_SOCKET=1` or
 removing the socket line disables it).
 
 Compose also ships a Watchtower sidecar in HTTP-API mode (no polling) as an
