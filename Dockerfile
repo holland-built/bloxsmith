@@ -8,9 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # App code + static assets (index.html, react/babel bundles, etc.)
 COPY server.py index.html ./
-# babel.min.js is .dockerignore'd on purpose (build-time only) — don't add it here.
-COPY app.bundle.js ./
-# Vendored ESM bundles, Astryx stylesheet and Geist fonts all live under assets/.
+# Vendored ESM bundles, the compiled app.bundle.js, the Astryx stylesheet and Geist
+# fonts all live under assets/. assets/babel.min.js is .dockerignore'd on purpose
+# (build-time only) — don't add it back.
 COPY assets/ ./assets/
 # Seed/provision templates are third-party (ccmarris/uddi_automation_toolkit) —
 # not committed to this repo; fetched at build. Mount a volume over /app/templates

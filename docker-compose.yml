@@ -56,7 +56,7 @@ services:
     ports:
       - "${HTTPS_BIND:-0.0.0.0}:${HTTPS_PORT:-8443}:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-:443}
