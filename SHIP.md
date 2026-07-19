@@ -21,7 +21,7 @@ Repo: `github.com/holland-built/bloxsmith`. Run `/release` from anywhere in the 
 Publish the runnable image so users can update to it — this is what makes
 `/release` a single command that ships both code AND a new version:
 
-1. `./release-image.sh` — builds the image with the version baked in and pushes
+1. `./scripts/release-image.sh` — builds the image with the version baked in and pushes
    it to `ghcr.io/holland-built/bloxsmith:latest` + `:v1.0.<n>`.
 2. `gh release create v1.0.<n> --generate-notes --target master` — cuts the
    GitHub release so the in-app "update available" banner sees the new version.

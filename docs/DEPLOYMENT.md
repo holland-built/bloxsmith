@@ -159,11 +159,11 @@ Use this if you're developing or want to build locally instead of pulling the im
 
 ```bash
 git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
-./run.sh
-# update later:  git pull && ./run.sh
+./scripts/run.sh
+# update later:  git pull && ./scripts/run.sh
 ```
 
-`run.sh` will:
+`scripts/run.sh` will:
 1. Prompt for an **Infoblox API key** (optional — Enter to use the in-app vault).
 2. Prompt for a **Groq API key** (optional — only the AI query box needs it).
 3. In vault mode, prompt for a **vault auto-unlock passphrase** (optional — Enter to unlock in the browser). If given, saved to `~/.noc-vault-pass` (`0600`) and mounted read-only.
@@ -187,7 +187,7 @@ docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 --env-file .env -e HOST=0.
 docker logs -f bloxsmith     # watch logs
 docker rm -f bloxsmith       # stop + remove
 docker start bloxsmith       # restart existing
-PORT=8090 ./run.sh              # run on a different port
+PORT=8090 ./scripts/run.sh              # run on a different port
 ```
 
 ---
@@ -198,7 +198,7 @@ PORT=8090 ./run.sh              # run on a different port
 
 1. Sign in to <https://csp.infoblox.com>.
 2. Top-right user menu → **User API Keys** → **Create**.
-3. Copy the token. Use it as-is — `run.sh` adds the `Token ` prefix automatically.
+3. Copy the token. Use it as-is — `scripts/run.sh` adds the `Token ` prefix automatically.
 
 > **Interactive vs service keys:** an interactive *User API Key* carries your user's
 > full account list and enables the in-dashboard account switcher. A *Service API
