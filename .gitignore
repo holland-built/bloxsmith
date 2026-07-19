@@ -90,3 +90,8 @@ views/
 
 # Third-party demo templates — fetched at build (scripts/fetch_templates.py), never published (ccmarris/uddi_automation_toolkit)
 templates/
+
+# Go build artifacts
+go/bloxsmith
+go/bloxsmith.exe
+go/dist/
