@@ -4,7 +4,7 @@
 # UI iteration. It does NOT update the app. To actually update, double-click the
 # update script for your OS (update.command / update.bat / update.sh) or run:
 #   docker compose pull && docker compose up -d
-# To REVERT a bad update (new image won't boot), use ../rollback.sh — it recreates
+# To REVERT a bad update (new image won't boot), use ../scripts/rollback.sh — it recreates
 # the container from bloxsmith:previous (or a pinned digest) without the app.
 set -euo pipefail
 cd "$(dirname "$0")/.."   # repo root — index.html below is read from here, not the caller's cwd
