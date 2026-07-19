@@ -13,9 +13,13 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 
 BASE = os.environ.get("NOC_BASE", "http://localhost:8080")
-DIR    = os.path.dirname(os.path.abspath(__file__))
+# This file lives in tests/, so the repo root is one level up. Resolve from the
+# root — index.html/server.py are NOT siblings of this file.
+DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HTML   = os.path.join(DIR, "index.html")
 SERVER = os.path.join(DIR, "server.py")
+CHECK_SH = os.path.join(DIR, "scripts", "check.sh")
+CI_YML   = os.path.join(DIR, ".github", "workflows", "docker-publish.yml")
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -2367,6 +2371,28 @@ console.log('CIDR_OK');
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
+
+
+class ToolingDriftTests(unittest.TestCase):
+    """The type-check command is DELIBERATELY duplicated in two places:
+    scripts/check.sh (what you run locally) and the CI workflow (inlined so the
+    workflow never depends on repo file layout — moving check.sh root->scripts/
+    would otherwise have broken CI). Nothing enforces they stay identical, so
+    this test does: if either copy changes, this fails instead of drifting."""
+
+    TYPECHECK_CMD = "npx -y --package typescript@latest tsc --noEmit -p tsconfig.json"
+
+    def test_typecheck_command_identical_in_check_sh_and_ci(self):
+        for label, path in (("scripts/check.sh", CHECK_SH), (".github/workflows/docker-publish.yml", CI_YML)):
+            with open(path, encoding="utf-8") as fh:
+                body = fh.read()
+            self.assertIn(
+                self.TYPECHECK_CMD, body,
+                f"{label} no longer contains the exact type-check command "
+                f"'{self.TYPECHECK_CMD}'. These two copies are intentional twins — "
+                f"update BOTH (see the comment atop scripts/check.sh)."
+            )
+
 
 if __name__ == "__main__":
     # Check server is up before running backend tests

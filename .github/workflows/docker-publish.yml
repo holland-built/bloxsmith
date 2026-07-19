@@ -175,6 +175,9 @@ jobs:
       - name: Type-check (tsc --noEmit)
         # --package names the pkg that provides `tsc`; without it npx treats `tsc` as a
         # source file and tsc errors TS5042 (project can't be mixed with source files).
+        # DELIBERATE DUPLICATE of scripts/check.sh — inlined on purpose so this
+        # workflow never depends on the repo's file layout. Kept in sync by
+        # ToolingDriftTests in tests/test_regression.py; change one, change both.
         run: npx -y --package typescript@latest tsc --noEmit -p tsconfig.json
 
       - name: Set up QEMU (for cross-arch builds)
