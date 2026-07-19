@@ -80,14 +80,43 @@ func main() {
 				}
 			}
 			os.Exit(runUpdateCLI(checkOnly))
+		case "service":
+			// `bloxsmith service install|uninstall|start|stop|status` — run as a
+			// native background service (launchd / systemd / Windows SCM).
+			os.Exit(runServiceCLI(os.Args[2:]))
 		}
 	}
 
-	// Load the main repo's .env if present, then any local .env (setdefault:
-	// real env > repo .env > local .env is the same precedence Python uses).
+	// Foreground: the interactive path keeps the shell's environment, so the
+	// developer .env files still apply. Precedence is first-wins (setdefault),
+	// with the real environment always ahead of every file.
+	loadForegroundEnv()
+
+	srv, ln, cfg, err := buildServer()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("bloxsmith %s serving on http://localhost:%s", version, cfg.Port)
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
+}
+
+// loadForegroundEnv loads the .env files that only make sense with a real cwd
+// and a real user session: the developer's source repo, the current directory,
+// and finally the shared config dir the service also reads.
+func loadForegroundEnv() {
 	config.LoadDotEnv("/Users/sholland/AI/Infoblox MCP/.env")
 	config.LoadDotEnv(".env")
+	config.LoadServiceEnv()
+}
 
+// buildServer wires the whole application and returns a graceful *http.Server
+// bound to a listener, ready to Serve. Both the foreground path (main) and the
+// service path (service.go program.Start) call this, so there is exactly one
+// place where the app is assembled. Environment loading happens BEFORE this is
+// called and differs per path — that is the only difference between the two.
+func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// Binary's own directory — vault fallback + templates default.
 	dir := "."
 	if exe, err := os.Executable(); err == nil {
@@ -175,12 +204,9 @@ func main() {
 	shutdownServer = srv.Shutdown
 	ln, err := listenWithRetry(":"+cfg.Port, 5*time.Second)
 	if err != nil {
-		log.Fatal(err)
+		return nil, nil, nil, err
 	}
-	log.Printf("bloxsmith %s serving on http://localhost:%s", version, cfg.Port)
-	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
-	}
+	return srv, ln, cfg, nil
 }
 
 // listenWithRetry binds addr, retrying briefly if the port is momentarily still

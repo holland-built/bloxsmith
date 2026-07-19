@@ -8,7 +8,7 @@ import (
 )
 
 // fixturePassphrase is the throwaway passphrase used to encrypt
-// testdata/vault.json with the Python `cryptography` Fernet library, replicating
+// testdata/python-vault-fixture.json with the Python `cryptography` Fernet library, replicating
 // server.py's _derive_key + _vault_save exactly (see the generator in the PR
 // notes). It is NOT a real secret.
 const fixturePassphrase = "test-passphrase-123"
@@ -16,7 +16,7 @@ const fixturePassphrase = "test-passphrase-123"
 // TestDecryptsPythonFixture proves the Go vault decrypts a vault.json written by
 // the Python app to the exact expected plaintext (STATE-FILE COMPATIBILITY).
 func TestDecryptsPythonFixture(t *testing.T) {
-	src, err := os.ReadFile("testdata/vault.json")
+	src, err := os.ReadFile("testdata/python-vault-fixture.json")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
