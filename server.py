@@ -22,6 +22,7 @@ from cryptography.fernet import Fernet, InvalidToken
 import glob, ipaddress
 import yaml
 from dataclasses import dataclass, field
+from urllib.parse import unquote as _unquote
 
 # ── credentials (load .env if present, never hardcode tokens) ─────────────────
 _env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -159,6 +160,32 @@ LLM_MODEL    = os.environ.get("LLM_MODEL") or "qwen/qwen3-32b"  # `or`, not defa
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "")  # blank = Groq default endpoint
 DIR          = os.path.dirname(os.path.abspath(__file__))
 _STATIC_FILES = frozenset(os.listdir(DIR))  # cached once; avoids O(n) fs hit per request
+
+# Static assets (vendored ESM bundles, Astryx CSS, Geist fonts, icons) live in
+# assets/. Serving is allowlist-only: the set is snapshotted once at startup and a
+# request path must match an entry EXACTLY — no recursive walk, no filesystem
+# lookup on a user-derived path.
+ASSETS_DIR   = os.path.join(DIR, "assets")
+_ASSET_FILES = frozenset(
+    "assets/" + f for f in os.listdir(ASSETS_DIR)
+    if os.path.isfile(os.path.join(ASSETS_DIR, f))
+) if os.path.isdir(ASSETS_DIR) else frozenset()
+
+
+def _asset_name(path):
+    """Canonicalize a request path to an allowlisted 'assets/<file>' name, else None.
+
+    Strips the query string, percent-decodes exactly ONCE (decoding twice would let
+    %252e%252e smuggle a '..' past the guard), drops the leading '/', then rejects
+    any path with empty, '.' or '..' components before the exact allowlist test.
+    """
+    name = _unquote(path.split("?", 1)[0])
+    name = name.lstrip("/")                      # also defeats absolute-after-decode
+    if not name.startswith("assets/"):
+        return None
+    if any(part in ("", ".", "..") for part in name.split("/")):
+        return None
+    return name if name in _ASSET_FILES else None
 
 MIME = {
     ".html": "text/html; charset=utf-8",
@@ -5994,6 +6021,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"licenses": [], "alerts": [], "status": "error"})
         elif path.lstrip("/") in _STATIC_FILES:
             self._file(path.lstrip("/"))  # _file validates realpath before serving
+        elif path.startswith("/assets/"):
+            # Must be handled before the SPA fallback: a missing or rejected asset
+            # is a real 404, never an HTML page masquerading as a font or script.
+            name = _asset_name(self.path)
+            if name is None:
+                self.send_error(404)
+            else:
+                self._file(name)
         elif not path.startswith("/api/"):
             self._file("index.html")  # SPA fallback — all non-API routes serve the app
         else:
