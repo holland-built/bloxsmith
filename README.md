@@ -79,7 +79,7 @@ Pick one; you are never forced into either:
 | **Manual only (default)** | `docker compose up -d` | **Enterprise / production.** Nothing ever changes on its own; an admin clicks **Update now** (or runs the pull) when they choose. Recommended when the app holds live-tenant write credentials. |
 | **Auto-update** | `docker compose --profile autoupdate up -d` | **SE demo laptops.** A Watchtower sidecar pulls new releases automatically so a demo box is always current. |
 
-If a new image ever fails to boot, revert from the shell with `./rollback.sh` (works even when the app is down). Enterprise installs should also pin an exact, signed image by digest — see `SHIP.md`.
+If a new image ever fails to boot, revert from the shell with `./rollback.sh` (works even when the app is down). Enterprise installs should also pin an exact, signed image by digest — see `docs/SHIP.md`.
 
 ## Get your Infoblox API key
 
@@ -115,5 +115,5 @@ The natural-language query box needs an LLM with tool-calling; everything else w
 ---
 
 - **Full deployment & env reference →** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- **Security policy →** [SECURITY.md](SECURITY.md) · **Contributing →** [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Security policy →** [SECURITY.md](.github/SECURITY.md) · **Contributing →** [CONTRIBUTING.md](.github/CONTRIBUTING.md)
 - Released under the [MIT License](LICENSE).

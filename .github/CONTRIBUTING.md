@@ -23,7 +23,7 @@ table and the Docker quick start.
 
 ## Running the tests
 
-`test_regression.py` is an HTTP-level regression suite that exercises a **running**
+`tests/test_regression.py` is an HTTP-level regression suite that exercises a **running**
 server.
 
 ```bash
@@ -31,7 +31,7 @@ server.
 python server.py
 
 # in another (with the venv active)
-python test_regression.py
+python tests/test_regression.py
 # or, verbose:
 python -m unittest test_regression -v
 ```
