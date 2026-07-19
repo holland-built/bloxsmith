@@ -23,23 +23,39 @@ browser ──HTTP──▶ bridge (server.py) ──MCP──▶ csp.infoblox.c
 
 ## Quick start
 
-Prereq: **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows) or Docker Engine (Linux: `curl -fsSL https://get.docker.com | sh`).
+### Path A — Standalone binary (laptop, **no Docker needed**)
 
-### Path A — SE demo (laptop / LAN, no clone)
-
-You're an Infoblox SE showing this on your laptop or a customer LAN in the next five minutes.
+One self-contained binary — no Docker, no Python, no clone. macOS and Linux:
 
 ```bash
-curl -fsSL -O https://raw.githubusercontent.com/holland-built/bloxsmith/master/run-image.sh && chmod +x run-image.sh
-./run-image.sh             # your machine → http://localhost:8080
-LAN=1 ./run-image.sh       # demo box → prints http://<host-ip>:8080 for the room
+curl --proto '=https' --tlsv1.2 -fsSLo install.sh https://github.com/holland-built/bloxsmith/releases/latest/download/install.sh && less install.sh && sh install.sh
+```
+
+Read it before you run it — that's what the `less` is for. The installer verifies the release's SHA-256 checksum, refuses to install on a mismatch, and drops `bloxsmith` in `~/.local/bin` (no sudo; override with `--prefix DIR`, pin with `--version vX.Y.Z`).
+
+```bash
+bloxsmith                  # start it → http://localhost:8080
+bloxsmith service install  # run it in the background at login
+bloxsmith update           # upgrade in place
+```
+
+### Path B — Docker image (server / SE demo)
+
+Prereq: **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows) or Docker Engine (Linux: `curl -fsSL https://get.docker.com | sh`).
+
+Clone the repo, then run the prebuilt image (no build):
+
+```bash
+git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
+./scripts/run-image.sh             # your machine → http://localhost:8080
+LAN=1 ./scripts/run-image.sh       # demo box → prints http://<host-ip>:8080 for the room
 ```
 
 Re-running always pulls `:latest`. The script also offers a vault auto-unlock passphrase, saved to `~/.noc-vault-pass` (`0600`).
 
-> ⚠️ **LAN mode has no login.** Anyone on the network can reach the dashboard and query your Infoblox tenant. Keep the vault **locked** when not presenting, or use Path B's secure proxy.
+> ⚠️ **LAN mode has no login.** Anyone on the network can reach the dashboard and query your Infoblox tenant. Keep the vault **locked** when not presenting, or use Path C's secure proxy.
 
-### Path B — Customer install (always-on server, compose)
+### Path C — Customer install (always-on server, compose)
 
 You're self-hosting this permanently on a server/VM (Proxmox, NUC, cloud).
 
@@ -59,13 +75,13 @@ First open (either path): pick a passphrase, add your [Infoblox API key](#get-yo
 
 Bloxsmith checks GitHub once a day in the background for a newer release (server-side; disable with `DISABLE_UPDATE_CHECK=1`). Nothing updates automatically — applying is always your call.
 
-Click the version badge → **Update now**. The app pulls the new image over the Docker socket, health-checks it, and swaps itself — automatic rollback if the new version fails to start. Available whenever the Docker socket is mounted (run-image.sh and compose both do by default).
+Click the version badge → **Update now**. The app pulls the new image over the Docker socket, health-checks it, and swaps itself — automatic rollback if the new version fails to start. Available whenever the Docker socket is mounted (scripts/run-image.sh and compose both do by default).
 
 Or update manually:
 
 ```bash
 docker compose pull && docker compose up -d    # customer/compose
-./run-image.sh                                 # SE demo — re-running always pulls :latest
+./scripts/run-image.sh                         # SE demo — re-running always pulls :latest
 ```
 
 Your vault (tenant keys, passphrase) lives in the `noc-vault` volume and survives every update.
@@ -79,7 +95,7 @@ Pick one; you are never forced into either:
 | **Manual only (default)** | `docker compose up -d` | **Enterprise / production.** Nothing ever changes on its own; an admin clicks **Update now** (or runs the pull) when they choose. Recommended when the app holds live-tenant write credentials. |
 | **Auto-update** | `docker compose --profile autoupdate up -d` | **SE demo laptops.** A Watchtower sidecar pulls new releases automatically so a demo box is always current. |
 
-If a new image ever fails to boot, revert from the shell with `./rollback.sh` (works even when the app is down). Enterprise installs should also pin an exact, signed image by digest — see `docs/SHIP.md`.
+If a new image ever fails to boot, revert from the shell with `./scripts/rollback.sh` (works even when the app is down). Enterprise installs should also pin an exact, signed image by digest — see `docs/SHIP.md`.
 
 ## Get your Infoblox API key
 
