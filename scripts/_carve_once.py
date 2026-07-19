@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """One-shot Phase-1 carve: slice index.html's inline babel script into src/*.jsx
-verbatim fragments, delete babel.min.js, point index.html at app.bundle.js.
+verbatim fragments, delete babel.min.js, point index.html at assets/app.bundle.js.
 
 Verbatim slicing => concatenation reproduces the original script body byte-for-byte,
 so behavior is identical. Run once; then `node scripts/build_ui.js`."""
@@ -68,7 +68,7 @@ for i, ln in enumerate(lines):
         continue
     if i == open_i:
         indent = ln[:len(ln) - len(ln.lstrip())]
-        new.append(f'{indent}<script type="module" src="./app.bundle.js"></script>\n')
+        new.append(f'{indent}<script type="module" src="./assets/app.bundle.js"></script>\n')
         continue
     if open_i < i <= close_i:
         continue  # swallowed by the replacement above
