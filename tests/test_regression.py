@@ -93,9 +93,9 @@ class BackendTests(unittest.TestCase):
     def test_static_files(self):
         # React 19 ESM boot: react/react-dom UMD are gone; the vendored ESM bundle +
         # the compiled app bundle serve as javascript, the Astryx stylesheet as CSS.
-        # Phase 1: in-browser Babel is retired — app.bundle.js (precompiled from
+        # Phase 1: in-browser Babel is retired — assets/app.bundle.js (precompiled from
         # src/*.jsx) is the runtime JS asset. See plans/STACK-EVOLUTION-PLAN.md.
-        for f in ("app.bundle.js", "assets/vendor.react-19-2-7.8c3b2ed6.js"):
+        for f in ("assets/app.bundle.js", "assets/vendor.react-19-2-7.8c3b2ed6.js"):
             status, ct, _ = get(f"/{f}")
             self.assertEqual(status, 200, f"{f} returned {status}")
             self.assertIn("javascript", ct, f"{f} wrong content-type")
@@ -1259,13 +1259,13 @@ class FrontendStructureTests(unittest.TestCase):
     def test_react_script_tags(self):
         # React 19 ESM boot (no UMD — React 19 ships none): importmap maps react/
         # react-dom to local vendored files. Phase 1: in-browser Babel is retired —
-        # index.html loads the precompiled app.bundle.js as a native ES module.
+        # index.html loads the precompiled assets/app.bundle.js as a native ES module.
         # See plans/STACK-EVOLUTION-PLAN.md.
         self.assertContains('<script type="importmap">', "React ESM importmap missing")
         self.assertContains('"react": "./assets/vendor.react-', "react importmap entry missing")
         self.assertContains('"react-dom/client": "./assets/vendor.react-dom-', "react-dom/client importmap entry missing")
-        self.assertContains('<script type="module" src="./app.bundle.js">',
-                            "index.html must load the compiled app.bundle.js as a native module")
+        self.assertContains('<script type="module" src="./assets/app.bundle.js">',
+                            "index.html must load the compiled assets/app.bundle.js as a native module")
         # In-browser Babel must no longer be loaded at runtime.
         self.assertEqual(self.html.count('<script src="babel.min.js">'), 0,
                          "in-browser babel.min.js must not be loaded (retired in Phase 1)")
@@ -2346,7 +2346,7 @@ console.log('CIDR_OK');
         node = shutil.which("node")
         if not node:
             self.skipTest("node not found on PATH")
-        babel = os.path.join(DIR, "babel.min.js")
+        babel = os.path.join(DIR, "assets", "babel.min.js")
         if not os.path.exists(babel):
             self.skipTest("babel.min.js not present")
         blocks = "\n".join(self._block(n) for n in self.SENTINELS)

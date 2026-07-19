@@ -3,8 +3,8 @@
  *
  * Concatenates every src/*.jsx (in FILENAME order — numeric prefixes define the
  * order) into ONE module, lowers JSX to react/jsx-runtime calls using the ALREADY-
- * VENDORED babel.min.js (@babel/standalone) under Node, and writes app.bundle.js next
- * to index.html. index.html loads it as a native ES module (react / jsx-runtime /
+ * VENDORED assets/babel.min.js (@babel/standalone) under Node, and writes the bundle to
+ * assets/app.bundle.js. index.html loads it as a native ES module (react / jsx-runtime /
  * react-dom / @astryxdesign/core resolved by vendor.importmap.json).
  *
  * Why concat, not per-file ESM: the ~180 top-level symbols share one scope today.
@@ -15,10 +15,10 @@
  * write module).
  *
  * NO @babel/core, NO node_modules in the container, NO network. The container still
- * just serves the static app.bundle.js — babel.min.js is deleted from index.html.
+ * just serves the static assets/app.bundle.js — babel.min.js is deleted from index.html.
  *
- * Usage:  node scripts/build_ui.js           # build app.bundle.js
- *         node scripts/build_ui.js --check    # fail if app.bundle.js is stale (CI gate)
+ * Usage:  node scripts/build_ui.js           # build assets/app.bundle.js
+ *         node scripts/build_ui.js --check    # fail if assets/app.bundle.js is stale (CI gate)
  */
 'use strict';
 const fs = require('fs');
@@ -26,8 +26,8 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(ROOT, 'src');
-const OUT = path.join(ROOT, 'app.bundle.js');
-const Babel = require(path.join(ROOT, 'babel.min.js'));
+const OUT = path.join(ROOT, 'assets', 'app.bundle.js');
+const Babel = require(path.join(ROOT, 'assets', 'babel.min.js'));
 const CHECK = process.argv.includes('--check');
 
 function build() {
@@ -72,11 +72,11 @@ function build() {
 
   const prev = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : null;
   if (CHECK) {
-    if (prev !== out) { console.error('STALE: app.bundle.js out of date — run: node scripts/build_ui.js'); process.exit(1); }
-    console.log(`build_ui --check: app.bundle.js current (${files.length} fragments).`);
+    if (prev !== out) { console.error('STALE: assets/app.bundle.js out of date — run: node scripts/build_ui.js'); process.exit(1); }
+    console.log(`build_ui --check: assets/app.bundle.js current (${files.length} fragments).`);
   } else {
     fs.writeFileSync(OUT, out);
-    console.log(`build_ui: app.bundle.js written from ${files.length} fragments (${(out.length/1024).toFixed(0)} KB).`);
+    console.log(`build_ui: assets/app.bundle.js written from ${files.length} fragments (${(out.length/1024).toFixed(0)} KB).`);
   }
 }
 

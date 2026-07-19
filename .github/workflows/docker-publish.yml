@@ -158,7 +158,7 @@ jobs:
         id: ver
         run: echo "version=1.0.$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
 
-      # Phase 1: index.html loads a precompiled app.bundle.js built from src/*.jsx.
+      # Phase 1: index.html loads a precompiled assets/app.bundle.js built from src/*.jsx.
       # The bundle is committed (the image build stays python-only, no node stage),
       # so this gate fails the build if someone edited src/ without rebuilding.
       - name: Set up Node
