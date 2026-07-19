@@ -347,5 +347,5 @@ For unattended restarts on the [Customer path](#customer-path-compose), set
   that line if you don't want the dashboard to have Docker control.
 - If a token is ever exposed, **rotate it** in the CSP portal — scrubbing files does not revoke it.
 
-See [SECURITY.md](../SECURITY.md) for the policy and how to report a vulnerability,
-and [CONTRIBUTING.md](../CONTRIBUTING.md) for local setup and the test suite.
+See [SECURITY.md](../.github/SECURITY.md) for the policy and how to report a vulnerability,
+and [CONTRIBUTING.md](../.github/CONTRIBUTING.md) for local setup and the test suite.

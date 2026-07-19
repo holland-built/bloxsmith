@@ -16,7 +16,7 @@ __pycache__
 .gitignore
 .DS_Store
 90%
-test_regression.py
+tests/test_regression.py
 Dockerfile
 .dockerignore
 scripts/run.sh
