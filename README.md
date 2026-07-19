@@ -100,7 +100,7 @@ BIND=0.0.0.0 docker compose up -d              # LAN
 docker compose --profile secure up -d          # + Caddy TLS + basic-auth
 
 # Build from source (dev):
-git clone https://github.com/holland-built/bloxsmith && cd bloxsmith && ./run.sh
+git clone https://github.com/holland-built/bloxsmith && cd bloxsmith && ./scripts/run.sh
 ```
 
 Full steps, the deploy matrix, auto-unlock, and pinning → **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.

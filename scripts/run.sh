@@ -11,7 +11,7 @@ BIND="${BIND:-127.0.0.1}"   # host interface to publish on; loopback by default.
 VOLUME="${VOLUME:-noc-vault}"   # named volume holding the encrypted vault
 INFOBLOX_URL="${INFOBLOX_URL:-https://csp.infoblox.com}"
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 echo "── Bloxsmith installer (build from source) ──────────────────────"
 

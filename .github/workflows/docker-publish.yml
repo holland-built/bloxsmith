@@ -5,7 +5,7 @@ name: Publish Docker image
 # AUTOMATIC BUILDS ARE OFF. This no longer runs on every push — it only runs when
 # you start it by hand (Actions tab → "Publish Docker image" → Run workflow), so
 # pushing code costs zero Actions minutes. To re-enable auto-builds, add back the
-# `push:` trigger below. To publish an image locally instead, run ./release-image.sh.
+# `push:` trigger below. To publish an image locally instead, run ./scripts/release-image.sh.
 
 on:
   workflow_dispatch:
@@ -86,7 +86,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           # No `cache: npm` — this repo has NO package.json/lockfile at all (tsc and
-          # playwright are fetched on demand via npx; see check.sh). setup-node's npm
+          # playwright are fetched on demand via npx; see scripts/check.sh). setup-node's npm
           # cache REQUIRES a lockfile and hard-fails without one, which killed this job
           # before a single test ran. The Playwright browser cache below is the one that
           # actually matters here.

@@ -19,7 +19,7 @@ __pycache__
 test_regression.py
 Dockerfile
 .dockerignore
-run.sh
+scripts/run.sh
 README.docker.md
 
 # Phase 1 build-time only — the runtime loads the precompiled app.bundle.js, so the

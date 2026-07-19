@@ -5,7 +5,7 @@
 # --package names the pkg that provides `tsc`; without it npx treats `tsc` as a
 # source file (TS5042). Requires Node/npx on PATH.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 echo "▶ Type-checking UI (tsc --noEmit -p tsconfig.json)…"
 npx -y --package typescript@latest tsc --noEmit -p tsconfig.json
 echo "✓ Type-check passed"
