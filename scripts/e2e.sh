@@ -6,7 +6,7 @@
 # ALWAYS tears the container (and its volume) down — pass, fail, or Ctrl-C.
 #
 # Never touches the live stack: different container name, different port,
-# different volume. Never runs dev.sh (which does `docker rm -f bloxsmith`).
+# different volume. Never runs scripts/dev.sh (which does `docker rm -f bloxsmith`).
 #
 # Usage:  ./scripts/e2e.sh [playwright args...]
 #   ./scripts/e2e.sh                      # full suite

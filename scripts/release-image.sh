@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# release-image.sh — build the Bloxsmith Docker image locally and publish it,
+# scripts/release-image.sh — build the Bloxsmith Docker image locally and publish it,
 # by hand, when YOU choose. Replaces the automatic GitHub build (now off).
 #
-# One command:  ./release-image.sh
+# One command:  ./scripts/release-image.sh
 #
 # Prereq (one time): log in to GitHub's container registry so you can push:
 #   echo "$GITHUB_TOKEN" | docker login ghcr.io -u <your-github-username> --password-stdin
@@ -12,7 +12,7 @@
 # version, and pushes both to ghcr.io. After this, anyone can pull the new
 # version; the in-app banner / update script will see it.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 IMAGE="ghcr.io/holland-built/bloxsmith"
 VERSION="1.0.$(git rev-list --count HEAD)"

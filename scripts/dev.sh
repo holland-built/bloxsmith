@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Dev loop: rebuild the image from CURRENT source and restart the container,
 # using your local .env (no prompts), bound to loopback. Run after each edit
-# to test before you commit/publish.  Usage:  ./dev.sh
+# to test before you commit/publish.  Usage:  ./scripts/dev.sh
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 [[ -f .env ]] || { echo "ERROR: no .env — copy .env.example to .env and add your INFOBLOX_API_KEY." >&2; exit 1; }
 
