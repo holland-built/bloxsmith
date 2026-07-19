@@ -91,13 +91,13 @@ class BackendTests(unittest.TestCase):
         # the compiled app bundle serve as javascript, the Astryx stylesheet as CSS.
         # Phase 1: in-browser Babel is retired — app.bundle.js (precompiled from
         # src/*.jsx) is the runtime JS asset. See plans/STACK-EVOLUTION-PLAN.md.
-        for f in ("app.bundle.js", "vendor.react-19-2-7.8c3b2ed6.js"):
+        for f in ("app.bundle.js", "assets/vendor.react-19-2-7.8c3b2ed6.js"):
             status, ct, _ = get(f"/{f}")
             self.assertEqual(status, 200, f"{f} returned {status}")
             self.assertIn("javascript", ct, f"{f} wrong content-type")
-        status, ct, _ = get("/vendor.astryx.css")
-        self.assertEqual(status, 200, f"vendor.astryx.css returned {status}")
-        self.assertIn("css", ct, "vendor.astryx.css wrong content-type")
+        status, ct, _ = get("/assets/vendor.astryx.css")
+        self.assertEqual(status, 200, f"assets/vendor.astryx.css returned {status}")
+        self.assertIn("css", ct, "assets/vendor.astryx.css wrong content-type")
 
     def test_404(self):
         # SPA fallback: non-API paths serve index.html (200); unknown /api/* paths 404
@@ -1119,8 +1119,8 @@ class FrontendStructureTests(unittest.TestCase):
 
     def test_geist_fonts(self):
         self.assertContains("@font-face", "@font-face declarations missing")
-        self.assertContains("Geist-400.woff2", "Geist font not loaded")
-        self.assertContains("GeistMono-400.woff2", "GeistMono font not loaded")
+        self.assertContains("assets/Geist-400.woff2", "Geist font not loaded")
+        self.assertContains("assets/GeistMono-400.woff2", "GeistMono font not loaded")
         self.assertContains("font-family:'Geist'", "Geist font-family not declared")
         self.assertContains("GeistMono", "GeistMono font-family not declared")
 
@@ -1258,8 +1258,8 @@ class FrontendStructureTests(unittest.TestCase):
         # index.html loads the precompiled app.bundle.js as a native ES module.
         # See plans/STACK-EVOLUTION-PLAN.md.
         self.assertContains('<script type="importmap">', "React ESM importmap missing")
-        self.assertContains('"react": "./vendor.react-', "react importmap entry missing")
-        self.assertContains('"react-dom/client": "./vendor.react-dom-', "react-dom/client importmap entry missing")
+        self.assertContains('"react": "./assets/vendor.react-', "react importmap entry missing")
+        self.assertContains('"react-dom/client": "./assets/vendor.react-dom-', "react-dom/client importmap entry missing")
         self.assertContains('<script type="module" src="./app.bundle.js">',
                             "index.html must load the compiled app.bundle.js as a native module")
         # In-browser Babel must no longer be loaded at runtime.
