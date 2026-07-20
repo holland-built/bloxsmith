@@ -193,6 +193,18 @@ function ViewOptions(){
   .update-modal-note{font-size:var(--t11);color:var(--text-dim);}
   .update-modal-err{font-size:var(--t11);color:var(--crit);line-height:1.5;}
   @keyframes update-spin{to{transform:rotate(360deg)}}
+  .more-update-dot{position:absolute;top:-1px;right:-1px;width:7px;height:7px;
+    background:var(--accent);border-radius:50%;box-shadow:0 0 0 2px var(--surface);pointer-events:none;}
+  .update-toast{position:fixed;bottom:20px;right:20px;z-index:300;
+    display:inline-flex;align-items:center;gap:10px;padding:10px 12px;
+    background:var(--surface);color:var(--text);border:1px solid var(--border);
+    border-radius:var(--r-panel);box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:var(--t12);
+    animation:update-toast-in .18s ease;}
+  .update-toast-check{color:var(--accent);}
+  .update-toast-close{background:none;border:none;color:var(--text-dim);cursor:pointer;
+    font-size:var(--t12);line-height:1;padding:2px 4px;border-radius:var(--r-ctl);}
+  .update-toast-close:hover{color:var(--text);}
+  @keyframes update-toast-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
   `;
   document.head.appendChild(s);
 })();
@@ -217,19 +229,21 @@ function detectUpdateScript(){
    step in red and keeps the previous version. Docker builds (selfUpdate:false) keep the
    passive path: the OS-relevant script the user double-clicks (docker compose pull && up
    -d, revealed on hover/focus) plus a release-notes link. */
-function UpdateBadge(){
-  const [info,setInfo]=useState(null);      // {current,latest,available,url,selfUpdate}
+function UpdateBadge({info:infoProp,onRecheck}={}){
+  const [ownInfo,setOwnInfo]=useState(null); // fallback when used standalone (no info prop)
+  const info=infoProp!==undefined?infoProp:ownInfo;
   const [checking,setChecking]=useState(false);
   const [apply,setApply]=useState(null);    // {phase,pct,error} while a self-update runs
   const check=async()=>{
+    if(onRecheck){ setChecking(true); try{ await onRecheck(); }finally{ setChecking(false); } return; }
     setChecking(true);
     try{
       const r=await fetch('/api/update/check',{cache:'no-store'});
-      setInfo(await r.json());
+      setOwnInfo(await r.json());
     }catch(e){ /* older/File-mode server — stay silent */ }
     setChecking(false);
   };
-  useEffect(()=>{ check(); },[]);
+  useEffect(()=>{ if(infoProp===undefined) check(); },[]);
 
   /* One-click self-update (Go binary only, gated on selfUpdate:true). POST
      /api/update/apply, then poll /api/update/status until the new binary swaps
@@ -245,9 +259,13 @@ function UpdateBadge(){
           const s=await fetch('/api/update/status',{cache:'no-store'}).then(x=>x.json());
           setApply(s);
           if(s.phase==='error'){ clearInterval(poll); return; }
-          if(s.phase==='done'||s.pct>=100){ clearInterval(poll); setTimeout(()=>location.reload(),2500); }
+          if(s.phase==='done'||s.pct>=100){ clearInterval(poll);
+            try{sessionStorage.setItem('bloxsmith_updated_to', (apply&&apply.version)||(info&&info.latest)||'');}catch(e){}
+            setTimeout(()=>location.reload(),2500); }
         }catch(e){ /* server mid-restart — the swap is happening; reload shortly */
-          clearInterval(poll); setTimeout(()=>location.reload(),3000); }
+          clearInterval(poll);
+          try{sessionStorage.setItem('bloxsmith_updated_to', (apply&&apply.version)||(info&&info.latest)||'');}catch(e2){}
+          setTimeout(()=>location.reload(),3000); }
       },1200);
     }catch(e){ setApply({phase:'error',pct:0,error:String(e)}); }
   };
@@ -333,7 +351,24 @@ function UpdateBadge(){
    because WatchMenu/ViewsMenu resolve their portal target once on mount. */
 function MoreMenu({onPalette}){
   const [open,setOpen]=useState(false);
+  const [info,setInfo]=useState(null);      // {current,latest,available,url,selfUpdate} — lifted so the ⋯ dot shows without opening
+  const [justUpdated,setJustUpdated]=useState('');
   const rootRef=useRef(null);
+  const recheck=async()=>{
+    try{
+      const r=await fetch('/api/update/check',{cache:'no-store'});
+      setInfo(await r.json());
+    }catch(e){ /* older/File-mode server — stay silent */ }
+  };
+  useEffect(()=>{ recheck(); },[]);
+  // One-time post-update confirmation toast (survives the reload via sessionStorage).
+  useEffect(()=>{
+    let v=''; try{ v=sessionStorage.getItem('bloxsmith_updated_to')||''; sessionStorage.removeItem('bloxsmith_updated_to'); }catch(e){}
+    if(!v) return;
+    setJustUpdated(v);
+    const t=setTimeout(()=>setJustUpdated(''),6000);
+    return ()=>clearTimeout(t);
+  },[]);
   useEffect(()=>{ if(!open) return;
     const onKey=e=>{ if(e.key==='Escape') setOpen(false); };
     const onDown=e=>{ if(rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
@@ -341,17 +376,23 @@ function MoreMenu({onPalette}){
     document.addEventListener('pointerdown',onDown,true);
     return ()=>{ window.removeEventListener('keydown',onKey); document.removeEventListener('pointerdown',onDown,true); };
   },[open]);
+  const hasUpdate=!!(info&&info.available);
   return <span ref={rootRef} className="more-menu" style={{position:'relative',display:'inline-flex'}}>
-    <button className="kbd" aria-haspopup="menu" aria-expanded={open}
-      aria-label="More tools — Watches, Views, command palette, display, software update"
-      onClick={()=>setOpen(o=>!o)}>⋯</button>
+    <button className="kbd" aria-haspopup="menu" aria-expanded={open} style={{position:'relative'}}
+      aria-label={"More tools — Watches, Views, command palette, display, software update"+(hasUpdate?" (update available)":"")}
+      onClick={()=>setOpen(o=>!o)}>⋯{hasUpdate&&<span className="more-update-dot" aria-hidden="true"/>}</button>
     {/* tools-slot stays mounted ALWAYS (Watches/Views portal into it on mount); just hidden when closed */}
     <div className="more-panel panel" role="menu" style={{display:open?'block':'none'}}>
       <div className="more-row"><button className="kbd" onClick={()=>{onPalette();setOpen(false);}}>Command palette <span className="mono">⌘K</span></button></div>
       <div className="more-row tools-slot"></div>            {/* Watches + Views portal here */}
       <div className="more-row"><ViewOptions/></div>
-      <div className="more-row"><UpdateBadge/></div>
+      <div className="more-row"><UpdateBadge info={info} onRecheck={recheck}/></div>
     </div>
+    {justUpdated&&<div className="update-toast" role="status" aria-live="polite">
+      <span className="update-toast-check" aria-hidden="true">✓</span>
+      <span>Updated to {justUpdated}</span>
+      <button className="update-toast-close" aria-label="Dismiss" onClick={()=>setJustUpdated('')}>✕</button>
+    </div>}
   </span>;
 }
 
