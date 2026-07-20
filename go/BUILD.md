@@ -47,6 +47,15 @@ git tag vX.Y.Z          # semver, e.g. v2.2.0
 git push origin vX.Y.Z
 ```
 
+Local fallback: stage the installers into `go/` first (goreleaser's
+`release.extra_files` globs them without a `../` prefix, which its zglob rejects
+at publish time — the copies are gitignored):
+
+```bash
+cd go && cp ../scripts/install.sh ../scripts/install.ps1 .
+GITHUB_TOKEN=$(gh auth token) goreleaser release --clean
+```
+
 The release (CI, or the local `cd go && goreleaser release --clean` fallback)
 produces and publishes:
 - per-OS archives (`.tar.gz`, Windows `.zip`) + `checksums.txt` (go-selfupdate verifies against it)

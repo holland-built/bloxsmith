@@ -38,7 +38,10 @@ installer and self-update consume, plus a multi-arch ghcr image.
      runs `--skip=homebrew` and the release still succeeds; only brew is skipped.
 
 ### Manual fallback (local goreleaser)
-`cd go && GITHUB_TOKEN=$(gh auth token) goreleaser release --clean`
+`cd go && cp ../scripts/install.sh ../scripts/install.ps1 . && GITHUB_TOKEN=$(gh auth token) goreleaser release --clean`
+
+(The `cp` stages the installers into `go/` for `release.extra_files` — a `../`
+glob trips goreleaser's zglob at publish time; the copies are gitignored.)
 
 Requires:
 - `docker login ghcr.io -u holland-built` with a PAT that has `write:packages`

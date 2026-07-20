@@ -65,6 +65,12 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
+      # Stage the installers into go/ so goreleaser's release.extra_files can
+      # glob them without a `../` prefix (which its zglob rejects at publish
+      # time). Kept out of git via .gitignore.
+      - name: Stage installers for goreleaser extra_files
+        run: cp scripts/install.sh scripts/install.ps1 go/
+
       - name: Set up goreleaser
         uses: goreleaser/goreleaser-action@v6
         with:

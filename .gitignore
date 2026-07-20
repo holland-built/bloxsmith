@@ -102,3 +102,6 @@ templates/
 go/bloxsmith
 go/bloxsmith.exe
 go/dist/
+# Installers staged into go/ for goreleaser release.extra_files (see release.yml)
+go/install.sh
+go/install.ps1

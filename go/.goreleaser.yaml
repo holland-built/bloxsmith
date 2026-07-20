@@ -93,11 +93,14 @@ release:
   name_template: "v{{ .Version }}"
   # Attach both installers to every release so
   # releases/latest/download/install.{sh,ps1} always resolve — no manual
-  # `gh release upload`. Paths are relative to go/ (goreleaser's cwd); the
-  # scripts live at repo-root scripts/ = ../scripts/.
+  # `gh release upload`. Globs are relative to go/ (goreleaser's cwd). The
+  # scripts are staged INTO go/ first (CI: a copy step in release.yml; local:
+  # `cp ../scripts/install.{sh,ps1} .`) — a `../` glob here trips goreleaser's
+  # zglob at SCM-publish time ("stat static prefix .//<abs>: invalid argument"),
+  # which `--snapshot` never exercises, so it only fails on a real release.
   extra_files:
-    - glob: ../scripts/install.sh
-    - glob: ../scripts/install.ps1
+    - glob: install.sh
+    - glob: install.ps1
 
 # --- Homebrew tap: `brew install holland-built/tap/bloxsmith` -----------------
 brews:
