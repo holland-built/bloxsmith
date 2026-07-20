@@ -661,6 +661,77 @@ function SocInsightsPanel(){
      : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id)} tableId="csp-soc" csvName="csp-soc" scrollBody={480}/>}
   </Panel>;
 }
+function ExposureFindingsPanel(){
+  const feed=useApi('/api/csp/exposures',{poll:300000});
+  const d=(feed.data&&feed.data.data)||null;
+  const status=feed.data&&feed.data.status;
+  const rows=(d&&Array.isArray(d.rows))?d.rows:[];
+  const cols=[
+    {key:'title',label:'Title',primary:true,minWidth:280,render:v=>v||'—'},
+    {key:'severity',label:'Severity',mono:true,align:'right'},
+    {key:'status',label:'Status'},
+    {key:'last_seen_at',label:'Last seen',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
+  ];
+  return <Panel title="Exposure findings" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <DataTable cols={cols} rows={rows} rowKey={(r,i)=>String(r.title)+'|'+i} tableId="sec-exposures" csvName="exposures"
+         filterable filterKeys={['title','status']} defaultSort={{key:'severity',dir:'desc'}} scrollBody={480}/>}
+  </Panel>;
+}
+function RiskiestAssetsPanel(){
+  const feed=useApi('/api/csp/asset-risk',{poll:300000});
+  const d=(feed.data&&feed.data.data)||null;
+  const status=feed.data&&feed.data.status;
+  const rows=(d&&Array.isArray(d.rows))?d.rows:[];
+  const cols=[
+    {key:'domain_name',label:'Domain',primary:true,render:v=>v||'—'},
+    {key:'ip_address',label:'IP',mono:true},
+    {key:'exposures',label:'Exposures',mono:true,align:'right'},
+    {key:'status',label:'Status'},
+    {key:'last_seen_at',label:'Last seen',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
+  ];
+  return <Panel title="Riskiest assets" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <DataTable cols={cols} rows={rows} rowKey={(r,i)=>String(r.domain_name)+'|'+i} tableId="sec-asset-risk" csvName="riskiest-assets"
+         defaultSort={{key:'exposures',dir:'desc'}} scrollBody={480}/>}
+  </Panel>;
+}
+function ExposedHostnamesPanel(){
+  const feed=useApi('/api/csp/exposed-hostnames',{poll:300000});
+  const d=(feed.data&&feed.data.data)||null;
+  const status=feed.data&&feed.data.status;
+  const rows=(d&&Array.isArray(d.rows))?d.rows:[];
+  const count=(d&&d.count)||rows.length;
+  const cols=[{key:'hostname',label:'Hostname',mono:true,primary:true,render:v=>v||'—'}];
+  return <Panel title="Exposed hostnames" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <div>
+        <div style={{marginBottom:'var(--s3)'}}><span className="kpi-num">{count}</span> <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>exposed hostnames</span></div>
+        <DataTable cols={cols} rows={rows} rowKey={(r,i)=>String(r.hostname)+'|'+i} tableId="sec-exp-hosts" csvName="exposed-hostnames"
+          filterable maxRows={200} scrollBody={480}/>
+      </div>}
+  </Panel>;
+}
+function ExposedIPsPanel(){
+  const feed=useApi('/api/csp/exposed-ips',{poll:300000});
+  const d=(feed.data&&feed.data.data)||null;
+  const status=feed.data&&feed.data.status;
+  const rows=(d&&Array.isArray(d.rows))?d.rows:[];
+  const count=(d&&d.count)||rows.length;
+  const cols=[{key:'ip',label:'IP',mono:true,primary:true,render:v=>v||'—'}];
+  return <Panel title="Exposed IPs" api={feed}>
+    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
+     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
+     : <div>
+        <div style={{marginBottom:'var(--s3)'}}><span className="kpi-num">{count}</span> <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>exposed IPs</span></div>
+        <DataTable cols={cols} rows={rows} rowKey={(r,i)=>String(r.ip)+'|'+i} tableId="sec-exp-ips" csvName="exposed-ips"
+          filterable scrollBody={480}/>
+      </div>}
+  </Panel>;
+}
 function SecurityTab(){
   const sec=useApi('/api/hub/security',{poll:60000});
   const route=useRoute();
@@ -715,6 +786,10 @@ function SecurityTab(){
       <CtemExposurePanel/>
       <CtemAssetsPanel/>
       <SocInsightsPanel/>
+      <div className="gd-wide"><ExposureFindingsPanel/></div>
+      <RiskiestAssetsPanel/>
+      <ExposedHostnamesPanel/>
+      <ExposedIPsPanel/>
     </div>
     {ai.node}
   </div>;
