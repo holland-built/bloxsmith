@@ -3527,6 +3527,49 @@ def _norm_license_alerts(licenses, alerts):
         } for a in (alerts if isinstance(alerts, list) else [])],
     }
 
+def _norm_exposures(body):
+    # body = {exposures:[{title,severity,priority,status,assigned_to,first_seen_at,last_seen_at,id}]}
+    raw = body.get("exposures") if isinstance(body, dict) else None
+    raw = raw if isinstance(raw, list) else []
+    return [{
+        "title":         e.get("title", ""),
+        "severity":      e.get("severity", ""),
+        "priority":      e.get("priority", ""),
+        "status":        e.get("status", ""),
+        "assigned_to":   e.get("assigned_to", ""),
+        "first_seen_at": e.get("first_seen_at", ""),
+        "last_seen_at":  e.get("last_seen_at", ""),
+        "id":            e.get("id", ""),
+    } for e in raw if isinstance(e, dict)]
+
+def _norm_asset_risk(body):
+    # body = {assets:[{domain_name,ip_address,exposures,status,asset_type,last_seen_at,ports:[...]}]}
+    raw = body.get("assets") if isinstance(body, dict) else None
+    raw = raw if isinstance(raw, list) else []
+    rows = [{
+        "domain_name":  a.get("domain_name", ""),
+        "ip_address":   a.get("ip_address", ""),
+        "exposures":    _num(a.get("exposures")),
+        "status":       a.get("status", ""),
+        "asset_type":   a.get("asset_type", ""),
+        "last_seen_at": a.get("last_seen_at", ""),
+        "ports_count":  len(a.get("ports")) if isinstance(a.get("ports"), list) else 0,
+    } for a in raw if isinstance(a, dict)]
+    rows.sort(key=lambda r: r["exposures"], reverse=True)
+    return rows
+
+def _norm_exposed_hostnames(body):
+    # body = {hostnames:[str]}
+    raw = body.get("hostnames") if isinstance(body, dict) else None
+    raw = raw if isinstance(raw, list) else []
+    return [{"hostname": str(h)} for h in raw]
+
+def _norm_exposed_ips(body):
+    # body = {ip_addresses:[str]}
+    raw = body.get("ip_addresses") if isinstance(body, dict) else None
+    raw = raw if isinstance(raw, list) else []
+    return [{"ip": str(x)} for x in raw]
+
 # ── fetch all dashboard data ──────────────────────────────────────────────────
 
 async def _fetch_dashboard_async() -> dict:
@@ -5992,6 +6035,51 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 _log_exc("/api/csp/license-alerts", e)
                 self._json({"licenses": [], "alerts": [], "status": "error"})
+        elif path == "/api/csp/exposures":
+            # Read-only exposures query: POST with a search body (no writes to CSP).
+            try:
+                body, http = _rest_write("POST", "/api/attack-surface/v1/exposures", {"limit": 200})
+                if http is None or http >= 400:
+                    self._json({"data": {}, "status": "error"})
+                else:
+                    rows = _norm_exposures(body)
+                    self._json({"data": {"rows": rows, "count": len(rows)}, "status": "ok"})
+            except Exception as e:
+                _log_exc("/api/csp/exposures", e)
+                self._json({"data": {}, "status": "error"})
+        elif path == "/api/csp/asset-risk":
+            try:
+                body, http = _rest_get_ex("/api/attack-surface/v1/assets/exposureRanking")
+                if http is None or http >= 400:
+                    self._json({"data": {}, "status": "error"})
+                else:
+                    rows = _norm_asset_risk(body)
+                    self._json({"data": {"rows": rows, "count": len(rows)}, "status": "ok"})
+            except Exception as e:
+                _log_exc("/api/csp/asset-risk", e)
+                self._json({"data": {}, "status": "error"})
+        elif path == "/api/csp/exposed-hostnames":
+            try:
+                body, http = _rest_get_ex("/api/attack-surface/v1/exposures/hostnames")
+                if http is None or http >= 400:
+                    self._json({"data": {}, "status": "error"})
+                else:
+                    rows = _norm_exposed_hostnames(body)
+                    self._json({"data": {"rows": rows, "count": len(rows)}, "status": "ok"})
+            except Exception as e:
+                _log_exc("/api/csp/exposed-hostnames", e)
+                self._json({"data": {}, "status": "error"})
+        elif path == "/api/csp/exposed-ips":
+            try:
+                body, http = _rest_get_ex("/api/attack-surface/v1/exposures/ip-addresses")
+                if http is None or http >= 400:
+                    self._json({"data": {}, "status": "error"})
+                else:
+                    rows = _norm_exposed_ips(body)
+                    self._json({"data": {"rows": rows, "count": len(rows)}, "status": "ok"})
+            except Exception as e:
+                _log_exc("/api/csp/exposed-ips", e)
+                self._json({"data": {}, "status": "error"})
         elif path.lstrip("/") in _STATIC_FILES:
             self._file(path.lstrip("/"))  # _file validates realpath before serving
         elif not path.startswith("/api/"):
