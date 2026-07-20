@@ -40,6 +40,16 @@ bloxsmith service install  # run it in the background at login
 bloxsmith update           # upgrade in place
 ```
 
+**Windows** — download, inspect, then run `install.ps1` (no admin, no winget):
+
+```powershell
+iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1
+# read install.ps1, then:
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+It verifies the release's SHA-256, drops `bloxsmith.exe` in `%LOCALAPPDATA%\Programs\Bloxsmith`, and adds it to your user PATH. Reopen the shell, then run `bloxsmith`. Or skip the script and download the `bloxsmith_<ver>_windows_amd64.zip` straight from the [latest release](https://github.com/holland-built/bloxsmith/releases/latest). The app self-updates in place — no `winget upgrade`. (install.ps1 is new; tested on PowerShell 5.1+/7 — run it once on a real Windows box to confirm before wide use.) The checksum proves the download is intact, not that the publisher is who they claim; the binary is unsigned.
+
 ### Path B — Docker image (server / SE demo)
 
 Prereq: **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows) or Docker Engine (Linux: `curl -fsSL https://get.docker.com | sh`).

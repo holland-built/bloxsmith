@@ -25,19 +25,18 @@ tarballs + `checksums.txt` the installer and self-update consume:
 
 1. Tag on `master`: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 2. `cd go && GITHUB_TOKEN=$(gh auth token) goreleaser release --clean`
-   → GitHub Release (per-OS tarballs + `checksums.txt`), Homebrew tap, winget
-   PR, and the ghcr image.
-3. `install.sh` is NOT built by goreleaser (it lives at repo-root `scripts/`);
-   attach it so `releases/latest/download/install.sh` keeps working:
-   `gh release upload vX.Y.Z scripts/install.sh`.
+   → GitHub Release (per-OS tarballs + `checksums.txt`), Homebrew tap, and the
+   ghcr image.
+3. Both installers (`scripts/install.sh` and `scripts/install.ps1`) auto-attach
+   to every release via goreleaser `release.extra_files`, so
+   `releases/latest/download/install.sh` and `.../install.ps1` keep working with
+   no manual `gh release upload`.
 
 Prerequisites (each an independent channel — a missing one only skips that
-channel, use `--skip=docker,winget,homebrew` to bypass):
+channel, use `--skip=docker,homebrew` to bypass):
 - **ghcr image**: `docker login ghcr.io -u holland-built` with a PAT that has
   `write:packages` (the gh CLI token does NOT carry this scope).
 - **Homebrew**: a `holland-built/homebrew-tap` repo must exist.
-- **winget**: a `holland-built/winget-pkgs` fork of `microsoft/winget-pkgs`
-  must exist.
 
 ## Enterprise deploy hardening
 > **Signing status (truth):** releases are cut **locally** and are currently

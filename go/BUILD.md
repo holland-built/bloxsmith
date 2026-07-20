@@ -51,8 +51,10 @@ cd go && goreleaser release --clean
 - a **GitHub Release** (tag `v1.0.<n>`) — the in-app update banner keys off this
 - a **Homebrew formula** pushed to `holland-built/homebrew-tap`
   → `brew install holland-built/tap/bloxsmith`
-- a **winget** manifest PR to `microsoft/winget-pkgs`
-  → `winget install holland-built.Bloxsmith`
+- **Windows**: no winget. Windows users run `scripts/install.ps1` (auto-attached
+  to each release) or download the `_windows_amd64.zip` directly.
+- both installers (`scripts/install.sh`, `scripts/install.ps1`) auto-attached via
+  goreleaser `release.extra_files` — no manual upload.
 - a **container image** to `ghcr.io/holland-built/bloxsmith` (`:latest` + `:v1.0.<n>`,
   distroless, multi-arch) — same env contract as before, drops into the existing
   `docker-compose.yml` + `noc-vault` volume unchanged.
@@ -66,15 +68,15 @@ The Python image and its scripts are gone; the Go binary is the whole product.
 | `release-image.sh` (local docker build+push) | `goreleaser release` (`dockers:` block) |
 | `docker-publish.yml` CI build-push | `goreleaser release` run **locally** from `master` (see `docs/SHIP.md`); `ci.yml` only builds/tests + a snapshot |
 | `Dockerfile` (`APP_VERSION` ARG) | `go/Dockerfile.goreleaser` + ldflags `-X main.version` |
-| brew/winget: none | goreleaser `brews:` / `winget:` blocks |
+| brew/Windows: none | goreleaser `brews:` block; Windows via `scripts/install.ps1` + direct zip |
 
 ## Secrets/tokens needed at real-release time (not for `--snapshot`)
 
-- `GITHUB_TOKEN` — GitHub Release upload **and** the cross-repo pushes to
-  `homebrew-tap` and the `winget-pkgs` fork (needs `contents:write` + repo scope
-  on those repos; a classic PAT if the default Actions token can't reach them).
+- `GITHUB_TOKEN` — GitHub Release upload **and** the cross-repo push to
+  `homebrew-tap` (needs `contents:write` + repo scope on that repo; a classic PAT
+  if the default Actions token can't reach it).
 - Registry auth for ghcr push (`docker login ghcr.io`, `write:packages`) — the
   release workflow uses the built-in `GITHUB_TOKEN`.
 - Code signing (Phase 4, optional, **costs money**): Apple notarization
   (`notarize:` block, $99/yr) and Windows Authenticode are deliberately deferred —
-  winget + Homebrew both install unsigned.
+  Homebrew and the Windows installer both install unsigned.
