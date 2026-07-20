@@ -25,7 +25,7 @@ function SynthBand({tone,verdict,facts,chips}){
     style={{background:'var(--'+t+'-dim)',borderLeft:'3px solid var(--'+t+')'}}>
     <div className="band-verdict">
       <span className="band-dot sd pulse" aria-hidden="true" style={{background:dot}}/>
-      <span className="prose" style={{fontSize:15,fontWeight:600,lineHeight:1.4}}>{verdict||'—'}</span>
+      <span className="prose" style={{fontSize:14,fontWeight:600,lineHeight:1.4}}>{verdict||'—'}</span>
     </div>
     {fx.length?<div className="band-facts">
       {fx.map((f,i)=>{
@@ -33,7 +33,7 @@ function SynthBand({tone,verdict,facts,chips}){
         const hasV=f&&f.value!=null&&f.value!=='';
         return <div className="band-fact" key={i}>
           <span className="band-fact-l">{f&&f.label!=null?f.label:'—'}</span>
-          <span className="band-fact-v mono" style={{fontSize:'12.5px'}}>
+          <span className="band-fact-v mono" style={{fontSize:'12px'}}>
             <b style={{color:'var(--text)',fontWeight:600}}>{hasV?f.value:'—'}</b>
             {d!=null?<Delta v={typeof d==='object'?d.v:d} good={typeof d==='object'?d.good:'up'}/>:null}
           </span>
@@ -949,7 +949,7 @@ function useAiExplain(){
   if(document.getElementById('bx-ov-styles')) return;
   const s=document.createElement('style');s.id='bx-ov-styles';
   s.textContent=`
-  .ovx table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
+  .ovx table{border-collapse:collapse;}
   .ovx thead th{text-align:left;color:var(--text-faint);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.1em;padding:6px 16px 6px 0;border-bottom:1px solid var(--border);white-space:nowrap;}
   .ovx tbody td{padding:7px 16px 7px 0;border-bottom:1px solid var(--border2);white-space:nowrap;}
   /* fixed layout + a real right-pad gap: every cell (incl. the primary) clips with ellipsis, so
