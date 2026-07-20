@@ -171,6 +171,28 @@ function ViewOptions(){
   .update-peek-c{color:var(--text-dim);}
   .update-peek-line{font-size:var(--t11);line-height:1.6;white-space:nowrap;color:var(--text);}
   .update-menu-link{font-size:var(--t11);color:var(--text-dim);text-decoration:underline;text-underline-offset:2px;}
+  .update-modal-backdrop{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.5);backdrop-filter:blur(2px);}
+  .update-modal{min-width:300px;max-width:90vw;padding:20px 22px;
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);
+    box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:14px;}
+  .update-modal-title{font-size:var(--t12);color:var(--text);font-weight:600;}
+  .update-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+  .update-step{display:flex;align-items:center;gap:10px;font-size:var(--t12);color:var(--text-dim);}
+  .update-step-mark{width:18px;height:18px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+    border-radius:50%;font-size:var(--t11);border:1px solid var(--border);}
+  .update-step.done{color:var(--text);}
+  .update-step.done .update-step-mark{color:var(--accent);border-color:var(--accent);}
+  .update-step.active{color:var(--text);}
+  .update-step.active .update-step-mark{color:transparent;border-color:var(--border);border-top-color:var(--accent);
+    animation:update-spin .8s linear infinite;}
+  .update-step.error .update-step-mark{color:var(--crit);border-color:var(--crit);}
+  .update-step.error .update-step-label{color:var(--crit);}
+  .update-step-label{flex:1 1 auto;}
+  .update-step-pct{font-size:var(--t11);color:var(--text-dim);}
+  .update-modal-note{font-size:var(--t11);color:var(--text-dim);}
+  .update-modal-err{font-size:var(--t11);color:var(--crit);line-height:1.5;}
+  @keyframes update-spin{to{transform:rotate(360deg)}}
   `;
   document.head.appendChild(s);
 })();
@@ -186,12 +208,15 @@ function detectUpdateScript(){
   return {file:'update.command',os:'macOS'};
 }
 
-/* UpdateBadge — passive "update available" banner (renders inside the ⋯ MoreMenu panel).
-   The app only SIGNALS: it shows the running version and, when a newer release exists,
-   names the OS-relevant update script the user double-clicks (docker compose pull &&
-   up -d, revealed on hover/focus) plus a release-notes link. It never applies, polls,
-   or rolls back — no /api/update/apply, /status, or /rollback-* calls. Checks once on
-   mount via GET /api/update/check; a small "Check now" re-hits the same endpoint. */
+/* UpdateBadge — version chip + updater (renders inside the ⋯ MoreMenu panel). Checks
+   once on mount via GET /api/update/check ("Check now" re-hits it). When a newer release
+   exists the behavior forks on info.selfUpdate: Go binaries (selfUpdate:true) get a
+   one-click "Update now" that POSTs /api/update/apply and polls /api/update/status,
+   surfacing progress in a stepped modal overlay (Check → Download → Verify → Apply →
+   Restart) that reloads the page once the swap completes; on failure it shows the errored
+   step in red and keeps the previous version. Docker builds (selfUpdate:false) keep the
+   passive path: the OS-relevant script the user double-clicks (docker compose pull && up
+   -d, revealed on hover/focus) plus a release-notes link. */
 function UpdateBadge(){
   const [info,setInfo]=useState(null);      // {current,latest,available,url,selfUpdate}
   const [checking,setChecking]=useState(false);
@@ -239,11 +264,38 @@ function UpdateBadge(){
             <span className="update-dot" aria-hidden="true"/>Update available → <b>{latest}</b>
           </span>
           {apply
-            ? <span className="update-applying mono" role="status" aria-live="polite">
-                {apply.phase==='error'
-                  ? <span className="update-apply-err">Update failed: {apply.error} (previous version kept)</span>
-                  : <span>{apply.phase}… {apply.pct||0}%{(apply.phase==='done'||apply.pct>=100)?' — restarting':''}</span>}
-              </span>
+            ? (()=>{
+                const STEPS=[
+                  {key:'check',   label:'Check',   phases:['starting','checking']},
+                  {key:'download',label:'Download',phases:['downloading']},
+                  {key:'verify',  label:'Verify',  phases:['verifying']},
+                  {key:'apply',   label:'Apply',   phases:['applying']},
+                  {key:'restart', label:'Restart', phases:['restarting','done']},
+                ];
+                const err=apply.phase==='error';
+                const pct=apply.pct||0;
+                let active=STEPS.findIndex(s=>s.phases.includes(apply.phase));
+                if(active<0) active=err?Math.min(4,Math.floor(pct/20)):0;
+                const restarting=apply.phase==='done'||pct>=100;
+                return <div className="update-modal-backdrop" role="dialog" aria-modal="true" aria-label="Software update in progress">
+                  <div className="update-modal">
+                    <div className="update-modal-title mono">Updating → v{apply.version||latest}</div>
+                    <ol className="update-steps">
+                      {STEPS.map((s,i)=>{
+                        const state=err&&i===active?'error':i<active?'done':i===active?'active':'pending';
+                        return <li key={s.key} className={'update-step '+state} aria-current={state==='active'?'step':undefined}>
+                          <span className="update-step-mark" aria-hidden="true">{state==='done'?'✔':state==='error'?'✕':state==='active'?'●':'○'}</span>
+                          <span className="update-step-label">{s.label}</span>
+                          {state==='active'&&!err&&<span className="update-step-pct mono">{pct}%</span>}
+                        </li>;
+                      })}
+                    </ol>
+                    {err
+                      ? <div className="update-modal-err" role="alert">Update failed: {apply.error} (previous version kept)</div>
+                      : restarting?<div className="update-modal-note" role="status" aria-live="polite">restarting…</div>:null}
+                  </div>
+                </div>;
+              })()
             : <button className="kbd update-now-btn" onClick={runApply}
                 aria-label={'Update now to '+latest+' — downloads, verifies and restarts automatically'}>
                 Update now → <b>{latest}</b>
