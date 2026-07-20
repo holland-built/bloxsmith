@@ -200,20 +200,6 @@ func normDNSServices(raw []any) []map[string]any {
 	return out
 }
 
-func normCSPZones(raw []any) []map[string]any {
-	out := make([]map[string]any, 0, len(raw))
-	for _, item := range raw {
-		z := asMap(item)
-		out = append(out, map[string]any{
-			"id":      idOf(z["id"]),
-			"fqdn":    getStr(z["fqdn"]),
-			"view":    getStr(z["view"]),
-			"comment": getStr(z["comment"]),
-		})
-	}
-	return out
-}
-
 func normIpamUtil(raw []any) []map[string]any {
 	out := make([]map[string]any, 0, len(raw))
 	for _, item := range raw {
@@ -366,15 +352,6 @@ func normExposedIPs(body any) []map[string]any {
 	return out
 }
 
-func normSOC(insightTypes []any) []map[string]any {
-	out := make([]map[string]any, 0, len(insightTypes))
-	for _, item := range insightTypes {
-		t := asMap(item)
-		out = append(out, map[string]any{"id": idOf(t["id"]), "name": getStr(t["name"])})
-	}
-	return out
-}
-
 func normLicenseAlerts(licenses, alerts []any) ([]map[string]any, []map[string]any) {
 	lic := make([]map[string]any, 0, len(licenses))
 	for _, item := range licenses {
@@ -485,15 +462,6 @@ func (s *Service) CSPDNSServices() map[string]any {
 	return rowsResp(normDNSServices(rest.Unwrap(body)))
 }
 
-func (s *Service) CSPZones() map[string]any {
-	body, st, err := s.Rest.GetEx("/api/ddi/v1/dns/zone_child",
-		map[string]string{"_limit": "500", "_filter": `flat=="false"`})
-	if errored(st, err) {
-		return errRows()
-	}
-	return rowsResp(normCSPZones(rest.Unwrap(body)))
-}
-
 func (s *Service) CSPIpamUtil() map[string]any {
 	body, st, err := s.Rest.GetEx("/api/ddi/v1/ipam/htree",
 		map[string]string{"view": "SPACE", "_limit": "500", "_fields": "id,label,utilization"})
@@ -579,27 +547,6 @@ func (s *Service) CSPExposedIPs() map[string]any {
 		return dataErr()
 	}
 	return dataRowsResp(normExposedIPs(body))
-}
-
-// CSPSoc gates on soc_enforcement_enabled, then fetches insight types.
-func (s *Service) CSPSoc() map[string]any {
-	gateB, gateH, ge := s.Rest.GetEx("/api/ris/v1/internal/soc_enforcement_enabled", nil)
-	if errored(gateH, ge) {
-		return map[string]any{"rows": []any{}, "count": 0, "enabled": false, "status": "error"}
-	}
-	enabled := truthy(asMap(gateB)["enabled"])
-	typesB, typesH, te := s.Rest.GetEx("/api/ris/v1/insights/types", nil)
-	if errored(typesH, te) {
-		return map[string]any{"rows": []any{}, "count": 0, "enabled": enabled, "status": "error"}
-	}
-	tm := asMap(typesB)
-	raw := orAny(tm["insightTypes"], tm["results"], tm["result"], []any{})
-	types := normSOC(asSlice(raw))
-	st := "ok"
-	if len(types) == 0 {
-		st = "empty"
-	}
-	return map[string]any{"rows": types, "count": len(types), "enabled": enabled, "status": st}
 }
 
 // CSPLicenseAlerts merges licenses + user_alerts; any sub-error → status=error.

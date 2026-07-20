@@ -586,8 +586,7 @@ function ThreatRibbonPanel(){
       </div>}
   </Panel>;
 }
-function CtemExposurePanel(){
-  const feed=useApi('/api/csp/ctem-exposure',{poll:300000});
+function CtemExposurePanel({feed}){
   const d=(feed.data&&feed.data.data)||null;
   const status=feed.data&&feed.data.status;
   const matrix=(d&&Array.isArray(d.matrix))?d.matrix:[];
@@ -612,8 +611,7 @@ function CtemExposurePanel(){
       </div>}
   </Panel>;
 }
-function CtemAssetsPanel(){
-  const feed=useApi('/api/csp/ctem-assets',{poll:300000});
+function CtemAssetsPanel({feed}){
   const d=(feed.data&&feed.data.data)||null;
   const status=feed.data&&feed.data.status;
   const providers=(d&&Array.isArray(d.providers))?d.providers:[];
@@ -645,24 +643,7 @@ function CtemAssetsPanel(){
       </div>}
   </Panel>;
 }
-function SocInsightsPanel(){
-  const feed=useApi('/api/csp/soc',{poll:300000});
-  const rows=(feed.data&&feed.data.rows)||[];
-  const status=feed.data&&feed.data.status;
-  const enabled=feed.data&&feed.data.enabled;
-  const cols=[
-    {key:'id',label:'ID',render:v=><IdCell value={v} label="ID"/>},
-    {key:'name',label:'Name',primary:true},
-  ];
-  return <Panel title="SOC insights" api={feed}>
-    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
-     : enabled===false ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>SOC enforcement not enabled for this account</div>
-     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
-     : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id)} tableId="csp-soc" csvName="csp-soc" scrollBody={480}/>}
-  </Panel>;
-}
-function ExposureFindingsPanel(){
-  const feed=useApi('/api/csp/exposures',{poll:300000});
+function ExposureFindingsPanel({feed}){
   const d=(feed.data&&feed.data.data)||null;
   const status=feed.data&&feed.data.status;
   const rows=(d&&Array.isArray(d.rows))?d.rows:[];
@@ -679,8 +660,7 @@ function ExposureFindingsPanel(){
          filterable filterKeys={['title','status']} defaultSort={{key:'severity',dir:'desc'}} scrollBody={480}/>}
   </Panel>;
 }
-function RiskiestAssetsPanel(){
-  const feed=useApi('/api/csp/asset-risk',{poll:300000});
+function RiskiestAssetsPanel({feed}){
   const d=(feed.data&&feed.data.data)||null;
   const status=feed.data&&feed.data.status;
   const rows=(d&&Array.isArray(d.rows))?d.rows:[];
@@ -698,8 +678,7 @@ function RiskiestAssetsPanel(){
          defaultSort={{key:'exposures',dir:'desc'}} scrollBody={480}/>}
   </Panel>;
 }
-function ExposedHostnamesPanel(){
-  const feed=useApi('/api/csp/exposed-hostnames',{poll:300000});
+function ExposedHostnamesPanel({feed}){
   const d=(feed.data&&feed.data.data)||null;
   const status=feed.data&&feed.data.status;
   const rows=(d&&Array.isArray(d.rows))?d.rows:[];
@@ -715,8 +694,7 @@ function ExposedHostnamesPanel(){
       </div>}
   </Panel>;
 }
-function ExposedIPsPanel(){
-  const feed=useApi('/api/csp/exposed-ips',{poll:300000});
+function ExposedIPsPanel({feed}){
   const d=(feed.data&&feed.data.data)||null;
   const status=feed.data&&feed.data.status;
   const rows=(d&&Array.isArray(d.rows))?d.rows:[];
@@ -730,6 +708,66 @@ function ExposedIPsPanel(){
         <DataTable cols={cols} rows={rows} rowKey={(r,i)=>String(r.ip)+'|'+i} tableId="sec-exp-ips" csvName="exposed-ips"
           filterable scrollBody={480}/>
       </div>}
+  </Panel>;
+}
+// CTEM / attack-surface entitlement gate. Each of the 6 feeds below hits a paid
+// Infoblox add-on endpoint; on an unentitled tenant they ALL return empty and used to
+// render 6 dead cards. CtemBelt owns the 6 fetches (single source of truth) and passes
+// each feed into its panel, so there's no double-fetch and the gate decision matches
+// exactly what the panels render. It collapses to one honest tile ONLY when every feed
+// has resolved successfully with zero rows. Any rows, any still-loading, or ANY error
+// ⇒ render the cards — an outage or an entitled-but-clean tenant must never be
+// mislabeled "not detected". ctemFeedRows mirrors each panel's own row-extraction.
+function ctemFeedRows(feed,kind){
+  const fd=feed.data; if(!fd) return false;
+  const d=fd.data;
+  if(kind==='exposure'){
+    const matrix=(d&&Array.isArray(d.matrix))?d.matrix:[];
+    const hourly=(d&&Array.isArray(d.hourly_counts))?d.hourly_counts:[];
+    return !!(d&&(d.total_exposures||matrix.length||hourly.length));
+  }
+  if(kind==='assets'){
+    const p=(d&&Array.isArray(d.providers))?d.providers:[];
+    const t=(d&&Array.isArray(d.technologies))?d.technologies:[];
+    const po=(d&&Array.isArray(d.ports))?d.ports:[];
+    return !!(d&&(d.asset_count||p.length||t.length||po.length));
+  }
+  const rows=(d&&Array.isArray(d.rows))?d.rows:[];
+  return rows.length>0;
+}
+function CtemBelt(){
+  const exposure=useApi('/api/csp/ctem-exposure',{poll:300000});
+  const assets=useApi('/api/csp/ctem-assets',{poll:300000});
+  const exposures=useApi('/api/csp/exposures',{poll:300000});
+  const assetRisk=useApi('/api/csp/asset-risk',{poll:300000});
+  const hostnames=useApi('/api/csp/exposed-hostnames',{poll:300000});
+  const ips=useApi('/api/csp/exposed-ips',{poll:300000});
+  const feeds=[[exposure,'exposure'],[assets,'assets'],[exposures,'rows'],[assetRisk,'rows'],[hostnames,'rows'],[ips,'rows']];
+  const cards=<React.Fragment>
+    <CtemExposurePanel feed={exposure}/>
+    <CtemAssetsPanel feed={assets}/>
+    <div className="gd-wide"><ExposureFindingsPanel feed={exposures}/></div>
+    <RiskiestAssetsPanel feed={assetRisk}/>
+    <ExposedHostnamesPanel feed={hostnames}/>
+    <ExposedIPsPanel feed={ips}/>
+  </React.Fragment>;
+  // Locked vault: preserve prior behavior (render cards) — don't mislabel as unentitled.
+  if(feeds.some(([f])=>f.locked)) return cards;
+  const anyRows=feeds.some(([f,k])=>ctemFeedRows(f,k));
+  // Any error (fetch failure OR HTTP-200 status:"error") means we can't conclude
+  // "unentitled" — an outage or backend error must keep the cards (which surface their
+  // own error state), never collapse to the "not detected" tile.
+  const anyError=feeds.some(([f])=>f.error||(f.data&&f.data.status==='error'));
+  // Only collapse once every feed has fully settled — resolved (data | error) AND not
+  // mid-flight (a background poll retains stale data with loading=true; don't collapse
+  // on that). Until then keep the cards so we never flash the tile during a refresh.
+  const allSettled=feeds.every(([f])=>!f.loading&&(f.data!=null||f.error));
+  if(anyRows||anyError||!allSettled) return cards;
+  // Honest wording: all six paid endpoints returned zero rows. We CAN'T prove that's an
+  // absent subscription vs an entitled tenant with nothing to show, so don't assert
+  // "not detected" — just report no data and name the add-on.
+  return <Panel title="CTEM / attack-surface">
+    <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No CTEM / attack-surface data. These panels (a paid Infoblox add-on) appear here once the subscription returns findings.</div>
   </Panel>;
 }
 function SecurityTab(){
@@ -783,13 +821,7 @@ function SecurityTab(){
     </div>
     <div className="grid-dense">
       <ThreatRibbonPanel/>
-      <CtemExposurePanel/>
-      <CtemAssetsPanel/>
-      <SocInsightsPanel/>
-      <div className="gd-wide"><ExposureFindingsPanel/></div>
-      <RiskiestAssetsPanel/>
-      <ExposedHostnamesPanel/>
-      <ExposedIPsPanel/>
+      <CtemBelt/>
     </div>
     {ai.node}
   </div>;

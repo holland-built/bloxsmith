@@ -173,22 +173,6 @@ function DnsServicesPanel(){
   </Panel>;
 }
 
-function ZoneInventoryPanel(){
-  const feed=useApi('/api/csp/zones',{poll:30000});
-  const rows=(feed.data&&feed.data.rows)||[];
-  const status=feed.data&&feed.data.status;
-  const cols=[
-    {key:'fqdn',label:'Zone',mono:true,align:'left',render:(v,r)=><IdCell value={v} label={r.id}/>},
-    {key:'view',label:'View',align:'left'},
-    {key:'comment',label:'Comment',align:'left'},
-  ];
-  return <Panel title="Zone inventory" api={feed}>
-    {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
-     : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
-     : <DataTable cols={cols} rows={rows} filterable filterKeys={['fqdn','view']} scrollBody={480} csvName="zone-inventory"/>}
-  </Panel>;
-}
-
 function DnsQpsPanel(){
   const feed=useApi('/api/csp/dns-qps',{poll:30000});
   const rows=(feed.data&&feed.data.rows)||[];
@@ -218,7 +202,6 @@ function DnsQpsPanel(){
 function DnsTilesRow(){
   return <div className="grid-dense">
     <DnsServicesPanel/>
-    <ZoneInventoryPanel/>
     <DnsQpsPanel/>
   </div>;
 }

@@ -8,7 +8,7 @@ import (
 
 // registerNOCRoutes wires the NOC-signal / analytics / sources surface
 // (server.py do_GET 5054-5295): the incidents engine (/api/incidents +
-// drill-down), /api/actions, /api/insights, /api/mcp/events, the source
+// drill-down), /api/actions, /api/insights, the source
 // registry (/api/sources + /api/source/<id>) and the analytics reads
 // (/api/dns-analytics, /api/host-metrics, /api/threat-lookup).
 func (d *Deps) registerNOCRoutes(mux *http.ServeMux) {
@@ -16,7 +16,6 @@ func (d *Deps) registerNOCRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/incidents", d.incidents)
 	mux.HandleFunc("GET /api/incidents/{cat}", d.incidentsCategory)
 	mux.HandleFunc("GET /api/insights", d.insights)
-	mux.HandleFunc("GET /api/mcp/events", d.mcpEvents)
 	mux.HandleFunc("GET /api/sources", d.sources)
 	mux.HandleFunc("GET /api/source/{sid}", d.sourceRows)
 	mux.HandleFunc("GET /api/dns-analytics", d.dnsAnalytics)
@@ -103,17 +102,6 @@ func (d *Deps) incidentsCategory(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) insights(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/insights")
 	d.json(w, r, 200, d.Dashboard.FetchInsights())
-}
-
-// mcpEvents is GET /api/mcp/events (server.py:5197): a bare list, [] on error.
-func (d *Deps) mcpEvents(w http.ResponseWriter, r *http.Request) {
-	defer func() {
-		if rec := recover(); rec != nil {
-			d.logExc("/api/mcp/events", rec)
-			d.json(w, r, 200, []any{})
-		}
-	}()
-	d.json(w, r, 200, d.Dashboard.FetchMCPEvents(r.Context(), 50, 0))
 }
 
 // sources is GET /api/sources (server.py:5054): registry META only.

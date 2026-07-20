@@ -73,16 +73,14 @@ function IncCategoryChips({incidents,query,onQuery,onSnoozed}){
   </div>;
 }
 
-/* IncidentsTab — port of TriagePanel + McpIncidentQueue + McpEventStream onto
+/* IncidentsTab — port of TriagePanel + McpIncidentQueue onto
    this app's DataTable/Panel/SynthBand idioms (pattern = AuditTab).
    - Triage: /api/incidents (server-correlated Signals from subnet/zone/lease
      data — no new upstream call).
-   - SOC queue: /api/actions (existing IQ Actions endpoint, reused as-is).
-   - Event stream: /api/mcp/events (new MCP anomaly-event endpoint). */
+   - SOC queue: /api/actions (existing IQ Actions endpoint, reused as-is). */
 function IncidentsTab(){
   const incApi=useApi('/api/incidents',{poll:20000});
   const actionsApi=useApi('/api/actions',{poll:30000});
-  const eventsApi=useApi('/api/mcp/events',{poll:30000});
 
   const [acks,setAcks]=useState(()=>LS.get('inc_acks',{}));
   const [incQuery,setIncQuery]=useState('');
@@ -136,9 +134,6 @@ function IncidentsTab(){
     ? [{key:'_sev',label:'Sev',width:70,render:(_,row)=><SeverityBadge severity={mcpSeverity(row)}/>},
        ...secAutoCols(actionsRows).filter(c=>c.key!=='severity')]
     : [];
-
-  const eventsRows=Array.isArray(eventsApi.data)?eventsApi.data:[];
-  const eventsCols=eventsRows.length?secAutoCols(eventsRows):[];
 
   return <div className="page">
     <div className={"inc-strip "+tone} role="status" aria-live="polite"
@@ -203,12 +198,6 @@ function IncidentsTab(){
       <DataTable cols={actionsCols} rows={actionsRows}
         rowKey={r=>String((r&&(r.id||r.display_id))||JSON.stringify(r).slice(0,40))}
         tableId="incidents-soc" csvName="soc-queue" maxRows={50} filterable/>
-    </Panel>
-
-    <Panel title="MCP event stream" api={eventsApi} empty={!eventsRows.length}>
-      <DataTable cols={eventsCols} rows={eventsRows}
-        rowKey={r=>String((r&&(r.ophid||r.event_id||r.id))||JSON.stringify(r).slice(0,40))}
-        tableId="incidents-events" csvName="mcp-events" maxRows={50}/>
     </Panel>
   </div>;
 }
