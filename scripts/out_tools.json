@@ -1,0 +1,250 @@
+[
+  {
+    "name": "infoblox-hosts_get_host_config",
+    "description": "Fetch the effective DNS or DHCP configuration files for a specific on-prem host. Use for host-specific configuration questions such as DNS zones, forwarders, recursion, DHCP pools, reservations, options, and DDNS behavior. Do not use for general explanations, runtime troubleshooting, or multi-host summaries.",
+    "params": [
+      "config_type*:string",
+      "ophid*:string"
+    ],
+    "required": [
+      "config_type",
+      "ophid"
+    ]
+  },
+  {
+    "name": "infoblox-portal_list_all_available_services",
+    "description": "List all available Infoblox Portal API services and their descriptions.\n\nYou have access to many services within the Infoblox Portal.\nUse this tool to discover what services are available and if a service exists to handle a request.\nAfter calling `list_all_available_services`, `get_service_info` and `get_method_info`\nyou can call HTTP operations to perform the actions needed.",
+    "params": [],
+    "required": []
+  },
+  {
+    "name": "infoblox-portal_get_service_info",
+    "description": "Discover methods available for a service.",
+    "params": [
+      "service_name*:string"
+    ],
+    "required": [
+      "service_name"
+    ]
+  },
+  {
+    "name": "infoblox-portal_get_method_info",
+    "description": "Get detailed parameter requirements for a specific endpoint.",
+    "params": [
+      "service_name*:string",
+      "endpoint*:string",
+      "method:string"
+    ],
+    "required": [
+      "endpoint",
+      "service_name"
+    ]
+  },
+  {
+    "name": "infoblox-portal_make_get_request",
+    "description": "Execute a GET request to retrieve information and store it for later SQL querying.\n\nThe response data will be stored in a session-specific directory and can be queried\nusing the `query_stored_data` tool with SQL.\n\nFiltering Strategy:\n1. Server-side filtering: Use the _filter parameter in query_params for simple\n    top-level field filtering. Example: {\"_filter\": \"name == 'John'\"}. IMPORTANT: The _filter\n    parameter only supports basic expressions on top-level fields and does not handle nested fields.\n    For example: {\"_filter\": \"name == 'John' and age > 30\"} is supported,\n    but {\"_filter\": \"user.name == 'John'\"} is not supported.\n\n2. Client-side SQL queries: After calling this tool, use `query_stored_data` to run\n    SQL queries against the stored data for:\n    - Filtering on nested fields\n    - Complex conditions (AND/OR)\n    - Joins across multiple GET requests\n    - Aggregations (COUNT, AVG, SUM, etc.)\n    - Analysis of results\n\nReturns:\n    The API response data and the table name for SQL querying.",
+    "params": [
+      "task_description*:string",
+      "service_name*:string",
+      "endpoint*:string",
+      "fetch_all:boolean",
+      "path_params:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]",
+      "query_params:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]",
+      "table_name:[{'type': 'string'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "endpoint",
+      "service_name",
+      "task_description"
+    ]
+  },
+  {
+    "name": "infoblox-portal_make_post_request",
+    "description": "Execute a POST request to create new objects or perform complex analysis.\n\nCalling this tool will surface a UI confirmation form for the user with the ability\nto edit fields before any changes are committed. Call this tool directly when the user asks to update\nor modify something \u2014 you do not need to ask for permission or clarification first.\n\nAny items in body or query_params will be pre-populated in the confirmation form shown to the user.\nAlways populate these arguments where possible, either from the user's request or best inference.",
+    "params": [
+      "task_description*:string",
+      "service_name*:string",
+      "endpoint*:string",
+      "body:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]",
+      "path_params:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]",
+      "query_params:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "endpoint",
+      "service_name",
+      "task_description"
+    ]
+  },
+  {
+    "name": "infoblox-portal_make_put_request",
+    "description": "Execute a PUT request to create or replace objects.\n\nCalling this tool will surface a UI confirmation form for the user with the ability\nto edit fields before any changes are committed. Call this tool directly when the user asks to update\nor modify something \u2014 you do not need to ask for permission or clarification first.\n\nAny items in body or query_params will be pre-populated in the confirmation form shown to the user.\nAlways populate these arguments where possible, either from the user's request or best inference.",
+    "params": [
+      "task_description*:string",
+      "service_name*:string",
+      "endpoint*:string",
+      "body:[{'additionalProperties': True, 'description': 'Body to include with the request', 'type': 'object'}, {'type': 'null'}]",
+      "path_params:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]",
+      "query_params:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "endpoint",
+      "service_name",
+      "task_description"
+    ]
+  },
+  {
+    "name": "infoblox-portal_make_patch_request",
+    "description": "Execute a PATCH request to update existing objects.\n\nCalling this tool will surface a UI confirmation form for the user with the ability\nto edit fields before any changes are committed. Call this tool directly when the user asks to update\nor modify something \u2014 you do not need to ask for permission or clarification first.\n\nAny items in body or query_params will be pre-populated in the confirmation form shown to the user.\nAlways populate these arguments where possible, either from the user's request or best inference.",
+    "params": [
+      "task_description*:string",
+      "service_name*:string",
+      "endpoint*:string",
+      "body:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]",
+      "path_params:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]",
+      "query_params:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "endpoint",
+      "service_name",
+      "task_description"
+    ]
+  },
+  {
+    "name": "infoblox-portal_make_delete_request",
+    "description": "Execute a DELETE request to remove objects.\n\nCalling this tool will surface a UI confirmation form for the user with the ability\nto edit fields before any changes are committed. Call this tool directly when the user asks to update\nor modify something \u2014 you do not need to ask for permission or clarification first.\n\nAny items in body or query_params will be pre-populated in the confirmation form shown to the user.\nAlways populate these arguments where possible, either from the user's request or best inference.",
+    "params": [
+      "task_description*:string",
+      "service_name*:string",
+      "endpoint*:string",
+      "body:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]",
+      "path_params:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]",
+      "query_params:[{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "endpoint",
+      "service_name",
+      "task_description"
+    ]
+  },
+  {
+    "name": "infoblox-portal_network_entity_search",
+    "description": "Search Infoblox/BloxOne entities (hosts, IPs, DNS records, assets, tags, users, etc.)\nacross the customer's environment using the Global Search API. Hits are only returned\nfor exact matches to the query.\n\nNot for web/internet search or public external resources.\n\nReturns a list of dicts containing metadata for matched entities.",
+    "params": [
+      "query*:string"
+    ],
+    "required": [
+      "query"
+    ]
+  },
+  {
+    "name": "infoblox-portal_list_all_cubes",
+    "description": "List all available CubeJS cubes and their descriptions.\n\nUse this tool to discover what analytical data cubes are available.\nEach cube represents a dataset that can be queried for insights.\nAvailable cubes cover areas including: DNS (activity logs, metrics), DHCP (activity logs, metrics), Tokens (utilization only, capacity is in services), Insights/Actions (network, config, security, Infoblox IQ, assets), Assets (inventory, users, network interfaces, discovery provider details, insights).\n\nWhen 5 or fewer cubes exist, full details (dimensions, measures, segments)\nare automatically included. For more than 5 cubes, use `get_cube_info` to\nget detailed information about a specific cube before querying.\n\nReturns a list of cubes with:\n- name: The cube identifier to use in queries\n- title: Human-readable name\n- description: What data the cube contains\n- type: Whether it's a 'cube' or 'view'\n- dimensions, measures, segments: (only when <= 5 cubes)",
+    "params": [],
+    "required": []
+  },
+  {
+    "name": "infoblox-portal_get_cube_info",
+    "description": "Get detailed metadata for a specific CubeJS cube.\n\nReturns comprehensive information about the cube including:\n- Dimensions: Fields you can group by or filter on (e.g., device_ip, timestamp)\n- Measures: Aggregatable values (e.g., count, sum, average)\n- Segments: Pre-defined filters that can be applied\n\nUse this information to construct queries with the `query_cube` tool.\n\nExample dimension types:\n- string: Text values for filtering/grouping\n- number: Numeric values\n- time: Timestamps that support time-based analysis\n- boolean: True/false values\n\nExample measure types:\n- count: Number of records\n- sum: Total of numeric values\n- avg: Average value\n- min/max: Extreme values",
+    "params": [
+      "cube_name*:string"
+    ],
+    "required": [
+      "cube_name"
+    ]
+  },
+  {
+    "name": "infoblox-portal_query_cube",
+    "description": "Execute a CubeJS query and store results for SQL analysis.\n\nThis tool queries the specified cube with the given parameters and stores\nthe results in a Parquet file that can be queried with `query_stored_data`.\n\nQuery Building Tips:\n1. Always use fully qualified names (CubeName.field) for measures and dimensions\n2. Use get_cube_info first to see available fields\n3. Time dimensions support relative ranges like '24 hours', '7 days' (auto-converted to date tuples)\n4. Filters use operators like: equals, notEquals, contains, gt, gte, lt, lte\n\nCommon Patterns:\n- Time series: Add time_dimensions with granularity for trends over time\n- Top N: Use order with limit to get highest/lowest values\n- Filtering: Use filters to narrow down to specific criteria\n- Grouping: Add dimensions to segment data by categories\n\nReturns:\n    Table name and metadata for use with query_stored_data tool.",
+    "params": [
+      "task_description*:string",
+      "cube_name*:string",
+      "measures*:array",
+      "dimensions:[{'items': {'type': 'string'}, 'type': 'array'}, {'type': 'null'}]",
+      "time_dimensions:[{'items': {'additionalProperties': True, 'type': 'object'}, 'type': 'array'}, {'type': 'null'}]",
+      "filters:[{'items': {'additionalProperties': True, 'type': 'object'}, 'type': 'array'}, {'type': 'null'}]",
+      "order:[{'additionalProperties': {'enum': ['asc', 'desc'], 'type': 'string'}, 'type': 'object'}, {'type': 'null'}]",
+      "limit:[{'type': 'integer'}, {'type': 'null'}]",
+      "offset:[{'type': 'integer'}, {'type': 'null'}]",
+      "table_name:[{'type': 'string'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "cube_name",
+      "measures",
+      "task_description"
+    ]
+  },
+  {
+    "name": "infoblox-portal_query_stored_data",
+    "description": "Execute a SQL query against stored API response data using DuckDB.\n\nThis tool allows you to:\n- Query data from previous GET requests using standard SQL\n- Join data across multiple API responses\n- Filter, aggregate, and analyze data with full SQL capabilities\n\nTable naming: Tables are named based on the service, method, and endpoint.\nUse the table_name returned from make_get_request (e.g., 'ipamsvc_get_ipam_subnet.parquet')\n\nDuckDB SQL Features:\n- Standard SQL: SELECT, WHERE, JOIN, GROUP BY, ORDER BY, etc.\n- Aggregations: COUNT(), SUM(), AVG(), MIN(), MAX()\n- Window functions, CTEs, and more\n\nExamples:\n- Simple query: \"SELECT * FROM ipamsvc_get_ipam_subnet.parquet WHERE address LIKE '10.%'\"\n- Nested field filtering: \"SELECT * FROM dns_get_records.parquet WHERE data.type = 'A'\"\n- Join: \"SELECT a.*, b.name FROM table1.parquet a JOIN table2.parquet b ON a.id = b.id\"\n- Aggregate: \"SELECT status, COUNT(*) as count FROM ipamsvc_get_ipam_subnet.parquet GROUP BY status\"\n- List files: \"SELECT * FROM glob('*.parquet')\" to see available tables",
+    "params": [
+      "task_description*:string",
+      "sql_query*:string",
+      "output_table_name:[{'type': 'string'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "sql_query",
+      "task_description"
+    ]
+  },
+  {
+    "name": "infoblox-portal_generate_chart",
+    "description": "Generate a formatted A2UI chart component from a stored Parquet table.\n\nThe chart is registered in the ChartRegistry under a human-readable ID\n(HRID) and can be rendered via 'ui://charts/{hrid}'.  Rehydration steps\n(the upstream query pipeline that produced the table) are derived\nautomatically from audit artifacts \u2014 no manual specification required.\nWhen the resource is accessed, any duckdb_query steps are re-run so the\nchart always reflects the latest Parquet data.\n\nWhen the source table has one row per entity rather than one row per\ncategory, supply group_by_column, aggregation, and aggregation_alias to\npre-aggregate the data before charting.",
+    "params": [
+      "task_description*:string",
+      "table_hrid*:string",
+      "title*:string",
+      "chart_type*:string",
+      "x_axis_column*:string",
+      "series_columns*:array",
+      "group_by_column:[{'type': 'string'}, {'type': 'null'}]",
+      "aggregation:[{'type': 'string'}, {'type': 'null'}]",
+      "aggregation_alias:[{'type': 'string'}, {'type': 'null'}]"
+    ],
+    "required": [
+      "chart_type",
+      "series_columns",
+      "table_hrid",
+      "task_description",
+      "title",
+      "x_axis_column"
+    ]
+  },
+  {
+    "name": "infoblox-portal_user_action",
+    "description": "Handle A2UI user-action events.\n\nThe A2UI client calls this tool when a user interacts with an\naction-bearing component (e.g. a form submit button).  Routing\nis based on the ``name`` argument.",
+    "params": [
+      "name*:string",
+      "context:object"
+    ],
+    "required": [
+      "name"
+    ]
+  },
+  {
+    "name": "infoblox-portal_list_tools",
+    "description": "Return the catalog of A2UI tools callable via call_tool.",
+    "params": [],
+    "required": []
+  },
+  {
+    "name": "infoblox-portal_call_tool",
+    "description": "Invoke an A2UI tool by name.\n\nThe A2UI client calls this tool to execute a dynamic UI action.\nUse ``list_tools`` to discover available tool names and their schemas.",
+    "params": [
+      "name*:string",
+      "arguments:object"
+    ],
+    "required": [
+      "name"
+    ]
+  },
+  {
+    "name": "infoblox-portal_read_resource",
+    "description": "Read a resource by its URI.\n\nFor static resources, provide the exact URI. For templated\nresources, provide the URI with template parameters filled in.\n\nReturns the resource content as a string. Binary content is\nbase64-encoded.",
+    "params": [
+      "uri*:string"
+    ],
+    "required": [
+      "uri"
+    ]
+  }
+]
