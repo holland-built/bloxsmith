@@ -46,6 +46,35 @@ the background at login, and `bloxsmith update` upgrades in place.
 > prove publisher identity, since checksums ship alongside the archive.
 > Signature verification (cosign) is the planned hardening step.
 
+### Windows
+
+No winget. The primary path is **download-inspect-run** `install.ps1` — no admin,
+no Docker:
+
+```powershell
+iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1
+# review install.ps1, then run it (for this process only):
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+`install.ps1` resolves the latest version from `checksums.txt`, downloads
+`bloxsmith_<ver>_windows_amd64.zip`, verifies its SHA-256 (**fail-closed**),
+installs `bloxsmith.exe` to `%LOCALAPPDATA%\Programs\Bloxsmith`, and adds that
+dir to your **user** PATH (reopen the shell to pick it up). Flags: `-Version
+vX.Y.Z` to pin, `-Prefix DIR` to install elsewhere.
+
+Secondary path — skip the script and download the
+`bloxsmith_<ver>_windows_amd64.zip` directly from the
+[latest release](https://github.com/holland-built/bloxsmith/releases/latest),
+unzip it, and run `bloxsmith.exe`.
+
+The app self-updates in place (in-app **Update now** / `bloxsmith update`) — there
+is no `winget upgrade` step. As with the shell installer, the SHA-256 check proves
+integrity, not publisher identity; the binary is unsigned.
+
+> **Note:** install.ps1 is new and tested on PowerShell 5.1+/7 — run it once on a
+> real Windows machine to confirm before advertising it for wide use.
+
 ---
 
 ## SE demo path (docker run)
