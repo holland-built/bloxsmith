@@ -173,9 +173,14 @@ function ViewOptions(){
   .update-menu-link{font-size:var(--t11);color:var(--text-dim);text-decoration:underline;text-underline-offset:2px;}
   .update-modal-backdrop{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
     background:rgba(0,0,0,.5);backdrop-filter:blur(2px);}
-  .update-modal{min-width:300px;max-width:90vw;padding:20px 22px;
+  .update-modal{position:relative;min-width:300px;max-width:90vw;padding:20px 22px;
     background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);
     box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:14px;}
+  .update-modal-x{position:absolute;top:10px;right:12px;width:24px;height:24px;padding:0;
+    display:inline-flex;align-items:center;justify-content:center;background:none;border:none;
+    color:var(--text-dim);font-size:var(--t12);cursor:pointer;border-radius:var(--r-ctl);}
+  .update-modal-x:hover{color:var(--text);background:var(--raised);}
+  .update-modal-uptodate{display:flex;align-items:center;gap:8px;font-size:var(--t12);color:var(--text);padding-right:20px;}
   .update-modal-title{font-size:var(--t12);color:var(--text);font-weight:600;}
   .update-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
   .update-step{display:flex;align-items:center;gap:10px;font-size:var(--t12);color:var(--text-dim);}
@@ -237,6 +242,7 @@ function useSelfUpdate(){
   const [info,setInfo]=useState(null);      // {current,latest,available,url,selfUpdate}
   const [apply,setApply]=useState(null);    // {phase,pct,error} while a self-update runs
   const [justUpdated,setJustUpdated]=useState('');
+  const applying=useRef(false);             // guards against re-triggering an in-flight apply
   const recheck=async()=>{
     try{
       const r=await fetch('/api/update/check',{cache:'no-store'});
@@ -258,32 +264,43 @@ function useSelfUpdate(){
      /api/update/apply, then poll /api/update/status until the new binary swaps
      in and restarts, then reload so the fresh UI loads. Docker builds return
      selfUpdate:false and never reach this branch — they keep the passive script. */
+  // "already up to date" is a benign no-op, NOT a failure — the server returns it
+  // when you click Update while current==latest (e.g. right after an update, before
+  // the pill re-checks away). Show a friendly note, re-check (which hides the pill),
+  // and auto-close — never a red "Update failed".
+  const finish=(msg)=>{
+    applying.current=false;
+    if(/up to date/i.test(msg||'')){
+      setApply({phase:'uptodate'});
+      recheck();
+      setTimeout(()=>setApply(null),2500);
+    }else{
+      setApply({phase:'error',pct:0,error:msg});
+    }
+  };
   const runApply=async()=>{
+    if(applying.current) return;           // one apply at a time — no repeat modals
+    applying.current=true;
     setApply({phase:'starting',pct:1});
+    const reloadTo=()=>{ try{sessionStorage.setItem('bloxsmith_updated_to', (info&&info.latest)||'');}catch(e){} setTimeout(()=>location.reload(),2800); };
     try{
       const r=await fetch('/api/update/apply',{method:'POST',cache:'no-store'});
-      if(!r.ok){ const j=await r.json().catch(()=>({})); setApply({phase:'error',pct:0,error:j.error||('HTTP '+r.status)}); return; }
+      if(!r.ok){ const j=await r.json().catch(()=>({})); finish(j.error||('HTTP '+r.status)); return; }
       const poll=setInterval(async()=>{
         try{
           const s=await fetch('/api/update/status',{cache:'no-store'}).then(x=>x.json());
+          if(s.phase==='error'){ clearInterval(poll); finish(s.error); return; }
           setApply(s);
-          if(s.phase==='error'){ clearInterval(poll); return; }
-          if(s.phase==='done'||s.pct>=100){ clearInterval(poll);
-            try{sessionStorage.setItem('bloxsmith_updated_to', (apply&&apply.version)||(info&&info.latest)||'');}catch(e){}
-            setTimeout(()=>location.reload(),2500); }
+          if(s.phase==='done'||s.pct>=100){ clearInterval(poll); applying.current=false; reloadTo(); }
         }catch(e){ /* server mid-restart — the swap is happening; reload shortly */
-          clearInterval(poll);
-          try{sessionStorage.setItem('bloxsmith_updated_to', (apply&&apply.version)||(info&&info.latest)||'');}catch(e2){}
-          setTimeout(()=>location.reload(),3000); }
+          clearInterval(poll); applying.current=false; setApply({phase:'restarting',pct:95}); reloadTo(); }
       },1200);
     }catch(e){ /* The POST connection dropped — the app is served BY the binary being
         swapped, so an unreachable origin means it's restarting into the new version (a
         success race), NOT a failure. On a real apply failure the old binary keeps
         serving (it never releases the socket), so a dropped connection is always a
         restart. Show "restarting…" and reload, don't scare the user with an error. */
-      try{sessionStorage.setItem('bloxsmith_updated_to', (info&&info.latest)||'');}catch(e2){}
-      setApply({phase:'restarting',pct:95});
-      setTimeout(()=>location.reload(),3000); }
+      applying.current=false; setApply({phase:'restarting',pct:95}); reloadTo(); }
   };
 
   return {info,recheck,apply,runApply,justUpdated,dismissToast:()=>setJustUpdated(''),dismissApply:()=>setApply(null)};
@@ -317,14 +334,26 @@ function UpdateModal({apply,latest,onDismiss}){
     {key:'restart', label:'Restart', phases:['restarting','done']},
   ];
   const err=apply.phase==='error';
+  const uptodate=apply.phase==='uptodate';
+  const terminal=err||uptodate;   // states the user can freely dismiss / click-away
   const pct=apply.pct||0;
   let active=STEPS.findIndex(s=>s.phases.includes(apply.phase));
   if(active<0) active=err?Math.min(4,Math.floor(pct/20)):0;
   const restarting=apply.phase==='done'||pct>=100;
   const ver=String(apply.version||latest||'').replace(/^v/,'');
-  return <div className="update-modal-backdrop" role="dialog" aria-modal="true" aria-label="Software update in progress"
-    onClick={err?onDismiss:undefined}>
+  // Benign "already on the latest" — not a failure. Compact confirmation, auto-dismisses.
+  if(uptodate) return <div className="update-modal-backdrop" role="dialog" aria-modal="true" aria-label="Already up to date" onClick={onDismiss}>
     <div className="update-modal" onClick={e=>e.stopPropagation()}>
+      <button type="button" className="update-modal-x" aria-label="Close" onClick={onDismiss}>✕</button>
+      <div className="update-modal-uptodate"><span className="update-toast-check" aria-hidden="true">✓</span> You’re on the latest version.</div>
+    </div>
+  </div>;
+  return <div className="update-modal-backdrop" role="dialog" aria-modal="true" aria-label="Software update in progress"
+    onClick={terminal?onDismiss:undefined}>
+    <div className="update-modal" onClick={e=>e.stopPropagation()}>
+      {/* ALWAYS closable — the modal must never trap the user, even mid-update (the
+          swap continues server-side and the page reloads on completion regardless). */}
+      <button type="button" className="update-modal-x" aria-label="Close" onClick={onDismiss}>✕</button>
       <div className="update-modal-title mono">Updating → v{ver}</div>
       <ol className="update-steps">
         {STEPS.map((s,i)=>{
