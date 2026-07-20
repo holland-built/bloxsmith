@@ -10,6 +10,7 @@ set -eu
 REPO="holland-built/bloxsmith"
 PREFIX="${HOME}/.local/bin"
 VERSION="latest"
+SERVICE=auto   # auto = prompt if interactive; set by --service / --no-service
 
 usage() {
     cat <<EOF
@@ -20,6 +21,8 @@ Usage: sh install.sh [options]
 Options:
   --version vX.Y.Z   Install a specific release (default: latest)
   --prefix DIR       Install directory (default: \$HOME/.local/bin)
+  --service          Also register the login service (no prompt)
+  --no-service       Skip the login-service step (no prompt)
   --help             Show this help
 
 Installs the single self-contained bloxsmith binary. No Docker required.
@@ -32,6 +35,8 @@ while [ $# -gt 0 ]; do
                    VERSION="$2"; shift 2 ;;
         --prefix)  [ $# -ge 2 ] || { echo "error: --prefix needs a value" >&2; exit 2; }
                    PREFIX="$2"; shift 2 ;;
+        --service)    SERVICE=yes; shift ;;
+        --no-service) SERVICE=no;  shift ;;
         --help|-h) usage; exit 0 ;;
         *) echo "error: unknown option '$1' (try --help)" >&2; exit 2 ;;
     esac
@@ -137,6 +142,40 @@ install -m 0755 "$BIN" "$PREFIX/bloxsmith" 2>/dev/null \
 
 echo ""
 echo "Installed bloxsmith ${NUM} -> ${PREFIX}/bloxsmith"
+
+# --- optional login service -------------------------------------------------
+# The background service does NOT read your shell env — it loads keys from
+#   ~/Library/Application Support/bloxsmith/.env  (macOS)
+# so set INFOBLOX_API_KEY there for it to start authenticated.
+DO_SERVICE="$SERVICE"
+if [ "$DO_SERVICE" = "auto" ]; then
+    if [ -t 0 ]; then
+        printf 'Run Bloxsmith at login as a background service? [y/N] '
+        REPLY=""
+        read REPLY || REPLY=""
+        case "$REPLY" in
+            y|Y|yes) DO_SERVICE=yes ;;
+            *)       DO_SERVICE=no ;;
+        esac
+    else
+        DO_SERVICE=no   # non-interactive (CI/piped): never hang, default to no
+    fi
+fi
+
+if [ "$DO_SERVICE" = "yes" ]; then
+    echo ""
+    if "$PREFIX/bloxsmith" service install; then
+        echo "Registered the login service."
+        echo "NOTE: the service loads keys from ~/Library/Application Support/bloxsmith/.env"
+        echo "      (macOS), not your shell — set INFOBLOX_API_KEY there so it starts authenticated."
+    else
+        echo "WARNING: 'bloxsmith service install' failed — the binary is installed; retry later" >&2
+        echo "         with: ${PREFIX}/bloxsmith service install" >&2
+    fi
+else
+    echo ""
+    echo "Skipped the login service. Register it later with: ${PREFIX}/bloxsmith service install"
+fi
 
 # --- PATH advice (we never edit your shell rc) ------------------------------
 case ":${PATH}:" in
