@@ -77,6 +77,10 @@ vault.json
 scripts/out_*.json
 scripts/out_*.txt
 scripts/catalog_*.py
+# ...but the nightly MCP drift-check workflow needs these two tracked: the tool
+# catalog script it runs, and the baseline snapshot it diffs against.
+!scripts/catalog_tools.py
+!scripts/out_tools.json
 scripts/test_queries.py
 scripts/test_workarounds.py
 scripts/test_resource_read.py
