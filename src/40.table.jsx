@@ -146,7 +146,7 @@ function IdCell({value,label}){
     {tail?<span className="dt-id-tail">{tail}</span>:null}
   </span>;
 }
-const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,showPeekItem,isPeekOpen,selectable,rowApi,diff,showDiff}){
+const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,clickable,showPeekItem,peekHint,isPeekOpen,selectable,rowApi,diff,showDiff}){
   const align=c=>c.align||(c.mono?'right':'left');
   const isNum=c=>align(c)==='right';
   const fx=useFilters();
@@ -188,7 +188,8 @@ const DTRow=React.memo(function DTRow({r,rkey,cols,rowId,isCursor,isSel,isFlash,
   // announcing collapsed/expanded would lie. aria-controls is deliberately omitted:
   // PeekDrawer's aside carries no DOM id to point at.
   return <tr id={rowId||undefined}
-    className={(clickable?'clickable':'')+(isCursor?' cursor':'')+(isFlash?' flash':'')}
+    className={(clickable?'clickable':'')+(!clickable&&peekHint?' peek-hint':'')+(isCursor?' cursor':'')+(isFlash?' flash':'')}
+    title={!clickable&&peekHint?'More details available — open the ⋮ menu → View details':undefined}
     aria-selected={isCursor?'true':undefined}
     aria-expanded={isPeekOpen==null?undefined:(isPeekOpen?'true':'false')}
     role="row" tabIndex={clickable?0:undefined}
@@ -659,7 +660,7 @@ function defaultPeekRender(columns){
 function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   tableId,rowKey,renderPeek,selectable,bulkActions,filterable,filterKeys,initialPeekKey,
   maxRows,problemsOnly,scrollBody,columnToggle,searchSchema,query,onQuery,
-  diffMap,diffGhosts,peekOnClick}){
+  diffMap,diffGhosts,peekOnClick,error,onRetry}){
   const power=usePower();
   const fx=useFilters();
   const {filters:globalFilters}=fx;
@@ -884,9 +885,15 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     cheatPanelRef.current.focus();
   },[cheatOpen]);
 
+  // Single source of truth for "the search box is shown" — used by the predicate here,
+  // by `showFilter` (toolbar), and by `ownFilterActive` (empty-state diagnostic/chip).
+  // MUST key off `rows.length` (the raw prop), identical to showFilter: keying the
+  // predicate off `base.length` instead let "Problems only" shrink base ≤12 and silently
+  // stop filtering a still-visible box. The bug was the box showing but never filtering.
+  const searchShown=filterable!==false&&(filterable||rows.length>12);
   const filtered=useMemo(()=>{
     let out=base;
-    if(filterable&&filter.trim()){
+    if(searchShown&&filter.trim()){
       const _tokens=parseQuery(filter);
       const _pred=buildPredicate(_tokens,_schema);
       out=out.filter(_pred);
@@ -896,7 +903,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
     const active=globalFilters.filter(f=>columns.some(c=>c.key===f.field));
     if(active.length) out=out.filter(r=>active.every(f=>filterMatchesRow(r,f)));
     return out;
-  },[base,filter,filterable,_schema,columns,globalFilters]);
+  },[base,filter,searchShown,_schema,columns,globalFilters]);
 
   const sorted=useMemo(()=>{
     if(!sort||!sort.length) return filtered;
@@ -1225,6 +1232,13 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // drawer's own "Open full view →" foot (onFull, openPeekAt) carries the nav path back.
   const rowClickable=!!onRowClick||!!(peekOnClick&&renderPeek);
   const showPeekItem=!!effPeek;
+  // Fix 3 (drill-down discoverability): rows that HAVE a reachable peek (via the
+  // kebab "View details") but do NOT open it on row-click look dead. A behavior
+  // change (row-click→peek) is impossible without regressing cell click-to-copy —
+  // making rows clickable DISABLES copyCell (see ~1173 + copy-cell.spec.ts on
+  // #security). So instead surface a subtle, honest hover hint (title tooltip +
+  // class hook) on those rows; the click gesture is left untouched.
+  const peekHint=showPeekItem&&!rowClickable;
   // rowExpands: rows whose OWN click opens the peek — the only ones aria-expanded can
   // honestly describe (activate() gives onRowClick priority).
   const rowExpands=!onRowClick&&!!(peekOnClick&&renderPeek);
@@ -1233,14 +1247,17 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   const allSel=allKeys.length>0&&allKeys.every(k=>selected.has(k));
   const toggleAll=()=>setSelected(prev=>{ const n=new Set(prev); if(allSel) allKeys.forEach(k=>n.delete(k)); else allKeys.forEach(k=>n.add(k)); return n; });
 
-  const showFilter=filterable!==false&&(filterable||rows.length>12);
+  const showFilter=searchShown;
   const showToolbar=showCsv||showFilter||problemsOnly||showCols||showFacets;
   const noIssues=problemsOnly&&probOn&&probCount===0;
   // Shared empty-state inputs: which filters are actively hiding rows — this
   // table's own BQL/text query AND any cross-filter chip whose field is a column
   // here — plus one action that clears exactly those (funnels through the same
   // setFilter / fx.remove the FilterBar × already uses).
-  const ownFilterActive=!!(filterable&&filter.trim());
+  // Same condition as the search predicate (fix above) + showFilter: an auto-enabled
+  // table (>12 rows, no explicit `filterable`) whose search hides every row must still
+  // show the "filtered — clear" diagnostic + chip, not a bare "No rows".
+  const ownFilterActive=!!(searchShown&&filter.trim());
   const crossFilters=useMemo(()=>globalFilters.filter(f=>columns.some(c=>c.key===f.field)),[globalFilters,columns]);
   const anyFilterActive=ownFilterActive||crossFilters.length>0;
   const clearAllFilters=useCallback(()=>{
@@ -1573,7 +1590,9 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         <tbody>
           {visible.length===0
             ? <tr><td className="dt-empty" colSpan={(effCols.length||1)+1+(selectable?1:0)+(diffMap?1:0)}>
-                {noIssues
+                {error
+                  ? <ErrorState error={error} onRetry={onRetry}/>
+                  : noIssues
                   ? <span className="prob-none">No issues · <button className="prob-none-btn" onClick={()=>setProb(false)}>Show all {data.length}</button></span>
                   : anyFilterActive
                     ? <EmptyState
@@ -1593,7 +1612,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
                 // per open/close, so the memo keeps every other row from re-rendering.
                 return <DTRow key={rk} r={r} rkey={rk} cols={effCols} rowId={rowIdOf(ri)}
                   isCursor={ri===cursor} isSel={selected.has(rk)} isFlash={flashed.has(rk)}
-                  clickable={rowClickable} showPeekItem={showPeekItem} selectable={!!selectable} rowApi={apiRef}
+                  clickable={rowClickable} showPeekItem={showPeekItem} peekHint={peekHint} selectable={!!selectable} rowApi={apiRef}
                   isPeekOpen={rowExpands?!!(power&&power.peek&&power.peek.tableId===id&&power.peek.row===r):undefined}
                   diff={diffMap?diffMap.get(rk):null} showDiff={!!diffMap}/>;
               })}

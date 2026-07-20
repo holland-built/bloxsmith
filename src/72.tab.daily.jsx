@@ -172,12 +172,12 @@ function DailyTab(){
         <span className="dly-base mono">{baseLabel}</span>
       </div>
       <div style={{display:'flex',alignItems:'center',gap:12}}>
-        <div className="dly-seg" role="group" aria-label="Comparison period">
-          <button className={'dly-seg-btn'+(period==='yesterday'?' on':'')} disabled={!yesterdaySnap}
-            title={yesterdaySnap?undefined:'A prior daily snapshot is needed'} onClick={()=>setPeriod('yesterday')}>vs yesterday</button>
-          <button className={'dly-seg-btn'+(period==='7d'?' on':'')} disabled={!weekSnap}
-            title={weekSnap?undefined:'Needs a snapshot 7+ days old'} onClick={()=>setPeriod('7d')}>vs 7 days</button>
-        </div>
+        {yesterdaySnap&&weekSnap&&<div className="dly-seg" role="group" aria-label="Comparison period">
+          <button className={'dly-seg-btn'+(period==='yesterday'?' on':'')}
+            onClick={()=>setPeriod('yesterday')}>vs yesterday</button>
+          <button className={'dly-seg-btn'+(period==='7d'?' on':'')}
+            onClick={()=>setPeriod('7d')}>vs 7 days</button>
+        </div>}
         <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
       </div>
     </div>
@@ -245,7 +245,7 @@ function DailyTab(){
           <span className="dly-trow-l">{ts.l}</span>
           <span className="dly-trow-s">{ts.s.length>=2
             ? <Sparkline values={ts.s} width={220} height={30} color={ts.c} fill={1}/>
-            : <span className="dly-note" style={{marginTop:0}}>building history…</span>}</span>
+            : null}</span>
           <span className="dly-trow-v mono">{ts.s.length?ts.s[ts.s.length-1]:'—'}</span>
         </div>)}
       </Panel>

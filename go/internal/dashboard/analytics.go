@@ -71,34 +71,6 @@ func (s *Service) actionsAsync(ctx context.Context) (any, bool) {
 	return v, true
 }
 
-// --- MCP events (server.py fetch_mcp_events 4188 / _fetch_mcp_events_async) ---
-
-// FetchMCPEvents is fetch_mcp_events: the iq-actions_get_events anomaly stream.
-// Degrades to an empty list on any error.
-func (s *Service) FetchMCPEvents(ctx context.Context, limit, offset int) []any {
-	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
-		return []any{}
-	}
-	text, err := s.Mcp.CallTool(ctx, "iq-actions_get_events", map[string]any{
-		"limit": limit, "offset": offset,
-	})
-	if err != nil {
-		return []any{}
-	}
-	var v any
-	if json.Unmarshal([]byte(text), &v) != nil {
-		return []any{}
-	}
-	m, ok := v.(map[string]any)
-	if !ok {
-		return []any{}
-	}
-	if events, ok := m["events"].([]any); ok {
-		return events
-	}
-	return []any{}
-}
-
 // --- SOC Insights (server.py fetch_insights 4252 / norm_insights 4229) -------
 
 // FetchInsights is fetch_insights: the direct REST /api/v1/insights read (the

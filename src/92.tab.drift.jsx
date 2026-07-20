@@ -14,7 +14,6 @@ function DriftTab(){
   const [checking,setChecking]=useState(false);
   const [result,setResult]=useState(null);
   const [err,setErr]=useState(null);
-  const [showExample,setShowExample]=useState(false); // sample-render an illustrative drift result
   if(locked) return null;
 
   const templates=(Array.isArray(templatesApi.data)?templatesApi.data:[]).filter(t=>!t.type||t.type==='site');
@@ -67,11 +66,7 @@ function DriftTab(){
           <div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
             <button className="btn" disabled={checking||!template} onClick={check}
               {...bind({title:'Check drift',rows:[['What it does','Compare your site template to the live Infoblox state and report the differences. Read-only — it changes nothing.']]})}>{checking?'Checking…':'Check drift'}</button>
-            <KebabMenu label="More drift actions" items={[
-              {label:showExample?'Hide example':'Show example', run:()=>setShowExample(v=>!v)},
-            ]}/>
           </div>
-          {showExample?<MarrisExampleDiff/>:null}
         </div>
       </Panel>
       {result?<Panel title="Result">
