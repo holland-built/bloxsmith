@@ -184,8 +184,27 @@ func (m *Manager) SwitchAccount(accountID string) (map[string]any, error) {
 		m.jwtIssue = time.Now()
 	}
 	m.active = accountID
-	m.cache.Invalidate() // cached rows belong to the previous tenant
+	m.cache.Rotate() // rotate: bump gen (fence in-flight fetches) + drop prior-tenant rows
 	return map[string]any{"ok": true, "active": accountID, "name": known[accountID]}, nil
+}
+
+// ResetActive clears the portal account-switch state (active back to the home
+// account, JWT timestamp zeroed). It is called by the vault's coordinated reset
+// on a vault-tenant mutation so the account context can't outlive the tenant it
+// belonged to. It does NOT touch the auth override or the cache — the coordinated
+// caller (main's authReset) clears the override and rotates the cache.
+func (m *Manager) ResetActive() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.active = m.home
+	m.jwtIssue = time.Time{}
+}
+
+// Active returns the currently active account id (lock-guarded).
+func (m *Manager) Active() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.active
 }
 
 // --- Python-semantics helpers -----------------------------------------------

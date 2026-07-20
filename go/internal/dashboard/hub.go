@@ -35,6 +35,7 @@ func (s *Service) FetchHubHealth() []map[string]any {
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.([]map[string]any)
 	}
+	g := s.Cache.Gen()
 	services := s.Rest.Get("/api/infra/v1/detail_services", map[string]string{"_limit": "500"})
 	rollup := make([]map[string]any, 0, len(hubBuckets))
 	for _, b := range hubBuckets {
@@ -89,7 +90,7 @@ func (s *Service) FetchHubHealth() []map[string]any {
 			"meta":        meta,
 		})
 	}
-	s.Cache.Set(ck, rollup)
+	s.Cache.SetGen(ck, rollup, g)
 	return rollup
 }
 
@@ -102,6 +103,7 @@ func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
 	}
+	g := s.Cache.Gen()
 	t1 := time.Now().Unix()
 	t0 := t1 - int64(windowSecs)
 	rows := s.Rest.Get("/api/dnsdata/v2/dns_event", map[string]string{
@@ -140,7 +142,7 @@ func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
 		"logged":  logged,
 		"total":   len(rows),
 	}
-	s.Cache.Set(ck, result)
+	s.Cache.SetGen(ck, result, g)
 	return result
 }
 
@@ -213,6 +215,7 @@ func (s *Service) FetchHubDomains() map[string]any {
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
 	}
+	g := s.Cache.Gen()
 
 	policies := s.Rest.Get("/api/atcfw/v1/security_policies", map[string]string{"_limit": "100"})
 	feeds := s.Rest.Get("/api/atcfw/v1/threat_feeds", map[string]string{"_limit": "100"})
@@ -373,6 +376,6 @@ func (s *Service) FetchHubDomains() map[string]any {
 		"dfp_services":      dfpServices,
 		"host_inventory":    hostInventory,
 	}
-	s.Cache.Set(ck, result)
+	s.Cache.SetGen(ck, result, g)
 	return result
 }
