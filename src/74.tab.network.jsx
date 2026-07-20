@@ -34,7 +34,6 @@ function SectionHead({title,children}){
 
 const NET_LEASE_COLS=[
   {key:'addr',label:'IP',mono:true,align:'left',minWidth:130},
-  {key:'mac',label:'MAC',mono:true,align:'left',minWidth:132,render:v=>v||'—'},
   {key:'state',label:'State',align:'left',pivot:true,render:v=>StateText(v)},
   {key:'host',label:'Host'},
 ];
@@ -123,7 +122,7 @@ function NetworkTab(){
     {key:'util',label:'Utilization',align:'right',render:v=>UtilBar(v)},
     {key:'trend',label:'Trend',align:'left',spark:r=>histByAddr[r.addr]},
     {key:'site',label:'Site',hideSm:true,pivot:true},
-    ...(canEdit?[{key:'__edit',label:'',align:'right',render:(v,r)=>r.__group?null:
+    ...(canEdit?[{key:'__edit',label:'',align:'right',width:60,render:(v,r)=>r.__group?null:
       <button className="btn" onClick={e=>{e.stopPropagation();nav('editor',{type:'subnet',id:r.id||r.addr,name:r.name,cidr:r.cidr});}}>Edit subnet</button>}]:[]),
   ];
 

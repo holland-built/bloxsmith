@@ -86,10 +86,10 @@ try{
   --accent-contrast:#fff; --logo-chip:#fff;
   --accent-dim:rgba(0,112,243,.14); --ok-dim:rgba(12,206,107,.13); --warn-dim:rgba(245,166,35,.13); --crit-dim:rgba(255,68,68,.13); --border2:#1c1c1c;
 
-  --t11:11px; --t12:12px; --t13:13px; --t14:14px; --t16:16px; --t20:20px; --t28:28px;
+  --t10:10px; --t11:11px; --t12:12px; --t13:13px; --t14:14px; --t16:16px; --t20:20px; --t28:28px;
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s12:48px;
   --r-ctl:4px; --r-panel:6px;
-  --row-h:28px; --dt-fs:var(--t12);
+  --row-h:26px; --dt-fs:var(--t12);
   /* Trailing gutter column the per-row KebabMenu (⋮) lives in. */
   --dt-actions-w:28px;
   --body-table:280px; --body-chart:220px;
@@ -754,7 +754,7 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:hidden
 .groupbar{display:flex;flex-direction:column;gap:var(--s1);width:100%;min-width:0;}
 .groupbar-row{display:flex;align-items:center;gap:var(--s2);min-width:0;}
 .groupbar-row.clickable{cursor:pointer;}
-.groupbar-l{flex:0 0 40%;font-size:11.5px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'GeistMono','SFMono-Regular',ui-monospace,monospace;}
+.groupbar-l{flex:0 0 40%;font-size:var(--t12);color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'GeistMono','SFMono-Regular',ui-monospace,monospace;}
 .groupbar-track{flex:1 1 auto;height:8px;background:var(--border);border-radius:4px;overflow:hidden;min-width:0;}
 .groupbar-fill{height:100%;border-radius:4px;}
 .groupbar-v{flex:0 0 auto;font-size:var(--t11);color:var(--text);min-width:40px;text-align:right;}
@@ -778,8 +778,8 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .pbody-fill{flex:1 1 auto;min-height:0;}
 .span-2{grid-column:span 2;}
 .chart-body{height:var(--body-chart);display:flex;flex-direction:column;justify-content:center;}
-.pcard>h3{font-size:12.5px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin:0;flex-wrap:wrap;min-width:0;}
-.pcard>h3 .side{color:var(--text-faint);font-weight:500;font-size:11px;display:inline-flex;align-items:center;gap:var(--s2);flex:0 1 auto;min-width:0;flex-wrap:wrap;justify-content:flex-end;}
+.pcard>h3{font-size:var(--t13);font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin:0;flex-wrap:wrap;min-width:0;}
+.pcard>h3 .side{color:var(--text-faint);font-weight:500;font-size:var(--t11);display:inline-flex;align-items:center;gap:var(--s2);flex:0 1 auto;min-width:0;flex-wrap:wrap;justify-content:flex-end;}
 .chart-seg{display:inline-flex;align-items:center;gap:6px;}
 .chart-seg button{font:inherit;font-size:11px;background:none;border:0;padding:0;cursor:pointer;color:var(--text-faint);line-height:1;}
 .chart-seg button[aria-pressed="true"]{color:var(--accent);font-weight:600;}
@@ -828,8 +828,8 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:10px;}
 .kpi{padding:12px 13px;border-radius:var(--r-panel);background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;transition:border-color .16s ease,transform .16s ease;min-width:0;}
 .kpi:hover{border-color:var(--border-strong);transform:translateY(-2px);}
-.kpi .lbl{display:flex;align-items:center;justify-content:space-between;color:var(--text-dim);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
-.kpi .num{font-family:'GeistMono',ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:26px;font-weight:500;letter-spacing:-1px;margin-top:5px;line-height:1;}
+.kpi .lbl{display:flex;align-items:center;justify-content:space-between;color:var(--text-dim);font-size:var(--t11);font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
+.kpi .num{font-family:'GeistMono',ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:var(--t28);font-weight:500;letter-spacing:-1px;margin-top:5px;line-height:1;}
 .kpi .sub{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint);margin-top:4px;min-width:0;}
 .kpi .sub .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .trend{font-family:'GeistMono',ui-monospace,monospace;font-weight:500;flex:none;}
@@ -845,7 +845,7 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .sev.low{background:var(--raised);color:var(--text-dim);}
 
 .sec-h{display:flex;align-items:center;gap:9px;margin:0 2px;}
-.sec-h h2{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text-dim);margin:0;}
+.sec-h h2{font-size:var(--t11);font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text-dim);margin:0;}
 .sec-h .rule{flex:1;height:1px;background:var(--border);}
 
 .issues{display:flex;flex-direction:column;min-width:0;max-height:var(--body-chart);overflow-y:auto;}
@@ -854,7 +854,7 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .issue:hover{background:var(--raised);}
 .issue .rank{font-family:'GeistMono',ui-monospace,monospace;color:var(--text-faint);font-size:11px;width:16px;flex:none;}
 .issue .body{flex:1 1 150px;min-width:0;}
-.issue .body .t{font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.issue .body .t{font-weight:500;font-size:var(--t12);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .issue .body .d{color:var(--text-faint);font-size:11px;font-family:'GeistMono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 .ubar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;min-width:52px;}
@@ -864,12 +864,12 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .siterow{display:flex;align-items:center;gap:10px;min-width:0;}
 .siterow.clickable{cursor:pointer;border-radius:var(--r-ctl);padding:2px 4px;margin:0 -4px;transition:background .12s ease;}
 .siterow.clickable:hover,.siterow.clickable:focus-visible{background:var(--hover);outline:none;}
-.siterow .nm{width:96px;font-size:11.5px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'GeistMono',ui-monospace,monospace;flex:none;}
+.siterow .nm{width:96px;font-size:var(--t12);color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'GeistMono',ui-monospace,monospace;flex:none;}
 .siterow .track{flex:1;max-width:560px;height:8px;border-radius:4px;background:var(--border);overflow:hidden;min-width:0;}
 .siterow .track>i{display:block;height:100%;border-radius:4px;}
-.siterow .pc{width:38px;text-align:right;font-family:'GeistMono',ui-monospace,monospace;font-size:11.5px;flex:none;}
+.siterow .pc{width:38px;text-align:right;font-family:'GeistMono',ui-monospace,monospace;font-size:var(--t12);flex:none;}
 
-.tag{font-size:10px;padding:1px 6px;border-radius:var(--r-ctl);background:var(--raised);color:var(--text-dim);font-family:'GeistMono',ui-monospace,monospace;white-space:nowrap;display:inline-block;max-width:92px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+.tag{font-size:var(--t10);padding:1px 6px;border-radius:var(--r-ctl);background:var(--raised);color:var(--text-dim);font-family:'GeistMono',ui-monospace,monospace;white-space:nowrap;display:inline-block;max-width:92px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 .rowspark{width:56px;height:16px;flex:none;}
 
 .svc{display:flex;flex-direction:column;gap:2px;padding:7px 12px;border-radius:var(--r-ctl);background:var(--raised);border:1px solid var(--border);min-width:118px;}
@@ -877,7 +877,7 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .svc .m{font-size:11px;color:var(--text-faint);}
 
 /* refined table skin — visual only, keeps table.dt class names/behavior */
-table.dt thead th{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);}
+table.dt thead th{font-size:var(--t11);font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);}
 table.dt tbody td{border-bottom-color:var(--border2);}
 
 /* donut legend pct column + row hover (Donut restyle) */

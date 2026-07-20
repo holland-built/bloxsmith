@@ -943,19 +943,40 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // columnToggle: effective (rendered) columns = ordered cols minus hidden, pinned first.
   // Never yields an empty set; CSV/peek-title still use the full `columns`.
   const effCols=useMemo(()=>{
-    // Part 2 of the cell-legibility system — hide-all-empty-columns by default:
-    // drop any PLAIN (un-rendered, non-spark, non-id) column whose value is empty
-    // in every row. Rendered/spark/id/keepEmpty columns are always kept (they can
-    // show content regardless of the raw value). Never yields an empty set.
+    // Part 2 of the cell-legibility system — auto-hide DEAD columns in the DEFAULT
+    // view. A column is dropped only when every value across the FULL unfiltered
+    // `rows` is null/empty/whitespace — EVEN IF it has a render() (dead cols are
+    // usually render:v=>v||'—', so the old render-exemption spared exactly the columns
+    // it should kill). ALWAYS exempt: spark columns, an id column, keepEmpty:true
+    // ("emptiness IS the signal"), and control/synthetic columns whose key isn't a
+    // real row field (kebab/edit/ack). Constant-but-populated columns are KEPT (all-0
+    // or uniform-status can be signal). When the table has a column chooser
+    // (columnToggle → showCols), auto-prune is OFF — the user owns visibility there.
     const dataRows=rows||[];
+    const isBlank=v=>v==null||(typeof v==='string'?v.trim()==='':v==='');
     const pruneEmpty=cs=>{
       if(!dataRows.length) return cs;
-      const kept=cs.filter(c=> c.render||c.spark||c.id||c.type==='id'||c.keepEmpty
-        || dataRows.some(r=>{const v=r&&r[c.key]; return v!=null&&v!=='';}));
+      const kept=cs.filter(c=>{
+        if(c.spark||c.id||c.type==='id'||c.keepEmpty) return true;
+        // Control/synthetic columns (kebab actions, edit, ack) bind no row field —
+        // their key is absent from the data, so every value reads blank. NEVER prune
+        // them (that was a blocking bug: it hid Ack/Edit/Delete). A column is a prune
+        // candidate only if its key actually exists on the rows.
+        let hasKey=false;
+        for(let i=0;i<dataRows.length;i++){ if(dataRows[i]&&(c.key in dataRows[i])){ hasKey=true; break; } }
+        if(!hasKey) return true; // control column (key never set by any normalizer here) — never prune
+        // Drop ONLY a data column that is blank in EVERY row. Break early on the first
+        // non-blank value so a populated column costs ~O(1), not O(rows), per poll —
+        // and never remove a merely-constant column (all-"0"/all-same can be signal).
+        for(let i=0;i<dataRows.length;i++){ const r=dataRows[i]; if(r&&!isBlank(r[c.key])) return true; }
+        return false;
+      });
       return kept.length?kept:cs;
     };
     if(!showCols) return pruneEmpty(columns);
-    let cs=pruneEmpty(orderedAll);
+    // Column chooser present → respect the user's explicit visibility, don't auto-prune
+    // (a pruned column the chooser still lists but can't restore is a lying control).
+    let cs=orderedAll;
     if(hiddenCols.length){
       const keep=cs.filter(c=>!hiddenCols.includes(c.key));
       cs=keep.length?keep:cs;
@@ -1052,6 +1073,41 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
 
   const align=(c)=>c.align||(c.mono?'right':'left');
   const isNum=(c)=>align(c)==='right';
+  // Content-measured column widths (kills app-wide wasted horizontal space): sit the
+  // table at its real content width instead of table-layout:fixed's edge-to-edge even
+  // split. Per visible column: explicit c.width → c.minWidth → else estimate from
+  // chars = max(header label length, longest String(raw) over the first 50 rows); a
+  // render-only column with no raw value uses header+4. width = clamp(10,chars,36)ch ×
+  // 7.2 (7.4 for mono/num) + 24px cell padding, rounded. Sampling the first 50 rows
+  // only (memoized on [rows,effCols]) keeps 5k-row tables from remeasuring per tick.
+  const colWidths=useMemo(()=>{
+    const sample=(rows||[]).slice(0,50);
+    return effCols.map(c=>{
+      if(c.width!=null) return c.width;
+      if(c.minWidth!=null) return c.minWidth;
+      // +2 chars for the sort indicator/order badge a sortable header renders, so a
+      // header that is the widest thing in its column doesn't clip when sorted.
+      const hdr=String(c.label!=null?c.label:(c.key||'')).length+(c.sortable===false?0:2);
+      let longest=0;
+      for(let i=0;i<sample.length;i++){
+        const v=sample[i]?sample[i][c.key]:undefined;
+        if(v==null) continue;
+        const s=String(v); if(s.length>longest) longest=s.length;
+      }
+      const chars=(c.render&&longest===0)?hdr+4:Math.max(hdr,longest);
+      const clamped=Math.max(10,Math.min(chars,36));
+      const per=(c.mono||isNum(c))?7.4:7.2;
+      return Math.round(clamped*per+24);
+    });
+  },[rows,effCols]);
+  // Table sits at its real content width; gutters (dt-check/dt-diff/dt-acts, not part
+  // of effCols) fold in so a narrow table shrinks to true content and left-aligns,
+  // whitespace to the right margin. NO maxWidth clamp: a wide table exceeds the
+  // container and .tbl-wrap scrolls it horizontally (preserving hand-tuned widths),
+  // exactly as the old minWidth floor already did — instead of squeezing columns.
+  // border-box (index.html:109) means each column's +24 padding is inside its width.
+  const gutterW=(selectable?28:0)+(diffMap?20:0)+28;
+  const totalColWidth=colWidths.reduce((a,b)=>a+b,0)+gutterW;
   const rowIdOf=i=>id?(id+'-r-'+i):null;
   const scrollTo=i=>{ const rid=rowIdOf(i);
     const go=()=>{ const el=rid&&document.getElementById(rid); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'}); };
@@ -1557,11 +1613,11 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
           --dt-actions-w) that aren't part of effCols. Wide containers never see
           this (the browser only enforces min-width once it exceeds 100%), so
           ordinary 4-6 column tables are pixel-identical to before. */}
-      <table className="dt" style={{minWidth:effCols.length*90+(selectable?28:0)+(diffMap?20:0)+28}}>
+      <table className="dt" style={{width:totalColWidth,minWidth:effCols.length*90+(selectable?28:0)+(diffMap?20:0)+28}}>
         <thead><tr>
           {diffMap?<th className="dt-diff" aria-label="Diff status"></th>:null}
           {selectable?<th className="dt-check"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all rows"/></th>:null}
-          {effCols.map(c=>{
+          {effCols.map((c,ci)=>{
             const sIdx=(sort||[]).findIndex(s=>s.key===c.key);
             const sEntry=sIdx>=0?sort[sIdx]:null;
             // Order badge (1·2·3…) only appears once 2+ sort keys are active — a
@@ -1574,7 +1630,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
                 truncated column name. */}
             return <th key={c.key} title={String(c.label!=null?c.label:c.key)}
               className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
-              style={(()=>{const w=c.width!=null?c.width:(c.minWidth!=null?c.minWidth:(c.primary?120:null));return w!=null?{width:w}:null;})()}
+              style={{width:colWidths[ci]}}
               aria-sort={sEntry?(sEntry.dir==='asc'?'ascending':'descending'):'none'}
               tabIndex={0}
               onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();clickSort(c.key,e.shiftKey);}}}
