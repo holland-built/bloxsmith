@@ -20,31 +20,47 @@ Repo: `github.com/holland-built/bloxsmith`. Run `/release` from anywhere in the 
 
 ## Release
 The app is a self-updating Go binary (embedded UI, `bloxsmith update` / in-app
-"Update now"). A release is a **goreleaser** run that publishes the binary
-tarballs + `checksums.txt` the installer and self-update consume:
+"Update now"). A release publishes the binary tarballs + `checksums.txt` the
+installer and self-update consume, plus a multi-arch ghcr image.
 
+### Canonical: tag-triggered CI (`.github/workflows/release.yml`)
 1. Tag on `master`: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-2. `cd go && GITHUB_TOKEN=$(gh auth token) goreleaser release --clean`
-   → GitHub Release (per-OS tarballs + `checksums.txt`), Homebrew tap, and the
-   ghcr image.
-3. Both installers (`scripts/install.sh` and `scripts/install.ps1`) auto-attach
-   to every release via goreleaser `release.extra_files`, so
-   `releases/latest/download/install.sh` and `.../install.ps1` keep working with
-   no manual `gh release upload`.
+2. The push fires `release.yml`, which runs goreleaser in CI and produces:
+   - **GitHub Release**: per-OS tarballs + `checksums.txt` + both install
+     scripts (`install.sh`, `install.ps1`) via `release.extra_files`.
+   - **ghcr image**: multi-arch (amd64+arm64), **cosign keyless-signed** (GitHub
+     OIDC identity, `id-token: write` — no stored key).
+   - **Templates**: third-party demo/seed templates are fetched by goreleaser's
+     `before` hook and bundled into every archive (next to the binary) and into
+     the image at `/templates`.
+   - **Homebrew tap**: published **iff** the `HOMEBREW_TAP_TOKEN` repo secret
+     exists (PAT with repo scope on `holland-built/homebrew-tap`). Absent → CI
+     runs `--skip=homebrew` and the release still succeeds; only brew is skipped.
 
-Prerequisites (each an independent channel — a missing one only skips that
-channel, use `--skip=docker,homebrew` to bypass):
-- **ghcr image**: `docker login ghcr.io -u holland-built` with a PAT that has
-  `write:packages` (the gh CLI token does NOT carry this scope).
-- **Homebrew**: a `holland-built/homebrew-tap` repo must exist.
+### Manual fallback (local goreleaser)
+`cd go && GITHUB_TOKEN=$(gh auth token) goreleaser release --clean`
+
+Requires:
+- `docker login ghcr.io -u holland-built` with a PAT that has `write:packages`
+  (the gh CLI token does NOT carry this scope).
+- **python3 + network** for the template-fetch `before` hook.
+- **cosign installed** (`brew install cosign`) — the `docker_signs:` stage runs
+  on any real `release`. If you can't/won't sign locally, pass `--skip=sign`.
+- Homebrew push uses `GITHUB_TOKEN` unless `HOMEBREW_TAP_TOKEN` is exported.
+- Bypass any channel with `--skip=docker,homebrew,sign` as needed.
 
 ## Enterprise deploy hardening
-> **Signing status (truth):** releases are cut **locally** and are currently
-> **unsigned** — there is no CI signing. The retired `docker-publish.yml` did keyless
-> cosign signing; that step was removed with the Python/Docker path. Signature
-> verification (cosign) is a **planned** hardening step, not a shipped guarantee. The
-> installer/self-update still verify the release **checksum** (`checksums.txt`), which
-> catches corruption/truncation but not publisher identity.
+> **Signing status (truth):** the tag-triggered CI (`release.yml`) **cosign
+> keyless-signs the multi-arch ghcr images** (GitHub OIDC identity — no stored
+> key). Verify with:
+> ```
+> cosign verify ghcr.io/holland-built/bloxsmith:<tag> \
+>   --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+>   --certificate-oidc-issuer https://token.actions.githubusercontent.com
+> ```
+> **Binary tarballs remain checksum-verified only** (`checksums.txt`), not
+> signature-signed — the installer/self-update verify the checksum, which catches
+> corruption/truncation but not publisher identity.
 
 - **Verify the checksum** — the installer and `bloxsmith update` do this automatically
   against the release's `checksums.txt` (fail-closed on mismatch).

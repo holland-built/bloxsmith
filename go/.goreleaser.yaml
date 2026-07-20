@@ -7,7 +7,7 @@
 #                                            #       + Homebrew + ghcr image
 #
 # Version: goreleaser derives {{ .Version }} from the pushed git tag. Tags are
-# `v1.0.<git-commit-count>` (SHIP.md), so {{ .Version }} == `1.0.<n>` — exactly
+# semver `vX.Y.Z` (SHIP.md; e.g. v2.2.0), so {{ .Version }} == `X.Y.Z` — exactly
 # what update.go's verN() compares against the GitHub Releases API. The ldflags
 # `-X main.version=` below REPLACES the old Dockerfile `APP_VERSION` ARG.
 #
@@ -20,6 +20,11 @@ project_name: bloxsmith
 before:
   hooks:
     - go mod tidy
+    # Fetch third-party demo/seed templates (ccmarris/uddi_automation_toolkit)
+    # into go/templates (gitignored) so archives + images can bundle them.
+    # cwd is go/, so the script is at ../scripts/. TEMPLATES_DIR overrides the
+    # script's repo-root default.
+    - sh -c "TEMPLATES_DIR=templates python3 ../scripts/fetch_templates.py"
 
 builds:
   - id: bloxsmith
@@ -57,6 +62,11 @@ archives:
       {{ .ProjectName }}_{{ .Version }}_
       {{- if eq .Os "darwin" }}macOS_universal
       {{- else }}{{ .Os }}_{{ .Arch }}{{ end }}
+    # Bundle the fetched third-party templates next to the binary: the binary's
+    # default TemplatesDir is <binary-dir>/templates, so extracting the archive
+    # yields a working template/seed provisioning setup with zero extra steps.
+    files:
+      - src: templates/**/*
     format_overrides:
       # Windows ships a zip (install.ps1 / direct download consume it).
       - goos: windows
@@ -98,6 +108,10 @@ brews:
       owner: holland-built
       name: homebrew-tap
       branch: main
+      # CI: HOMEBREW_TAP_TOKEN (PAT with repo scope on homebrew-tap) — the
+      # built-in GITHUB_TOKEN can't push cross-repo. Local fallback: falls back
+      # to GITHUB_TOKEN (gh auth token has repo scope on personal repos).
+      token: "{{ if index .Env \"HOMEBREW_TAP_TOKEN\" }}{{ .Env.HOMEBREW_TAP_TOKEN }}{{ else }}{{ .Env.GITHUB_TOKEN }}{{ end }}"
     homepage: "https://github.com/holland-built/bloxsmith"
     description: "Bloxsmith — self-contained Infoblox BloxOne NOC dashboard (embedded UI + API proxy)."
     license: "MIT"
@@ -122,6 +136,8 @@ dockers:
     goos: linux
     goarch: amd64
     dockerfile: Dockerfile.goreleaser
+    extra_files:
+      - templates
     image_templates:
       - "ghcr.io/holland-built/bloxsmith:{{ .Version }}-amd64"
       - "ghcr.io/holland-built/bloxsmith:latest-amd64"
@@ -136,6 +152,8 @@ dockers:
     goos: linux
     goarch: arm64
     dockerfile: Dockerfile.goreleaser
+    extra_files:
+      - templates
     image_templates:
       - "ghcr.io/holland-built/bloxsmith:{{ .Version }}-arm64"
       - "ghcr.io/holland-built/bloxsmith:latest-arm64"
@@ -154,3 +172,15 @@ docker_manifests:
     image_templates:
       - "ghcr.io/holland-built/bloxsmith:latest-amd64"
       - "ghcr.io/holland-built/bloxsmith:latest-arm64"
+
+# --- cosign keyless signing of the pushed ghcr images -------------------------
+# Runs in CI (release.yml) with id-token: write — the signature's identity is
+# the workflow's OIDC identity; no key is stored anywhere. Verify with:
+#   cosign verify ghcr.io/holland-built/bloxsmith:<tag> \
+#     --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+docker_signs:
+  - cmd: cosign
+    artifacts: all
+    output: true
+    args: ["sign", "--yes", "${artifact}@${digest}"]

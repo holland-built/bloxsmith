@@ -18,12 +18,26 @@ const (
 	defaultDNSParent = "internal.example.com"
 )
 
+// TemplatesInstalled reports whether the templates directory exists on disk.
+// Templates are third-party (fetched by scripts/fetch_templates.py, bundled by
+// goreleaser); a bare `go build` dev tree legitimately lacks them.
+func (e *Engine) TemplatesInstalled() bool {
+	info, err := os.Stat(e.TemplatesDir)
+	return err == nil && info.IsDir()
+}
+
 // LoadTemplate is load_template (server.py:1024): YAML load by path relative to
 // TemplatesDir, rejecting paths that escape it, raising *Error not sys.exit.
 func (e *Engine) LoadTemplate(name string) (M, error) {
 	safe := strings.TrimSpace(name)
 	if safe == "" {
 		return nil, perr("template name is required")
+	}
+	// When the whole templates dir is absent, EvalSymlinks below zeroes `base`
+	// and every name trips the path-escape guard ("invalid template name") —
+	// misleading. Report the real cause up front.
+	if !e.TemplatesInstalled() {
+		return nil, perr("templates not installed — run scripts/fetch_templates.py, or use the release archive / container image, which bundle them")
 	}
 	base, err := filepath.Abs(e.TemplatesDir)
 	if err != nil {
@@ -39,6 +53,9 @@ func (e *Engine) LoadTemplate(name string) (M, error) {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		if !e.TemplatesInstalled() {
+			return nil, perr("templates not installed — run scripts/fetch_templates.py, or use the release archive / container image, which bundle them")
+		}
 		return nil, perr("template not found: %s", name)
 	}
 	var data any
