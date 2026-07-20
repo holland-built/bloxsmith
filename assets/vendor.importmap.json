@@ -1,7 +1,0 @@
-{
- "react": "./vendor.react-19-2-7.8c3b2ed6.js",
- "react/jsx-runtime": "./vendor.react-19-2-7-jsx-runtime.805ef1b3.js",
- "react-dom": "./vendor.react-dom-19-2-7.4dd257fe.js",
- "react-dom/client": "./vendor.react-dom-19-2-7-client.05c771c8.js",
- "@astryxdesign/core": "./vendor.astryxdesign-core-0-1-4.d9d26976.js"
-}

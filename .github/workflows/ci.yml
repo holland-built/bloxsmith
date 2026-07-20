@@ -1,0 +1,52 @@
+name: CI
+
+# Replaces the retired docker-publish.yml. Builds and tests the Go single-binary
+# app (embedded UI) — no image publish, no signing. Releases are cut locally with
+# goreleaser (see docs/SHIP.md); this workflow only proves the tree builds.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # UI freshness: fail if go/web/app.bundle.js is stale vs src/*.jsx.
+      - name: UI bundle up to date (build_ui --check)
+        run: node scripts/build_ui.js --check
+
+      # TypeScript gate — only when a tsconfig.json is present. Mirrors scripts/check.sh.
+      - name: Type-check (tsc --noEmit)
+        if: hashFiles('tsconfig.json') != ''
+        run: npx -y --package typescript@latest tsc --noEmit -p tsconfig.json
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+
+      - name: Go build + test
+        working-directory: go
+        run: |
+          go build ./...
+          go test ./...
+
+      # Embedded-UI + multi-arch smoke: cross-compile every target, no publish.
+      - name: Set up goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          install-only: true
+
+      - name: goreleaser build (snapshot, no publish)
+        working-directory: go
+        run: goreleaser build --snapshot --clean

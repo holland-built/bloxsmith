@@ -5,14 +5,14 @@ Full reference for **Bloxsmith**. For the 30-second start see the
 environment variables, LLM providers, and security.
 
 - [Standalone binary (no Docker)](#standalone-binary-no-docker)
-- [SE demo path (run-image.sh)](#se-demo-path-run-imagesh)
+- [SE demo path (docker run)](#se-demo-path-docker-run)
 - [Customer path (compose)](#customer-path-compose)
 - [Updating](#updating)
 - [Install from the prebuilt image](#install-from-the-prebuilt-image)
 - [Build from source (dev)](#build-from-source-dev)
+- [Provisioning templates](#provisioning-templates)
 - [Getting the keys](#getting-the-keys)
 - [Using a different LLM provider](#using-a-different-llm-provider)
-- [Running without Docker](#running-without-docker)
 - [Environment variables](#environment-variables)
 - [Auto-unlock after an upgrade](#auto-unlock-after-an-upgrade)
 - [Security notes](#security-notes)
@@ -48,24 +48,25 @@ the background at login, and `bloxsmith update` upgrades in place.
 
 ---
 
-## SE demo path (run-image.sh)
+## SE demo path (docker run)
 
 You're an Infoblox SE showing this on a laptop or a customer LAN with Docker.
-`scripts/run-image.sh` wraps pull + run:
+Pull and run the prebuilt Go image directly:
 
 ```bash
-git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
-./scripts/run-image.sh              # localhost → http://localhost:8080
-LAN=1 ./scripts/run-image.sh        # LAN → binds 0.0.0.0, prints http://<host-ip>:8080
+# localhost → http://localhost:8080
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
+  -v noc-vault:/vault -v /var/run/docker.sock:/var/run/docker.sock \
+  --restart unless-stopped ghcr.io/holland-built/bloxsmith:latest
+
+# LAN → bind all interfaces, reachable at http://<host-ip>:8080
+#   swap 127.0.0.1: for 0.0.0.0: in the -p flag above
 ```
 
-It also prompts for an optional vault auto-unlock passphrase, saving it to
-`~/.noc-vault-pass` (`0600`) and mounting it (see [Auto-unlock](#auto-unlock-after-an-upgrade)),
-and it mounts `/var/run/docker.sock` so the in-app self-update works (set
-`NO_DOCKER_SOCKET=1` to disable).
-
-Re-running `./scripts/run-image.sh` always re-pulls `:latest` — see [Updating](#updating)
-for the full picture.
+Mounting `/var/run/docker.sock` lets the in-app self-update work; drop that `-v` to
+disable it. For an unattended vault auto-unlock passphrase, see
+[Auto-unlock](#auto-unlock-after-an-upgrade). Re-running with `:latest` after a
+`docker pull` picks up the newest release — see [Updating](#updating).
 
 > ⚠️ **No login on LAN.** Anyone who can reach the port can use the dashboard.
 > On a trusted LAN, keep the vault **locked** when not presenting (don't set an
@@ -104,7 +105,8 @@ docker run --rm caddy caddy hash-password -p 'yourpassword'   # paste into BASIC
 | Localhost (compose) | `docker compose up -d` | http://localhost:8080 |
 | Server (LAN, compose) | `BIND=0.0.0.0 docker compose up -d` | http://host-ip:8080 |
 | Server (secure) | `docker compose --profile secure up -d` | https://host-ip:8443 (login) |
-| Desktop / no-clone | `./scripts/run-image.sh` | http://localhost:8080 |
+| Desktop / no-clone | `docker run … ghcr.io/holland-built/bloxsmith:latest` | http://localhost:8080 |
+| Laptop / no Docker | `bloxsmith` (standalone binary) | http://localhost:8080 |
 
 Tenant keys live AES-encrypted in the `noc-vault` Docker volume — they survive
 updates, restarts, and container recreation. For unattended restarts (no browser
@@ -115,8 +117,11 @@ step to re-enter the passphrase), see `VAULT_PASSPHRASE_FILE` in
 
 ## Updating
 
-**SE demo:** re-run `./scripts/run-image.sh` (always pulls `:latest`), or use the in-app
-**Update now** button.
+**Standalone binary:** `bloxsmith update` (or the in-app **Update now** button) —
+downloads the release tarball, verifies its checksum, and swaps the binary in place.
+
+**SE demo (Docker):** `docker pull ghcr.io/holland-built/bloxsmith:latest && docker
+restart bloxsmith`, or use the in-app **Update now** button.
 
 **Customer:** `docker compose pull && docker compose up -d`, or use the in-app
 **Update now** button.
@@ -132,8 +137,7 @@ Clicking **Update now** pre-pulls the `:latest` image over the mounted Docker
 socket, health-checks the candidate before switching to it, and recreates itself.
 If the new image fails its health check, it auto-rolls back to the previous image
 (tagged `bloxsmith:rollback`). This requires `/var/run/docker.sock` to be mounted,
-which `scripts/run-image.sh` and compose both do by default (`NO_DOCKER_SOCKET=1` or
-removing the socket line disables it).
+which compose does by default (remove the socket line to disable it).
 
 Compose also ships a Watchtower sidecar in HTTP-API mode (no polling) as an
 alternate trigger; the in-app button does not require it.
@@ -146,9 +150,11 @@ that's the button click or the manual command above.
 
 ## Install from the prebuilt image
 
-No source checkout, no build — just Docker. Every push to `master` and every
-`vX.Y.Z` tag publishes an image to GitHub Container Registry (GHCR) and cuts a
-release via [CI](../.github/workflows/docker-publish.yml).
+No source checkout, no build — just Docker. Releases are cut **locally** with
+goreleaser (see [SHIP.md](SHIP.md)), which publishes the multi-arch image to GitHub
+Container Registry (GHCR) alongside the binary tarballs. CI
+([ci.yml](../.github/workflows/ci.yml)) only builds and tests the tree on push/PR —
+it does not publish or sign images.
 
 ```bash
 docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
@@ -177,37 +183,33 @@ Pin a release with a tag (`:v1.0.0`, `:1.0.0`, or `:1.0`) instead of `:latest`.
 > token that has `read:packages`.)
 
 This manual `docker run` is the always-works fallback behind both the
-[SE demo path](#se-demo-path-run-imagesh) and the
+[SE demo path](#se-demo-path-docker-run) and the
 [Customer path](#customer-path-compose) above.
 
 ---
 
 ## Build from source (dev)
 
-Use this if you're developing or want to build locally instead of pulling the image.
+Use this if you're developing or want to build the binary locally instead of pulling
+the image. Requires **Go 1.26+** and **Node** (to rebuild the embedded UI).
 
 ```bash
 git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
-./scripts/run.sh
-# update later:  git pull && ./scripts/run.sh
+node scripts/build_ui.js              # compile src/*.jsx → go/web/app.bundle.js (embedded)
+cd go && go build -o bloxsmith .      # single self-contained binary with the UI baked in
+./bloxsmith                           # → http://localhost:8080
 ```
 
-`scripts/run.sh` will:
-1. Prompt for an **Infoblox API key** (optional — Enter to use the in-app vault).
-2. Prompt for a **Groq API key** (optional — only the AI query box needs it).
-3. In vault mode, prompt for a **vault auto-unlock passphrase** (optional — Enter to unlock in the browser). If given, saved to `~/.noc-vault-pass` (`0600`) and mounted read-only.
-4. Build the image and start the container.
-5. Print `→ http://localhost:8080`.
+Keys are read from the environment or the in-app vault at runtime — nothing is baked
+into the binary. Point at a `.env` by exporting the vars (`set -a; . ../.env; set +a`)
+before launching, or set the provider and tenant keys in the dashboard on first open.
+See [go/BUILD.md](../go/BUILD.md) for cross-compilation and the goreleaser build.
 
-The API key is **never baked into the image** — injected at runtime as an env var.
-
-### Non-interactive (use a `.env`)
+### Build the container image locally
 
 ```bash
-cp .env.example .env        # then edit .env with your keys
-docker build -t bloxsmith .
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 --env-file .env -e HOST=0.0.0.0 \
-  --restart unless-stopped bloxsmith   # loopback only; drop 127.0.0.1: to expose on the LAN
+cd go && go build -o bloxsmith .
+docker build -f Dockerfile.goreleaser -t bloxsmith .   # distroless image around the binary
 ```
 
 ### Manage
@@ -216,7 +218,7 @@ docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 --env-file .env -e HOST=0.
 docker logs -f bloxsmith     # watch logs
 docker rm -f bloxsmith       # stop + remove
 docker start bloxsmith       # restart existing
-PORT=8090 ./scripts/run.sh              # run on a different port
+PORT=8090 ./bloxsmith        # standalone binary on a different port
 ```
 
 ---
@@ -227,7 +229,7 @@ PORT=8090 ./scripts/run.sh              # run on a different port
 
 1. Sign in to <https://csp.infoblox.com>.
 2. Top-right user menu → **User API Keys** → **Create**.
-3. Copy the token. Use it as-is — `scripts/run.sh` adds the `Token ` prefix automatically.
+3. Copy the token. Use it as-is — the dashboard adds the `Token ` prefix automatically.
 
 > **Interactive vs service keys:** an interactive *User API Key* carries your user's
 > full account list and enables the in-dashboard account switcher. A *Service API
@@ -290,20 +292,13 @@ OpenAI-compatible gateway for Claude.
 
 ---
 
-## Running without Docker
+## Provisioning templates
 
-Requires **Python ≥ 3.11** (tested on 3.13). Node/npx is only needed for the
-`.mcp.json` / `mcp-remote` path; the default `python server.py` bridge uses the
-`mcp` pip package and needs no Node.
-
-```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env        # fill in keys
-python server.py            # → http://localhost:8080
-```
-
-Set `HOST=0.0.0.0` to expose beyond localhost (the Docker image does this for you).
+The provisioning tools read their YAML/JSON templates from disk at `TEMPLATES_DIR`
+(default `/templates` in the container, the binary's own directory standalone).
+**These templates are not yet packaged into the distroless container image** — a
+known follow-up. Until then, provisioning that relies on bundled templates needs a
+`TEMPLATES_DIR` mounted from the host (e.g. `-v ./templates:/templates`).
 
 ---
 
@@ -366,10 +361,10 @@ For unattended restarts on the [Customer path](#customer-path-compose), set
 
 - **Never commit `.env`** (gitignored). Use `.env.example` as the template.
 - The image ships no secrets — `.dockerignore` excludes `.env`, `.mcp.json`, and local state.
-- The bridge has **no client auth** on its read/query/account endpoints (only
+- The app has **no client auth** on its read/query/account endpoints (only
   `block`/`unblock` writes are gated by `DASHBOARD_TOKEN`). CORS is restricted to the
   loopback origin, but that only restrains browsers — anyone who can reach the port
-  can use your Infoblox key indirectly. The script/compose publish on **`127.0.0.1`
+  can use your Infoblox key indirectly. The binary/compose publish on **`127.0.0.1`
   by default**; `BIND=0.0.0.0` exposes on the LAN, and only then behind your own
   auth/TLS (the `secure` Caddy profile, or a VPN).
 - The compose file mounts the Docker socket into the app for self-update; remove

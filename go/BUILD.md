@@ -57,12 +57,14 @@ cd go && goreleaser release --clean
   distroless, multi-arch) — same env contract as before, drops into the existing
   `docker-compose.yml` + `noc-vault` volume unchanged.
 
-## This REPLACES the old distribution path
+## This REPLACED the old distribution path (Python retired 2026-07)
 
-| Old (Python image) | New (Go binary) |
+The Python image and its scripts are gone; the Go binary is the whole product.
+
+| Old (Python image, deleted) | New (Go binary) |
 |---|---|
 | `release-image.sh` (local docker build+push) | `goreleaser release` (`dockers:` block) |
-| `.github/workflows/docker-publish.yml` (build-push job) | a `v1.0.*` tag → goreleaser CI |
+| `docker-publish.yml` CI build-push | `goreleaser release` run **locally** from `master` (see `docs/SHIP.md`); `ci.yml` only builds/tests + a snapshot |
 | `Dockerfile` (`APP_VERSION` ARG) | `go/Dockerfile.goreleaser` + ldflags `-X main.version` |
 | brew/winget: none | goreleaser `brews:` / `winget:` blocks |
 
