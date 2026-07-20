@@ -10,6 +10,7 @@ package dashboard
 
 import (
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -99,6 +100,17 @@ func rowsResp(rows []map[string]any) map[string]any {
 
 func errRows() map[string]any {
 	return map[string]any{"rows": []any{}, "count": 0, "status": "error"}
+}
+
+// dataRowsResp builds the attack-surface {data:{rows,count},status:"ok"} body.
+// Unlike rowsResp these tiles have no empty state — a successful call is "ok"
+// even with zero rows; only an upstream error flips status to "error".
+func dataRowsResp(rows []map[string]any) map[string]any {
+	return map[string]any{"data": map[string]any{"rows": rows, "count": len(rows)}, "status": "ok"}
+}
+
+func dataErr() map[string]any {
+	return map[string]any{"data": map[string]any{}, "status": "error"}
 }
 
 // --- shapers (server.py 3376-3528) ------------------------------------------
@@ -294,6 +306,66 @@ func normCtemAssets(providers, technologies, ports, count any) map[string]any {
 	}
 }
 
+// --- attack-surface shapers (mirror _norm_exposures/_asset_risk/…) ----------
+
+func normExposures(body any) []map[string]any {
+	raw := asSlice(asMap(body)["exposures"])
+	out := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		e := asMap(item)
+		out = append(out, map[string]any{
+			"title":         getStr(e["title"]),
+			"severity":      getStr(e["severity"]),
+			"priority":      getStr(e["priority"]),
+			"status":        getStr(e["status"]),
+			"assigned_to":   getStr(e["assigned_to"]),
+			"first_seen_at": getStr(e["first_seen_at"]),
+			"last_seen_at":  getStr(e["last_seen_at"]),
+			"id":            idOf(e["id"]),
+		})
+	}
+	return out
+}
+
+func normAssetRisk(body any) []map[string]any {
+	raw := asSlice(asMap(body)["assets"])
+	out := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		a := asMap(item)
+		out = append(out, map[string]any{
+			"domain_name":  getStr(a["domain_name"]),
+			"ip_address":   getStr(a["ip_address"]),
+			"exposures":    num(a["exposures"]),
+			"status":       getStr(a["status"]),
+			"asset_type":   getStr(a["asset_type"]),
+			"last_seen_at": getStr(a["last_seen_at"]),
+			"ports_count":  len(asSlice(a["ports"])),
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i]["exposures"].(int) > out[j]["exposures"].(int)
+	})
+	return out
+}
+
+func normExposedHostnames(body any) []map[string]any {
+	raw := asSlice(asMap(body)["hostnames"])
+	out := make([]map[string]any, 0, len(raw))
+	for _, h := range raw {
+		out = append(out, map[string]any{"hostname": getStr(h)})
+	}
+	return out
+}
+
+func normExposedIPs(body any) []map[string]any {
+	raw := asSlice(asMap(body)["ip_addresses"])
+	out := make([]map[string]any, 0, len(raw))
+	for _, x := range raw {
+		out = append(out, map[string]any{"ip": getStr(x)})
+	}
+	return out
+}
+
 func normSOC(insightTypes []any) []map[string]any {
 	out := make([]map[string]any, 0, len(insightTypes))
 	for _, item := range insightTypes {
@@ -471,6 +543,42 @@ func (s *Service) CSPCtemAssets() map[string]any {
 		st = "ok"
 	}
 	return map[string]any{"data": data, "status": st}
+}
+
+// CSPExposures POSTs the attack-surface exposures search (read-only query).
+func (s *Service) CSPExposures() map[string]any {
+	body, st, err := s.Rest.Write("POST", "/api/attack-surface/v1/exposures", map[string]any{"limit": 200}, nil)
+	if errored(st, err) {
+		return dataErr()
+	}
+	return dataRowsResp(normExposures(body))
+}
+
+// CSPAssetRisk ranks assets by exposure count (rows sorted exposures DESC).
+func (s *Service) CSPAssetRisk() map[string]any {
+	body, st, err := s.Rest.GetEx("/api/attack-surface/v1/assets/exposureRanking", nil)
+	if errored(st, err) {
+		return dataErr()
+	}
+	return dataRowsResp(normAssetRisk(body))
+}
+
+// CSPExposedHostnames lists internet-exposed hostnames.
+func (s *Service) CSPExposedHostnames() map[string]any {
+	body, st, err := s.Rest.GetEx("/api/attack-surface/v1/exposures/hostnames", nil)
+	if errored(st, err) {
+		return dataErr()
+	}
+	return dataRowsResp(normExposedHostnames(body))
+}
+
+// CSPExposedIPs lists internet-exposed IP addresses.
+func (s *Service) CSPExposedIPs() map[string]any {
+	body, st, err := s.Rest.GetEx("/api/attack-surface/v1/exposures/ip-addresses", nil)
+	if errored(st, err) {
+		return dataErr()
+	}
+	return dataRowsResp(normExposedIPs(body))
 }
 
 // CSPSoc gates on soc_enforcement_enabled, then fetches insight types.
