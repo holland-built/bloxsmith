@@ -4,7 +4,7 @@
 # (go/web/) both live here. Run every command from this directory:
 #   goreleaser build   --snapshot --clean   # local cross-compile test, NO publish
 #   goreleaser release --clean               # real: archives + checksums + Release
-#                                            #       + Homebrew + winget + ghcr image
+#                                            #       + Homebrew + ghcr image
 #
 # Version: goreleaser derives {{ .Version }} from the pushed git tag. Tags are
 # `v1.0.<git-commit-count>` (SHIP.md), so {{ .Version }} == `1.0.<n>` — exactly
@@ -39,7 +39,7 @@ builds:
       - amd64
       - arm64
     ignore:
-      # No windows/arm64 target (winget audience is amd64).
+      # No windows/arm64 target (Windows audience is amd64).
       - goos: windows
         goarch: arm64
 
@@ -58,7 +58,7 @@ archives:
       {{- if eq .Os "darwin" }}macOS_universal
       {{- else }}{{ .Os }}_{{ .Arch }}{{ end }}
     format_overrides:
-      # winget cannot consume tar.gz; Windows ships a zip.
+      # Windows ships a zip (install.ps1 / direct download consume it).
       - goos: windows
         formats: [zip]
 
@@ -81,6 +81,13 @@ release:
   draft: false
   prerelease: auto
   name_template: "v{{ .Version }}"
+  # Attach both installers to every release so
+  # releases/latest/download/install.{sh,ps1} always resolve — no manual
+  # `gh release upload`. Paths are relative to go/ (goreleaser's cwd); the
+  # scripts live at repo-root scripts/ = ../scripts/.
+  extra_files:
+    - glob: ../scripts/install.sh
+    - glob: ../scripts/install.ps1
 
 # --- Homebrew tap: `brew install holland-built/tap/bloxsmith` -----------------
 brews:
@@ -103,34 +110,6 @@ brews:
       bin.install "bloxsmith"
     test: |
       system "#{bin}/bloxsmith", "--version"
-
-# --- winget: `winget install holland-built.Bloxsmith` ------------------------
-winget:
-  - name: Bloxsmith
-    publisher: holland-built
-    package_identifier: holland-built.Bloxsmith
-    ids:
-      - bloxsmith
-    short_description: "Self-contained Infoblox BloxOne NOC dashboard."
-    description: "Bloxsmith is a single static binary that embeds its React UI, proxies the Infoblox BloxOne/CSP APIs, and self-updates from GitHub Releases."
-    license: "MIT"
-    homepage: "https://github.com/holland-built/bloxsmith"
-    publisher_url: "https://github.com/holland-built"
-    release_notes_url: "https://github.com/holland-built/bloxsmith/releases/tag/v{{ .Version }}"
-    commit_author:
-      name: goreleaser-bot
-      email: bot@holland-built.dev
-    repository:
-      owner: holland-built
-      name: winget-pkgs
-      branch: "bloxsmith-{{ .Version }}"
-      pull_request:
-        enabled: true
-        draft: false
-        base:
-          owner: microsoft
-          name: winget-pkgs
-          branch: master
 
 # --- Container image for the enterprise-server audience ----------------------
 # distroless/static — same env contract as the old python image, so the existing
