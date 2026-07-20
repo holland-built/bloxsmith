@@ -1,7 +1,0 @@
-mcp==1.27.1
-groq==1.4.0
-anyio==4.13.0
-httpx==0.28.1
-httpx-sse==0.4.3
-cryptography==48.0.0
-PyYAML==6.0.2

@@ -4,53 +4,50 @@ Thanks for your interest in improving Bloxsmith. This is a small
 demo/dashboard tool — contributions that keep it simple and dependency-light are
 most welcome.
 
-## Local development (without Docker)
+## Local development (build from source)
 
-Requires **Python >= 3.11** (tested on 3.13) and `pip`.
+Requires **Go >= 1.26** and **Node** (to rebuild the embedded UI).
 
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env        # fill in your keys
-python server.py            # → http://localhost:8080
+node scripts/build_ui.js              # compile src/*.jsx → go/web/app.bundle.js (embedded)
+cp .env.example .env                  # fill in your keys (optional — the in-app vault also works)
+cd go && go build -o bloxsmith . && ./bloxsmith   # → http://localhost:8080
 ```
 
 Set `HOST=0.0.0.0` to expose beyond localhost. See the README for the full env-var
-table and the Docker quick start.
-
-> **Node/npx** is only required if you use the `.mcp.json` / `mcp-remote` path. The
-> default `python server.py` bridge uses the `mcp` pip package and needs no Node.
+table and the Docker quick start, and [go/BUILD.md](../go/BUILD.md) for cross-compiles.
 
 ## Running the tests
 
-`tests/test_regression.py` is an HTTP-level regression suite that exercises a **running**
-server.
-
 ```bash
-# in one terminal
-python server.py
+# UI freshness — the embedded bundle must match src/*.jsx
+node scripts/build_ui.js --check
 
-# in another (with the venv active)
-python tests/test_regression.py
-# or, verbose:
-python -m unittest test_regression -v
+# TypeScript gate
+./scripts/check.sh
+
+# Go unit + integration tests
+cd go && go test ./...
 ```
 
-Add or update a test when you change an endpoint's shape or add a new one.
+CI ([ci.yml](workflows/ci.yml)) runs the same checks plus a `goreleaser build
+--snapshot` smoke on every push and PR. Add or update a Go test when you change a
+behavior or add an endpoint.
 
 ## Code style
 
 - Keep it simple and surgical — match the existing style; no large refactors bundled
   with feature work.
-- Python: standard library first; only add a dependency when it earns its place, and
-  pin it in `requirements.txt`.
-- Frontend (`index.html`) is a single-file React app — keep changes self-contained.
+- Go: standard library first; only add a dependency when it earns its place.
+- Frontend lives in `src/*.jsx` (compiled to the embedded `go/web/app.bundle.js` by
+  `scripts/build_ui.js`) — edit the source, never the generated bundle, and rerun the
+  build.
 
 ## Branch / PR process
 
-1. Fork and branch off `main` (e.g. `fix/dns-zone-parsing`, `feat/widget-resize`).
+1. Branch off `master` (e.g. `fix/dns-zone-parsing`, `feat/widget-resize`).
 2. Make focused commits; keep each PR scoped to one logical change.
-3. Run the regression suite locally before opening the PR and note the result.
+3. Run the checks above locally before opening the PR and note the result.
 4. Open a PR with a clear description of what changed and why. Link any related issue.
 
 ## Security & secrets

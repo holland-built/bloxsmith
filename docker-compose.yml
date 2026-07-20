@@ -8,7 +8,8 @@
 # To apply it, double-click the update script for your OS that ships next to this
 # file (update.command on macOS, update.bat on Windows, update.sh on Linux), or run:
 #   docker compose pull && docker compose up -d
-# Out-of-band revert (boot-failed image): ./scripts/rollback.sh
+# Revert: if a new image fails its health check the in-app updater auto-rolls back
+# to the previous image (tagged bloxsmith:rollback).
 # Copy .env.example to .env to set BIND/PORT/token/auth.
 
 services:
@@ -66,7 +67,7 @@ services:
 
 volumes:
   noc-vault:
-    name: noc-vault      # match scripts/run-image.sh volume name; vault survives scripts/run-image.sh ↔ compose switches
+    name: noc-vault      # fixed volume name; the vault survives docker run ↔ compose switches
   caddy-data:
 
 networks:
