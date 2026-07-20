@@ -13,7 +13,7 @@ handled on a best-effort basis.
 
 ## Scope
 
-In scope: the Python bridge (`server.py`), the bundled dashboard (`index.html`), the
+In scope: the Go single-binary app (`go/`), the embedded dashboard (`go/web/`), the
 Docker packaging, and the documented configuration surface. Out of scope: the Infoblox
 CSP / Infoblox Portal platform itself (report those to Infoblox) and third-party LLM providers.
 
@@ -27,13 +27,13 @@ CSP / Infoblox Portal platform itself (report those to Infoblox) and third-party
 
 ## Deployment warnings
 
-- **The bridge has no client auth on its read/query/account endpoints.** It reflects
+- **The app has no client auth on its read/query/account endpoints.** It reflects
   CORS only for the same-origin loopback allowlist (`http://localhost:<port>` /
   `127.0.0.1:<port>`), but CORS only restrains *browsers* — any local process (curl,
   another container) that can reach the port can use your Infoblox key indirectly,
   including switching CSP accounts. Only the destructive `block`/`unblock` writes are
   gated, by the `DASHBOARD_TOKEN` (`X-Auth-Token`) shared secret.
-- **Publish on `127.0.0.1` (the default).** `scripts/run.sh`/`scripts/run-image.sh` map the container
+- **Publish on `127.0.0.1` (the default).** Compose maps the container
   to `127.0.0.1:<port>` so it is loopback-only; set `BIND=0.0.0.0` to expose it on the
   LAN, and only do that behind your own auth/TLS boundary. (`HOST=0.0.0.0` inside the
   image is correct — it lets the host port-mapping work; exposure is controlled by the

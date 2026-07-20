@@ -1,23 +1,24 @@
 # Bloxsmith
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
-[![Docker ready](https://img.shields.io/badge/Docker-ready-2496ED.svg)](Dockerfile)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8.svg)](https://go.dev/)
+[![Docker ready](https://img.shields.io/badge/Docker-ready-2496ED.svg)](docker-compose.yml)
 
 **Bloxsmith** is a composable, self-hostable workbench for your **Infoblox Portal / CSP**
 data — subnets, DHCP leases, DNS zones, hosts, security policies, threat feeds, and audit
 logs, plus an optional natural-language query box. Build your own views instead of living in
-a fixed monitoring dashboard. A small Python bridge talks to the Infoblox cloud over
-**MCP** and serves a React workspace at `http://localhost:8080`.
+a fixed monitoring dashboard. It ships as a **single Go binary** that talks to the Infoblox
+cloud over **MCP** and serves its React workspace at `http://localhost:8080` — the UI is
+embedded in the binary, so there is nothing else to install.
 
 ![Bloxsmith](docs/dashboard.png)
 
 ```
-browser ──HTTP──▶ bridge (server.py) ──MCP──▶ csp.infoblox.com/mcp
+browser ──HTTP──▶ bloxsmith (Go binary) ──MCP──▶ csp.infoblox.com/mcp
                        └── optional: LLM (Groq / OpenAI-compatible) for NL queries
 ```
 
-(The bridge exists because browsers can't call the Infoblox MCP endpoint directly — CORS, and MCP is JSON-RPC/SSE. It's the server-side hop that holds your API key.)
+(The binary exists because browsers can't call the Infoblox MCP endpoint directly — CORS, and MCP is JSON-RPC/SSE. It's the server-side hop that holds your API key.)
 
 ---
 
@@ -43,15 +44,16 @@ bloxsmith update           # upgrade in place
 
 Prereq: **Docker** — [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows) or Docker Engine (Linux: `curl -fsSL https://get.docker.com | sh`).
 
-Clone the repo, then run the prebuilt image (no build):
+Run the prebuilt image (no clone, no build):
 
 ```bash
-git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
-./scripts/run-image.sh             # your machine → http://localhost:8080
-LAN=1 ./scripts/run-image.sh       # demo box → prints http://<host-ip>:8080 for the room
+docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
+  -v noc-vault:/vault --restart unless-stopped \
+  ghcr.io/holland-built/bloxsmith:latest        # your machine → http://localhost:8080
+# LAN demo: swap 127.0.0.1: for 0.0.0.0: to bind all interfaces → http://<host-ip>:8080
 ```
 
-Re-running always pulls `:latest`. The script also offers a vault auto-unlock passphrase, saved to `~/.noc-vault-pass` (`0600`).
+Pin a release with a tag (`:v2.0.0`) instead of `:latest`. Tenant keys live AES-encrypted in the `noc-vault` volume.
 
 > ⚠️ **LAN mode has no login.** Anyone on the network can reach the dashboard and query your Infoblox tenant. Keep the vault **locked** when not presenting, or use Path C's secure proxy.
 
@@ -75,13 +77,12 @@ First open (either path): pick a passphrase, add your [Infoblox API key](#get-yo
 
 Bloxsmith checks GitHub once a day in the background for a newer release (server-side; disable with `DISABLE_UPDATE_CHECK=1`). Nothing updates automatically — applying is always your call.
 
-Click the version badge → **Update now**. The app pulls the new image over the Docker socket, health-checks it, and swaps itself — automatic rollback if the new version fails to start. Available whenever the Docker socket is mounted (scripts/run-image.sh and compose both do by default).
+**Standalone binary:** click the version badge → **Update now** (or run `bloxsmith update`). It downloads the new release tarball, verifies its checksum, and atomically swaps the binary in place.
 
-Or update manually:
+**Docker:** click **Update now** to pull the new image over the mounted Docker socket, health-check it, and swap in — automatic rollback if the new version fails to start (the socket is mounted by compose by default). Or update manually:
 
 ```bash
 docker compose pull && docker compose up -d    # customer/compose
-./scripts/run-image.sh                         # SE demo — re-running always pulls :latest
 ```
 
 Your vault (tenant keys, passphrase) lives in the `noc-vault` volume and survives every update.
@@ -95,7 +96,7 @@ Pick one; you are never forced into either:
 | **Manual only (default)** | `docker compose up -d` | **Enterprise / production.** Nothing ever changes on its own; an admin clicks **Update now** (or runs the pull) when they choose. Recommended when the app holds live-tenant write credentials. |
 | **Auto-update** | `docker compose --profile autoupdate up -d` | **SE demo laptops.** A Watchtower sidecar pulls new releases automatically so a demo box is always current. |
 
-If a new image ever fails to boot, revert from the shell with `./scripts/rollback.sh` (works even when the app is down). Enterprise installs should also pin an exact, signed image by digest — see `docs/SHIP.md`.
+If a new image fails to boot, the in-app updater auto-reverts to the previous image (tagged `bloxsmith:rollback`). Enterprise installs should pin an exact image by digest — see `docs/SHIP.md`.
 
 ## Get your Infoblox API key
 
@@ -115,8 +116,10 @@ docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
 BIND=0.0.0.0 docker compose up -d              # LAN
 docker compose --profile secure up -d          # + Caddy TLS + basic-auth
 
-# Build from source (dev):
-git clone https://github.com/holland-built/bloxsmith && cd bloxsmith && ./scripts/run.sh
+# Build from source (dev) — Go 1.26+:
+git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
+node scripts/build_ui.js                        # refresh the embedded UI (go/web/)
+cd go && go build -o bloxsmith . && ./bloxsmith  # → http://localhost:8080
 ```
 
 Full steps, the deploy matrix, auto-unlock, and pinning → **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
