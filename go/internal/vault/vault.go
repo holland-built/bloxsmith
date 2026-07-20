@@ -73,6 +73,59 @@ type Vault struct {
 	llmModel string
 	key      *fernet.Key // derived Fernet key
 	salt     string      // std-b64 salt (as stored)
+
+	// onAuthReset is the coordinated auth reset the server registers once at
+	// startup (main): clear the portal Bearer override, reset account.Manager
+	// active state, and Rotate() the shared cache. It runs after a vault-tenant
+	// mutation whose save() succeeded, so a switched-in portal account or stale
+	// cache row can never outlive the tenant change. Set once via SetAuthReset,
+	// never mutated after, so lock-free reads are safe.
+	onAuthReset func()
+}
+
+// SetAuthReset registers the coordinated auth reset (see onAuthReset). Called
+// once at wiring time in main; never during request handling.
+func (v *Vault) SetAuthReset(fn func()) { v.onAuthReset = fn }
+
+// rotateAuth runs the coordinated auth reset if one is registered. The callback
+// touches the auth slot, account.Manager, and cache — never the vault — so it is
+// safe to call whether or not v.mu is held (no re-entry, no lock inversion).
+func (v *Vault) rotateAuth() {
+	if v.onAuthReset != nil {
+		v.onAuthReset()
+	}
+}
+
+// vaultSnap is a full copy of the mutable vault state, taken before a mutation
+// so a failed save() can be rolled back (save serializes current in-memory
+// fields, so the mutation must happen before save — hence snapshot+restore).
+type vaultSnap struct {
+	tenants  []Tenant
+	active   *string
+	groq     string
+	llmBase  string
+	llmModel string
+}
+
+// snapshot captures the current mutable state (caller holds v.mu).
+func (v *Vault) snapshot() vaultSnap {
+	t := make([]Tenant, len(v.tenants))
+	copy(t, v.tenants)
+	var a *string
+	if v.active != nil {
+		s := *v.active
+		a = &s
+	}
+	return vaultSnap{tenants: t, active: a, groq: v.groq, llmBase: v.llmBase, llmModel: v.llmModel}
+}
+
+// restore rolls the mutable state back to a snapshot (caller holds v.mu).
+func (v *Vault) restore(s vaultSnap) {
+	v.tenants = s.tenants
+	v.active = s.active
+	v.groq = s.groq
+	v.llmBase = s.llmBase
+	v.llmModel = s.llmModel
 }
 
 // LLMCreds returns a lock-guarded snapshot of the stored LLM credentials (Groq

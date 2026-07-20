@@ -27,10 +27,31 @@ type entry struct {
 type Cache struct {
 	mu      sync.Mutex
 	entries map[string]entry
+	gen     uint64 // monotonic epoch; bumped by Rotate to fence in-flight writes
 }
 
 // New builds an empty cache.
 func New() *Cache { return &Cache{entries: make(map[string]entry)} }
+
+// Gen returns the current cache generation (epoch). A Get-miss→fetch→Set path
+// captures this BEFORE the upstream fetch and passes it back to SetGen so a
+// Rotate() during the fetch drops the now-stale, wrong-tenant result.
+func (c *Cache) Gen() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.gen
+}
+
+// Rotate bumps the generation AND clears every entry in one atomic step. It is
+// the tenant-switch primitive: any in-flight fetch that began under the old gen
+// will have its SetGen dropped, and all previously cached rows (belonging to the
+// prior tenant) are gone. Combines bumpGen()+Invalidate().
+func (c *Cache) Rotate() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.gen++
+	c.entries = make(map[string]entry)
+}
 
 // Key is _cache_key (server.py:193): "service|endpoint|<sorted params>|fetchAll".
 // Params are rendered as Python renders str(sorted(params.items())) closely
@@ -66,10 +87,25 @@ func (c *Cache) Get(key string) (any, bool) {
 }
 
 // Set is _cache_set (server.py:201): stores value, evicting the oldest entries
-// first when at the cap and the key is new.
+// first when at the cap and the key is new. It stamps the write with the current
+// generation (never stale by construction).
 func (c *Cache) Set(key string, value any) {
 	c.mu.Lock()
+	gen := c.gen
+	c.mu.Unlock()
+	c.SetGen(key, value, gen)
+}
+
+// SetGen is Set fenced by a generation token: if gen no longer matches the
+// current cache generation, the write is DROPPED (a Rotate happened after the
+// caller captured gen — the value belongs to a prior tenant). Otherwise it
+// behaves exactly like Set (oldest-first eviction at the cap).
+func (c *Cache) SetGen(key string, value any, gen uint64) {
+	c.mu.Lock()
 	defer c.mu.Unlock()
+	if gen != c.gen {
+		return // stale in-flight write from before a Rotate — drop it
+	}
 	if _, exists := c.entries[key]; !exists && len(c.entries) >= Max {
 		type kt struct {
 			k  string

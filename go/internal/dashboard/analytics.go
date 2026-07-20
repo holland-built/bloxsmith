@@ -109,6 +109,7 @@ func (s *Service) FetchInsights() map[string]any {
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
 	}
+	g := s.Cache.Gen()
 	raw, _, _ := s.Rest.GetEx("/api/v1/insights", nil)
 	var rows []any
 	if m, ok := raw.(map[string]any); ok {
@@ -121,7 +122,7 @@ func (s *Service) FetchInsights() map[string]any {
 		result = map[string]any{"data": []any{},
 			"unavailable": "No SOC Insights (security actions) in the last 30 days for this tenant."}
 	}
-	s.Cache.Set(ck, result)
+	s.Cache.SetGen(ck, result, g)
 	return result
 }
 
