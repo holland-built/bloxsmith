@@ -1,0 +1,88 @@
+name: Release
+
+# Canonical release path: push a semver tag and CI runs goreleaser — GitHub
+# Release (tarballs + checksums + install scripts), ghcr images (multi-arch,
+# cosign keyless-signed), and — when the HOMEBREW_TAP_TOKEN secret is present —
+# the Homebrew tap. Local goreleaser (docs/SHIP.md) remains the manual fallback.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write   # create the GitHub Release
+  packages: write   # push ghcr images with the built-in GITHUB_TOKEN (no PAT)
+  id-token: write   # cosign keyless (OIDC) image signing
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # goreleaser needs full history + tags
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # go/web/ is committed + go:embed'd; --check proves it matches src/*.jsx.
+      - name: UI bundle up to date (build_ui --check)
+        run: node scripts/build_ui.js --check
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+
+      # Don't publish a tag that never passed tests: a tag can point at any
+      # commit, not just a CI-green master. Gate the release on the suite.
+      - name: Go build + test
+        working-directory: go
+        run: |
+          go build ./...
+          go test ./...
+
+      # Pre-fetch third-party templates (goreleaser's before hook also does
+      # this; running it explicitly fails fast with a clearer log on error).
+      - name: Fetch provisioning templates
+        run: TEMPLATES_DIR=go/templates python3 scripts/fetch_templates.py
+
+      - name: Set up QEMU (arm64 image build)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Set up goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          install-only: true
+
+      # Homebrew gating: the built-in GITHUB_TOKEN cannot push to the
+      # holland-built/homebrew-tap repo. If the HOMEBREW_TAP_TOKEN secret (PAT,
+      # repo scope on homebrew-tap) is present, release everything; if absent,
+      # skip only the brew channel so the release never fails for lack of it.
+      - name: goreleaser release
+        working-directory: go
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -n "$HOMEBREW_TAP_TOKEN" ]; then
+            goreleaser release --clean
+          else
+            echo "HOMEBREW_TAP_TOKEN not set — skipping Homebrew tap publish"
+            goreleaser release --clean --skip=homebrew
+          fi
