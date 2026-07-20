@@ -1,0 +1,89 @@
+name: MCP drift check
+
+# Infoblox reshuffles the undocumented CSP /mcp tool surface with no notice
+# (e.g. the whole iq-actions_* family vanished in a week). This job catalogs the
+# LIVE tool set nightly and, when it differs from the committed snapshot
+# (scripts/out_tools.json), opens a GitHub issue so the maintainer finds out
+# before a tile silently breaks. Maintainer-facing only — nothing user-visible.
+#
+# REQUIRES a repo secret INFOBLOX_API_KEY (a CSP API token). Without it the job
+# skips the live catalog and does nothing.
+
+on:
+  schedule:
+    - cron: "17 6 * * *" # ~06:17 UTC nightly
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if no API key configured
+        id: gate
+        run: |
+          if [ -z "${{ secrets.INFOBLOX_API_KEY }}" ]; then
+            echo "No INFOBLOX_API_KEY secret — skipping live MCP catalog."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: "3.13"
+
+      - name: Install MCP client
+        if: steps.gate.outputs.run == 'true'
+        run: pip install --quiet mcp
+
+      - name: Catalog live MCP tools
+        if: steps.gate.outputs.run == 'true'
+        env:
+          INFOBLOX_API_KEY: ${{ secrets.INFOBLOX_API_KEY }}
+          INFOBLOX_URL: https://csp.infoblox.com
+        run: python scripts/catalog_tools.py > /tmp/live_tools.json
+
+      - name: Diff vs committed snapshot
+        if: steps.gate.outputs.run == 'true'
+        id: diff
+        run: |
+          python - <<'PY'
+          import json, os
+          names = lambda p: sorted(t["name"] for t in json.load(open(p)))
+          live = names("/tmp/live_tools.json")
+          snap = names("scripts/out_tools.json")
+          added   = [n for n in live if n not in snap]
+          removed = [n for n in snap if n not in live]
+          changed = bool(added or removed)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"changed={'true' if changed else 'false'}\n")
+              f.write("body<<BODYEOF\n")
+              f.write("The live Infoblox CSP `/mcp` tool set no longer matches "
+                      "`scripts/out_tools.json`.\n\n")
+              f.write(f"**Added ({len(added)}):** {', '.join(added) or '_none_'}\n\n")
+              f.write(f"**Removed ({len(removed)}):** {', '.join(removed) or '_none_'}\n\n")
+              f.write("Re-run `python scripts/catalog_tools.py > scripts/out_tools.json` "
+                      "and commit to update the baseline once you've checked nothing broke.\n")
+              f.write("BODYEOF\n")
+          PY
+
+      - name: Open issue on drift
+        if: steps.gate.outputs.run == 'true' && steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          gh issue create --repo "${{ github.repository }}" \
+            --title "MCP drift detected ($DATE)" \
+            --label "mcp-drift" \
+            --body "${{ steps.diff.outputs.body }}" || \
+          gh issue create --repo "${{ github.repository }}" \
+            --title "MCP drift detected ($DATE)" \
+            --body "${{ steps.diff.outputs.body }}"
