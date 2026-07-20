@@ -18,9 +18,7 @@ function DnsTab(){
       render:heatCell(r=>Number(r.ttl),{warn:60,crit:86400,mode:'range',tip:'Flagged: TTL under 60s or over 24h'})},
     {key:'issues',label:'Issues',align:'left',render:v=>(v&&v.length)
       ? <span className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>{v.join(', ')}</span> : ''},
-    {key:'anomaly',label:'Flag',align:'left',render:v=>v
-      ? <span className="mono" style={{fontSize:'var(--t11)',color:'var(--warn)'}}>anomaly</span> : ''},
-    ...(canEdit?[{key:'__edit',label:'',align:'right',render:(v,z)=>
+    ...(canEdit?[{key:'__edit',label:'',align:'right',width:60,render:(v,z)=>
       <button className="btn" onClick={e=>{e.stopPropagation();nav('editor',{type:'dns_zone',id:z.id,fqdn:z.fqdn,view:z.view});}}>Edit</button>}]:[]),
   ];
 

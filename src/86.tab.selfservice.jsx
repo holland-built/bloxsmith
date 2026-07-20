@@ -289,7 +289,7 @@ function SelfServiceTab(){
     {key:'disabled',label:'Disabled',render:(v,r)=>r.id===editingId
       ?<input type="checkbox" checked={editDisabled} onChange={e=>setEditDisabled(e.target.checked)}/>
       :(v?'yes':'no')},
-    {key:'actions',label:'',render:(_,r)=>r.id===editingId
+    {key:'actions',label:'',width:150,render:(_,r)=>r.id===editingId
       ?<span style={{display:'flex',gap:6}}>
           <button className="btn" disabled={editBusy} onClick={saveEdit}>{editBusy?'Saving…':'Save'}</button>
           <button className="btn" disabled={editBusy} onClick={cancelEdit}>Cancel</button>
@@ -329,7 +329,7 @@ function SelfServiceTab(){
     {key:'name',label:'Name',render:v=>v||'—'},
     {key:'comment',label:'Comment',render:v=>v||'—'},
     {key:'state',label:'State',render:v=>StateText(v)},
-    {key:'actions',label:'',render:(_,r)=>
+    {key:'actions',label:'',width:150,render:(_,r)=>
       <button className="btn" disabled={releasingId===r.id} onClick={()=>releaseAddress(r)} {...bind({title:'Release address',rows:[['What it does','Return this address to the free pool so it can be allocated again.']]})}>{releasingId===r.id?'Releasing…':'Release'}</button>},
   ];
 

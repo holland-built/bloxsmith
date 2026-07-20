@@ -111,10 +111,6 @@ function IncidentsTab(){
     : 'No issues detected — all metrics within normal thresholds';
 
   const triageCols=[
-    // Persistent affordance that the row opens — never hover-gated. aria-expanded
-    // lives on the <tr> (DTRow, 40.table.jsx), not here.
-    {key:'__peek',label:'',width:24,sortable:false,
-      render:()=><span aria-hidden="true" style={{color:'var(--text-faint)'}}>›</span>},
     // Sits beside DataTable's own select box (td.dt-check), so it MUST stay labeled:
     // that one selects, this one mutates ack state (80.tab.security.jsx:186's lesson).
     {key:'ack',label:'Ack',width:48,sortable:false,render:(_,s)=>
@@ -122,8 +118,7 @@ function IncidentsTab(){
         onChange={()=>toggleAck(s)} aria-label="Acknowledge signal"/>},
     {key:'severity',label:'Sev',width:70,render:v=><SeverityBadge severity={v}/>},
     {key:'entity_id',label:'Entity',id:true},
-    {key:'category',label:'Category',mono:true},
-    {key:'message',label:'Message'},
+    {key:'message',label:'Message',render:(v,r)=><span>{r.category?<span className="tag" style={{marginRight:6}}>{r.category}</span>:null}{v}</span>},
     {key:'detected_at',label:'Age',mono:true,align:'right',render:v=>secEvtAge(v)},
   ];
 
