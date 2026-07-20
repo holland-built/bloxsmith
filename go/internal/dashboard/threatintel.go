@@ -118,11 +118,12 @@ func (s *Service) FetchDossier(q, itype string) map[string]any {
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
 	}
+	g := s.Cache.Gen()
 	job, st, _ := s.Rest.GetEx("/tide/api/services/intel/lookup/indicator/"+itype,
 		map[string]string{"value": q, "wait": "true"})
 	if st == 403 {
 		res := dossierUnavail(q, itype, "Dossier not entitled")
-		s.Cache.Set(ck, res)
+		s.Cache.SetGen(ck, res, g)
 		return res
 	}
 	jobID := ""
@@ -138,7 +139,7 @@ func (s *Service) FetchDossier(q, itype string) map[string]any {
 		results = asSlice(m["results"])
 	}
 	out := normDossier(q, itype, results)
-	s.Cache.Set(ck, out)
+	s.Cache.SetGen(ck, out, g)
 	return out
 }
 
@@ -252,6 +253,7 @@ func (s *Service) FetchLookalikes() map[string]any {
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
 	}
+	g := s.Cache.Gen()
 	dom, st1, _ := s.Rest.GetEx("/api/tdlad/v1/lookalike_domains", map[string]string{"_limit": "500"})
 	tgt, st2, _ := s.Rest.GetEx("/api/tdlad/v1/lookalike_targets", nil)
 	var result map[string]any
@@ -263,7 +265,7 @@ func (s *Service) FetchLookalikes() map[string]any {
 	default:
 		result = normLookalikes(dom, tgt)
 	}
-	s.Cache.Set(ck, result)
+	s.Cache.SetGen(ck, result, g)
 	return result
 }
 
@@ -322,6 +324,7 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
 	}
+	g := s.Cache.Gen()
 	assets, rollup, trend := []any{}, []any{}, []any{}
 	if s.Mcp != nil && s.Mcp.Initialize(ctx) == nil {
 		invD := s.Mcp.QueryCube(ctx, "SecurityActionAssets",
@@ -357,7 +360,7 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 		result = map[string]any{"assets": []any{}, "rollup": []any{}, "trend": []any{},
 			"unavailable": "No security-action assets in the last 30 days for this tenant."}
 	}
-	s.Cache.Set(ck, result)
+	s.Cache.SetGen(ck, result, g)
 	return result
 }
 

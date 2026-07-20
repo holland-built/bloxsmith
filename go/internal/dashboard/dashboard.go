@@ -20,6 +20,10 @@ func (s *Service) FetchDashboardData() map[string]any {
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
 	}
+	// Capture the cache generation BEFORE the upstream fetch: a vault/portal
+	// tenant switch mid-fetch Rotates the cache, and SetGen then drops this
+	// now-wrong-tenant result instead of caching it under the new tenant.
+	g := s.Cache.Gen()
 
 	subnetsD := s.Rest.Get("/api/ddi/v1/ipam/subnet",
 		map[string]string{"_fields": "id,name,address,cidr,utilization,tags", "_limit": "5000"})
@@ -65,6 +69,6 @@ func (s *Service) FetchDashboardData() map[string]any {
 	log.Printf("  subnets=%d leases=%d zones=%d hosts=%d policies=%d feeds=%d audit=%d(%s)",
 		len(subnetsD), len(leasesD), len(zonesD), len(hostsD), len(policiesD), len(feedsD),
 		len(auditD), auditStatus)
-	s.Cache.Set(ck, result)
+	s.Cache.SetGen(ck, result, g)
 	return result
 }

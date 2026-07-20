@@ -143,6 +143,9 @@ func (v *Vault) UnlockR(passphrase string) map[string]any {
 	if err := v.Unlock(passphrase); err != nil {
 		return fail(err.Error())
 	}
+	// Unlocking loads a (possibly different) active tenant into memory — coordinate
+	// the auth reset + cache rotate so nothing from a prior locked session leaks.
+	v.rotateAuth()
 	_ = v.RefreshNames() // best-effort, mirrors the try/except at 2828
 	return ok()
 }
@@ -167,15 +170,24 @@ func (v *Vault) AddTenant(label, key string, groq *string) map[string]any {
 		}
 	}
 	tid := tokenHex(6)
+	snap := v.snapshot()
 	v.tenants = append(v.tenants, Tenant{ID: tid, Label: label, Key: nk})
 	if groq != nil {
 		v.groq = strings.TrimSpace(*groq)
 	}
+	becameActive := false
 	if v.active == nil {
 		v.active = &tid
+		becameActive = true
 	}
 	if err := v.save(); err != nil {
+		v.restore(snap)
 		return fail(err.Error())
+	}
+	// The first tenant added to an empty vault becomes active — the active key
+	// just changed from nothing to this tenant, so rotate the auth+cache.
+	if becameActive {
+		v.rotateAuth()
 	}
 	return map[string]any{"ok": true, "id": tid, "label": label}
 }
@@ -187,6 +199,8 @@ func (v *Vault) RemoveTenant(tid string) map[string]any {
 	if !v.unlocked {
 		return fail("locked")
 	}
+	snap := v.snapshot()
+	removedActive := v.active != nil && *v.active == tid
 	kept := v.tenants[:0:0]
 	for _, t := range v.tenants {
 		if t.ID != tid {
@@ -194,7 +208,7 @@ func (v *Vault) RemoveTenant(tid string) map[string]any {
 		}
 	}
 	v.tenants = kept
-	if v.active != nil && *v.active == tid {
+	if removedActive {
 		if len(v.tenants) > 0 {
 			id := v.tenants[0].ID
 			v.active = &id
@@ -203,7 +217,13 @@ func (v *Vault) RemoveTenant(tid string) map[string]any {
 		}
 	}
 	if err := v.save(); err != nil {
+		v.restore(snap)
 		return fail(err.Error())
+	}
+	// Removing the active tenant re-points active (or clears it) — the active key
+	// changed, so rotate the auth+cache.
+	if removedActive {
+		v.rotateAuth()
 	}
 	return ok()
 }
@@ -234,6 +254,10 @@ func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 	if idx < 0 {
 		return fail("unknown connection")
 	}
+	snap := v.snapshot()
+	// The active tenant's key changes only when this tenant is active AND a new
+	// key was supplied — that's what invalidates cached rows / a portal switch.
+	activeKeyChanged := nk != "" && v.active != nil && *v.active == tid
 	if nk != "" {
 		v.tenants[idx].Key = nk
 		if lbl == "" { // new key, no explicit name → auto-resolve
@@ -250,7 +274,11 @@ func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 		v.tenants[idx].Label = lbl
 	}
 	if err := v.save(); err != nil {
+		v.restore(snap)
 		return fail(err.Error())
+	}
+	if activeKeyChanged {
+		v.rotateAuth()
 	}
 	return map[string]any{"ok": true, "id": tid, "label": v.tenants[idx].Label}
 }
@@ -272,22 +300,34 @@ func (v *Vault) SetActive(tid string) map[string]any {
 	if !found {
 		return fail("unknown tenant")
 	}
+	snap := v.snapshot()
 	id := tid
 	v.active = &id
 	if err := v.save(); err != nil {
+		v.restore(snap)
 		return fail(err.Error())
 	}
+	// SetActive is the canonical vault-tenant switch: coordinated reset of the
+	// portal override + account.Manager active + JWT ts, plus a cache Rotate.
+	v.rotateAuth()
 	return map[string]any{"ok": true, "active": tid}
 }
 
-// LockR wraps Lock (server.py:2943) in the {ok} shape.
-func (v *Vault) LockR() map[string]any { v.Lock(); return ok() }
+// LockR wraps Lock (server.py:2943) in the {ok} shape. Locking drops the active
+// key, so coordinate the auth reset + cache rotate.
+func (v *Vault) LockR() map[string]any {
+	v.Lock()
+	v.rotateAuth()
+	return ok()
+}
 
-// ResetR wraps Reset (server.py:2951).
+// ResetR wraps Reset (server.py:2951). Reset clears all tenants (no active key),
+// so coordinate the auth reset + cache rotate.
 func (v *Vault) ResetR() map[string]any {
 	if err := v.Reset(); err != nil {
 		return fail(err.Error())
 	}
+	v.rotateAuth()
 	return ok()
 }
 

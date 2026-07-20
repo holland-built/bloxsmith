@@ -154,6 +154,20 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// same rest proxy. The MCP client is built for the later search (1e) / AI
 	// (1h) phases; /api/data itself uses REST (the parquet path is broken).
 	sharedCache := cache.New()
+
+	// Multi-account switcher, plus the coordinated auth reset the vault runs on a
+	// tenant mutation (SetActive/add-first/remove-active/update-active-key/
+	// unlock/lock/reset): clear the portal Bearer override, reset the account
+	// switcher's active state, and Rotate() the cache (fence in-flight fetches +
+	// drop prior-tenant rows). Portal /api/switch-account keeps its own override
+	// and only Rotates — it is intentionally NOT cleared here.
+	acct := account.New(cfg.BaseURL, cfg.APIKey, auth, sharedCache)
+	v.SetAuthReset(func() {
+		auth.SetOverride("")
+		acct.ResetActive()
+		sharedCache.Rotate()
+	})
+
 	dash := dashboard.New(restClient, sharedCache)
 	// The MCP client backs the Phase 1h AI tool loop (dashboard.RunAITool);
 	// /api/data itself uses REST (the parquet path is broken).
@@ -190,7 +204,7 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 		Edit:           edit.New(restClient),
 		Provision:      provision.New(restClient, cfg.TemplatesDir),
 		AI:             ai.New(llmCreds{cfg: cfg, v: v}, dash),
-		Account:        account.New(cfg.BaseURL, cfg.APIKey, auth, sharedCache),
+		Account:        acct,
 		Version:        version,
 		Static:         staticHandler(),
 		UpdateCheck:    updateCheckHandler,
@@ -215,7 +229,12 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// Shutdown() the listener and hand the port to its successor cleanly.
 	srv := &http.Server{Handler: handler}
 	shutdownServer = srv.Shutdown
-	ln, err := listenWithRetry(":"+cfg.Port, 5*time.Second)
+	// Bind cfg.Host (HOST env), not all-interfaces: the laptop/service default
+	// "localhost" stays loopback-only (never expose an auto-unlocked, no-login
+	// dashboard to the LAN), while the Docker image sets HOST=0.0.0.0 to be
+	// reachable through its published port. Previously this bound ":"+port
+	// (all interfaces) and ignored HOST entirely.
+	ln, err := listenWithRetry(cfg.Host+":"+cfg.Port, 5*time.Second)
 	if err != nil {
 		return nil, nil, nil, err
 	}
