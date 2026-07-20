@@ -191,7 +191,8 @@ function ViewOptions(){
   .update-step-label{flex:1 1 auto;}
   .update-step-pct{font-size:var(--t11);color:var(--text-dim);}
   .update-modal-note{font-size:var(--t11);color:var(--text-dim);}
-  .update-modal-err{font-size:var(--t11);color:var(--crit);line-height:1.5;}
+  .update-modal-err{display:flex;flex-direction:column;align-items:flex-start;gap:8px;font-size:var(--t11);color:var(--crit);line-height:1.5;}
+  .update-modal-close{align-self:flex-end;}
   @keyframes update-spin{to{transform:rotate(360deg)}}
   .more-update-dot{position:absolute;top:-1px;right:-1px;width:7px;height:7px;
     background:var(--accent);border-radius:50%;box-shadow:0 0 0 2px var(--surface);pointer-events:none;}
@@ -275,10 +276,17 @@ function useSelfUpdate(){
           try{sessionStorage.setItem('bloxsmith_updated_to', (apply&&apply.version)||(info&&info.latest)||'');}catch(e2){}
           setTimeout(()=>location.reload(),3000); }
       },1200);
-    }catch(e){ setApply({phase:'error',pct:0,error:String(e)}); }
+    }catch(e){ /* The POST connection dropped — the app is served BY the binary being
+        swapped, so an unreachable origin means it's restarting into the new version (a
+        success race), NOT a failure. On a real apply failure the old binary keeps
+        serving (it never releases the socket), so a dropped connection is always a
+        restart. Show "restarting…" and reload, don't scare the user with an error. */
+      try{sessionStorage.setItem('bloxsmith_updated_to', (info&&info.latest)||'');}catch(e2){}
+      setApply({phase:'restarting',pct:95});
+      setTimeout(()=>location.reload(),3000); }
   };
 
-  return {info,recheck,apply,runApply,justUpdated,dismissToast:()=>setJustUpdated('')};
+  return {info,recheck,apply,runApply,justUpdated,dismissToast:()=>setJustUpdated(''),dismissApply:()=>setApply(null)};
 }
 
 /* UpdatePill — the VISIBLE top-bar affordance. Renders only when an update exists; an
@@ -300,7 +308,7 @@ function UpdatePill({update}){
 
 /* UpdateModal — the stepped self-update overlay (Check → Download → Verify → Apply →
    Restart). Driven entirely by the shared apply state; rendered once at TopBar level. */
-function UpdateModal({apply,latest}){
+function UpdateModal({apply,latest,onDismiss}){
   const STEPS=[
     {key:'check',   label:'Check',   phases:['starting','checking']},
     {key:'download',label:'Download',phases:['downloading']},
@@ -313,9 +321,11 @@ function UpdateModal({apply,latest}){
   let active=STEPS.findIndex(s=>s.phases.includes(apply.phase));
   if(active<0) active=err?Math.min(4,Math.floor(pct/20)):0;
   const restarting=apply.phase==='done'||pct>=100;
-  return <div className="update-modal-backdrop" role="dialog" aria-modal="true" aria-label="Software update in progress">
-    <div className="update-modal">
-      <div className="update-modal-title mono">Updating → v{apply.version||latest}</div>
+  const ver=String(apply.version||latest||'').replace(/^v/,'');
+  return <div className="update-modal-backdrop" role="dialog" aria-modal="true" aria-label="Software update in progress"
+    onClick={err?onDismiss:undefined}>
+    <div className="update-modal" onClick={e=>e.stopPropagation()}>
+      <div className="update-modal-title mono">Updating → v{ver}</div>
       <ol className="update-steps">
         {STEPS.map((s,i)=>{
           const state=err&&i===active?'error':i<active?'done':i===active?'active':'pending';
@@ -327,7 +337,10 @@ function UpdateModal({apply,latest}){
         })}
       </ol>
       {err
-        ? <div className="update-modal-err" role="alert">Update failed: {apply.error} (previous version kept)</div>
+        ? <div className="update-modal-err" role="alert">
+            <span>Update failed: {apply.error} (previous version kept)</span>
+            <button type="button" className="kbd update-modal-close" onClick={onDismiss}>Close</button>
+          </div>
         : restarting?<div className="update-modal-note" role="status" aria-live="polite">restarting…</div>:null}
     </div>
   </div>;
@@ -451,7 +464,7 @@ function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
       <span className="tb-group"><MoreMenu onPalette={onPalette} update={u}/></span>
       <span className="tb-group"><AccountSlot/></span>
     </div>
-    {u.apply&&<UpdateModal apply={u.apply} latest={u.info&&u.info.latest}/>}
+    {u.apply&&<UpdateModal apply={u.apply} latest={u.info&&u.info.latest} onDismiss={u.dismissApply}/>}
     {u.justUpdated&&<UpdateToast version={u.justUpdated} onDismiss={u.dismissToast}/>}
   </header>;
 }
