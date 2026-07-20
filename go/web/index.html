@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Bloxsmith</title>
+<script type="importmap">
+{ "imports": {
+  "react": "./vendor.react-19-2-7.8c3b2ed6.js",
+  "react/jsx-runtime": "./vendor.react-19-2-7-jsx-runtime.805ef1b3.js",
+  "react-dom": "./vendor.react-dom-19-2-7.4dd257fe.js",
+  "react-dom/client": "./vendor.react-dom-19-2-7-client.05c771c8.js",
+  "@astryxdesign/core": "./vendor.astryxdesign-core-0-1-4.d9d26976.js"
+}}
+</script>
+<link rel="stylesheet" href="vendor.astryx.css">
+<style id="astryx-theme-map">
+/* Map Astryx design tokens onto the Bloxsmith palette so Astryx components are
+   on-brand AND follow the app's [data-theme] toggle (Astryx's own light-dark()
+   keys off color-scheme, which the app pins to dark — so we override here). The
+   app's --accent/--text/--border/... already flip on data-theme, so pointing
+   Astryx tokens at them makes Astryx track the toggle automatically. */
+:root, [data-theme="dark"], [data-theme="light"] {
+  --color-accent: var(--accent);
+  --color-accent-muted: var(--accent-dim);
+  --color-on-accent: var(--accent-contrast);
+  --color-neutral: var(--surface);
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--text-dim);
+  --color-text-tertiary: var(--text-faint);
+  --color-border: var(--border);
+  --color-border-emphasized: var(--border-strong);
+  --color-tint-hover: var(--hover);
+  --color-overlay-hover: var(--hover);
+  --radius-element: var(--r-ctl);
+  --radius-container: var(--r-panel);
+}
+/* Astryx's "default" Badge ships transparent — it reads as plain text next to the
+   filled success/error pills, so a table's badges don't look like one family. Give
+   it a neutral fill so every Astryx.Badge is the same pill shape (the success/error
+   variants already carry their own colour; only default was bare). Scoped to Badge —
+   Card.default is unaffected. */
+.astryx-badge.default{ background:var(--raised); color:var(--text-dim); }
+/* Astryx's button paints its variant BACKGROUND but declares no `color` of its own,
+   so the app's `button{color:inherit}` reset (~l.105) leaks whatever ancestor text
+   colour happens to be nearby. The Audit "Export Audit Log" primary sits inside the
+   panel header's <span class="side">, which is --text-faint: measured #5c5c5c on the
+   primary blue = 1.47:1 (AA needs 4.5). Inheriting a colour is never right for a
+   button whose background is fixed by its variant — pin the variant's own token so
+   placement can't decide legibility. */
+.astryx-button.primary{color:var(--color-on-accent);}
+</style>
+<script>
+/* no-flash theme boot — runs before styles parse. bx.theme is stored as JSON
+   ("light"/"dark") by the LS helper, so strip quotes defensively. */
+try{
+  var _t=localStorage.getItem('bx.theme');
+  if(_t){_t=_t.replace(/^"|"$/g,'');}
+  if(_t!=='light'&&_t!=='dark'){
+    _t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
+  }
+  document.documentElement.dataset.theme=_t;
+  var _d=localStorage.getItem('bx.density');
+  if(_d){_d=_d.replace(/^"|"$/g,'');}
+  if(_d!=='comfortable'&&_d!=='compact'){_d='compact';}
+  document.documentElement.dataset.density=_d;
+}catch(e){document.documentElement.dataset.theme='dark';document.documentElement.dataset.density='compact';}
+</script>
+<style>
+@font-face{font-family:'Geist';src:url('Geist-400.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap;}
+@font-face{font-family:'Geist';src:url('Geist-500.woff2') format('woff2');font-weight:500;font-style:normal;font-display:swap;}
+@font-face{font-family:'Geist';src:url('Geist-600.woff2') format('woff2');font-weight:600;font-style:normal;font-display:swap;}
+@font-face{font-family:'Geist';src:url('Geist-700.woff2') format('woff2');font-weight:700;font-style:normal;font-display:swap;}
+@font-face{font-family:'GeistMono';src:url('GeistMono-400.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap;}
+@font-face{font-family:'GeistMono';src:url('GeistMono-500.woff2') format('woff2');font-weight:500;font-style:normal;font-display:swap;}
+
+:root{
+  color-scheme:dark;
+  --bg:#000; --surface:#0a0a0a; --raised:#111; --hover:#1a1a1a;
+  --border:#262626; --border-strong:#333;
+  --border-input:#5f5f5f; /* text-field boundary — ≥3:1 vs surface (WCAG 1.4.11) */
+  --text:#ededed; --text-dim:#a1a1a1; --text-faint:#8a8a8a;
+  --accent:#0070f3; --accent-text:#3291ff;
+  --ok:#0cce6b; --warn:#f5a623; --crit:#ff4444;
+  --scrim:rgba(0,0,0,.6); --crit-tint:rgba(255,68,68,.08); --crit-tint-border:rgba(255,68,68,.3); --warn-tint:rgba(245,166,35,.14);
+  --accent-contrast:#fff; --logo-chip:#fff;
+  --accent-dim:rgba(0,112,243,.14); --ok-dim:rgba(12,206,107,.13); --warn-dim:rgba(245,166,35,.13); --crit-dim:rgba(255,68,68,.13); --border2:#1c1c1c;
+
+  --t11:11px; --t12:12px; --t13:13px; --t14:14px; --t16:16px; --t20:20px; --t28:28px;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s12:48px;
+  --r-ctl:4px; --r-panel:6px;
+  --row-h:28px; --dt-fs:var(--t12);
+  /* Trailing gutter column the per-row KebabMenu (⋮) lives in. */
+  --dt-actions-w:28px;
+  --body-table:280px; --body-chart:220px;
+  /* Panel-size scale — one source of truth for panel/table/chart body heights.
+     Panel `size` prop (sm/md/lg) + rerouted ad-hoc max-heights all read these. */
+  --panel-sm:220px; --panel-md:340px; --panel-lg:560px;
+}
+[data-density="comfortable"]{--row-h:32px;}
+[data-theme="light"]{color-scheme:light;
+  --bg:#fafafa;--surface:#fff;--raised:#f2f2f2;--hover:#e8e8e8;
+  --border:#e2e2e2;--border-strong:#cfcfcf;--border-input:#8a8a8a;
+  --text:#171717;--text-dim:#525252;--text-faint:#5c5c5c;
+  --accent:#0070f3;--accent-text:#0057c2;
+  --ok:#047857;--warn:#b45309;--crit:#dc2626;
+  --scrim:rgba(0,0,0,.35);--crit-tint:rgba(220,38,38,.06);--crit-tint-border:rgba(220,38,38,.3);--warn-tint:rgba(180,83,9,.12);
+  --accent-dim:rgba(0,96,208,.09);--ok-dim:rgba(10,143,77,.10);--warn-dim:rgba(185,118,26,.10);--crit-dim:rgba(217,32,32,.09);--border2:#efefef;}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:'Geist',-apple-system,system-ui,sans-serif;
+  font-size:var(--t13); line-height:1.45;
+  color:var(--text); background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:'GeistMono','SFMono-Regular',ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.kpi-num{font-family:'GeistMono','SFMono-Regular',ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:var(--t28);font-weight:600;line-height:1;}
+a{color:var(--accent-text);text-decoration:none;}
+button{font-family:inherit;color:inherit;cursor:pointer;}
+
+:focus{outline:none;}
+:focus-visible{box-shadow:0 0 0 1px var(--accent-text);border-radius:var(--r-ctl);}
+
+.btn{
+  display:inline-flex;align-items:center;gap:var(--s2);
+  height:28px;padding:0 var(--s3);
+  font-size:var(--t12);font-weight:500;
+  background:var(--raised);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--r-ctl);
+  transition:background .12s ease,border-color .12s ease;
+}
+.btn:hover{background:var(--hover);border-color:var(--border-strong);}
+.btn-ghost{background:transparent;border-color:transparent;}
+.btn-ghost:hover{background:var(--hover);border-color:var(--border);}
+
+.panel{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r-panel);
+}
+
+/* ── top bar ── */
+.topbar{
+  display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;
+  min-height:48px;padding:0 var(--s4);
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+  position:sticky;top:0;z-index:40;
+}
+.brand{display:flex;align-items:center;gap:var(--s2);flex:0 0 auto;}
+.brand-logo{width:24px;height:24px;border-radius:var(--r-ctl);display:flex;align-items:center;justify-content:center;background:var(--raised);border:1px solid var(--border);overflow:hidden;}
+.brand-name{font-size:var(--t13);font-weight:600;color:var(--text);}
+.brand-org{font-size:var(--t12);color:var(--text-dim);}
+
+/* Service-health strip (HealthStrip) — under the tabbar. */
+.health-strip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:4px 16px;border-bottom:1px solid var(--border);background:var(--surface);font-size:var(--t12);}
+.health-strip-label{color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;font-size:10px;}
+.health-seg{display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid transparent;border-radius:var(--r-panel);padding:2px 8px;color:var(--text);font:inherit;cursor:pointer;}
+.health-seg.active{border-color:var(--border-strong);}
+.health-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
+.health-dot.ok{background:var(--ok);}
+.health-dot.warn{background:var(--warn);}
+.health-dot.crit{background:var(--crit);}
+.health-svc{font-weight:500;}
+.health-status{color:var(--text-dim);}
+
+.tabbar{
+  display:flex;align-items:center;gap:var(--s1);
+  order:3;flex-basis:100%;min-width:0;overflow-x:auto;
+  scrollbar-width:none;
+}
+.tabbar::-webkit-scrollbar{display:none;}
+.tab{
+  position:relative;flex:0 0 auto;
+  height:48px;padding:0 var(--s3);
+  display:inline-flex;align-items:center;
+  font-size:var(--t12);font-weight:500;color:var(--text-dim);
+  background:transparent;border:none;
+  transition:color .12s ease;
+}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--text);}
+.tab.active::after{
+  content:'';position:absolute;left:var(--s3);right:var(--s3);bottom:0;
+  height:2px;background:var(--accent);
+}
+.topbar-right{display:flex;align-items:center;gap:var(--s3);flex:0 0 auto;margin-left:auto;}
+.kbd{
+  display:inline-flex;align-items:center;gap:var(--s1);
+  height:26px;padding:0 var(--s2);
+  font-size:var(--t11);color:var(--text-dim);
+  background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);
+}
+/* AI trigger — prominent accented feature button, distinct from the neutral kbd chips */
+.ai-trigger{
+  padding:0 var(--s3);font-size:var(--t12);font-weight:600;
+  background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent-text);
+  transition:background .12s ease,border-color .12s ease;
+}
+.ai-trigger:hover{background:var(--accent-dim);border-color:var(--accent-text);}
+.ai-trigger--open{background:var(--accent);color:#fff;border-color:var(--accent);}
+/* --accent-bg was never defined by either theme block, so it always fell back to a
+   hardcoded dark-navy hex while --accent-text kept flipping per theme (WCAG 2.18:1 in
+   light). Reuse .ai-trigger's already-themed accent-dim/accent-text pair instead. */
+.ai-trigger--accent{background:var(--accent-dim);border-color:var(--accent);color:var(--accent-text);}
+/* topbar-right cluster grouping — logical groups separated by thin dividers */
+.tb-group{display:inline-flex;align-items:center;gap:var(--s2);}
+.tb-group:not(:empty) + .tb-group:not(:empty)::before{content:'';width:1px;height:18px;background:var(--border-strong);margin:0 var(--s1);flex:0 0 auto;}
+.view-options{position:relative;display:inline-flex;}
+.view-options-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;display:flex;flex-direction:column;gap:var(--s1);padding:var(--s2);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.view-options-menu .kbd{width:100%;justify-content:flex-start;}
+.more-panel{position:absolute;top:100%;right:0;margin-top:8px;min-width:220px;padding:6px;z-index:60;}
+.more-row{display:flex;align-items:center;padding:2px 0;}
+
+/* ── freshness pill ── */
+.fresh{
+  display:inline-flex;align-items:center;gap:var(--s2);
+  font-size:var(--t11);color:var(--text-faint);
+}
+.fresh.err{color:var(--crit);}
+.fresh-retry{
+  font-size:var(--t11);color:var(--accent-text);
+  background:transparent;border:none;padding:0;
+}
+
+/* ── severity badge (audit chain status, etc.) ── */
+.sev-badge{
+  display:inline-flex;align-items:center;gap:var(--s2);
+  font-size:var(--t11);font-weight:600;text-transform:uppercase;letter-spacing:.02em;
+  padding:2px 8px;border-radius:var(--r-ctl);border:1px solid transparent;
+}
+.sev-badge.ok{color:var(--ok);border-color:var(--ok);background:var(--ok-dim);}
+.sev-badge.warn{color:var(--warn);border-color:var(--warn);background:var(--warn-dim);}
+.sev-badge.crit{color:var(--crit);border-color:var(--crit);background:var(--crit-dim);}
+
+/* ── table ── */
+/* table-fit default (site-wide): fixed layout + per-cell ellipsis means every
+   table divides the width it's given and clips overlong cells instead of forcing
+   a horizontal scrollbar. overflow-x:auto stays only as a last-resort safety when
+   the sum of explicit column min-widths genuinely can't fit. */
+.tbl-wrap{width:100%;overflow-x:auto;}
+table.dt{width:100%;border-collapse:collapse;font-size:var(--dt-fs);table-layout:fixed;}
+table.dt thead th{
+  text-align:left;font-weight:500;color:var(--text-dim);
+  padding:0 var(--s3);height:var(--row-h);
+  border-bottom:1px solid var(--border);
+  white-space:nowrap;user-select:none;cursor:pointer;
+  background:var(--surface);
+  /* tbody td has clipped+ellipsised since forever; th never did. With nowrap and
+     overflow:visible a long header spills straight out of its own cell and paints
+     over its neighbours — that's the unreadable run-together header mush
+     ("SEVCBRRCEMCSTAMTESRAVEDASESSRM"), not merely narrow columns. Match td; the
+     th's title attr carries the full label for anything ellipsised. */
+  overflow:hidden;text-overflow:ellipsis;
+}
+table.dt thead th.num{text-align:right;}
+table.dt thead th .sort-ind{color:var(--text-faint);margin-left:var(--s1);}
+/* Unsorted columns still render the span (empty: no badge, no arrow), so its
+   margin stole 4px of label width from every header for nothing — and headers
+   clip+ellipsis now, so that 4px was real lost text. */
+table.dt thead th .sort-ind:empty{margin-left:0;}
+/* Feature 7 — multi-sort order badge: a small numbered circle ahead of the arrow,
+   shown only once 2+ sort keys are active (never color-only — the number itself
+   IS the signal, same text badge in both themes). */
+table.dt thead th .sort-order{display:inline-flex;align-items:center;justify-content:center;
+  width:13px;height:13px;border-radius:50%;background:var(--accent);color:var(--accent-contrast);
+  font-size:var(--t11);font-weight:700;margin-right:2px;vertical-align:1px;}
+table.dt tbody td{
+  padding:0 var(--s3);height:var(--row-h);
+  border-bottom:1px solid var(--border);
+  color:var(--text);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
+}
+table.dt tbody td.num{text-align:right;}
+table.dt tbody tr{transition:background .1s ease;}
+table.dt tbody tr.clickable{cursor:pointer;}
+table.dt tbody tr.clickable:hover{background:var(--hover);}
+.dt-empty{color:var(--text-faint);padding:var(--s3);text-align:center;}
+/* ── shared state triad (empty / error) ── */
+.dt-state{display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:var(--s4) var(--s3);text-align:center;}
+.dt-empty-title{color:var(--text);font-size:var(--t13);font-weight:500;}
+.dt-empty-note{color:var(--text-faint);font-size:var(--t12);}
+.dt-empty-chips{display:inline-flex;flex-wrap:wrap;gap:var(--s2);justify-content:center;}
+.dt-error{color:var(--crit);}
+.dt-error-msg{display:inline-flex;align-items:baseline;gap:var(--s1);color:var(--crit);font-size:var(--t12);}
+.dt-error-tag{font-weight:600;text-transform:uppercase;letter-spacing:.02em;font-size:var(--t11);}
+.dt-toolbar{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;padding:var(--s2) 0;}
+
+/* ── toasts ── */
+.toasts{
+  position:fixed;right:var(--s4);bottom:var(--s4);z-index:80;
+  display:flex;flex-direction:column;gap:var(--s2);
+  max-width:340px;
+}
+.toast{
+  padding:var(--s2) var(--s3);
+  font-size:var(--t12);
+  background:var(--raised);border:1px solid var(--border-strong);
+  border-radius:var(--r-ctl);color:var(--text);
+}
+.toast.err{border-color:var(--crit);color:var(--crit);}
+.toast.warn{border-color:var(--warn);}
+.toast.ok{border-color:var(--border-strong);}
+
+/* ── skeleton (no pulse) ── */
+.skel{
+  display:block;height:12px;border-radius:var(--r-ctl);
+  background:var(--hover);opacity:.6;
+}
+.skel-row{height:14px;margin:var(--s2) 0;}
+.skel-note{display:flex;align-items:center;gap:var(--s2);font-size:var(--t12);color:var(--text-dim);margin:0 0 var(--s3);}
+.skel-spin{width:13px;height:13px;flex:none;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:boot-spin .7s linear infinite;}
+
+/* ── boot splash — static HTML inside #root so the very first paint is never a
+   blank screen; React's root.render() replaces it once the app mounts. ── */
+.boot-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s3);background:var(--bg);}
+.boot-spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:boot-spin .7s linear infinite;}
+.boot-title{font-size:var(--t16);font-weight:600;color:var(--text);letter-spacing:.02em;}
+.boot-note{font-size:var(--t12);color:var(--text-dim);}
+@keyframes boot-spin{to{transform:rotate(360deg);}}
+
+/* ── stub ── */
+.stub{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:280px;gap:var(--s2);
+  color:var(--text-faint);
+  border:1px dashed var(--border);border-radius:var(--r-panel);
+  margin:var(--s6);
+}
+.stub-name{font-size:var(--t16);font-weight:600;color:var(--text-dim);}
+.stub-sub{font-size:var(--t12);color:var(--text-faint);}
+
+.main{padding:var(--s6);width:100%;max-width:min(100%,2040px);margin:0 auto;transition:padding-right .16s ease;}
+
+/* ── shared layout + synthesis primitives ── */
+.page{display:flex;flex-direction:column;gap:var(--s6);}
+/* PageHeader — consistent tab-level title/subtitle/actions row (see PageHeader() fn). */
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s4);margin:0 2px var(--s4);}
+.page-head-main{min-width:0;}
+.page-title{font-size:var(--t16);font-weight:600;margin:0;letter-spacing:-.2px;color:var(--text);}
+.page-sub{font-size:var(--t12);color:var(--text-dim);margin:2px 0 0;}
+.page-actions{display:flex;gap:var(--s2);flex-wrap:wrap;flex:none;}
+/* form utilities — used by the provisioning/editor/drift/self-service tabs whose forms
+   are stacks of labeled inputs, so per-field styling isn't repeated inline. */
+.field-lbl{font-size:var(--t11);color:var(--text-faint);}
+.form-col{display:flex;flex-direction:column;gap:var(--s3);}
+.check-row{display:flex;align-items:center;gap:var(--s2);}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+.grid-2>*,.grid-3>*{min-width:0;}
+.prose{max-width:72ch;min-width:0;overflow-wrap:anywhere;}
+.band{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s5);width:100%;min-width:0;padding:var(--s5);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);}
+.band-verdict{display:flex;align-items:flex-start;gap:var(--s3);flex:1 1 320px;min-width:0;overflow-wrap:anywhere;}
+.band-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;margin-top:5px;}
+.band-facts{display:flex;flex-wrap:wrap;gap:var(--s6);flex:1 1 auto;min-width:0;}
+.band-fact{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.band-fact-l{font-size:var(--t11);color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
+.band-fact-v{font-size:var(--t16);color:var(--text);display:inline-flex;align-items:baseline;gap:var(--s2);min-width:0;overflow-wrap:anywhere;}
+.band-chips{display:flex;flex-wrap:wrap;gap:var(--s2);flex:0 1 auto;min-width:0;align-items:center;}
+.band-chip{cursor:pointer;}
+.band-chip:hover{border-color:var(--border-strong);color:var(--text);}
+
+.chip{
+  display:inline-flex;align-items:center;height:20px;padding:0 var(--s2);
+  font-size:var(--t11);color:var(--text-dim);
+  background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);
+}
+
+/* command palette stub */
+.palette-scrim{position:fixed;inset:0;z-index:90;background:var(--scrim);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;}
+.palette{width:min(560px,92vw);}
+.palette-in{width:100%;height:44px;padding:0 var(--s4);font-size:var(--t14);color:var(--text);background:var(--raised);border:1px solid var(--border-strong);border-radius:var(--r-panel);}
+.palette-body{padding:var(--s3);color:var(--text-faint);font-size:var(--t12);}
+
+/* row-level focus ring for keyboard-tabbable clickable rows */
+table.dt tbody tr.clickable:focus-visible{box-shadow:inset 0 0 0 1px var(--accent-text);}
+
+/* ── power layer: keyboard cursor, row flash, selection, peek, action bar ──
+   Feature 5: the cursor row is NOT color-only — a full inset ring (all four
+   sides, like the focus-visible ring above) is the real signal, on top of the
+   background tint + left accent bar; aria-selected + aria-activedescendant
+   (DTRow/DataTable) carry the same state for assistive tech. */
+table.dt tbody tr.cursor{background:var(--hover);
+  box-shadow:inset 2px 0 0 var(--accent),inset 0 0 0 1px var(--accent-text);}
+@keyframes bx-flash{0%{background:var(--hover);}100%{background:transparent;}}
+table.dt tbody tr.flash{animation:bx-flash .4s ease;}
+table.dt td.dt-check,table.dt th.dt-check{width:28px;text-align:center;padding:0 var(--s2);cursor:default;}
+table.dt td.dt-check input,table.dt th.dt-check input{cursor:pointer;vertical-align:middle;}
+
+/* ── Compare-to-snapshot gutter: glyph (+ / − / ~) + aria label is the ONLY diff
+   signal — no red/green tint (red is reserved for --crit). Neutral --text color,
+   AA in both themes since it's the same token used for primary cell text. ── */
+table.dt td.dt-diff,table.dt th.dt-diff{width:20px;text-align:center;padding:0;color:var(--text);}
+table.dt tbody tr.dt-ghost td{color:var(--text-dim);text-decoration:line-through;}
+table.dt tbody tr.dt-ghost td.dt-diff{text-decoration:none;}
+
+/* ── copy-cell / copy-row: no color signaling — text confirmation via the toast bus ── */
+table.dt tbody td.dt-copyable{cursor:copy;}
+table.dt tbody td:last-child{position:relative;}
+/* ── Row-actions gutter (dt-acts) ──
+   Row actions are their OWN trailing column, mirroring the dt-check gutter on the
+   left, rather than floating inside the last data cell. That kills three bugs at
+   once: the buttons can no longer paint over a cell's value, the anchor stops
+   being positional ("last data column" moved whenever columns were reordered),
+   and — critically — overflow:visible lets the ⋮ popover escape the 28px row band.
+   It previously sat in a td with the inherited overflow:hidden, which clipped the
+   menu to one visible item; only the first format was ever reachable. */
+table.dt td.dt-acts,table.dt th.dt-acts{
+  width:var(--dt-actions-w);padding:0 var(--s1) 0 0;
+  text-align:center;overflow:visible;position:relative;
+}
+/* Reveal on hover / keyboard focus / cursor row — same contract the old pair had,
+   plus [aria-expanded] so the trigger stays put while its menu is open. */
+table.dt tbody td.dt-acts .kebab-wrap{opacity:0;pointer-events:none;}
+table.dt tbody tr:hover .dt-acts .kebab-wrap,
+table.dt tbody tr:focus-within .dt-acts .kebab-wrap,
+table.dt tbody tr.cursor .dt-acts .kebab-wrap,
+table.dt tbody td.dt-acts .kebab-wrap:focus-within{opacity:1;pointer-events:auto;}
+/* .btn is 28px tall — full row height — so shrink the trigger inside a table row. */
+table.dt tbody td.dt-acts .kebab-btn{width:20px;height:20px;font-size:var(--t12);}
+.dt-copyas-menu{right:0;top:calc(100% + 4px);min-width:150px;padding:var(--s1);}
+.dt-copyas-item{display:block;width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-copyas-item:hover,.dt-copyas-item:focus-visible{background:var(--hover);}
+/* KebabMenu (⋮) — compact icon trigger; reuses .dt-copyas-menu for the popover. */
+.kebab-btn{width:28px;padding:0;justify-content:center;font-size:var(--t14,15px);line-height:1;}
+.kebab-menu{min-width:180px;}
+.kebab-menu.kebab-left{right:auto;left:0;}
+/* Marris example callout — clearly-labeled illustrative sample (not real data). */
+.marris-example{border:1px dashed var(--border-strong,var(--border));border-radius:var(--r-ctl);
+  padding:var(--s3);margin-top:var(--s3);background:var(--raised);}
+.marris-example .mx-head{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s2);}
+.marris-example .mx-tag{font-size:var(--t11);font-weight:600;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--text-dim);border:1px solid var(--border);border-radius:var(--r-ctl);padding:1px var(--s2);}
+.marris-example pre.mx-body{margin:0;font-size:var(--t11);white-space:pre-wrap;color:var(--text-dim);}
+.dt-filter{height:26px;padding:0 var(--s2);font-size:var(--t12);color:var(--text);background:var(--raised);border:1px solid var(--border-input);border-radius:var(--r-ctl);min-width:200px;}
+.dt-filter:focus{border-color:var(--accent);}
+.spark{display:inline-block;vertical-align:middle;}
+
+/* heatCell tint spans (DataTable render helper) — theme-aware low-opacity fills */
+.heat{display:inline-block;padding:0 var(--s2);border-radius:var(--r-ctl);}
+.heat-warn{background:var(--warn-tint);}
+.heat-crit{background:var(--crit-tint);}
+/* ── global click-to-pivot / cross-filter ── */
+.pivot-cell{cursor:pointer;border-bottom:1px dotted var(--border-strong);border-radius:2px;padding:0 2px;transition:background .1s ease;}
+.pivot-cell:hover{color:var(--text);background:var(--accent-dim);}
+.pivot-cell.active{background:var(--accent-dim);box-shadow:inset 0 0 0 1px var(--accent-text);color:var(--accent-text);}
+.pivot-cell:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+/* ── Group C/2: pivot-on-cell — ordinary (non-.pivot-cell) DataTable cells get a
+   right-click / Shift+F10 "Filter by this value" affordance, funneling into the
+   SAME fx.toggle used above. position:relative anchors the tiny action menu. ── */
+.dt-cell-pivot{position:relative;cursor:context-menu;}
+.dt-cell-pivot:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+.dt-cellpivot-menu{top:calc(100% + 4px);left:0;min-width:180px;padding:var(--s1);}
+.dt-cellpivot-item{display:block;width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-cellpivot-item:hover,.dt-cellpivot-item:focus-visible{background:var(--hover);}
+.filter-bar{position:sticky;top:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);padding:var(--s2) var(--s4);background:var(--surface);border-bottom:1px solid var(--border);}
+.filter-bar-label{font-size:var(--t11);color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;}
+.filter-bar .chip.active{cursor:pointer;color:var(--accent-text);background:var(--accent-dim);border-color:var(--accent-text);height:22px;}
+.filter-bar .chip.active .x{margin-left:6px;color:var(--text-faint);}
+.filter-bar .chip.active:hover{color:var(--text);}
+.filter-bar .chip.active:hover .x{color:var(--text);}
+.filter-clear{height:22px;padding:0 var(--s2);font-size:var(--t11);color:var(--text-dim);background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+.filter-clear:hover{color:var(--text);border-color:var(--border-strong);}
+/* display-form primitives (VolumeHistogram) — viewBox-scaled, overflow-safe */
+.vh-svg{display:block;width:100%;}
+.vh-bar{cursor:pointer;}
+/* ── time & graph interaction (P1 slice 5) — crosshair, annotations, zoom band,
+   global time-range control. Monochrome + text (no color-only), token-driven. ── */
+.vh-wrap{position:relative;width:100%;min-width:0;}
+.vh-crosshair{stroke:var(--text-dim);stroke-width:0.5;stroke-dasharray:1.5 1.5;pointer-events:none;vector-effect:non-scaling-stroke;}
+.vh-window{fill:var(--accent);opacity:0.10;pointer-events:none;}
+.vh-annot-hit{fill:transparent;cursor:help;}
+.vh-annot-mark{fill:var(--text-faint);pointer-events:none;}
+.vh-annot:hover .vh-annot-mark,.vh-annot:focus-visible .vh-annot-mark{fill:var(--text);}
+.vh-annot:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+.vh-readout{position:absolute;top:0;transform:translateX(-50%);pointer-events:none;
+  background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);
+  padding:1px var(--s2);font-family:'GeistMono',ui-monospace,monospace;font-size:var(--t11);
+  color:var(--text);white-space:nowrap;z-index:2;box-shadow:0 1px 4px rgba(0,0,0,0.25);}
+.vh-reset{height:22px;padding:0 var(--s2);font-size:var(--t11);color:var(--text-dim);
+  background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+.vh-reset:hover{color:var(--text);border-color:var(--border-strong);}
+/* global time-range control (TopBar) — segmented preset buttons + reset */
+.timerange{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--border);
+  border-radius:var(--r-ctl);padding:2px;background:var(--surface);}
+.tr-preset,.tr-reset{height:22px;min-width:30px;padding:0 var(--s2);font-size:var(--t11);
+  font-family:'GeistMono',ui-monospace,monospace;color:var(--text-dim);background:transparent;
+  border:0;border-radius:calc(var(--r-ctl) - 1px);cursor:pointer;}
+.tr-preset:hover,.tr-reset:hover{color:var(--text);background:var(--raised);}
+.tr-preset:focus-visible,.tr-reset:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+.tr-preset[aria-pressed="true"]{color:var(--accent-contrast);background:var(--accent);}
+.tr-reset{border-left:1px solid var(--border);margin-left:2px;border-radius:0 calc(var(--r-ctl) - 1px) calc(var(--r-ctl) - 1px) 0;}
+@media (prefers-reduced-motion:no-preference){.vh-readout{transition:left 60ms linear;}}
+
+.action-bar{
+  position:fixed;left:50%;bottom:var(--s5);transform:translateX(-50%);z-index:75;
+  display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;
+  padding:var(--s2) var(--s3);
+  background:var(--raised);border:1px solid var(--border-strong);border-radius:var(--r-panel);
+  animation:ab-in .16s ease;
+}
+@keyframes ab-in{from{transform:translate(-50%,120%);opacity:0;}}
+.ab-count{font-size:var(--t12);color:var(--text-dim);padding-right:var(--s2);border-right:1px solid var(--border);}
+.ab-confirm{display:inline-flex;align-items:center;gap:var(--s2);font-size:var(--t12);color:var(--text-dim);}
+/* Copy-as menu on the action bar opens UPWARD (bar is pinned to the viewport bottom). */
+.ab-menu{top:auto;bottom:calc(100% + 4px);right:auto;left:0;}
+
+/* Shortcut-overlay (Feature 10) — neutral, plain-text modal. Accent-free. */
+.sc-scrim{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;
+  background:var(--scrim,rgba(0,0,0,.4));padding:var(--s4);}
+.sc-overlay{width:min(560px,100%);max-height:80vh;overflow-y:auto;padding:var(--s4);}
+.sc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3);}
+.sc-title{font-size:var(--t14);font-weight:600;color:var(--text);margin:0;}
+.sc-list{display:grid;grid-template-columns:auto 1fr;gap:var(--s2) var(--s3);margin:0;}
+.sc-row{display:contents;}
+.sc-row dt{margin:0;}
+.sc-row dd{margin:0;font-size:var(--t12);color:var(--text-dim);align-self:center;}
+
+.toast{display:flex;align-items:center;gap:var(--s3);justify-content:space-between;}
+.toast-action{font-size:var(--t12);font-weight:500;color:var(--accent-text);background:transparent;border:none;padding:0;flex:0 0 auto;}
+
+.peek{
+  position:fixed;top:48px;right:0;bottom:0;width:min(420px,100vw);
+  background:var(--surface);border-left:1px solid var(--border);
+  z-index:70;overflow-y:auto;animation:peek-in .16s ease;
+  display:flex;flex-direction:column;
+}
+@keyframes peek-in{from{transform:translateX(100%);}}
+.peek-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3) var(--s4);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);}
+.peek-title{font-size:var(--t13);font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.peek-close{height:24px;width:24px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t14);color:var(--text-dim);background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);flex:0 0 auto;}
+.peek-close:hover{color:var(--text);border-color:var(--border-strong);}
+.peek-body{flex:1 1 auto;padding:var(--s4);min-width:0;}
+.peek-foot{padding:var(--s3) var(--s4);border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--surface);}
+.peek-full{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;}
+
+/* ── EntityPeek (slice 6) — shared trace/pin block inside the peek ── */
+.ep{margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--border);display:flex;flex-direction:column;gap:var(--s3);}
+.ep-sec-label{font-size:var(--t11);text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);margin-bottom:var(--s2);}
+.ep-audit{display:flex;justify-content:space-between;gap:var(--s3);font-size:var(--t12);padding:2px 0;}
+.ep-audit-ev{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ep-audit-meta{color:var(--text-faint);flex:0 0 auto;}
+.ep-empty{font-size:var(--t12);color:var(--text-faint);}
+.ep-traces{display:flex;flex-wrap:wrap;gap:var(--s2);}
+.ep-trace-btn{font-size:var(--t12);color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-ctl);padding:2px var(--s2);}
+.ep-trace-btn:hover,.ep-trace-btn:focus-visible{border-color:var(--accent);color:var(--accent-text);outline:none;}
+.ep-pin{align-self:flex-start;font-size:var(--t12);font-weight:600;color:var(--accent-contrast);background:var(--accent);border:1px solid var(--accent);border-radius:var(--r-ctl);padding:3px var(--s3);}
+.ep-pin:hover,.ep-pin:focus-visible{filter:brightness(1.08);outline:none;}
+
+/* ── Scratchpad (slice 6) — on-demand floating badge + tray overlay ── */
+.scratch-badge{position:fixed;right:var(--s4);bottom:var(--s4);z-index:75;display:inline-flex;align-items:center;gap:var(--s2);
+  font-size:var(--t12);font-weight:600;color:var(--text);background:var(--surface);
+  border:1px solid var(--border);border-left:2px solid var(--accent);border-radius:var(--r-ctl);
+  padding:var(--s2) var(--s3);box-shadow:0 2px 8px rgba(0,0,0,.18);}
+.scratch-badge:hover,.scratch-badge:focus-visible{border-color:var(--accent);outline:none;}
+.scratch-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:0 0 auto;}
+.scratch-badge-n{color:var(--accent-text);}
+.scratch-scrim{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;background:var(--scrim,rgba(0,0,0,.4));}
+.scratch-tray{width:min(520px,100%);max-height:80vh;overflow-y:auto;padding:var(--s4);display:flex;flex-direction:column;}
+.scratch-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3);}
+.scratch-title{font-size:var(--t14);font-weight:600;color:var(--text);margin:0;}
+.scratch-title-n{color:var(--text-faint);font-size:var(--t12);margin-left:var(--s1);}
+.scratch-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
+.scratch-item{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) 0;border-bottom:1px solid var(--border);}
+.scratch-kind{font-size:var(--t11);text-transform:uppercase;letter-spacing:.03em;color:var(--text-faint);flex:0 0 auto;min-width:52px;}
+.scratch-label{font-size:var(--t12);color:var(--text);flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.scratch-item-acts{display:flex;gap:var(--s2);flex:0 0 auto;}
+.scratch-trace{font-size:var(--t11);color:var(--text);background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);padding:1px var(--s2);}
+.scratch-trace:hover,.scratch-trace:focus-visible{border-color:var(--accent);color:var(--accent-text);outline:none;}
+.scratch-rm{font-size:var(--t12);color:var(--text-dim);background:transparent;border:1px solid var(--border);border-radius:var(--r-ctl);width:22px;height:22px;line-height:1;}
+.scratch-rm:hover,.scratch-rm:focus-visible{color:var(--text);border-color:var(--border-strong);outline:none;}
+.scratch-foot{display:flex;gap:var(--s2);margin-top:var(--s3);flex-wrap:wrap;}
+.scratch-clear{margin-left:auto;}
+
+/* ── responsive grid column counts ── .grid/.grid-3/.grid-dense now self-size via
+   auto-fit (see base rules); only the fixed 2-col grid still needs a collapse. */
+@media (max-width:720px){
+  .grid-2{grid-template-columns:minmax(0,1fr);}
+  .grid-2>.pcard:last-child:nth-child(n){grid-column:auto;}
+}
+@media (max-width:768px){
+  .brand-org{display:none;}
+  .main{padding:var(--s4);}
+}
+@media (max-width:640px){
+  .hide-sm{display:none;}
+  .kbd{display:none;}
+  .kbd.ai-trigger{display:inline-flex;}
+  /* The blanket .kbd hide above also killed the ⋯ trigger, which is the ONLY
+     mobile path to theme/density/views/palette/update — every one of those
+     controls is a .kbd behind it. Descendant selector (0-2-0) re-shows the
+     trigger and the panel's contents; the panel itself is display:none until
+     open, so nothing extra paints while closed. */
+  .more-menu .kbd{display:inline-flex;}
+  .ai-trigger .mono{display:none;}
+  .views-slot{display:none;}
+  .topbar-right .acct-trigger{max-width:120px;}
+  .acct-trigger .nm{display:none;}
+  .topbar{gap:var(--s2);padding:0 var(--s2);flex-wrap:wrap;height:auto;min-height:48px;}
+  /* Tab bar drops to its own full-width row so the AI/badge/account controls
+     never squeeze it (was collapsing to ~20px). */
+  .tabbar{order:3;flex-basis:100%;height:40px;}
+  /* Two-row top bar on mobile → push the right-anchored drawers below it. */
+  .peek,.ai-drawer{top:88px;}
+  /* DataTable toolbar must shrink to fit: the fixed-width filter + prob-toggle
+     otherwise overflow their row on narrow screens. */
+  .dt-filter{min-width:0;}
+  .prob-toggle{min-width:0;}
+  .prob-count{display:none;}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important;}
+}
+
+/* ── AI drawer (non-modal, persists across tabs; borrows .peek visuals) ── */
+.ai-drawer{
+  position:fixed;top:48px;right:0;bottom:0;width:min(420px,100vw);
+  background:var(--surface);border-left:2px solid var(--accent);
+  z-index:65;overflow-y:auto;
+  display:flex;flex-direction:column;
+  /* stays mounted (conversation persists) — slides off-canvas instead of unmounting.
+     inline setProperty(!important) in AiDrawer is authoritative; this is the visual. */
+  transform:translateX(100%);visibility:hidden;pointer-events:none;
+  transition:transform .2s cubic-bezier(.2,.8,.2,1),visibility 0s linear .2s;
+}
+.ai-drawer[data-open]{transform:none;visibility:visible;pointer-events:auto;transition:transform .2s cubic-bezier(.2,.8,.2,1),visibility 0s;}
+.ai-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3) var(--s4);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;}
+.ai-drawer-title{display:inline-flex;align-items:center;gap:var(--s2);font-size:var(--t13);font-weight:600;color:var(--text);}
+.ai-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 auto;}
+.ai-drawer-body{flex:1 1 auto;padding:var(--s4);min-width:0;display:flex;flex-direction:column;gap:var(--s4);}
+.ai-disclosure summary{cursor:pointer;font-size:var(--t12);color:var(--text-dim);padding:var(--s2) 0;list-style:none;}
+.ai-disclosure summary::-webkit-details-marker{display:none;}
+.ai-disclosure summary::before{content:'▸ ';color:var(--text-faint);}
+.ai-disclosure[open] summary::before{content:'▾ ';}
+
+/* ── DataTable "show all/fewer" footer + problems toggle ── */
+.dt-more{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) var(--s3);font-size:var(--t12);color:var(--text-dim);}
+.dt-more-btn{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;}
+.prob-toggle{display:inline-flex;align-items:center;gap:var(--s2);height:26px;padding:0 var(--s2);font-size:var(--t12);color:var(--text-dim);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+.prob-toggle[aria-pressed="true"]{color:var(--text);border-color:var(--border-strong);background:var(--hover);}
+.prob-count{font-size:var(--t11);color:var(--text-faint);}
+.prob-none{display:flex;align-items:center;gap:var(--s2);padding:var(--s3);font-size:var(--t12);color:var(--text-faint);}
+.prob-none-btn{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;}
+
+/* ── scrollBody: bounded scroll region + sticky header (collapsed borders don't
+   stick → a box-shadow stands in for the bottom border) ── */
+.dt-scroll{position:relative;}
+.dt-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 1px 0 var(--border);}
+.dt-count{color:var(--text-faint);}
+/* primary column: under the table-fit default it clips with ellipsis like every
+   other cell (an .dt-id renderer, below, keeps long identifiers legible via
+   middle-truncation instead of bleeding across neighbouring columns). */
+table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* ── .dt-id: the site-wide identifier renderer (long UUIDs / paths / FQDNs).
+   Middle-truncation via a flexing head (ellipsizes) + a fixed tail (last chars
+   always visible); monospace + tabular for scan-alignment; click / Enter copies
+   the FULL value; hover / focus reveals it in the shared hovercard. Accent is
+   identity-only (hover/focus affordance), never the data signal. */
+.dt-id{display:inline-flex;align-items:baseline;max-width:100%;min-width:0;
+  font-family:'GeistMono',ui-monospace,monospace;font-variant-numeric:tabular-nums;
+  cursor:pointer;vertical-align:bottom;border-radius:var(--r-ctl);}
+.dt-id .dt-id-head{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.dt-id .dt-id-tail{flex:0 0 auto;white-space:nowrap;}
+.dt-id:hover{color:var(--accent-text);}
+.dt-id:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;}
+/* ── columnToggle: ⋯ Cols chooser menu (reuses the views-menu overlay pattern) ── */
+.dt-tools{display:flex;align-items:center;gap:var(--s2);flex:0 0 auto;}
+.dt-cols-slot{position:relative;display:inline-flex;}
+/* H4: shared anchored-popover base — every dt-*-menu/dt-suggest/dt-cheat/views-menu
+   panel is position:absolute + the same z-index/scroll-clamp defaults; each class
+   below now carries only its width/side/offset/padding diffs from this base. */
+.dt-popover{position:absolute;z-index:61;max-height:60vh;overflow-y:auto;}
+.dt-cols-menu{right:0;top:calc(100% + 6px);width:248px;padding:var(--s1);}
+/* Feature 8: each row = checkbox+label (show/hide) + reorder/pin controls.
+   The controls sit OUTSIDE the <label> so clicking them doesn't also toggle
+   the checkbox; reorder is keyboard-reachable via the ↑/↓ buttons (not drag-only). */
+.dt-cols-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);border-radius:var(--r-ctl);}
+.dt-cols-item:hover{background:var(--hover);}
+.dt-cols-item-label{display:flex;align-items:center;gap:var(--s2);padding:5px 8px;font-size:var(--t12);color:var(--text);cursor:pointer;flex:1 1 auto;min-width:0;}
+.dt-cols-item-label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dt-cols-item-label input{cursor:pointer;}
+.dt-cols-item-ctl{display:flex;align-items:center;gap:1px;flex:0 0 auto;padding-right:4px;}
+.dt-cols-move,.dt-cols-pin{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t12);color:var(--text-faint);background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-cols-move:hover,.dt-cols-pin:hover{color:var(--text);background:var(--hover);}
+.dt-cols-move:disabled{opacity:.35;cursor:default;}
+.dt-cols-pin[aria-pressed="true"]{color:var(--accent-text);}
+/* ── F5: on-demand facet popover (Filter button in dt-tools) — same overlay/panel
+   pattern as .dt-cols-menu; value rows reuse the pivot-cell accent-for-active rule. ── */
+.dt-facet-slot{position:relative;display:inline-flex;}
+.dt-facet-menu{right:0;top:calc(100% + 6px);width:240px;padding:var(--s2);display:flex;flex-direction:column;gap:var(--s3);}
+.dt-facet-empty{padding:var(--s2);font-size:var(--t12);color:var(--text-faint);}
+.dt-facet-group{display:flex;flex-direction:column;gap:2px;}
+.dt-facet-label{font-size:var(--t11);text-transform:uppercase;letter-spacing:.04em;color:var(--text-faint);padding:2px 4px;}
+.dt-facet-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);width:100%;padding:5px 8px;font-size:var(--t12);color:var(--text-dim);text-align:left;background:transparent;border:1px solid transparent;border-radius:var(--r-ctl);cursor:pointer;transition:background .12s ease,border-color .12s ease;}
+.dt-facet-item:hover{background:var(--hover);color:var(--text);}
+.dt-facet-item.active{color:var(--accent-text);background:var(--accent-dim);border-color:var(--accent-text);}
+/* M3: count stays faint/dim even when the row is active — the row already
+   signals active via accent text + border + dim bg, so no extra rule needed here. */
+.dt-facet-count{color:var(--text-faint);font-family:'GeistMono',ui-monospace,monospace;}
+/* ── DataTable BQL search: typeahead popover + ? cheatsheet + no-match diag ── */
+.dt-search{position:relative;display:inline-flex;align-items:center;min-width:0;}
+.dt-search .dt-filter{padding-right:46px;}
+/* H4: dt-cheat-btn/dt-nl-btn share the same icon-button box; only `right` differs. */
+.dt-search-icon-btn{position:absolute;top:1px;height:24px;width:22px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--t12);color:var(--text-faint);background:transparent;border:none;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-search-icon-btn:hover{color:var(--text);}
+.dt-cheat-btn{right:1px;}
+/* M1: NL button is standing chrome at rest — hide it until the search field is
+   focused (dim, since empty text still leaves it non-functional) or the field
+   holds text (fully visible); mirrors the dt-acts kebab reveal-on-need pattern. */
+.dt-nl-btn{right:23px;opacity:0;pointer-events:none;}
+.dt-search:focus-within .dt-nl-btn:disabled{opacity:.4;cursor:default;}
+.dt-search:focus-within .dt-nl-btn:not(:disabled),
+.dt-nl-btn:not(:disabled){opacity:1;pointer-events:auto;}
+.dt-suggest{left:0;top:calc(100% + 4px);z-index:62;width:min(340px,80vw);max-height:56vh;padding:var(--s1);}
+/* M2: hover signals via background only (no accent stripe); selection keeps a
+   ≤1px accent marker — the 2px hover-triggered stripe is gone (DESIGN §6). */
+.dt-sug-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);width:100%;padding:6px 8px;font-size:var(--t12);color:var(--text);text-align:left;background:transparent;border:none;border-left:1px solid transparent;border-radius:var(--r-ctl);cursor:pointer;}
+.dt-sug-item:hover{background:var(--hover);}
+.dt-sug-item.sel{background:var(--hover);border-left-color:var(--accent);}
+.dt-sug-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dt-sug-meta{font-size:var(--t11);color:var(--text-faint);flex:0 0 auto;}
+.dt-sug-tag{font-size:var(--t11);color:var(--text-dim);flex:0 0 auto;padding:0 5px;border:1px solid var(--border);border-radius:var(--r-ctl);}
+.dt-sug-recent{padding:0;}
+.dt-sug-recent-run{flex:1 1 auto;min-width:0;display:block;padding:6px 8px;background:transparent;border:none;color:inherit;font:inherit;text-align:left;cursor:pointer;}
+.dt-sug-pin{flex:0 0 auto;padding:4px 6px;background:transparent;border:none;color:var(--text-faint);font-size:var(--t12);cursor:pointer;border-radius:var(--r-ctl);}
+.dt-sug-pin:hover{color:var(--text);}
+.dt-cheat{right:0;top:calc(100% + 4px);z-index:62;max-height:none;overflow-y:visible;width:min(360px,84vw);padding:var(--s3);}
+.dt-cheat h4{margin:0 0 6px;font-size:var(--t11);color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em;}
+.dt-cheat-row{display:flex;gap:var(--s2);font-size:var(--t12);color:var(--text-dim);padding:3px 0;}
+.dt-cheat-row code{color:var(--accent-text);flex:0 0 96px;}
+.dt-cheat-fields{margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:var(--t11);color:var(--text-faint);word-break:break-word;}
+.dt-nomatch{display:inline-flex;align-items:center;gap:var(--s2);flex-wrap:wrap;}
+.dt-nomatch code{color:var(--text);}
+.dt-clear-btn{font-size:var(--t12);color:var(--accent-text);background:transparent;border:none;padding:0;cursor:pointer;}
+.dt-cols-item-label input:disabled{cursor:default;}
+/* ValueBands active chip */
+.band-chip.active{border-color:var(--accent);color:var(--text);}
+
+/* ── problems badge (topbar) ── */
+.problems-badge{display:inline-flex;align-items:center;gap:var(--s1);height:26px;padding:0 var(--s2);font-size:var(--t11);color:var(--text-dim);background:var(--raised);border:1px solid var(--border);border-radius:var(--r-ctl);cursor:pointer;}
+.problems-badge.crit{color:var(--crit);border-color:var(--crit-tint-border);background:var(--crit-tint);}
+
+/* ── donut / histogram / grouped bar / hovercard primitives (viewBox-scaled) ── */
+.donut-wrap{display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;min-width:0;}
+.donut-svg{flex:0 0 auto;}
+.donut-legend{display:flex;flex-direction:column;gap:var(--s1);min-width:0;font-size:var(--t12);}
+.donut-leg{display:flex;align-items:center;gap:var(--s2);min-width:120px;}
+.donut-leg-dot{width:8px;height:8px;border-radius:2px;flex:0 0 auto;}
+.donut-leg-l{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.donut-leg-v{margin-left:auto;color:var(--text);}
+.histbar-svg{display:block;width:100%;}
+.histbar-bar{cursor:pointer;}
+.groupbar{display:flex;flex-direction:column;gap:var(--s1);width:100%;min-width:0;}
+.groupbar-row{display:flex;align-items:center;gap:var(--s2);min-width:0;}
+.groupbar-row.clickable{cursor:pointer;}
+.groupbar-l{flex:0 0 40%;font-size:11.5px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'GeistMono','SFMono-Regular',ui-monospace,monospace;}
+.groupbar-track{flex:1 1 auto;height:8px;background:var(--border);border-radius:4px;overflow:hidden;min-width:0;}
+.groupbar-fill{height:100%;border-radius:4px;}
+.groupbar-v{flex:0 0 auto;font-size:var(--t11);color:var(--text);min-width:40px;text-align:right;}
+.groupbar-more{font-size:var(--t11);color:var(--text-faint);padding:var(--s1) 0;}
+.hovercard{position:relative;display:inline-block;}
+.hovercard-pop{position:fixed;z-index:85;max-width:280px;padding:var(--s3);font-size:var(--t12);color:var(--text);}
+
+/* ── refined mockup design system (shared, ported from mockup-refined.html) ── */
+/* drawer reflow: main shrinks beside the right drawers; overlay kept on mobile */
+html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
+@media (max-width:900px){html[data-drawer="open"] .main{padding-right:revert;}}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.sd{width:7px;height:7px;border-radius:50%;flex:none;display:inline-block;}
+.sd.ok{background:var(--ok);}
+.sd.warn{background:var(--warn);}
+.sd.crit{background:var(--crit);animation:pulse 2s infinite;}
+.sd.pulse{animation:pulse 2.4s ease-in-out infinite;}
+
+.pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:14px 15px;display:flex;flex-direction:column;min-width:0;height:100%;}
+.pbody-fill{flex:1 1 auto;min-height:0;}
+.span-2{grid-column:span 2;}
+.chart-body{height:var(--body-chart);display:flex;flex-direction:column;justify-content:center;}
+.pcard>h3{font-size:12.5px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin:0;flex-wrap:wrap;min-width:0;}
+.pcard>h3 .side{color:var(--text-faint);font-weight:500;font-size:11px;display:inline-flex;align-items:center;gap:var(--s2);flex:0 1 auto;min-width:0;flex-wrap:wrap;justify-content:flex-end;}
+.chart-seg{display:inline-flex;align-items:center;gap:6px;}
+.chart-seg button{font:inherit;font-size:11px;background:none;border:0;padding:0;cursor:pointer;color:var(--text-faint);line-height:1;}
+.chart-seg button[aria-pressed="true"]{color:var(--accent);font-weight:600;}
+.chart-seg button:hover{color:var(--text);}
+.chart-seg button:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px;border-radius:2px;}
+.chart-seg .sep{color:var(--border-strong);font-size:10px;user-select:none;}
+/* Panel size floor — routes through the --panel-* scale so boxes stay consistent
+   and a panel like Triage is never cramped. Optional; unset panels are unchanged. */
+.pcard.sz-sm{min-height:var(--panel-sm);}
+.pcard.sz-md{min-height:var(--panel-md);}
+.pcard.sz-lg{min-height:var(--panel-lg);}
+/* Maximize affordance (shared Panel header) + fullscreen overlay. */
+.pcard-max{background:none;border:0;cursor:pointer;color:var(--text-faint);font-size:13px;line-height:1;padding:2px 4px;border-radius:var(--r-ctl);display:inline-flex;align-items:center;flex:none;}
+.pcard-max:hover{color:var(--text);background:var(--hover);}
+.pcard-max:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+.pcard-scrim{position:fixed;inset:0;z-index:92;display:flex;align-items:stretch;justify-content:center;background:rgba(0,0,0,.55);padding:var(--s5);}
+.pcard-overlay{width:100%;max-width:1600px;height:100%;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:var(--s5);animation:fade .12s ease;}
+.pcard-overlay-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3);}
+.pcard-overlay-title{font-size:var(--t14);font-weight:600;margin:0;}
+.pcard-overlay-body{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column;}
+/* Maximized panel gives its table/chart the viewport. */
+.pcard-overlay-body .dt-scroll{max-height:none!important;}
+.pcard-overlay-body .chart-body{height:auto!important;flex:1 1 auto;min-height:var(--panel-md);}
+.pcard-max-note{color:var(--text-faint);font-size:var(--t12);padding:var(--s3);}
+/* Compact incident strip — dense inline replacement for the tall answer band,
+   keeps the --crit accent + text. */
+.inc-strip{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) var(--s3);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);font-size:var(--t13);color:var(--text);}
+.inc-strip .sd{margin:0 2px;}
+.inc-strip-txt{min-width:0;overflow-wrap:anywhere;font-weight:500;}
+
+/* Card grids track the CONTAINER, not the viewport: auto-fit adds/removes columns
+   as space allows (drawer open, narrow window), so a card that can't fit wraps to
+   the next row instead of crushing its content. Empty trailing tracks collapse,
+   so 3 cards on a wide screen still share the full width. */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+.grid-dense{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+/* Wide cards (tables) take 2 tracks; below ~560px there may be only 1 track, so revert. */
+.grid-dense>.gd-wide{grid-column:span 2;min-width:0;}
+@media (max-width:560px){.grid-dense>.gd-wide{grid-column:auto;}}
+.grid>*,.grid-dense>*{min-width:0;}
+/* trailing-row fill: only the fixed 2-col grids keep nth-child span rules —
+   .grid/.grid-3/.grid-dense col counts now vary with the container (auto-fit),
+   so count-keyed spans would misfire; dense flow backfills holes instead. */
+.grid-2>.pcard:last-child:nth-child(odd),.ovx-detail>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:10px;}
+.kpi{padding:12px 13px;border-radius:var(--r-panel);background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;transition:border-color .16s ease,transform .16s ease;min-width:0;}
+.kpi:hover{border-color:var(--border-strong);transform:translateY(-2px);}
+.kpi .lbl{display:flex;align-items:center;justify-content:space-between;color:var(--text-dim);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
+.kpi .num{font-family:'GeistMono',ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:26px;font-weight:500;letter-spacing:-1px;margin-top:5px;line-height:1;}
+.kpi .sub{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-faint);margin-top:4px;min-width:0;}
+.kpi .sub .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.trend{font-family:'GeistMono',ui-monospace,monospace;font-weight:500;flex:none;}
+.trend.up{color:var(--ok);}
+.trend.dn{color:var(--crit);}
+.trend.fl{color:var(--text-faint);}
+.kpi svg.spark,.kpi svg.rowspark{position:absolute;right:10px;bottom:9px;opacity:.9;}
+
+.sev{font-size:11px;font-weight:600;padding:2px 7px;border-radius:var(--r-ctl);text-transform:uppercase;letter-spacing:.3px;flex:none;display:inline-block;}
+.sev.crit{background:var(--crit-dim);color:var(--crit);}
+.sev.high{background:var(--warn-dim);color:var(--warn);}
+.sev.med{background:var(--accent-dim);color:var(--accent-text);}
+.sev.low{background:var(--raised);color:var(--text-dim);}
+
+.sec-h{display:flex;align-items:center;gap:9px;margin:0 2px;}
+.sec-h h2{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text-dim);margin:0;}
+.sec-h .rule{flex:1;height:1px;background:var(--border);}
+
+.issues{display:flex;flex-direction:column;min-width:0;max-height:var(--body-chart);overflow-y:auto;}
+.issue{display:flex;align-items:center;gap:4px 10px;flex-wrap:wrap;padding:8px 6px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .12s ease;min-width:0;}
+.issue:last-child{border-bottom:0;}
+.issue:hover{background:var(--raised);}
+.issue .rank{font-family:'GeistMono',ui-monospace,monospace;color:var(--text-faint);font-size:11px;width:16px;flex:none;}
+.issue .body{flex:1 1 150px;min-width:0;}
+.issue .body .t{font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.issue .body .d{color:var(--text-faint);font-size:11px;font-family:'GeistMono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.ubar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;min-width:52px;}
+.ubar>i{display:block;height:100%;border-radius:3px;}
+
+.sites{display:flex;flex-direction:column;gap:9px;}
+.siterow{display:flex;align-items:center;gap:10px;min-width:0;}
+.siterow.clickable{cursor:pointer;border-radius:var(--r-ctl);padding:2px 4px;margin:0 -4px;transition:background .12s ease;}
+.siterow.clickable:hover,.siterow.clickable:focus-visible{background:var(--hover);outline:none;}
+.siterow .nm{width:96px;font-size:11.5px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'GeistMono',ui-monospace,monospace;flex:none;}
+.siterow .track{flex:1;max-width:560px;height:8px;border-radius:4px;background:var(--border);overflow:hidden;min-width:0;}
+.siterow .track>i{display:block;height:100%;border-radius:4px;}
+.siterow .pc{width:38px;text-align:right;font-family:'GeistMono',ui-monospace,monospace;font-size:11.5px;flex:none;}
+
+.tag{font-size:10px;padding:1px 6px;border-radius:var(--r-ctl);background:var(--raised);color:var(--text-dim);font-family:'GeistMono',ui-monospace,monospace;white-space:nowrap;display:inline-block;max-width:92px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+.rowspark{width:56px;height:16px;flex:none;}
+
+.svc{display:flex;flex-direction:column;gap:2px;padding:7px 12px;border-radius:var(--r-ctl);background:var(--raised);border:1px solid var(--border);min-width:118px;}
+.svc .t{display:flex;align-items:center;gap:6px;font-weight:600;font-size:12px;}
+.svc .m{font-size:11px;color:var(--text-faint);}
+
+/* refined table skin — visual only, keeps table.dt class names/behavior */
+table.dt thead th{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);}
+table.dt tbody td{border-bottom-color:var(--border2);}
+
+/* donut legend pct column + row hover (Donut restyle) */
+.donut-leg{padding:2px 4px;border-radius:var(--r-ctl);transition:background .12s ease;}
+.donut-leg:hover{background:var(--raised);}
+.donut-leg-pct{color:var(--text-faint);font-size:11px;min-width:34px;text-align:right;font-family:'GeistMono',ui-monospace,monospace;flex:none;}
+
+/* histogram hover value + volume-histogram bar polish */
+.histbar-bar:hover,.vh-bar:hover{filter:brightness(1.25);}
+.histbar-bar:focus-visible,.vh-bar:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px;filter:brightness(1.25);}
+
+/* HoverDetail — cursor-following, edge-aware floating card (singleton portal) */
+.hoverdetail{position:fixed;z-index:80;min-width:200px;max-width:260px;left:0;top:0;padding:11px 12px;border-radius:8px;background:var(--raised);border:1px solid var(--border);box-shadow:0 12px 40px rgba(0,0,0,.55);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .13s ease,transform .13s ease;font-size:12px;}
+.hoverdetail.show{opacity:1;transform:translateY(0);}
+.hoverdetail .hh{font-weight:600;font-family:'GeistMono',ui-monospace,monospace;margin-bottom:6px;display:flex;align-items:center;gap:7px;}
+.hoverdetail .kv{display:flex;justify-content:space-between;gap:14px;padding:2px 0;color:var(--text-dim);}
+.hoverdetail .kv b{color:var(--text);font-family:'GeistMono',ui-monospace,monospace;font-weight:500;}
+.hoverdetail .mini{height:26px;margin-top:7px;}
+
+.fadein{animation:fade .5s ease both;}
+@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="boot-splash">
+    <div class="boot-spinner"></div>
+    <div class="boot-title">Bloxsmith</div>
+    <div class="boot-note">Starting up&hellip;</div>
+  </div>
+</div>
+
+<script type="module" src="./app.bundle.js"></script>
+</body>
+</html>

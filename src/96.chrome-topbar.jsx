@@ -171,6 +171,52 @@ function ViewOptions(){
   .update-peek-c{color:var(--text-dim);}
   .update-peek-line{font-size:var(--t11);line-height:1.6;white-space:nowrap;color:var(--text);}
   .update-menu-link{font-size:var(--t11);color:var(--text-dim);text-decoration:underline;text-underline-offset:2px;}
+  .update-modal-backdrop{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.5);backdrop-filter:blur(2px);}
+  .update-modal{position:relative;min-width:300px;max-width:90vw;padding:20px 22px;
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);
+    box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:14px;}
+  .update-modal-x{position:absolute;top:10px;right:12px;width:24px;height:24px;padding:0;
+    display:inline-flex;align-items:center;justify-content:center;background:none;border:none;
+    color:var(--text-dim);font-size:var(--t12);cursor:pointer;border-radius:var(--r-ctl);}
+  .update-modal-x:hover{color:var(--text);background:var(--raised);}
+  .update-modal-uptodate{display:flex;align-items:center;gap:8px;font-size:var(--t12);color:var(--text);padding-right:20px;}
+  .update-modal-title{font-size:var(--t12);color:var(--text);font-weight:600;}
+  .update-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+  .update-step{display:flex;align-items:center;gap:10px;font-size:var(--t12);color:var(--text-dim);}
+  .update-step-mark{width:18px;height:18px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+    border-radius:50%;font-size:var(--t11);border:1px solid var(--border);}
+  .update-step.done{color:var(--text);}
+  .update-step.done .update-step-mark{color:var(--accent);border-color:var(--accent);}
+  .update-step.active{color:var(--text);}
+  .update-step.active .update-step-mark{color:transparent;border-color:var(--border);border-top-color:var(--accent);
+    animation:update-spin .8s linear infinite;}
+  .update-step.error .update-step-mark{color:var(--crit);border-color:var(--crit);}
+  .update-step.error .update-step-label{color:var(--crit);}
+  .update-step-label{flex:1 1 auto;}
+  .update-step-pct{font-size:var(--t11);color:var(--text-dim);}
+  .update-modal-note{font-size:var(--t11);color:var(--text-dim);}
+  .update-modal-err{display:flex;flex-direction:column;align-items:flex-start;gap:8px;font-size:var(--t11);color:var(--crit);line-height:1.5;}
+  .update-modal-close{align-self:flex-end;}
+  @keyframes update-spin{to{transform:rotate(360deg)}}
+  .more-update-dot{position:absolute;top:-1px;right:-1px;width:7px;height:7px;
+    background:var(--accent);border-radius:50%;box-shadow:0 0 0 2px var(--surface);pointer-events:none;}
+  .update-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;line-height:1;
+    background:color-mix(in srgb,var(--accent) 15%,var(--surface));border:1px solid var(--accent);
+    color:var(--accent-text);border-radius:var(--r-ctl);font-size:var(--t12);font-weight:600;
+    cursor:pointer;white-space:nowrap;transition:background .12s ease,border-color .12s ease;}
+  .update-pill:hover{background:color-mix(in srgb,var(--accent) 26%,var(--surface));border-color:var(--accent-text);}
+  .update-pill-glyph{font-size:var(--t11);line-height:1;}
+  .update-toast{position:fixed;bottom:20px;right:20px;z-index:300;
+    display:inline-flex;align-items:center;gap:10px;padding:10px 12px;
+    background:var(--surface);color:var(--text);border:1px solid var(--border);
+    border-radius:var(--r-panel);box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:var(--t12);
+    animation:update-toast-in .18s ease;}
+  .update-toast-check{color:var(--accent);}
+  .update-toast-close{background:none;border:none;color:var(--text-dim);cursor:pointer;
+    font-size:var(--t12);line-height:1;padding:2px 4px;border-radius:var(--r-ctl);}
+  .update-toast-close:hover{color:var(--text);}
+  @keyframes update-toast-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
   `;
   document.head.appendChild(s);
 })();
@@ -186,32 +232,187 @@ function detectUpdateScript(){
   return {file:'update.command',os:'macOS'};
 }
 
-/* UpdateBadge — passive "update available" banner (renders inside the ⋯ MoreMenu panel).
-   The app only SIGNALS: it shows the running version and, when a newer release exists,
-   names the OS-relevant update script the user double-clicks (docker compose pull &&
-   up -d, revealed on hover/focus) plus a release-notes link. It never applies, polls,
-   or rolls back — no /api/update/apply, /status, or /rollback-* calls. Checks once on
-   mount via GET /api/update/check; a small "Check now" re-hits the same endpoint. */
-function UpdateBadge(){
-  const [info,setInfo]=useState(null);      // {current,latest,available,url}
-  const [checking,setChecking]=useState(false);
-  const check=async()=>{
-    setChecking(true);
+/* useSelfUpdate — THE single source of update truth for the whole top bar. Owns: the
+   version/availability info (GET /api/update/check on mount + a 6-hour re-check so long-open
+   tabs surface new releases without a reload), the one-click self-update run (POST
+   /api/update/apply → poll /api/update/status → sessionStorage-marker → reload), and the
+   post-reload "Updated to …" toast state. TopBar calls this ONCE and threads it into the
+   pill, the ⋯ dot/badge, the stepped modal, and the toast so they can never disagree. */
+function useSelfUpdate(){
+  const [info,setInfo]=useState(null);      // {current,latest,available,url,selfUpdate}
+  const [apply,setApply]=useState(null);    // {phase,pct,error} while a self-update runs
+  const [justUpdated,setJustUpdated]=useState('');
+  const applying=useRef(false);             // guards against re-triggering an in-flight apply
+  const recheck=async()=>{
     try{
       const r=await fetch('/api/update/check',{cache:'no-store'});
       setInfo(await r.json());
     }catch(e){ /* older/File-mode server — stay silent */ }
-    setChecking(false);
   };
-  useEffect(()=>{ check(); },[]);
+  // Check on mount + every 6h so long-open tabs surface new releases without a reload.
+  useEffect(()=>{ recheck(); const id=setInterval(recheck,6*60*60*1000); return ()=>clearInterval(id); },[]);
+  // One-time post-update confirmation toast (survives the reload via sessionStorage).
+  useEffect(()=>{
+    let v=''; try{ v=sessionStorage.getItem('bloxsmith_updated_to')||''; sessionStorage.removeItem('bloxsmith_updated_to'); }catch(e){}
+    if(!v) return;
+    setJustUpdated(v);
+    const t=setTimeout(()=>setJustUpdated(''),6000);
+    return ()=>clearTimeout(t);
+  },[]);
 
+  /* One-click self-update (Go binary only, gated on selfUpdate:true). POST
+     /api/update/apply, then poll /api/update/status until the new binary swaps
+     in and restarts, then reload so the fresh UI loads. Docker builds return
+     selfUpdate:false and never reach this branch — they keep the passive script. */
+  // "already up to date" is a benign no-op, NOT a failure — the server returns it
+  // when you click Update while current==latest (e.g. right after an update, before
+  // the pill re-checks away). Show a friendly note, re-check (which hides the pill),
+  // and auto-close — never a red "Update failed".
+  const finish=(msg)=>{
+    applying.current=false;
+    if(/up to date/i.test(msg||'')){
+      setApply({phase:'uptodate'});
+      recheck();
+      setTimeout(()=>setApply(null),2500);
+    }else{
+      setApply({phase:'error',pct:0,error:msg});
+    }
+  };
+  const runApply=async()=>{
+    if(applying.current) return;           // one apply at a time — no repeat modals
+    applying.current=true;
+    setApply({phase:'starting',pct:1});
+    const reloadTo=()=>{ try{sessionStorage.setItem('bloxsmith_updated_to', (info&&info.latest)||'');}catch(e){} setTimeout(()=>location.reload(),2800); };
+    try{
+      const r=await fetch('/api/update/apply',{method:'POST',cache:'no-store'});
+      if(!r.ok){ const j=await r.json().catch(()=>({})); finish(j.error||('HTTP '+r.status)); return; }
+      const poll=setInterval(async()=>{
+        try{
+          const s=await fetch('/api/update/status',{cache:'no-store'}).then(x=>x.json());
+          if(s.phase==='error'){ clearInterval(poll); finish(s.error); return; }
+          setApply(s);
+          if(s.phase==='done'||s.pct>=100){ clearInterval(poll); applying.current=false; reloadTo(); }
+        }catch(e){ /* server mid-restart — the swap is happening; reload shortly */
+          clearInterval(poll); applying.current=false; setApply({phase:'restarting',pct:95}); reloadTo(); }
+      },1200);
+    }catch(e){ /* The POST connection dropped — the app is served BY the binary being
+        swapped, so an unreachable origin means it's restarting into the new version (a
+        success race), NOT a failure. On a real apply failure the old binary keeps
+        serving (it never releases the socket), so a dropped connection is always a
+        restart. Show "restarting…" and reload, don't scare the user with an error. */
+      applying.current=false; setApply({phase:'restarting',pct:95}); reloadTo(); }
+  };
+
+  return {info,recheck,apply,runApply,justUpdated,dismissToast:()=>setJustUpdated(''),dismissApply:()=>setApply(null)};
+}
+
+/* UpdatePill — the VISIBLE top-bar affordance. Renders only when an update exists; an
+   accent-tinted chip button reading "↑ Update → v{latest}". Go binaries (selfUpdate:true)
+   self-apply on click; Docker builds (selfUpdate:false) can't self-apply, so it opens the
+   release notes instead. Shares state with the ⋯ dot + in-menu badge via the update prop. */
+function UpdatePill({update}){
+  const info=update&&update.info;
+  if(!info||!info.available) return null;
+  const latest=String(info.latest||'').replace(/^v/,'');
+  const open=()=>{ if(info.selfUpdate) update.runApply(); else if(info.url) window.open(info.url,'_blank','noopener,noreferrer'); };
+  return <button type="button" className="update-pill" onClick={open}
+    aria-label={info.selfUpdate
+      ? 'Update available — install v'+latest+' now (downloads, verifies and restarts)'
+      : 'Update available — v'+latest+', opens the release notes to update'}>
+    <span className="update-pill-glyph" aria-hidden="true">↑</span>Update → v{latest}
+  </button>;
+}
+
+/* UpdateModal — the stepped self-update overlay (Check → Download → Verify → Apply →
+   Restart). Driven entirely by the shared apply state; rendered once at TopBar level. */
+function UpdateModal({apply,latest,onDismiss}){
+  const STEPS=[
+    {key:'check',   label:'Check',   phases:['starting','checking']},
+    {key:'download',label:'Download',phases:['downloading']},
+    {key:'verify',  label:'Verify',  phases:['verifying']},
+    {key:'apply',   label:'Apply',   phases:['applying']},
+    {key:'restart', label:'Restart', phases:['restarting','done']},
+  ];
+  const err=apply.phase==='error';
+  const uptodate=apply.phase==='uptodate';
+  const terminal=err||uptodate;   // states the user can freely dismiss / click-away
+  const pct=apply.pct||0;
+  let active=STEPS.findIndex(s=>s.phases.includes(apply.phase));
+  if(active<0) active=err?Math.min(4,Math.floor(pct/20)):0;
+  const restarting=apply.phase==='done'||pct>=100;
+  const ver=String(apply.version||latest||'').replace(/^v/,'');
+  // Benign "already on the latest" — not a failure. Compact confirmation, auto-dismisses.
+  if(uptodate) return <div className="update-modal-backdrop" role="dialog" aria-modal="true" aria-label="Already up to date" onClick={onDismiss}>
+    <div className="update-modal" onClick={e=>e.stopPropagation()}>
+      <button type="button" className="update-modal-x" aria-label="Close" onClick={onDismiss}>✕</button>
+      <div className="update-modal-uptodate"><span className="update-toast-check" aria-hidden="true">✓</span> You’re on the latest version.</div>
+    </div>
+  </div>;
+  return <div className="update-modal-backdrop" role="dialog" aria-modal="true" aria-label="Software update in progress"
+    onClick={terminal?onDismiss:undefined}>
+    <div className="update-modal" onClick={e=>e.stopPropagation()}>
+      {/* ALWAYS closable — the modal must never trap the user, even mid-update (the
+          swap continues server-side and the page reloads on completion regardless). */}
+      <button type="button" className="update-modal-x" aria-label="Close" onClick={onDismiss}>✕</button>
+      <div className="update-modal-title mono">Updating → v{ver}</div>
+      <ol className="update-steps">
+        {STEPS.map((s,i)=>{
+          const state=err&&i===active?'error':i<active?'done':i===active?'active':'pending';
+          return <li key={s.key} className={'update-step '+state} aria-current={state==='active'?'step':undefined}>
+            <span className="update-step-mark" aria-hidden="true">{state==='done'?'✔':state==='error'?'✕':state==='active'?'●':'○'}</span>
+            <span className="update-step-label">{s.label}</span>
+            {state==='active'&&!err&&<span className="update-step-pct mono">{pct}%</span>}
+          </li>;
+        })}
+      </ol>
+      {err
+        ? <div className="update-modal-err" role="alert">
+            <span>Update failed: {apply.error} (previous version kept)</span>
+            <button type="button" className="kbd update-modal-close" onClick={onDismiss}>Close</button>
+          </div>
+        : restarting?<div className="update-modal-note" role="status" aria-live="polite">restarting…</div>:null}
+    </div>
+  </div>;
+}
+
+/* UpdateToast — one-time post-update confirmation, rendered once at TopBar level. */
+function UpdateToast({version,onDismiss}){
+  return <div className="update-toast" role="status" aria-live="polite">
+    <span className="update-toast-check" aria-hidden="true">✓</span>
+    <span>Updated to {version}</span>
+    <button className="update-toast-close" aria-label="Dismiss" onClick={onDismiss}>✕</button>
+  </div>;
+}
+
+/* UpdateBadge — presentational version chip + updater inside the ⋯ MoreMenu panel. All
+   update state now comes from the shared useSelfUpdate hook (via the update prop); this
+   only renders. When a newer release exists the behavior forks on info.selfUpdate: Go
+   binaries (selfUpdate:true) get a one-click "Update now" (the shared runApply, whose
+   progress modal renders at TopBar level); Docker builds (selfUpdate:false) keep the
+   passive path: the OS-relevant script the user double-clicks (docker compose pull && up
+   -d, revealed on hover/focus) plus a release-notes link. "Check now" hits shared recheck. */
+function UpdateBadge({update}){
+  const info=update&&update.info;
+  const [checking,setChecking]=useState(false);
+  const check=async()=>{ setChecking(true); try{ await update.recheck(); }finally{ setChecking(false); } };
   if(!info||info.current==null) return null;
-  const {current,latest,available,url}=info;
+  const {current,latest,available,url,selfUpdate}=info;
   const script=detectUpdateScript();
 
   return <span className="update-slot">
     <span className="mono update-version">Bloxsmith v{current}</span>
-    {available
+    {available && selfUpdate
+      ? <span className="update-avail">
+          <span className="update-avail-text">
+            <span className="update-dot" aria-hidden="true"/>Update available → <b>{latest}</b>
+          </span>
+          <button className="kbd update-now-btn" onClick={update.runApply}
+            aria-label={'Update now to '+latest+' — downloads, verifies and restarts automatically'}>
+            Update now → <b>{latest}</b>
+          </button>
+          {url&&<a className="update-menu-link" href={url} target="_blank" rel="noopener noreferrer">View release notes</a>}
+        </span>
+      : available
       ? <span className="update-avail">
           <span className="update-avail-text">
             <span className="update-dot" aria-hidden="true"/>Update available → <b>{latest}</b>
@@ -240,7 +441,7 @@ function UpdateBadge(){
    ViewOptions, and UpdateBadge, all consolidated behind one ⋯ trigger. The
    .tools-slot inside stays mounted at all times (display:none when closed)
    because WatchMenu/ViewsMenu resolve their portal target once on mount. */
-function MoreMenu({onPalette}){
+function MoreMenu({onPalette,update}){
   const [open,setOpen]=useState(false);
   const rootRef=useRef(null);
   useEffect(()=>{ if(!open) return;
@@ -250,16 +451,18 @@ function MoreMenu({onPalette}){
     document.addEventListener('pointerdown',onDown,true);
     return ()=>{ window.removeEventListener('keydown',onKey); document.removeEventListener('pointerdown',onDown,true); };
   },[open]);
+  const info=update&&update.info;
+  const hasUpdate=!!(info&&info.available);
   return <span ref={rootRef} className="more-menu" style={{position:'relative',display:'inline-flex'}}>
-    <button className="kbd" aria-haspopup="menu" aria-expanded={open}
-      aria-label="More tools — Watches, Views, command palette, display, software update"
-      onClick={()=>setOpen(o=>!o)}>⋯</button>
+    <button className="kbd" aria-haspopup="menu" aria-expanded={open} style={{position:'relative'}}
+      aria-label={"More tools — Watches, Views, command palette, display, software update"+(hasUpdate?" (update available)":"")}
+      onClick={()=>setOpen(o=>!o)}>⋯{hasUpdate&&<span className="more-update-dot" aria-hidden="true"/>}</button>
     {/* tools-slot stays mounted ALWAYS (Watches/Views portal into it on mount); just hidden when closed */}
     <div className="more-panel panel" role="menu" style={{display:open?'block':'none'}}>
       <div className="more-row"><button className="kbd" onClick={()=>{onPalette();setOpen(false);}}>Command palette <span className="mono">⌘K</span></button></div>
       <div className="more-row tools-slot"></div>            {/* Watches + Views portal here */}
       <div className="more-row"><ViewOptions/></div>
-      <div className="more-row"><UpdateBadge/></div>
+      <div className="more-row"><UpdateBadge update={update}/></div>
     </div>
   </span>;
 }
@@ -268,6 +471,7 @@ function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
   const {orgName}=useAuth();
   const orgLabel=orgName||org;
   const {bind}=useHoverDetail();
+  const u=useSelfUpdate();   // single source of update truth — shared by pill, ⋯ dot, badge, modal, toast
   return <header className="topbar">
     <div className="brand">
       <BrandLogo/>
@@ -284,10 +488,13 @@ function TopBar({tab,org,fresh,onPalette,onAi,aiOpen}){
     <div className="topbar-right">
       <span className="tb-group">{fresh}<TimeRangeControl/></span>
       <span className="tb-group"><ProblemsBadge/></span>
+      <span className="tb-group"><UpdatePill update={u}/></span>
       <span className="tb-group"><button className={"kbd ai-trigger ai-trigger--accent"+(aiOpen?" ai-trigger--open":"")} onClick={onAi} aria-label="Open AI assistant" aria-expanded={aiOpen} {...bind({title:'Ask AI  ·  ⌘I',rows:[['What','Natural-language assistant over your live NOC data'],['Shortcut','⌘I / Ctrl-I']]})}><span>Ask AI</span><span className="mono">⌘I</span></button></span>
-      <span className="tb-group"><MoreMenu onPalette={onPalette}/></span>
+      <span className="tb-group"><MoreMenu onPalette={onPalette} update={u}/></span>
       <span className="tb-group"><AccountSlot/></span>
     </div>
+    {u.apply&&<UpdateModal apply={u.apply} latest={u.info&&u.info.latest} onDismiss={u.dismissApply}/>}
+    {u.justUpdated&&<UpdateToast version={u.justUpdated} onDismiss={u.dismissToast}/>}
   </header>;
 }
 
