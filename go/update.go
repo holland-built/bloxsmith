@@ -13,15 +13,21 @@ import (
 // server.py.
 const appRepo = "holland-built/bloxsmith"
 
-// verN extracts the integer <n> from a "1.0.<n>" / "v1.0.<n>" version, or -1.
-// Port of _ver_n (server.py:82).
+// verN maps a "major.minor.patch" / "vMAJOR.MINOR.PATCH" version to a single
+// comparable integer for full-semver ranking, or -1 when unparseable.
+// v2.0.0 > 1.9.0 > v1.0.595. Wide bases (1e6 per level) so the old
+// 1.0.<commit-count> scheme's large patch numbers can't carry into minor.
+// (The old port of _ver_n compared only the patch digit, so a 2.0.0 release
+// ranked equal to any x.y.0 and self-update could never detect it.)
 func verN(v string) int {
 	m := regexp.MustCompile(`(\d+)\.(\d+)\.(\d+)`).FindStringSubmatch(v)
 	if m == nil {
 		return -1
 	}
-	n, _ := strconv.Atoi(m[3])
-	return n
+	major, _ := strconv.Atoi(m[1])
+	minor, _ := strconv.Atoi(m[2])
+	patch, _ := strconv.Atoi(m[3])
+	return major*1_000_000_000_000 + minor*1_000_000 + patch
 }
 
 type updateStatus struct {

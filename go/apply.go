@@ -429,10 +429,40 @@ func runUpdateCLI(checkOnly bool) int {
 		return 0
 	}
 	fmt.Println("downloading and applying...")
+	// Print each phase transition live by polling the shared progress struct that
+	// applyLatest advances (checking->downloading->...->done). The goroutine stops
+	// on done/error or when applyLatest returns and closes the done channel.
+	done := make(chan struct{})
+	go func() {
+		last := ""
+		for {
+			select {
+			case <-done:
+				return
+			case <-time.After(300 * time.Millisecond):
+				snap := progress.snapshot()
+				phase, _ := snap["phase"].(string)
+				pct, _ := snap["pct"].(int)
+				if phase != last {
+					last = phase
+					if phase == "checking" {
+						fmt.Printf(">> %s...\n", phase)
+					} else {
+						fmt.Printf(">> %s  %d%%\n", phase, pct)
+					}
+				}
+				if phase == "done" || phase == "error" {
+					return
+				}
+			}
+		}
+	}()
 	if err := applyLatest(); err != nil {
+		close(done)
 		fmt.Fprintln(os.Stderr, "update failed (old binary kept):", err)
 		return 1
 	}
+	close(done)
 	fmt.Println("updated to", st.Latest, "— restarting")
 	return 0
 }

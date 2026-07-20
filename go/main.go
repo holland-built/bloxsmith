@@ -84,6 +84,9 @@ func main() {
 			// `bloxsmith service install|uninstall|start|stop|status` — run as a
 			// native background service (launchd / systemd / Windows SCM).
 			os.Exit(runServiceCLI(os.Args[2:]))
+		case "--help", "-h", "help":
+			printUsage()
+			return
 		}
 	}
 
@@ -100,6 +103,16 @@ func main() {
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+// printUsage prints the top-level command summary for `bloxsmith --help`.
+func printUsage() {
+	println("usage: bloxsmith [command]")
+	println("  (no command)              start the server (foreground) on http://localhost:$PORT")
+	println("  update [--check]          download+verify+swap the latest release, then restart")
+	println("  service <cmd>             install|uninstall|start|stop|restart|status  (run at login)")
+	println("  --version, -v             print version")
+	println("  --help, -h, help          this help")
 }
 
 // loadForegroundEnv loads the .env files that only make sense with a real cwd
@@ -164,20 +177,20 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	}
 
 	handler := server.New(&server.Deps{
-		Cfg:         cfg,
-		Vault:       v,
-		Rest:        restClient,
-		Auth:        auth,
-		Guard:       guard,
-		Audit:       auditLog,
-		Store:       st,
-		Cache:       sharedCache,
-		Dashboard:   dash,
-		StateDir:    stateDir,
-		Edit:        edit.New(restClient),
-		Provision:   provision.New(restClient, cfg.TemplatesDir),
-		AI:          ai.New(llmCreds{cfg: cfg, v: v}, dash),
-		Account:     account.New(cfg.BaseURL, cfg.APIKey, auth, sharedCache),
+		Cfg:            cfg,
+		Vault:          v,
+		Rest:           restClient,
+		Auth:           auth,
+		Guard:          guard,
+		Audit:          auditLog,
+		Store:          st,
+		Cache:          sharedCache,
+		Dashboard:      dash,
+		StateDir:       stateDir,
+		Edit:           edit.New(restClient),
+		Provision:      provision.New(restClient, cfg.TemplatesDir),
+		AI:             ai.New(llmCreds{cfg: cfg, v: v}, dash),
+		Account:        account.New(cfg.BaseURL, cfg.APIKey, auth, sharedCache),
 		Version:        version,
 		Static:         staticHandler(),
 		UpdateCheck:    updateCheckHandler,
