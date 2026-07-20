@@ -44,7 +44,11 @@ the background at login, and `bloxsmith update` upgrades in place.
 
 > Checksum verification detects a corrupt or truncated download; it does **not**
 > prove publisher identity, since checksums ship alongside the archive.
-> Signature verification (cosign) is the planned hardening step.
+> The multi-arch **ghcr images** are now cosign keyless-signed in CI (GitHub OIDC
+> identity — verify with `cosign verify ghcr.io/holland-built/bloxsmith:<tag>
+> --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/'
+> --certificate-oidc-issuer https://token.actions.githubusercontent.com`); the
+> standalone binary remains checksum-only.
 
 ### Windows
 
@@ -70,7 +74,8 @@ unzip it, and run `bloxsmith.exe`.
 
 The app self-updates in place (in-app **Update now** / `bloxsmith update`) — there
 is no `winget upgrade` step. As with the shell installer, the SHA-256 check proves
-integrity, not publisher identity; the binary is unsigned.
+integrity, not publisher identity; the binary is unsigned (the container images
+are cosign-signed in CI, but the standalone binary is not).
 
 > **Note:** install.ps1 is new and tested on PowerShell 5.1+/7 — run it once on a
 > real Windows machine to confirm before advertising it for wide use.
@@ -179,11 +184,12 @@ that's the button click or the manual command above.
 
 ## Install from the prebuilt image
 
-No source checkout, no build — just Docker. Releases are cut **locally** with
-goreleaser (see [SHIP.md](SHIP.md)), which publishes the multi-arch image to GitHub
-Container Registry (GHCR) alongside the binary tarballs. CI
-([ci.yml](../.github/workflows/ci.yml)) only builds and tests the tree on push/PR —
-it does not publish or sign images.
+No source checkout, no build — just Docker. Releases are cut by the tag-triggered
+CI workflow ([release.yml](../.github/workflows/release.yml)), which runs goreleaser
+to publish AND cosign keyless-sign the multi-arch image to GitHub Container Registry
+(GHCR) alongside the binary tarballs (see [SHIP.md](SHIP.md)); local goreleaser is
+the manual fallback. The push/PR CI ([ci.yml](../.github/workflows/ci.yml)) only
+builds and tests the tree — it does not publish or sign images.
 
 ```bash
 docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \

@@ -8,6 +8,9 @@ FROM gcr.io/distroless/static:latest
 
 WORKDIR /app
 COPY bloxsmith /app/bloxsmith
+# Third-party demo/seed templates, fetched by goreleaser's before hook and
+# injected via dockers[].extra_files. Matches ENV TEMPLATES_DIR=/templates below.
+COPY templates /templates
 
 ENV HOST=0.0.0.0 \
     PORT=8080 \

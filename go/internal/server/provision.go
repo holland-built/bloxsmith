@@ -231,6 +231,12 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	}
 	summary := map[string]any{"succeeded": []any{}, "failed": []any{}, "skipped": []any{}}
 
+	if !d.Provision.TemplatesInstalled() {
+		emit(map[string]any{"error": "templates not installed — run scripts/fetch_templates.py, or use the release archive / container image, which bundle them"})
+		emit(map[string]any{"done": true, "summary": summary})
+		return
+	}
+
 	emit(map[string]any{"step": "Seeding blocks…"})
 	if bt, err := d.Provision.LoadTemplate("blocks/regional_address_blocks.yaml"); err != nil {
 		emit(map[string]any{"template": "blocks/regional_address_blocks.yaml", "error": err.Error()})

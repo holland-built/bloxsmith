@@ -1,8 +1,9 @@
 name: CI
 
 # Replaces the retired docker-publish.yml. Builds and tests the Go single-binary
-# app (embedded UI) — no image publish, no signing. Releases are cut locally with
-# goreleaser (see docs/SHIP.md); this workflow only proves the tree builds.
+# app (embedded UI) — no image publish, no signing. Releases are cut by the
+# tag-triggered .github/workflows/release.yml; this workflow proves the tree
+# builds on push/PR.
 on:
   push:
     branches: [master]
@@ -50,3 +51,22 @@ jobs:
       - name: goreleaser build (snapshot, no publish)
         working-directory: go
         run: goreleaser build --snapshot --clean
+
+  # PSScriptAnalyzer gate for the Windows installer — catches PowerShell errors
+  # without a manual Windows run. Error severity only; warnings don't fail CI.
+  lint-ps1:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PSScriptAnalyzer (Error severity gate)
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $findings = Invoke-ScriptAnalyzer -Path scripts/install.ps1 -Severity Error
+          if ($findings) {
+            $findings | Format-Table RuleName, Line, Message -AutoSize | Out-String | Write-Host
+            exit 1
+          }
+          Write-Host "PSScriptAnalyzer: no Error-severity findings in scripts/install.ps1"
