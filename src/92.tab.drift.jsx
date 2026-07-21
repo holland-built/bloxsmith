@@ -14,6 +14,7 @@ function DriftTab(){
   const [checking,setChecking]=useState(false);
   const [result,setResult]=useState(null);
   const [err,setErr]=useState(null);
+  const [openCats,setOpenCats]=useState(()=>new Set());
   if(locked) return null;
 
   const templates=(Array.isArray(templatesApi.data)?templatesApi.data:[]).filter(t=>!t.type||t.type==='site');
@@ -89,14 +90,17 @@ function DriftTab(){
               {Object.keys(groups).length===0
                 ? <div className="dt-empty">No drift items</div>
                 : // TODO(backend): drift items carry no per-item severity; count-desc is the honest interim rank — stamp severity server-side for errors-first ordering.
-                  Object.entries(groups).sort((a,b)=>b[1].length-a[1].length).map(([cat,items])=>
-                    <div key={cat} style={{marginBottom:'var(--s3)'}}>
+                  <div style={{maxHeight:'var(--body-chart)',overflow:'auto'}}>
+                  {Object.entries(groups).sort((a,b)=>b[1].length-a[1].length).map(([cat,items])=>{
+                    const open=openCats.has(cat);
+                    const shown=open?items:items.slice(0,6);
+                    return <div key={cat} style={{marginBottom:'var(--s3)'}}>
                       <div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)',textTransform:'uppercase',marginBottom:'var(--s1)'}}>{cat}</div>
                       {/* Glyph-diff render — shared dt-diff vocabulary (+/−/~), monochrome
                           body text, accessible label per glyph. No color-only signal. */}
                       <table className="dt">
                         <tbody>
-                          {items.map((d,i)=>{
+                          {shown.map((d,i)=>{
                             const g=driftMark(d);
                             return <tr key={i}>
                               <td className="dt-diff mono"><span aria-label={g.label} title={g.label}>{g.mark}</span></td>
@@ -105,7 +109,12 @@ function DriftTab(){
                           })}
                         </tbody>
                       </table>
-                    </div>)}
+                      {items.length>6&&!open
+                        ? <button className="btn btn-ghost" onClick={()=>setOpenCats(s=>{const n=new Set(s); n.add(cat); return n;})}>+{items.length-6} more</button>
+                        : null}
+                    </div>;
+                  })}
+                  </div>}
             </>}
       </Panel>:null}
       {err?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{err}</div></Panel>:null}
