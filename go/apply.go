@@ -322,7 +322,9 @@ func applyLatest() error {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return fmt.Errorf("apply failed AND rollback failed: %v (rollback: %v)", err, rerr)
 		}
-		return fmt.Errorf("apply failed, old binary restored: %v", err)
+		// RollbackError==nil means the rollback either succeeded OR was never needed
+		// (the swap hadn't committed) — either way the old binary is still in place.
+		return fmt.Errorf("apply failed; old binary unchanged or restored: %v", err)
 	}
 
 	progress.set("restarting", 95)
