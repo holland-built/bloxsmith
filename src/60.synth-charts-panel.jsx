@@ -400,7 +400,7 @@ function TrendChart({series,height,xLabel}){
     l:x&&x.l!=null?x.l:'—', c:(x&&x.c)||'var(--accent)',
     s:(Array.isArray(x&&x.s)?x.s:[]).map(Number).filter(v=>isFinite(v))}));
   const maxLen=ss.reduce((m,x)=>Math.max(m,x.s.length),0);
-  const H=Number(height)||200;
+  const H=Math.min(240,Number(height)||200);
   const W=560,padL=36,padR=10,padT=10,padB=22;
   const plotW=W-padL-padR,plotH=H-padT-padB,baseY=padT+plotH;
   const allVals=[]; ss.forEach(x=>x.s.forEach(v=>allVals.push(v)));
@@ -414,6 +414,13 @@ function TrendChart({series,height,xLabel}){
   </div>;
   if(maxLen<2) return <div style={{width:'100%',minWidth:0}}>{legend}
     <div style={{color:'var(--text-faint)',fontSize:'var(--t12)',padding:'var(--s3)'}}>No history yet</div></div>;
+  if(ss.length===1 && ss[0].s.length>=2 && ss[0].s.every(v=>v===ss[0].s[0])){
+    return <div style={{width:'100%',minWidth:0}}>{legend}
+      <div style={{padding:'var(--s3)',display:'flex',alignItems:'baseline',gap:'var(--s2)'}}>
+        <b className="mono" style={{fontSize:'var(--t18,20px)'}}>{ss[0].s[0]}</b>
+        <span style={{color:'var(--text-faint)',fontSize:'var(--t12)'}}>steady across {ss[0].s.length} points</span>
+      </div></div>;
+  }
 
   const grids=[0,1,2,3,4].map(k=>maxY*(k/4)); // ~4 gridlines (5 incl. 0)
   const ticks=[]; for(let i=0;i<maxLen;i++){ const ago=maxLen-1-i; if(ago%6===0||i===0) ticks.push({i,ago}); } // every ~6 pts + last
@@ -470,10 +477,21 @@ function TrendChart({series,height,xLabel}){
    center + each legend row into useHoverDetail — no new tooltip system, callers
    that don't pass them get the exact prior behavior. ── */
 function Donut({slices,size=120,centerValue,centerLabel,centerDetail,legendDetail}){
+  size=Math.min(140,size);
   const {bind}=useHoverDetail();
   const raw=(Array.isArray(slices)?slices:[]).filter(s=>s&&(Number(s.value)||0)>0);
   const total=raw.reduce((a,s)=>a+(Number(s.value)||0),0);
   if(!raw.length||total<=0) return <div style={{color:'var(--text-faint)',fontSize:'var(--t12)',padding:'var(--s3)'}}>No data</div>;
+  if(raw.length===1){
+    const only=raw[0];
+    const b=bind({title:only.label,rows:[['Count',Number(only.value)||0],['Share','100%']]});
+    return <div className="donut-wrap" role="img" aria-label={'All '+(Number(only.value)||0)+' '+only.label} {...b} style={{cursor:'help'}}>
+      <div style={{display:'flex',alignItems:'baseline',gap:'var(--s2)',padding:'var(--s2)'}}>
+        <span className="donut-leg-dot" style={{background:only.color||'var(--accent)'}}/>
+        <b className="mono">100% {only.label}</b>
+        <span className="mono" style={{color:'var(--text-faint)'}}>({Number(only.value)||0})</span>
+      </div></div>;
+  }
   const desc=[...raw].sort((a,b)=>(Number(b.value)||0)-(Number(a.value)||0));
   let parts=desc;
   if(desc.length>5){
