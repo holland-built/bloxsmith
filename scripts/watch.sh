@@ -27,15 +27,15 @@ if lsof -ti:"$PORT" >/dev/null 2>&1; then
 fi
 
 echo "watch: serving from disk on http://localhost:$PORT  (edit src/*.jsx — Ctrl-C to stop)"
-( cd go && WEB_DIR="$ROOT/go/web" PORT="$PORT" exec go run . ) &
-SRV=$!
+start_server(){ ( cd go && WEB_DIR="$ROOT/go/web" PORT="$PORT" exec go run . ) & SRV=$!; }
+start_server
 cleanup(){ echo; echo "watch: stopping…"; kill "$SRV" 2>/dev/null || true; lsof -ti:"$PORT" 2>/dev/null | xargs kill -9 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
 # Wait until it serves, then open the browser once.
 for _ in $(seq 1 60); do
   if curl -s -o /dev/null "http://localhost:$PORT/" 2>/dev/null; then
-    command -v open >/dev/null 2>&1 && open "http://localhost:$PORT/"
+    [ -n "${WATCH_NO_OPEN:-}" ] || { command -v open >/dev/null 2>&1 && open "http://localhost:$PORT/"; }
     break
   fi
   sleep 1
@@ -61,6 +61,11 @@ sig(){ cat src/*.jsx go/web/index.html 2>/dev/null | shasum | cut -d' ' -f1; }
 echo "watch: watching src/*.jsx + index.html …"
 LAST="$(sig)"
 while sleep 1; do
+  # self-heal: if the port isn't answering AND the server process is gone, relaunch it
+  # (during a ~20s go rebuild the process is alive but not yet serving — don't double-launch).
+  if ! curl -s -o /dev/null "http://localhost:$PORT/" 2>/dev/null && ! kill -0 "$SRV" 2>/dev/null; then
+    echo "watch: server down — restarting…"; start_server
+  fi
   NOW="$(sig)"
   if [ "$NOW" != "$LAST" ]; then
     LAST="$NOW"
