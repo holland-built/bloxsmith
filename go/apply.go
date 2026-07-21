@@ -331,6 +331,13 @@ func applyLatest() error {
 	// over the port. Deferred slightly so the /api/update/apply response and a
 	// final /status poll can complete first.
 	go func() {
+		// A panic in the hand-off (before restart() reports its own spawn errors)
+		// would strand progress at 'restarting'; surface it so the modal resolves.
+		defer func() {
+			if rec := recover(); rec != nil {
+				progress.fail(fmt.Errorf("update restart panicked: %v", rec))
+			}
+		}()
 		time.Sleep(750 * time.Millisecond)
 		restart()
 	}()
@@ -399,6 +406,14 @@ func applyUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	go func() {
+		// A panic here (extract/swap/nil-deref) would otherwise kill the goroutine
+		// WITHOUT a terminal status, freezing progress at its last phase and leaving
+		// the frontend polling forever. Recover into phase=error so the modal resolves.
+		defer func() {
+			if rec := recover(); rec != nil {
+				progress.fail(fmt.Errorf("update panicked: %v", rec))
+			}
+		}()
 		if err := applyLatest(); err != nil {
 			progress.fail(err)
 		}
