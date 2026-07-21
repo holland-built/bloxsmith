@@ -1,4 +1,5 @@
 function ThemeToggle(){
+  const {bind}=useHoverDetail();
   const [theme,setTheme]=useState(()=>document.documentElement.dataset.theme||'dark');
   const toggle=()=>{
     const next=theme==='dark'?'light':'dark';
@@ -7,13 +8,15 @@ function ThemeToggle(){
     setTheme(next);
   };
   return <button className="kbd" onClick={toggle}
-    aria-label="Toggle color theme" title="Toggle light / dark theme">
+    aria-label="Toggle color theme" title="Toggle light / dark theme"
+    {...bind({title:'Theme',rows:[['What','Switch light / dark'],['Saved','Per browser']]})}>
     {theme==='dark'?'Light':'Dark'}
   </button>;
 }
 
 /* DensityToggle — flips compact/comfortable row height + persists (LS.set('density',…)). */
 function DensityToggle(){
+  const {bind}=useHoverDetail();
   const [d,setD]=useState(()=>document.documentElement.dataset.density||'compact');
   const toggle=()=>{
     const next=d==='compact'?'comfortable':'compact';
@@ -22,7 +25,8 @@ function DensityToggle(){
     setD(next);
   };
   return <button className="kbd" onClick={toggle}
-    aria-label="Toggle row density" title="Toggle compact / comfortable rows">
+    aria-label="Toggle row density" title="Toggle compact / comfortable rows"
+    {...bind({title:'Density',rows:[['What','Compact ↔ comfortable data-table rows'],['Note','Affects sortable tables, not tiles/charts']]})}>
     {d==='compact'?'Compact':'Comfort'}
   </button>;
 }
@@ -481,7 +485,9 @@ function UpdateBadge({update}){
    .tools-slot inside stays mounted at all times (display:none when closed)
    because WatchMenu/ViewsMenu resolve their portal target once on mount. */
 function MoreMenu({onPalette,update}){
+  const {bind}=useHoverDetail();
   const [open,setOpen]=useState(false);
+  const [helpOpen,setHelpOpen]=useState(false);
   const rootRef=useRef(null);
   useEffect(()=>{ if(!open) return;
     const onKey=e=>{ if(e.key==='Escape') setOpen(false); };
@@ -495,21 +501,24 @@ function MoreMenu({onPalette,update}){
   return <span ref={rootRef} className="more-menu" style={{position:'relative',display:'inline-flex'}}>
     <button className="kbd" aria-haspopup="menu" aria-expanded={open} style={{position:'relative'}}
       aria-label={"More tools — Watches, Views, command palette, display, software update"+(hasUpdate?" (update available)":"")}
-      onClick={()=>setOpen(o=>!o)}>⋯{hasUpdate&&<span className="more-update-dot" aria-hidden="true"/>}</button>
+      onClick={()=>setOpen(o=>!o)}
+      {...bind({title:'More tools',rows:[['Watches','Save a table search + live match count'],['Views','Save the current tab + filters as a named snapshot'],['Display','Theme, density, wallboard'],['Help','What every control does']]})}>⋯{hasUpdate&&<span className="more-update-dot" aria-hidden="true"/>}</button>
     {/* tools-slot stays mounted ALWAYS (Watches/Views portal into it on mount); just hidden when closed */}
     <div className="more-panel panel" role="menu" style={{display:open?'block':'none'}}>
       <div className="more-sec-label">Tools</div>
-      <div className="more-row"><button className="kbd" onClick={()=>{onPalette();setOpen(false);}}>Command palette <span className="mono">⌘K</span></button></div>
+      <div className="more-row"><button className="kbd" onClick={()=>{onPalette();setOpen(false);}} {...bind({title:'Command palette',rows:[['What','Jump to anything — tabs, actions, saved views'],['Shortcut','⌘K / Ctrl-K']]})}>Command palette <span className="mono">⌘K</span></button></div>
+      <div className="more-row"><button className="kbd" onClick={()=>{setHelpOpen(true);setOpen(false);}}>Help — what each control does</button></div>
       <div className="more-row tools-slot"></div>            {/* Watches + Views portal here */}
       <div className="more-divide" role="separator"></div>
       <div className="more-sec-label">Display</div>
       <div className="more-row"><div className="more-toggle"><span>Theme</span><ThemeToggle/></div></div>
       <div className="more-row"><div className="more-toggle"><span>Density</span><DensityToggle/></div></div>
-            <div className="more-row"><div className="more-toggle"><span>Wallboard</span><button className="kbd wall-toggle" onClick={enterWall} aria-label="Enter wallboard mode" title="Full-screen NOC display (#wall)">Enter</button></div></div>
+            <div className="more-row"><div className="more-toggle"><span>Wallboard</span><button className="kbd wall-toggle" onClick={enterWall} aria-label="Enter wallboard mode" title="Full-screen NOC display (#wall)" {...bind({title:'Wallboard',rows:[['What','Full-screen NOC display — auto-rotates Overview / Network / Security'],['Exit','Press Esc']]})}>Enter</button></div></div>
       <div className="more-divide" role="separator"></div>
       <div className="more-sec-label">About</div>
       <div className="more-row"><UpdateBadge update={update}/></div>
     </div>
+    <HelpModal open={helpOpen} onClose={()=>setHelpOpen(false)}/>
   </span>;
 }
 

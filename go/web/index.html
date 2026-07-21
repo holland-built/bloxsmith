@@ -90,7 +90,7 @@ try{
   --t10:10px; --t11:11px; --t12:12px; --t13:13px; --t14:14px; --t16:16px; --t20:20px; --t28:28px;
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s12:48px;
   --r-ctl:4px; --r-panel:6px;
-  --row-h:26px; --dt-fs:var(--t12);
+  --row-h:26px; --dt-fs:var(--t12); --dt-cell-py:0px;
   /* Trailing gutter column the per-row KebabMenu (⋮) lives in. */
   --dt-actions-w:28px;
   --body-table:280px; --body-chart:220px;
@@ -98,7 +98,7 @@ try{
      Panel `size` prop (sm/md/lg) + rerouted ad-hoc max-heights all read these. */
   --panel-sm:220px; --panel-md:340px; --panel-lg:560px;
 }
-[data-density="comfortable"]{--row-h:32px;}
+[data-density="comfortable"]{--row-h:36px; --dt-fs:var(--t13); --dt-cell-py:var(--s1);}
 [data-theme="light"]{color-scheme:light;
   --bg:#fafafa;--surface:#fff;--raised:#f2f2f2;--hover:#e8e8e8;
   --border:#e2e2e2;--border-strong:#cfcfcf;--border-input:#8a8a8a;
@@ -249,7 +249,7 @@ button{font-family:inherit;color:inherit;cursor:pointer;}
 table.dt{width:100%;border-collapse:collapse;font-size:var(--dt-fs);table-layout:fixed;}
 table.dt thead th{
   text-align:left;font-weight:500;color:var(--text-dim);
-  padding:0 var(--s3);height:var(--row-h);
+  padding:var(--dt-cell-py) var(--s3);height:var(--row-h);
   border-bottom:1px solid var(--border);
   white-space:nowrap;user-select:none;cursor:pointer;
   background:var(--surface);
@@ -273,7 +273,7 @@ table.dt thead th .sort-order{display:inline-flex;align-items:center;justify-con
   width:13px;height:13px;border-radius:50%;background:var(--accent);color:var(--accent-contrast);
   font-size:var(--t11);font-weight:700;margin-right:2px;vertical-align:1px;}
 table.dt tbody td{
-  padding:0 var(--s3);height:var(--row-h);
+  padding:var(--dt-cell-py) var(--s3);height:var(--row-h);
   border-bottom:1px solid var(--border);
   color:var(--text);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;
@@ -540,6 +540,10 @@ table.dt tbody td.dt-acts .kebab-btn{width:20px;height:20px;font-size:var(--t12)
 .sc-row{display:contents;}
 .sc-row dt{margin:0;}
 .sc-row dd{margin:0;font-size:var(--t12);color:var(--text-dim);align-self:center;}
+.help-list{display:flex;flex-direction:column;gap:var(--s4);}
+.help-sec{display:flex;flex-direction:column;gap:var(--s1);}
+.help-sec-title{margin:0;font-size:var(--t13);font-weight:600;color:var(--text);}
+.help-sec-body{margin:0;font-size:var(--t12);line-height:1.5;color:var(--text-dim);}
 
 .toast{display:flex;align-items:center;gap:var(--s3);justify-content:space-between;}
 .toast-action{font-size:var(--t12);font-weight:500;color:var(--accent-text);background:transparent;border:none;padding:0;flex:0 0 auto;}
