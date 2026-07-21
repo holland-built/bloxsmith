@@ -88,7 +88,8 @@ function DriftTab(){
               </div>:null}
               {Object.keys(groups).length===0
                 ? <div className="dt-empty">No drift items</div>
-                : Object.entries(groups).map(([cat,items])=>
+                : // TODO(backend): drift items carry no per-item severity; count-desc is the honest interim rank — stamp severity server-side for errors-first ordering.
+                  Object.entries(groups).sort((a,b)=>b[1].length-a[1].length).map(([cat,items])=>
                     <div key={cat} style={{marginBottom:'var(--s3)'}}>
                       <div className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)',textTransform:'uppercase',marginBottom:'var(--s1)'}}>{cat}</div>
                       {/* Glyph-diff render — shared dt-diff vocabulary (+/−/~), monochrome

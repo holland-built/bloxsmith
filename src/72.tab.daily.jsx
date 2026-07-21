@@ -149,9 +149,15 @@ function DailyTab(){
   ];
 
   // ── Current-state panels (no history needed) — keep Daily full on first visit ──
-  const topSubs=sortedSubs.slice(0,10);
-  const attnHosts=hosts.filter(h=>!/^(online|up)$/i.test(String(h.status||''))).slice(0,10);
-  const issueZones=zones.filter(z=>Array.isArray(z.issues)&&z.issues.length>0).slice(0,10);
+  // Rank by fewest FREE addresses first (free=total-used; missing data sorts last),
+  // then collapse ≥5 identical 100%-util /cidr rows into one synthetic __group row.
+  const freeOf=s=>{const t=Number(s&&s.total),u=Number(s&&s.used);return (isFinite(t)&&isFinite(u))?(t-u):Infinity;};
+  const topSubs=collapseIdentical([...subnets].sort((a,b)=>freeOf(a)-freeOf(b)).slice(0,10),
+    s=>utilOf(s)===100?('100|/'+(s.cidr||'')):null, 5);
+  // Severity order for hosts needing attention: error > degraded > offline > other.
+  const hostSev=h=>{const s=String(h.status||'').toLowerCase();return s==='error'?0:s==='degraded'?1:s==='offline'?2:3;};
+  const attnHosts=hosts.filter(h=>!/^(online|up)$/i.test(String(h.status||''))).sort((a,b)=>hostSev(a)-hostSev(b)).slice(0,10);
+  const issueZones=zones.filter(z=>Array.isArray(z.issues)&&z.issues.length>0).sort((a,b)=>b.issues.length-a.issues.length).slice(0,10);
 
   // Vault locked → gate handles it (after all hooks). Loading → skeleton.
   if(locked) return null;
@@ -250,11 +256,15 @@ function DailyTab(){
         </div>)}
       </Panel>
 
-      <Panel title="Top capacity subnets" side={<span className="mono">by utilization</span>} empty={!topSubs.length}>
+      <Panel title="Top capacity subnets" side={<span className="mono">by free space</span>} empty={!topSubs.length}>
         <div className="issues">
-          {topSubs.map((s,i)=>{const u=Math.round(utilOf(s));const c=utilColor(u);return <div key={s.id||s.addr||i} className="issue" role="button" tabIndex={0}
+          {topSubs.map((s,i)=>{if(s.__group) return <div key={'grp:'+s.__group} className="issue">
+              <span className="rank">·</span>
+              <div className="body"><div className="t mono" style={{color:'var(--text-dim)'}}>{s.__count} subnets at 100% ({(s.__group.split('|')[1])||''})</div></div>
+            </div>;
+            const u=Math.round(utilOf(s));const c=utilColor(u);return <div key={s.id||s.addr||i} className="issue" role="button" tabIndex={0}
               onClick={()=>nav('network',{subnet:s.addr||s.id})} onKeyDown={e=>{if(e.key==='Enter')nav('network',{subnet:s.addr||s.id});}}
-              {...hover.bind({title:(s.addr||s.name||'subnet')+(s.cidr?'/'+s.cidr:''),rows:[['used',(s.used!=null?s.used:'—')+' / '+(s.total!=null?s.total:'—')],['util',u+'%'],['site',s.site||'—']],spark:[u*0.4,u*0.6,u*0.8,u]})}>
+              {...hover.bind({title:(s.addr||s.name||'subnet')+(s.cidr?'/'+s.cidr:''),rows:[['used',(s.used!=null?s.used:'—')+' / '+(s.total!=null?s.total:'—')],['util',u+'%'],['site',s.site||'—']]})}>
             <span className="rank">{i+1}</span>
             <div className="body"><div className="t mono">{s.addr||s.name}{s.cidr?'/'+s.cidr:''}</div><div className="d">{s.site||'—'}</div></div>
             <div className="ubar" style={{flex:'none',width:56}}><i style={{width:Math.max(4,u)+'%',background:c}}/></div>
