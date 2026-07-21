@@ -14,11 +14,20 @@ function secAutoCols(rows,tableId){
   sample.forEach(r=>Object.keys(r).forEach(k=>{if(!seen.has(k)){seen.add(k);keys.push(k);}}));
   // Dead columns (null/undefined/'' across the whole sample) waste width that matters.
   const live=keys.filter(k=>sample.some(r=>r[k]!=null&&r[k]!==''));
+  // Drop constant columns (Source=Infoblox, State=Active in every row) — but decide
+  // constancy over the FULL dataset (bounded 500), NOT the 20-row `sample`. A column
+  // constant in the sample yet varied later (e.g. Severity all "crit" up top, a "low"
+  // deeper down) must keep its column — the rare value is the signal, and a dropped
+  // column here is gone entirely (not even deferred to the ⋯ Cols manager).
+  const allRows=(rows||[]).filter(r=>r&&typeof r==='object');
   const varied=live.filter(k=>{
-    const vals=sample.map(r=>r[k]).filter(x=>x!=null&&x!=='');
-    if(vals.length<2) return true; // too few to judge — keep
-    const f=typeof vals[0]==='string'?vals[0].trim():vals[0];
-    return vals.some(x=>(typeof x==='string'?x.trim():x)!==f); // keep only if 2+ distinct values
+    let first,seen=false;
+    for(let i=0;i<allRows.length&&i<500;i++){
+      const v=allRows[i][k]; if(v==null||v==='') continue;
+      const nv=typeof v==='string'?v.trim():v;
+      if(!seen){ seen=true; first=nv; } else if(nv!==first) return true; // 2+ distinct → keep
+    }
+    return false; // 0-1 distinct non-blank across the whole dataset → constant, drop
   });
   const base=varied.length?varied:live;
   // Priority: name/severity/status/counts first — opaque ids and duplicate timestamps last.
