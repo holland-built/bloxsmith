@@ -759,6 +759,20 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:hidden
 .groupbar-fill{height:100%;border-radius:4px;}
 .groupbar-v{flex:0 0 auto;font-size:var(--t11);color:var(--text);min-width:40px;text-align:right;}
 .groupbar-more{font-size:var(--t11);color:var(--text-faint);padding:var(--s1) 0;}
+/* ── ExceptionPanel (shared) — bounded exception list; tone = 2px left accent, redundant to the printed value (never color-alone) ── */
+.expanel{display:flex;flex-direction:column;gap:var(--s2);min-width:0;}
+.expanel-strip{flex:0 0 auto;min-width:0;}
+.exlist{display:flex;flex-direction:column;gap:var(--s1);min-width:0;}
+.exrow{padding:var(--s1) var(--s2);border-left:2px solid transparent;border-radius:var(--r-ctl);min-width:0;}
+.exrow.clickable{cursor:pointer;}
+.exrow.clickable:hover{background:var(--hover);}
+.exrow.tone-ok{border-left-color:var(--ok);}
+.exrow.tone-warn{border-left-color:var(--warn);}
+.exrow.tone-crit{border-left-color:var(--crit);}
+.exrow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;box-shadow:none;}
+.exrollup{display:block;width:100%;text-align:center;background:transparent;border:1px solid transparent;border-radius:var(--r-ctl);padding:var(--s1) var(--s2);font-size:var(--t11);color:var(--text-dim);}
+.exrollup:hover{background:var(--hover);border-color:var(--border);color:var(--text);}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
 .hovercard{position:relative;display:inline-block;}
 .hovercard-pop{position:fixed;z-index:85;max-width:280px;padding:var(--s3);font-size:var(--t12);color:var(--text);}
 
