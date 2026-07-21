@@ -215,21 +215,19 @@ function NetworkTab(){
                 rows={exhaustionRows}
                 topK={8}
                 rowKey={(r,i)=>r.__group?('g'+i):(r.addr||r.id||i)}
-                toneOf={r=>{const u=r.__group?100:utilOf(r); return u>85?'crit':u>70?'warn':'ok';}}
                 onRow={r=>{ if(r.__group) return; nav('network',{subnet:r.addr||r.id}); }}
                 renderRow={(r,i)=> r.__group
                   ? <div className="exrow-group">{r.__count} subnets at 100% · same /{r.cidr}</div>
-                  : <div className="exrow-body">
-                      <div className="exrow-name">
-                        <span>{r.name||r.addr}</span>
-                        <span className="mono exrow-cidr">{(r.addr||'')+(r.cidr?('/'+r.cidr):'')}</span>
+                  : <div className="exrow-a">
+                      <div className="exa-id">
+                        <div className="exa-cidr mono">{(r.addr||'')+(r.cidr?('/'+r.cidr):'')}</div>
+                        {(r.name&&r.name!==r.addr)?<div className="exa-tag">{r.name}</div>:null}
                       </div>
-                      {UtilBar(utilOf(r))}
-                      <div className="exrow-free mono">
-                        <b>{((totalOf(r)-(Number(r.used)||0))).toLocaleString()}</b> free
-                        <span className="exrow-sub"> of {totalOf(r).toLocaleString()} · {utilOf(r)}%</span>
+                      <div className="exa-meter">
+                        <span className="exa-bar"><span style={{width:Math.min(100,utilOf(r))+'%',background:utilColor(utilOf(r))}}/></span>
+                        <span className="exa-pct mono">{utilOf(r)}%</span>
                       </div>
-                      <Sparkline values={(histByAddr[r.addr]||[]).filter(x=>typeof x==='number')}/>
+                      <div className="exa-free"><b className="mono">{Math.max(0,totalOf(r)-(Number(r.used)||0)).toLocaleString()}</b><span>free of {totalOf(r).toLocaleString()}</span></div>
                     </div>}
                 rollup={{count:healthyCount, label:healthyCount+' subnets under 70% — healthy, hidden → View all in table',
                          onClick:()=>{ injectUtilBand(null); const t=document.getElementById('net-subnets-table'); if(t) t.scrollIntoView({behavior:'smooth',block:'start'}); }}}
