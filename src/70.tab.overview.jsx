@@ -283,7 +283,7 @@ function OverviewTab(){
           side={<span className="mono" tabIndex={0} style={{cursor:'help'}}
             {...bind({title:'Top consumers',rows:[
               ['Matching','Subnets passing the current scope + utilization-band filters.'],
-              ['Order','Worst-first by utilization.'],
+              ['Order','Biggest address consumers first (by addresses used).'],
             ]})}>{subnetPreview.length} matching</span>}>
           {/* .issues' class-level max-height is a --body-chart (220px) token borrowed
               from the chart-body panels; it doesn't track this pcard's actual height,
@@ -301,7 +301,7 @@ function OverviewTab(){
               the list takes only leftover space and scrolls inside it. */}
           <div className="issues" style={{maxHeight:'none',flex:'1 1 0',minHeight:0}}>
             {subnetPreview.length
-              ? subnetPreview.slice(0,OV_SHOWN).map((s,i)=>{
+              ? [...subnetPreview].sort((a,b)=>((Number(b.used)||0)-(Number(a.used)||0))||util(b)-util(a)).slice(0,OV_SHOWN).map((s,i)=>{
                   const go=()=>nav('network',{subnet:s.addr||s.id});
                   const label=(s.addr||s.name||'—')+(s.cidr?('/'+s.cidr):'');
                   const u=util(s);
