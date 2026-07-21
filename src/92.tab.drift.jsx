@@ -89,9 +89,9 @@ function DriftTab(){
               </div>:null}
               {Object.keys(groups).length===0
                 ? <div className="dt-empty">No drift items</div>
-                : // TODO(backend): drift items carry no per-item severity; count-desc is the honest interim rank — stamp severity server-side for errors-first ordering.
+                : // groups ranked by worst real d.severity (error>warning>info), tie-break count.
                   <div style={{maxHeight:'var(--body-chart)',overflow:'auto'}}>
-                  {Object.entries(groups).sort((a,b)=>b[1].length-a[1].length).map(([cat,items])=>{
+                  {(()=>{const sevRank={error:0,warning:1,info:2}; const worst=g=>Math.min(...g.map(d=>sevRank[d.severity]!=null?sevRank[d.severity]:2)); return Object.entries(groups).sort((a,b)=>worst(a[1])-worst(b[1])||b[1].length-a[1].length);})().map(([cat,items])=>{
                     const open=openCats.has(cat);
                     const shown=open?items:items.slice(0,6);
                     return <div key={cat} style={{marginBottom:'var(--s3)'}}>
