@@ -160,22 +160,15 @@ function InfraTab({vaultTick}={}){
     ...offlineHosts.slice(0,2).map(h=>({label:h.name,onClick:()=>nav('infra',{host:h.name})})),
   ];
 
-  const kpiTiles=[
-    {label:'Online',value:online,sub:'of '+total,color:'var(--ok)'},
-    {label:'Degraded',value:degraded,color:'var(--warn)'},
-    {label:'Offline',value:offline,color:'var(--crit)'},
-    ...(byType.length>1?[{label:'Types',value:byType.length,sub:'host types',color:'var(--accent)',values:byType.map(t=>t[1])}]:[]),
-  ];
   const attention=[...offlineHosts,...degradedHosts];
   const attnSev=h=>/^(down|offline)$/i.test(String(h.status||''))?'crit':'high';
 
   return <div className="infra-page">
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
 
-    <div className="kpis">
-      {kpiTiles.map(k=><KpiSpark key={k.label} label={k.label} value={k.value} sub={k.sub}
-        color={k.color} values={k.values} bars/>)}
-    </div>
+    {/* KPI tiles removed — Online/Degraded/Offline already live in the SynthBand facts
+        above and "By type" is its own panel below; the tile strip was a redundant,
+        oversized duplicate that ballooned to fill the row. */}
 
     <div className="grid-dense">
       <Panel title="Needs attention" side={attention.length+(attention.length===1?' host':' hosts')}>
