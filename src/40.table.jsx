@@ -992,8 +992,14 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         if(constant){ dead.push({key:c.key,label,value:String(first)}); return false; } // constant — hidden + noted
         return true;
       });
-      // Never strip a table to zero columns (1-row / all-constant edge) — keep all, note none.
-      return kept.length?{visible:kept,dead}:{visible:cs,dead:[]};
+      if(kept.length) return {visible:kept,dead};
+      // Every column is dead. With 2+ rows this is a DEAD PANEL — a table of pure
+      // repetition (Licenses: Type empty, State all "active", Expiry all "–"). Don't
+      // fall back to rendering all-dead columns; flag it so the body collapses to a
+      // one-line summary. A 1-row table just reads "all-constant" (n=1) — not dead;
+      // keep its columns and emit no note.
+      if(dataRows.length>=2) return {visible:cs,dead,allDead:true};
+      return {visible:cs,dead:[]};
     };
     if(!showCols) return analyze(columns);
     // Column chooser present → respect the user's explicit visibility, don't auto-prune
@@ -1011,6 +1017,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   },[columns,hiddenCols,showCols,orderedAll,pinnedCol,rows]);
   const effCols=colPlan.visible;
   const deadCols=colPlan.dead;
+  const allDead=!!colPlan.allDead;
   const toggleCol=(key)=>setHiddenCols(prev=>{
     const has=prev.includes(key);
     const next=has?prev.filter(k=>k!==key):[...prev,key];
@@ -1623,11 +1630,17 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         {showCsv?<button className="btn btn-ghost" onClick={()=>downloadCSV(String(csvName||tableId||'export')+'.csv',sorted,columns)}>CSV</button>:null}
       </div>
     </div>}
-    {deadCols.length?<div className="dt-deadnote"
+    {deadCols.length&&!allDead?<div className="dt-deadnote"
       title="Columns whose value is the same in every row are hidden — they add no information. Value shown here.">
       {deadCols.length} all-same column{deadCols.length>1?'s':''} hidden:{' '}
       {deadCols.map((d,i)=><span key={d.key} className="dt-deadchip">{d.label} = <b>{d.value}</b>{i<deadCols.length-1?' ':''}</span>)}
     </div>:null}
+    {allDead?<div className="dt-alldead">
+      <div className="dt-alldead-head">{sorted.length} row{sorted.length===1?'':'s'} — every column holds one value, so this is a summary, not a table:</div>
+      <div className="dt-alldead-chips">
+        {deadCols.map(d=><span key={d.key} className="dt-deadchip">{d.label} = <b>{(typeof d.value==='string'&&d.value.trim()==='')?'(empty)':d.value}</b></span>)}
+      </div>
+    </div>:
     <div className={"tbl-wrap"+(scrollBody?" dt-scroll":"")}
       style={scrollBody?{maxHeight:scrollPx,overflowY:'auto'}:undefined}
       onScroll={scrollBody?onBodyScroll:undefined}>
@@ -1718,7 +1731,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
           }):null}
         </tbody>
       </table>
-    </div>
+    </div>}
     {scrollBody&&sorted.length>30?<div className="dt-more">
       <span className="dt-count mono">{sorted.length} rows</span>
     </div>:null}
