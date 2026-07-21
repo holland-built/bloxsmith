@@ -129,7 +129,7 @@ function NetworkTab(){
   // ── Address-exhaustion exception list ("Which subnets run out first?") + top consumers ──
   const totalOf=s=>{const t=Number(s.total)||0; if(t>0) return t; const c=Number(s.cidr)||32; return c<=32?Math.pow(2,32-c):0;};
   // exhaustion ranking excludes /31,/32,loopbacks & unknown-capacity (total<=2): structurally full, can't "run out"; they remain in the subnets table below.
-  const exhaustCandidates = subnets.filter(s=>totalOf(s) > 2);
+  const exhaustCandidates = subnets.filter(s=>totalOf(s) >= 16); // >=/28: skip /29-/32 point-to-point/loopback infra links (never DHCP pools that "run out")
   // Rank subnets by fewest free addresses (scarcity ASC), tie-break by util DESC, then collapse
   // runs of ≥5 fully-saturated (100%) subnets sharing a /cidr into one group row (Design C).
   const exhaustionRows=collapseIdentical(
