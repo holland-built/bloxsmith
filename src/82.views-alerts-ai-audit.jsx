@@ -419,7 +419,7 @@ function CspAuditPanel(){
           ? <div className="dt-empty">{search?'No CSP entries match this search.':'No portal audit entries in the current window.'}</div>
           : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}}
               tableId="csp-audit" csvName="csp-audit" rowKey={r=>String(r.id||((r.ts||'')+'|'+(r.user||'')))}
-              scrollBody={480} filterable filterKeys={['user','who_kind','who_role','action','resource','result']}/>}
+              maxRows={50} scrollBody={480} filterable filterKeys={['user','who_kind','who_role','action','resource','result']}/>}
   </Panel>;
 }
 

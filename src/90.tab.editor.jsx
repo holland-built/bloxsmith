@@ -224,7 +224,7 @@ function EditorTab(){
           </Panel>
           {previewBody?<Panel title="Preview">
             <Astryx.Badge variant="warning" label="DRY RUN"/>
-            <pre className="mono" style={{fontSize:'var(--t11)',whiteSpace:'pre-wrap',marginTop:'var(--s2)'}}>
+            <pre className="mono" style={{fontSize:'var(--t11)',whiteSpace:'pre-wrap',marginTop:'var(--s2)',maxHeight:'420px',overflow:'auto'}}>
               {JSON.stringify(previewBody,null,2)}
             </pre>
           </Panel>:null}

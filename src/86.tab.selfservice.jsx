@@ -501,7 +501,8 @@ function SelfServiceTab(){
           {(result.addresses||[]).length} address{(result.addresses||[]).length===1?'':'es'} allocated{result.dry?' (dry run)':''}
         </div>
         <div style={{marginTop:'var(--s2)',display:'flex',flexDirection:'column',gap:2}}>
-          {(result.addresses||[]).map((a,i)=><div key={i} className="mono" style={{fontSize:'var(--t12)'}}>{typeof a==='string'?a:JSON.stringify(a)}</div>)}
+          {(result.addresses||[]).slice(0,50).map((a,i)=><div key={i} className="mono" style={{fontSize:'var(--t12)'}}>{typeof a==='string'?a:JSON.stringify(a)}</div>)}
+          {(result.addresses||[]).length>50?<div className="mono" style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>+{(result.addresses||[]).length-50} more</div>:null}
         </div>
         {result.record?<div className="mono" style={{marginTop:'var(--s3)',fontSize:'var(--t12)',color:'var(--text-dim)'}}>
           Record: {JSON.stringify(result.record)}
@@ -560,7 +561,7 @@ function SelfServiceTab(){
         {!dnsZoneId?<div className="dt-empty">Select a zone</div>
           :recordsApi.loading?<Skeleton rows={3}/>
           :records.length===0?<div className="dt-empty">No records</div>
-          :<DataTable tableId="ss-dns-records" rowKey={r=>r.id} cols={recordCols} rows={records}
+          :<DataTable tableId="ss-dns-records" rowKey={r=>r.id} cols={recordCols} rows={records} scrollBody={480}
               defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}
               searchSchema={{fields:{ttl:{type:'number'}},aliases:{name:'name_in_zone',value:'dns_rdata'}}}/>}
       </Panel>
@@ -607,7 +608,7 @@ function SelfServiceTab(){
         {!ipSubnetId?<div className="dt-empty">Select a subnet</div>
           :addrApi.loading?<Skeleton rows={3}/>
           :addresses.length===0?<div className="dt-empty">No allocated addresses</div>
-          :<DataTable tableId="ss-ip-addresses" rowKey={r=>r.id} cols={addrCols} rows={addresses}
+          :<DataTable tableId="ss-ip-addresses" rowKey={r=>r.id} cols={addrCols} rows={addresses} scrollBody={480}
               defaultSort={{key:'address',dir:'asc'}} filterable filterKeys={['address','name','comment']}/>}
       </Panel>
     </div>:null}
@@ -644,7 +645,7 @@ function SelfServiceTab(){
         {!invSubnetId?<div className="dt-empty">Select a subnet</div>
           :invAddrApi.loading?<Skeleton rows={3}/>
           :invAddresses.length===0?<div className="dt-empty">No addresses</div>
-          :<DataTable tableId="ss-inv-addresses" rowKey={r=>r.id} cols={invAddrCols} rows={invAddresses}
+          :<DataTable tableId="ss-inv-addresses" rowKey={r=>r.id} cols={invAddrCols} rows={invAddresses} scrollBody={480}
               defaultSort={{key:'address',dir:'asc'}} filterable filterKeys={['address','name','comment']}/>}
       </Panel>
       <Panel title="Zone">
@@ -663,7 +664,7 @@ function SelfServiceTab(){
         {!invZoneId?<div className="dt-empty">Select a zone</div>
           :invRecordsApi.loading?<Skeleton rows={3}/>
           :invRecords.length===0?<div className="dt-empty">No records</div>
-          :<DataTable tableId="ss-inv-records" rowKey={r=>r.id} cols={invRecordCols} rows={invRecords}
+          :<DataTable tableId="ss-inv-records" rowKey={r=>r.id} cols={invRecordCols} rows={invRecords} scrollBody={480}
               defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}
               searchSchema={{fields:{ttl:{type:'number'}},aliases:{name:'name_in_zone',value:'dns_rdata'}}}/>}
       </Panel>

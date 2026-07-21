@@ -53,8 +53,13 @@ function mcpSeverity(row){
    filters the table to that category (74.tab.network.jsx:277's query/onQuery). */
 function IncCategoryChips({incidents,query,onQuery,onSnoozed}){
   if(!incidents.length) return null;
+  // Bound the strip: too many categories would wrap into a wall of chips. Show the
+  // first ~8, roll the rest into a single "+N more" indicator.
+  const CHIP_CAP=8;
+  const shown=incidents.slice(0,CHIP_CAP);
+  const overflow=incidents.length-shown.length;
   return <div style={{display:'flex',alignItems:'center',gap:'var(--s3)',flexWrap:'wrap',marginBottom:'var(--s3)'}}>
-    {incidents.map(i=>{
+    {shown.map(i=>{
       const on=query===i.category;
       return <span key={i.key||i.category}
         style={{display:'inline-flex',alignItems:'center',gap:'var(--s2)',padding:'2px var(--s2)',
@@ -70,6 +75,10 @@ function IncCategoryChips({incidents,query,onQuery,onSnoozed}){
         <SnoozeControl category={i.category} onSnoozed={onSnoozed}/>
       </span>;
     })}
+    {overflow>0
+      ? <span className="mono" title={overflow+' more categor'+(overflow===1?'y':'ies')}
+          style={{fontSize:'var(--t12)',color:'var(--text-dim)',padding:'2px var(--s2)'}}>+{overflow} more</span>
+      : null}
   </div>;
 }
 
