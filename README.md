@@ -133,6 +133,8 @@ cd go && go build -o bloxsmith . && ./bloxsmith  # → http://localhost:8080
 
 scripts/preview.sh [port]                       # one-command local preview (default :8090):
                                                 #   rebuilds UI, frees the port, runs, opens browser
+scripts/watch.sh [port]                         # LIVE dev: edit src/*.jsx → change shows in ~2s
+                                                #   (serves UI from disk via WEB_DIR; auto-reloads on macOS/Chrome)
 ```
 
 Full steps, the deploy matrix, auto-unlock, and pinning → **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
