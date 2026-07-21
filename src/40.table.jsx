@@ -942,38 +942,60 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   },[columns,colOrder]);
   // columnToggle: effective (rendered) columns = ordered cols minus hidden, pinned first.
   // Never yields an empty set; CSV/peek-title still use the full `columns`.
-  const effCols=useMemo(()=>{
-    // Part 2 of the cell-legibility system — auto-hide DEAD columns in the DEFAULT
-    // view. A column is dropped only when every value across the FULL unfiltered
-    // `rows` is null/empty/whitespace — EVEN IF it has a render() (dead cols are
-    // usually render:v=>v||'—', so the old render-exemption spared exactly the columns
-    // it should kill). ALWAYS exempt: spark columns, an id column, keepEmpty:true
-    // ("emptiness IS the signal"), and control/synthetic columns whose key isn't a
-    // real row field (kebab/edit/ack). Constant-but-populated columns are KEPT (all-0
-    // or uniform-status can be signal). When the table has a column chooser
-    // (columnToggle → showCols), auto-prune is OFF — the user owns visibility there.
+  // Part 2 of the cell-legibility system — auto-hide DEAD columns in the DEFAULT
+  // view, where "dead" = carries no information across the FULL unfiltered `rows`:
+  //   (a) EMPTY   — every value null/blank/whitespace (hidden silently, as before);
+  //   (b) CONSTANT— a single distinct value in every row (e.g. Site all "–", State
+  //       all "active", an auto "active" flag all true). One value across N rows is
+  //       a header stat, not a column — collapse it and NOTE it (colPlan.dead) so the
+  //       hide is visible, never silent;
+  //   (c) DEAD SPARK — a spark column whose spark(row) yields nothing for every row
+  //       (e.g. Trend before any snapshot history exists → all "—").
+  // ALWAYS exempt: an id column, keepEmpty:true ("emptiness IS the signal"), and
+  // control/synthetic columns whose key isn't a real row field (kebab/edit/ack).
+  // When the table has a column chooser (columnToggle → showCols) auto-prune is OFF —
+  // the user owns visibility there. 1-row tables are never pruned (every column reads
+  // "constant" at n=1) via the kept.length fallback.
+  const colPlan=useMemo(()=>{
     const dataRows=rows||[];
     const isBlank=v=>v==null||(typeof v==='string'?v.trim()==='':v==='');
-    const pruneEmpty=cs=>{
-      if(!dataRows.length) return cs;
+    const norm=v=>typeof v==='string'?v.trim():v;
+    const sparkEmpty=v=>v==null||v===''||(Array.isArray(v)&&v.length===0);
+    const analyze=cs=>{
+      if(!dataRows.length) return {visible:cs,dead:[]};
+      const dead=[];
       const kept=cs.filter(c=>{
-        if(c.spark||c.id||c.type==='id'||c.keepEmpty) return true;
+        if(c.id||c.type==='id'||c.keepEmpty) return true;
+        const label=c.label!=null?c.label:c.key;
+        // Spark column: dead only when spark() is empty for EVERY row.
+        if(c.spark){
+          if(typeof c.spark!=='function') return true;
+          for(let i=0;i<dataRows.length;i++){ const r=dataRows[i]; if(r&&!sparkEmpty(c.spark(r))) return true; }
+          dead.push({key:c.key,label,value:'—'});
+          return false;
+        }
         // Control/synthetic columns (kebab actions, edit, ack) bind no row field —
-        // their key is absent from the data, so every value reads blank. NEVER prune
-        // them (that was a blocking bug: it hid Ack/Edit/Delete). A column is a prune
-        // candidate only if its key actually exists on the rows.
+        // their key is absent from the data. NEVER prune them (hiding Ack/Edit/Delete
+        // was a blocking bug). A column is a candidate only if its key exists on a row.
         let hasKey=false;
         for(let i=0;i<dataRows.length;i++){ if(dataRows[i]&&(c.key in dataRows[i])){ hasKey=true; break; } }
-        if(!hasKey) return true; // control column (key never set by any normalizer here) — never prune
-        // Drop ONLY a data column that is blank in EVERY row. Break early on the first
-        // non-blank value so a populated column costs ~O(1), not O(rows), per poll —
-        // and never remove a merely-constant column (all-"0"/all-same can be signal).
-        for(let i=0;i<dataRows.length;i++){ const r=dataRows[i]; if(r&&!isBlank(r[c.key])) return true; }
-        return false;
+        if(!hasKey) return true;
+        // One pass detects both EMPTY (all-blank) and CONSTANT (single-distinct). Break
+        // on the second distinct value so a populated, varied column costs ~O(1)/poll.
+        let seen=false,first,constant=true,allBlank=true;
+        for(let i=0;i<dataRows.length;i++){ const r=dataRows[i]; if(!r) continue; const v=r[c.key];
+          if(isBlank(v)) continue;
+          allBlank=false; const nv=norm(v);
+          if(!seen){ seen=true; first=nv; } else if(nv!==first){ constant=false; break; }
+        }
+        if(allBlank) return false;                                   // empty — hidden silently
+        if(constant){ dead.push({key:c.key,label,value:String(first)}); return false; } // constant — hidden + noted
+        return true;
       });
-      return kept.length?kept:cs;
+      // Never strip a table to zero columns (1-row / all-constant edge) — keep all, note none.
+      return kept.length?{visible:kept,dead}:{visible:cs,dead:[]};
     };
-    if(!showCols) return pruneEmpty(columns);
+    if(!showCols) return analyze(columns);
     // Column chooser present → respect the user's explicit visibility, don't auto-prune
     // (a pruned column the chooser still lists but can't restore is a lying control).
     let cs=orderedAll;
@@ -985,8 +1007,10 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
       const pinned=cs.find(c=>c.key===pinnedCol);
       if(pinned) cs=[pinned,...cs.filter(c=>c.key!==pinnedCol)];
     }
-    return cs;
+    return {visible:cs,dead:[]};
   },[columns,hiddenCols,showCols,orderedAll,pinnedCol,rows]);
+  const effCols=colPlan.visible;
+  const deadCols=colPlan.dead;
   const toggleCol=(key)=>setHiddenCols(prev=>{
     const has=prev.includes(key);
     const next=has?prev.filter(k=>k!==key):[...prev,key];
@@ -1599,6 +1623,11 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         {showCsv?<button className="btn btn-ghost" onClick={()=>downloadCSV(String(csvName||tableId||'export')+'.csv',sorted,columns)}>CSV</button>:null}
       </div>
     </div>}
+    {deadCols.length?<div className="dt-deadnote"
+      title="Columns whose value is the same in every row are hidden — they add no information. Value shown here.">
+      {deadCols.length} all-same column{deadCols.length>1?'s':''} hidden:{' '}
+      {deadCols.map((d,i)=><span key={d.key} className="dt-deadchip">{d.label} = <b>{d.value}</b>{i<deadCols.length-1?' ':''}</span>)}
+    </div>:null}
     <div className={"tbl-wrap"+(scrollBody?" dt-scroll":"")}
       style={scrollBody?{maxHeight:scrollPx,overflowY:'auto'}:undefined}
       onScroll={scrollBody?onBodyScroll:undefined}>
