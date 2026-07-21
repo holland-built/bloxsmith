@@ -119,11 +119,11 @@ function NetworkTab(){
           rows:[['Util',utilOf(r)+'%'],['Site',r.site||'—'],['Leases',String(leasesInSubnet(leases,r).length)]],
           spark:histByAddr[r.addr]})}>{v||'—'}</span>},
     {key:'addr',label:'Network',mono:true,align:'left',render:(v,r)=>(r.addr||'')+(r.cidr?('/'+r.cidr):'')},
-    {key:'util',label:'Utilization',align:'right',render:v=>UtilBar(v)},
+    {key:'util',label:'Utilization',align:'right',minWidth:130,render:v=>UtilBar(v)},
     {key:'trend',label:'Trend',align:'left',spark:r=>histByAddr[r.addr]},
     {key:'site',label:'Site',hideSm:true,pivot:true},
     ...(canEdit?[{key:'__edit',label:'',align:'right',width:60,render:(v,r)=>r.__group?null:
-      <button className="btn" onClick={e=>{e.stopPropagation();nav('editor',{type:'subnet',id:r.id||r.addr,name:r.name,cidr:r.cidr});}}>Edit subnet</button>}]:[]),
+      <button className="btn" onClick={e=>{e.stopPropagation();nav('editor',{type:'subnet',id:r.id||r.addr,name:r.name,cidr:r.cidr});}}>Edit</button>}]:[]),
   ];
 
   // ── Address-exhaustion exception list ("Which subnets run out first?") + top consumers ──
