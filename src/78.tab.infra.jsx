@@ -268,9 +268,11 @@ function InfraTab({vaultTick}={}){
 
     <div className="infra-sec">
       <div className="infra-head">
+        {hostNames.length>0 && metricNames.length>0 ? (
         <button className="infra-panel-btn infra-h" style={{cursor:'pointer'}} onClick={()=>setShowSensors(v=>!v)}>
           {showSensors ? 'Hide sensor grid' : 'Show sensor grid ('+hostNames.length+' hosts × '+metricNames.length+' metrics)'}
         </button>
+        ) : null}
         {showSensors ? <Freshness at={mx.fetchedAt} error={mx.error} onRetry={mx.refetch}/> : null}
       </div>
       {!showSensors ? null
