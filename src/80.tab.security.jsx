@@ -389,9 +389,12 @@ function SecThreatLookup(){
 }
 
 function SecArrayTable({rows,csvName}){
+  // BOUNDED by default: cap the rendered domain at 50 so an unentitled-but-noisy tenant
+  // can't dump hundreds of feed/list/host rows into a card. DataTable's own maxRows keeps
+  // CSV/sort on the full set and surfaces a "Showing 50 of N · Show all" expander.
   if(!Array.isArray(rows)||!rows.length) return <div className="dt-empty">None</div>;
-  if(typeof rows[0]!=='object'||rows[0]===null) return <DataTable cols={[{key:'value',label:'Value'}]} rows={rows.map(v=>({value:v}))} csvName={csvName}/>;
-  return <DataTable cols={secAutoCols(rows)} rows={rows} csvName={csvName}/>;
+  if(typeof rows[0]!=='object'||rows[0]===null) return <DataTable cols={[{key:'value',label:'Value'}]} rows={rows.map(v=>({value:v}))} maxRows={50} csvName={csvName}/>;
+  return <DataTable cols={secAutoCols(rows)} rows={rows} maxRows={50} csvName={csvName}/>;
 }
 function SecRoaming({re}){
   if(!re||typeof re!=='object') return null;
@@ -405,7 +408,7 @@ function SecRoaming({re}){
       </span>
     </div>
     {tc.length>0&&<DataTable cols={[{key:'country',label:'Country'},{key:'count',label:'Endpoints',mono:true,align:'right'}]}
-      rows={tc.map(p=>Array.isArray(p)?{country:p[0],count:p[1]}:p)} csvName="roaming-countries"/>}
+      rows={tc.map(p=>Array.isArray(p)?{country:p[0],count:p[1]}:p)} maxRows={50} csvName="roaming-countries"/>}
   </SecSection>;
 }
 function SecDomainPanels(){
@@ -636,9 +639,9 @@ function CtemAssetsPanel({feed}){
      : <div>
         <div style={{marginBottom:'var(--s3)'}}><span className="kpi-num">{d.asset_count||0}</span> <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>assets</span></div>
         <div style={{maxHeight:'var(--panel-md)',overflow:'auto'}}>
-          {chipRow('Providers',providers)}
+          {chipRow('Providers',providers,30)}
           {chipRow('Technologies',technologies,30)}
-          {chipRow('Ports',ports)}
+          {chipRow('Ports',ports,30)}
         </div>
       </div>}
   </Panel>;
@@ -684,11 +687,23 @@ function ExposedHostnamesPanel({feed}){
   const rows=(d&&Array.isArray(d.rows))?d.rows:[];
   const count=(d&&d.count)||rows.length;
   const cols=[{key:'hostname',label:'Hostname',mono:true,primary:true,render:v=>v||'—'}];
+  // Shape-first: a 200-row list of hostnames is a wall. Lead with the concentration —
+  // how many distinct registrable domains they collapse into, and the top few — so the
+  // operator reads the exposure's spread before scrolling. Derived from real rows only.
+  const domStats=(()=>{
+    const freq={};
+    rows.forEach(r=>{const h=String((r&&r.hostname)||'').toLowerCase().replace(/\.$/,'');if(!h)return;const dom=h.split('.').slice(-2).join('.')||h;freq[dom]=(freq[dom]||0)+1;});
+    const arr=Object.entries(freq).sort((a,b)=>b[1]-a[1]);
+    return {n:arr.length,top:arr.slice(0,3)};
+  })();
   return <Panel title="Exposed hostnames" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div>
         <div style={{marginBottom:'var(--s3)'}}><span className="kpi-num">{count}</span> <span style={{fontSize:'var(--t11)',color:'var(--text-dim)'}}>exposed hostnames</span></div>
+        {domStats.n>0&&<div className="mono" style={{marginBottom:'var(--s3)',fontSize:'var(--t11)',color:'var(--text-dim)'}}>
+          {'across '+domStats.n+' domain'+(domStats.n===1?'':'s')}{domStats.top.length?' · '+domStats.top.map(([dom,c])=>dom+' ('+c+')').join(' · '):''}
+        </div>}
         <DataTable cols={cols} rows={rows} rowKey={(r,i)=>String(r.hostname)+'|'+i} tableId="sec-exp-hosts" csvName="exposed-hostnames"
           filterable maxRows={200} scrollBody={480}/>
       </div>}

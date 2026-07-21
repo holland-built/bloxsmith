@@ -91,7 +91,7 @@ function DriftTab(){
                 ? <div className="dt-empty">No drift items</div>
                 : // groups ranked by worst real d.severity (error>warning>info), tie-break count.
                   <div style={{maxHeight:'var(--body-chart)',overflow:'auto'}}>
-                  {(()=>{const sevRank={error:0,warning:1,info:2}; const worst=g=>Math.min(...g.map(d=>sevRank[d.severity]!=null?sevRank[d.severity]:2)); return Object.entries(groups).sort((a,b)=>worst(a[1])-worst(b[1])||b[1].length-a[1].length);})().map(([cat,items])=>{
+                  {(()=>{const sevRank={error:0,warning:1,info:2}; const worst=g=>Math.min(...g.map(d=>sevRank[d.severity]!=null?sevRank[d.severity]:2)); const sorted=Object.entries(groups).sort((a,b)=>worst(a[1])-worst(b[1])||b[1].length-a[1].length); const CAT_CAP=6; const shownCats=sorted.slice(0,CAT_CAP); return <>{shownCats.map(([cat,items])=>{
                     const open=openCats.has(cat);
                     const shown=open?items:items.slice(0,6);
                     return <div key={cat} style={{marginBottom:'var(--s3)'}}>
@@ -114,6 +114,7 @@ function DriftTab(){
                         : null}
                     </div>;
                   })}
+                  {sorted.length>CAT_CAP?<div className="exrollup">+{sorted.length-CAT_CAP} more categories</div>:null}</>;})()}
                   </div>}
             </>}
       </Panel>:null}
