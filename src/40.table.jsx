@@ -990,21 +990,16 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         }
         if(allBlank) return false;                                   // empty — hidden silently
         if(constant){ dead.push({key:c.key,label,value:String(first)}); return false; } // constant — hidden + noted
-        // NEAR-DEAD: one value dominates >=95% of non-null rows (e.g. VERSION ~99%
-        // empty, APPS all "1"). Bounded scan of first 500 rows; only with >=20 non-null
-        // samples so a tiny table can't false-drop a real column.
-        const counts=new Map(); let total=0;
-        for(let i=0;i<dataRows.length&&i<500;i++){ const r=dataRows[i]; if(!r) continue; const v=r[c.key];
-          if(isBlank(v)) continue; total++; const nv=norm(v); counts.set(nv,(counts.get(nv)||0)+1);
-        }
-        if(total>=20){
-          let dominant,maxCount=0;
-          for(const [k,n] of counts){ if(n>maxCount){ maxCount=n; dominant=k; } }
-          if(maxCount/total>=0.95){
-            const value=isBlank(dominant)?label+' — mostly empty':String(dominant)+' (≥95%)';
-            dead.push({key:c.key,label,value}); return false;
-          }
-        }
+        // NEAR-EMPTY: column is BLANK in >=95% of rows (e.g. Host-health VERSION,
+        // ~99% empty) — noise + wasted width, hide it. Bounded scan of first 500 rows,
+        // only with >=20 sampled rows so a tiny table can't false-drop.
+        // IMPORTANT: we hide on high BLANK ratio, NOT on "one real value dominates 95%".
+        // A fully-populated column where one value is 99% (e.g. State 1191 active + 3
+        // expired) must STAY — the rare value is the whole signal on an exceptions
+        // dashboard; hiding it buries the exceptions. Only emptiness is safe to collapse.
+        let blanks=0,tot=0;
+        for(let i=0;i<dataRows.length&&i<500;i++){ const r=dataRows[i]; if(!r) continue; tot++; if(isBlank(r[c.key])) blanks++; }
+        if(tot>=20 && blanks/tot>=0.95){ dead.push({key:c.key,label,value:label+' — mostly empty'}); return false; }
         return true;
       });
       if(kept.length) return {visible:kept,dead};
