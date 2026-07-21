@@ -154,11 +154,10 @@ function InfraTab({vaultTick}={}){
     ...offlineHosts.slice(0,2).map(h=>({label:h.name,onClick:()=>nav('infra',{host:h.name})})),
   ];
 
-  const statusMix=[online,degraded,offline];
   const kpiTiles=[
-    {label:'Online',value:online,sub:'of '+total,color:'var(--ok)',values:statusMix},
-    {label:'Degraded',value:degraded,color:'var(--warn)',values:statusMix},
-    {label:'Offline',value:offline,color:'var(--crit)',values:statusMix},
+    {label:'Online',value:online,sub:'of '+total,color:'var(--ok)'},
+    {label:'Degraded',value:degraded,color:'var(--warn)'},
+    {label:'Offline',value:offline,color:'var(--crit)'},
     ...(byType.length>1?[{label:'Types',value:byType.length,sub:'host types',color:'var(--accent)',values:byType.map(t=>t[1])}]:[]),
   ];
   const attention=[...offlineHosts,...degradedHosts];
