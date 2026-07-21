@@ -835,7 +835,7 @@ function SecurityTab(){
       {/* alignSelf:start opts this card out of .grid-dense's align-items:stretch — it
           otherwise inherits the row height of its tall SOC-insights row-mate, and
           .pcard's own height:100% (shared by every panel) fills that void. */}
-      <div className="gd-wide" style={{alignSelf:'start'}}><Panel><SecThreatLookup/></Panel></div>
+      <div style={{alignSelf:'start'}}><Panel><SecThreatLookup/></Panel></div>
       <div className="gd-wide"><Panel><SecLookalikes/></Panel></div>
       <SecInsights/>
       <SecActions/>
