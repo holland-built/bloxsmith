@@ -324,7 +324,7 @@ function ProvisionTab(){
       </Panel>
       <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live output of each provisioning step, streamed from the server via SSE as it runs.']]})}>Live log</span>}>
         {log.length===0
-          ? <div className="dt-empty">No output yet</div>
+          ? <div className="dt-empty">Output appears here when you run a provision.</div>
           : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
               {log.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
                 {l.error?('✕ '+l.error):l.done?('✓ done — subnet '+((l.subnet&&(l.subnet.address||l.subnet.id))||'')):(l.step||JSON.stringify(l))}
@@ -399,7 +399,7 @@ function ProvisionTab(){
       </Panel>
       <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live per-step output of the site build, streamed from the server via SSE.']]})}>Live log</span>}>
         {siteLog.length===0
-          ? <div className="dt-empty">No output yet</div>
+          ? <div className="dt-empty">Output appears here when you provision a site.</div>
           : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
               {siteLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
                 {l.error?('✕ '+l.error):l.done?'✓ done':(l.step||JSON.stringify(l))}
@@ -407,7 +407,14 @@ function ProvisionTab(){
             </div>}
       </Panel>
       {siteSuccess?<Panel title="Success">
-        <div className="mono" style={{fontSize:'var(--t12)'}}>{JSON.stringify(siteSuccess)}</div>
+        {siteSuccess.skipped
+          ? <div className="mono" style={{fontSize:'var(--t12)',color:'var(--text-dim)'}}>Skipped — {siteSuccess.skip_reason||'already provisioned'}.</div>
+          : <div className="mono" style={{fontSize:'var(--t12)',display:'flex',flexDirection:'column',gap:2}}>
+              <div><span style={{color:'var(--text-dim)'}}>Block: </span>{siteSuccess.block_address||'—'}</div>
+              <div><span style={{color:'var(--text-dim)'}}>DNS zone: </span>{siteSuccess.dns_zone_fqdn||'—'}</div>
+              <div><span style={{color:'var(--text-dim)'}}>Subnets: </span>{(siteSuccess.subnets||[]).length} · <span style={{color:'var(--text-dim)'}}>DHCP ranges: </span>{(siteSuccess.dhcp_ranges||[]).length} · <span style={{color:'var(--text-dim)'}}>Hosts: </span>{(siteSuccess.hosts||[]).length}</div>
+              {siteSuccess.dry_run?<div style={{color:'var(--warn)'}}>Dry-run — nothing was created.</div>:null}
+            </div>}
       </Panel>:null}
       {siteErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{siteErr}</div></Panel>:null}
       {siteTeardownLog.length?<Panel title="Teardown log">
@@ -418,7 +425,12 @@ function ProvisionTab(){
         </div>
       </Panel>:null}
       {siteTeardownResult?<Panel title="Teardown result">
-        <div className="mono" style={{fontSize:'var(--t12)'}}>{JSON.stringify(siteTeardownResult)}</div>
+        <div className="mono" style={{fontSize:'var(--t12)',display:'flex',flexDirection:'column',gap:2}}>
+          <div><span style={{color:'var(--text-dim)'}}>Site: </span>{siteTeardownResult.site||siteTemplate||'—'}</div>
+          <div><span style={{color:'var(--text-dim)'}}>DNS zone: </span>{siteTeardownResult.dns_zone_fqdn||'—'} {siteTeardownResult.dns_zone_deleted?'(deleted)':'(kept)'}</div>
+          <div><span style={{color:'var(--text-dim)'}}>Subnets: </span>{(siteTeardownResult.subnets_deleted||[]).length} · <span style={{color:'var(--text-dim)'}}>DHCP ranges: </span>{(siteTeardownResult.dhcp_ranges_deleted||[]).length} · <span style={{color:'var(--text-dim)'}}>Hosts: </span>{(siteTeardownResult.hosts_deleted||[]).length} deleted</div>
+          {siteTeardownResult.dry_run?<div style={{color:'var(--warn)'}}>Dry-run — nothing was deleted.</div>:null}
+        </div>
       </Panel>:null}
       {siteTeardownErr?<Panel title="Teardown error"><div className="mono" style={{color:'var(--crit)'}}>{siteTeardownErr}</div></Panel>:null}
     </div>:null}
@@ -473,7 +485,7 @@ function ProvisionTab(){
       </Panel>
       <Panel title={<span {...bind({title:'Progress',rows:[['What it does','Per-template status as each demo site is provisioned.']]})}>Progress</span>}>
         {Object.keys(seedRows).length===0
-          ? <div className="dt-empty">No output yet</div>
+          ? <div className="dt-empty">Per-template status appears here once seeding starts.</div>
           : (()=>{const rs=Object.values(seedRows);const seedTotal=Object.keys(seedRows).length;const seedFailed=rs.filter(r=>r&&r.error).length;const seedDone=rs.filter(r=>r&&!r.error).length;
               return <div style={{display:'flex',flexDirection:'column',gap:2}}>
                 <div className="mono" style={{fontSize:'var(--t12)',color:seedFailed?'var(--crit)':'var(--text-dim)'}}>
@@ -487,7 +499,7 @@ function ProvisionTab(){
       </Panel>
       <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live per-step output of the seed run, streamed from the server via SSE.']]})}>Live log</span>}>
         {seedLog.length===0
-          ? <div className="dt-empty">No output yet</div>
+          ? <div className="dt-empty">Output appears here when the seed run starts.</div>
           : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
               {seedLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
                 {l.error?(l.template?('✕ '+l.template+': '+l.error):('✕ '+l.error)):l.done?'✓ done':(l.template?(l.template+' — '+(l.phase||'')):JSON.stringify(l))}
@@ -501,9 +513,7 @@ function ProvisionTab(){
       </Panel>:null}
       {seedErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{seedErr}</div></Panel>:null}
       <Panel title="Teardown progress" empty={Object.keys(teardownRows).length===0}>
-        {Object.keys(teardownRows).length===0
-          ? <div className="dt-empty">No output yet</div>
-          : (()=>{const rs=Object.values(teardownRows);const tdTotal=Object.keys(teardownRows).length;const tdFailed=rs.filter(r=>r&&r.error).length;const tdDone=rs.filter(r=>r&&!r.error).length;
+        {(()=>{const rs=Object.values(teardownRows);const tdTotal=Object.keys(teardownRows).length;const tdFailed=rs.filter(r=>r&&r.error).length;const tdDone=rs.filter(r=>r&&!r.error).length;
               return <div style={{display:'flex',flexDirection:'column',gap:2}}>
                 <div className="mono" style={{fontSize:'var(--t12)',color:tdFailed?'var(--crit)':'var(--text-dim)'}}>
                   {tdDone+'/'+tdTotal+' done'}{tdFailed?(' · '+tdFailed+' failed'):''}
@@ -515,13 +525,11 @@ function ProvisionTab(){
               </div>;})()}
       </Panel>
       <Panel title="Teardown log" empty={teardownLog.length===0}>
-        {teardownLog.length===0
-          ? <div className="dt-empty">No output yet</div>
-          : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
-              {teardownLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
-                {l.error?(l.template?('✕ '+l.template+': '+l.error):('✕ '+l.error)):l.done?'✓ done':(l.template?(l.template+' — '+(l.phase||'')):(l.step||JSON.stringify(l)))}
-              </div>)}
-            </div>}
+        <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
+          {teardownLog.map((l,i)=><div key={i} style={{color:l.error?'var(--crit)':l.done?'var(--ok)':'var(--text-dim)'}}>
+            {l.error?(l.template?('✕ '+l.template+': '+l.error):('✕ '+l.error)):l.done?'✓ done':(l.template?(l.template+' — '+(l.phase||'')):(l.step||JSON.stringify(l)))}
+          </div>)}
+        </div>
       </Panel>
       {teardownSummary?<Panel title="Teardown summary">
         <div className="mono" style={{fontSize:'var(--t12)'}}>
