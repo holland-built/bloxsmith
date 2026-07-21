@@ -1,8 +1,8 @@
-// Render caps for the two subnetPreview lists. OV_SHOWN clears every problems-only
-// scope (the >70% pool is ~305), so it only bites under "All subnets"; OV_TRIAGE is a
-// deliberate top-N — each row is a heavy 4-button action card, not a browse surface.
-// Both are stated on screen when they bite; neither ever caps the underlying data.
-const OV_SHOWN=300, OV_TRIAGE=6;
+// Render caps for the two subnetPreview lists — both deliberate, bounded top-N lists
+// per the golden design language (top rows + an on-screen rollup, never a scroller).
+// OV_TOP: Top-consumers list. OV_TRIAGE: triage queue (heavy 4-button action cards).
+// Neither ever caps the underlying data — the rollup drills into Network for the rest.
+const OV_TOP=8, OV_TRIAGE=6;
 
 function OverviewTab(){
   const {bind}=useHoverDetail();
@@ -285,23 +285,14 @@ function OverviewTab(){
               ['Matching','Subnets passing the current scope + utilization-band filters.'],
               ['Order','Biggest address consumers first (by addresses used).'],
             ]})}>{subnetPreview.length} matching</span>}>
-          {/* .issues' class-level max-height is a --body-chart (220px) token borrowed
-              from the chart-body panels; it doesn't track this pcard's actual height,
-              which grid-stretches to match its row (e.g. 638px next to Capacity
-              heatmap) — so the list was clamped to a tiny 220px scroller inside a much
-              taller, mostly-empty card. Override inline: fill the pcard's flex column
-              instead of a fixed pixel cap. */}
-          {/* .issues ships max-height:var(--body-chart) — a 220px cap borrowed from the
-              small chart bodies. This card is span-3 in a stretch row, so it's ~638px
-              tall (sized by the taller Capacity heatmap beside it): 3 rows showed and
-              the rest was dead void. Fill the card instead — but flex-BASIS must be 0,
-              not auto: with `auto` the list's full 60-row content still counts toward the
-              pcard's height, so the card grew to 2198px and dragged every sibling in the
-              row up with it. basis:0 + min-height:0 + the class's own overflow-y:auto =
-              the list takes only leftover space and scrolls inside it. */}
-          <div className="issues" style={{maxHeight:'420px',overflowY:'auto',minHeight:0}}>
+          {/* Golden design language (matches the "Which subnets run out first?"
+              ExceptionPanel): BOUNDED — show the top OV_TOP consumers at natural height,
+              then a full-width `exrollup` footer that drills into Network for the rest.
+              No inner scroller, no infinite list. Override the .issues class cap
+              (max-height:220px + overflow) so the 8-row list sizes to its content. */}
+          <div className="issues" style={{maxHeight:'none',overflow:'visible'}}>
             {subnetPreview.length
-              ? [...subnetPreview].sort((a,b)=>((Number(b.used)||0)-(Number(a.used)||0))||util(b)-util(a)).slice(0,OV_SHOWN).map((s,i)=>{
+              ? [...subnetPreview].sort((a,b)=>((Number(b.used)||0)-(Number(a.used)||0))||util(b)-util(a)).slice(0,OV_TOP).map((s,i)=>{
                   const go=()=>nav('network',{subnet:s.addr||s.id});
                   const label=(s.addr||s.name||'—')+(s.cidr?('/'+s.cidr):'');
                   const u=util(s);
@@ -325,17 +316,13 @@ function OverviewTab(){
                   </div>;
                 })
               : <div style={{color:'var(--text-faint)',fontSize:12,padding:'8px 4px'}}>No subnets match the current filters</div>}
-            {/* The side badge counts the whole match set; the list must reconcile with it.
-                It scrolls, so it shows everything up to OV_SHOWN — only the degenerate
-                "All subnets" scope (thousands of hover-bound, non-virtualized rows) hits
-                the cap, and then it says so rather than dropping rows in silence. */}
-            {subnetPreview.length>OV_SHOWN
-              ? <div role="button" tabIndex={0} onClick={()=>nav('network')}
-                  onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();nav('network');}}}
-                  style={{fontSize:'var(--t11)',color:'var(--text-faint)',marginTop:2,cursor:'pointer',padding:'4px'}}>
-                  +{subnetPreview.length-OV_SHOWN} more — open Network for the full table</div>
-              : null}
           </div>
+          {/* Bounded rollup: the side badge counts the whole match set; this footer
+              reconciles the top-8 list with it and drills into Network for the rest. */}
+          {subnetPreview.length>OV_TOP
+            ? <button type="button" className="exrollup" onClick={()=>nav('network')}>
+                {(subnetPreview.length-OV_TOP)+' more → View all in Network'}</button>
+            : null}
         </Panel>
       </div>
 

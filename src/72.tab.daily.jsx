@@ -156,8 +156,10 @@ function DailyTab(){
     s=>utilOf(s)===100?('100|/'+(s.cidr||'')):null, 5);
   // Severity order for hosts needing attention: error > degraded > offline > other.
   const hostSev=h=>{const s=String(h.status||'').toLowerCase();return s==='error'?0:s==='degraded'?1:s==='offline'?2:3;};
-  const attnHosts=hosts.filter(h=>!/^(online|up)$/i.test(String(h.status||''))).sort((a,b)=>hostSev(a)-hostSev(b)).slice(0,10);
-  const issueZones=zones.filter(z=>Array.isArray(z.issues)&&z.issues.length>0).sort((a,b)=>b.issues.length-a.issues.length).slice(0,10);
+  const attnHostsAll=hosts.filter(h=>!/^(online|up)$/i.test(String(h.status||''))).sort((a,b)=>hostSev(a)-hostSev(b));
+  const attnHosts=attnHostsAll.slice(0,10);
+  const issueZonesAll=zones.filter(z=>Array.isArray(z.issues)&&z.issues.length>0).sort((a,b)=>b.issues.length-a.issues.length);
+  const issueZones=issueZonesAll.slice(0,10);
 
   // Vault locked → gate handles it (after all hooks). Loading → skeleton.
   if(locked) return null;
@@ -271,6 +273,7 @@ function DailyTab(){
             <span className="mono" style={{flex:'none',width:34,textAlign:'right',fontSize:11,color:c}}>{u}%</span>
           </div>;})}
         </div>
+        {subnets.length>10&&<button type="button" className="exrollup" onClick={()=>nav('network')}>{(subnets.length-10)+' more → View all in Network'}</button>}
       </Panel>
 
       <Panel title="Hosts needing attention" side={<span className="mono">{attnHosts.length} of {nHost}</span>} empty={!attnHosts.length}>
@@ -283,6 +286,7 @@ function DailyTab(){
             <span className={'sev '+sv}>{h.status||'—'}</span>
           </div>;})}
         </div>
+        {attnHostsAll.length>10&&<button type="button" className="exrollup" onClick={()=>nav('infra')}>{(attnHostsAll.length-10)+' more → Infra'}</button>}
       </Panel>
 
       <Panel title="DNS zones with issues" side={<span className="mono">{zoneIssues} of {nZone}</span>} empty={!issueZones.length}>
@@ -295,6 +299,7 @@ function DailyTab(){
             <span className="sev high">{n}</span>
           </div>;})}
         </div>
+        {issueZonesAll.length>10&&<button type="button" className="exrollup" onClick={()=>nav('dns')}>{(issueZonesAll.length-10)+' more → DNS'}</button>}
       </Panel>
 
     </div>

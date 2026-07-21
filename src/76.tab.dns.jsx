@@ -143,11 +143,12 @@ function DnsTab(){
             </Panel>
             <Panel title="Query types" empty={qtypesEmpty}>
               <div className="sites">
-                {qtypes.map((q,i)=><div key={i} className="siterow">
+                {qtypes.slice(0,8).map((q,i)=><div key={i} className="siterow">
                   <span className="nm">{q.type}</span>
                   <span className="track"><i style={{width:Math.round(q.count/qmax*100)+'%',background:'var(--accent)'}}/></span>
                   <span className="pc mono">{q.count.toLocaleString()}</span>
                 </div>)}
+                {qtypes.length>8 ? <div className="exrollup">+{qtypes.length-8} more</div> : null}
               </div>
             </Panel>
           </div>
