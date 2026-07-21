@@ -66,6 +66,12 @@ function InfraTab({vaultTick}={}){
     };
   },[metricRows]);
 
+  // Sensor grid: exceptions surface, healthy collapses (hotByHost = per-host anomaly count).
+  const SENSOR_CAP=20;
+  const hotHosts=hostNames.filter(h=>(hotByHost[h]||0)>0).sort((a,b)=>(hotByHost[b]||0)-(hotByHost[a]||0));
+  const shownHosts=hotHosts.slice(0,SENSOR_CAP);
+  const calmHosts=hostNames.length-hotHosts.length;
+
   // ── Synthesis derivations (host status + hottest, day-over-day delta) ──
   const {delta,prev}=useSnapshots();
   const online=hosts.filter(h=>/^(online|up)$/i.test(String(h.status||''))).length;
@@ -270,25 +276,31 @@ function InfraTab({vaultTick}={}){
       {!showSensors ? null
         : mx.loading&&!mx.data ? <Skeleton rows={6}/>
         : metricNames.length===0 ? <div className="infra-dim">No metrics reported</div>
-        : <div className="sensor-wrap">
-            <table className="sensor">
-              <thead><tr>
-                <th className="sensor-hcol">Host</th>
-                {metricNames.map(m=><th key={m}>{m}</th>)}
-              </tr></thead>
-              <tbody>
-                {hostNames.map(h=><tr key={h}>
-                  <td className="sensor-hcol mono">{h}</td>
-                  {metricNames.map(m=>{
-                    const f=fmtMetric(pivot[h]&&pivot[h][m]);
-                    const hot=hotSet.has(h+'\u0000'+m);
-                    return <td key={m} className={'mono'+(f==null?' sensor-null':(hot?' sensor-hot':''))}>
-                      {f==null?'·':f}</td>;
-                  })}
-                </tr>)}
-              </tbody>
-            </table>
-          </div>}
+        : hotHosts.length===0
+          ? <div className="infra-dim">All {hostNames.length} hosts nominal — no out-of-band sensor readings.</div>
+          : <>
+            <div className="sensor-wrap">
+              <table className="sensor">
+                <thead><tr>
+                  <th className="sensor-hcol">Host</th>
+                  {metricNames.map(m=><th key={m}>{m}</th>)}
+                </tr></thead>
+                <tbody>
+                  {shownHosts.map(h=><tr key={h}>
+                    <td className="sensor-hcol mono">{h}</td>
+                    {metricNames.map(m=>{
+                      const f=fmtMetric(pivot[h]&&pivot[h][m]);
+                      const hot=hotSet.has(h+'\u0000'+m);
+                      return <td key={m} className={'mono'+(f==null?' sensor-null':(hot?' sensor-hot':''))}>
+                        {f==null?'·':f}</td>;
+                    })}
+                  </tr>)}
+                </tbody>
+              </table>
+            </div>
+            {hotHosts.length>SENSOR_CAP&&<button type="button" className="exrollup" onClick={()=>{const el=document.querySelector('[data-table-id="hosts"]');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}}>{(hotHosts.length-SENSOR_CAP)+' more host'+(hotHosts.length-SENSOR_CAP===1?'':'s')+' with anomalies → View all in Hosts'}</button>}
+            {calmHosts>0&&<button type="button" className="exrollup" onClick={()=>{const el=document.querySelector('[data-table-id="hosts"]');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}}>{calmHosts+' host'+(calmHosts===1?'':'s')+' all-nominal, hidden → View all in Hosts'}</button>}
+          </>}
     </div>
 
     <div className="infra-sec">
