@@ -127,13 +127,15 @@ function NetworkTab(){
   ];
 
   // ── Address-exhaustion exception list ("Which subnets run out first?") + top consumers ──
-  const totalOf=s=>Number(s.total)||Math.pow(2,32-(Number(s.cidr)||32));
+  const totalOf=s=>{const t=Number(s.total)||0; if(t>0) return t; const c=Number(s.cidr)||32; return c<=32?Math.pow(2,32-c):0;};
+  // exhaustion ranking excludes /31,/32,loopbacks & unknown-capacity (total<=2): structurally full, can't "run out"; they remain in the subnets table below.
+  const exhaustCandidates = subnets.filter(s=>totalOf(s) > 2);
   // Rank subnets by fewest free addresses (scarcity ASC), tie-break by util DESC, then collapse
   // runs of ≥5 fully-saturated (100%) subnets sharing a /cidr into one group row (Design C).
   const exhaustionRows=collapseIdentical(
-    [...subnets].sort((a,b)=>((totalOf(a)-(Number(a.used)||0))-(totalOf(b)-(Number(b.used)||0)))||utilOf(b)-utilOf(a)),
+    [...exhaustCandidates].sort((a,b)=>((totalOf(a)-(Number(a.used)||0))-(totalOf(b)-(Number(b.used)||0)))||utilOf(b)-utilOf(a)),
     s=>utilOf(s)===100?('100|/'+(s.cidr||'')):null, 5);
-  const healthyCount=subnets.filter(s=>utilOf(s)<70).length;
+  const healthyCount=exhaustCandidates.filter(s=>utilOf(s)<70).length;
   const topN=[...subnets].sort((a,b)=>((totalOf(a)-(Number(a.used)||0))-(totalOf(b)-(Number(b.used)||0)))||utilOf(b)-utilOf(a)).slice(0,15);
   // Lease-state mix for the "Lease states" donut (Donut folds to 5 slices, tolerant of casing).
   const leaseStateCounts={};
