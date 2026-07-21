@@ -249,13 +249,7 @@ function DailyTab(){
       </Panel>
 
       <Panel title="Capacity & threats" side={<span className="mono">30 days</span>} empty={allDays.length<2}>
-        {trendSeries.map(ts=><div className="dly-trow" key={ts.l}>
-          <span className="dly-trow-l">{ts.l}</span>
-          <span className="dly-trow-s">{ts.s.length>=2
-            ? <Sparkline values={ts.s} width={220} height={30} color={ts.c} fill={1}/>
-            : null}</span>
-          <span className="dly-trow-v mono">{ts.s.length?ts.s[ts.s.length-1]:'—'}</span>
-        </div>)}
+        <TrendChart series={trendSeries}/>
       </Panel>
 
       <Panel title="Top capacity subnets" side={<span className="mono">by free space</span>} empty={!topSubs.length}>
