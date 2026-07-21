@@ -382,6 +382,86 @@ function VolumeHistogram({rows,tsKey,buckets,onRange,selected,onZoom,annotations
   </div>;
 }
 
+/* TrendChart — shared multi-series area chart (Daily "Capacity & threats").
+   series=[{l,s,c}] where l=label, s=array of daily numbers (oldest→newest, ≤30),
+   c=CSS color var. Hand-rolled SVG (no chart lib): filled area + stroke line per
+   series, left y-axis gridlines + mono value labels, x-axis day-ago ticks, and a
+   hover crosshair with a per-series readout (mirrors VolumeHistogram's
+   getBoundingClientRect pointer math + viewBox-scaled paths). Axis text lives in
+   HTML overlays (not SVG <text>) because preserveAspectRatio=none stretches SVG
+   text horizontally; vertical maps 1:1 so HTML labels position cleanly. Codes
+   defensively for differing series lengths (uses the max length). height default 200. */
+function TrendChart({series,height}){
+  const svgRef=useRef(null);
+  const [cross,setCross]=useState(null); // hovered point index (0..maxLen-1) or null
+  const ss=(Array.isArray(series)?series:[]).filter(Boolean).map(x=>({
+    l:x&&x.l!=null?x.l:'—', c:(x&&x.c)||'var(--accent)',
+    s:(Array.isArray(x&&x.s)?x.s:[]).map(Number).filter(v=>isFinite(v))}));
+  const maxLen=ss.reduce((m,x)=>Math.max(m,x.s.length),0);
+  const H=Number(height)||200;
+  const W=560,padL=36,padR=10,padT=10,padB=22;
+  const plotW=W-padL-padR,plotH=H-padT-padB,baseY=padT+plotH;
+  const allVals=[]; ss.forEach(x=>x.s.forEach(v=>allVals.push(v)));
+  const rawMax=allVals.length?Math.max(...allVals):0;
+  const maxY=Math.max(5,Math.ceil(rawMax/5)*5); // guard 0 → 5
+  const xFor=i=>maxLen<2?padL:padL+(i/(maxLen-1))*plotW;
+  const yFor=v=>baseY-(Math.max(0,Math.min(v,maxY))/maxY)*plotH;
+  const legend=<div className="trend-legend">
+    {ss.map((x,i)=><span className="trend-leg" key={i}>
+      <span className="trend-sw" style={{background:x.c}}/>{x.l}</span>)}
+  </div>;
+  if(maxLen<2) return <div style={{width:'100%',minWidth:0}}>{legend}
+    <div style={{color:'var(--text-faint)',fontSize:'var(--t12)',padding:'var(--s3)'}}>No history yet</div></div>;
+
+  const grids=[0,1,2,3,4].map(k=>maxY*(k/4)); // ~4 gridlines (5 incl. 0)
+  const ticks=[]; for(let i=0;i<maxLen;i++){ const ago=maxLen-1-i; if(ago%6===0||i===0) ticks.push({i,ago}); } // every ~6 pts + last
+  const clientToIdx=px=>{ const el=svgRef.current; if(!el) return 0;
+    const r=el.getBoundingClientRect(); const f=Math.max(0,Math.min(1,(px-r.left)/r.width));
+    return Math.round(f*(maxLen-1)); };
+  const onMove=e=>setCross(clientToIdx(e.clientX));
+  const cx=cross!=null?xFor(cross):0;
+  const leftPct=cross!=null?(cx/W)*100:0;
+  const ago=cross!=null?(maxLen-1-cross):0;
+  const yPct=y=>(y/H)*100;
+
+  return <div style={{width:'100%',minWidth:0}}>
+    {legend}
+    <div className="trend-wrap" style={{height:H+'px'}}>
+      <svg ref={svgRef} className="trend-svg" viewBox={'0 0 '+W+' '+H} preserveAspectRatio="none"
+          role="img" aria-label={'Trend chart — '+ss.map(x=>x.l).join(', ')}
+          onMouseMove={onMove} onMouseLeave={()=>setCross(null)}>
+        {grids.map((gv,k)=><line key={'g'+k} className="trend-grid" x1={padL} y1={yFor(gv)} x2={W-padR} y2={yFor(gv)}/>)}
+        {ss.map((x,i)=>{ if(x.s.length<2) return null;
+          const pts=x.s.map((v,j)=>[xFor(j),yFor(v)]);
+          const d='M'+pts[0][0].toFixed(1)+','+baseY+' '+pts.map(p=>'L'+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')+' L'+pts[pts.length-1][0].toFixed(1)+','+baseY+' Z';
+          return <path key={'a'+i} d={d} fill={x.c} opacity="0.13" style={{pointerEvents:'none'}}/>;
+        })}
+        {ss.map((x,i)=>{ if(x.s.length<2) return null;
+          const pts=x.s.map((v,j)=>[xFor(j),yFor(v)]);
+          const d=pts.map((p,j)=>(j?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+          return <path key={'l'+i} d={d} fill="none" stroke={x.c} strokeWidth="1.8"
+            strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" style={{pointerEvents:'none'}}/>;
+        })}
+        {cross!=null?<line className="trend-crosshair" x1={cx} y1={padT} x2={cx} y2={baseY}/>:null}
+        {cross!=null?ss.map((x,i)=> cross<x.s.length
+          ? <circle key={'d'+i} cx={cx} cy={yFor(x.s[cross])} r="2.6" fill={x.c}
+              stroke="var(--surface)" strokeWidth="1" style={{pointerEvents:'none'}}/> : null):null}
+      </svg>
+      {grids.map((gv,k)=><span key={'yl'+k} className="trend-yl mono"
+        style={{top:yPct(yFor(gv))+'%',left:'calc('+((padL/W)*100)+'% - 4px)'}}>{Math.round(gv)}</span>)}
+      {ticks.map((t,k)=><span key={'xl'+k} className="trend-xl mono"
+        style={{left:((xFor(t.i)/W)*100)+'%'}}>{t.ago===0?'now':'-'+t.ago+'d'}</span>)}
+      {cross!=null?<div className="trend-readout" style={{left:leftPct+'%'}}>
+        <div className="trend-readout-h mono">{ago===0?'now':ago+' day'+(ago===1?'':'s')+' ago'}</div>
+        {ss.map((x,i)=><div className="trend-readout-r" key={i}>
+          <span style={{color:x.c}}>{x.l}</span>
+          <b className="mono">{cross<x.s.length?x.s[cross]:'—'}</b>
+        </div>)}
+      </div>:null}
+    </div>
+  </div>;
+}
+
 /* ── Donut (shared) — slices=[{label,value,color}]. Hard-caps at 5 slices
    (top-4 + folded "other"), center total, side legend w/ counts. Guards empty/zero.
    Optional centerDetail (string) and legendDetail(label,slice)=>string wire the
