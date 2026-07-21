@@ -136,7 +136,7 @@ function NetworkTab(){
     [...exhaustCandidates].sort((a,b)=>((totalOf(a)-(Number(a.used)||0))-(totalOf(b)-(Number(b.used)||0)))||utilOf(b)-utilOf(a)),
     s=>utilOf(s)===100?('100|/'+(s.cidr||'')):null, 5);
   const healthyCount=exhaustCandidates.filter(s=>utilOf(s)<70).length;
-  const topN=[...subnets].sort((a,b)=>((totalOf(a)-(Number(a.used)||0))-(totalOf(b)-(Number(b.used)||0)))||utilOf(b)-utilOf(a)).slice(0,15);
+  const topN=[...subnets].sort((a,b)=>((Number(b.used)||0)-(Number(a.used)||0))||utilOf(b)-utilOf(a)).slice(0,15);
   // Lease-state mix for the "Lease states" donut (Donut folds to 5 slices, tolerant of casing).
   const leaseStateCounts={};
   leases.forEach(l=>{const st=String(l.state||'unknown').toLowerCase();leaseStateCounts[st]=(leaseStateCounts[st]||0)+1;});
@@ -255,7 +255,7 @@ function NetworkTab(){
                     <span className="rank mono">{i+1}</span>
                     <div className="body">
                       <div className="t mono">{(s.addr||'')+(s.cidr?('/'+s.cidr):'')}</div>
-                      <div className="d">{(s.name||'—')+' · '+(s.site||'—')}</div>
+                      <div className="d">{(s.name||'—')+' · '+(Number(s.used)||0).toLocaleString()+' addrs used'}</div>
                     </div>
                     {UtilBar(s.util||0)}
                     <button className="btn" onClick={e=>{e.stopPropagation();nav('provision',{space:'',cidr:24,from:s.addr});}}>Provision subnet →</button>
