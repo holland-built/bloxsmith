@@ -75,10 +75,10 @@ function NetworkTab(){
   },[subnetQuery]);
   const [expandedSigs,setExpandedSigs]=useState(()=>new Set());
   const {bind}=useHoverDetail(); // cursor-following flavor card for subnet + top-consumer rows
-  const flt=useFilters(); // "Capacity by site" bars → removable global site filter (FilterBar + Clear)
+  // The "Capacity by site" panel + its site filter were removed: the /16 site dimension was
+  // synthetic (fabricated from an addr prefix), so useFilters/site chart state are gone too.
   const _whoNet=useApi('/api/whoami');
   const canEdit=(((_whoNet.data&&_whoNet.data.role)||'viewer')!=='viewer');
-  const [siteChart,siteToggle]=useChartType(['bar','pie'],'bar');
   const [leaseChart,leaseToggle]=useChartType(['pie','bar'],'pie');
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8} label="Collecting data from Infoblox — first load can take a minute…"/></div>;
@@ -126,22 +126,14 @@ function NetworkTab(){
       <button className="btn" onClick={e=>{e.stopPropagation();nav('editor',{type:'subnet',id:r.id||r.addr,name:r.name,cidr:r.cidr});}}>Edit subnet</button>}]:[]),
   ];
 
-  // ── Capacity-by-site groups + top consumers (replaces the sparse treemap) ──
+  // ── Address-exhaustion exception list ("Which subnets run out first?") + top consumers ──
   const totalOf=s=>Number(s.total)||Math.pow(2,32-(Number(s.cidr)||32));
-  // Backend defaults an untagged subnet's site to "–"; fall back to the /16 prefix so
-  // untagged subnets still group into meaningful buckets instead of collapsing to one.
-  const siteKey=s=>(s.site&&s.site!=='–')?s.site:(String(s.addr||'').split('.').slice(0,2).join('.')+'.0.0/16');
-  const siteMap=new Map();
-  subnets.forEach(s=>{
-    const site=siteKey(s);
-    let g=siteMap.get(site); if(!g){g={site,count:0,sum:0,worst:0};siteMap.set(site,g);}
-    const u=utilOf(s); g.count++; g.sum+=u; if(u>g.worst) g.worst=u; g.used=(g.used||0)+(Number(s.used)||0); g.total=(g.total||0)+totalOf(s);
-  });
-  const siteRows=[...siteMap.values()].map(g=>({
-    label:g.site, value:(g.total?Math.round(100*g.used/g.total):0), site:g.site, count:g.count,
-    detail:g.count+' subnet'+(g.count===1?'':'s')+' · '+((g.total||0)-(g.used||0)).toLocaleString()+' free',
-    color:utilColor(g.total?Math.round(100*g.used/g.total):0),
-  })).sort((a,b)=>b.value-a.value);
+  // Rank subnets by fewest free addresses (scarcity ASC), tie-break by util DESC, then collapse
+  // runs of ≥5 fully-saturated (100%) subnets sharing a /cidr into one group row (Design C).
+  const exhaustionRows=collapseIdentical(
+    [...subnets].sort((a,b)=>((totalOf(a)-(Number(a.used)||0))-(totalOf(b)-(Number(b.used)||0)))||utilOf(b)-utilOf(a)),
+    s=>utilOf(s)===100?('100|/'+(s.cidr||'')):null, 5);
+  const healthyCount=subnets.filter(s=>utilOf(s)<70).length;
   const topN=[...subnets].sort((a,b)=>((totalOf(a)-(Number(a.used)||0))-(totalOf(b)-(Number(b.used)||0)))||utilOf(b)-utilOf(a)).slice(0,15);
   // Lease-state mix for the "Lease states" donut (Donut folds to 5 slices, tolerant of casing).
   const leaseStateCounts={};
@@ -176,7 +168,7 @@ function NetworkTab(){
     :null;
 
   // Util-band presets → BQL tokens injected into the subnets search (replace any existing util
-  // token; clicking the active band clears it). "Capacity by site" bars inject site:<name>.
+  // token; clicking the active band clears it). (The synthetic site: injection path was removed.)
   const UTIL_BQL={'100':'util>=100','9099':'util:90-99','7089':'util:70-89','lt70':'util<70'};
   const stripUtil=q=>String(q||'').split(/\s+/).filter(t=>t&&!/^-?util(:|>=|<=|>|<|=)/i.test(t)).join(' ');
   const activeUtilBand=(()=>{const parts=String(subnetQuery).split(/\s+/);for(const id in UTIL_BQL){if(parts.indexOf(UTIL_BQL[id])!==-1)return id;}return null;})();
@@ -213,8 +205,33 @@ function NetworkTab(){
       : <React.Fragment>
           <SectionRule title="Capacity & utilization"/>
           <div className="grid">
-            <Panel title="Capacity by site" side={siteToggle} empty={siteRows.length<2}>
-              <ChartView type={siteChart} data={siteRows} onBar={r=>flt.toggle('site',r.site,'Site: '+r.site)}/>
+            <Panel title="Which subnets run out first?" empty={subnets.length===0}>
+              <ExceptionPanel
+                ariaLabel="Subnets by address exhaustion"
+                strip={<ValueBands rows={subnets} valueFn={utilOf} bands={UTIL_BANDS}
+                         value={activeUtilBand} onChange={injectUtilBand}/>}
+                rows={exhaustionRows}
+                topK={8}
+                rowKey={(r,i)=>r.__group?('g'+i):(r.addr||r.id||i)}
+                toneOf={r=>{const u=r.__group?100:utilOf(r); return u>85?'crit':u>70?'warn':'ok';}}
+                onRow={r=>{ if(r.__group) return; nav('network',{subnet:r.addr||r.id}); }}
+                renderRow={(r,i)=> r.__group
+                  ? <div className="exrow-group">{r.__count} subnets at 100% · same /{r.cidr}</div>
+                  : <div className="exrow-body">
+                      <div className="exrow-name">
+                        <span>{r.name||r.addr}</span>
+                        <span className="mono exrow-cidr">{(r.addr||'')+(r.cidr?('/'+r.cidr):'')}</span>
+                      </div>
+                      {UtilBar(utilOf(r))}
+                      <div className="exrow-free mono">
+                        <b>{((totalOf(r)-(Number(r.used)||0))).toLocaleString()}</b> free
+                        <span className="exrow-sub"> of {totalOf(r).toLocaleString()} · {utilOf(r)}%</span>
+                      </div>
+                      <Sparkline values={(histByAddr[r.addr]||[]).filter(x=>typeof x==='number')}/>
+                    </div>}
+                rollup={{count:healthyCount, label:healthyCount+' subnets under 70% — healthy, hidden → View all in table',
+                         onClick:()=>{ injectUtilBand(null); const t=document.getElementById('net-subnets-table'); if(t) t.scrollIntoView({behavior:'smooth',block:'start'}); }}}
+              />
             </Panel>
             <Panel title="Top consumers" empty={topN.length===0}>
               {/* Same short-sheeting as Overview's Top consumers: .issues carries
@@ -251,7 +268,7 @@ function NetworkTab(){
               <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
                 Type <code>site:name</code> or <code>util&gt;=90</code> in the table search to scope by site</span>
             </div>
-            <div style={{gridColumn:'1/-1'}}>
+            <div id="net-subnets-table" style={{gridColumn:'1/-1'}}>
               <Panel title="Subnets" side={<span style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
                   <button className="btn btn-ghost" aria-pressed={compareOn}
                     disabled={!prev} title={prev?'Diff current top subnets against yesterday\'s snapshot':'A prior daily snapshot is needed'}
