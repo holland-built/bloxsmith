@@ -174,8 +174,8 @@ function InfraTab({vaultTick}={}){
     <div className="grid-dense">
       <Panel title="Needs attention" side={attention.length+(attention.length===1?' host':' hosts')}>
         {attention.length
-          ? <div className="issues">
-              {attention.map((h,i)=><div key={h.name||i} className="issue" role="button" tabIndex={0}
+          ? <><div className="issues">
+              {attention.slice(0,8).map((h,i)=><div key={h.name||i} className="issue" role="button" tabIndex={0}
                   onClick={()=>nav('infra',{host:h.name})}
                   onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();nav('infra',{host:h.name});}}}
                   {...hoverBind({title:h.name,rows:[['IP',h.ip||'—'],['Type',h.type||'—'],['Status',h.status||'—']]})}>
@@ -186,6 +186,8 @@ function InfraTab({vaultTick}={}){
                 </div>
               </div>)}
             </div>
+            {attention.length>8&&<button type="button" className="exrollup" onClick={()=>{const el=document.querySelector('[data-table-id="hosts"]');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}}>{(attention.length-8)+' more → Infra hosts'}</button>}
+          </>
           : <div className="infra-dim">All {total} hosts online</div>}
       </Panel>
 
@@ -201,9 +203,11 @@ function InfraTab({vaultTick}={}){
 
       <Panel title="By type" empty={byType.length<2} side={byType.length+(byType.length===1?' type':' types')}>
         {byType.length
-          ? <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-              {byType.map(([t,c])=><div key={t} className="infra-panel-row"><span>{t}</span><span className="mono">{c}</span></div>)}
+          ? <><div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              {byType.slice(0,8).map(([t,c])=><div key={t} className="infra-panel-row"><span>{t}</span><span className="mono">{c}</span></div>)}
             </div>
+            {byType.length>8&&<div className="exrollup">{'+'+(byType.length-8)+' more'}</div>}
+          </>
           : <div className="infra-dim">No hosts</div>}
       </Panel>
 
