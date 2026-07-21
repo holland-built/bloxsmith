@@ -6,7 +6,6 @@ function DnsTab(){
   const canEdit=(((_whoDns.data&&_whoDns.data.role)||'viewer')!=='viewer');
   const {confirm:commit}=useCommit();
   const {delta}=useSnapshots();
-  const [volChart,volToggle]=useChartType(['bar','line'],'bar');
   if(locked) return null;
   if(loading&&!data) return <div className="page"><Skeleton rows={8} label="Collecting data from Infoblox — first load can take a minute…"/></div>;
   if(error) return <div className="page"><Freshness error onRetry={refetch}/></div>;
@@ -29,8 +28,6 @@ function DnsTab(){
   const qtypes=((an.data&&an.data.query_types)||[]).map(r=>({
     type:r[NDA+'query_type']||'?',count:Number(r[NDA+'total_query_count'])||0})).sort((a,b)=>b.count-a.count);
   const qmax=Math.max(1,...qtypes.map(q=>q.count));
-  const fmtDay=(r)=>{const t=r[NDA+'timestamp.day']||r[NDA+'timestamp']||r.timestamp||'';
-    const d=new Date(t);return isNaN(d)?String(t).slice(5,10):(d.getMonth()+1)+'/'+d.getDate();};
   const clientCols=[
     {key:'device',label:'Device'},
     {key:'ip',label:'IP',mono:true,align:'left'},
@@ -66,7 +63,6 @@ function DnsTab(){
 
   // Analytics panels render ONLY when their array is non-empty and no fetch error
   // (graceful empties → no dead bands). If all three are empty the whole analytics block renders nothing.
-  const volBuckets=volume.slice(0,7).map(r=>({label:fmtDay(r),count:Number(r[NDA+'total_query_count'])||0}));
   const volEmpty=!(volume.length&&!an.error);
   const clientsEmpty=!(clients.length&&!an.error);
   const qtypesEmpty=!(qtypes.length&&!an.error);
@@ -134,9 +130,9 @@ function DnsTab(){
           </div>
           <div className="grid-dense">
             <Panel title="Query volume · 7d"
-              side={<>{volToggle}<Freshness at={an.fetchedAt} onRetry={an.refetch} error={an.error?true:undefined}/></>}
+              side={<Freshness at={an.fetchedAt} onRetry={an.refetch} error={an.error?true:undefined}/>}
               empty={volEmpty}>
-              <ChartView type={volChart} data={volBuckets.map(b=>({label:b.label,value:b.count,color:b.color}))} barMode="histogram"/>
+              <TrendChart series={[{l:'Queries',s:volCounts,c:'var(--accent)'}]}/>
             </Panel>
             <Panel title="Top clients" empty={clientsEmpty}>
               <DataTable cols={clientCols} rows={clients} defaultSort={{key:'queries',dir:'desc'}} csvName="top-clients" scrollBody={280}/>
@@ -186,13 +182,11 @@ function DnsQpsPanel(){
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
-         <div style={{display:'flex',alignItems:'center',gap:'var(--s3)'}}>
-           <Sparkline values={values}/>
-           <div>
-             <div style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>current QPS</div>
-             <div className="kpi-num" style={{fontSize:'var(--t16)'}}>{current!==null?current.toLocaleString():'—'}</div>
-           </div>
+         <div>
+           <div style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>current QPS</div>
+           <div className="kpi-num" style={{fontSize:'var(--t16)'}}>{current!==null?current.toLocaleString():'—'}</div>
          </div>
+         <TrendChart series={[{l:'QPS',s:values,c:'var(--accent)'}]} xLabel={n=>n===0?'now':'-'+n+'h'}/>
          <DataTable cols={cols} rows={rows} scrollBody={220} csvName="dns-qps"/>
        </div>}
   </Panel>;
