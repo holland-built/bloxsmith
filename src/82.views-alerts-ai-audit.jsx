@@ -293,7 +293,7 @@ function AuditTab(){
       render:v=>v==null?'—':new Date(parseTs(v)).toLocaleString()},
     {key:'actor',label:'Actor',mono:true},
     {key:'event',label:'Event'},
-    {key:'detail',label:'Detail',render:v=>
+    {key:'detail',label:'Detail',flex:true,render:v=>
       <span className="mono" style={{fontSize:11,color:'var(--text-dim)'}}>{v&&Object.keys(v).length?JSON.stringify(v):'—'}</span>},
   ];
 
