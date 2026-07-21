@@ -780,6 +780,17 @@ table.dt td.dt-primary,table.dt th.dt-primary{white-space:nowrap;overflow:hidden
 .exrow-free{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
 .exrow-sub{color:var(--text-faint);font-size:var(--t11);}
 .exrow-group{color:var(--text-dim);font-style:italic;font-size:var(--t12);}
+.exrow-a{display:grid;grid-template-columns:minmax(0,1fr) 92px 66px;align-items:center;gap:var(--s2);width:100%;}
+.exa-id{min-width:0;}
+.exa-cidr{font-size:var(--t13);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.exa-tag{font-size:var(--t11);color:var(--text-faint);}
+.exa-meter{display:flex;align-items:center;gap:var(--s2);}
+.exa-bar{flex:1;height:6px;border-radius:3px;background:var(--raised);overflow:hidden;}
+.exa-bar>span{display:block;height:100%;border-radius:3px;}
+.exa-pct{font-size:var(--t12);color:var(--text-dim);min-width:30px;text-align:right;font-variant-numeric:tabular-nums;}
+.exa-free{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.exa-free b{font-size:15px;font-weight:650;}
+.exa-free span{display:block;font-size:var(--t11);color:var(--text-faint);}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
 .hovercard{position:relative;display:inline-block;}
 .hovercard-pop{position:fixed;z-index:85;max-width:280px;padding:var(--s3);font-size:var(--t12);color:var(--text);}
