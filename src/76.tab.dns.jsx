@@ -27,7 +27,7 @@ function DnsTab(){
     device:r[NDA+'device_name']||'—',ip:r[NDA+'device_ip']||'—',
     queries:Number(r[NDA+'total_query_count'])||0}));
   const qtypes=((an.data&&an.data.query_types)||[]).map(r=>({
-    type:r[NDA+'query_type']||'?',count:Number(r[NDA+'total_query_count'])||0}));
+    type:r[NDA+'query_type']||'?',count:Number(r[NDA+'total_query_count'])||0})).sort((a,b)=>b.count-a.count);
   const qmax=Math.max(1,...qtypes.map(q=>q.count));
   const fmtDay=(r)=>{const t=r[NDA+'timestamp.day']||r[NDA+'timestamp']||r.timestamp||'';
     const d=new Date(t);return isNaN(d)?String(t).slice(5,10):(d.getMonth()+1)+'/'+d.getDate();};

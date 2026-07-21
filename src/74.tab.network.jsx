@@ -135,14 +135,14 @@ function NetworkTab(){
   subnets.forEach(s=>{
     const site=siteKey(s);
     let g=siteMap.get(site); if(!g){g={site,count:0,sum:0,worst:0};siteMap.set(site,g);}
-    const u=utilOf(s); g.count++; g.sum+=u; if(u>g.worst) g.worst=u;
+    const u=utilOf(s); g.count++; g.sum+=u; if(u>g.worst) g.worst=u; g.used=(g.used||0)+(Number(s.used)||0); g.total=(g.total||0)+totalOf(s);
   });
   const siteRows=[...siteMap.values()].map(g=>({
-    label:g.site, value:g.worst, site:g.site, count:g.count,
-    detail:g.count+' subnet'+(g.count===1?'':'s')+' · avg '+Math.round(g.sum/g.count)+'%',
-    color:utilColor(g.worst),
+    label:g.site, value:(g.total?Math.round(100*g.used/g.total):0), site:g.site, count:g.count,
+    detail:g.count+' subnet'+(g.count===1?'':'s')+' · '+((g.total||0)-(g.used||0)).toLocaleString()+' free',
+    color:utilColor(g.total?Math.round(100*g.used/g.total):0),
   })).sort((a,b)=>b.value-a.value);
-  const topN=[...subnets].sort((a,b)=>utilOf(b)-utilOf(a)||totalOf(b)-totalOf(a)).slice(0,15);
+  const topN=[...subnets].sort((a,b)=>((totalOf(a)-(Number(a.used)||0))-(totalOf(b)-(Number(b.used)||0)))||utilOf(b)-utilOf(a)).slice(0,15);
   // Lease-state mix for the "Lease states" donut (Donut folds to 5 slices, tolerant of casing).
   const leaseStateCounts={};
   leases.forEach(l=>{const st=String(l.state||'unknown').toLowerCase();leaseStateCounts[st]=(leaseStateCounts[st]||0)+1;});

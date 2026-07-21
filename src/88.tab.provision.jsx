@@ -496,7 +496,7 @@ function ProvisionTab(){
         </div>
       </Panel>:null}
       {seedErr?<Panel title="Error"><div className="mono" style={{color:'var(--crit)'}}>{seedErr}</div></Panel>:null}
-      <Panel title="Teardown progress">
+      <Panel title="Teardown progress" empty={Object.keys(teardownRows).length===0}>
         {Object.keys(teardownRows).length===0
           ? <div className="dt-empty">No output yet</div>
           : <div style={{display:'flex',flexDirection:'column',gap:2}}>
@@ -506,7 +506,7 @@ function ProvisionTab(){
                 </div>)}
             </div>}
       </Panel>
-      <Panel title="Teardown log">
+      <Panel title="Teardown log" empty={teardownLog.length===0}>
         {teardownLog.length===0
           ? <div className="dt-empty">No output yet</div>
           : <div className="mono" style={{display:'flex',flexDirection:'column',gap:2,fontSize:'var(--t12)',maxHeight:'var(--panel-md)',overflow:'auto'}}>
