@@ -278,29 +278,68 @@ function useSelfUpdate(){
       setApply({phase:'error',pct:0,error:msg});
     }
   };
+  // fetch with an AbortController timeout so a hung request can never wedge the flow.
+  const fetchT=(url,opts,ms)=>{ const ac=new AbortController(); const t=setTimeout(()=>ac.abort(),ms||8000);
+    return fetch(url,{...(opts||{}),signal:ac.signal,cache:'no-store'}).finally(()=>clearTimeout(t)); };
   const runApply=async()=>{
     if(applying.current) return;           // one apply at a time — no repeat modals
     applying.current=true;
     setApply({phase:'starting',pct:1});
+    const oldVer=(info&&info.current)||'';
     const reloadTo=()=>{ try{sessionStorage.setItem('bloxsmith_updated_to', (info&&info.latest)||'');}catch(e){} setTimeout(()=>location.reload(),2800); };
+    let done=false;                        // terminal latch — a late/stale poll can't act after this
+    const failWith=(m)=>{ if(done)return; done=true; finish(m); };
+    // The ONLY reliable success signal is the SERVED version actually moving off the
+    // one we started from — a fresh process, a dropped socket, or a 'done' phase each
+    // prove only that SOMETHING restarted, not that OUR update took (a crash or
+    // supervisor restart at the old version looks identical). So every "looks
+    // restarted" hint routes here: probe /check until current!=oldVer (success →
+    // reload) or a 20s deadline passes (honest error — never a false success on a
+    // transient blip, and never a modal stuck at the reset 'idle'→"Check 0%").
+    const confirmThenReload=()=>{
+      if(done) return; setApply({phase:'restarting',pct:95});
+      const deadline=Date.now()+20000;
+      const probe=async()=>{
+        if(done) return;
+        try{ const c=await fetchT('/api/update/check',null,6000).then(x=>x.json());
+          if(c&&c.current&&c.current!==oldVer){ done=true; applying.current=false; reloadTo(); return; }
+        }catch(e){ /* mid-restart — keep probing */ }
+        if(Date.now()>deadline){ done=true; applying.current=false;
+          setApply({phase:'error',pct:95,error:'update applied but could not confirm — refresh to verify the version'}); return; }
+        setTimeout(probe,1500);
+      };
+      probe();
+    };
     try{
-      const r=await fetch('/api/update/apply',{method:'POST',cache:'no-store'});
-      if(!r.ok){ const j=await r.json().catch(()=>({})); finish(j.error||('HTTP '+r.status)); return; }
-      const poll=setInterval(async()=>{
-        try{
-          const s=await fetch('/api/update/status',{cache:'no-store'}).then(x=>x.json());
-          if(s.phase==='error'){ clearInterval(poll); finish(s.error); return; }
-          setApply(s);
-          if(s.phase==='done'||s.pct>=100){ clearInterval(poll); applying.current=false; reloadTo(); }
-        }catch(e){ /* server mid-restart — the swap is happening; reload shortly */
-          clearInterval(poll); applying.current=false; setApply({phase:'restarting',pct:95}); reloadTo(); }
-      },1200);
-    }catch(e){ /* The POST connection dropped — the app is served BY the binary being
-        swapped, so an unreachable origin means it's restarting into the new version (a
-        success race), NOT a failure. On a real apply failure the old binary keeps
-        serving (it never releases the socket), so a dropped connection is always a
-        restart. Show "restarting…" and reload, don't scare the user with an error. */
-      applying.current=false; setApply({phase:'restarting',pct:95}); reloadTo(); }
+      const r=await fetchT('/api/update/apply',{method:'POST'},12000);
+      if(!r.ok){ const j=await r.json().catch(()=>({})); failWith(j.error||('HTTP '+r.status)); return; }
+      // Serialized poll (one request in flight, recursive setTimeout — never a pile-up)
+      // with an ACTIVITY watchdog: a stall is "no phase change for 180s", not total
+      // time. 180s sits above the backend's realistic worst case (a ~15MB archive at
+      // the 120s cap + a KB checksum), so a slow-but-progressing download never false-fails.
+      let lastPhase='starting', lastChange=Date.now();
+      const tick=async()=>{
+        if(done) return;
+        let s;
+        try{ s=await fetchT('/api/update/status',null,8000).then(x=>x.json()); }
+        catch(e){ /* /status unreachable ⇒ old binary released the socket mid-swap ⇒ confirm */ confirmThenReload(); return; }
+        if(done) return;
+        if(s.phase==='error'){ failWith(s.error); return; }
+        if(s.phase==='done'||s.pct>=100){ confirmThenReload(); return; }
+        // Seamless in-place restart: the swapped-in binary answers on the SAME port
+        // with a fresh {phase:'idle',running:false}. Confirm before declaring success.
+        if(s.running===false && (!s.phase||s.phase==='idle')){ confirmThenReload(); return; }
+        if(s.phase!==lastPhase){ lastPhase=s.phase; lastChange=Date.now(); }
+        else if(Date.now()-lastChange>180000){ failWith('update stalled — refresh to check the version'); return; }
+        setApply(s);
+        setTimeout(tick,1200);
+      };
+      setTimeout(tick,1200);
+    }catch(e){ /* POST dropped/aborted — the app is served BY the binary being swapped,
+        so an unreachable origin means it may be restarting; confirm the version moved
+        (never a blind success). A real apply failure keeps the old binary serving, so
+        confirmThenReload will time out into an honest "couldn't confirm" instead. */
+      confirmThenReload(); }
   };
 
   return {info,recheck,apply,runApply,justUpdated,dismissToast:()=>setJustUpdated(''),dismissApply:()=>setApply(null)};
