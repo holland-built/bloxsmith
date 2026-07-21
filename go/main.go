@@ -41,14 +41,24 @@ func instanceID() string {
 // version is overridden at build time via -ldflags "-X main.version=...".
 var version = "0.0.0-poc"
 
-// staticHandler serves the embedded frontend (embed.go webFS). index.html and
-// assets both send no-store cache headers (mirror server.py:6509-6512).
+// staticHandler serves the frontend. Normally the embedded copy (embed.go webFS);
+// when WEB_DIR is set it serves that directory from disk instead — dev live-reload
+// (scripts/watch.sh rebuilds the bundle in place, no recompile). Inert in prod:
+// WEB_DIR is unset there, so the embed stays the default. index.html and assets
+// both send no-store cache headers (mirror server.py:6509-6512).
 func staticHandler() http.Handler {
-	sub, err := fs.Sub(webFS, "web")
-	if err != nil {
-		log.Fatal(err)
+	var fsys fs.FS
+	if dir := os.Getenv("WEB_DIR"); dir != "" {
+		log.Printf("dev: serving UI from disk WEB_DIR=%s (not embed)", dir)
+		fsys = os.DirFS(dir)
+	} else {
+		sub, err := fs.Sub(webFS, "web")
+		if err != nil {
+			log.Fatal(err)
+		}
+		fsys = sub
 	}
-	fileServer := http.FileServer(http.FS(sub))
+	fileServer := http.FileServer(http.FS(fsys))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		fileServer.ServeHTTP(w, r)
