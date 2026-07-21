@@ -391,8 +391,10 @@ function VolumeHistogram({rows,tsKey,buckets,onRange,selected,onZoom,annotations
    HTML overlays (not SVG <text>) because preserveAspectRatio=none stretches SVG
    text horizontally; vertical maps 1:1 so HTML labels position cleanly. Codes
    defensively for differing series lengths (uses the max length). height default 200. */
-function TrendChart({series,height}){
+function TrendChart({series,height,xLabel}){
   const svgRef=useRef(null);
+  // xLabel(nFromEnd)=>string renders each x-tick; default = days-ago (unchanged).
+  const xlab=(typeof xLabel==='function')?xLabel:(n=>n===0?'now':'-'+n+'d');
   const [cross,setCross]=useState(null); // hovered point index (0..maxLen-1) or null
   const ss=(Array.isArray(series)?series:[]).filter(Boolean).map(x=>({
     l:x&&x.l!=null?x.l:'—', c:(x&&x.c)||'var(--accent)',
@@ -450,7 +452,7 @@ function TrendChart({series,height}){
       {grids.map((gv,k)=><span key={'yl'+k} className="trend-yl mono"
         style={{top:yPct(yFor(gv))+'%',left:'calc('+((padL/W)*100)+'% - 4px)'}}>{Math.round(gv)}</span>)}
       {ticks.map((t,k)=><span key={'xl'+k} className="trend-xl mono"
-        style={{left:((xFor(t.i)/W)*100)+'%'}}>{t.ago===0?'now':'-'+t.ago+'d'}</span>)}
+        style={{left:((xFor(t.i)/W)*100)+'%'}}>{xlab(t.ago)}</span>)}
       {cross!=null?<div className="trend-readout" style={{left:leftPct+'%'}}>
         <div className="trend-readout-h mono">{ago===0?'now':ago+' day'+(ago===1?'':'s')+' ago'}</div>
         {ss.map((x,i)=><div className="trend-readout-r" key={i}>
