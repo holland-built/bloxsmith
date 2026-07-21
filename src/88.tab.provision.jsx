@@ -474,12 +474,16 @@ function ProvisionTab(){
       <Panel title={<span {...bind({title:'Progress',rows:[['What it does','Per-template status as each demo site is provisioned.']]})}>Progress</span>}>
         {Object.keys(seedRows).length===0
           ? <div className="dt-empty">No output yet</div>
-          : <div style={{display:'flex',flexDirection:'column',gap:2}}>
-              {Object.entries(seedRows).map(([tpl,row])=>
-                <div key={tpl} className="mono" style={{fontSize:'var(--t12)',color:row.error?'var(--crit)':'var(--text-dim)'}}>
-                  {tpl}: {row.error?('✕ '+row.error):(row.phase||'…')}
-                </div>)}
-            </div>}
+          : (()=>{const rs=Object.values(seedRows);const seedTotal=Object.keys(seedRows).length;const seedFailed=rs.filter(r=>r&&r.error).length;const seedDone=rs.filter(r=>r&&!r.error).length;
+              return <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                <div className="mono" style={{fontSize:'var(--t12)',color:seedFailed?'var(--crit)':'var(--text-dim)'}}>
+                  {seedDone+'/'+seedTotal+' done'}{seedFailed?(' · '+seedFailed+' failed'):''}
+                </div>
+                {Object.entries(seedRows).filter(([,row])=>row&&row.error).map(([tpl,row])=>
+                  <div key={tpl} className="mono" style={{fontSize:'var(--t12)',color:'var(--crit)'}}>
+                    {'✕ '+tpl+': '+row.error}
+                  </div>)}
+              </div>;})()}
       </Panel>
       <Panel title={<span {...bind({title:'Live log',rows:[['What it does','Live per-step output of the seed run, streamed from the server via SSE.']]})}>Live log</span>}>
         {seedLog.length===0
@@ -499,12 +503,16 @@ function ProvisionTab(){
       <Panel title="Teardown progress" empty={Object.keys(teardownRows).length===0}>
         {Object.keys(teardownRows).length===0
           ? <div className="dt-empty">No output yet</div>
-          : <div style={{display:'flex',flexDirection:'column',gap:2}}>
-              {Object.entries(teardownRows).map(([tpl,row])=>
-                <div key={tpl} className="mono" style={{fontSize:'var(--t12)',color:row.error?'var(--crit)':'var(--text-dim)'}}>
-                  {tpl}: {row.error?('✕ '+row.error):(row.phase||'…')}
-                </div>)}
-            </div>}
+          : (()=>{const rs=Object.values(teardownRows);const tdTotal=Object.keys(teardownRows).length;const tdFailed=rs.filter(r=>r&&r.error).length;const tdDone=rs.filter(r=>r&&!r.error).length;
+              return <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                <div className="mono" style={{fontSize:'var(--t12)',color:tdFailed?'var(--crit)':'var(--text-dim)'}}>
+                  {tdDone+'/'+tdTotal+' done'}{tdFailed?(' · '+tdFailed+' failed'):''}
+                </div>
+                {Object.entries(teardownRows).filter(([,row])=>row&&row.error).map(([tpl,row])=>
+                  <div key={tpl} className="mono" style={{fontSize:'var(--t12)',color:'var(--crit)'}}>
+                    {'✕ '+tpl+': '+row.error}
+                  </div>)}
+              </div>;})()}
       </Panel>
       <Panel title="Teardown log" empty={teardownLog.length===0}>
         {teardownLog.length===0
