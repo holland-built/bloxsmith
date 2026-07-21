@@ -14,6 +14,13 @@ function secAutoCols(rows,tableId){
   sample.forEach(r=>Object.keys(r).forEach(k=>{if(!seen.has(k)){seen.add(k);keys.push(k);}}));
   // Dead columns (null/undefined/'' across the whole sample) waste width that matters.
   const live=keys.filter(k=>sample.some(r=>r[k]!=null&&r[k]!==''));
+  const varied=live.filter(k=>{
+    const vals=sample.map(r=>r[k]).filter(x=>x!=null&&x!=='');
+    if(vals.length<2) return true; // too few to judge — keep
+    const f=typeof vals[0]==='string'?vals[0].trim():vals[0];
+    return vals.some(x=>(typeof x==='string'?x.trim():x)!==f); // keep only if 2+ distinct values
+  });
+  const base=varied.length?varied:live;
   // Priority: name/severity/status/counts first — opaque ids and duplicate timestamps last.
   const rank=k=>{
     const s=k.toLowerCase();
@@ -25,7 +32,7 @@ function secAutoCols(rows,tableId){
     if(s==='id'||/id$/.test(s)) return 5;
     return 2.5;
   };
-  const ordered=live.slice().sort((a,b)=>rank(a)-rank(b));
+  const ordered=base.slice().sort((a,b)=>rank(a)-rank(b));
   const cols=ordered.map(k=>{
     const v=sample.map(r=>r[k]).find(x=>x!=null);
     const isNum=typeof v==='number';
