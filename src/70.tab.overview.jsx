@@ -299,7 +299,7 @@ function OverviewTab(){
               pcard's height, so the card grew to 2198px and dragged every sibling in the
               row up with it. basis:0 + min-height:0 + the class's own overflow-y:auto =
               the list takes only leftover space and scrolls inside it. */}
-          <div className="issues" style={{maxHeight:'none',flex:'1 1 0',minHeight:0}}>
+          <div className="issues" style={{maxHeight:'420px',overflowY:'auto',minHeight:0}}>
             {subnetPreview.length
               ? [...subnetPreview].sort((a,b)=>((Number(b.used)||0)-(Number(a.used)||0))||util(b)-util(a)).slice(0,OV_SHOWN).map((s,i)=>{
                   const go=()=>nav('network',{subnet:s.addr||s.id});
