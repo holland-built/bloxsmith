@@ -53,7 +53,9 @@ function DnsTab(){
     {label:'Zones',value:zones.length,delta:{v:delta('zones.n'),good:'up'}},
     {label:'Zones w/ issues',value:issueCount,delta:{v:delta('zones.issues'),good:'down'}},
     {label:'Anomalies',value:anomalyCount},
-    {label:'7d volume',value:volTotal.toLocaleString()+(volAvg>0?(' ('+pctStr+')'):'')},
+    // 7d volume: an empty/errored feed sums to 0, which reads as "zero traffic" — a
+    // lie. Show "—" (no data) unless the volume feed actually returned rows.
+    {label:'7d volume',value:(volume.length&&!an.error)?(volTotal.toLocaleString()+(volAvg>0?(' ('+pctStr+')'):'')):'—'},
   ];
   // D: problem-zone chips were dead labels — now isolate that zone in the table
   // via a removable global filter on the fqdn column (clearable in FilterBar).
