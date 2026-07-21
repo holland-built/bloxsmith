@@ -522,6 +522,48 @@ function GroupedBar({rows,max=24,onClick}){
   </div>;
 }
 
+/* ── ExceptionPanel (shared) — the "summarize + defer" primitive: a bounded,
+   consequence-ranked exception list that renders INSIDE a Panel (does not replace
+   it). Presentational ONLY — callers pass ready rows (already ranked +
+   collapseIdentical'd) and a renderRow; the panel never re-sorts, alphabetizes,
+   or computes util/free/ranking, and never encodes value by color alone.
+   `strip` slots a caller-built distribution bar (ValueBands / segmented) above the
+   list. `toneOf` → a 2px left accent border, redundant to the number renderRow
+   prints. `rollup` is the "N normal, hidden → View all in table" defer button,
+   shown only when count>0. Mirrors GroupedBar's row/keyboard contract
+   (Enter+Space, preventDefault, focus-visible ring); an aria-live region speaks
+   shown/total so filter/expand changes aren't conveyed by color alone. ── */
+function ExceptionPanel({strip,rows,renderRow,toneOf,onRow,rowKey,topK=8,rollup,maxHeight,ariaLabel}){
+  const rs=Array.isArray(rows)?rows:[];
+  const total=rs.length;
+  const shown=rs.slice(0,Math.max(0,topK));
+  const label=ariaLabel||'Exceptions';
+  return <div className="expanel">
+    {strip!=null?<div className="expanel-strip">{strip}</div>:null}
+    <div className="exlist" role="list" aria-label={label}
+      style={{maxHeight:maxHeight||'var(--body-chart)',overflow:'auto'}}>
+      {shown.length
+        ? shown.map((r,i)=>{
+            const tone=toneOf?toneOf(r):null;
+            const key=rowKey?rowKey(r,i):i;
+            return <div key={key}
+              className={'exrow'+(tone?' tone-'+tone:'')+(onRow?' clickable':'')}
+              role={onRow?'button':'listitem'} tabIndex={onRow?0:undefined}
+              onClick={onRow?()=>onRow(r,i):undefined}
+              onKeyDown={onRow?e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onRow(r,i);}}:undefined}>
+              {renderRow?renderRow(r,i):null}
+            </div>;
+          })
+        : <div className="dt-empty">Nothing to show</div>}
+    </div>
+    {rollup&&rollup.count>0
+      ? <button type="button" className="exrollup" onClick={rollup.onClick}>
+          {rollup.label!=null?rollup.label:(rollup.count+' normal, hidden → View all in table')}</button>
+      : null}
+    <div className="sr-only" aria-live="polite">{label+': showing '+shown.length+' of '+total}</div>
+  </div>;
+}
+
 /* ── Chart-type toggle (shared) — screenshot-style "Line · Bar · Pie" text control.
    Canonical order line→bar→pie, filtered to allowed `types`. aria-pressed, active=accent. ── */
 const CHART_TYPE_ORDER=['line','bar','pie'];
