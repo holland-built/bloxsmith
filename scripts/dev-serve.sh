@@ -19,7 +19,10 @@ command -v go   >/dev/null 2>&1 || { echo "dev-serve: go not found"   >&2; exit 
 
 echo "dev-serve: build bundle + binary…"
 node scripts/build_ui.js >/dev/null 2>&1 || echo "dev-serve: bundle build failed (continuing)"
-rm -f "$BIN"; ( cd go && go build -o "$BIN" . ) || { echo "dev-serve: go build failed" >&2; exit 1; }
+# Stamp a clear dev version (dev-<sha>) so :8090 never shows a release number and
+# never looks "behind" a real release — it IS the bleeding edge, not a version to update.
+DEVVER="dev-$(git rev-parse --short HEAD 2>/dev/null || echo local)"
+rm -f "$BIN"; ( cd go && go build -ldflags "-X main.version=$DEVVER" -o "$BIN" . ) || { echo "dev-serve: go build failed" >&2; exit 1; }
 
 start(){ lsof -ti:"$PORT" 2>/dev/null | xargs kill -9 2>/dev/null; "$BIN" & SRV=$!; }
 cleanup(){ kill "$SRV" 2>/dev/null; lsof -ti:"$PORT" 2>/dev/null | xargs kill -9 2>/dev/null; }
