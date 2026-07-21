@@ -130,6 +130,9 @@ docker compose --profile secure up -d          # + Caddy TLS + basic-auth
 git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
 node scripts/build_ui.js                        # refresh the embedded UI (go/web/)
 cd go && go build -o bloxsmith . && ./bloxsmith  # → http://localhost:8080
+
+scripts/preview.sh [port]                       # one-command local preview (default :8090):
+                                                #   rebuilds UI, frees the port, runs, opens browser
 ```
 
 Full steps, the deploy matrix, auto-unlock, and pinning → **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
