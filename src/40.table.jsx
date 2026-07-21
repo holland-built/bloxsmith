@@ -1154,6 +1154,11 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // border-box (index.html:109) means each column's +24 padding is inside its width.
   const gutterW=(selectable?28:0)+(diffMap?20:0)+28;
   const totalColWidth=colWidths.reduce((a,b)=>a+b,0)+gutterW;
+  // A `flex:true` column absorbs leftover width so a table with few narrow columns
+  // fills its card instead of leaving a dead right gutter (and its free-text value
+  // stops clipping). When present the table goes width:100% and the flex column's
+  // header/cells go width:auto; the other columns keep their measured widths.
+  const hasFlex=effCols.some(c=>c&&c.flex);
   const rowIdOf=i=>id?(id+'-r-'+i):null;
   const scrollTo=i=>{ const rid=rowIdOf(i);
     const go=()=>{ const el=rid&&document.getElementById(rid); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'}); };
@@ -1670,7 +1675,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
           --dt-actions-w) that aren't part of effCols. Wide containers never see
           this (the browser only enforces min-width once it exceeds 100%), so
           ordinary 4-6 column tables are pixel-identical to before. */}
-      <table className="dt" style={{width:totalColWidth,minWidth:effCols.length*90+(selectable?28:0)+(diffMap?20:0)+28}}>
+      <table className="dt" style={hasFlex?{width:'100%'}:{width:totalColWidth,minWidth:effCols.length*90+(selectable?28:0)+(diffMap?20:0)+28}}>
         <thead><tr>
           {diffMap?<th className="dt-diff" aria-label="Diff status"></th>:null}
           {selectable?<th className="dt-check"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all rows"/></th>:null}
@@ -1687,7 +1692,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
                 truncated column name. */}
             return <th key={c.key} title={String(c.label!=null?c.label:c.key)}
               className={(isNum(c)?'num':'')+(c.hideSm?' hide-sm':'')+(c.primary?' dt-primary':'')}
-              style={{width:colWidths[ci]}}
+              style={{width:(hasFlex&&c.flex)?'auto':colWidths[ci]}}
               aria-sort={sEntry?(sEntry.dir==='asc'?'ascending':'descending'):'none'}
               tabIndex={0}
               onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();clickSort(c.key,e.shiftKey);}}}
