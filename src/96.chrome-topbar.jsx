@@ -498,9 +498,16 @@ function MoreMenu({onPalette,update}){
       onClick={()=>setOpen(o=>!o)}>⋯{hasUpdate&&<span className="more-update-dot" aria-hidden="true"/>}</button>
     {/* tools-slot stays mounted ALWAYS (Watches/Views portal into it on mount); just hidden when closed */}
     <div className="more-panel panel" role="menu" style={{display:open?'block':'none'}}>
+      <div className="more-sec-label">Tools</div>
       <div className="more-row"><button className="kbd" onClick={()=>{onPalette();setOpen(false);}}>Command palette <span className="mono">⌘K</span></button></div>
       <div className="more-row tools-slot"></div>            {/* Watches + Views portal here */}
-      <div className="more-row"><ViewOptions/></div>
+      <div className="more-divide" role="separator"></div>
+      <div className="more-sec-label">Display</div>
+      <div className="more-row"><div className="more-toggle"><span>Theme</span><ThemeToggle/></div></div>
+      <div className="more-row"><div className="more-toggle"><span>Density</span><DensityToggle/></div></div>
+            <div className="more-row"><div className="more-toggle"><span>Wallboard</span><button className="kbd wall-toggle" onClick={enterWall} aria-label="Enter wallboard mode" title="Full-screen NOC display (#wall)">Enter</button></div></div>
+      <div className="more-divide" role="separator"></div>
+      <div className="more-sec-label">About</div>
       <div className="more-row"><UpdateBadge update={update}/></div>
     </div>
   </span>;
