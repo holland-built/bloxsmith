@@ -3,6 +3,7 @@ import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
+import { authFetch } from '../lib/authFetch.js'
 import { COLORS, TT, Card, Empty, Skeleton } from '../components/ui.jsx'
 
 const SEV_COLOR = { critical: COLORS.crit, high: '#ff7b7b', medium: COLORS.warn, low: COLORS.accent }
@@ -123,6 +124,46 @@ function KpiStack({ hub, events, acks }) {
   )
 }
 
+// ---------- block action ----------
+
+function BlockCell({ domain }) {
+  const [state, setState] = useState('idle') // idle | busy | blocked | tokenRequired | error
+  const [msg, setMsg] = useState('')
+
+  async function run(action) {
+    if (!domain) return
+    setState('busy')
+    const res = await authFetch(`/api/${action}-domain`, {
+      method: 'POST',
+      body: JSON.stringify({ domain }),
+    })
+    if (res.ok) {
+      setState(action === 'block' ? 'blocked' : 'idle')
+    } else if (res.tokenRequired) {
+      setState('tokenRequired')
+    } else {
+      setState('error')
+      setMsg((res.data && res.data.error) || `HTTP ${res.status}`)
+    }
+  }
+
+  if (!domain) return <span className="text-dim text-[11px]">—</span>
+  if (state === 'busy') return <span className="text-[11px] text-muted">…</span>
+  if (state === 'blocked') {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px]" style={{ color: COLORS.ok }}>blocked ✓</span>
+        <button onClick={() => run('unblock')} className="px-1.5 py-0.5 rounded text-[10.5px] border border-[#2a2a2a] text-muted">Unblock</button>
+      </div>
+    )
+  }
+  if (state === 'tokenRequired') return <span className="text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⚙ Accounts</span>
+  if (state === 'error') return <span className="text-[11px]" style={{ color: COLORS.crit }}>{msg}</span>
+  return (
+    <button onClick={() => run('block')} className="px-1.5 py-0.5 rounded text-[10.5px] border border-[#2a2a2a] text-muted hover:text-[#ddd]">Block</button>
+  )
+}
+
 // ---------- triage inbox ----------
 
 function TriageInbox({ hub, events, acks, setAcks }) {
@@ -196,6 +237,7 @@ function TriageInbox({ hub, events, acks, setAcks }) {
           <thead>
             <tr>
               <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Ack</th>
+              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Block</th>
               {headers.map((h) => (
                 <th
                   key={h.key}
@@ -215,6 +257,9 @@ function TriageInbox({ hub, events, acks, setAcks }) {
                 <tr key={ackKey(e) + i} style={{ opacity: acked ? 0.45 : 1 }}>
                   <td className="py-2 px-2.5 border-b border-line">
                     <input type="checkbox" checked={acked} onChange={() => toggleAck(e)} />
+                  </td>
+                  <td className="py-2 px-2.5 border-b border-line">
+                    <BlockCell domain={e.qname} />
                   </td>
                   <td className="py-2 px-2.5 border-b border-line font-medium uppercase text-[11px]" style={{ color: SEV_COLOR[sev] || COLORS.other }}>{e.severity || '—'}</td>
                   <td className="py-2 px-2.5 border-b border-line font-mono">{e.qname || '—'}</td>

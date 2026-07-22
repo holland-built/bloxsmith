@@ -26,5 +26,4 @@ README.docker.md
 # in-browser Babel and the JSX source never need to ship in the image.
 assets/babel.min.js
 src
-scripts/build_ui.js
 scripts/_carve_once.py

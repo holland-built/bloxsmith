@@ -14,6 +14,9 @@ import SelfService from './tabs/SelfService.jsx'
 import Ai from './tabs/Ai.jsx'
 import Palette from './components/Palette.jsx'
 import UpdateButton from './components/UpdateButton.jsx'
+import VaultGate from './components/VaultGate.jsx'
+import TenantManager from './components/TenantManager.jsx'
+import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Overview', el: Overview },
@@ -39,6 +42,17 @@ function hashTab() {
 
 export default function App() {
   const [tab, setTab] = useState(hashTab)
+  const [showAccounts, setShowAccounts] = useState(false)
+  const [showBrand, setShowBrand] = useState(false)
+  const [brandDomain, setBrandDomain] = useState(() => localStorage.getItem('orgDomain') || '')
+  const [logoBust, setLogoBust] = useState(0)
+
+  useEffect(() => {
+    fetch('/api/brand', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => { if (b && b.domain) setBrandDomain(b.domain) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const on = () => setTab(hashTab())
@@ -49,42 +63,67 @@ export default function App() {
   const Active = TABS.find((t) => t.id === tab)?.el ?? Overview
 
   return (
-    <div className="min-h-screen bg-bg text-txt">
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-line-2 bg-bg/95 backdrop-blur sticky top-0 z-10">
-        <strong className="tracking-tight">◆ Bloxsmith</strong>
-        <nav className="flex gap-0.5">
-          {TABS.map((t) => (
-            <a
-              key={t.id}
-              href={`#${t.id}`}
-              className={
-                'px-3 py-1.5 rounded-lg text-[13px] no-underline ' +
-                (t.id === tab
-                  ? 'bg-line text-txt font-medium'
-                  : 'text-muted hover:text-txt')
-              }
-            >
-              {t.label}
-            </a>
-          ))}
-        </nav>
-        <span className="flex-1" />
-        <UpdateButton />
-        <button
-          onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
-          className="w-[190px] text-left px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#8a8a8a] text-sm"
-        >
-          Jump to…&nbsp;&nbsp;⌘K
-        </button>
-        <a
-          href="#provision"
-          className="px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm font-medium no-underline"
-        >
-          + Provision
-        </a>
+    <VaultGate>
+      <div className="min-h-screen bg-bg text-txt">
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-line-2 bg-bg/95 backdrop-blur sticky top-0 z-10">
+          <BrandLogoImg
+            domain={brandDomain}
+            bust={logoBust}
+            title="Edit brand"
+            className="h-5 w-5 rounded cursor-pointer"
+            onClick={() => setShowBrand(true)}
+          />
+          <strong className="tracking-tight">◆ Bloxsmith</strong>
+          <nav className="flex gap-0.5">
+            {TABS.map((t) => (
+              <a
+                key={t.id}
+                href={`#${t.id}`}
+                className={
+                  'px-3 py-1.5 rounded-lg text-[13px] no-underline ' +
+                  (t.id === tab
+                    ? 'bg-line text-txt font-medium'
+                    : 'text-muted hover:text-txt')
+                }
+              >
+                {t.label}
+              </a>
+            ))}
+          </nav>
+          <span className="flex-1" />
+          <UpdateButton />
+          <button
+            onClick={() => setShowAccounts(true)}
+            className="px-2 py-1 rounded-lg border border-[#2a2a2a] text-[#8a8a8a] text-xs hover:text-txt hover:border-[#3a3a3a]"
+          >
+            ⚙ Accounts
+          </button>
+          <button
+            onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+            className="w-[190px] text-left px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#8a8a8a] text-sm"
+          >
+            Jump to…&nbsp;&nbsp;⌘K
+          </button>
+          <a
+            href="#provision"
+            className="px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm font-medium no-underline"
+          >
+            + Provision
+          </a>
+        </div>
+        <Active />
+        <Palette tabs={TABS} onPick={(id) => { location.hash = id }} />
+        {showAccounts && <TenantManager onClose={() => setShowAccounts(false)} />}
+        {showBrand && (
+          <BrandEdit
+            onClose={() => setShowBrand(false)}
+            onSaved={() => {
+              setBrandDomain(localStorage.getItem('orgDomain') || '')
+              setLogoBust(Date.now())
+            }}
+          />
+        )}
       </div>
-      <Active />
-      <Palette tabs={TABS} onPick={(id) => { location.hash = id }} />
-    </div>
+    </VaultGate>
   )
 }

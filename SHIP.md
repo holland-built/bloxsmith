@@ -6,7 +6,7 @@
 | prod | master | *       | tag vX.Y.Z → GitHub release + ghcr image; :8080 self-updates |
 
 ## Steps
-1. Ensure UI is current: `cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/` (commit go/web if changed). Legacy no-build pipeline (`scripts/build_ui.js` → app.bundle.js) retired at v3.0.0 — src/*.jsx is the OLD app, kept for reference only.
+1. Ensure UI is current: `cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/` (commit go/web if changed). Legacy no-build JSX pipeline retired at v3.0.0 — the old app was deleted; it lives on only in git history.
 2. Bump patch/minor version = next tag
 3. Commit all with feat/fix message
 
