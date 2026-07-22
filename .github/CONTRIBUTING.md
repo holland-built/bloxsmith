@@ -9,10 +9,13 @@ most welcome.
 Requires **Go >= 1.26** and **Node** (to rebuild the embedded UI).
 
 ```bash
-node scripts/build_ui.js              # compile src/*.jsx → go/web/app.bundle.js (embedded)
-cp .env.example .env                  # fill in your keys (optional — the in-app vault also works)
+cd ui && npm ci && npm run build              # Vite build: ui/src → go/web (embedded)
+cd .. && cp .env.example .env                  # fill in your keys (optional — the in-app vault also works)
 cd go && go build -o bloxsmith . && ./bloxsmith   # → http://localhost:8080
 ```
+
+For a live-reload dev loop instead, run `scripts/dev-serve.sh [port]` (rebuilds
+`ui/` on change, serves from disk via `WEB_DIR`).
 
 Set `HOST=0.0.0.0` to expose beyond localhost. See the README for the full env-var
 table and the Docker quick start, and [go/BUILD.md](../go/BUILD.md) for cross-compiles.
@@ -20,11 +23,8 @@ table and the Docker quick start, and [go/BUILD.md](../go/BUILD.md) for cross-co
 ## Running the tests
 
 ```bash
-# UI freshness — the embedded bundle must match src/*.jsx
-node scripts/build_ui.js --check
-
-# TypeScript gate
-./scripts/check.sh
+# UI freshness — go/web must match ui/ build output
+cd ui && npm run build && cd .. && diff -r ui/dist go/web
 
 # Go unit + integration tests
 cd go && go test ./...
@@ -39,9 +39,8 @@ behavior or add an endpoint.
 - Keep it simple and surgical — match the existing style; no large refactors bundled
   with feature work.
 - Go: standard library first; only add a dependency when it earns its place.
-- Frontend lives in `src/*.jsx` (compiled to the embedded `go/web/app.bundle.js` by
-  `scripts/build_ui.js`) — edit the source, never the generated bundle, and rerun the
-  build.
+- Frontend lives in `ui/` (Vite + React) and builds to the embedded `go/web/` —
+  edit the source, never the generated `go/web/` output, and rerun the build.
 
 ## Branch / PR process
 

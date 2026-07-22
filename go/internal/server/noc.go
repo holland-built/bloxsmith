@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"bloxsmith/internal/dashboard"
 )
@@ -124,9 +126,14 @@ func (d *Deps) sourceRows(w http.ResponseWriter, r *http.Request) {
 }
 
 // dnsAnalytics is GET /api/dns-analytics (server.py:5209).
+// Overall 15s deadline: the fetch chains several MCP calls (init + 3 cube
+// queries), each individually bounded at 12s (mcp.go post) — without a total
+// cap a fully-stalled upstream still cost ~4×12s per request.
 func (d *Deps) dnsAnalytics(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/dns-analytics")
-	d.json(w, r, 200, d.Dashboard.FetchDNSAnalytics(r.Context()))
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	d.json(w, r, 200, d.Dashboard.FetchDNSAnalytics(ctx))
 }
 
 // hostMetrics is GET /api/host-metrics (server.py:5215).

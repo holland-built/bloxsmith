@@ -14,13 +14,28 @@ export function useApi(url, { poll } = {}) {
     if (!url) return
     // Hard 12s timeout — some feeds (e.g. /api/dns-analytics) hang forever server-side;
     // without this the panel shows an eternal skeleton instead of its Empty state.
-    fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
-      .then((res) => {
+    const ac = new AbortController()
+    const t = setTimeout(() => ac.abort(), 12000)
+    fetch(url, { cache: 'no-store', signal: ac.signal })
+      .then(async (res) => {
+        if (res.status === 503) {
+          const body = await res.json().catch(() => ({}))
+          if (body && (body.locked === true || body.error === 'vault locked')) {
+            clearTimeout(t)
+            ac.abort()
+            if (aliveRef.current) {
+              setData(null)
+              setLoading(false)
+            }
+            window.dispatchEvent(new Event('bx:vault-locked'))
+            return null
+          }
+        }
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         return res.json()
       })
       .then((json) => {
-        if (!aliveRef.current) return
+        if (json === null || !aliveRef.current) return
         setData(json)
         setError(null)
         setLoading(false)
@@ -30,6 +45,7 @@ export function useApi(url, { poll } = {}) {
         setError(err)
         setLoading(false)
       })
+      .finally(() => clearTimeout(t))
   }, [url])
 
   useEffect(() => {

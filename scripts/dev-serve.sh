@@ -17,10 +17,10 @@ export WEB_DIR="$ROOT/go/web" DISABLE_UPDATE_CHECK=1 PORT
 command -v node >/dev/null 2>&1 || { echo "dev-serve: node not found" >&2; exit 1; }
 command -v go   >/dev/null 2>&1 || { echo "dev-serve: go not found"   >&2; exit 1; }
 
-build_ui(){ ( cd ui && npm run build >/dev/null 2>&1 ) && rm -rf go/web/* && cp -R ui/dist/* go/web/; }
+rebuild_web(){ ( cd ui && npm run build >/dev/null 2>&1 ) && rm -rf go/web/* && cp -R ui/dist/* go/web/; }
 
 echo "dev-serve: build UI + binary…"
-build_ui || echo "dev-serve: UI build failed (continuing with last good go/web)"
+rebuild_web || echo "dev-serve: UI build failed (continuing with last good go/web)"
 # Stamp a clear dev version (dev-<sha>) so :8090 never shows a release number and
 # never looks "behind" a real release — it IS the bleeding edge, not a version to update.
 DEVVER="dev-$(git rev-parse --short HEAD 2>/dev/null || echo local)"
@@ -42,5 +42,5 @@ while sleep 2; do
   fi
   # UI edit → vite rebuild into go/web (binary serves it from disk, no restart)
   NOW="$(sig)"
-  if [ "$NOW" != "$LAST" ]; then LAST="$NOW"; echo "dev-serve: change → rebuild"; build_ui && echo "dev-serve: ✓ rebuilt"; fi
+  if [ "$NOW" != "$LAST" ]; then LAST="$NOW"; echo "dev-serve: change → rebuild"; rebuild_web && echo "dev-serve: ✓ rebuilt"; fi
 done

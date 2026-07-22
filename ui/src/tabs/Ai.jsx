@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { COLORS, Card, Empty } from '../components/ui.jsx'
+import { authFetch } from '../lib/authFetch.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd]'
 
@@ -190,6 +191,45 @@ function EntitiesTable({ entities }) {
   )
 }
 
+function BlockDomainButton({ domain }) {
+  const [state, setState] = useState('idle') // idle | busy | blocked | tokenRequired | error
+  const [msg, setMsg] = useState('')
+
+  const looksLikeDomain = !!domain && domain.includes('.') && !domain.includes(' ')
+  if (!looksLikeDomain) return null
+
+  async function run(action) {
+    setState('busy')
+    const res = await authFetch(`/api/${action}-domain`, {
+      method: 'POST',
+      body: JSON.stringify({ domain }),
+    })
+    if (res.ok) {
+      setState(action === 'block' ? 'blocked' : 'idle')
+    } else if (res.tokenRequired) {
+      setState('tokenRequired')
+    } else {
+      setState('error')
+      setMsg((res.data && res.data.error) || `HTTP ${res.status}`)
+    }
+  }
+
+  if (state === 'busy') return <span className="text-[11px] text-muted">…</span>
+  if (state === 'blocked') {
+    return (
+      <div className="flex items-center gap-1.5 mt-2">
+        <span className="text-[11px]" style={{ color: COLORS.ok }}>blocked ✓</span>
+        <button onClick={() => run('unblock')} className="px-2 py-1 rounded-lg text-[11px] border border-[#2a2a2a] text-muted">Unblock</button>
+      </div>
+    )
+  }
+  if (state === 'tokenRequired') return <div className="mt-2 text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⚙ Accounts</div>
+  if (state === 'error') return <div className="mt-2 text-[11px]" style={{ color: COLORS.crit }}>{msg}</div>
+  return (
+    <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-lg text-[11px] border border-[#2a2a2a] text-muted hover:text-[#ddd]">Block domain</button>
+  )
+}
+
 function DossierPanel({ dossier }) {
   if (!dossier) return null
   if (dossier.unavailable) {
@@ -251,11 +291,12 @@ function LookupCard() {
   const [res, setRes] = useState(null)
   const [dossier, setDossier] = useState(null)
   const [err, setErr] = useState(null)
+  const [queryUsed, setQueryUsed] = useState('')
 
   const lookup = async () => {
     const query = q.trim()
     if (!query) return
-    setBusy(true); setErr(null); setRes(null); setDossier(null)
+    setBusy(true); setErr(null); setRes(null); setDossier(null); setQueryUsed(query)
     fetch(`/api/dossier?q=${encodeURIComponent(query)}`, { cache: 'no-store' })
       .then((r) => r.json().catch(() => null))
       .then((j) => { if (j) setDossier(j) })
@@ -293,6 +334,7 @@ function LookupCard() {
       {err && <div className="text-[13px] mb-2" style={{ color: '#ff7b7b' }}>{err}</div>}
       {!err && !res && !dossier && !busy && <Empty>Look up a domain, IP, or host</Empty>}
       {res && <EntitiesTable entities={res.entities} />}
+      {(res || dossier) && <BlockDomainButton domain={queryUsed} />}
       <DossierPanel dossier={dossier} />
     </Card>
   )

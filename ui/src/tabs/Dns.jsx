@@ -10,10 +10,9 @@ import { COLORS, TT, Card, Empty, Skeleton, utilStatus } from '../components/ui.
 export default function Dns() {
   const qps = useApi('/api/csp/dns-qps', { poll: 30000 })
   const services = useApi('/api/csp/dns-services', { poll: 30000 })
-  // /api/dns-analytics is NOT called: the handler hangs forever AND holds a server-side
-  // lock that blocks /api/data for every tab while in flight (verified 2026-07-22).
-  // Re-enable once the Go handler gets a timeout. Panel below renders feed-unavailable.
-  const analytics = { data: null, error: new Error('feed disabled: server hang'), loading: false }
+  // Re-enabled 2026-07-22: MCP calls now carry a bounded 12s deadline (mcp.go post()),
+  // so a stalled feed errors out instead of hanging goroutines / starving the upstream.
+  const analytics = useApi('/api/dns-analytics', { poll: 30000 })
   const data = useApi('/api/data', { poll: 30000 })
 
   const zones = data.data?.zones ?? []

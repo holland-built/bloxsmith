@@ -31,11 +31,6 @@ jobs:
             exit 1
           }
 
-      # TypeScript gate — only when a tsconfig.json is present. Mirrors scripts/check.sh.
-      - name: Type-check (tsc --noEmit)
-        if: hashFiles('tsconfig.json') != ''
-        run: npx -y --package typescript@latest tsc --noEmit -p tsconfig.json
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:

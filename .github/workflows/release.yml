@@ -28,7 +28,7 @@ jobs:
           node-version: '24'
 
       # go/web/ is committed + go:embed'd; prove it matches ui/ source (v3 Vite
-      # stack — the old build_ui.js/src/*.jsx pipeline is retired).
+      # stack — the retired no-build JSX pipeline lives on only in git history).
       - name: UI dist up to date (vite build --check)
         run: |
           cd ui && npm ci && npm run build && cd ..

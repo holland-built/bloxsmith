@@ -43,7 +43,7 @@ var version = "0.0.0-poc"
 
 // staticHandler serves the frontend. Normally the embedded copy (embed.go webFS);
 // when WEB_DIR is set it serves that directory from disk instead — dev live-reload
-// (scripts/watch.sh rebuilds the bundle in place, no recompile). Inert in prod:
+// (scripts/dev-serve.sh rebuilds ui/ into go/web in place, no recompile). Inert in prod:
 // WEB_DIR is unset there, so the embed stays the default. index.html and assets
 // both send no-store cache headers (mirror server.py:6509-6512).
 func staticHandler() http.Handler {
