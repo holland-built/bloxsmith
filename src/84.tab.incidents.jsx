@@ -149,7 +149,9 @@ function IncidentsTab(){
     <IncCategoryChips incidents={incidents} query={incQuery} onQuery={setIncQuery}
       onSnoozed={incApi.refetch}/>
 
-    <Panel title="Triage" api={incApi} size="md"
+    <div className="dash">
+    <div className="dc24 t-s6">
+    <Panel title="Triage" api={incApi} size="s6"
       side={<button className="fresh-retry" onClick={clearAcks}>Clear acks</button>}>
       <Astryx.Card variant="default" padding={0}>
         {incApi.loading&&!incApi.data
@@ -197,12 +199,16 @@ function IncidentsTab(){
                 </React.Fragment>}
       </Astryx.Card>
     </Panel>
+    </div>
 
-    <Panel title="SOC queue (IQ Actions)" api={actionsApi} empty={!actionsRows.length}>
+    <div className="dc24 t-md">
+    <Panel title="SOC queue (IQ Actions)" api={actionsApi} empty={!actionsRows.length} size="md">
       <DataTable cols={actionsCols} rows={actionsRows}
         rowKey={r=>String((r&&(r.id||r.display_id))||JSON.stringify(r).slice(0,40))}
         tableId="incidents-soc" csvName="soc-queue" maxRows={50} filterable/>
     </Panel>
+    </div>
+    </div>
   </div>;
 }
 // ═══ END: INCIDENTS ═══

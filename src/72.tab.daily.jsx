@@ -205,9 +205,9 @@ function DailyTab(){
       {firstRun&&<div className="dly-note">First visit — trend sparklines and deltas begin after your next daily check-in.</div>}
     </div>
 
-    <div className="grid fadein">
+    <div className="dash fadein">
 
-      <Panel title="Open issues" side={<span className="mono">{issues.length} active</span>}>
+      <div className="dc12 t-md"><Panel size="md" title="Open issues" side={<span className="mono">{issues.length} active</span>}>
         {issues.length
           ? issues.map((it,i)=><div className="issue" key={i} role="button" tabIndex={0}
               onClick={it.onClick} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();it.onClick();}}}
@@ -221,9 +221,9 @@ function DailyTab(){
               <div className="body"><div className="t">No open issues</div><div className="d">all systems clear</div></div>
               <span className="sev low">clear</span>
             </div>}
-      </Panel>
+      </Panel></div>
 
-      <Panel title="Security today" side={<span className="mono">{secEvents.length} events</span>} empty={!secReady}>
+      <div className="dc12 t-md"><Panel size="md" title="Security today" side={<span className="mono">{secEvents.length} events</span>} empty={!secReady}>
         <div className="dly-sev" role="button" tabIndex={0} onClick={()=>nav('security')}
           onKeyDown={e=>{if(e.key==='Enter')nav('security');}}>
           {secSev.map(x=><div className="dly-sev-cell" key={x.l}>
@@ -235,9 +235,13 @@ function DailyTab(){
           ? <div className="dly-hourly"><MiniBars values={secByHour} width={220} height={30} color="var(--warn)"/>
               <span className="dly-note" style={{marginTop:0}}>events · last 12h</span></div>
           : <div className="dly-note">No security events in the last 12 hours</div>}
-      </Panel>
+      </Panel></div>
 
-      <Panel title={'Top movers'+(baseline?' · vs '+baseline.date:'')} empty={!(baseline&&movers.length>0)}>
+      <div className="dc12 t-md"><Panel size="md" title="Capacity & threats" side={<span className="mono">30 days</span>} empty={allDays.length<2}>
+        <TrendChart series={trendSeries}/>
+      </Panel></div>
+
+      <div className="dc12 t-md"><Panel size="md" title={'Top movers'+(baseline?' · vs '+baseline.date:'')} empty={!(baseline&&movers.length>0)}>
         {movers.map((m,i)=><div className="issue" key={m.a+i} role="button" tabIndex={0}
             onClick={()=>nav('network',{subnet:m.a})} onKeyDown={e=>{if(e.key==='Enter')nav('network',{subnet:m.a});}}
             {...hover.bind({title:m.a,rows:[['before',m.before+'%'],['after',m.after+'%'],['change',(m.d>0?'+':'')+m.d+'%']],spark:[m.before,m.after]})}>
@@ -246,13 +250,9 @@ function DailyTab(){
             <MiniBars values={[m.before,m.after]} width={54} height={16} color={utilColor(m.after)}/>
             <Delta v={m.d} good="down"/>
           </div>)}
-      </Panel>
+      </Panel></div>
 
-      <Panel title="Capacity & threats" side={<span className="mono">30 days</span>} empty={allDays.length<2}>
-        <TrendChart series={trendSeries}/>
-      </Panel>
-
-      <Panel title="Top capacity subnets" side={<span className="mono">by free space</span>} empty={!topSubs.length}>
+      <div className="dc8 t-md"><Panel size="md" title="Top capacity subnets" side={<span className="mono">by free space</span>} empty={!topSubs.length}>
         <div className="issues">
           {topSubs.map((s,i)=>{if(s.__group) return <div key={'grp:'+s.__group} className="issue">
               <span className="rank">·</span>
@@ -268,9 +268,9 @@ function DailyTab(){
           </div>;})}
         </div>
         {subnets.length>10&&<button type="button" className="exrollup" onClick={()=>nav('network')}>{(subnets.length-10)+' more → View all in Network'}</button>}
-      </Panel>
+      </Panel></div>
 
-      <Panel title="Hosts needing attention" side={<span className="mono">{attnHosts.length} of {nHost}</span>} empty={!attnHosts.length}>
+      <div className="dc8 t-md"><Panel size="md" title="Hosts needing attention" side={<span className="mono">{attnHosts.length} of {nHost}</span>} empty={!attnHosts.length}>
         <div className="issues">
           {attnHosts.map((h,i)=>{const st=String(h.status||'').toLowerCase();const sv=st==='error'?'crit':st==='degraded'?'high':st==='offline'?'low':'med';return <div key={h.id||i} className="issue" role="button" tabIndex={0}
               onClick={()=>nav('infra')} onKeyDown={e=>{if(e.key==='Enter')nav('infra');}}
@@ -281,9 +281,9 @@ function DailyTab(){
           </div>;})}
         </div>
         {attnHostsAll.length>10&&<button type="button" className="exrollup" onClick={()=>nav('infra')}>{(attnHostsAll.length-10)+' more → Infra'}</button>}
-      </Panel>
+      </Panel></div>
 
-      <Panel title="DNS zones with issues" side={<span className="mono">{zoneIssues} of {nZone}</span>} empty={!issueZones.length}>
+      <div className="dc8 t-md"><Panel size="md" title="DNS zones with issues" side={<span className="mono">{zoneIssues} of {nZone}</span>} empty={!issueZones.length}>
         <div className="issues">
           {issueZones.map((z,i)=>{const n=z.issues.length;return <div key={z.id||z.fqdn||i} className="issue" role="button" tabIndex={0}
               onClick={()=>nav('dns')} onKeyDown={e=>{if(e.key==='Enter')nav('dns');}}
@@ -294,7 +294,7 @@ function DailyTab(){
           </div>;})}
         </div>
         {issueZonesAll.length>10&&<button type="button" className="exrollup" onClick={()=>nav('dns')}>{(issueZonesAll.length-10)+' more → DNS'}</button>}
-      </Panel>
+      </Panel></div>
 
     </div>
 

@@ -306,24 +306,30 @@ function AuditTab(){
   return <div className="page">
     <SynthBand tone={tone} verdict={verdict} facts={[]}/>
 
-    <Panel title="Audit log"
-      side={<span style={{display:'inline-flex',alignItems:'center',gap:'var(--s3)'}}>
-        {chainValid!=null && <Astryx.Badge variant={chainValid?'success':'error'} label={chainValid?'Chain valid':'Chain broken'}/>}
-        <AuditExportButton/>
-        <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
-      </span>}>
-      {loading&&!data
-        ? <Skeleton rows={6}/>
-        : locked
-          ? <div className="dt-empty">Vault locked — unlock to load the audit log.</div>
-          : error
-            ? <ErrorState error={error} onRetry={refetch}/>
-            : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}} csvName="audit"
-                tableId="audit" rowKey={r=>String(r.hash||((r.ts||'')+'|'+(r.actor||'')+'|'+(r.event||'')))}
-                maxRows={50} selectable filterable filterKeys={['actor','event','_detail']}/>}
-    </Panel>
+    <div className="dash">
+      <div className="dc24 t-lg">
+        <Panel title="Audit log" size="lg"
+          side={<span style={{display:'inline-flex',alignItems:'center',gap:'var(--s3)'}}>
+            {chainValid!=null && <Astryx.Badge variant={chainValid?'success':'error'} label={chainValid?'Chain valid':'Chain broken'}/>}
+            <AuditExportButton/>
+            <Freshness at={fetchedAt} error={error} onRetry={refetch}/>
+          </span>}>
+          {loading&&!data
+            ? <Skeleton rows={6}/>
+            : locked
+              ? <div className="dt-empty">Vault locked — unlock to load the audit log.</div>
+              : error
+                ? <ErrorState error={error} onRetry={refetch}/>
+                : <DataTable cols={cols} rows={rows} defaultSort={{key:'ts',dir:'desc'}} csvName="audit"
+                    tableId="audit" rowKey={r=>String(r.hash||((r.ts||'')+'|'+(r.actor||'')+'|'+(r.event||'')))}
+                    maxRows={50} selectable filterable filterKeys={['actor','event','_detail']}/>}
+        </Panel>
+      </div>
 
-    <CspAuditPanel/>
+      <div className="dc24 t-lg">
+        <CspAuditPanel/>
+      </div>
+    </div>
   </div>;
 }
 
@@ -380,7 +386,7 @@ function CspAuditPanel(){
     {key:'result',label:'Result',render:v=>
       <Astryx.Badge variant={v==='failure'?'error':'success'} label={v||'—'}/>},
   ];
-  return <Panel title="CSP portal audit — external"
+  return <Panel title="CSP portal audit — external" size="lg"
     side={<Freshness at={feed.data?feed.fetchedAt:null} error={feed.error} onRetry={feed.refetch}/>}>
     <div style={{fontSize:'var(--t12)',color:'var(--text-dim)',marginBottom:'var(--s2)'}}>
       Read-only activity from the Infoblox portal — who changed what in CSP. Separate from
