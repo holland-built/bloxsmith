@@ -128,13 +128,11 @@ docker compose --profile secure up -d          # + Caddy TLS + basic-auth
 
 # Build from source (dev) — Go 1.26+:
 git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
-node scripts/build_ui.js                        # refresh the embedded UI (go/web/)
+cd ui && npm ci && npm run build && cd ..        # Vite build → refreshes the embedded UI (go/web/)
 cd go && go build -o bloxsmith . && ./bloxsmith  # → http://localhost:8080
 
-scripts/preview.sh [port]                       # one-command local preview (default :8090):
-                                                #   rebuilds UI, frees the port, runs, opens browser
-scripts/watch.sh [port]                         # LIVE dev: edit src/*.jsx → change shows in ~2s
-                                                #   (serves UI from disk via WEB_DIR; auto-reloads on macOS/Chrome)
+scripts/dev-serve.sh [port]                     # LIVE dev (default :8090): edit ui/src → Vite
+                                                #   rebuild → go/web, binary serves from disk via WEB_DIR
 ```
 
 Full steps, the deploy matrix, auto-unlock, and pinning → **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.

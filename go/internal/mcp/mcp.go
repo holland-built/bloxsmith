@@ -43,7 +43,14 @@ type Client struct {
 	mu        sync.Mutex
 	sessionID string // Mcp-Session-Id issued by initialize
 	nextID    int
+
+	initMu      sync.Mutex
+	initialized bool
 }
+
+// callTimeout bounds any call whose incoming ctx carries no deadline (e.g. a
+// request context that never cancels). Package var so tests can shrink it.
+var callTimeout = 12 * time.Second
 
 // New builds a client. url is MCP_URL (BASE_URL + "/mcp"); auth returns the
 // current Authorization header value (rest.Auth.Value).
@@ -71,6 +78,12 @@ type rpcResp struct {
 // endpoint may reply with either. A nil id makes it a notification (no reply
 // expected), returning a nil rpcResp.
 func (c *Client) post(ctx context.Context, method string, params any, notify bool) (*rpcResp, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, callTimeout)
+		defer cancel()
+	}
+
 	c.mu.Lock()
 	c.nextID++
 	id := c.nextID
@@ -96,6 +109,10 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 	if sid != "" {
 		req.Header.Set("Mcp-Session-Id", sid)
 	}
+	// Verified 2026-07-22: Auth is read into a plain header value above and the
+	// call site never holds a lock across Do — the historical /api/data stall
+	// was upstream CSP-side serialization behind a hung /mcp initialize, not
+	// contention on this client.
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, err
@@ -148,17 +165,34 @@ func extractSSEData(raw []byte) []byte {
 }
 
 // Initialize is session.initialize (server.py:3062): the MCP handshake, then
-// the required notifications/initialized. Safe to call once per Client.
+// the required notifications/initialized. Idempotent: concurrent and repeat
+// calls after a successful handshake are no-ops (ensureInit semantics). A
+// failed handshake is NOT cached — the next call retries the full handshake,
+// since a transient CSP/network error shouldn't wedge the client forever.
 func (c *Client) Initialize(ctx context.Context) error {
+	c.initMu.Lock()
+	defer c.initMu.Unlock()
+
+	c.mu.Lock()
+	sid := c.sessionID
+	c.mu.Unlock()
+	if c.initialized && sid != "" {
+		return nil
+	}
+
 	_, err := c.post(ctx, "initialize", map[string]any{
 		"protocolVersion": "2025-06-18",
 		"capabilities":    map[string]any{},
 		"clientInfo":      map[string]any{"name": "bloxsmith-go", "version": "1"},
 	}, false)
 	if err != nil {
+		// Session expired/rejected (e.g. http 404) or any other handshake
+		// failure: leave initialized=false so the next call retries.
+		c.initialized = false
 		return err
 	}
 	_, _ = c.post(ctx, "notifications/initialized", map[string]any{}, true)
+	c.initialized = true
 	return nil
 }
 
