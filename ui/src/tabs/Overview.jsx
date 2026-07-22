@@ -1,0 +1,476 @@
+import { useMemo, useState } from 'react'
+import {
+  AreaChart, Area, BarChart, Bar, Cell, PieChart, Pie,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
+import { useApi } from '../lib/api.js'
+
+const COLORS = { accent: '#0070f3', purple: '#8b5cf6', warn: '#f5a623', crit: '#ee4444', ok: '#4ade80', other: '#8a8a8a' }
+
+// ---------- shared bits ----------
+
+function Card({ title, note, right, span = 2, className = '', children }) {
+  return (
+    <div
+      className={`bg-card border border-card-border rounded-card p-[18px] ${className}`}
+      style={{ gridColumn: `span ${span} / span ${span}` }}
+    >
+      {title && (
+        <div className="flex items-center gap-2 mb-2">
+          <h2 className="text-[13.5px] font-semibold">{title}</h2>
+          {note && <span className="text-[11px] text-dim">{note}</span>}
+          <span className="flex-1" />
+          {right}
+        </div>
+      )}
+      {children}
+    </div>
+  )
+}
+
+function Empty({ children = 'no data' }) {
+  return <div className="h-full min-h-[100px] flex items-center justify-center text-muted text-sm">{children}</div>
+}
+
+function Skeleton({ h = 140 }) {
+  return <div className="animate-pulse bg-line rounded-lg w-full" style={{ height: h }} />
+}
+
+function Sparkline({ values, color, h = 30 }) {
+  if (!values || values.length < 2) return null
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const range = max - min || 1
+  const pts = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * 100
+      const y = h - ((v - min) / range) * h
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 100 ${h}`} preserveAspectRatio="none">
+      <polyline fill="none" stroke={color} strokeWidth="1.8" vectorEffect="non-scaling-stroke" points={pts} />
+    </svg>
+  )
+}
+
+function utilStatus(util) {
+  if (util >= 92) return { label: 'Critical', color: COLORS.crit, bg: '#2a1215', fg: '#ff7b7b' }
+  if (util >= 75) return { label: 'Warning', color: COLORS.warn, bg: '#2a2210', fg: '#f5c76b' }
+  return { label: 'Healthy', color: COLORS.accent, bg: '#0d2136', fg: '#6bb2ff' }
+}
+
+// ---------- main ----------
+
+export default function Overview() {
+  const dns = useApi('/api/csp/dns-qps', { poll: 30000 })
+  const data = useApi('/api/data', { poll: 30000 })
+
+  const subnets = data.data?.subnets ?? []
+  const leases = data.data?.leases ?? []
+  const hosts = data.data?.hosts ?? []
+
+  return (
+    <div className="max-w-[1340px] mx-auto p-5">
+      <h1 className="text-lg font-semibold tracking-tight mb-3">Overview</h1>
+      <div className="grid grid-cols-6 gap-3">
+        <DnsHero dns={dns} />
+        <KpiStack subnets={subnets} leases={leases} />
+        <TopUtilization subnets={subnets} />
+        <SubnetHeatmap subnets={subnets} />
+        <HostStatus hosts={hosts} />
+        <SubnetTable subnets={subnets} />
+      </div>
+    </div>
+  )
+}
+
+// ---------- hero ----------
+
+function DnsHero({ dns }) {
+  const rows = dns.data?.rows ?? []
+  const chartData = rows.map((r) => {
+    let label = r.hour
+    const d = new Date(r.hour)
+    if (!isNaN(d)) label = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    return { label, value: Number(r.avg_value) || 0 }
+  })
+  const current = chartData.at(-1)?.value
+  const first = chartData[0]?.value
+  const delta = first ? ((current - first) / first) * 100 : null
+  const flat = delta != null && Math.abs(delta) < 0.05
+
+  return (
+    <Card
+      span={4}
+      title="DNS Query Rate — 24h"
+      right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
+    >
+      {dns.loading ? (
+        <Skeleton h={250} />
+      ) : dns.error || chartData.length === 0 ? (
+        <Empty />
+      ) : (
+        <>
+          <div className="flex items-center gap-4 my-2">
+            <span className="text-[30px] font-semibold tracking-tight">{current?.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+            {delta != null && (
+              <span className="text-xs" style={{ color: flat ? COLORS.other : delta >= 0 ? COLORS.ok : COLORS.crit }}>
+                {flat ? '— flat' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`} vs first hour
+              </span>
+            )}
+          </div>
+          <ResponsiveContainer width="100%" height={230}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="dnsFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={COLORS.accent} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={COLORS.accent} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#222" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: '#777', fontSize: 11 }} axisLine={{ stroke: '#222' }} tickLine={false} minTickGap={40} />
+              <YAxis hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
+              <Tooltip
+                contentStyle={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 12 }}
+                labelStyle={{ color: '#8a8a8a' }}
+                itemStyle={{ color: '#ededed' }}
+              />
+              <Area type="monotone" dataKey="value" stroke={COLORS.accent} strokeWidth={1.8} fill="url(#dnsFill)" isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </>
+      )}
+    </Card>
+  )
+}
+
+// ---------- kpi stack ----------
+
+function KpiStack({ subnets, leases }) {
+  const utils = [...subnets.map((s) => Number(s.util) || 0)].sort((a, b) => a - b)
+  const activeLeases = leases.filter((l) => l.state === 'active').length
+  const critSubnets = subnets.filter((s) => Number(s.util) >= 90).length
+
+  const cells = [
+    { label: 'Active Leases', value: activeLeases.toLocaleString(), color: COLORS.accent },
+    { label: 'Subnets', value: subnets.length.toLocaleString(), color: COLORS.purple },
+    { label: 'Subnets ≥90%', value: critSubnets.toLocaleString(), color: COLORS.crit },
+  ]
+
+  return (
+    <Card span={2} className="flex flex-col justify-between">
+      {cells.map((c, i) => (
+        <div key={c.label} className={`py-3.5 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}>
+          <div className="text-muted text-xs">{c.label}</div>
+          <div className="text-2xl font-semibold tracking-tight my-1">{c.value}</div>
+          {utils.length > 1 ? (
+            <>
+              <Sparkline values={utils} color={c.color} />
+              <div className="text-[10px] text-dim mt-0.5">util distribution (sorted), not history</div>
+            </>
+          ) : (
+            <div className="h-[30px]" />
+          )}
+        </div>
+      ))}
+    </Card>
+  )
+}
+
+// ---------- top utilization ----------
+
+function TopUtilization({ subnets }) {
+  // Rank by addresses USED, not util% — util ranking is a wall of 100% /32 infra links
+  // (learned in old app: commits 7789ae8 / 46e591c)
+  const top = [...subnets]
+    .filter((s) => s.addr || s.cidr)
+    .sort((a, b) => (Number(b.used) || 0) - (Number(a.used) || 0))
+    .slice(0, 12)
+
+  return (
+    <Card span={2} title="Top Consumers" right={<span className="text-[11px] text-muted">addresses used · top 12</span>}>
+      {top.length === 0 ? (
+        <Empty />
+      ) : (
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={top} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+            <XAxis dataKey="addr" tick={false} axisLine={{ stroke: '#222' }} tickLine={false} />
+            <YAxis hide />
+            <Tooltip
+              contentStyle={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 12 }}
+              labelStyle={{ color: '#ededed' }}
+              formatter={(v, _n, p) => [`${Number(v).toLocaleString()} used (${p?.payload?.util ?? '?'}%)`, null]}
+              labelFormatter={(_, p) => p?.[0]?.payload?.addr ?? p?.[0]?.payload?.cidr ?? ''}
+            />
+            <Bar dataKey="used" radius={[3, 3, 0, 0]} isAnimationActive={false}>
+              {top.map((s, i) => (
+                <Cell key={i} fill={COLORS.purple} fillOpacity={1 - (i / top.length) * 0.6} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </Card>
+  )
+}
+
+// ---------- subnet heatmap ----------
+
+function SubnetHeatmap({ subnets }) {
+  // Worst N only — a cell per subnet at 5k subnets = sub-pixel rects (invisible). Cap + say so.
+  const CAP = 288 // 24 x 12
+  // /29-/32 are infra links, always ~100% — they'd paint the whole map red (old app: 67db14e)
+  const all = subnets.filter((s) => (s.addr || s.cidr) && (Number(s.cidr) || 0) <= 28)
+  const cells = [...all].sort((a, b) => (Number(b.util) || 0) - (Number(a.util) || 0)).slice(0, CAP)
+  const cols = 24
+  const rows = Math.max(1, Math.ceil(cells.length / cols))
+  const gap = 0.6
+  const cw = 100 / cols
+  const ch = 100 / rows
+
+  return (
+    <Card span={2} title="Subnet Heatmap" right={<span className="text-[11px] text-muted">{all.length > CAP ? `worst ${CAP} of ${all.length.toLocaleString()}` : 'util by subnet'}</span>}>
+      {cells.length === 0 ? (
+        <Empty />
+      ) : (
+        <>
+          <svg width="100%" height="110" viewBox="0 0 100 100" preserveAspectRatio="none">
+            {cells.map((s, i) => {
+              const util = Number(s.util) || 0
+              const r = Math.floor(i / cols)
+              const c = i % cols
+              const color = util >= 92 ? COLORS.crit : util >= 75 ? COLORS.warn : COLORS.accent
+              const opacity = Math.max(0.15, Math.min(1, util / 100))
+              return (
+                <rect
+                  key={s.addr || s.cidr || i}
+                  x={c * cw + gap / 2}
+                  y={r * ch + gap / 2}
+                  width={cw - gap}
+                  height={ch - gap}
+                  rx={0.8}
+                  fill={color}
+                  opacity={opacity}
+                >
+                  <title>{`${s.addr || s.cidr} — ${util}%`}</title>
+                </rect>
+              )
+            })}
+          </svg>
+          <div className="flex gap-3.5 mt-2 text-[11px] text-muted">
+            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />ok</span>
+            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.warn }} />&gt;75%</span>
+            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.crit }} />&gt;92%</span>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
+// ---------- host status ----------
+
+function HostStatus({ hosts }) {
+  const buckets = { Active: 0, Degraded: 0, Offline: 0, Other: 0 }
+  for (const h of hosts) {
+    const s = h.status || ''
+    if (/online|up|active/i.test(s)) buckets.Active++
+    else if (/degraded|warn/i.test(s)) buckets.Degraded++
+    else if (/off|down|error|fail/i.test(s)) buckets.Offline++
+    else buckets.Other++
+  }
+  const colorMap = { Active: COLORS.accent, Degraded: COLORS.warn, Offline: COLORS.crit, Other: COLORS.other }
+  const total = hosts.length
+  const pieData = Object.entries(buckets)
+    .filter(([, v]) => v > 0)
+    .map(([name, value]) => ({ name, value, color: colorMap[name] }))
+
+  return (
+    <Card span={2} title="Host Status">
+      {total === 0 ? (
+        <Empty />
+      ) : (
+        <div className="flex items-center gap-4">
+          <div className="relative w-[130px] h-[130px] shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={pieData} dataKey="value" innerRadius={44} outerRadius={62} startAngle={90} endAngle={-270} stroke="none" isAnimationActive={false}>
+                  {pieData.map((d) => (
+                    <Cell key={d.name} fill={d.color} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 12 }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-lg font-semibold">{total.toLocaleString()}</span>
+              <span className="text-dim text-[11px]">hosts</span>
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col gap-2">
+            {pieData.map((d) => (
+              <div key={d.name} className="flex items-center gap-1.5 text-xs">
+                <i className="w-2 h-2 rounded-sm inline-block" style={{ background: d.color }} />
+                <span className="text-muted flex-1">{d.name}</span>
+                <b>{((d.value / total) * 100).toFixed(0)}%</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ---------- table ----------
+
+function SubnetTable({ subnets }) {
+  const [filter, setFilter] = useState('')
+  const [site, setSite] = useState('')
+  const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
+
+  const sites = useMemo(() => [...new Set(subnets.map((s) => s.site).filter(Boolean))].sort(), [subnets])
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    return subnets.filter((s) => {
+      // /29-/32 infra links are always ~100% — they bury real exhaustion (old app: 67db14e)
+      if ((Number(s.cidr) || 0) > 28) return false
+      if (site && s.site !== site) return false
+      if (!q) return true
+      return [s.addr, s.cidr, s.site, s.name].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+    })
+  }, [subnets, filter, site])
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered]
+    const { key, dir } = sort
+    arr.sort((a, b) => {
+      let av, bv
+      if (key === 'network') { av = a.addr || a.cidr || ''; bv = b.addr || b.cidr || '' }
+      else if (key === 'site') { av = a.site || ''; bv = b.site || '' }
+      else if (key === 'free') { av = (Number(a.total) || 0) - (Number(a.used) || 0); bv = (Number(b.total) || 0) - (Number(b.used) || 0) }
+      else if (key === 'util') { av = Number(a.util) || 0; bv = Number(b.util) || 0 }
+      else { av = Number(a.util) || 0; bv = Number(b.util) || 0 }
+      if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      return dir === 'asc' ? av - bv : bv - av
+    })
+    return arr
+  }, [filtered, sort])
+
+  const top15 = sorted.slice(0, 15)
+
+  function toggleSort(key) {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
+  }
+
+  function exportCsv() {
+    const header = ['Network', 'Site', 'Utilization', 'Status', 'Free']
+    const lines = [header.join(',')]
+    for (const s of sorted) {
+      const util = Number(s.util) || 0
+      const free = (Number(s.total) || 0) - (Number(s.used) || 0)
+      const status = utilStatus(util).label
+      const network = s.addr || s.cidr || ''
+      lines.push([network, s.site || '', `${util}%`, status, free].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'top-subnets.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const headers = [
+    { key: 'network', label: 'Network' },
+    { key: 'site', label: 'Site' },
+    { key: 'util', label: 'Utilization' },
+    { key: 'status', label: 'Status', noSort: true },
+    { key: 'free', label: 'Free' },
+  ]
+
+  return (
+    <Card
+      span={6}
+      title="Top Subnets by Utilization"
+      note="excl. /29–/32 infra links"
+      right={
+        <div className="flex items-center gap-2">
+          <input
+            placeholder="Filter…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+          />
+          <select
+            value={site}
+            onChange={(e) => setSite(e.target.value)}
+            className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+          >
+            <option value="">All sites</option>
+            {sites.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <button onClick={exportCsv} className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm">
+            Export CSV
+          </button>
+        </div>
+      }
+    >
+      {subnets.length === 0 ? (
+        <Empty />
+      ) : top15.length === 0 ? (
+        <Empty>no subnets match</Empty>
+      ) : (
+        <table className="w-full border-collapse mt-2.5 text-sm">
+          <thead>
+            <tr>
+              {headers.map((h) => (
+                <th
+                  key={h.key}
+                  onClick={() => !h.noSort && toggleSort(h.key)}
+                  className={`text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 ${h.noSort ? '' : 'cursor-pointer select-none'}`}
+                >
+                  {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {top15.map((s, i) => {
+              const util = Number(s.util) || 0
+              const free = (Number(s.total) || 0) - (Number(s.used) || 0)
+              const status = utilStatus(util)
+              const network = s.addr || s.cidr || '—'
+              return (
+                <tr key={network + i}>
+                  <td className="py-2.5 px-2.5 border-b border-line font-mono">{network}</td>
+                  <td className="py-2.5 px-2.5 border-b border-line">{s.site || '—'}</td>
+                  <td className="py-2.5 px-2.5 border-b border-line" style={{ width: '26%' }}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-[5px] rounded-full bg-line overflow-hidden flex-1 min-w-[70px]">
+                        <div className="h-full" style={{ width: `${Math.min(100, util)}%`, background: status.color }} />
+                      </div>
+                      <span className="text-muted w-9 text-right">{util}%</span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-2.5 border-b border-line">
+                    <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: status.bg, color: status.fg }}>
+                      {status.label}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-2.5 border-b border-line text-muted">{free.toLocaleString()} free</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+    </Card>
+  )
+}
