@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react'
 import { COLORS, Card, Empty, Skeleton } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 
-const inputCls = 'px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none w-full'
+const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
 
 function itemStatus(d) {
   const m = String(d?.message || '')
-  if (/is not in the template/.test(m)) return { label: 'extra', color: COLORS.crit, bg: '#2a1215', fg: '#ff7b7b' }
-  if (/live value is/.test(m)) return { label: 'changed', color: COLORS.warn, bg: '#2a2210', fg: '#f5c76b' }
-  return { label: 'missing', color: COLORS.crit, bg: '#2a1215', fg: '#ff7b7b' }
+  if (/is not in the template/.test(m)) return { label: 'extra', color: COLORS.crit, bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' }
+  if (/live value is/.test(m)) return { label: 'changed', color: COLORS.warn, bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)' }
+  return { label: 'missing', color: COLORS.crit, bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' }
 }
 
 export default function Drift() {
@@ -129,8 +129,8 @@ export default function Drift() {
                     className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium"
                     style={
                       result.drifted
-                        ? { background: '#2a1215', color: '#ff7b7b' }
-                        : { background: '#0d2136', color: '#6bb2ff' }
+                        ? { background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }
+                        : { background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)' }
                     }
                   >
                     {result.drifted ? `✕ ${result.drifts?.length || 0} items` : '✓ in-sync'}

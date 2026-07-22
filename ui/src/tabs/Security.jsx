@@ -1,13 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
-import { COLORS, TT, Card, Empty, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, Empty, Skeleton } from '../components/ui.jsx'
+import { useThemeColors } from '../lib/theme.jsx'
 
-const SEV_COLOR = { critical: COLORS.crit, high: '#ff7b7b', medium: COLORS.warn, low: COLORS.accent }
 const SEV_ORDER = ['critical', 'high', 'medium', 'low']
+
+function sevColorMap(COLORS) {
+  return { critical: COLORS.crit, high: COLORS.sevHigh, medium: COLORS.warn, low: COLORS.accent }
+}
 
 function ackKey(e) {
   return `${e.event_time}|${e.qname}`
@@ -44,6 +48,9 @@ export default function Security() {
 // ---------- severity hero ----------
 
 function SeverityHero({ hub, events }) {
+  const { COLORS, TT } = useChartTheme()
+  const { grid, tick } = useThemeColors()
+  const SEV_COLOR = sevColorMap(COLORS)
   const counts = hub.data?.counts ?? {}
   const hourly = useMemo(() => {
     const buckets = new Array(24).fill(0)
@@ -81,8 +88,8 @@ function SeverityHero({ hub, events }) {
           ) : (
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={hourly} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#222" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="hour" tick={{ fill: '#777', fontSize: 10 }} axisLine={{ stroke: '#222' }} tickLine={false} minTickGap={30} />
+                <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="hour" tick={{ fill: tick, fontSize: 10 }} axisLine={{ stroke: grid }} tickLine={false} minTickGap={30} />
                 <YAxis hide />
                 <Tooltip {...TT} />
                 <Bar dataKey="value" radius={[3, 3, 0, 0]} fill={COLORS.accent} isAnimationActive={false} />
@@ -98,6 +105,7 @@ function SeverityHero({ hub, events }) {
 // ---------- kpi stack ----------
 
 function KpiStack({ hub, events, acks }) {
+  const { COLORS } = useChartTheme()
   const d = hub.data ?? {}
   const unackedCrit = events.filter((e) => !acks[ackKey(e)] && String(e.severity).toLowerCase() === 'critical').length
 
@@ -127,8 +135,13 @@ function KpiStack({ hub, events, acks }) {
 // ---------- block action ----------
 
 function BlockCell({ domain }) {
+  const { COLORS } = useChartTheme()
   const [state, setState] = useState('idle') // idle | busy | blocked | tokenRequired | error
   const [msg, setMsg] = useState('')
+  const aliveRef = useRef(true)
+  useEffect(() => {
+    return () => { aliveRef.current = false }
+  }, [])
 
   async function run(action) {
     if (!domain) return
@@ -137,6 +150,7 @@ function BlockCell({ domain }) {
       method: 'POST',
       body: JSON.stringify({ domain }),
     })
+    if (!aliveRef.current) return
     if (res.ok) {
       setState(action === 'block' ? 'blocked' : 'idle')
     } else if (res.tokenRequired) {
@@ -153,20 +167,22 @@ function BlockCell({ domain }) {
     return (
       <div className="flex items-center gap-1.5">
         <span className="text-[11px]" style={{ color: COLORS.ok }}>blocked ✓</span>
-        <button onClick={() => run('unblock')} className="px-1.5 py-0.5 rounded text-[10.5px] border border-[#2a2a2a] text-muted">Unblock</button>
+        <button onClick={() => run('unblock')} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted">Unblock</button>
       </div>
     )
   }
-  if (state === 'tokenRequired') return <span className="text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⚙ Accounts</span>
+  if (state === 'tokenRequired') return <span className="text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⚙ Settings</span>
   if (state === 'error') return <span className="text-[11px]" style={{ color: COLORS.crit }}>{msg}</span>
   return (
-    <button onClick={() => run('block')} className="px-1.5 py-0.5 rounded text-[10.5px] border border-[#2a2a2a] text-muted hover:text-[#ddd]">Block</button>
+    <button onClick={() => run('block')} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted hover:text-field-txt">Block</button>
   )
 }
 
 // ---------- triage inbox ----------
 
 function TriageInbox({ hub, events, acks, setAcks }) {
+  const { COLORS } = useChartTheme()
+  const SEV_COLOR = sevColorMap(COLORS)
   const [sevFilter, setSevFilter] = useState('all')
   const [sort, setSort] = useState({ key: 'severity', dir: 'asc' })
 
@@ -220,8 +236,8 @@ function TriageInbox({ hub, events, acks, setAcks }) {
               onClick={() => setSevFilter(s)}
               className="px-2 py-1 rounded-md text-[11px] capitalize border"
               style={{
-                borderColor: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : '#2a2a2a',
-                color: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : '#8a8a8a',
+                borderColor: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-border)',
+                color: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : COLORS.other,
               }}
             >
               {s}
@@ -278,6 +294,7 @@ function TriageInbox({ hub, events, acks, setAcks }) {
 // ---------- lookalike domains ----------
 
 function LookalikeTable({ lookalikes }) {
+  const { COLORS } = useChartTheme()
   const d = lookalikes.data ?? {}
   const rows = Array.isArray(d.domains) ? d.domains : []
 
@@ -312,6 +329,8 @@ function LookalikeTable({ lookalikes }) {
 // ---------- CTEM exposure ----------
 
 function CtemPanel({ ctem }) {
+  const { COLORS } = useChartTheme()
+  const SEV_COLOR = sevColorMap(COLORS)
   const d = ctem.data?.data ?? null
   const matrix = Array.isArray(d?.matrix) ? d.matrix : []
   const empty = !d || (!d.total_exposures && matrix.length === 0)
@@ -348,6 +367,8 @@ function CtemPanel({ ctem }) {
 // ---------- threat feed activity ----------
 
 function ThreatFeed({ threats }) {
+  const { COLORS, TT } = useChartTheme()
+  const { grid, tick } = useThemeColors()
   const rows = threats.data?.rows ?? []
   const status = threats.data?.status
   const chartData = rows.map((r) => ({ day: r.day, requests: Number(r.requests) || 0, action: String(r.action || '').toLowerCase() }))
@@ -369,7 +390,7 @@ function ThreatFeed({ threats }) {
           </div>
           <ResponsiveContainer width="100%" height={150}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <XAxis dataKey="day" tick={{ fill: '#777', fontSize: 10 }} axisLine={{ stroke: '#222' }} tickLine={false} minTickGap={30} />
+              <XAxis dataKey="day" tick={{ fill: tick, fontSize: 10 }} axisLine={{ stroke: grid }} tickLine={false} minTickGap={30} />
               <YAxis hide />
               <Tooltip {...TT} />
               <Bar dataKey="requests" radius={[3, 3, 0, 0]} isAnimationActive={false}>

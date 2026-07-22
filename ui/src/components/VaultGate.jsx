@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 // vpost — POST JSON, always resolves {ok,data}.
 const vpost = (url, body) =>
@@ -7,11 +7,11 @@ const vpost = (url, body) =>
     .catch(() => ({ ok: false, data: { error: 'network error' } }))
 
 const inCls =
-  'w-full px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none focus:border-accent'
+  'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none focus:border-accent'
 const btnCls =
   'w-full mt-4 px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm font-medium disabled:opacity-50'
 const cancelCls =
-  'w-full mt-2 px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] text-[#ddd] text-sm bg-transparent disabled:opacity-50'
+  'w-full mt-2 px-2.5 py-1.5 rounded-lg border border-border text-field-txt text-sm bg-transparent disabled:opacity-50'
 
 function Screen({ children }) {
   return (
@@ -40,7 +40,7 @@ function Setup({ onDone }) {
 
   return (
     <Screen>
-      <div className="text-sm font-semibold mb-5">◆ Bloxsmith</div>
+      <div className="text-sm font-semibold mb-5">Bloxsmith</div>
       <h1 className="text-base font-semibold mb-2">Create your vault</h1>
       <p className="text-xs leading-relaxed text-muted mb-4">
         Set a passphrase to encrypt your Infoblox tenant keys at rest. It is never stored — you re-enter it after a
@@ -83,7 +83,7 @@ function Unlock({ onDone }) {
 
   return (
     <Screen>
-      <div className="text-sm font-semibold mb-5">◆ Bloxsmith</div>
+      <div className="text-sm font-semibold mb-5">Bloxsmith</div>
       <h1 className="text-base font-semibold mb-2">Unlock vault</h1>
       <p className="text-xs leading-relaxed text-muted mb-4">Enter your passphrase to decrypt your saved tenant keys.</p>
       <label className="block text-[11px] text-dim mb-1" htmlFor="vu-pass">Passphrase</label>
@@ -125,7 +125,7 @@ function Unlock({ onDone }) {
             >
               Reset vault
             </button>
-            <button className="px-2.5 py-1 rounded-lg border border-[#2a2a2a] text-[#ddd] text-xs" autoFocus onClick={() => setConfirmReset(false)}>
+            <button className="px-2.5 py-1 rounded-lg border border-border text-field-txt text-xs" autoFocus onClick={() => setConfirmReset(false)}>
               Cancel
             </button>
           </div>
@@ -162,7 +162,7 @@ function FirstTenant({ onDone }) {
 
   return (
     <Screen>
-      <div className="text-sm font-semibold mb-5">◆ Bloxsmith</div>
+      <div className="text-sm font-semibold mb-5">Bloxsmith</div>
       <h1 className="text-base font-semibold mb-2">Add your first connection</h1>
       <p className="text-xs leading-relaxed text-muted mb-4">
         Paste an Infoblox API key. The key is encrypted in your vault, and the connection is named automatically from
@@ -214,16 +214,19 @@ function FirstTenant({ onDone }) {
 
 export default function VaultGate({ children }) {
   const [st, setSt] = useState(null)
+  const alive = useRef(true)
 
   const refresh = useCallback(() => {
     fetch('/api/vault/status', { cache: 'no-store' })
       .then((r) => r.json())
-      .then(setSt)
-      .catch(() => setSt({ vaultMode: false }))
+      .then((d) => { if (alive.current) setSt(d) })
+      .catch(() => { if (alive.current) setSt({ vaultMode: false }) })
   }, [])
 
   useEffect(() => {
+    alive.current = true
     refresh()
+    return () => { alive.current = false }
   }, [refresh])
 
   useEffect(() => {
@@ -235,8 +238,8 @@ export default function VaultGate({ children }) {
   if (!st) {
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-bg">
-        <div className="w-7 h-7 rounded-full border-2 border-[#2a2a2a] border-t-accent animate-spin" />
-        <div className="text-sm font-semibold">◆ Bloxsmith</div>
+        <div className="w-7 h-7 rounded-full border-2 border-border border-t-accent animate-spin" />
+        <div className="text-sm font-semibold">Bloxsmith</div>
       </div>
     )
   }

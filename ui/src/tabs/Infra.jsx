@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Cell, PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { COLORS, TT, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useThemeColors } from '../lib/theme.jsx'
 
 // ---------- main ----------
 
@@ -13,6 +14,7 @@ export default function Infra() {
   const dfp = useApi('/api/csp/dfp', { poll: 30000 })
   const maint = useApi('/api/csp/maintenance', { poll: 60000 })
 
+  const theme = useThemeColors()
   const hosts = data.data?.hosts ?? []
   const maintEnabled = maint.data?.enabled
   const maintOk = maint.data?.status !== 'error' && !maint.error && maintEnabled != null
@@ -25,8 +27,8 @@ export default function Infra() {
           <span
             className="text-[11px] font-medium px-2 py-0.5 rounded-full"
             style={{
-              background: maintEnabled ? '#2a2210' : '#0d2136',
-              color: maintEnabled ? '#f5c76b' : '#6bb2ff',
+              background: maintEnabled ? theme.pillWarnBg : theme.pillOkBg,
+              color: maintEnabled ? theme.pillWarnFg : theme.pillOkFg,
             }}
           >
             {maintEnabled ? 'Maintenance ON' : 'Operational'}
@@ -88,6 +90,7 @@ export default function Infra() {
 // ---------- host status ----------
 
 function HostStatus({ hosts }) {
+  const { COLORS, TT } = useChartTheme()
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Other: 0 }
   for (const h of hosts) {
     const s = h.status || ''
@@ -146,10 +149,11 @@ function statusBadgeColor(v) {
   if (/online|up|active|success|complete/.test(s)) return utilStatus(0)
   if (/degraded|warn|pending|running/.test(s)) return utilStatus(80)
   if (/off|down|error|fail/.test(s)) return utilStatus(95)
-  return { bg: '#1a1a1a', fg: '#8a8a8a' }
+  return null
 }
 
 function FeedCard({ span, title, note, feed, columns }) {
+  const theme = useThemeColors()
   const rows = feed.data?.rows ?? []
   const bad = feed.error || feed.data?.status === 'error'
 
@@ -179,7 +183,7 @@ function FeedCard({ span, title, note, feed, columns }) {
                   {columns.map((c) => {
                     const v = r[c.key]
                     if (c.badge) {
-                      const st = statusBadgeColor(v)
+                      const st = statusBadgeColor(v) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
                       return (
                         <td key={c.key} className="py-2 px-2.5 border-b border-line">
                           <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: st.bg, color: st.fg }}>
@@ -207,6 +211,7 @@ function FeedCard({ span, title, note, feed, columns }) {
 // ---------- host inventory table ----------
 
 function HostTable({ hosts }) {
+  const theme = useThemeColors()
   const [filter, setFilter] = useState('')
   const [type, setType] = useState('')
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
@@ -257,12 +262,12 @@ function HostTable({ hosts }) {
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           />
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           >
             <option value="">All types</option>
             {types.map((t) => (
@@ -293,7 +298,7 @@ function HostTable({ hosts }) {
           </thead>
           <tbody>
             {top50.map((h, i) => {
-              const st = statusBadgeColor(h.status)
+              const st = statusBadgeColor(h.status) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
               return (
                 <tr key={h.name + i}>
                   <td className="py-2.5 px-2.5 border-b border-line">{h.name || '—'}</td>

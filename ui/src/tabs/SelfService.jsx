@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { COLORS, Card, Empty } from '../components/ui.jsx'
 
-const inputCls = 'px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none'
+const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none'
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
 
 function Field({ label, children }) {
@@ -20,8 +20,8 @@ function Result({ result, error }) {
     <pre
       className="mt-3 p-3 rounded-lg text-xs overflow-auto max-h-[220px] whitespace-pre-wrap"
       style={{
-        background: error ? '#2a1215' : '#0d2136',
-        color: error ? '#ff7b7b' : '#6bb2ff',
+        background: error ? 'var(--pill-crit-bg)' : 'var(--pill-ok-bg)',
+        color: error ? 'var(--pill-crit-fg)' : 'var(--pill-ok-fg)',
         border: `1px solid ${error ? COLORS.crit : COLORS.accent}`,
       }}
     >

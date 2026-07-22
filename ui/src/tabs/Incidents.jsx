@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { COLORS, Card, Empty, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, Empty, Skeleton } from '../components/ui.jsx'
 
 // ---------- severity vocab ----------
 // Signals carry crit/warn/ok (this app) or critical/high/medium/low (upstream) —
 // normalize both into one palette so chips, KPIs, and the table agree.
-function sevMeta(s) {
+function sevMeta(s, COLORS) {
   const v = String(s || '').toLowerCase()
   if (v === 'crit' || v === 'critical') return { key: 'critical', label: 'Critical', color: COLORS.crit }
-  if (v === 'high') return { key: 'high', label: 'High', color: '#ff7b7b' }
+  if (v === 'high') return { key: 'high', label: 'High', color: COLORS.sevHigh }
   if (v === 'warn' || v === 'medium') return { key: 'medium', label: 'Medium', color: COLORS.warn }
   if (v === 'low' || v === 'ok') return { key: 'low', label: 'Low', color: COLORS.accent }
   return { key: 'unknown', label: v || 'Unknown', color: COLORS.other }
@@ -33,7 +33,8 @@ function ageLabel(epoch) {
 }
 
 function SeverityPill({ severity }) {
-  const m = sevMeta(severity)
+  const { COLORS } = useChartTheme()
+  const m = sevMeta(severity, COLORS)
   return (
     <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: `${m.color}22`, color: m.color }}>
       {m.label}
@@ -96,6 +97,7 @@ export default function Incidents() {
 // ---------- category chips ----------
 
 function CategoryChips({ categories, loading, category, onCategory }) {
+  const { COLORS } = useChartTheme()
   return (
     <Card span={6} title="Categories" note="click to filter Triage">
       {loading ? (
@@ -106,16 +108,16 @@ function CategoryChips({ categories, loading, category, onCategory }) {
         <div className="flex flex-wrap gap-2">
           {categories.map((c) => {
             const on = category === c.category
-            const m = sevMeta(c.severity)
+            const m = sevMeta(c.severity, COLORS)
             return (
               <button
                 key={c.category}
                 onClick={() => onCategory(on ? '' : c.category)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs"
-                style={{ borderColor: on ? m.color : '#2a2a2a', background: on ? `${m.color}1a` : '#141414' }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs border-border bg-field"
+                style={{ borderColor: on ? m.color : undefined, background: on ? `${m.color}1a` : undefined }}
               >
                 <i className="w-2 h-2 rounded-sm inline-block" style={{ background: m.color }} />
-                <span className="font-mono text-[#ddd]">{(Number(c.count) || 0).toLocaleString()}</span>
+                <span className="font-mono text-field-txt">{(Number(c.count) || 0).toLocaleString()}</span>
                 <span className="text-muted">{c.category}</span>
               </button>
             )
@@ -129,14 +131,15 @@ function CategoryChips({ categories, loading, category, onCategory }) {
 // ---------- severity kpi row ----------
 
 function SeverityKpis({ signals, loading }) {
+  const { COLORS } = useChartTheme()
   const counts = { critical: 0, high: 0, medium: 0, low: 0 }
   for (const s of signals) {
-    const m = sevMeta(s.severity)
+    const m = sevMeta(s.severity, COLORS)
     if (counts[m.key] != null) counts[m.key]++
   }
   const cells = [
     { label: 'Critical', value: counts.critical, color: COLORS.crit },
-    { label: 'High', value: counts.high, color: '#ff7b7b' },
+    { label: 'High', value: counts.high, color: COLORS.sevHigh },
     { label: 'Medium', value: counts.medium, color: COLORS.warn },
     { label: 'Low', value: counts.low, color: COLORS.accent },
   ]
@@ -162,6 +165,7 @@ function SeverityKpis({ signals, loading }) {
 // ---------- incidents table ----------
 
 function IncidentsTable({ signals, loading, error, category, onCategory, acks, onToggleAck, onClearAcks }) {
+  const { COLORS } = useChartTheme()
   const [filter, setFilter] = useState('')
   const [sort, setSort] = useState({ key: 'detected_at', dir: 'desc' })
 
@@ -181,7 +185,7 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
       let av, bv
       if (key === 'category') { av = a.category || ''; bv = b.category || '' }
       else if (key === 'entity_id') { av = a.entity_id || ''; bv = b.entity_id || '' }
-      else if (key === 'severity') { av = sevMeta(a.severity).key; bv = sevMeta(b.severity).key }
+      else if (key === 'severity') { av = sevMeta(a.severity, COLORS).key; bv = sevMeta(b.severity, COLORS).key }
       else { av = Number(a.detected_at) || 0; bv = Number(b.detected_at) || 0 }
       if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
       return dir === 'asc' ? av - bv : bv - av
@@ -213,14 +217,14 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-[150px] px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+            className="w-[150px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           />
           {category && (
-            <button onClick={() => onCategory('')} className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm">
+            <button onClick={() => onCategory('')} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
               Clear filter
             </button>
           )}
-          <button onClick={onClearAcks} className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm">
+          <button onClick={onClearAcks} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
             Clear acks
           </button>
         </div>

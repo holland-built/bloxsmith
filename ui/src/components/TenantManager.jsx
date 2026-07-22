@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTheme } from '../lib/theme.jsx'
 
 const vpost = (url, body) =>
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -6,11 +7,15 @@ const vpost = (url, body) =>
     .catch(() => ({ ok: false, data: { error: 'network error' } }))
 
 const inCls =
-  'w-full px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none focus:border-accent'
-const rowBtn = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm text-[#ddd] hover:bg-line'
-const miniBtn = 'px-2 py-1 rounded-lg border border-[#2a2a2a] text-[11px] text-muted hover:text-txt hover:border-[#3a3a3a]'
+  'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none focus:border-accent'
+const rowBtn = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm text-field-txt hover:bg-line'
+const miniBtn = 'px-2 py-1 rounded-lg border border-border text-[11px] text-muted hover:text-txt hover:border-border-hover'
+
+const modeBtn = (on) =>
+  `flex-1 px-2.5 py-1.5 rounded-lg border text-sm ${on ? 'border-accent text-accent' : 'border-border text-muted'}`
 
 export default function TenantManager({ onClose }) {
+  const { mode, setMode } = useTheme()
   const [status, setStatus] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [dashToken, setDashToken] = useState(() => localStorage.getItem('dashToken') || '')
@@ -121,10 +126,21 @@ export default function TenantManager({ onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">
-          <h2 className="text-sm font-semibold">Accounts &amp; vault</h2>
+          <h2 className="text-sm font-semibold">Settings</h2>
           <span className="flex-1" />
           <button className="text-muted text-sm" onClick={onClose} aria-label="Close">✕</button>
         </div>
+
+        {!add.open && !edit && (
+          <>
+            <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Appearance</div>
+            <div className="flex gap-2 mb-4">
+              <button className={modeBtn(mode === 'dark')} onClick={() => setMode('dark')}>Dark</button>
+              <button className={modeBtn(mode === 'light')} onClick={() => setMode('light')}>Light</button>
+              <button className={modeBtn(mode === 'system')} onClick={() => setMode('system')}>System</button>
+            </div>
+          </>
+        )}
 
         {add.open ? (
           <div>
@@ -157,8 +173,8 @@ export default function TenantManager({ onClose }) {
               <button className="flex-1 px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm disabled:opacity-50" onClick={submitAdd} disabled={add.busy || !add.key}>
                 {add.busy ? 'Adding…' : 'Add'}
               </button>
-              <button className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] text-sm text-[#ddd]" onClick={testAddKey} disabled={!add.key}>Test</button>
-              <button className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] text-sm text-[#ddd]" onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
+              <button className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt" onClick={testAddKey} disabled={!add.key}>Test</button>
+              <button className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt" onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
             </div>
           </div>
         ) : edit ? (
@@ -182,8 +198,8 @@ export default function TenantManager({ onClose }) {
               <button className="flex-1 px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm disabled:opacity-50" onClick={submitEdit} disabled={edit.busy || !edit.key}>
                 {edit.busy ? 'Replacing…' : 'Replace key'}
               </button>
-              <button className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] text-sm text-[#ddd]" onClick={testEditKey} disabled={!edit.key}>Test</button>
-              <button className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] text-sm text-[#ddd]" onClick={() => setEdit(null)}>Cancel</button>
+              <button className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt" onClick={testEditKey} disabled={!edit.key}>Test</button>
+              <button className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt" onClick={() => setEdit(null)}>Cancel</button>
             </div>
           </div>
         ) : (
@@ -196,7 +212,7 @@ export default function TenantManager({ onClose }) {
                     <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-crit/10 border border-crit/40">
                       <span className="flex-1 text-[11px] text-crit">Remove {t.label}?</span>
                       <button className="px-2 py-0.5 rounded border border-crit text-crit text-[11px]" onClick={() => remove(t.id)}>✓</button>
-                      <button className="px-2 py-0.5 rounded border border-[#2a2a2a] text-[11px] text-[#ddd]" onClick={() => setConfirmRm(null)}>✕</button>
+                      <button className="px-2 py-0.5 rounded border border-border text-[11px] text-field-txt" onClick={() => setConfirmRm(null)}>✕</button>
                     </div>
                   ) : (
                     <>
@@ -212,7 +228,7 @@ export default function TenantManager({ onClose }) {
               ))}
               {tenants.length === 0 && <div className="text-[11px] text-dim px-1">No tenants saved.</div>}
             </div>
-            <button className="w-full px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] text-sm text-[#ddd] hover:border-[#3a3a3a] mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
+            <button className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
               + Add connection
             </button>
 
@@ -241,7 +257,7 @@ export default function TenantManager({ onClose }) {
               placeholder="X-Auth-Token for lock/admin actions"
             />
 
-            <button className="w-full px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] text-sm text-[#ddd] hover:border-crit hover:text-crit disabled:opacity-50" onClick={lockNow} disabled={locking}>
+            <button className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-crit hover:text-crit disabled:opacity-50" onClick={lockNow} disabled={locking}>
               {locking ? 'Locking…' : 'Lock vault now'}
             </button>
           </>

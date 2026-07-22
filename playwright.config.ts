@@ -1,5 +1,4 @@
 import { defineConfig, devices } from '@playwright/test';
-import path from 'node:path';
 
 // Default target is the disposable e2e harness (scripts/e2e.sh), which builds
 // and runs the CURRENT working tree on its own container/port — never the live
@@ -21,12 +20,6 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: process.env.NOC_BASE || DEFAULT_BASE_URL,
-    // Pre-seeds bx.tourSeen/bx.wizardSeen so the first-run wizard and feature
-    // tour don't overlay every spec and eat clicks on a freshly-onboarded
-    // instance. Origin inside the file is fixed to the harness's default port
-    // (8090); it silently no-ops (no seeding, not an error) if NOC_BASE points
-    // somewhere else, matching Playwright's normal per-origin storageState behavior.
-    storageState: path.join(__dirname, 'tests/.auth/storageState.json'),
   },
   projects: [
     {

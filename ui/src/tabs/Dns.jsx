@@ -3,7 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { COLORS, TT, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
 
 // ---------- main ----------
 
@@ -34,6 +34,7 @@ export default function Dns() {
 // ---------- hero ----------
 
 function QpsHero({ qps }) {
+  const { COLORS, TT } = useChartTheme()
   const rows = qps.data?.rows ?? []
   const chartData = rows.map((r) => {
     let label = r.hour
@@ -74,8 +75,8 @@ function QpsHero({ qps }) {
                   <stop offset="100%" stopColor={COLORS.accent} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#222" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: '#777', fontSize: 11 }} axisLine={{ stroke: '#222' }} tickLine={false} minTickGap={40} />
+              <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={40} />
               <YAxis hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
               <Tooltip {...TT} />
               <Area type="monotone" dataKey="value" stroke={COLORS.accent} strokeWidth={1.8} fill="url(#qpsFill)" isAnimationActive={false} />
@@ -90,6 +91,7 @@ function QpsHero({ qps }) {
 // ---------- zone kpis ----------
 
 function ZoneKpis({ zones }) {
+  const { COLORS } = useChartTheme()
   const issueCount = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length
   const anomalyCount = zones.filter((z) => z.anomaly).length
 
@@ -152,6 +154,7 @@ function DnsServices({ services }) {
 // ---------- query volume 7d (known-broken feed) ----------
 
 function QueryVolume7d({ analytics }) {
+  const { COLORS, TT } = useChartTheme()
   // dns-analytics is a known-broken feed — an empty/errored response must render
   // Empty/"—", never a fabricated 0 or invented volume.
   const volume = analytics.data?.volume ?? []
@@ -173,8 +176,8 @@ function QueryVolume7d({ analytics }) {
                 <stop offset="100%" stopColor={COLORS.purple} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="#222" strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: '#777', fontSize: 11 }} axisLine={{ stroke: '#222' }} tickLine={false} minTickGap={40} />
+            <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={40} />
             <YAxis hide />
             <Tooltip {...TT} />
             <Area type="monotone" dataKey="value" stroke={COLORS.purple} strokeWidth={1.8} fill="url(#volFill)" isAnimationActive={false} />
@@ -188,6 +191,7 @@ function QueryVolume7d({ analytics }) {
 // ---------- zone table ----------
 
 function ZoneTable({ zones }) {
+  const { COLORS } = useChartTheme()
   const [filter, setFilter] = useState('')
   const [sort, setSort] = useState({ key: 'fqdn', dir: 'asc' })
 
@@ -235,7 +239,7 @@ function ZoneTable({ zones }) {
           placeholder="Filter…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="w-[170px] px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+          className="w-[170px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
         />
       }
     >
@@ -271,7 +275,7 @@ function ZoneTable({ zones }) {
                     {hasIssues ? (
                       <span className="font-mono text-[11px]" style={{ color: COLORS.crit }}>{z.issues.join(', ')}</span>
                     ) : z.anomaly ? (
-                      <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: '#2a2210', color: '#f5c76b' }}>anomaly</span>
+                      <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }}>anomaly</span>
                     ) : (
                       <span className="text-dim">—</span>
                     )}
