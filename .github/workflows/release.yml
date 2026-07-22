@@ -27,9 +27,15 @@ jobs:
         with:
           node-version: '24'
 
-      # go/web/ is committed + go:embed'd; --check proves it matches src/*.jsx.
-      - name: UI bundle up to date (build_ui --check)
-        run: node scripts/build_ui.js --check
+      # go/web/ is committed + go:embed'd; prove it matches ui/ source (v3 Vite
+      # stack — the old build_ui.js/src/*.jsx pipeline is retired).
+      - name: UI dist up to date (vite build --check)
+        run: |
+          cd ui && npm ci && npm run build && cd ..
+          diff -r ui/dist go/web >/dev/null || {
+            echo "::error::go/web is stale — run: cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/"
+            exit 1
+          }
 
       - name: Set up Go
         uses: actions/setup-go@v5
