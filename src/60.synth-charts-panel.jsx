@@ -1107,7 +1107,7 @@ function useAiExplain(){
   .ovx .lchip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r-ctl);text-transform:uppercase;letter-spacing:.3px;background:var(--raised);display:inline-block;}
   .ovx .ov-mt{margin-top:8px;}
   /* DETAIL grid (v1 Bloomberg layout) — 12-col span shell for the 5 dashboard panels. */
-  .ovx-detail{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+  .ovx-detail{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start;grid-auto-flow:dense;min-width:0;}
   .ovx-detail>*{min-width:0;}
   .ovx-detail .span-3{grid-column:span 3;}
   .ovx-detail .span-4{grid-column:span 4;}
