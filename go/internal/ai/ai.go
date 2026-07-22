@@ -195,7 +195,11 @@ func (s *Service) chat(ctx context.Context, key, base, model string, messages []
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("chat/completions: http %d", resp.StatusCode)
+		// Include the provider's error body (truncated) — "http 400" alone cost a
+		// debugging session when Groq decommissioned the default model.
+		b := make([]byte, 300)
+		n, _ := resp.Body.Read(b)
+		return nil, fmt.Errorf("chat/completions: http %d: %s", resp.StatusCode, strings.TrimSpace(string(b[:n])))
 	}
 	var out chatResp
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
