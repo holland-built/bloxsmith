@@ -980,25 +980,29 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
         let hasKey=false;
         for(let i=0;i<dataRows.length;i++){ if(dataRows[i]&&(c.key in dataRows[i])){ hasKey=true; break; } }
         if(!hasKey) return true;
-        // One pass detects both EMPTY (all-blank) and CONSTANT (single-distinct). Break
-        // on the second distinct value so a populated, varied column costs ~O(1)/poll.
-        let seen=false,first,constant=true,allBlank=true;
-        for(let i=0;i<dataRows.length;i++){ const r=dataRows[i]; if(!r) continue; const v=r[c.key];
-          if(isBlank(v)) continue;
-          allBlank=false; const nv=norm(v);
-          if(!seen){ seen=true; first=nv; } else if(nv!==first){ constant=false; break; }
+        // One pass detects both EMPTY (all-blank) and CONSTANT (single value in EVERY
+        // row). A BLANK counts as its own distinct token: a column that is "active" in
+        // most rows but BLANK in a few is NOT constant — the missing-value rows are
+        // themselves the exception, so the column must stay (never skip blanks here, or
+        // [active, blank] misreads as all-active and buries the gaps). Break on the
+        // second distinct token so a populated, varied column costs ~O(1)/poll.
+        const BLANK=' b';
+        let seen=false,first,constant=true,anyVal=false;
+        for(let i=0;i<dataRows.length;i++){ const r=dataRows[i]; if(!r) continue;
+          const v=r[c.key]; const tok=isBlank(v)?BLANK:norm(v); if(tok!==BLANK) anyVal=true;
+          if(!seen){ seen=true; first=tok; } else if(tok!==first){ constant=false; break; }
         }
-        if(allBlank) return false;                                   // empty — hidden silently
-        if(constant){ dead.push({key:c.key,label,value:String(first)}); return false; } // constant — hidden + noted
-        // NEAR-EMPTY: column is BLANK in >=95% of rows (e.g. Host-health VERSION,
-        // ~99% empty) — noise + wasted width, hide it. Bounded scan of first 500 rows,
-        // only with >=20 sampled rows so a tiny table can't false-drop.
-        // IMPORTANT: we hide on high BLANK ratio, NOT on "one real value dominates 95%".
-        // A fully-populated column where one value is 99% (e.g. State 1191 active + 3
-        // expired) must STAY — the rare value is the whole signal on an exceptions
-        // dashboard; hiding it buries the exceptions. Only emptiness is safe to collapse.
+        if(!anyVal) return false;                                     // all blank — hidden silently
+        if(constant){ dead.push({key:c.key,label,value:String(first)}); return false; } // one value in every row — hidden + noted
+        // NEAR-EMPTY: column is BLANK in >=95% of rows across the FULL dataset (e.g.
+        // Host-health VERSION, ~99% empty) — noise + wasted width, hide it. Scans every
+        // row (not a 500-row sample: a column blank early but populated later must not
+        // be false-hidden); only fires with >=20 rows so a tiny table can't false-drop.
+        // Hides on high BLANK ratio ONLY, never on "one real value dominates 95%" — a
+        // fully-populated column whose rare value is the signal (State 1191 active + 3
+        // expired) must stay; hiding it would bury the exceptions.
         let blanks=0,tot=0;
-        for(let i=0;i<dataRows.length&&i<500;i++){ const r=dataRows[i]; if(!r) continue; tot++; if(isBlank(r[c.key])) blanks++; }
+        for(let i=0;i<dataRows.length;i++){ const r=dataRows[i]; if(!r) continue; tot++; if(isBlank(r[c.key])) blanks++; }
         if(tot>=20 && blanks/tot>=0.95){ dead.push({key:c.key,label,value:label+' — mostly empty'}); return false; }
         return true;
       });
@@ -1154,6 +1158,10 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
   // stops clipping). When present the table goes width:100% and the flex column's
   // header/cells go width:auto; the other columns keep their measured widths.
   const hasFlex=effCols.some(c=>c&&c.flex);
+  // Even at width:100%, keep a min-width floor from the NON-flex (fixed) columns so a
+  // narrow viewport scrolls horizontally instead of compressing the fixed columns to
+  // mush — the flex column still absorbs any width beyond that floor.
+  const flexFloor=hasFlex?effCols.reduce((a,c,i)=>a+((c&&c.flex)?0:(colWidths[i]||0)),0)+gutterW:0;
   const rowIdOf=i=>id?(id+'-r-'+i):null;
   const scrollTo=i=>{ const rid=rowIdOf(i);
     const go=()=>{ const el=rid&&document.getElementById(rid); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'}); };
@@ -1670,7 +1678,7 @@ function DataTable({cols,rows,defaultSort,onRowClick,csvName,
           --dt-actions-w) that aren't part of effCols. Wide containers never see
           this (the browser only enforces min-width once it exceeds 100%), so
           ordinary 4-6 column tables are pixel-identical to before. */}
-      <table className="dt" style={hasFlex?{width:'100%'}:{width:totalColWidth,minWidth:effCols.length*90+(selectable?28:0)+(diffMap?20:0)+28}}>
+      <table className="dt" style={hasFlex?{width:'100%',minWidth:flexFloor}:{width:totalColWidth,minWidth:effCols.length*90+(selectable?28:0)+(diffMap?20:0)+28}}>
         <thead><tr>
           {diffMap?<th className="dt-diff" aria-label="Diff status"></th>:null}
           {selectable?<th className="dt-check"><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Select all rows"/></th>:null}
