@@ -11,7 +11,9 @@ import Provision from './tabs/Provision.jsx'
 import Editor from './tabs/Editor.jsx'
 import Drift from './tabs/Drift.jsx'
 import SelfService from './tabs/SelfService.jsx'
+import Ai from './tabs/Ai.jsx'
 import Palette from './components/Palette.jsx'
+import UpdateButton from './components/UpdateButton.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Overview', el: Overview },
@@ -26,6 +28,7 @@ const TABS = [
   { id: 'selfservice', label: 'Self-Service', el: SelfService },
   { id: 'editor', label: 'Editor', el: Editor },
   { id: 'drift', label: 'Drift', el: Drift },
+  { id: 'ai', label: 'AI', el: Ai },
 ]
 
 function hashTab() {
@@ -66,6 +69,7 @@ export default function App() {
           ))}
         </nav>
         <span className="flex-1" />
+        <UpdateButton />
         <button
           onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
           className="w-[190px] text-left px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#8a8a8a] text-sm"
