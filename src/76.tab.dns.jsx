@@ -72,7 +72,9 @@ function DnsTab(){
 
   return <div className="page fadein">
     <SynthBand tone={tone} verdict={verdict} facts={facts} chips={chips}/>
-    <Panel title="DNS zones" side={<div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>{canEdit?<button className="btn" onClick={()=>nav('editor',{type:'dns_zone'})}>New zone</button>:null}<Freshness at={fetchedAt} onRetry={refetch}/></div>}>
+    <div className="dash">
+    <div className="dc24 t-lg">
+    <Panel size="lg" title="DNS zones" side={<div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>{canEdit?<button className="btn" onClick={()=>nav('editor',{type:'dns_zone'})}>New zone</button>:null}<Freshness at={fetchedAt} onRetry={refetch}/></div>}>
       <DataTable cols={zoneCols} rows={zones} defaultSort={{key:'fqdn',dir:'asc'}} csvName="zones"
         scrollBody={480} columnToggle
         problemsOnly={{label:'Problems only',test:z=>(z.issues&&z.issues.length)||z.anomaly,default:true}}
@@ -122,6 +124,8 @@ function DnsTab(){
           }];
         }}/>
     </Panel>
+    </div>
+    </div>
     {anLoading
       ? <Skeleton rows={3}/>
       : allEmpty
@@ -130,16 +134,21 @@ function DnsTab(){
           <div className="sec-h">
             <h2>DNS analytics</h2><span className="rule"/>
           </div>
-          <div className="grid-dense">
-            <Panel title="Query volume · 7d"
+          <div className="dash">
+            <div className="dc8 t-md">
+            <Panel size="md" title="Query volume · 7d"
               side={<Freshness at={an.fetchedAt} onRetry={an.refetch} error={an.error?true:undefined}/>}
               empty={volEmpty}>
               <TrendChart series={[{l:'Queries',s:volCounts,c:'var(--accent)'}]}/>
             </Panel>
-            <Panel title="Top clients" empty={clientsEmpty}>
+            </div>
+            <div className="dc8 t-md">
+            <Panel size="md" title="Top clients" empty={clientsEmpty}>
               <DataTable cols={clientCols} rows={clients} defaultSort={{key:'queries',dir:'desc'}} csvName="top-clients" scrollBody={280}/>
             </Panel>
-            <Panel title="Query types" empty={qtypesEmpty}>
+            </div>
+            <div className="dc8 t-md">
+            <Panel size="md" title="Query types" empty={qtypesEmpty}>
               <div className="sites">
                 {qtypes.slice(0,8).map((q,i)=><div key={i} className="siterow">
                   <span className="nm">{q.type}</span>
@@ -149,6 +158,7 @@ function DnsTab(){
                 {qtypes.length>8 ? <div className="exrollup">+{qtypes.length-8} more</div> : null}
               </div>
             </Panel>
+            </div>
           </div>
         </React.Fragment>}
     <DnsTilesRow/>
@@ -163,7 +173,7 @@ function DnsServicesPanel(){
     {key:'comment',label:'Comment',align:'left'},
     {key:'pool_id',label:'Pool ID',mono:true,align:'left'},
   ];
-  return <Panel title="DNS services" api={feed}>
+  return <Panel size="s6" title="DNS services" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <DataTable cols={cols} rows={rows} filterable filterKeys={['name','comment']} scrollBody={360} csvName="dns-services"/>}
@@ -180,7 +190,7 @@ function DnsQpsPanel(){
     {key:'hour',label:'Hour',align:'left'},
     {key:'avg_value',label:'Avg QPS',mono:true,align:'right',render:v=>Number(v).toLocaleString()},
   ];
-  return <Panel title="DNS QPS" api={feed}>
+  return <Panel size="s6" title="DNS QPS" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div style={{display:'flex',flexDirection:'column',gap:'var(--s3)'}}>
@@ -195,9 +205,9 @@ function DnsQpsPanel(){
 }
 
 function DnsTilesRow(){
-  return <div className="grid-dense">
-    <DnsServicesPanel/>
-    <DnsQpsPanel/>
+  return <div className="dash">
+    <div className="dc12 t-s6"><DnsServicesPanel/></div>
+    <div className="dc12 t-s6"><DnsQpsPanel/></div>
   </div>;
 }
 // ═══ END: NETDNS ═══
