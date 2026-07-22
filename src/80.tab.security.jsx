@@ -456,7 +456,7 @@ function SecInsights(){
   if(locked) return null;
   const rows=!data?[]:(Array.isArray(data)?data:(data.data||data.results||data.items||[]));
   if(!rows.length) return null;
-  return <Panel title="SOC insights" api={api}>
+  return <Panel size="s6" title="SOC insights" api={api}>
     <DataTable cols={secAutoCols(rows,'soc-insights')} rows={rows} maxRows={50} csvName="soc-insights"/>
   </Panel>;
 }
@@ -467,7 +467,7 @@ function SecActions(){
   if(locked) return null;
   const rows=!data?[]:(Array.isArray(data)?data:(data.actions||data.results||data.data||[]));
   if(!rows.length) return null;
-  return <Panel title="Actions" api={api}>
+  return <Panel size="s6" title="Actions" api={api}>
     <DataTable cols={secAutoCols(rows,'actions')} rows={rows} maxRows={50} csvName="actions"/>
   </Panel>;
 }
@@ -593,7 +593,7 @@ function ThreatRibbonPanel(){
     {key:'action',label:'Action',render:v=><Astryx.Badge variant={String(v||'').toLowerCase()==='block'?'error':'success'} label={v||'—'}/>},
     {key:'requests',label:'Requests',mono:true,align:'right'},
   ];
-  return <Panel title="Threat ribbon" api={feed}>
+  return <Panel size="s6" title="Threat ribbon" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div>
@@ -616,7 +616,7 @@ function CtemExposurePanel({feed}){
     {key:'priority',label:'Priority',mono:true},
     {key:'count',label:'Count',mono:true,align:'right'},
   ];
-  return <Panel title="CTEM exposure" api={feed}>
+  return <Panel size="s6" title="CTEM exposure" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : empty ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div>
@@ -649,7 +649,7 @@ function CtemAssetsPanel({feed}){
       </div>
     </div>;
   };
-  return <Panel title="CTEM assets" api={feed}>
+  return <Panel size="s6" title="CTEM assets" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : empty ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div>
@@ -672,7 +672,7 @@ function ExposureFindingsPanel({feed}){
     {key:'status',label:'Status'},
     {key:'last_seen_at',label:'Last seen',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
   ];
-  return <Panel title="Exposure findings" api={feed}>
+  return <Panel size="s6" title="Exposure findings" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <DataTable cols={cols} rows={rows} rowKey={(r,i)=>String(r.title)+'|'+i} tableId="sec-exposures" csvName="exposures"
@@ -690,7 +690,7 @@ function RiskiestAssetsPanel({feed}){
     {key:'status',label:'Status'},
     {key:'last_seen_at',label:'Last seen',mono:true,align:'right',render:v=><span style={{color:'var(--text-faint)'}}>{secEvtAge(v)}</span>},
   ];
-  return <Panel title="Riskiest assets" api={feed}>
+  return <Panel size="s6" title="Riskiest assets" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <DataTable cols={cols} rows={rows} rowKey={(r,i)=>String(r.domain_name)+'|'+i} tableId="sec-asset-risk" csvName="riskiest-assets"
@@ -712,7 +712,7 @@ function ExposedHostnamesPanel({feed}){
     const arr=Object.entries(freq).sort((a,b)=>b[1]-a[1]);
     return {n:arr.length,top:arr.slice(0,3)};
   })();
-  return <Panel title="Exposed hostnames" api={feed}>
+  return <Panel size="md" title="Exposed hostnames" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div>
@@ -731,7 +731,7 @@ function ExposedIPsPanel({feed}){
   const rows=(d&&Array.isArray(d.rows))?d.rows:[];
   const count=(d&&d.count)||rows.length;
   const cols=[{key:'ip',label:'IP',mono:true,primary:true,render:v=>v||'—'}];
-  return <Panel title="Exposed IPs" api={feed}>
+  return <Panel size="md" title="Exposed IPs" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <div>
@@ -775,12 +775,12 @@ function CtemBelt(){
   const ips=useApi('/api/csp/exposed-ips',{poll:300000});
   const feeds=[[exposure,'exposure'],[assets,'assets'],[exposures,'rows'],[assetRisk,'rows'],[hostnames,'rows'],[ips,'rows']];
   const cards=<React.Fragment>
-    <CtemExposurePanel feed={exposure}/>
-    <CtemAssetsPanel feed={assets}/>
-    <div className="gd-wide"><ExposureFindingsPanel feed={exposures}/></div>
-    <RiskiestAssetsPanel feed={assetRisk}/>
-    <ExposedHostnamesPanel feed={hostnames}/>
-    <ExposedIPsPanel feed={ips}/>
+    <div className="dc12 t-s6"><CtemExposurePanel feed={exposure}/></div>
+    <div className="dc8 t-s6"><CtemAssetsPanel feed={assets}/></div>
+    <div className="dc8 t-s6"><ExposureFindingsPanel feed={exposures}/></div>
+    <div className="dc8 t-s6"><RiskiestAssetsPanel feed={assetRisk}/></div>
+    <div className="dc12 t-md"><ExposedHostnamesPanel feed={hostnames}/></div>
+    <div className="dc12 t-md"><ExposedIPsPanel feed={ips}/></div>
   </React.Fragment>;
   // Locked vault: preserve prior behavior (render cards) — don't mislabel as unentitled.
   if(feeds.some(([f])=>f.locked)) return cards;
@@ -797,9 +797,9 @@ function CtemBelt(){
   // Honest wording: all six paid endpoints returned zero rows. We CAN'T prove that's an
   // absent subscription vs an entitled tenant with nothing to show, so don't assert
   // "not detected" — just report no data and name the add-on.
-  return <Panel title="CTEM / attack-surface">
+  return <div className="dc24 t-s6"><Panel size="s6" title="CTEM / attack-surface">
     <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No CTEM / attack-surface data. These panels (a paid Infoblox add-on) appear here once the subscription returns findings.</div>
-  </Panel>;
+  </Panel></div>;
 }
 function SecurityTab(){
   const sec=useApi('/api/hub/security',{poll:60000});
@@ -832,26 +832,30 @@ function SecurityTab(){
     aria-label="Reset zoom — clear the time window">Reset zoom ✕</button>;
   return <div className="page">
     <SecSynthBand api={sec} acks={acks} setSevF={setSevF} triageRef={triageRef}/>
-    <Panel title="Event volume" side={time.token?resetZoom:'brush to filter'} empty={secEvents.length===0}>
-      <VolumeHistogram rows={secEvents} tsKey="event_time" buckets={48} onRange={setRange} selected={range}
-        onZoom={onZoom} annotations={annotations} windowRange={tWin?[tWin.from,tWin.to]:null}/>
-    </Panel>
-    <Panel>
-      <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} setAcks={setAcks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef} initialPeekKey={route.params.peek} range={effRange} onExplain={ai.open}/>
-    </Panel>
-    <div className="grid-dense">
-      {/* Table-bearing cards span 2 tracks — FQDN columns are unreadable at 1-track width. */}
-      {/* alignSelf:start opts this card out of .grid-dense's align-items:stretch — it
-          otherwise inherits the row height of its tall SOC-insights row-mate, and
-          .pcard's own height:100% (shared by every panel) fills that void. */}
-      <div style={{alignSelf:'start'}}><Panel><SecThreatLookup/></Panel></div>
-      <div className="gd-wide"><Panel><SecLookalikes/></Panel></div>
-      <SecInsights/>
-      <SecActions/>
-      <div className="gd-wide"><Panel><SecDomainPanels/></Panel></div>
-    </div>
-    <div className="grid-dense">
-      <ThreatRibbonPanel/>
+    <div className="dash">
+      {/* Band 1 — event volume (brush/zoom histogram) */}
+      <div className="dc24 t-s4">
+        <Panel size="s4" title="Event volume" side={time.token?resetZoom:'brush to filter'} empty={secEvents.length===0}>
+          <VolumeHistogram rows={secEvents} tsKey="event_time" buckets={48} onRange={setRange} selected={range}
+            onZoom={onZoom} annotations={annotations} windowRange={tWin?[tWin.from,tWin.to]:null}/>
+        </Panel>
+      </div>
+      {/* Band 2 — triage inbox (peek drawer) */}
+      <div className="dc24 t-lg">
+        <Panel size="lg">
+          <SecTriageInbox api={sec} sevF={sevF} setSevF={setSevF} acks={acks} setAcks={setAcks} toggleAck={toggleAck} clearAcks={clearAcks} triageRef={triageRef} initialPeekKey={route.params.peek} range={effRange} onExplain={ai.open}/>
+        </Panel>
+      </div>
+      {/* Band 3 — threat lookup (search form) | lookalike domains */}
+      <div className="dc8 t-s6"><Panel size="s6"><SecThreatLookup/></Panel></div>
+      <div className="dc16 t-s6"><Panel size="s6"><SecLookalikes/></Panel></div>
+      {/* Band 4 — SOC insights | actions | domain protection */}
+      <div className="dc8 t-s6"><SecInsights/></div>
+      <div className="dc8 t-s6"><SecActions/></div>
+      <div className="dc8 t-s6"><Panel size="s6"><SecDomainPanels/></Panel></div>
+      {/* Band 5 — threat ribbon | CTEM exposure (from CtemBelt) */}
+      <div className="dc12 t-s6"><ThreatRibbonPanel/></div>
+      {/* Bands 5-7 — CTEM / attack-surface belt emits its own dc+tier wrappers */}
       <CtemBelt/>
     </div>
     {ai.node}
