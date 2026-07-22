@@ -902,6 +902,50 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
    so count-keyed spans would misfire; dense flow backfills holes instead. */
 .grid-2>.pcard:last-child:nth-child(odd),.ovx-detail>.pcard:last-child:nth-child(odd){grid-column:1/-1;}
 
+/* ── 24-col Grafana grid (tessellating tiers) — NEW, coexists with .grid/.ovx-detail
+   so every unconverted tab still works. `.dash` is the grid; col-spans (.dc*) go on
+   the wrapper div, tier heights (.t-*) go on the .pcard itself. Default align is
+   stretch so each panel fills its fixed row-track band (gapless). ── */
+.dash{display:grid;grid-template-columns:repeat(24,1fr);grid-auto-rows:64px;gap:8px;grid-auto-flow:dense;}
+.dash>*{min-width:0;}
+/* tier heights (row-spans) — on the GRID ITEM (the .dc* wrapper), which also carries
+   the tier class. Row-span MUST live on the grid item, not the inner .pcard, or the
+   wrapper collapses to one 64px track and the pcard overflows onto its neighbours. */
+.dash>.t-stat{grid-row:span 2;}
+.dash>.t-sm{grid-row:span 3;}
+.dash>.t-s4{grid-row:span 4;}
+.dash>.t-md{grid-row:span 5;}
+.dash>.t-s6{grid-row:span 6;}
+.dash>.t-lg{grid-row:span 8;}
+/* pcard fills its (row-span-sized) wrapper */
+.dash>[class*="dc"]{display:flex;flex-direction:column;min-height:0;}
+.dash>[class*="dc"]>.pcard{flex:1 1 auto;min-height:0;}
+/* col-spans — on the .dash child wrapper */
+.dc4{grid-column:span 4;}
+.dc6{grid-column:span 6;}
+.dc8{grid-column:span 8;}
+.dc12{grid-column:span 12;}
+.dc16{grid-column:span 16;}
+.dc24{grid-column:span 24;}
+/* A tier is a fixed-height box: its body must flex to fill and SCROLL inside the tier,
+   never spill past the fixed row-track. overflow stays VISIBLE so in-card popovers /
+   menus escape — the scroll is delegated to the table/body, not the card. */
+.pcard[class*="t-"]{overflow:hidden;}
+.pcard[class*="t-"]>*:last-child{flex:1 1 auto;min-height:0;}
+/* Non-table content (heatmap cells, lists, chart+list stacks) scrolls INSIDE the tier
+   instead of spilling past it. DataTables are excluded — they self-scroll via scrollBody
+   and their toolbar popovers must stay in flow (drop within the tall card, not clipped). */
+.pcard[class*="t-"]>*:last-child:not([data-table-id]):not(.tbl-wrap){overflow:auto;}
+/* DataTable fill: its root (data-table-id) becomes the flex column, the scroll body
+   grows to the tier and drops its inline maxHeight cap (mirrors .pcard-overlay-body). */
+.pcard[class*="t-"] [data-table-id]{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;}
+.pcard[class*="t-"] .tbl-wrap.dt-scroll{flex:1 1 auto;min-height:0;max-height:none!important;}
+@media (max-width:900px){
+  .dash{grid-template-columns:1fr;}
+  .pcard[class*="t-"]{grid-row:auto;min-height:var(--panel-sm);}
+  .dc4,.dc6,.dc8,.dc12,.dc16,.dc24{grid-column:auto;}
+}
+
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:10px;}
 .kpi{padding:12px 13px;border-radius:var(--r-panel);background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;transition:border-color .16s ease,transform .16s ease;min-width:0;}
 .kpi:hover{border-color:var(--border-strong);transform:translateY(-2px);}
