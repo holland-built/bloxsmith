@@ -73,7 +73,7 @@ export default function App() {
             className="h-5 w-5 rounded cursor-pointer"
             onClick={() => setShowBrand(true)}
           />
-          <strong className="tracking-tight">◆ Bloxsmith</strong>
+          <strong className="tracking-tight">Bloxsmith</strong>
           <nav className="flex gap-0.5">
             {TABS.map((t) => (
               <a
@@ -94,13 +94,13 @@ export default function App() {
           <UpdateButton />
           <button
             onClick={() => setShowAccounts(true)}
-            className="px-2 py-1 rounded-lg border border-[#2a2a2a] text-[#8a8a8a] text-xs hover:text-txt hover:border-[#3a3a3a]"
+            className="px-2 py-1 rounded-lg border border-border text-muted text-xs hover:text-txt hover:border-border-hover"
           >
-            ⚙ Accounts
+            ⚙ Settings
           </button>
           <button
             onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
-            className="w-[190px] text-left px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#8a8a8a] text-sm"
+            className="w-[190px] text-left px-2.5 py-1.5 rounded-lg border border-border bg-field text-muted text-sm"
           >
             Jump to…&nbsp;&nbsp;⌘K
           </button>

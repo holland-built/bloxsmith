@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react'
-import { COLORS, Card, Empty } from '../components/ui.jsx'
+import { useEffect, useRef, useState } from 'react'
+import { useChartTheme, Card, Empty } from '../components/ui.jsx'
 import { authFetch } from '../lib/authFetch.js'
 
-const inputCls = 'px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd]'
+const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt'
 
 const SUGGESTIONS = [
   'Which subnets are nearly full?',
@@ -19,30 +19,35 @@ function Message({ item }) {
   if (item.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] px-3 py-2 rounded-lg bg-[#1c1c1c] text-[#ededed] text-[13px]">{item.text}</div>
+        <div className="max-w-[80%] px-3 py-2 rounded-lg bg-line-2 text-txt text-[13px]">{item.text}</div>
       </div>
     )
   }
   if (item.error) {
     return (
       <div className="flex justify-start">
-        <div className="max-w-[85%] px-3 py-2 rounded-lg border border-[#3a1518] bg-[#2a1215] text-[#ff7b7b] text-[13px]">{item.error}</div>
+        <div
+          className="max-w-[85%] px-3 py-2 rounded-lg border text-[13px]"
+          style={{ borderColor: 'var(--color-crit)', background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}
+        >
+          {item.error}
+        </div>
       </div>
     )
   }
   return (
     <div className="flex justify-start">
-      <div className="max-w-[85%] px-3 py-2 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-[13px] whitespace-pre-wrap">
+      <div className="max-w-[85%] px-3 py-2 rounded-lg border border-border bg-field text-field-txt text-[13px] whitespace-pre-wrap">
         {item.text}
         {!!(item.suggestions && item.suggestions.length) && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {item.suggestions.map((sg, i) => (
-              <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border border-[#2a2a2a] text-muted">{sg}</span>
+              <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border border-border text-muted">{sg}</span>
             ))}
           </div>
         )}
         {!!(item.trace && item.trace.length) && (
-          <div className="mt-2 pt-2 border-t border-[#2a2a2a] font-mono text-[11px] text-muted space-y-0.5">
+          <div className="mt-2 pt-2 border-t border-border font-mono text-[11px] text-muted space-y-0.5">
             {item.trace.map((t, i) => (
               <div key={i}>
                 <span>{t.tool}</span> <span className="opacity-70">{JSON.stringify(t.args)}</span>
@@ -56,6 +61,7 @@ function Message({ item }) {
 }
 
 function ChatCard() {
+  const { COLORS } = useChartTheme()
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [items, setItems] = useState([])
@@ -120,7 +126,7 @@ function ChatCard() {
         {SUGGESTIONS.map((sg, i) => (
           <button
             key={i}
-            className="text-[11px] px-2 py-1 rounded-full border border-[#2a2a2a] text-muted hover:text-[#ddd] hover:border-[#3a3a3a]"
+            className="text-[11px] px-2 py-1 rounded-full border border-border text-muted hover:text-field-txt hover:border-border-hover"
             onClick={() => ask(sg)}
           >
             {sg}
@@ -138,8 +144,8 @@ function ChatCard() {
           disabled={busy}
         />
         <button
-          className="px-3 py-1.5 rounded-lg text-[13px] font-medium disabled:opacity-40"
-          style={{ background: COLORS.accent, color: '#fff' }}
+          className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-white disabled:opacity-40"
+          style={{ background: COLORS.accent }}
           onClick={() => submit()}
           disabled={busy || !input.trim()}
         >
@@ -170,9 +176,9 @@ function EntitiesTable({ entities }) {
             </thead>
             <tbody>
               {entities.map((row, i) => (
-                <tr key={i} className="border-t border-[#2a2a2a]">
+                <tr key={i} className="border-t border-border">
                   {cols.map((c) => (
-                    <td key={c} className="pr-3 py-1 text-[#ddd] align-top">
+                    <td key={c} className="pr-3 py-1 text-field-txt align-top">
                       {typeof row[c] === 'object' && row[c] != null ? JSON.stringify(row[c]) : String(row[c] ?? '—')}
                     </td>
                   ))}
@@ -185,15 +191,20 @@ function EntitiesTable({ entities }) {
     }
   }
   return (
-    <pre className="font-mono text-[11px] text-muted whitespace-pre-wrap p-2 rounded-lg border border-[#2a2a2a] bg-[#141414] max-h-[300px] overflow-auto">
+    <pre className="font-mono text-[11px] text-muted whitespace-pre-wrap p-2 rounded-lg border border-border bg-field max-h-[300px] overflow-auto">
       {JSON.stringify(entities, null, 2)}
     </pre>
   )
 }
 
 function BlockDomainButton({ domain }) {
+  const { COLORS } = useChartTheme()
   const [state, setState] = useState('idle') // idle | busy | blocked | tokenRequired | error
   const [msg, setMsg] = useState('')
+  const aliveRef = useRef(true)
+  useEffect(() => {
+    return () => { aliveRef.current = false }
+  }, [])
 
   const looksLikeDomain = !!domain && domain.includes('.') && !domain.includes(' ')
   if (!looksLikeDomain) return null
@@ -204,6 +215,7 @@ function BlockDomainButton({ domain }) {
       method: 'POST',
       body: JSON.stringify({ domain }),
     })
+    if (!aliveRef.current) return
     if (res.ok) {
       setState(action === 'block' ? 'blocked' : 'idle')
     } else if (res.tokenRequired) {
@@ -219,18 +231,19 @@ function BlockDomainButton({ domain }) {
     return (
       <div className="flex items-center gap-1.5 mt-2">
         <span className="text-[11px]" style={{ color: COLORS.ok }}>blocked ✓</span>
-        <button onClick={() => run('unblock')} className="px-2 py-1 rounded-lg text-[11px] border border-[#2a2a2a] text-muted">Unblock</button>
+        <button onClick={() => run('unblock')} className="px-2 py-1 rounded-lg text-[11px] border border-border text-muted">Unblock</button>
       </div>
     )
   }
-  if (state === 'tokenRequired') return <div className="mt-2 text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⚙ Accounts</div>
+  if (state === 'tokenRequired') return <div className="mt-2 text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⚙ Settings</div>
   if (state === 'error') return <div className="mt-2 text-[11px]" style={{ color: COLORS.crit }}>{msg}</div>
   return (
-    <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-lg text-[11px] border border-[#2a2a2a] text-muted hover:text-[#ddd]">Block domain</button>
+    <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-lg text-[11px] border border-border text-muted hover:text-field-txt">Block domain</button>
   )
 }
 
 function DossierPanel({ dossier }) {
+  const { COLORS } = useChartTheme()
   if (!dossier) return null
   if (dossier.unavailable) {
     return <div className="text-[11px] text-muted mt-3">External intel unavailable: {String(dossier.unavailable)}</div>
@@ -247,12 +260,12 @@ function DossierPanel({ dossier }) {
   const classes = Array.isArray(sum.threat_classes) ? sum.threat_classes : []
 
   return (
-    <div className="mt-3 pt-3 border-t border-[#2a2a2a]">
+    <div className="mt-3 pt-3 border-t border-border">
       <h3 className="text-[12px] font-semibold text-muted mb-2">External intel (Dossier)</h3>
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <span
           className="font-mono text-[11px] px-2 py-0.5 rounded-lg border"
-          style={{ color: mal ? '#ff7b7b' : COLORS.ok, borderColor: mal ? COLORS.crit : '#2a2a2a' }}
+          style={{ color: mal ? COLORS.sevHigh : COLORS.ok, borderColor: mal ? COLORS.crit : 'var(--color-border)' }}
         >
           {mal ? 'malicious' : 'clean'}
         </span>
@@ -262,7 +275,7 @@ function DossierPanel({ dossier }) {
       {!!classes.length && (
         <div className="flex gap-1 flex-wrap mb-2">
           {classes.map((c, i) => (
-            <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border border-[#2a2a2a] text-muted">{String(c)}</span>
+            <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border border-border text-muted">{String(c)}</span>
           ))}
         </div>
       )}
@@ -271,7 +284,7 @@ function DossierPanel({ dossier }) {
           {meta.map(([k, v]) => (
             <span key={k} className="contents">
               <dt className="text-muted">{k}</dt>
-              <dd className="font-mono text-[#ddd] break-all">{String(v)}</dd>
+              <dd className="font-mono text-field-txt break-all">{String(v)}</dd>
             </span>
           ))}
         </dl>
@@ -286,6 +299,7 @@ function DossierPanel({ dossier }) {
 }
 
 function LookupCard() {
+  const { COLORS } = useChartTheme()
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const [res, setRes] = useState(null)
@@ -323,15 +337,15 @@ function LookupCard() {
           onKeyDown={(e) => { if (e.key === 'Enter') lookup() }}
         />
         <button
-          className="px-3 py-1.5 rounded-lg text-[13px] font-medium disabled:opacity-40"
-          style={{ background: COLORS.accent, color: '#fff' }}
+          className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-white disabled:opacity-40"
+          style={{ background: COLORS.accent }}
           onClick={lookup}
           disabled={busy || !q.trim()}
         >
           {busy ? 'Looking up…' : 'Lookup'}
         </button>
       </div>
-      {err && <div className="text-[13px] mb-2" style={{ color: '#ff7b7b' }}>{err}</div>}
+      {err && <div className="text-[13px] mb-2" style={{ color: COLORS.sevHigh }}>{err}</div>}
       {!err && !res && !dossier && !busy && <Empty>Look up a domain, IP, or host</Empty>}
       {res && <EntitiesTable entities={res.entities} />}
       {(res || dossier) && <BlockDomainButton domain={queryUsed} />}

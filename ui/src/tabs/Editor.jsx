@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { COLORS, Card, Empty } from '../components/ui.jsx'
 
-const inputCls = 'w-full px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none'
+const inputCls = 'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none'
 
 const FIELD_SPECS = {
   dns_zone: {
@@ -210,13 +210,17 @@ export default function Editor() {
 
   // Two-click arm instead of window.confirm — blocking dialogs freeze browser automation
   const [delArmed, setDelArmed] = useState(false)
+  const delArmTimerRef = useRef(null)
+  useEffect(() => () => clearTimeout(delArmTimerRef.current), [])
   function del() {
     if (!spec || !editId.trim() || busy) return
     if (!delArmed) {
       setDelArmed(true)
-      setTimeout(() => setDelArmed(false), 4000)
+      clearTimeout(delArmTimerRef.current)
+      delArmTimerRef.current = setTimeout(() => setDelArmed(false), 4000)
       return
     }
+    clearTimeout(delArmTimerRef.current)
     setDelArmed(false)
     setBusy(true)
     setResult(null)
@@ -252,8 +256,8 @@ export default function Editor() {
             onClick={() => { setType(t.key); setEditId('') }}
             className="px-2.5 py-1.5 rounded-lg border text-sm"
             style={type === t.key
-              ? { borderColor: COLORS.accent, background: '#0d2136', color: '#6bb2ff' }
-              : { borderColor: '#2a2a2a', background: '#141414', color: '#ddd' }}
+              ? { borderColor: COLORS.accent, background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)' }
+              : { borderColor: 'var(--color-border)', background: 'var(--color-field)', color: 'var(--color-field-txt)' }}
           >
             {t.label}
           </button>
@@ -280,7 +284,7 @@ export default function Editor() {
             </label>
           ))}
 
-          <label className="flex items-center gap-2 text-sm text-[#ddd]">
+          <label className="flex items-center gap-2 text-sm text-field-txt">
             <input type="checkbox" checked={dry} onChange={(e) => { setDry(e.target.checked); setPreview(null); setPendingApply(false) }} />
             Dry-run (no changes)
           </label>
@@ -289,8 +293,8 @@ export default function Editor() {
             <div
               className="text-sm rounded-lg px-3 py-2"
               style={result.ok
-                ? { background: '#0d2f18', color: '#6bde8a', border: '1px solid #1c5c33' }
-                : { background: '#2a1215', color: '#ff7b7b', border: '1px solid #5c1c22' }}
+                ? { background: 'var(--pill-ok-bg)', color: 'var(--color-ok)', border: '1px solid var(--color-ok)' }
+                : { background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)', border: '1px solid var(--color-crit)' }}
             >
               {result.msg}
             </div>
@@ -310,7 +314,7 @@ export default function Editor() {
                 onClick={apply}
                 disabled={busy}
                 className="px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50"
-                style={{ background: COLORS.ok, color: '#0a2412' }}
+                style={{ background: COLORS.ok, color: 'var(--pill-ok-bg)' }}
               >
                 Apply
               </button>
@@ -333,7 +337,7 @@ export default function Editor() {
 
       {previewBody && (
         <Card title="Preview" note="dry run — nothing applied yet" className="mt-3">
-          <pre className="text-xs whitespace-pre-wrap max-h-[420px] overflow-auto text-[#bbb]">
+          <pre className="text-xs whitespace-pre-wrap max-h-[420px] overflow-auto text-muted">
             {JSON.stringify(previewBody, null, 2)}
           </pre>
         </Card>

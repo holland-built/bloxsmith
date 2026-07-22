@@ -67,7 +67,7 @@ function extractDomain(url) {
 }
 
 const inCls =
-  'w-full px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none focus:border-accent'
+  'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none focus:border-accent'
 
 export function BrandEdit({ onClose, onSaved }) {
   const [domain, setDomain] = useState('')
@@ -130,7 +130,7 @@ export function BrandEdit({ onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
       <div
-        className="w-[380px] max-w-full bg-[#0e0e0e] border border-[#1e1e1e] rounded-card p-5"
+        className="w-[380px] max-w-full bg-card border border-card-border rounded-card p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">
@@ -155,13 +155,13 @@ export function BrandEdit({ onClose, onSaved }) {
           <BrandLogoImg
             domain={dm}
             title="logo preview"
-            className="w-7 h-7 rounded object-contain bg-[#141414] p-0.5"
+            className="w-7 h-7 rounded object-contain bg-field p-0.5"
             onSrcChange={setCurrentSrc}
           />
           <span className="text-[11px] text-dim">{dm || 'preview'}</span>
           <span className="flex-1" />
           <button
-            className="px-2 py-1 rounded-lg border border-[#2a2a2a] text-[11px] text-muted hover:text-txt hover:border-[#3a3a3a]"
+            className="px-2 py-1 rounded-lg border border-border text-[11px] text-muted hover:text-txt hover:border-border-hover"
             onClick={() => downloadLogo(currentSrc || IB_LOGO)}
           >
             Download
@@ -178,7 +178,7 @@ export function BrandEdit({ onClose, onSaved }) {
           >
             {busy ? 'Saving…' : 'Save brand'}
           </button>
-          <button className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] text-sm text-[#ddd]" onClick={onClose}>
+          <button className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt" onClick={onClose}>
             Cancel
           </button>
         </div>

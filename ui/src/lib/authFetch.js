@@ -1,5 +1,10 @@
 export async function authFetch(url, opts = {}) {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('dashToken') : null
+  let token = null
+  try {
+    token = typeof localStorage !== 'undefined' ? localStorage.getItem('dashToken') : null
+  } catch (e) {
+    token = null
+  }
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) }
   if (token) headers['X-Auth-Token'] = token
   try {

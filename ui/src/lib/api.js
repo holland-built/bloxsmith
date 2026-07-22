@@ -22,7 +22,6 @@ export function useApi(url, { poll } = {}) {
           const body = await res.json().catch(() => ({}))
           if (body && (body.locked === true || body.error === 'vault locked')) {
             clearTimeout(t)
-            ac.abort()
             if (aliveRef.current) {
               setData(null)
               setLoading(false)

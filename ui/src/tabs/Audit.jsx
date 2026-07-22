@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { COLORS, TT, Card, Empty, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, Empty, Skeleton } from '../components/ui.jsx'
 
-const ACTION_COLOR = { CREATE: COLORS.ok, DELETE: COLORS.crit, UPDATE: COLORS.accent }
+function actionColor(a, COLORS) {
+  return { CREATE: COLORS.ok, DELETE: COLORS.crit, UPDATE: COLORS.accent }[a] || COLORS.other
+}
 
 function fmtTs(ts) {
   const d = new Date(ts)
@@ -31,6 +33,7 @@ export default function Audit() {
 // ---------- activity summary ----------
 
 function ActivitySummary({ logs, loading }) {
+  const { COLORS, TT } = useChartTheme()
   const counts = { CREATE: 0, UPDATE: 0, DELETE: 0 }
   let ok = 0, fail = 0
   for (const l of logs) {
@@ -62,13 +65,13 @@ function ActivitySummary({ logs, loading }) {
           </div>
           <ResponsiveContainer width="100%" height={140}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="#222" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: '#777', fontSize: 11 }} axisLine={{ stroke: '#222' }} tickLine={false} />
+              <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} />
               <YAxis hide />
               <Tooltip {...TT} />
               <Bar dataKey="value" radius={[3, 3, 0, 0]} isAnimationActive={false}>
                 {chartData.map((d) => (
-                  <Cell key={d.name} fill={ACTION_COLOR[d.name] || COLORS.other} />
+                  <Cell key={d.name} fill={actionColor(d.name, COLORS)} />
                 ))}
               </Bar>
             </BarChart>
@@ -82,8 +85,9 @@ function ActivitySummary({ logs, loading }) {
 // ---------- local audit log table ----------
 
 function ActionPill({ action }) {
+  const { COLORS } = useChartTheme()
   const a = String(action || '').toUpperCase()
-  const color = ACTION_COLOR[a] || COLORS.other
+  const color = actionColor(a, COLORS)
   return (
     <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: `${color}22`, color }}>
       {a || '—'}
@@ -141,12 +145,12 @@ function AuditTable({ logs, loading, error }) {
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-[150px] px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+            className="w-[150px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           />
           <select
             value={action}
             onChange={(e) => setAction(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           >
             <option value="">All actions</option>
             <option value="CREATE">Create</option>
@@ -199,6 +203,7 @@ function AuditTable({ logs, loading, error }) {
 // ---------- CSP portal audit ----------
 
 function CspAuditTable() {
+  const { COLORS } = useChartTheme()
   const [q, setQ] = useState('')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -230,9 +235,9 @@ function CspAuditTable() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && runSearch()}
-            className="w-[220px] px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+            className="w-[220px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           />
-          <button onClick={runSearch} className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm">
+          <button onClick={runSearch} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
             {loading ? 'Searching…' : 'Search'}
           </button>
         </div>

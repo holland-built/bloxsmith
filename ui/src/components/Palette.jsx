@@ -44,7 +44,7 @@ export default function Palette({ tabs, onPick }) {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-[420px] rounded-xl border border-[#2a2a2a] bg-[#111] shadow-2xl overflow-hidden"
+        className="w-[420px] rounded-xl border border-border bg-card shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -57,16 +57,16 @@ export default function Palette({ tabs, onPick }) {
             else if (e.key === 'Enter' && hits[idx]) pick(hits[idx])
           }}
           placeholder="Jump to tab…"
-          className="w-full px-4 py-3 bg-transparent text-[#ededed] text-sm outline-none border-b border-[#222]"
+          className="w-full px-4 py-3 bg-transparent text-txt text-sm outline-none border-b border-line-2"
         />
         <div className="max-h-[300px] overflow-auto py-1">
-          {hits.length === 0 && <div className="px-4 py-3 text-[#8a8a8a] text-sm">no match</div>}
+          {hits.length === 0 && <div className="px-4 py-3 text-muted text-sm">no match</div>}
           {hits.map((t, i) => (
             <button
               key={t.id}
               onClick={() => pick(t)}
               onMouseEnter={() => setIdx(i)}
-              className={`w-full text-left px-4 py-2 text-sm ${i === idx ? 'bg-[#1b1b1b] text-white' : 'text-[#bbb]'}`}
+              className={`w-full text-left px-4 py-2 text-sm ${i === idx ? 'bg-line text-txt' : 'text-muted'}`}
             >
               {t.label}
             </button>
