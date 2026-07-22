@@ -7,6 +7,11 @@ import Security from './tabs/Security.jsx'
 import Infra from './tabs/Infra.jsx'
 import Incidents from './tabs/Incidents.jsx'
 import Audit from './tabs/Audit.jsx'
+import Provision from './tabs/Provision.jsx'
+import Editor from './tabs/Editor.jsx'
+import Drift from './tabs/Drift.jsx'
+import SelfService from './tabs/SelfService.jsx'
+import Palette from './components/Palette.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Overview', el: Overview },
@@ -17,10 +22,15 @@ const TABS = [
   { id: 'infra', label: 'Infra', el: Infra },
   { id: 'incidents', label: 'Incidents', el: Incidents },
   { id: 'audit', label: 'Audit', el: Audit },
+  { id: 'provision', label: 'Provision', el: Provision },
+  { id: 'selfservice', label: 'Self-Service', el: SelfService },
+  { id: 'editor', label: 'Editor', el: Editor },
+  { id: 'drift', label: 'Drift', el: Drift },
 ]
 
 function hashTab() {
-  const h = location.hash.replace('#', '')
+  // '#editor?type=subnet' deep-links: tab id is the part before '?'
+  const h = location.hash.replace('#', '').split('?')[0]
   return TABS.some((t) => t.id === h) ? h : 'overview'
 }
 
@@ -56,15 +66,21 @@ export default function App() {
           ))}
         </nav>
         <span className="flex-1" />
-        <input
-          placeholder="Search…  ⌘K"
-          className="w-[190px] px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
-        />
-        <button className="px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm font-medium">
-          + Provision
+        <button
+          onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+          className="w-[190px] text-left px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#8a8a8a] text-sm"
+        >
+          Jump to…&nbsp;&nbsp;⌘K
         </button>
+        <a
+          href="#provision"
+          className="px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm font-medium no-underline"
+        >
+          + Provision
+        </a>
       </div>
       <Active />
+      <Palette tabs={TABS} onPick={(id) => { location.hash = id }} />
     </div>
   )
 }
