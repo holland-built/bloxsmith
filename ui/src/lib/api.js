@@ -12,7 +12,9 @@ export function useApi(url, { poll } = {}) {
 
   const load = useCallback(() => {
     if (!url) return
-    fetch(url, { cache: 'no-store' })
+    // Hard 12s timeout — some feeds (e.g. /api/dns-analytics) hang forever server-side;
+    // without this the panel shows an eternal skeleton instead of its Empty state.
+    fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
       .then((res) => {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         return res.json()
