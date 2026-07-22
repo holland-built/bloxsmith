@@ -96,7 +96,7 @@ type Config struct {
 
 	GroqAPIKey string // GROQ_API_KEY (server.py:154)
 	LLMAPIKey  string // LLM_API_KEY or GROQ_API_KEY (server.py:157)
-	LLMModel   string // LLM_MODEL or "qwen/qwen3-32b" (server.py:158)
+	LLMModel   string // LLM_MODEL or "llama-3.3-70b-versatile" (qwen3-32b decommissioned by Groq 2026-07)
 	LLMBaseURL string // LLM_BASE_URL (server.py:159)
 
 	VaultDir            string // VAULT_DIR, default "/vault" (server.py:2405)
@@ -151,7 +151,9 @@ func Load(dir string) *Config {
 	if v := os.Getenv("LLM_API_KEY"); v != "" {
 		c.LLMAPIKey = v
 	}
-	c.LLMModel = or("LLM_MODEL", "qwen/qwen3-32b")
+	// Default was qwen/qwen3-32b until Groq decommissioned it (404 model_not_found,
+	// 2026-07) — every /api/query returned "AI error: request failed".
+	c.LLMModel = or("LLM_MODEL", "llama-3.3-70b-versatile")
 	c.LLMBaseURL = os.Getenv("LLM_BASE_URL")
 
 	c.VaultDir = getDefault("VAULT_DIR", "/vault")
