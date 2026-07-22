@@ -360,8 +360,8 @@ table.dt tbody tr.clickable:hover{background:var(--hover);}
 .field-lbl{font-size:var(--t11);color:var(--text-faint);}
 .form-col{display:flex;flex-direction:column;gap:var(--s3);}
 .check-row{display:flex;align-items:center;gap:var(--s2);}
-.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
-.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;grid-auto-flow:dense;min-width:0;}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;align-items:start;grid-auto-flow:dense;min-width:0;}
 .grid-2>*,.grid-3>*{min-width:0;}
 .prose{max-width:72ch;min-width:0;overflow-wrap:anywhere;}
 .band{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s5);width:100%;min-width:0;padding:var(--s5);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);}
@@ -845,7 +845,11 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
 .sd.crit{background:var(--crit);animation:pulse 2s infinite;}
 .sd.pulse{animation:pulse 2.4s ease-in-out infinite;}
 
-.pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:14px 15px;display:flex;flex-direction:column;min-width:0;height:100%;}
+/* Cards size to their CONTENT, never stretch to a tall row-mate (the half-empty-card
+   fix — Grafana-style density via align-items:start on the grids below, not authored
+   row spans, which would clip our in-card popovers/menus). A tidy minimum still comes
+   from an optional .sz-* floor; sparse/form panels carry no floor and shrink to fit. */
+.pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);padding:14px 15px;display:flex;flex-direction:column;min-width:0;}
 .pbody-fill{flex:1 1 auto;min-height:0;}
 .span-2{grid-column:span 2;}
 .chart-body{height:var(--body-chart);display:flex;flex-direction:column;justify-content:center;}
@@ -885,8 +889,8 @@ html[data-drawer="open"] .main{padding-right:min(420px,100vw);}
    as space allows (drawer open, narrow window), so a card that can't fit wraps to
    the next row instead of crushing its content. Empty trailing tracks collapse,
    so 3 cards on a wide screen still share the full width. */
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
-.grid-dense{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:16px;align-items:stretch;grid-auto-flow:dense;min-width:0;}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;align-items:start;grid-auto-flow:dense;min-width:0;}
+.grid-dense{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:16px;align-items:start;grid-auto-flow:dense;min-width:0;}
 /* Wide cards (tables) take 2 tracks; below ~560px there may be only 1 track, so revert. */
 .grid-dense>.gd-wide{grid-column:span 2;min-width:0;}
 @media (max-width:560px){.grid-dense>.gd-wide{grid-column:auto;}}
