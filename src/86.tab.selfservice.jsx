@@ -557,6 +557,8 @@ function SelfServiceTab(){
           {addErr?<div className="mono" style={{fontSize:'var(--t11)',color:'var(--crit)'}}>{addErr}</div>:null}
         </div>
       </Panel>:null}
+    </div>:null}
+    {mode==='dns'?<div className="dash"><div className="dc24 t-s6">
       <Panel title="Records" api={dnsZoneId?recordsApi:undefined}>
         {!dnsZoneId?<div className="dt-empty">Select a zone</div>
           :recordsApi.loading?<Skeleton rows={3}/>
@@ -565,7 +567,7 @@ function SelfServiceTab(){
               defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}
               searchSchema={{fields:{ttl:{type:'number'}},aliases:{name:'name_in_zone',value:'dns_rdata'}}}/>}
       </Panel>
-    </div>:null}
+    </div></div>:null}
     {mode==='ipman'?<div className="grid">
       <Panel title="Subnet">
         <div className="form-col">
@@ -604,6 +606,8 @@ function SelfServiceTab(){
           </div>
           :<div className="dt-empty">{availApi.loading?'Loading…':'No data'}</div>}
       </Panel>:null}
+    </div>:null}
+    {mode==='ipman'?<div className="dash"><div className="dc24 t-s6">
       <Panel title="Addresses" api={ipSubnetId?addrApi:undefined}>
         {!ipSubnetId?<div className="dt-empty">Select a subnet</div>
           :addrApi.loading?<Skeleton rows={3}/>
@@ -611,7 +615,7 @@ function SelfServiceTab(){
           :<DataTable tableId="ss-ip-addresses" rowKey={r=>r.id} cols={addrCols} rows={addresses} scrollBody={480}
               defaultSort={{key:'address',dir:'asc'}} filterable filterKeys={['address','name','comment']}/>}
       </Panel>
-    </div>:null}
+    </div></div>:null}
     {mode==='inventory'?<div className="grid">
       <Panel title="Space / Block / Subnet">
         <div className="form-col">
@@ -641,13 +645,6 @@ function SelfServiceTab(){
           </label>
         </div>
       </Panel>
-      <Panel title="Addresses" api={invSubnetId?invAddrApi:undefined}>
-        {!invSubnetId?<div className="dt-empty">Select a subnet</div>
-          :invAddrApi.loading?<Skeleton rows={3}/>
-          :invAddresses.length===0?<div className="dt-empty">No addresses</div>
-          :<DataTable tableId="ss-inv-addresses" rowKey={r=>r.id} cols={invAddrCols} rows={invAddresses} scrollBody={480}
-              defaultSort={{key:'address',dir:'asc'}} filterable filterKeys={['address','name','comment']}/>}
-      </Panel>
       <Panel title="Zone">
         <div className="form-col">
           <label className="mono field-lbl"
@@ -660,14 +657,27 @@ function SelfServiceTab(){
           </label>
         </div>
       </Panel>
-      <Panel title="Records" api={invZoneId?invRecordsApi:undefined}>
-        {!invZoneId?<div className="dt-empty">Select a zone</div>
-          :invRecordsApi.loading?<Skeleton rows={3}/>
-          :invRecords.length===0?<div className="dt-empty">No records</div>
-          :<DataTable tableId="ss-inv-records" rowKey={r=>r.id} cols={invRecordCols} rows={invRecords} scrollBody={480}
-              defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}
-              searchSchema={{fields:{ttl:{type:'number'}},aliases:{name:'name_in_zone',value:'dns_rdata'}}}/>}
-      </Panel>
+    </div>:null}
+    {mode==='inventory'?<div className="dash">
+      <div className="dc12 t-s6">
+        <Panel title="Addresses" api={invSubnetId?invAddrApi:undefined}>
+          {!invSubnetId?<div className="dt-empty">Select a subnet</div>
+            :invAddrApi.loading?<Skeleton rows={3}/>
+            :invAddresses.length===0?<div className="dt-empty">No addresses</div>
+            :<DataTable tableId="ss-inv-addresses" rowKey={r=>r.id} cols={invAddrCols} rows={invAddresses} scrollBody={480}
+                defaultSort={{key:'address',dir:'asc'}} filterable filterKeys={['address','name','comment']}/>}
+        </Panel>
+      </div>
+      <div className="dc12 t-s6">
+        <Panel title="Records" api={invZoneId?invRecordsApi:undefined}>
+          {!invZoneId?<div className="dt-empty">Select a zone</div>
+            :invRecordsApi.loading?<Skeleton rows={3}/>
+            :invRecords.length===0?<div className="dt-empty">No records</div>
+            :<DataTable tableId="ss-inv-records" rowKey={r=>r.id} cols={invRecordCols} rows={invRecords} scrollBody={480}
+                defaultSort={{key:'name_in_zone',dir:'asc'}} filterable filterKeys={['name_in_zone','type','dns_rdata']}
+                searchSchema={{fields:{ttl:{type:'number'}},aliases:{name:'name_in_zone',value:'dns_rdata'}}}/>}
+        </Panel>
+      </div>
     </div>:null}
   </div>;
 }

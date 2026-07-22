@@ -170,8 +170,9 @@ function InfraTab({vaultTick}={}){
         above and "By type" is its own panel below; the tile strip was a redundant,
         oversized duplicate that ballooned to fill the row. */}
 
-    <div className="grid-dense">
-      <Panel title="Needs attention" side={attention.length+(attention.length===1?' host':' hosts')}>
+    <div className="dash">
+      <div className="dc6 t-s4">
+      <Panel size="s4" title="Needs attention" side={attention.length+(attention.length===1?' host':' hosts')}>
         {attention.length
           ? <><div className="issues">
               {attention.slice(0,8).map((h,i)=><div key={h.name||i} className="issue" role="button" tabIndex={0}
@@ -189,8 +190,10 @@ function InfraTab({vaultTick}={}){
           </>
           : <div className="infra-dim">All {total} hosts online</div>}
       </Panel>
+      </div>
 
-      <Panel title="Status" side={<>{infraToggle}<span>{total+' hosts'}</span></>}>
+      <div className="dc6 t-s4">
+      <Panel size="s4" title="Status" side={<>{infraToggle}<span>{total+' hosts'}</span></>}>
         <div className="chart-body">
           <ChartView type={infraChart} data={[
             {label:'online',value:online,color:'var(--ok)'},
@@ -199,8 +202,10 @@ function InfraTab({vaultTick}={}){
           ]} donut={{centerValue:offline,centerLabel:"offline"}}/>
         </div>
       </Panel>
+      </div>
 
-      <Panel title="By type" empty={byType.length<2} side={byType.length+(byType.length===1?' type':' types')}>
+      <div className="dc6 t-s4">
+      <Panel size="s4" title="By type" empty={byType.length<2} side={byType.length+(byType.length===1?' type':' types')}>
         {byType.length
           ? <><div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
               {byType.slice(0,8).map(([t,c])=><div key={t} className="infra-panel-row"><span>{t}</span><span className="mono">{c}</span></div>)}
@@ -209,13 +214,18 @@ function InfraTab({vaultTick}={}){
           </>
           : <div className="infra-dim">No hosts</div>}
       </Panel>
+      </div>
 
-      <Panel title="Hottest host" empty={!hottest}>
+      <div className="dc6 t-s4">
+      <Panel size="s4" title="Hottest host" empty={!hottest}>
         <button className="infra-panel-btn" onClick={()=>{setShowSensors(true);nav('infra',{host:hottest});}}>{hottest} — {hottest?hotByHost[hottest]:0} sensors hot →</button>
       </Panel>
+      </div>
     </div>
 
-    <Panel title="Hosts" side={<div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+    <div className="dash">
+    <div className="dc24 t-lg">
+    <Panel size="lg" title="Hosts" side={<div style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
         <button className="btn btn-ghost" aria-pressed={hostCompareOn}
           disabled={!prev} title={prev?'Diff current hosts against yesterday\'s snapshot':'A prior daily snapshot is needed'}
           onClick={()=>{
@@ -258,6 +268,8 @@ function InfraTab({vaultTick}={}){
               </div>;
             }}/>}
     </Panel>
+    </div>
+    </div>
 
     <div className="infra-sec">
       <div className="infra-head">
@@ -301,10 +313,14 @@ function InfraTab({vaultTick}={}){
     <div className="infra-sec">
       <div className="infra-head"><span className="infra-h">CSP</span><MaintenancePill/></div>
     </div>
-    <HostHealthPanel/>
-    <OnPremHostsPanel/>
-    <JobsPanel/>
-    <DfpServicesPanel/>
+    <div className="dash">
+      <div className="dc12 t-s6"><HostHealthPanel/></div>
+      <div className="dc12 t-s6"><OnPremHostsPanel/></div>
+    </div>
+    <div className="dash">
+      <div className="dc12 t-s6"><JobsPanel/></div>
+      <div className="dc12 t-s6"><DfpServicesPanel/></div>
+    </div>
   </div>;
 }
 // ── CSP tiles (read-only, appended — see BUILD_SPEC.md) ──
@@ -325,7 +341,7 @@ function HostHealthPanel(){
     {key:'nat_ip',label:'NAT IP',mono:true},
     {key:'location',label:'Location'},
   ];
-  return <Panel title="Host health" api={feed}>
+  return <Panel size="s6" title="Host health" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.name)} tableId="csp-host-health" csvName="csp-host-health" scrollBody={480} filterable/>}
@@ -340,7 +356,7 @@ function OnPremHostsPanel(){
     {key:'ophid',label:'OPH ID',render:v=><IdCell value={v} label="OPH ID"/>},
     {key:'app_count',label:'Apps',mono:true,align:'right'},
   ];
-  return <Panel title="On-prem hosts" api={feed}>
+  return <Panel size="s6" title="On-prem hosts" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.ophid||r.name)} tableId="csp-onprem-hosts" csvName="csp-onprem-hosts" scrollBody={480} filterable/>}
@@ -356,7 +372,7 @@ function JobsPanel(){
     {key:'status',label:'Status',render:cspStatusBadge},
     {key:'user',label:'User'},
   ];
-  return <Panel title="Jobs" api={feed}>
+  return <Panel size="s6" title="Jobs" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id||r.created_at)} tableId="csp-jobs" csvName="csp-jobs" defaultSort={{key:'created_at',dir:'desc'}} scrollBody={480}/>}
@@ -370,7 +386,7 @@ function DfpServicesPanel(){
     {key:'name',label:'Name',primary:true},
     {key:'status',label:'Status',render:cspStatusBadge},
   ];
-  return <Panel title="DFP services" api={feed}>
+  return <Panel size="s6" title="DFP services" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : rows.length===0 ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <DataTable cols={cols} rows={rows} rowKey={r=>String(r.id||r.name)} tableId="csp-dfp" csvName="csp-dfp" scrollBody={480}/>}
