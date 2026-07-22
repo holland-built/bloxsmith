@@ -919,7 +919,10 @@ class PanelBoundary extends React.Component{
 
 /* Panel({title,side,api,children,empty}) — .pcard wrapper (header + optional .side /
    Freshness). Renders null when empty (dead-section suppression). */
-function Panel({title,side,api,children,empty,size}){
+// Tier sizes (stat/sm/s4/md/s6/lg) emit a `.t-<size>` grid-row class for the 24-col
+// `.dash` grid; any other size keeps the legacy `.sz-<size>` min-height floor.
+const PANEL_TIERS={stat:1,sm:1,s4:1,md:1,s6:1,lg:1};
+function Panel({title,side,api,children,empty,size,tierCol}){
   if(empty) return null;
   const [maxed,setMaxed]=useState(false);
   const overlayRef=useRef(null),returnRef=useRef(null);
@@ -948,7 +951,8 @@ function Panel({title,side,api,children,empty,size}){
     <span>{title}</span>
     <span className="side">{sideNode}{maxBtn}</span>
   </h3>:null;
-  return <div className={"pcard"+(size?(" sz-"+size):"")}>
+  const sizeCls=size?(PANEL_TIERS[size]?(" t-"+size):(" sz-"+size)):"";
+  return <div className={"pcard"+sizeCls}>
     {head}
     {maxed
       ? <div className="pcard-max-note">Maximized — press Esc or Close to return.</div>
