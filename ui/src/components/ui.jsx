@@ -2,13 +2,41 @@ import {
   AreaChart, Area, BarChart, Bar, Cell, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
+import { useThemeColors } from '../lib/theme.jsx'
 
-export const COLORS = { accent: '#0070f3', purple: '#8b5cf6', warn: '#f5a623', crit: '#ee4444', ok: '#4ade80', other: '#8a8a8a' }
+// Static COLORS as CSS var() strings: fine for inline HTML styles (auto-flip with
+// theme), NOT for Recharts SVG props/gradients — chart code uses useChartTheme()
+// which resolves real hex per theme.
+export const COLORS = {
+  accent: 'var(--color-accent)', purple: 'var(--color-purple)', warn: 'var(--color-warn)',
+  crit: 'var(--color-crit)', ok: 'var(--color-ok)', other: 'var(--color-other)',
+}
 
+// Static tooltip style via vars — flips with theme without re-render.
 export const TT = {
-  contentStyle: { background: '#141414', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 12 },
-  labelStyle: { color: '#8a8a8a' },
-  itemStyle: { color: '#ededed' },
+  contentStyle: { background: 'var(--color-field)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 },
+  labelStyle: { color: 'var(--color-muted)' },
+  itemStyle: { color: 'var(--color-txt)' },
+}
+
+export function useChartTheme() {
+  const colors = useThemeColors()
+  return {
+    COLORS: {
+      accent: colors.accent,
+      purple: colors.purple,
+      warn: colors.warn,
+      crit: colors.crit,
+      ok: colors.ok,
+      other: colors.other,
+      sevHigh: colors.sevHigh,
+    },
+    TT: {
+      contentStyle: { background: colors.field, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 12 },
+      labelStyle: { color: colors.muted },
+      itemStyle: { color: colors.txt },
+    },
+  }
 }
 
 
@@ -62,8 +90,8 @@ export function Sparkline({ values, color, h = 30 }) {
 }
 
 export function utilStatus(util) {
-  if (util >= 92) return { label: 'Critical', color: COLORS.crit, bg: '#2a1215', fg: '#ff7b7b' }
-  if (util >= 75) return { label: 'Warning', color: COLORS.warn, bg: '#2a2210', fg: '#f5c76b' }
-  return { label: 'Healthy', color: COLORS.accent, bg: '#0d2136', fg: '#6bb2ff' }
+  if (util >= 92) return { label: 'Critical', color: 'var(--color-crit)', bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' }
+  if (util >= 75) return { label: 'Warning', color: 'var(--color-warn)', bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)' }
+  return { label: 'Healthy', color: 'var(--color-accent)', bg: 'var(--pill-ok-bg)', fg: 'var(--pill-ok-fg)' }
 }
 

@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { COLORS, Card, Empty, Skeleton } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 
-const inputCls = 'px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none w-full'
+const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
 const btnBase = 'px-3.5 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed'
-const btnPrimary = `${btnBase} bg-[${COLORS.accent}] text-white`
-const btnOutline = `${btnBase} border border-[#2a2a2a] bg-transparent text-[#ddd]`
+const btnPrimary = `${btnBase} bg-accent text-white`
+const btnOutline = `${btnBase} border border-border bg-transparent text-field-txt`
 
 export default function Provision() {
   const [mode, setMode] = useState('subnet') // 'subnet' | 'site' | 'seed'
@@ -20,15 +20,15 @@ export default function Provision() {
         <span
           className="text-[11px] font-medium px-2 py-0.5 rounded-full"
           style={{
-            background: isAdmin ? '#0d2136' : role === 'operator' ? '#2a2210' : '#2a1215',
-            color: isAdmin ? '#6bb2ff' : role === 'operator' ? '#f5c76b' : '#ff7b7b',
+            background: isAdmin ? 'var(--pill-ok-bg)' : role === 'operator' ? 'var(--pill-warn-bg)' : 'var(--pill-crit-bg)',
+            color: isAdmin ? 'var(--pill-ok-fg)' : role === 'operator' ? 'var(--pill-warn-fg)' : 'var(--pill-crit-fg)',
           }}
         >
           {role.toUpperCase()}
         </span>
       </div>
 
-      <div className="flex gap-1 mb-4 p-1 rounded-lg bg-[#141414] border border-[#2a2a2a] w-fit">
+      <div className="flex gap-1 mb-4 p-1 rounded-lg bg-field border border-border w-fit">
         {[
           ['subnet', 'Subnet'],
           ['site', 'Full site'],
@@ -38,7 +38,7 @@ export default function Provision() {
             key={key}
             onClick={() => setMode(key)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-              mode === key ? 'bg-[#0070f3] text-white' : 'text-[#aaa]'
+              mode === key ? 'bg-accent text-white' : 'text-muted'
             }`}
           >
             {label}
@@ -58,7 +58,7 @@ function LogView({ log, doneLabel }) {
   return (
     <div className="font-mono text-[12px] flex flex-col gap-0.5 max-h-[280px] overflow-auto">
       {log.map((l, i) => (
-        <div key={i} style={{ color: l.error ? COLORS.crit : l.done ? COLORS.ok : '#8a8a8a' }}>
+        <div key={i} style={{ color: l.error ? 'var(--color-crit)' : l.done ? 'var(--color-ok)' : 'var(--color-muted)' }}>
           {l.error ? `✕ ${l.error}` : l.done ? `✓ ${doneLabel || 'done'}` : l.step || JSON.stringify(l)}
         </div>
       ))}
@@ -354,7 +354,7 @@ function RowsRollup({ rows, failedLabel }) {
   if (total === 0) return <Empty>Per-template status appears here once seeding starts.</Empty>
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="font-mono text-[12px]" style={{ color: failed ? COLORS.crit : '#8a8a8a' }}>
+      <div className="font-mono text-[12px]" style={{ color: failed ? 'var(--color-crit)' : 'var(--color-muted)' }}>
         {done}/{total} done{failed ? ` · ${failed} ${failedLabel || 'failed'}` : ''}
       </div>
       {Object.entries(rows).filter(([, r]) => r?.error).map(([tpl, r]) => (

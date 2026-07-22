@@ -122,13 +122,13 @@ export default function UpdateButton() {
   const isDev = current.startsWith('dev-') || (info && info.checkDisabled);
 
   if (isDev || !info) {
-    return <span className="text-[11px] text-[#8a8a8a]">{current || 'checking version…'}</span>;
+    return <span className="text-[11px] text-muted">{current || 'checking version…'}</span>;
   }
 
   if (phase === 'error') {
     return (
       <span className="flex items-center gap-2 text-[11px]">
-        <span className="text-[#8a8a8a]">v{current.replace(/^v/, '')}</span>
+        <span className="text-muted">v{current.replace(/^v/, '')}</span>
         <span className="text-red-500">{error}</span>
       </span>
     );
@@ -136,7 +136,7 @@ export default function UpdateButton() {
 
   if (phase === 'applying' || phase === 'restarting') {
     return (
-      <span className="text-[11px] text-[#8a8a8a]">
+      <span className="text-[11px] text-muted">
         {phase === 'restarting' ? 'Restarting…' : 'Updating…'}
       </span>
     );
@@ -151,12 +151,12 @@ export default function UpdateButton() {
           if (info.selfUpdate) runApply();
           else if (info.url) window.open(info.url, '_blank', 'noopener,noreferrer');
         }}
-        className="px-2 py-1 rounded-lg bg-[#0070f3] text-white text-xs"
+        className="px-2 py-1 rounded-lg bg-accent text-white text-xs"
       >
         Update v{latest}
       </button>
     );
   }
 
-  return <span className="text-[11px] text-[#8a8a8a]">v{current.replace(/^v/, '')}</span>;
+  return <span className="text-[11px] text-muted">v{current.replace(/^v/, '')}</span>;
 }

@@ -4,7 +4,8 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { COLORS, TT, Card, Empty, Skeleton, Sparkline, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, Empty, Skeleton, Sparkline, utilStatus } from '../components/ui.jsx'
+import { useThemeColors } from '../lib/theme.jsx'
 
 // ---------- main ----------
 
@@ -34,6 +35,8 @@ export default function Overview() {
 // ---------- hero ----------
 
 function DnsHero({ dns }) {
+  const { COLORS, TT } = useChartTheme()
+  const theme = useThemeColors()
   const rows = dns.data?.rows ?? []
   const chartData = rows.map((r) => {
     let label = r.hour
@@ -74,14 +77,10 @@ function DnsHero({ dns }) {
                   <stop offset="100%" stopColor={COLORS.accent} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#222" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: '#777', fontSize: 11 }} axisLine={{ stroke: '#222' }} tickLine={false} minTickGap={40} />
+              <CartesianGrid stroke={theme.grid} strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: theme.tick, fontSize: 11 }} axisLine={{ stroke: theme.grid }} tickLine={false} minTickGap={40} />
               <YAxis hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
-              <Tooltip
-                contentStyle={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: '#8a8a8a' }}
-                itemStyle={{ color: '#ededed' }}
-              />
+              <Tooltip {...TT} />
               <Area type="monotone" dataKey="value" stroke={COLORS.accent} strokeWidth={1.8} fill="url(#dnsFill)" isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
@@ -94,6 +93,7 @@ function DnsHero({ dns }) {
 // ---------- kpi stack ----------
 
 function KpiStack({ subnets, leases }) {
+  const { COLORS } = useChartTheme()
   const utils = [...subnets.map((s) => Number(s.util) || 0)].sort((a, b) => a - b)
   const activeLeases = leases.filter((l) => l.state === 'active').length
   const critSubnets = subnets.filter((s) => Number(s.util) >= 90).length
@@ -127,6 +127,8 @@ function KpiStack({ subnets, leases }) {
 // ---------- top utilization ----------
 
 function TopUtilization({ subnets }) {
+  const { COLORS, TT } = useChartTheme()
+  const theme = useThemeColors()
   // Rank by addresses USED, not util% — util ranking is a wall of 100% /32 infra links
   // (learned in old app: commits 7789ae8 / 46e591c)
   const top = [...subnets]
@@ -141,11 +143,11 @@ function TopUtilization({ subnets }) {
       ) : (
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={top} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <XAxis dataKey="addr" tick={false} axisLine={{ stroke: '#222' }} tickLine={false} />
+            <XAxis dataKey="addr" tick={false} axisLine={{ stroke: theme.grid }} tickLine={false} />
             <YAxis hide />
             <Tooltip
-              contentStyle={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: '#ededed' }}
+              contentStyle={TT.contentStyle}
+              labelStyle={{ color: theme.txt }}
               formatter={(v, _n, p) => [`${Number(v).toLocaleString()} used (${p?.payload?.util ?? '?'}%)`, null]}
               labelFormatter={(_, p) => p?.[0]?.payload?.addr ?? p?.[0]?.payload?.cidr ?? ''}
             />
@@ -164,6 +166,7 @@ function TopUtilization({ subnets }) {
 // ---------- subnet heatmap ----------
 
 function SubnetHeatmap({ subnets }) {
+  const { COLORS } = useChartTheme()
   // Worst N only — a cell per subnet at 5k subnets = sub-pixel rects (invisible). Cap + say so.
   const CAP = 288 // 24 x 12
   // /29-/32 are infra links, always ~100% — they'd paint the whole map red (old app: 67db14e)
@@ -218,6 +221,7 @@ function SubnetHeatmap({ subnets }) {
 // ---------- host status ----------
 
 function HostStatus({ hosts }) {
+  const { COLORS, TT } = useChartTheme()
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Other: 0 }
   for (const h of hosts) {
     const s = h.status || ''
@@ -246,7 +250,7 @@ function HostStatus({ hosts }) {
                     <Cell key={d.name} fill={d.color} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 8, fontSize: 12 }} />
+                <Tooltip contentStyle={TT.contentStyle} />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -349,19 +353,19 @@ function SubnetTable({ subnets }) {
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           />
           <select
             value={site}
             onChange={(e) => setSite(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           >
             <option value="">All sites</option>
             {sites.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <button onClick={exportCsv} className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm">
+          <button onClick={exportCsv} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
             Export CSV
           </button>
         </div>

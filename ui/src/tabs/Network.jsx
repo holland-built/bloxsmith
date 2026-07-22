@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { COLORS, TT, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
 
 // ---------- main ----------
 
@@ -30,13 +30,13 @@ export default function Network() {
 
 // ---------- utilization distribution ----------
 
-const BANDS = [
-  { key: '0-70', label: '<70%', test: (u) => u < 70, color: COLORS.accent },
-  { key: '70-85', label: '70–85%', test: (u) => u >= 70 && u <= 85, color: COLORS.warn },
-  { key: '85-100', label: '>85%', test: (u) => u > 85, color: COLORS.crit },
-]
-
 function UtilBands({ subnets }) {
+  const { TT } = useChartTheme()
+  const BANDS = [
+    { key: '0-70', label: '<70%', test: (u) => u < 70, color: 'var(--color-accent)' },
+    { key: '70-85', label: '70–85%', test: (u) => u >= 70 && u <= 85, color: 'var(--color-warn)' },
+    { key: '85-100', label: '>85%', test: (u) => u > 85, color: 'var(--color-crit)' },
+  ]
   const counts = BANDS.map((b) => ({
     label: b.label,
     value: subnets.filter((s) => b.test(Number(s.util) || 0)).length,
@@ -51,9 +51,9 @@ function UtilBands({ subnets }) {
       ) : (
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={counts} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke="#222" strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: '#777', fontSize: 11 }} axisLine={{ stroke: '#222' }} tickLine={false} />
-            <YAxis tick={{ fill: '#777', fontSize: 11 }} axisLine={{ stroke: '#222' }} tickLine={false} allowDecimals={false} />
+            <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} />
+            <YAxis tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} allowDecimals={false} />
             <Tooltip {...TT} formatter={(v) => [`${v} subnets`, null]} />
             <Bar dataKey="value" radius={[3, 3, 0, 0]} isAnimationActive={false}>
               {counts.map((c) => (
@@ -205,12 +205,12 @@ function ExhaustionTable({ subnets }) {
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           />
           <select
             value={site}
             onChange={(e) => setSite(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-[#2a2a2a] bg-[#141414] text-[#ddd] text-sm outline-none"
+            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           >
             <option value="">All sites</option>
             {sites.map((s) => (

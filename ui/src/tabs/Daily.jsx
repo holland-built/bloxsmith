@@ -1,4 +1,4 @@
-import { COLORS, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 
 // ---------- main ----------
@@ -28,6 +28,7 @@ export default function Daily() {
 // ---------- KPI cards ----------
 
 function IssueKpis({ subnets, hosts, zones, loading }) {
+  const { COLORS } = useChartTheme()
   const gt85 = subnets.filter((s) => (Number(s.cidr) || 0) <= 28 && (Number(s.util) || 0) > 85).length
   const notOnline = hosts.filter((h) => !/online|active/i.test(h.status || '')).length
   const zoneIssues = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length
@@ -59,6 +60,7 @@ function IssueKpis({ subnets, hosts, zones, loading }) {
 // ---------- security today ----------
 
 function SecurityToday({ sec }) {
+  const { COLORS } = useChartTheme()
   const counts = sec.data?.counts ?? {}
   const events = sec.data?.events ?? []
   const chips = [
@@ -142,6 +144,7 @@ function TopCapacityRisks({ subnets, loading }) {
 // ---------- hosts needing attention ----------
 
 function HostsAttention({ hosts, loading }) {
+  const { COLORS } = useChartTheme()
   const rows = hosts.filter((h) => !/online|active/i.test(h.status || '')).slice(0, 10)
 
   return (
@@ -183,7 +186,7 @@ function DnsZoneIssues({ zones, loading }) {
         <div className="flex flex-col gap-1 mt-1">
           {rows.map((z, i) => (
             <div key={(z.fqdn || '') + i} className="flex items-start gap-2.5 py-1.5 border-b border-line last:border-0">
-              <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0" style={{ background: '#2a1215', color: '#ff7b7b' }}>
+              <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0" style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}>
                 {z.issues.length}
               </span>
               <div className="flex-1 min-w-0">

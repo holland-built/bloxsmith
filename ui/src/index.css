@@ -7,16 +7,68 @@
   --color-card-border: #1e1e1e;
   --color-line: #161616;
   --color-line-2: #1c1c1c;
+  --color-field: #141414;
+  --color-border: #2a2a2a;
+  --color-border-hover: #3a3a3a;
   --color-txt: #ededed;
+  --color-field-txt: #dddddd;
   --color-muted: #8a8a8a;
   --color-dim: #777777;
+  --color-grid: #222222;
+  --color-tick: #777777;
   --color-accent: #0070f3;
   --color-purple: #8b5cf6;
   --color-ok: #4ade80;
   --color-warn: #f5a623;
   --color-crit: #ee4444;
+  --color-other: #8a8a8a;
+  --color-sev-high: #ff7b7b;
   --radius-card: 12px;
   --font-sans: system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --pill-crit-bg: #2a1215;
+  --pill-crit-fg: #ff7b7b;
+  --pill-warn-bg: #2a2210;
+  --pill-warn-fg: #f5c76b;
+  --pill-ok-bg: #0d2136;
+  --pill-ok-fg: #6bb2ff;
+  --pill-neutral-bg: #1a1a1a;
+  --pill-neutral-fg: #8a8a8a;
+}
+
+:root[data-theme="light"] {
+  --color-bg: #f7f7f8;
+  --color-card: #ffffff;
+  --color-card-border: #e5e5e5;
+  --color-line: #eeeeee;
+  --color-line-2: #e5e5e5;
+  --color-field: #ffffff;
+  --color-border: #e5e5e5;
+  --color-border-hover: #d4d4d4;
+  --color-txt: #111111;
+  --color-field-txt: #111111;
+  --color-muted: #666666;
+  --color-dim: #999999;
+  --color-grid: #e5e5e5;
+  --color-tick: #999999;
+  --color-accent: #0070f3;
+  --color-purple: #7c3aed;
+  --color-ok: #16a34a;
+  --color-warn: #b45309;
+  --color-crit: #dc2626;
+  --color-other: #888888;
+  --color-sev-high: #e5484d;
+
+  --pill-crit-bg: #fde8e8;
+  --pill-crit-fg: #b91c1c;
+  --pill-warn-bg: #fef3d6;
+  --pill-warn-fg: #92600a;
+  --pill-ok-bg: #e6f0fd;
+  --pill-ok-fg: #0757c9;
+  --pill-neutral-bg: #f0f0f0;
+  --pill-neutral-fg: #555555;
 }
 
 html { background: var(--color-bg); }
