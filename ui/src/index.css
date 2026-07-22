@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* v6 mockup tokens — north star: .mockups/quick/...-6.html */
+@theme {
+  --color-bg: #050505;
+  --color-card: #0e0e0e;
+  --color-card-border: #1e1e1e;
+  --color-line: #161616;
+  --color-line-2: #1c1c1c;
+  --color-txt: #ededed;
+  --color-muted: #8a8a8a;
+  --color-dim: #777777;
+  --color-accent: #0070f3;
+  --color-purple: #8b5cf6;
+  --color-ok: #4ade80;
+  --color-warn: #f5a623;
+  --color-crit: #ee4444;
+  --radius-card: 12px;
+  --font-sans: system-ui, -apple-system, sans-serif;
+}
+
+html { background: var(--color-bg); }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--color-txt);
+  background: var(--color-bg);
+  min-height: 100vh;
+}
