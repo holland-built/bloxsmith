@@ -182,7 +182,8 @@ function NetworkTab(){
       ? <section>
           <SectionRule title="Subnet detail"/>
           {drill
-            ? <div className="grid">
+            ? <div className="dash">
+                <div className="dc24 t-sm">
                 <div className="pcard">
                   <button className="btn btn-ghost" onClick={()=>history.back()}>← Back</button>
                   <div style={{marginTop:'var(--s3)',fontWeight:600}}>{drill.name}</div>
@@ -191,13 +192,16 @@ function NetworkTab(){
                   <div className="mono" style={{marginTop:'var(--s3)',color:'var(--text-dim)',fontSize:'var(--t12)'}}>
                     {drillLeases.length} lease{drillLeases.length===1?'':'s'} in subnet</div>
                 </div>
-                <Panel title={'Leases · '+drillLeases.length}>
+                </div>
+                <div className="dc24 t-lg">
+                <Panel size="lg" title={'Leases · '+drillLeases.length}>
                   {drillLeases.length
                     ? <DataTable cols={NET_LEASE_COLS} rows={drillLeases} defaultSort={{key:'addr',dir:'asc'}}
                         csvName={'leases-'+(drill.addr||drill.id)}
                         tableId={'drill-leases-'+(drill.addr||drill.id)} rowKey={r=>String(r.ip||r.addr||r.mac)} selectable/>
                     : <div className="dt-empty">No leases in this subnet</div>}
                 </Panel>
+                </div>
               </div>
             : <div className="pcard">
                 <button className="btn btn-ghost" onClick={()=>history.back()}>← Back</button>
@@ -206,8 +210,16 @@ function NetworkTab(){
         </section>
       : <React.Fragment>
           <SectionRule title="Capacity & utilization"/>
-          <div className="grid">
-            <Panel title="Which subnets run out first?" empty={subnets.length===0}>
+          <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',gap:'var(--s2)',marginBottom:'var(--s3)'}}>
+            <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>Filter</span>
+            <ValueBands rows={subnets} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS}
+              value={activeUtilBand} onChange={id=>injectUtilBand(id)}/>
+            <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
+              Type <code>site:name</code> or <code>util&gt;=90</code> in the table search to scope by site</span>
+          </div>
+          <div className="dash">
+            <div className="dc12 t-s6">
+            <Panel size="s6" title="Which subnets run out first?" empty={subnets.length===0}>
               <ExceptionPanel
                 ariaLabel="Subnets by address exhaustion"
                 strip={<ValueBands rows={subnets} valueFn={utilOf} bands={UTIL_BANDS}
@@ -233,7 +245,9 @@ function NetworkTab(){
                          onClick:()=>{ injectUtilBand(null); const t=document.getElementById('net-subnets-table'); if(t) t.scrollIntoView({behavior:'smooth',block:'start'}); }}}
               />
             </Panel>
-            <Panel title="Top consumers" empty={topN.length===0}>
+            </div>
+            <div className="dc12 t-s6">
+            <Panel size="s6" title="Top consumers" empty={topN.length===0}>
               {/* Bounded to top 8 at natural height, with an exrollup footer to the full
                   table — mirrors the "Which subnets run out first?" panel above. No inner
                   scroller: a fixed short list can't short-sheet the card the way a capped
@@ -261,15 +275,9 @@ function NetworkTab(){
                     {(topN.length-8)+' more → View all in table'}</button>
                 : null}
             </Panel>
-            <div style={{gridColumn:'1/-1',display:'flex',flexWrap:'wrap',alignItems:'center',gap:'var(--s2)'}}>
-              <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>Filter</span>
-              <ValueBands rows={subnets} valueFn={s=>Number(s.util)||0} bands={UTIL_BANDS}
-                value={activeUtilBand} onChange={id=>injectUtilBand(id)}/>
-              <span className="mono" style={{fontSize:'var(--t11)',color:'var(--text-faint)'}}>
-                Type <code>site:name</code> or <code>util&gt;=90</code> in the table search to scope by site</span>
             </div>
-            <div id="net-subnets-table" style={{gridColumn:'1/-1'}}>
-              <Panel title="Subnets" side={<span style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
+            <div id="net-subnets-table" className="dc24 t-lg">
+              <Panel size="lg" title="Subnets" side={<span style={{display:'flex',alignItems:'center',gap:'var(--s2)'}}>
                   <button className="btn btn-ghost" aria-pressed={compareOn}
                     disabled={!prev} title={prev?'Diff current top subnets against yesterday\'s snapshot':'A prior daily snapshot is needed'}
                     onClick={()=>{
@@ -315,8 +323,8 @@ function NetworkTab(){
                   }}]}/>
               </Panel>
             </div>
-            <div style={{gridColumn:'1/-1',minWidth:0}}>
-            <Panel title={'All leases · '+leases.length} side={
+            <div className="dc16 t-lg" style={{minWidth:0}}>
+            <Panel size="lg" title={'All leases · '+leases.length} side={
                 <button className="btn btn-ghost" aria-pressed={leaseCompareOn}
                   disabled={!prev} title={prev?'Diff current leases against yesterday\'s snapshot':'A prior daily snapshot is needed'}
                   onClick={()=>{
@@ -334,13 +342,15 @@ function NetworkTab(){
                 diffMap={leaseDiff?leaseDiff.byKey:null} diffGhosts={leaseDiff?leaseDiff.ghosts:null}/>
             </Panel>
             </div>
-            <Panel title="Lease states" side={<>{leaseToggle}<span className="mono" style={{color:'var(--text-faint)'}}>{leases.length}</span></>} empty={leases.length===0}>
+            <div className="dc8 t-s4">
+            <Panel size="s4" title="Lease states" side={<>{leaseToggle}<span className="mono" style={{color:'var(--text-faint)'}}>{leases.length}</span></>} empty={leases.length===0}>
               <ChartView type={leaseChart} data={leaseSlices} donut={{centerValue:leases.length,centerLabel:"leases"}}/>
             </Panel>
+            </div>
+            <div className="dc8 t-s4"><IpamUtilPanel size="s4"/></div>
+            <div className="dc24 t-s6"><DhcpLeasesPanel size="s6"/></div>
           </div>
         </React.Fragment>}
-    <IpamUtilPanel/>
-    <DhcpLeasesPanel/>
   </div>;
 }
 
@@ -350,11 +360,11 @@ const IPAM_UTIL_COLS=[
   {key:'total',label:'Total',align:'right',mono:true},
   {key:'pct',label:'Utilization',align:'right',mono:true,render:v=>(v===''||v==null)?'—':(isNaN(Number(v))?'—':Number(v)+'%')},
 ];
-function IpamUtilPanel(){
+function IpamUtilPanel({size}){
   const feed=useApi('/api/csp/ipam-util',{poll:30000});
   const rows=(feed.data&&feed.data.rows)||[];
   const status=feed.data&&feed.data.status;
-  return <Panel title="IPAM utilization" api={feed}>
+  return <Panel size={size} title="IPAM utilization" api={feed}>
     {feed.error||status==='error'
       ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
       : rows.length===0
@@ -371,11 +381,11 @@ const DHCP_LEASE_COLS=[
   {key:'hardware',label:'Hardware',mono:true,render:v=>v||'—'},
   {key:'state',label:'State',align:'left',render:v=>StateText(v)},
 ];
-function DhcpLeasesPanel(){
+function DhcpLeasesPanel({size}){
   const feed=useApi('/api/csp/dhcp-leases',{poll:30000});
   const rows=(feed.data&&feed.data.rows)||[];
   const status=feed.data&&feed.data.status;
-  return <Panel title="DHCP leases" api={feed}>
+  return <Panel size={size} title="DHCP leases" api={feed}>
     {feed.error||status==='error'
       ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
       : rows.length===0
