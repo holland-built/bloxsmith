@@ -207,10 +207,11 @@ function OverviewTab(){
       </div>
     </div>
 
-    <div className="ovx-detail">
+    <div className="dash">
 
-      <div className="span-6">
-        <Panel title="Capacity heatmap" empty={siteRows.length<2}
+      {/* ── Band A — Capacity heatmap (dc12·lg) | Host status (dc12·s4) + Top consumers (dc12·s4) ── */}
+      <div className="dc12 t-lg">
+        <Panel title="Capacity heatmap" size="lg" empty={siteRows.length<2}
           side={<span className="mono" tabIndex={0} style={{cursor:'help'}}
             {...bind({title:'Capacity heatmap',rows:[
               ['Grouping','Subnets grouped by tagged site (or by /16 network when untagged).'],
@@ -278,8 +279,39 @@ function OverviewTab(){
         </Panel>
       </div>
 
-      <div className="span-3">
-        <Panel title="Top consumers"
+      <div className="dc12 t-s4">
+        <Panel title="Host status" size="s4" side={<>{hostToggle}<span>{hosts.length.toLocaleString()+' hosts'}</span></>}>
+          <div className="chart-body">
+            <ChartView type={hostChart} data={hostSlices} donut={{
+              centerValue:hosts.length?Math.round(hostAgg.online/hosts.length*100)+'%':'0',centerLabel:"online",
+              centerDetail:'Reachability of your '+hosts.length.toLocaleString()+' managed hosts — the percentage that are currently online.',
+              legendDetail:l=>({
+                online:'Host responded to reachability checks — considered healthy.',
+                degraded:'Host is reachable but reporting a warning status.',
+                offline:'Host did not respond — down or unreachable.',
+                other:"Status not recognized by the dashboard — not counted as online, degraded, or offline.",
+              }[l]||l)}}/>
+          </div>
+          {attnHosts.length?<div style={{marginTop:10,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:6}}>
+            {attnHosts.map((h,i)=>{
+              const st=String(h.status||'').toLowerCase();
+              const sv=/^(offline|down|off|error)$/.test(st)?'crit':/^(degraded|warn|warning)$/.test(st)?'high':'low';
+              const meaning=sv==='crit'?'Unreachable — investigate connectivity.':sv==='high'?'Reporting a warning — degraded but reachable.':'Status not recognized by the dashboard.';
+              const go=()=>nav('infra',{host:h.name});
+              return <div key={h.id||h.name||i} role="button" tabIndex={0} onClick={go}
+                onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}
+                style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,cursor:'pointer'}}
+                {...bind({title:'Host '+(h.name||h.ip||'—'),rows:[['Status',h.status||'—'],['What it means',meaning+' Click to investigate.']]})}>
+                <span className="mono" style={{fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.name||h.ip||'—'}</span>
+                <span className={'sev '+sv}>{h.status||'—'}</span>
+              </div>;
+            })}
+          </div>:null}
+        </Panel>
+      </div>
+
+      <div className="dc12 t-s4">
+        <Panel title="Top consumers" size="s4"
           side={<span className="mono" tabIndex={0} style={{cursor:'help'}}
             {...bind({title:'Top consumers',rows:[
               ['Matching','Subnets passing the current scope + utilization-band filters.'],
@@ -326,61 +358,11 @@ function OverviewTab(){
         </Panel>
       </div>
 
-      <div className="span-3">
-        <Panel title="Host status" side={<>{hostToggle}<span>{hosts.length.toLocaleString()+' hosts'}</span></>}>
-          <div className="chart-body">
-            <ChartView type={hostChart} data={hostSlices} donut={{
-              centerValue:hosts.length?Math.round(hostAgg.online/hosts.length*100)+'%':'0',centerLabel:"online",
-              centerDetail:'Reachability of your '+hosts.length.toLocaleString()+' managed hosts — the percentage that are currently online.',
-              legendDetail:l=>({
-                online:'Host responded to reachability checks — considered healthy.',
-                degraded:'Host is reachable but reporting a warning status.',
-                offline:'Host did not respond — down or unreachable.',
-                other:"Status not recognized by the dashboard — not counted as online, degraded, or offline.",
-              }[l]||l)}}/>
-          </div>
-          {attnHosts.length?<div style={{marginTop:10,paddingTop:8,borderTop:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:6}}>
-            {attnHosts.map((h,i)=>{
-              const st=String(h.status||'').toLowerCase();
-              const sv=/^(offline|down|off|error)$/.test(st)?'crit':/^(degraded|warn|warning)$/.test(st)?'high':'low';
-              const meaning=sv==='crit'?'Unreachable — investigate connectivity.':sv==='high'?'Reporting a warning — degraded but reachable.':'Status not recognized by the dashboard.';
-              const go=()=>nav('infra',{host:h.name});
-              return <div key={h.id||h.name||i} role="button" tabIndex={0} onClick={go}
-                onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}}}
-                style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,cursor:'pointer'}}
-                {...bind({title:'Host '+(h.name||h.ip||'—'),rows:[['Status',h.status||'—'],['What it means',meaning+' Click to investigate.']]})}>
-                <span className="mono" style={{fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.name||h.ip||'—'}</span>
-                <span className={'sev '+sv}>{h.status||'—'}</span>
-              </div>;
-            })}
-          </div>:null}
-        </Panel>
-      </div>
-
-      <div className="span-8">
-        <Panel title="All leases" empty={!leases.length}
-          side={<span className="mono" tabIndex={0}
-            aria-label={'Hidden columns: MAC address and Lease expires — not provided by this data source'}
-            style={{cursor:'help',textDecoration:'underline dotted'}}
-            {...bind({title:'Hidden columns',rows:[['MAC address','not provided by this data source'],['Lease expires','not provided by this data source']]})}>
-            {leases.length.toLocaleString()+' rows · '+activeLeases.toLocaleString()+' active · MAC column hidden ⓘ'}</span>}>
-          <DataTable tableId="ov-leases" csvName="active-leases" scrollBody={280}
-            rows={leases} rowKey={r=>String(r.addr||r.ip||'')+'|'+String(r.host||'')}
-            onRowClick={()=>nav('network')}
-            cols={[
-              {key:'addr',label:'IP address',primary:true,minWidth:150,mono:true,align:'left'},
-              {key:'state',label:'State',align:'left',render:v=>StateText(v)},
-              {key:'host',label:'Hostname',render:v=>v||'—'},
-            ]}
-            renderPeek={l=><OvPeek title={l.addr} sub={l.host}
-              rows={[['Host',l.host],['State',l.state],['Subnet',l.subnet]]}/>}/>
-        </Panel>
-      </div>
-
-      <div className="span-4">
+      {/* ── Band B — Triage queue (dc12·lg) | All leases (dc12·lg) ── */}
+      <div className="dc12 t-lg">
         {/* The badge says "top 6 of N" whenever the cap bites — the list is a deliberate
             top-N, so the number beside the title must not read as the whole queue. */}
-        <Panel title="Triage queue" size="md" side={<span className={'sev '+(subnetPreview.length?'crit':'low')}>{subnetPreview.length>OV_TRIAGE?('top '+OV_TRIAGE+' of '+subnetPreview.length+' need action'):(subnetPreview.length+' need action')}</span>}>
+        <Panel title="Triage queue" size="lg" side={<span className={'sev '+(subnetPreview.length?'crit':'low')}>{subnetPreview.length>OV_TRIAGE?('top '+OV_TRIAGE+' of '+subnetPreview.length+' need action'):(subnetPreview.length+' need action')}</span>}>
           {subnetPreview.length
             ? subnetPreview.slice(0,OV_TRIAGE).map((s,i)=>{
                 const u=util(s);
@@ -418,7 +400,28 @@ function OverviewTab(){
         </Panel>
       </div>
 
-      <div className="span-12">
+      <div className="dc12 t-lg">
+        <Panel title="All leases" size="lg" empty={!leases.length}
+          side={<span className="mono" tabIndex={0}
+            aria-label={'Hidden columns: MAC address and Lease expires — not provided by this data source'}
+            style={{cursor:'help',textDecoration:'underline dotted'}}
+            {...bind({title:'Hidden columns',rows:[['MAC address','not provided by this data source'],['Lease expires','not provided by this data source']]})}>
+            {leases.length.toLocaleString()+' rows · '+activeLeases.toLocaleString()+' active · MAC column hidden ⓘ'}</span>}>
+          <DataTable tableId="ov-leases" csvName="active-leases" scrollBody={280}
+            rows={leases} rowKey={r=>String(r.addr||r.ip||'')+'|'+String(r.host||'')}
+            onRowClick={()=>nav('network')}
+            cols={[
+              {key:'addr',label:'IP address',primary:true,minWidth:150,mono:true,align:'left'},
+              {key:'state',label:'State',align:'left',render:v=>StateText(v)},
+              {key:'host',label:'Hostname',render:v=>v||'—'},
+            ]}
+            renderPeek={l=><OvPeek title={l.addr} sub={l.host}
+              rows={[['Host',l.host],['State',l.state],['Subnet',l.subnet]]}/>}/>
+        </Panel>
+      </div>
+
+      {/* ── Band C — Licenses & portal alerts (dc24·s4) ── */}
+      <div className="dc24 t-s4">
         <LicenseAlertsPanel/>
       </div>
 
@@ -458,7 +461,7 @@ function LicenseAlertsPanel(){
     {key:'severity',label:'Severity',render:ovxAlertSevBadge},
     {key:'created_at',label:'Created',mono:true},
   ];
-  return <Panel title="Licenses & Portal Alerts" api={feed}>
+  return <Panel title="Licenses & Portal Alerts" size="s4" api={feed}>
     {feed.error||status==='error' ? <ErrorState error="feed unavailable — CSP returned an error" onRetry={feed.refetch}/>
      : (licenses.length===0&&alerts.length===0) ? <div style={{padding:16,color:'var(--text-faint)',fontSize:12}}>No data in the current window</div>
      : <>
