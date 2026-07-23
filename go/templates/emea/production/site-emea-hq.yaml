@@ -1,0 +1,49 @@
+type: site
+
+# Bloxsmith seed template — original content, no third-party source.
+# Fictional EMEA headquarters site: Dublin, Ireland.
+site:
+  name: emea-hq
+  region: EMEA
+  environment: production
+  location: Dublin, Ireland
+  owner: netops-emea@example.com
+
+network:
+  ip_space: default
+  subnet_size: 24
+  subnets:
+    - name: emea-hq-servers
+      purpose: Server VLAN
+      cidr: 24
+      dhcp: false
+    - name: emea-hq-workstations
+      purpose: Workstation VLAN
+      cidr: 24
+      dhcp: true
+      dhcp_start: 50
+      dhcp_end: 220
+    - name: emea-hq-voip
+      purpose: VoIP VLAN
+      cidr: 26
+      dhcp: true
+      dhcp_start: 5
+      dhcp_end: 60
+
+dns:
+  parent: corp.example.com
+  view: default
+  create_zone: true
+  create_reverse_zone: true
+
+hosts:
+  - hostname: emea-hq-core-sw01
+    subnet: emea-hq-servers
+    comment: Core distribution switch
+  - hostname: emea-hq-fw01
+    subnet: emea-hq-servers
+    comment: Primary edge firewall
+
+tags:
+  cost_center: emea-100
+  managed_by: bloxsmith

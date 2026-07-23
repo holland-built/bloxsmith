@@ -1,0 +1,40 @@
+type: site
+
+# Bloxsmith seed template — original content, no third-party source.
+# Fictional APAC lab site: Osaka, Japan.
+site:
+  name: apac-lab
+  region: APAC
+  environment: lab
+  location: Osaka, Japan
+  owner: labops-apac@example.com
+
+network:
+  ip_space: default
+  subnet_size: 25
+  subnets:
+    - name: apac-lab-bench
+      purpose: Test bench VLAN
+      cidr: 25
+      dhcp: true
+      dhcp_start: 20
+      dhcp_end: 120
+    - name: apac-lab-mgmt
+      purpose: Out-of-band management VLAN
+      cidr: 27
+      dhcp: false
+
+dns:
+  parent: lab.example.com
+  view: default
+  create_zone: true
+  create_reverse_zone: false
+
+hosts:
+  - hostname: apac-lab-jump01
+    subnet: apac-lab-mgmt
+    comment: Lab jump host
+
+tags:
+  cost_center: apac-200
+  managed_by: bloxsmith

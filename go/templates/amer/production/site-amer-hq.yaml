@@ -1,0 +1,49 @@
+type: site
+
+# Bloxsmith seed template — original content, no third-party source.
+# Fictional Americas headquarters site: Denver, CO.
+site:
+  name: amer-hq
+  region: Americas
+  environment: production
+  location: Denver, CO
+  owner: netops-amer@example.com
+
+network:
+  ip_space: default
+  subnet_size: 24
+  subnets:
+    - name: amer-hq-servers
+      purpose: Server VLAN
+      cidr: 24
+      dhcp: false
+    - name: amer-hq-workstations
+      purpose: Workstation VLAN
+      cidr: 24
+      dhcp: true
+      dhcp_start: 50
+      dhcp_end: 200
+    - name: amer-hq-guest
+      purpose: Guest wifi VLAN
+      cidr: 25
+      dhcp: true
+      dhcp_start: 10
+      dhcp_end: 100
+
+dns:
+  parent: corp.example.com
+  view: default
+  create_zone: true
+  create_reverse_zone: true
+
+hosts:
+  - hostname: amer-hq-core-sw01
+    subnet: amer-hq-servers
+    comment: Core distribution switch
+  - hostname: amer-hq-fw01
+    subnet: amer-hq-servers
+    comment: Primary edge firewall
+
+tags:
+  cost_center: amer-100
+  managed_by: bloxsmith

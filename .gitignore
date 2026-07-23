@@ -92,9 +92,6 @@ mockups/
 # saved-view runtime store (VAULT_DIR)
 views/
 
-# Third-party demo templates — fetched at build (scripts/fetch_templates.py), never published (ccmarris/uddi_automation_toolkit)
-templates/
-
 # Windows version-info resource — generated at build time by goversioninfo
 # from go/versioninfo.json (see go/versioninfo.go, go/.goreleaser.yaml before.hooks)
 *.syso
@@ -110,3 +107,6 @@ go/dist/
 go/install.sh
 go/install.ps1
 go/web/app.bundle.js
+
+# root-level templates/ is a fetched third-party copy — never commit (our own set lives in go/templates/)
+/templates/
