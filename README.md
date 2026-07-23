@@ -27,16 +27,15 @@ sh install.sh
 brew install holland-built/tap/bloxsmith
 ```
 
-**Windows** — open **PowerShell** (Start → type `PowerShell`), then paste; it downloads, you inspect, then it installs and opens the dashboard:
+**Windows** — paste into **Command Prompt or PowerShell** (each `powershell` line works from either); it downloads, you inspect, then it installs and opens the dashboard:
 
-```powershell
-iwr -UseBasicParsing -OutFile install.ps1 `
-  https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1
+```bat
+powershell -Command "iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1"
 notepad install.ps1
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-Use **PowerShell**, not Command Prompt — `iwr` is a PowerShell command (cmd.exe gives "iwr is not recognized"). Close Notepad after reading to continue.
+Line 1 downloads it, Notepad opens it to read — close Notepad, then line 3 installs. Prefixing with `powershell -Command` is what makes `iwr` work from cmd.exe.
 
 **Docker** — then open http://localhost:8080 yourself:
 
