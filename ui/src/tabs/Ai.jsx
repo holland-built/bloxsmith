@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useChartTheme, Card, Empty } from '../components/ui.jsx'
 import { authFetch } from '../lib/authFetch.js'
+import DossierPanel from '../components/DossierPanel.jsx'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt'
 
@@ -242,62 +243,6 @@ function BlockDomainButton({ domain }) {
   )
 }
 
-function DossierPanel({ dossier }) {
-  const { COLORS } = useChartTheme()
-  if (!dossier) return null
-  if (dossier.unavailable) {
-    return <div className="text-[11px] text-muted mt-3">External intel unavailable: {String(dossier.unavailable)}</div>
-  }
-  const sum = dossier.summary || {}
-  const sources = Array.isArray(dossier.sources) ? dossier.sources : []
-  const mal = !!sum.malicious
-  const meta = [
-    ['Max threat level', sum.max_threat_level],
-    ['Country', sum.country],
-    ['Registrar', sum.registrar],
-    ['Actor', sum.actor],
-  ].filter((x) => x[1] != null && x[1] !== '')
-  const classes = Array.isArray(sum.threat_classes) ? sum.threat_classes : []
-
-  return (
-    <div className="mt-3 pt-3 border-t border-border">
-      <h3 className="text-[12px] font-semibold text-muted mb-2">External intel (Dossier)</h3>
-      <div className="flex items-center gap-2 flex-wrap mb-2">
-        <span
-          className="font-mono text-[11px] px-2 py-0.5 rounded-lg border"
-          style={{ color: mal ? COLORS.sevHigh : COLORS.ok, borderColor: mal ? COLORS.crit : 'var(--color-border)' }}
-        >
-          {mal ? 'malicious' : 'clean'}
-        </span>
-        {sum.max_threat_level != null && <span className="font-mono text-[11px] text-muted">threat {String(sum.max_threat_level)}</span>}
-        {dossier.type && <span className="font-mono text-[11px] text-dim">{String(dossier.type)}</span>}
-      </div>
-      {!!classes.length && (
-        <div className="flex gap-1 flex-wrap mb-2">
-          {classes.map((c, i) => (
-            <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border border-border text-muted">{String(c)}</span>
-          ))}
-        </div>
-      )}
-      {!!meta.length && (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] mb-2">
-          {meta.map(([k, v]) => (
-            <span key={k} className="contents">
-              <dt className="text-muted">{k}</dt>
-              <dd className="font-mono text-field-txt break-all">{String(v)}</dd>
-            </span>
-          ))}
-        </dl>
-      )}
-      {sources.length > 0 ? (
-        <EntitiesTable entities={sources} />
-      ) : (
-        <div className="font-mono text-[11px] text-muted">No sources reported.</div>
-      )}
-    </div>
-  )
-}
-
 function LookupCard() {
   const { COLORS } = useChartTheme()
   const [q, setQ] = useState('')
@@ -349,7 +294,7 @@ function LookupCard() {
       {!err && !res && !dossier && !busy && <Empty>Look up a domain, IP, or host</Empty>}
       {res && <EntitiesTable entities={res.entities} />}
       {(res || dossier) && <BlockDomainButton domain={queryUsed} />}
-      <DossierPanel dossier={dossier} />
+      <DossierPanel data={dossier} />
     </Card>
   )
 }
