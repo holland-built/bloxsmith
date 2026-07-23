@@ -164,6 +164,25 @@ failing, open an issue at https://github.com/$REPO/issues
         Write-Host "PATH     : added $Prefix to your user PATH - reopen your shell for it to take effect."
     }
 
+    # --- get the user to the dashboard, zero extra steps ----------------------
+    $url = 'http://localhost:8080'
+    if ([Environment]::UserInteractive) {
+        Write-Host ''
+        Write-Host "Starting Bloxsmith and opening $url ..."
+        Start-Process -FilePath $dest | Out-Null
+        $up = $false
+        for ($i = 0; $i -lt 40; $i++) {
+            try {
+                Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 2 | Out-Null
+                $up = $true; break
+            } catch { Start-Sleep -Milliseconds 500 }
+        }
+        Start-Process $url | Out-Null
+        if (-not $up) {
+            Write-Host "Bloxsmith is still starting — the browser may need a refresh."
+        }
+    }
+
     Write-Host ''
     Write-Host 'Next steps:'
     Write-Host '  bloxsmith                 # start it -> http://localhost:8080'
