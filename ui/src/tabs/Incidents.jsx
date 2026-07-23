@@ -73,7 +73,7 @@ export default function Incidents() {
   }
 
   return (
-    <div className="max-w-[1340px] mx-auto p-5">
+    <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Incidents</h1>
       <div className="grid grid-cols-6 gap-3">
         <CategoryChips categories={categories} loading={incApi.loading} category={category} onCategory={setCategory} />

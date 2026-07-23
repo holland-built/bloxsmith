@@ -195,7 +195,7 @@ function DnsPanel() {
 
 export default function SelfService() {
   return (
-    <div className="max-w-[1340px] mx-auto p-5">
+    <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Self-Service</h1>
       <div className="flex flex-wrap gap-3">
         <div className="flex-1 min-w-[420px] max-w-[640px]"><AllocatePanel /></div>
