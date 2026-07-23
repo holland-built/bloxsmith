@@ -14,6 +14,7 @@ import SelfService from './tabs/SelfService.jsx'
 import Ai from './tabs/Ai.jsx'
 import Palette from './components/Palette.jsx'
 import UpdateButton from './components/UpdateButton.jsx'
+import ConnStatus from './components/ConnStatus.jsx'
 import VaultGate from './components/VaultGate.jsx'
 import TenantManager from './components/TenantManager.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
@@ -91,6 +92,7 @@ export default function App() {
             ))}
           </nav>
           <span className="flex-1" />
+          <ConnStatus />
           <UpdateButton />
           <button
             onClick={() => setShowAccounts(true)}
