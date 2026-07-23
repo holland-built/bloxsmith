@@ -18,6 +18,23 @@ import ConnStatus from './components/ConnStatus.jsx'
 import VaultGate from './components/VaultGate.jsx'
 import TenantManager from './components/TenantManager.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
+import { useTheme } from './lib/theme.jsx'
+
+// One-icon theme cycle: dark → light → system → dark. Full 3-way picker also in Settings.
+function ThemeIcon() {
+  const { mode, setMode } = useTheme()
+  const next = { dark: 'light', light: 'system', system: 'dark' }
+  const icon = { dark: '☾', light: '☀', system: '◐' }
+  return (
+    <button
+      onClick={() => setMode(next[mode] ?? 'dark')}
+      title={`Theme: ${mode} — click for ${next[mode]}`}
+      className="w-8 h-8 rounded-lg border border-border bg-field text-muted hover:text-txt hover:border-border-hover"
+    >
+      {icon[mode] ?? '☾'}
+    </button>
+  )
+}
 
 const TABS = [
   { id: 'overview', label: 'Overview', el: Overview },
@@ -94,17 +111,13 @@ export default function App() {
           <span className="flex-1" />
           <ConnStatus />
           <UpdateButton />
+          <ThemeIcon />
           <button
             onClick={() => setShowAccounts(true)}
-            className="px-2 py-1 rounded-lg border border-border text-muted text-xs hover:text-txt hover:border-border-hover"
+            title="Settings"
+            className="w-8 h-8 rounded-lg border border-border bg-field text-muted hover:text-txt hover:border-border-hover"
           >
-            ⚙ Settings
-          </button>
-          <button
-            onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
-            className="w-[190px] text-left px-2.5 py-1.5 rounded-lg border border-border bg-field text-muted text-sm"
-          >
-            Jump to…&nbsp;&nbsp;⌘K
+            ⚙
           </button>
           <a
             href="#provision"
