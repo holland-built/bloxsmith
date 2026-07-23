@@ -34,9 +34,9 @@ function IssueKpis({ subnets, hosts, zones, loading }) {
   const zoneIssues = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length
 
   const cells = [
-    { label: 'Subnets >85% Util', value: gt85, color: COLORS.crit },
-    { label: 'Hosts Not Online', value: notOnline, color: COLORS.warn },
-    { label: 'DNS Zones w/ Issues', value: zoneIssues, color: COLORS.other },
+    { label: 'Subnets >85% Util', value: gt85, color: COLORS.crit, hash: 'network?minUtil=85' },
+    { label: 'Hosts Not Online', value: notOnline, color: COLORS.warn, hash: 'infra?status=error' },
+    { label: 'DNS Zones w/ Issues', value: zoneIssues, color: COLORS.other, hash: 'dns?issues=1' },
   ]
 
   return (
@@ -45,7 +45,11 @@ function IssueKpis({ subnets, hosts, zones, loading }) {
         <Skeleton h={160} />
       ) : (
         cells.map((c, i) => (
-          <div key={c.label} className={`flex items-center justify-between py-3.5 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}>
+          <div
+            key={c.label}
+            onClick={() => { location.hash = c.hash }}
+            className={`flex items-center justify-between py-3.5 cursor-pointer hover:bg-line ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
+          >
             <div className="text-muted text-xs">{c.label}</div>
             <div className="text-2xl font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
               {c.value.toLocaleString()}
@@ -122,7 +126,11 @@ function TopCapacityRisks({ subnets, loading }) {
               const util = Number(s.util) || 0
               const status = utilStatus(util)
               return (
-                <tr key={(s.addr || s.cidr || '') + i}>
+                <tr
+                  key={(s.addr || s.cidr || '') + i}
+                  onClick={() => { location.hash = 'network?subnet=' + encodeURIComponent(s.addr || s.cidr || '') }}
+                  className="cursor-pointer hover:bg-line"
+                >
                   <td className="py-2 px-2.5 border-b border-line font-mono">{s.addr || s.cidr}</td>
                   <td className="py-2 px-2.5 border-b border-line">{s.site || '—'}</td>
                   <td className="py-2 px-2.5 border-b border-line">
@@ -156,7 +164,11 @@ function HostsAttention({ hosts, loading }) {
       ) : (
         <div className="flex flex-col gap-1 mt-1">
           {rows.map((h, i) => (
-            <div key={(h.name || h.ip || '') + i} className="flex items-center gap-2.5 py-1.5 border-b border-line last:border-0">
+            <div
+              key={(h.name || h.ip || '') + i}
+              onClick={() => { location.hash = 'infra?status=error' }}
+              className="flex items-center gap-2.5 py-1.5 border-b border-line last:border-0 cursor-pointer hover:bg-line"
+            >
               <i className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: COLORS.crit }} />
               <div className="flex-1 min-w-0">
                 <div className="text-sm truncate">{h.name || '—'}</div>
@@ -185,7 +197,11 @@ function DnsZoneIssues({ zones, loading }) {
       ) : (
         <div className="flex flex-col gap-1 mt-1">
           {rows.map((z, i) => (
-            <div key={(z.fqdn || '') + i} className="flex items-start gap-2.5 py-1.5 border-b border-line last:border-0">
+            <div
+              key={(z.fqdn || '') + i}
+              onClick={() => { location.hash = 'dns?issues=1' }}
+              className="flex items-start gap-2.5 py-1.5 border-b border-line last:border-0 cursor-pointer hover:bg-line"
+            >
               <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0" style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}>
                 {z.issues.length}
               </span>
