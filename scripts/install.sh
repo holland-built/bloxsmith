@@ -55,6 +55,27 @@ else
     exit 1
 fi
 
+# Wait up to ~20s for the dashboard to answer, then return 0/1.
+wait_for_url() {
+    _i=0
+    while [ "$_i" -lt 40 ]; do
+        if curl -fsS -o /dev/null "$1" 2>/dev/null; then return 0; fi
+        _i=$((_i + 1)); sleep 0.5
+    done
+    return 1
+}
+
+# Best-effort browser open; never fails the script.
+open_url() {
+    if command -v open >/dev/null 2>&1; then
+        open "$1" >/dev/null 2>&1 || true
+    elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$1" >/dev/null 2>&1 || true
+    else
+        echo "Open this in your browser: $1"
+    fi
+}
+
 # --- detect platform --------------------------------------------------------
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
@@ -176,6 +197,27 @@ else
     echo ""
     echo "Skipped the login service. Register it later with: ${PREFIX}/bloxsmith service install"
 fi
+
+# --- get the user to the dashboard, zero extra steps ------------------------
+URL="http://localhost:8080"
+if [ "$DO_SERVICE" = "yes" ]; then
+    # `service install` registers the unit but does NOT start it — start it now.
+    "$PREFIX/bloxsmith" service start >/dev/null 2>&1 || true
+    echo ""
+    echo "Starting Bloxsmith and opening ${URL} ..."
+    if wait_for_url "$URL"; then open_url "$URL"; else
+        echo "Bloxsmith did not answer on ${URL} yet — open it manually once it's up."
+    fi
+elif [ -t 0 ]; then
+    # No service, interactive install: launch detached so the terminal returns.
+    echo ""
+    echo "Starting Bloxsmith and opening ${URL} ..."
+    nohup "$PREFIX/bloxsmith" >/dev/null 2>&1 </dev/null &
+    if wait_for_url "$URL"; then open_url "$URL"; else
+        echo "Bloxsmith is starting — open ${URL} in your browser."
+    fi
+fi
+# Non-interactive + no service: fall through to "Next steps" unchanged.
 
 # --- PATH advice (we never edit your shell rc) ------------------------------
 case ":${PATH}:" in

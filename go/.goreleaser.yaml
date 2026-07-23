@@ -127,6 +127,10 @@ brews:
       bin.install "bloxsmith"
     test: |
       system "#{bin}/bloxsmith", "--version"
+    caveats: |
+      Start Bloxsmith by running:  bloxsmith
+      Then open the dashboard:     http://localhost:8080
+      Run it at login in the background:  bloxsmith service install
 
 # --- Container image for the enterprise-server audience ----------------------
 # distroless/static — same env contract as the old python image, so the existing
