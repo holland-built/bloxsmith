@@ -1,0 +1,38 @@
+type: dns
+
+# Bloxsmith seed template — original content, no third-party source.
+# Fictional corporate zone with a handful of example records.
+zones:
+  - fqdn: corp.example.com
+    kind: forward
+    records:
+      - type: A
+        name: www
+        rdata: 10.0.0.10
+        ttl: 3600
+      - type: A
+        name: mail
+        rdata: 10.0.0.11
+        ttl: 3600
+      - type: CNAME
+        name: intranet
+        rdata: www.corp.example.com
+        ttl: 3600
+      - type: MX
+        name: "@"
+        rdata:
+          preference: 10
+          exchange: mail.corp.example.com
+        ttl: 3600
+      - type: TXT
+        name: "@"
+        rdata: "v=spf1 mx -all"
+        ttl: 3600
+
+  - fqdn: 0.10.in-addr.arpa
+    kind: reverse
+    records:
+      - type: PTR
+        name: "10.0.0.10"
+        rdata: www.corp.example.com
+        ttl: 3600

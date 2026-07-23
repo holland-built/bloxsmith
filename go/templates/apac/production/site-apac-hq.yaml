@@ -1,0 +1,49 @@
+type: site
+
+# Bloxsmith seed template — original content, no third-party source.
+# Fictional APAC headquarters site: Singapore.
+site:
+  name: apac-hq
+  region: APAC
+  environment: production
+  location: Singapore
+  owner: netops-apac@example.com
+
+network:
+  ip_space: default
+  subnet_size: 24
+  subnets:
+    - name: apac-hq-servers
+      purpose: Server VLAN
+      cidr: 24
+      dhcp: false
+    - name: apac-hq-workstations
+      purpose: Workstation VLAN
+      cidr: 24
+      dhcp: true
+      dhcp_start: 50
+      dhcp_end: 210
+    - name: apac-hq-guest
+      purpose: Guest wifi VLAN
+      cidr: 25
+      dhcp: true
+      dhcp_start: 10
+      dhcp_end: 100
+
+dns:
+  parent: corp.example.com
+  view: default
+  create_zone: true
+  create_reverse_zone: true
+
+hosts:
+  - hostname: apac-hq-core-sw01
+    subnet: apac-hq-servers
+    comment: Core distribution switch
+  - hostname: apac-hq-fw01
+    subnet: apac-hq-servers
+    comment: Primary edge firewall
+
+tags:
+  cost_center: apac-100
+  managed_by: bloxsmith
