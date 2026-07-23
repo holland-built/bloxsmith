@@ -4,6 +4,8 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useHashParams } from '../lib/hash.js'
+import { useThemeColors } from '../lib/theme.jsx'
 
 // ---------- main ----------
 
@@ -15,6 +17,7 @@ export default function Dns() {
   const analytics = useApi('/api/dns-analytics', { poll: 30000 })
   const data = useApi('/api/data', { poll: 30000 })
 
+  const hp = useHashParams()
   const zones = data.data?.zones ?? []
 
   return (
@@ -25,7 +28,7 @@ export default function Dns() {
         <ZoneKpis zones={zones} />
         <DnsServices services={services} />
         <QueryVolume7d analytics={analytics} />
-        <ZoneTable zones={zones} />
+        <ZoneTable zones={zones} issuesOnly={!!hp.issues} />
       </div>
     </div>
   )
@@ -190,16 +193,18 @@ function QueryVolume7d({ analytics }) {
 
 // ---------- zone table ----------
 
-function ZoneTable({ zones }) {
+function ZoneTable({ zones, issuesOnly }) {
   const { COLORS } = useChartTheme()
+  const theme = useThemeColors()
   const [filter, setFilter] = useState('')
   const [sort, setSort] = useState({ key: 'fqdn', dir: 'asc' })
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    if (!q) return zones
-    return zones.filter((z) => [z.fqdn, z.view].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [zones, filter])
+    let base = issuesOnly ? zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0) : zones
+    if (!q) return base
+    return base.filter((z) => [z.fqdn, z.view].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
+  }, [zones, filter, issuesOnly])
 
   const sorted = useMemo(() => {
     const arr = [...filtered]
@@ -233,7 +238,20 @@ function ZoneTable({ zones }) {
   return (
     <Card
       span={6}
-      title="DNS Zones"
+      title={
+        issuesOnly ? (
+          <span className="inline-flex items-center gap-2">
+            DNS Zones
+            <span
+              onClick={() => { location.hash = 'dns' }}
+              className="text-[11px] font-medium px-2 py-0.5 rounded-full cursor-pointer"
+              style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
+            >
+              issues only ✕
+            </span>
+          </span>
+        ) : 'DNS Zones'
+      }
       right={
         <input
           placeholder="Filter…"
