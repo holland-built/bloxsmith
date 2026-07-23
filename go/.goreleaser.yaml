@@ -119,9 +119,11 @@ brews:
       name: homebrew-tap
       branch: main
       # CI: HOMEBREW_TAP_TOKEN (PAT with repo scope on homebrew-tap) — the
-      # built-in GITHUB_TOKEN can't push cross-repo. Local fallback: falls back
-      # to GITHUB_TOKEN (gh auth token has repo scope on personal repos).
-      token: "{{ if index .Env \"HOMEBREW_TAP_TOKEN\" }}{{ .Env.HOMEBREW_TAP_TOKEN }}{{ else }}{{ .Env.GITHUB_TOKEN }}{{ end }}"
+      # built-in GITHUB_TOKEN can't push cross-repo. release.yml runs the brew
+      # channel only when this secret is set (else --skip=homebrew), so a plain
+      # env ref is safe. goreleaser (v2.17+ via goreleaser-action@v7) rejects
+      # conditional/if-else token templates — must be {{ .Env.VAR }} only.
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: "https://github.com/holland-built/bloxsmith"
     description: "Bloxsmith — self-contained Infoblox BloxOne NOC dashboard (embedded UI + API proxy)."
     license: "MIT"
@@ -143,49 +145,23 @@ brews:
 # distroless/static — same env contract as the old python image, so the existing
 # docker-compose.yml + noc-vault volume drop in unchanged. Built only during
 # `goreleaser release` (skipped by `goreleaser build`).
-dockers:
-  - id: bloxsmith-amd64
-    ids:
+dockers_v2:
+  - ids:
       - bloxsmith
-    goos: linux
-    goarch: amd64
+    images:
+      - "ghcr.io/holland-built/bloxsmith"
+    tags:
+      - "{{ .Version }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
     dockerfile: Dockerfile.goreleaser
     extra_files:
       - templates
-    image_templates:
-      - "ghcr.io/holland-built/bloxsmith:{{ .Version }}-amd64"
-      - "ghcr.io/holland-built/bloxsmith:latest-amd64"
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.source=https://github.com/holland-built/bloxsmith"
-  - id: bloxsmith-arm64
-    ids:
-      - bloxsmith
-    goos: linux
-    goarch: arm64
-    dockerfile: Dockerfile.goreleaser
-    extra_files:
-      - templates
-    image_templates:
-      - "ghcr.io/holland-built/bloxsmith:{{ .Version }}-arm64"
-      - "ghcr.io/holland-built/bloxsmith:latest-arm64"
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm64"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.source=https://github.com/holland-built/bloxsmith"
-
-docker_manifests:
-  - name_template: "ghcr.io/holland-built/bloxsmith:{{ .Version }}"
-    image_templates:
-      - "ghcr.io/holland-built/bloxsmith:{{ .Version }}-amd64"
-      - "ghcr.io/holland-built/bloxsmith:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/holland-built/bloxsmith:latest"
-    image_templates:
-      - "ghcr.io/holland-built/bloxsmith:latest-amd64"
-      - "ghcr.io/holland-built/bloxsmith:latest-arm64"
+    labels:
+      "org.opencontainers.image.version": "{{ .Version }}"
+      "org.opencontainers.image.source": "https://github.com/holland-built/bloxsmith"
 
 # --- cosign keyless signing of the pushed ghcr images -------------------------
 # Runs in CI (release.yml) with id-token: write — the signature's identity is
