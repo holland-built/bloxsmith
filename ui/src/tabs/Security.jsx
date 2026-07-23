@@ -249,43 +249,49 @@ function TriageInbox({ hub, events, acks, setAcks }) {
       {hub.loading ? <Skeleton h={260} /> : hub.error || sorted.length === 0 ? (
         <Empty>{hub.error ? 'no data' : 'no events match'}</Empty>
       ) : (
-        <table className="w-full border-collapse mt-2.5 text-sm">
-          <thead>
-            <tr>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Ack</th>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Block</th>
-              {headers.map((h) => (
-                <th
-                  key={h.key}
-                  onClick={() => toggleSort(h.key)}
-                  className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 cursor-pointer select-none"
-                >
-                  {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {top.map((e, i) => {
-              const sev = String(e.severity || '').toLowerCase()
-              const acked = !!acks[ackKey(e)]
-              return (
-                <tr key={ackKey(e) + i} style={{ opacity: acked ? 0.45 : 1 }}>
-                  <td className="py-2 px-2.5 border-b border-line">
-                    <input type="checkbox" checked={acked} onChange={() => toggleAck(e)} />
-                  </td>
-                  <td className="py-2 px-2.5 border-b border-line">
-                    <BlockCell domain={e.qname} />
-                  </td>
-                  <td className="py-2 px-2.5 border-b border-line font-medium uppercase text-[11px]" style={{ color: SEV_COLOR[sev] || COLORS.other }}>{e.severity || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line font-mono">{e.qname || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted">{e.policy_action || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line text-dim text-[11px]">{e.event_time ? new Date(e.event_time).toLocaleString() : '—'}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <div className="overflow-x-hidden overflow-y-auto max-h-[420px]">
+          <table className="w-full border-collapse mt-2.5 text-sm">
+            <thead>
+              <tr>
+                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Ack</th>
+                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Block</th>
+                {headers.map((h) => (
+                  <th
+                    key={h.key}
+                    onClick={() => toggleSort(h.key)}
+                    className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 cursor-pointer select-none"
+                  >
+                    {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {top.map((e, i) => {
+                const sev = String(e.severity || '').toLowerCase()
+                const acked = !!acks[ackKey(e)]
+                return (
+                  <tr key={ackKey(e) + i} style={{ opacity: acked ? 0.45 : 1 }}>
+                    <td className="py-2 px-2.5 border-b border-line">
+                      <input type="checkbox" checked={acked} onChange={() => toggleAck(e)} />
+                    </td>
+                    <td className="py-2 px-2.5 border-b border-line">
+                      <BlockCell domain={e.qname} />
+                    </td>
+                    <td className="py-2 px-2.5 border-b border-line font-medium uppercase text-[11px]" style={{ color: SEV_COLOR[sev] || COLORS.other }}>{e.severity || '—'}</td>
+                    <td className="py-2 px-2.5 border-b border-line align-top">
+                      <span className="block font-mono overflow-hidden whitespace-nowrap" style={{ maxWidth: 260 }} title={e.qname || undefined}>
+                        {e.qname || '—'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-2.5 border-b border-line text-muted">{e.policy_action || '—'}</td>
+                    <td className="py-2 px-2.5 border-b border-line text-dim text-[11px] whitespace-nowrap">{e.event_time ? new Date(e.event_time).toLocaleString() : '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   )
@@ -303,24 +309,30 @@ function LookalikeTable({ lookalikes }) {
       {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error || d.unavailable || rows.length === 0 ? (
         <Empty>{d.unavailable ? `not entitled — ${d.unavailable}` : 'no data'}</Empty>
       ) : (
-        <table className="w-full border-collapse mt-2.5 text-sm">
-          <thead>
-            <tr>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Lookalike</th>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Target</th>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Suspicious</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 15).map((r, i) => (
-              <tr key={(r.lookalike || i) + '' + i}>
-                <td className="py-2 px-2.5 border-b border-line font-mono">{r.lookalike || '—'}</td>
-                <td className="py-2 px-2.5 border-b border-line text-muted">{r.target || '—'}</td>
-                <td className="py-2 px-2.5 border-b border-line" style={{ color: r.suspicious ? COLORS.crit : COLORS.other }}>{r.suspicious ? 'yes' : 'no'}</td>
+        <div className="overflow-x-hidden overflow-y-auto max-h-[280px]">
+          <table className="w-full border-collapse mt-2.5 text-sm">
+            <thead>
+              <tr>
+                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Lookalike</th>
+                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Target</th>
+                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Suspicious</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.slice(0, 15).map((r, i) => (
+                <tr key={(r.lookalike || i) + '' + i}>
+                  <td className="py-2 px-2.5 border-b border-line align-top">
+                    <span className="block font-mono overflow-hidden whitespace-nowrap" style={{ maxWidth: 220 }} title={r.lookalike || undefined}>
+                      {r.lookalike || '—'}
+                    </span>
+                  </td>
+                  <td className="py-2 px-2.5 border-b border-line text-muted break-words">{r.target || '—'}</td>
+                  <td className="py-2 px-2.5 border-b border-line" style={{ color: r.suspicious ? COLORS.crit : COLORS.other }}>{r.suspicious ? 'yes' : 'no'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   )
@@ -416,24 +428,26 @@ function InsightsPanel({ insights }) {
   return (
     <Card span={3} title="SOC Insights">
       {insights.loading ? <Skeleton h={220} /> : insights.error || rows.length === 0 ? <Empty /> : (
-        <table className="w-full border-collapse mt-2.5 text-sm">
-          <thead>
-            <tr>
-              {cols.map((c) => (
-                <th key={c} className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">{c.replace(/_/g, ' ')}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 15).map((r, i) => (
-              <tr key={i}>
+        <div className="overflow-x-hidden overflow-y-auto max-h-[280px]">
+          <table className="w-full border-collapse mt-2.5 text-sm">
+            <thead>
+              <tr>
                 {cols.map((c) => (
-                  <td key={c} className="py-2 px-2.5 border-b border-line text-muted">{typeof r[c] === 'object' ? JSON.stringify(r[c]) : String(r[c] ?? '—')}</td>
+                  <th key={c} className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">{c.replace(/_/g, ' ')}</th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.slice(0, 15).map((r, i) => (
+                <tr key={i}>
+                  {cols.map((c) => (
+                    <td key={c} className="py-2 px-2.5 border-b border-line text-muted break-words">{typeof r[c] === 'object' ? JSON.stringify(r[c]) : String(r[c] ?? '—')}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   )

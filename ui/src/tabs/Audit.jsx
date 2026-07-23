@@ -167,7 +167,7 @@ function AuditTable({ logs, loading, error }) {
       ) : top50.length === 0 ? (
         <Empty>no entries match</Empty>
       ) : (
-        <div className="overflow-auto max-h-[420px]">
+        <div className="overflow-x-hidden overflow-y-auto max-h-[420px]">
           <table className="w-full border-collapse mt-2.5 text-sm">
             <thead>
               <tr>
@@ -188,8 +188,8 @@ function AuditTable({ logs, loading, error }) {
                   <td className="py-2 px-2.5 border-b border-line font-mono text-[12px] whitespace-nowrap">{fmtTs(l.ts)}</td>
                   <td className="py-2 px-2.5 border-b border-line max-w-[140px] truncate" title={l.user}>{l.user || '—'}</td>
                   <td className="py-2 px-2.5 border-b border-line"><ActionPill action={l.action} /></td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted">{l.resource || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted">{l.result || '—'}</td>
+                  <td className="py-2 px-2.5 border-b border-line text-muted break-words">{l.resource || '—'}</td>
+                  <td className="py-2 px-2.5 border-b border-line text-muted break-words">{l.result || '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -252,7 +252,7 @@ function CspAuditTable() {
       ) : rows.length === 0 ? (
         <Empty>no entries match</Empty>
       ) : (
-        <div className="overflow-auto max-h-[420px]">
+        <div className="overflow-x-hidden overflow-y-auto max-h-[420px]">
           <table className="w-full border-collapse mt-2.5 text-sm">
             <thead>
               <tr>
@@ -269,8 +269,8 @@ function CspAuditTable() {
                     {r.user || '—'} {r.who_kind && <span className="text-dim text-[10.5px]">({r.who_kind})</span>}
                   </td>
                   <td className="py-2 px-2.5 border-b border-line">{r.action || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted">{r.resource || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line" style={{ color: /fail/i.test(r.result || '') ? COLORS.crit : COLORS.ok }}>{r.result || '—'}</td>
+                  <td className="py-2 px-2.5 border-b border-line text-muted break-words">{r.resource || '—'}</td>
+                  <td className="py-2 px-2.5 border-b border-line break-words" style={{ color: /fail/i.test(r.result || '') ? COLORS.crit : COLORS.ok }}>{r.result || '—'}</td>
                 </tr>
               ))}
             </tbody>
