@@ -66,7 +66,7 @@ export default function Drift() {
   }
 
   return (
-    <div className="max-w-[1340px] mx-auto p-5">
+    <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Drift</h1>
 
       <div className="max-w-[720px] mx-auto">
