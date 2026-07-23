@@ -301,7 +301,7 @@ function SocQueue({ rows, loading, error }) {
             </thead>
             <tbody>
               {rows.slice(0, 50).map((r, i) => (
-                <tr key={r.id || r.display_id || i}>
+                <tr key={`${r.id ?? r.display_id ?? ''}|${i}`}>
                   <td className="py-2.5 px-2.5 border-b border-line"><SeverityPill severity={mcpSeverity(r)} /></td>
                   <td className="py-2.5 px-2.5 border-b border-line text-muted">{r.title || r.name || r.message || r.display_id || r.id || '—'}</td>
                 </tr>
