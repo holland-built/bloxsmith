@@ -175,8 +175,10 @@ function parseMalwareAnalysisV3(blob) {
   const stats = blob.last_analysis_stats
   if (!stats || typeof stats !== 'object') return null
   const malicious = Number(stats.malicious) || 0
-  const total = ['harmless', 'malicious', 'suspicious', 'undetected'].reduce((sum, k) => sum + (Number(stats[k]) || 0), 0)
-  return { verdict: `${malicious} malicious / ${total} engines`, tone: malicious > 0 ? 'warn' : 'ok' }
+  const suspicious = Number(stats.suspicious) || 0
+  const total = Object.values(stats).reduce((sum, v) => sum + (Number(v) || 0), 0)
+  const verdict = suspicious > 0 ? `${malicious} malicious, ${suspicious} suspicious / ${total} engines` : `${malicious} malicious / ${total} engines`
+  return { verdict, tone: malicious > 0 || suspicious > 0 ? 'warn' : 'ok' }
 }
 
 const REP_PARSERS = {
