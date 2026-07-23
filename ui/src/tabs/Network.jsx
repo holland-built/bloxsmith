@@ -96,7 +96,7 @@ function IpamSpaces({ ipam }) {
           {rows.map((r, i) => {
             const status = utilStatus(r.pct)
             return (
-              <div key={r.id || r.label || i} className="flex items-center gap-2 text-xs">
+              <div key={`${r.id ?? r.label ?? ''}|${i}`} className="flex items-center gap-2 text-xs">
                 <span className="w-[110px] truncate text-muted" title={r.label}>{r.label || r.id || '—'}</span>
                 <div className="h-[6px] rounded-full bg-line overflow-hidden flex-1">
                   <div className="h-full" style={{ width: `${Math.min(100, r.pct)}%`, background: status.color }} />

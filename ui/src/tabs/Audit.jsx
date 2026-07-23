@@ -184,7 +184,7 @@ function AuditTable({ logs, loading, error }) {
             </thead>
             <tbody>
               {top50.map((l, i) => (
-                <tr key={l.id || i}>
+                <tr key={`${l.id ?? ''}|${i}`}>
                   <td className="py-2 px-2.5 border-b border-line font-mono text-[12px] whitespace-nowrap">{fmtTs(l.ts)}</td>
                   <td className="py-2 px-2.5 border-b border-line max-w-[140px] truncate" title={l.user}>{l.user || '—'}</td>
                   <td className="py-2 px-2.5 border-b border-line"><ActionPill action={l.action} /></td>
@@ -263,7 +263,7 @@ function CspAuditTable() {
             </thead>
             <tbody>
               {rows.slice(0, 50).map((r, i) => (
-                <tr key={r.id || i}>
+                <tr key={`${r.id ?? ''}|${i}`}>
                   <td className="py-2 px-2.5 border-b border-line font-mono text-[12px] whitespace-nowrap">{fmtTs(r.ts)}</td>
                   <td className="py-2 px-2.5 border-b border-line max-w-[160px] truncate" title={r.user}>
                     {r.user || '—'} {r.who_kind && <span className="text-dim text-[10.5px]">({r.who_kind})</span>}

@@ -140,7 +140,7 @@ function DnsServices({ services }) {
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={r.id ?? i}>
+                <tr key={`${r.id ?? ''}|${i}`}>
                   <td className="py-2 px-2.5 border-b border-line">{r.name || '—'}</td>
                   <td className="py-2 px-2.5 border-b border-line text-muted">{r.comment || '—'}</td>
                   <td className="py-2 px-2.5 border-b border-line font-mono text-muted">{r.pool_id || '—'}</td>

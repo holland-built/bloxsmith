@@ -151,6 +151,43 @@ function repVerdict(blob) {
   return null
 }
 
+function parseGsb(blob) {
+  if (!blob || typeof blob !== 'object') return null
+  const status = blob.status
+  if (status == null) return null
+  return { verdict: fmt(status), tone: /no match/i.test(String(status)) ? 'ok' : 'warn' }
+}
+
+function parseMatchesCount(blob) {
+  if (!blob || typeof blob !== 'object' || !Array.isArray(blob.matches)) return null
+  const n = blob.matches.length
+  return n ? { verdict: `${n} match(es)`, tone: 'warn' } : { verdict: 'clear', tone: 'ok' }
+}
+
+function parseUnavailable(blob) {
+  if (!blob || typeof blob !== 'object') return null
+  if (blob.info != null || blob.reason != null) return { verdict: 'unavailable', tone: 'muted' }
+  return null
+}
+
+function parseMalwareAnalysisV3(blob) {
+  if (!blob || typeof blob !== 'object') return null
+  const stats = blob.last_analysis_stats
+  if (!stats || typeof stats !== 'object') return null
+  const malicious = Number(stats.malicious) || 0
+  const total = ['harmless', 'malicious', 'suspicious', 'undetected'].reduce((sum, k) => sum + (Number(stats[k]) || 0), 0)
+  return { verdict: `${malicious} malicious / ${total} engines`, tone: malicious > 0 ? 'warn' : 'ok' }
+}
+
+const REP_PARSERS = {
+  gsb: parseGsb,
+  threatfox: parseMatchesCount,
+  urlhaus: parseMatchesCount,
+  malware_analysis: parseUnavailable,
+  mandiant: parseUnavailable,
+  malware_analysis_v3: parseMalwareAnalysisV3,
+}
+
 // ---------- infra parsing ----------
 
 function parseGeo(blob) {
@@ -275,12 +312,18 @@ export default function DossierPanel({ data }) {
     if (!entry) return null
     markUsed(key)
     const blob = sourceBlob(entry)
+    const parser = REP_PARSERS[key]
+    const parsed = parser ? parser(blob) : null
+    if (parsed != null) {
+      if (blob != null) rawFallback.push({ source: key, blob })
+      return { key, verdict: parsed.verdict, tone: parsed.tone }
+    }
     const verdict = repVerdict(blob)
     if (verdict == null) {
       if (blob != null) rawFallback.push({ source: key, blob })
       return null
     }
-    return { key, verdict }
+    return { key, verdict, tone: null }
   }).filter(Boolean)
 
   // Infrastructure
@@ -387,12 +430,18 @@ export default function DossierPanel({ data }) {
       {!!repCells.length && (
         <Section title="Reputation">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {repCells.map(({ key, verdict }) => {
-              const clear = /^clear$/i.test(verdict)
+            {repCells.map(({ key, verdict, tone }) => {
+              const muted = tone === 'muted'
+              const ok = tone ? tone === 'ok' : /^clear$/i.test(verdict)
               return (
                 <div key={key} className="px-2 py-1.5 rounded-lg border border-border bg-field">
                   <div className="text-[10px] text-muted font-mono uppercase">{key}</div>
-                  <div className="text-[11px] font-mono" style={{ color: clear ? COLORS.ok : COLORS.warn }}>{verdict}</div>
+                  <div
+                    className={`text-[11px] font-mono ${muted ? 'text-muted' : ''}`}
+                    style={muted ? undefined : { color: ok ? COLORS.ok : COLORS.warn }}
+                  >
+                    {verdict}
+                  </div>
                 </div>
               )
             })}

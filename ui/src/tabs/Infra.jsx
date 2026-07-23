@@ -181,7 +181,7 @@ function FeedCard({ span, title, note, feed, columns }) {
             </thead>
             <tbody>
               {rows.slice(0, 20).map((r, i) => (
-                <tr key={r.id || r.name || r.created_at || i}>
+                <tr key={`${r.id ?? r.name ?? r.created_at ?? ''}|${i}`}>
                   {columns.map((c) => {
                     const v = r[c.key]
                     if (c.badge) {
@@ -244,14 +244,20 @@ function HostTable({ hosts, status }) {
     const arr = [...filtered]
     const { key, dir } = sort
     arr.sort((a, b) => {
+      if (key === 'ip') {
+        const av = String(a.ip || '').split('.').map(Number)
+        const bv = String(b.ip || '').split('.').map(Number)
+        for (let i = 0; i < 4; i++) {
+          if ((av[i] || 0) !== (bv[i] || 0)) return dir === 'asc' ? (av[i] || 0) - (bv[i] || 0) : (bv[i] || 0) - (av[i] || 0)
+        }
+        return 0
+      }
       const av = String(a[key] ?? '')
       const bv = String(b[key] ?? '')
       return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
     })
     return arr
   }, [filtered, sort])
-
-  const top50 = sorted.slice(0, 50)
 
   function toggleSort(key) {
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
@@ -281,11 +287,11 @@ function HostTable({ hosts, status }) {
           </span>
         ) : 'Host Inventory'
       }
-      note={hosts.length > 50 ? `showing 50 of ${hosts.length.toLocaleString()}` : undefined}
       right={
         <div className="flex items-center gap-2">
+          <span className="text-[11px] text-muted">{filtered.length.toLocaleString()} of {hosts.length.toLocaleString()}</span>
           <input
-            placeholder="Filter…"
+            placeholder="Search name, IP…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="w-[170px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
@@ -305,41 +311,43 @@ function HostTable({ hosts, status }) {
     >
       {hosts.length === 0 ? (
         <Empty />
-      ) : top50.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <Empty>no hosts match</Empty>
       ) : (
-        <table className="w-full border-collapse mt-2.5 text-sm">
-          <thead>
-            <tr>
-              {headers.map((h) => (
-                <th
-                  key={h.key}
-                  onClick={() => toggleSort(h.key)}
-                  className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 cursor-pointer select-none"
-                >
-                  {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {top50.map((h, i) => {
-              const st = statusBadgeColor(h.status) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
-              return (
-                <tr key={h.name + i}>
-                  <td className="py-2.5 px-2.5 border-b border-line">{h.name || '—'}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line font-mono">{h.ip || '—'}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line">
-                    <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: st.bg, color: st.fg }}>
-                      {h.status || '—'}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-2.5 border-b border-line text-muted">{h.type || '—'}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <div className="max-h-[420px] overflow-auto mt-2.5">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                {headers.map((h) => (
+                  <th
+                    key={h.key}
+                    onClick={() => toggleSort(h.key)}
+                    className="sticky top-0 z-10 bg-panel text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 cursor-pointer select-none"
+                  >
+                    {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((h, i) => {
+                const st = statusBadgeColor(h.status) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
+                return (
+                  <tr key={`${h.name}|${h.ip}|${i}`}>
+                    <td className="py-2.5 px-2.5 border-b border-line">{h.name || '—'}</td>
+                    <td className="py-2.5 px-2.5 border-b border-line font-mono">{h.ip || '—'}</td>
+                    <td className="py-2.5 px-2.5 border-b border-line">
+                      <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: st.bg, color: st.fg }}>
+                        {h.status || '—'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-2.5 border-b border-line text-muted">{h.type || '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   )
