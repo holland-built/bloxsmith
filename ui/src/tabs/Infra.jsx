@@ -168,8 +168,8 @@ function FeedCard({ span, title, note, feed, columns }) {
       ) : rows.length === 0 ? (
         <Empty />
       ) : (
-        <div className="overflow-auto max-h-[260px]">
-          <table className="w-full border-collapse text-sm">
+        <div className="overflow-x-hidden overflow-y-auto max-h-[260px]">
+          <table className="w-full table-fixed border-collapse text-sm">
             <thead>
               <tr>
                 {columns.map((c) => (
@@ -195,7 +195,7 @@ function FeedCard({ span, title, note, feed, columns }) {
                       )
                     }
                     return (
-                      <td key={c.key} className={`py-2 px-2.5 border-b border-line ${c.mono ? 'font-mono' : ''}`}>
+                      <td key={c.key} title={v != null ? String(v) : undefined} className={`py-2 px-2.5 border-b border-line truncate ${c.mono ? 'font-mono' : ''}`}>
                         {v ?? '—'}
                       </td>
                     )
