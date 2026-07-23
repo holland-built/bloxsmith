@@ -15,7 +15,10 @@ Pick one. Full options and deployment guidance are in [docs/DEPLOYMENT.md](docs/
 **macOS / Linux** — inspect, then install; it opens the dashboard for you:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -fsSLo install.sh https://github.com/holland-built/bloxsmith/releases/latest/download/install.sh && less install.sh && sh install.sh
+curl --proto '=https' --tlsv1.2 -fsSLo install.sh \
+  https://github.com/holland-built/bloxsmith/releases/latest/download/install.sh
+less install.sh   # read it before running
+sh install.sh
 ```
 
 **Homebrew** (macOS / Linux) — installs the binary; then run `bloxsmith`:
@@ -24,20 +27,24 @@ curl --proto '=https' --tlsv1.2 -fsSLo install.sh https://github.com/holland-bui
 brew install holland-built/tap/bloxsmith
 ```
 
-**Windows** — paste into **Command Prompt or PowerShell**; it downloads, you inspect, then it installs and opens the dashboard:
+**Windows** — open **PowerShell** (Start → type `PowerShell`), then paste; it downloads, you inspect, then it installs and opens the dashboard:
 
 ```powershell
-powershell -Command "iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1"
+iwr -UseBasicParsing -OutFile install.ps1 `
+  https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1
 notepad install.ps1
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-Both `powershell` lines run from either shell — no "iwr is not recognized" error. Close Notepad after reading to continue.
+Use **PowerShell**, not Command Prompt — `iwr` is a PowerShell command (cmd.exe gives "iwr is not recognized"). Close Notepad after reading to continue.
 
 **Docker** — then open http://localhost:8080 yourself:
 
 ```bash
-docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 -v noc-vault:/vault --restart unless-stopped ghcr.io/holland-built/bloxsmith:latest
+docker run -d --name bloxsmith \
+  -p 127.0.0.1:8080:8080 -v noc-vault:/vault \
+  --restart unless-stopped \
+  ghcr.io/holland-built/bloxsmith:latest
 ```
 
 **First open:** pick a passphrase, then paste your [Infoblox API key](#get-your-infoblox-api-key).
