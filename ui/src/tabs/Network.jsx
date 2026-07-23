@@ -210,7 +210,7 @@ function DhcpLeases({ dhcp, innerRef }) {
       ) : sorted.length === 0 ? (
         <Empty>no leases match</Empty>
       ) : (
-        <div className="max-h-[420px] overflow-auto mt-2.5">
+        <div className="max-h-[420px] overflow-x-hidden overflow-y-auto mt-2.5">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
@@ -231,12 +231,12 @@ function DhcpLeases({ dhcp, innerRef }) {
                 const isPast = !isNaN(endsMs) && endsMs < now
                 return (
                   <tr key={`${r.address}|${r.hardware}|${r.ends}|${i}`}>
-                    <td className="py-2.5 px-2.5 border-b border-line font-mono">{r.address || '—'}</td>
-                    <td className="py-2.5 px-2.5 border-b border-line">{r.hostname || '—'}</td>
-                    <td className={`py-2.5 px-2.5 border-b border-line font-mono ${isPast ? 'text-dim' : 'text-muted'}`}>
+                    <td className="py-2.5 px-2.5 border-b border-line font-mono whitespace-nowrap">{r.address || '—'}</td>
+                    <td className="py-2.5 px-2.5 border-b border-line break-words">{r.hostname || '—'}</td>
+                    <td className={`py-2.5 px-2.5 border-b border-line font-mono whitespace-nowrap ${isPast ? 'text-dim' : 'text-muted'}`}>
                       {!isNaN(endsMs) ? new Date(endsMs).toLocaleString() : r.ends || '—'}
                     </td>
-                    <td className="py-2.5 px-2.5 border-b border-line font-mono text-muted">{r.hardware || '—'}</td>
+                    <td className="py-2.5 px-2.5 border-b border-line font-mono text-muted whitespace-nowrap">{r.hardware || '—'}</td>
                     <td className="py-2.5 px-2.5 border-b border-line text-muted">{r.state || '—'}</td>
                   </tr>
                 )

@@ -129,7 +129,7 @@ function DnsServices({ services }) {
       ) : services.error || status === 'error' || rows.length === 0 ? (
         <Empty />
       ) : (
-        <div className="max-h-[220px] overflow-auto">
+        <div className="max-h-[220px] overflow-x-hidden overflow-y-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
@@ -141,9 +141,13 @@ function DnsServices({ services }) {
             <tbody>
               {rows.map((r, i) => (
                 <tr key={`${r.id ?? ''}|${i}`}>
-                  <td className="py-2 px-2.5 border-b border-line">{r.name || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted">{r.comment || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line font-mono text-muted">{r.pool_id || '—'}</td>
+                  <td className="py-2 px-2.5 border-b border-line break-words">{r.name || '—'}</td>
+                  <td className="py-2 px-2.5 border-b border-line text-muted break-words">{r.comment || '—'}</td>
+                  <td className="py-2 px-2.5 border-b border-line align-top">
+                    <span className="block font-mono text-muted overflow-hidden whitespace-nowrap" style={{ maxWidth: 150 }} title={r.pool_id || undefined}>
+                      {r.pool_id || '—'}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>

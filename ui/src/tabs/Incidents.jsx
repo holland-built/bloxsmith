@@ -239,7 +239,7 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
       ) : sorted.length === 0 ? (
         <Empty>no signals match</Empty>
       ) : (
-        <div className="max-h-[420px] overflow-y-auto">
+        <div className="max-h-[420px] overflow-x-hidden overflow-y-auto">
           <table className="w-full border-collapse mt-2.5 text-sm">
             <thead>
               <tr>
@@ -264,10 +264,14 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
                       <input type="checkbox" checked={acked} onChange={() => onToggleAck(s)} aria-label="Acknowledge signal" />
                     </td>
                     <td className="py-2.5 px-2.5 border-b border-line text-muted">{s.category || '—'}</td>
-                    <td className="py-2.5 px-2.5 border-b border-line font-mono">{s.entity_id || '—'}</td>
+                    <td className="py-2.5 px-2.5 border-b border-line align-top">
+                      <span className="block font-mono overflow-hidden whitespace-nowrap" style={{ maxWidth: 180 }} title={s.entity_id || undefined}>
+                        {s.entity_id || '—'}
+                      </span>
+                    </td>
                     <td className="py-2.5 px-2.5 border-b border-line"><SeverityPill severity={s.severity} /></td>
-                    <td className="py-2.5 px-2.5 border-b border-line text-muted">{s.message || '—'}</td>
-                    <td className="py-2.5 px-2.5 border-b border-line text-muted">{ageLabel(s.detected_at)}</td>
+                    <td className="py-2.5 px-2.5 border-b border-line text-muted break-words">{s.message || '—'}</td>
+                    <td className="py-2.5 px-2.5 border-b border-line text-muted whitespace-nowrap">{ageLabel(s.detected_at)}</td>
                   </tr>
                 )
               })}
@@ -291,7 +295,7 @@ function SocQueue({ rows, loading, error }) {
       ) : rows.length === 0 ? (
         <Empty>no pending actions</Empty>
       ) : (
-        <div className="max-h-[420px] overflow-y-auto">
+        <div className="max-h-[420px] overflow-x-hidden overflow-y-auto">
           <table className="w-full border-collapse mt-2.5 text-sm">
             <thead>
               <tr>
@@ -303,7 +307,7 @@ function SocQueue({ rows, loading, error }) {
               {rows.slice(0, 50).map((r, i) => (
                 <tr key={`${r.id ?? r.display_id ?? ''}|${i}`}>
                   <td className="py-2.5 px-2.5 border-b border-line"><SeverityPill severity={mcpSeverity(r)} /></td>
-                  <td className="py-2.5 px-2.5 border-b border-line text-muted">{r.title || r.name || r.message || r.display_id || r.id || '—'}</td>
+                  <td className="py-2.5 px-2.5 border-b border-line text-muted break-words">{r.title || r.name || r.message || r.display_id || r.id || '—'}</td>
                 </tr>
               ))}
             </tbody>
