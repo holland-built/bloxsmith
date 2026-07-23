@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, Empty, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
 
 // ---------- severity vocab ----------
 // Signals carry crit/warn/ok (this app) or critical/high/medium/low (upstream) —
@@ -75,7 +75,7 @@ export default function Incidents() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Incidents</h1>
-      <div className="grid grid-cols-6 gap-3">
+      <CardGrid>
         <CategoryChips categories={categories} loading={incApi.loading} category={category} onCategory={setCategory} />
         <SeverityKpis signals={signals} loading={incApi.loading} />
         <IncidentsTable
@@ -89,7 +89,7 @@ export default function Incidents() {
           onClearAcks={() => setAcks({})}
         />
         <SocQueue rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} />
-      </div>
+      </CardGrid>
     </div>
   )
 }
