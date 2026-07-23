@@ -1,15 +1,17 @@
-# Consumed by goreleaser `dockers:` — the binary is already cross-compiled by the
-# `builds:` stage and dropped into the build context, so this is a single COPY
-# into a distroless base (no toolchain, no shell, ~2 MB over the binary itself).
+# Consumed by goreleaser `dockers_v2:` — the binary is already cross-compiled by
+# the `builds:` stage and dropped into the per-platform build context
+# (<platform>/bloxsmith), so this is a single COPY into a distroless base
+# (no toolchain, no shell, ~2 MB over the binary itself).
 #
 # Same runtime env contract as the retired python Dockerfile, so the existing
 # docker-compose.yml + `noc-vault` volume keep working with zero changes.
 FROM gcr.io/distroless/static:latest
 
+ARG TARGETPLATFORM
 WORKDIR /app
-COPY bloxsmith /app/bloxsmith
-# Third-party demo/seed templates, fetched by goreleaser's before hook and
-# injected via dockers[].extra_files. Matches ENV TEMPLATES_DIR=/templates below.
+COPY $TARGETPLATFORM/bloxsmith /app/bloxsmith
+# Templates are committed in go/templates and staged into the build context by
+# dockers_v2[].extra_files. Matches ENV TEMPLATES_DIR=/templates below.
 COPY templates /templates
 
 ENV HOST=0.0.0.0 \
