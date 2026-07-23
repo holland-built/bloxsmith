@@ -11,7 +11,7 @@ test('default theme is dark; Settings can switch to light and it persists', asyn
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
-  await page.getByRole('button', { name: '⚙ Settings' }).click();
+  await page.getByTitle('Settings').click();
   await page.getByRole('button', { name: 'Light', exact: true }).click();
 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');

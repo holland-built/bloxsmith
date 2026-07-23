@@ -260,6 +260,10 @@ export default function TenantManager({ onClose }) {
             <button className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-crit hover:text-crit disabled:opacity-50" onClick={lockNow} disabled={locking}>
               {locking ? 'Locking…' : 'Lock vault now'}
             </button>
+
+            <div className="mt-4 pt-3 border-t border-line-2 text-[11px] text-dim text-center">
+              Bloxsmith {(status && status.version) || '…'}
+            </div>
           </>
         )}
       </div>

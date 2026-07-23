@@ -121,9 +121,9 @@ export default function UpdateButton() {
   const current = (info && info.current) || '';
   const isDev = current.startsWith('dev-') || (info && info.checkDisabled);
 
-  if (isDev || !info) {
-    return <span className="text-[11px] text-muted">{current || 'checking version…'}</span>;
-  }
+  // Idle version text lives in Settings now (topbar declutter v1) — the topbar
+  // only shows this component when there's something actionable to say.
+  if (isDev || !info) return null;
 
   if (phase === 'error') {
     return (
@@ -158,5 +158,5 @@ export default function UpdateButton() {
     );
   }
 
-  return <span className="text-[11px] text-muted">v{current.replace(/^v/, '')}</span>;
+  return null // up to date — version shown in Settings
 }
