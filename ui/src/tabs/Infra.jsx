@@ -169,7 +169,7 @@ function FeedCard({ span, title, note, feed, columns }) {
         <Empty />
       ) : (
         <div className="overflow-x-hidden overflow-y-auto max-h-[260px]">
-          <table className="w-full table-fixed border-collapse text-sm">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
                 {columns.map((c) => (
@@ -195,8 +195,14 @@ function FeedCard({ span, title, note, feed, columns }) {
                       )
                     }
                     return (
-                      <td key={c.key} title={v != null ? String(v) : undefined} className={`py-2 px-2.5 border-b border-line truncate ${c.mono ? 'font-mono' : ''}`}>
-                        {v ?? '—'}
+                      <td key={c.key} className="py-2 px-2.5 border-b border-line align-top">
+                        {c.mono ? (
+                          <span className="block font-mono overflow-hidden whitespace-nowrap" style={{ maxWidth: 150 }} title={v != null ? String(v) : undefined}>
+                            {v ?? '—'}
+                          </span>
+                        ) : (
+                          <span className="break-words">{v ?? '—'}</span>
+                        )}
                       </td>
                     )
                   })}
