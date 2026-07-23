@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, Empty, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
 
 function actionColor(a, COLORS) {
   return { CREATE: COLORS.ok, DELETE: COLORS.crit, UPDATE: COLORS.accent }[a] || COLORS.other
@@ -21,11 +21,11 @@ export default function Audit() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Audit</h1>
-      <div className="grid grid-cols-6 gap-3">
+      <CardGrid>
         <ActivitySummary logs={logs} loading={data.loading} />
         <AuditTable logs={logs} loading={data.loading} error={data.error} />
         <CspAuditTable />
-      </div>
+      </CardGrid>
     </div>
   )
 }

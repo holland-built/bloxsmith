@@ -25,6 +25,18 @@ before:
     # cwd is go/, so the script is at ../scripts/. TEMPLATES_DIR overrides the
     # script's repo-root default.
     - sh -c "TEMPLATES_DIR=templates python3 ../scripts/fetch_templates.py"
+    # SignPath requires signed Windows binaries to carry file-metadata
+    # attributes (ProductName, FileVersion, CompanyName, ...). goreleaser does
+    # not embed Windows version resources itself — goversioninfo compiles
+    # versioninfo.json into resource_windows_amd64.syso, which `go build`
+    # auto-links for the windows/amd64 target below (see versioninfo.go).
+    # Installed fresh each run (not vendored) — needs network in CI.
+    - go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+    # `go generate` filters files by the HOST's build tags, not the target's —
+    # on a linux/macOS CI runner it silently skips versioninfo.go's `windows`
+    # build tag unless GOOS is forced here (verified: omitting this produces
+    # no .syso and the release ships unsigned-metadata Windows binaries).
+    - sh -c "GOOS=windows GOARCH=amd64 go generate ./..."
 
 builds:
   - id: bloxsmith

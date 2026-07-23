@@ -1,4 +1,4 @@
-import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 
 // ---------- main ----------
@@ -14,13 +14,13 @@ export default function Daily() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Daily Briefing</h1>
-      <div className="grid grid-cols-6 gap-3">
+      <CardGrid>
         <IssueKpis subnets={subnets} hosts={hosts} zones={zones} loading={data.loading} />
         <SecurityToday sec={sec} />
         <TopCapacityRisks subnets={subnets} loading={data.loading} />
         <HostsAttention hosts={hosts} loading={data.loading} />
         <DnsZoneIssues zones={zones} loading={data.loading} />
-      </div>
+      </CardGrid>
     </div>
   )
 }

@@ -1,16 +1,25 @@
-# Bloxsmith
+<div align="center">
+  <img src="docs/logo.svg" width="72" alt="Bloxsmith">
+  <h1>Bloxsmith</h1>
+  <p>Self-hosted workbench for your Infoblox Portal / CSP data.</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.26-00ADD8.svg)](https://go.dev/)
-[![Docker ready](https://img.shields.io/badge/Docker-ready-2496ED.svg)](docker-compose.yml)
-
-**Bloxsmith** is a self-hosted workbench for your Infoblox Portal / CSP data — subnets, DHCP leases, DNS zones, hosts, security policies, threat feeds, and audit logs. It ships as a single Go binary with an embedded React UI at `http://localhost:8080`.
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+  [![Go](https://img.shields.io/badge/Go-1.26-00ADD8.svg)](https://go.dev/)
+  [![Docker ready](https://img.shields.io/badge/Docker-ready-2496ED.svg)](docker-compose.yml)
+</div>
 
 ![Bloxsmith](docs/dashboard.png)
 
-## Install
+|  |  |
+|---|---|
+| **Subnets & DHCP** | leases, utilization, exhaustion |
+| **DNS & zones** | records, zones, query rates |
+| **Security & threat feeds** | policies, indicators, audit logs |
+| **Single Go binary** | embedded UI, no runtime deps |
+| **Encrypted vault** | tenant keys AES-encrypted at rest |
+| **Optional AI query box** | natural-language over your data |
 
-Pick one. Full options and deployment guidance are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+## Install
 
 **macOS / Linux** — inspect, then install; it opens the dashboard for you:
 
@@ -21,11 +30,10 @@ less install.sh   # read it before running
 sh install.sh
 ```
 
-**Homebrew** (macOS / Linux) — installs the binary; then run `bloxsmith`:
+First run: pick a passphrase, then paste your [Infoblox API key](#get-your-infoblox-api-key).
 
-```bash
-brew install holland-built/tap/bloxsmith
-```
+<details>
+<summary><b>Other platforms — Windows · Docker · Homebrew</b></summary>
 
 **Windows** — paste into **Command Prompt or PowerShell** (each `powershell` line works from either); it downloads, you inspect, then it installs and opens the dashboard:
 
@@ -46,7 +54,18 @@ docker run -d --name bloxsmith \
   ghcr.io/holland-built/bloxsmith:latest
 ```
 
-**First open:** pick a passphrase, then paste your [Infoblox API key](#get-your-infoblox-api-key).
+**Homebrew** (macOS / Linux):
+
+```bash
+brew install holland-built/tap/bloxsmith
+```
+
+> [!NOTE]
+> Homebrew channel is coming soon — use the curl or Windows installer for now.
+
+Full options and deployment guidance are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+</details>
 
 ## Get your Infoblox API key
 
@@ -75,7 +94,8 @@ bloxsmith update           # upgrade in place
 <details>
 <summary><b>Run as an always-on server (LAN, compose, secure proxy)</b></summary>
 
-> ⚠️ **LAN mode has no login.** Anyone on the network can reach the dashboard and query your Infoblox tenant. Keep the vault **locked** when not presenting, or use a secure proxy.
+> [!WARNING]
+> LAN mode has no login. Anyone on the network can reach the dashboard and query your Infoblox tenant. Keep the vault **locked** when not presenting, or use a secure proxy.
 
 Binding `0.0.0.0` (Docker) or `BIND=0.0.0.0` (compose) instead of `127.0.0.1` exposes the dashboard on the LAN with no auth in front of it. Pin a release with a tag (e.g. `:v2.0.0`) instead of `:latest`. Tenant keys live AES-encrypted in the `noc-vault` volume and survive updates, restarts, and container recreation.
 
@@ -134,8 +154,14 @@ Full steps, the deploy matrix, auto-unlock, and pinning → **[docs/DEPLOYMENT.m
 The natural-language query box needs an LLM with tool-calling; everything else works without it. Default is **Groq** (free tier — fast, free models, good for demos): get a key at <https://console.groq.com> and set it in the dashboard (sidebar → **⚙ AI provider**) or via `GROQ_API_KEY`. Any OpenAI-compatible provider works — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider).
 </details>
 
+## Code signing policy
+
+Bloxsmith releases are built and published from GitHub Actions. Windows and macOS binaries are distributed via GitHub Releases with SHA-256 checksums; code-signing via SignPath Foundation is being set up. Report signing issues at the GitHub issue tracker.
+
 ---
 
 - **Full deployment & env reference →** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - **Security policy →** [SECURITY.md](.github/SECURITY.md) · **Contributing →** [CONTRIBUTING.md](.github/CONTRIBUTING.md)
 - Released under the [MIT License](LICENSE).
+</content>
+</invoke>
