@@ -52,7 +52,7 @@ function DnsHero({ dns }) {
   return (
     <Card
       span={4}
-      title="DNS Query Rate — 24h"
+      title={<span onClick={() => { location.hash = 'dns' }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS Query Rate — 24h</span>}
       right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
     >
       {dns.loading ? (
@@ -99,15 +99,19 @@ function KpiStack({ subnets, leases }) {
   const critSubnets = subnets.filter((s) => Number(s.util) >= 90).length
 
   const cells = [
-    { label: 'Active Leases', value: activeLeases.toLocaleString(), color: COLORS.accent },
-    { label: 'Subnets', value: subnets.length.toLocaleString(), color: COLORS.purple },
-    { label: 'Subnets ≥90%', value: critSubnets.toLocaleString(), color: COLORS.crit },
+    { label: 'Active Leases', value: activeLeases.toLocaleString(), color: COLORS.accent, hash: 'network?focus=leases' },
+    { label: 'Subnets', value: subnets.length.toLocaleString(), color: COLORS.purple, hash: 'network' },
+    { label: 'Subnets ≥90%', value: critSubnets.toLocaleString(), color: COLORS.crit, hash: 'network?minUtil=90' },
   ]
 
   return (
     <Card span={2} className="flex flex-col justify-between">
       {cells.map((c, i) => (
-        <div key={c.label} className={`py-3.5 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}>
+        <div
+          key={c.label}
+          onClick={() => { location.hash = c.hash }}
+          className={`py-3.5 cursor-pointer hover:bg-line rounded-lg transition-colors px-1 -mx-1 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
+        >
           <div className="text-muted text-xs">{c.label}</div>
           <div className="text-2xl font-semibold tracking-tight my-1">{c.value}</div>
           {utils.length > 1 ? (
@@ -151,7 +155,16 @@ function TopUtilization({ subnets }) {
               formatter={(v, _n, p) => [`${Number(v).toLocaleString()} used (${p?.payload?.util ?? '?'}%)`, null]}
               labelFormatter={(_, p) => p?.[0]?.payload?.addr ?? p?.[0]?.payload?.cidr ?? ''}
             />
-            <Bar dataKey="used" radius={[3, 3, 0, 0]} isAnimationActive={false}>
+            <Bar
+              dataKey="used"
+              radius={[3, 3, 0, 0]}
+              isAnimationActive={false}
+              cursor="pointer"
+              onClick={(payload) => {
+                const addr = payload?.addr
+                if (addr) location.hash = 'network?subnet=' + encodeURIComponent(addr)
+              }}
+            >
               {top.map((s, i) => (
                 <Cell key={i} fill={COLORS.purple} fillOpacity={1 - (i / top.length) * 0.6} />
               ))}
@@ -201,6 +214,11 @@ function SubnetHeatmap({ subnets }) {
                   rx={0.8}
                   fill={color}
                   opacity={opacity}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => {
+                    const addr = s.addr || s.cidr
+                    if (addr) location.hash = 'network?subnet=' + encodeURIComponent(addr)
+                  }}
                 >
                   <title>{`${s.addr || s.cidr} — ${util}%`}</title>
                 </rect>
@@ -245,7 +263,18 @@ function HostStatus({ hosts }) {
           <div className="relative w-[130px] h-[130px] shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} dataKey="value" innerRadius={44} outerRadius={62} startAngle={90} endAngle={-270} stroke="none" isAnimationActive={false}>
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  innerRadius={44}
+                  outerRadius={62}
+                  startAngle={90}
+                  endAngle={-270}
+                  stroke="none"
+                  isAnimationActive={false}
+                  cursor="pointer"
+                  onClick={(d) => { location.hash = 'infra?status=' + d.name.toLowerCase() }}
+                >
                   {pieData.map((d) => (
                     <Cell key={d.name} fill={d.color} />
                   ))}
@@ -260,7 +289,11 @@ function HostStatus({ hosts }) {
           </div>
           <div className="flex-1 flex flex-col gap-2">
             {pieData.map((d) => (
-              <div key={d.name} className="flex items-center gap-1.5 text-xs">
+              <div
+                key={d.name}
+                onClick={() => { location.hash = 'infra?status=' + d.name.toLowerCase() }}
+                className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-line rounded-lg transition-colors px-1 -mx-1"
+              >
                 <i className="w-2 h-2 rounded-sm inline-block" style={{ background: d.color }} />
                 <span className="text-muted flex-1">{d.name}</span>
                 <b>{((d.value / total) * 100).toFixed(0)}%</b>
@@ -397,7 +430,14 @@ function SubnetTable({ subnets }) {
               const status = utilStatus(util)
               const network = s.addr || s.cidr || '—'
               return (
-                <tr key={network + i}>
+                <tr
+                  key={network + i}
+                  onClick={() => {
+                    const addr = s.addr || s.cidr
+                    if (addr) location.hash = 'network?subnet=' + encodeURIComponent(addr)
+                  }}
+                  className="cursor-pointer hover:bg-line/50"
+                >
                   <td className="py-2.5 px-2.5 border-b border-line font-mono">{network}</td>
                   <td className="py-2.5 px-2.5 border-b border-line">{s.site || '—'}</td>
                   <td className="py-2.5 px-2.5 border-b border-line" style={{ width: '26%' }}>

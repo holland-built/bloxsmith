@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useHashParams, setHashParams } from '../lib/hash.js'
 
 // ---------- main ----------
 
@@ -12,8 +13,16 @@ export default function Network() {
   const data = useApi('/api/data', { poll: 30000 })
   const ipam = useApi('/api/csp/ipam-util', { poll: 30000 })
   const dhcp = useApi('/api/csp/dhcp-leases', { poll: 30000 })
+  const hp = useHashParams()
 
   const subnets = data.data?.subnets ?? []
+
+  const leasesRef = useRef(null)
+  useEffect(() => {
+    if (hp.focus === 'leases' && leasesRef.current) {
+      leasesRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [hp.focus])
 
   return (
     <div className="w-full px-6 py-5">
@@ -21,8 +30,8 @@ export default function Network() {
       <div className="grid grid-cols-6 gap-3">
         <UtilBands subnets={subnets} />
         <IpamSpaces ipam={ipam} />
-        <DhcpLeases dhcp={dhcp} />
-        <ExhaustionTable subnets={subnets} />
+        <DhcpLeases dhcp={dhcp} innerRef={leasesRef} />
+        <ExhaustionTable subnets={subnets} hp={hp} />
       </div>
     </div>
   )
@@ -104,11 +113,12 @@ function IpamSpaces({ ipam }) {
 
 // ---------- DHCP leases ----------
 
-function DhcpLeases({ dhcp }) {
+function DhcpLeases({ dhcp, innerRef }) {
   const rows = dhcp.data?.rows ?? []
   const top = rows.slice(0, 12)
 
   return (
+    <div ref={innerRef}>
     <Card span={6} title="DHCP Leases" right={<span className="text-[11px] text-muted">{rows.length.toLocaleString()} total · first 12 shown</span>}>
       {dhcp.loading ? (
         <Skeleton h={200} />
@@ -139,15 +149,21 @@ function DhcpLeases({ dhcp }) {
         </table>
       )}
     </Card>
+    </div>
   )
 }
 
 // ---------- exhaustion table ----------
 
-function ExhaustionTable({ subnets }) {
-  const [filter, setFilter] = useState('')
+function ExhaustionTable({ subnets, hp }) {
+  const [filter, setFilter] = useState(hp.subnet || '')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
+  const minUtil = hp.minUtil !== undefined && hp.minUtil !== '' ? Number(hp.minUtil) : null
+
+  useEffect(() => {
+    if (hp.subnet) setFilter(hp.subnet)
+  }, [hp.subnet])
 
   // /29-/32 are infra links (point-to-point/loopback), always ~100% — exclude,
   // they'd bury real exhaustion (old app: 67db14e)
@@ -158,10 +174,11 @@ function ExhaustionTable({ subnets }) {
     const q = filter.trim().toLowerCase()
     return base.filter((s) => {
       if (site && s.site !== site) return false
+      if (minUtil !== null && (Number(s.util) || 0) < minUtil) return false
       if (!q) return true
       return [s.addr, s.cidr, s.site, s.name].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
     })
-  }, [base, filter, site])
+  }, [base, filter, site, minUtil])
 
   const sorted = useMemo(() => {
     const arr = [...filtered]
@@ -197,7 +214,20 @@ function ExhaustionTable({ subnets }) {
   return (
     <Card
       span={6}
-      title="Which Subnets Run Out First?"
+      title={
+        <>
+          Which Subnets Run Out First?
+          {minUtil !== null && (
+            <span
+              className="ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-normal bg-field border border-border text-muted cursor-pointer"
+              onClick={() => setHashParams('network', {})}
+              title="clear filter"
+            >
+              util ≥ {minUtil}% ✕
+            </span>
+          )}
+        </>
+      }
       note="excl. /29–/32 infra links"
       right={
         <div className="flex items-center gap-2">

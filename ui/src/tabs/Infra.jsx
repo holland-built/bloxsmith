@@ -3,6 +3,7 @@ import { Cell, PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
+import { useHashParams } from '../lib/hash.js'
 
 // ---------- main ----------
 
@@ -15,6 +16,7 @@ export default function Infra() {
   const maint = useApi('/api/csp/maintenance', { poll: 60000 })
 
   const theme = useThemeColors()
+  const hp = useHashParams()
   const hosts = data.data?.hosts ?? []
   const maintEnabled = maint.data?.enabled
   const maintOk = maint.data?.status !== 'error' && !maint.error && maintEnabled != null
@@ -59,7 +61,7 @@ export default function Infra() {
             { key: 'app_count', label: 'Apps', mono: true },
           ]}
         />
-        <HostTable hosts={hosts} />
+        <HostTable hosts={hosts} status={hp.status} />
         <FeedCard
           span={3}
           title="Jobs"
@@ -210,22 +212,33 @@ function FeedCard({ span, title, note, feed, columns }) {
 
 // ---------- host inventory table ----------
 
-function HostTable({ hosts }) {
+function statusBucket(s) {
+  s = s || ''
+  if (/online|up|active/i.test(s)) return 'active'
+  if (/degraded|warn/i.test(s)) return 'degraded'
+  if (/off|down|error|fail/i.test(s)) return 'offline'
+  return 'other'
+}
+
+function HostTable({ hosts, status }) {
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
   const [type, setType] = useState('')
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
+
+  const statusFilter = status === 'error' ? 'offline' : status
 
   const types = useMemo(() => [...new Set(hosts.map((h) => h.type).filter(Boolean))].sort(), [hosts])
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
     return hosts.filter((h) => {
+      if (statusFilter && statusBucket(h.status) !== statusFilter) return false
       if (type && h.type !== type) return false
       if (!q) return true
       return [h.name, h.ip, h.status, h.type].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
     })
-  }, [hosts, filter, type])
+  }, [hosts, filter, type, statusFilter])
 
   const sorted = useMemo(() => {
     const arr = [...filtered]
@@ -254,7 +267,20 @@ function HostTable({ hosts }) {
   return (
     <Card
       span={6}
-      title="Host Inventory"
+      title={
+        statusFilter ? (
+          <span className="inline-flex items-center gap-2">
+            Host Inventory
+            <span
+              onClick={() => { location.hash = 'infra' }}
+              className="text-[11px] font-medium px-2 py-0.5 rounded-full cursor-pointer"
+              style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
+            >
+              status: {statusFilter} ✕
+            </span>
+          </span>
+        ) : 'Host Inventory'
+      }
       note={hosts.length > 50 ? `showing 50 of ${hosts.length.toLocaleString()}` : undefined}
       right={
         <div className="flex items-center gap-2">
