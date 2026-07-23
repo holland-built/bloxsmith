@@ -114,39 +114,135 @@ function IpamSpaces({ ipam }) {
 // ---------- DHCP leases ----------
 
 function DhcpLeases({ dhcp, innerRef }) {
+  const hp = useHashParams()
   const rows = dhcp.data?.rows ?? []
-  const top = rows.slice(0, 12)
+  const [q, setQ] = useState(hp.lease || '')
+  const [state, setState] = useState('')
+  const [sort, setSort] = useState({ key: 'ends', dir: 'desc' })
+
+  useEffect(() => {
+    if (hp.lease) setQ(hp.lease)
+  }, [hp.lease])
+
+  const states = useMemo(() => [...new Set(rows.map((r) => r.state).filter(Boolean))].sort(), [rows])
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return rows.filter((r) => {
+      if (state && r.state !== state) return false
+      if (!needle) return true
+      return [r.address, r.hostname, r.hardware].filter(Boolean).some((v) => String(v).toLowerCase().includes(needle))
+    })
+  }, [rows, q, state])
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered]
+    const { key, dir } = sort
+    arr.sort((a, b) => {
+      let av, bv
+      if (key === 'address') {
+        av = (a.address || '').split('.').map(Number)
+        bv = (b.address || '').split('.').map(Number)
+        for (let i = 0; i < 4; i++) {
+          if ((av[i] || 0) !== (bv[i] || 0)) return dir === 'asc' ? (av[i] || 0) - (bv[i] || 0) : (bv[i] || 0) - (av[i] || 0)
+        }
+        return 0
+      }
+      if (key === 'ends') {
+        av = a.ends ? new Date(a.ends).getTime() || 0 : 0
+        bv = b.ends ? new Date(b.ends).getTime() || 0 : 0
+        return dir === 'asc' ? av - bv : bv - av
+      }
+      av = a[key] || ''
+      bv = b[key] || ''
+      return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+    })
+    return arr
+  }, [filtered, sort])
+
+  function toggleSort(key) {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
+  }
+
+  const headers = [
+    { key: 'address', label: 'Address' },
+    { key: 'hostname', label: 'Hostname' },
+    { key: 'ends', label: 'Ends' },
+    { key: 'hardware', label: 'Hardware' },
+    { key: 'state', label: 'State' },
+  ]
+
+  const now = Date.now()
 
   return (
-    <div ref={innerRef}>
-    <Card span={6} title="DHCP Leases" right={<span className="text-[11px] text-muted">{rows.length.toLocaleString()} total · first 12 shown</span>}>
+    // span must live on the grid item — a bare wrapper div here collapsed the card
+    <div ref={innerRef} style={{ gridColumn: 'span 6 / span 6' }}>
+    <Card
+      span={6}
+      title="DHCP Leases"
+      right={
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-muted">{filtered.length.toLocaleString()} of {rows.length.toLocaleString()}</span>
+          <input
+            placeholder="Search address, hostname, MAC…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="w-[220px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+          />
+          <select
+            value={state}
+            onChange={(e) => setState(e.target.value)}
+            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+          >
+            <option value="">All states</option>
+            {states.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      }
+    >
       {dhcp.loading ? (
         <Skeleton h={200} />
       ) : dhcp.error || rows.length === 0 ? (
         <Empty />
+      ) : sorted.length === 0 ? (
+        <Empty>no leases match</Empty>
       ) : (
-        <table className="w-full border-collapse mt-2.5 text-sm">
-          <thead>
-            <tr>
-              {['Address', 'Hostname', 'Ends', 'Hardware', 'State'].map((h) => (
-                <th key={h} className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {top.map((r, i) => (
-              <tr key={r.address || i}>
-                <td className="py-2.5 px-2.5 border-b border-line font-mono">{r.address || '—'}</td>
-                <td className="py-2.5 px-2.5 border-b border-line">{r.hostname || '—'}</td>
-                <td className="py-2.5 px-2.5 border-b border-line font-mono text-muted">{r.ends || '—'}</td>
-                <td className="py-2.5 px-2.5 border-b border-line font-mono text-muted">{r.hardware || '—'}</td>
-                <td className="py-2.5 px-2.5 border-b border-line text-muted">{r.state || '—'}</td>
+        <div className="max-h-[420px] overflow-auto mt-2.5">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                {headers.map((h) => (
+                  <th
+                    key={h.key}
+                    onClick={() => toggleSort(h.key)}
+                    className="sticky top-0 z-10 bg-panel text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 cursor-pointer select-none"
+                  >
+                    {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sorted.map((r, i) => {
+                const endsMs = r.ends ? new Date(r.ends).getTime() : NaN
+                const isPast = !isNaN(endsMs) && endsMs < now
+                return (
+                  <tr key={`${r.address}|${r.hardware}|${r.ends}|${i}`}>
+                    <td className="py-2.5 px-2.5 border-b border-line font-mono">{r.address || '—'}</td>
+                    <td className="py-2.5 px-2.5 border-b border-line">{r.hostname || '—'}</td>
+                    <td className={`py-2.5 px-2.5 border-b border-line font-mono ${isPast ? 'text-dim' : 'text-muted'}`}>
+                      {!isNaN(endsMs) ? new Date(endsMs).toLocaleString() : r.ends || '—'}
+                    </td>
+                    <td className="py-2.5 px-2.5 border-b border-line font-mono text-muted">{r.hardware || '—'}</td>
+                    <td className="py-2.5 px-2.5 border-b border-line text-muted">{r.state || '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
     </div>
