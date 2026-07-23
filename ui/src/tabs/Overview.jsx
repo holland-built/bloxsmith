@@ -206,7 +206,7 @@ function SubnetHeatmap({ subnets }) {
               const opacity = Math.max(0.15, Math.min(1, util / 100))
               return (
                 <rect
-                  key={s.addr || s.cidr || i}
+                  key={`${s.addr ?? s.cidr ?? ''}|${i}`}
                   x={c * cw + gap / 2}
                   y={r * ch + gap / 2}
                   width={cw - gap}
