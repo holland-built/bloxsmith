@@ -1,0 +1,40 @@
+type: site
+
+# Bloxsmith seed template — original content, no third-party source.
+# Fictional EMEA lab site: Krakow, Poland.
+site:
+  name: emea-lab
+  region: EMEA
+  environment: lab
+  location: Krakow, Poland
+  owner: labops-emea@example.com
+
+network:
+  ip_space: default
+  subnet_size: 25
+  subnets:
+    - name: emea-lab-bench
+      purpose: Test bench VLAN
+      cidr: 25
+      dhcp: true
+      dhcp_start: 20
+      dhcp_end: 120
+    - name: emea-lab-mgmt
+      purpose: Out-of-band management VLAN
+      cidr: 27
+      dhcp: false
+
+dns:
+  parent: lab.example.com
+  view: default
+  create_zone: true
+  create_reverse_zone: false
+
+hosts:
+  - hostname: emea-lab-jump01
+    subnet: emea-lab-mgmt
+    comment: Lab jump host
+
+tags:
+  cost_center: emea-200
+  managed_by: bloxsmith

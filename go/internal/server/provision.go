@@ -232,7 +232,7 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	summary := map[string]any{"succeeded": []any{}, "failed": []any{}, "skipped": []any{}}
 
 	if !d.Provision.TemplatesInstalled() {
-		emit(map[string]any{"error": "templates not installed — run scripts/fetch_templates.py, or use the release archive / container image, which bundle them"})
+		emit(map[string]any{"error": "templates not installed — use the release archive or container image (which bundle them), or add YAML templates to the templates directory"})
 		emit(map[string]any{"done": true, "summary": summary})
 		return
 	}

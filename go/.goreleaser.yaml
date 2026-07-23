@@ -20,11 +20,6 @@ project_name: bloxsmith
 before:
   hooks:
     - go mod tidy
-    # Fetch third-party demo/seed templates (ccmarris/uddi_automation_toolkit)
-    # into go/templates (gitignored) so archives + images can bundle them.
-    # cwd is go/, so the script is at ../scripts/. TEMPLATES_DIR overrides the
-    # script's repo-root default.
-    - sh -c "TEMPLATES_DIR=templates python3 ../scripts/fetch_templates.py"
     # SignPath requires signed Windows binaries to carry file-metadata
     # attributes (ProductName, FileVersion, CompanyName, ...). goreleaser does
     # not embed Windows version resources itself — goversioninfo compiles

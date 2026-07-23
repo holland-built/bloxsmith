@@ -19,7 +19,7 @@ const (
 )
 
 // TemplatesInstalled reports whether the templates directory exists on disk.
-// Templates are third-party (fetched by scripts/fetch_templates.py, bundled by
+// Templates ship with bloxsmith (committed in go/templates, bundled by
 // goreleaser); a bare `go build` dev tree legitimately lacks them.
 func (e *Engine) TemplatesInstalled() bool {
 	info, err := os.Stat(e.TemplatesDir)
@@ -37,7 +37,7 @@ func (e *Engine) LoadTemplate(name string) (M, error) {
 	// and every name trips the path-escape guard ("invalid template name") —
 	// misleading. Report the real cause up front.
 	if !e.TemplatesInstalled() {
-		return nil, perr("templates not installed — run scripts/fetch_templates.py, or use the release archive / container image, which bundle them")
+		return nil, perr("templates not installed — use the release archive or container image (which bundle them), or add YAML templates to the templates directory")
 	}
 	base, err := filepath.Abs(e.TemplatesDir)
 	if err != nil {
@@ -54,7 +54,7 @@ func (e *Engine) LoadTemplate(name string) (M, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if !e.TemplatesInstalled() {
-			return nil, perr("templates not installed — run scripts/fetch_templates.py, or use the release archive / container image, which bundle them")
+			return nil, perr("templates not installed — use the release archive or container image (which bundle them), or add YAML templates to the templates directory")
 		}
 		return nil, perr("template not found: %s", name)
 	}

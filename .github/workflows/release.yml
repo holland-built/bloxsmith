@@ -50,11 +50,6 @@ jobs:
           go build ./...
           go test ./...
 
-      # Pre-fetch third-party templates (goreleaser's before hook also does
-      # this; running it explicitly fails fast with a clearer log on error).
-      - name: Fetch provisioning templates
-        run: TEMPLATES_DIR=go/templates python3 scripts/fetch_templates.py
-
       - name: Set up QEMU (arm64 image build)
         uses: docker/setup-qemu-action@v3
 
