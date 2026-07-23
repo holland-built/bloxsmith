@@ -80,3 +80,7 @@ body {
   background: var(--color-bg);
   min-height: 100vh;
 }
+
+/* hide scrollbar on internally-scrolling strips (e.g. topbar nav on narrow widths) */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

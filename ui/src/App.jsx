@@ -119,8 +119,8 @@ export default function App() {
             className="h-5 w-5 rounded cursor-pointer"
             onClick={() => setShowBrand(true)}
           />
-          <strong className="tracking-tight">Bloxsmith</strong>
-          <nav className="flex gap-0.5">
+          <strong className="tracking-tight shrink-0">Bloxsmith</strong>
+          <nav className="flex gap-0.5 min-w-0 overflow-x-auto no-scrollbar">
             {TABS.map((t) => (
               <a
                 key={t.id}
@@ -137,23 +137,25 @@ export default function App() {
             ))}
           </nav>
           <span className="flex-1" />
-          <ConnStatus />
-          <UpdateButton />
-          <ThemeSwitch />
-          <button
-            onClick={() => setShowAccounts(true)}
-            title="Settings"
-            aria-label="Settings"
-            className="w-8 h-8 rounded-lg border border-border bg-field text-muted hover:text-txt hover:border-border-hover"
-          >
-            ⋯
-          </button>
-          <a
-            href="#provision"
-            className="px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm font-medium no-underline"
-          >
-            + Provision
-          </a>
+          <div className="flex items-center gap-3 shrink-0">
+            <ConnStatus />
+            <UpdateButton />
+            <ThemeSwitch />
+            <button
+              onClick={() => setShowAccounts(true)}
+              title="Settings"
+              aria-label="Settings"
+              className="w-8 h-8 rounded-lg border border-border bg-field text-muted hover:text-txt hover:border-border-hover"
+            >
+              ⋯
+            </button>
+            <a
+              href="#provision"
+              className="px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm font-medium no-underline"
+            >
+              + Provision
+            </a>
+          </div>
         </div>
         <Active />
         <Palette tabs={TABS} onPick={(id) => { location.hash = id }} />
