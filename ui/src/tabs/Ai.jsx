@@ -166,7 +166,7 @@ function EntitiesTable({ entities }) {
     if (typeof entities[0] === 'object' && entities[0]) {
       const cols = Object.keys(entities[0])
       return (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-hidden overflow-y-auto max-h-[280px]">
           <table className="w-full text-[12px] font-mono">
             <thead>
               <tr className="text-muted text-left">
@@ -178,11 +178,16 @@ function EntitiesTable({ entities }) {
             <tbody>
               {entities.map((row, i) => (
                 <tr key={i} className="border-t border-border">
-                  {cols.map((c) => (
-                    <td key={c} className="pr-3 py-1 text-field-txt align-top">
-                      {typeof row[c] === 'object' && row[c] != null ? JSON.stringify(row[c]) : String(row[c] ?? '—')}
-                    </td>
-                  ))}
+                  {cols.map((c) => {
+                    const v = typeof row[c] === 'object' && row[c] != null ? JSON.stringify(row[c]) : String(row[c] ?? '—')
+                    return (
+                      <td key={c} className="pr-3 py-1 text-field-txt align-top">
+                        <span className="block overflow-hidden whitespace-nowrap" style={{ maxWidth: 180 }} title={v}>
+                          {v}
+                        </span>
+                      </td>
+                    )
+                  })}
                 </tr>
               ))}
             </tbody>
