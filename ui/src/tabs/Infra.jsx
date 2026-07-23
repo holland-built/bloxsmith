@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Cell, PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
 
@@ -37,7 +37,7 @@ export default function Infra() {
           </span>
         )}
       </div>
-      <div className="grid grid-cols-6 gap-3">
+      <CardGrid>
         <HostStatus hosts={hosts} />
         <FeedCard
           span={2}
@@ -55,6 +55,8 @@ export default function Infra() {
           title="On-Prem Hosts"
           note="CSP"
           feed={onprem}
+          limit={5}
+          viewAllHref="#infra"
           columns={[
             { key: 'name', label: 'Name' },
             { key: 'ophid', label: 'OPH ID', mono: true },
@@ -84,7 +86,7 @@ export default function Infra() {
             { key: 'status', label: 'Status', badge: true },
           ]}
         />
-      </div>
+      </CardGrid>
     </div>
   )
 }
@@ -154,10 +156,54 @@ function statusBadgeColor(v) {
   return null
 }
 
-function FeedCard({ span, title, note, feed, columns }) {
+function FeedCard({ span, title, note, feed, columns, limit, viewAllHref }) {
   const theme = useThemeColors()
   const rows = feed.data?.rows ?? []
   const bad = feed.error || feed.data?.status === 'error'
+  const shown = limit ? rows.slice(0, limit) : rows.slice(0, 20)
+  const table = (
+    <table className="w-full border-collapse text-sm">
+      <thead>
+        <tr>
+          {columns.map((c) => (
+            <th key={c.key} className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">
+              {c.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {shown.map((r, i) => (
+          <tr key={`${r.id ?? r.name ?? r.created_at ?? ''}|${i}`}>
+            {columns.map((c) => {
+              const v = r[c.key]
+              if (c.badge) {
+                const st = statusBadgeColor(v) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
+                return (
+                  <td key={c.key} className="py-2 px-2.5 border-b border-line">
+                    <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: st.bg, color: st.fg }}>
+                      {v || '—'}
+                    </span>
+                  </td>
+                )
+              }
+              return (
+                <td key={c.key} className="py-2 px-2.5 border-b border-line align-top">
+                  {c.mono ? (
+                    <span className="block font-mono overflow-hidden whitespace-nowrap" style={{ maxWidth: 150 }} title={v != null ? String(v) : undefined}>
+                      {v ?? '—'}
+                    </span>
+                  ) : (
+                    <span className="break-words">{v ?? '—'}</span>
+                  )}
+                </td>
+              )
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
 
   return (
     <Card span={span} title={title} note={note}>
@@ -167,49 +213,21 @@ function FeedCard({ span, title, note, feed, columns }) {
         <Empty>feed unavailable</Empty>
       ) : rows.length === 0 ? (
         <Empty />
+      ) : limit ? (
+        <>
+          {table}
+          {viewAllHref && rows.length > limit && (
+            <a
+              href={viewAllHref}
+              className="block text-center text-accent text-[11.5px] font-medium py-2 px-2.5 hover:bg-line/50 rounded-lg transition-colors"
+            >
+              View all {rows.length} →
+            </a>
+          )}
+        </>
       ) : (
         <div className="overflow-x-hidden overflow-y-auto max-h-[260px]">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                {columns.map((c) => (
-                  <th key={c.key} className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">
-                    {c.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 20).map((r, i) => (
-                <tr key={`${r.id ?? r.name ?? r.created_at ?? ''}|${i}`}>
-                  {columns.map((c) => {
-                    const v = r[c.key]
-                    if (c.badge) {
-                      const st = statusBadgeColor(v) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
-                      return (
-                        <td key={c.key} className="py-2 px-2.5 border-b border-line">
-                          <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: st.bg, color: st.fg }}>
-                            {v || '—'}
-                          </span>
-                        </td>
-                      )
-                    }
-                    return (
-                      <td key={c.key} className="py-2 px-2.5 border-b border-line align-top">
-                        {c.mono ? (
-                          <span className="block font-mono overflow-hidden whitespace-nowrap" style={{ maxWidth: 150 }} title={v != null ? String(v) : undefined}>
-                            {v ?? '—'}
-                          </span>
-                        ) : (
-                          <span className="break-words">{v ?? '—'}</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {table}
         </div>
       )}
     </Card>

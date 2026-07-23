@@ -3,7 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
 import { useHashParams } from '../lib/hash.js'
 import { useThemeColors } from '../lib/theme.jsx'
 
@@ -23,13 +23,13 @@ export default function Dns() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">DNS</h1>
-      <div className="grid grid-cols-6 gap-3">
+      <CardGrid>
         <QpsHero qps={qps} />
         <ZoneKpis zones={zones} />
         <DnsServices services={services} />
         <QueryVolume7d analytics={analytics} />
         <ZoneTable zones={zones} issuesOnly={!!hp.issues} />
-      </div>
+      </CardGrid>
     </div>
   )
 }

@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, Empty, Skeleton, Sparkline, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, Skeleton, Sparkline, utilStatus } from '../components/ui.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 
 // ---------- main ----------
@@ -20,14 +20,14 @@ export default function Overview() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Overview</h1>
-      <div className="grid grid-cols-6 gap-3">
+      <CardGrid>
         <DnsHero dns={dns} />
         <KpiStack subnets={subnets} leases={leases} />
         <TopUtilization subnets={subnets} />
         <SubnetHeatmap subnets={subnets} />
         <HostStatus hosts={hosts} />
         <SubnetTable subnets={subnets} />
-      </div>
+      </CardGrid>
     </div>
   )
 }

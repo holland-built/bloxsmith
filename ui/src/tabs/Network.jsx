@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 
 // ---------- main ----------
@@ -27,12 +27,12 @@ export default function Network() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Network</h1>
-      <div className="grid grid-cols-6 gap-3">
+      <CardGrid>
         <UtilBands subnets={subnets} />
         <IpamSpaces ipam={ipam} />
         <DhcpLeases dhcp={dhcp} innerRef={leasesRef} />
         <ExhaustionTable subnets={subnets} hp={hp} />
-      </div>
+      </CardGrid>
     </div>
   )
 }
@@ -175,8 +175,9 @@ function DhcpLeases({ dhcp, innerRef }) {
   const now = Date.now()
 
   return (
-    // span must live on the grid item — a bare wrapper div here collapsed the card
-    <div ref={innerRef} style={{ gridColumn: 'span 6 / span 6' }}>
+    // span must live on the grid item — a bare wrapper div here collapsed the card;
+    // class must match SPAN_CLASS[6] in ui.jsx so it reflows with the rest of the grid
+    <div ref={innerRef} className="col-span-2 md:col-span-4 xl:col-span-6">
     <Card
       span={6}
       title="DHCP Leases"

@@ -43,11 +43,28 @@ export function useChartTheme() {
 
 // ---------- shared bits ----------
 
+export function CardGrid({ className = '', children }) {
+  return (
+    <div className={`grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 ${className}`}>
+      {children}
+    </div>
+  )
+}
+
+const SPAN_CLASS = {
+  1: 'col-span-1',
+  2: 'col-span-2 md:col-span-2 xl:col-span-2',
+  3: 'col-span-2 md:col-span-2 xl:col-span-3',
+  4: 'col-span-2 md:col-span-4 xl:col-span-4',
+  5: 'col-span-2 md:col-span-4 xl:col-span-5',
+  6: 'col-span-2 md:col-span-4 xl:col-span-6',
+}
+
 export function Card({ title, note, right, span = 2, className = '', children }) {
+  const spanClass = SPAN_CLASS[span] || SPAN_CLASS[6]
   return (
     <div
-      className={`bg-card border border-card-border rounded-card p-[18px] ${className}`}
-      style={{ gridColumn: `span ${span} / span ${span}` }}
+      className={`bg-card border border-card-border rounded-card p-[18px] ${spanClass} ${className}`}
     >
       {title && (
         <div className="flex items-center gap-2 mb-2">

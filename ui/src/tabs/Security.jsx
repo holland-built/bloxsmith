@@ -4,7 +4,7 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
-import { useChartTheme, Card, Empty, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 
 const SEV_ORDER = ['critical', 'high', 'medium', 'low']
@@ -32,7 +32,7 @@ export default function Security() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Security</h1>
-      <div className="grid grid-cols-6 gap-3">
+      <CardGrid>
         <SeverityHero hub={hub} events={events} />
         <KpiStack hub={hub} events={events} acks={acks} />
         <TriageInbox hub={hub} events={events} acks={acks} setAcks={setAcks} />
@@ -40,7 +40,7 @@ export default function Security() {
         <CtemPanel ctem={ctem} />
         <ThreatFeed threats={threats} />
         <InsightsPanel insights={insights} />
-      </div>
+      </CardGrid>
     </div>
   )
 }

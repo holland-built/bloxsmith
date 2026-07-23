@@ -95,6 +95,10 @@ views/
 # Third-party demo templates — fetched at build (scripts/fetch_templates.py), never published (ccmarris/uddi_automation_toolkit)
 templates/
 
+# Windows version-info resource — generated at build time by goversioninfo
+# from go/versioninfo.json (see go/versioninfo.go, go/.goreleaser.yaml before.hooks)
+*.syso
+
 # cross-model critique scratch
 .xcheck/
 
