@@ -473,7 +473,9 @@ func (s *Service) CSPIpamUtil() map[string]any {
 
 func (s *Service) CSPDHCPLeases() map[string]any {
 	body, st, err := s.Rest.GetEx("/api/ddi/v1/dhcp/lease",
-		map[string]string{"_limit": "200", "_fields": "address,hostname,ends,hardware,state"})
+		// 200 was an arbitrary cap that silently hid ~1000 leases; the tenant has
+		// ~1.2k and the UI now searches/scrolls the full set.
+		map[string]string{"_limit": "5000", "_fields": "address,hostname,ends,hardware,state"})
 	if errored(st, err) {
 		return errRows()
 	}
