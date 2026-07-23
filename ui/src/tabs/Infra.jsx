@@ -20,7 +20,7 @@ export default function Infra() {
   const maintOk = maint.data?.status !== 'error' && !maint.error && maintEnabled != null
 
   return (
-    <div className="max-w-[1340px] mx-auto p-5">
+    <div className="w-full px-6 py-5">
       <div className="flex items-center gap-2 mb-3">
         <h1 className="text-lg font-semibold tracking-tight">Infrastructure</h1>
         {maintOk && (
