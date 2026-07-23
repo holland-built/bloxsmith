@@ -60,9 +60,6 @@ docker run -d --name bloxsmith \
 brew install holland-built/tap/bloxsmith
 ```
 
-> [!NOTE]
-> Homebrew channel is coming soon — use the curl or Windows installer for now.
-
 Full options and deployment guidance are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 </details>
