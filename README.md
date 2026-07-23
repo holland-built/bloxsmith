@@ -24,12 +24,15 @@ curl --proto '=https' --tlsv1.2 -fsSLo install.sh https://github.com/holland-bui
 brew install holland-built/tap/bloxsmith
 ```
 
-**Windows** — inspect, then run; it opens the dashboard for you:
+**Windows** — paste into **Command Prompt or PowerShell**; it downloads, you inspect, then it installs and opens the dashboard:
 
 ```powershell
-iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1
+powershell -Command "iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1"
+notepad install.ps1
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
+
+Both `powershell` lines run from either shell — no "iwr is not recognized" error. Close Notepad after reading to continue.
 
 **Docker** — then open http://localhost:8080 yourself:
 
