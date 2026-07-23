@@ -121,7 +121,7 @@ function HostStatus({ hosts }) {
                     <Cell key={d.name} fill={d.color} />
                   ))}
                 </Pie>
-                <Tooltip {...TT} />
+                <Tooltip {...TT} position={{ y: 100 }} allowEscapeViewBox={{ x: false, y: true }} />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
