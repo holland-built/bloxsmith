@@ -7,12 +7,11 @@ test('light theme from localStorage applies pre-paint', async ({ page }) => {
   expect(theme).toBe('light');
 });
 
-test('default theme is dark; Settings can switch to light and it persists', async ({ page }) => {
+test('default theme is dark; topbar pill can switch to light and it persists', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
-  await page.getByTitle('Settings').click();
-  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await page.getByRole('button', { name: 'Light theme' }).click();
 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   const stored = await page.evaluate(() => localStorage.getItem('theme'));

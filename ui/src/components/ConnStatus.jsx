@@ -59,10 +59,13 @@ export default function ConnStatus() {
     : null
   const title = `${tenantName} · last data fetch ${secsAgo === null ? 'never' : `${secsAgo}s ago`}`
 
+  const version = status?.version ? String(status.version).replace(/^v/, '') : null
+
   return (
     <span className="text-[11px] text-muted flex items-center gap-1.5" title={title}>
       <span className="w-2 h-2 rounded-full" style={{ background: color }} />
       {label}
+      {version && <span className="text-dim">· v{version}</span>}
     </span>
   )
 }

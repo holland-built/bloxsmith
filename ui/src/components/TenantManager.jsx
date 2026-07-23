@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useTheme } from '../lib/theme.jsx'
 
 const vpost = (url, body) =>
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -11,11 +10,7 @@ const inCls =
 const rowBtn = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm text-field-txt hover:bg-line'
 const miniBtn = 'px-2 py-1 rounded-lg border border-border text-[11px] text-muted hover:text-txt hover:border-border-hover'
 
-const modeBtn = (on) =>
-  `flex-1 px-2.5 py-1.5 rounded-lg border text-sm ${on ? 'border-accent text-accent' : 'border-border text-muted'}`
-
 export default function TenantManager({ onClose }) {
-  const { mode, setMode } = useTheme()
   const [status, setStatus] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [dashToken, setDashToken] = useState(() => localStorage.getItem('dashToken') || '')
@@ -133,12 +128,7 @@ export default function TenantManager({ onClose }) {
 
         {!add.open && !edit && (
           <>
-            <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Appearance</div>
-            <div className="flex gap-2 mb-4">
-              <button className={modeBtn(mode === 'dark')} onClick={() => setMode('dark')}>Dark</button>
-              <button className={modeBtn(mode === 'light')} onClick={() => setMode('light')}>Light</button>
-              <button className={modeBtn(mode === 'system')} onClick={() => setMode('system')}>System</button>
-            </div>
+
           </>
         )}
 
