@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, CardGrid, Empty, Skeleton, Sparkline, utilStatus } from '../components/ui.jsx'
+import { DataTable } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 
 // ---------- main ----------
@@ -342,11 +343,26 @@ function SubnetTable({ subnets }) {
     return arr
   }, [filtered, sort])
 
-  const top15 = sorted.slice(0, 15)
-
-  function toggleSort(key) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
-  }
+  const rows = useMemo(
+    () =>
+      sorted.map((s) => {
+        const util = Number(s.util) || 0
+        const free = (Number(s.total) || 0) - (Number(s.used) || 0)
+        const st = utilStatus(util)
+        return {
+          network: s.addr || s.cidr || '—',
+          site: s.site || '—',
+          util,
+          free,
+          status: st.label,
+          _addr: s.addr || s.cidr,
+          _color: st.color,
+          _bg: st.bg,
+          _fg: st.fg,
+        }
+      }),
+    [sorted],
+  )
 
   function exportCsv() {
     const header = ['Network', 'Site', 'Utilization', 'Status', 'Free']
@@ -367,12 +383,39 @@ function SubnetTable({ subnets }) {
     URL.revokeObjectURL(url)
   }
 
-  const headers = [
-    { key: 'network', label: 'Network' },
-    { key: 'site', label: 'Site' },
-    { key: 'util', label: 'Utilization' },
-    { key: 'status', label: 'Status', noSort: true },
-    { key: 'free', label: 'Free' },
+  const columns = [
+    { key: 'network', label: 'Network', mono: true, clip: 200, sortable: true },
+    { key: 'site', label: 'Site', sortable: true },
+    {
+      key: 'util',
+      label: 'Utilization',
+      sortable: true,
+      width: '26%',
+      render: (util, r) => (
+        <div className="flex items-center gap-2">
+          <div className="h-[5px] rounded-full bg-line overflow-hidden flex-1 min-w-[70px]">
+            <div className="h-full" style={{ width: `${Math.min(100, util)}%`, background: r._color }} />
+          </div>
+          <span className="text-muted w-9 text-right">{util}%</span>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (_v, r) => (
+        <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: r._bg, color: r._fg }}>
+          {r.status}
+        </span>
+      ),
+    },
+    {
+      key: 'free',
+      label: 'Free',
+      align: 'right',
+      sortable: true,
+      render: (free) => <span className="text-muted">{free.toLocaleString()} free</span>,
+    },
   ]
 
   return (
@@ -382,6 +425,7 @@ function SubnetTable({ subnets }) {
       note="excl. /29–/32 infra links"
       right={
         <div className="flex items-center gap-2">
+          <span className="text-[11px] text-muted tabular-nums">{rows.length.toLocaleString()}</span>
           <input
             placeholder="Filter…"
             value={filter}
@@ -406,59 +450,26 @@ function SubnetTable({ subnets }) {
     >
       {subnets.length === 0 ? (
         <Empty />
-      ) : top15.length === 0 ? (
-        <Empty>no subnets match</Empty>
       ) : (
-        <table className="w-full border-collapse mt-2.5 text-sm">
-          <thead>
-            <tr>
-              {headers.map((h) => (
-                <th
-                  key={h.key}
-                  onClick={() => !h.noSort && toggleSort(h.key)}
-                  className={`text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 ${h.noSort ? '' : 'cursor-pointer select-none'}`}
-                >
-                  {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {top15.map((s, i) => {
-              const util = Number(s.util) || 0
-              const free = (Number(s.total) || 0) - (Number(s.used) || 0)
-              const status = utilStatus(util)
-              const network = s.addr || s.cidr || '—'
-              return (
-                <tr
-                  key={network + i}
-                  onClick={() => {
-                    const addr = s.addr || s.cidr
-                    if (addr) location.hash = 'network?subnet=' + encodeURIComponent(addr)
-                  }}
-                  className="cursor-pointer hover:bg-line/50"
-                >
-                  <td className="py-2.5 px-2.5 border-b border-line font-mono">{network}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line">{s.site || '—'}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line" style={{ width: '26%' }}>
-                    <div className="flex items-center gap-2">
-                      <div className="h-[5px] rounded-full bg-line overflow-hidden flex-1 min-w-[70px]">
-                        <div className="h-full" style={{ width: `${Math.min(100, util)}%`, background: status.color }} />
-                      </div>
-                      <span className="text-muted w-9 text-right">{util}%</span>
-                    </div>
-                  </td>
-                  <td className="py-2.5 px-2.5 border-b border-line">
-                    <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: status.bg, color: status.fg }}>
-                      {status.label}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-2.5 border-b border-line text-muted">{free.toLocaleString()} free</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <DataTable
+          rows={rows}
+          columns={columns}
+          sort={sort}
+          onSort={(next) =>
+            setSort((cur) =>
+              cur.key === next.key
+                ? { key: next.key, dir: cur.dir === 'asc' ? 'desc' : 'asc' }
+                : { key: next.key, dir: 'desc' },
+            )
+          }
+          onRowClick={(r) => {
+            if (r._addr) location.hash = 'network?subnet=' + encodeURIComponent(r._addr)
+          }}
+          rowKey={(r, i) => r.network + i}
+          maxHeight={420}
+          rowCap={150}
+          emptyText="no subnets match"
+        />
       )}
     </Card>
   )

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
+import { DataTable } from '../components/DataTable.jsx'
 
 // ---------- severity vocab ----------
 // Signals carry crit/warn/ok (this app) or critical/high/medium/low (upstream) —
@@ -12,6 +13,12 @@ function sevMeta(s, COLORS) {
   if (v === 'warn' || v === 'medium') return { key: 'medium', label: 'Medium', color: COLORS.warn }
   if (v === 'low' || v === 'ok') return { key: 'low', label: 'Low', color: COLORS.accent }
   return { key: 'unknown', label: v || 'Unknown', color: COLORS.other }
+}
+
+// Sort rank so Critical > High > Medium > Low (ascending puts Critical first).
+const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, unknown: 4 }
+function sevRank(s, COLORS) {
+  return SEV_RANK[sevMeta(s, COLORS).key] ?? 4
 }
 
 // MCP IQ Actions carry priority (low/medium/high), not this app's severity vocab.
@@ -167,43 +174,51 @@ function SeverityKpis({ signals, loading }) {
 function IncidentsTable({ signals, loading, error, category, onCategory, acks, onToggleAck, onClearAcks }) {
   const { COLORS } = useChartTheme()
   const [filter, setFilter] = useState('')
-  const [sort, setSort] = useState({ key: 'detected_at', dir: 'desc' })
 
-  const filtered = useMemo(() => {
+  // Filter, then default-order newest-first; DataTable takes over once a header is clicked.
+  const rows = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    return signals.filter((s) => {
-      if (category && s.category !== category) return false
-      if (!q) return true
-      return [s.category, s.entity_id, s.message].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
-    })
+    return signals
+      .filter((s) => {
+        if (category && s.category !== category) return false
+        if (!q) return true
+        return [s.category, s.entity_id, s.message].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+      })
+      .sort((a, b) => (Number(b.detected_at) || 0) - (Number(a.detected_at) || 0))
   }, [signals, category, filter])
 
-  const sorted = useMemo(() => {
-    const arr = [...filtered]
-    const { key, dir } = sort
-    arr.sort((a, b) => {
-      let av, bv
-      if (key === 'category') { av = a.category || ''; bv = b.category || '' }
-      else if (key === 'entity_id') { av = a.entity_id || ''; bv = b.entity_id || '' }
-      else if (key === 'severity') { av = sevMeta(a.severity, COLORS).key; bv = sevMeta(b.severity, COLORS).key }
-      else { av = Number(a.detected_at) || 0; bv = Number(b.detected_at) || 0 }
-      if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-      return dir === 'asc' ? av - bv : bv - av
-    })
-    return arr
-  }, [filtered, sort])
-
-  function toggleSort(key) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
-  }
-
-  const headers = [
-    { key: 'ack', label: 'Ack', noSort: true },
-    { key: 'category', label: 'Category' },
-    { key: 'entity_id', label: 'Entity' },
-    { key: 'severity', label: 'Severity' },
-    { key: 'message', label: 'Message', noSort: true },
-    { key: 'detected_at', label: 'Age' },
+  const columns = [
+    {
+      key: 'ack',
+      label: 'Ack',
+      keep: true,
+      render: (_v, s) => (
+        <input
+          type="checkbox"
+          checked={!!acks[ackKey(s)]}
+          onChange={() => onToggleAck(s)}
+          aria-label="Acknowledge signal"
+        />
+      ),
+    },
+    { key: 'category', label: 'Category', sortable: true },
+    { key: 'entity_id', label: 'Entity', mono: true, clip: 160, sortable: true },
+    {
+      key: 'severity',
+      label: 'Severity',
+      sortable: true,
+      comparator: (a, b) => sevRank(a.severity, COLORS) - sevRank(b.severity, COLORS),
+      render: (_v, s) => <SeverityPill severity={s.severity} />,
+    },
+    { key: 'message', label: 'Message' },
+    {
+      key: 'detected_at',
+      label: 'Age',
+      mono: true,
+      sortable: true,
+      comparator: (a, b) => (Number(a.detected_at) || 0) - (Number(b.detected_at) || 0),
+      render: (v) => ageLabel(v),
+    },
   ]
 
   return (
@@ -227,6 +242,7 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
           <button onClick={onClearAcks} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
             Clear acks
           </button>
+          <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span>
         </div>
       }
     >
@@ -236,48 +252,17 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
         <Empty>failed to load incidents</Empty>
       ) : signals.length === 0 ? (
         <Empty>no issues detected — all metrics within normal thresholds</Empty>
-      ) : sorted.length === 0 ? (
+      ) : rows.length === 0 ? (
         <Empty>no signals match</Empty>
       ) : (
-        <div className="max-h-[420px] overflow-x-hidden overflow-y-auto">
-          <table className="w-full border-collapse mt-2.5 text-sm">
-            <thead>
-              <tr>
-                {headers.map((h) => (
-                  <th
-                    key={h.key}
-                    onClick={() => !h.noSort && toggleSort(h.key)}
-                    className={`text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 ${h.noSort ? '' : 'cursor-pointer select-none'}`}
-                  >
-                    {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((s) => {
-                const k = ackKey(s)
-                const acked = !!acks[k]
-                return (
-                  <tr key={k} style={{ opacity: acked ? 0.45 : 1 }}>
-                    <td className="py-2.5 px-2.5 border-b border-line">
-                      <input type="checkbox" checked={acked} onChange={() => onToggleAck(s)} aria-label="Acknowledge signal" />
-                    </td>
-                    <td className="py-2.5 px-2.5 border-b border-line text-muted">{s.category || '—'}</td>
-                    <td className="py-2.5 px-2.5 border-b border-line align-top">
-                      <span className="block font-mono overflow-hidden whitespace-nowrap" style={{ maxWidth: 180 }} title={s.entity_id || undefined}>
-                        {s.entity_id || '—'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-2.5 border-b border-line"><SeverityPill severity={s.severity} /></td>
-                    <td className="py-2.5 px-2.5 border-b border-line text-muted break-words">{s.message || '—'}</td>
-                    <td className="py-2.5 px-2.5 border-b border-line text-muted whitespace-nowrap">{ageLabel(s.detected_at)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rows={rows}
+          columns={columns}
+          maxHeight={420}
+          rowCap={150}
+          rowKey={(s) => ackKey(s)}
+          rowStyle={(s) => ({ opacity: acks[ackKey(s)] ? 0.45 : 1 })}
+        />
       )}
     </Card>
   )
@@ -286,8 +271,29 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
 // ---------- SOC action queue ----------
 
 function SocQueue({ rows, loading, error }) {
+  const { COLORS } = useChartTheme()
+  const columns = [
+    {
+      key: 'sev',
+      label: 'Sev',
+      sortable: true,
+      comparator: (a, b) => sevRank(mcpSeverity(a), COLORS) - sevRank(mcpSeverity(b), COLORS),
+      render: (_v, r) => <SeverityPill severity={mcpSeverity(r)} />,
+    },
+    {
+      key: 'action',
+      label: 'Action',
+      keep: true,
+      render: (_v, r) => (
+        <span className="line-clamp-2">{r.title || r.name || r.message || r.display_id || r.id || '—'}</span>
+      ),
+    },
+  ]
+
+  const right = rows.length > 0 ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : undefined
+
   return (
-    <Card span={2} title="SOC Queue" note="IQ Actions">
+    <Card span={2} title="SOC Queue" note="IQ Actions" right={right}>
       {loading ? (
         <Skeleton h={280} />
       ) : error ? (
@@ -295,24 +301,7 @@ function SocQueue({ rows, loading, error }) {
       ) : rows.length === 0 ? (
         <Empty>no pending actions</Empty>
       ) : (
-        <div className="max-h-[420px] overflow-x-hidden overflow-y-auto">
-          <table className="w-full border-collapse mt-2.5 text-sm">
-            <thead>
-              <tr>
-                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Sev</th>
-                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 50).map((r, i) => (
-                <tr key={`${r.id ?? r.display_id ?? ''}|${i}`}>
-                  <td className="py-2.5 px-2.5 border-b border-line"><SeverityPill severity={mcpSeverity(r)} /></td>
-                  <td className="py-2.5 px-2.5 border-b border-line text-muted break-words">{r.title || r.name || r.message || r.display_id || r.id || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable rows={rows} columns={columns} maxHeight={420} rowCap={150} rowKey={(r, i) => `${r.id ?? r.display_id ?? ''}|${i}`} />
       )}
     </Card>
   )

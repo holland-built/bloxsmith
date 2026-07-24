@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Cell, PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty } from '../components/ui.jsx'
+import { DataTable, FeedCard } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
 
@@ -44,6 +45,7 @@ export default function Infra() {
           title="Host Health"
           note="CSP"
           feed={health}
+          count
           columns={[
             { key: 'name', label: 'Name' },
             { key: 'status', label: 'Status', badge: true },
@@ -69,6 +71,7 @@ export default function Infra() {
           title="Jobs"
           note="recent"
           feed={jobs}
+          count
           columns={[
             { key: 'created_at', label: 'Created', mono: true },
             { key: 'type', label: 'Type' },
@@ -81,6 +84,7 @@ export default function Infra() {
           title="DFP Services"
           note="CSP"
           feed={dfp}
+          count
           columns={[
             { key: 'name', label: 'Name' },
             { key: 'status', label: 'Status', badge: true },
@@ -146,94 +150,6 @@ function HostStatus({ hosts }) {
   )
 }
 
-// ---------- generic CSP feed card ----------
-
-function statusBadgeColor(v) {
-  const s = String(v || '').toLowerCase()
-  if (/online|up|active|success|complete/.test(s)) return utilStatus(0)
-  if (/degraded|warn|pending|running/.test(s)) return utilStatus(80)
-  if (/off|down|error|fail/.test(s)) return utilStatus(95)
-  return null
-}
-
-function FeedCard({ span, title, note, feed, columns, limit, viewAllHref }) {
-  const theme = useThemeColors()
-  const rows = feed.data?.rows ?? []
-  const bad = feed.error || feed.data?.status === 'error'
-  const shown = limit ? rows.slice(0, limit) : rows.slice(0, 20)
-  const table = (
-    <table className="w-full border-collapse text-sm">
-      <thead>
-        <tr>
-          {columns.map((c) => (
-            <th key={c.key} className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">
-              {c.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {shown.map((r, i) => (
-          <tr key={`${r.id ?? r.name ?? r.created_at ?? ''}|${i}`}>
-            {columns.map((c) => {
-              const v = r[c.key]
-              if (c.badge) {
-                const st = statusBadgeColor(v) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
-                return (
-                  <td key={c.key} className="py-2 px-2.5 border-b border-line">
-                    <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: st.bg, color: st.fg }}>
-                      {v || '—'}
-                    </span>
-                  </td>
-                )
-              }
-              return (
-                <td key={c.key} className="py-2 px-2.5 border-b border-line align-top">
-                  {c.mono ? (
-                    <span className="block font-mono overflow-hidden whitespace-nowrap" style={{ maxWidth: 150 }} title={v != null ? String(v) : undefined}>
-                      {v ?? '—'}
-                    </span>
-                  ) : (
-                    <span className="break-words">{v ?? '—'}</span>
-                  )}
-                </td>
-              )
-            })}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-
-  return (
-    <Card span={span} title={title} note={note}>
-      {feed.loading && !feed.data ? (
-        <Skeleton h={160} />
-      ) : bad ? (
-        <Empty>feed unavailable</Empty>
-      ) : rows.length === 0 ? (
-        <Empty />
-      ) : limit ? (
-        <>
-          {table}
-          {viewAllHref && rows.length > limit && (
-            <a
-              href={viewAllHref}
-              className="block text-center text-accent text-[11.5px] font-medium py-2 px-2.5 hover:bg-line/50 rounded-lg transition-colors"
-            >
-              View all {rows.length} →
-            </a>
-          )}
-        </>
-      ) : (
-        <div className="overflow-x-hidden overflow-y-auto max-h-[260px]">
-          {table}
-        </div>
-      )}
-    </Card>
-  )
-}
-
 // ---------- host inventory table ----------
 
 function statusBucket(s) {
@@ -244,11 +160,33 @@ function statusBucket(s) {
   return 'other'
 }
 
+// Severity rank for status sort: offline first, then degraded, active, other.
+const SEV_ORDER = { offline: 0, degraded: 1, active: 2, other: 3 }
+function sevRank(s) {
+  return SEV_ORDER[statusBucket(s)] ?? 3
+}
+
+// Octet-aware IP compare.
+function ipCompare(a, b) {
+  const av = String(a || '').split('.').map(Number)
+  const bv = String(b || '').split('.').map(Number)
+  for (let i = 0; i < 4; i++) {
+    if ((av[i] || 0) !== (bv[i] || 0)) return (av[i] || 0) - (bv[i] || 0)
+  }
+  return 0
+}
+
+const HOST_COLUMNS = [
+  { key: 'name', label: 'Name', sortable: true, keep: true },
+  { key: 'ip', label: 'IP', mono: true, sortable: true, comparator: (a, b) => ipCompare(a.ip, b.ip) },
+  { key: 'status', label: 'Status', badge: true, sortable: true, comparator: (a, b) => sevRank(a.status) - sevRank(b.status) },
+  { key: 'type', label: 'Type', priority: 'low' },
+]
+
 function HostTable({ hosts, status }) {
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
   const [type, setType] = useState('')
-  const [sort, setSort] = useState({ key: 'name', dir: 'asc' })
 
   const statusFilter = status === 'error' ? 'offline' : status
 
@@ -264,35 +202,9 @@ function HostTable({ hosts, status }) {
     })
   }, [hosts, filter, type, statusFilter])
 
-  const sorted = useMemo(() => {
-    const arr = [...filtered]
-    const { key, dir } = sort
-    arr.sort((a, b) => {
-      if (key === 'ip') {
-        const av = String(a.ip || '').split('.').map(Number)
-        const bv = String(b.ip || '').split('.').map(Number)
-        for (let i = 0; i < 4; i++) {
-          if ((av[i] || 0) !== (bv[i] || 0)) return dir === 'asc' ? (av[i] || 0) - (bv[i] || 0) : (bv[i] || 0) - (av[i] || 0)
-        }
-        return 0
-      }
-      const av = String(a[key] ?? '')
-      const bv = String(b[key] ?? '')
-      return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-    })
-    return arr
-  }, [filtered, sort])
-
-  function toggleSort(key) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
-  }
-
-  const headers = [
-    { key: 'name', label: 'Name' },
-    { key: 'ip', label: 'IP' },
-    { key: 'status', label: 'Status' },
-    { key: 'type', label: 'Type' },
-  ]
+  const countLabel = filtered.length === hosts.length
+    ? `${hosts.length.toLocaleString()} hosts`
+    : `${filtered.length.toLocaleString()} of ${hosts.length.toLocaleString()}`
 
   return (
     <Card
@@ -313,7 +225,7 @@ function HostTable({ hosts, status }) {
       }
       right={
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted">{filtered.length.toLocaleString()} of {hosts.length.toLocaleString()}</span>
+          <span className="text-[11px] text-muted">{countLabel}</span>
           <input
             placeholder="Search name, IP…"
             value={filter}
@@ -335,42 +247,18 @@ function HostTable({ hosts, status }) {
     >
       {hosts.length === 0 ? (
         <Empty />
-      ) : sorted.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <Empty>no hosts match</Empty>
       ) : (
-        <div className="max-h-[420px] overflow-auto mt-2.5">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                {headers.map((h) => (
-                  <th
-                    key={h.key}
-                    onClick={() => toggleSort(h.key)}
-                    className="sticky top-0 z-10 bg-panel text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 cursor-pointer select-none"
-                  >
-                    {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((h, i) => {
-                const st = statusBadgeColor(h.status) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
-                return (
-                  <tr key={`${h.name}|${h.ip}|${i}`}>
-                    <td className="py-2.5 px-2.5 border-b border-line">{h.name || '—'}</td>
-                    <td className="py-2.5 px-2.5 border-b border-line font-mono">{h.ip || '—'}</td>
-                    <td className="py-2.5 px-2.5 border-b border-line">
-                      <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: st.bg, color: st.fg }}>
-                        {h.status || '—'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-2.5 border-b border-line text-muted">{h.type || '—'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="mt-2.5">
+          <DataTable
+            rows={filtered}
+            columns={HOST_COLUMNS}
+            maxHeight={420}
+            rowCap={150}
+            stickyHeader
+            rowKey={(h, i) => `${h.name}|${h.ip}|${i}`}
+          />
         </div>
       )}
     </Card>

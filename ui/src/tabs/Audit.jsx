@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
+import { DataTable } from '../components/DataTable.jsx'
 
 function actionColor(a, COLORS) {
   return { CREATE: COLORS.ok, DELETE: COLORS.crit, UPDATE: COLORS.accent }[a] || COLORS.other
@@ -10,6 +11,16 @@ function actionColor(a, COLORS) {
 function fmtTs(ts) {
   const d = new Date(ts)
   return isNaN(d) ? String(ts ?? '—') : d.toLocaleString()
+}
+
+// mono, single-line, clipped timestamp cell (reused by both tables)
+function monoTs(v) {
+  const s = fmtTs(v)
+  return (
+    <span className="block overflow-hidden whitespace-nowrap text-ellipsis font-mono text-[12px]" style={{ maxWidth: 180 }} title={s}>
+      {s}
+    </span>
+  )
 }
 
 // ---------- main ----------
@@ -121,18 +132,20 @@ function AuditTable({ logs, loading, error }) {
     return arr
   }, [filtered, sort])
 
-  function toggleSort(key) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
-  }
-
-  const headers = [
-    { key: 'ts', label: 'Time' },
-    { key: 'user', label: 'User' },
-    { key: 'action', label: 'Action' },
-    { key: 'resource', label: 'Resource' },
-    { key: 'result', label: 'Result' },
+  const columns = [
+    { key: 'ts', label: 'Time', sortable: true, render: monoTs },
+    {
+      key: 'user',
+      label: 'User',
+      sortable: true,
+      render: (v) => (
+        <span className="block truncate max-w-[140px]" title={v}>{v || '—'}</span>
+      ),
+    },
+    { key: 'action', label: 'Action', sortable: true, render: (v) => <ActionPill action={v} /> },
+    { key: 'resource', label: 'Resource', sortable: true },
+    { key: 'result', label: 'Result', sortable: true },
   ]
-  const top50 = sorted.slice(0, 50)
 
   return (
     <Card
@@ -157,6 +170,7 @@ function AuditTable({ logs, loading, error }) {
             <option value="UPDATE">Update</option>
             <option value="DELETE">Delete</option>
           </select>
+          {sorted.length > 0 && <span className="text-[11px] text-muted">{sorted.length}</span>}
         </div>
       }
     >
@@ -164,37 +178,20 @@ function AuditTable({ logs, loading, error }) {
         <Skeleton h={250} />
       ) : error || logs.length === 0 ? (
         <Empty />
-      ) : top50.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <Empty>no entries match</Empty>
       ) : (
-        <div className="overflow-x-hidden overflow-y-auto max-h-[420px]">
-          <table className="w-full border-collapse mt-2.5 text-sm">
-            <thead>
-              <tr>
-                {headers.map((h) => (
-                  <th
-                    key={h.key}
-                    onClick={() => toggleSort(h.key)}
-                    className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 cursor-pointer select-none"
-                  >
-                    {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {top50.map((l, i) => (
-                <tr key={`${l.id ?? ''}|${i}`}>
-                  <td className="py-2 px-2.5 border-b border-line font-mono text-[12px] whitespace-nowrap">{fmtTs(l.ts)}</td>
-                  <td className="py-2 px-2.5 border-b border-line max-w-[140px] truncate" title={l.user}>{l.user || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line"><ActionPill action={l.action} /></td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted break-words">{l.resource || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted break-words">{l.result || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rows={sorted}
+          columns={columns}
+          rowCap={50}
+          maxHeight={420}
+          stickyHeader
+          sort={sort}
+          onSort={(next) =>
+            setSort((s) => (s.key === next.key ? { key: next.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: next.key, dir: 'desc' }))
+          }
+        />
       )}
     </Card>
   )
@@ -223,6 +220,29 @@ function CspAuditTable() {
 
   const rows = result?.rows ?? []
 
+  const columns = [
+    { key: 'ts', label: 'Time', render: monoTs },
+    {
+      key: 'user',
+      label: 'Who',
+      keep: true,
+      render: (v, r) => (
+        <span className="block truncate max-w-[160px]" title={r.user}>
+          {r.user || '—'} {r.who_kind && <span className="text-dim text-[10.5px]">({r.who_kind})</span>}
+        </span>
+      ),
+    },
+    { key: 'action', label: 'Action' },
+    { key: 'resource', label: 'Resource' },
+    {
+      key: 'result',
+      label: 'Result',
+      render: (v) => (
+        <span className="line-clamp-2" style={{ color: /fail/i.test(v || '') ? COLORS.crit : COLORS.ok }}>{v || '—'}</span>
+      ),
+    },
+  ]
+
   return (
     <Card
       span={6}
@@ -240,6 +260,7 @@ function CspAuditTable() {
           <button onClick={runSearch} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
             {loading ? 'Searching…' : 'Search'}
           </button>
+          {rows.length > 0 && <span className="text-[11px] text-muted">{rows.length}</span>}
         </div>
       }
     >
@@ -252,30 +273,7 @@ function CspAuditTable() {
       ) : rows.length === 0 ? (
         <Empty>no entries match</Empty>
       ) : (
-        <div className="overflow-x-hidden overflow-y-auto max-h-[420px]">
-          <table className="w-full border-collapse mt-2.5 text-sm">
-            <thead>
-              <tr>
-                {['Time', 'Who', 'Action', 'Resource', 'Result'].map((h) => (
-                  <th key={h} className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 50).map((r, i) => (
-                <tr key={`${r.id ?? ''}|${i}`}>
-                  <td className="py-2 px-2.5 border-b border-line font-mono text-[12px] whitespace-nowrap">{fmtTs(r.ts)}</td>
-                  <td className="py-2 px-2.5 border-b border-line max-w-[160px] truncate" title={r.user}>
-                    {r.user || '—'} {r.who_kind && <span className="text-dim text-[10.5px]">({r.who_kind})</span>}
-                  </td>
-                  <td className="py-2 px-2.5 border-b border-line">{r.action || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted break-words">{r.resource || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line break-words" style={{ color: /fail/i.test(r.result || '') ? COLORS.crit : COLORS.ok }}>{r.result || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable rows={rows} columns={columns} rowCap={150} maxHeight={420} stickyHeader />
       )}
     </Card>
   )

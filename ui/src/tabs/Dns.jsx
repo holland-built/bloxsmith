@@ -4,6 +4,7 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { DataTable } from '../components/DataTable.jsx'
 import { useHashParams } from '../lib/hash.js'
 import { useThemeColors } from '../lib/theme.jsx'
 
@@ -122,6 +123,12 @@ function DnsServices({ services }) {
   const rows = services.data?.rows ?? []
   const status = services.data?.status
 
+  const columns = [
+    { key: 'name', label: 'Name' },
+    { key: 'comment', label: 'Comment' },
+    { key: 'pool_id', label: 'Pool ID', mono: true, clip: 160 },
+  ]
+
   return (
     <Card span={3} title="DNS Services" right={<span className="text-[11px] text-muted">{rows.length ? `${rows.length} services` : ''}</span>}>
       {services.loading ? (
@@ -129,30 +136,7 @@ function DnsServices({ services }) {
       ) : services.error || status === 'error' || rows.length === 0 ? (
         <Empty />
       ) : (
-        <div className="max-h-[220px] overflow-x-hidden overflow-y-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Name</th>
-                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Comment</th>
-                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Pool ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={`${r.id ?? ''}|${i}`}>
-                  <td className="py-2 px-2.5 border-b border-line break-words">{r.name || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted break-words">{r.comment || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line align-top">
-                    <span className="block font-mono text-muted overflow-hidden whitespace-nowrap" style={{ maxWidth: 150 }} title={r.pool_id || undefined}>
-                      {r.pool_id || '—'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable rows={rows} columns={columns} maxHeight={320} rowKey={(r, i) => `${r.id ?? ''}|${i}`} />
       )}
     </Card>
   )
@@ -227,16 +211,32 @@ function ZoneTable({ zones, issuesOnly }) {
     return arr
   }, [filtered, sort])
 
-  function toggleSort(key) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
-  }
+  // Map zone objects -> DataTable rows. `records` is a formatted string and `issues`
+  // is the crit text / anomaly pill node (or '—') so the primitive's hideWhenConstant
+  // can auto-drop them when every value is "0" / "—" respectively.
+  const rows = useMemo(() => sorted.map((z) => {
+    const hasIssues = Array.isArray(z.issues) && z.issues.length > 0
+    const issuesCell = hasIssues ? (
+      <span className="font-mono text-[11px]" style={{ color: COLORS.crit }}>{z.issues.join(', ')}</span>
+    ) : z.anomaly ? (
+      <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }}>anomaly</span>
+    ) : '—'
+    return {
+      fqdn: z.fqdn,
+      view: z.view,
+      records: (Number(z.records) || 0).toLocaleString(),
+      ttl: z.ttl,
+      issues: issuesCell,
+      _hasIssues: hasIssues,
+    }
+  }), [sorted, COLORS])
 
-  const headers = [
-    { key: 'fqdn', label: 'Zone' },
-    { key: 'view', label: 'View' },
-    { key: 'records', label: 'Records' },
-    { key: 'ttl', label: 'TTL' },
-    { key: 'issues', label: 'Issues' },
+  const columns = [
+    { key: 'fqdn', label: 'Zone', mono: true, keep: true, clip: 240, sortable: true },
+    { key: 'view', label: 'View', sortable: true },
+    { key: 'records', label: 'Records', align: 'right', hideWhenConstant: true, sortable: true },
+    { key: 'ttl', label: 'TTL', mono: true, sortable: true },
+    { key: 'issues', label: 'Issues', hideWhenConstant: true, sortable: true },
   ]
 
   return (
@@ -257,12 +257,15 @@ function ZoneTable({ zones, issuesOnly }) {
         ) : 'DNS Zones'
       }
       right={
-        <input
-          placeholder="Filter…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="w-[170px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
-        />
+        <div className="flex items-center gap-2.5">
+          <span className="text-[11px] text-muted whitespace-nowrap">{sorted.length.toLocaleString()} zones</span>
+          <input
+            placeholder="Filter…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+          />
+        </div>
       }
     >
       {zones.length === 0 ? (
@@ -270,43 +273,17 @@ function ZoneTable({ zones, issuesOnly }) {
       ) : sorted.length === 0 ? (
         <Empty>no zones match</Empty>
       ) : (
-        <table className="w-full border-collapse mt-2.5 text-sm">
-          <thead>
-            <tr>
-              {headers.map((h) => (
-                <th
-                  key={h.key}
-                  onClick={() => toggleSort(h.key)}
-                  className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 cursor-pointer select-none"
-                >
-                  {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((z, i) => {
-              const hasIssues = Array.isArray(z.issues) && z.issues.length > 0
-              return (
-                <tr key={(z.fqdn || '') + i} style={hasIssues ? { background: 'rgba(238,68,68,0.06)' } : undefined}>
-                  <td className="py-2.5 px-2.5 border-b border-line font-mono">{z.fqdn || '—'}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line">{z.view || '—'}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line text-muted">{(Number(z.records) || 0).toLocaleString()}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line text-muted font-mono">{z.ttl ?? '—'}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line">
-                    {hasIssues ? (
-                      <span className="font-mono text-[11px]" style={{ color: COLORS.crit }}>{z.issues.join(', ')}</span>
-                    ) : z.anomaly ? (
-                      <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }}>anomaly</span>
-                    ) : (
-                      <span className="text-dim">—</span>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <DataTable
+          rows={rows}
+          columns={columns}
+          sort={sort}
+          onSort={setSort}
+          maxHeight={420}
+          rowCap={150}
+          stickyHeader
+          rowKey={(r, i) => (r.fqdn || '') + i}
+          rowStyle={(r) => (r._hasIssues ? { background: 'rgba(238,68,68,0.06)' } : undefined)}
+        />
       )}
     </Card>
   )

@@ -5,7 +5,14 @@ import {
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
 import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
+import { DataTable } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
+
+const SEV_RANK = ['critical', 'high', 'medium', 'low', 'info']
+function sevRank(s) {
+  const i = SEV_RANK.indexOf(String(s || '').toLowerCase())
+  return i < 0 ? 99 : i
+}
 
 const SEV_ORDER = ['critical', 'high', 'medium', 'low']
 
@@ -184,7 +191,6 @@ function TriageInbox({ hub, events, acks, setAcks }) {
   const { COLORS } = useChartTheme()
   const SEV_COLOR = sevColorMap(COLORS)
   const [sevFilter, setSevFilter] = useState('all')
-  const [sort, setSort] = useState({ key: 'severity', dir: 'asc' })
 
   function toggleAck(e) {
     const k = ackKey(e)
@@ -196,32 +202,60 @@ function TriageInbox({ hub, events, acks, setAcks }) {
     return events.filter((e) => String(e.severity).toLowerCase() === sevFilter)
   }, [events, sevFilter])
 
-  const sorted = useMemo(() => {
-    const arr = [...filtered]
-    const { key, dir } = sort
-    const rank = (s) => SEV_ORDER.indexOf(String(s).toLowerCase())
-    arr.sort((a, b) => {
-      let av, bv
-      if (key === 'severity') { av = rank(a.severity); bv = rank(b.severity) }
-      else if (key === 'qname') { av = a.qname || ''; bv = b.qname || '' }
-      else if (key === 'time') { av = a.event_time || ''; bv = b.event_time || '' }
-      else { av = a.policy_action || ''; bv = b.policy_action || '' }
-      if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-      return dir === 'asc' ? av - bv : bv - av
-    })
-    return arr
-  }, [filtered, sort])
+  // Default order matches the old severity-asc sort (Critical first); DataTable
+  // re-sorts in place when a header is clicked.
+  const rows = useMemo(
+    () => [...filtered].sort((a, b) => sevRank(a.severity) - sevRank(b.severity)),
+    [filtered],
+  )
 
-  function toggleSort(key) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
-  }
-
-  const top = sorted.slice(0, 25)
-  const headers = [
-    { key: 'severity', label: 'Severity' },
-    { key: 'qname', label: 'Query' },
-    { key: 'action', label: 'Action' },
-    { key: 'time', label: 'Time' },
+  const columns = [
+    {
+      key: 'ack',
+      label: 'Ack',
+      keep: true,
+      render: (_v, r) => (
+        <input type="checkbox" checked={!!acks[ackKey(r)]} onChange={() => toggleAck(r)} />
+      ),
+    },
+    {
+      key: 'block',
+      label: 'Block',
+      keep: true,
+      render: (_v, r) => <BlockCell domain={r.qname} />,
+    },
+    {
+      key: 'severity',
+      label: 'Severity',
+      keep: true,
+      sortable: true,
+      comparator: (a, b) => sevRank(a.severity) - sevRank(b.severity),
+      render: (_v, r) => {
+        const sev = String(r.severity || '').toLowerCase()
+        return (
+          <span className="font-medium uppercase text-[11px]" style={{ color: SEV_COLOR[sev] || COLORS.other }}>
+            {r.severity || '—'}
+          </span>
+        )
+      },
+    },
+    { key: 'qname', label: 'Query', mono: true, clip: 240, sortable: true },
+    { key: 'policy_action', label: 'Action', sortable: true },
+    {
+      key: 'event_time',
+      label: 'Time',
+      keep: true,
+      sortable: true,
+      render: (_v, r) => (
+        <span
+          className="block font-mono overflow-hidden whitespace-nowrap text-ellipsis text-dim text-[11px]"
+          style={{ maxWidth: 180 }}
+          title={r.event_time || undefined}
+        >
+          {r.event_time ? new Date(r.event_time).toLocaleString() : '—'}
+        </span>
+      ),
+    },
   ]
 
   return (
@@ -229,7 +263,7 @@ function TriageInbox({ hub, events, acks, setAcks }) {
       span={6}
       title="Triage Inbox"
       right={
-        <div className="flex gap-1.5">
+        <div className="flex items-center gap-1.5">
           {['all', ...SEV_ORDER].map((s) => (
             <button
               key={s}
@@ -243,55 +277,21 @@ function TriageInbox({ hub, events, acks, setAcks }) {
               {s}
             </button>
           ))}
+          <span className="text-[11px] text-muted ml-1">{rows.length.toLocaleString()}</span>
         </div>
       }
     >
-      {hub.loading ? <Skeleton h={260} /> : hub.error || sorted.length === 0 ? (
+      {hub.loading ? <Skeleton h={260} /> : hub.error || rows.length === 0 ? (
         <Empty>{hub.error ? 'no data' : 'no events match'}</Empty>
       ) : (
-        <div className="overflow-x-hidden overflow-y-auto max-h-[420px]">
-          <table className="w-full border-collapse mt-2.5 text-sm">
-            <thead>
-              <tr>
-                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Ack</th>
-                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Block</th>
-                {headers.map((h) => (
-                  <th
-                    key={h.key}
-                    onClick={() => toggleSort(h.key)}
-                    className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 cursor-pointer select-none"
-                  >
-                    {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {top.map((e, i) => {
-                const sev = String(e.severity || '').toLowerCase()
-                const acked = !!acks[ackKey(e)]
-                return (
-                  <tr key={ackKey(e) + i} style={{ opacity: acked ? 0.45 : 1 }}>
-                    <td className="py-2 px-2.5 border-b border-line">
-                      <input type="checkbox" checked={acked} onChange={() => toggleAck(e)} />
-                    </td>
-                    <td className="py-2 px-2.5 border-b border-line">
-                      <BlockCell domain={e.qname} />
-                    </td>
-                    <td className="py-2 px-2.5 border-b border-line font-medium uppercase text-[11px]" style={{ color: SEV_COLOR[sev] || COLORS.other }}>{e.severity || '—'}</td>
-                    <td className="py-2 px-2.5 border-b border-line align-top">
-                      <span className="block font-mono overflow-hidden whitespace-nowrap" style={{ maxWidth: 260 }} title={e.qname || undefined}>
-                        {e.qname || '—'}
-                      </span>
-                    </td>
-                    <td className="py-2 px-2.5 border-b border-line text-muted">{e.policy_action || '—'}</td>
-                    <td className="py-2 px-2.5 border-b border-line text-dim text-[11px] whitespace-nowrap">{e.event_time ? new Date(e.event_time).toLocaleString() : '—'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rows={rows}
+          columns={columns}
+          maxHeight={420}
+          rowCap={150}
+          rowKey={(r, i) => ackKey(r) + i}
+          rowStyle={(r) => ({ opacity: acks[ackKey(r)] ? 0.45 : 1 })}
+        />
       )}
     </Card>
   )
@@ -304,35 +304,26 @@ function LookalikeTable({ lookalikes }) {
   const d = lookalikes.data ?? {}
   const rows = Array.isArray(d.domains) ? d.domains : []
 
+  const columns = [
+    { key: 'lookalike', label: 'Lookalike', mono: true, clip: 240, sortable: true },
+    { key: 'target', label: 'Target', sortable: true },
+    {
+      key: 'suspicious',
+      label: 'Suspicious',
+      keep: true,
+      sortable: true,
+      render: (_v, r) => (
+        <span style={{ color: r.suspicious ? COLORS.crit : COLORS.other }}>{r.suspicious ? 'yes' : 'no'}</span>
+      ),
+    },
+  ]
+
   return (
     <Card span={3} title="Lookalike Domains" right={<span className="text-[11px] text-muted">{rows.length} detected</span>}>
       {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error || d.unavailable || rows.length === 0 ? (
         <Empty>{d.unavailable ? `not entitled — ${d.unavailable}` : 'no data'}</Empty>
       ) : (
-        <div className="overflow-x-hidden overflow-y-auto max-h-[280px]">
-          <table className="w-full border-collapse mt-2.5 text-sm">
-            <thead>
-              <tr>
-                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Lookalike</th>
-                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Target</th>
-                <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Suspicious</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 15).map((r, i) => (
-                <tr key={(r.lookalike || i) + '' + i}>
-                  <td className="py-2 px-2.5 border-b border-line align-top">
-                    <span className="block font-mono overflow-hidden whitespace-nowrap" style={{ maxWidth: 220 }} title={r.lookalike || undefined}>
-                      {r.lookalike || '—'}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted break-words">{r.target || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line" style={{ color: r.suspicious ? COLORS.crit : COLORS.other }}>{r.suspicious ? 'yes' : 'no'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable rows={rows} columns={columns} maxHeight={320} rowCap={150} />
       )}
     </Card>
   )
@@ -347,30 +338,30 @@ function CtemPanel({ ctem }) {
   const matrix = Array.isArray(d?.matrix) ? d.matrix : []
   const empty = !d || (!d.total_exposures && matrix.length === 0)
 
+  const columns = [
+    {
+      key: 'severity',
+      label: 'Severity',
+      keep: true,
+      sortable: true,
+      comparator: (a, b) => sevRank(a.severity) - sevRank(b.severity),
+      render: (_v, r) => {
+        const sev = String(r.severity || '').toLowerCase()
+        return (
+          <span className="font-medium uppercase text-[11px]" style={{ color: SEV_COLOR[sev] || COLORS.other }}>
+            {r.severity || '—'}
+          </span>
+        )
+      },
+    },
+    { key: 'priority', label: 'Priority', sortable: true },
+    { key: 'count', label: 'Count', align: 'right', mono: true, sortable: true },
+  ]
+
   return (
     <Card span={3} title="CTEM Exposure" right={d?.total_exposures ? <span className="text-[11px] text-muted">{d.total_exposures.toLocaleString()} total</span> : null}>
       {ctem.loading ? <Skeleton h={220} /> : ctem.error || empty ? <Empty /> : (
-        <table className="w-full border-collapse mt-2.5 text-sm">
-          <thead>
-            <tr>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Severity</th>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Priority</th>
-              <th className="text-right text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Count</th>
-            </tr>
-          </thead>
-          <tbody>
-            {matrix.slice(0, 15).map((r, i) => {
-              const sev = String(r.severity || '').toLowerCase()
-              return (
-                <tr key={sev + r.priority + i}>
-                  <td className="py-2 px-2.5 border-b border-line font-medium uppercase text-[11px]" style={{ color: SEV_COLOR[sev] || COLORS.other }}>{r.severity || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted">{r.priority ?? '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line text-right font-mono">{r.count ?? 0}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <DataTable rows={matrix} columns={columns} maxHeight={320} rowCap={150} />
       )}
     </Card>
   )
@@ -423,31 +414,32 @@ function ThreatFeed({ threats }) {
 function InsightsPanel({ insights }) {
   const d = insights.data
   const rows = Array.isArray(d) ? d : Array.isArray(d?.results) ? d.results : Array.isArray(d?.data) ? d.data : []
-  const cols = rows.length ? Object.keys(rows[0]).slice(0, 4) : []
+  const keys = rows.length ? Object.keys(rows[0]).slice(0, 4) : []
+
+  // Flatten object cells to strings up front so the primitive renders text only.
+  const normRows = useMemo(
+    () =>
+      rows.map((r) => {
+        const o = {}
+        for (const k of keys) o[k] = typeof r[k] === 'object' && r[k] !== null ? JSON.stringify(r[k]) : (r[k] ?? '—')
+        return o
+      }),
+    [rows, keys.join('|')],
+  )
+
+  // First column is the ID/hash-like field — force one mono line + ellipsis (was
+  // wrapping into a 4-line stack). The rest line-clamp as normal text.
+  const columns = keys.map((k, i) => ({
+    key: k,
+    label: k.replace(/_/g, ' '),
+    sortable: true,
+    ...(i === 0 ? { mono: true, clip: 160 } : {}),
+  }))
 
   return (
-    <Card span={3} title="SOC Insights">
+    <Card span={3} title="SOC Insights" right={rows.length ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : null}>
       {insights.loading ? <Skeleton h={220} /> : insights.error || rows.length === 0 ? <Empty /> : (
-        <div className="overflow-x-hidden overflow-y-auto max-h-[280px]">
-          <table className="w-full border-collapse mt-2.5 text-sm">
-            <thead>
-              <tr>
-                {cols.map((c) => (
-                  <th key={c} className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">{c.replace(/_/g, ' ')}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 15).map((r, i) => (
-                <tr key={i}>
-                  {cols.map((c) => (
-                    <td key={c} className="py-2 px-2.5 border-b border-line text-muted break-words">{typeof r[c] === 'object' ? JSON.stringify(r[c]) : String(r[c] ?? '—')}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable rows={normRows} columns={columns} maxHeight={320} rowCap={150} />
       )}
     </Card>
   )
