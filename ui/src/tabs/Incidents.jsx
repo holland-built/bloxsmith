@@ -123,7 +123,9 @@ function CategoryChips({ categories, loading, category, onCategory }) {
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs border-border bg-field"
                 style={{ borderColor: on ? m.color : undefined, background: on ? `${m.color}1a` : undefined }}
               >
-                <i className="w-2 h-2 rounded-sm inline-block" style={{ background: m.color }} />
+                <i className="w-2 h-2 rounded-sm inline-block" style={{ background: m.color }} title={m.label} />
+                <span className="font-semibold" style={{ color: m.color }} aria-hidden="true">{m.label[0]}</span>
+                <span className="sr-only">{m.label} severity</span>
                 <span className="font-mono text-field-txt">{(Number(c.count) || 0).toLocaleString()}</span>
                 <span className="text-muted">{c.category}</span>
               </button>

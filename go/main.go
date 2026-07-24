@@ -70,6 +70,29 @@ func staticHandler() http.Handler {
 	})
 }
 
+// securityHeaders wraps the whole mux so every response — static assets and API
+// alike — carries a baseline set of browser hardening headers. The dashboard
+// admin token lives in localStorage (ui/src/lib/authFetch.js), so the priorities
+// are: (1) frame-ancestors 'none' + X-Frame-Options DENY to block clickjacking of
+// the vault/provision controls, (2) connect-src 'self' + img-src 'self' data: to
+// deny an injected script any outbound channel to exfiltrate the X-Auth-Token.
+// script-src/style-src keep 'unsafe-inline' because the shipped app relies on it —
+// the index.html theme-bootstrap <script> and React's inline style props — so a
+// bare default-src 'self' would break the UI; data: covers Vite-inlined assets.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Content-Security-Policy",
+			"default-src 'self'; connect-src 'self'; frame-ancestors 'none'; "+
+				"script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "+
+				"img-src 'self' data:; font-src 'self' data:")
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	// CLI: `bloxsmith --version`, `bloxsmith update [--check]`.
 	if len(os.Args) > 1 {
@@ -327,7 +350,7 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 
 	// A graceful *http.Server (not http.ListenAndServe) so the self-updater can
 	// Shutdown() the listener and hand the port to its successor cleanly.
-	srv := &http.Server{Handler: handler}
+	srv := &http.Server{Handler: securityHeaders(handler)}
 	shutdownServer = srv.Shutdown
 	// Bind cfg.Host (HOST env), not all-interfaces: the laptop/service default
 	// "localhost" stays loopback-only (never expose an auto-unlocked, no-login

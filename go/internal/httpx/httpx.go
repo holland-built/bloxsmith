@@ -124,19 +124,42 @@ func (g *Guard) IsMutating(path string) bool {
 // WriteGuard is _write_guard (server.py:4956): for a mutating path, 403 the
 // unauthorized caller (returns true, caller must stop); otherwise audit-log the
 // authorized write and return false. Read-only routes never match.
+//
+// CSRF hardening: besides the explicit mutating set, every state-changing verb
+// on any /api/ route (unsafeAPIWrite) must pass WriteOK — this covers the
+// /api/vault/* control routes, which are NOT in the mutating set and whose
+// handlers do no Origin/token check. Without this a cross-origin "simple" POST
+// (text/plain, no preflight) the victim's browser sends to the loopback server
+// could add/activate/destroy vault keys. The gate holds because any cross-origin
+// browser request carries an Origin the allowlist rejects, and a token deployment
+// requires the token. Audit semantics are unchanged: only mutating paths are
+// audit-logged.
 func (g *Guard) WriteGuard(w http.ResponseWriter, r *http.Request) bool {
 	path := strings.SplitN(r.URL.Path, "?", 2)[0]
-	if g.IsMutating(path) {
+	mutating := g.IsMutating(path)
+	if mutating || unsafeAPIWrite(r.Method, path) {
 		if !g.WriteOK(r) {
 			WriteJSON(w, r, http.StatusForbidden, g.Port,
 				map[string]any{"error": "forbidden — write not authorized"})
 			return true
 		}
-		if g.Audit != nil {
-			g.Audit("write-authorized", actor(r), r.Method, path)
-		}
+	}
+	if mutating && g.Audit != nil {
+		g.Audit("write-authorized", actor(r), r.Method, path)
 	}
 	return false
+}
+
+// unsafeAPIWrite reports whether a request is a state-changing verb targeting an
+// /api/ route. GET/HEAD (safe reads) and OPTIONS (handled as CORS preflight
+// before the write guard) are excluded, so read routes and the SSE ?token= GET
+// fallback keep their existing behavior.
+func unsafeAPIWrite(method, path string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	return strings.HasPrefix(path, "/api/")
 }
 
 // vaultGateGETExempt is the set of GET routes Python answers BEFORE the vault

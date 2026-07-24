@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -98,6 +99,17 @@ func (d *Deps) brandGet(w http.ResponseWriter, r *http.Request) {
 // brandPost is POST /api/brand (server.py:6018): persist {domain,name} and,
 // best-effort, cache the logo from the Brandfetch CDN (failure is non-fatal).
 func (d *Deps) brandPost(w http.ResponseWriter, r *http.Request, b map[string]any) {
+	// CSRF gate: this route sits ABOVE the vault gate and isn't in the central
+	// mutating-path set, so the chassis write-guard never runs for it. Without
+	// this, a cross-origin page could drive the brand.json write + the outbound
+	// cdn.brandfetch.io fetch. Require a same-origin caller (mirrors _same_origin)
+	// and a JSON content type — the latter forces a CORS preflight that the
+	// same-origin gate then blocks, closing the simple-form-POST vector.
+	if !d.Guard.SameOrigin(r) ||
+		!strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		d.json(w, r, 403, map[string]any{"ok": false, "error": "forbidden — write not authorized"})
+		return
+	}
 	domain := brandSanitize.ReplaceAllString(str(b, "domain"), "")
 	if len(domain) > 253 {
 		domain = domain[:253]

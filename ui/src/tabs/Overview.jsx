@@ -53,7 +53,7 @@ function DnsHero({ dns }) {
   return (
     <Card
       span={4}
-      title={<span onClick={() => { location.hash = 'dns' }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS Query Rate — 24h</span>}
+      title={<span role="button" tabIndex={0} onClick={() => { location.hash = 'dns' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'dns' } }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS Query Rate — 24h</span>}
       right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
     >
       {dns.loading ? (
@@ -110,7 +110,10 @@ function KpiStack({ subnets, leases }) {
       {cells.map((c, i) => (
         <div
           key={c.label}
+          role="button"
+          tabIndex={0}
           onClick={() => { location.hash = c.hash }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
           className={`py-3.5 cursor-pointer hover:bg-line rounded-lg transition-colors px-1 -mx-1 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
         >
           <div className="text-muted text-xs">{c.label}</div>
@@ -292,7 +295,10 @@ function HostStatus({ hosts }) {
             {pieData.map((d) => (
               <div
                 key={d.name}
+                role="button"
+                tabIndex={0}
                 onClick={() => { location.hash = 'infra?status=' + d.name.toLowerCase() }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'infra?status=' + d.name.toLowerCase() } }}
                 className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-line rounded-lg transition-colors px-1 -mx-1"
               >
                 <i className="w-2 h-2 rounded-sm inline-block" style={{ background: d.color }} />
@@ -427,6 +433,7 @@ function SubnetTable({ subnets }) {
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted tabular-nums">{rows.length.toLocaleString()}</span>
           <input
+            aria-label="Filter subnets"
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}

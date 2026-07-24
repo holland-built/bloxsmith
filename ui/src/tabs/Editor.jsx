@@ -293,7 +293,7 @@ export default function Editor() {
             <div
               className="text-sm rounded-lg px-3 py-2"
               style={result.ok
-                ? { background: 'var(--pill-ok-bg)', color: 'var(--color-ok)', border: '1px solid var(--color-ok)' }
+                ? { background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)', border: '1px solid var(--color-ok)' }
                 : { background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)', border: '1px solid var(--color-crit)' }}
             >
               {result.msg}
@@ -314,7 +314,7 @@ export default function Editor() {
                 onClick={apply}
                 disabled={busy}
                 className="px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50"
-                style={{ background: COLORS.ok, color: 'var(--pill-ok-bg)' }}
+                style={{ background: COLORS.ok, color: '#fff' }}
               >
                 Apply
               </button>

@@ -18,6 +18,21 @@ export function toggleSort(cur, key) {
   return cur && cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }
 }
 
+// Sort a copy of `rows` by a controlled {key,dir} sort using a per-key accessor
+// map ({ key: (row) => value }). Does the string(localeCompare)/number branch once
+// so callers stop re-implementing it. Falls back to row[key] for unmapped keys.
+export function sortRows(rows, sort, accessors) {
+  if (!sort || !sort.key) return rows
+  const { key, dir } = sort
+  const get = accessors[key] || ((r) => r[key])
+  return [...rows].sort((a, b) => {
+    const av = get(a)
+    const bv = get(b)
+    if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+    return dir === 'asc' ? av - bv : bv - av
+  })
+}
+
 // ---------- internals ----------
 
 const EMPTY_MARKERS = new Set([null, undefined, '', '—', '-'])
@@ -163,8 +178,25 @@ export function DataTable({
           <tr
             key={rowKey ? rowKey(r, i) : `${r.id ?? r.name ?? r.created_at ?? ''}|${i}`}
             onClick={onRowClick ? () => onRowClick(r) : undefined}
+            onKeyDown={
+              onRowClick
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onRowClick(r)
+                    }
+                  }
+                : undefined
+            }
+            tabIndex={onRowClick ? 0 : undefined}
+            role={onRowClick ? 'button' : undefined}
+            aria-label={onRowClick ? `View details for ${r.name ?? r.id ?? 'row'}` : undefined}
             style={rowStyle ? rowStyle(r) : undefined}
-            className={onRowClick ? 'cursor-pointer hover:bg-line/50' : undefined}
+            className={
+              onRowClick
+                ? 'cursor-pointer hover:bg-line/50 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
+                : undefined
+            }
           >
             {cols.map((c) => {
               const v = r[c.key]

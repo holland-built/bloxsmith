@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 
 	"bloxsmith/internal/account"
 	"bloxsmith/internal/httpx"
@@ -10,8 +11,9 @@ import (
 // registerAccountRoutes wires the multi-account (portal-tenant) surface:
 // /api/whoami (server.py:5092), /api/accounts (5267), and POST
 // /api/switch-account (6094). whoami + accounts are reads; switch-account is a
-// POST that is NOT in MUTATING_PATHS, so — like Python — it carries no token
-// requirement beyond the same-origin CORS allowlist.
+// state-changing POST, so switchAccount enforces its own CSRF gate
+// (same-origin + JSON content type) — CORS alone only blocks reading the
+// response, not sending a cross-origin simple POST.
 func (d *Deps) registerAccountRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/whoami", d.whoami)
 	mux.HandleFunc("GET /api/accounts", d.accounts)
@@ -56,6 +58,15 @@ func (d *Deps) accounts(w http.ResponseWriter, r *http.Request) {
 // account the user belongs to. 403 -> not-entitled message; other CSP errors ->
 // 502; unknown/failed -> 400 via the {"ok":false} result.
 func (d *Deps) switchAccount(w http.ResponseWriter, r *http.Request, b map[string]any) {
+	// CSRF gate: this POST mints a Bearer JWT and rebinds every later REST call
+	// to the target account (auth.SetOverride), so a forged cross-origin request
+	// must not reach SwitchAccount. Require an allowlisted same-origin caller and
+	// a JSON content type — a CSRF "simple request" can set neither, and CORS
+	// does not stop the send, only the response read.
+	if !d.Guard.SameOrigin(r) || !isJSONContent(r.Header.Get("Content-Type")) {
+		d.json(w, r, 403, map[string]any{"ok": false, "error": "forbidden — write not authorized"})
+		return
+	}
 	res, err := d.Account.SwitchAccount(str(b, "id"))
 	if err != nil {
 		d.logExc("/api/switch-account", err)
@@ -72,6 +83,15 @@ func (d *Deps) switchAccount(w http.ResponseWriter, r *http.Request, b map[strin
 		return
 	}
 	d.json(w, r, code(res, 400), res)
+}
+
+// isJSONContent reports whether a Content-Type header names application/json
+// (tolerating a charset/boundary parameter, e.g. "application/json; charset=utf-8").
+func isJSONContent(ct string) bool {
+	if i := strings.IndexByte(ct, ';'); i >= 0 {
+		ct = ct[:i]
+	}
+	return strings.EqualFold(strings.TrimSpace(ct), "application/json")
 }
 
 // itoaStatus renders an HTTP status for the account error messages.

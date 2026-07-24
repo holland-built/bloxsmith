@@ -112,13 +112,19 @@ export default function App() {
     <VaultGate>
       <div className="min-h-screen bg-bg text-txt">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-line-2 bg-bg/95 backdrop-blur sticky top-0 z-10">
-          <BrandLogoImg
-            domain={brandDomain}
-            bust={logoBust}
+          <button
+            type="button"
+            aria-label="Edit brand"
             title="Edit brand"
-            className="h-5 w-5 rounded cursor-pointer"
             onClick={() => setShowBrand(true)}
-          />
+            className="shrink-0 cursor-pointer"
+          >
+            <BrandLogoImg
+              domain={brandDomain}
+              bust={logoBust}
+              className="h-5 w-5 rounded"
+            />
+          </button>
           <strong className="tracking-tight shrink-0">Bloxsmith</strong>
           <nav className="flex gap-0.5 min-w-0 overflow-x-auto no-scrollbar">
             {TABS.map((t) => (

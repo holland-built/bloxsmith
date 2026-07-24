@@ -36,7 +36,7 @@ func TemplateToDecommissionConfig(template, params M) (*DecommissionConfig, erro
 		DNSParent: resolve(params["dns_parent"], dnsSec["parent"], defaultDNSParent),
 		DNSView:   resolve(params["dns_view"], dnsSec["view"], "default"),
 		KeepZone:  truthy(params["keep_zone"], false),
-		DryRun:    truthyDry(params["dry"]),
+		DryRun:    TruthyDry(params["dry"]),
 	}, nil
 }
 

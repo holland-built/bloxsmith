@@ -137,7 +137,7 @@ func TemplateToSiteConfig(template, params M) (*SiteConfig, error) {
 	return &SiteConfig{
 		Site: site, Region: region, Environment: environment, Location: location,
 		IPSpace: ipSpace, DNSParent: dnsParent, DNSView: dnsView, Owner: owner,
-		SubnetSize: subnetSize, DryRun: truthyDry(params["dry"]),
+		SubnetSize: subnetSize, DryRun: TruthyDry(params["dry"]),
 		CreateZone:        resolveBool(params["create_zone"], dnsSec["create_zone"]),
 		CreateReverseZone: resolveBool(params["create_reverse_zone"], dnsSec["create_reverse_zone"]),
 		IfNotExists:       resolveBool(params["if_not_exists"], false),

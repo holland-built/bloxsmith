@@ -12,13 +12,6 @@ export const COLORS = {
   crit: 'var(--color-crit)', ok: 'var(--color-ok)', other: 'var(--color-other)',
 }
 
-// Static tooltip style via vars — flips with theme without re-render.
-export const TT = {
-  contentStyle: { background: 'var(--color-field)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 },
-  labelStyle: { color: 'var(--color-muted)' },
-  itemStyle: { color: 'var(--color-txt)' },
-}
-
 export function useChartTheme() {
   const colors = useThemeColors()
   return {

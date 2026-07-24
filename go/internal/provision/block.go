@@ -57,7 +57,7 @@ func TemplateToBlockConfig(template, params M) (*BlockConfig, error) {
 		extraTags[k] = pyStr(v)
 	}
 	return &BlockConfig{
-		Name: name, IPSpace: ipSpace, DryRun: truthyDry(params["dry"]),
+		Name: name, IPSpace: ipSpace, DryRun: TruthyDry(params["dry"]),
 		ExtraTags: extraTags, Blocks: blocks,
 	}, nil
 }
