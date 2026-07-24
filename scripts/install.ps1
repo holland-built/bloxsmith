@@ -26,7 +26,9 @@ Notes:
 [CmdletBinding()]
 param(
     [string]$Version = 'latest',
-    [string]$Prefix  = "$env:LOCALAPPDATA\Programs\Bloxsmith"
+    [string]$Prefix  = "$env:LOCALAPPDATA\Programs\Bloxsmith",
+    [switch]$Uninstall,
+    [switch]$Purge
 )
 
 Set-StrictMode -Version Latest
@@ -34,6 +36,47 @@ $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $REPO = 'holland-built/bloxsmith'
+
+# --- uninstall (no download needed) -----------------------------------------
+if ($Uninstall) {
+    Write-Host 'Bloxsmith uninstaller (Windows)'
+    $exe = Join-Path $Prefix 'bloxsmith.exe'
+    if (Test-Path -LiteralPath $exe) {
+        # unregister + stop the login service if it was ever set up (best-effort)
+        try { & $exe service uninstall 2>&1 | Out-Null } catch {}
+        Remove-Item -LiteralPath $exe -Force -ErrorAction SilentlyContinue
+        Write-Host "  removed  : $exe"
+    } else {
+        Write-Host "  (no bloxsmith.exe at $exe - nothing to remove there)"
+    }
+    $tpl = Join-Path $Prefix 'templates'
+    if (Test-Path -LiteralPath $tpl) {
+        Remove-Item -LiteralPath $tpl -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "  removed  : $tpl"
+    }
+    # strip the install dir back out of the user PATH (reverse of install)
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if ($userPath) {
+        $kept = $userPath -split ';' | Where-Object { $_ -ne '' -and $_.TrimEnd('\') -ine $Prefix.TrimEnd('\') }
+        [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), 'User')
+        Write-Host "  PATH     : removed $Prefix from your user PATH (reopen your shell)"
+    }
+    $cfg = Join-Path $env:AppData 'bloxsmith'
+    if ($Purge) {
+        if (Test-Path -LiteralPath $cfg) {
+            Remove-Item -LiteralPath $cfg -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "  removed  : $cfg (config + vault)"
+        }
+    } elseif (Test-Path -LiteralPath $cfg) {
+        Write-Host ''
+        Write-Host 'Config + encrypted vault left in place at:'
+        Write-Host "    $cfg"
+        Write-Host '  Delete it too with:  .\install.ps1 -Uninstall -Purge'
+    }
+    Write-Host ''
+    Write-Host 'Bloxsmith uninstalled.'
+    return
+}
 
 if ($Version -eq 'latest') {
     $base = "https://github.com/$REPO/releases/latest/download"
