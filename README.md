@@ -82,9 +82,12 @@ Later, from a terminal:
 
 ```bash
 bloxsmith                  # start it → http://localhost:8080
+bloxsmith --port 9090      # use a different port (or set PORT=9090)
 bloxsmith service install  # run it in the background at login
 bloxsmith update           # upgrade in place
 ```
+
+Port 8080 is the default for every install method. If it's already taken (the Docker stack also uses 8080), Bloxsmith tells you and suggests `--port` rather than crashing.
 
 </details>
 
