@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/logo.svg" width="72" alt="Bloxsmith">
+  <img src="docs/logo.svg?v=2" width="72" alt="Bloxsmith">
   <h1>Bloxsmith</h1>
   <p>Self-hosted workbench for your Infoblox Portal / CSP data.</p>
 
