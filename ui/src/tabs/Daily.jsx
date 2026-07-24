@@ -48,7 +48,10 @@ function IssueKpis({ subnets, hosts, zones, loading }) {
         cells.map((c, i) => (
           <div
             key={c.label}
+            role="button"
+            tabIndex={0}
             onClick={() => { location.hash = c.hash }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
             className={`flex items-center justify-between py-3.5 cursor-pointer hover:bg-line ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
           >
             <div className="text-muted text-xs">{c.label}</div>

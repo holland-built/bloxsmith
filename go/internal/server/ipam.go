@@ -2,10 +2,17 @@ package server
 
 import (
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 
 	"bloxsmith/internal/rest"
 )
+
+// subnetIDRe restricts the ?subnet path segment to an opaque CSP object id
+// ([A-Za-z0-9_.-], e.g. a UUID) so it cannot break out of the upstream path
+// (../ traversal, ?/# query/fragment injection) into other CSP APIs.
+var subnetIDRe = regexp.MustCompile(`^[A-Za-z0-9_.\-]+$`)
 
 // registerIPAMReadRoutes wires the IPAM/DNS read helpers the resource editor +
 // self-service wizard use (server.py 5296-5430): ipam/spaces, ipam/blocks,
@@ -165,7 +172,11 @@ func (d *Deps) ipamAvailability(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 400, map[string]any{"error": "subnet is required"})
 		return
 	}
-	body, status, _ := d.Rest.GetEx("/api/ddi/v1/ipam/subnet/"+subnet,
+	if !subnetIDRe.MatchString(subnet) {
+		d.json(w, r, 400, map[string]any{"error": "invalid subnet id"})
+		return
+	}
+	body, status, _ := d.Rest.GetEx("/api/ddi/v1/ipam/subnet/"+url.PathEscape(subnet),
 		map[string]string{"_fields": "id,address,cidr,utilization"})
 	m, ok := body.(map[string]any)
 	if status != 200 || !ok {

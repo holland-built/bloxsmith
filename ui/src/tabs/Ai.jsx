@@ -116,7 +116,7 @@ function ChatCard() {
 
   return (
     <Card title="Ask AI" span={1}>
-      <div className="flex flex-col gap-2 min-h-[280px] max-h-[480px] overflow-y-auto mb-3">
+      <div role="log" aria-live="polite" className="flex flex-col gap-2 min-h-[280px] max-h-[480px] overflow-y-auto mb-3">
         {items.length === 0 ? (
           <Empty>Ask a question or pick a suggestion below</Empty>
         ) : (
@@ -241,7 +241,7 @@ function BlockDomainButton({ domain }) {
       </div>
     )
   }
-  if (state === 'tokenRequired') return <div className="mt-2 text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⚙ Settings</div>
+  if (state === 'tokenRequired') return <div className="mt-2 text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⋯ Settings</div>
   if (state === 'error') return <div className="mt-2 text-[11px]" style={{ color: COLORS.crit }}>{msg}</div>
   return (
     <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-lg text-[11px] border border-border text-muted hover:text-field-txt">Block domain</button>

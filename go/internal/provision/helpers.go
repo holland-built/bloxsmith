@@ -171,8 +171,8 @@ func truthy(v any, def bool) bool {
 	return true
 }
 
-// truthyDry is _truthy_dry (server.py:1355): preview unless explicitly disabled.
-func truthyDry(v any) bool { return truthy(v, true) }
+// TruthyDry is _truthy_dry (server.py:1355): preview unless explicitly disabled.
+func TruthyDry(v any) bool { return truthy(v, true) }
 
 // resolveBool is _resolve_bool (server.py:1361): param (CLI-flag stand-in) wins
 // over the YAML value; a real bool()/truthy() on the param, else bool(yaml).

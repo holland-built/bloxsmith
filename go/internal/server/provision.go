@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"bloxsmith/internal/httpx"
@@ -91,7 +92,7 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(provision.PyStr(qp["name"]))
 	comment := strings.TrimSpace(provision.PyStr(qp["comment"]))
 	makeZone := provision.PyStr(qp["make_zone"]) == "1"
-	dry := truthyDryQ(qp["dry"])
+	dry := provision.TruthyDry(qp["dry"])
 
 	if !d.roleGate(r, "operator") {
 		d.json(w, r, 403, map[string]any{"ok": false, "error": "operator required"})
@@ -129,7 +130,7 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			body = bm
 		}
 		result, status, _ := d.Rest.Write("POST", "/api/ddi/v1/"+block+"/nextavailablesubnet",
-			body, map[string]string{"cidr": itoaLocal(cidrN)})
+			body, map[string]string{"cidr": strconv.Itoa(cidrN)})
 		emit(map[string]any{"step": "Subnet allocation result", "status": status, "result": result})
 		subnet := firstRowLocal(result)
 		if makeZone && provision.PyStr(subnet["address"]) != "" {
@@ -212,7 +213,7 @@ func (d *Deps) provisionSiteStream(w http.ResponseWriter, r *http.Request) {
 
 func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	qp := queryM(r)
-	dry := truthyDryQ(qp["dry"])
+	dry := provision.TruthyDry(qp["dry"])
 	regions := parseRegions(provision.PyStr(qp["regions"]))
 	override := ipSpaceOverride(qp)
 
@@ -353,7 +354,7 @@ func (d *Deps) teardownSiteStream(w http.ResponseWriter, r *http.Request) {
 
 func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	qp := queryM(r)
-	dry := truthyDryQ(qp["dry"])
+	dry := provision.TruthyDry(qp["dry"])
 	regions := parseRegions(provision.PyStr(qp["regions"]))
 	override := ipSpaceOverride(qp)
 	confirm := provision.PyStr(qp["confirm"])
@@ -423,11 +424,7 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if _, err := d.Provision.NewBlockDecommissioner(blockName, provision.PyStr(blockIPSpace), dry, emitter(emit)).Decommission(); err != nil {
-			if provision.IsError(err) {
-				emit(map[string]any{"template": "blocks/regional_address_blocks.yaml", "error": err.Error()})
-			} else {
-				emit(map[string]any{"template": "blocks/regional_address_blocks.yaml", "error": err.Error()})
-			}
+			emit(map[string]any{"template": "blocks/regional_address_blocks.yaml", "error": err.Error()})
 		}
 	}
 
@@ -523,7 +520,7 @@ func (d *Deps) teardownBlock(w http.ResponseWriter, r *http.Request, b map[strin
 	if ipSpace == "" {
 		ipSpace = "default"
 	}
-	dry := truthyDryQ(b["dry"])
+	dry := provision.TruthyDry(b["dry"])
 	blockName := bstr(template, "name")
 	if blockName == "" {
 		blockName = name
@@ -564,7 +561,7 @@ func (d *Deps) retagBlock(w http.ResponseWriter, r *http.Request, b map[string]a
 	if ipSpace == "" {
 		ipSpace = "default"
 	}
-	dry := truthyDryQ(b["dry"])
+	dry := provision.TruthyDry(b["dry"])
 
 	esc, err := rest.CSPQ(ipSpace)
 	if err != nil {
@@ -646,21 +643,6 @@ func emitter(e sse.Emit) provision.Emitter { return provision.Emitter(e) }
 // noopEmit is Python's `lambda _obj: None` for the non-streaming POST routes.
 var noopEmit = provision.Emitter(func(map[string]any) {})
 
-// truthyDryQ is _truthy_dry for a query/body value (default dry-run preview).
-func truthyDryQ(v any) bool {
-	if v == nil {
-		return true
-	}
-	if b, ok := v.(bool); ok {
-		return b
-	}
-	switch strings.ToLower(strings.TrimSpace(provision.PyStr(v))) {
-	case "0", "false", "no", "":
-		return false
-	}
-	return true
-}
-
 // parseRegions is the seed/teardown region parsing (server.py:5555): split on
 // commas, trim+lowercase, drop empties, default to amer,emea,apac.
 func parseRegions(raw string) []string {
@@ -706,24 +688,9 @@ func mapOf(v any) map[string]any {
 }
 
 func parseIntStr(s string) (int, bool) {
-	n := 0
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, false
-	}
-	for i, c := range s {
-		if i == 0 && (c == '-' || c == '+') {
-			continue
-		}
-		if c < '0' || c > '9' {
-			return 0, false
-		}
-	}
-	_, err := fmt.Sscanf(s, "%d", &n)
+	n, err := strconv.Atoi(strings.TrimSpace(s))
 	return n, err == nil
 }
-
-func itoaLocal(n int) string { return fmt.Sprintf("%d", n) }
 
 func firstRowLocal(resp any) map[string]any {
 	m := mapOf(resp)

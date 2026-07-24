@@ -14,16 +14,6 @@ import (
 // (4319) and threat_lookup (4551). Each degrades gracefully — never panics into
 // the route — mirroring the Python contract.
 
-// asRowList renders QueryCube rows (typed) as a plain []any for the JSON body,
-// so the response shape matches Python's _results(...) list exactly.
-func asRowList(rows []map[string]any) []any {
-	out := make([]any, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, r)
-	}
-	return out
-}
-
 // --- IQ Actions (server.py fetch_actions 4160 / _fetch_actions_async 4149) ----
 
 // FetchActions is fetch_actions: IQ Actions (SOC incidents) via the
@@ -135,20 +125,20 @@ func normInsights(raw []any) []any {
 func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
 	vol, clients, types := []any{}, []any{}, []any{}
 	if s.Mcp != nil && s.Mcp.Initialize(ctx) == nil {
-		vol = asRowList(s.Mcp.QueryCube(ctx, "NstarDnsActivity",
+		vol = toAnyN(s.Mcp.QueryCube(ctx, "NstarDnsActivity",
 			[]string{"NstarDnsActivity.total_query_count"}, map[string]any{
 				"time_dimensions": []map[string]any{{
 					"dimension": "NstarDnsActivity.timestamp",
 					"dateRange": "7 days", "granularity": "day"}},
 			}))
-		clients = asRowList(s.Mcp.QueryCube(ctx, "NstarDnsActivity",
+		clients = toAnyN(s.Mcp.QueryCube(ctx, "NstarDnsActivity",
 			[]string{"NstarDnsActivity.total_query_count"}, map[string]any{
 				"dimensions": []string{"NstarDnsActivity.device_name", "NstarDnsActivity.device_ip"},
 				"time_dimensions": []map[string]any{{
 					"dimension": "NstarDnsActivity.timestamp", "dateRange": "7 days"}},
 				"order": map[string]any{"NstarDnsActivity.total_query_count": "desc"}, "limit": 50,
 			}))
-		types = asRowList(s.Mcp.QueryCube(ctx, "NstarDnsActivity",
+		types = toAnyN(s.Mcp.QueryCube(ctx, "NstarDnsActivity",
 			[]string{"NstarDnsActivity.total_query_count"}, map[string]any{
 				"dimensions": []string{"NstarDnsActivity.query_type"},
 				"time_dimensions": []map[string]any{{
@@ -166,7 +156,7 @@ func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
 func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 	metrics := []any{}
 	if s.Mcp != nil && s.Mcp.Initialize(ctx) == nil {
-		metrics = asRowList(s.Mcp.QueryCube(ctx, "HostMetrics",
+		metrics = toAnyN(s.Mcp.QueryCube(ctx, "HostMetrics",
 			[]string{"HostMetrics.avg_value"}, map[string]any{
 				"dimensions": []string{"HostMetrics.host_name", "HostMetrics.metric_name"},
 				"time_dimensions": []map[string]any{{

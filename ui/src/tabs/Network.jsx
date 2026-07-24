@@ -5,7 +5,8 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
-import { DataTable } from '../components/DataTable.jsx'
+import { DataTable, sortRows } from '../components/DataTable.jsx'
+import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 
 // IP address octet-order comparator (ascending); DataTable applies direction.
@@ -51,11 +52,12 @@ export default function Network() {
 // ---------- utilization distribution ----------
 
 function UtilBands({ subnets }) {
-  const { TT } = useChartTheme()
+  const { COLORS, TT } = useChartTheme()
+  const { grid, tick } = useThemeColors()
   const BANDS = [
-    { key: '0-70', label: '<70%', test: (u) => u < 70, color: 'var(--color-accent)' },
-    { key: '70-85', label: '70–85%', test: (u) => u >= 70 && u <= 85, color: 'var(--color-warn)' },
-    { key: '85-100', label: '>85%', test: (u) => u > 85, color: 'var(--color-crit)' },
+    { key: '0-70', label: '<70%', test: (u) => u < 70, color: COLORS.accent },
+    { key: '70-85', label: '70–85%', test: (u) => u >= 70 && u <= 85, color: COLORS.warn },
+    { key: '85-100', label: '>85%', test: (u) => u > 85, color: COLORS.crit },
   ]
   const counts = BANDS.map((b) => ({
     label: b.label,
@@ -71,9 +73,9 @@ function UtilBands({ subnets }) {
       ) : (
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={counts} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} />
-            <YAxis tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} allowDecimals={false} />
+            <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: tick, fontSize: 11 }} axisLine={{ stroke: grid }} tickLine={false} />
+            <YAxis tick={{ fill: tick, fontSize: 11 }} axisLine={{ stroke: grid }} tickLine={false} allowDecimals={false} />
             <Tooltip {...TT} formatter={(v) => [`${v} subnets`, null]} />
             <Bar dataKey="value" radius={[3, 3, 0, 0]} isAnimationActive={false}>
               {counts.map((c) => (
@@ -214,6 +216,15 @@ function DhcpLeases({ dhcp, innerRef }) {
 
 // ---------- exhaustion table ----------
 
+// Per-key accessors for the controlled sort; sortRows does the string/number branch.
+const EXHAUSTION_SORT = {
+  network: (r) => r.addr || r.cidr || '',
+  site: (r) => r.site || '',
+  used: (r) => Number(r.used) || 0,
+  free: (r) => (Number(r.total) || 0) - (Number(r.used) || 0),
+  util: (r) => Number(r.util) || 0,
+}
+
 function ExhaustionTable({ subnets, hp }) {
   const [filter, setFilter] = useState(hp.subnet || '')
   const [site, setSite] = useState('')
@@ -239,21 +250,7 @@ function ExhaustionTable({ subnets, hp }) {
     })
   }, [base, filter, site, minUtil])
 
-  const sorted = useMemo(() => {
-    const arr = [...filtered]
-    const { key, dir } = sort
-    arr.sort((a, b) => {
-      let av, bv
-      if (key === 'network') { av = a.addr || a.cidr || ''; bv = b.addr || b.cidr || '' }
-      else if (key === 'site') { av = a.site || ''; bv = b.site || '' }
-      else if (key === 'used') { av = Number(a.used) || 0; bv = Number(b.used) || 0 }
-      else if (key === 'free') { av = (Number(a.total) || 0) - (Number(a.used) || 0); bv = (Number(b.total) || 0) - (Number(b.used) || 0) }
-      else { av = Number(a.util) || 0; bv = Number(b.util) || 0 }
-      if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-      return dir === 'asc' ? av - bv : bv - av
-    })
-    return arr
-  }, [filtered, sort])
+  const sorted = useMemo(() => sortRows(filtered, sort, EXHAUSTION_SORT), [filtered, sort])
 
   const top20 = sorted.slice(0, 20)
 
@@ -318,13 +315,15 @@ function ExhaustionTable({ subnets, hp }) {
         <>
           Which Subnets Run Out First?
           {minUtil !== null && (
-            <span
+            <button
+              type="button"
+              aria-label="Clear filter"
               className="ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-normal bg-field border border-border text-muted cursor-pointer"
               onClick={() => setHashParams('network', {})}
               title="clear filter"
             >
               util ≥ {minUtil}% ✕
-            </span>
+            </button>
           )}
         </>
       }

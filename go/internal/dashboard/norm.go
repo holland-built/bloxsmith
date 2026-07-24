@@ -1,6 +1,9 @@
 package dashboard
 
-import "strings"
+import (
+	"math"
+	"strings"
+)
 
 // normSubnets is norm_subnets (server.py:3201).
 func normSubnets(raw []any) []map[string]any {
@@ -12,7 +15,7 @@ func normSubnets(raw []any) []map[string]any {
 		used := toInt(orAny(u["used"], u["used_count"], 0))
 		pct := 0
 		if total != 0 {
-			pct = roundHalfEven(float64(used) / float64(total) * 100)
+			pct = int(math.RoundToEven(float64(used) / float64(total) * 100))
 		}
 		tags := asMap(s["tags"])
 		cidr := s["cidr"]

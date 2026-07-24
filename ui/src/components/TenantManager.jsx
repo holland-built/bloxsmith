@@ -135,8 +135,9 @@ export default function TenantManager({ onClose }) {
         {add.open ? (
           <div>
             <h3 className="text-xs font-semibold mb-2">Add a connection</h3>
-            <label className="block text-[11px] text-dim mb-1">Infoblox API key</label>
+            <label htmlFor="tm-add-key" className="block text-[11px] text-dim mb-1">Infoblox API key</label>
             <input
+              id="tm-add-key"
               className={inCls}
               type="password"
               value={add.key}
@@ -144,10 +145,11 @@ export default function TenantManager({ onClose }) {
               placeholder="paste token"
               autoFocus
             />
-            <label className="block text-[11px] text-dim mt-2 mb-1">Name (optional)</label>
-            <input className={inCls} value={add.label} onChange={(e) => setAdd((a) => ({ ...a, label: e.target.value }))} />
-            <label className="block text-[11px] text-dim mt-2 mb-1">Groq API key (optional)</label>
+            <label htmlFor="tm-add-label" className="block text-[11px] text-dim mt-2 mb-1">Name (optional)</label>
+            <input id="tm-add-label" className={inCls} value={add.label} onChange={(e) => setAdd((a) => ({ ...a, label: e.target.value }))} />
+            <label htmlFor="tm-add-groq" className="block text-[11px] text-dim mt-2 mb-1">Groq API key (optional)</label>
             <input
+              id="tm-add-groq"
               className={inCls}
               type="password"
               value={add.groq}
@@ -170,8 +172,9 @@ export default function TenantManager({ onClose }) {
         ) : edit ? (
           <div>
             <h3 className="text-xs font-semibold mb-2">Replace key for {edit.label || 'connection'}</h3>
-            <label className="block text-[11px] text-dim mb-1">New Infoblox API key</label>
+            <label htmlFor="tm-edit-key" className="block text-[11px] text-dim mb-1">New Infoblox API key</label>
             <input
+              id="tm-edit-key"
               className={inCls}
               type="password"
               value={edit.key}
@@ -201,8 +204,8 @@ export default function TenantManager({ onClose }) {
                   {confirmRm === t.id ? (
                     <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-crit/10 border border-crit/40">
                       <span className="flex-1 text-[11px] text-crit">Remove {t.label}?</span>
-                      <button className="px-2 py-0.5 rounded border border-crit text-crit text-[11px]" onClick={() => remove(t.id)}>✓</button>
-                      <button className="px-2 py-0.5 rounded border border-border text-[11px] text-field-txt" onClick={() => setConfirmRm(null)}>✕</button>
+                      <button className="px-2 py-0.5 rounded border border-crit text-crit text-[11px]" aria-label="Confirm remove" title="Confirm remove" onClick={() => remove(t.id)}>✓</button>
+                      <button className="px-2 py-0.5 rounded border border-border text-[11px] text-field-txt" aria-label="Cancel" title="Cancel" onClick={() => setConfirmRm(null)}>✕</button>
                     </div>
                   ) : (
                     <>
@@ -210,8 +213,8 @@ export default function TenantManager({ onClose }) {
                         <span>{t.id === activeId ? '●' : '○'}</span>
                         <span className="truncate">{t.label}</span>
                       </button>
-                      <button className={miniBtn} title="Replace key" onClick={() => openEdit(t)}>chg</button>
-                      <button className={miniBtn + ' hover:text-crit hover:border-crit'} title="Remove" onClick={() => setConfirmRm(t.id)}>✕</button>
+                      <button className={miniBtn} aria-label="Replace key" title="Replace key" onClick={() => openEdit(t)}>chg</button>
+                      <button className={miniBtn + ' hover:text-crit hover:border-crit'} aria-label="Remove tenant" title="Remove" onClick={() => setConfirmRm(t.id)}>✕</button>
                     </>
                   )}
                 </div>
@@ -238,8 +241,9 @@ export default function TenantManager({ onClose }) {
               </>
             )}
 
-            <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Dashboard token</div>
+            <label htmlFor="tm-dash-token" className="block text-[10px] uppercase tracking-wide text-dim mb-2">Dashboard token</label>
             <input
+              id="tm-dash-token"
               className={inCls + ' mb-4'}
               type="password"
               value={dashToken}

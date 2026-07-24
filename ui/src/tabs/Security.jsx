@@ -271,7 +271,7 @@ function TriageInbox({ hub, events, acks, setAcks }) {
               className="px-2 py-1 rounded-md text-[11px] capitalize border"
               style={{
                 borderColor: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-border)',
-                color: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : COLORS.other,
+                color: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-muted)',
               }}
             >
               {s}
