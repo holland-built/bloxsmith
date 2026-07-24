@@ -145,6 +145,20 @@ failing, open an issue at https://github.com/$REPO/issues
         Move-Item -LiteralPath $srcExe -Destination $dest -Force
     }
 
+    # The zip bundles a templates\ dir next to the exe; the default TemplatesDir
+    # is <exe-dir>\templates, so copy it beside the installed exe or Seed Demo /
+    # Provision report "templates not installed".
+    $templatesSrc = Join-Path (Split-Path -Parent $srcExe) 'templates'
+    if (Test-Path -LiteralPath $templatesSrc) {
+        $templatesDest = Join-Path $Prefix 'templates'
+        if (Test-Path -LiteralPath $templatesDest) { Remove-Item -LiteralPath $templatesDest -Recurse -Force }
+        try {
+            Copy-Item -LiteralPath $templatesSrc -Destination $templatesDest -Recurse -Force
+        } catch {
+            Write-Warning "could not install templates -> $templatesDest (Seed Demo will be unavailable). $($_.Exception.Message)"
+        }
+    }
+
     Write-Host ''
     Write-Host "Installed bloxsmith $num -> $dest"
 

@@ -161,6 +161,16 @@ install -m 0755 "$BIN" "$PREFIX/bloxsmith" 2>/dev/null \
     || { cp "$BIN" "$PREFIX/bloxsmith" && chmod 0755 "$PREFIX/bloxsmith"; } \
     || { echo "error: could not write to ${PREFIX} (choose another with --prefix DIR)" >&2; exit 1; }
 
+# The archive bundles a templates/ dir next to the binary; the default
+# TemplatesDir is <binary-dir>/templates, so copy it beside the installed
+# binary or Seed Demo / Provision report "templates not installed".
+TEMPLATES_SRC="$(dirname "$BIN")/templates"
+if [ -d "$TEMPLATES_SRC" ]; then
+    rm -rf "$PREFIX/templates"
+    cp -R "$TEMPLATES_SRC" "$PREFIX/templates" \
+        || echo "warning: could not install templates -> ${PREFIX}/templates (Seed Demo will be unavailable)" >&2
+fi
+
 echo ""
 echo "Installed bloxsmith ${NUM} -> ${PREFIX}/bloxsmith"
 
