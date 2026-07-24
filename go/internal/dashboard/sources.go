@@ -18,16 +18,6 @@ func fld(name, typ, role string) map[string]any {
 	return map[string]any{"name": name, "type": typ, "role": role}
 }
 
-// mapsToAny lifts a []map[string]any shaper result to the []any the source
-// contract returns.
-func mapsToAny(rows []map[string]any) []any {
-	out := make([]any, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, r)
-	}
-	return out
-}
-
 // --- registry-specific shapers (server.py:4605-4681) -------------------------
 
 func normThreatFeeds(raw []any) []any {
@@ -257,7 +247,7 @@ func (s *Service) SourcesMeta() map[string]any {
 		}
 		list = append(list, map[string]any{
 			"id": d.ID, "label": d.Label, "transport": d.Transport,
-			"requires": toAnySlice(req), "fields": toAnySlice2(d.Fields),
+			"requires": toAnyN(req), "fields": toAnyN(d.Fields),
 		})
 	}
 	list = append(list, map[string]any{
@@ -271,24 +261,24 @@ func (s *Service) SourcesMeta() map[string]any {
 func (s *Service) sourceFetch(ctx context.Context, sid string, p map[string]string) []any {
 	switch sid {
 	case "subnets":
-		return mapsToAny(normSubnets(s.Rest.Get("/api/ddi/v1/ipam/subnet",
+		return toAnyN(normSubnets(s.Rest.Get("/api/ddi/v1/ipam/subnet",
 			map[string]string{"_fields": "id,name,address,cidr,utilization,tags", "_limit": "5000"})))
 	case "leases":
-		return mapsToAny(normLeases(s.Rest.Get("/api/ddi/v1/dhcp/lease",
+		return toAnyN(normLeases(s.Rest.Get("/api/ddi/v1/dhcp/lease",
 			map[string]string{"_fields": "address,hostname,state,client_id", "_limit": "5000"})))
 	case "dns_zones":
-		return mapsToAny(normZones(s.Rest.Get("/api/ddi/v1/dns/auth_zone",
+		return toAnyN(normZones(s.Rest.Get("/api/ddi/v1/dns/auth_zone",
 			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type", "_limit": "5000"}), nil))
 	case "dns_records":
 		return normRecords(s.Rest.Get("/api/ddi/v1/dns/record", map[string]string{"_limit": "2000"}))
 	case "hosts":
-		return mapsToAny(normHosts(s.Rest.Get("/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})))
+		return toAnyN(normHosts(s.Rest.Get("/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})))
 	case "threat_feeds":
 		return normThreatFeeds(s.Rest.Get("/api/atcfw/v1/threat_feeds", map[string]string{"_limit": "200"}))
 	case "named_lists":
 		return normNamedLists(s.Rest.Get("/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"}))
 	case "security_policies":
-		return mapsToAny(normPolicies(s.Rest.Get("/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})))
+		return toAnyN(normPolicies(s.Rest.Get("/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})))
 	case "dfp":
 		return normSourceDFP(s.Rest.Get("/api/atcdfp/v1/dfp_services", map[string]string{"_limit": "200"}))
 	case "anycast":
@@ -298,7 +288,7 @@ func (s *Service) sourceFetch(ctx context.Context, sid string, p map[string]stri
 	case "incidents":
 		return normIncidents(s.FetchActions(ctx))
 	case "anomaly_events":
-		return mapsToAny(anyToMaps(s.FetchHubSecurity(3600, 200)["events"]))
+		return toAnyN(anyToMaps(s.FetchHubSecurity(3600, 200)["events"]))
 	case "entity_search":
 		if p["q"] == "" {
 			return []any{}
@@ -398,22 +388,16 @@ func (s *Service) SourceRows(ctx context.Context, sid string, params map[string]
 	if len(rows) > limit {
 		rows = rows[:limit]
 	}
-	return map[string]any{"rows": rows, "count": len(rows), "fields": toAnySlice2(def.Fields)}
+	return map[string]any{"rows": rows, "count": len(rows), "fields": toAnyN(def.Fields)}
 }
 
 // --- helpers -----------------------------------------------------------------
 
-func toAnySlice(ss []string) []any {
-	out := make([]any, len(ss))
-	for i, v := range ss {
-		out[i] = v
-	}
-	return out
-}
-
-func toAnySlice2(ms []map[string]any) []any {
-	out := make([]any, len(ms))
-	for i, v := range ms {
+// toAnyN widens any []T (e.g. []map[string]any shaper output, []string requires)
+// to the []any the source/meta contract returns — Python's _results() pass-through.
+func toAnyN[T any](s []T) []any {
+	out := make([]any, len(s))
+	for i, v := range s {
 		out[i] = v
 	}
 	return out

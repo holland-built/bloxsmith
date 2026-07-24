@@ -129,7 +129,7 @@ export default function UpdateButton() {
     return (
       <span className="flex items-center gap-2 text-[11px]">
         <span className="text-muted">v{current.replace(/^v/, '')}</span>
-        <span className="text-red-500">{error}</span>
+        <span className="text-crit">{error}</span>
       </span>
     );
   }

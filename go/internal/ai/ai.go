@@ -10,6 +10,7 @@ package ai
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -117,7 +118,7 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 		messages = append(messages, ch.Message)
 		for _, tc := range ch.toolCalls {
 			var argMap map[string]any
-			_ = json.Unmarshal([]byte(orDefault(tc.Function.Arguments, "{}")), &argMap)
+			_ = json.Unmarshal([]byte(cmp.Or(tc.Function.Arguments, "{}")), &argMap)
 			*trace = append(*trace, map[string]any{
 				"tool": tc.Function.Name,
 				"args": traceArgs(argMap),
@@ -229,11 +230,4 @@ func traceArgs(args map[string]any) map[string]any {
 		out[k] = s
 	}
 	return out
-}
-
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
 }

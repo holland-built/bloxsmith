@@ -57,7 +57,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 			params["cidr"] = strconv.Itoa(c)
 		}
 		rows := s.Mcp.Get(ctx, "Ipamsvc", "/ipam/subnet", params, !hasAddr)
-		data := normSubnets(toAny(rows))
+		data := normSubnets(toAnyN(rows))
 		if len(data) == 0 {
 			return "No subnet data."
 		}
@@ -66,7 +66,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 	case "get_hosts":
 		rows := s.Mcp.Get(ctx, "Infrastructure", "/detail_hosts",
 			map[string]any{"_fields": "display_name,ip_address,composite_status,host_type"}, true)
-		data := normHosts(toAny(rows))
+		data := normHosts(toAnyN(rows))
 		if st := aiStr(args["status"]); st != "" {
 			filtered := data[:0:0]
 			for _, h := range data {
@@ -91,14 +91,14 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 			vm[getStr(v["id"])] = getStr(v["name"])
 		}
 		return jstr(map[string]any{
-			"views": normViews(toAny(viewsD)),
-			"zones": capMaps(normZones(toAny(zonesD), vm), 200),
+			"views": normViews(toAnyN(viewsD)),
+			"zones": capMaps(normZones(toAnyN(zonesD), vm), 200),
 		})
 
 	case "get_dhcp_leases":
 		rows := s.Mcp.Get(ctx, "DhcpLeases", "/dhcp/lease",
 			map[string]any{"_fields": "address,hostname,state"}, true)
-		data := normLeases(toAny(rows))
+		data := normLeases(toAnyN(rows))
 		if sub := aiStr(args["subnet"]); sub != "" {
 			filtered := data[:0:0]
 			for _, l := range data {
@@ -116,7 +116,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 	case "get_threat_feeds":
 		rows := s.Mcp.Get(ctx, "Atcfw", "/named_lists",
 			map[string]any{"_fields": "name,threat_level,item_count"}, true)
-		data := normFeeds(toAny(rows))
+		data := normFeeds(toAnyN(rows))
 		if len(data) == 0 {
 			return "No threat feed data."
 		}
@@ -129,7 +129,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		}
 		rows := s.Mcp.Get(ctx, "AuditLog", "/logs",
 			map[string]any{"_limit": limit, "_order_by": "created_at desc"}, false)
-		data := normAudit(toAny(rows))
+		data := normAudit(toAnyN(rows))
 		if len(data) == 0 {
 			return "No audit log data."
 		}
@@ -165,16 +165,6 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 // aiAddrRE is the IP/CIDR-ish filter guard (server.py:3972) applied to a
 // caller-supplied subnet address before it is forwarded upstream.
 var aiAddrRE = regexp.MustCompile(`^[0-9a-fA-F:.]{1,45}(/\d{1,3})?$`)
-
-// toAny widens []map[string]any (what mcp.Client returns) to []any (what the
-// norm_* shapers accept), matching Python's _results() pass-through.
-func toAny(ms []map[string]any) []any {
-	out := make([]any, len(ms))
-	for i, m := range ms {
-		out[i] = m
-	}
-	return out
-}
 
 func capMaps(ms []map[string]any, n int) []map[string]any {
 	if len(ms) > n {

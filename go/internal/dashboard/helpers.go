@@ -162,20 +162,3 @@ func vToStr(v any) string {
 	}
 	return ""
 }
-
-// roundHalfEven is Python's round() (banker's rounding) for the utilization %.
-func roundHalfEven(x float64) int {
-	f := float64(int64(x))
-	diff := x - f
-	switch {
-	case diff > 0.5:
-		return int(f) + 1
-	case diff < 0.5:
-		return int(f)
-	default: // exactly .5 -> round to even
-		if int64(f)%2 == 0 {
-			return int(f)
-		}
-		return int(f) + 1
-	}
-}

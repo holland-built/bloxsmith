@@ -246,13 +246,15 @@ function ZoneTable({ zones, issuesOnly }) {
         issuesOnly ? (
           <span className="inline-flex items-center gap-2">
             DNS Zones
-            <span
+            <button
+              type="button"
+              aria-label="Clear filter"
               onClick={() => { location.hash = 'dns' }}
               className="text-[11px] font-medium px-2 py-0.5 rounded-full cursor-pointer"
               style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
             >
               issues only ✕
-            </span>
+            </button>
           </span>
         ) : 'DNS Zones'
       }
@@ -260,6 +262,7 @@ function ZoneTable({ zones, issuesOnly }) {
         <div className="flex items-center gap-2.5">
           <span className="text-[11px] text-muted whitespace-nowrap">{sorted.length.toLocaleString()} zones</span>
           <input
+            aria-label="Filter zones"
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}

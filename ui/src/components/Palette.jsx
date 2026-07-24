@@ -44,6 +44,9 @@ export default function Palette({ tabs, onPick }) {
       onClick={() => setOpen(false)}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
         className="w-[420px] rounded-xl border border-border bg-card shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -57,13 +60,17 @@ export default function Palette({ tabs, onPick }) {
             else if (e.key === 'Enter' && hits[idx]) pick(hits[idx])
           }}
           placeholder="Jump to tab…"
+          aria-activedescendant={hits[idx] ? `palette-opt-${hits[idx].id}` : undefined}
           className="w-full px-4 py-3 bg-transparent text-txt text-sm outline-none border-b border-line-2"
         />
-        <div className="max-h-[300px] overflow-auto py-1">
+        <div role="listbox" className="max-h-[300px] overflow-auto py-1">
           {hits.length === 0 && <div className="px-4 py-3 text-muted text-sm">no match</div>}
           {hits.map((t, i) => (
             <button
               key={t.id}
+              id={`palette-opt-${t.id}`}
+              role="option"
+              aria-selected={i === idx}
               onClick={() => pick(t)}
               onMouseEnter={() => setIdx(i)}
               className={`w-full text-left px-4 py-2 text-sm ${i === idx ? 'bg-line text-txt' : 'text-muted'}`}
