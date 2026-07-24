@@ -4,12 +4,17 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"bloxsmith/internal/account"
@@ -100,13 +105,43 @@ func main() {
 		}
 	}
 
+	// --port/-p (foreground only): unmatched by the switch above, so "--port"
+	// or "-p" as os.Args[1] already falls through to here rather than an
+	// "unknown command" path. Set PORT in the real env BEFORE loadForegroundEnv
+	// so it wins: config.Load's PORT precedence is real-env-first, and
+	// loadForegroundEnv's .env loading is setdefault (never overwrites an
+	// already-set real env var).
+	if len(os.Args) > 1 {
+		port, err := parsePortFlag(os.Args[1:])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		if port != "" {
+			os.Setenv("PORT", port)
+		}
+	}
+
 	// Foreground: the interactive path keeps the shell's environment, so the
 	// developer .env files still apply. Precedence is first-wins (setdefault),
 	// with the real environment always ahead of every file.
 	loadForegroundEnv()
 
+	// Captured before buildServer (which returns a nil *config.Config on
+	// failure) so a bind failure can still name the port in its message.
+	wantPort := os.Getenv("PORT")
+	if wantPort == "" {
+		wantPort = "8080"
+	}
+
 	srv, ln, cfg, err := buildServer()
 	if err != nil {
+		if isAddrInUse(err) {
+			fmt.Fprintf(os.Stderr, "Port %s is already in use.\n", wantPort)
+			fmt.Fprintln(os.Stderr, "Something else is on that port — often the Bloxsmith Docker stack (also 8080), or another Bloxsmith instance.")
+			fmt.Fprintln(os.Stderr, "Start on a different port:  bloxsmith --port 9090   (or set PORT=9090)")
+			os.Exit(1)
+		}
 		log.Fatal(err)
 	}
 	log.Printf("bloxsmith %s serving on http://localhost:%s", version, cfg.Port)
@@ -119,10 +154,65 @@ func main() {
 func printUsage() {
 	println("usage: bloxsmith [command]")
 	println("  (no command)              start the server (foreground) on http://localhost:$PORT")
+	println("  --port N, -p N            start on port N instead of 8080 (overrides $PORT)")
 	println("  update [--check]          download+verify+swap the latest release, then restart")
 	println("  service <cmd>             install|uninstall|start|stop|restart|status  (run at login)")
 	println("  --version, -v             print version")
 	println("  --help, -h, help          this help")
+}
+
+// parsePortFlag scans args (os.Args[1:]) for a --port/-p flag in any of the
+// "--port N", "--port=N", "-p N", "-p=N" forms. Returns "" with a nil error
+// when the flag is absent. err is non-nil only when the flag IS present but
+// its value isn't a valid 1-65535 port.
+func parsePortFlag(args []string) (string, error) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		var val string
+		switch {
+		case a == "--port" || a == "-p":
+			if i+1 >= len(args) {
+				return "", fmt.Errorf("--port requires a value")
+			}
+			val = args[i+1]
+		case strings.HasPrefix(a, "--port="):
+			val = strings.TrimPrefix(a, "--port=")
+		case strings.HasPrefix(a, "-p="):
+			val = strings.TrimPrefix(a, "-p=")
+		default:
+			continue
+		}
+		if !validPort(val) {
+			return "", fmt.Errorf("invalid --port %s: must be 1-65535", val)
+		}
+		return val, nil
+	}
+	return "", nil
+}
+
+// validPort reports whether s parses as a port number in the valid TCP range.
+func validPort(s string) bool {
+	n, err := strconv.Atoi(s)
+	return err == nil && n >= 1 && n <= 65535
+}
+
+// isAddrInUse reports whether err is a bind failure because the address is
+// already in use (as opposed to any other listen error). errors.Is with
+// syscall.EADDRINUSE covers unix; Windows returns WSAEADDRINUSE, which isn't
+// visible to errors.Is without a platform-specific build, so a string match
+// on the common wordings (including Windows' own phrasing) covers it without
+// adding a GOOS-specific file.
+func isAddrInUse(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.EADDRINUSE) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "address already in use") ||
+		strings.Contains(msg, "in use") ||
+		strings.Contains(msg, "Only one usage of each socket address")
 }
 
 // loadForegroundEnv loads the .env files that only make sense with a real cwd
