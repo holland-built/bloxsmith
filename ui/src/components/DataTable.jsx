@@ -118,19 +118,27 @@ export function DataTable({
 
   const headBg = stickyHeader ? 'sticky top-0 z-10 bg-card' : ''
 
+  // table-fixed column widths: explicit width wins; badges/right-aligned numbers
+  // hug small so text/mono columns keep the room; a mono clip becomes its column
+  // width. Everything else shares the remaining width equally. table-fixed +
+  // per-cell overflow-hidden guarantees the table never exceeds the card (no
+  // horizontal scroll, ever) and the last column is never pushed off.
+  const colWidth = (c) =>
+    c.width || (c.badge ? '104px' : c.align === 'right' ? '84px' : c.mono && c.clip ? `${c.clip}px` : undefined)
+
   const table = (
-    <table className="w-full border-collapse text-sm">
+    <table className="w-full table-fixed border-collapse text-sm">
       <thead>
         <tr>
           {cols.map((c) => {
             const alignRight = c.align === 'right'
-            const lowPri = c.priority === 'low' ? ' @max-[520px]:hidden' : ''
+            const lowPri = c.priority === 'low' ? ' @max-[360px]:hidden' : ''
             const base = `${headBg} text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 ${alignRight ? 'text-right' : 'text-left'}${lowPri}`
             if (c.sortable) {
               const isActive = activeSort && activeSort.key === c.key
               const ariaSort = isActive ? (activeSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'
               return (
-                <th key={c.key} aria-sort={ariaSort} className={base} style={c.width ? { width: c.width } : undefined}>
+                <th key={c.key} aria-sort={ariaSort} className={base} style={colWidth(c) ? { width: colWidth(c) } : undefined}>
                   <button
                     type="button"
                     onClick={() => handleSort(c.key)}
@@ -143,7 +151,7 @@ export function DataTable({
               )
             }
             return (
-              <th key={c.key} className={base} style={c.width ? { width: c.width } : undefined}>
+              <th key={c.key} className={base} style={colWidth(c) ? { width: colWidth(c) } : undefined}>
                 {c.label}
               </th>
             )
@@ -161,8 +169,8 @@ export function DataTable({
             {cols.map((c) => {
               const v = r[c.key]
               const alignRight = c.align === 'right'
-              const lowPri = c.priority === 'low' ? ' @max-[520px]:hidden' : ''
-              const tdBase = `py-2 px-2.5 border-b border-line ${alignRight ? 'text-right' : ''}${lowPri}`
+              const lowPri = c.priority === 'low' ? ' @max-[360px]:hidden' : ''
+              const tdBase = `py-2 px-2.5 border-b border-line overflow-hidden ${alignRight ? 'text-right' : ''}${lowPri}`
               // 5. render -> badge -> mono -> default text.
               if (c.render) {
                 return (
@@ -185,8 +193,7 @@ export function DataTable({
                 return (
                   <td key={c.key} className={tdBase}>
                     <span
-                      className={`block overflow-hidden whitespace-nowrap text-ellipsis font-mono ${alignRight ? 'ml-auto' : ''}`}
-                      style={{ maxWidth: c.clip || 160 }}
+                      className="block overflow-hidden whitespace-nowrap text-ellipsis font-mono"
                       title={v != null ? String(v) : undefined}
                     >
                       {v ?? '—'}
@@ -227,11 +234,12 @@ export function DataTable({
     )
   }
 
-  // 4 + 7. @container marks the responsive boundary; below 520px low-priority cols
-  // hide and the wrapper allows x-scroll as a last resort. Normal widths: x-hidden.
+  // table-fixed guarantees the table fits the card, so the wrapper NEVER x-scrolls
+  // (the user's #1 complaint). @container only hides priority:'low' columns at true
+  // phone width (<360px). Long values clip within their fixed column via ellipsis.
   return (
     <div className="@container">
-      <div className="overflow-x-hidden @max-[520px]:overflow-x-auto overflow-y-auto" style={{ maxHeight }}>
+      <div className="overflow-x-hidden overflow-y-auto" style={{ maxHeight }}>
         {table}
       </div>
       {footer}
