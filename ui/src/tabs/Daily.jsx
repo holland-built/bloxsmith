@@ -1,4 +1,5 @@
 import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
 
 // ---------- main ----------
@@ -101,9 +102,32 @@ function SecurityToday({ sec }) {
 function TopCapacityRisks({ subnets, loading }) {
   const rows = [...subnets]
     .filter((s) => (s.addr || s.cidr) && (Number(s.cidr) || 0) <= 28)
-    .map((s) => ({ ...s, free: (Number(s.total) || 0) - (Number(s.used) || 0) }))
+    .map((s) => ({
+      ...s,
+      network: s.addr || s.cidr,
+      util: Number(s.util) || 0,
+      free: (Number(s.total) || 0) - (Number(s.used) || 0),
+    }))
     .sort((a, b) => a.free - b.free)
-    .slice(0, 10)
+
+  const columns = [
+    { key: 'network', label: 'Network', mono: true, clip: 160 },
+    { key: 'site', label: 'Site', keep: true },
+    {
+      key: 'util',
+      label: 'Util',
+      keep: true,
+      render: (v) => {
+        const st = utilStatus(v)
+        return (
+          <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: st.bg, color: st.fg }}>
+            {v}%
+          </span>
+        )
+      },
+    },
+    { key: 'free', label: 'Free', align: 'right', render: (v) => <span className="text-muted">{(v || 0).toLocaleString()}</span> },
+  ]
 
   return (
     <Card span={3} title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-[11px] text-muted">top 10</span>}>
@@ -112,38 +136,12 @@ function TopCapacityRisks({ subnets, loading }) {
       ) : rows.length === 0 ? (
         <Empty />
       ) : (
-        <table className="w-full border-collapse mt-2 text-sm">
-          <thead>
-            <tr>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Network</th>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Site</th>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Util</th>
-              <th className="text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2">Free</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((s, i) => {
-              const util = Number(s.util) || 0
-              const status = utilStatus(util)
-              return (
-                <tr
-                  key={(s.addr || s.cidr || '') + i}
-                  onClick={() => { location.hash = 'network?subnet=' + encodeURIComponent(s.addr || s.cidr || '') }}
-                  className="cursor-pointer hover:bg-line"
-                >
-                  <td className="py-2 px-2.5 border-b border-line font-mono">{s.addr || s.cidr}</td>
-                  <td className="py-2 px-2.5 border-b border-line">{s.site || '—'}</td>
-                  <td className="py-2 px-2.5 border-b border-line">
-                    <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: status.bg, color: status.fg }}>
-                      {util}%
-                    </span>
-                  </td>
-                  <td className="py-2 px-2.5 border-b border-line text-muted">{s.free.toLocaleString()}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <DataTable
+          rows={rows}
+          columns={columns}
+          limit={10}
+          onRowClick={(s) => { location.hash = 'network?subnet=' + encodeURIComponent(s.network || '') }}
+        />
       )}
     </Card>
   )
@@ -153,7 +151,24 @@ function TopCapacityRisks({ subnets, loading }) {
 
 function HostsAttention({ hosts, loading }) {
   const { COLORS } = useChartTheme()
-  const rows = hosts.filter((h) => !/online|active/i.test(h.status || '')).slice(0, 10)
+  const rows = hosts.filter((h) => !/online|active/i.test(h.status || ''))
+
+  const columns = [
+    {
+      key: 'name',
+      label: 'Hostname',
+      keep: true,
+      render: (v, h) => (
+        <span className="flex items-center gap-2 min-w-0">
+          <i className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: COLORS.crit }} />
+          <span className="font-mono truncate" style={{ maxWidth: 180 }} title={h.name || h.ip || ''}>
+            {h.name || h.ip || '—'}
+          </span>
+        </span>
+      ),
+    },
+    { key: 'status', label: 'Status', align: 'right' },
+  ]
 
   return (
     <Card span={3} title="Hosts Needing Attention" right={<span className="text-[11px] text-muted">{rows.length} shown</span>}>
@@ -162,22 +177,13 @@ function HostsAttention({ hosts, loading }) {
       ) : rows.length === 0 ? (
         <Empty>all hosts online</Empty>
       ) : (
-        <div className="flex flex-col gap-1 mt-1">
-          {rows.map((h, i) => (
-            <div
-              key={(h.name || h.ip || '') + i}
-              onClick={() => { location.hash = 'infra?status=error' }}
-              className="flex items-center gap-2.5 py-1.5 border-b border-line last:border-0 cursor-pointer hover:bg-line"
-            >
-              <i className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: COLORS.crit }} />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm truncate">{h.name || '—'}</div>
-                <div className="text-[11px] text-dim font-mono truncate">{h.ip || ''}</div>
-              </div>
-              <span className="text-[11px] text-muted shrink-0">{h.status || '—'}</span>
-            </div>
-          ))}
-        </div>
+        <DataTable
+          rows={rows}
+          columns={columns}
+          limit={10}
+          viewAllHref="#infra?status=error"
+          onRowClick={() => { location.hash = 'infra?status=error' }}
+        />
       )}
     </Card>
   )
@@ -186,7 +192,25 @@ function HostsAttention({ hosts, loading }) {
 // ---------- DNS zone issues ----------
 
 function DnsZoneIssues({ zones, loading }) {
-  const rows = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).slice(0, 10)
+  const rows = zones
+    .filter((z) => Array.isArray(z.issues) && z.issues.length > 0)
+    .map((z) => ({ ...z, count: z.issues.length, issuesText: z.issues.join(', ') }))
+
+  const columns = [
+    {
+      key: 'count',
+      label: '',
+      keep: true,
+      width: '2.5rem',
+      render: (v) => (
+        <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}>
+          {v}
+        </span>
+      ),
+    },
+    { key: 'fqdn', label: 'Zone', mono: true, clip: 240 },
+    { key: 'issuesText', label: 'Issues' },
+  ]
 
   return (
     <Card span={6} title="DNS Zone Issues" right={<span className="text-[11px] text-muted">{rows.length} zones</span>}>
@@ -195,23 +219,13 @@ function DnsZoneIssues({ zones, loading }) {
       ) : rows.length === 0 ? (
         <Empty>no DNS zone issues</Empty>
       ) : (
-        <div className="flex flex-col gap-1 mt-1">
-          {rows.map((z, i) => (
-            <div
-              key={(z.fqdn || '') + i}
-              onClick={() => { location.hash = 'dns?issues=1' }}
-              className="flex items-start gap-2.5 py-1.5 border-b border-line last:border-0 cursor-pointer hover:bg-line"
-            >
-              <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0" style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}>
-                {z.issues.length}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-mono truncate">{z.fqdn || '—'}</div>
-                <div className="text-[11px] text-dim truncate">{z.issues.join(', ')}</div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <DataTable
+          rows={rows}
+          columns={columns}
+          limit={10}
+          viewAllHref="#dns?issues=1"
+          onRowClick={() => { location.hash = 'dns?issues=1' }}
+        />
       )}
     </Card>
   )
