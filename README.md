@@ -21,6 +21,20 @@
 
 ## Install
 
+**Docker** (recommended) — one command, then open http://localhost:8080:
+
+```bash
+docker run -d --name bloxsmith \
+  -p 127.0.0.1:8080:8080 -v noc-vault:/vault \
+  --restart unless-stopped \
+  ghcr.io/holland-built/bloxsmith:latest
+```
+
+First run: pick a passphrase, then paste your [Infoblox API key](#get-your-infoblox-api-key). Tenant keys live in the encrypted `noc-vault` volume and survive restarts and updates.
+
+<details>
+<summary><b>Other platforms — macOS/Linux script · Windows · Homebrew</b></summary>
+
 **macOS / Linux** — inspect, then install; it opens the dashboard for you:
 
 ```bash
@@ -29,11 +43,6 @@ curl --proto '=https' --tlsv1.2 -fsSLo install.sh \
 less install.sh   # read it before running
 sh install.sh
 ```
-
-First run: pick a passphrase, then paste your [Infoblox API key](#get-your-infoblox-api-key).
-
-<details>
-<summary><b>Other platforms — Windows · Docker · Homebrew</b></summary>
 
 **Windows** — paste into **Command Prompt or PowerShell** (each `powershell` line works from either); it downloads, you inspect, then it installs and opens the dashboard:
 
@@ -44,15 +53,6 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 Line 1 downloads it, Notepad opens it to read — close Notepad, then line 3 installs. Prefixing with `powershell -Command` is what makes `iwr` work from cmd.exe.
-
-**Docker** — then open http://localhost:8080 yourself:
-
-```bash
-docker run -d --name bloxsmith \
-  -p 127.0.0.1:8080:8080 -v noc-vault:/vault \
-  --restart unless-stopped \
-  ghcr.io/holland-built/bloxsmith:latest
-```
 
 **Homebrew** (macOS / Linux):
 
@@ -113,6 +113,41 @@ Full update modes → [docs/DEPLOYMENT.md#updating](docs/DEPLOYMENT.md#updating)
 </details>
 
 <details>
+<summary><b>Uninstalling</b></summary>
+
+Each install method removes cleanly. Config + the encrypted vault are **kept by default** so a reinstall keeps your tenants — add the purge flag to delete them too.
+
+**macOS / Linux** (same script, `--uninstall`):
+
+```bash
+sh install.sh --uninstall            # remove binary, templates, login service
+sh install.sh --uninstall --purge    # also delete config + vault
+```
+
+**Windows** (same script, `-Uninstall`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall -Purge
+```
+
+**Homebrew** — unregister the login service first (brew doesn't know about it), then uninstall:
+
+```bash
+bloxsmith service uninstall          # stop + remove the login service
+brew uninstall bloxsmith
+rm -rf ~/Library/Application\ Support/bloxsmith   # optional: config + vault (macOS)
+```
+
+**Docker:**
+
+```bash
+docker rm -f bloxsmith && docker volume rm noc-vault   # volume rm also drops the vault
+```
+
+</details>
+
+<details>
 <summary><b>How it works</b></summary>
 
 ```
@@ -156,7 +191,7 @@ The natural-language query box needs an LLM with tool-calling; everything else w
 
 ## Code signing policy
 
-Bloxsmith releases are built and published from GitHub Actions. Windows and macOS binaries are distributed via GitHub Releases with SHA-256 checksums; code-signing via SignPath Foundation is being set up. Report signing issues at the GitHub issue tracker.
+Bloxsmith releases are built and published from GitHub Actions. Windows and macOS binaries are distributed via GitHub Releases with SHA-256 checksums. The binaries are **not code-signed** — verify a download with the checksum, and expect a first-run warning (macOS Gatekeeper: right-click → **Open**, or `xattr -dr com.apple.quarantine` the binary; Windows SmartScreen: **More info → Run anyway**). Report signing issues at the GitHub issue tracker.
 
 ---
 
