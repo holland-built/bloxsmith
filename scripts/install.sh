@@ -11,6 +11,8 @@ REPO="holland-built/bloxsmith"
 PREFIX="${HOME}/.local/bin"
 VERSION="latest"
 SERVICE=auto   # auto = prompt if interactive; set by --service / --no-service
+UNINSTALL=no
+PURGE=no
 
 usage() {
     cat <<EOF
@@ -23,6 +25,8 @@ Options:
   --prefix DIR       Install directory (default: \$HOME/.local/bin)
   --service          Also register the login service (no prompt)
   --no-service       Skip the login-service step (no prompt)
+  --uninstall        Remove bloxsmith (binary, templates, login service)
+  --purge            With --uninstall, also delete config + encrypted vault
   --help             Show this help
 
 Installs the single self-contained bloxsmith binary. No Docker required.
@@ -37,6 +41,8 @@ while [ $# -gt 0 ]; do
                    PREFIX="$2"; shift 2 ;;
         --service)    SERVICE=yes; shift ;;
         --no-service) SERVICE=no;  shift ;;
+        --uninstall)  UNINSTALL=yes; shift ;;
+        --purge)      PURGE=yes; shift ;;
         --help|-h) usage; exit 0 ;;
         *) echo "error: unknown option '$1' (try --help)" >&2; exit 2 ;;
     esac
@@ -84,6 +90,39 @@ case "$ARCH" in
     aarch64|arm64) ARCH="arm64" ;;
     *) echo "error: unsupported architecture '$ARCH'" >&2; exit 1 ;;
 esac
+
+# --- uninstall (no download needed) -----------------------------------------
+if [ "$UNINSTALL" = yes ]; then
+    echo "Bloxsmith uninstaller"
+    BIN="$PREFIX/bloxsmith"
+    if [ -x "$BIN" ]; then
+        # unregister + stop the login service if it was ever set up (best-effort)
+        "$BIN" service uninstall >/dev/null 2>&1 || true
+    fi
+    if [ -e "$BIN" ]; then
+        rm -f "$BIN" && echo "  removed  : $BIN"
+    else
+        echo "  (no binary at $BIN — nothing to remove there)"
+    fi
+    if [ -d "$PREFIX/templates" ]; then
+        rm -rf "$PREFIX/templates" && echo "  removed  : $PREFIX/templates"
+    fi
+    case "$OS" in
+        darwin) CFG="$HOME/Library/Application Support/bloxsmith" ;;
+        *)      CFG="${XDG_CONFIG_HOME:-$HOME/.config}/bloxsmith" ;;
+    esac
+    if [ "$PURGE" = yes ]; then
+        if [ -d "$CFG" ]; then rm -rf "$CFG" && echo "  removed  : $CFG (config + vault)"; fi
+    elif [ -d "$CFG" ]; then
+        echo ""
+        echo "Config + encrypted vault left in place at:"
+        echo "    $CFG"
+        echo "Delete it too with:  sh install.sh --uninstall --purge   (or: rm -rf \"$CFG\")"
+    fi
+    echo ""
+    echo "Bloxsmith uninstalled."
+    exit 0
+fi
 
 # Version number without the leading 'v' — goreleaser asset names use the bare form.
 if [ "$VERSION" = "latest" ]; then
