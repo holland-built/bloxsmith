@@ -5,7 +5,18 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { DataTable } from '../components/DataTable.jsx'
 import { useHashParams, setHashParams } from '../lib/hash.js'
+
+// IP address octet-order comparator (ascending); DataTable applies direction.
+function ipCompare(a, b) {
+  const av = (a.address || '').split('.').map(Number)
+  const bv = (b.address || '').split('.').map(Number)
+  for (let i = 0; i < 4; i++) {
+    if ((av[i] || 0) !== (bv[i] || 0)) return (av[i] || 0) - (bv[i] || 0)
+  }
+  return 0
+}
 
 // ---------- main ----------
 
@@ -118,7 +129,6 @@ function DhcpLeases({ dhcp, innerRef }) {
   const rows = dhcp.data?.rows ?? []
   const [q, setQ] = useState(hp.lease || '')
   const [state, setState] = useState('')
-  const [sort, setSort] = useState({ key: 'ends', dir: 'desc' })
 
   useEffect(() => {
     if (hp.lease) setQ(hp.lease)
@@ -135,44 +145,27 @@ function DhcpLeases({ dhcp, innerRef }) {
     })
   }, [rows, q, state])
 
-  const sorted = useMemo(() => {
-    const arr = [...filtered]
-    const { key, dir } = sort
-    arr.sort((a, b) => {
-      let av, bv
-      if (key === 'address') {
-        av = (a.address || '').split('.').map(Number)
-        bv = (b.address || '').split('.').map(Number)
-        for (let i = 0; i < 4; i++) {
-          if ((av[i] || 0) !== (bv[i] || 0)) return dir === 'asc' ? (av[i] || 0) - (bv[i] || 0) : (bv[i] || 0) - (av[i] || 0)
+  // Precompute ends timestamp + display label; default order is ends-desc.
+  const tableRows = useMemo(() => {
+    return filtered
+      .map((r) => {
+        const ms = r.ends ? new Date(r.ends).getTime() : NaN
+        return {
+          ...r,
+          _endsMs: isNaN(ms) ? 0 : ms,
+          endsLabel: !isNaN(ms) ? new Date(ms).toLocaleString() : r.ends || '—',
         }
-        return 0
-      }
-      if (key === 'ends') {
-        av = a.ends ? new Date(a.ends).getTime() || 0 : 0
-        bv = b.ends ? new Date(b.ends).getTime() || 0 : 0
-        return dir === 'asc' ? av - bv : bv - av
-      }
-      av = a[key] || ''
-      bv = b[key] || ''
-      return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-    })
-    return arr
-  }, [filtered, sort])
+      })
+      .sort((a, b) => b._endsMs - a._endsMs)
+  }, [filtered])
 
-  function toggleSort(key) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
-  }
-
-  const headers = [
-    { key: 'address', label: 'Address' },
-    { key: 'hostname', label: 'Hostname' },
-    { key: 'ends', label: 'Ends' },
-    { key: 'hardware', label: 'Hardware' },
-    { key: 'state', label: 'State' },
+  const columns = [
+    { key: 'address', label: 'Address', mono: true, sortable: true, comparator: ipCompare },
+    { key: 'hostname', label: 'Hostname', sortable: true },
+    { key: 'endsLabel', label: 'Ends', mono: true, sortable: true, comparator: (a, b) => (a._endsMs || 0) - (b._endsMs || 0) },
+    { key: 'hardware', label: 'Hardware', mono: true, clip: 160, priority: 'low', sortable: true },
+    { key: 'state', label: 'State', sortable: true },
   ]
-
-  const now = Date.now()
 
   return (
     // span must live on the grid item — a bare wrapper div here collapsed the card;
@@ -207,42 +200,11 @@ function DhcpLeases({ dhcp, innerRef }) {
         <Skeleton h={200} />
       ) : dhcp.error || rows.length === 0 ? (
         <Empty />
-      ) : sorted.length === 0 ? (
+      ) : tableRows.length === 0 ? (
         <Empty>no leases match</Empty>
       ) : (
-        <div className="max-h-[420px] overflow-x-hidden overflow-y-auto mt-2.5">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                {headers.map((h) => (
-                  <th
-                    key={h.key}
-                    onClick={() => toggleSort(h.key)}
-                    className="sticky top-0 z-10 bg-panel text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 cursor-pointer select-none"
-                  >
-                    {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((r, i) => {
-                const endsMs = r.ends ? new Date(r.ends).getTime() : NaN
-                const isPast = !isNaN(endsMs) && endsMs < now
-                return (
-                  <tr key={`${r.address}|${r.hardware}|${r.ends}|${i}`}>
-                    <td className="py-2.5 px-2.5 border-b border-line font-mono whitespace-nowrap">{r.address || '—'}</td>
-                    <td className="py-2.5 px-2.5 border-b border-line break-words">{r.hostname || '—'}</td>
-                    <td className={`py-2.5 px-2.5 border-b border-line font-mono whitespace-nowrap ${isPast ? 'text-dim' : 'text-muted'}`}>
-                      {!isNaN(endsMs) ? new Date(endsMs).toLocaleString() : r.ends || '—'}
-                    </td>
-                    <td className="py-2.5 px-2.5 border-b border-line font-mono text-muted whitespace-nowrap">{r.hardware || '—'}</td>
-                    <td className="py-2.5 px-2.5 border-b border-line text-muted">{r.state || '—'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="mt-2.5">
+          <DataTable rows={tableRows} columns={columns} maxHeight={420} rowCap={150} stickyHeader emptyText="no leases match" />
         </div>
       )}
     </Card>
@@ -295,17 +257,58 @@ function ExhaustionTable({ subnets, hp }) {
 
   const top20 = sorted.slice(0, 20)
 
-  function toggleSort(key) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
+  // Normalize numerics + derive network/free so column keys match sort keys.
+  const tableRows = useMemo(
+    () =>
+      top20.map((s) => {
+        const util = Number(s.util) || 0
+        const used = Number(s.used) || 0
+        const free = (Number(s.total) || 0) - used
+        return { ...s, util, used, free, network: s.addr || s.cidr || '—' }
+      }),
+    [top20],
+  )
+
+  // Controlled sort: DataTable renders header arrows + reports clicks; the
+  // component still owns sorting (sort full set -> slice top20).
+  function onSort(next) {
+    setSort((s) => (s.key === next.key ? { key: next.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: next.key, dir: 'desc' }))
   }
 
-  const headers = [
-    { key: 'network', label: 'Network' },
-    { key: 'site', label: 'Site' },
-    { key: 'util', label: 'Utilization' },
-    { key: 'status', label: 'Status', noSort: true },
-    { key: 'used', label: 'Used' },
-    { key: 'free', label: 'Free' },
+  const columns = [
+    { key: 'network', label: 'Network', mono: true, sortable: true },
+    { key: 'site', label: 'Site', sortable: true },
+    {
+      key: 'util',
+      label: 'Utilization',
+      sortable: true,
+      width: '22%',
+      render: (_v, r) => {
+        const status = utilStatus(r.util)
+        return (
+          <div className="flex items-center gap-2">
+            <div className="h-[5px] rounded-full bg-line overflow-hidden flex-1 min-w-[70px]">
+              <div className="h-full" style={{ width: `${Math.min(100, r.util)}%`, background: status.color }} />
+            </div>
+            <span className="text-muted w-9 text-right">{r.util}%</span>
+          </div>
+        )
+      },
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (_v, r) => {
+        const status = utilStatus(r.util)
+        return (
+          <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: status.bg, color: status.fg }}>
+            {status.label}
+          </span>
+        )
+      },
+    },
+    { key: 'used', label: 'Used', align: 'right', sortable: true, render: (v) => <span className="text-muted">{(Number(v) || 0).toLocaleString()}</span> },
+    { key: 'free', label: 'Free', align: 'right', sortable: true, render: (v) => <span className="text-muted">{(Number(v) || 0).toLocaleString()} free</span> },
   ]
 
   return (
@@ -352,51 +355,9 @@ function ExhaustionTable({ subnets, hp }) {
       ) : top20.length === 0 ? (
         <Empty>no subnets match</Empty>
       ) : (
-        <table className="w-full border-collapse mt-2.5 text-sm">
-          <thead>
-            <tr>
-              {headers.map((h) => (
-                <th
-                  key={h.key}
-                  onClick={() => !h.noSort && toggleSort(h.key)}
-                  className={`text-left text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 ${h.noSort ? '' : 'cursor-pointer select-none'}`}
-                >
-                  {h.label}{sort.key === h.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {top20.map((s, i) => {
-              const util = Number(s.util) || 0
-              const used = Number(s.used) || 0
-              const free = (Number(s.total) || 0) - used
-              const status = utilStatus(util)
-              const network = s.addr || s.cidr || '—'
-              return (
-                <tr key={network + i}>
-                  <td className="py-2.5 px-2.5 border-b border-line font-mono">{network}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line">{s.site || '—'}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line" style={{ width: '22%' }}>
-                    <div className="flex items-center gap-2">
-                      <div className="h-[5px] rounded-full bg-line overflow-hidden flex-1 min-w-[70px]">
-                        <div className="h-full" style={{ width: `${Math.min(100, util)}%`, background: status.color }} />
-                      </div>
-                      <span className="text-muted w-9 text-right">{util}%</span>
-                    </div>
-                  </td>
-                  <td className="py-2.5 px-2.5 border-b border-line">
-                    <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: status.bg, color: status.fg }}>
-                      {status.label}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-2.5 border-b border-line text-muted">{used.toLocaleString()}</td>
-                  <td className="py-2.5 px-2.5 border-b border-line text-muted">{free.toLocaleString()} free</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <div className="mt-2.5">
+          <DataTable rows={tableRows} columns={columns} sort={sort} onSort={onSort} maxHeight={420} rowCap={150} />
+        </div>
       )}
     </Card>
   )
