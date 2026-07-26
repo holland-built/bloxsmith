@@ -114,7 +114,7 @@ function TopCapacityRisks({ subnets, loading }) {
     .sort((a, b) => a.free - b.free)
 
   const columns = [
-    { key: 'network', label: 'Network', mono: true, clip: 160 },
+    { key: 'network', label: 'Network', mono: true },
     { key: 'site', label: 'Site', keep: true },
     {
       key: 'util',
@@ -211,7 +211,7 @@ function DnsZoneIssues({ zones, loading }) {
         </span>
       ),
     },
-    { key: 'fqdn', label: 'Zone', mono: true, clip: 240 },
+    { key: 'fqdn', label: 'Zone', mono: true, grow: true },
     { key: 'issuesText', label: 'Issues' },
   ]
 

@@ -6,6 +6,16 @@ import { DataTable, FeedCard } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
 
+// ---------- helpers ----------
+
+// Matches the guard pattern used by Security.jsx's fmtDate; uses toLocaleString
+// (date + time) instead of date-only since job timestamps need time precision.
+function fmtDate(v) {
+  if (!v) return '—'
+  const ms = new Date(v).getTime()
+  return isNaN(ms) ? '—' : new Date(ms).toLocaleString()
+}
+
 // ---------- main ----------
 
 export default function Infra() {
@@ -48,7 +58,10 @@ export default function Infra() {
           feed={health}
           count
           columns={[
-            { key: 'name', label: 'Name' },
+            // Card is narrow (measured ~457px); Status/Version already fit, so
+            // Name absorbs the leftover width and clips the longest tokens —
+            // there's no room to give it more.
+            { key: 'name', label: 'Name', grow: true },
             { key: 'status', label: 'Status', badge: true },
             { key: 'version', label: 'Version', mono: true },
           ]}
@@ -75,10 +88,11 @@ export default function Infra() {
           feed={jobs}
           count
           columns={[
-            { key: 'created_at', label: 'Created', mono: true },
-            { key: 'type', label: 'Type' },
+            { key: 'created_at', label: 'Created', mono: true, render: (v) => fmtDate(v) },
+            { key: 'type', label: 'Type', grow: true },
             { key: 'status', label: 'Status', badge: true },
-            { key: 'user', label: 'User' },
+            // Opaque service-principal string; maxCh is a measured ceiling, not a guess.
+            { key: 'user', label: 'User', maxCh: 20 },
           ]}
         />
         <FeedCard
