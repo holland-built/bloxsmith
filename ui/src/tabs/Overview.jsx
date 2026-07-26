@@ -18,17 +18,23 @@ export default function Overview() {
   const subnets = data.data?.subnets ?? []
   const leases = data.data?.leases ?? []
   const hosts = data.data?.hosts ?? []
+  const totals = data.data?._totals ?? {}
 
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Overview</h1>
+      {totals.degraded && (
+        <div className="text-[11px] text-dim mb-2">
+          some estate-wide counts could not be fetched this cycle — figures below marked as provisional
+        </div>
+      )}
       <CardGrid>
         <DnsHero dns={dns} />
-        <KpiStack subnets={subnets} leases={leases} />
-        <TopUtilization subnets={subnets} />
-        <SubnetHeatmap subnets={subnets} />
-        <HostStatus hosts={hosts} />
-        <SubnetTable subnets={subnets} />
+        <KpiStack subnets={subnets} leases={leases} totals={totals} />
+        <TopUtilization subnets={subnets} totals={totals} />
+        <SubnetHeatmap subnets={subnets} totals={totals} />
+        <HostStatus hosts={hosts} totals={totals} />
+        <SubnetTable subnets={subnets} totals={totals} />
         <LicenseInventory licenses={licenses} />
       </CardGrid>
     </div>
@@ -164,16 +170,23 @@ function DnsHero({ dns }) {
 
 // ---------- kpi stack ----------
 
-function KpiStack({ subnets, leases }) {
+function KpiStack({ subnets, leases, totals }) {
   const { COLORS } = useChartTheme()
   const utils = [...subnets.map((s) => Number(s.util) || 0)].sort((a, b) => a - b)
   const activeLeases = leases.filter((l) => l.state === 'active').length
-  const critSubnets = subnets.filter((s) => Number(s.util) >= 90).length
+
+  const hasSubnetsTotal = typeof totals.subnets === 'number'
+  const hasCritTotal = typeof totals.subnetsCrit === 'number'
+  const rowCritSubnets = subnets.filter((s) => Number(s.util) >= 90).length
 
   const cells = [
     { label: 'Active Leases', value: activeLeases.toLocaleString(), color: COLORS.accent, hash: 'network?focus=leases' },
-    { label: 'Subnets', value: subnets.length.toLocaleString(), color: COLORS.purple, hash: 'network' },
-    { label: 'Subnets ≥90%', value: critSubnets.toLocaleString(), color: COLORS.crit, hash: 'network?minUtil=90' },
+    hasSubnetsTotal
+      ? { label: 'Subnets', value: totals.subnets.toLocaleString(), color: COLORS.purple, hash: 'network' }
+      : { label: 'Subnets (loaded rows)', value: subnets.length.toLocaleString(), color: COLORS.purple, hash: 'network' },
+    hasCritTotal
+      ? { label: 'Subnets ≥90%', value: totals.subnetsCrit.toLocaleString(), color: COLORS.crit, hash: 'network?minUtil=90' }
+      : { label: 'Subnets ≥90% (loaded rows)', value: rowCritSubnets.toLocaleString(), color: COLORS.crit, hash: 'network?minUtil=90' },
   ]
 
   return (
@@ -192,7 +205,7 @@ function KpiStack({ subnets, leases }) {
           {utils.length > 1 ? (
             <>
               <Sparkline values={utils} color={c.color} />
-              <div className="text-[10px] text-dim mt-0.5">util distribution (sorted), not history</div>
+              <div className="text-[10px] text-dim mt-0.5">util of loaded rows (sorted), not history or estate</div>
             </>
           ) : (
             <div className="h-[30px]" />
@@ -205,7 +218,7 @@ function KpiStack({ subnets, leases }) {
 
 // ---------- top utilization ----------
 
-function TopUtilization({ subnets }) {
+function TopUtilization({ subnets, totals = {} }) {
   const { COLORS, TT } = useChartTheme()
   const theme = useThemeColors()
   // Rank by addresses USED, not util% — util ranking is a wall of 100% /32 infra links
@@ -214,9 +227,12 @@ function TopUtilization({ subnets }) {
     .filter((s) => s.addr || s.cidr)
     .sort((a, b) => (Number(b.used) || 0) - (Number(a.used) || 0))
     .slice(0, 12)
+  const estateLabel = typeof totals.subnets === 'number'
+    ? `top 12 of ${totals.subnets.toLocaleString()} subnets`
+    : `top 12 · estate total unknown`
 
   return (
-    <Card span={2} title="Top Consumers" right={<span className="text-[11px] text-muted">addresses used · top 12</span>}>
+    <Card span={2} title="Top Consumers" right={<span className="text-[11px] text-muted">addresses used · {estateLabel}</span>}>
       {top.length === 0 ? (
         <Empty />
       ) : (
@@ -253,7 +269,7 @@ function TopUtilization({ subnets }) {
 
 // ---------- subnet heatmap ----------
 
-function SubnetHeatmap({ subnets }) {
+function SubnetHeatmap({ subnets, totals = {} }) {
   const { COLORS } = useChartTheme()
   // Worst N only — a cell per subnet at 5k subnets = sub-pixel rects (invisible). Cap + say so.
   const CAP = 288 // 24 x 12
@@ -265,9 +281,13 @@ function SubnetHeatmap({ subnets }) {
   const gap = 0.6
   const cw = 100 / cols
   const ch = 100 / rows
+  const estateTotal = typeof totals.subnets === 'number' ? totals.subnets.toLocaleString() : null
+  const heatmapLabel = cells.length < all.length
+    ? `worst ${cells.length} of ${all.length.toLocaleString()} loaded${estateTotal ? ` (${estateTotal} in estate)` : ''}`
+    : `util by subnet — ${cells.length.toLocaleString()} loaded${estateTotal ? ` of ${estateTotal}` : ''}`
 
   return (
-    <Card span={2} title="Subnet Heatmap" right={<span className="text-[11px] text-muted">{all.length > CAP ? `worst ${CAP} of ${all.length.toLocaleString()}` : 'util by subnet'}</span>}>
+    <Card span={2} title="Subnet Heatmap" right={<span className="text-[11px] text-muted">{heatmapLabel}</span>}>
       {cells.length === 0 ? (
         <Empty />
       ) : (
@@ -313,7 +333,7 @@ function SubnetHeatmap({ subnets }) {
 
 // ---------- host status ----------
 
-function HostStatus({ hosts }) {
+function HostStatus({ hosts, totals = {} }) {
   const { COLORS, TT } = useChartTheme()
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Other: 0 }
   for (const h of hosts) {
@@ -324,7 +344,9 @@ function HostStatus({ hosts }) {
     else buckets.Other++
   }
   const colorMap = { Active: COLORS.accent, Degraded: COLORS.warn, Offline: COLORS.crit, Other: COLORS.other }
-  const total = hosts.length
+  const hasHostTotal = typeof totals.hosts === 'number'
+  const total = hasHostTotal ? totals.hosts : hosts.length
+  const loaded = hosts.length
   const pieData = Object.entries(buckets)
     .filter(([, v]) => v > 0)
     .map(([name, value]) => ({ name, value, color: colorMap[name] }))
@@ -359,7 +381,7 @@ function HostStatus({ hosts }) {
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-lg font-semibold">{total.toLocaleString()}</span>
-              <span className="text-dim text-[11px]">hosts</span>
+              <span className="text-dim text-[11px]">{hasHostTotal ? 'hosts' : 'hosts (loaded)'}</span>
             </div>
           </div>
           <div className="flex-1 flex flex-col gap-2">
@@ -374,11 +396,14 @@ function HostStatus({ hosts }) {
               >
                 <i className="w-2 h-2 rounded-sm inline-block" style={{ background: d.color }} />
                 <span className="text-muted flex-1">{d.name}</span>
-                <b>{((d.value / total) * 100).toFixed(0)}%</b>
+                <b>{((d.value / loaded) * 100).toFixed(0)}%</b>
               </div>
             ))}
           </div>
         </div>
+      )}
+      {hasHostTotal && loaded !== total && (
+        <div className="text-[10px] text-dim mt-2">breakdown of {loaded.toLocaleString()} loaded of {total.toLocaleString()} total</div>
       )}
     </Card>
   )
@@ -386,7 +411,7 @@ function HostStatus({ hosts }) {
 
 // ---------- table ----------
 
-function SubnetTable({ subnets }) {
+function SubnetTable({ subnets, totals = {} }) {
   const [filter, setFilter] = useState('')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
@@ -502,7 +527,11 @@ function SubnetTable({ subnets }) {
       note="excl. /29–/32 infra links"
       right={
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted tabular-nums">{rows.length.toLocaleString()}</span>
+          <span className="text-[11px] text-muted tabular-nums">
+            {typeof totals.subnets === 'number'
+              ? `showing ${rows.length.toLocaleString()} of ${totals.subnets.toLocaleString()}`
+              : `${rows.length.toLocaleString()} loaded`}
+          </span>
           <input
             aria-label="Filter subnets"
             placeholder="Filter…"

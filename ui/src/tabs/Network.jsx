@@ -28,6 +28,7 @@ export default function Network() {
   const hp = useHashParams()
 
   const subnets = data.data?.subnets ?? []
+  const totals = data.data?._totals
 
   const leasesRef = useRef(null)
   useEffect(() => {
@@ -40,7 +41,7 @@ export default function Network() {
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Network</h1>
       <CardGrid>
-        <UtilBands subnets={subnets} />
+        <UtilBands subnets={subnets} totals={totals} />
         <IpamSpaces ipam={ipam} />
         <DhcpLeases dhcp={dhcp} innerRef={leasesRef} />
         <ExhaustionTable subnets={subnets} hp={hp} />
@@ -51,7 +52,7 @@ export default function Network() {
 
 // ---------- utilization distribution ----------
 
-function UtilBands({ subnets }) {
+function UtilBands({ subnets, totals }) {
   const { COLORS, TT } = useChartTheme()
   const { grid, tick } = useThemeColors()
   const BANDS = [
@@ -65,9 +66,13 @@ function UtilBands({ subnets }) {
     color: b.color,
   }))
   const hasData = subnets.length > 0
+  const estateTotal = Number.isFinite(totals?.subnets) ? totals.subnets : null
+  const scopeLabel = estateTotal !== null
+    ? `${subnets.length.toLocaleString()} loaded of ${estateTotal.toLocaleString()} total`
+    : `${subnets.length.toLocaleString()} loaded (estate total unavailable)`
 
   return (
-    <Card span={3} title="Utilization Distribution" right={<span className="text-[11px] text-muted">subnets by band</span>}>
+    <Card span={3} title="Utilization Distribution" right={<span className="text-[11px] text-muted">{scopeLabel}</span>}>
       {!hasData ? (
         <Empty />
       ) : (

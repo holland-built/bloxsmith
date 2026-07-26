@@ -30,6 +30,7 @@ export default function Infra() {
   const theme = useThemeColors()
   const hp = useHashParams()
   const hosts = data.data?.hosts ?? []
+  const totalHosts = data.data?._totals?.hosts
   const maintEnabled = maint.data?.enabled
   const maintOk = maint.data?.status !== 'error' && !maint.error && maintEnabled != null
 
@@ -50,7 +51,7 @@ export default function Infra() {
         )}
       </div>
       <CardGrid>
-        <HostStatus hosts={hosts} />
+        <HostStatus hosts={hosts} totalHosts={totalHosts} />
         <FeedCard
           span={2}
           title="Host Health"
@@ -80,7 +81,7 @@ export default function Infra() {
           ]}
         />
         <DiscoveryStatus feed={discovery} />
-        <HostTable hosts={hosts} status={hp.status} />
+        <HostTable hosts={hosts} status={hp.status} totalHosts={totalHosts} />
         <FeedCard
           span={3}
           title="Jobs"
@@ -113,7 +114,7 @@ export default function Infra() {
 
 // ---------- host status ----------
 
-function HostStatus({ hosts }) {
+function HostStatus({ hosts, totalHosts }) {
   const { COLORS, TT } = useChartTheme()
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Other: 0 }
   for (const h of hosts) {
@@ -124,7 +125,12 @@ function HostStatus({ hosts }) {
     else buckets.Other++
   }
   const colorMap = { Active: COLORS.accent, Degraded: COLORS.warn, Offline: COLORS.crit, Other: COLORS.other }
-  const total = hosts.length
+  // Headline uses the real estate total when the backend has it; the pie is
+  // always built from the fetched rows only (loaded !== estate), so its
+  // slices are shown as a % of rows loaded, never scaled to invent the gap.
+  const loaded = hosts.length
+  const total = totalHosts ?? loaded
+  const partial = totalHosts != null && totalHosts !== loaded
   const pieData = Object.entries(buckets)
     .filter(([, v]) => v > 0)
     .map(([name, value]) => ({ name, value, color: colorMap[name] }))
@@ -148,7 +154,7 @@ function HostStatus({ hosts }) {
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-lg font-semibold">{total.toLocaleString()}</span>
-              <span className="text-dim text-[11px]">hosts</span>
+              <span className="text-dim text-[11px]">{totalHosts == null ? 'hosts (loaded)' : 'hosts'}</span>
             </div>
           </div>
           <div className="flex-1 flex flex-col gap-2">
@@ -156,9 +162,14 @@ function HostStatus({ hosts }) {
               <div key={d.name} className="flex items-center gap-1.5 text-xs">
                 <i className="w-2 h-2 rounded-sm inline-block" style={{ background: d.color }} />
                 <span className="text-muted flex-1">{d.name}</span>
-                <b>{((d.value / total) * 100).toFixed(0)}%</b>
+                <b>{((d.value / loaded) * 100).toFixed(0)}%</b>
               </div>
             ))}
+            {partial && (
+              <div className="text-dim text-[10px] leading-tight">
+                breakdown of {loaded.toLocaleString()} loaded of {total.toLocaleString()} total
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -246,7 +257,7 @@ const HOST_COLUMNS = [
   { key: 'type', label: 'Type', priority: 'low' },
 ]
 
-function HostTable({ hosts, status }) {
+function HostTable({ hosts, status, totalHosts }) {
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
   const [type, setType] = useState('')
@@ -265,9 +276,12 @@ function HostTable({ hosts, status }) {
     })
   }, [hosts, filter, type, statusFilter])
 
+  const total = totalHosts ?? hosts.length
   const countLabel = filtered.length === hosts.length
-    ? `${hosts.length.toLocaleString()} hosts`
-    : `${filtered.length.toLocaleString()} of ${hosts.length.toLocaleString()}`
+    ? (totalHosts != null && totalHosts !== hosts.length
+        ? `${hosts.length.toLocaleString()} loaded of ${total.toLocaleString()} hosts`
+        : `${hosts.length.toLocaleString()} hosts`)
+    : `${filtered.length.toLocaleString()} of ${hosts.length.toLocaleString()} loaded (${total.toLocaleString()} total)`
 
   return (
     <Card

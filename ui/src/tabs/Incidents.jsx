@@ -70,6 +70,9 @@ export default function Incidents() {
 
   const categories = incApi.data?.incidents ?? []
   const signals = Array.isArray(incApi.data?.signals) ? incApi.data.signals : []
+  // signals is capped server-side (SignalsCap); signals_total is the true pre-cap count.
+  const signalsTotal = Number.isFinite(incApi.data?.signals_total) ? incApi.data.signals_total : signals.length
+  const signalsTruncated = !!incApi.data?.signals_truncated
 
   const actionsRows = Array.isArray(actionsApi.data)
     ? actionsApi.data
@@ -117,9 +120,11 @@ export default function Incidents() {
       <h1 className="text-lg font-semibold tracking-tight mb-3">Incidents</h1>
       <CardGrid>
         <CategoryChips categories={categories} loading={incApi.loading} category={category} onCategory={setCategory} />
-        <SeverityKpis signals={signals} loading={incApi.loading} />
+        <SeverityKpis signals={signals} truncated={signalsTruncated} loading={incApi.loading} />
         <IncidentsTable
           signals={signals}
+          signalsTotal={signalsTotal}
+          signalsTruncated={signalsTruncated}
           loading={incApi.loading}
           error={incApi.error}
           category={category}
@@ -181,7 +186,7 @@ function CategoryChips({ categories, loading, category, onCategory }) {
 
 // ---------- severity kpi row ----------
 
-function SeverityKpis({ signals, loading }) {
+function SeverityKpis({ signals, truncated, loading }) {
   const { COLORS } = useChartTheme()
   const counts = { critical: 0, high: 0, medium: 0, low: 0 }
   for (const s of signals) {
@@ -196,7 +201,11 @@ function SeverityKpis({ signals, loading }) {
   ]
 
   return (
-    <Card span={6} className="flex flex-row items-stretch justify-between">
+    <Card
+      span={6}
+      className="flex flex-row items-stretch justify-between"
+      note={truncated ? 'of shown signals — list is capped' : undefined}
+    >
       {loading ? (
         <Skeleton h={60} />
       ) : (
@@ -215,7 +224,7 @@ function SeverityKpis({ signals, loading }) {
 
 // ---------- incidents table ----------
 
-function IncidentsTable({ signals, loading, error, category, onCategory, acks, onToggleAck, onClearAcks }) {
+function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, error, category, onCategory, acks, onToggleAck, onClearAcks }) {
   const { COLORS } = useChartTheme()
   const [filter, setFilter] = useState('')
 
@@ -286,7 +295,7 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
           <button onClick={onClearAcks} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
             Clear acks
           </button>
-          <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span>
+          <span className="text-[11px] text-muted">{signalsTotal.toLocaleString()}</span>
         </div>
       }
     >
@@ -299,14 +308,21 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
       ) : rows.length === 0 ? (
         <Empty>no signals match</Empty>
       ) : (
-        <DataTable
-          rows={rows}
-          columns={columns}
-          maxHeight={420}
-          rowCap={150}
-          rowKey={(s) => ackKey(s)}
-          rowStyle={(s) => ({ opacity: acks[ackKey(s)] ? 0.45 : 1 })}
-        />
+        <>
+          {signalsTruncated && (
+            <div className="text-[11px] text-muted mb-1.5">
+              showing {signals.length.toLocaleString()} of {signalsTotal.toLocaleString()} signals — filter to narrow
+            </div>
+          )}
+          <DataTable
+            rows={rows}
+            columns={columns}
+            maxHeight={420}
+            rowCap={150}
+            rowKey={(s) => ackKey(s)}
+            rowStyle={(s) => ({ opacity: acks[ackKey(s)] ? 0.45 : 1 })}
+          />
+        </>
       )}
     </Card>
   )
