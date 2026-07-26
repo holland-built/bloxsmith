@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -42,10 +43,12 @@ const applyCooldown = 60 * time.Second
 // release asset (or a decompression bomb) must not be able to exhaust memory,
 // so every read is bounded.
 const (
-	maxArchiveBytes  = 200 << 20 // compressed archive
-	maxChecksumBytes = 4 << 20   // checksums.txt
-	maxJSONBytes     = 64 << 20  // GitHub release JSON
-	maxBinaryBytes   = 200 << 20 // a single extracted file
+	maxArchiveBytes        = 200 << 20 // compressed archive
+	maxChecksumBytes       = 4 << 20   // checksums.txt
+	maxJSONBytes           = 64 << 20  // GitHub release JSON
+	maxBinaryBytes         = 200 << 20 // a single extracted file
+	maxTemplateFileBytes   = 4 << 20   // a single template file (small YAML)
+	maxTemplatesTotalBytes = 64 << 20  // all template files combined
 )
 
 // updateProgress is the pollable {phase,pct} status the frontend reads from
@@ -258,6 +261,140 @@ func baseName(p string) string {
 	return p
 }
 
+// extractTemplates pulls every "templates/…" entry out of the downloaded
+// archive and installs it under destDir/templates, atomically replacing
+// whatever was there before (and pruning templates removed upstream). It
+// extracts into a fresh destDir/templates.new sibling first and only swaps
+// that into place once extraction fully succeeds; on ANY error the temp dir
+// is removed and the existing templates/ is left untouched. This is a
+// best-effort refresh called from applyLatest after the binary swap — the
+// archive itself is already checksum-verified, but entry paths are still
+// validated (defense in depth) and every read is size-capped.
+func extractTemplates(archive []byte, isZip bool, destDir string) error {
+	tmpDir := filepath.Join(destDir, "templates.new")
+	if err := os.RemoveAll(tmpDir); err != nil {
+		return fmt.Errorf("clearing %s: %w", tmpDir, err)
+	}
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		return err
+	}
+
+	var total int64
+	write := func(entryPath string, r io.Reader, declaredSize int64) error {
+		rel, err := safeTemplateRel(entryPath)
+		if err != nil {
+			return err
+		}
+		if declaredSize > maxTemplateFileBytes {
+			return fmt.Errorf("template entry %s too large (%d bytes)", entryPath, declaredSize)
+		}
+		data, err := io.ReadAll(io.LimitReader(r, maxTemplateFileBytes+1))
+		if err != nil {
+			return err
+		}
+		if int64(len(data)) > maxTemplateFileBytes {
+			return fmt.Errorf("template entry %s exceeds size cap of %d bytes", entryPath, int64(maxTemplateFileBytes))
+		}
+		total += int64(len(data))
+		if total > maxTemplatesTotalBytes {
+			return fmt.Errorf("templates total exceeds size cap of %d bytes", int64(maxTemplatesTotalBytes))
+		}
+		dest := filepath.Join(tmpDir, rel)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(dest, data, 0o644)
+	}
+
+	var extractErr error
+	if isZip {
+		extractErr = extractTemplatesZip(archive, write)
+	} else {
+		extractErr = extractTemplatesTarGz(archive, write)
+	}
+	if extractErr != nil {
+		_ = os.RemoveAll(tmpDir)
+		return extractErr
+	}
+
+	final := filepath.Join(destDir, "templates")
+	if err := os.RemoveAll(final); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return err
+	}
+	if err := os.Rename(tmpDir, final); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return err
+	}
+	return nil
+}
+
+// safeTemplateRel strips the "templates/" prefix from a slash-normalized
+// archive entry path and returns its path relative to the templates root,
+// rejecting absolute paths and any path that escapes the root via "..".
+func safeTemplateRel(entryPath string) (string, error) {
+	rel := strings.TrimPrefix(entryPath, "templates/")
+	clean := filepath.Clean(rel)
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("archive entry %s escapes templates root", entryPath)
+	}
+	return clean, nil
+}
+
+// extractTemplatesZip walks a zip archive, invoking write for every regular
+// file entry under templates/. Directory entries (trailing "/") are skipped.
+func extractTemplatesZip(archive []byte, write func(entryPath string, r io.Reader, size int64) error) error {
+	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		return err
+	}
+	for _, f := range zr.File {
+		norm := strings.ReplaceAll(f.Name, "\\", "/")
+		if !strings.HasPrefix(norm, "templates/") || strings.HasSuffix(norm, "/") {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		err = write(norm, rc, int64(f.UncompressedSize64))
+		rc.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// extractTemplatesTarGz walks a tar.gz archive, invoking write for every
+// regular file entry under templates/. Directory (and other non-regular)
+// entries are skipped.
+func extractTemplatesTarGz(archive []byte, write func(entryPath string, r io.Reader, size int64) error) error {
+	gz, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		norm := strings.ReplaceAll(hdr.Name, "\\", "/")
+		if hdr.Typeflag != tar.TypeReg || !strings.HasPrefix(norm, "templates/") {
+			continue
+		}
+		if err := write(norm, tr, hdr.Size); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // applyLatest runs the whole download -> verify -> swap for the newest release.
 // It advances updateProgress so the frontend can poll GET /api/update/status.
 func applyLatest() error {
@@ -326,6 +463,17 @@ func applyLatest() error {
 		// (the swap hadn't committed) — either way the old binary is still in place.
 		return fmt.Errorf("apply failed; old binary unchanged or restored: %v", err)
 	}
+
+	// Best-effort templates refresh: the archive also carries templates/, which
+	// extractBinary above never touched, so a self-update alone never refreshed
+	// them. The binary is already swapped at this point, so any failure here
+	// must not fail the overall update — it's silently retried on the next
+	// release.
+	exe, err := os.Executable()
+	if err != nil {
+		exe = os.Args[0]
+	}
+	_ = extractTemplates(archBytes, runtime.GOOS == "windows", filepath.Dir(exe))
 
 	progress.set("restarting", 95)
 	// Graceful hand-off: spawn the freshly-swapped binary, and only once it has
