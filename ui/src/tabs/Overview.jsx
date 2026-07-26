@@ -41,8 +41,8 @@ function LicenseInventory({ licenses }) {
   const rows = licenses.data?.licenses ?? []
 
   const columns = [
-    { key: 'name', label: 'Name', clip: 260 },
-    { key: 'sku', label: 'SKU', mono: true, clip: 180 },
+    { key: 'name', label: 'Name', grow: true },
+    { key: 'sku', label: 'SKU', mono: true, grow: true },
     {
       key: 'state',
       label: 'State',
@@ -461,13 +461,13 @@ function SubnetTable({ subnets }) {
   }
 
   const columns = [
-    { key: 'network', label: 'Network', mono: true, clip: 200, sortable: true },
+    { key: 'network', label: 'Network', mono: true, sortable: true },
     { key: 'site', label: 'Site', sortable: true },
     {
       key: 'util',
       label: 'Utilization',
       sortable: true,
-      width: '26%',
+      grow: true,
       render: (util, r) => (
         <div className="flex items-center gap-2">
           <div className="h-[5px] rounded-full bg-line overflow-hidden flex-1 min-w-[70px]">

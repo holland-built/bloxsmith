@@ -163,9 +163,9 @@ function DhcpLeases({ dhcp, innerRef }) {
 
   const columns = [
     { key: 'address', label: 'Address', mono: true, sortable: true, comparator: ipCompare },
-    { key: 'hostname', label: 'Hostname', sortable: true },
+    { key: 'hostname', label: 'Hostname', grow: true, sortable: true },
     { key: 'endsLabel', label: 'Ends', mono: true, sortable: true, comparator: (a, b) => (a._endsMs || 0) - (b._endsMs || 0) },
-    { key: 'hardware', label: 'Hardware', mono: true, clip: 160, priority: 'low', sortable: true },
+    { key: 'hardware', label: 'Hardware', mono: true, priority: 'low', sortable: true },
     { key: 'state', label: 'State', sortable: true },
   ]
 
@@ -279,7 +279,7 @@ function ExhaustionTable({ subnets, hp }) {
       key: 'util',
       label: 'Utilization',
       sortable: true,
-      width: '22%',
+      grow: true,
       render: (_v, r) => {
         const status = utilStatus(r.util)
         return (

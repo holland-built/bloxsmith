@@ -250,7 +250,7 @@ function TriageInbox({ hub, events, acks, setAcks }) {
         )
       },
     },
-    { key: 'qname', label: 'Query', mono: true, clip: 240, sortable: true },
+    { key: 'qname', label: 'Query', mono: true, grow: true, sortable: true },
     { key: 'policy_action', label: 'Action', sortable: true },
     {
       key: 'event_time',
@@ -316,7 +316,7 @@ function LookalikeTable({ lookalikes }) {
   const rows = Array.isArray(d.domains) ? d.domains : []
 
   const columns = [
-    { key: 'lookalike', label: 'Lookalike', mono: true, clip: 240, sortable: true },
+    { key: 'lookalike', label: 'Lookalike', mono: true, grow: true, sortable: true },
     { key: 'target', label: 'Target', sortable: true },
     {
       key: 'suspicious',
@@ -444,7 +444,8 @@ function InsightsPanel({ insights }) {
     key: k,
     label: k.replace(/_/g, ' '),
     sortable: true,
-    ...(i === 0 ? { mono: true, clip: 160 } : {}),
+    ...(i === 0 ? { mono: true, grow: true } : {}),
+    ...(k === 'id' ? { maxCh: 14 } : {}), // measured: bare 36-char UUID overflows the card; cap it
   }))
 
   return (
@@ -497,7 +498,7 @@ function ExposuresPanel({ exposures }) {
   const count = exposures.data?.data?.count ?? rows.length
 
   const columns = [
-    { key: 'title', label: 'Title', clip: 320, sortable: true },
+    { key: 'title', label: 'Title', grow: true, sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'first_seen_at', label: 'First Seen', sortable: true, render: (v) => fmtDate(v) },
     { key: 'last_seen_at', label: 'Last Seen', sortable: true, render: (v) => fmtDate(v) },
@@ -525,7 +526,7 @@ function AssetRiskPanel({ assetRisk }) {
   )
 
   const columns = [
-    { key: 'domain_name', label: 'Domain', mono: true, clip: 200, sortable: true },
+    { key: 'domain_name', label: 'Domain', mono: true, grow: true, sortable: true },
     { key: 'ip_address', label: 'IP', mono: true, sortable: true },
     { key: 'asset_type', label: 'Type', sortable: true },
     { key: 'exposures', label: 'Exposures', align: 'right', mono: true, sortable: true },
@@ -557,7 +558,7 @@ function ExposedSurfacePanel({ hostnames, ips }) {
   const bothEmpty = hRows.length === 0 && iRows.length === 0
 
   const SAMPLE = 25
-  const hCols = [{ key: 'hostname', label: 'Hostname', mono: true, clip: 320 }]
+  const hCols = [{ key: 'hostname', label: 'Hostname', mono: true, grow: true }]
   const iCols = [{ key: 'ip', label: 'IP', mono: true }]
 
   return (

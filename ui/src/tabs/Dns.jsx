@@ -131,8 +131,8 @@ function DnsServices({ services }) {
 
   const columns = [
     { key: 'name', label: 'Name' },
-    { key: 'comment', label: 'Comment' },
-    { key: 'pool_id', label: 'Pool ID', mono: true, clip: 160 },
+    { key: 'comment', label: 'Comment', grow: true },
+    { key: 'pool_id', label: 'Pool ID', mono: true },
   ]
 
   return (
@@ -238,7 +238,7 @@ function ZoneTable({ zones, issuesOnly }) {
   }), [sorted, COLORS])
 
   const columns = [
-    { key: 'fqdn', label: 'Zone', mono: true, keep: true, clip: 240, sortable: true },
+    { key: 'fqdn', label: 'Zone', mono: true, keep: true, grow: true, sortable: true },
     { key: 'view', label: 'View', sortable: true },
     { key: 'records', label: 'Records', align: 'right', hideWhenConstant: true, sortable: true },
     { key: 'ttl', label: 'TTL', mono: true, sortable: true },
@@ -323,8 +323,8 @@ function DnssecHealth({ dnssec }) {
   }))
 
   const columns = [
-    { key: 'fqdn', label: 'Zone', mono: true, clip: 240 },
-    { key: 'view', label: 'View', mono: true, clip: 160 },
+    { key: 'fqdn', label: 'Zone', mono: true, grow: true },
+    { key: 'view', label: 'View', mono: true, maxCh: 22 }, // measured: opaque resource path overflows the card; cap it
     { key: 'dnssec_signing_policy', label: 'Signing Policy' },
   ]
 
@@ -391,7 +391,7 @@ function RpzPanel({ rpz }) {
   }))
 
   const columns = [
-    { key: 'fqdn', label: 'Zone', mono: true, clip: 240 },
+    { key: 'fqdn', label: 'Zone', mono: true, grow: true },
     { key: 'severity', label: 'Severity' },
     { key: 'policy_override', label: 'Policy Override' },
     { key: 'type', label: 'Type' },
@@ -427,7 +427,7 @@ function DtcLbdnPanel({ dtcLbdn }) {
   }))
 
   const columns = [
-    { key: 'name', label: 'Name', mono: true, clip: 220 },
+    { key: 'name', label: 'Name', mono: true, grow: true },
     { key: 'dtc_policy', label: 'Policy' },
     { key: 'precedence', label: 'Precedence', align: 'right' },
     { key: 'ttl', label: 'TTL', mono: true, align: 'right' },
