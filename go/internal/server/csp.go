@@ -32,11 +32,23 @@ func (d *Deps) registerCSPRoutes(mux *http.ServeMux) {
 	tile("/api/csp/ipam-util", d.Dashboard.CSPIpamUtil)
 	tile("/api/csp/dhcp-leases", d.Dashboard.CSPDHCPLeases)
 	tile("/api/csp/license-alerts", d.Dashboard.CSPLicenseAlerts)
+	tile("/api/csp/dnssec", d.Dashboard.CSPDnssec)
+	tile("/api/csp/rpz", d.Dashboard.CSPRpz)
+	tile("/api/csp/dtc-lbdn", d.Dashboard.CSPDtcLbdn)
 
 	mux.HandleFunc("GET /api/csp-audit", func(w http.ResponseWriter, r *http.Request) {
 		defer d.recover500(w, r, "/api/csp-audit")
 		q := r.URL.Query()
 		d.json(w, r, 200, d.Dashboard.CSPAudit(
 			q.Get("q"), q.Get("kind"), q.Get("since"), q.Get("until")))
+	})
+
+	mux.HandleFunc("GET /api/csp/discovery-status", func(w http.ResponseWriter, r *http.Request) {
+		defer d.recover500(w, r, "/api/csp/discovery-status")
+		d.json(w, r, 200, d.Dashboard.CSPDiscoveryStatus(r.Context()))
+	})
+	mux.HandleFunc("GET /api/csp/asset-insights", func(w http.ResponseWriter, r *http.Request) {
+		defer d.recover500(w, r, "/api/csp/asset-insights")
+		d.json(w, r, 200, d.Dashboard.CSPAssetInsights(r.Context()))
 	})
 }

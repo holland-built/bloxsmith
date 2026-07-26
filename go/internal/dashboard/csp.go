@@ -352,15 +352,28 @@ func normExposedIPs(body any) []map[string]any {
 	return out
 }
 
+// normLicenseAlerts shapes /licensing/v1/licenses + user_alerts. The live
+// license payload's real column set is: account_id, amended_at, guardrails,
+// id, name, packages, security_facets, sku, state — but "sku" is itself a
+// nested object ({sku, end_date, start_date, quantity, evaluation, ...}),
+// not a string. Expiry lives at sku.end_date, which is why it is absent from
+// the flat top-level column list. amended_at/guardrails/security_facets are
+// frequently null in live data.
 func normLicenseAlerts(licenses, alerts []any) ([]map[string]any, []map[string]any) {
 	lic := make([]map[string]any, 0, len(licenses))
 	for _, item := range licenses {
 		l := asMap(item)
+		sku := asMap(l["sku"])
 		lic = append(lic, map[string]any{
-			"id":     idOf(l["id"]),
-			"type":   orStr(l["license_type"], l["type"], ""),
-			"state":  getStr(l["state"]),
-			"expiry": orStr(l["expiration_date"], l["expiry"], ""),
+			"id":         idOf(l["id"]),
+			"name":       getStr(l["name"]),
+			"sku":        getStr(sku["sku"]),
+			"state":      getStr(l["state"]),
+			"packages":   joinPackages(l["packages"]),
+			"amended_at": getStr(l["amended_at"]),
+			"expiry":     getStr(sku["end_date"]),
+			"quantity":   toInt(sku["quantity"]),
+			"evaluation": truthy(sku["evaluation"]),
 		})
 	}
 	al := make([]map[string]any, 0, len(alerts))
@@ -376,7 +389,123 @@ func normLicenseAlerts(licenses, alerts []any) ([]map[string]any, []map[string]a
 	return lic, al
 }
 
+// joinPackages renders the license "packages" field for display: a list of
+// package objects ({id, name, properties}) is comma-joined on each item's
+// "name" (never Go's default []interface{}/map formatting), a plain string
+// passes through, a list of plain strings is comma-joined as-is, anything
+// else (including null) is "".
+func joinPackages(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case []any:
+		parts := make([]string, 0, len(t))
+		for _, p := range t {
+			if s, ok := p.(string); ok {
+				if s != "" {
+					parts = append(parts, s)
+				}
+				continue
+			}
+			if s := getStr(asMap(p)["name"]); s != "" {
+				parts = append(parts, s)
+			}
+		}
+		return strings.Join(parts, ", ")
+	}
+	return ""
+}
+
+// normDNSSEC shapes /api/ddi/v1/dns/auth_zone into id/fqdn/view/dnssec_status/
+// dnssec_signing_policy rows, plus a per-status summary count.
+func normDNSSEC(raw []any) ([]map[string]any, map[string]int) {
+	out := make([]map[string]any, 0, len(raw))
+	summary := map[string]int{}
+	for _, item := range raw {
+		z := asMap(item)
+		status := getStr(z["dnssec_status"])
+		out = append(out, map[string]any{
+			"id":                    idOf(z["id"]),
+			"fqdn":                  getStr(z["fqdn"]),
+			"view":                  getStr(z["view"]),
+			"dnssec_status":         status,
+			"dnssec_signing_policy": getStr(z["dnssec_signing_policy"]),
+		})
+		summary[status]++
+	}
+	return out, summary
+}
+
+// normRPZ shapes /api/ddi/v1/dns/rpz rows.
+func normRPZ(raw []any) []map[string]any {
+	out := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		z := asMap(item)
+		out = append(out, map[string]any{
+			"fqdn":            getStr(z["fqdn"]),
+			"severity":        getStr(z["severity"]),
+			"priority":        getStr(z["priority"]),
+			"policy_override": getStr(z["policy_override"]),
+			"type":            getStr(z["type"]),
+			"disabled":        truthy(z["disabled"]),
+			"comment":         getStr(z["comment"]),
+		})
+	}
+	return out
+}
+
+// normDtcLbdn shapes /api/ddi/v1/dtc/lbdn rows.
+func normDtcLbdn(raw []any) []map[string]any {
+	out := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		z := asMap(item)
+		out = append(out, map[string]any{
+			"name":       getStr(z["name"]),
+			"view":       getStr(z["view"]),
+			"dtc_policy": getStr(z["dtc_policy"]),
+			"precedence": num(z["precedence"]),
+			"ttl":        num(z["ttl"]),
+			"disabled":   truthy(z["disabled"]),
+			"comment":    getStr(z["comment"]),
+		})
+	}
+	return out
+}
+
 // --- tile handlers (return the full response body) --------------------------
+
+// CSPDnssec lists DNS auth zones with their DNSSEC status, plus a per-status
+// summary so the UI can show a breakdown without a second call.
+func (s *Service) CSPDnssec() map[string]any {
+	body, st, err := s.Rest.GetEx("/api/ddi/v1/dns/auth_zone", map[string]string{
+		"_limit":  "5000",
+		"_fields": "id,fqdn,view,dnssec_status,dnssec_signing_policy"})
+	if errored(st, err) {
+		return errRows()
+	}
+	rows, summary := normDNSSEC(rest.Unwrap(body))
+	resp := rowsResp(rows)
+	resp["summary"] = summary
+	return resp
+}
+
+// CSPRpz lists Response Policy Zones.
+func (s *Service) CSPRpz() map[string]any {
+	body, st, err := s.Rest.GetEx("/api/ddi/v1/dns/rpz", map[string]string{"_limit": "500"})
+	if errored(st, err) {
+		return errRows()
+	}
+	return rowsResp(normRPZ(rest.Unwrap(body)))
+}
+
+// CSPDtcLbdn lists DTC LBDNs (load-balanced DNS names).
+func (s *Service) CSPDtcLbdn() map[string]any {
+	body, st, err := s.Rest.GetEx("/api/ddi/v1/dtc/lbdn", map[string]string{"_limit": "500"})
+	if errored(st, err) {
+		return errRows()
+	}
+	return rowsResp(normDtcLbdn(rest.Unwrap(body)))
+}
 
 func (s *Service) CSPHostHealth() map[string]any {
 	body, st, err := s.Rest.GetEx("/api/infra/v1/detail_hosts", map[string]string{

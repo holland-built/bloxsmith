@@ -16,8 +16,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -32,6 +34,18 @@ var tableRE = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_.\-]{0,127}$`)
 // pageSize is the 100-row inline cap MCP enforces (server.py:3086, memory note
 // mcp_inline_row_cap). query_stored_data pages through the parquet in blocks.
 const pageSize = 100
+
+// maxRows bounds how many rows queryAllRows will ever page through. Verified
+// 2026-07-26: query_stored_data is broken upstream (every read, by
+// table_name, resource_id, or read_resource, returns "No stored data found in
+// this session"), so any page loop against it is dead weight — but this cap
+// also guards the day it's fixed, so one huge stored table can't turn a
+// single dashboard load into thousands of tool calls.
+const maxRows = 5000
+
+// ErrTooManyRows is returned by queryAllRows when row_count exceeds maxRows.
+// No query_stored_data call is issued in this case.
+var ErrTooManyRows = errors.New("mcp: row_count exceeds maxRows cap")
 
 // Client is a streamable-HTTP MCP session. Auth mirrors MCP_HEADERS: a func so
 // the active tenant key (post account-switch) is always read live.
@@ -149,8 +163,59 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 	return &out, nil
 }
 
-// extractSSEData pulls the JSON body from the last `data:` line of an SSE reply.
+// extractSSEData pulls the JSON-RPC RESPONSE event out of an SSE reply.
+// Verified 2026-07-26 live: the CSP endpoint sends TWO SSE events for any
+// tool call carrying a task_description — a `notifications/message` progress
+// event first, then the actual result — separated by a blank line per the
+// SSE spec. The previous implementation joined every `data:` line across the
+// whole stream with "", which mashed both events into one invalid JSON blob
+// (`{...}{...}`) and made CallTool fail with "invalid character '{' after
+// top-level value" on every task_description call — the real root cause
+// behind dns-analytics/host-metrics/get_subnets all coming back empty.
+//
+// Events are split on blank lines; within one event, `data:` lines are
+// joined with "\n" (SSE spec). The last event that decodes as a JSON-RPC
+// response (has "id" and "result" or "error" — not a bare notification) is
+// returned. If none qualifies, falls back to the old join-everything
+// behavior so nothing regresses on a single-event stream.
 func extractSSEData(raw []byte) []byte {
+	var events [][]byte
+	var cur []string
+	flush := func() {
+		if len(cur) > 0 {
+			events = append(events, []byte(strings.Join(cur, "\n")))
+			cur = nil
+		}
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimRight(line, "\r")
+		if line == "" {
+			flush()
+			continue
+		}
+		if strings.HasPrefix(line, "data:") {
+			cur = append(cur, strings.TrimSpace(line[5:]))
+		}
+	}
+	flush()
+
+	for i := len(events) - 1; i >= 0; i-- {
+		var probe struct {
+			ID     *int            `json:"id"`
+			Result json.RawMessage `json:"result"`
+			Error  json.RawMessage `json:"error"`
+			Method string          `json:"method"`
+		}
+		if err := json.Unmarshal(events[i], &probe); err != nil {
+			continue
+		}
+		if probe.ID != nil && (probe.Result != nil || probe.Error != nil) {
+			return events[i]
+		}
+	}
+
+	// Fallback: no response event found (e.g. malformed/empty stream) —
+	// preserve the pre-fix behavior rather than erroring outright.
 	var data []string
 	for _, line := range strings.Split(string(raw), "\n") {
 		line = strings.TrimRight(line, "\r")
@@ -198,6 +263,12 @@ func (c *Client) Initialize(ctx context.Context) error {
 
 // toolText is _tool_text (server.py:3064): the first content block's text, or
 // "{}" when the tool returned no content.
+//
+// FUTURE: result also carries `structuredContent`, the same payload already
+// decoded (no text-blob parsing / Python-repr wrangling needed). Once we
+// don't need byte-for-byte parity with the old text-block path, switching
+// callers to structuredContent directly would let parseInline go away. Left
+// alone here to keep this change surgical.
 func toolText(result json.RawMessage) string {
 	var r struct {
 		Content []struct {
@@ -246,9 +317,131 @@ func columnarToDicts(raw map[string]any) []map[string]any {
 	return out
 }
 
+// parseInline extracts rows from a measure-only cube/REST response that
+// carries its result INLINE instead of stashing it for query_stored_data.
+// Verified 2026-07-26 live: query_stored_data is broken upstream (every read
+// fails), but a dimensionless cube query still returns its data inline in
+// `message`, e.g.:
+//
+//	{"table_name":"...","row_count":1,"message":"Query Result: [{'AssetDiscoveryStatus.count': '319397'}]. If necessary, ..."}
+//
+// The payload after "Query Result: " is Python dict-repr (single-quoted),
+// not JSON, so it needs its own defensive parse — never query_stored_data.
+func parseInline(text string) (rows []map[string]any, ok bool) {
+	defer func() {
+		if recover() != nil {
+			rows, ok = nil, false
+		}
+	}()
+
+	var msg struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(text), &msg); err != nil {
+		return nil, false
+	}
+	const marker = "Query Result: "
+	idx := strings.Index(msg.Message, marker)
+	if idx == -1 {
+		return nil, false
+	}
+	rest := msg.Message[idx+len(marker):]
+	start := strings.Index(rest, "[")
+	if start == -1 {
+		return nil, false
+	}
+	end := strings.LastIndex(rest, "]")
+	if end == -1 || end < start {
+		return nil, false
+	}
+	list := rest[start : end+1]
+
+	// Split top-level dicts by brace depth (not regex) so a nested dict/list
+	// value can be detected instead of silently mis-split by a flat regex.
+	// Nesting means the payload shape isn't the flat row we know how to
+	// parse — bail on the WHOLE result (see rationale below) rather than
+	// guess at hand-parsing it.
+	var items []string
+	depth := 0
+	itemStart := -1
+	nested := false
+	for i, ch := range list {
+		switch ch {
+		case '{':
+			depth++
+			if depth == 1 {
+				itemStart = i
+			} else {
+				nested = true
+			}
+		case '[':
+			if depth >= 1 {
+				nested = true
+			}
+		case '}':
+			depth--
+			if depth == 0 && itemStart != -1 {
+				items = append(items, list[itemStart:i+1])
+				itemStart = -1
+			}
+		}
+	}
+	if nested || len(items) == 0 {
+		return nil, false
+	}
+
+	// pairRE captures a key plus one of: a quoted string, a number, or a
+	// bare token (only None/True/False are legal Python literals there —
+	// anything else is an unrecognized shape).
+	pairRE := regexp.MustCompile(`'([^']*)':\s*(?:'([^']*)'|([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)|([A-Za-z_][A-Za-z0-9_]*))`)
+
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		locs := pairRE.FindAllStringSubmatchIndex(item, -1)
+		if len(locs) == 0 {
+			return nil, false
+		}
+		row := map[string]any{}
+		for _, loc := range locs {
+			key := item[loc[2]:loc[3]]
+			switch {
+			case loc[4] != -1: // quoted string
+				row[key] = item[loc[4]:loc[5]]
+			case loc[6] != -1: // number
+				row[key] = item[loc[6]:loc[7]]
+			case loc[8] != -1: // bare token
+				switch item[loc[8]:loc[9]] {
+				case "None":
+					row[key] = nil
+				case "True":
+					row[key] = true
+				case "False":
+					row[key] = false
+				default:
+					// An unquoted token we don't recognize (not a Python
+					// literal we handle) means we don't understand this
+					// value's shape. Returning ok=false for the WHOLE parse
+					// sends the caller down its normal degrade path (empty/
+					// unavailable state) instead of rendering a row that's
+					// silently missing a key as if it were complete data —
+					// a partial row is indistinguishable from real data to
+					// an operator, so it must not reach them.
+					return nil, false
+				}
+			default:
+				continue
+			}
+		}
+		out = append(out, row)
+	}
+	return out, true
+}
+
 // Get is _mcp_get (server.py:3107): make_get_request stores the feed as a
 // parquet, then query_stored_data pages 100 rows at a time (the MCP inline
-// cap). Returns the assembled rows.
+// cap). Returns the assembled rows. Since query_stored_data is broken
+// upstream (see parseInline), inline results are tried first and returned
+// immediately when present.
 func (c *Client) Get(ctx context.Context, service, endpoint string, params map[string]any, fetchAll bool) []map[string]any {
 	args := map[string]any{
 		"task_description": fmt.Sprintf("Fetch %s %s for NOC dashboard", service, endpoint),
@@ -263,11 +456,19 @@ func (c *Client) Get(ctx context.Context, service, endpoint string, params map[s
 	if err != nil {
 		return nil
 	}
+	if rows, ok := parseInline(text); ok {
+		return rows
+	}
 	table, rowCount, ok := storedMeta(text)
 	if !ok {
 		return nil
 	}
-	return c.queryAllRows(ctx, table, rowCount, service+"/"+endpoint)
+	rows, err := c.queryAllRows(ctx, table, rowCount, service+"/"+endpoint)
+	if err != nil {
+		log.Printf("mcp: Get %s/%s: %v", service, endpoint, err)
+		return nil
+	}
+	return rows
 }
 
 // storedMeta validates a make_get_request / query_cube response and returns its
@@ -289,7 +490,12 @@ func storedMeta(text string) (string, int, bool) {
 }
 
 // queryAllRows is _query_all_rows (server.py:3085): page the stored parquet.
-func (c *Client) queryAllRows(ctx context.Context, table string, rowCount int, label string) []map[string]any {
+// Returns ErrTooManyRows (before issuing any request) when rowCount exceeds
+// maxRows.
+func (c *Client) queryAllRows(ctx context.Context, table string, rowCount int, label string) ([]map[string]any, error) {
+	if rowCount > maxRows {
+		return nil, ErrTooManyRows
+	}
 	var rows []map[string]any
 	for offset := 0; offset < rowCount; offset += pageSize {
 		text, err := c.CallTool(ctx, "infoblox-portal_query_stored_data", map[string]any{
@@ -309,7 +515,7 @@ func (c *Client) queryAllRows(ctx context.Context, table string, rowCount int, l
 		}
 		rows = append(rows, batch...)
 	}
-	return rows
+	return rows, nil
 }
 
 // QueryCube is _mcp_query_cube (server.py:3147): a Cube.js query; column names
@@ -327,11 +533,21 @@ func (c *Client) QueryCube(ctx context.Context, cube string, measures []string, 
 	if err != nil {
 		return nil
 	}
-	table, rowCount, ok := storedMeta(text)
-	if !ok {
-		return nil
+	var rows []map[string]any
+	if inline, ok := parseInline(text); ok {
+		rows = inline
+	} else {
+		table, rowCount, ok := storedMeta(text)
+		if !ok {
+			return nil
+		}
+		var qerr error
+		rows, qerr = c.queryAllRows(ctx, table, rowCount, cube+" cube")
+		if qerr != nil {
+			log.Printf("mcp: QueryCube %s: %v", cube, qerr)
+			return nil
+		}
 	}
-	rows := c.queryAllRows(ctx, table, rowCount, cube+" cube")
 	for _, r := range rows {
 		for k, v := range r {
 			if strings.Contains(k, "__") {

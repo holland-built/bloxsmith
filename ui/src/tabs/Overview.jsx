@@ -13,6 +13,7 @@ import { useThemeColors } from '../lib/theme.jsx'
 export default function Overview() {
   const dns = useApi('/api/csp/dns-qps', { poll: 30000 })
   const data = useApi('/api/data', { poll: 30000 })
+  const licenses = useApi('/api/csp/license-alerts', { poll: 30000 })
 
   const subnets = data.data?.subnets ?? []
   const leases = data.data?.leases ?? []
@@ -28,8 +29,78 @@ export default function Overview() {
         <SubnetHeatmap subnets={subnets} />
         <HostStatus hosts={hosts} />
         <SubnetTable subnets={subnets} />
+        <LicenseInventory licenses={licenses} />
       </CardGrid>
     </div>
+  )
+}
+
+// ---------- license inventory ----------
+
+function LicenseInventory({ licenses }) {
+  const rows = licenses.data?.licenses ?? []
+
+  const columns = [
+    { key: 'name', label: 'Name', clip: 260 },
+    { key: 'sku', label: 'SKU', mono: true, clip: 180 },
+    {
+      key: 'state',
+      label: 'State',
+      render: (state, r) => (
+        <span className="flex items-center gap-1.5">
+          <span>{state || '—'}</span>
+          {r._evaluation && (
+            <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-medium bg-line text-muted">Eval</span>
+          )}
+        </span>
+      ),
+    },
+    { key: 'expiry', label: 'Expiry' },
+    {
+      key: 'quantity',
+      label: 'Quantity',
+      align: 'right',
+      render: (q) => <span className="text-muted">{typeof q === 'number' ? q.toLocaleString() : '—'}</span>,
+    },
+  ]
+
+  const tableRows = rows.map((l, i) => {
+    let expiry = '—'
+    if (l.expiry) {
+      const d = new Date(l.expiry)
+      expiry = isNaN(d) ? l.expiry : d.toLocaleDateString()
+    }
+    return {
+      name: l.name || '—',
+      sku: l.sku || '—',
+      state: l.state || '—',
+      expiry,
+      quantity: typeof l.quantity === 'number' ? l.quantity : Number(l.quantity) || 0,
+      _evaluation: !!l.evaluation,
+      _key: l.id ?? i,
+    }
+  })
+
+  return (
+    <Card
+      span={4}
+      title="License Inventory"
+      right={<span className="text-[11px] text-muted tabular-nums">{rows.length.toLocaleString()} licenses</span>}
+    >
+      {licenses.loading ? (
+        <Skeleton h={220} />
+      ) : licenses.error || licenses.data?.status === 'error' || rows.length === 0 ? (
+        <Empty>no license data available</Empty>
+      ) : (
+        <DataTable
+          rows={tableRows}
+          columns={columns}
+          rowKey={(r) => r._key}
+          maxHeight={280}
+          rowCap={50}
+        />
+      )}
+    </Card>
   )
 }
 
