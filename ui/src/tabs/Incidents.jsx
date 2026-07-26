@@ -246,7 +246,7 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
       ),
     },
     { key: 'category', label: 'Category', sortable: true },
-    { key: 'entity_id', label: 'Entity', mono: true, clip: 160, sortable: true },
+    { key: 'entity_id', label: 'Entity', mono: true, sortable: true },
     {
       key: 'severity',
       label: 'Severity',
@@ -254,7 +254,7 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
       comparator: (a, b) => sevRank(a.severity, COLORS) - sevRank(b.severity, COLORS),
       render: (_v, s) => <SeverityPill severity={s.severity} />,
     },
-    { key: 'message', label: 'Message' },
+    { key: 'message', label: 'Message', grow: true },
     {
       key: 'detected_at',
       label: 'Age',
@@ -328,6 +328,7 @@ function SocQueue({ rows, loading, error, statusState, onSetStatus, openActionId
       key: 'action',
       label: 'Action',
       keep: true,
+      grow: true,
       render: (_v, r) => (
         <button
           type="button"
