@@ -32,6 +32,13 @@ docker run -d --name bloxsmith \
 
 First run: pick a passphrase, then paste your [Infoblox API key](#get-your-infoblox-api-key). Tenant keys live in the encrypted `noc-vault` volume and survive restarts and updates.
 
+Want in-app updates + rollback? Use compose instead — no clone needed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/holland-built/bloxsmith/master/docker-compose.yml -o docker-compose.yml
+docker compose up -d
+```
+
 <details>
 <summary><b>Other platforms — macOS/Linux script · Windows · Homebrew</b></summary>
 
@@ -191,7 +198,21 @@ The natural-language query box needs an LLM with tool-calling; everything else w
 
 ## Code signing policy
 
-Bloxsmith releases are built and published from GitHub Actions. Windows and macOS binaries are distributed via GitHub Releases with SHA-256 checksums. The binaries are **not code-signed** — verify a download with the checksum, and expect a first-run warning (macOS Gatekeeper: right-click → **Open**, or `xattr -dr com.apple.quarantine` the binary; Windows SmartScreen: **More info → Run anyway**). Report signing issues at the GitHub issue tracker.
+Bloxsmith releases are built and published from GitHub Actions.
+
+**OS trust.** The Windows and macOS binaries are **not code-signed** (no Apple notarization, no Windows Authenticode), so a first run trips OS gatekeeping: macOS Gatekeeper — right-click → **Open**, or `xattr -dr com.apple.quarantine` the binary; Windows SmartScreen — **More info → Run anyway**.
+
+**Supply-chain provenance.** Every release's `checksums.txt` is cosign **keyless-signed** in CI using the workflow's GitHub OIDC identity — the same mechanism that signs the ghcr container images. This proves the checksums (and therefore the archives) were built by this repo's release workflow; it is not OS trust and does not remove the warnings above. Verify:
+
+```bash
+cosign verify-blob \
+  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+```
+
+Report signing issues at the GitHub issue tracker.
 
 ---
 
