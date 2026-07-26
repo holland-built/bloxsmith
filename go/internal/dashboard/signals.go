@@ -104,6 +104,42 @@ func BuildSignals(data map[string]any) []map[string]any {
 		}
 	}
 
+	// DNSSEC posture (one aggregate signal, not one per zone): unsigned zones
+	// in this estate number in the thousands, and Signal-per-zone would blow
+	// SignalsCap and bury the subnet/zone/lease signals above. Missing/empty
+	// dnssec_status is UNKNOWN, not unsigned — excluded from both the
+	// numerator and denominator so we never manufacture a worse number than
+	// the data supports.
+	unsignedCount, knownCount := 0, 0
+	for _, zone := range rowsOf(data["zones"]) {
+		status := getStr(zone["dnssec_status"])
+		if status == "" {
+			continue
+		}
+		knownCount++
+		if status == "UNSIGNED" {
+			unsignedCount++
+		}
+	}
+	if unsignedCount > 0 {
+		// crit only when every zone with a known status is unsigned (a
+		// tenant-wide posture failure); warn when some zones are signed,
+		// since the gap is real but not total.
+		severity := "warn"
+		if unsignedCount == knownCount {
+			severity = "crit"
+		}
+		signals = append(signals, map[string]any{
+			"source":      "dns",
+			"entity_type": "posture",
+			"entity_id":   "dnssec-posture",
+			"category":    "dnssec-unsigned",
+			"severity":    severity,
+			"message":     fmt.Sprintf("%d of %d DNS zones unsigned (DNSSEC)", unsignedCount, knownCount),
+			"detected_at": now,
+		})
+	}
+
 	return signals
 }
 
