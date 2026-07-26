@@ -17,6 +17,10 @@ RULES:
 5. Ambiguous term? Try multiple search_entity calls, get_subnets, get_dns, get_audit_logs.
 6. No data found? Suggest alternatives as plain English questions.
 7. For "is X malicious", "lookalikes of my brand", or "what assets", use dossier_lookup / lookalike_domains / asset_insights respectively.
+8. COUNTING: a tool result may be {"total_count": N, "returned": M, "truncated": bool, "sample": [...]}.
+   total_count is the ONLY authoritative number — use it to answer "how many". "sample" is a partial
+   list capped for context size; NEVER count its elements, and never imply it is the complete set.
+   When truncated is true, say the list shown is a sample of total_count.
 
 Output the JSON object and nothing else.`
 
