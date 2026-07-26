@@ -32,6 +32,12 @@ export default function Security() {
   const lookalikes = useApi('/api/lookalikes')
   const insights = useApi('/api/insights')
   const ctem = useApi('/api/csp/ctem-exposure', { poll: 30000 })
+  const assetInsights = useApi('/api/csp/asset-insights', { poll: 30000 })
+  const exposures = useApi('/api/csp/exposures', { poll: 30000 })
+  const assetRisk = useApi('/api/csp/asset-risk', { poll: 30000 })
+  const exposedHostnames = useApi('/api/csp/exposed-hostnames', { poll: 30000 })
+  const exposedIps = useApi('/api/csp/exposed-ips', { poll: 30000 })
+  const ctemAssets = useApi('/api/csp/ctem-assets', { poll: 30000 })
   const [acks, setAcks] = useState({})
 
   const events = hub.data?.events ?? []
@@ -45,6 +51,11 @@ export default function Security() {
         <TriageInbox hub={hub} events={events} acks={acks} setAcks={setAcks} />
         <LookalikeTable lookalikes={lookalikes} />
         <CtemPanel ctem={ctem} />
+        <AssetInsights assetInsights={assetInsights} />
+        <ExposuresPanel exposures={exposures} />
+        <AssetRiskPanel assetRisk={assetRisk} />
+        <ExposedSurfacePanel hostnames={exposedHostnames} ips={exposedIps} />
+        <CtemAssetsPanel ctemAssets={ctemAssets} />
         <ThreatFeed threats={threats} />
         <InsightsPanel insights={insights} />
       </CardGrid>
@@ -440,6 +451,209 @@ function InsightsPanel({ insights }) {
     <Card span={3} title="SOC Insights" right={rows.length ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : null}>
       {insights.loading ? <Skeleton h={220} /> : insights.error || rows.length === 0 ? <Empty /> : (
         <DataTable rows={normRows} columns={columns} maxHeight={320} rowCap={150} />
+      )}
+    </Card>
+  )
+}
+
+// ---------- asset insights (severity buckets) ----------
+
+function AssetInsights({ assetInsights }) {
+  const d = assetInsights.data ?? {}
+  const status = d.status
+  const hasTotal = typeof d.total === 'number' && d.total > 0
+
+  return (
+    <Card span={3} title="Asset Insights">
+      {assetInsights.loading ? <Skeleton h={220} /> : assetInsights.error || status === 'error' ? (
+        <Empty>feed failed to load</Empty>
+      ) : status === 'empty' || !hasTotal ? (
+        <Empty>no asset insights for this tenant</Empty>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div>
+            <div className="text-[11px] text-muted">Total Findings</div>
+            <div className="text-xl font-semibold tracking-tight my-1">{d.total.toLocaleString()}</div>
+          </div>
+          {d.breakdown_available === false ? (
+            <div className="text-[11px] text-dim">{d.note || 'severity breakdown unavailable upstream'}</div>
+          ) : null}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ---------- exposures ----------
+
+function fmtDate(v) {
+  if (!v) return '—'
+  const ms = new Date(v).getTime()
+  return isNaN(ms) ? '—' : new Date(ms).toLocaleDateString()
+}
+
+function ExposuresPanel({ exposures }) {
+  const rows = exposures.data?.data?.rows ?? []
+  const count = exposures.data?.data?.count ?? rows.length
+
+  const columns = [
+    { key: 'title', label: 'Title', clip: 320, sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'first_seen_at', label: 'First Seen', sortable: true, render: (v) => fmtDate(v) },
+    { key: 'last_seen_at', label: 'Last Seen', sortable: true, render: (v) => fmtDate(v) },
+  ]
+
+  return (
+    <Card span={4} title="Exposures" right={count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null}>
+      {exposures.loading ? <Skeleton h={260} /> : exposures.error || rows.length === 0 ? (
+        <Empty>no exposures reported</Empty>
+      ) : (
+        <DataTable rows={rows} columns={columns} maxHeight={360} rowCap={150} rowKey={(r) => r.id} />
+      )}
+    </Card>
+  )
+}
+
+// ---------- asset risk ----------
+
+function AssetRiskPanel({ assetRisk }) {
+  const raw = assetRisk.data?.data?.rows ?? []
+  const count = assetRisk.data?.data?.count ?? raw.length
+  const rows = useMemo(
+    () => [...raw].sort((a, b) => (Number(b.exposures) || 0) - (Number(a.exposures) || 0)),
+    [raw],
+  )
+
+  const columns = [
+    { key: 'domain_name', label: 'Domain', mono: true, clip: 200, sortable: true },
+    { key: 'ip_address', label: 'IP', mono: true, sortable: true },
+    { key: 'asset_type', label: 'Type', sortable: true },
+    { key: 'exposures', label: 'Exposures', align: 'right', mono: true, sortable: true },
+    { key: 'ports_count', label: 'Ports', align: 'right', mono: true, sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+  ]
+
+  return (
+    <Card span={4} title="Asset Risk" right={count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null}>
+      {assetRisk.loading ? <Skeleton h={260} /> : assetRisk.error || rows.length === 0 ? (
+        <Empty>no asset risk data</Empty>
+      ) : (
+        <DataTable rows={rows} columns={columns} maxHeight={360} rowCap={150} rowKey={(r, i) => `${r.domain_name}|${r.ip_address}|${i}`} />
+      )}
+    </Card>
+  )
+}
+
+// ---------- exposed hostnames / ips (huge single-column lists) ----------
+
+function ExposedSurfacePanel({ hostnames, ips }) {
+  const hRows = hostnames.data?.data?.rows ?? []
+  const hCount = hostnames.data?.data?.count ?? hRows.length
+  const iRows = ips.data?.data?.rows ?? []
+  const iCount = ips.data?.data?.count ?? iRows.length
+
+  const loading = hostnames.loading || ips.loading
+  const bothError = (hostnames.error && ips.error)
+  const bothEmpty = hRows.length === 0 && iRows.length === 0
+
+  const SAMPLE = 25
+  const hCols = [{ key: 'hostname', label: 'Hostname', mono: true, clip: 320 }]
+  const iCols = [{ key: 'ip', label: 'IP', mono: true }]
+
+  return (
+    <Card
+      span={4}
+      title="Exposed Surface"
+      right={
+        <span className="text-[11px] text-muted">
+          {hCount.toLocaleString()} hostnames · {iCount.toLocaleString()} IPs
+        </span>
+      }
+    >
+      {loading ? <Skeleton h={260} /> : bothError || bothEmpty ? (
+        <Empty>no exposed hostnames or IPs reported</Empty>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="text-[11px] text-muted mb-1">
+              Showing {Math.min(SAMPLE, hRows.length).toLocaleString()} of {hCount.toLocaleString()}
+            </div>
+            {hRows.length === 0 ? (
+              <Empty>none</Empty>
+            ) : (
+              <DataTable rows={hRows} columns={hCols} maxHeight={280} rowCap={SAMPLE} rowKey={(r, i) => `${r.hostname}|${i}`} />
+            )}
+          </div>
+          <div>
+            <div className="text-[11px] text-muted mb-1">
+              Showing {Math.min(SAMPLE, iRows.length).toLocaleString()} of {iCount.toLocaleString()}
+            </div>
+            {iRows.length === 0 ? (
+              <Empty>none</Empty>
+            ) : (
+              <DataTable rows={iRows} columns={iCols} maxHeight={280} rowCap={SAMPLE} rowKey={(r, i) => `${r.ip}|${i}`} />
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ---------- CTEM assets (aggregate) ----------
+
+function summarizeArr(arr, n = 6) {
+  if (!Array.isArray(arr) || arr.length === 0) return { count: 0, sample: [] }
+  const sample = arr.slice(0, n).map((v) => {
+    if (v == null) return '—'
+    if (typeof v === 'object') return v.name ?? v.label ?? v.value ?? JSON.stringify(v)
+    return String(v)
+  })
+  return { count: arr.length, sample }
+}
+
+function CtemAssetsPanel({ ctemAssets }) {
+  const d = ctemAssets.data?.data ?? null
+  const assetCount = d?.asset_count
+
+  const groups = useMemo(() => {
+    if (!d) return []
+    const out = []
+    for (const [key, val] of Object.entries(d)) {
+      if (key === 'asset_count') continue
+      if (Array.isArray(val)) out.push({ key, ...summarizeArr(val) })
+    }
+    return out
+  }, [d])
+
+  const empty = !d || (!assetCount && groups.every((g) => g.count === 0))
+
+  return (
+    <Card
+      span={4}
+      title="CTEM Assets"
+      right={assetCount ? <span className="text-[11px] text-muted">{assetCount.toLocaleString()} assets</span> : null}
+    >
+      {ctemAssets.loading ? <Skeleton h={260} /> : ctemAssets.error || empty ? (
+        <Empty>no CTEM asset data</Empty>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {groups.map((g) => (
+            <div key={g.key}>
+              <div className="text-xs text-muted capitalize mb-1">
+                {g.key.replace(/_/g, ' ')} <b className="text-field-txt">{g.count.toLocaleString()}</b> distinct
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {g.sample.map((s, i) => (
+                  <span key={i} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted">{s}</span>
+                ))}
+                {g.count > g.sample.length ? (
+                  <span className="px-1.5 py-0.5 text-[10.5px] text-dim">+{(g.count - g.sample.length).toLocaleString()} more</span>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </Card>
   )

@@ -17,6 +17,9 @@ export default function Dns() {
   // so a stalled feed errors out instead of hanging goroutines / starving the upstream.
   const analytics = useApi('/api/dns-analytics', { poll: 30000 })
   const data = useApi('/api/data', { poll: 30000 })
+  const dnssec = useApi('/api/csp/dnssec', { poll: 30000 })
+  const rpz = useApi('/api/csp/rpz', { poll: 30000 })
+  const dtcLbdn = useApi('/api/csp/dtc-lbdn', { poll: 30000 })
 
   const hp = useHashParams()
   const zones = data.data?.zones ?? []
@@ -30,6 +33,9 @@ export default function Dns() {
         <DnsServices services={services} />
         <QueryVolume7d analytics={analytics} />
         <ZoneTable zones={zones} issuesOnly={!!hp.issues} />
+        <DnssecHealth dnssec={dnssec} />
+        <RpzPanel rpz={rpz} />
+        <DtcLbdnPanel dtcLbdn={dtcLbdn} />
       </CardGrid>
     </div>
   )
@@ -287,6 +293,155 @@ function ZoneTable({ zones, issuesOnly }) {
           rowKey={(r, i) => (r.fqdn || '') + i}
           rowStyle={(r) => (r._hasIssues ? { background: 'rgba(238,68,68,0.06)' } : undefined)}
         />
+      )}
+    </Card>
+  )
+}
+
+// ---------- dnssec health ----------
+
+const DNSSEC_CAP = 150
+
+function DnssecHealth({ dnssec }) {
+  const { COLORS } = useChartTheme()
+  const rows = dnssec.data?.rows ?? []
+  const total = dnssec.data?.count ?? rows.length
+
+  const signedCount = rows.filter((r) => r.dnssec_status === 'SIGNED').length
+  const unsignedCount = rows.filter((r) => r.dnssec_status === 'UNSIGNED').length
+  const signedShare = rows.length ? (signedCount / rows.length) * 100 : null
+
+  const unsigned = rows.filter((r) => r.dnssec_status === 'UNSIGNED')
+  const shown = unsigned.slice(0, DNSSEC_CAP)
+
+  const tableRows = shown.map((r, i) => ({
+    fqdn: r.fqdn,
+    view: r.view,
+    dnssec_status: r.dnssec_status,
+    dnssec_signing_policy: r.dnssec_signing_policy || '—',
+    _k: `${r.fqdn ?? ''}|${i}`,
+  }))
+
+  const columns = [
+    { key: 'fqdn', label: 'Zone', mono: true, clip: 240 },
+    { key: 'view', label: 'View', mono: true, clip: 160 },
+    { key: 'dnssec_signing_policy', label: 'Signing Policy' },
+  ]
+
+  return (
+    <Card
+      span={3}
+      title="DNSSEC Health"
+      right={
+        <span className="text-[11px] text-muted">
+          {unsigned.length > DNSSEC_CAP
+            ? `worst ${DNSSEC_CAP} of ${unsigned.length.toLocaleString()} unsigned`
+            : unsigned.length
+              ? `${unsigned.length.toLocaleString()} unsigned`
+              : ''}
+        </span>
+      }
+    >
+      {dnssec.loading ? (
+        <Skeleton h={280} />
+      ) : dnssec.error || rows.length === 0 ? (
+        <Empty>{dnssec.error ? 'DNSSEC feed unavailable' : 'no DNSSEC data'}</Empty>
+      ) : (
+        <>
+          <div className="flex items-center gap-4 my-2">
+            <div>
+              <div className="text-2xl font-semibold tracking-tight" style={{ color: COLORS.ok }}>{signedCount.toLocaleString()}</div>
+              <div className="text-[11px] text-muted">signed</div>
+            </div>
+            <div>
+              <div className="text-2xl font-semibold tracking-tight" style={{ color: unsignedCount > 0 ? COLORS.crit : COLORS.ok }}>{unsignedCount.toLocaleString()}</div>
+              <div className="text-[11px] text-muted">unsigned</div>
+            </div>
+            {signedShare != null && (
+              <div>
+                <div className="text-2xl font-semibold tracking-tight">{signedShare.toFixed(1)}%</div>
+                <div className="text-[11px] text-muted">signed share (of {total.toLocaleString()})</div>
+              </div>
+            )}
+          </div>
+          {unsigned.length === 0 ? (
+            <Empty>all zones signed</Empty>
+          ) : (
+            <DataTable rows={tableRows} columns={columns} maxHeight={260} rowCap={DNSSEC_CAP} rowKey={(r) => r._k} />
+          )}
+        </>
+      )}
+    </Card>
+  )
+}
+
+// ---------- rpz policy zones ----------
+
+function RpzPanel({ rpz }) {
+  const rows = rpz.data?.rows ?? []
+  const total = rpz.data?.count ?? rows.length
+
+  const tableRows = rows.map((r, i) => ({
+    fqdn: r.fqdn,
+    severity: r.severity || '—',
+    policy_override: r.policy_override || '—',
+    type: r.type || '—',
+    disabled: r.disabled ? 'Disabled' : 'Enabled',
+    _k: `${r.fqdn ?? ''}|${i}`,
+  }))
+
+  const columns = [
+    { key: 'fqdn', label: 'Zone', mono: true, clip: 240 },
+    { key: 'severity', label: 'Severity' },
+    { key: 'policy_override', label: 'Policy Override' },
+    { key: 'type', label: 'Type' },
+    { key: 'disabled', label: 'Status' },
+  ]
+
+  return (
+    <Card span={3} title="RPZ Policy Zones" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} zones` : ''}</span>}>
+      {rpz.loading ? (
+        <Skeleton h={200} />
+      ) : rpz.error || rows.length === 0 ? (
+        <Empty>{rpz.error ? 'RPZ feed unavailable' : 'no RPZ zones'}</Empty>
+      ) : (
+        <DataTable rows={tableRows} columns={columns} maxHeight={260} rowKey={(r) => r._k} />
+      )}
+    </Card>
+  )
+}
+
+// ---------- dtc load-balanced names ----------
+
+function DtcLbdnPanel({ dtcLbdn }) {
+  const rows = dtcLbdn.data?.rows ?? []
+  const total = dtcLbdn.data?.count ?? rows.length
+
+  const tableRows = rows.map((r, i) => ({
+    name: r.name,
+    dtc_policy: r.dtc_policy || '—',
+    precedence: r.precedence,
+    ttl: r.ttl,
+    disabled: r.disabled ? 'Disabled' : 'Enabled',
+    _k: `${r.name ?? ''}|${i}`,
+  }))
+
+  const columns = [
+    { key: 'name', label: 'Name', mono: true, clip: 220 },
+    { key: 'dtc_policy', label: 'Policy' },
+    { key: 'precedence', label: 'Precedence', align: 'right' },
+    { key: 'ttl', label: 'TTL', mono: true, align: 'right' },
+    { key: 'disabled', label: 'Status' },
+  ]
+
+  return (
+    <Card span={3} title="DTC Load-Balanced Names" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} names` : ''}</span>}>
+      {dtcLbdn.loading ? (
+        <Skeleton h={200} />
+      ) : dtcLbdn.error || rows.length === 0 ? (
+        <Empty>{dtcLbdn.error ? 'DTC LBDN feed unavailable' : 'no LBDN records'}</Empty>
+      ) : (
+        <DataTable rows={tableRows} columns={columns} maxHeight={260} rowKey={(r) => r._k} />
       )}
     </Card>
   )

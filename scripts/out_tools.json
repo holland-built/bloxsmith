@@ -246,5 +246,47 @@
     "required": [
       "uri"
     ]
+  },
+  {
+    "name": "iq-actions_get_action",
+    "description": "Retrieve detailed information about a specific action by its ID. Shows complete action details including status, priority, timestamps, and associated information.",
+    "params": [
+      "format:string",
+      "id*:string"
+    ],
+    "required": [
+      "id"
+    ]
+  },
+  {
+    "name": "iq-actions_list_actions",
+    "description": "List and search actions for your account. Shows action summaries including title, status, priority, and last activity. Supports keyword search (query), filtering by status, priority, type, and creation-date range, plus sorting and pagination.",
+    "params": [
+      "created_after:string",
+      "created_before:string",
+      "format:string",
+      "limit:integer",
+      "offset:integer",
+      "priority:string",
+      "query:string",
+      "sort_field:string",
+      "sort_order:string",
+      "status:string",
+      "type:string"
+    ],
+    "required": []
+  },
+  {
+    "name": "iq-actions_update_action",
+    "description": "Update the status of an existing action. Valid statuses are: active, resolved. Helps track action lifecycle and progress through workflow stages.",
+    "params": [
+      "format:string",
+      "id*:string",
+      "status*:string"
+    ],
+    "required": [
+      "id",
+      "status"
+    ]
   }
 ]
