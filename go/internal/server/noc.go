@@ -3,9 +3,11 @@ package server
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"bloxsmith/internal/dashboard"
+	"bloxsmith/internal/httpx"
 )
 
 // registerNOCRoutes wires the NOC-signal / analytics / sources surface
@@ -15,6 +17,8 @@ import (
 // (/api/dns-analytics, /api/host-metrics, /api/threat-lookup).
 func (d *Deps) registerNOCRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/actions", d.actions)
+	mux.HandleFunc("GET /api/actions/{id}", d.actionDetail)
+	mux.HandleFunc("POST /api/actions/{id}/status", d.body(d.actionStatus))
 	mux.HandleFunc("GET /api/incidents", d.incidents)
 	mux.HandleFunc("GET /api/incidents/{cat}", d.incidentsCategory)
 	mux.HandleFunc("GET /api/insights", d.insights)
@@ -29,6 +33,48 @@ func (d *Deps) registerNOCRoutes(mux *http.ServeMux) {
 func (d *Deps) actions(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/actions")
 	d.json(w, r, 200, d.Dashboard.FetchActions(r.Context()))
+}
+
+// actionDetail is GET /api/actions/{id}: a single IQ Action read.
+func (d *Deps) actionDetail(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/actions/{id}")
+	id := r.PathValue("id")
+	d.json(w, r, 200, d.Dashboard.GetAction(r.Context(), id))
+}
+
+// actionStatus is POST /api/actions/{id}/status: the first IQ Actions write
+// path (resolve/reopen). Gated to operator+; audits both outcomes.
+func (d *Deps) actionStatus(w http.ResponseWriter, r *http.Request, b map[string]any) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		d.json(w, r, 400, map[string]any{"ok": false, "error": "id is required"})
+		return
+	}
+	if !d.roleGate(r, "operator") {
+		d.json(w, r, 403, map[string]any{"ok": false, "error": "operator required"})
+		return
+	}
+	defer d.recoverEdit(w, r, "/api/actions/{id}/status")
+	status, _ := b["status"].(string)
+	res, err := d.Dashboard.UpdateAction(r.Context(), id, status)
+	if err != nil {
+		d.json(w, r, 400, map[string]any{"ok": false, "error": err.Error()})
+		_, _ = d.Audit.Append("iq-action-resolve-failed", httpx.Actor(r), map[string]any{
+			"id": id, "old_status": "unknown", "new_status": status, "error": err.Error()})
+		return
+	}
+	if ok, _ := res["ok"].(bool); !ok {
+		// UpdateAction returned a non-error but unconfirmed outcome (e.g. an
+		// unparseable upstream response) — surface it as a failure, not a 200.
+		d.json(w, r, 502, res)
+		_, _ = d.Audit.Append("iq-action-resolve-failed", httpx.Actor(r), map[string]any{
+			"id": id, "old_status": res["old_status"], "new_status": res["new_status"],
+			"error": res["error"]})
+		return
+	}
+	d.json(w, r, 200, res)
+	_, _ = d.Audit.Append("iq-action-resolve", httpx.Actor(r), map[string]any{
+		"id": id, "old_status": res["old_status"], "new_status": res["new_status"]})
 }
 
 // incidents is GET /api/incidents (server.py:5103): build signals, stamp ages,

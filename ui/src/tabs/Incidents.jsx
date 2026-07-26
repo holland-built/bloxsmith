@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
@@ -61,6 +64,9 @@ export default function Incidents() {
 
   const [acks, setAcks] = useState({})
   const [category, setCategory] = useState('')
+  const [openActionId, setOpenActionId] = useState(null)
+  // per-action-id pending/error state for the resolve/reopen control (rows are independent)
+  const [actionStatusState, setActionStatusState] = useState({})
 
   const categories = incApi.data?.incidents ?? []
   const signals = Array.isArray(incApi.data?.signals) ? incApi.data.signals : []
@@ -79,6 +85,33 @@ export default function Incidents() {
     })
   }
 
+  async function setActionStatus(id, nextStatus) {
+    setActionStatusState((p) => ({ ...p, [id]: { pending: true, error: null } }))
+    try {
+      const res = await fetch(`/api/actions/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      })
+      let body = null
+      try { body = await res.json() } catch { /* non-json body */ }
+      if (res.status === 403) {
+        setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: 'operator required' } }))
+        return
+      }
+      if (!res.ok || !body?.ok) {
+        setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: body?.error || `failed (${res.status})` } }))
+        return
+      }
+      // Not optimistic: only clear pending + drop error once the server confirms,
+      // then let a refetch drive the real row status.
+      setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: null } }))
+      await actionsApi.refetch()
+    } catch (e) {
+      setActionStatusState((p) => ({ ...p, [id]: { pending: false, error: e?.message || 'network error' } }))
+    }
+  }
+
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Incidents</h1>
@@ -95,7 +128,16 @@ export default function Incidents() {
           onToggleAck={toggleAck}
           onClearAcks={() => setAcks({})}
         />
-        <SocQueue rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} />
+        <SocQueue
+          rows={actionsRows}
+          loading={actionsApi.loading}
+          error={actionsApi.error}
+          statusState={actionStatusState}
+          onSetStatus={setActionStatus}
+          openActionId={openActionId}
+          onOpenAction={setOpenActionId}
+        />
+        <ActionTrendStrip rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} />
       </CardGrid>
     </div>
   )
@@ -272,7 +314,7 @@ function IncidentsTable({ signals, loading, error, category, onCategory, acks, o
 
 // ---------- SOC action queue ----------
 
-function SocQueue({ rows, loading, error }) {
+function SocQueue({ rows, loading, error, statusState, onSetStatus, openActionId, onOpenAction }) {
   const { COLORS } = useChartTheme()
   const columns = [
     {
@@ -287,8 +329,37 @@ function SocQueue({ rows, loading, error }) {
       label: 'Action',
       keep: true,
       render: (_v, r) => (
-        <span className="line-clamp-2">{r.title || r.name || r.message || r.display_id || r.id || '—'}</span>
+        <button
+          type="button"
+          className="line-clamp-2 text-left underline decoration-dotted underline-offset-2 hover:text-accent"
+          onClick={() => onOpenAction(r.id)}
+        >
+          {r.title || r.name || r.message || r.display_id || r.id || '—'}
+        </button>
       ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (_v, r) => {
+        const st = statusState[r.id] || {}
+        const resolved = String(r.status || '').toLowerCase() === 'resolved'
+        const next = resolved ? 'active' : 'resolved'
+        const label = resolved ? 'Reopen' : 'Resolve'
+        return (
+          <div className="flex flex-col gap-0.5">
+            <button
+              type="button"
+              disabled={st.pending}
+              onClick={() => onSetStatus(r.id, next)}
+              className="px-2 py-1 rounded-md border border-border bg-field text-field-txt text-[11px] disabled:opacity-50"
+            >
+              {st.pending ? 'saving…' : label}
+            </button>
+            {st.error && <span className="text-[10px] text-crit" style={{ color: COLORS.crit }}>{st.error}</span>}
+          </div>
+        )
+      },
     },
   ]
 
@@ -303,7 +374,103 @@ function SocQueue({ rows, loading, error }) {
       ) : rows.length === 0 ? (
         <Empty>no pending actions</Empty>
       ) : (
-        <DataTable rows={rows} columns={columns} maxHeight={420} rowCap={150} rowKey={(r, i) => `${r.id ?? r.display_id ?? ''}|${i}`} />
+        <>
+          <DataTable rows={rows} columns={columns} maxHeight={420} rowCap={150} rowKey={(r, i) => `${r.id ?? r.display_id ?? ''}|${i}`} />
+          {openActionId != null && <ActionDetailDrawer actionId={openActionId} onClose={() => onOpenAction(null)} />}
+        </>
+      )}
+    </Card>
+  )
+}
+
+// ---------- action detail drawer ----------
+
+function ActionDetailDrawer({ actionId, onClose }) {
+  const detail = useApi(`/api/actions/${actionId}`)
+
+  const action = detail.data?.action || detail.data
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
+      <div
+        className="h-full w-full max-w-[420px] bg-panel border-l border-border p-4 overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold">Action detail</h2>
+          <button type="button" onClick={onClose} className="px-2 py-1 rounded-md border border-border bg-field text-field-txt text-xs" aria-label="Close">
+            Close
+          </button>
+        </div>
+        {detail.loading ? (
+          <Skeleton h={200} />
+        ) : detail.error ? (
+          <Empty>failed to load action detail</Empty>
+        ) : !action ? (
+          <Empty>action not found</Empty>
+        ) : (
+          <dl className="text-sm space-y-2">
+            {Object.entries(action).map(([k, v]) => (
+              <div key={k} className="flex flex-col border-b border-line-2 pb-1.5">
+                <dt className="text-[11px] text-muted uppercase tracking-wide">{k}</dt>
+                <dd className="font-mono break-words">{typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—')}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------- action volume trend strip ----------
+
+function ActionTrendStrip({ rows, loading, error }) {
+  const { COLORS } = useChartTheme()
+
+  const { byDay, byPriority } = useMemo(() => {
+    const days = {}
+    const pri = { low: 0, medium: 0, high: 0 }
+    for (const r of rows) {
+      const t = Date.parse(r.last_activity)
+      if (!Number.isNaN(t)) {
+        const d = new Date(t).toISOString().slice(0, 10)
+        days[d] = (days[d] || 0) + 1
+      }
+      const p = String(r.priority || '').toLowerCase()
+      if (pri[p] != null) pri[p]++
+    }
+    const byDay = Object.entries(days)
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([date, count]) => ({ date: date.slice(5), count }))
+    return { byDay, byPriority: pri }
+  }, [rows])
+
+  return (
+    <Card span={2} title="Action Volume" note="by day">
+      {loading ? (
+        <Skeleton h={220} />
+      ) : error ? (
+        <Empty>failed to load actions</Empty>
+      ) : rows.length === 0 ? (
+        <Empty>no IQ actions to trend</Empty>
+      ) : (
+        <>
+          <ResponsiveContainer width="100%" height={150}>
+            <BarChart data={byDay} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" tick={{ fill: 'var(--color-tick)', fontSize: 10 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={20} />
+              <YAxis hide />
+              <Tooltip contentStyle={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', fontSize: 12 }} />
+              <Bar dataKey="count" fill={COLORS.accent} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex items-center justify-between mt-2 text-xs">
+            <span style={{ color: COLORS.sevHigh }}>High {byPriority.high}</span>
+            <span style={{ color: COLORS.warn }}>Medium {byPriority.medium}</span>
+            <span style={{ color: COLORS.accent }}>Low {byPriority.low}</span>
+          </div>
+        </>
       )}
     </Card>
   )

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Cell, PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
 import { DataTable, FeedCard } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
@@ -15,6 +15,7 @@ export default function Infra() {
   const jobs = useApi('/api/csp/jobs', { poll: 15000 })
   const dfp = useApi('/api/csp/dfp', { poll: 30000 })
   const maint = useApi('/api/csp/maintenance', { poll: 60000 })
+  const discovery = useApi('/api/csp/discovery-status', { poll: 60000 })
 
   const theme = useThemeColors()
   const hp = useHashParams()
@@ -65,6 +66,7 @@ export default function Infra() {
             { key: 'app_count', label: 'Apps', mono: true },
           ]}
         />
+        <DiscoveryStatus feed={discovery} />
         <HostTable hosts={hosts} status={hp.status} />
         <FeedCard
           span={3}
@@ -146,6 +148,53 @@ function HostStatus({ hosts }) {
           </div>
         </div>
       )}
+    </Card>
+  )
+}
+
+// ---------- asset discovery status ----------
+
+function DiscoveryStatus({ feed }) {
+  const { COLORS } = useChartTheme()
+  const { data, error, loading } = feed
+
+  if (loading && !data) {
+    return (
+      <Card span={2} title="Asset Discovery">
+        <Skeleton />
+      </Card>
+    )
+  }
+  if (error || data?.status === 'error') {
+    return (
+      <Card span={2} title="Asset Discovery">
+        <Empty>discovery feed error</Empty>
+      </Card>
+    )
+  }
+  if (data?.status === 'empty' || !data?.total) {
+    return (
+      <Card span={2} title="Asset Discovery">
+        <Empty>no discovery data for this tenant</Empty>
+      </Card>
+    )
+  }
+
+  const total = data.total
+
+  return (
+    <Card
+      span={2}
+      title="Asset Discovery"
+      note="CSP"
+      right={!data.breakdown_available && data.note && (
+        <span className="text-[11px] text-dim">{data.note}</span>
+      )}
+    >
+      <div>
+        <span className="text-lg font-semibold" style={{ color: COLORS.accent }}>{total.toLocaleString()}</span>
+        <span className="text-dim text-[11px] ml-1.5">assets with discovery status tracked</span>
+      </div>
     </Card>
   )
 }

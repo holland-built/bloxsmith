@@ -1,10 +1,15 @@
 name: MCP drift check
 
-# Infoblox reshuffles the undocumented CSP /mcp tool surface with no notice
-# (e.g. the whole iq-actions_* family vanished in a week). This job catalogs the
-# LIVE tool set nightly and, when it differs from the committed snapshot
-# (scripts/out_tools.json), opens a GitHub issue so the maintainer finds out
-# before a tile silently breaks. Maintainer-facing only — nothing user-visible.
+# Infoblox reshuffles the undocumented CSP /mcp surface with no notice
+# (e.g. the whole iq-actions_* tool family vanished in a week; separately,
+# portal services and analytics cubes have silently added/removed/resized
+# entries — Licensing appeared, ThirdPartyProviders vanished, DnsConfig went
+# 30->44 paths, cube count went 19->38 — with nothing to catch it). This job
+# catalogs the LIVE tools, services, and cubes nightly and, when any of them
+# differ from the committed snapshots (scripts/out_tools.json,
+# scripts/out_services.json, scripts/out_cubes.json), opens a GitHub issue so
+# the maintainer finds out before a tile silently breaks. Maintainer-facing
+# only — nothing user-visible.
 #
 # REQUIRES a repo secret INFOBLOX_API_KEY (a CSP API token). Without it the job
 # skips the live catalog and does nothing.
@@ -43,34 +48,99 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: pip install --quiet mcp
 
-      - name: Catalog live MCP tools
+      - name: Catalog live MCP tools, services, cubes
         if: steps.gate.outputs.run == 'true'
         env:
           INFOBLOX_API_KEY: ${{ secrets.INFOBLOX_API_KEY }}
           INFOBLOX_URL: https://csp.infoblox.com
-        run: python scripts/catalog_tools.py > /tmp/live_tools.json
+        run: |
+          python scripts/catalog_tools.py > /tmp/live_tools.json
+          python scripts/catalog_services.py > /tmp/live_services.json
+          python scripts/catalog_cubes.py > /tmp/live_cubes.json
 
-      - name: Diff vs committed snapshot
+      - name: Diff vs committed snapshots
         if: steps.gate.outputs.run == 'true'
         id: diff
         run: |
           python - <<'PY'
           import json, os
-          names = lambda p: sorted(t["name"] for t in json.load(open(p)))
-          live = names("/tmp/live_tools.json")
-          snap = names("scripts/out_tools.json")
-          added   = [n for n in live if n not in snap]
-          removed = [n for n in snap if n not in live]
-          changed = bool(added or removed)
+
+          def tool_names(p):
+              return sorted(t["name"] for t in json.load(open(p)))
+
+          def service_map(p):
+              data = json.load(open(p))
+              svc_list = data.get("all_services", {}).get("services", [])
+              return {s.get("service_name"): s for s in svc_list if isinstance(s, dict)}
+
+          def find_cube_list(obj):
+              """Defensive walker: first dict value that is a list under key 'cubes'."""
+              if isinstance(obj, dict):
+                  if "cubes" in obj and isinstance(obj["cubes"], list):
+                      return obj["cubes"]
+                  for v in obj.values():
+                      found = find_cube_list(v)
+                      if found is not None:
+                          return found
+              return None
+
+          def cube_names(p):
+              data = json.load(open(p))
+              lst = find_cube_list(data) or []
+              return sorted(c.get("name") for c in lst if isinstance(c, dict) and c.get("name"))
+
+          # tools: added/removed by name
+          t_live = tool_names("/tmp/live_tools.json")
+          t_snap = tool_names("scripts/out_tools.json")
+          t_added = [n for n in t_live if n not in t_snap]
+          t_removed = [n for n in t_snap if n not in t_live]
+
+          # services: added/removed by service_name, plus changed paths_count/version
+          s_live = service_map("/tmp/live_services.json")
+          s_snap = service_map("scripts/out_services.json")
+          s_added = sorted(n for n in s_live if n not in s_snap)
+          s_removed = sorted(n for n in s_snap if n not in s_live)
+          s_changed = []
+          for n in sorted(set(s_live) & set(s_snap)):
+              l, s = s_live[n], s_snap[n]
+              if l.get("paths_count") != s.get("paths_count") or l.get("version") != s.get("version"):
+                  bits = []
+                  if l.get("paths_count") != s.get("paths_count"):
+                      bits.append(f"paths {s.get('paths_count')} -> {l.get('paths_count')}")
+                  if l.get("version") != s.get("version"):
+                      bits.append(f"version {s.get('version')} -> {l.get('version')}")
+                  s_changed.append(f"{n}: {', '.join(bits)}")
+
+          # cubes: added/removed by name
+          c_live = cube_names("/tmp/live_cubes.json")
+          c_snap = cube_names("scripts/out_cubes.json")
+          c_added = [n for n in c_live if n not in c_snap]
+          c_removed = [n for n in c_snap if n not in c_live]
+
+          changed = bool(t_added or t_removed or s_added or s_removed or s_changed or c_added or c_removed)
+
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"changed={'true' if changed else 'false'}\n")
               f.write("body<<BODYEOF\n")
-              f.write("The live Infoblox CSP `/mcp` tool set no longer matches "
-                      "`scripts/out_tools.json`.\n\n")
-              f.write(f"**Added ({len(added)}):** {', '.join(added) or '_none_'}\n\n")
-              f.write(f"**Removed ({len(removed)}):** {', '.join(removed) or '_none_'}\n\n")
-              f.write("Re-run `python scripts/catalog_tools.py > scripts/out_tools.json` "
-                      "and commit to update the baseline once you've checked nothing broke.\n")
+              f.write("The live Infoblox CSP `/mcp` surface no longer matches the committed baselines.\n\n")
+
+              f.write("## Tools\n\n")
+              f.write(f"**Added ({len(t_added)}):** {', '.join(t_added) or '_none_'}\n\n")
+              f.write(f"**Removed ({len(t_removed)}):** {', '.join(t_removed) or '_none_'}\n\n")
+              f.write("Refresh: `python scripts/catalog_tools.py > scripts/out_tools.json`\n\n")
+
+              f.write("## Services\n\n")
+              f.write(f"**Added ({len(s_added)}):** {', '.join(s_added) or '_none_'}\n\n")
+              f.write(f"**Removed ({len(s_removed)}):** {', '.join(s_removed) or '_none_'}\n\n")
+              f.write(f"**Changed ({len(s_changed)}):** {'; '.join(s_changed) or '_none_'}\n\n")
+              f.write("Refresh: `python scripts/catalog_services.py > scripts/out_services.json`\n\n")
+
+              f.write("## Cubes\n\n")
+              f.write(f"**Added ({len(c_added)}):** {', '.join(c_added) or '_none_'}\n\n")
+              f.write(f"**Removed ({len(c_removed)}):** {', '.join(c_removed) or '_none_'}\n\n")
+              f.write("Refresh: `python scripts/catalog_cubes.py > scripts/out_cubes.json`\n\n")
+
+              f.write("Check nothing broke before committing the refreshed baseline(s).\n")
               f.write("BODYEOF\n")
           PY
 
