@@ -239,49 +239,110 @@ func normInsights(raw []any) []any {
 
 // --- DNS Analytics (server.py fetch_dns_analytics 4302) ----------------------
 
-// FetchDNSAnalytics is fetch_dns_analytics: three NstarDnsActivity cube queries
-// (7-day volume trend, top clients, query-type mix).
-func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
-	vol, clients, types := []any{}, []any{}, []any{}
-	if s.Mcp != nil && s.Mcp.Initialize(ctx) == nil {
-		vol = toAnyN(s.Mcp.QueryCube(ctx, "NstarDnsActivity",
-			[]string{"NstarDnsActivity.total_query_count"}, map[string]any{
-				"time_dimensions": []map[string]any{{
-					"dimension": "NstarDnsActivity.timestamp",
-					"dateRange": "7 days", "granularity": "day"}},
-			}))
-		clients = toAnyN(s.Mcp.QueryCube(ctx, "NstarDnsActivity",
-			[]string{"NstarDnsActivity.total_query_count"}, map[string]any{
-				"dimensions": []string{"NstarDnsActivity.device_name", "NstarDnsActivity.device_ip"},
-				"time_dimensions": []map[string]any{{
-					"dimension": "NstarDnsActivity.timestamp", "dateRange": "7 days"}},
-				"order": map[string]any{"NstarDnsActivity.total_query_count": "desc"}, "limit": 50,
-			}))
-		types = toAnyN(s.Mcp.QueryCube(ctx, "NstarDnsActivity",
-			[]string{"NstarDnsActivity.total_query_count"}, map[string]any{
-				"dimensions": []string{"NstarDnsActivity.query_type"},
-				"time_dimensions": []map[string]any{{
-					"dimension": "NstarDnsActivity.timestamp", "dateRange": "7 days"}},
-				"order": map[string]any{"NstarDnsActivity.total_query_count": "desc"}, "limit": 10,
-			}))
+// cubeQuery runs one cubejs REST query (the same /api/cubejs/v1/query path
+// CSPDNSQps/CSPThreats use) and returns its rows, normalized to plain
+// (non-prefixed) keys via cubeRow. On any upstream error it returns an empty
+// slice — never panics into the route.
+func (s *Service) cubeQuery(query map[string]any) []map[string]any {
+	q, _ := json.Marshal(query)
+	body, st, err := s.Rest.GetEx("/api/cubejs/v1/query", map[string]string{"query": string(q)})
+	if errored(st, err) {
+		return nil
 	}
+	raw := cubeData(body)
+	out := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		out = append(out, cubeRow(asMap(item)))
+	}
+	return out
+}
+
+// FetchDNSAnalytics is fetch_dns_analytics: three NstarDnsActivity cube
+// queries (7-day volume trend, top clients, query-type mix) over direct REST
+// — the MCP parquet path (query_stored_data) cannot be read back at all.
+func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
+	vol := toAnyN(s.cubeQuery(map[string]any{
+		"measures": []string{"NstarDnsActivity.total_query_count"},
+		"timeDimensions": []map[string]any{{
+			"dimension": "NstarDnsActivity.timestamp",
+			"dateRange": "last 7 days", "granularity": "day"}},
+	}))
+	clients := toAnyN(s.cubeQuery(map[string]any{
+		"measures":   []string{"NstarDnsActivity.total_query_count"},
+		"dimensions": []string{"NstarDnsActivity.device_name", "NstarDnsActivity.device_ip"},
+		"timeDimensions": []map[string]any{{
+			"dimension": "NstarDnsActivity.timestamp", "dateRange": "last 7 days"}},
+		"order": map[string]any{"NstarDnsActivity.total_query_count": "desc"}, "limit": 50,
+	}))
+	types := toAnyN(s.cubeQuery(map[string]any{
+		"measures":   []string{"NstarDnsActivity.total_query_count"},
+		"dimensions": []string{"NstarDnsActivity.query_type"},
+		"timeDimensions": []map[string]any{{
+			"dimension": "NstarDnsActivity.timestamp", "dateRange": "last 7 days"}},
+		"order": map[string]any{"NstarDnsActivity.total_query_count": "desc"}, "limit": 10,
+	}))
 	return map[string]any{"volume": vol, "top_clients": clients, "query_types": types}
 }
 
 // --- Host Metrics (server.py fetch_host_metrics 4319) ------------------------
 
-// FetchHostMetrics is fetch_host_metrics: the HostMetrics cube (1-hour avg per
-// host+metric).
+// hostDisplayNames builds a uuid/ophid -> display_name lookup from
+// /api/infra/v1/detail_hosts, the same endpoint CSPHostHealth already reads.
+// Never fabricates a name: a host with no match keeps its raw id upstream.
+func (s *Service) hostDisplayNames() map[string]string {
+	rows := s.Rest.Get("/api/infra/v1/detail_hosts",
+		map[string]string{"_limit": "500", "_fields": "id,ophid,display_name"})
+	out := make(map[string]string, len(rows))
+	for _, item := range rows {
+		h := asMap(item)
+		name := getStr(h["display_name"])
+		if name == "" {
+			continue
+		}
+		if id := getStr(h["id"]); id != "" {
+			out[id] = name
+		}
+		if ophid := getStr(h["ophid"]); ophid != "" {
+			out[ophid] = name
+		}
+	}
+	return out
+}
+
+// FetchHostMetrics is fetch_host_metrics: one HostMetrics cube query per
+// per-host metric (host_cpu, host_memory) over direct REST — HostMetrics has
+// no host_name dimension and requires a metric_name filter, unlike the old
+// (never-working) MCP query. HostMetrics.host is an opaque UUID; it is
+// resolved to a display name via hostDisplayNames. Rows with a null host are
+// account-level (e.g. dns_qps_iq) and are skipped, never rendered blank.
 func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
+	names := s.hostDisplayNames()
 	metrics := []any{}
-	if s.Mcp != nil && s.Mcp.Initialize(ctx) == nil {
-		metrics = toAnyN(s.Mcp.QueryCube(ctx, "HostMetrics",
-			[]string{"HostMetrics.avg_value"}, map[string]any{
-				"dimensions": []string{"HostMetrics.host_name", "HostMetrics.metric_name"},
-				"time_dimensions": []map[string]any{{
-					"dimension": "HostMetrics.timestamp", "dateRange": "1 hours"}},
-				"order": map[string]any{"HostMetrics.avg_value": "desc"}, "limit": 100,
-			}))
+	for _, metricName := range []string{"host_cpu", "host_memory"} {
+		rows := s.cubeQuery(map[string]any{
+			"measures":   []string{"HostMetrics.avg_value"},
+			"dimensions": []string{"HostMetrics.host", "HostMetrics.metric_name_label"},
+			"filters": []map[string]any{{
+				"member": "HostMetrics.metric_name", "operator": "equals",
+				"values": []string{metricName}}},
+		})
+		for _, row := range rows {
+			hostID := getStr(row["host"])
+			if hostID == "" {
+				continue
+			}
+			hostName := hostID
+			if n, ok := names[hostID]; ok {
+				hostName = n
+			}
+			metrics = append(metrics, map[string]any{
+				"host":              hostID,
+				"host_name":         hostName,
+				"metric_name":       metricName,
+				"metric_name_label": row["metric_name_label"],
+				"avg_value":         toFloat(orAny(row["avg_value"], 0)),
+			})
+		}
 	}
 	return map[string]any{"metrics": metrics}
 }
