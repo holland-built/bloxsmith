@@ -43,7 +43,19 @@ export default function Overview() {
 
 // ---------- license inventory ----------
 
+// Coarsens a day count into a glanceable label: whole days under ~2 years,
+// otherwise months (under ~5 years) or whole years beyond that.
+function formatRemaining(days) {
+  if (days == null) return '—'
+  const abs = Math.abs(days)
+  const sign = days < 0 ? 'ago' : ''
+  if (abs < 730) return `${abs.toLocaleString()}d${sign ? ' ' + sign : ''}`
+  if (abs < 1825) return `~${Math.round(abs / 30.44)}mo${sign ? ' ' + sign : ''}`
+  return `~${Math.round(abs / 365.25)}y${sign ? ' ' + sign : ''}`
+}
+
 function LicenseInventory({ licenses }) {
+  const { COLORS } = useChartTheme()
   const rows = licenses.data?.licenses ?? []
 
   const columns = [
@@ -63,33 +75,67 @@ function LicenseInventory({ licenses }) {
     },
     { key: 'expiry', label: 'Expiry' },
     {
+      key: 'remaining',
+      label: 'Time Left',
+      align: 'right',
+      sortable: true,
+      // Unknown expiry sorts as +Infinity, never -Infinity: ascending order means
+      // "most imminent first", so -Infinity would park unparseable rows at the top
+      // as if they were the most urgent thing on the panel.
+      sortAccessor: (r) => (r._days == null ? Infinity : r._days),
+      render: (_v, r) => (
+        <span style={r._days != null && r._days < 30 ? { color: COLORS.crit } : r._days != null && r._days < 90 ? { color: COLORS.warn } : undefined} className={r._days == null ? 'text-muted' : ''}>
+          {formatRemaining(r._days)}
+        </span>
+      ),
+    },
+    {
       key: 'quantity',
-      label: 'Quantity',
+      // "QTY" not "Quantity": the auto-sizer measures header text in the cell
+      // font, so it under-measures uppercase letter-spaced headers whose cells
+      // are short ("1,000"). "QUANTITY" clipped to "QUAN…" even at full width.
+      // Known gap — tests/table-sizing.spec.ts only asserts on body cells, so
+      // it does not catch clipped headers.
+      label: 'Qty',
       align: 'right',
       render: (q) => <span className="text-muted">{typeof q === 'number' ? q.toLocaleString() : '—'}</span>,
     },
   ]
 
+  const now = Date.now()
   const tableRows = rows.map((l, i) => {
     let expiry = '—'
+    let days = null
     if (l.expiry) {
       const d = new Date(l.expiry)
-      expiry = isNaN(d) ? l.expiry : d.toLocaleDateString()
+      if (!isNaN(d)) {
+        expiry = d.toLocaleDateString()
+        days = Math.round((d.getTime() - now) / 86400000)
+      } else {
+        expiry = l.expiry
+      }
     }
     return {
       name: l.name || '—',
       sku: l.sku || '—',
       state: l.state || '—',
       expiry,
+      remaining: formatRemaining(days),
       quantity: typeof l.quantity === 'number' ? l.quantity : Number(l.quantity) || 0,
       _evaluation: !!l.evaluation,
+      _days: days,
       _key: l.id ?? i,
     }
   })
 
   return (
     <Card
-      span={4}
+      // span 6, not 4: this panel now carries six columns (name, sku, state,
+      // expiry, time left, quantity). At span 4 the added column pushed the
+      // total past the card width, so the auto-sizer shrank headers until
+      // "QUANTITY" clipped to "QUAN…" — while two grid columns sat empty to the
+      // right. Full width removes both the clip and the dead space.
+      span={6}
       title="License Inventory"
       right={<span className="text-[11px] text-muted tabular-nums">{rows.length.toLocaleString()} licenses</span>}
     >

@@ -186,7 +186,7 @@ func (s *Service) buildAggregate() map[string]any {
 	viewsD := s.Rest.Get("/api/ddi/v1/dns/view",
 		map[string]string{"_fields": "id,name,comment", "_limit": "5000"})
 	zonesD := s.Rest.Get("/api/ddi/v1/dns/auth_zone",
-		map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type", "_limit": "5000"})
+		map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type,dnssec_status", "_limit": "5000"})
 	hostsD := s.Rest.Get("/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})
 	policiesD := s.Rest.Get("/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})
 	feedsD := s.Rest.Get("/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})

@@ -94,14 +94,15 @@ func normZones(raw []any, viewMap map[string]string) []map[string]any {
 			issues = append(issues, "High Neg-TTL")
 		}
 		out = append(out, map[string]any{
-			"id":      idOf(z["id"]),
-			"fqdn":    fqdn,
-			"view":    view,
-			"ttl":     ttl,
-			"neg_ttl": negTTL,
-			"records": 0,
-			"issues":  issues,
-			"anomaly": len(issues) > 0,
+			"id":            idOf(z["id"]),
+			"fqdn":          fqdn,
+			"view":          view,
+			"ttl":           ttl,
+			"neg_ttl":       negTTL,
+			"records":       0,
+			"issues":        issues,
+			"anomaly":       len(issues) > 0,
+			"dnssec_status": getStr(z["dnssec_status"]),
 		})
 	}
 	return out
