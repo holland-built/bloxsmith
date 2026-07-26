@@ -11,12 +11,13 @@ export default function Daily() {
   const subnets = data.data?.subnets ?? []
   const hosts = data.data?.hosts ?? []
   const zones = data.data?.zones ?? []
+  const totals = data.data?._totals
 
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Daily Briefing</h1>
       <CardGrid>
-        <IssueKpis subnets={subnets} hosts={hosts} zones={zones} loading={data.loading} />
+        <IssueKpis subnets={subnets} hosts={hosts} zones={zones} totals={totals} loading={data.loading} />
         <SecurityToday sec={sec} />
         <TopCapacityRisks subnets={subnets} loading={data.loading} />
         <HostsAttention hosts={hosts} loading={data.loading} />
@@ -30,6 +31,12 @@ export default function Daily() {
 
 function IssueKpis({ subnets, hosts, zones, loading }) {
   const { COLORS } = useChartTheme()
+  // `subnets` (data.subnets) is the union of the first-5,000 page and every
+  // subnet with util >= 70, deduped. That union is COMPLETE for any threshold
+  // >= 70 — a subnet at util > 85 is necessarily >= 70, so it cannot be missing
+  // from the union. Counting rows here is therefore an exact estate figure for
+  // this tile, not a coverage-set sample — do not swap this for a `_totals`
+  // lookup (`_totals.subnetsCrit` is util >= 90, a different threshold).
   const gt85 = subnets.filter((s) => (Number(s.cidr) || 0) <= 28 && (Number(s.util) || 0) > 85).length
   const notOnline = hosts.filter((h) => !/online|active/i.test(h.status || '')).length
   const zoneIssues = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length
