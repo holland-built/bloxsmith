@@ -10,6 +10,7 @@ package dashboard
 
 import (
 	"encoding/json"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -111,6 +112,79 @@ func dataRowsResp(rows []map[string]any) map[string]any {
 
 func dataErr() map[string]any {
 	return map[string]any{"data": map[string]any{}, "status": "error"}
+}
+
+// --- attack-surface availability tri-state -----------------------------------
+//
+// The attack-surface feeds (exposures/hostnames/IPs) can each fail in a way
+// that a plain ok/error boolean hides: the fetch can succeed with rows but no
+// trustworthy total (e.g. a paged POST that only ever returns page 1), or it
+// can fail outright (e.g. a 429 from upstream's own size cap). Collapsing
+// either case into "empty" or "error" misreports the attack surface, so these
+// feeds report one of three explicit availability states instead:
+//
+//   - "ok": rows fetched, and upstream's own total_count/has_more passed the
+//     consistency checks below, so data.total_available can be trusted.
+//   - "metadata-degraded": rows fetched fine — the feed itself is healthy —
+//     but the total is missing or inconsistent, so no total is emitted at
+//     all. Never substitute the fetched row count for the missing total.
+//   - "unavailable": the fetch itself failed. No rows, an operator-safe
+//     reason, and the raw upstream error text stays server-side (log.Printf
+//     only) so it never lands in a client-facing response body.
+//
+// data.rows / data.count are always present and always mean "rows actually
+// fetched", never "the total attack surface" — that distinction is the whole
+// point of this type.
+
+// totalConsistencyCheck applies sanity checks — NOT verification of ground
+// truth — to an upstream-reported total_count/has_more pair. Upstream can
+// report a plausible-but-wrong total and still pass every check here; this
+// only catches internally-inconsistent responses (missing/non-integer/
+// negative/smaller-than-what-we-already-have). ok=false means "don't trust
+// this total", not "upstream lied".
+func totalConsistencyCheck(body any, offset, returned int) (total int, ok bool) {
+	m := asMap(body)
+	tv, present := m["total_count"]
+	if !present || !isDigit(tv) {
+		return 0, false
+	}
+	total = toInt(tv)
+	if total < 0 {
+		return 0, false
+	}
+	have := offset + returned
+	if total < have {
+		return 0, false
+	}
+	hasMore := truthy(m["has_more"])
+	if hasMore && total <= have {
+		return 0, false
+	}
+	return total, true
+}
+
+// exposureFeedResp builds the three-state response body for an
+// attack-surface feed given the rows already fetched and the outcome of
+// totalConsistencyCheck.
+func exposureFeedResp(rows []map[string]any, total int, haveTotal bool) map[string]any {
+	data := map[string]any{"rows": rows, "count": len(rows)}
+	if haveTotal {
+		data["total_available"] = total
+		return map[string]any{"data": data, "status": "ok", "availability": "ok"}
+	}
+	return map[string]any{"data": data, "status": "ok", "availability": "metadata-degraded"}
+}
+
+// exposureFeedUnavailable builds the "unavailable" state: no rows, an
+// operator-safe reason, and — deliberately — no raw upstream error text.
+// Callers must log.Printf the raw detail themselves before calling this.
+func exposureFeedUnavailable(reason string) map[string]any {
+	return map[string]any{
+		"data":         map[string]any{},
+		"status":       "error",
+		"availability": "unavailable",
+		"reason":       reason,
+	}
 }
 
 // --- shapers (server.py 3376-3528) ------------------------------------------
@@ -645,12 +719,20 @@ func (s *Service) CSPCtemAssets() map[string]any {
 }
 
 // CSPExposures POSTs the attack-surface exposures search (read-only query).
+// The request is a single page (offset 0, limit 200); the response's own
+// total_count/has_more are read and sanity-checked so a 200-row page is
+// never reported as the whole attack surface (server.py/csp.go bug: a fixed
+// page size masquerading as a total, third instance of this family).
 func (s *Service) CSPExposures() map[string]any {
+	const offset = 0
 	body, st, err := s.Rest.Write("POST", "/api/attack-surface/v1/exposures", map[string]any{"limit": 200}, nil)
 	if errored(st, err) {
-		return dataErr()
+		log.Printf("csp: exposures fetch failed: status=%d err=%v body=%v", st, err, body)
+		return exposureFeedUnavailable("upstream exposures fetch failed")
 	}
-	return dataRowsResp(normExposures(body))
+	rows := normExposures(body)
+	total, ok := totalConsistencyCheck(body, offset, len(rows))
+	return exposureFeedResp(rows, total, ok)
 }
 
 // CSPAssetRisk ranks assets by exposure count (rows sorted exposures DESC).
@@ -662,22 +744,40 @@ func (s *Service) CSPAssetRisk() map[string]any {
 	return dataRowsResp(normAssetRisk(body))
 }
 
-// CSPExposedHostnames lists internet-exposed hostnames.
+// CSPExposedHostnames lists internet-exposed hostnames. The upstream endpoint
+// serialises its whole response before checking size against its own 4 MiB
+// gRPC cap, so a too-large dataset 429s regardless of limit/_limit/offset —
+// there is no client-side paging escape here; do not add retry-with-smaller-
+// limit logic, it will hit the identical 429 every time.
 func (s *Service) CSPExposedHostnames() map[string]any {
 	body, st, err := s.Rest.GetEx("/api/attack-surface/v1/exposures/hostnames", nil)
 	if errored(st, err) {
-		return dataErr()
+		// GetEx discards the parsed error body on a 4xx/5xx (rest.go:127-129),
+		// so the raw "grpc: trying to send message larger than max ..." text
+		// upstream returns on the 429 isn't available here to log — only the
+		// status/err are. It never reaches the response body either way.
+		log.Printf("csp: exposed-hostnames fetch failed: status=%d err=%v", st, err)
+		return exposureFeedUnavailable("upstream response too large")
 	}
-	return dataRowsResp(normExposedHostnames(body))
+	rows := normExposedHostnames(body)
+	total, ok := totalConsistencyCheck(body, 0, len(rows))
+	return exposureFeedResp(rows, total, ok)
 }
 
-// CSPExposedIPs lists internet-exposed IP addresses.
+// CSPExposedIPs lists internet-exposed IP addresses. Same 4 MiB server-side
+// cap as CSPExposedHostnames applies (today at ~1 MB, so headroom, not
+// immunity) — same no-client-paging caveat.
 func (s *Service) CSPExposedIPs() map[string]any {
 	body, st, err := s.Rest.GetEx("/api/attack-surface/v1/exposures/ip-addresses", nil)
 	if errored(st, err) {
-		return dataErr()
+		// Same GetEx caveat as CSPExposedHostnames: the error body isn't
+		// available here to log, only status/err.
+		log.Printf("csp: exposed-ips fetch failed: status=%d err=%v", st, err)
+		return exposureFeedUnavailable("upstream response too large")
 	}
-	return dataRowsResp(normExposedIPs(body))
+	rows := normExposedIPs(body)
+	total, ok := totalConsistencyCheck(body, 0, len(rows))
+	return exposureFeedResp(rows, total, ok)
 }
 
 // CSPLicenseAlerts merges licenses + user_alerts; any sub-error → status=error.
