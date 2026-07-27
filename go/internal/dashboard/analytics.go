@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"bloxsmith/internal/cache"
+	"bloxsmith/internal/mcp"
 )
 
 // This file ports the MCP/REST-backed analytics + SOC fetchers:
@@ -157,23 +158,22 @@ func (s *Service) UpdateAction(ctx context.Context, id, status string) (map[stri
 		oldStatus = "unknown"
 	}
 
-	text, err := s.Mcp.CallTool(ctx, "iq-actions_update_action", map[string]any{
+	text, err := s.Mcp.CallToolChecked(ctx, "iq-actions_update_action", map[string]any{
 		"id": id, "status": status, "format": "json",
-	})
+	}, mcp.SuccessFieldTrue)
 	if err != nil {
-		return nil, err
-	}
-	var v any
-	if json.Unmarshal([]byte(text), &v) != nil {
-		// Upstream replied 200 but the body didn't parse: the write outcome is
-		// unknown, not a success — never report ok:true for an unconfirmed write.
+		// Upstream rejected the write (or the payload wasn't a recognised
+		// success shape): report ok:false with the upstream detail, never
+		// ok:true for an unconfirmed write.
 		return map[string]any{
 			"ok": false, "id": id, "old_status": oldStatus, "new_status": status,
-			"error":      "IQ Actions update returned an unparseable response; outcome unknown.",
+			"error":      err.Error(),
 			"result_raw": trunc(text, 200),
 		}, nil
 	}
 
+	var v any
+	_ = json.Unmarshal([]byte(text), &v)
 	return map[string]any{
 		"ok": true, "id": id, "old_status": oldStatus, "new_status": status,
 		"result": v,

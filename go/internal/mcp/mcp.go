@@ -47,6 +47,19 @@ const maxRows = 5000
 // No query_stored_data call is issued in this case.
 var ErrTooManyRows = errors.New("mcp: row_count exceeds maxRows cap")
 
+// ErrTransport is wrapped into CallToolChecked's returned error whenever the
+// call never reached the tool at all (network/HTTP/JSON-RPC failure) — the
+// write was never sent, so it is always safe to retry. Callers should match
+// it with errors.Is rather than inspecting the error's message text, which is
+// free to change without notice.
+var ErrTransport = errors.New("mcp: transport error")
+
+// ErrRejected is wrapped into CallToolChecked's returned error whenever the
+// tool replied but the reply did not satisfy the SuccessPredicate (including
+// the case where no predicate exists at all — see CallToolChecked). The call
+// reached the tool; the write may or may not have landed upstream.
+var ErrRejected = errors.New("mcp: rejected")
+
 // Client is a streamable-HTTP MCP session. Auth mirrors MCP_HEADERS: a func so
 // the active tenant key (post account-switch) is always read live.
 type Client struct {
@@ -283,6 +296,13 @@ func toolText(result json.RawMessage) string {
 
 // CallTool is session.call_tool: invoke a tool by name with its args, returning
 // the text payload of the first content block.
+//
+// WARNING: the returned error is TRANSPORT-only (network/HTTP/JSON-RPC
+// failure). Every upstream TOOL rejection (bad auth, bad request, unknown
+// arg, no stored data, ...) arrives as an ordinary text payload with
+// err == nil — this has produced a live false-success on a security control
+// (domain blocking). Any call site that MUTATES state must use
+// CallToolChecked instead, which fails closed on an unrecognised payload.
 func (c *Client) CallTool(ctx context.Context, name string, args map[string]any) (string, error) {
 	resp, err := c.post(ctx, "tools/call", map[string]any{
 		"name": name, "arguments": args,
@@ -291,6 +311,107 @@ func (c *Client) CallTool(ctx context.Context, name string, args map[string]any)
 		return "", err
 	}
 	return toolText(resp.Result), nil
+}
+
+// SuccessPredicate decides whether a decoded tool payload is a recognised
+// success for one specific tool. payload is the result of json.Unmarshal-ing
+// text into a map[string]any; it is nil when text did not decode as a JSON
+// object (e.g. plain-text validation errors). Implementations should inspect
+// only fields that tool is documented to return on success.
+type SuccessPredicate func(text string, payload map[string]any) bool
+
+// SuccessFieldTrue is a ready-made SuccessPredicate for tools that report
+// success via a boolean "success" field, matching the iq-actions_update_action
+// fixture: {"success":true,"new_status":"resolved",...}. Reusable across any
+// tool with that same convention, but never applied implicitly — each
+// mutation call site must name its predicate explicitly.
+func SuccessFieldTrue(text string, payload map[string]any) bool {
+	ok, _ := payload["success"].(bool)
+	return ok
+}
+
+// CallToolChecked wraps CallTool for tools that MUTATE state. It is
+// FAIL-CLOSED by design: it returns a non-nil error unless ok affirmatively
+// recognises the payload as success. An unparseable payload, an empty
+// payload, a payload matching none of the known shapes, and a payload
+// matching a KNOWN ERROR shape are all treated as failure — the known error
+// shapes below are used only to build a readable message, never to decide
+// success, because an allowlist of failures fails open the moment upstream
+// invents a new error shape, which is exactly the bug this function exists
+// to fix (a live false-success on domain blocking). Returns the raw text
+// alongside any error so callers can keep it as diagnostic context.
+// If ok is nil, no recognised success shape exists for this tool: the reply
+// can never confirm success, and every call falls into the rejected branch
+// below with a message saying so plainly — the caller must verify success
+// out-of-band (e.g. a read-back of the mutated resource).
+func (c *Client) CallToolChecked(ctx context.Context, name string, args map[string]any, ok SuccessPredicate) (string, error) {
+	text, err := c.CallTool(ctx, name, args)
+	if err != nil {
+		return text, fmt.Errorf("mcp %s: transport error: %w: %w", name, ErrTransport, err)
+	}
+
+	var payload map[string]any
+	_ = json.Unmarshal([]byte(text), &payload) // payload stays nil on decode failure
+
+	if ok == nil {
+		return text, fmt.Errorf("mcp %s: rejected: %w: no success predicate is defined for this tool, so its reply can never confirm success — verify out-of-band", name, ErrRejected)
+	}
+	if ok(text, payload) {
+		return text, nil
+	}
+
+	return text, fmt.Errorf("mcp %s: rejected: %w: %s", name, ErrRejected, describeFailure(text, payload))
+}
+
+// describeFailure builds a human-readable detail string from a rejected
+// tool payload. It recognises the known error shapes (message/error/
+// status_code fields, or a plain-text detail) purely for MESSAGE quality —
+// see the fail-closed rationale on CallToolChecked for why this must never
+// feed back into the success decision.
+func describeFailure(text string, payload map[string]any) string {
+	if payload == nil {
+		trimmed := strings.TrimSpace(text)
+		if trimmed == "" {
+			return "empty response"
+		}
+		if len(trimmed) > 200 {
+			trimmed = trimmed[:200]
+		}
+		return trimmed
+	}
+
+	var parts []string
+	if sc, ok := payload["status_code"]; ok {
+		parts = append(parts, fmt.Sprintf("status_code=%v", sc))
+	}
+	if msg, ok := payload["message"].(string); ok && msg != "" {
+		parts = append(parts, msg)
+	}
+	switch e := payload["error"].(type) {
+	case string:
+		if e != "" {
+			parts = append(parts, e)
+		}
+	case []any:
+		for _, item := range e {
+			if m, ok := item.(map[string]any); ok {
+				if s, ok := m["message"].(string); ok && s != "" {
+					parts = append(parts, s)
+				}
+			}
+		}
+	}
+	if len(parts) == 0 {
+		trimmed := strings.TrimSpace(text)
+		if len(trimmed) > 200 {
+			trimmed = trimmed[:200]
+		}
+		if trimmed == "" {
+			trimmed = "unrecognised payload"
+		}
+		return trimmed
+	}
+	return strings.Join(parts, "; ")
 }
 
 // columnarToDicts is _columnar_to_dicts (server.py:3068): DuckDB

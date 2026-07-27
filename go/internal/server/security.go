@@ -29,8 +29,8 @@ func (d *Deps) blockDomain(w http.ResponseWriter, r *http.Request, b map[string]
 		return
 	}
 	result := d.Dashboard.BlockDomain(r.Context(), domain, d.Cfg.BlockListID)
-	d.json(w, r, 200, result)
-	if ok, _ := result["ok"].(bool); ok {
+	d.json(w, r, outcomeStatus(result), result)
+	if outcome, _ := result["outcome"].(string); outcome == "verified" {
 		_, _ = d.Audit.Append("block-domain", httpx.Actor(r), map[string]any{"domain": domain})
 	}
 }
@@ -47,9 +47,33 @@ func (d *Deps) unblockDomain(w http.ResponseWriter, r *http.Request, b map[strin
 		return
 	}
 	result := d.Dashboard.UnblockDomain(r.Context(), domain, d.Cfg.BlockListID)
-	d.json(w, r, 200, result)
-	if ok, _ := result["ok"].(bool); ok {
+	d.json(w, r, outcomeStatus(result), result)
+	if outcome, _ := result["outcome"].(string); outcome == "verified" {
 		_, _ = d.Audit.Append("unblock-domain", httpx.Actor(r), map[string]any{"domain": domain})
+	}
+}
+
+// outcomeStatus maps a block/unblock result to an HTTP status so the status
+// line agrees with the body instead of always reporting 200
+// (dashboard/security.go contract, four outcomes): "verified" -> 200 (read-back
+// confirms desired state); "invalid" -> 400 (a local fault — invalid domain,
+// block list not configured/malformed, nil MCP client — nothing was ever sent
+// upstream); "rejected" -> 502 (the call reached upstream and upstream
+// refused it, via CallToolChecked's transport-error branch, safe to retry);
+// "unverified" -> 504 (submitted, but read-back didn't confirm within budget).
+// Anything with no recognised "outcome" falls back to 500.
+func outcomeStatus(result map[string]any) int {
+	switch result["outcome"] {
+	case "verified":
+		return 200
+	case "invalid":
+		return 400
+	case "rejected":
+		return 502
+	case "unverified":
+		return 504
+	default:
+		return 500
 	}
 }
 

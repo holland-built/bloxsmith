@@ -154,8 +154,14 @@ function KpiStack({ hub, events, acks }) {
 
 function BlockCell({ domain }) {
   const { COLORS } = useChartTheme()
-  const [state, setState] = useState('idle') // idle | busy | blocked | tokenRequired | error
+  // idle | busy | verified | rejected | unverified | tokenRequired.
+  // "verified" is the ONLY state that may show a green tick — it means a
+  // read-back of the block list actually confirmed the desired state, not
+  // just that the HTTP call returned ok. See dashboard/security.go's
+  // outcome contract: verified / rejected / unverified.
+  const [state, setState] = useState('idle')
   const [msg, setMsg] = useState('')
+  const lastActionRef = useRef('block')
   const aliveRef = useRef(true)
   useEffect(() => {
     return () => { aliveRef.current = false }
@@ -163,25 +169,40 @@ function BlockCell({ domain }) {
 
   async function run(action) {
     if (!domain) return
+    lastActionRef.current = action
     setState('busy')
     const res = await authFetch(`/api/${action}-domain`, {
       method: 'POST',
       body: JSON.stringify({ domain }),
     })
     if (!aliveRef.current) return
-    if (res.ok) {
-      setState(action === 'block' ? 'blocked' : 'idle')
-    } else if (res.tokenRequired) {
+    if (res.tokenRequired) {
       setState('tokenRequired')
-    } else {
-      setState('error')
-      setMsg((res.data && res.data.error) || `HTTP ${res.status}`)
+      return
     }
+    const body = res.data || {}
+    if (body.outcome === 'verified') {
+      // A read-back proved the list's actual state — safe to show success.
+      setState(action === 'block' ? 'verified' : 'idle')
+      setMsg('')
+      return
+    }
+    if (body.outcome === 'unverified') {
+      // Write was submitted but read-back didn't converge in budget — the
+      // mutation MAY have landed. Never imply success or failure here.
+      setState('unverified')
+      setMsg(body.error || 'change may have already applied — refresh and re-check before retrying')
+      return
+    }
+    // "rejected" (upstream refused, or a local guard like missing
+    // BLOCK_LIST_ID) — nothing was applied, safe to retry.
+    setState('rejected')
+    setMsg(body.error || `HTTP ${res.status}`)
   }
 
   if (!domain) return <span className="text-dim text-[11px]">—</span>
   if (state === 'busy') return <span className="text-[11px] text-muted">…</span>
-  if (state === 'blocked') {
+  if (state === 'verified') {
     return (
       <div className="flex items-center gap-1.5">
         <span className="text-[11px]" style={{ color: COLORS.ok }}>blocked ✓</span>
@@ -190,7 +211,24 @@ function BlockCell({ domain }) {
     )
   }
   if (state === 'tokenRequired') return <span className="text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⚙ Settings</span>
-  if (state === 'error') return <span className="text-[11px]" style={{ color: COLORS.crit }}>{msg}</span>
+  if (state === 'unverified') {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px]" style={{ color: COLORS.warn }} title={msg}>
+          unconfirmed — {msg}
+        </span>
+        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted">Re-check</button>
+      </div>
+    )
+  }
+  if (state === 'rejected') {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px]" style={{ color: COLORS.crit }} title={msg}>{msg}</span>
+        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted">Retry</button>
+      </div>
+    )
+  }
   return (
     <button onClick={() => run('block')} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted hover:text-field-txt">Block</button>
   )
