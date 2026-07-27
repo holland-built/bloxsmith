@@ -24,6 +24,18 @@ function ackKey(e) {
   return `${e.event_time}|${e.qname}`
 }
 
+// A dead upstream feed must never read as "you have none" — this is visually
+// and lexically distinct from <Empty>: no zero-count language, no "no data".
+function FeedUnavailable({ reason, label = 'Feed unavailable' }) {
+  const { COLORS } = useChartTheme()
+  return (
+    <div className="h-full min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4">
+      <div className="text-sm font-semibold" style={{ color: COLORS.crit }}>{label}</div>
+      {reason ? <div className="text-[11px]" style={{ color: COLORS.warn }}>{reason}</div> : null}
+    </div>
+  )
+}
+
 // ---------- main ----------
 
 export default function Security() {
@@ -532,8 +544,11 @@ function fmtDate(v) {
 }
 
 function ExposuresPanel({ exposures }) {
-  const rows = exposures.data?.data?.rows ?? []
-  const count = exposures.data?.data?.count ?? rows.length
+  const payload = exposures.data ?? {}
+  const availability = payload.availability
+  const rows = payload.data?.rows ?? []
+  const count = payload.data?.count ?? rows.length
+  const total = payload.data?.total_available
 
   const columns = [
     { key: 'title', label: 'Title', grow: true, sortable: true },
@@ -542,12 +557,30 @@ function ExposuresPanel({ exposures }) {
     { key: 'last_seen_at', label: 'Last Seen', sortable: true, render: (v) => fmtDate(v) },
   ]
 
+  const rightNode =
+    availability === 'ok' && typeof total === 'number'
+      ? <span className="text-[11px] text-muted">{total.toLocaleString()} total</span>
+      : availability === 'metadata-degraded'
+        ? <span className="text-[11px] text-muted">{count.toLocaleString()} rows loaded</span>
+        : count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null
+
   return (
-    <Card span={4} title="Exposures" right={count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null}>
-      {exposures.loading ? <Skeleton h={260} /> : exposures.error || rows.length === 0 ? (
+    <Card span={4} title="Exposures" right={rightNode}>
+      {exposures.loading ? <Skeleton h={260} /> : availability === 'unavailable' ? (
+        <FeedUnavailable reason={payload.reason} label="Exposures feed unavailable" />
+      ) : exposures.error || rows.length === 0 ? (
         <Empty>no exposures reported</Empty>
       ) : (
-        <DataTable rows={rows} columns={columns} maxHeight={360} rowCap={150} rowKey={(r) => r.id} />
+        <>
+          <div className="text-[11px] text-muted mb-1">
+            {availability === 'metadata-degraded'
+              ? `Total unavailable, ${count.toLocaleString()} rows loaded`
+              : typeof total === 'number'
+                ? `${count.toLocaleString()} of ${total.toLocaleString()}, upstream order — not ranked by severity`
+                : `${count.toLocaleString()} rows, upstream order`}
+          </div>
+          <DataTable rows={rows} columns={columns} maxHeight={360} rowCap={150} rowKey={(r) => r.id} />
+        </>
       )}
     </Card>
   )
@@ -586,49 +619,67 @@ function AssetRiskPanel({ assetRisk }) {
 // ---------- exposed hostnames / ips (huge single-column lists) ----------
 
 function ExposedSurfacePanel({ hostnames, ips }) {
-  const hRows = hostnames.data?.data?.rows ?? []
-  const hCount = hostnames.data?.data?.count ?? hRows.length
-  const iRows = ips.data?.data?.rows ?? []
-  const iCount = ips.data?.data?.count ?? iRows.length
+  const hPayload = hostnames.data ?? {}
+  const iPayload = ips.data ?? {}
+  const hAvail = hPayload.availability
+  const iAvail = iPayload.availability
+  const hRows = hPayload.data?.rows ?? []
+  const hCount = hPayload.data?.count ?? hRows.length
+  const iRows = iPayload.data?.rows ?? []
+  const iCount = iPayload.data?.count ?? iRows.length
 
   const loading = hostnames.loading || ips.loading
-  const bothError = (hostnames.error && ips.error)
-  const bothEmpty = hRows.length === 0 && iRows.length === 0
+  const hDead = hAvail === 'unavailable'
+  const iDead = iAvail === 'unavailable'
+  const bothDead = hDead && iDead
 
   const SAMPLE = 25
   const hCols = [{ key: 'hostname', label: 'Hostname', mono: true, grow: true }]
   const iCols = [{ key: 'ip', label: 'IP', mono: true }]
+
+  // metadata-degraded feeds have rows but no verified total — never call it a total.
+  function countLabel(count, avail) {
+    return avail === 'metadata-degraded' ? `${count.toLocaleString()} rows loaded` : count.toLocaleString()
+  }
 
   return (
     <Card
       span={4}
       title="Exposed Surface"
       right={
-        <span className="text-[11px] text-muted">
-          {hCount.toLocaleString()} hostnames · {iCount.toLocaleString()} IPs
-        </span>
+        loading || bothDead ? null : (
+          <span className="text-[11px] text-muted">
+            {hDead ? 'hostnames unavailable' : `${countLabel(hCount, hAvail)} hostnames`}
+            {' · '}
+            {iDead ? 'IPs unavailable' : `${countLabel(iCount, iAvail)} IPs`}
+          </span>
+        )
       }
     >
-      {loading ? <Skeleton h={260} /> : bothError || bothEmpty ? (
-        <Empty>no exposed hostnames or IPs reported</Empty>
+      {loading ? <Skeleton h={260} /> : bothDead ? (
+        <FeedUnavailable reason={hPayload.reason || iPayload.reason} label="Exposed surface feeds unavailable" />
       ) : (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <div className="text-[11px] text-muted mb-1">
-              Showing {Math.min(SAMPLE, hRows.length).toLocaleString()} of {hCount.toLocaleString()}
+              {hDead ? 'Hostnames' : `Showing ${Math.min(SAMPLE, hRows.length).toLocaleString()} of ${countLabel(hCount, hAvail)}`}
             </div>
-            {hRows.length === 0 ? (
-              <Empty>none</Empty>
+            {hDead ? (
+              <FeedUnavailable reason={hPayload.reason} label="Hostname feed unavailable" />
+            ) : hRows.length === 0 ? (
+              <Empty>no hostnames reported</Empty>
             ) : (
               <DataTable rows={hRows} columns={hCols} maxHeight={280} rowCap={SAMPLE} rowKey={(r, i) => `${r.hostname}|${i}`} />
             )}
           </div>
           <div>
             <div className="text-[11px] text-muted mb-1">
-              Showing {Math.min(SAMPLE, iRows.length).toLocaleString()} of {iCount.toLocaleString()}
+              {iDead ? 'IPs' : `Showing ${Math.min(SAMPLE, iRows.length).toLocaleString()} of ${countLabel(iCount, iAvail)}`}
             </div>
-            {iRows.length === 0 ? (
-              <Empty>none</Empty>
+            {iDead ? (
+              <FeedUnavailable reason={iPayload.reason} label="IP feed unavailable" />
+            ) : iRows.length === 0 ? (
+              <Empty>no IPs reported</Empty>
             ) : (
               <DataTable rows={iRows} columns={iCols} maxHeight={280} rowCap={SAMPLE} rowKey={(r, i) => `${r.ip}|${i}`} />
             )}
