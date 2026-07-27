@@ -241,3 +241,78 @@ func TestUpdateActionUnparseableResponseIsNotSuccess(t *testing.T) {
 		t.Fatalf("old/new status should still be reported: got %v/%v", res["old_status"], res["new_status"])
 	}
 }
+
+// TestUpdateActionSuccessFieldTrueYieldsOk locks the real observed success
+// fixture: a payload carrying success:true must yield ok:true, with the
+// upstream result attached.
+func TestUpdateActionSuccessFieldTrueYieldsOk(t *testing.T) {
+	f := &fakeMCP{
+		getBody: map[string]any{"action": map[string]any{"id": "427de4b8-9b32-4ce8-9492-ad88a70662cd", "status": "resolved"}},
+		updateBody: map[string]any{
+			"action_id":  "427de4b8-9b32-4ce8-9492-ad88a70662cd",
+			"message":    "Action status updated successfully to: resolved",
+			"new_status": "resolved",
+			"old_status": "resolved",
+			"success":    true,
+		},
+	}
+	s := newTestService(t, f)
+	res, err := s.UpdateAction(context.Background(), "427de4b8-9b32-4ce8-9492-ad88a70662cd", "resolved")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok, _ := res["ok"].(bool); !ok {
+		t.Fatalf("ok: got %v, want true for success:true payload", res["ok"])
+	}
+}
+
+// TestUpdateActionForbiddenIsNotSuccess is the core fix under test: an
+// upstream 403 rejection ("Request forbidden: not authorized") parses fine
+// as JSON but carries no success:true field. It must yield ok:false with the
+// upstream detail surfaced, never ok:true — a rejected status change must
+// never be reported to the operator (or the audit log) as accepted.
+func TestUpdateActionForbiddenIsNotSuccess(t *testing.T) {
+	f := &fakeMCP{
+		getBody: map[string]any{"action": map[string]any{"id": "abc", "status": "active"}},
+		updateBody: map[string]any{
+			"error":       []any{map[string]any{"message": "Request forbidden: not authorized"}},
+			"status_code": float64(403),
+		},
+	}
+	s := newTestService(t, f)
+	res, err := s.UpdateAction(context.Background(), "abc", "resolved")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok, _ := res["ok"].(bool); ok {
+		t.Fatalf("ok: got true, want false for a 403 forbidden payload")
+	}
+	errMsg, _ := res["error"].(string)
+	if !strings.Contains(errMsg, "forbidden") && !strings.Contains(errMsg, "403") {
+		t.Fatalf("expected upstream detail (forbidden/403) in error, got %q", errMsg)
+	}
+	if _, has := res["result_raw"]; !has {
+		t.Fatalf("expected result_raw to carry the raw rejected payload")
+	}
+	if res["old_status"] != "active" || res["new_status"] != "resolved" {
+		t.Fatalf("old/new status should still be reported: got %v/%v", res["old_status"], res["new_status"])
+	}
+}
+
+// TestUpdateActionUnrecognisedShapeFailsClosed verifies the fail-closed
+// contract: a well-formed but unrecognised payload (no success:true, no
+// known error shape) must NOT be treated as success just because it parsed.
+func TestUpdateActionUnrecognisedShapeFailsClosed(t *testing.T) {
+	f := &fakeMCP{
+		getBody:    map[string]any{"action": map[string]any{"id": "abc", "status": "active"}},
+		updateBody: map[string]any{"weird": "shape"},
+	}
+	s := newTestService(t, f)
+	res, err := s.UpdateAction(context.Background(), "abc", "resolved")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok, _ := res["ok"].(bool); ok {
+		t.Fatalf("ok: got true, want false for an unrecognised payload shape")
+	}
+}
