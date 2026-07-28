@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -156,6 +157,136 @@ func findTotal(body map[string]any, rowCount int) (int, bool) {
 	return 0, false
 }
 
+// upstreamMsgKeys are the only upstream error-body fields ever surfaced to a
+// client. This IS the security boundary: allowlisting specific fields, never
+// regex-scrubbing and forwarding arbitrary upstream text.
+var upstreamMsgKeys = []string{"error", "message", "detail"}
+
+// upstreamArrayKeys are the top-level keys whose value, when a JSON array, is
+// treated as a list of error objects (CSP's actual shape for a bad filter:
+// {"error":[{"message":"Unknown field: subnet"}]}). Only the first element is
+// consulted.
+var upstreamArrayKeys = []string{"error", "errors"}
+
+// upstreamArrayElemKeys is the field-priority used inside an array element:
+// message first (CSP's actual field for this shape), then error, then detail.
+var upstreamArrayElemKeys = []string{"message", "error", "detail"}
+
+// upstreamMsgMaxLen bounds the extracted message before it reaches a client.
+const upstreamMsgMaxLen = 200
+
+// stringField returns the first of keys present in m with a non-empty string
+// value. A non-string value (nested object, number, etc.) is not a match —
+// only a plain string is ever considered "recognised".
+func stringField(m map[string]any, keys []string) (string, bool) {
+	for _, k := range keys {
+		if s, ok := m[k].(string); ok && s != "" {
+			return s, true
+		}
+	}
+	return "", false
+}
+
+// truncateRunes bounds s to at most n runes (not bytes), so a multi-byte
+// character is never split.
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
+}
+
+// extractUpstreamMessage pulls an allowlisted, human-readable message out of
+// an upstream JSON error body (a bounded rest.UpstreamError.Snippet). It tries
+// error/message/detail at the top level, then one level down inside a nested
+// "status" or "error" object (CSP sometimes wraps its real message there,
+// e.g. {"status":{"message":"..."}}), then — CSP's actual shape for a bad
+// filter — an "error"/"errors" key whose value is an ARRAY of objects, e.g.
+// {"error":[{"message":"Unknown field: subnet"}]}: only the first element is
+// consulted, and only if it is itself an object. Anything else — unparsable
+// JSON, a non-object body, an array whose first element isn't an object, none
+// of the recognised keys — is reported as not found, and the caller must omit
+// the field entirely rather than fall back to dumping the raw snippet. The
+// returned message is truncated to upstreamMsgMaxLen characters.
+func extractUpstreamMessage(snippet string) (string, bool) {
+	var parsed any
+	if err := json.Unmarshal([]byte(snippet), &parsed); err != nil {
+		return "", false
+	}
+	m, ok := parsed.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	if msg, found := stringField(m, upstreamMsgKeys); found {
+		return truncateRunes(msg, upstreamMsgMaxLen), true
+	}
+	for _, container := range []string{"status", "error"} {
+		nested, ok := m[container].(map[string]any)
+		if !ok {
+			continue
+		}
+		if msg, found := stringField(nested, upstreamMsgKeys); found {
+			return truncateRunes(msg, upstreamMsgMaxLen), true
+		}
+	}
+	for _, arrKey := range upstreamArrayKeys {
+		arr, ok := m[arrKey].([]any)
+		if !ok || len(arr) == 0 {
+			continue
+		}
+		first, ok := arr[0].(map[string]any)
+		if !ok {
+			continue
+		}
+		if msg, found := stringField(first, upstreamArrayElemKeys); found {
+			return truncateRunes(msg, upstreamMsgMaxLen), true
+		}
+	}
+	return "", false
+}
+
+// credentialRe matches the credential shapes we must never let reach the
+// server log: an Authorization header/value, a bearer or token credential, or
+// an api_key/api-key/apikey assignment. Applied to the (already bounded)
+// snippet before it is logged.
+var credentialRe = regexp.MustCompile(`(?i)(authorization\s*[:=]\s*"?[^",}\s]+"?|bearer\s+\S+|token\s+\S+|api[-_]?key["']?\s*[:=]\s*"?[^",}\s]+"?)`)
+
+// redactSnippet replaces any credential-shaped substring with [REDACTED]
+// before a snippet is logged. This is a best-effort guard on top of the
+// snippet already being size-bounded — it is not itself the security
+// boundary (that's the allowlist in extractUpstreamMessage for what reaches
+// the client); this only keeps the server log from casually holding a token.
+func redactSnippet(s string) string {
+	return credentialRe.ReplaceAllString(s, "[REDACTED]")
+}
+
+// logUpstreamError writes one structured server-log line per upstream
+// failure: the endpoint path, upstream status, failure category, whether the
+// kept snippet was itself truncated, and the snippet with credentials
+// redacted first. The snippet is already bounded to rest.snippetCap (8KiB) by
+// GetStrict — this never logs a full unbounded body.
+func logUpstreamError(ue *rest.UpstreamError) {
+	log.Printf("[upstream] path=%s status=%d category=%s truncated=%t snippet=%s",
+		ue.Path, ue.Status, ue.Category, ue.Truncated, redactSnippet(ue.Snippet))
+}
+
+// writeUpstreamError answers a failed upstream fetch with a 502 that carries
+// an allowlisted, size-bounded summary of WHY (never the raw body), and logs
+// the full redacted, bounded snippet server-side. It takes the
+// *rest.UpstreamError already produced by pagedFetch's single GetPageStrict
+// call — it must NEVER re-issue the request to recover this information; that
+// would double load on an already-failing upstream and risk reporting a
+// different failure than the one that actually occurred.
+func (d *Deps) writeUpstreamError(w http.ResponseWriter, r *http.Request, ue *rest.UpstreamError) {
+	resp := map[string]any{"error": "upstream request failed", "status": ue.Status}
+	logUpstreamError(ue)
+	if msg, found := extractUpstreamMessage(ue.Snippet); found {
+		resp["upstream"] = msg
+	}
+	d.json(w, r, 502, resp)
+}
+
 // pagedFetch runs the shared upstream-fetch + truncation-metadata logic used
 // by dnsRecordsGet and ipamAddressesGet. It issues a SINGLE upstream request
 // for limit+1 rows (limit is capped at 999 by parseListLimit, so limit+1
@@ -172,9 +303,15 @@ func (d *Deps) pagedFetch(w http.ResponseWriter, r *http.Request, path string, p
 	}
 
 	p["_limit"] = strconv.Itoa(limit + 1)
-	fetchRows, body, status := d.Rest.GetPage(path, p)
-	if status == 0 || status >= 400 {
-		d.json(w, r, 502, map[string]any{"error": "upstream request failed", "status": status})
+	fetchRows, body, err := d.Rest.GetPageStrict(path, p)
+	if err != nil {
+		ue, ok := err.(*rest.UpstreamError)
+		if !ok {
+			// GetPageStrict only ever returns *rest.UpstreamError; this
+			// fallback is defensive, not a path exercised in practice.
+			ue = &rest.UpstreamError{Path: path}
+		}
+		d.writeUpstreamError(w, r, ue)
 		return nil, nil, false
 	}
 
@@ -277,7 +414,7 @@ func (d *Deps) ipamAddressesGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addrs, extra, ok := d.pagedFetch(w, r, "/api/ddi/v1/ipam/address",
-		map[string]string{"_filter": `subnet=="` + esc + `"`}, limit)
+		map[string]string{"_filter": `parent=="` + esc + `"`}, limit)
 	if !ok {
 		return
 	}

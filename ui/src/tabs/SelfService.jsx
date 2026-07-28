@@ -277,6 +277,10 @@ function ManageRecordsPanel() {
   const [message, setMessage] = useState(null)
   const [error, setError] = useState(null)
   const [deleteError, setDeleteError] = useState(null)
+  // Panel-level confirmation — the row-scoped `message` above dies with the row
+  // it lives in (Edit closes / Delete removes the row in the same tick), so a
+  // successful apply/delete needs its own state that survives that unmount.
+  const [panelMessage, setPanelMessage] = useState(null)
 
   function markStale() {
     if (status === 'previewed') setStale(true)
@@ -289,6 +293,7 @@ function ManageRecordsPanel() {
     setComment(row.comment ?? '')
     setHeld(null)
     setStatus('idle'); setStale(false); setPreview(null); setMessage(null); setError(null)
+    setPanelMessage(null)
   }
 
   // `expected` here is the held snapshot (value/ttl/comment as they were when
@@ -371,8 +376,8 @@ function ManageRecordsPanel() {
             return
           }
           setPreview(null); setStale(false); setStatus('applied')
-          setMessage('DNS record updated.')
           setEditingId(null)
+          setPanelMessage('DNS record updated.')
           recordsApi.refetch()
         })
       })
@@ -392,6 +397,7 @@ function ManageRecordsPanel() {
   function handleDeleteClick(row) {
     if (armedId !== row.id) {
       setDeleteError(null)
+      setPanelMessage(null)
       fetch(recordsUrl, { cache: 'no-store' })
         .then((r) => r.json())
         .catch(() => ({}))
@@ -415,6 +421,7 @@ function ManageRecordsPanel() {
           setDeleteError(j.error || `HTTP ${r.status} — delete failed, record still exists`)
           return
         }
+        setPanelMessage('DNS record deleted.')
         recordsApi.refetch()
       })
       .catch((e) => setDeleteError(String(e?.message || e) || 'delete failed, record still exists'))
@@ -429,7 +436,7 @@ function ManageRecordsPanel() {
           <select
             className={inputCls}
             value={zoneId}
-            onChange={(e) => { setZoneId(e.target.value); setEditingId(null); setArmedId(null); setDeleteError(null) }}
+            onChange={(e) => { setZoneId(e.target.value); setEditingId(null); setArmedId(null); setDeleteError(null); setPanelMessage(null) }}
           >
             <option value="">Select zone…</option>
             {zones.map((z) => <option key={z.id} value={z.id}>{z.fqdn || z.name || z.id}</option>)}
@@ -443,6 +450,7 @@ function ManageRecordsPanel() {
         <>
           <FetchError error={recordsApi.error} stale={records.length > 0} />
           {deleteError && <div className="text-xs mb-2" style={{ color: COLORS.crit }}>{deleteError}</div>}
+          {!deleteError && panelMessage && <div className="text-xs mb-2" style={{ color: COLORS.ok }}>{panelMessage}</div>}
           {note && <div className="text-[11px] text-dim mb-2">{note}</div>}
           {!recordsApi.loading && !recordsApi.error && records.length === 0 && <Empty>no records in this zone</Empty>}
           {records.length > 0 && (
@@ -641,11 +649,8 @@ function ManageAddressesPanel() {
 
 // ---------- main ----------
 
-// ManageAddressesPanel is finished and tested, but GET /api/ddi/v1/ipam/address
-// answers HTTP 400 upstream for every subnet id form, so the panel can only
-// render its error state. Flip this to true once that query is corrected —
-// nothing else needs to change. See docs/DAILY_CHANGELOG.md 2026-07-28.
-const SHOW_MANAGE_ADDRESSES = false
+// ManageAddressesPanel is live — the server filter field was fixed (parent, not subnet).
+const SHOW_MANAGE_ADDRESSES = true
 
 export default function SelfService() {
   return (

@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -155,6 +156,133 @@ func (c *Client) GetPage(path string, params map[string]string) (rows []any, bod
 		body = b
 	}
 	return rows, body, status
+}
+
+// snippetCap bounds how much of an upstream body GetStrict retains in an
+// UpstreamError. It is enforced at read time via io.LimitReader, never by
+// slicing an already fully-read body, so an oversized error page can't blow
+// up memory before we know we're about to discard most of it.
+const snippetCap = 8 << 10 // 8KiB
+
+// UpstreamError is a failed upstream read that a caller must not mistake for
+// an empty result. Category distinguishes the failure modes that all
+// previously collapsed to an empty slice via Get/GetEx.
+type UpstreamError struct {
+	Path      string
+	Status    int    // 0 on a transport failure
+	Category  string // "network" | "status" | "decode" | "shape"
+	Snippet   string // bounded copy of the upstream body, for logs only
+	Truncated bool   // Snippet was cut
+}
+
+// Error is short and safe for general logs: category, status, path. It NEVER
+// includes Snippet, which may carry sensitive upstream response content.
+func (e *UpstreamError) Error() string {
+	if e.Status > 0 {
+		return fmt.Sprintf("upstream %s error (status %d) on %s", e.Category, e.Status, e.Path)
+	}
+	return fmt.Sprintf("upstream %s error on %s", e.Category, e.Path)
+}
+
+// Public is one sanitized sentence fit to show a user — no path, no snippet.
+func (e *UpstreamError) Public() string {
+	switch e.Category {
+	case "network":
+		return "Could not reach the upstream server."
+	case "status":
+		return fmt.Sprintf("The upstream server returned an error (status %d).", e.Status)
+	case "decode":
+		return "The upstream server's response could not be parsed."
+	case "shape":
+		return "The upstream server returned an unexpected response format."
+	default:
+		return "The upstream request failed."
+	}
+}
+
+// GetStrict is Get with the failures surfaced. Empty is still a legitimate
+// result — only a non-nil error means the read failed. Unlike Get, it does
+// not call GetEx: GetEx throws the error body away, and GetStrict needs to
+// keep a bounded copy of it for UpstreamError.Snippet. It delegates to
+// getStrict, discarding the envelope that GetPageStrict needs.
+func (c *Client) GetStrict(path string, params map[string]string) ([]any, error) {
+	rows, _, err := c.getStrict(path, params)
+	return rows, err
+}
+
+// GetPageStrict is GetStrict plus the raw envelope: callers that need both
+// pagination metadata and a categorized failure must not have to fetch twice.
+// It shares getStrict's single request/read/decode routine with GetStrict —
+// there is exactly one copy of that logic.
+func (c *Client) GetPageStrict(path string, params map[string]string) (rows []any, body map[string]any, err error) {
+	return c.getStrict(path, params)
+}
+
+// getStrict is the one request/read/decode routine behind both GetStrict and
+// GetPageStrict. body is the decoded top-level object when the response is a
+// JSON object, else nil (a bare top-level array still populates rows via
+// Unwrap, but has no envelope to expose). On error, rows and body are nil.
+func (c *Client) getStrict(path string, params map[string]string) ([]any, map[string]any, error) {
+	req, err := http.NewRequest("GET", c.url(path, params), nil)
+	if err != nil {
+		return nil, nil, &UpstreamError{Path: path, Category: "network"}
+	}
+	req.Header.Set("Authorization", c.auth.Value())
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, nil, &UpstreamError{Path: path, Category: "network"}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		// The snippet cap bounds only what we KEEP for logs on a failure — it
+		// is never applied to a successful body. Read one byte past the cap
+		// so we can tell a cap-hit apart from a body that just happens to be
+		// exactly snippetCap bytes long.
+		raw, err := io.ReadAll(io.LimitReader(resp.Body, snippetCap+1))
+		if err != nil {
+			return nil, nil, &UpstreamError{Path: path, Category: "network"}
+		}
+		truncated := len(raw) > snippetCap
+		if truncated {
+			raw = raw[:snippetCap]
+		}
+		return nil, nil, &UpstreamError{
+			Path:      path,
+			Status:    resp.StatusCode,
+			Category:  "status",
+			Snippet:   string(raw),
+			Truncated: truncated,
+		}
+	}
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, &UpstreamError{Path: path, Category: "network"}
+	}
+
+	var parsed any
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, nil, &UpstreamError{
+			Path:     path,
+			Status:   resp.StatusCode,
+			Category: "decode",
+		}
+	}
+
+	switch p := parsed.(type) {
+	case map[string]any:
+		return Unwrap(parsed), p, nil
+	case []any:
+		return Unwrap(parsed), nil, nil
+	default:
+		return nil, nil, &UpstreamError{
+			Path:     path,
+			Status:   resp.StatusCode,
+			Category: "shape",
+		}
+	}
 }
 
 // Write is _rest_write (server.py:390): POST/PATCH/DELETE returning
