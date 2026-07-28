@@ -111,8 +111,11 @@ func (p *BlockProvisioner) exists(bdef M) (bool, error) {
 		return false, err
 	}
 	cidr, _ := intCoerce(bdef["cidr"])
-	results := p.e.Rest.Get("/api/ddi/v1/ipam/address_block", map[string]string{
+	results, err := p.e.Rest.GetStrict("/api/ddi/v1/ipam/address_block", map[string]string{
 		"_filter": fmt.Sprintf(`space=="%s" and address=="%s" and cidr==%d`, space, addr, cidr)})
+	if err != nil {
+		return false, perrWrap(err, "could not check for existing address block %s/%d: %s", pyStr(bdef["address"]), cidr, upstreamPublic(err))
+	}
 	return len(results) > 0, nil
 }
 
@@ -200,8 +203,11 @@ func (p *BlockProvisioner) Provision(resilient bool) (M, error) {
 	if err != nil {
 		return nil, err
 	}
-	spaceResults := p.e.Rest.Get("/api/ddi/v1/ipam/ip_space", map[string]string{
+	spaceResults, err := p.e.Rest.GetStrict("/api/ddi/v1/ipam/ip_space", map[string]string{
 		"_filter": fmt.Sprintf(`name=="%s"`, space)})
+	if err != nil {
+		return nil, perrWrap(err, "could not read IP space %s: %s", p.cfg.IPSpace, upstreamPublic(err))
+	}
 	if len(spaceResults) == 0 {
 		return nil, perr("IP space not found: %s", p.cfg.IPSpace)
 	}
@@ -262,7 +268,11 @@ func (e *Engine) FindBlocksForRetag(spaceID, template, address string, cidr any,
 	default:
 		return nil, perr("template, site, or address+cidr is required")
 	}
-	return e.Rest.Get("/api/ddi/v1/ipam/address_block", params), nil
+	results, err := e.Rest.GetStrict("/api/ddi/v1/ipam/address_block", params)
+	if err != nil {
+		return nil, perrWrap(err, "could not read address blocks for retag: %s", upstreamPublic(err))
+	}
+	return results, nil
 }
 
 // RetagBlock is _retag_block (server.py:2041).
@@ -314,8 +324,12 @@ func (d *BlockDecommissioner) findBlocks() ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return d.e.Rest.Get("/api/ddi/v1/ipam/address_block", map[string]string{
-		"_filter": fmt.Sprintf(`space=="%s"`, space), "_tfilter": fmt.Sprintf(`Template=="%s"`, name)}), nil
+	results, err := d.e.Rest.GetStrict("/api/ddi/v1/ipam/address_block", map[string]string{
+		"_filter": fmt.Sprintf(`space=="%s"`, space), "_tfilter": fmt.Sprintf(`Template=="%s"`, name)})
+	if err != nil {
+		return nil, perrWrap(err, "could not read address blocks for template %s: %s", d.name, upstreamPublic(err))
+	}
+	return results, nil
 }
 
 func (d *BlockDecommissioner) deleteBlocks(blocks []any) ([]any, error) {
@@ -350,8 +364,11 @@ func (d *BlockDecommissioner) Decommission() (M, error) {
 	if err != nil {
 		return nil, err
 	}
-	spaceResults := d.e.Rest.Get("/api/ddi/v1/ipam/ip_space", map[string]string{
+	spaceResults, err := d.e.Rest.GetStrict("/api/ddi/v1/ipam/ip_space", map[string]string{
 		"_filter": fmt.Sprintf(`name=="%s"`, space)})
+	if err != nil {
+		return nil, perrWrap(err, "could not read IP space %s: %s", d.ipSpace, upstreamPublic(err))
+	}
 	if len(spaceResults) == 0 {
 		return nil, perr("IP space not found: %s", d.ipSpace)
 	}

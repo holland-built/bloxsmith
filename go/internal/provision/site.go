@@ -165,7 +165,10 @@ func (p *SiteProvisioner) resolveIPSpace() error {
 	if err != nil {
 		return err
 	}
-	results := p.e.Rest.Get("/api/ddi/v1/ipam/ip_space", map[string]string{"_filter": fmt.Sprintf(`name=="%s"`, space)})
+	results, err := p.e.Rest.GetStrict("/api/ddi/v1/ipam/ip_space", map[string]string{"_filter": fmt.Sprintf(`name=="%s"`, space)})
+	if err != nil {
+		return perrWrap(err, "could not read IP space %s: %s", p.cfg.IPSpace, upstreamPublic(err))
+	}
 	if len(results) == 0 {
 		return perr("IP space not found: %s", p.cfg.IPSpace)
 	}
@@ -182,8 +185,12 @@ func (p *SiteProvisioner) findExistingSite() ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return p.e.Rest.Get("/api/ddi/v1/ipam/subnet", map[string]string{
-		"_filter": fmt.Sprintf(`space=="%s"`, space), "_tfilter": fmt.Sprintf(`Site=="%s"`, site)}), nil
+	results, err := p.e.Rest.GetStrict("/api/ddi/v1/ipam/subnet", map[string]string{
+		"_filter": fmt.Sprintf(`space=="%s"`, space), "_tfilter": fmt.Sprintf(`Site=="%s"`, site)})
+	if err != nil {
+		return nil, perrWrap(err, "could not read existing subnets for site %s: %s", p.cfg.Site, upstreamPublic(err))
+	}
+	return results, nil
 }
 
 func (p *SiteProvisioner) findAvailableBlock() (M, error) {
@@ -199,14 +206,21 @@ func (p *SiteProvisioner) findAvailableBlock() (M, error) {
 	if err != nil {
 		return nil, err
 	}
-	results := p.e.Rest.Get("/api/ddi/v1/ipam/address_block", map[string]string{
+	results, err := p.e.Rest.GetStrict("/api/ddi/v1/ipam/address_block", map[string]string{
 		"_filter":  fmt.Sprintf(`space=="%s"`, space),
 		"_tfilter": fmt.Sprintf(`Region=="%s" and Environment=="%s" and Status=="available"`, region, env)})
+	if err != nil {
+		return nil, perrWrap(err, "could not read address blocks for region %s environment %s: %s",
+			p.cfg.Region, p.cfg.Environment, upstreamPublic(err))
+	}
 	if len(results) == 0 {
 		// Fallback: region + available, ignoring Environment (server.py:1672).
-		results = p.e.Rest.Get("/api/ddi/v1/ipam/address_block", map[string]string{
+		results, err = p.e.Rest.GetStrict("/api/ddi/v1/ipam/address_block", map[string]string{
 			"_filter":  fmt.Sprintf(`space=="%s"`, space),
 			"_tfilter": fmt.Sprintf(`Region=="%s" and Status=="available"`, region)})
+		if err != nil {
+			return nil, perrWrap(err, "could not read address blocks for region %s: %s", p.cfg.Region, upstreamPublic(err))
+		}
 	}
 	if len(results) == 0 {
 		return nil, perr("No available address block found for Region=%s Environment=%s", p.cfg.Region, p.cfg.Environment)
@@ -219,7 +233,10 @@ func (p *SiteProvisioner) resolveDNSView() error {
 	if err != nil {
 		return err
 	}
-	results := p.e.Rest.Get("/api/ddi/v1/dns/view", map[string]string{"_filter": fmt.Sprintf(`name=="%s"`, view)})
+	results, err := p.e.Rest.GetStrict("/api/ddi/v1/dns/view", map[string]string{"_filter": fmt.Sprintf(`name=="%s"`, view)})
+	if err != nil {
+		return perrWrap(err, "could not read DNS view %s: %s", p.cfg.DNSView, upstreamPublic(err))
+	}
 	if len(results) == 0 {
 		return perr("DNS view not found: %s", p.cfg.DNSView)
 	}
@@ -246,6 +263,10 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 	p.emit(M{"step": fmt.Sprintf("%sCreating subnet /%d  name=%s  purpose=%s", mode, cidr, sdef.Name, sdef.Purpose)})
 
 	if p.cfg.DryRun {
+		// Deliberately NOT GetStrict: this is a preview-only lookup for a dry
+		// run. A failed preview must leave subnetAddr blank, never abort the
+		// dry run — the real creation path below uses Rest.Write with its own
+		// status check, so nothing here can create a false duplicate.
 		preview := p.e.Rest.Get("/api/ddi/v1/"+blockID+"/nextavailablesubnet",
 			map[string]string{"cidr": itoa(cidr), "count": "1"})
 		subnetAddr := ""
@@ -348,8 +369,11 @@ func (p *SiteProvisioner) createDNSZone() (M, error) {
 	if err != nil {
 		return nil, err
 	}
-	existing := p.e.Rest.Get("/api/ddi/v1/dns/auth_zone", map[string]string{
+	existing, err := p.e.Rest.GetStrict("/api/ddi/v1/dns/auth_zone", map[string]string{
 		"_filter": fmt.Sprintf(`fqdn=="%s." and view=="%s"`, fq, vw)})
+	if err != nil {
+		return nil, perrWrap(err, "could not read DNS zone %s: %s", fqdn, upstreamPublic(err))
+	}
 	if len(existing) > 0 {
 		zone := asMap(existing[0])
 		p.zoneID = pyStr(zone["id"])
@@ -396,8 +420,11 @@ func (p *SiteProvisioner) createReverseZone(subnetAddr string, cidr int) (M, err
 	if err != nil {
 		return nil, err
 	}
-	existing := p.e.Rest.Get("/api/ddi/v1/dns/auth_zone", map[string]string{
+	existing, err := p.e.Rest.GetStrict("/api/ddi/v1/dns/auth_zone", map[string]string{
 		"_filter": fmt.Sprintf(`fqdn=="%s" and view=="%s"`, fq, vw)})
+	if err != nil {
+		return nil, perrWrap(err, "could not read reverse DNS zone %s: %s", fqdn, upstreamPublic(err))
+	}
 	if len(existing) > 0 {
 		zone := asMap(existing[0])
 		p.emit(M{"step": fmt.Sprintf("  Reverse zone already exists: %s  id=%s", fqdn, pyStr(zone["id"]))})

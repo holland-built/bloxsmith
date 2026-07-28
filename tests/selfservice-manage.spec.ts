@@ -147,10 +147,11 @@ test.describe('ManageRecordsPanel', () => {
     expect(patchBodies[1].expected).toEqual({ value: '192.0.2.10', ttl: 300, comment: 'web' });
 
     // Apply success closes the edit row (setEditingId(null) fires in the same
-    // tick as the success message, so the message never gets a chance to
-    // paint) — the closed row is the observable proof the Apply succeeded.
+    // tick), and the confirmation now lives at panel level so it survives
+    // that unmount instead of dying with the row.
     await expect(row.getByRole('button', { name: 'Edit' })).toBeVisible();
     await expect(row.getByRole('button', { name: 'Update' })).toHaveCount(0);
+    await expect(page.getByText('DNS record updated.')).toBeVisible();
   });
 
   test('409 conflict from Apply surfaces the error and leaves the row unchanged', async ({ page }) => {
@@ -216,6 +217,7 @@ test.describe('ManageRecordsPanel', () => {
 
     await expect.poll(() => deletes.length).toBe(1);
     expect(deletes[0]).toContain(`/api/dns/records/${encodeURIComponent(rec.id)}`);
+    await expect(page.getByText('DNS record deleted.')).toBeVisible();
   });
 
   test('delete arm auto-disarms after 4s with no DELETE ever fired', async ({ page }) => {
@@ -245,10 +247,7 @@ test.describe('ManageRecordsPanel', () => {
 });
 
 test.describe('ManageAddressesPanel', () => {
-  // Skipped: SelfService.jsx no longer renders ManageAddressesPanel — see
-  // SHOW_MANAGE_ADDRESSES in ui/src/tabs/SelfService.jsx. Re-enable once that
-  // flag flips back to true.
-  test.skip('two-click release: DELETE hits /api/ipam/addresses/<id> URL-encoded', async ({ page }) => {
+  test('two-click release: DELETE hits /api/ipam/addresses/<id> URL-encoded', async ({ page }) => {
     await stubIpamPickers(page);
     const addr = { id: 'ipam/address/1', address: '10.0.0.5', state: 'used', name: 'host-1', comment: '' };
     const deletes: string[] = [];
