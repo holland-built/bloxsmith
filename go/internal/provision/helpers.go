@@ -38,12 +38,28 @@ type M = map[string]any
 // (bad template / failed API call) the HTTP layer turns into a JSON/SSE error
 // rather than a 500. Callers distinguish it from an unexpected error exactly as
 // Python distinguishes `except ProvisionError` from `except Exception`.
-type Error struct{ Msg string }
+type Error struct {
+	Msg string
+	Err error // wrapped cause, e.g. a *rest.UpstreamError; nil for perr-built errors
+}
 
 func (e *Error) Error() string { return e.Msg }
 
-// perr builds a *Error with a formatted message.
+// Unwrap exposes the wrapped cause so errors.As/errors.Is can reach a typed
+// error (like *rest.UpstreamError) through a *provision.Error instead of it
+// being stringified into Msg and lost.
+func (e *Error) Unwrap() error { return e.Err }
+
+// perr builds a *Error with a formatted message. It does not wrap a cause;
+// use perrWrap when there is an underlying error a caller needs to inspect.
 func perr(format string, a ...any) *Error { return &Error{Msg: fmt.Sprintf(format, a...)} }
+
+// perrWrap builds a *Error whose Msg is the formatted string and whose Unwrap
+// returns err, so a typed upstream failure survives the provision layer
+// instead of being dropped the way perr drops it.
+func perrWrap(err error, format string, a ...any) *Error {
+	return &Error{Msg: fmt.Sprintf(format, a...), Err: err}
+}
 
 // IsError reports whether err is (or wraps) a *Error — the analogue of Python's
 // `except ProvisionError`. The HTTP layer maps it to a 400/SSE-error; anything
@@ -55,6 +71,19 @@ func IsError(err error) bool {
 
 // PyStr exports the Python str() coercion for the server layer's body reads.
 func PyStr(v any) string { return pyStr(v) }
+
+// upstreamPublic extracts the user-safe sentence from a GetStrict failure,
+// falling back to err.Error() if it somehow isn't an *rest.UpstreamError, and
+// to "" if err is nil so callers can't panic by passing a nil error through.
+func upstreamPublic(err error) string {
+	if err == nil {
+		return ""
+	}
+	if uerr, ok := err.(*rest.UpstreamError); ok {
+		return uerr.Public()
+	}
+	return err.Error()
+}
 
 // Engine holds the shared REST proxy + the templates directory. One per process.
 type Engine struct {

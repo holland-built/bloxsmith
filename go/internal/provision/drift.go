@@ -15,7 +15,10 @@ func (e *Engine) QuerySiteLive(site, ipSpace, dnsView, dnsZone string) (M, error
 	if err != nil {
 		return nil, err
 	}
-	spaceResults := e.Rest.Get("/api/ddi/v1/ipam/ip_space", map[string]string{"_filter": fmt.Sprintf(`name=="%s"`, space)})
+	spaceResults, err := e.Rest.GetStrict("/api/ddi/v1/ipam/ip_space", map[string]string{"_filter": fmt.Sprintf(`name=="%s"`, space)})
+	if err != nil {
+		return nil, perrWrap(err, "reading IP space %q: %s", ipSpace, upstreamPublic(err))
+	}
 	if len(spaceResults) == 0 {
 		return nil, perr("IP space not found: %s", ipSpace)
 	}
@@ -24,7 +27,10 @@ func (e *Engine) QuerySiteLive(site, ipSpace, dnsView, dnsZone string) (M, error
 	if err != nil {
 		return nil, err
 	}
-	viewResults := e.Rest.Get("/api/ddi/v1/dns/view", map[string]string{"_filter": fmt.Sprintf(`name=="%s"`, view)})
+	viewResults, err := e.Rest.GetStrict("/api/ddi/v1/dns/view", map[string]string{"_filter": fmt.Sprintf(`name=="%s"`, view)})
+	if err != nil {
+		return nil, perrWrap(err, "reading DNS view %q: %s", dnsView, upstreamPublic(err))
+	}
 	if len(viewResults) == 0 {
 		return nil, perr("DNS view not found: %s", dnsView)
 	}
@@ -38,12 +44,18 @@ func (e *Engine) QuerySiteLive(site, ipSpace, dnsView, dnsZone string) (M, error
 	if err != nil {
 		return nil, err
 	}
-	subnetsRaw := e.Rest.Get("/api/ddi/v1/ipam/subnet", map[string]string{
+	subnetsRaw, err := e.Rest.GetStrict("/api/ddi/v1/ipam/subnet", map[string]string{
 		"_filter": fmt.Sprintf(`space=="%s"`, spaceQ), "_tfilter": fmt.Sprintf(`Site=="%s"`, siteQ)})
+	if err != nil {
+		return nil, perrWrap(err, "reading subnets for site %q: %s", site, upstreamPublic(err))
+	}
 	found := len(subnetsRaw) > 0
 	var allHosts []any
 	if found {
-		allHosts = e.Rest.Get("/api/ddi/v1/ipam/host", map[string]string{"_limit": "1000"})
+		allHosts, err = e.Rest.GetStrict("/api/ddi/v1/ipam/host", map[string]string{"_limit": "1000"})
+		if err != nil {
+			return nil, perrWrap(err, "reading hosts: %s", upstreamPublic(err))
+		}
 	}
 
 	subnetsOut := []any{}
@@ -89,8 +101,11 @@ func (e *Engine) QuerySiteLive(site, ipSpace, dnsView, dnsZone string) (M, error
 	if err != nil {
 		return nil, err
 	}
-	zoneResults := e.Rest.Get("/api/ddi/v1/dns/auth_zone", map[string]string{
+	zoneResults, err := e.Rest.GetStrict("/api/ddi/v1/dns/auth_zone", map[string]string{
 		"_filter": fmt.Sprintf(`fqdn=="%s." and view=="%s"`, dz, vq)})
+	if err != nil {
+		return nil, perrWrap(err, "reading DNS zone %q: %s", dnsZone, upstreamPublic(err))
+	}
 	zone := M{}
 	if len(zoneResults) > 0 {
 		zone = asMap(zoneResults[0])

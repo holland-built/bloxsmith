@@ -119,6 +119,32 @@ func TestDNSRecordsGet_UpstreamErrorIs502NotEmptySuccess(t *testing.T) {
 	}
 }
 
+// TestDNSRecordsGet_UpstreamErrorIssuesExactlyOneRequest is the regression
+// test for the double-fetch-on-failure bug: writeUpstreamError used to
+// re-issue the identical request via GetStrict to recover the typed error,
+// doubling load on an already-failing upstream. pagedFetch must derive the
+// 502 body from the single GetPageStrict call it already made.
+func TestDNSRecordsGet_UpstreamErrorIssuesExactlyOneRequest(t *testing.T) {
+	calls := 0
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"boom"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/dns/records?zone=example.com", nil)
+	rr := httptest.NewRecorder()
+	d.dnsRecordsGet(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	if calls != 1 {
+		t.Fatalf("upstream calls = %d, want exactly 1 (no re-fetch to recover the error)", calls)
+	}
+}
+
 func TestDNSRecordsGet_WithTotal(t *testing.T) {
 	var gotLimit string
 	calls := 0
@@ -429,6 +455,240 @@ func TestIPAMAddressesGet_CountKeyIsNotTrusted(t *testing.T) {
 	}
 	if body["truncated"] != true {
 		t.Fatalf("truncated = %v, want true", body["truncated"])
+	}
+}
+
+// TestIPAMAddressesGet_UpstreamErrorIssuesExactlyOneRequest mirrors the DNS
+// records regression test above for the ipamAddressesGet handler.
+func TestIPAMAddressesGet_UpstreamErrorIssuesExactlyOneRequest(t *testing.T) {
+	calls := 0
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"boom"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	if calls != 1 {
+		t.Fatalf("upstream calls = %d, want exactly 1 (no re-fetch to recover the error)", calls)
+	}
+}
+
+func TestIPAMAddressesGet_UpstreamErrorMessageSurfaced(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		w.Write([]byte(`{"error":"bad filter syntax"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	if body["upstream"] != "bad filter syntax" {
+		t.Fatalf(`upstream = %v, want "bad filter syntax"`, body["upstream"])
+	}
+	if status, ok := body["status"].(float64); !ok || int(status) != 400 {
+		t.Fatalf("status field = %v, want 400", body["status"])
+	}
+}
+
+func TestIPAMAddressesGet_UpstreamErrorUnrecognisedShapeOmitsField(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		w.Write([]byte(`{"reason_code":"E1234","context":{"foo":"bar"}}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	body := decodeBody(t, rr)
+	if _, has := body["upstream"]; has {
+		t.Fatalf("upstream key present for an unrecognised body shape, want omitted: %v", body)
+	}
+}
+
+func TestIPAMAddressesGet_UpstreamErrorMessageTruncated(t *testing.T) {
+	long := strings.Repeat("x", 300)
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		w.Write([]byte(`{"error":"` + long + `"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	body := decodeBody(t, rr)
+	got, ok := body["upstream"].(string)
+	if !ok {
+		t.Fatalf("upstream = %v, want a string", body["upstream"])
+	}
+	if len(got) != 200 {
+		t.Fatalf("upstream length = %d, want truncated to 200", len(got))
+	}
+}
+
+func TestIPAMAddressesGet_RawUpstreamBodyNeverInResponse(t *testing.T) {
+	const marker = "TOTALLY-DISTINCTIVE-UPSTREAM-MARKER-XYZ"
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		w.Write([]byte(`{"error":"bad filter","debug":"` + marker + `","stack":"internal trace ` + marker + `"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if strings.Contains(rr.Body.String(), marker) {
+		t.Fatalf("raw upstream body leaked into HTTP response: %s", rr.Body.String())
+	}
+}
+
+func TestIPAMAddressesGet_SuccessShapeUnchanged(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[{"id":"1","address":"10.0.0.1","name":"host1","comment":"","state":"used"}],"total_count":1}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc&_limit=5", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	wantKeys := map[string]bool{"addresses": true, "total": true, "limit": true}
+	for k := range body {
+		if !wantKeys[k] {
+			t.Fatalf("unexpected key %q in success response, want only addresses/total/limit: %v", k, body)
+		}
+	}
+	for k := range wantKeys {
+		if _, has := body[k]; !has {
+			t.Fatalf("missing expected key %q: %v", k, body)
+		}
+	}
+	if _, has := body["upstream"]; has {
+		t.Fatalf("upstream key present on a successful response: %v", body)
+	}
+	if _, has := body["error"]; has {
+		t.Fatalf("error key present on a successful response: %v", body)
+	}
+}
+
+// TestIPAMAddressesGet_FilterFieldIsParent pins the corrected upstream filter
+// field (empirically confirmed against live CSP: "subnet" 400s with "Unknown
+// field: subnet"; "parent" returns 200 with real rows) so a future edit can't
+// silently regress it back to the broken field.
+func TestIPAMAddressesGet_FilterFieldIsParent(t *testing.T) {
+	var gotFilter string
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		gotFilter = r.URL.Query().Get("_filter")
+		w.Write([]byte(`{"results":[]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	want := `parent=="abc"`
+	if gotFilter != want {
+		t.Fatalf("_filter = %q, want %q (upstream field must be 'parent', not 'subnet')", gotFilter, want)
+	}
+}
+
+// --- extractUpstreamMessage array error shapes --------------------------------
+
+// TestIPAMAddressesGet_UpstreamArrayErrorShapeSurfaced covers CSP's actual
+// error shape for a bad filter: {"error":[{"message":"..."}]}, an ARRAY of
+// objects rather than a single object or string. Before this fix the
+// extractor only handled a top-level string or one level down inside an
+// object, so this shape found nothing and the 502 body omitted "upstream"
+// entirely — the reason the real cause had to be dug out of the server log.
+func TestIPAMAddressesGet_UpstreamArrayErrorShapeSurfaced(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		w.Write([]byte(`{"error":[{"message":"Unknown field: subnet"}]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	if body["upstream"] != "Unknown field: subnet" {
+		t.Fatalf(`upstream = %v, want "Unknown field: subnet"`, body["upstream"])
+	}
+}
+
+// TestIPAMAddressesGet_UpstreamErrorsArrayVariantSurfaced covers the plural
+// "errors" key variant of the same array shape.
+func TestIPAMAddressesGet_UpstreamErrorsArrayVariantSurfaced(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		w.Write([]byte(`{"errors":[{"message":"Unknown field: subnet"}]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	if body["upstream"] != "Unknown field: subnet" {
+		t.Fatalf(`upstream = %v, want "Unknown field: subnet"`, body["upstream"])
+	}
+}
+
+// TestIPAMAddressesGet_UpstreamArrayErrorNonObjectFirstElementOmitsField
+// covers an array whose first element is not an object (e.g. a bare string) —
+// it must be treated as unrecognised and omit "upstream" rather than panic on
+// the failed type assertion.
+func TestIPAMAddressesGet_UpstreamArrayErrorNonObjectFirstElementOmitsField(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		w.Write([]byte(`{"error":["Unknown field: subnet"]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	if _, has := body["upstream"]; has {
+		t.Fatalf("upstream key present for a non-object first array element, want omitted: %v", body)
 	}
 }
 
