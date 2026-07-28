@@ -390,9 +390,11 @@ func TestRunAITool_GetSubnets_UsesPageTotalSizeWhenPresent(t *testing.T) {
 }
 
 // TestRunAITool_GetSubnets_MalformedPageFallsBackWithoutPanic covers a
-// missing page object, a non-string total_size, and a zero/garbage
-// total_size — all three must fall back to the fetched row count rather than
-// inventing a number or panicking on a bad type assertion.
+// missing page object, a non-string total_size, and unparseable/negative
+// total_size — all must fall back to the fetched row count rather than
+// inventing a number or panicking on a bad type assertion. total_size="0" is
+// NOT in this list — a genuine zero is a valid total, not malformed input;
+// see TestPageTotalSize_ZeroIsValidNotFallback.
 func TestRunAITool_GetSubnets_MalformedPageFallsBackWithoutPanic(t *testing.T) {
 	cases := []struct {
 		name string
@@ -401,7 +403,7 @@ func TestRunAITool_GetSubnets_MalformedPageFallsBackWithoutPanic(t *testing.T) {
 		{"missing page", nil},
 		{"total_size is a number not a string", map[string]any{"total_size": 72316}},
 		{"total_size is garbage", map[string]any{"total_size": "not-a-number"}},
-		{"total_size is zero", map[string]any{"total_size": "0"}},
+		{"total_size is negative", map[string]any{"total_size": "-3"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

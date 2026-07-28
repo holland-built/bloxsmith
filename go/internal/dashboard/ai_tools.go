@@ -269,9 +269,13 @@ func cappedPayloadWithTotal(rows []map[string]any, n int, total int, noun string
 // pageTotalSize reads the authoritative tenant-wide row count from a REST
 // response's page.total_size (present only when the request sent
 // `_is_total_size_needed=true`). The field is a JSON STRING ("72316"), not a
-// number, so it is parsed defensively: a missing page object, a non-string or
-// unparseable total_size, or a zero value all fall back to `fallback` (the
-// count of rows actually fetched) rather than inventing a number.
+// number, so it is parsed defensively: a missing page object, a non-string
+// total_size, or an unparseable/negative value all fall back to `fallback`
+// (the count of rows actually fetched) rather than inventing a number. ZERO
+// IS A VALID TOTAL: CSP legitimately reports page.total_size: "0" when a
+// filtered query (e.g. a >=90% utilization crit-subnet count) genuinely
+// matches nothing, and that must be returned as 0, not treated as
+// unparseable — do not "tighten" this back to n <= 0.
 func pageTotalSize(body any, fallback int) int {
 	page, ok := asMap(body)["page"].(map[string]any)
 	if !ok {
@@ -282,7 +286,7 @@ func pageTotalSize(body any, fallback int) int {
 		return fallback
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(ts))
-	if err != nil || n <= 0 {
+	if err != nil || n < 0 {
 		return fallback
 	}
 	return n
