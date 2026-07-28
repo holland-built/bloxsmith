@@ -1,4 +1,4 @@
-import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
 
@@ -12,6 +12,7 @@ export default function Daily() {
   const hosts = data.data?.hosts ?? []
   const zones = data.data?.zones ?? []
   const totals = data.data?._totals
+  const meta = data.data?._meta ?? {}
 
   return (
     <div className="w-full px-6 py-5">
@@ -19,9 +20,9 @@ export default function Daily() {
       <CardGrid>
         <IssueKpis subnets={subnets} hosts={hosts} zones={zones} totals={totals} loading={data.loading} />
         <SecurityToday sec={sec} />
-        <TopCapacityRisks subnets={subnets} loading={data.loading} />
-        <HostsAttention hosts={hosts} loading={data.loading} />
-        <DnsZoneIssues zones={zones} loading={data.loading} />
+        <TopCapacityRisks subnets={subnets} loading={data.loading} subnetsStatus={meta.subnets} />
+        <HostsAttention hosts={hosts} loading={data.loading} hostsStatus={meta.hosts} />
+        <DnsZoneIssues zones={zones} loading={data.loading} zonesStatus={meta.zones} />
       </CardGrid>
     </div>
   )
@@ -109,7 +110,7 @@ function SecurityToday({ sec }) {
 
 // ---------- top capacity risks ----------
 
-function TopCapacityRisks({ subnets, loading }) {
+function TopCapacityRisks({ subnets, loading, subnetsStatus }) {
   const rows = [...subnets]
     .filter((s) => (s.addr || s.cidr) && (Number(s.cidr) || 0) <= 28)
     .map((s) => ({
@@ -144,7 +145,7 @@ function TopCapacityRisks({ subnets, loading }) {
       {loading ? (
         <Skeleton h={220} />
       ) : rows.length === 0 ? (
-        <Empty />
+        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
       ) : (
         <DataTable
           rows={rows}
@@ -159,7 +160,7 @@ function TopCapacityRisks({ subnets, loading }) {
 
 // ---------- hosts needing attention ----------
 
-function HostsAttention({ hosts, loading }) {
+function HostsAttention({ hosts, loading, hostsStatus }) {
   const { COLORS } = useChartTheme()
   const rows = hosts.filter((h) => !/online|active/i.test(h.status || ''))
 
@@ -185,7 +186,7 @@ function HostsAttention({ hosts, loading }) {
       {loading ? (
         <Skeleton h={220} />
       ) : rows.length === 0 ? (
-        <Empty>all hosts online</Empty>
+        hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty>all hosts online</Empty>
       ) : (
         <DataTable
           rows={rows}
@@ -201,7 +202,7 @@ function HostsAttention({ hosts, loading }) {
 
 // ---------- DNS zone issues ----------
 
-function DnsZoneIssues({ zones, loading }) {
+function DnsZoneIssues({ zones, loading, zonesStatus }) {
   const rows = zones
     .filter((z) => Array.isArray(z.issues) && z.issues.length > 0)
     .map((z) => ({ ...z, count: z.issues.length, issuesText: z.issues.join(', ') }))
@@ -227,7 +228,7 @@ function DnsZoneIssues({ zones, loading }) {
       {loading ? (
         <Skeleton h={160} />
       ) : rows.length === 0 ? (
-        <Empty>no DNS zone issues</Empty>
+        zonesStatus === 'error' ? <FeedUnavailable label="DNS zones feed unavailable" /> : <Empty>no DNS zone issues</Empty>
       ) : (
         <DataTable
           rows={rows}
