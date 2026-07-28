@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { COLORS, Card, Empty } from '../components/ui.jsx'
+import { COLORS, Card, Empty, TabIntro } from '../components/ui.jsx'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none'
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
@@ -196,7 +196,11 @@ function DnsPanel() {
 export default function SelfService() {
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-lg font-semibold tracking-tight mb-3">Self-Service</h1>
+      <h1 className="text-lg font-semibold tracking-tight mb-1">Self-Service</h1>
+      <TabIntro anchor="self-service">
+        The two everyday asks, without the full Editor: take the next free address out of a subnet, or add a
+        record to an existing DNS zone. Dry Run previews the exact request; Apply sends it.
+      </TabIntro>
       <div className="flex flex-wrap gap-3">
         <div className="flex-1 min-w-[420px] max-w-[640px]"><AllocatePanel /></div>
         <div className="flex-1 min-w-[420px] max-w-[640px]"><DnsPanel /></div>
