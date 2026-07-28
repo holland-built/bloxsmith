@@ -1,9 +1,11 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"bloxsmith/internal/rest"
@@ -91,6 +93,105 @@ func (d *Deps) ipamBlocks(w http.ResponseWriter, r *http.Request) {
 	d.json(w, r, 200, map[string]any{"blocks": pick(blocks, "id", "address", "cidr", "name", "tags")})
 }
 
+// parseListLimit validates the shared `_limit` query param used by the
+// paginated list handlers below. Absent -> default 200. Present -> must be an
+// integer in 1..999 (capped below 1000 so limit+1 is always a genuine
+// truncation probe upstream, never clamped back down). On an invalid value
+// it writes the 400 itself and returns ok=false so the caller returns
+// immediately.
+func (d *Deps) parseListLimit(w http.ResponseWriter, r *http.Request) (limit int, ok bool) {
+	raw := r.URL.Query().Get("_limit")
+	if raw == "" {
+		return 200, true
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > 999 {
+		d.json(w, r, 400, map[string]any{"error": "_limit must be an integer between 1 and 999"})
+		return 0, false
+	}
+	return n, true
+}
+
+// numFromAny coerces a decoded JSON number (float64) or json.Number to an int,
+// used when reading a total out of an upstream envelope of unknown shape.
+func numFromAny(v any) (int, bool) {
+	switch t := v.(type) {
+	case float64:
+		return int(t), true
+	case json.Number:
+		if i, err := t.Int64(); err == nil {
+			return int(i), true
+		}
+	case int:
+		return t, true
+	}
+	return 0, false
+}
+
+// findTotal hunts an upstream response body for a pagination total under
+// total_size/total_count, at the top level and inside a nested
+// page/page_info object. "count" is deliberately excluded: in many list
+// envelopes it means "rows in this page", not the collection total, and we
+// could not probe CSP ahead of time to disambiguate (the .env API key 401s;
+// the live key lives in the encrypted vault). A candidate is also rejected
+// if it's less than rowCount (the number of rows the upstream actually
+// returned) — that's definitionally not a collection total. Never emit a
+// total we can't stand behind.
+func findTotal(body map[string]any, rowCount int) (int, bool) {
+	keys := []string{"total_size", "total_count"}
+	for _, k := range keys {
+		if n, ok := numFromAny(body[k]); ok && n >= rowCount {
+			return n, true
+		}
+	}
+	for _, nestKey := range []string{"page", "page_info"} {
+		if nested, ok := body[nestKey].(map[string]any); ok {
+			for _, k := range keys {
+				if n, ok := numFromAny(nested[k]); ok && n >= rowCount {
+					return n, true
+				}
+			}
+		}
+	}
+	return 0, false
+}
+
+// pagedFetch runs the shared upstream-fetch + truncation-metadata logic used
+// by dnsRecordsGet and ipamAddressesGet. It issues a SINGLE upstream request
+// for limit+1 rows (limit is capped at 999 by parseListLimit, so limit+1
+// never exceeds 1000) and derives both the total (if a trustworthy candidate
+// is present in that one response) and truncated (true iff more than `limit`
+// rows came back) from it — never a second fetch. On an upstream failure it
+// writes the 502 itself and returns ok=false. See findTotal for why the
+// total is runtime-detected rather than assumed.
+func (d *Deps) pagedFetch(w http.ResponseWriter, r *http.Request, path string, params map[string]string, limit int) (rows []any, extra map[string]any, ok bool) {
+	// Copy params so we don't mutate the caller's map when adding _limit.
+	p := map[string]string{}
+	for k, v := range params {
+		p[k] = v
+	}
+
+	p["_limit"] = strconv.Itoa(limit + 1)
+	fetchRows, body, status := d.Rest.GetPage(path, p)
+	if status == 0 || status >= 400 {
+		d.json(w, r, 502, map[string]any{"error": "upstream request failed", "status": status})
+		return nil, nil, false
+	}
+
+	rowCount := len(fetchRows)
+	truncated := rowCount > limit
+	if truncated {
+		fetchRows = fetchRows[:limit]
+	}
+
+	if body != nil {
+		if total, found := findTotal(body, rowCount); found {
+			return fetchRows, map[string]any{"total": total, "limit": limit}, true
+		}
+	}
+	return fetchRows, map[string]any{"truncated": truncated, "limit": limit}, true
+}
+
 func (d *Deps) dnsZones(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/dns/zones")
 	view := r.URL.Query().Get("view")
@@ -119,6 +220,10 @@ func (d *Deps) dnsRecordsGet(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 400, map[string]any{"error": "zone is required"})
 		return
 	}
+	limit, ok := d.parseListLimit(w, r)
+	if !ok {
+		return
+	}
 	zoneEsc, err := rest.CSPQ(zone)
 	if err != nil {
 		d.json(w, r, 400, map[string]any{"error": err.Error()})
@@ -141,10 +246,18 @@ func (d *Deps) dnsRecordsGet(w http.ResponseWriter, r *http.Request) {
 		}
 		filt = append(filt, `name_in_zone=="`+esc+`"`)
 	}
-	records := d.Rest.Get("/api/ddi/v1/dns/record", map[string]string{"_filter": strings.Join(filt, " and ")})
-	d.json(w, r, 200, map[string]any{
+	records, extra, ok := d.pagedFetch(w, r, "/api/ddi/v1/dns/record",
+		map[string]string{"_filter": strings.Join(filt, " and ")}, limit)
+	if !ok {
+		return
+	}
+	resp := map[string]any{
 		"records": pick(records, "id", "name_in_zone", "type", "ttl", "dns_rdata", "comment", "disabled"),
-	})
+	}
+	for k, v := range extra {
+		resp[k] = v
+	}
+	d.json(w, r, 200, resp)
 }
 
 func (d *Deps) ipamAddressesGet(w http.ResponseWriter, r *http.Request) {
@@ -154,15 +267,27 @@ func (d *Deps) ipamAddressesGet(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 400, map[string]any{"error": "subnet is required"})
 		return
 	}
+	limit, ok := d.parseListLimit(w, r)
+	if !ok {
+		return
+	}
 	esc, err := rest.CSPQ(subnet)
 	if err != nil {
 		d.json(w, r, 400, map[string]any{"error": err.Error()})
 		return
 	}
-	addrs := d.Rest.Get("/api/ddi/v1/ipam/address", map[string]string{"_filter": `subnet=="` + esc + `"`})
-	d.json(w, r, 200, map[string]any{
+	addrs, extra, ok := d.pagedFetch(w, r, "/api/ddi/v1/ipam/address",
+		map[string]string{"_filter": `subnet=="` + esc + `"`}, limit)
+	if !ok {
+		return
+	}
+	resp := map[string]any{
 		"addresses": pick(addrs, "id", "address", "name", "comment", "state"),
-	})
+	}
+	for k, v := range extra {
+		resp[k] = v
+	}
+	d.json(w, r, 200, resp)
 }
 
 func (d *Deps) ipamAvailability(w http.ResponseWriter, r *http.Request) {
