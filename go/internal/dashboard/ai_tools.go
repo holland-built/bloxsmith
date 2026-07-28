@@ -79,7 +79,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		}
 		body, status, err := s.Rest.GetEx("/api/ddi/v1/ipam/subnet", params)
 		if err != nil || status == 0 || status >= 400 {
-			return "No subnet data."
+			return aiLookupFailed("subnets", aiExDetail(status, err))
 		}
 		data := normSubnets(rest.Unwrap(body))
 		if len(data) == 0 {
@@ -95,7 +95,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 			map[string]string{"_fields": "display_name,ip_address,composite_status,host_type", "_limit": "500",
 				"_is_total_size_needed": "true"})
 		if err != nil || status == 0 || status >= 400 {
-			return "No host data."
+			return aiLookupFailed("hosts", aiExDetail(status, err))
 		}
 		data := normHosts(rest.Unwrap(body))
 		total := pageTotalSize(body, len(data))
@@ -114,10 +114,16 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		return jstr(cappedPayloadWithTotal(data, aiSampleCap, total, "hosts"))
 
 	case "get_dns":
-		viewsD := s.Rest.Get("/api/ddi/v1/dns/view",
+		viewsD, viewsErr := s.Rest.GetStrict("/api/ddi/v1/dns/view",
 			map[string]string{"_fields": "id,name,comment", "_limit": "5000"})
-		zonesD := s.Rest.Get("/api/ddi/v1/dns/auth_zone",
+		if viewsErr != nil {
+			return aiLookupFailed("DNS views", aiUpstreamDetail(viewsErr))
+		}
+		zonesD, zonesErr := s.Rest.GetStrict("/api/ddi/v1/dns/auth_zone",
 			map[string]string{"_fields": "fqdn,view,zone_authority", "_limit": "5000"})
+		if zonesErr != nil {
+			return aiLookupFailed("DNS zones", aiUpstreamDetail(zonesErr))
+		}
 		vm := map[string]string{}
 		for _, v := range viewsD {
 			m := asMap(v)
@@ -129,8 +135,11 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		})
 
 	case "get_dhcp_leases":
-		rows := s.Rest.Get("/api/ddi/v1/dhcp/lease",
+		rows, err := s.Rest.GetStrict("/api/ddi/v1/dhcp/lease",
 			map[string]string{"_fields": "address,hostname,state", "_limit": "5000"})
+		if err != nil {
+			return aiLookupFailed("DHCP leases", aiUpstreamDetail(err))
+		}
 		data := normLeases(rows)
 		if sub := aiStr(args["subnet"]); sub != "" {
 			filtered := data[:0:0]
@@ -147,8 +156,11 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		return jstr(cappedPayload(data, aiSampleCap, "DHCP leases"))
 
 	case "get_threat_feeds":
-		rows := s.Rest.Get("/api/atcfw/v1/named_lists",
+		rows, err := s.Rest.GetStrict("/api/atcfw/v1/named_lists",
 			map[string]string{"_fields": "name,threat_level,item_count", "_limit": "200"})
+		if err != nil {
+			return aiLookupFailed("threat feeds", aiUpstreamDetail(err))
+		}
 		data := normFeeds(rows)
 		if len(data) == 0 {
 			return "No threat feed data."
@@ -160,8 +172,11 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		if n, ok := aiInt(args["limit"]); ok {
 			limit = n
 		}
-		rows := s.Rest.Get("/api/auditlog/v1/logs",
+		rows, err := s.Rest.GetStrict("/api/auditlog/v1/logs",
 			map[string]string{"_limit": strconv.Itoa(limit), "_order_by": "created_at desc"})
+		if err != nil {
+			return aiLookupFailed("audit log entries", aiUpstreamDetail(err))
+		}
 		data := normAudit(rows)
 		if len(data) == 0 {
 			return "No audit log data."
@@ -189,7 +204,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		})
 		body, status, err := s.Rest.GetEx("/api/cubejs/v1/query", map[string]string{"query": string(q)})
 		if err != nil || status == 0 || status >= 400 {
-			return "No DNS analytics data."
+			return aiLookupFailed("DNS analytics data", aiExDetail(status, err))
 		}
 		rows := cubeData(body)
 		if len(rows) == 0 {
@@ -203,6 +218,50 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 // aiAddrRE is the IP/CIDR-ish filter guard (server.py:3972) applied to a
 // caller-supplied subnet address before it is forwarded upstream.
 var aiAddrRE = regexp.MustCompile(`^[0-9a-fA-F:.]{1,45}(/\d{1,3})?$`)
+
+// aiLookupFailed is the wording for a FAILED upstream read — a network error,
+// a bad HTTP status, or an unparseable/malformed body — as distinct from a
+// genuine, successful, zero-row result (which keeps its existing "No X
+// data." wording unchanged). This string is fed directly to the LLM driving
+// the AI tools, which relays it to a human as if it were fact: collapsing a
+// fetch failure into "No host data." previously made the assistant assert a
+// false absence with total confidence. Being maximally explicit here is the
+// only lever available — the string itself must be structurally impossible
+// to mistake for an empty-result sentence, since the model cannot be trusted
+// to infer the distinction on its own. noun is the plural thing being looked
+// up ("hosts", "subnets", "DHCP leases", ...); detail is a short sanitized
+// clause describing what went wrong (see aiUpstreamDetail / aiExDetail).
+func aiLookupFailed(noun, detail string) string {
+	return fmt.Sprintf(
+		"Could not reach Infoblox to look up %s (%s). This is a lookup failure, not a report that there are no %s — do not tell the user they have none.",
+		noun, detail, noun,
+	)
+}
+
+// aiUpstreamDetail renders the sanitized detail clause for a GetStrict/
+// GetPageStrict failure. It prefers the categorized *rest.UpstreamError's
+// own Public() sentence (network/status/decode/shape, already scrubbed of
+// path and body); the fallback only fires if GetStrict's contract ever
+// changes to return some other error type.
+func aiUpstreamDetail(err error) string {
+	if ue, ok := err.(*rest.UpstreamError); ok {
+		return ue.Public()
+	}
+	return "upstream error"
+}
+
+// aiExDetail renders the sanitized detail clause for the GetEx-based cases
+// (get_subnets, get_hosts, get_dns_analytics), which see a bare status/error
+// pair rather than a categorized *rest.UpstreamError — GetEx predates
+// GetStrict and these three call sites keep it deliberately (see the
+// migration note on RunAITool), so their failure detail is derived locally
+// instead of switching call sites.
+func aiExDetail(status int, err error) string {
+	if err != nil || status == 0 {
+		return "could not reach the upstream server"
+	}
+	return fmt.Sprintf("upstream returned status %d", status)
+}
 
 // aiSampleCap is the ONE shared row-sample size for every list-shaped AI
 // tool result (get_subnets, get_hosts, get_dns views/zones, get_dhcp_leases,

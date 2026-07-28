@@ -488,7 +488,17 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 			return M{"ok": false, "error": err.Error()}, 400
 		}
 		tagFilter := fmt.Sprintf(`%s=="%s"`, field, esc)
-		subnets := c.Rest.Get("/api/ddi/v1/ipam/subnet", map[string]string{"_tfilter": tagFilter})
+		// GetStrict so a failed read 502s instead of masquerading as "no
+		// subnet carries this tag" (a false 404 the caller could act on).
+		subnets, err := c.Rest.GetStrict("/api/ddi/v1/ipam/subnet", map[string]string{"_tfilter": tagFilter})
+		if err != nil {
+			ue, _ := err.(*rest.UpstreamError)
+			msg := "lookup failed"
+			if ue != nil {
+				msg = ue.Public()
+			}
+			return M{"ok": false, "error": fmt.Sprintf("subnet lookup failed: %s", msg)}, 502
+		}
 		if len(subnets) == 0 {
 			return M{"ok": false, "error": fmt.Sprintf("No subnet found with tag %s==%s", tagKey, tagValue)}, 404
 		}

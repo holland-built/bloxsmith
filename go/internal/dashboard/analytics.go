@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"bloxsmith/internal/cache"
@@ -290,8 +291,18 @@ func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
 // /api/infra/v1/detail_hosts, the same endpoint CSPHostHealth already reads.
 // Never fabricates a name: a host with no match keeps its raw id upstream.
 func (s *Service) hostDisplayNames() map[string]string {
-	rows := s.Rest.Get("/api/infra/v1/detail_hosts",
+	rows, err := s.Rest.GetStrict("/api/infra/v1/detail_hosts",
 		map[string]string{"_limit": "500", "_fields": "id,ophid,display_name"})
+	if err != nil {
+		// Not surfaced to the caller: this feeds a uuid/ophid -> display_name
+		// lookup map for FetchHostMetrics, which has no error return of its
+		// own and already degrades a missing name to the raw id. Aborting
+		// here would just turn ALL host names blank instead of leaving the
+		// (still-correct) ids in place, so the failure is logged and the map
+		// comes back empty.
+		log.Printf("dashboard: detail_hosts fetch failed: %v", err)
+		return map[string]string{}
+	}
 	out := make(map[string]string, len(rows))
 	for _, item := range rows {
 		h := asMap(item)

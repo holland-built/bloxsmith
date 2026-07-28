@@ -412,3 +412,59 @@ func TestDNSRecordUpdate_ExpectedNeverInOutgoingBody(t *testing.T) {
 		t.Fatalf("outgoing update body must never contain \"expected\", got: %v", capturedBody)
 	}
 }
+
+// --- SelfserviceAllocate: tag-lookup GetStrict migration ---------------------
+
+// TestSelfserviceAllocate_TagLookupUpstreamError_Returns502NotFalse404 is the
+// regression test for the bug this migration fixes: Rest.Get swallowed a
+// failed subnet-by-tag read into an empty slice, which SelfserviceAllocate
+// then reported as "No subnet found with tag ..." — a wrong, misleading 404.
+// A failed READ must 502, never masquerade as a genuine "no match" result.
+func TestSelfserviceAllocate_TagLookupUpstreamError_Returns502NotFalse404(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"boom"}`))
+	}))
+	defer srv.Close()
+	c := newTestClient(srv)
+
+	res, status := c.SelfserviceAllocate(M{"tag_key": "Env", "tag_value": "prod"})
+
+	if status != 502 {
+		t.Fatalf("status = %d, want 502 (upstream 500 must NOT become the 'No subnet found' 404); res=%v", status, res)
+	}
+	if resultOK(res) {
+		t.Fatalf("ok = true, want false on upstream failure: %v", res)
+	}
+	if calls != 1 {
+		t.Fatalf("upstream calls = %d, want exactly 1", calls)
+	}
+}
+
+// resultOK mirrors internal/server's helper of the same name (not imported
+// here — this package has no dependency on internal/server).
+func resultOK(res M) bool { b, _ := res["ok"].(bool); return b }
+
+// TestSelfserviceAllocate_TagLookupGenuineEmpty_Returns404NotFound confirms
+// the original not-found behavior survives the migration: a successful read
+// that genuinely finds no subnet with the tag still 404s with the original
+// message, not a 502.
+func TestSelfserviceAllocate_TagLookupGenuineEmpty_Returns404NotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"results":[]}`))
+	}))
+	defer srv.Close()
+	c := newTestClient(srv)
+
+	res, status := c.SelfserviceAllocate(M{"tag_key": "Env", "tag_value": "prod"})
+
+	if status != 404 {
+		t.Fatalf("status = %d, want 404; res=%v", status, res)
+	}
+	if res["error"] != "No subnet found with tag Env==prod" {
+		t.Fatalf("error = %v, want original not-found message", res["error"])
+	}
+}

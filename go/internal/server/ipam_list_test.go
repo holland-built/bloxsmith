@@ -799,6 +799,450 @@ func TestIPAMAddressesGet_PageTotalSizeStringSmallerThanRowsIsRejected(t *testin
 	}
 }
 
+// --- ipamSpaces, ipamBlocks, dnsZones, ipamSubnets ---------------------------
+//
+// These four handlers were migrated from Rest.Get (which swallows any
+// upstream error into an indistinguishable empty []any{}) to
+// getStrictOrErr/GetStrict, closing the "dead read looks like an empty
+// dropdown" bug. Each gets the same three-shape coverage as dnsRecordsGet /
+// ipamAddressesGet above: upstream 500 -> 502 (not a 200 empty list),
+// genuine empty result -> 200 empty list, and non-empty result -> exact key
+// set pinned so a future edit can't silently change the response shape.
+
+func TestIPAMSpaces_UpstreamErrorIs502NotEmptySuccess(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"boom"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/spaces", nil)
+	rr := httptest.NewRecorder()
+	d.ipamSpaces(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502 (upstream 500 must NOT become a 200 empty list); body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	if _, has := body["spaces"]; has {
+		t.Fatalf("body has 'spaces' key on upstream failure, want error-only response: %v", body)
+	}
+	if body["error"] != "upstream request failed" {
+		t.Fatalf("error = %v, want 'upstream request failed'", body["error"])
+	}
+}
+
+func TestIPAMSpaces_EmptyResultIs200EmptyList(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/spaces", nil)
+	rr := httptest.NewRecorder()
+	d.ipamSpaces(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200 (a genuinely empty result is not an error); body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	spaces, ok := body["spaces"].([]any)
+	if !ok || len(spaces) != 0 {
+		t.Fatalf("spaces = %v, want an empty list", body["spaces"])
+	}
+}
+
+func TestIPAMSpaces_SuccessShapeUnchanged(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[{"id":"1","name":"default"}]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/spaces", nil)
+	rr := httptest.NewRecorder()
+	d.ipamSpaces(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	wantKeys := map[string]bool{"spaces": true}
+	for k := range body {
+		if !wantKeys[k] {
+			t.Fatalf("unexpected key %q in success response, want only spaces: %v", k, body)
+		}
+	}
+	spaces := body["spaces"].([]any)
+	if len(spaces) != 1 {
+		t.Fatalf("spaces = %v, want 1 row", spaces)
+	}
+	row := spaces[0].(map[string]any)
+	wantRowKeys := map[string]bool{"id": true, "name": true}
+	for k := range row {
+		if !wantRowKeys[k] {
+			t.Fatalf("unexpected key %q in space row, want only id/name: %v", k, row)
+		}
+	}
+	for k := range wantRowKeys {
+		if _, has := row[k]; !has {
+			t.Fatalf("space row missing key %q: %v", k, row)
+		}
+	}
+}
+
+func TestIPAMBlocks_UpstreamErrorIs502NotEmptySuccess(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"boom"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/blocks", nil)
+	rr := httptest.NewRecorder()
+	d.ipamBlocks(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	if _, has := body["blocks"]; has {
+		t.Fatalf("body has 'blocks' key on upstream failure: %v", body)
+	}
+}
+
+func TestIPAMBlocks_EmptyResultIs200EmptyList(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/blocks", nil)
+	rr := httptest.NewRecorder()
+	d.ipamBlocks(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	blocks, ok := body["blocks"].([]any)
+	if !ok || len(blocks) != 0 {
+		t.Fatalf("blocks = %v, want an empty list", body["blocks"])
+	}
+}
+
+func TestIPAMBlocks_SuccessShapeUnchanged(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[{"id":"1","address":"10.0.0.0","cidr":8,"name":"blk","tags":{}}]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/blocks", nil)
+	rr := httptest.NewRecorder()
+	d.ipamBlocks(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	wantKeys := map[string]bool{"blocks": true}
+	for k := range body {
+		if !wantKeys[k] {
+			t.Fatalf("unexpected key %q in success response, want only blocks: %v", k, body)
+		}
+	}
+	blocks := body["blocks"].([]any)
+	if len(blocks) != 1 {
+		t.Fatalf("blocks = %v, want 1 row", blocks)
+	}
+	row := blocks[0].(map[string]any)
+	wantRowKeys := map[string]bool{"id": true, "address": true, "cidr": true, "name": true, "tags": true}
+	for k := range row {
+		if !wantRowKeys[k] {
+			t.Fatalf("unexpected key %q in block row, want only id/address/cidr/name/tags: %v", k, row)
+		}
+	}
+	for k := range wantRowKeys {
+		if _, has := row[k]; !has {
+			t.Fatalf("block row missing key %q: %v", k, row)
+		}
+	}
+}
+
+func TestDNSZones_UpstreamErrorIs502NotEmptySuccess(t *testing.T) {
+	// The views fetch runs first and fails -> 502, never a 200 with empty
+	// views/zones lists.
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"boom"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/dns/zones", nil)
+	rr := httptest.NewRecorder()
+	d.dnsZones(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502 (upstream 500 must NOT become a 200 empty list); body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	if _, has := body["views"]; has {
+		t.Fatalf("body has 'views' key on upstream failure: %v", body)
+	}
+	if _, has := body["zones"]; has {
+		t.Fatalf("body has 'zones' key on upstream failure: %v", body)
+	}
+	if body["error"] != "upstream request failed" {
+		t.Fatalf("error = %v, want 'upstream request failed'", body["error"])
+	}
+}
+
+func TestDNSZones_ZonesFetchUpstreamErrorIs502(t *testing.T) {
+	// views succeeds, the second (zones) fetch fails -> still 502, not a
+	// 200 with an empty zones list.
+	calls := 0
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if strings.Contains(r.URL.Path, "auth_zone") {
+			w.WriteHeader(500)
+			w.Write([]byte(`{"error":"boom"}`))
+			return
+		}
+		w.Write([]byte(`{"results":[]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/dns/zones", nil)
+	rr := httptest.NewRecorder()
+	d.dnsZones(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	if calls != 2 {
+		t.Fatalf("upstream calls = %d, want exactly 2 (views then zones)", calls)
+	}
+}
+
+func TestDNSZones_EmptyResultIs200EmptyLists(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/dns/zones", nil)
+	rr := httptest.NewRecorder()
+	d.dnsZones(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	views, ok := body["views"].([]any)
+	if !ok || len(views) != 0 {
+		t.Fatalf("views = %v, want an empty list", body["views"])
+	}
+	zones, ok := body["zones"].([]any)
+	if !ok || len(zones) != 0 {
+		t.Fatalf("zones = %v, want an empty list", body["zones"])
+	}
+}
+
+func TestDNSZones_SuccessShapeUnchanged(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "auth_zone") {
+			w.Write([]byte(`{"results":[{"id":"z1","fqdn":"example.com.","view":"v1"}]}`))
+			return
+		}
+		w.Write([]byte(`{"results":[{"id":"v1","name":"default"}]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/dns/zones", nil)
+	rr := httptest.NewRecorder()
+	d.dnsZones(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	wantKeys := map[string]bool{"views": true, "zones": true}
+	for k := range body {
+		if !wantKeys[k] {
+			t.Fatalf("unexpected key %q in success response, want only views/zones: %v", k, body)
+		}
+	}
+	views := body["views"].([]any)
+	viewRow := views[0].(map[string]any)
+	wantViewKeys := map[string]bool{"id": true, "name": true}
+	for k := range viewRow {
+		if !wantViewKeys[k] {
+			t.Fatalf("unexpected key %q in view row: %v", k, viewRow)
+		}
+	}
+	zones := body["zones"].([]any)
+	zoneRow := zones[0].(map[string]any)
+	wantZoneKeys := map[string]bool{"id": true, "fqdn": true, "view": true}
+	for k := range zoneRow {
+		if !wantZoneKeys[k] {
+			t.Fatalf("unexpected key %q in zone row: %v", k, zoneRow)
+		}
+	}
+	for k := range wantZoneKeys {
+		if _, has := zoneRow[k]; !has {
+			t.Fatalf("zone row missing key %q: %v", k, zoneRow)
+		}
+	}
+}
+
+func TestIPAMSubnets_UpstreamErrorIs502NotEmptySuccess(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"boom"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/subnets", nil)
+	rr := httptest.NewRecorder()
+	d.ipamSubnets(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	if _, has := body["subnets"]; has {
+		t.Fatalf("body has 'subnets' key on upstream failure: %v", body)
+	}
+	if body["error"] != "upstream request failed" {
+		t.Fatalf("error = %v, want 'upstream request failed'", body["error"])
+	}
+}
+
+func TestIPAMSubnets_EmptyResultIs200EmptyList(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/subnets", nil)
+	rr := httptest.NewRecorder()
+	d.ipamSubnets(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	subnets, ok := body["subnets"].([]any)
+	if !ok || len(subnets) != 0 {
+		t.Fatalf("subnets = %v, want an empty list", body["subnets"])
+	}
+}
+
+func TestIPAMSubnets_SuccessShapeUnchanged(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[{"id":"1","address":"10.0.0.0","cidr":24,"name":"sn","utilization":{}}]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/subnets", nil)
+	rr := httptest.NewRecorder()
+	d.ipamSubnets(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	wantKeys := map[string]bool{"subnets": true}
+	for k := range body {
+		if !wantKeys[k] {
+			t.Fatalf("unexpected key %q in success response, want only subnets: %v", k, body)
+		}
+	}
+	subnets := body["subnets"].([]any)
+	if len(subnets) != 1 {
+		t.Fatalf("subnets = %v, want 1 row", subnets)
+	}
+	row := subnets[0].(map[string]any)
+	wantRowKeys := map[string]bool{"id": true, "address": true, "cidr": true, "name": true, "utilization": true}
+	for k := range row {
+		if !wantRowKeys[k] {
+			t.Fatalf("unexpected key %q in subnet row, want only id/address/cidr/name/utilization: %v", k, row)
+		}
+	}
+	for k := range wantRowKeys {
+		if _, has := row[k]; !has {
+			t.Fatalf("subnet row missing key %q: %v", k, row)
+		}
+	}
+}
+
+func TestIPAMSubnets_UpstreamErrorMessageSurfaced(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		w.Write([]byte(`{"error":"bad filter syntax"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/subnets", nil)
+	rr := httptest.NewRecorder()
+	d.ipamSubnets(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	if body["upstream"] != "bad filter syntax" {
+		t.Fatalf(`upstream = %v, want "bad filter syntax"`, body["upstream"])
+	}
+	if status, ok := body["status"].(float64); !ok || int(status) != 400 {
+		t.Fatalf("status field = %v, want 400", body["status"])
+	}
+}
+
+func TestIPAMSpaces_UpstreamErrorIssuesExactlyOneRequest(t *testing.T) {
+	calls := 0
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"boom"}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/spaces", nil)
+	rr := httptest.NewRecorder()
+	d.ipamSpaces(rr, req)
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502; body=%s", rr.Code, rr.Body.String())
+	}
+	if calls != 1 {
+		t.Fatalf("upstream calls = %d, want exactly 1 (no re-fetch to recover the error)", calls)
+	}
+}
+
+func TestIPAMSubnets_TotalSmallerThanRowsIsRejected(t *testing.T) {
+	// ipamSubnets is not paginated (no pagedFetch, no total/truncated
+	// metadata) — a total_count field in the upstream body is simply not
+	// part of its response shape at all, regardless of value. Pinning this
+	// guards against ipamSubnets accidentally growing pagedFetch's
+	// metadata keys via a future edit.
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[{"id":"1","address":"10.0.0.0","cidr":24,"name":"sn","utilization":{}}],"total_count":1}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/subnets", nil)
+	rr := httptest.NewRecorder()
+	d.ipamSubnets(rr, req)
+
+	body := decodeBody(t, rr)
+	if _, has := body["total"]; has {
+		t.Fatalf("total present, want ipamSubnets response to have no pagination metadata at all: %v", body)
+	}
+	if _, has := body["truncated"]; has {
+		t.Fatalf("truncated present, want ipamSubnets response to have no pagination metadata at all: %v", body)
+	}
+}
+
 func TestIPAMAddressesGet_TotalSmallerThanRowsIsRejected(t *testing.T) {
 	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
 		row := `{"id":"1","address":"10.0.0.1","name":"h","comment":"","state":"used"}`
