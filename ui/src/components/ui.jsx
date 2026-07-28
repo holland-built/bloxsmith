@@ -214,6 +214,18 @@ export function Empty({ children = 'no data' }) {
   return <div className="h-full min-h-[100px] flex items-center justify-center text-muted text-sm">{children}</div>
 }
 
+// A dead upstream feed must never read as "you have none" — this is visually
+// and lexically distinct from <Empty>: no zero-count language, no "no data".
+export function FeedUnavailable({ reason, label = 'Feed unavailable' }) {
+  const { COLORS } = useChartTheme()
+  return (
+    <div className="h-full min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4">
+      <div className="text-sm font-semibold" style={{ color: COLORS.crit }}>{label}</div>
+      {reason ? <div className="text-[11px]" style={{ color: COLORS.warn }}>{reason}</div> : null}
+    </div>
+  )
+}
+
 export function Skeleton({ h = 140 }) {
   return <div className="animate-pulse bg-line rounded-lg w-full" style={{ height: h }} />
 }

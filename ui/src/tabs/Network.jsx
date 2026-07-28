@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable, sortRows } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams, setHashParams } from '../lib/hash.js'
@@ -29,6 +29,7 @@ export default function Network() {
 
   const subnets = data.data?.subnets ?? []
   const totals = data.data?._totals
+  const meta = data.data?._meta ?? {}
 
   const leasesRef = useRef(null)
   useEffect(() => {
@@ -41,10 +42,10 @@ export default function Network() {
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Network</h1>
       <CardGrid>
-        <UtilBands subnets={subnets} totals={totals} />
+        <UtilBands subnets={subnets} totals={totals} subnetsStatus={meta.subnets} />
         <IpamSpaces ipam={ipam} />
         <DhcpLeases dhcp={dhcp} innerRef={leasesRef} />
-        <ExhaustionTable subnets={subnets} hp={hp} />
+        <ExhaustionTable subnets={subnets} hp={hp} subnetsStatus={meta.subnets} />
       </CardGrid>
     </div>
   )
@@ -52,7 +53,7 @@ export default function Network() {
 
 // ---------- utilization distribution ----------
 
-function UtilBands({ subnets, totals }) {
+function UtilBands({ subnets, totals, subnetsStatus }) {
   const { COLORS, TT } = useChartTheme()
   const { grid, tick } = useThemeColors()
   const BANDS = [
@@ -74,7 +75,7 @@ function UtilBands({ subnets, totals }) {
   return (
     <Card span={3} title="Utilization Distribution" right={<span className="text-[11px] text-muted">{scopeLabel}</span>}>
       {!hasData ? (
-        <Empty />
+        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
       ) : (
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={counts} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -230,7 +231,7 @@ const EXHAUSTION_SORT = {
   util: (r) => Number(r.util) || 0,
 }
 
-function ExhaustionTable({ subnets, hp }) {
+function ExhaustionTable({ subnets, hp, subnetsStatus }) {
   const [filter, setFilter] = useState(hp.subnet || '')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
@@ -355,7 +356,7 @@ function ExhaustionTable({ subnets, hp }) {
       }
     >
       {base.length === 0 ? (
-        <Empty />
+        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
       ) : top20.length === 0 ? (
         <Empty>no subnets match</Empty>
       ) : (

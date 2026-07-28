@@ -4,7 +4,7 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
-import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, Skeleton, FeedUnavailable } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 
@@ -22,18 +22,6 @@ function sevColorMap(COLORS) {
 
 function ackKey(e) {
   return `${e.event_time}|${e.qname}`
-}
-
-// A dead upstream feed must never read as "you have none" — this is visually
-// and lexically distinct from <Empty>: no zero-count language, no "no data".
-function FeedUnavailable({ reason, label = 'Feed unavailable' }) {
-  const { COLORS } = useChartTheme()
-  return (
-    <div className="h-full min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4">
-      <div className="text-sm font-semibold" style={{ color: COLORS.crit }}>{label}</div>
-      {reason ? <div className="text-[11px]" style={{ color: COLORS.warn }}>{reason}</div> : null}
-    </div>
-  )
 }
 
 // ---------- main ----------

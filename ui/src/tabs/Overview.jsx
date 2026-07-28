@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, Skeleton, Sparkline, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 
@@ -19,6 +19,7 @@ export default function Overview() {
   const leases = data.data?.leases ?? []
   const hosts = data.data?.hosts ?? []
   const totals = data.data?._totals ?? {}
+  const meta = data.data?._meta ?? {}
 
   return (
     <div className="w-full px-6 py-5">
@@ -31,10 +32,10 @@ export default function Overview() {
       <CardGrid>
         <DnsHero dns={dns} />
         <KpiStack subnets={subnets} leases={leases} totals={totals} />
-        <TopUtilization subnets={subnets} totals={totals} />
-        <SubnetHeatmap subnets={subnets} totals={totals} />
-        <HostStatus hosts={hosts} totals={totals} />
-        <SubnetTable subnets={subnets} totals={totals} />
+        <TopUtilization subnets={subnets} totals={totals} subnetsStatus={meta.subnets} />
+        <SubnetHeatmap subnets={subnets} totals={totals} subnetsStatus={meta.subnets} />
+        <HostStatus hosts={hosts} totals={totals} hostsStatus={meta.hosts} />
+        <SubnetTable subnets={subnets} totals={totals} subnetsStatus={meta.subnets} />
         <LicenseInventory licenses={licenses} />
       </CardGrid>
     </div>
@@ -264,7 +265,7 @@ function KpiStack({ subnets, leases, totals }) {
 
 // ---------- top utilization ----------
 
-function TopUtilization({ subnets, totals = {} }) {
+function TopUtilization({ subnets, totals = {}, subnetsStatus }) {
   const { COLORS, TT } = useChartTheme()
   const theme = useThemeColors()
   // Rank by addresses USED, not util% — util ranking is a wall of 100% /32 infra links
@@ -280,7 +281,7 @@ function TopUtilization({ subnets, totals = {} }) {
   return (
     <Card span={2} title="Top Consumers" right={<span className="text-[11px] text-muted">addresses used · {estateLabel}</span>}>
       {top.length === 0 ? (
-        <Empty />
+        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
       ) : (
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={top} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -315,7 +316,7 @@ function TopUtilization({ subnets, totals = {} }) {
 
 // ---------- subnet heatmap ----------
 
-function SubnetHeatmap({ subnets, totals = {} }) {
+function SubnetHeatmap({ subnets, totals = {}, subnetsStatus }) {
   const { COLORS } = useChartTheme()
   // Worst N only — a cell per subnet at 5k subnets = sub-pixel rects (invisible). Cap + say so.
   const CAP = 288 // 24 x 12
@@ -335,7 +336,7 @@ function SubnetHeatmap({ subnets, totals = {} }) {
   return (
     <Card span={2} title="Subnet Heatmap" right={<span className="text-[11px] text-muted">{heatmapLabel}</span>}>
       {cells.length === 0 ? (
-        <Empty />
+        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
       ) : (
         <>
           <svg width="100%" height="110" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -379,7 +380,7 @@ function SubnetHeatmap({ subnets, totals = {} }) {
 
 // ---------- host status ----------
 
-function HostStatus({ hosts, totals = {} }) {
+function HostStatus({ hosts, totals = {}, hostsStatus }) {
   const { COLORS, TT } = useChartTheme()
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Other: 0 }
   for (const h of hosts) {
@@ -400,7 +401,7 @@ function HostStatus({ hosts, totals = {} }) {
   return (
     <Card span={2} title="Host Status">
       {total === 0 ? (
-        <Empty />
+        hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty />
       ) : (
         <div className="flex items-center gap-4">
           <div className="relative w-[130px] h-[130px] shrink-0">
@@ -457,7 +458,7 @@ function HostStatus({ hosts, totals = {} }) {
 
 // ---------- table ----------
 
-function SubnetTable({ subnets, totals = {} }) {
+function SubnetTable({ subnets, totals = {}, subnetsStatus }) {
   const [filter, setFilter] = useState('')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
@@ -602,7 +603,7 @@ function SubnetTable({ subnets, totals = {} }) {
       }
     >
       {subnets.length === 0 ? (
-        <Empty />
+        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
       ) : (
         <DataTable
           rows={rows}

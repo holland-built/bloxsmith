@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Cell, PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable, FeedCard } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
@@ -31,6 +31,7 @@ export default function Infra() {
   const hp = useHashParams()
   const hosts = data.data?.hosts ?? []
   const totalHosts = data.data?._totals?.hosts
+  const hostsStatus = data.data?._meta?.hosts
   const maintEnabled = maint.data?.enabled
   const maintOk = maint.data?.status !== 'error' && !maint.error && maintEnabled != null
 
@@ -51,7 +52,7 @@ export default function Infra() {
         )}
       </div>
       <CardGrid>
-        <HostStatus hosts={hosts} totalHosts={totalHosts} />
+        <HostStatus hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} />
         <FeedCard
           span={2}
           title="Host Health"
@@ -81,7 +82,7 @@ export default function Infra() {
           ]}
         />
         <DiscoveryStatus feed={discovery} />
-        <HostTable hosts={hosts} status={hp.status} totalHosts={totalHosts} />
+        <HostTable hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} />
         <FeedCard
           span={3}
           title="Jobs"
@@ -114,7 +115,7 @@ export default function Infra() {
 
 // ---------- host status ----------
 
-function HostStatus({ hosts, totalHosts }) {
+function HostStatus({ hosts, totalHosts, hostsStatus }) {
   const { COLORS, TT } = useChartTheme()
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Other: 0 }
   for (const h of hosts) {
@@ -138,7 +139,7 @@ function HostStatus({ hosts, totalHosts }) {
   return (
     <Card span={2} title="Host Status">
       {total === 0 ? (
-        <Empty />
+        hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty />
       ) : (
         <div className="flex items-center gap-4">
           <div className="relative w-[130px] h-[130px] shrink-0">
@@ -257,7 +258,7 @@ const HOST_COLUMNS = [
   { key: 'type', label: 'Type', priority: 'low' },
 ]
 
-function HostTable({ hosts, status, totalHosts }) {
+function HostTable({ hosts, status, totalHosts, hostsStatus }) {
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
   const [type, setType] = useState('')
@@ -323,7 +324,7 @@ function HostTable({ hosts, status, totalHosts }) {
       }
     >
       {hosts.length === 0 ? (
-        <Empty />
+        hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty />
       ) : filtered.length === 0 ? (
         <Empty>no hosts match</Empty>
       ) : (

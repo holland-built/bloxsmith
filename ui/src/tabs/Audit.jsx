@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 
 function actionColor(a, COLORS) {
@@ -28,13 +28,14 @@ function monoTs(v) {
 export default function Audit() {
   const data = useApi('/api/data', { poll: 30000 })
   const logs = data.data?.auditLogs ?? []
+  const auditLogsStatus = data.data?._meta?.auditLogs
 
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Audit</h1>
       <CardGrid>
-        <ActivitySummary logs={logs} loading={data.loading} />
-        <AuditTable logs={logs} loading={data.loading} error={data.error} />
+        <ActivitySummary logs={logs} loading={data.loading} auditLogsStatus={auditLogsStatus} />
+        <AuditTable logs={logs} loading={data.loading} error={data.error} auditLogsStatus={auditLogsStatus} />
         <CspAuditTable />
       </CardGrid>
     </div>
@@ -43,7 +44,7 @@ export default function Audit() {
 
 // ---------- activity summary ----------
 
-function ActivitySummary({ logs, loading }) {
+function ActivitySummary({ logs, loading, auditLogsStatus }) {
   const { COLORS, TT } = useChartTheme()
   const counts = { CREATE: 0, UPDATE: 0, DELETE: 0 }
   let ok = 0, fail = 0
@@ -61,7 +62,7 @@ function ActivitySummary({ logs, loading }) {
       {loading ? (
         <Skeleton h={200} />
       ) : total === 0 ? (
-        <Empty />
+        auditLogsStatus === 'error' ? <FeedUnavailable label="Audit log feed unavailable" /> : <Empty />
       ) : (
         <>
           <div className="flex gap-4 mb-2">
@@ -106,7 +107,7 @@ function ActionPill({ action }) {
   )
 }
 
-function AuditTable({ logs, loading, error }) {
+function AuditTable({ logs, loading, error, auditLogsStatus }) {
   const [filter, setFilter] = useState('')
   const [action, setAction] = useState('')
   const [sort, setSort] = useState({ key: 'ts', dir: 'desc' })
@@ -177,7 +178,7 @@ function AuditTable({ logs, loading, error }) {
       {loading ? (
         <Skeleton h={250} />
       ) : error || logs.length === 0 ? (
-        <Empty />
+        error || auditLogsStatus === 'error' ? <FeedUnavailable label="Audit log feed unavailable" /> : <Empty />
       ) : sorted.length === 0 ? (
         <Empty>no entries match</Empty>
       ) : (

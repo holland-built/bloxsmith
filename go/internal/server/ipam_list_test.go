@@ -692,6 +692,113 @@ func TestIPAMAddressesGet_UpstreamArrayErrorNonObjectFirstElementOmitsField(t *t
 	}
 }
 
+// TestIPAMAddressesGet_IsTotalSizeNeededParamSent pins that pagedFetch asks
+// CSP for the authoritative total (the fix for the "CSP never returns a
+// total" mistake — it does, but only when asked).
+func TestIPAMAddressesGet_IsTotalSizeNeededParamSent(t *testing.T) {
+	var got string
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query().Get("_is_total_size_needed")
+		w.Write([]byte(`{"results":[]}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if got != "true" {
+		t.Fatalf("_is_total_size_needed = %q, want %q", got, "true")
+	}
+}
+
+// TestIPAMAddressesGet_PageTotalSizeString covers the real CSP shape:
+// page.total_size as a STRING (see pageTotalSize in
+// internal/dashboard/ai_tools.go). A total found here must suppress
+// truncated entirely, and must come from exactly one upstream request.
+func TestIPAMAddressesGet_PageTotalSizeString(t *testing.T) {
+	calls := 0
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		row := `{"id":"1","address":"10.0.0.1","name":"h","comment":"","state":"used"}`
+		w.Write([]byte(`{"results":[` + row + `],"page":{"total_size":"4210"}}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc&_limit=5", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if calls != 1 {
+		t.Fatalf("upstream calls = %d, want exactly 1", calls)
+	}
+	body := decodeBody(t, rr)
+	if total, ok := body["total"].(float64); !ok || int(total) != 4210 {
+		t.Fatalf("total = %v, want 4210", body["total"])
+	}
+	if _, has := body["truncated"]; has {
+		t.Fatalf("truncated present when page.total_size gave an authoritative total: %v", body)
+	}
+}
+
+// TestIPAMAddressesGet_PageTotalSizeJunkFallsBackToTruncated covers
+// page.total_size present but not a usable positive integer ("abc", "0",
+// "-3") — each must be rejected and fall back to the truncated heuristic,
+// never a bogus total.
+func TestIPAMAddressesGet_PageTotalSizeJunkFallsBackToTruncated(t *testing.T) {
+	for _, junk := range []string{"abc", "0", "-3"} {
+		junk := junk
+		t.Run(junk, func(t *testing.T) {
+			d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+				row := `{"id":"1","address":"10.0.0.1","name":"h","comment":"","state":"used"}`
+				w.Write([]byte(`{"results":[` + strings.Join([]string{row, row, row}, ",") + `],"page":{"total_size":"` + junk + `"}}`))
+			})
+			defer closeSrv()
+
+			req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc&_limit=2", nil)
+			rr := httptest.NewRecorder()
+			d.ipamAddressesGet(rr, req)
+
+			body := decodeBody(t, rr)
+			if _, has := body["total"]; has {
+				t.Fatalf("total_size=%q: total present, want rejected: %v", junk, body)
+			}
+			if body["truncated"] != true {
+				t.Fatalf("total_size=%q: truncated = %v, want true", junk, body["truncated"])
+			}
+		})
+	}
+}
+
+// TestIPAMAddressesGet_PageTotalSizeStringSmallerThanRowsIsRejected mirrors
+// TestIPAMAddressesGet_TotalSmallerThanRowsIsRejected for the string-shaped
+// page.total_size field.
+func TestIPAMAddressesGet_PageTotalSizeStringSmallerThanRowsIsRejected(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		row := `{"id":"1","address":"10.0.0.1","name":"h","comment":"","state":"used"}`
+		w.Write([]byte(`{"results":[` + strings.Join([]string{row, row, row}, ",") + `],"page":{"total_size":"1"}}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc&_limit=2", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	body := decodeBody(t, rr)
+	if _, has := body["total"]; has {
+		t.Fatalf("total present despite page.total_size(1) < rows returned(3), want it rejected: %v", body)
+	}
+	if body["truncated"] != true {
+		t.Fatalf("truncated = %v, want true", body["truncated"])
+	}
+}
+
 func TestIPAMAddressesGet_TotalSmallerThanRowsIsRejected(t *testing.T) {
 	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
 		row := `{"id":"1","address":"10.0.0.1","name":"h","comment":"","state":"used"}`

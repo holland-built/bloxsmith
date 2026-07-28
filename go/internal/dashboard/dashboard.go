@@ -179,17 +179,17 @@ func (s *Service) FetchDashboardData() map[string]any {
 // Python does; the audit feed goes through GetEx so a 4xx (unavailable) is
 // distinguishable from a genuinely empty feed.
 func (s *Service) buildAggregate() map[string]any {
-	subnetsD := s.Rest.Get("/api/ddi/v1/ipam/subnet",
+	subnetsD, subnetsStatus := fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet",
 		map[string]string{"_fields": subnetFields, "_limit": "5000"})
-	leasesD := s.Rest.Get("/api/ddi/v1/dhcp/lease",
+	leasesD, leasesStatus := fetchStrict(s.Rest, "/api/ddi/v1/dhcp/lease",
 		map[string]string{"_fields": "address,hostname,state,client_id", "_limit": "5000"})
-	viewsD := s.Rest.Get("/api/ddi/v1/dns/view",
+	viewsD, viewsStatus := fetchStrict(s.Rest, "/api/ddi/v1/dns/view",
 		map[string]string{"_fields": "id,name,comment", "_limit": "5000"})
-	zonesD := s.Rest.Get("/api/ddi/v1/dns/auth_zone",
+	zonesD, zonesStatus := fetchStrict(s.Rest, "/api/ddi/v1/dns/auth_zone",
 		map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type,dnssec_status", "_limit": "5000"})
-	hostsD := s.Rest.Get("/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})
-	policiesD := s.Rest.Get("/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})
-	feedsD := s.Rest.Get("/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})
+	hostsD, hostsStatus := fetchStrict(s.Rest, "/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})
+	policiesD, policiesStatus := fetchStrict(s.Rest, "/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})
+	feedsD, feedsStatus := fetchStrict(s.Rest, "/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})
 
 	// The at-risk fetch is the fix for the core bug: BuildSignals (signals.go)
 	// only ever sees data["subnets"], so any at-risk subnet outside the first
@@ -227,6 +227,10 @@ func (s *Service) buildAggregate() map[string]any {
 	hostsTotal, hostsTotalOK := s.fetchCount("/api/infra/v1/detail_hosts", nil)
 
 	degraded := atRiskDegraded
+	if subnetsStatus == "error" || leasesStatus == "error" || viewsStatus == "error" ||
+		zonesStatus == "error" || hostsStatus == "error" || policiesStatus == "error" || feedsStatus == "error" {
+		degraded = true
+	}
 	totals := map[string]any{}
 	if subnetsTotalOK {
 		totals["subnets"] = subnetsTotal
@@ -259,12 +263,39 @@ func (s *Service) buildAggregate() map[string]any {
 		"secPolicies": normPolicies(policiesD),
 		"feeds":       normFeeds(feedsD),
 		"auditLogs":   normAudit(auditD),
-		"_meta":       map[string]any{"auditLogs": auditStatus},
-		"_totals":     totals,
+		"_meta": map[string]any{
+			"subnets":     subnetsStatus,
+			"leases":      leasesStatus,
+			"dnsViews":    viewsStatus,
+			"zones":       zonesStatus,
+			"hosts":       hostsStatus,
+			"secPolicies": policiesStatus,
+			"feeds":       feedsStatus,
+			"auditLogs":   auditStatus,
+		},
+		"_totals": totals,
 	}
-	log.Printf("  subnets=%d(union, page=%d atRisk=%d) leases=%d zones=%d hosts=%d policies=%d feeds=%d audit=%d(%s) totals[subnets=%v subnetsCrit=%v subnetsWarn=%v hosts=%v degraded=%v]",
-		len(subnetsUnion), len(subnetsD), len(atRiskD), len(leasesD), len(zonesD), len(hostsD),
-		len(policiesD), len(feedsD), len(auditD), auditStatus,
+	log.Printf("  subnets=%d(union, page=%d atRisk=%d, %s) leases=%d(%s) zones=%d(%s) hosts=%d(%s) policies=%d(%s) feeds=%d(%s) audit=%d(%s) totals[subnets=%v subnetsCrit=%v subnetsWarn=%v hosts=%v degraded=%v]",
+		len(subnetsUnion), len(subnetsD), len(atRiskD), subnetsStatus, len(leasesD), leasesStatus,
+		len(zonesD), zonesStatus, len(hostsD), hostsStatus, len(policiesD), policiesStatus,
+		len(feedsD), feedsStatus, len(auditD), auditStatus,
 		totals["subnets"], totals["subnetsCrit"], totals["subnetsWarn"], totals["hosts"], degraded)
 	return result
+}
+
+// fetchStrict wraps Rest.GetStrict with the same three-state status
+// vocabulary ("ok"/"empty"/"error") already used for the audit feed at
+// auditStatus above, so a dead upstream feed reports its failure instead of
+// silently rendering as "you have none". On error the returned slice is a
+// non-nil empty []any so every downstream norm* shaper and the handler keep
+// working — one dead feed must never blank the whole /api/data payload.
+func fetchStrict(c *rest.Client, path string, params map[string]string) ([]any, string) {
+	rows, err := c.GetStrict(path, params)
+	if err != nil {
+		return []any{}, "error"
+	}
+	if len(rows) == 0 {
+		return rows, "empty"
+	}
+	return rows, "ok"
 }

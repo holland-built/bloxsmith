@@ -129,26 +129,51 @@ func numFromAny(v any) (int, bool) {
 	return 0, false
 }
 
-// findTotal hunts an upstream response body for a pagination total under
-// total_size/total_count, at the top level and inside a nested
-// page/page_info object. "count" is deliberately excluded: in many list
-// envelopes it means "rows in this page", not the collection total, and we
-// could not probe CSP ahead of time to disambiguate (the .env API key 401s;
-// the live key lives in the encrypted vault). A candidate is also rejected
-// if it's less than rowCount (the number of rows the upstream actually
-// returned) — that's definitionally not a collection total. Never emit a
-// total we can't stand behind.
+// findTotal hunts an upstream response body for a pagination total. The
+// authoritative shape, confirmed by fetchCount/pageTotalSize in
+// internal/dashboard (dashboard.go:93-105, ai_tools.go:275-289), is
+// body.page.total_size — a STRING that CSP only populates when the request
+// carries _is_total_size_needed=true (which pagedFetch now sends). That
+// string is parsed with strconv.Atoi (surrounding whitespace trimmed) and
+// rejected if it's not a positive integer. As a secondary path (kept so
+// nothing regresses if CSP ever answers with a differently-shaped or
+// numeric total) we also check total_size/total_count at the top level and
+// inside a nested page/page_info object, accepting either a numeric or
+// string value there too. "count" is deliberately excluded throughout: in
+// many list envelopes it means "rows in this page", not the collection
+// total. A candidate is also rejected if it's less than rowCount (the
+// number of rows the upstream actually returned) — that's definitionally
+// not a collection total. Never emit a total we can't stand behind.
 func findTotal(body map[string]any, rowCount int) (int, bool) {
+	if page, ok := body["page"].(map[string]any); ok {
+		if s, ok := page["total_size"].(string); ok {
+			if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && n > 0 && n >= rowCount {
+				return n, true
+			}
+		}
+	}
+
 	keys := []string{"total_size", "total_count"}
+	numOrStr := func(v any) (int, bool) {
+		if n, ok := numFromAny(v); ok {
+			return n, true
+		}
+		if s, ok := v.(string); ok {
+			if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+				return n, true
+			}
+		}
+		return 0, false
+	}
 	for _, k := range keys {
-		if n, ok := numFromAny(body[k]); ok && n >= rowCount {
+		if n, ok := numOrStr(body[k]); ok && n >= rowCount {
 			return n, true
 		}
 	}
 	for _, nestKey := range []string{"page", "page_info"} {
 		if nested, ok := body[nestKey].(map[string]any); ok {
 			for _, k := range keys {
-				if n, ok := numFromAny(nested[k]); ok && n >= rowCount {
+				if n, ok := numOrStr(nested[k]); ok && n >= rowCount {
 					return n, true
 				}
 			}
@@ -290,11 +315,13 @@ func (d *Deps) writeUpstreamError(w http.ResponseWriter, r *http.Request, ue *re
 // pagedFetch runs the shared upstream-fetch + truncation-metadata logic used
 // by dnsRecordsGet and ipamAddressesGet. It issues a SINGLE upstream request
 // for limit+1 rows (limit is capped at 999 by parseListLimit, so limit+1
-// never exceeds 1000) and derives both the total (if a trustworthy candidate
-// is present in that one response) and truncated (true iff more than `limit`
-// rows came back) from it — never a second fetch. On an upstream failure it
-// writes the 502 itself and returns ok=false. See findTotal for why the
-// total is runtime-detected rather than assumed.
+// never exceeds 1000), asking CSP for the authoritative total via
+// _is_total_size_needed=true (the same param fetchCount uses in
+// internal/dashboard/dashboard.go), and derives both the total (if a
+// trustworthy candidate is present in that one response — see findTotal)
+// and truncated (true iff more than `limit` rows came back, used only when
+// no total was found) from it — never a second fetch. On an upstream
+// failure it writes the 502 itself and returns ok=false.
 func (d *Deps) pagedFetch(w http.ResponseWriter, r *http.Request, path string, params map[string]string, limit int) (rows []any, extra map[string]any, ok bool) {
 	// Copy params so we don't mutate the caller's map when adding _limit.
 	p := map[string]string{}
@@ -303,6 +330,7 @@ func (d *Deps) pagedFetch(w http.ResponseWriter, r *http.Request, path string, p
 	}
 
 	p["_limit"] = strconv.Itoa(limit + 1)
+	p["_is_total_size_needed"] = "true"
 	fetchRows, body, err := d.Rest.GetPageStrict(path, p)
 	if err != nil {
 		ue, ok := err.(*rest.UpstreamError)
