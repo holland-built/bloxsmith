@@ -99,6 +99,10 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	comment := strOr(body, "comment")
 
 	if truthyDry(body["dry"]) {
+		// Deliberately NOT GetStrict: this is a preview-only lookup for a dry
+		// run. A failed preview must leave subnetAddr blank, never abort the
+		// dry run — the real creation path below uses Rest.Write with its own
+		// status check, so nothing here can create a false duplicate.
 		preview := c.Rest.Get("/api/ddi/v1/"+blockID+"/nextavailablesubnet",
 			map[string]string{"cidr": strconv.Itoa(cidr), "count": "1"})
 		subnetAddr := ""

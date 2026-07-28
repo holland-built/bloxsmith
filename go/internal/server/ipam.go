@@ -57,7 +57,10 @@ func pick(rows []any, keys ...string) []any {
 
 func (d *Deps) ipamSpaces(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/ipam/spaces")
-	spaces := d.Rest.Get("/api/ddi/v1/ipam/ip_space", nil)
+	spaces, ok := d.getStrictOrErr(w, r, "/api/ddi/v1/ipam/ip_space", nil)
+	if !ok {
+		return
+	}
 	d.json(w, r, 200, map[string]any{"spaces": pick(spaces, "id", "name")})
 }
 
@@ -90,7 +93,10 @@ func (d *Deps) ipamBlocks(w http.ResponseWriter, r *http.Request) {
 		}
 		params["_tfilter"] = field + `=="` + val + `"`
 	}
-	blocks := d.Rest.Get("/api/ddi/v1/ipam/address_block", params)
+	blocks, ok := d.getStrictOrErr(w, r, "/api/ddi/v1/ipam/address_block", params)
+	if !ok {
+		return
+	}
 	d.json(w, r, 200, map[string]any{"blocks": pick(blocks, "id", "address", "cidr", "name", "tags")})
 }
 
@@ -312,6 +318,29 @@ func (d *Deps) writeUpstreamError(w http.ResponseWriter, r *http.Request, ue *re
 	d.json(w, r, 502, resp)
 }
 
+// getStrictOrErr issues path via GetStrict for the un-paginated dropdown
+// handlers (spaces/blocks/zones/views/subnets). On a non-nil error it writes
+// the shared 502 (via writeUpstreamError — the same error shape and log line
+// every migrated handler in this file uses) and returns ok=false so the
+// caller returns immediately without re-issuing the request. A genuinely
+// empty upstream result is NOT an error — GetStrict only errors on a
+// transport failure, non-2xx status, or undecodable/unshaped body — so it
+// still flows through here as ok=true with a zero-length rows slice.
+func (d *Deps) getStrictOrErr(w http.ResponseWriter, r *http.Request, path string, params map[string]string) (rows []any, ok bool) {
+	rows, err := d.Rest.GetStrict(path, params)
+	if err != nil {
+		ue, isUE := err.(*rest.UpstreamError)
+		if !isUE {
+			// GetStrict only ever returns *rest.UpstreamError; this fallback
+			// is defensive, not a path exercised in practice.
+			ue = &rest.UpstreamError{Path: path}
+		}
+		d.writeUpstreamError(w, r, ue)
+		return nil, false
+	}
+	return rows, true
+}
+
 // pagedFetch runs the shared upstream-fetch + truncation-metadata logic used
 // by dnsRecordsGet and ipamAddressesGet. It issues a SINGLE upstream request
 // for limit+1 rows (limit is capped at 999 by parseListLimit, so limit+1
@@ -360,7 +389,10 @@ func (d *Deps) pagedFetch(w http.ResponseWriter, r *http.Request, path string, p
 func (d *Deps) dnsZones(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/dns/zones")
 	view := r.URL.Query().Get("view")
-	views := d.Rest.Get("/api/ddi/v1/dns/view", nil)
+	views, ok := d.getStrictOrErr(w, r, "/api/ddi/v1/dns/view", nil)
+	if !ok {
+		return
+	}
 	var zoneParams map[string]string
 	if view != "" {
 		esc, err := rest.CSPQ(view)
@@ -370,7 +402,10 @@ func (d *Deps) dnsZones(w http.ResponseWriter, r *http.Request) {
 		}
 		zoneParams = map[string]string{"_filter": `view=="` + esc + `"`}
 	}
-	zones := d.Rest.Get("/api/ddi/v1/dns/auth_zone", zoneParams)
+	zones, ok := d.getStrictOrErr(w, r, "/api/ddi/v1/dns/auth_zone", zoneParams)
+	if !ok {
+		return
+	}
 	d.json(w, r, 200, map[string]any{
 		"views": pick(views, "id", "name"),
 		"zones": pick(zones, "id", "fqdn", "view"),
@@ -519,7 +554,10 @@ func (d *Deps) ipamSubnets(w http.ResponseWriter, r *http.Request) {
 	if len(filt) > 0 {
 		params = map[string]string{"_filter": strings.Join(filt, " and ")}
 	}
-	subnets := d.Rest.Get("/api/ddi/v1/ipam/subnet", params)
+	subnets, ok := d.getStrictOrErr(w, r, "/api/ddi/v1/ipam/subnet", params)
+	if !ok {
+		return
+	}
 	d.json(w, r, 200, map[string]any{
 		"subnets": pick(subnets, "id", "address", "cidr", "name", "utilization"),
 	})

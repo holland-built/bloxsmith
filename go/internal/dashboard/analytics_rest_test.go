@@ -216,6 +216,41 @@ func TestFetchHostMetrics_UpstreamErrorDegrades(t *testing.T) {
 	}
 }
 
+// --- hostDisplayNames: GetStrict migration -----------------------------------
+
+// TestHostDisplayNames_UpstreamErrorReturnsEmptyMapNotPanic is the regression
+// test for the bug this migration fixes: a failed detail_hosts read used to
+// be indistinguishable from a genuinely empty one (both collapsed to []any{}
+// via Rest.Get). The failure is now logged instead of surfaced (this map only
+// feeds a display-name lookup; callers already degrade to the raw id), but it
+// must still come back as an empty map rather than panicking the caller.
+func TestHostDisplayNames_UpstreamErrorReturnsEmptyMapNotPanic(t *testing.T) {
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"boom"}`))
+	})
+
+	got := s.hostDisplayNames()
+	if got == nil || len(got) != 0 {
+		t.Fatalf("hostDisplayNames() = %v, want an empty (non-nil) map on upstream error", got)
+	}
+}
+
+// TestHostDisplayNames_GenuineEmptyReturnsEmptyMap confirms the original
+// behavior survives the migration: a successful read with no hosts still
+// yields an empty map, exactly as before.
+func TestHostDisplayNames_GenuineEmptyReturnsEmptyMap(t *testing.T) {
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"results":[]}`))
+	})
+
+	got := s.hostDisplayNames()
+	if got == nil || len(got) != 0 {
+		t.Fatalf("hostDisplayNames() = %v, want an empty map on a genuinely empty result", got)
+	}
+}
+
 func contains(ss []string, v string) bool {
 	for _, s := range ss {
 		if s == v {

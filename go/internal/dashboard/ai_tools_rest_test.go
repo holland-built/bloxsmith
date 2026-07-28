@@ -469,12 +469,79 @@ func TestRunAITool_GetHosts_ReportsUntruncatedTotal(t *testing.T) {
 	}
 }
 
-// TestRunAITool_UpstreamErrorDegradesGracefully verifies a 5xx from the
-// Infoblox REST proxy produces the tool's "No X data." sentinel instead of a
-// panic or an error string leaking the upstream failure.
-func TestRunAITool_UpstreamErrorDegradesGracefully(t *testing.T) {
+// TestRunAITool_UpstreamErrorIsNotReportedAsAbsence is the core regression
+// guard for the fetch-failure-vs-absence bug: a 500 from the Infoblox REST
+// proxy used to collapse into the tool's "No X data." sentinel (see the
+// now-removed TestRunAITool_UpstreamErrorDegradesGracefully, which asserted
+// exactly that as the DESIRED behavior). That sentinel is fed straight to an
+// LLM which relays it to a human as fact — "you have no hosts" — when the
+// truth is Infoblox was unreachable. Every REST-backed tool must now say the
+// read FAILED, worded so it cannot be mistaken for an empty result, and must
+// NOT emit the absence sentinel.
+func TestRunAITool_UpstreamErrorIsNotReportedAsAbsence(t *testing.T) {
 	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
+	})
+	tools := []struct{ name, absenceSentinel string }{
+		{"get_subnets", "No subnet data."},
+		{"get_hosts", "No host data."},
+		{"get_dns", ""}, // get_dns has no absence sentinel; only the failure property applies
+		{"get_dhcp_leases", "No lease data."},
+		{"get_threat_feeds", "No threat feed data."},
+		{"get_audit_logs", "No audit log data."},
+		{"get_dns_analytics", "No DNS analytics data."},
+	}
+	for _, tc := range tools {
+		t.Run(tc.name, func(t *testing.T) {
+			out := s.RunAITool(context.Background(), tc.name, map[string]any{})
+			if tc.absenceSentinel != "" && out == tc.absenceSentinel {
+				t.Fatalf("%s: upstream 500 reported as absence (%q) instead of a lookup failure", tc.name, out)
+			}
+			if strings.Contains(out, "No ") && strings.Contains(out, " data.") {
+				t.Fatalf("%s: failure output still reads like an absence sentinel: %q", tc.name, out)
+			}
+			if !strings.Contains(out, "lookup failure") {
+				t.Fatalf("%s: expected failure output to state it is a lookup failure, got %q", tc.name, out)
+			}
+			if !strings.Contains(out, "do not tell the user") {
+				t.Fatalf("%s: expected failure output to instruct the model not to report absence, got %q", tc.name, out)
+			}
+		})
+	}
+}
+
+// TestRunAITool_NetworkErrorIsNotReportedAsAbsence covers a genuine transport
+// failure (nothing listening on the port) rather than an HTTP error status —
+// GetEx/GetStrict see status 0, a distinct failure path from the >=400 branch
+// above, and it must degrade the same way: failure wording, not absence.
+func TestRunAITool_NetworkErrorIsNotReportedAsAbsence(t *testing.T) {
+	closedSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	deadURL := closedSrv.URL
+	closedSrv.Close() // nothing is listening on this port now
+
+	c := rest.New(deadURL, rest.NewAuth("test-key", nil))
+	s := New(c, cache.New())
+
+	out := s.RunAITool(context.Background(), "get_subnets", map[string]any{})
+	if out == "No subnet data." {
+		t.Fatalf("network error reported as absence: %q", out)
+	}
+	if !strings.Contains(out, "lookup failure") || !strings.Contains(out, "do not tell the user") {
+		t.Fatalf("expected lookup-failure wording, got %q", out)
+	}
+}
+
+// TestRunAITool_EmptySuccessfulReadKeepsAbsenceWording is the other half of
+// the contract: a genuine 200-with-zero-rows result is NOT a failure, and
+// must keep the exact pre-existing "No X data." wording unchanged.
+func TestRunAITool_EmptySuccessfulReadKeepsAbsenceWording(t *testing.T) {
+	s, _ := newAIToolsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/cubejs/v1/query") {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"data": []any{}}})
+			return
+		}
+		writeResults(w, []map[string]any{})
 	})
 	tools := []struct{ name, want string }{
 		{"get_subnets", "No subnet data."},

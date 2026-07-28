@@ -569,7 +569,13 @@ func (d *Deps) retagBlock(w http.ResponseWriter, r *http.Request, b map[string]a
 		d.json(w, r, 500, map[string]any{"error": "internal error"})
 		return
 	}
-	spaceResults := d.Rest.Get("/api/ddi/v1/ipam/ip_space", map[string]string{"_filter": fmt.Sprintf(`name=="%s"`, esc)})
+	// getStrictOrErr (ipam.go) distinguishes a failed read from a genuinely
+	// empty one: a failed read must 502, not tell the caller their IP space
+	// does not exist. It already writes the 502 itself on error.
+	spaceResults, ok := d.getStrictOrErr(w, r, "/api/ddi/v1/ipam/ip_space", map[string]string{"_filter": fmt.Sprintf(`name=="%s"`, esc)})
+	if !ok {
+		return
+	}
 	if len(spaceResults) == 0 {
 		d.json(w, r, 400, map[string]any{"error": "IP space not found: " + ipSpace})
 		return
