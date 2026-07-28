@@ -10,6 +10,7 @@ package edit
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -126,6 +127,57 @@ func intCoerce(v any) (int, bool) {
 		return 0, true
 	}
 	return 0, false
+}
+
+// segRe is the allowed shape of a single path segment (the final component of
+// an object id): no slashes, no encoded separators, no traversal dots.
+var segRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+
+// ObjectPath builds the /api/ddi/v1 path for a CSP object id. Ids come in two
+// forms: full-form ("dns/record/<uuid>", as returned by every list endpoints)
+// and bare uuid. Prefixing the type path onto a full-form id yields
+// /api/ddi/v1/dns/record/dns/record/<uuid>, which CSP answers with 501.
+//
+// Hardened against path traversal and type confusion: the id is validated
+// before it ever reaches the outgoing request. A full-form id must be exactly
+// kind+"/"+seg (anything else — including "..", a different kind prefix, or
+// extra segments — is rejected); a bare id must itself be a single valid
+// segment. Go's HTTP transport does not clean ".." out of a request path, so
+// an unvalidated id here would let a caller reach arbitrary CSP paths under
+// the server's own API key.
+func ObjectPath(kind, id string) (string, error) {
+	const errInvalid = "invalid object id"
+
+	trimmed := strings.Trim(strings.TrimSpace(id), "/")
+	if trimmed == "" {
+		return "", fmt.Errorf(errInvalid)
+	}
+	for _, bad := range []string{"..", "%2f", "%2F", "\\"} {
+		if strings.Contains(trimmed, bad) {
+			return "", fmt.Errorf(errInvalid)
+		}
+	}
+	for _, r := range trimmed {
+		if r < 0x20 || r == 0x7f {
+			return "", fmt.Errorf(errInvalid)
+		}
+	}
+
+	if strings.Contains(trimmed, "/") {
+		seg := trimmed[strings.LastIndex(trimmed, "/")+1:]
+		if !segRe.MatchString(seg) {
+			return "", fmt.Errorf(errInvalid)
+		}
+		if trimmed != kind+"/"+seg {
+			return "", fmt.Errorf(errInvalid)
+		}
+		return "/api/ddi/v1/" + trimmed, nil
+	}
+
+	if !segRe.MatchString(trimmed) {
+		return "", fmt.Errorf(errInvalid)
+	}
+	return "/api/ddi/v1/" + kind + "/" + trimmed, nil
 }
 
 // asMap type-asserts a REST response to a JSON object, else nil.
@@ -298,7 +350,12 @@ func (c *Client) DNSRecordUpdate(body M) (M, int) {
 	}
 	dry := boolPy(body["dry"])
 
-	current, curStatus, _ := c.Rest.GetEx("/api/ddi/v1/dns/record/"+recordID, nil)
+	objPath, err := ObjectPath("dns/record", recordID)
+	if err != nil {
+		return M{"ok": false, "error": "invalid object id"}, 400
+	}
+
+	current, curStatus, _ := c.Rest.GetEx(objPath, nil)
 	curMap := asMap(current)
 	if curStatus != 200 || curMap == nil {
 		return M{"ok": false, "error": fmt.Sprintf("record not found (status %d)", curStatus)}, statusOr(curStatus, 502)
@@ -308,6 +365,38 @@ func (c *Client) DNSRecordUpdate(body M) (M, int) {
 		curRecord = curMap
 	}
 	curType := strings.ToUpper(pyStr(curRecord["type"]))
+
+	// Optimistic-concurrency check: if the caller's preview (`expected`) is
+	// stale relative to what's on the server right now, refuse the write
+	// instead of silently clobbering someone else's edit. This only narrows
+	// the read-compare-write race window — it is NOT atomic; another writer
+	// can still land between this check and the PATCH below. Runs on the dry
+	// path too, since a preview that hides a conflict just moves the surprise
+	// to the real write. `expected` is read-only here and must never be
+	// copied into updateBody.
+	if expected := asMap(body["expected"]); expected != nil {
+		if has(expected, "value") {
+			wantVal := strings.TrimSpace(pyStr(expected["value"]))
+			gotVal := strings.TrimSpace(pyStr(curRecord["dns_rdata"]))
+			if wantVal != gotVal {
+				return conflictResponse(curRecord), 409
+			}
+		}
+		if has(expected, "ttl") {
+			wantTTL, wantOK := intCoerce(expected["ttl"])
+			gotTTL, gotOK := intCoerce(curRecord["ttl"])
+			if !wantOK || !gotOK || wantTTL != gotTTL {
+				return conflictResponse(curRecord), 409
+			}
+		}
+		if has(expected, "comment") {
+			wantComment := strings.TrimSpace(pyStr(expected["comment"]))
+			gotComment := strings.TrimSpace(pyStr(curRecord["comment"]))
+			if wantComment != gotComment {
+				return conflictResponse(curRecord), 409
+			}
+		}
+	}
 
 	updateBody := M{}
 	if has(body, "value") {
@@ -338,11 +427,25 @@ func (c *Client) DNSRecordUpdate(body M) (M, int) {
 		return M{"ok": true, "dry_run": true, "id": recordID, "would_update": updateBody}, 200
 	}
 
-	resp, status, method := c.patchThenPut("/api/ddi/v1/dns/record/"+recordID, updateBody)
+	resp, status, method := c.patchThenPut(objPath, updateBody)
 	if (status != 200 && status != 201) || resp == nil {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (status %d)", status), "detail": resp, "method": method}, statusOr(status, 502)
 	}
 	return M{"ok": true, "method": method, "record": resultOrSelf(resp)}, 200
+}
+
+// conflictResponse builds the 409 body returned when DNSRecordUpdate's
+// optimistic-concurrency check finds the caller's `expected` snapshot stale.
+func conflictResponse(curRecord M) M {
+	return M{
+		"ok":    false,
+		"error": "record changed since it was read — re-fetch and retry",
+		"current": M{
+			"value":   curRecord["dns_rdata"],
+			"ttl":     curRecord["ttl"],
+			"comment": curRecord["comment"],
+		},
+	}
 }
 
 // patchThenPut is the shared PATCH->PUT-on-405 fallback used by every update

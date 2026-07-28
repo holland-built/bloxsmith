@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"bloxsmith/internal/edit"
 	"bloxsmith/internal/httpx"
 )
 
@@ -111,8 +112,13 @@ func (d *Deps) dnsRecordDelete(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 400, map[string]any{"error": "id is required"})
 		return
 	}
+	objPath, err := edit.ObjectPath("dns/record", id)
+	if err != nil {
+		d.json(w, r, 400, map[string]any{"error": "invalid object id"})
+		return
+	}
 	defer d.recoverEdit(w, r, "/api/dns/records DELETE")
-	res, status := d.Edit.Delete("/api/ddi/v1/dns/record/" + id)
+	res, status := d.Edit.Delete(objPath)
 	d.json(w, r, status, res)
 }
 
@@ -124,8 +130,13 @@ func (d *Deps) ipamAddressDelete(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 400, map[string]any{"error": "id is required"})
 		return
 	}
+	objPath, err := edit.ObjectPath("ipam/address", id)
+	if err != nil {
+		d.json(w, r, 400, map[string]any{"error": "invalid object id"})
+		return
+	}
 	defer d.recoverEdit(w, r, "/api/ipam/addresses DELETE")
-	res, status := d.Edit.Delete("/api/ddi/v1/ipam/address/" + id)
+	res, status := d.Edit.Delete(objPath)
 	d.json(w, r, status, res)
 }
 
