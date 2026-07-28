@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { COLORS, Card, Empty, Skeleton } from '../components/ui.jsx'
+import { COLORS, Card, Empty, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
@@ -27,6 +27,12 @@ export default function Provision() {
           {role.toUpperCase()}
         </span>
       </div>
+
+      <TabIntro anchor="provision">
+        Creates real objects in Infoblox — one subnet, a whole site from a template, or a multi-region demo
+        estate. Dry-run is on by default and streams the plan before anything is written; teardown is permanent
+        and needs admin.
+      </TabIntro>
 
       <div className="flex gap-1 mb-4 p-1 rounded-lg bg-field border border-border w-fit">
         {[
