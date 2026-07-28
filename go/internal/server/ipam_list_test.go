@@ -748,11 +748,12 @@ func TestIPAMAddressesGet_PageTotalSizeString(t *testing.T) {
 }
 
 // TestIPAMAddressesGet_PageTotalSizeJunkFallsBackToTruncated covers
-// page.total_size present but not a usable positive integer ("abc", "0",
-// "-3") — each must be rejected and fall back to the truncated heuristic,
-// never a bogus total.
+// page.total_size present but not a usable integer ("abc", "-3") — each must
+// be rejected and fall back to the truncated heuristic, never a bogus total.
+// Note "0" is NOT junk — see
+// TestIPAMAddressesGet_PageTotalSizeZeroIsAuthoritative below.
 func TestIPAMAddressesGet_PageTotalSizeJunkFallsBackToTruncated(t *testing.T) {
-	for _, junk := range []string{"abc", "0", "-3"} {
+	for _, junk := range []string{"abc", "-3"} {
 		junk := junk
 		t.Run(junk, func(t *testing.T) {
 			d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
@@ -773,6 +774,37 @@ func TestIPAMAddressesGet_PageTotalSizeJunkFallsBackToTruncated(t *testing.T) {
 				t.Fatalf("total_size=%q: truncated = %v, want true", junk, body["truncated"])
 			}
 		})
+	}
+}
+
+// TestIPAMAddressesGet_PageTotalSizeZeroIsAuthoritative covers the case the
+// old junk-list test could not detect: a subnet that genuinely holds zero
+// addresses. Upstream returns zero rows and page.total_size:"0" — that 0
+// must be accepted as an authoritative total (0 >= 0 rows returned), not
+// discarded to a bare {"truncated": false} response.
+func TestIPAMAddressesGet_PageTotalSizeZeroIsAuthoritative(t *testing.T) {
+	d, closeSrv := newTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"results":[],"page":{"total_size":"0"}}`))
+	})
+	defer closeSrv()
+
+	req := httptest.NewRequest("GET", "/api/ipam/addresses?subnet=abc&_limit=5", nil)
+	rr := httptest.NewRecorder()
+	d.ipamAddressesGet(rr, req)
+
+	if rr.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	body := decodeBody(t, rr)
+	total, ok := body["total"]
+	if !ok {
+		t.Fatalf("total missing, want 0 present and authoritative: %v", body)
+	}
+	if n, ok := total.(float64); !ok || n != 0 {
+		t.Fatalf("total = %v, want 0", total)
+	}
+	if _, has := body["truncated"]; has {
+		t.Fatalf("truncated present when page.total_size gave an authoritative total: %v", body)
 	}
 }
 

@@ -102,7 +102,13 @@ func TestFetchDNSAnalytics_QueryShapesAndShape(t *testing.T) {
 	}
 }
 
-func TestFetchDNSAnalytics_UpstreamErrorDegrades(t *testing.T) {
+// TestFetchDNSAnalytics_UpstreamErrorReportsUnavailable is the regression
+// test for the bug this migration fixes: a dead cubejs used to collapse to
+// the exact same {volume:[],top_clients:[],query_types:[]} shape as a
+// tenant with genuinely no query activity. It must now surface
+// availability:"unavailable" plus a reason, alongside the (still empty)
+// rows the caller already handled.
+func TestFetchDNSAnalytics_UpstreamErrorReportsUnavailable(t *testing.T) {
 	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
@@ -114,6 +120,38 @@ func TestFetchDNSAnalytics_UpstreamErrorDegrades(t *testing.T) {
 		if !ok || len(rows) != 0 {
 			t.Errorf("%s = %v, want empty slice on upstream error", key, got[key])
 		}
+	}
+	if got["availability"] != "unavailable" {
+		t.Errorf("availability = %v, want \"unavailable\"", got["availability"])
+	}
+	if reason, _ := got["reason"].(string); reason == "" {
+		t.Errorf("reason = %v, want a non-empty operator-safe reason", got["reason"])
+	}
+}
+
+// TestFetchDNSAnalytics_GenuineEmptyReportsOk confirms the other half of the
+// same contract: a successful fetch that legitimately returns zero rows
+// (a tenant with no query activity) must NOT be mistaken for a dead feed —
+// it reports availability:"ok" and carries no reason.
+func TestFetchDNSAnalytics_GenuineEmptyReportsOk(t *testing.T) {
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":{"data":[]}}`))
+	})
+
+	got := s.FetchDNSAnalytics(context.Background())
+
+	for _, key := range []string{"volume", "top_clients", "query_types"} {
+		rows, ok := got[key].([]any)
+		if !ok || len(rows) != 0 {
+			t.Errorf("%s = %v, want empty slice on a genuinely empty tenant", key, got[key])
+		}
+	}
+	if got["availability"] != "ok" {
+		t.Errorf("availability = %v, want \"ok\" for a genuinely empty (not dead) feed", got["availability"])
+	}
+	if _, has := got["reason"]; has {
+		t.Errorf("reason = %v, want no reason on a healthy empty fetch", got["reason"])
 	}
 }
 
@@ -204,7 +242,12 @@ func TestFetchHostMetrics_UnresolvedHostKeepsRawID(t *testing.T) {
 	}
 }
 
-func TestFetchHostMetrics_UpstreamErrorDegrades(t *testing.T) {
+// TestFetchHostMetrics_UpstreamErrorReportsUnavailable is the regression
+// test for the bug this migration fixes: a dead HostMetrics cube used to
+// collapse to the same {"metrics":[]} shape as a tenant with genuinely no
+// per-host metrics. It must now surface availability:"unavailable" plus a
+// reason, alongside the (still empty) metrics list.
+func TestFetchHostMetrics_UpstreamErrorReportsUnavailable(t *testing.T) {
 	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 	})
@@ -213,6 +256,40 @@ func TestFetchHostMetrics_UpstreamErrorDegrades(t *testing.T) {
 	metrics, ok := got["metrics"].([]any)
 	if !ok || len(metrics) != 0 {
 		t.Errorf("metrics = %v, want empty slice on upstream error", got["metrics"])
+	}
+	if got["availability"] != "unavailable" {
+		t.Errorf("availability = %v, want \"unavailable\"", got["availability"])
+	}
+	if reason, _ := got["reason"].(string); reason == "" {
+		t.Errorf("reason = %v, want a non-empty operator-safe reason", got["reason"])
+	}
+}
+
+// TestFetchHostMetrics_GenuineEmptyReportsOk confirms the other half of the
+// same contract: a successful fetch that legitimately returns no per-host
+// metrics must NOT be mistaken for a dead cube — it reports
+// availability:"ok" and carries no reason.
+func TestFetchHostMetrics_GenuineEmptyReportsOk(t *testing.T) {
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/infra/v1/detail_hosts":
+			_, _ = w.Write([]byte(`{"results":[]}`))
+		case "/api/cubejs/v1/query":
+			_, _ = w.Write([]byte(`{"result":{"data":[]}}`))
+		}
+	})
+
+	got := s.FetchHostMetrics(context.Background())
+	metrics, ok := got["metrics"].([]any)
+	if !ok || len(metrics) != 0 {
+		t.Errorf("metrics = %v, want empty slice on a genuinely empty tenant", got["metrics"])
+	}
+	if got["availability"] != "ok" {
+		t.Errorf("availability = %v, want \"ok\" for a genuinely empty (not dead) cube", got["availability"])
+	}
+	if _, has := got["reason"]; has {
+		t.Errorf("reason = %v, want no reason on a healthy empty fetch", got["reason"])
 	}
 }
 

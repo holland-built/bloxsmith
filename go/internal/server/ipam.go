@@ -141,7 +141,8 @@ func numFromAny(v any) (int, bool) {
 // body.page.total_size — a STRING that CSP only populates when the request
 // carries _is_total_size_needed=true (which pagedFetch now sends). That
 // string is parsed with strconv.Atoi (surrounding whitespace trimmed) and
-// rejected if it's not a positive integer. As a secondary path (kept so
+// rejected if it's negative or unparseable — a genuine 0 (an empty subnet)
+// is a valid, authoritative total. As a secondary path (kept so
 // nothing regresses if CSP ever answers with a differently-shaped or
 // numeric total) we also check total_size/total_count at the top level and
 // inside a nested page/page_info object, accepting either a numeric or
@@ -153,7 +154,7 @@ func numFromAny(v any) (int, bool) {
 func findTotal(body map[string]any, rowCount int) (int, bool) {
 	if page, ok := body["page"].(map[string]any); ok {
 		if s, ok := page["total_size"].(string); ok {
-			if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && n > 0 && n >= rowCount {
+			if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && n >= 0 && n >= rowCount {
 				return n, true
 			}
 		}

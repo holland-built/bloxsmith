@@ -143,21 +143,6 @@ func (c *Client) Get(path string, params map[string]string) []any {
 	return Unwrap(body)
 }
 
-// GetPage is Get plus the raw envelope: callers that need pagination
-// metadata (a total, a page token) or that must distinguish an upstream
-// failure from a genuinely empty list cannot use Get, which discards both.
-func (c *Client) GetPage(path string, params map[string]string) (rows []any, body map[string]any, status int) {
-	raw, status, err := c.GetEx(path, params)
-	if err != nil || status == 0 || status >= 400 {
-		return nil, nil, status
-	}
-	rows = Unwrap(raw)
-	if b, ok := raw.(map[string]any); ok {
-		body = b
-	}
-	return rows, body, status
-}
-
 // snippetCap bounds how much of an upstream body GetStrict retains in an
 // UpstreamError. It is enforced at read time via io.LimitReader, never by
 // slicing an already fully-read body, so an oversized error page can't blow

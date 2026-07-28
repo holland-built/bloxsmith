@@ -261,28 +261,47 @@ func (s *Service) cubeQuery(query map[string]any) []map[string]any {
 // FetchDNSAnalytics is fetch_dns_analytics: three NstarDnsActivity cube
 // queries (7-day volume trend, top clients, query-type mix) over direct REST
 // — the MCP parquet path (query_stored_data) cannot be read back at all.
+//
+// cubeQuery returns a nil slice on upstream failure and a non-nil (possibly
+// empty) slice on a genuine success, even with zero rows — see cubeQuery's
+// doc comment. That distinction is preserved here as availability: a dead
+// cubejs reports "unavailable" with a reason and empty rows; a tenant with
+// real but zero query activity still reports "ok", mirroring the
+// availability/reason field names csp.go's exposureFeedUnavailable uses for
+// the same failure-vs-empty problem on the attack-surface feeds.
 func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
-	vol := toAnyN(s.cubeQuery(map[string]any{
+	volRows := s.cubeQuery(map[string]any{
 		"measures": []string{"NstarDnsActivity.total_query_count"},
 		"timeDimensions": []map[string]any{{
 			"dimension": "NstarDnsActivity.timestamp",
 			"dateRange": "last 7 days", "granularity": "day"}},
-	}))
-	clients := toAnyN(s.cubeQuery(map[string]any{
+	})
+	clientRows := s.cubeQuery(map[string]any{
 		"measures":   []string{"NstarDnsActivity.total_query_count"},
 		"dimensions": []string{"NstarDnsActivity.device_name", "NstarDnsActivity.device_ip"},
 		"timeDimensions": []map[string]any{{
 			"dimension": "NstarDnsActivity.timestamp", "dateRange": "last 7 days"}},
 		"order": map[string]any{"NstarDnsActivity.total_query_count": "desc"}, "limit": 50,
-	}))
-	types := toAnyN(s.cubeQuery(map[string]any{
+	})
+	typeRows := s.cubeQuery(map[string]any{
 		"measures":   []string{"NstarDnsActivity.total_query_count"},
 		"dimensions": []string{"NstarDnsActivity.query_type"},
 		"timeDimensions": []map[string]any{{
 			"dimension": "NstarDnsActivity.timestamp", "dateRange": "last 7 days"}},
 		"order": map[string]any{"NstarDnsActivity.total_query_count": "desc"}, "limit": 10,
-	}))
-	return map[string]any{"volume": vol, "top_clients": clients, "query_types": types}
+	})
+	if volRows == nil || clientRows == nil || typeRows == nil {
+		log.Printf("dashboard: DNS analytics cube query failed (NstarDnsActivity unavailable)")
+		return map[string]any{
+			"volume": []any{}, "top_clients": []any{}, "query_types": []any{},
+			"availability": "unavailable",
+			"reason":       "DNS analytics (NstarDnsActivity) unavailable (upstream error).",
+		}
+	}
+	return map[string]any{
+		"volume": toAnyN(volRows), "top_clients": toAnyN(clientRows), "query_types": toAnyN(typeRows),
+		"availability": "ok",
+	}
 }
 
 // --- Host Metrics (server.py fetch_host_metrics 4319) ------------------------
@@ -326,9 +345,17 @@ func (s *Service) hostDisplayNames() map[string]string {
 // (never-working) MCP query. HostMetrics.host is an opaque UUID; it is
 // resolved to a display name via hostDisplayNames. Rows with a null host are
 // account-level (e.g. dns_qps_iq) and are skipped, never rendered blank.
+//
+// Same availability treatment as FetchDNSAnalytics: cubeQuery returns nil on
+// upstream failure and a non-nil (possibly empty) slice on a genuine
+// success. A failure on either metric query reports availability
+// "unavailable" with a reason and an empty metrics list; a real tenant with
+// no per-host metrics still reports "ok" with an empty metrics list. The
+// "metrics" key and its row shape are unchanged.
 func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 	names := s.hostDisplayNames()
 	metrics := []any{}
+	failed := false
 	for _, metricName := range []string{"host_cpu", "host_memory"} {
 		rows := s.cubeQuery(map[string]any{
 			"measures":   []string{"HostMetrics.avg_value"},
@@ -337,6 +364,10 @@ func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 				"member": "HostMetrics.metric_name", "operator": "equals",
 				"values": []string{metricName}}},
 		})
+		if rows == nil {
+			failed = true
+			continue
+		}
 		for _, row := range rows {
 			hostID := getStr(row["host"])
 			if hostID == "" {
@@ -355,7 +386,15 @@ func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 			})
 		}
 	}
-	return map[string]any{"metrics": metrics}
+	if failed {
+		log.Printf("dashboard: host metrics cube query failed (HostMetrics unavailable)")
+		return map[string]any{
+			"metrics":      []any{},
+			"availability": "unavailable",
+			"reason":       "Host metrics (HostMetrics) unavailable (upstream error).",
+		}
+	}
+	return map[string]any{"metrics": metrics, "availability": "ok"}
 }
 
 // --- Threat Lookup (server.py threat_lookup 4551 / _threat_lookup_async) -----
