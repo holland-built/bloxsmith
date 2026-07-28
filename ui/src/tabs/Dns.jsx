@@ -3,7 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useHashParams } from '../lib/hash.js'
 import { useThemeColors } from '../lib/theme.jsx'
@@ -23,6 +23,7 @@ export default function Dns() {
 
   const hp = useHashParams()
   const zones = data.data?.zones ?? []
+  const zonesStatus = data.data?._meta?.zones
 
   return (
     <div className="w-full px-6 py-5">
@@ -32,7 +33,7 @@ export default function Dns() {
         <ZoneKpis zones={zones} />
         <DnsServices services={services} />
         <QueryVolume7d analytics={analytics} />
-        <ZoneTable zones={zones} issuesOnly={!!hp.issues} />
+        <ZoneTable zones={zones} issuesOnly={!!hp.issues} zonesStatus={zonesStatus} />
         <DnssecHealth dnssec={dnssec} />
         <RpzPanel rpz={rpz} />
         <DtcLbdnPanel dtcLbdn={dtcLbdn} />
@@ -187,7 +188,7 @@ function QueryVolume7d({ analytics }) {
 
 // ---------- zone table ----------
 
-function ZoneTable({ zones, issuesOnly }) {
+function ZoneTable({ zones, issuesOnly, zonesStatus }) {
   const { COLORS } = useChartTheme()
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
@@ -278,7 +279,7 @@ function ZoneTable({ zones, issuesOnly }) {
       }
     >
       {zones.length === 0 ? (
-        <Empty />
+        zonesStatus === 'error' ? <FeedUnavailable label="DNS zones feed unavailable" /> : <Empty />
       ) : sorted.length === 0 ? (
         <Empty>no zones match</Empty>
       ) : (
