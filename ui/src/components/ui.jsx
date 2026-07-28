@@ -94,6 +94,122 @@ export function TabIntro({ anchor, children }) {
   )
 }
 
+// ---------- write flow ----------
+//
+// One Preview -> Apply flow for every surface that writes to Infoblox
+// (Provision, Self-Service, Editor). Before this, each tab had its own model:
+// Editor previewed then revealed Apply, Provision made you untick a checkbox
+// and re-run, and Self-Service's two cards used one label ("Dry Run") for two
+// different behaviours — one called the server, one only echoed the typed
+// values back in a success-styled box.
+//
+// The rules this encodes:
+//   - Preview always runs server-side. A preview that never left the browser
+//     validates nothing but still reads as confirmation.
+//   - Apply is only reachable from a fresh preview, so what you apply is what
+//     you reviewed.
+//   - Editing an input after previewing marks the preview stale and hides
+//     Apply. Silently applying against changed inputs is the failure mode the
+//     whole flow exists to prevent.
+//
+// This owns the button state machine and the framing only — each tab keeps its
+// own fetch/stream logic and renders its own preview body as children, because
+// Provision streams SSE while the others are request/response.
+
+const PA_BTN = 'px-3.5 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed'
+
+export function PreviewApply({
+  status = 'idle', // 'idle' | 'busy' | 'previewed' | 'applied'
+  stale = false,
+  disabled = false,
+  applyDisabled = false, // extra gate on Apply only (admin role, typed confirm)
+  applyNote,
+  onPreview,
+  onApply,
+  previewLabel = 'Preview',
+  applyLabel = 'Apply',
+  busyLabel = 'Working…',
+  destructive = false,
+  error,
+  message,
+  children,
+}) {
+  const busy = status === 'busy'
+  const showApply = status === 'previewed' && !stale && !busy
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onPreview}
+          disabled={busy || disabled}
+          className={PA_BTN}
+          style={{ background: COLORS.accent, color: '#fff' }}
+        >
+          {busy ? busyLabel : previewLabel}
+        </button>
+        {showApply && (
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={applyDisabled}
+            className={PA_BTN}
+            style={{ background: destructive ? COLORS.crit : COLORS.ok, color: '#fff' }}
+          >
+            {applyLabel}
+          </button>
+        )}
+        {showApply && applyDisabled && applyNote && (
+          <span className="text-[11px]" style={{ color: COLORS.warn }}>{applyNote}</span>
+        )}
+        {status === 'previewed' && stale && (
+          <span className="text-[11px]" style={{ color: COLORS.warn }}>
+            inputs changed — preview again
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <div
+          className="text-sm rounded-lg px-3 py-2"
+          style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)', border: `1px solid ${COLORS.crit}` }}
+        >
+          {error}
+        </div>
+      )}
+      {/* A stale preview's message ("review it, then apply") is no longer true —
+          the warning above replaces it rather than sitting next to it. */}
+      {!error && message && !stale && (
+        <div
+          className="text-sm rounded-lg px-3 py-2"
+          style={{ background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)', border: `1px solid ${COLORS.ok}` }}
+        >
+          {message}
+        </div>
+      )}
+
+      {/* Dimmed when stale: the body below still shows the OLD payload, and it
+          must not read as describing the current inputs. */}
+      <div className={stale ? 'opacity-40' : undefined}>{children}</div>
+    </div>
+  )
+}
+
+// Renders a previewed payload. Never styled as success — a preview is a
+// statement of intent, not a result, and green reads as "it worked".
+export function PreviewBox({ data, note = 'preview — nothing applied yet' }) {
+  if (data == null) return null
+  return (
+    <div className="rounded-lg border border-border bg-field p-3">
+      <div className="text-[11px] text-dim mb-1.5">{note}</div>
+      <pre className="text-xs whitespace-pre-wrap max-h-[320px] overflow-auto text-muted">
+        {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
+      </pre>
+    </div>
+  )
+}
+
 export function Empty({ children = 'no data' }) {
   return <div className="h-full min-h-[100px] flex items-center justify-center text-muted text-sm">{children}</div>
 }

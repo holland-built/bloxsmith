@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { COLORS, Card, Empty, Skeleton, TabIntro } from '../components/ui.jsx'
+import { COLORS, Card, Empty, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
-const btnBase = 'px-3.5 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed'
-const btnPrimary = `${btnBase} bg-accent text-white`
-const btnOutline = `${btnBase} border border-border bg-transparent text-field-txt`
 
 export default function Provision() {
   const [mode, setMode] = useState('subnet') // 'subnet' | 'site' | 'seed'
@@ -15,7 +12,7 @@ export default function Provision() {
 
   return (
     <div className="max-w-[720px] mx-auto p-5">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-1">
         <h1 className="text-lg font-semibold tracking-tight">Provision</h1>
         <span
           className="text-[11px] font-medium px-2 py-0.5 rounded-full"
@@ -30,7 +27,7 @@ export default function Provision() {
 
       <TabIntro anchor="provision">
         Creates real objects in Infoblox — one subnet, a whole site from a template, or a multi-region demo
-        estate. Dry-run is on by default and streams the plan before anything is written; teardown is permanent
+        estate. Preview streams the full plan without writing anything; Apply then runs it. Teardown is permanent
         and needs admin.
       </TabIntro>
 
@@ -57,10 +54,64 @@ export default function Provision() {
   )
 }
 
+// ---------- shared stream flow ----------
+//
+// Every provision and teardown path is the same server-sent-event stream with a
+// dry flag, so they share one driver instead of five near-identical copies of
+// the EventSource wiring. Preview runs with dry=1 and lands in 'previewed';
+// Apply re-runs the identical query with dry=0.
+//
+// Note the honest limit: the server re-plans on apply, so unlike the
+// request/response surfaces this cannot submit the exact bytes you previewed.
+// What it does guarantee is that the inputs are unchanged — markStale hides
+// Apply the moment any field moves — so the plan is regenerated from the same
+// request, not a silently different one.
+
+function useStreamFlow(path) {
+  const [status, setStatus] = useState('idle') // idle | busy | previewed | applied
+  const [stale, setStale] = useState(false)
+  const [log, setLog] = useState([])
+  const [rows, setRows] = useState({})
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState(null)
+  const esRef = useRef(null)
+  const dryRef = useRef(true)
+
+  useEffect(() => () => esRef.current?.close(), [])
+
+  function markStale() {
+    if (status === 'previewed') setStale(true)
+  }
+
+  function run(qs, dry) {
+    if (status === 'busy' || esRef.current) return
+    setLog([]); setRows({}); setResult(null); setError(null); setStatus('busy')
+    dryRef.current = dry
+    const es = new EventSource(`${path}?${qs}`)
+    esRef.current = es
+    const stop = (next) => { esRef.current?.close(); esRef.current = null; setStatus(next) }
+    es.onmessage = (e) => {
+      let j = null
+      try { j = JSON.parse(e.data) } catch { return }
+      setLog((prev) => [...prev, j])
+      if (j?.template) setRows((prev) => ({ ...prev, [j.template]: { phase: j.phase, error: j.error } }))
+      if (j?.error && !j.template) { setError(j.error); stop('idle') }
+      else if (j?.done) {
+        setResult(j)
+        setStale(false)
+        stop(dryRef.current ? 'previewed' : 'applied')
+      }
+    }
+    es.onerror = () => { if (!esRef.current) return; setError((p) => p || 'Stream connection error'); stop('idle') }
+  }
+
+  return { status, stale, log, rows, result, error, markStale, run }
+}
+
 // ---------- log rendering ----------
 
 function LogView({ log, doneLabel }) {
-  if (log.length === 0) return <Empty>Output appears here when you run a provision.</Empty>
+  if (log.length === 0) return <Empty>Output appears here when you preview or apply.</Empty>
   return (
     <div className="font-mono text-[12px] flex flex-col gap-0.5 max-h-[280px] overflow-auto">
       {log.map((l, i) => (
@@ -71,6 +122,28 @@ function LogView({ log, doneLabel }) {
     </div>
   )
 }
+
+function RowsRollup({ rows, failedLabel }) {
+  const rs = Object.values(rows)
+  const total = Object.keys(rows).length
+  const failed = rs.filter((r) => r?.error).length
+  const done = rs.filter((r) => r && !r.error).length
+  if (total === 0) return <Empty>Per-template status appears here once the run starts.</Empty>
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="font-mono text-[12px]" style={{ color: failed ? 'var(--color-crit)' : 'var(--color-muted)' }}>
+        {done}/{total} done{failed ? ` · ${failed} ${failedLabel || 'failed'}` : ''}
+      </div>
+      {Object.entries(rows).filter(([, r]) => r?.error).map(([tpl, r]) => (
+        <div key={tpl} className="font-mono text-[12px]" style={{ color: COLORS.crit }}>
+          ✕ {tpl}: {r.error}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const previewMsg = (verb) => `Preview only — nothing has been written. Review the plan, then ${verb}.`
 
 // ---------- subnet mode ----------
 
@@ -85,86 +158,72 @@ function SubnetMode() {
   const [name, setName] = useState('')
   const [comment, setComment] = useState('')
   const [makeZone, setMakeZone] = useState(false)
-  const [dry, setDry] = useState(true)
 
-  const [log, setLog] = useState([])
-  const [streaming, setStreaming] = useState(false)
-  const [success, setSuccess] = useState(null)
-  const [err, setErr] = useState(null)
-  const esRef = useRef(null)
+  const flow = useStreamFlow('/api/provision/stream')
 
-  useEffect(() => () => esRef.current?.close(), [])
-
-  function start() {
-    if (streaming || esRef.current) return
-    setLog([]); setSuccess(null); setErr(null); setStreaming(true)
-    const qs = new URLSearchParams({
+  function qs(dry) {
+    return new URLSearchParams({
       space, block, cidr: String(cidr || 24), name, comment,
       make_zone: makeZone ? '1' : '0', dry: dry ? '1' : '0',
-    })
-    const es = new EventSource('/api/provision/stream?' + qs.toString())
-    esRef.current = es
-    const stop = () => { esRef.current?.close(); esRef.current = null; setStreaming(false) }
-    es.onmessage = (e) => {
-      let j = null
-      try { j = JSON.parse(e.data) } catch { return }
-      setLog((prev) => [...prev, j])
-      if (j?.error) { setErr(j.error); stop() }
-      else if (j?.done) { setSuccess(j.subnet || null); stop() }
-    }
-    es.onerror = () => { if (!esRef.current) return; setErr((p) => p || 'Stream connection error'); stop() }
+    }).toString()
   }
+
+  const subnet = flow.result?.subnet
 
   return (
     <div className="flex flex-col gap-3">
       <Card title="Request" span={6}>
         <div className="flex flex-col gap-3">
           <Field label="Space">
-            <select className={inputCls} value={space} onChange={(e) => { setSpace(e.target.value); setBlock('') }}>
+            <select className={inputCls} value={space} onChange={(e) => { setSpace(e.target.value); setBlock(''); flow.markStale() }}>
               <option value="">{spacesApi.loading ? 'Loading spaces…' : 'Select a space'}</option>
               {spaces.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
             </select>
           </Field>
           <Field label="Block">
-            <select className={inputCls} value={block} onChange={(e) => setBlock(e.target.value)} disabled={!space}>
+            <select className={inputCls} value={block} onChange={(e) => { setBlock(e.target.value); flow.markStale() }} disabled={!space}>
               <option value="">{blocksApi.loading ? 'Loading blocks…' : 'Select a block'}</option>
               {blocks.map((b) => <option key={b.id} value={b.id}>{b.name || b.cidr || b.address}</option>)}
             </select>
           </Field>
           <Field label="CIDR prefix">
-            <input type="number" min="1" max="32" className={inputCls} value={cidr} onChange={(e) => setCidr(e.target.value)} />
+            <input type="number" min="1" max="32" className={inputCls} value={cidr} onChange={(e) => { setCidr(e.target.value); flow.markStale() }} />
           </Field>
           <Field label="Name">
-            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="subnet name" />
+            <input className={inputCls} value={name} onChange={(e) => { setName(e.target.value); flow.markStale() }} placeholder="subnet name" />
           </Field>
           <Field label="Comment">
-            <input className={inputCls} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="optional" />
+            <input className={inputCls} value={comment} onChange={(e) => { setComment(e.target.value); flow.markStale() }} placeholder="optional" />
           </Field>
-          <CheckRow checked={makeZone} onChange={setMakeZone} label="Create matching DNS zone" />
-          <CheckRow checked={dry} onChange={setDry} label="Dry-run (no changes made)" />
-          <div className="flex items-center gap-2 pt-1">
-            <button className={btnOutline} disabled={streaming || !space} onClick={() => { setDry(true); start() }}>Dry-run</button>
-            <button className={btnPrimary} disabled={streaming || !space} onClick={start}>
-              {streaming ? 'Provisioning…' : dry ? 'Run dry-run' : 'Provision'}
-            </button>
-          </div>
+          <CheckRow checked={makeZone} onChange={(v) => { setMakeZone(v); flow.markStale() }} label="Create matching DNS zone" />
+
+          <PreviewApply
+            status={flow.status}
+            stale={flow.stale}
+            disabled={!space}
+            onPreview={() => flow.run(qs(true), true)}
+            onApply={() => flow.run(qs(false), false)}
+            applyLabel="Provision"
+            busyLabel="Running…"
+            error={flow.error}
+            message={
+              flow.status === 'previewed' ? previewMsg('Provision')
+                : flow.status === 'applied' ? `Provisioned — subnet ${subnet?.address || subnet?.id || ''}`
+                : null
+            }
+          />
         </div>
       </Card>
 
       <Card title="Live log" span={6}>
-        <LogView log={log} doneLabel={success ? `done — subnet ${success.address || success.id || ''}` : 'done'} />
+        <LogView log={flow.log} doneLabel={flow.status === 'previewed' ? 'plan complete — nothing written' : 'done'} />
       </Card>
 
-      {success && (
-        <Card title="Success" span={6}>
+      {flow.status === 'applied' && subnet && (
+        <Card title="Result" span={6}>
           <div className="font-mono text-[12px]">
-            Subnet id: {success.id ?? '—'} · {success.address || ''}{success.cidr ? `/${success.cidr}` : ''}
+            Subnet id: {subnet.id ?? '—'} · {subnet.address || ''}{subnet.cidr ? `/${subnet.cidr}` : ''}
           </div>
-        </Card>
-      )}
-      {err && (
-        <Card title="Error" span={6}>
-          <div className="font-mono text-[12px]" style={{ color: COLORS.crit }}>{err}</div>
         </Card>
       )}
     </div>
@@ -181,74 +240,40 @@ function SiteMode({ isAdmin }) {
 
   const [siteSpace, setSiteSpace] = useState('')
   const [siteTemplate, setSiteTemplate] = useState('')
-  const [siteDry, setSiteDry] = useState(true)
-  const [siteLog, setSiteLog] = useState([])
-  const [siteStreaming, setSiteStreaming] = useState(false)
-  const [siteSuccess, setSiteSuccess] = useState(null)
-  const [siteErr, setSiteErr] = useState(null)
-  const siteEsRef = useRef(null)
-
-  const [tdDry, setTdDry] = useState(true)
   const [tdConfirm, setTdConfirm] = useState('')
-  const [tdLog, setTdLog] = useState([])
-  const [tdStreaming, setTdStreaming] = useState(false)
-  const [tdResult, setTdResult] = useState(null)
-  const [tdErr, setTdErr] = useState(null)
-  const tdEsRef = useRef(null)
 
-  useEffect(() => () => { siteEsRef.current?.close(); tdEsRef.current?.close() }, [])
+  const build = useStreamFlow('/api/provision/site/stream')
+  const teardown = useStreamFlow('/api/teardown/site/stream')
 
-  function siteStart() {
-    if (siteStreaming || siteEsRef.current) return
-    setSiteLog([]); setSiteSuccess(null); setSiteErr(null); setSiteStreaming(true)
-    const qs = new URLSearchParams({ template: siteTemplate, dry: siteDry ? '1' : '0' })
-    if (siteSpace) qs.set('ip_space', siteSpace)
-    const es = new EventSource('/api/provision/site/stream?' + qs.toString())
-    siteEsRef.current = es
-    const stop = () => { siteEsRef.current?.close(); siteEsRef.current = null; setSiteStreaming(false) }
-    es.onmessage = (e) => {
-      let j = null
-      try { j = JSON.parse(e.data) } catch { return }
-      setSiteLog((prev) => [...prev, j])
-      if (j?.error) { setSiteErr(j.error); stop() }
-      else if (j?.done) { setSiteSuccess(j.result || null); stop() }
-    }
-    es.onerror = () => { if (!siteEsRef.current) return; setSiteErr((p) => p || 'Stream connection error'); stop() }
+  function baseQs(dry) {
+    const q = new URLSearchParams({ template: siteTemplate, dry: dry ? '1' : '0' })
+    if (siteSpace) q.set('ip_space', siteSpace)
+    return q
+  }
+  function tdQs(dry) {
+    const q = baseQs(dry)
+    if (!dry) q.set('confirm', tdConfirm.trim())
+    return q.toString()
   }
 
-  function teardownStart() {
-    if (tdStreaming || tdEsRef.current) return
-    if (!tdDry && !isAdmin) return
-    if (!tdDry && !tdConfirm.trim()) return
-    setTdLog([]); setTdResult(null); setTdErr(null); setTdStreaming(true)
-    const qs = new URLSearchParams({ template: siteTemplate, dry: tdDry ? '1' : '0' })
-    if (siteSpace) qs.set('ip_space', siteSpace)
-    if (!tdDry) qs.set('confirm', tdConfirm.trim())
-    const es = new EventSource('/api/teardown/site/stream?' + qs.toString())
-    tdEsRef.current = es
-    const stop = () => { tdEsRef.current?.close(); tdEsRef.current = null; setTdStreaming(false) }
-    es.onmessage = (e) => {
-      let j = null
-      try { j = JSON.parse(e.data) } catch { return }
-      setTdLog((prev) => [...prev, j])
-      if (j?.error) { setTdErr(j.error); stop() }
-      else if (j?.done) { setTdResult(j.result || null); stop() }
-    }
-    es.onerror = () => { if (!tdEsRef.current) return; setTdErr((p) => p || 'Stream connection error'); stop() }
+  function onInput(fn) {
+    return (v) => { fn(v); build.markStale(); teardown.markStale() }
   }
+
+  const built = build.result?.result
 
   return (
     <div className="flex flex-col gap-3">
       <Card title="Request" span={6}>
         <div className="flex flex-col gap-3">
           <Field label="IP space (override)">
-            <select className={inputCls} value={siteSpace} onChange={(e) => setSiteSpace(e.target.value)}>
+            <select className={inputCls} value={siteSpace} onChange={(e) => onInput(setSiteSpace)(e.target.value)}>
               <option value="">— template default —</option>
               {spaces.map((sp) => <option key={sp.id} value={sp.name}>{sp.name}</option>)}
             </select>
           </Field>
           <Field label="Template">
-            <select className={inputCls} value={siteTemplate} onChange={(e) => setSiteTemplate(e.target.value)}>
+            <select className={inputCls} value={siteTemplate} onChange={(e) => onInput(setSiteTemplate)(e.target.value)}>
               <option value="">{templatesApi.loading ? 'Loading templates…' : 'Select a template'}</option>
               {templates.map((t) => (
                 <option key={t.name} value={t.name}>
@@ -257,93 +282,98 @@ function SiteMode({ isAdmin }) {
               ))}
             </select>
           </Field>
-          <CheckRow checked={siteDry} onChange={setSiteDry} label="Dry-run (no changes made)" />
-          <div className="flex items-center gap-2 pt-1">
-            <button className={btnOutline} disabled={siteStreaming || !siteTemplate} onClick={() => { setSiteDry(true); siteStart() }}>Dry-run</button>
-            <button className={btnPrimary} disabled={siteStreaming || !siteTemplate} onClick={siteStart}>
-              {siteStreaming ? 'Provisioning…' : siteDry ? 'Run dry-run' : 'Provision site'}
-            </button>
-          </div>
+
+          <PreviewApply
+            status={build.status}
+            stale={build.stale}
+            disabled={!siteTemplate}
+            onPreview={() => build.run(baseQs(true).toString(), true)}
+            onApply={() => build.run(baseQs(false).toString(), false)}
+            applyLabel="Provision site"
+            busyLabel="Running…"
+            error={build.error}
+            message={
+              build.status === 'previewed' ? previewMsg('Provision site')
+                : build.status === 'applied' ? 'Site provisioned.'
+                : null
+            }
+          />
         </div>
       </Card>
 
       <Card title="Live log" span={6}>
-        <LogView log={siteLog} />
+        <LogView log={build.log} doneLabel={build.status === 'previewed' ? 'plan complete — nothing written' : 'done'} />
       </Card>
 
-      {siteSuccess && (
-        <Card title="Success" span={6}>
-          {siteSuccess.skipped ? (
-            <div className="font-mono text-[12px] text-muted">Skipped — {siteSuccess.skip_reason || 'already provisioned'}.</div>
+      {build.status === 'applied' && built && (
+        <Card title="Result" span={6}>
+          {built.skipped ? (
+            <div className="font-mono text-[12px] text-muted">Skipped — {built.skip_reason || 'already provisioned'}.</div>
           ) : (
             <div className="font-mono text-[12px] flex flex-col gap-0.5">
-              <div><span className="text-muted">Block: </span>{siteSuccess.block_address || '—'}</div>
-              <div><span className="text-muted">DNS zone: </span>{siteSuccess.dns_zone_fqdn || '—'}</div>
+              <div><span className="text-muted">Block: </span>{built.block_address || '—'}</div>
+              <div><span className="text-muted">DNS zone: </span>{built.dns_zone_fqdn || '—'}</div>
               <div>
-                <span className="text-muted">Subnets: </span>{(siteSuccess.subnets || []).length} ·{' '}
-                <span className="text-muted">DHCP ranges: </span>{(siteSuccess.dhcp_ranges || []).length} ·{' '}
-                <span className="text-muted">Hosts: </span>{(siteSuccess.hosts || []).length}
+                <span className="text-muted">Subnets: </span>{(built.subnets || []).length} ·{' '}
+                <span className="text-muted">DHCP ranges: </span>{(built.dhcp_ranges || []).length} ·{' '}
+                <span className="text-muted">Hosts: </span>{(built.hosts || []).length}
               </div>
-              {siteSuccess.dry_run && <div style={{ color: COLORS.warn }}>Dry-run — nothing was created.</div>}
             </div>
           )}
-        </Card>
-      )}
-      {siteErr && (
-        <Card title="Error" span={6}>
-          <div className="font-mono text-[12px]" style={{ color: COLORS.crit }}>{siteErr}</div>
         </Card>
       )}
 
       <Card title="Tear down this site" note="permanently deletes its provisioned objects" span={6}>
         <div className="flex flex-col gap-3">
-          <CheckRow checked={tdDry} onChange={setTdDry} label="Dry-run (no changes made)" />
-          {!tdDry && (
-            isAdmin ? (
-              <Field label="Type the site name to confirm">
-                <input className={inputCls} value={tdConfirm} onChange={(e) => setTdConfirm(e.target.value)} placeholder={siteTemplate || 'site name'} />
-              </Field>
-            ) : (
-              <div className="text-[11px]" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
-            )
+          {isAdmin ? (
+            <Field label="Type the site name to confirm">
+              <input className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder={siteTemplate || 'site name'} />
+            </Field>
+          ) : (
+            <div className="text-[11px]" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
           )}
-          <div className="pt-1">
-            <button
-              className={btnOutline}
-              disabled={tdStreaming || !siteTemplate || (!tdDry && (!isAdmin || !tdConfirm.trim()))}
-              onClick={teardownStart}
-              style={{ borderColor: COLORS.crit, color: COLORS.crit }}
-            >
-              {tdStreaming ? 'Tearing down…' : 'Tear down this site'}
-            </button>
-          </div>
+
+          <PreviewApply
+            status={teardown.status}
+            stale={teardown.stale}
+            disabled={!siteTemplate}
+            applyDisabled={!isAdmin || !tdConfirm.trim()}
+            applyNote={isAdmin ? 'type the site name to confirm' : 'admin required'}
+            onPreview={() => teardown.run(tdQs(true), true)}
+            onApply={() => teardown.run(tdQs(false), false)}
+            applyLabel="Tear down this site"
+            busyLabel="Running…"
+            destructive
+            error={teardown.error}
+            message={
+              teardown.status === 'previewed' ? previewMsg('Tear down this site')
+                : teardown.status === 'applied' ? 'Teardown complete.'
+                : null
+            }
+          />
         </div>
       </Card>
 
-      {tdLog.length > 0 && (
+      {teardown.log.length > 0 && (
         <Card title="Teardown log" span={6}>
-          <LogView log={tdLog} />
+          <LogView log={teardown.log} doneLabel={teardown.status === 'previewed' ? 'plan complete — nothing deleted' : 'done'} />
         </Card>
       )}
-      {tdResult && (
-        <Card title="Teardown result" span={6}>
+      {teardown.result?.result && (
+        <Card title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown result'} span={6}>
           <div className="font-mono text-[12px] flex flex-col gap-0.5">
-            <div><span className="text-muted">Site: </span>{tdResult.site || siteTemplate || '—'}</div>
+            <div><span className="text-muted">Site: </span>{teardown.result.result.site || siteTemplate || '—'}</div>
             <div>
-              <span className="text-muted">DNS zone: </span>{tdResult.dns_zone_fqdn || '—'} {tdResult.dns_zone_deleted ? '(deleted)' : '(kept)'}
+              <span className="text-muted">DNS zone: </span>{teardown.result.result.dns_zone_fqdn || '—'}{' '}
+              {teardown.result.result.dns_zone_deleted ? '(deleted)' : '(kept)'}
             </div>
             <div>
-              <span className="text-muted">Subnets: </span>{(tdResult.subnets_deleted || []).length} ·{' '}
-              <span className="text-muted">DHCP ranges: </span>{(tdResult.dhcp_ranges_deleted || []).length} ·{' '}
-              <span className="text-muted">Hosts: </span>{(tdResult.hosts_deleted || []).length} deleted
+              <span className="text-muted">Subnets: </span>{(teardown.result.result.subnets_deleted || []).length} ·{' '}
+              <span className="text-muted">DHCP ranges: </span>{(teardown.result.result.dhcp_ranges_deleted || []).length} ·{' '}
+              <span className="text-muted">Hosts: </span>{(teardown.result.result.hosts_deleted || []).length} deleted
             </div>
-            {tdResult.dry_run && <div style={{ color: COLORS.warn }}>Dry-run — nothing was deleted.</div>}
+            {teardown.status === 'previewed' && <div style={{ color: COLORS.warn }}>Preview — nothing was deleted.</div>}
           </div>
-        </Card>
-      )}
-      {tdErr && (
-        <Card title="Teardown error" span={6}>
-          <div className="font-mono text-[12px]" style={{ color: COLORS.crit }}>{tdErr}</div>
         </Card>
       )}
     </div>
@@ -352,188 +382,134 @@ function SiteMode({ isAdmin }) {
 
 // ---------- seed demo mode ----------
 
-function RowsRollup({ rows, failedLabel }) {
-  const rs = Object.values(rows)
-  const total = Object.keys(rows).length
-  const failed = rs.filter((r) => r?.error).length
-  const done = rs.filter((r) => r && !r.error).length
-  if (total === 0) return <Empty>Per-template status appears here once seeding starts.</Empty>
-  return (
-    <div className="flex flex-col gap-0.5">
-      <div className="font-mono text-[12px]" style={{ color: failed ? 'var(--color-crit)' : 'var(--color-muted)' }}>
-        {done}/{total} done{failed ? ` · ${failed} ${failedLabel || 'failed'}` : ''}
-      </div>
-      {Object.entries(rows).filter(([, r]) => r?.error).map(([tpl, r]) => (
-        <div key={tpl} className="font-mono text-[12px]" style={{ color: COLORS.crit }}>
-          ✕ {tpl}: {r.error}
-        </div>
-      ))}
-    </div>
-  )
-}
-
 function SeedMode({ isAdmin }) {
   const spacesApi = useApi('/api/ipam/spaces')
   const spaces = spacesApi.data?.spaces ?? []
 
   const [regions, setRegions] = useState({ amer: true, emea: true, apac: true })
   const [seedSpace, setSeedSpace] = useState('')
-  const [seedDry, setSeedDry] = useState(true)
-  const [seedLog, setSeedLog] = useState([])
-  const [seedRows, setSeedRows] = useState({})
-  const [seedStreaming, setSeedStreaming] = useState(false)
-  const [seedSummary, setSeedSummary] = useState(null)
-  const [seedErr, setSeedErr] = useState(null)
-  const seedEsRef = useRef(null)
-
-  const [tdDry, setTdDry] = useState(true)
   const [tdConfirm, setTdConfirm] = useState('')
-  const [tdLog, setTdLog] = useState([])
-  const [tdRows, setTdRows] = useState({})
-  const [tdStreaming, setTdStreaming] = useState(false)
-  const [tdSummary, setTdSummary] = useState(null)
-  const [tdErr, setTdErr] = useState(null)
-  const tdEsRef = useRef(null)
 
-  useEffect(() => () => { seedEsRef.current?.close(); tdEsRef.current?.close() }, [])
+  const seed = useStreamFlow('/api/provision/seed-demo/stream')
+  const teardown = useStreamFlow('/api/teardown/seed-demo/stream')
 
   const regionList = Object.keys(regions).filter((r) => regions[r])
 
-  function seedStart() {
-    if (seedStreaming || seedEsRef.current) return
-    if (!regionList.length) return
-    setSeedLog([]); setSeedRows({}); setSeedSummary(null); setSeedErr(null); setSeedStreaming(true)
-    const qs = new URLSearchParams({ dry: seedDry ? '1' : '0', regions: regionList.join(',') })
-    if (seedSpace) qs.set('ip_space', seedSpace)
-    const es = new EventSource('/api/provision/seed-demo/stream?' + qs.toString())
-    seedEsRef.current = es
-    const stop = () => { seedEsRef.current?.close(); seedEsRef.current = null; setSeedStreaming(false) }
-    es.onmessage = (e) => {
-      let j = null
-      try { j = JSON.parse(e.data) } catch { return }
-      setSeedLog((prev) => [...prev, j])
-      if (j?.template) setSeedRows((prev) => ({ ...prev, [j.template]: { phase: j.phase, error: j.error } }))
-      if (j?.error && !j.template) { setSeedErr(j.error); stop() }
-      else if (j?.done) { setSeedSummary(j.summary || null); stop() }
-    }
-    es.onerror = () => { if (!seedEsRef.current) return; setSeedErr((p) => p || 'Stream connection error'); stop() }
+  function baseQs(dry) {
+    const q = new URLSearchParams({ dry: dry ? '1' : '0', regions: regionList.join(',') })
+    if (seedSpace) q.set('ip_space', seedSpace)
+    return q
   }
-
-  function teardownStart() {
-    if (tdStreaming || tdEsRef.current) return
-    if (!tdDry && !isAdmin) return
-    if (!tdDry && tdConfirm.trim() !== 'DELETE') return
-    if (!regionList.length) return
-    setTdLog([]); setTdRows({}); setTdSummary(null); setTdErr(null); setTdStreaming(true)
-    const qs = new URLSearchParams({ dry: tdDry ? '1' : '0', regions: regionList.join(','), confirm: tdDry ? '' : 'DELETE' })
-    if (seedSpace) qs.set('ip_space', seedSpace)
-    const es = new EventSource('/api/teardown/seed-demo/stream?' + qs.toString())
-    tdEsRef.current = es
-    const stop = () => { tdEsRef.current?.close(); tdEsRef.current = null; setTdStreaming(false) }
-    es.onmessage = (e) => {
-      let j = null
-      try { j = JSON.parse(e.data) } catch { return }
-      setTdLog((prev) => [...prev, j])
-      if (j?.template) setTdRows((prev) => ({ ...prev, [j.template]: { phase: j.phase, error: j.error } }))
-      if (j?.error && !j.template) { setTdErr(j.error); stop() }
-      else if (j?.done) { setTdSummary(j.summary || null); stop() }
-    }
-    es.onerror = () => { if (!tdEsRef.current) return; setTdErr((p) => p || 'Stream connection error'); stop() }
+  function tdQs(dry) {
+    const q = baseQs(dry)
+    q.set('confirm', dry ? '' : 'DELETE')
+    return q.toString()
   }
+  function touch() { seed.markStale(); teardown.markStale() }
 
   return (
     <div className="flex flex-col gap-3">
       <Card title="Seed multi-region demo data" span={6}>
         <div className="text-[11px] text-dim mb-3">
-          Provisions a full set of demo sites, subnets, and zones across the selected regions from the template library.
-          Dry-run is on by default — review the plan before writing real objects.
+          Provisions a full set of demo sites, subnets, and zones across the selected regions from the template
+          library. Preview the plan before writing real objects — this creates a lot of them.
         </div>
         <div className="flex flex-col gap-3">
           {['amer', 'emea', 'apac'].map((r) => (
-            <CheckRow key={r} checked={!!regions[r]} onChange={(v) => setRegions((prev) => ({ ...prev, [r]: v }))} label={r.toUpperCase()} />
+            <CheckRow
+              key={r}
+              checked={!!regions[r]}
+              onChange={(v) => { setRegions((prev) => ({ ...prev, [r]: v })); touch() }}
+              label={r.toUpperCase()}
+            />
           ))}
           <Field label="IP space (override)">
-            <select className={inputCls} value={seedSpace} onChange={(e) => setSeedSpace(e.target.value)}>
+            <select className={inputCls} value={seedSpace} onChange={(e) => { setSeedSpace(e.target.value); touch() }}>
               <option value="">— template default —</option>
               {spaces.map((sp) => <option key={sp.id} value={sp.name}>{sp.name}</option>)}
             </select>
           </Field>
-          <CheckRow checked={seedDry} onChange={setSeedDry} label="Dry-run (no changes made)" />
-          <div className="flex items-center gap-2 pt-1">
-            <button className={btnOutline} disabled={seedStreaming} onClick={() => { setSeedDry(true); seedStart() }}>Dry-run</button>
-            <button className={btnPrimary} disabled={seedStreaming} onClick={seedStart}>
-              {seedStreaming ? 'Seeding…' : seedDry ? 'Run dry-run' : 'Seed Demo Data'}
-            </button>
-          </div>
+
+          <PreviewApply
+            status={seed.status}
+            stale={seed.stale}
+            disabled={!regionList.length}
+            onPreview={() => seed.run(baseQs(true).toString(), true)}
+            onApply={() => seed.run(baseQs(false).toString(), false)}
+            applyLabel="Seed demo data"
+            busyLabel="Running…"
+            error={seed.error}
+            message={
+              seed.status === 'previewed' ? previewMsg('Seed demo data')
+                : seed.status === 'applied' ? 'Seed complete.'
+                : null
+            }
+          />
         </div>
       </Card>
 
       <Card title="Progress" span={6}>
-        <RowsRollup rows={seedRows} />
+        <RowsRollup rows={seed.rows} />
       </Card>
 
       <Card title="Live log" span={6}>
-        <LogView log={seedLog} />
+        <LogView log={seed.log} doneLabel={seed.status === 'previewed' ? 'plan complete — nothing written' : 'done'} />
       </Card>
 
-      {seedSummary && (
-        <Card title="Summary" span={6}>
+      {seed.result?.summary && (
+        <Card title={seed.status === 'previewed' ? 'Planned' : 'Summary'} span={6}>
           <div className="font-mono text-[12px]">
-            Succeeded: {seedSummary.succeeded ?? 0} · Failed: {seedSummary.failed ?? 0} · Skipped: {seedSummary.skipped ?? 0}
+            Succeeded: {seed.result.summary.succeeded ?? 0} · Failed: {seed.result.summary.failed ?? 0} · Skipped: {seed.result.summary.skipped ?? 0}
           </div>
-        </Card>
-      )}
-      {seedErr && (
-        <Card title="Error" span={6}>
-          <div className="font-mono text-[12px]" style={{ color: COLORS.crit }}>{seedErr}</div>
         </Card>
       )}
 
       <Card title="Tear down demo" note={`permanently deletes every seed-created object in ${seedSpace || 'the default space'}`} span={6}>
         <div className="flex flex-col gap-3">
-          <CheckRow checked={tdDry} onChange={setTdDry} label="Dry-run (no changes made)" />
-          {!tdDry && (
-            isAdmin ? (
-              <Field label="Type DELETE to confirm">
-                <input className={inputCls} value={tdConfirm} onChange={(e) => setTdConfirm(e.target.value)} placeholder="DELETE" />
-              </Field>
-            ) : (
-              <div className="text-[11px]" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
-            )
+          {isAdmin ? (
+            <Field label="Type DELETE to confirm">
+              <input className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder="DELETE" />
+            </Field>
+          ) : (
+            <div className="text-[11px]" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
           )}
-          <div className="pt-1">
-            <button
-              className={btnOutline}
-              disabled={tdStreaming || (!tdDry && (!isAdmin || tdConfirm.trim() !== 'DELETE'))}
-              onClick={teardownStart}
-              style={{ borderColor: COLORS.crit, color: COLORS.crit }}
-            >
-              {tdStreaming ? 'Tearing down…' : 'Tear down demo'}
-            </button>
-          </div>
+
+          <PreviewApply
+            status={teardown.status}
+            stale={teardown.stale}
+            disabled={!regionList.length}
+            applyDisabled={!isAdmin || tdConfirm.trim() !== 'DELETE'}
+            applyNote={isAdmin ? 'type DELETE to confirm' : 'admin required'}
+            onPreview={() => teardown.run(tdQs(true), true)}
+            onApply={() => teardown.run(tdQs(false), false)}
+            applyLabel="Tear down demo"
+            busyLabel="Running…"
+            destructive
+            error={teardown.error}
+            message={
+              teardown.status === 'previewed' ? previewMsg('Tear down demo')
+                : teardown.status === 'applied' ? 'Teardown complete.'
+                : null
+            }
+          />
         </div>
       </Card>
 
-      {tdRows && Object.keys(tdRows).length > 0 && (
+      {Object.keys(teardown.rows).length > 0 && (
         <Card title="Teardown progress" span={6}>
-          <RowsRollup rows={tdRows} />
+          <RowsRollup rows={teardown.rows} />
         </Card>
       )}
-      {tdLog.length > 0 && (
+      {teardown.log.length > 0 && (
         <Card title="Teardown log" span={6}>
-          <LogView log={tdLog} />
+          <LogView log={teardown.log} doneLabel={teardown.status === 'previewed' ? 'plan complete — nothing deleted' : 'done'} />
         </Card>
       )}
-      {tdSummary && (
-        <Card title="Teardown summary" span={6}>
+      {teardown.result?.summary && (
+        <Card title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown summary'} span={6}>
           <div className="font-mono text-[12px]">
-            Succeeded: {tdSummary.succeeded ?? 0} · Failed: {tdSummary.failed ?? 0} · Skipped: {tdSummary.skipped ?? 0}
+            Succeeded: {teardown.result.summary.succeeded ?? 0} · Failed: {teardown.result.summary.failed ?? 0} · Skipped: {teardown.result.summary.skipped ?? 0}
           </div>
-        </Card>
-      )}
-      {tdErr && (
-        <Card title="Teardown error" span={6}>
-          <div className="font-mono text-[12px]" style={{ color: COLORS.crit }}>{tdErr}</div>
         </Card>
       )}
     </div>

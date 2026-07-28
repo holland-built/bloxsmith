@@ -5,9 +5,26 @@ What each tab in Bloxsmith does, what it reads, and what it can change.
 Tabs fall into two groups:
 
 - **Read-only** — Overview, Daily, Network, DNS, Security, Infra, Incidents, Audit. They poll and display; they never write to Infoblox.
-- **Write-capable** — Provision, Self-Service, Editor. These create, change, or delete real objects in your tenant. All three default to a dry run. Drift and AI sit in between: Drift only reads, AI reads plus one write action (block a domain).
+- **Write-capable** — Provision, Self-Service, Editor. These create, change, or delete real objects in your tenant. Drift and AI sit in between: Drift only reads, AI reads plus one write action (block a domain).
 
-Every write path shows you a preview before it touches anything. If a preview looks wrong, it is wrong — fix the input, don't apply.
+## The write flow
+
+Every surface that writes to Infoblox uses the same two buttons, in the same order:
+
+1. **Preview** — sends the request to the server with a dry-run flag. Nothing is written. The server validates it and returns exactly what it would do; that lands on screen.
+2. **Apply** — appears only after a successful preview, and commits it. The button is labelled for the job (Create, Allocate, Provision, Tear down).
+
+Three rules the flow enforces, so you don't have to remember them:
+
+- **A preview never skips the server.** It is a real request, so it catches errors your browser can't see — a malformed MX record, a non-integer TTL, a missing required field.
+- **Apply is only reachable from a fresh preview.** There is no way to write without seeing the plan first.
+- **Editing any field after a preview hides Apply** and shows "inputs changed — preview again". The plan on screen is dimmed, because it describes the inputs you *had*, not the ones you have now.
+
+If a preview looks wrong, it is wrong — fix the input and preview again.
+
+One honest limit: Provision streams its plan from the server, and the server re-plans when you Apply. So Provision guarantees the *inputs* are unchanged between preview and apply, not the literal bytes. The request/response surfaces (Self-Service, Editor) do submit the reviewed body.
+
+Destructive actions carry extra gates on top of this flow: teardown needs an admin token plus a typed confirmation, and Editor's Delete is a separate two-click armed button that never goes through preview.
 
 | Tab | Writes? | Purpose |
 |---|---|---|
@@ -119,7 +136,7 @@ Two separate logs on purpose: one is what this tool did, the other is what every
 
 ## Provision
 
-**Writes to Infoblox.** Builds real objects. Dry-run is on by default in every mode — leave it on until the plan reads correctly. Progress streams line by line as the work happens.
+**Writes to Infoblox.** Builds real objects. Follows the [Preview → Apply flow](#the-write-flow); progress streams line by line as the plan runs.
 
 Your role is shown as a pill at the top right (`VIEWER` / `OPERATOR` / `ADMIN`). Live teardown requires admin.
 
@@ -130,7 +147,7 @@ Carve one subnet out of an existing block.
 1. Pick an **IP space**, then a **block** inside it.
 2. Set the **CIDR prefix** (e.g. `24`), a **name**, and an optional comment.
 3. Optionally tick **Create matching DNS zone**.
-4. **Run dry-run** first. When the log looks right, untick dry-run and **Provision**.
+4. **Preview** — the log streams the plan without writing. Then **Provision**.
 
 On success you get the new subnet's ID and address.
 
@@ -139,10 +156,12 @@ On success you get the new subnet's ID and address.
 Build an entire site from a template in your template library — address block, DNS zone, subnets, DHCP ranges, and hosts, in one run.
 
 1. Pick a **template**. Optionally override the **IP space** the template would use.
-2. Dry-run, review the plan, then provision.
+2. **Preview**, read the plan, then **Provision site**.
 3. If the site already exists, the run reports *skipped* with a reason rather than duplicating it.
 
-**Tear down this site** deletes what that template provisioned. It is permanent. Live teardown needs admin plus typing the site name to confirm.
+**Tear down this site** deletes what that template provisioned. It is permanent. Preview it like anything else; the live run needs admin plus typing the site name to confirm.
+
+If the template dropdown is empty, no templates are installed — run `scripts/fetch_templates.py`, or use the release archive / container image, which bundle them.
 
 ### Seed demo
 
@@ -150,13 +169,13 @@ Bulk-provisions a full demo estate across the regions you tick (AMER, EMEA, APAC
 
 Per-template progress rolls up as `done/total`, with failures listed individually.
 
-**Tear down demo** deletes every object the seed created in the selected space. Live teardown needs admin plus typing `DELETE`.
+**Tear down demo** deletes every object the seed created in the selected space. The live run needs admin plus typing `DELETE`.
 
 > Do not point Seed demo at a production tenant. It writes many objects fast and the teardown is the only way back.
 
 ## Self-Service
 
-**Writes to Infoblox.** Two small forms for the everyday asks, so people don't need the full Editor.
+**Writes to Infoblox.** Two small forms for the everyday asks, so people don't need the full Editor. Both use the [Preview → Apply flow](#the-write-flow).
 
 ### Allocate Address
 
@@ -164,7 +183,7 @@ Take the next free address(es) out of a subnet.
 
 1. Pick **IP space** → **block** (optional) → **subnet**.
 2. Set how many addresses you want, and an optional name.
-3. **Dry Run** shows what would be allocated. **Apply** takes them.
+3. **Preview** shows what would be allocated. **Allocate** takes it.
 
 ### Create DNS Record
 
@@ -172,7 +191,9 @@ Add a record to an existing zone.
 
 1. Pick the **zone** and record **type** (A, AAAA, CNAME, MX, TXT, SRV, PTR, NS, CAA).
 2. Fill in **name** (`@` for the zone apex), **value**, and an optional TTL.
-3. **Dry Run** shows the exact request that would be sent. **Create** sends it.
+3. **Preview** sends it to the server for validation and shows the record it would write. **Create** writes it.
+
+The preview shows the record as the *server* parsed it, which is often not what you typed — an SRV value of `10 5 5060 sip.example.com` comes back as separate priority, weight, port, and target fields. Worth a glance.
 
 ## Editor
 
@@ -185,9 +206,9 @@ Six object types: DNS Zone, Subnet, Address Block, DHCP Range, Host, and Tags (b
 - Leave it blank → the form **creates** a new object.
 - Paste an existing object ID → the form **updates** that object, and a Delete button appears.
 
-**The flow:** leave *Dry-run* ticked and hit **Preview**. The exact request body renders below. If it is right, hit **Apply**. Untick dry-run to skip the preview and submit directly.
+**The flow:** hit **Preview**. The exact request body renders below. If it is right, hit **Create** (or **Update**). See [the write flow](#the-write-flow).
 
-**Delete** is armed by two clicks — the first click changes the button to "Click again to permanently delete" and disarms itself after four seconds. There is no undo.
+**Delete** is separate and does not go through preview. It is armed by two clicks — the first changes the button to "Click again to permanently delete" and disarms itself after four seconds. There is no undo.
 
 Deep-linkable and prefillable from other tabs: `#editor?type=subnet&id=abc123`.
 
