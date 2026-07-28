@@ -194,7 +194,7 @@ function DiscoveryStatus({ feed }) {
   if (error || data?.status === 'error') {
     return (
       <Card span={2} title="Asset Discovery">
-        <Empty>discovery feed error</Empty>
+        <FeedUnavailable label="Asset discovery unavailable" />
       </Card>
     )
   }

@@ -142,6 +142,17 @@ export default function UpdateButton() {
     );
   }
 
+  // The check itself failed (rate-limited, GitHub hiccup, bad response) — say
+  // so, muted, instead of silently rendering as "up to date". Not a phase
+  // error (that's the apply-flow branch above) and not an alarming banner.
+  if (info.error) {
+    return (
+      <span className="text-[11px] text-muted" title={info.error}>
+        v{current.replace(/^v/, '')} · update check failed
+      </span>
+    );
+  }
+
   if (info.available) {
     const latest = String(info.latest || '').replace(/^v/, '');
     return (

@@ -153,10 +153,12 @@ function DnsServices({ services }) {
 
 function QueryVolume7d({ analytics }) {
   const { COLORS, TT } = useChartTheme()
-  // dns-analytics is a known-broken feed — an empty/errored response must render
-  // Empty/"—", never a fabricated 0 or invented volume.
+  // dns-analytics can legitimately return zero rows for a tenant with no query
+  // activity — that must render as empty, not as a dead feed. Only a fetch
+  // error or an explicit availability:"unavailable" from the backend (a dead
+  // cubejs) counts as broken; a genuinely empty "ok" fetch does not.
   const volume = analytics.data?.volume ?? []
-  const broken = !!analytics.error || volume.length === 0
+  const broken = !!analytics.error || analytics.data?.availability === 'unavailable'
   const chartData = volume.map((r, i) => ({ label: r.hour ?? i, value: Number(r.total_query_count) || 0 }))
 
   return (
