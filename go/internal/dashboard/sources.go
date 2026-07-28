@@ -2,9 +2,13 @@ package dashboard
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"bloxsmith/internal/rest"
 )
 
 // This file ports the curated data-source registry (server.py:4595-4874): the
@@ -258,44 +262,106 @@ func (s *Service) SourcesMeta() map[string]any {
 }
 
 // sourceFetch dispatches a source's fetch (server.py SOURCES[sid]["fetch"]).
-func (s *Service) sourceFetch(ctx context.Context, sid string, p map[string]string) []any {
+// It reports a failed upstream read as an error rather than collapsing it to
+// an empty slice: a nil error with nil/empty rows means the source is
+// genuinely empty, while a non-nil error means the read itself failed and the
+// caller must not treat that as "no data".
+func (s *Service) sourceFetch(ctx context.Context, sid string, p map[string]string) ([]any, error) {
 	switch sid {
 	case "subnets":
-		return toAnyN(normSubnets(s.Rest.Get("/api/ddi/v1/ipam/subnet",
-			map[string]string{"_fields": "id,name,address,cidr,utilization,tags", "_limit": "5000"})))
+		raw, err := s.Rest.GetStrict("/api/ddi/v1/ipam/subnet",
+			map[string]string{"_fields": "id,name,address,cidr,utilization,tags", "_limit": "5000"})
+		if err != nil {
+			return nil, err
+		}
+		return toAnyN(normSubnets(raw)), nil
 	case "leases":
-		return toAnyN(normLeases(s.Rest.Get("/api/ddi/v1/dhcp/lease",
-			map[string]string{"_fields": "address,hostname,state,client_id", "_limit": "5000"})))
+		raw, err := s.Rest.GetStrict("/api/ddi/v1/dhcp/lease",
+			map[string]string{"_fields": "address,hostname,state,client_id", "_limit": "5000"})
+		if err != nil {
+			return nil, err
+		}
+		return toAnyN(normLeases(raw)), nil
 	case "dns_zones":
-		return toAnyN(normZones(s.Rest.Get("/api/ddi/v1/dns/auth_zone",
-			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type", "_limit": "5000"}), nil))
+		raw, err := s.Rest.GetStrict("/api/ddi/v1/dns/auth_zone",
+			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type", "_limit": "5000"})
+		if err != nil {
+			return nil, err
+		}
+		return toAnyN(normZones(raw, nil)), nil
 	case "dns_records":
-		return normRecords(s.Rest.Get("/api/ddi/v1/dns/record", map[string]string{"_limit": "2000"}))
+		raw, err := s.Rest.GetStrict("/api/ddi/v1/dns/record", map[string]string{"_limit": "2000"})
+		if err != nil {
+			return nil, err
+		}
+		return normRecords(raw), nil
 	case "hosts":
-		return toAnyN(normHosts(s.Rest.Get("/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})))
+		raw, err := s.Rest.GetStrict("/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})
+		if err != nil {
+			return nil, err
+		}
+		return toAnyN(normHosts(raw)), nil
 	case "threat_feeds":
-		return normThreatFeeds(s.Rest.Get("/api/atcfw/v1/threat_feeds", map[string]string{"_limit": "200"}))
+		raw, err := s.Rest.GetStrict("/api/atcfw/v1/threat_feeds", map[string]string{"_limit": "200"})
+		if err != nil {
+			return nil, err
+		}
+		return normThreatFeeds(raw), nil
 	case "named_lists":
-		return normNamedLists(s.Rest.Get("/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"}))
+		raw, err := s.Rest.GetStrict("/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})
+		if err != nil {
+			return nil, err
+		}
+		return normNamedLists(raw), nil
 	case "security_policies":
-		return toAnyN(normPolicies(s.Rest.Get("/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})))
+		raw, err := s.Rest.GetStrict("/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})
+		if err != nil {
+			return nil, err
+		}
+		return toAnyN(normPolicies(raw)), nil
 	case "dfp":
-		return normSourceDFP(s.Rest.Get("/api/atcdfp/v1/dfp_services", map[string]string{"_limit": "200"}))
+		raw, err := s.Rest.GetStrict("/api/atcdfp/v1/dfp_services", map[string]string{"_limit": "200"})
+		if err != nil {
+			return nil, err
+		}
+		return normSourceDFP(raw), nil
 	case "anycast":
-		return normAnycast(s.Rest.Get("/api/anycast/v1/accm/ac_runtime_statuses", map[string]string{"_limit": "200"}))
+		raw, err := s.Rest.GetStrict("/api/anycast/v1/accm/ac_runtime_statuses", map[string]string{"_limit": "200"})
+		if err != nil {
+			return nil, err
+		}
+		return normAnycast(raw), nil
 	case "roaming":
-		return normRoaming(s.Rest.Get("/api/atcep/v1/roaming_devices", map[string]string{"_limit": "2000"}))
+		raw, err := s.Rest.GetStrict("/api/atcep/v1/roaming_devices", map[string]string{"_limit": "2000"})
+		if err != nil {
+			return nil, err
+		}
+		return normRoaming(raw), nil
 	case "incidents":
-		return normIncidents(s.FetchActions(ctx))
+		return normIncidents(s.FetchActions(ctx)), nil
 	case "anomaly_events":
-		return toAnyN(anyToMaps(s.FetchHubSecurity(3600, 200)["events"]))
+		return toAnyN(anyToMaps(s.FetchHubSecurity(3600, 200)["events"])), nil
 	case "entity_search":
 		if p["q"] == "" {
-			return []any{}
+			return []any{}, nil
 		}
-		return asSlice(s.ThreatLookup(ctx, p["q"])["entities"])
+		return asSlice(s.ThreatLookup(ctx, p["q"])["entities"]), nil
 	}
-	return nil
+	return nil, nil
+}
+
+// upstreamErrorRows is the shared failed-read shape, matching the existing
+// "unknown source" / "path must start with /api/" convention (below): an
+// "error" key alongside empty rows/fields, never a panic or an aborted
+// handler — one bad source reports its own error, the rest of the payload is
+// unaffected.
+func upstreamErrorRows(label string, err error) map[string]any {
+	msg := label + " failed"
+	var ue *rest.UpstreamError
+	if errors.As(err, &ue) {
+		msg = fmt.Sprintf("%s failed: %s", label, ue.Public())
+	}
+	return map[string]any{"error": msg, "rows": []any{}, "count": 0, "fields": []any{}}
 }
 
 // SourceRows is source_rows (server.py:4824): resolve a source, fetch via its
@@ -317,7 +383,13 @@ func (s *Service) SourceRows(ctx context.Context, sid string, params map[string]
 		if len(restParams) > 0 {
 			rp = restParams
 		}
-		rows := s.Rest.Get(restPath, rp)
+		rows, err := s.Rest.GetStrict(restPath, rp)
+		if err != nil {
+			return upstreamErrorRows(fmt.Sprintf("raw source %q", restPath), err)
+		}
+		if rows == nil {
+			rows = []any{}
+		}
 		return map[string]any{"rows": rows, "count": len(rows), "fields": []any{}}
 	}
 
@@ -336,7 +408,10 @@ func (s *Service) SourceRows(ctx context.Context, sid string, params map[string]
 		limit = 5000
 	}
 
-	rows := s.sourceFetch(ctx, sid, params)
+	rows, err := s.sourceFetch(ctx, sid, params)
+	if err != nil {
+		return upstreamErrorRows(fmt.Sprintf("source %q", sid), err)
+	}
 	if rows == nil {
 		rows = []any{}
 	}

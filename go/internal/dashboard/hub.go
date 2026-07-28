@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -36,7 +37,24 @@ func (s *Service) FetchHubHealth() []map[string]any {
 		return v.([]map[string]any)
 	}
 	g := s.Cache.Gen()
-	services := s.Rest.Get("/api/infra/v1/detail_services", map[string]string{"_limit": "500"})
+	services, err := s.Rest.GetStrict("/api/infra/v1/detail_services", map[string]string{"_limit": "500"})
+	if err != nil {
+		// A dead detail_services feed must never masquerade as "0 deployed,
+		// all healthy" — that is the exact failure-reads-as-safety bug this
+		// migration exists to close. Every bucket is marked unavailable
+		// instead of fabricating a healthy rollup from an empty slice.
+		log.Printf("hub: detail_services fetch failed: %v", err)
+		rollup := make([]map[string]any, 0, len(hubBuckets))
+		for _, b := range hubBuckets {
+			rollup = append(rollup, map[string]any{
+				"name": b.name, "status": "unavailable",
+				"statusLabel": "unavailable", "meta": "feed unavailable",
+				"availability": "unavailable", "reason": "service inventory feed unavailable",
+			})
+		}
+		s.Cache.SetGen(ck, rollup, g)
+		return rollup
+	}
 	rollup := make([]map[string]any, 0, len(hubBuckets))
 	for _, b := range hubBuckets {
 		var members []map[string]any
@@ -50,6 +68,7 @@ func (s *Service) FetchHubHealth() []map[string]any {
 			rollup = append(rollup, map[string]any{
 				"name": b.name, "status": "ok",
 				"statusLabel": "no services", "meta": "0 deployed",
+				"availability": "ok",
 			})
 			continue
 		}
@@ -84,10 +103,11 @@ func (s *Service) FetchHubHealth() []map[string]any {
 			meta = fmt.Sprintf("%d/%d online", online, len(members))
 		}
 		rollup = append(rollup, map[string]any{
-			"name":        b.name,
-			"status":      severity,
-			"statusLabel": hubSeverityLabel[severity],
-			"meta":        meta,
+			"name":         b.name,
+			"status":       severity,
+			"statusLabel":  hubSeverityLabel[severity],
+			"meta":         meta,
+			"availability": "ok",
 		})
 	}
 	s.Cache.SetGen(ck, rollup, g)
@@ -106,9 +126,27 @@ func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
 	g := s.Cache.Gen()
 	t1 := time.Now().Unix()
 	t0 := t1 - int64(windowSecs)
-	rows := s.Rest.Get("/api/dnsdata/v2/dns_event", map[string]string{
+	rows, err := s.Rest.GetStrict("/api/dnsdata/v2/dns_event", map[string]string{
 		"t0": fmt.Sprint(t0), "t1": fmt.Sprint(t1), "_limit": fmt.Sprint(limit),
 	})
+	if err != nil {
+		// This is the highest-consequence instance of the empty-vs-error bug:
+		// a dead DNS-threat-event feed must never render as "no threats" — a
+		// failure that reads as safety. Mark the section unavailable instead
+		// of silently emitting zero events/counts.
+		log.Printf("hub: dns_event fetch failed: %v", err)
+		result := map[string]any{
+			"events":       []map[string]any{},
+			"counts":       map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0},
+			"blocked":      0,
+			"logged":       0,
+			"total":        0,
+			"availability": "unavailable",
+			"reason":       "threat-event feed unavailable",
+		}
+		s.Cache.SetGen(ck, result, g)
+		return result
+	}
 	counts := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0}
 	blocked, logged := 0, 0
 	events := make([]map[string]any, 0, len(rows))
@@ -136,11 +174,12 @@ func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
 		})
 	}
 	result := map[string]any{
-		"events":  events,
-		"counts":  counts,
-		"blocked": blocked,
-		"logged":  logged,
-		"total":   len(rows),
+		"events":       events,
+		"counts":       counts,
+		"blocked":      blocked,
+		"logged":       logged,
+		"total":        len(rows),
+		"availability": "ok",
 	}
 	s.Cache.SetGen(ck, result, g)
 	return result
@@ -217,13 +256,37 @@ func (s *Service) FetchHubDomains() map[string]any {
 	}
 	g := s.Cache.Gen()
 
-	policies := s.Rest.Get("/api/atcfw/v1/security_policies", map[string]string{"_limit": "100"})
-	feeds := s.Rest.Get("/api/atcfw/v1/threat_feeds", map[string]string{"_limit": "100"})
-	named := s.Rest.Get("/api/atcfw/v1/named_lists", map[string]string{"_limit": "100"})
-	roaming := s.Rest.Get("/api/atcep/v1/roaming_devices", map[string]string{"_limit": "200"})
-	anycast := s.Rest.Get("/api/anycast/v1/accm/ac_runtime_statuses", map[string]string{"_limit": "100"})
-	dfp := s.Rest.Get("/api/atcdfp/v1/dfp_services", map[string]string{"_limit": "100"})
-	hosts := s.Rest.Get("/api/infra/v1/detail_hosts", map[string]string{"_limit": "200"})
+	policies, errPolicies := s.Rest.GetStrict("/api/atcfw/v1/security_policies", map[string]string{"_limit": "100"})
+	feeds, errFeeds := s.Rest.GetStrict("/api/atcfw/v1/threat_feeds", map[string]string{"_limit": "100"})
+	named, errNamed := s.Rest.GetStrict("/api/atcfw/v1/named_lists", map[string]string{"_limit": "100"})
+	roaming, errRoaming := s.Rest.GetStrict("/api/atcep/v1/roaming_devices", map[string]string{"_limit": "200"})
+	anycast, errAnycast := s.Rest.GetStrict("/api/anycast/v1/accm/ac_runtime_statuses", map[string]string{"_limit": "100"})
+	dfp, errDfp := s.Rest.GetStrict("/api/atcdfp/v1/dfp_services", map[string]string{"_limit": "100"})
+	hosts, errHosts := s.Rest.GetStrict("/api/infra/v1/detail_hosts", map[string]string{"_limit": "200"})
+
+	// availability is one section-name -> "ok"/"unavailable" entry per
+	// independent feed this endpoint combines. Unlike the single-feed
+	// hub/security and hub/health sections (which carry one flat
+	// availability/reason pair each, mirroring csp.go's exposureFeedUnavailable
+	// shape directly), hub/domains fans out to 7 unrelated upstreams in one
+	// response, so a single failure must never blank the other 6 — each is
+	// tracked independently instead of collapsing to one status.
+	availability := map[string]any{}
+	noteAvailability := func(section string, err error) {
+		if err != nil {
+			log.Printf("hub: %s fetch failed: %v", section, err)
+			availability[section] = "unavailable"
+			return
+		}
+		availability[section] = "ok"
+	}
+	noteAvailability("security_policies", errPolicies)
+	noteAvailability("threat_feeds", errFeeds)
+	noteAvailability("named_lists", errNamed)
+	noteAvailability("roaming_endpoints", errRoaming)
+	noteAvailability("anycast_ha", errAnycast)
+	noteAvailability("dfp_services", errDfp)
+	noteAvailability("host_inventory", errHosts)
 
 	threatFeeds := make([]map[string]any, 0, len(feeds))
 	for _, item := range feeds {
@@ -375,6 +438,7 @@ func (s *Service) FetchHubDomains() map[string]any {
 		"anycast_ha":        anycastHA,
 		"dfp_services":      dfpServices,
 		"host_inventory":    hostInventory,
+		"availability":      availability,
 	}
 	s.Cache.SetGen(ck, result, g)
 	return result

@@ -88,6 +88,8 @@ function SeverityHero({ hub, events }) {
     <Card span={4} title="Threat Events — by Severity" right={<span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
       {hub.loading ? (
         <Skeleton h={230} />
+      ) : hub.data?.availability === 'unavailable' ? (
+        <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
       ) : hub.error || events.length === 0 ? (
         <Empty />
       ) : (
@@ -136,7 +138,9 @@ function KpiStack({ hub, events, acks }) {
 
   return (
     <Card span={2} title="Response Summary">
-      {hub.loading ? <Skeleton h={200} /> : hub.error ? <Empty /> : (
+      {hub.loading ? <Skeleton h={200} /> : hub.data?.availability === 'unavailable' ? (
+        <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
+      ) : hub.error ? <Empty /> : (
         <div className="grid grid-cols-2 gap-3">
           {cells.map((c) => (
             <div key={c.label}>
@@ -330,7 +334,9 @@ function TriageInbox({ hub, events, acks, setAcks }) {
         </div>
       }
     >
-      {hub.loading ? <Skeleton h={260} /> : hub.error || rows.length === 0 ? (
+      {hub.loading ? <Skeleton h={260} /> : hub.data?.availability === 'unavailable' ? (
+        <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
+      ) : hub.error || rows.length === 0 ? (
         <Empty>{hub.error ? 'no data' : 'no events match'}</Empty>
       ) : (
         <DataTable
