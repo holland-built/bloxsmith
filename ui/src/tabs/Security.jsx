@@ -511,7 +511,7 @@ function AssetInsights({ assetInsights }) {
   return (
     <Card span={3} title="Asset Insights">
       {assetInsights.loading ? <Skeleton h={220} /> : assetInsights.error || status === 'error' ? (
-        <Empty>feed failed to load</Empty>
+        <FeedUnavailable label="Asset insights unavailable" />
       ) : status === 'empty' || !hasTotal ? (
         <Empty>no asset insights for this tenant</Empty>
       ) : (
