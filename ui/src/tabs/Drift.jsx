@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { COLORS, Card, Empty, Skeleton } from '../components/ui.jsx'
+import { COLORS, Card, Empty, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
@@ -67,7 +67,11 @@ export default function Drift() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-lg font-semibold tracking-tight mb-3">Drift</h1>
+      <h1 className="text-lg font-semibold tracking-tight mb-1">Drift</h1>
+      <TabIntro anchor="drift">
+        Compares a site template against what actually exists in Infoblox and lists what is missing, changed, or
+        extra. Read-only — it reports gaps, it never closes them.
+      </TabIntro>
 
       <div className="max-w-[720px] mx-auto">
         <Card span={6} title="Check drift" note="compare a site template against live Infoblox state">

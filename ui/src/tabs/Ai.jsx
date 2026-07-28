@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useChartTheme, Card, Empty } from '../components/ui.jsx'
+import { useChartTheme, Card, Empty, TabIntro } from '../components/ui.jsx'
 import { authFetch } from '../lib/authFetch.js'
 import DossierPanel from '../components/DossierPanel.jsx'
 
@@ -309,7 +309,12 @@ function LookupCard() {
 export default function Ai() {
   return (
     <div className="max-w-[860px] mx-auto p-5">
-      <h1 className="text-lg font-semibold tracking-tight mb-3">AI Assistant</h1>
+      <h1 className="text-lg font-semibold tracking-tight mb-1">AI Assistant</h1>
+      <TabIntro anchor="ai">
+        Ask questions about your own network in plain language — answers show the tools used, so you can check
+        where a number came from. Threat lookup takes a domain, IP, or host and returns intel plus a dossier.
+        Chat needs an LLM key; Block domain needs a dashboard token.
+      </TabIntro>
       <div className="grid grid-cols-1 gap-4">
         <ChatCard />
         <LookupCard />

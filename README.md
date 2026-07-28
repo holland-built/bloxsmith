@@ -19,6 +19,8 @@
 | **Encrypted vault** | tenant keys AES-encrypted at rest |
 | **Optional AI query box** | natural-language over your data |
 
+**[What each tab does →](docs/TABS.md)** — all 13 tabs, which ones write to Infoblox, and how the dry-run/apply flow works.
+
 ## Install
 
 **Docker** (recommended) — one command, then open http://localhost:8080:

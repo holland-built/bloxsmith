@@ -72,6 +72,28 @@ export function Card({ title, note, right, span = 2, className = '', children })
   )
 }
 
+// One-line "what this tab does" line under a tab title, with a link to the
+// matching section of docs/TABS.md. Always-visible text rather than a hover
+// tooltip: the nav collapses tabs into a ⋯ menu at narrow widths and hover
+// does not exist on touch, so a tooltip is the one place this can't be read.
+const DOCS_URL = 'https://github.com/holland-built/bloxsmith/blob/master/docs/TABS.md'
+
+export function TabIntro({ anchor, children }) {
+  return (
+    <p className="text-xs text-muted mb-3 max-w-[80ch]">
+      {children}{' '}
+      <a
+        href={anchor ? `${DOCS_URL}#${anchor}` : DOCS_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="text-accent underline underline-offset-2 whitespace-nowrap"
+      >
+        Docs →
+      </a>
+    </p>
+  )
+}
+
 export function Empty({ children = 'no data' }) {
   return <div className="h-full min-h-[100px] flex items-center justify-center text-muted text-sm">{children}</div>
 }

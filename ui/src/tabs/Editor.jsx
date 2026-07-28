@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { COLORS, Card, Empty } from '../components/ui.jsx'
+import { COLORS, Card, Empty, TabIntro } from '../components/ui.jsx'
 
 const inputCls = 'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none'
 
@@ -247,7 +247,11 @@ export default function Editor() {
   return (
     <div className="max-w-[720px] mx-auto p-5">
       <h1 className="text-lg font-semibold tracking-tight mb-1">Editor</h1>
-      <p className="text-xs text-muted mb-3">Directly edit DNS/DHCP records and objects. Editor-created subnets and address blocks are ad-hoc — not tracked by a site template.</p>
+      <TabIntro anchor="editor">
+        Direct create, update, and delete on individual DNS/DHCP objects. Blank Object ID creates; pasting an ID
+        switches the form to update and reveals Delete. Preview first, then Apply. Editor-created subnets and
+        address blocks are ad-hoc — no site template tracks them, so Drift reports them as extra.
+      </TabIntro>
 
       <div className="flex flex-wrap gap-1.5 mb-4">
         {EDITOR_TYPES.map((t) => (
