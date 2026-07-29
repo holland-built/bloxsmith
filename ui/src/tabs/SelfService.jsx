@@ -169,7 +169,10 @@ function AllocatePanel() {
         <PreviewBox data={flow.preview} note="preview — no address has been taken yet" />
       </PreviewApply>
 
-      {!spacesApi.loading && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+      <FetchError error={spacesApi.error} stale={spaces.length > 0} />
+      <FetchError error={blocksApi.error} stale={blocks.length > 0} />
+      <FetchError error={subnetsApi.error} stale={subnets.length > 0} />
+      {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
     </Card>
   )
 }
@@ -232,7 +235,8 @@ function DnsPanel() {
         <PreviewBox data={flow.preview} note="preview — the record has not been created yet" />
       </PreviewApply>
 
-      {!zonesApi.loading && zones.length === 0 && <Empty>no DNS zones</Empty>}
+      <FetchError error={zonesApi.error} stale={zones.length > 0} />
+      {!zonesApi.loading && !zonesApi.error && zones.length === 0 && <Empty>no DNS zones</Empty>}
     </Card>
   )
 }
@@ -444,7 +448,8 @@ function ManageRecordsPanel() {
         </Field>
       </div>
 
-      {!zonesApi.loading && zones.length === 0 && <Empty>no DNS zones</Empty>}
+      <FetchError error={zonesApi.error} stale={zones.length > 0} />
+      {!zonesApi.loading && !zonesApi.error && zones.length === 0 && <Empty>no DNS zones</Empty>}
 
       {zoneId && (
         <>
@@ -606,7 +611,9 @@ function ManageAddressesPanel() {
         </Field>
       </div>
 
-      {!spacesApi.loading && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+      <FetchError error={spacesApi.error} stale={spaces.length > 0} />
+      <FetchError error={subnetsApi.error} stale={subnets.length > 0} />
+      {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
 
       {subnetId && (
         <>

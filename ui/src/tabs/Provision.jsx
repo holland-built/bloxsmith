@@ -145,6 +145,24 @@ function RowsRollup({ rows, failedLabel }) {
 
 const previewMsg = (verb) => `Preview only — nothing has been written. Review the plan, then ${verb}.`
 
+// runOutcome classifies a finished seed/teardown-seed run from the terminal
+// stream frame's explicit counts (backend now ships succeeded/failed/skipped/
+// total ints alongside the raw summary arrays — see terminalFrame in
+// provision.go). Before this, the UI had only `done`, so a run where every
+// template failed rendered the exact same success banner as one where every
+// template succeeded. total === 0 (nothing selected) is legitimate, not a
+// failure — it reads as 'success' below.
+function runOutcome(result) {
+  if (!result) return null
+  const succeeded = result.succeeded ?? 0
+  const failed = result.failed ?? 0
+  const skipped = result.skipped ?? 0
+  const total = result.total ?? (succeeded + failed + skipped)
+  if (total > 0 && failed === total) return { kind: 'failed', succeeded, failed, skipped, total }
+  if (failed > 0) return { kind: 'partial', succeeded, failed, skipped, total }
+  return { kind: 'success', succeeded, failed, skipped, total }
+}
+
 // ---------- subnet mode ----------
 
 function SubnetMode() {
@@ -407,6 +425,9 @@ function SeedMode({ isAdmin }) {
   }
   function touch() { seed.markStale(); teardown.markStale() }
 
+  const seedOutcome = runOutcome(seed.result)
+  const teardownOutcome = runOutcome(teardown.result)
+
   return (
     <div className="flex flex-col gap-3">
       <Card title="Seed multi-region demo data" span={6}>
@@ -438,10 +459,17 @@ function SeedMode({ isAdmin }) {
             onApply={() => seed.run(baseQs(false).toString(), false)}
             applyLabel="Seed demo data"
             busyLabel="Running…"
-            error={seed.error}
+            error={
+              seed.error ||
+              (seed.status === 'applied' && seedOutcome?.kind === 'failed'
+                ? `Seed failed — 0 of ${seedOutcome.total} template(s) succeeded.`
+                : null)
+            }
             message={
               seed.status === 'previewed' ? previewMsg('Seed demo data')
-                : seed.status === 'applied' ? 'Seed complete.'
+                : seed.status === 'applied' && seedOutcome?.kind === 'partial'
+                  ? `Seed partial — ${seedOutcome.succeeded} of ${seedOutcome.total} succeeded, ${seedOutcome.failed} failed.`
+                : seed.status === 'applied' && seedOutcome?.kind === 'success' ? 'Seed complete.'
                 : null
             }
           />
@@ -456,10 +484,10 @@ function SeedMode({ isAdmin }) {
         <LogView log={seed.log} doneLabel={seed.status === 'previewed' ? 'plan complete — nothing written' : 'done'} />
       </Card>
 
-      {seed.result?.summary && (
+      {seedOutcome && (
         <Card title={seed.status === 'previewed' ? 'Planned' : 'Summary'} span={6}>
           <div className="font-mono text-[12px]">
-            Succeeded: {seed.result.summary.succeeded ?? 0} · Failed: {seed.result.summary.failed ?? 0} · Skipped: {seed.result.summary.skipped ?? 0}
+            Succeeded: {seedOutcome.succeeded} · Failed: {seedOutcome.failed} · Skipped: {seedOutcome.skipped}
           </div>
         </Card>
       )}
@@ -485,10 +513,17 @@ function SeedMode({ isAdmin }) {
             applyLabel="Tear down demo"
             busyLabel="Running…"
             destructive
-            error={teardown.error}
+            error={
+              teardown.error ||
+              (teardown.status === 'applied' && teardownOutcome?.kind === 'failed'
+                ? `Teardown failed — 0 of ${teardownOutcome.total} template(s) succeeded.`
+                : null)
+            }
             message={
               teardown.status === 'previewed' ? previewMsg('Tear down demo')
-                : teardown.status === 'applied' ? 'Teardown complete.'
+                : teardown.status === 'applied' && teardownOutcome?.kind === 'partial'
+                  ? `Teardown partial — ${teardownOutcome.succeeded} of ${teardownOutcome.total} succeeded, ${teardownOutcome.failed} failed.`
+                : teardown.status === 'applied' && teardownOutcome?.kind === 'success' ? 'Teardown complete.'
                 : null
             }
           />
@@ -505,10 +540,10 @@ function SeedMode({ isAdmin }) {
           <LogView log={teardown.log} doneLabel={teardown.status === 'previewed' ? 'plan complete — nothing deleted' : 'done'} />
         </Card>
       )}
-      {teardown.result?.summary && (
+      {teardownOutcome && (
         <Card title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown summary'} span={6}>
           <div className="font-mono text-[12px]">
-            Succeeded: {teardown.result.summary.succeeded ?? 0} · Failed: {teardown.result.summary.failed ?? 0} · Skipped: {teardown.result.summary.skipped ?? 0}
+            Succeeded: {teardownOutcome.succeeded} · Failed: {teardownOutcome.failed} · Skipped: {teardownOutcome.skipped}
           </div>
         </Card>
       )}
