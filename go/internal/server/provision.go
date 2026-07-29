@@ -18,7 +18,7 @@ import (
 // (server.New) already gated every mutating path and logged "write-authorized";
 // these handlers add the per-route RBAC gate, the engine call, the SSE framing,
 // and the explicit action audit entry, exactly as Python does.
-func (d *Deps) registerProvisionRoutes(mux *http.ServeMux) {
+func (d *Deps) registerProvisionRoutes(mux router) {
 	mux.HandleFunc("GET /api/templates", d.templatesList)
 	mux.HandleFunc("GET /api/provision/stream", d.provisionSubnetStream)
 	mux.HandleFunc("GET /api/provision/site/stream", d.provisionSiteStream)
@@ -102,6 +102,7 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	defer d.recoverStream(&emit, r)
 
 	err := func() error {
 		if block == "" {
@@ -174,6 +175,7 @@ func (d *Deps) provisionSiteStream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	defer d.recoverStream(&emit, r)
 	name := strings.TrimSpace(provision.PyStr(qp["template"]))
 	if name == "" {
 		emit(map[string]any{"error": "template is required"})
@@ -225,6 +227,7 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	defer d.recoverStream(&emit, r)
 
 	dryParam := "0"
 	if dry {
@@ -322,6 +325,7 @@ func (d *Deps) teardownSiteStream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	defer d.recoverStream(&emit, r)
 	name := strings.TrimSpace(provision.PyStr(qp["template"]))
 	if name == "" {
 		emit(map[string]any{"error": "template is required"})
@@ -378,6 +382,7 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	defer d.recoverStream(&emit, r)
 	if !dry && confirm != "DELETE" {
 		emit(map[string]any{"error": "confirmation required"})
 		return
@@ -746,4 +751,45 @@ func firstRowLocal(resp any) map[string]any {
 		return mapOf(res)
 	}
 	return map[string]any{}
+}
+
+// recoverStream is the panic guard for the five SSE provision/teardown streams.
+//
+// THEY HAD NONE. Every JSON handler in this package defers recoverEdit; not one
+// of the streams did, and sse.go's own comment ("nothing to recover mid-stream")
+// was about a failed write to a disconnected client, not about a panic in the
+// engine. So a nil dereference anywhere inside a provisioning or teardown run
+// took down the whole server process — mid-teardown, with a partially deleted
+// tenant, no summary, and the operator seeing only a dropped connection.
+//
+// Found by executing one: with the write lock temporarily disabled to prove its
+// refusals were load-bearing, a teardown request on a Deps with no provisioning
+// engine panicked in SiteTemplateRelPaths and killed the test binary. Nothing had
+// ever run these handlers to the point of a panic before.
+//
+// The response headers and a 200 are already sent by the time anything in the
+// run can fail, so there is no status code left to change. What it can do is tell
+// the client the run STOPPED and did not finish — never emit a summary, which
+// would read as a completed run. The event uses the same {"error": ...} shape the
+// streams already emit for a failed template, so the existing UI handling applies
+// without change.
+//
+// emit is taken by pointer so this reads whatever closure the handler holds at
+// the moment of the panic, not a copy captured when the defer was set up.
+func (d *Deps) recoverStream(emit *sse.Emit, r *http.Request) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	path := r.URL.Path
+	d.logExc(path, rec)
+	if emit != nil && *emit != nil {
+		// Deliberately not the panic text: it can carry internal detail, and the
+		// operator's actionable fact is that the run stopped partway.
+		(*emit)(map[string]any{
+			"error": "the run stopped unexpectedly and did NOT finish — check the audit log for what was already applied, " +
+				"and the server log for the cause",
+			"aborted": true,
+		})
+	}
 }

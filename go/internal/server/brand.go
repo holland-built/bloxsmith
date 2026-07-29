@@ -18,7 +18,7 @@ import (
 // POST 6018): GET /api/logo (vault logo, else a CDN passthrough), GET /api/brand
 // (the saved brand.json, else {}), POST /api/brand (persist brand + cache the
 // logo). All three sit ABOVE the vault gate (registry/meta, no tenant data).
-func (d *Deps) registerBrandRoutes(mux *http.ServeMux) {
+func (d *Deps) registerBrandRoutes(mux router) {
 	mux.HandleFunc("GET /api/logo", d.logo)
 	mux.HandleFunc("GET /api/brand", d.brandGet)
 	mux.HandleFunc("POST /api/brand", d.body(d.brandPost))

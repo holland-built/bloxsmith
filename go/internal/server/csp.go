@@ -12,7 +12,7 @@ import (
 // shared rest.Client); the route layer just returns the body at 200, exactly as
 // Python's self._json does. A shaper panic is caught and logged as a 500 via the
 // same recover500 guard the /api/data routes use.
-func (d *Deps) registerCSPRoutes(mux *http.ServeMux) {
+func (d *Deps) registerCSPRoutes(mux router) {
 	// fn is a METHOD EXPRESSION, not a bound method value: the service it runs
 	// against is chosen per request, so each tile reads the tenant that request
 	// started against rather than whichever one is active when it fires.

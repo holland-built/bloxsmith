@@ -6,7 +6,7 @@ import "net/http"
 // aggregation) and the three operator-hub endpoints (server.py:5071/5242-5250).
 // Each mirrors Python's handler: on a fetcher panic, log and return a 500 with
 // {"error":"internal error"} — the frontend already tolerates that shape.
-func (d *Deps) registerDataRoutes(mux *http.ServeMux) {
+func (d *Deps) registerDataRoutes(mux router) {
 	mux.HandleFunc("GET /api/data", d.apiData)
 	mux.HandleFunc("GET /api/hub/health", d.hubHealth)
 	mux.HandleFunc("GET /api/hub/security", d.hubSecurity)

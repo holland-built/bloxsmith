@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"bloxsmith/internal/edit"
 	"bloxsmith/internal/httpx"
 	"bloxsmith/internal/rest"
+	"bloxsmith/internal/vault"
 )
 
 // The defect: auth.SetOverride wrote a single process-global slot that every
@@ -58,13 +60,29 @@ func (s *tenantSpy) headers() []string {
 
 // newTenantChassis wires the full routed handler over a spy upstream, the way
 // main.go does, so the request-scoped pin is exercised end to end.
+//
+// The vault here exists for one reason: the per-tenant write lock (writelock.go)
+// refuses every tenant-changing route unless that tenant was explicitly marked
+// writable, and these tests exercise a PATCH. Without the opt-in the lock refuses
+// first, zero outbound calls happen, and the pinning test cannot see the thing it
+// is testing — which is exactly how this was noticed: it started reporting
+// "want at least 2 upstream calls, got 0". No vault tenant is added, so the
+// identity is the env-key one.
 func newTenantChassis(t *testing.T, spy *tenantSpy) (http.Handler, *rest.Auth, func()) {
 	t.Helper()
 	up := httptest.NewServer(spy)
 	auth := rest.NewAuth("Token tenant-A", nil)
 	rc := rest.New(up.URL, auth)
+	vlt := vault.New(filepath.Join(t.TempDir(), "vault.json"))
+	if err := vlt.Init("pass-phrase-for-test"); err != nil {
+		t.Fatalf("vault init: %v", err)
+	}
+	if res := vlt.SetWritable(vault.WriteID(vault.EnvTenant, vault.NoSwitch), true); !res["ok"].(bool) {
+		t.Fatalf("opt the env tenant in to writes: %v", res)
+	}
 	d := &Deps{
 		Cfg:   &config.Config{Port: "8080"},
+		Vault: vlt,
 		Rest:  rc,
 		Auth:  auth,
 		Guard: &httpx.Guard{Port: "8080", MutatingPaths: httpx.DefaultMutatingPaths()},

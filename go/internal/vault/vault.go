@@ -41,12 +41,17 @@ type Tenant struct {
 }
 
 // payload is the Fernet-encrypted plaintext (server.py:2773-2774 _vault_save).
+//
+// WriteAllowed is additive: a vault written before the per-tenant write lock has
+// no such key, which decodes to nil — nothing writable. That is the correct
+// default for an existing vault, not a migration gap. See writelock.go.
 type payload struct {
-	Tenants  []Tenant `json:"tenants"`
-	Active   *string  `json:"active"`
-	Groq     string   `json:"groq"`
-	LLMBase  string   `json:"llm_base"`
-	LLMModel string   `json:"llm_model"`
+	Tenants      []Tenant `json:"tenants"`
+	Active       *string  `json:"active"`
+	Groq         string   `json:"groq"`
+	LLMBase      string   `json:"llm_base"`
+	LLMModel     string   `json:"llm_model"`
+	WriteAllowed []string `json:"write_allowed,omitempty"`
 }
 
 // fileEnvelope is the cleartext on-disk wrapper (server.py:2778).
@@ -73,6 +78,9 @@ type Vault struct {
 	llmModel string
 	key      *fernet.Key // derived Fernet key
 	salt     string      // std-b64 salt (as stored)
+	// writeAllowed holds the identities explicitly opted in to being written to
+	// (see writelock.go). Empty means nothing is writable, which is the default.
+	writeAllowed []string
 
 	// onAuthReset is the coordinated auth reset the server registers once at
 	// startup (main): clear the portal Bearer override, reset account.Manager
@@ -100,11 +108,12 @@ func (v *Vault) rotateAuth() {
 // so a failed save() can be rolled back (save serializes current in-memory
 // fields, so the mutation must happen before save — hence snapshot+restore).
 type vaultSnap struct {
-	tenants  []Tenant
-	active   *string
-	groq     string
-	llmBase  string
-	llmModel string
+	tenants      []Tenant
+	active       *string
+	groq         string
+	llmBase      string
+	llmModel     string
+	writeAllowed []string
 }
 
 // snapshot captures the current mutable state (caller holds v.mu).
@@ -116,7 +125,9 @@ func (v *Vault) snapshot() vaultSnap {
 		s := *v.active
 		a = &s
 	}
-	return vaultSnap{tenants: t, active: a, groq: v.groq, llmBase: v.llmBase, llmModel: v.llmModel}
+	w := make([]string, len(v.writeAllowed))
+	copy(w, v.writeAllowed)
+	return vaultSnap{tenants: t, active: a, groq: v.groq, llmBase: v.llmBase, llmModel: v.llmModel, writeAllowed: w}
 }
 
 // restore rolls the mutable state back to a snapshot (caller holds v.mu).
@@ -126,6 +137,7 @@ func (v *Vault) restore(s vaultSnap) {
 	v.groq = s.groq
 	v.llmBase = s.llmBase
 	v.llmModel = s.llmModel
+	v.writeAllowed = s.writeAllowed
 }
 
 // LLMCreds returns a lock-guarded snapshot of the stored LLM credentials (Groq
@@ -274,6 +286,7 @@ func (v *Vault) Unlock(passphrase string) error {
 	v.groq = p.Groq
 	v.llmBase = p.LLMBase
 	v.llmModel = p.LLMModel
+	v.writeAllowed = p.WriteAllowed
 	v.key = key
 	v.salt = env.Salt
 	return nil
@@ -286,11 +299,12 @@ func (v *Vault) save() error {
 		return errors.New("vault locked")
 	}
 	p := payload{
-		Tenants:  v.tenants,
-		Active:   v.active,
-		Groq:     v.groq,
-		LLMBase:  v.llmBase,
-		LLMModel: v.llmModel,
+		Tenants:      v.tenants,
+		Active:       v.active,
+		Groq:         v.groq,
+		LLMBase:      v.llmBase,
+		LLMModel:     v.llmModel,
+		WriteAllowed: v.writeAllowed,
 	}
 	plain, err := json.Marshal(p)
 	if err != nil {
@@ -331,6 +345,11 @@ func (v *Vault) Lock() {
 	v.tenants = nil
 	v.active = nil
 	v.groq = ""
+	// Cleared with the rest of the decrypted state: a locked vault must not be
+	// able to answer "is this tenant writable" from memory. WriteAllowed()
+	// therefore says no while locked, which is the right answer — nothing is
+	// writable when nothing is unlocked.
+	v.writeAllowed = nil
 	v.key = nil
 }
 
@@ -348,6 +367,7 @@ func (v *Vault) Reset() error {
 	v.tenants = nil
 	v.active = nil
 	v.groq, v.llmBase, v.llmModel = "", "", ""
+	v.writeAllowed = nil
 	v.key = nil
 	v.salt = ""
 	return nil

@@ -68,6 +68,16 @@ func (a *Auth) SetFallback(k string) {
 	a.fallback = k
 }
 
+// OverrideActive reports whether a portal account switch is currently in force.
+// The per-tenant write lock needs this to know whether the outbound credential
+// belongs to the stored key's own account or to a switched-in one — the value
+// itself is a secret and is never returned.
+func (a *Auth) OverrideActive() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.override != ""
+}
+
 // SetOverride sets (or, with "", clears) the account-switch Authorization slot
 // that Value() consults BEFORE the active-tenant key and the env fallback. This
 // is how a portal account switch actually takes effect through the same resolver

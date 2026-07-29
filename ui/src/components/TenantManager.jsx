@@ -20,6 +20,11 @@ export default function TenantManager({ onClose }) {
   const [confirmRm, setConfirmRm] = useState(null)
   const [locking, setLocking] = useState(false)
   const [switchingAcct, setSwitchingAcct] = useState(false)
+  const [writeTarget, setWriteTarget] = useState(null)
+  const [writeTargetError, setWriteTargetError] = useState(null)
+  const [confirmGrant, setConfirmGrant] = useState(false)
+  const [grantBusy, setGrantBusy] = useState(false)
+  const [grantErr, setGrantErr] = useState('')
 
   const [add, setAdd] = useState({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })
   const [edit, setEdit] = useState(null) // { id, label, key, err, busy, test }
@@ -36,6 +41,14 @@ export default function TenantManager({ onClose }) {
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then((d) => { setStatus(d); setStatusError(false) })
       .catch(() => setStatusError(true))
+    // Which tenant a write would land in, and whether it has been opted in.
+    // Three outcomes, kept distinct: writable, read-only, and "we could not
+    // work out where a write would go" — the last is not read-only, it is
+    // unknown, and it must not render as though we checked and it was fine.
+    fetch('/api/vault/write-target', { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then((d) => { setWriteTarget(d); setWriteTargetError(null) })
+      .catch(() => setWriteTargetError('Could not read the write permission — retry.'))
     // go/internal/server/account.go:51 already computes {error,status} on a CSP
     // failure (HTTP 200, accounts:[]) — read and surface them instead of
     // silently collapsing to an empty switcher indistinguishable from "no
@@ -135,6 +148,20 @@ export default function TenantManager({ onClose }) {
           ? 'Unverified: could not verify — check connectivity and try again'
           : 'Invalid: ' + (data.error || 'rejected')
     setEdit((e) => ({ ...e, test }))
+  }
+
+  // Grant or revoke write permission for the tenant a write would currently
+  // land in. No id is sent: the server resolves the same identity it enforces
+  // against, so the UI cannot grant permission for a different tenant than the
+  // one it is showing.
+  const setWritable = async (on) => {
+    setGrantBusy(true)
+    setGrantErr('')
+    const { ok, data } = await vpost('/api/vault/tenant-writable', { writable: on })
+    setGrantBusy(false)
+    setConfirmGrant(false)
+    if (ok && data.ok) load()
+    else setGrantErr(data.error || 'Could not change the write permission.')
   }
 
   const lockNow = async () => {
@@ -279,6 +306,82 @@ export default function TenantManager({ onClose }) {
             <button className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
               + Add connection
             </button>
+
+            {/* Per-tenant write lock. Tenants are read-only until opted in, so
+                this is the only place the dangerous routes can be turned on.
+                See go/internal/vault/writelock.go. */}
+            <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Changing this tenant</div>
+            {writeTargetError ? (
+              <div className="mb-4">
+                <FeedUnavailable label="Write permission unknown" reason={writeTargetError} />
+              </div>
+            ) : !writeTarget ? (
+              <div className="text-[11px] text-dim px-1 mb-4">Checking…</div>
+            ) : !writeTarget.known ? (
+              <div className="mb-4">
+                <FeedUnavailable
+                  label="Cannot tell which tenant a change would hit"
+                  reason={(writeTarget.reason || '') + ' — changes are refused until this resolves.'}
+                />
+              </div>
+            ) : (
+              <div className="mb-4 rounded-lg border border-border bg-field p-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px]" style={{ color: writeTarget.writable ? 'var(--color-warn)' : 'var(--color-ok)' }}>
+                    {writeTarget.writable ? '● Changes allowed' : '● Read-only'}
+                  </span>
+                  <span className="flex-1" />
+                  <span className="text-[10px] text-dim font-mono truncate" title={writeTarget.tenant}>
+                    {writeTarget.label || writeTarget.tenant}
+                  </span>
+                </div>
+                <div className="text-[11px] text-dim mt-1.5">
+                  {writeTarget.writable
+                    ? 'Provisioning, teardown and record edits will really change this tenant.'
+                    : 'Provisioning, teardown and record edits are refused. Nothing here can change this tenant.'}
+                </div>
+                {grantErr && <div className="mt-2 text-[11px] text-crit">{grantErr}</div>}
+                {writeTarget.writable ? (
+                  <button
+                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover disabled:opacity-50"
+                    disabled={grantBusy}
+                    onClick={() => setWritable(false)}
+                  >
+                    {grantBusy ? 'Saving…' : 'Make read-only'}
+                  </button>
+                ) : confirmGrant ? (
+                  <div className="mt-2.5">
+                    <div className="text-[11px] mb-2" style={{ color: 'var(--color-warn)' }}>
+                      This lets teardown delete real DNS zones, subnets and address blocks in{' '}
+                      {writeTarget.label || writeTarget.tenant}. Only do this on a tenant you own.
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="flex-1 px-2.5 py-1.5 rounded-lg border text-sm disabled:opacity-50"
+                        style={{ borderColor: 'var(--color-crit)', color: 'var(--color-crit)' }}
+                        disabled={grantBusy}
+                        onClick={() => setWritable(true)}
+                      >
+                        {grantBusy ? 'Saving…' : 'Yes, allow changes'}
+                      </button>
+                      <button
+                        className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt"
+                        onClick={() => { setConfirmGrant(false); setGrantErr('') }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover"
+                    onClick={() => setConfirmGrant(true)}
+                  >
+                    Allow changes to this tenant…
+                  </button>
+                )}
+              </div>
+            )}
 
             {accountsError ? (
               <div className="mb-4">
