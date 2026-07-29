@@ -8,6 +8,7 @@ package account
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -32,8 +33,13 @@ type Manager struct {
 	cache    *cache.Cache
 	http     *http.Client
 	home     string
-	active   string
-	jwtIssue time.Time
+	// homeVerified is true only once /v2/current_user has actually resolved an
+	// account_id. Until then, m.home may hold nothing more than the alphabetically
+	// first account (a display guess) and must never be trusted as the home
+	// account for SwitchAccount's home-branch — see cspJSON and listAccountsLocked.
+	homeVerified bool
+	active       string
+	jwtIssue     time.Time
 }
 
 // New builds the Manager from the immutable env API_KEY plus the shared auth +
@@ -79,7 +85,10 @@ func (m *Manager) cspJSON(path string, body any) (map[string]any, int, error) {
 	}
 	var parsed any
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return map[string]any{}, resp.StatusCode, nil
+		// A 2xx with an undecodable body is a failed read, not an empty success —
+		// callers (esp. the home-account resolver) must be able to tell the
+		// difference and retry rather than memoizing a wrong fallback forever.
+		return nil, resp.StatusCode, fmt.Errorf("csp %s: decode response: %w", path, err)
 	}
 	if m, ok := parsed.(map[string]any); ok {
 		return m, resp.StatusCode, nil
@@ -121,15 +130,24 @@ func (m *Manager) listAccountsLocked() (map[string]any, error) {
 	sort.SliceStable(accounts, func(i, j int) bool {
 		return strings.ToLower(str(accounts[i]["name"])) < strings.ToLower(str(accounts[j]["name"]))
 	})
-	if m.home == "" {
+	if !m.homeVerified {
 		home := ""
+		verified := false
 		if cu, _, e := m.cspJSON("/v2/current_user", nil); e == nil {
-			home = str(asMap(cu["result"])["account_id"])
+			if hid := str(asMap(cu["result"])["account_id"]); hid != "" {
+				home = hid
+				verified = true
+			}
 		}
+		// /v2/current_user failed or came back unparseable: fall back to the
+		// alphabetically-first account ONLY as a display guess. Do not mark it
+		// verified, so the next call retries the real identity check instead of
+		// entrenching a possibly-wrong home forever.
 		if home == "" && len(accounts) > 0 {
 			home = str(accounts[0]["id"])
 		}
 		m.home = home
+		m.homeVerified = verified
 		if m.active == "" {
 			m.active = m.home
 		}
@@ -165,6 +183,15 @@ func (m *Manager) SwitchAccount(accountID string) (map[string]any, error) {
 		// normal active-tenant/env key (the long-lived key), undoing any prior
 		// switch. Clearing (not SetFallback) is what makes the switch actually
 		// take effect in vault mode, where active() would otherwise shadow it.
+		//
+		// m.home may only be an unverified display guess (see listAccountsLocked)
+		// when /v2/current_user has never successfully resolved an account_id. In
+		// that case we do NOT know accountID is actually the home account — take
+		// the branch anyway and we clear the override + report ok:true for a
+		// switch that may not have happened at all. Fail loudly instead.
+		if !m.homeVerified {
+			return map[string]any{"ok": false, "error": "could not verify home account identity (CSP /v2/current_user unavailable); retry the switch"}, nil
+		}
 		m.auth.SetOverride("")
 	} else {
 		resp, _, err := m.cspJSON("/v2/session/account_switch", map[string]any{"id": accountID})

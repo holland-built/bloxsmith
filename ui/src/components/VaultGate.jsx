@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { FeedUnavailable } from './ui.jsx'
 
 // vpost — POST JSON, always resolves {ok,data}.
 const vpost = (url, body) =>
@@ -214,13 +215,20 @@ function FirstTenant({ onDone }) {
 
 export default function VaultGate({ children }) {
   const [st, setSt] = useState(null)
+  const [statusError, setStatusError] = useState(false)
   const alive = useRef(true)
 
   const refresh = useCallback(() => {
     fetch('/api/vault/status', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => { if (alive.current) setSt(d) })
-      .catch(() => { if (alive.current) setSt({ vaultMode: false }) })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((d) => { if (alive.current) { setSt(d); setStatusError(false) } })
+      // A failed status read must not be treated as "no vault configured" —
+      // {vaultMode:false} here used to fall straight through to `return
+      // children`, rendering the full dashboard as if vault mode were off.
+      .catch(() => { if (alive.current) setStatusError(true) })
   }, [])
 
   useEffect(() => {
@@ -234,6 +242,15 @@ export default function VaultGate({ children }) {
     window.addEventListener('bx:vault-locked', on)
     return () => window.removeEventListener('bx:vault-locked', on)
   }, [refresh])
+
+  if (statusError) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-bg px-6">
+        <div className="text-sm font-semibold">Bloxsmith</div>
+        <FeedUnavailable label="Vault status unavailable" reason="Could not reach the server to confirm vault state — retry." />
+      </div>
+    )
+  }
 
   if (!st) {
     return (

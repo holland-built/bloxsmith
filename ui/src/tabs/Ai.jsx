@@ -267,8 +267,18 @@ function LookupCard() {
     if (!query) return
     setBusy(true); setErr(null); setRes(null); setDossier(null); setQueryUsed(query)
     fetch(`/api/dossier?q=${encodeURIComponent(query)}`, { cache: 'no-store' })
-      .then((r) => r.json().catch(() => null))
-      .then((j) => { if (j) setDossier(j) })
+      .then(async (r) => {
+        const body = await r.json().catch(() => null)
+        // A non-200 (vault-gate 503 {error,locked}, a recover500 panic body) must
+        // never pass its error body through as if it were dossier data — that is
+        // how a lookup that never ran got painted CLEAN.
+        if (!r.ok) {
+          const reason = (body && (body.error || body.reason)) || `HTTP ${r.status}`
+          setDossier({ unavailable: reason })
+          return
+        }
+        if (body) setDossier(body)
+      })
       .catch(() => {})
     try {
       const r = await fetch(`/api/threat-lookup?q=${encodeURIComponent(query)}`, { cache: 'no-store' })
