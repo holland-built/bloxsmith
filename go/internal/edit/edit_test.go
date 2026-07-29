@@ -235,6 +235,38 @@ func TestDNSRecordUpdate_ConflictFiresOnDryPath(t *testing.T) {
 	}
 }
 
+// TestDNSRecordUpdate_NonJSON200OnRead_DecodeFlavoredError is the regression
+// test for edit.go's discarded GetEx decode error: a pre-update GET that
+// returns HTTP 200 with a non-JSON body (e.g. an upstream proxy/gateway
+// hiccup) must NOT be reported as "record not found" — the record was never
+// actually read, so its existence is unknown, not disproven. The error
+// message must reflect the real decode failure instead.
+func TestDNSRecordUpdate_NonJSON200OnRead_DecodeFlavoredError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte("<html>not json</html>"))
+	}))
+	defer srv.Close()
+	c := newTestClient(srv)
+
+	res, _ := c.DNSRecordUpdate(M{
+		"id":      "abc123",
+		"comment": "updated",
+	})
+
+	if res["ok"] != false {
+		t.Fatalf("ok = %v, want false", res["ok"])
+	}
+	errMsg, _ := res["error"].(string)
+	if strings.Contains(errMsg, "record not found") {
+		t.Fatalf("error = %q, must not claim the record was not found when the GET actually returned 200", errMsg)
+	}
+	if !strings.Contains(errMsg, "decode") && !strings.Contains(errMsg, "could not read") {
+		t.Fatalf("error = %q, want a decode-flavored message", errMsg)
+	}
+}
+
 func TestObjectPath_FullFormID_NoDoublePrefix(t *testing.T) {
 	got, err := ObjectPath("dns/record", "dns/record/abc")
 	want := "/api/ddi/v1/dns/record/abc"

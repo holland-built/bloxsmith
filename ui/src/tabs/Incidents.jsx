@@ -289,7 +289,11 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
       mono: true,
       sortable: true,
       comparator: (a, b) => (Number(a.detected_at) || 0) - (Number(b.detected_at) || 0),
-      render: (v) => ageLabel(v),
+      // first_seen_unknown (store.go's degraded StampFirstSeen branch) means
+      // detected_at was deliberately never stamped — rendering a computed age
+      // here would print a confident-looking "0s"/"—" for a value that is
+      // genuinely unknown, not zero.
+      render: (v, s) => (s.first_seen_unknown ? 'unknown' : ageLabel(v)),
     },
   ]
 
