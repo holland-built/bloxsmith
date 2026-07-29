@@ -97,7 +97,15 @@ export default function TenantManager({ onClose }) {
     if (!add.key) return
     setAdd((a) => ({ ...a, test: 'Testing…' }))
     const { ok, data } = await vpost('/api/vault/test-key', { key: add.key })
-    setAdd((a) => ({ ...a, test: ok && data.ok ? 'Key valid' + (data.name ? ' — ' + data.name : '') : 'Invalid: ' + (data.error || 'rejected') }))
+    // unverified: the request never reached CSP (offline/VPN/proxy/timeout) —
+    // the key was never judged, so this must not read as "rejected".
+    const test =
+      ok && data.ok
+        ? 'Key valid' + (data.name ? ' — ' + data.name : '')
+        : data.unverified
+          ? 'Unverified: could not verify — check connectivity and try again'
+          : 'Invalid: ' + (data.error || 'rejected')
+    setAdd((a) => ({ ...a, test }))
   }
 
   const openEdit = (t) => setEdit({ id: t.id, label: t.label, key: '', err: '', busy: false, test: '' })
@@ -118,7 +126,15 @@ export default function TenantManager({ onClose }) {
     if (!edit.key) return
     setEdit((e) => ({ ...e, test: 'Testing…' }))
     const { ok, data } = await vpost('/api/vault/test-key', { key: edit.key })
-    setEdit((e) => ({ ...e, test: ok && data.ok ? 'Key valid' + (data.name ? ' — ' + data.name : '') : 'Invalid: ' + (data.error || 'rejected') }))
+    // unverified: the request never reached CSP (offline/VPN/proxy/timeout) —
+    // the key was never judged, so this must not read as "rejected".
+    const test =
+      ok && data.ok
+        ? 'Key valid' + (data.name ? ' — ' + data.name : '')
+        : data.unverified
+          ? 'Unverified: could not verify — check connectivity and try again'
+          : 'Invalid: ' + (data.error || 'rejected')
+    setEdit((e) => ({ ...e, test }))
   }
 
   const lockNow = async () => {
@@ -171,7 +187,16 @@ export default function TenantManager({ onClose }) {
               onChange={(e) => setAdd((a) => ({ ...a, groq: e.target.value }))}
             />
             {add.test && (
-              <div className={'mt-2 text-[11px] ' + (add.test.startsWith('Key valid') ? 'text-ok' : add.test === 'Testing…' ? 'text-dim' : 'text-crit')}>
+              <div
+                className={
+                  'mt-2 text-[11px] ' +
+                  (add.test.startsWith('Key valid')
+                    ? 'text-ok'
+                    : add.test === 'Testing…' || add.test.startsWith('Unverified')
+                      ? 'text-dim'
+                      : 'text-crit')
+                }
+              >
                 {add.test}
               </div>
             )}
@@ -197,7 +222,16 @@ export default function TenantManager({ onClose }) {
               autoFocus
             />
             {edit.test && (
-              <div className={'mt-2 text-[11px] ' + (edit.test.startsWith('Key valid') ? 'text-ok' : edit.test === 'Testing…' ? 'text-dim' : 'text-crit')}>
+              <div
+                className={
+                  'mt-2 text-[11px] ' +
+                  (edit.test.startsWith('Key valid')
+                    ? 'text-ok'
+                    : edit.test === 'Testing…' || edit.test.startsWith('Unverified')
+                      ? 'text-dim'
+                      : 'text-crit')
+                }
+              >
                 {edit.test}
               </div>
             )}

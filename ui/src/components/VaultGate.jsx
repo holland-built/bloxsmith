@@ -158,7 +158,11 @@ function FirstTenant({ onDone }) {
     if (!key) return
     setTest('Testing…')
     const { ok, data } = await vpost('/api/vault/test-key', { key })
-    setTest(ok && data.ok ? 'Key valid' + (data.name ? ' — ' + data.name : ' (no account name)') : 'Invalid: ' + (data.error || 'rejected'))
+    if (ok && data.ok) setTest('Key valid' + (data.name ? ' — ' + data.name : ' (no account name)'))
+    // unverified: the request never reached CSP (offline/VPN/proxy/timeout) —
+    // the key was never judged, so this must not read as "rejected".
+    else if (data.unverified) setTest('Unverified: could not verify — check connectivity and try again')
+    else setTest('Invalid: ' + (data.error || 'rejected'))
   }
 
   return (
@@ -200,7 +204,16 @@ function FirstTenant({ onDone }) {
         placeholder="gsk_… (can add later)"
       />
       {test && (
-        <div className={'mt-2 text-[11px] ' + (test.startsWith('Key valid') ? 'text-ok' : test === 'Testing…' ? 'text-dim' : 'text-crit')}>
+        <div
+          className={
+            'mt-2 text-[11px] ' +
+            (test.startsWith('Key valid')
+              ? 'text-ok'
+              : test === 'Testing…' || test.startsWith('Unverified')
+                ? 'text-dim'
+                : 'text-crit')
+          }
+        >
           {test}
         </div>
       )}

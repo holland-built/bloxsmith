@@ -12,8 +12,14 @@ func newTestStore(t *testing.T) *Store {
 	return New(t.TempDir())
 }
 
+// sig mirrors what BuildSignals hands StampFirstSeen in production: every
+// signal already carries a fabricated detected_at:now stamp (signals.go)
+// before StampFirstSeen ever runs. Without this, the degraded-path
+// assertions below ("detected_at must be absent") passed vacuously — there
+// was never a detected_at to begin with, fabricated or not, so the tests
+// could not have caught StampFirstSeen failing to delete it.
 func sig(category, entityID string) map[string]any {
-	return map[string]any{"category": category, "entity_id": entityID}
+	return map[string]any{"category": category, "entity_id": entityID, "detected_at": now()}
 }
 
 // First run: no first_seen.json on disk yet. This is a legitimate empty

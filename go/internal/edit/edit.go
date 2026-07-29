@@ -355,9 +355,16 @@ func (c *Client) DNSRecordUpdate(body M) (M, int) {
 		return M{"ok": false, "error": "invalid object id"}, 400
 	}
 
-	current, curStatus, _ := c.Rest.GetEx(objPath, nil)
+	current, curStatus, getErr := c.Rest.GetEx(objPath, nil)
 	curMap := asMap(current)
 	if curStatus != 200 || curMap == nil {
+		// A non-JSON (or otherwise undecodable) 200 body means the record
+		// almost certainly exists — GetEx just couldn't parse the response —
+		// so "record not found" would be a lie. Surface the real reason
+		// instead of discarding it.
+		if getErr != nil {
+			return M{"ok": false, "error": fmt.Sprintf("could not read current record before update: %v", getErr)}, statusOr(curStatus, 502)
+		}
 		return M{"ok": false, "error": fmt.Sprintf("record not found (status %d)", curStatus)}, statusOr(curStatus, 502)
 	}
 	curRecord := asMap(curMap["result"])
