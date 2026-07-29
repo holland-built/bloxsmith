@@ -242,79 +242,54 @@ jobs:
       # is what the script's launch gate keys on to skip opening a browser /
       # starting the app — so this step also exercises that gate, not just the
       # download+verify+install path.
+      # Run the installer and assert in ONE step, holding the output in a
+      # variable. Splitting them meant tee-ing to a file and re-reading it in a
+      # later step, and that handoff silently lost lines: 'checksum : ok' was
+      # reported absent from a log the console had visibly printed. Capturing
+      # once removes the file, its encoding, and the cross-step handoff.
       - name: install.ps1 installs the latest release, verifying both times
         shell: powershell
         run: |
-          # NOT 'Stop' around the native call: with ErrorActionPreference=Stop,
-          # the FIRST stderr line a child process writes is promoted to a
-          # terminating error, aborting the step before the rest of the message
-          # is captured. That is how the real parse error came back as a
-          # meaningless fragment. Capture everything, then judge the exit code.
           $ErrorActionPreference = 'Continue'
-          $log = "$env:RUNNER_TEMP\install.log"
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -Prefix "$env:RUNNER_TEMP\bx" 2>&1 |
-            Tee-Object -FilePath $log
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::install.ps1 exited $LASTEXITCODE on a clean install of the real latest release"
-            exit 1
-          }
+          $prefix = "$env:RUNNER_TEMP\bx"
+          $out = & powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -Prefix $prefix 2>&1 |
+                   ForEach-Object { $_.ToString() }
+          $code = $LASTEXITCODE
+          $text = ($out -join "`n")
+          Write-Host "--- installer output ---"
+          Write-Host $text
+          Write-Host "--- end installer output ---"
 
-      # A verification step that silently stops running still looks like a
-      # clean install from the outside — the log greps below exist because
-      # "it printed nothing but also didn't fail" must count as a failure.
-      - name: Assert signature + checksum were verified, and the binary works
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $log = "$env:RUNNER_TEMP\install.log"
-          if (-not (Test-Path -LiteralPath $log)) {
-            Write-Host "::error::install.log is missing (install step never produced output) — cannot confirm verification ran"
+          if ($code -ne 0) {
+            Write-Host "::error::install.ps1 exited $code on a clean install of the real latest release"
             exit 1
           }
-          # Print what we are actually asserting against. An assertion that
-          # fails without showing its input costs a whole CI round trip to
-          # diagnose, which is exactly what happened here.
-          Write-Host "--- install.log as captured ---"
-          Write-Host (Get-Content -Raw -Path $log)
-          Write-Host "--- end install.log ---"
-          $text = Get-Content -Raw -Path $log
-
-          if ($text -notmatch [regex]::Escape('signature: ok')) {
-            Write-Host "::error::install.log is present but 'signature: ok' is absent — signature verification did not run or was not printed"
-            exit 1
+          # Both verification lines must have actually PRINTED. A verify step
+          # that silently stops running still looks like a clean install.
+          foreach ($needle in @('signature: ok', 'checksum : ok')) {
+            if ($text -notmatch [regex]::Escape($needle)) {
+              Write-Host "::error::the installer succeeded but never printed '$needle' - verification did not run"
+              exit 1
+            }
           }
-          if ($text -notmatch [regex]::Escape('checksum : ok')) {
-            Write-Host "::error::install.log is present but 'checksum : ok' is absent — checksum verification did not run or was not printed"
-            exit 1
-          }
-
-          $exe = "$env:RUNNER_TEMP\bx\bloxsmith.exe"
+          $exe = Join-Path $prefix 'bloxsmith.exe'
           if (-not (Test-Path -LiteralPath $exe)) {
             Write-Host "::error::bloxsmith.exe is missing at $exe despite a zero exit code"
             exit 1
           }
-          $ver = & $exe --version 2>&1
+          $ver = (& $exe --version 2>&1 | ForEach-Object { $_.ToString() }) -join ' '
           if ($ver -notmatch '^bloxsmith \d+\.\d+\.\d+') {
-            Write-Host "::error::bloxsmith.exe --version output did not match '^bloxsmith \d+\.\d+\.\d+' — got: $ver"
+            Write-Host "::error::bloxsmith.exe --version did not match '^bloxsmith N.N.N' - got: $ver"
             exit 1
           }
-
-          # Step 7 (uninstall) proves the PATH entry is actually removed — that
-          # only means something if we first confirm it was actually added here.
+          # Prove the PATH entry was added, so the uninstall assertion means something.
           $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-          if (-not $userPath -or ($userPath -split ';') -notcontains "$env:RUNNER_TEMP\bx") {
-            Write-Host "::error::install.ps1 did not add $env:RUNNER_TEMP\bx to the user PATH"
+          if (-not $userPath -or (($userPath -split ';') -notcontains $prefix)) {
+            Write-Host "::error::install.ps1 did not add $prefix to the user PATH"
             exit 1
           }
-          Write-Host "signature: ok, checksum: ok, bloxsmith.exe --version ok, user PATH updated"
+          Write-Host "installed, both verifications printed, exe runs, PATH updated"
 
-      # The refusal paths matter more than the happy one: a check that cannot
-      # fail is decoration. A function named Invoke-WebRequest, defined in the
-      # SAME process as install.ps1 is run in, outranks the real cmdlet in
-      # PowerShell's command precedence — so a wrapper script that defines the
-      # function and then invokes install.ps1 in-process transparently serves
-      # local files instead of hitting the network, without install.ps1 taking
-      # a base-URL parameter or being modified at all.
       - name: install.ps1 refuses a tampered checksums.txt
         shell: powershell
         run: |
