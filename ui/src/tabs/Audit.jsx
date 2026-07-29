@@ -115,19 +115,29 @@ function ActionPill({ action }) {
   )
 }
 
-// The audit chain hashes each entry to the one before it, so an edited or
-// deleted line is detectable. /api/audit/log carries that verdict as three
-// states: chain_valid true (intact), chain_valid false + broken_index
-// (tampered), or chain_verify_error (the check itself could not run). A
-// fetch failure is folded into the same "could not verify" state — it must
-// never be allowed to read as "chain is fine" just because nothing loaded.
+// The audit chain hashes each entry to the one before it AND signs each entry
+// with a key held outside the log's directory, with a separately sealed record
+// of how many entries there should be — so an edited, deleted or truncated log
+// is detectable by something an attacker with write access cannot recompute.
+// /api/audit/log carries that verdict as three states: chain_valid true
+// (intact), chain_valid false + broken_index (tampered), or chain_verify_error
+// (the check itself could not run). A fetch failure is folded into the same
+// "could not verify" state — it must never be allowed to read as "chain is
+// fine" just because nothing loaded.
+//
+// The reason strings matter here. "could not verify" covers a lost or rotated
+// key as well as an unreadable file, and an operator who sees it needs to know
+// which — so chain_verify_error is shown, not just its existence. Likewise
+// broken_reason distinguishes a forged entry from a truncated tail.
 function ChainVerdict({ result, error, loading }) {
   const { COLORS } = useChartTheme()
   if (loading) return null
   if (error || result == null || result.chain_verify_error) {
+    const why = error ? 'the check could not be loaded' : result?.chain_verify_error
     return (
       <div className="text-[12px] font-medium mb-2" style={{ color: COLORS.warn }}>
         chain integrity could not be verified
+        {why ? <span className="font-normal text-dim"> — {why}</span> : null}
       </div>
     )
   }
@@ -135,11 +145,12 @@ function ChainVerdict({ result, error, loading }) {
     return (
       <div className="text-sm font-semibold mb-2" style={{ color: COLORS.crit }}>
         chain tampered — broken at entry #{result.broken_index}
+        {result.broken_reason ? <span className="font-normal text-[12px]"> — {result.broken_reason}</span> : null}
       </div>
     )
   }
   if (result.chain_valid === true) {
-    return <div className="text-[11px] text-dim mb-2">chain intact — no tampering detected</div>
+    return <div className="text-[11px] text-dim mb-2">chain intact — signature and entry count verified</div>
   }
   // Unrecognized shape: same rule as a fetch failure — don't imply "fine".
   return (
