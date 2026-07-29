@@ -175,44 +175,174 @@ curl --proto '=https' --tlsv1.2 -fsSLo "$WORK/$ASSET" "${BASE}/${ASSET}" \
 #    repository's GitHub Actions secrets. The public half is pinned in this
 #    script, so the thing that decides whether a release is genuine does NOT
 #    travel with the release — which is exactly what a checksum sitting beside
-#    the archive it validates can never do. Verified here when openssl supports
-#    raw Ed25519 (OpenSSL 3.x); macOS ships LibreSSL, which does not, so this
-#    degrades to a stated fact rather than a silent pass. The installed binary
-#    ALWAYS verifies this signature before a self-update, whatever openssl is on
-#    the machine (go/signing.go), so the automated path is never the weak one.
+#    the archive it validates can never do.
 #
-# 2. CHECKSUM. Proves the archive matches what was signed. On its own it catches
-#    a corrupt or truncated download and a broken mirror — nothing more.
+#    Two independent tools can check that signature, tried in this order:
+#      a) ssh-keygen -Y verify against an SSH-format signature
+#         (checksums.txt.sshsig). Preferred, because ssh-keygen ships by
+#         default on macOS, Linux, and Windows 10+ — that's what makes the
+#         check actually RUN on the platform most installs happen on, instead
+#         of being silently skipped.
+#      b) openssl pkeyutl -rawin against a raw Ed25519 signature
+#         (checksums.txt.ed25519). Kept as a fallback for hosts without a
+#         usable ssh-keygen, but it needs OpenSSL 3.x — macOS ships LibreSSL,
+#         which cannot do this, so (a) is what actually covers a stock Mac.
+#
+#    Releases from 3.23.0 onward always carry a signature (CI refuses to
+#    publish without one), so for "latest" or any pinned version >= 3.23.0 the
+#    signature is REQUIRED: no signature asset at all, a download that can't
+#    be checked (neither tool above is usable), or a signature that fails to
+#    verify all REFUSE the install rather than fall back to checksum-only.
+#    Falling back is not a degrade, it is the control turned off — an
+#    attacker who can write release assets would simply arrange the fallback
+#    by deleting the signature. The installed binary ALWAYS verifies this
+#    signature before a self-update (go/apply.go, go/signing.go); refusing
+#    here just brings the one-time install up to the same bar.
+#
+#    The one legitimate exception: a release pinned with --version to an exact
+#    tag OLDER than 3.23.0 genuinely predates signing. That is stated as a fact
+#    about that specific old release, never as "signing is unavailable."
+#
+# 2. CHECKSUM. Proves the archive matches what was signed (or, for a pinned
+#    pre-3.23.0 release, matches what was published). On its own it catches a
+#    corrupt or truncated download and a broken mirror — nothing more.
+SIG_SSH_PUBKEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILh1e4Aj8VwLy+7PBMzfkwqDa7amfqAgpSmF1sq4S+g9"
+
 SIG_PUBKEY_PEM="-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAL0O2g8iJMvkw7ZxIw1NGsD8Cb6X2H+LbFs3e/GYRG4k=
 -----END PUBLIC KEY-----"
 
+# 3.23.0 is when CI started refusing to publish a release without a signature.
+SIGNING_SINCE="3.23.0"
+
+# A bare "X.Y.Z" (optionally with a -suffix) at the front of $NUM; anything
+# else (a malformed --version, an unexpected checksums.txt format) cannot be
+# compared, so callers must fail closed rather than assume it's old.
+is_valid_semver() {
+    printf '%s' "$1" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'
+}
+
+# True (exit 0) if semver $1 >= semver $2. sort -V ships on both macOS and
+# Linux; whichever version sorts last is the greater one.
+version_ge() {
+    [ "$1" = "$2" ] && return 0
+    [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
+}
+
+# Decide once, up front, whether this install may proceed without a verified
+# signature. "latest" and anything >= SIGNING_SINCE must have one; an
+# unparseable $NUM is treated the same as "must have one" — fail closed, never
+# open.
+if [ "$VERSION" = "latest" ]; then
+    SIG_REQUIRED=yes
+elif ! is_valid_semver "$NUM"; then
+    SIG_REQUIRED=yes
+elif version_ge "$NUM" "$SIGNING_SINCE"; then
+    SIG_REQUIRED=yes
+else
+    SIG_REQUIRED=no
+fi
+
+# A failed download and a genuinely absent asset are different outcomes and
+# must not print the same way: curl -f exits 22 specifically on an HTTP error
+# (a real 404 — the asset does not exist), anything else is a network/local
+# failure that tells us nothing about whether the asset exists. Both
+# signature assets get the same treatment, fetched independently — a release
+# could in principle carry one format without the other.
+if curl --proto '=https' --tlsv1.2 -fsSLo "$WORK/checksums.txt.sshsig" \
+        "${BASE}/checksums.txt.sshsig" 2>/dev/null; then
+    SSHSIG_FETCH_RC=0
+else
+    SSHSIG_FETCH_RC=$?
+fi
+
 if curl --proto '=https' --tlsv1.2 -fsSLo "$WORK/checksums.txt.ed25519" \
         "${BASE}/checksums.txt.ed25519" 2>/dev/null; then
-    if command -v openssl >/dev/null 2>&1 && openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
-        printf '%s\n' "$SIG_PUBKEY_PEM" > "$WORK/relsign.pem"
-        if ! base64 -d < "$WORK/checksums.txt.ed25519" > "$WORK/checksums.sig" 2>/dev/null \
-           && ! base64 -D < "$WORK/checksums.txt.ed25519" > "$WORK/checksums.sig" 2>/dev/null; then
-            echo "error: could not decode checksums.txt.ed25519 — refusing to install" >&2
-            exit 1
-        fi
-        if openssl pkeyutl -verify -pubin -inkey "$WORK/relsign.pem" -rawin \
-                -in "$WORK/checksums.txt" -sigfile "$WORK/checksums.sig" >/dev/null 2>&1; then
-            echo "  signature: ok (ed25519, key pinned in this script)"
-        else
-            echo "error: RELEASE SIGNATURE DOES NOT VERIFY — refusing to install." >&2
-            echo "  checksums.txt was not signed by this project's release key." >&2
-            echo "  Do not retry blindly; report it at https://github.com/${REPO}/issues" >&2
-            exit 1
-        fi
+    SIG_FETCH_RC=0
+else
+    SIG_FETCH_RC=$?
+fi
+
+if command -v ssh-keygen >/dev/null 2>&1 && [ "$SSHSIG_FETCH_RC" -eq 0 ]; then
+    printf '%s %s\n' "bloxsmith-release-signing" "$SIG_SSH_PUBKEY" > "$WORK/allowed_signers"
+    if ssh-keygen -Y verify -f "$WORK/allowed_signers" -I bloxsmith-release-signing \
+            -n bloxsmith-release -s "$WORK/checksums.txt.sshsig" \
+            < "$WORK/checksums.txt" >/dev/null 2>&1; then
+        echo "  signature: ok (ssh-ed25519, key pinned in this script)"
     else
-        echo "  signature: present but NOT checked (this openssl cannot verify raw ed25519)"
+        echo "error: RELEASE SIGNATURE DOES NOT VERIFY — refusing to install." >&2
+        echo "  checksums.txt was not signed by this project's release key." >&2
+        echo "  Do not retry blindly; report it at https://github.com/${REPO}/issues" >&2
+        exit 1
+    fi
+elif command -v openssl >/dev/null 2>&1 && openssl pkeyutl -help 2>&1 | grep -q -- '-rawin' \
+        && [ "$SIG_FETCH_RC" -eq 0 ]; then
+    printf '%s\n' "$SIG_PUBKEY_PEM" > "$WORK/relsign.pem"
+    if ! base64 -d < "$WORK/checksums.txt.ed25519" > "$WORK/checksums.sig" 2>/dev/null \
+       && ! base64 -D < "$WORK/checksums.txt.ed25519" > "$WORK/checksums.sig" 2>/dev/null; then
+        echo "error: could not decode checksums.txt.ed25519 — refusing to install" >&2
+        exit 1
+    fi
+    if openssl pkeyutl -verify -pubin -inkey "$WORK/relsign.pem" -rawin \
+            -in "$WORK/checksums.txt" -sigfile "$WORK/checksums.sig" >/dev/null 2>&1; then
+        echo "  signature: ok (ed25519, key pinned in this script)"
+    else
+        echo "error: RELEASE SIGNATURE DOES NOT VERIFY — refusing to install." >&2
+        echo "  checksums.txt was not signed by this project's release key." >&2
+        echo "  Do not retry blindly; report it at https://github.com/${REPO}/issues" >&2
+        exit 1
+    fi
+elif [ "$SSHSIG_FETCH_RC" -eq 0 ] || [ "$SIG_FETCH_RC" -eq 0 ]; then
+    # At least one signature asset downloaded, but no available tool could
+    # check it: ssh-keygen is missing for .sshsig, or this openssl can't do
+    # raw Ed25519 for .ed25519. The signature exists — it's just unverifiable
+    # here, which is not the same thing as absent.
+    if [ "$SIG_REQUIRED" = yes ]; then
+        echo "error: release ${NUM} is signed, but nothing here can verify it —" >&2
+        echo "  refusing to install unverified." >&2
+        command -v ssh-keygen >/dev/null 2>&1 \
+            || echo "  ssh-keygen not found (ships by default on macOS/Linux/Windows 10+)" >&2
+        if ! command -v openssl >/dev/null 2>&1 || ! openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
+            echo "  openssl here cannot verify raw Ed25519 (needs OpenSSL 3.x); on macOS:" >&2
+            echo "    brew install openssl@3" >&2
+        fi
+        echo "  Do not retry blindly if this persists; report it at https://github.com/${REPO}/issues" >&2
+        exit 1
+    else
+        echo "  signature: present but NOT checked (no usable ssh-keygen or openssl here)"
         echo "             the installed binary verifies it on every self-update"
     fi
+elif [ "$SSHSIG_FETCH_RC" -eq 22 ] && [ "$SIG_FETCH_RC" -eq 22 ]; then
+    # Both signature assets are genuinely absent (real 404s, not fetch
+    # failures) — this release was never signed at all.
+    if [ "$SIG_REQUIRED" = yes ]; then
+        echo "error: release ${NUM} has no signature asset (checksums.txt.sshsig or" >&2
+        echo "  checksums.txt.ed25519) — refusing to install." >&2
+        echo "  Releases from ${SIGNING_SINCE} onward are always signed, so a signed" >&2
+        echo "  release with no signature asset cannot be authenticated." >&2
+        echo "  Do not retry blindly if this persists; report it at https://github.com/${REPO}/issues" >&2
+        exit 1
+    else
+        echo "  signature: none — release ${NUM} predates release signing (introduced in"
+        echo "             ${SIGNING_SINCE}); checksum only for this specific old release"
+    fi
 else
-    echo "  signature: none published for this release — checksum only"
-    echo "             (a checksum from the same release proves the download is intact,"
-    echo "              not that this project published it)"
+    # Neither asset downloaded, and at least one failure wasn't a 404 — a
+    # fetch problem (network/local), not evidence the release lacks a
+    # signature. Must not be reported the same way as a genuine absence.
+    if [ "$SIG_REQUIRED" = yes ]; then
+        echo "error: could not download the release signature (checksums.txt.sshsig" >&2
+        echo "  exit ${SSHSIG_FETCH_RC}, checksums.txt.ed25519 exit ${SIG_FETCH_RC}) —" >&2
+        echo "  refusing to install without verifying the signature. This is a fetch" >&2
+        echo "  failure, not a release that lacks a signature; check your network and retry." >&2
+        echo "  Do not retry blindly if this persists; report it at https://github.com/${REPO}/issues" >&2
+        exit 1
+    else
+        echo "  signature: could not be downloaded (checksums.txt.sshsig exit ${SSHSIG_FETCH_RC},"
+        echo "             checksums.txt.ed25519 exit ${SIG_FETCH_RC}); release ${NUM}"
+        echo "             predates release signing anyway (introduced in ${SIGNING_SINCE}),"
+        echo "             so continuing checksum only"
+    fi
 fi
 
 EXPECTED="$(awk -v f="$ASSET" '$2 == f || $2 == "*" f {print $1}' "$WORK/checksums.txt" | head -1)"

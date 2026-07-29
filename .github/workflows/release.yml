@@ -90,7 +90,15 @@ jobs:
       - name: Release signing key present
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
         run: |
+          if [ -z "$RELEASE_SSH_SIGNING_KEY" ]; then
+            echo "::error::RELEASE_SSH_SIGNING_KEY secret is not set — refusing to publish."
+            echo "install.sh prefers the ssh-keygen signature because OpenSSH ships by"
+            echo "default on macOS/Linux/Windows while OpenSSL 3.x does not; without this"
+            echo "asset a stock Mac cannot verify the release at all."
+            exit 1
+          fi
           if [ -z "$RELEASE_SIGNING_KEY" ]; then
             echo "::error::RELEASE_SIGNING_KEY secret is not set — refusing to publish an unsigned release."
             echo "Generate one with: cd go && go run ./tools/relsign keygen"
@@ -132,3 +140,32 @@ jobs:
             -in dist/checksums.txt -sig dist/checksums.txt.ed25519
           rm -f /tmp/relsign.key
           gh release upload "${GITHUB_REF_NAME}" dist/checksums.txt.ed25519 --clobber
+
+      # SSH-format signature over the SAME checksums.txt. Separate from the raw
+      # Ed25519 one on purpose: the compiled-in verifier in go/apply.go reads the
+      # raw form with no dependencies, while the installers read this one because
+      # ssh-keygen is present by default on macOS, Linux and Windows and OpenSSL
+      # 3.x is not — macOS ships LibreSSL, which cannot verify raw Ed25519 at all.
+      # A signature nobody on the platform can check is the control switched off.
+      - name: Sign and publish checksums.txt.sshsig
+        working-directory: go
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SSH_SIGNING_KEY: ${{ secrets.RELEASE_SSH_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$RELEASE_SSH_SIGNING_KEY" > /tmp/relsign_ssh
+          chmod 600 /tmp/relsign_ssh
+          ssh-keygen -Y sign -f /tmp/relsign_ssh -n bloxsmith-release dist/checksums.txt
+          # Verify what we are about to publish, against the public key exactly as
+          # install.sh pins it — a signing step that silently produced something
+          # unverifiable would look identical to a good one.
+          PUB="$(sed -n 's/.*SIG_SSH_PUBKEY="\(ssh-ed25519 [^"]*\)".*/\1/p' ../scripts/install.sh | head -1)"
+          [ -n "$PUB" ] || { echo "::error::could not read the pinned ssh key from scripts/install.sh"; exit 1; }
+          printf '%s %s\n' bloxsmith-release-signing "$(printf '%s' "$PUB" | awk '{print $1" "$2}')" > /tmp/allowed_signers
+          ssh-keygen -Y verify -f /tmp/allowed_signers -I bloxsmith-release-signing \
+            -n bloxsmith-release -s dist/checksums.txt.sig < dist/checksums.txt
+          mv dist/checksums.txt.sig dist/checksums.txt.sshsig
+          rm -f /tmp/relsign_ssh /tmp/allowed_signers
+          gh release upload "${GITHUB_REF_NAME}" dist/checksums.txt.sshsig --clobber
