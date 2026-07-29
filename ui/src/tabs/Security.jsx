@@ -376,7 +376,7 @@ function LookalikeTable({ lookalikes }) {
   return (
     <Card span={3} title="Lookalike Domains" right={<span className="text-[11px] text-muted">{rows.length} detected</span>}>
       {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error || d.unavailable || rows.length === 0 ? (
-        <Empty>{d.unavailable ? `not entitled — ${d.unavailable}` : 'no data'}</Empty>
+        <Empty>{d.unavailable ? (d.not_entitled ? `not entitled — ${d.unavailable}` : d.unavailable) : 'no data'}</Empty>
       ) : (
         <DataTable rows={rows} columns={columns} maxHeight={320} rowCap={150} />
       )}
@@ -392,6 +392,9 @@ function CtemPanel({ ctem }) {
   const d = ctem.data?.data ?? null
   const matrix = Array.isArray(d?.matrix) ? d.matrix : []
   const empty = !d || (!d.total_exposures && matrix.length === 0)
+  // CSPCtemExposure returns status:"error" at HTTP 200 on an upstream failure —
+  // the fetch itself never errors, so `ctem.error` alone never catches this.
+  const status = ctem.data?.status
 
   const columns = [
     {
@@ -415,7 +418,9 @@ function CtemPanel({ ctem }) {
 
   return (
     <Card span={3} title="CTEM Exposure" right={d?.total_exposures ? <span className="text-[11px] text-muted">{d.total_exposures.toLocaleString()} total</span> : null}>
-      {ctem.loading ? <Skeleton h={220} /> : ctem.error || empty ? <Empty /> : (
+      {ctem.loading ? <Skeleton h={220} /> : ctem.error || status === 'error' ? (
+        <FeedUnavailable label="CTEM exposure feed unavailable" />
+      ) : empty ? <Empty /> : (
         <DataTable rows={matrix} columns={columns} maxHeight={320} rowCap={150} />
       )}
     </Card>
@@ -585,6 +590,9 @@ function ExposuresPanel({ exposures }) {
 function AssetRiskPanel({ assetRisk }) {
   const raw = assetRisk.data?.data?.rows ?? []
   const count = assetRisk.data?.data?.count ?? raw.length
+  // CSPAssetRisk returns status:"error" at HTTP 200 on an upstream failure —
+  // the fetch itself never errors, so `assetRisk.error` alone never catches this.
+  const status = assetRisk.data?.status
   const rows = useMemo(
     () => [...raw].sort((a, b) => (Number(b.exposures) || 0) - (Number(a.exposures) || 0)),
     [raw],
@@ -601,7 +609,9 @@ function AssetRiskPanel({ assetRisk }) {
 
   return (
     <Card span={4} title="Asset Risk" right={count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null}>
-      {assetRisk.loading ? <Skeleton h={260} /> : assetRisk.error || rows.length === 0 ? (
+      {assetRisk.loading ? <Skeleton h={260} /> : assetRisk.error || status === 'error' ? (
+        <FeedUnavailable label="Asset risk feed unavailable" />
+      ) : rows.length === 0 ? (
         <Empty>no asset risk data</Empty>
       ) : (
         <DataTable rows={rows} columns={columns} maxHeight={360} rowCap={150} rowKey={(r, i) => `${r.domain_name}|${r.ip_address}|${i}`} />
@@ -699,6 +709,9 @@ function summarizeArr(arr, n = 6) {
 function CtemAssetsPanel({ ctemAssets }) {
   const d = ctemAssets.data?.data ?? null
   const assetCount = d?.asset_count
+  // CSPCtemAssets returns status:"error" at HTTP 200 on an upstream failure —
+  // the fetch itself never errors, so `ctemAssets.error` alone never catches this.
+  const status = ctemAssets.data?.status
 
   const groups = useMemo(() => {
     if (!d) return []
@@ -718,7 +731,9 @@ function CtemAssetsPanel({ ctemAssets }) {
       title="CTEM Assets"
       right={assetCount ? <span className="text-[11px] text-muted">{assetCount.toLocaleString()} assets</span> : null}
     >
-      {ctemAssets.loading ? <Skeleton h={260} /> : ctemAssets.error || empty ? (
+      {ctemAssets.loading ? <Skeleton h={260} /> : ctemAssets.error || status === 'error' ? (
+        <FeedUnavailable label="CTEM assets feed unavailable" />
+      ) : empty ? (
         <Empty>no CTEM asset data</Empty>
       ) : (
         <div className="flex flex-col gap-3">

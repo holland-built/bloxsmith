@@ -22,16 +22,27 @@ import (
 // FetchActions is fetch_actions: IQ Actions (SOC incidents) via the
 // iq-actions_list_actions MCP tool. Never raises — degrades to an
 // {"actions":[],"unavailable":...} shape.
+//
+// availability distinguishes a genuinely failed read (transport/init error,
+// or an unrecognised response shape — actionsAsync's ok=false, or a non-map
+// result) from a genuinely empty tenant (a real, successful zero-action
+// response), the same way FetchDNSAnalytics/FetchHostMetrics/FetchHubSecurity
+// already do. sourceFetch's "incidents" case (sources.go) reads this field to
+// decide whether to propagate an error, rather than trusting the mere
+// presence of "unavailable" — which, before this field existed, was also set
+// on a genuine empty tenant and so could not tell the two apart.
 func (s *Service) FetchActions(ctx context.Context) map[string]any {
 	raw, ok := s.actionsAsync(ctx)
 	if !ok {
 		return map[string]any{"actions": []any{},
-			"unavailable": "IQ Actions service unavailable (upstream error)."}
+			"unavailable":  "IQ Actions service unavailable (upstream error).",
+			"availability": "unavailable"}
 	}
 	data, isMap := raw.(map[string]any)
 	if !isMap {
 		return map[string]any{"actions": []any{},
-			"unavailable": "IQ Actions returned unexpected data."}
+			"unavailable":  "IQ Actions returned unexpected data.",
+			"availability": "unavailable"}
 	}
 	if v, has := data["actions"]; !has || v == nil {
 		data["actions"] = []any{}
@@ -41,6 +52,7 @@ func (s *Service) FetchActions(ctx context.Context) map[string]any {
 			data["unavailable"] = "No IQ Actions (SOC incidents) for this tenant."
 		}
 	}
+	data["availability"] = "ok"
 	return data
 }
 
@@ -186,23 +198,37 @@ func (s *Service) UpdateAction(ctx context.Context, id, status string) (map[stri
 // FetchInsights is fetch_insights: the direct REST /api/v1/insights read (the
 // SecurityActionSummaryView cube is dead server-side). Degrades to
 // {"data":[],"unavailable":...}; never fabricates.
+//
+// A failed read (network error, bad status, unparseable/unexpected body) must
+// never collapse into the "No SOC Insights ... in the last 30 days for this
+// tenant." wording — that sentence asserts a fact about the tenant's data,
+// which a failed read has no basis to claim. It now goes through GetPageStrict
+// so the failure is distinguishable from a genuine zero-row response, and a
+// failure is NOT written to the ~5 min cache (SetGen only runs on the success
+// path) so a transient outage can't freeze a false "no insights" state for
+// the cache's lifetime.
 func (s *Service) FetchInsights() map[string]any {
 	ck := cache.Key("insights", "", nil, false)
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
 	}
 	g := s.Cache.Gen()
-	raw, _, _ := s.Rest.GetEx("/api/v1/insights", nil)
-	var rows []any
-	if m, ok := raw.(map[string]any); ok {
-		rows = asSlice(m["insightList"])
+	_, body, err := s.Rest.GetPageStrict("/api/v1/insights", nil)
+	if err != nil {
+		return map[string]any{
+			"data":         []any{},
+			"unavailable":  "SOC Insights (security actions) unavailable (upstream error).",
+			"availability": "unavailable",
+		}
 	}
+	rows := asSlice(body["insightList"])
 	var result map[string]any
 	if len(rows) > 0 {
-		result = map[string]any{"data": normInsights(rows)}
+		result = map[string]any{"data": normInsights(rows), "availability": "ok"}
 	} else {
 		result = map[string]any{"data": []any{},
-			"unavailable": "No SOC Insights (security actions) in the last 30 days for this tenant."}
+			"unavailable":  "No SOC Insights (security actions) in the last 30 days for this tenant.",
+			"availability": "ok"}
 	}
 	s.Cache.SetGen(ck, result, g)
 	return result
@@ -400,12 +426,25 @@ func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 // --- Threat Lookup (server.py threat_lookup 4551 / _threat_lookup_async) -----
 
 // ThreatLookup is threat_lookup: network_entity_search over one query string.
+//
+// s.Mcp.Search returns nil on a failed search (no MCP client, a failed
+// Initialize, a transport error, a non-2xx, or an unparseable/unexpected
+// payload) and a non-nil (possibly empty) slice on a genuine search — see
+// mcp.go's Search doc. Collapsing both to entities:[] (the prior behavior)
+// made a dead search render identically to a real "no matches" in the UI
+// (EntitiesTable). availability distinguishes them for the caller the same
+// way FetchDNSAnalytics/FetchHostMetrics/FetchHubSecurity already do; the
+// "entities" field itself is unchanged so existing callers keep working.
 func (s *Service) ThreatLookup(ctx context.Context, query string) map[string]any {
-	entities := []any{}
 	if s.Mcp != nil && s.Mcp.Initialize(ctx) == nil {
 		if hits := s.Mcp.Search(ctx, query); hits != nil {
-			entities = hits
+			return map[string]any{"entities": hits, "query": query, "availability": "ok"}
 		}
 	}
-	return map[string]any{"entities": entities, "query": query}
+	return map[string]any{
+		"entities":     []any{},
+		"query":        query,
+		"availability": "unavailable",
+		"reason":       "Entity search (network_entity_search) unavailable (upstream error).",
+	}
 }

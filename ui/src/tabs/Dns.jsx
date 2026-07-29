@@ -30,7 +30,7 @@ export default function Dns() {
       <h1 className="text-lg font-semibold tracking-tight mb-3">DNS</h1>
       <CardGrid>
         <QpsHero qps={qps} />
-        <ZoneKpis zones={zones} />
+        <ZoneKpis zones={zones} zonesStatus={zonesStatus} />
         <DnsServices services={services} />
         <QueryVolume7d analytics={analytics} />
         <ZoneTable zones={zones} issuesOnly={!!hp.issues} zonesStatus={zonesStatus} />
@@ -101,8 +101,18 @@ function QpsHero({ qps }) {
 
 // ---------- zone kpis ----------
 
-function ZoneKpis({ zones }) {
+function ZoneKpis({ zones, zonesStatus }) {
   const { COLORS } = useChartTheme()
+  // All three cells read the same `zones` feed — a dead read means none of
+  // these counts are known, not that they're all zero.
+  if (zones.length === 0 && zonesStatus === 'error') {
+    return (
+      <Card span={2} className="flex flex-col justify-between">
+        <FeedUnavailable label="DNS zones feed unavailable" />
+      </Card>
+    )
+  }
+
   const issueCount = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length
   const anomalyCount = zones.filter((z) => z.anomaly).length
 
@@ -309,6 +319,9 @@ function DnssecHealth({ dnssec }) {
   const { COLORS } = useChartTheme()
   const rows = dnssec.data?.rows ?? []
   const total = dnssec.data?.count ?? rows.length
+  // CSPDnssec returns status:"error" at HTTP 200 on an upstream failure — the
+  // fetch itself never errors, so `dnssec.error` alone never catches this.
+  const status = dnssec.data?.status
 
   const signedCount = rows.filter((r) => r.dnssec_status === 'SIGNED').length
   const unsignedCount = rows.filter((r) => r.dnssec_status === 'UNSIGNED').length
@@ -347,8 +360,10 @@ function DnssecHealth({ dnssec }) {
     >
       {dnssec.loading ? (
         <Skeleton h={280} />
-      ) : dnssec.error || rows.length === 0 ? (
-        <Empty>{dnssec.error ? 'DNSSEC feed unavailable' : 'no DNSSEC data'}</Empty>
+      ) : dnssec.error || status === 'error' ? (
+        <FeedUnavailable label="DNSSEC feed unavailable" />
+      ) : rows.length === 0 ? (
+        <Empty>no DNSSEC data</Empty>
       ) : (
         <>
           <div className="flex items-center gap-4 my-2">
@@ -383,6 +398,8 @@ function DnssecHealth({ dnssec }) {
 function RpzPanel({ rpz }) {
   const rows = rpz.data?.rows ?? []
   const total = rpz.data?.count ?? rows.length
+  // Same errRows() contract as DnssecHealth — status:"error" at HTTP 200.
+  const status = rpz.data?.status
 
   const tableRows = rows.map((r, i) => ({
     fqdn: r.fqdn,
@@ -405,8 +422,10 @@ function RpzPanel({ rpz }) {
     <Card span={3} title="RPZ Policy Zones" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} zones` : ''}</span>}>
       {rpz.loading ? (
         <Skeleton h={200} />
-      ) : rpz.error || rows.length === 0 ? (
-        <Empty>{rpz.error ? 'RPZ feed unavailable' : 'no RPZ zones'}</Empty>
+      ) : rpz.error || status === 'error' ? (
+        <FeedUnavailable label="RPZ feed unavailable" />
+      ) : rows.length === 0 ? (
+        <Empty>no RPZ zones</Empty>
       ) : (
         <DataTable rows={tableRows} columns={columns} maxHeight={260} rowKey={(r) => r._k} />
       )}
@@ -419,6 +438,8 @@ function RpzPanel({ rpz }) {
 function DtcLbdnPanel({ dtcLbdn }) {
   const rows = dtcLbdn.data?.rows ?? []
   const total = dtcLbdn.data?.count ?? rows.length
+  // Same errRows() contract as DnssecHealth/RpzPanel — status:"error" at HTTP 200.
+  const status = dtcLbdn.data?.status
 
   const tableRows = rows.map((r, i) => ({
     name: r.name,
@@ -441,8 +462,10 @@ function DtcLbdnPanel({ dtcLbdn }) {
     <Card span={3} title="DTC Load-Balanced Names" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} names` : ''}</span>}>
       {dtcLbdn.loading ? (
         <Skeleton h={200} />
-      ) : dtcLbdn.error || rows.length === 0 ? (
-        <Empty>{dtcLbdn.error ? 'DTC LBDN feed unavailable' : 'no LBDN records'}</Empty>
+      ) : dtcLbdn.error || status === 'error' ? (
+        <FeedUnavailable label="DTC LBDN feed unavailable" />
+      ) : rows.length === 0 ? (
+        <Empty>no LBDN records</Empty>
       ) : (
         <DataTable rows={tableRows} columns={columns} maxHeight={260} rowKey={(r) => r._k} />
       )}

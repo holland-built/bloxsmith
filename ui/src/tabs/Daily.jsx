@@ -18,7 +18,7 @@ export default function Daily() {
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Daily Briefing</h1>
       <CardGrid>
-        <IssueKpis subnets={subnets} hosts={hosts} zones={zones} totals={totals} loading={data.loading} />
+        <IssueKpis subnets={subnets} hosts={hosts} zones={zones} totals={totals} meta={meta} loading={data.loading} />
         <SecurityToday sec={sec} />
         <TopCapacityRisks subnets={subnets} loading={data.loading} subnetsStatus={meta.subnets} />
         <HostsAttention hosts={hosts} loading={data.loading} hostsStatus={meta.hosts} />
@@ -30,7 +30,7 @@ export default function Daily() {
 
 // ---------- KPI cards ----------
 
-function IssueKpis({ subnets, hosts, zones, loading }) {
+function IssueKpis({ subnets, hosts, zones, meta = {}, loading }) {
   const { COLORS } = useChartTheme()
   // `subnets` (data.subnets) is the union of the first-5,000 page and every
   // subnet with util >= 70, deduped. That union is COMPLETE for any threshold
@@ -42,10 +42,12 @@ function IssueKpis({ subnets, hosts, zones, loading }) {
   const notOnline = hosts.filter((h) => !/online|active/i.test(h.status || '')).length
   const zoneIssues = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length
 
+  // Each KPI reads a DIFFERENT feed (subnets/hosts/zones) — one can be dead
+  // while the other two are fine, so the gate is per-row, not per-card.
   const cells = [
-    { label: 'Subnets >85% Util', value: gt85, color: COLORS.crit, hash: 'network?minUtil=85' },
-    { label: 'Hosts Not Online', value: notOnline, color: COLORS.warn, hash: 'infra?status=error' },
-    { label: 'DNS Zones w/ Issues', value: zoneIssues, color: COLORS.other, hash: 'dns?issues=1' },
+    { label: 'Subnets >85% Util', value: gt85, color: COLORS.crit, hash: 'network?minUtil=85', status: meta.subnets },
+    { label: 'Hosts Not Online', value: notOnline, color: COLORS.warn, hash: 'infra?status=error', status: meta.hosts },
+    { label: 'DNS Zones w/ Issues', value: zoneIssues, color: COLORS.other, hash: 'dns?issues=1', status: meta.zones },
   ]
 
   return (
@@ -53,21 +55,28 @@ function IssueKpis({ subnets, hosts, zones, loading }) {
       {loading ? (
         <Skeleton h={160} />
       ) : (
-        cells.map((c, i) => (
-          <div
-            key={c.label}
-            role="button"
-            tabIndex={0}
-            onClick={() => { location.hash = c.hash }}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
-            className={`flex items-center justify-between py-3.5 cursor-pointer hover:bg-line ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
-          >
-            <div className="text-muted text-xs">{c.label}</div>
-            <div className="text-2xl font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
-              {c.value.toLocaleString()}
+        cells.map((c, i) => {
+          const unavailable = c.status === 'error'
+          return (
+            <div
+              key={c.label}
+              role="button"
+              tabIndex={0}
+              onClick={() => { location.hash = c.hash }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
+              className={`flex items-center justify-between py-3.5 cursor-pointer hover:bg-line ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
+            >
+              <div className="text-muted text-xs">{c.label}</div>
+              {unavailable ? (
+                <div className="text-xs font-semibold text-right" style={{ color: COLORS.crit }}>unavailable</div>
+              ) : (
+                <div className="text-2xl font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
+                  {c.value.toLocaleString()}
+                </div>
+              )}
             </div>
-          </div>
-        ))
+          )
+        })
       )}
     </Card>
   )
@@ -90,6 +99,8 @@ function SecurityToday({ sec }) {
     <Card span={4} title="Security Today" right={<span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
       {sec.loading ? (
         <Skeleton h={160} />
+      ) : sec.data?.availability === 'unavailable' ? (
+        <FeedUnavailable reason={sec.data?.reason} label="Threat feed unavailable" />
       ) : sec.error || (!sec.data) ? (
         <Empty />
       ) : (

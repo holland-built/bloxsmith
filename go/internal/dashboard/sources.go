@@ -338,14 +338,32 @@ func (s *Service) sourceFetch(ctx context.Context, sid string, p map[string]stri
 		}
 		return normRoaming(raw), nil
 	case "incidents":
-		return normIncidents(s.FetchActions(ctx)), nil
+		// FetchActions already knows when the upstream read failed: it marks
+		// availability:"unavailable" (upstream error) vs "ok" (genuine
+		// result, including a real zero). Propagate that instead of handing
+		// normIncidents a failure disguised as an empty actions list.
+		data := s.FetchActions(ctx)
+		if data["availability"] == "unavailable" {
+			return nil, fmt.Errorf("%s", getStr(data["unavailable"]))
+		}
+		return normIncidents(data), nil
 	case "anomaly_events":
-		return toAnyN(anyToMaps(s.FetchHubSecurity(3600, 200)["events"])), nil
+		// FetchHubSecurity reports the same availability/reason shape as
+		// FetchDNSAnalytics/FetchHostMetrics for a dead threat-event feed.
+		data := s.FetchHubSecurity(3600, 200)
+		if data["availability"] == "unavailable" {
+			return nil, fmt.Errorf("%s", getStr(data["reason"]))
+		}
+		return toAnyN(anyToMaps(data["events"])), nil
 	case "entity_search":
 		if p["q"] == "" {
 			return []any{}, nil
 		}
-		return asSlice(s.ThreatLookup(ctx, p["q"])["entities"]), nil
+		result := s.ThreatLookup(ctx, p["q"])
+		if result["availability"] == "unavailable" {
+			return nil, fmt.Errorf("%s", getStr(result["reason"]))
+		}
+		return asSlice(result["entities"]), nil
 	}
 	return nil, nil
 }

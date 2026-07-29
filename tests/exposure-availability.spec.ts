@@ -30,7 +30,10 @@ const IPS_OK = {
 const IPS_DEGRADED = {
   availability: 'metadata-degraded',
   status: 'ok',
-  data: { rows: [{ ip: '198.51.100.1' }], count: 46963 }, // count here is rows fetched, not a total
+  // csp.go's exposureFeedResp always sets count: len(rows) — the server can
+  // never emit a count that outruns the rows array. The real degraded signal
+  // is the ABSENCE of a total_available key, not an inflated count.
+  data: { rows: [{ ip: '198.51.100.1' }], count: 1 },
 };
 const IPS_DEAD = {
   availability: 'unavailable',
@@ -86,7 +89,11 @@ test.describe('Exposed Surface panel — availability branching', () => {
     await mockSurface(page, HOSTNAMES_OK, IPS_DEGRADED);
     await page.goto('/#security');
     const card = page.locator('text=Exposed Surface').locator('..').locator('..');
-    await expect(card.getByText(/rows loaded/i).first()).toBeVisible();
+    // Pin the exact rendered string (not a loose /rows loaded/i, which would
+    // match any number) — with 1 row and no total_available, countLabel must
+    // render "1 rows loaded", never "46,963" or any other total-shaped value.
+    await expect(card.getByText('Showing 1 of 1 rows loaded')).toBeVisible();
+    await expect(card.getByText('1 rows loaded IPs')).toBeVisible();
   });
 });
 

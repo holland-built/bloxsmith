@@ -196,6 +196,41 @@ func TestBlockDomain_WriteAcceptedButReadBackNeverShowsDomain_Unverified(t *test
 	}
 }
 
+// TestBlockDomain_ReadBackAlwaysErrors_YieldsUnverifiedNeverVerifiedOrRejected
+// pins the case that differs from the "read succeeds but domain absent" test
+// above: every read-back GET itself fails (HTTP 500, not a well-formed
+// "domain not there yet" body). verifyState's retry loop treats a read error
+// the same as a non-match and simply exhausts its budget, so the outcome
+// must land on "unverified" — the write was submitted and its result is
+// simply unknown. It must NOT be "verified" (we never observed the domain
+// present) and must NOT be "rejected" (the write itself was never refused;
+// only the confirmation read failed, and "rejected" is reserved for a
+// transport-level refusal of the WRITE — see
+// TestBlockDomain_WriteRejectedYieldsRejectedOutcome).
+func TestBlockDomain_ReadBackAlwaysErrors_YieldsUnverifiedNeverVerifiedOrRejected(t *testing.T) {
+	var readCalls int32
+	s := newSecurityTestService(t, http.StatusOK, `{"message":"patched"}`, func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&readCalls, 1)
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	got := s.BlockDomain(context.Background(), "evil.example.com", testBlockListID)
+
+	if got["outcome"] != "unverified" {
+		t.Fatalf("outcome = %v, want unverified: %+v", got["outcome"], got)
+	}
+	if got["ok"] != false {
+		t.Fatalf("ok = %v, want false: %+v", got["ok"], got)
+	}
+	msg, _ := got["error"].(string)
+	if !strings.Contains(msg, "refresh") {
+		t.Fatalf("unverified message should tell operator to refresh, got: %q", msg)
+	}
+	if n := atomic.LoadInt32(&readCalls); n < 2 {
+		t.Fatalf("expected the read-back retry loop to run (>=2 attempts) even though every read errors, got %d", n)
+	}
+}
+
 func TestUnblockDomain_VerifiedWhenDomainAbsent(t *testing.T) {
 	s := newSecurityTestService(t, http.StatusOK, `{"message":"deleted"}`, func(w http.ResponseWriter, r *http.Request) {
 		namedListBody(w, "other.example.com")

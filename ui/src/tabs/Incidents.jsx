@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 
 // ---------- severity vocab ----------
@@ -73,10 +73,19 @@ export default function Incidents() {
   // signals is capped server-side (SignalsCap); signals_total is the true pre-cap count.
   const signalsTotal = Number.isFinite(incApi.data?.signals_total) ? incApi.data.signals_total : signals.length
   const signalsTruncated = !!incApi.data?.signals_truncated
+  // true when subnets/zones/leases — the feeds BuildSignals reads — didn't all
+  // read cleanly; a zero-signal result under this condition is NOT a clean
+  // estate, it's an unverified one (see dashboard.SignalsMeta).
+  const signalsDegraded = !!incApi.data?.signals_degraded
+  const incidentsMeta = incApi.data?._meta ?? {}
 
   const actionsRows = Array.isArray(actionsApi.data)
     ? actionsApi.data
     : actionsApi.data?.actions || actionsApi.data?.results || actionsApi.data?.data || []
+  // FetchActions degrades to {actions:[], availability:"unavailable"} on a
+  // dead upstream — a genuinely empty tenant stays availability:"ok" with its
+  // own "unavailable" NOTE string, so only the availability flag disambiguates.
+  const actionsUnavailable = actionsApi.data?.availability === 'unavailable'
 
   function toggleAck(s) {
     const k = ackKey(s)
@@ -119,7 +128,7 @@ export default function Incidents() {
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Incidents</h1>
       <CardGrid>
-        <CategoryChips categories={categories} loading={incApi.loading} category={category} onCategory={setCategory} />
+        <CategoryChips categories={categories} loading={incApi.loading} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
         <SeverityKpis signals={signals} truncated={signalsTruncated} loading={incApi.loading} />
         <IncidentsTable
           signals={signals}
@@ -127,6 +136,8 @@ export default function Incidents() {
           signalsTruncated={signalsTruncated}
           loading={incApi.loading}
           error={incApi.error}
+          degraded={signalsDegraded}
+          meta={incidentsMeta}
           category={category}
           onCategory={setCategory}
           acks={acks}
@@ -137,12 +148,13 @@ export default function Incidents() {
           rows={actionsRows}
           loading={actionsApi.loading}
           error={actionsApi.error}
+          unavailable={actionsUnavailable}
           statusState={actionStatusState}
           onSetStatus={setActionStatus}
           openActionId={openActionId}
           onOpenAction={setOpenActionId}
         />
-        <ActionTrendStrip rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} />
+        <ActionTrendStrip rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} unavailable={actionsUnavailable} />
       </CardGrid>
     </div>
   )
@@ -150,12 +162,18 @@ export default function Incidents() {
 
 // ---------- category chips ----------
 
-function CategoryChips({ categories, loading, category, onCategory }) {
+function CategoryChips({ categories, loading, category, onCategory, degraded, meta = {} }) {
   const { COLORS } = useChartTheme()
+  const failed = Object.entries(meta).filter(([, v]) => v === 'error').map(([k]) => k)
   return (
     <Card span={6} title="Categories" note="click to filter Triage">
       {loading ? (
         <Skeleton h={40} />
+      ) : categories.length === 0 && degraded ? (
+        <FeedUnavailable
+          label="Category check incomplete"
+          reason={failed.length ? `feeds unavailable: ${failed.join(', ')}` : undefined}
+        />
       ) : categories.length === 0 ? (
         <Empty>no active categories</Empty>
       ) : (
@@ -224,9 +242,10 @@ function SeverityKpis({ signals, truncated, loading }) {
 
 // ---------- incidents table ----------
 
-function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, error, category, onCategory, acks, onToggleAck, onClearAcks }) {
+function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, error, degraded, meta = {}, category, onCategory, acks, onToggleAck, onClearAcks }) {
   const { COLORS } = useChartTheme()
   const [filter, setFilter] = useState('')
+  const failedFeeds = Object.entries(meta).filter(([, v]) => v === 'error').map(([k]) => k)
 
   // Filter, then default-order newest-first; DataTable takes over once a header is clicked.
   const rows = useMemo(() => {
@@ -303,12 +322,22 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
         <Skeleton h={280} />
       ) : error ? (
         <Empty>failed to load incidents</Empty>
+      ) : signals.length === 0 && degraded ? (
+        <FeedUnavailable
+          label="Check could not be completed"
+          reason={failedFeeds.length ? `feeds unavailable: ${failedFeeds.join(', ')}` : 'one or more feeds failed'}
+        />
       ) : signals.length === 0 ? (
         <Empty>no issues detected — all metrics within normal thresholds</Empty>
       ) : rows.length === 0 ? (
         <Empty>no signals match</Empty>
       ) : (
         <>
+          {degraded && (
+            <div className="text-[11px] mb-1.5" style={{ color: COLORS.warn }}>
+              incomplete check — {failedFeeds.length ? `could not read: ${failedFeeds.join(', ')}` : 'one or more feeds failed'}, some issues may be missing
+            </div>
+          )}
           {signalsTruncated && (
             <div className="text-[11px] text-muted mb-1.5">
               showing {signals.length.toLocaleString()} of {signalsTotal.toLocaleString()} signals — filter to narrow
@@ -330,7 +359,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
 
 // ---------- SOC action queue ----------
 
-function SocQueue({ rows, loading, error, statusState, onSetStatus, openActionId, onOpenAction }) {
+function SocQueue({ rows, loading, error, unavailable, statusState, onSetStatus, openActionId, onOpenAction }) {
   const { COLORS } = useChartTheme()
   const columns = [
     {
@@ -386,6 +415,8 @@ function SocQueue({ rows, loading, error, statusState, onSetStatus, openActionId
     <Card span={2} title="SOC Queue" note="IQ Actions" right={right}>
       {loading ? (
         <Skeleton h={280} />
+      ) : unavailable ? (
+        <FeedUnavailable label="IQ Actions feed unavailable" />
       ) : error ? (
         <Empty>failed to load actions</Empty>
       ) : rows.length === 0 ? (
@@ -442,7 +473,7 @@ function ActionDetailDrawer({ actionId, onClose }) {
 
 // ---------- action volume trend strip ----------
 
-function ActionTrendStrip({ rows, loading, error }) {
+function ActionTrendStrip({ rows, loading, error, unavailable }) {
   const { COLORS } = useChartTheme()
 
   const { byDay, byPriority } = useMemo(() => {
@@ -467,6 +498,8 @@ function ActionTrendStrip({ rows, loading, error }) {
     <Card span={2} title="Action Volume" note="by day">
       {loading ? (
         <Skeleton h={220} />
+      ) : unavailable ? (
+        <FeedUnavailable label="IQ Actions feed unavailable" />
       ) : error ? (
         <Empty>failed to load actions</Empty>
       ) : rows.length === 0 ? (

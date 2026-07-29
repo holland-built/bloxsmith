@@ -22,14 +22,11 @@ func feedStatusHandler(t *testing.T, overrides map[string]http.HandlerFunc) http
 		q := r.URL.Query()
 		if r.URL.Path == "/api/ddi/v1/ipam/subnet" || r.URL.Path == "/api/infra/v1/detail_hosts" {
 			// The count queries (fetchCount, always _limit=1) and the
-			// at-risk fetch (_filter>=70) treat page.total_size=="0" as
-			// unparseable (pageTotalSize's n<=0 guard) and would flip
-			// _totals[degraded] for a reason unrelated to feed status, so
-			// they get a non-zero total_size here with zero rows — that's
-			// enough to make fetchCount/fetchAtRiskSubnets succeed while
-			// the feed itself still reports "empty".
+			// at-risk fetch (_filter>=70) get an explicit page.total_size of
+			// "0" alongside zero rows — the real shape of a genuinely empty
+			// feed (pageTotalSize parses "0" as 0; only n < 0 is rejected).
 			if q.Get("_limit") == "1" || q.Get("_filter") == "utilization.utilization>=70" {
-				writeResultsWithPage(w, nil, map[string]any{"total_size": "1"})
+				writeResultsWithPage(w, nil, map[string]any{"total_size": "0"})
 				return
 			}
 		}

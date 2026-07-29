@@ -69,7 +69,13 @@ func TestVerifyPythonWrittenChain(t *testing.T) {
 	exp := loadExpected(t)
 	l := New(filepath.Join("testdata", "audit_log.jsonl"), "app-v1.2.3", "ab12cd34")
 
-	entries := l.Read()
+	entries, skipped, err := l.Read()
+	if err != nil {
+		t.Fatalf("Read() error: %v", err)
+	}
+	if skipped != 0 {
+		t.Fatalf("want 0 skipped, got %d", skipped)
+	}
 	if len(entries) != 3 {
 		t.Fatalf("want 3 entries, got %d", len(entries))
 	}
@@ -150,7 +156,129 @@ func TestGoWrittenChainVerifies(t *testing.T) {
 	if v, _ := res["valid"].(bool); !v {
 		t.Fatalf("Go-written chain failed self-verify: %v", res)
 	}
-	if n := len(l.Read()); n != 2 {
+	entries, skipped, err := l.Read()
+	if err != nil {
+		t.Fatalf("Read() error: %v", err)
+	}
+	if skipped != 0 {
+		t.Fatalf("want 0 skipped, got %d", skipped)
+	}
+	if n := len(entries); n != 2 {
 		t.Fatalf("want 2 entries, got %d", n)
+	}
+}
+
+// TestVerifyEmptyLogIsValid: a missing/never-written log file is a genuinely
+// empty chain, not a read failure — it must still verify as intact.
+func TestVerifyEmptyLogIsValid(t *testing.T) {
+	dir := t.TempDir()
+	l := New(filepath.Join(dir, "audit_log.jsonl"), "app-v1.2.3", "ab12cd34")
+
+	res := l.Verify()
+	if v, _ := res["valid"].(bool); !v {
+		t.Fatalf("Verify() on empty log = %v, want valid", res)
+	}
+	if res["broken_index"] != nil {
+		t.Fatalf("broken_index = %v, want nil", res["broken_index"])
+	}
+	if _, ok := res["verify_error"]; ok {
+		t.Fatalf("verify_error present on a valid empty log: %v", res)
+	}
+}
+
+// TestVerifyUnreadableFileCannotVerify: when the log cannot even be opened
+// (here: the path is a directory, so os.Open succeeds but reading from it
+// fails), Verify() must report "could not verify" — never "valid": true, and
+// never conflated with a broken/tampered chain (broken_index must stay nil).
+func TestVerifyUnreadableFileCannotVerify(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit_log.jsonl")
+	if err := os.Mkdir(logPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	l := New(logPath, "app-v1.2.3", "ab12cd34")
+
+	res := l.Verify()
+	if v, _ := res["valid"].(bool); v {
+		t.Fatalf("Verify() on an unreadable log = %v, want valid:false", res)
+	}
+	if res["broken_index"] != nil {
+		t.Fatalf("broken_index = %v, want nil (unreadable is not the same as broken)", res["broken_index"])
+	}
+	msg, _ := res["verify_error"].(string)
+	if msg == "" {
+		t.Fatalf("verify_error missing/empty for an unreadable log: %v", res)
+	}
+}
+
+// TestVerifyDroppedLineCannotVerify: a line that fails to decode mid-file
+// must NOT be silently skipped into a short-but-"valid" chain — Verify() must
+// report could-not-verify with the skipped count, distinct from both valid
+// and broken.
+func TestVerifyDroppedLineCannotVerify(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit_log.jsonl")
+	l := New(logPath, "app-v9.9.9", "deadbeef")
+	ts := 1752624000.5
+	l.now = func() float64 { ts += 20; return ts }
+
+	if _, err := l.Append("write-authorized", "loopback",
+		map[string]any{"method": "POST", "path": "/api/edit/host"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Corrupt the log by appending a malformed line by hand, mid-file.
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("{not valid json\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	res := l.Verify()
+	if v, _ := res["valid"].(bool); v {
+		t.Fatalf("Verify() with a dropped line = %v, want valid:false", res)
+	}
+	if res["broken_index"] != nil {
+		t.Fatalf("broken_index = %v, want nil (a dropped line is not the same as tampering)", res["broken_index"])
+	}
+	msg, _ := res["verify_error"].(string)
+	if msg == "" {
+		t.Fatalf("verify_error missing/empty for a chain with a dropped line: %v", res)
+	}
+}
+
+// TestVerifyUnverifiableIsDistinctFromValid is the explicit regression guard
+// for the actual defect: "could not verify" must never be reportable as
+// indistinguishable from "valid". A caller that only checks res["valid"]
+// would otherwise treat an unreadable/incomplete chain as proof of
+// integrity — the worst possible failure mode for a tamper-evident log.
+func TestVerifyUnverifiableIsDistinctFromValid(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit_log.jsonl")
+	if err := os.Mkdir(logPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	l := New(logPath, "app-v1.2.3", "ab12cd34")
+
+	unverifiable := l.Verify()
+	valid, _ := unverifiable["valid"].(bool)
+	_, hasReason := unverifiable["verify_error"]
+	if valid {
+		t.Fatal("unverifiable chain reported valid:true — this is the exact defect being fixed")
+	}
+	if !hasReason {
+		t.Fatal("unverifiable chain has no verify_error to distinguish it from a clean valid:false/broken result")
+	}
+
+	emptyLog := New(filepath.Join(dir, "other_audit_log.jsonl"), "app-v1.2.3", "ab12cd34")
+	valid2 := emptyLog.Verify()
+	v2, _ := valid2["valid"].(bool)
+	if !v2 {
+		t.Fatalf("genuinely empty log incorrectly reported unverifiable/invalid: %v", valid2)
 	}
 }

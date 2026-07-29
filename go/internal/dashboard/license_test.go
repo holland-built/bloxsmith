@@ -1,6 +1,102 @@
 package dashboard
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
+
+// TestCSPLicenseAlerts_UpstreamFailure_YieldsErrorEmptyLists pins the failure
+// branch (csp.go:788): either sub-fetch erroring must report status="error"
+// with BOTH lists empty (not nil, not omitted) — this is what tells a caller
+// "we don't know" rather than "there is nothing to show".
+func TestCSPLicenseAlerts_UpstreamFailure_YieldsErrorEmptyLists(t *testing.T) {
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/licensing/v1/licenses" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":[]}`))
+	})
+
+	got := s.CSPLicenseAlerts()
+
+	if got["status"] != "error" {
+		t.Fatalf("status = %v, want error", got["status"])
+	}
+	lic, ok := got["licenses"].([]any)
+	if !ok || len(lic) != 0 {
+		t.Fatalf("licenses = %v (%T), want empty slice", got["licenses"], got["licenses"])
+	}
+	al, ok := got["alerts"].([]any)
+	if !ok || len(al) != 0 {
+		t.Fatalf("alerts = %v (%T), want empty slice", got["alerts"], got["alerts"])
+	}
+}
+
+// TestCSPLicenseAlerts_GenuineEmpty_YieldsEmptyStatusNotError pins the
+// distinction the failure branch above depends on: a well-formed upstream
+// response with zero licenses and zero alerts is a genuinely empty feed, not
+// a failure, and must report status="empty" — never "error", which would
+// make an operator think the fetch itself broke.
+func TestCSPLicenseAlerts_GenuineEmpty_YieldsEmptyStatusNotError(t *testing.T) {
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":[]}`))
+	})
+
+	got := s.CSPLicenseAlerts()
+
+	if got["status"] != "empty" {
+		t.Fatalf("status = %v, want empty (genuinely empty feed must be distinct from error)", got["status"])
+	}
+	lic, ok := got["licenses"].([]map[string]any)
+	if !ok || len(lic) != 0 {
+		t.Fatalf("licenses = %v (%T), want empty slice", got["licenses"], got["licenses"])
+	}
+	al, ok := got["alerts"].([]map[string]any)
+	if !ok || len(al) != 0 {
+		t.Fatalf("alerts = %v (%T), want empty slice", got["alerts"], got["alerts"])
+	}
+}
+
+// TestCSPLicenseAlerts_WithLicensesAndAlerts_YieldsOkWithPayload pins the
+// normal success path: real rows on both sub-fetches produce status="ok" and
+// the shaped payload (see normLicenseAlerts / TestNormLicenseAlertsRealColumns
+// for the field-level shaping contract).
+func TestCSPLicenseAlerts_WithLicensesAndAlerts_YieldsOkWithPayload(t *testing.T) {
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/licensing/v1/licenses":
+			_, _ = w.Write([]byte(`{"result":[{"id":"lic-1","name":"BloxOne DDI","state":"active"}]}`))
+		case "/atlas-notifications-mailbox/v1/user_alerts":
+			_, _ = w.Write([]byte(`{"result":[{"id":"alert-1","title":"Expiring soon","severity":"warning"}]}`))
+		default:
+			_, _ = w.Write([]byte(`{"result":[]}`))
+		}
+	})
+
+	got := s.CSPLicenseAlerts()
+
+	if got["status"] != "ok" {
+		t.Fatalf("status = %v, want ok", got["status"])
+	}
+	lic, ok := got["licenses"].([]map[string]any)
+	if !ok || len(lic) != 1 {
+		t.Fatalf("licenses = %v (%T), want 1 row", got["licenses"], got["licenses"])
+	}
+	if lic[0]["name"] != "BloxOne DDI" {
+		t.Fatalf("license name = %v, want BloxOne DDI", lic[0]["name"])
+	}
+	al, ok := got["alerts"].([]map[string]any)
+	if !ok || len(al) != 1 {
+		t.Fatalf("alerts = %v (%T), want 1 row", got["alerts"], got["alerts"])
+	}
+	if al[0]["title"] != "Expiring soon" {
+		t.Fatalf("alert title = %v, want Expiring soon", al[0]["title"])
+	}
+}
 
 // TestNormLicenseAlertsRealColumns locks the live payload's real nested
 // shape: "sku" is an OBJECT ({sku, end_date, start_date, quantity,

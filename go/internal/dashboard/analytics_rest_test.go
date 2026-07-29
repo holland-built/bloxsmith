@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"bloxsmith/internal/cache"
@@ -325,6 +326,54 @@ func TestHostDisplayNames_GenuineEmptyReturnsEmptyMap(t *testing.T) {
 	got := s.hostDisplayNames()
 	if got == nil || len(got) != 0 {
 		t.Fatalf("hostDisplayNames() = %v, want an empty map on a genuinely empty result", got)
+	}
+}
+
+// --- FetchInsights ---------------------------------------------------------
+
+// TestFetchInsights_UpstreamErrorReportsLookupFailure is the regression test
+// for defect 1: a 500 from /api/v1/insights used to be discarded (GetEx's
+// status/error both thrown away), landing in the same
+// {"data":[],"unavailable":"No SOC Insights ... in the last 30 days for this
+// tenant."} shape as a genuinely quiet tenant — an assertion about the
+// tenant's data when the truth is the read failed. It must now report a
+// lookup failure and must NOT contain the tenant-fact sentence.
+func TestFetchInsights_UpstreamErrorReportsLookupFailure(t *testing.T) {
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	got := s.FetchInsights()
+
+	if got["availability"] != "unavailable" {
+		t.Errorf("availability = %v, want \"unavailable\"", got["availability"])
+	}
+	msg, _ := got["unavailable"].(string)
+	if msg == "" {
+		t.Fatalf("expected a non-empty unavailable message, got %v", got["unavailable"])
+	}
+	if strings.Contains(msg, "last 30 days for this tenant") {
+		t.Errorf("upstream failure must not read as a tenant fact, got %q", msg)
+	}
+}
+
+// TestFetchInsights_GenuineEmptyKeepsTenantFactWording confirms the other
+// half: a successful 200 with zero insights keeps the exact pre-existing
+// tenant-fact wording, unchanged.
+func TestFetchInsights_GenuineEmptyKeepsTenantFactWording(t *testing.T) {
+	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"insightList":[]}`))
+	})
+
+	got := s.FetchInsights()
+
+	if got["availability"] != "ok" {
+		t.Errorf("availability = %v, want \"ok\" for a genuinely empty (not dead) feed", got["availability"])
+	}
+	msg, _ := got["unavailable"].(string)
+	if !strings.Contains(msg, "last 30 days for this tenant") {
+		t.Errorf("genuine empty result should keep the tenant-fact wording, got %q", msg)
 	}
 }
 

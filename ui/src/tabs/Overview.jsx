@@ -31,7 +31,7 @@ export default function Overview() {
       )}
       <CardGrid>
         <DnsHero dns={dns} />
-        <KpiStack subnets={subnets} leases={leases} totals={totals} />
+        <KpiStack subnets={subnets} leases={leases} totals={totals} meta={meta} />
         <TopUtilization subnets={subnets} totals={totals} subnetsStatus={meta.subnets} />
         <SubnetHeatmap subnets={subnets} totals={totals} subnetsStatus={meta.subnets} />
         <HostStatus hosts={hosts} totals={totals} hostsStatus={meta.hosts} />
@@ -217,7 +217,7 @@ function DnsHero({ dns }) {
 
 // ---------- kpi stack ----------
 
-function KpiStack({ subnets, leases, totals }) {
+function KpiStack({ subnets, leases, totals, meta = {} }) {
   const { COLORS } = useChartTheme()
   const utils = [...subnets.map((s) => Number(s.util) || 0)].sort((a, b) => a - b)
   const activeLeases = leases.filter((l) => l.state === 'active').length
@@ -227,7 +227,7 @@ function KpiStack({ subnets, leases, totals }) {
   const rowCritSubnets = subnets.filter((s) => Number(s.util) >= 90).length
 
   const cells = [
-    { label: 'Active Leases', value: activeLeases.toLocaleString(), color: COLORS.accent, hash: 'network?focus=leases' },
+    { label: 'Active Leases', value: activeLeases.toLocaleString(), color: COLORS.accent, hash: 'network?focus=leases', status: meta.leases },
     hasSubnetsTotal
       ? { label: 'Subnets', value: totals.subnets.toLocaleString(), color: COLORS.purple, hash: 'network' }
       : { label: 'Subnets (loaded rows)', value: subnets.length.toLocaleString(), color: COLORS.purple, hash: 'network' },
@@ -238,27 +238,34 @@ function KpiStack({ subnets, leases, totals }) {
 
   return (
     <Card span={2} className="flex flex-col justify-between">
-      {cells.map((c, i) => (
-        <div
-          key={c.label}
-          role="button"
-          tabIndex={0}
-          onClick={() => { location.hash = c.hash }}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
-          className={`py-3.5 cursor-pointer hover:bg-line rounded-lg transition-colors px-1 -mx-1 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
-        >
-          <div className="text-muted text-xs">{c.label}</div>
-          <div className="text-2xl font-semibold tracking-tight my-1">{c.value}</div>
-          {utils.length > 1 ? (
-            <>
-              <Sparkline values={utils} color={c.color} />
-              <div className="text-[10px] text-dim mt-0.5">util of loaded rows (sorted), not history or estate</div>
-            </>
-          ) : (
-            <div className="h-[30px]" />
-          )}
-        </div>
-      ))}
+      {cells.map((c, i) => {
+        const unavailable = c.status === 'error'
+        return (
+          <div
+            key={c.label}
+            role="button"
+            tabIndex={0}
+            onClick={() => { location.hash = c.hash }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
+            className={`py-3.5 cursor-pointer hover:bg-line rounded-lg transition-colors px-1 -mx-1 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
+          >
+            <div className="text-muted text-xs">{c.label}</div>
+            {unavailable ? (
+              <div className="text-sm font-semibold my-1" style={{ color: COLORS.crit }}>unavailable</div>
+            ) : (
+              <div className="text-2xl font-semibold tracking-tight my-1">{c.value}</div>
+            )}
+            {utils.length > 1 && !unavailable ? (
+              <>
+                <Sparkline values={utils} color={c.color} />
+                <div className="text-[10px] text-dim mt-0.5">util of loaded rows (sorted), not history or estate</div>
+              </>
+            ) : (
+              <div className="h-[30px]" />
+            )}
+          </div>
+        )
+      })}
     </Card>
   )
 }
