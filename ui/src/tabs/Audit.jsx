@@ -272,7 +272,14 @@ function CspAuditTable() {
       ) : result == null ? (
         <Empty>enter a search to query the CSP audit feed</Empty>
       ) : rows.length === 0 ? (
-        <Empty>no entries match</Empty>
+        // csp.go:849-851 returns HTTP 200 with {rows:[],count:0,status:"error"}
+        // on any upstream failure — a fetch that never actually searched must
+        // not be reported with the same wording as a genuine empty result.
+        result?.status === 'error' ? (
+          <FeedUnavailable label="CSP audit feed unavailable" />
+        ) : (
+          <Empty>no entries match</Empty>
+        )
       ) : (
         <DataTable rows={rows} columns={columns} rowCap={150} maxHeight={420} stickyHeader />
       )}
