@@ -183,6 +183,50 @@ jobs:
       # confirmed here — log both tools' versions so the assumption is recorded
       # instead of silently believed. Never fail the job on this: it is a record,
       # not a gate (the install/refusal steps below are the real gate).
+      # Windows PowerShell 5.1 decodes a BOM-less file as the ANSI codepage
+      # (Windows-1252), NOT UTF-8. A UTF-8 em-dash then becomes three chars, one
+      # of which is a CURLY DOUBLE QUOTE -- and PowerShell treats curly quotes as
+      # real string delimiters. That silently unbalances the quoting and the
+      # parser dies on some unrelated line far away. It is invisible on macOS and
+      # to PSScriptAnalyzer (which reads the file as UTF-8), and it was sitting in
+      # this file from the day it was written; nothing had ever executed it.
+      # Keep the installer pure ASCII rather than relying on every tool that
+      # copies it preserving a BOM.
+      - name: install.ps1 is pure ASCII (PS 5.1 misreads UTF-8 without a BOM)
+        shell: pwsh
+        run: |
+          $bytes = [System.IO.File]::ReadAllBytes("scripts/install.ps1")
+          $bad = @()
+          $line = 1
+          foreach ($b in $bytes) {
+            if ($b -eq 10) { $line++ }
+            elseif ($b -gt 127) { $bad += $line }
+          }
+          if ($bad.Count -gt 0) {
+            $u = ($bad | Sort-Object -Unique) -join ', '
+            Write-Host "::error::scripts/install.ps1 contains non-ASCII bytes on line(s) $u - PowerShell 5.1 will mis-decode them and may fail to parse the file"
+            exit 1
+          }
+          Write-Host "install.ps1 is pure ASCII ($($bytes.Length) bytes)"
+
+      # A precise parse check. The step below runs the installer as a child
+      # process, and a child's parse error reaches us only as a truncated
+      # fragment -- the first attempt reported "install.ps1:460 char:67" with the
+      # actual message swallowed. Parsing here names the problem directly.
+      - name: install.ps1 parses under Windows PowerShell
+        shell: powershell
+        run: |
+          $errors = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path scripts\install.ps1).Path, [ref]$null, [ref]$errors)
+          if ($errors -and $errors.Count -gt 0) {
+            foreach ($e in $errors) {
+              Write-Host "::error::parse error at line $($e.Extent.StartLineNumber) col $($e.Extent.StartColumnNumber): $($e.Message)"
+            }
+            exit 1
+          }
+          Write-Host "install.ps1 parses clean under $($PSVersionTable.PSVersion)"
+
       - name: Record ssh/ssh-keygen versions (assumption, not yet confirmed)
         shell: powershell
         continue-on-error: true
@@ -201,7 +245,12 @@ jobs:
       - name: install.ps1 installs the latest release, verifying both times
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
+          # NOT 'Stop' around the native call: with ErrorActionPreference=Stop,
+          # the FIRST stderr line a child process writes is promoted to a
+          # terminating error, aborting the step before the rest of the message
+          # is captured. That is how the real parse error came back as a
+          # meaningless fragment. Capture everything, then judge the exit code.
+          $ErrorActionPreference = 'Continue'
           $log = "$env:RUNNER_TEMP\install.log"
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -Prefix "$env:RUNNER_TEMP\bx" 2>&1 |
             Tee-Object -FilePath $log
