@@ -242,6 +242,34 @@ jobs:
       # is what the script's launch gate keys on to skip opening a browser /
       # starting the app — so this step also exercises that gate, not just the
       # download+verify+install path.
+      # TEMPORARY DIAGNOSTIC. ssh-keygen reported "incorrect signature" against a
+      # release that verifies fine on macOS, so something is altering the bytes
+      # between download and stdin. Measure rather than guess: compare what
+      # Invoke-WebRequest writes to what curl writes, byte for byte.
+      - name: DIAG compare Invoke-WebRequest bytes against curl
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $b = "https://github.com/holland-built/bloxsmith/releases/latest/download"
+          $d = "$env:RUNNER_TEMP\diag"; New-Item -ItemType Directory -Path $d -Force | Out-Null
+          Invoke-WebRequest -UseBasicParsing -Uri "$b/checksums.txt" -OutFile "$d\iwr.txt"
+          curl.exe -fsSL -o "$d\curl.txt" "$b/checksums.txt"
+          foreach ($n in @('iwr','curl')) {
+            $f = "$d\$n.txt"
+            $bytes = [System.IO.File]::ReadAllBytes($f)
+            $sha = (Get-FileHash -Algorithm SHA256 -Path $f).Hash
+            $crlf = ([regex]::Matches([System.Text.Encoding]::ASCII.GetString($bytes), "`r`n")).Count
+            $bom = if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { 'YES' } else { 'no' }
+            Write-Host "$n : $($bytes.Length) bytes  sha256=$sha  CRLF-pairs=$crlf  BOM=$bom"
+          }
+          Write-Host "identical: $((Get-FileHash "$d\iwr.txt").Hash -eq (Get-FileHash "$d\curl.txt").Hash)"
+          # And the signature check itself, done the plain shell way for comparison.
+          Invoke-WebRequest -UseBasicParsing -Uri "$b/checksums.txt.sshsig" -OutFile "$d\sig"
+          "bloxsmith-release-signing ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILh1e4Aj8VwLy+7PBMzfkwqDa7amfqAgpSmF1sq4S+g9" |
+            Out-File -Encoding ascii -NoNewline "$d\allowed"
+          cmd /c "ssh-keygen -Y verify -f `"$d\allowed`" -I bloxsmith-release-signing -n bloxsmith-release -s `"$d\sig`" < `"$d\curl.txt`" 2>&1"
+          Write-Host "cmd-redirect verify exit: $LASTEXITCODE"
+
       - name: install.ps1 installs the latest release, verifying both times
         shell: powershell
         run: |
