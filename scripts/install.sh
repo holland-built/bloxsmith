@@ -215,7 +215,7 @@ else
     echo "              not that this project published it)"
 fi
 
-EXPECTED"$(awk -v f="$ASSET" '$2 == f || $2 == "*" f {print $1}' "$WORK/checksums.txt" | head -1)"
+EXPECTED="$(awk -v f="$ASSET" '$2 == f || $2 == "*" f {print $1}' "$WORK/checksums.txt" | head -1)"
 [ -n "$EXPECTED" ] || { echo "error: ${ASSET} has no entry in checksums.txt — refusing to install" >&2; exit 1; }
 
 ACTUAL="$(sha256 "$WORK/$ASSET")"

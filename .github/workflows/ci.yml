@@ -53,6 +53,59 @@ jobs:
         working-directory: go
         run: goreleaser build --snapshot --clean
 
+  # install.sh had NO test at all, and it showed: v3.23.0 shipped with a mangled
+  # `EXPECTED="$(...)"` assignment that turned the checksum lookup into a command
+  # invocation. `bash -n` passes on that — it is valid syntax, just wrong — so the
+  # only check that catches it is running the thing. This job installs the real
+  # latest release and asserts BOTH verification lines actually printed: a
+  # verification step that silently stops running is worse than none, because the
+  # output still looks like a clean install.
+  install-sh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: shellcheck (Error severity gate)
+        run: shellcheck -S error scripts/install.sh
+
+      - name: install.sh installs the latest release, verifying both times
+        run: |
+          set -euo pipefail
+          bash scripts/install.sh --prefix "$RUNNER_TEMP/bx" | tee "$RUNNER_TEMP/install.log"
+          grep -q "signature: ok" "$RUNNER_TEMP/install.log" || {
+            echo "::error::install.sh did not verify the release signature"; exit 1; }
+          grep -q "checksum : ok" "$RUNNER_TEMP/install.log" || {
+            echo "::error::install.sh did not verify the checksum"; exit 1; }
+          "$RUNNER_TEMP/bx/bloxsmith" --version
+
+      # The refusal paths matter more than the happy one: a check that cannot
+      # fail is decoration. A curl shim serves the real release assets from disk
+      # so the archive can be validated against a checksums.txt we have edited.
+      - name: install.sh refuses a tampered or unsigned checksums.txt
+        run: |
+          set -euo pipefail
+          W="$RUNNER_TEMP/shim"; mkdir -p "$W/bin" "$W/rel"
+          BASE=https://github.com/holland-built/bloxsmith/releases/latest/download
+          for f in checksums.txt checksums.txt.ed25519; do
+            curl -fsSLo "$W/rel/$f" "$BASE/$f"
+          done
+          NUM="$(sed -n 's/.*bloxsmith_\([0-9][^_]*\)_.*/\1/p' "$W/rel/checksums.txt" | head -1)"
+          curl -fsSLo "$W/rel/bloxsmith_${NUM}_linux_amd64.tar.gz" \
+            "$BASE/bloxsmith_${NUM}_linux_amd64.tar.gz"
+          printf '%s\n' '#!/bin/sh' 'out=""; url=""' \
+            'while [ $# -gt 0 ]; do case "$1" in -*o) out="$2"; shift 2;; -*) case "$1" in *o) out="$2"; shift 2;; *) shift;; esac;; *) url="$1"; shift;; esac; done' \
+            'f="$(basename "$url")"; [ -f "$REL/$f" ] || exit 22; cp "$REL/$f" "$out"' > "$W/bin/curl"
+          chmod +x "$W/bin/curl"
+
+          sed -i 's/^./f/' "$W/rel/checksums.txt"
+          if PATH="$W/bin:$PATH" REL="$W/rel" bash scripts/install.sh --prefix "$W/out" > "$W/tampered.log" 2>&1; then
+            echo "::error::install.sh installed from a tampered checksums.txt"; cat "$W/tampered.log"; exit 1
+          fi
+          grep -q "SIGNATURE DOES NOT VERIFY" "$W/tampered.log" || {
+            echo "::error::the refusal did not name the signature as the reason"; cat "$W/tampered.log"; exit 1; }
+          echo "tampered checksums.txt refused, as it must be"
+
   # PSScriptAnalyzer gate for the Windows installer — catches PowerShell errors
   # without a manual Windows run. Error severity only; warnings don't fail CI.
   lint-ps1:
