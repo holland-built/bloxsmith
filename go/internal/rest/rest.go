@@ -110,8 +110,19 @@ func (c *Client) url(path string, params map[string]string) string {
 }
 
 // GetEx is _rest_get_ex (server.py:371): status-surfacing REST GET returning
-// (parsed_body, http_status). status is 0 on a network error (Python returns
-// None — Go uses 0 as the no-response sentinel). Body is nil on an HTTP error.
+// (parsed_body, http_status, error). status is 0 on a network error (Python
+// returns None — Go uses 0 as the no-response sentinel). Body is nil on an
+// HTTP error, a decode error, or a shape error.
+//
+// A 200 whose body is not valid JSON (a proxy/gateway interstitial) or whose
+// decoded JSON is neither an object nor an array (a bare scalar) used to be
+// silently swallowed here — `_ = json.Unmarshal(...)` — so callers saw
+// (nil, 200, nil): a successful-looking empty read indistinguishable from a
+// genuine empty body. That is now surfaced as a non-nil error, mirroring
+// GetStrict's decode/shape categorization (getStrict below) without changing
+// GetEx's signature. A 204/empty body is NOT a decode failure — it is
+// checked for and passed through as (nil, status, nil) before the JSON
+// parse is even attempted.
 func (c *Client) GetEx(path string, params map[string]string) (any, int, error) {
 	req, err := http.NewRequest("GET", c.url(path, params), nil)
 	if err != nil {
@@ -128,9 +139,21 @@ func (c *Client) GetEx(path string, params map[string]string) (any, int, error) 
 	if resp.StatusCode >= 400 {
 		return nil, resp.StatusCode, nil
 	}
+	if len(raw) == 0 {
+		// A genuinely empty body (204, or a 200 with no content) is a
+		// legitimate no-op result, not a decode failure.
+		return nil, resp.StatusCode, nil
+	}
 	var parsed any
-	_ = json.Unmarshal(raw, &parsed)
-	return parsed, resp.StatusCode, nil
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("rest: decode response body for %s: %w", path, err)
+	}
+	switch parsed.(type) {
+	case map[string]any, []any:
+		return parsed, resp.StatusCode, nil
+	default:
+		return nil, resp.StatusCode, fmt.Errorf("rest: unexpected response shape %T for %s", parsed, path)
+	}
 }
 
 // Get is _rest_get (server.py:354): unwraps results/result to a list, swallowing

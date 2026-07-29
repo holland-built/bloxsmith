@@ -201,11 +201,11 @@ func (s *Service) buildAggregate() map[string]any {
 
 	// CSP portal audit — REST, status-surfacing (server.py:3609). MCP AuditLog
 	// is broken server-side, so this is the only working path.
-	auditBody, auditHTTP, _ := s.Rest.GetEx("/api/auditlog/v1/logs",
+	auditBody, auditHTTP, auditErr := s.Rest.GetEx("/api/auditlog/v1/logs",
 		map[string]string{"_limit": "100", "_order_by": "created_at desc"})
 	auditD := rest.Unwrap(auditBody)
 	auditStatus := "empty"
-	if auditHTTP == 0 || auditHTTP >= 400 {
+	if auditErr != nil || auditHTTP == 0 || auditHTTP >= 400 {
 		auditStatus = "error"
 	} else if len(auditD) > 0 {
 		auditStatus = "ok"

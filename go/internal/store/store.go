@@ -8,6 +8,7 @@ package store
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -215,14 +216,26 @@ const (
 	firstSeenEntitySep   = "\x00"       // "{category}\x00{entity_id}" key (2622)
 )
 
-func (s *Store) firstSeenLoad() map[string]map[string]float64 {
-	m := map[string]map[string]float64{}
+// firstSeenLoad reads the persisted first-seen history. Its second return
+// value distinguishes "no history exists yet" (a genuine first run — the
+// caller should proceed with a fresh, empty map, exactly as before) from "the
+// file exists but couldn't be read or decoded" (a real failure — the caller
+// must NOT treat that as equivalent to "nothing has ever been seen").
+func (s *Store) firstSeenLoad() (m map[string]map[string]float64, ok bool) {
 	b, err := os.ReadFile(s.firstSeenFile())
 	if err != nil {
-		return m
+		if os.IsNotExist(err) {
+			return map[string]map[string]float64{}, true
+		}
+		log.Printf("store: first_seen.json unreadable (%v) — treating history as unknown, not empty; incident ages will be reported as unknown rather than reset to now", err)
+		return nil, false
 	}
-	_ = json.Unmarshal(b, &m)
-	return m
+	m = map[string]map[string]float64{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		log.Printf("store: first_seen.json corrupt (%v) — treating history as unknown, not empty; incident ages will be reported as unknown rather than reset to now", err)
+		return nil, false
+	}
+	return m, true
 }
 
 // StampFirstSeen ports stamp_first_seen (server.py:2586): rewrite each signal's
@@ -230,11 +243,33 @@ func (s *Store) firstSeenLoad() map[string]map[string]float64 {
 // restarts. Mutates and returns signals. Never propagates an error (matches the
 // Python contract of leaving detected_at untouched on any failure). No HTTP
 // route of its own — /api/incidents (a later phase) is its only caller.
+//
+// If the on-disk history could not be loaded (firstSeenLoad ok=false), this
+// does NOT fall back to treating every signal as brand-new: doing so used to
+// stamp detected_at = now on every signal, so ages silently reset to 0s and
+// ackKey-based dismissals (keyed on detected_at) vanished on every poll. Now
+// each signal is left without a fabricated detected_at and is instead flagged
+// "first_seen_unknown": true, so a caller/UI can render "age unknown" rather
+// than a confident-looking "0s". The store is also NOT written in this case —
+// see the CRITICAL note below.
 func (s *Store) StampFirstSeen(signals []map[string]any) []map[string]any {
 	s.fsMu.Lock()
 	defer s.fsMu.Unlock()
 
-	store := s.firstSeenLoad()
+	store, loadOK := s.firstSeenLoad()
+	if !loadOK {
+		// CRITICAL: a failed load must never be allowed to reach the write
+		// path below. Previously firstSeenLoad() always returned a usable
+		// (if empty) map, so a transient read/decode failure quietly
+		// produced an empty map that then got written back over the real
+		// history file, permanently destroying it. Refusing to write here
+		// means a bad poll can never turn into data loss — the next poll
+		// gets to try loading the untouched file again.
+		for _, sig := range signals {
+			sig["first_seen_unknown"] = true
+		}
+		return signals
+	}
 	n := now()
 	meta := store[firstSeenMeta]
 	lastPoll := 0.0
@@ -263,7 +298,9 @@ func (s *Store) StampFirstSeen(signals []map[string]any) []map[string]any {
 		}
 	}
 	store[firstSeenMeta] = map[string]float64{"last_poll": n}
-	_ = atomicWriteJSON(s.firstSeenFile(), store)
+	if err := atomicWriteJSON(s.firstSeenFile(), store); err != nil {
+		log.Printf("store: failed to persist first_seen.json: %v", err)
+	}
 	return signals
 }
 

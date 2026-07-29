@@ -234,22 +234,29 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 
 	if !d.Provision.TemplatesInstalled() {
 		emit(map[string]any{"error": "templates not installed — use the release archive or container image (which bundle them), or add YAML templates to the templates directory"})
-		emit(map[string]any{"done": true, "summary": summary})
+		emit(terminalFrame(summary))
 		return
 	}
 
+	const blocksTemplate = "blocks/regional_address_blocks.yaml"
 	emit(map[string]any{"step": "Seeding blocks…"})
-	if bt, err := d.Provision.LoadTemplate("blocks/regional_address_blocks.yaml"); err != nil {
-		emit(map[string]any{"template": "blocks/regional_address_blocks.yaml", "error": err.Error()})
+	if bt, err := d.Provision.LoadTemplate(blocksTemplate); err != nil {
+		summaryAppend(summary, "failed", blocksTemplate)
+		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
 	} else if bcfg, err := provision.TemplateToBlockConfig(bt, provision.M{"dry": dryParam, "ip_space": override}); err != nil {
-		emit(map[string]any{"template": "blocks/regional_address_blocks.yaml", "error": err.Error()})
+		summaryAppend(summary, "failed", blocksTemplate)
+		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
 	} else if _, err := d.Provision.NewBlockProvisioner(bcfg, emitter(emit)).Provision(true); err != nil {
-		if provision.IsError(err) {
-			emit(map[string]any{"template": "blocks/regional_address_blocks.yaml", "error": err.Error()})
-		} else {
-			summaryAppend(summary, "failed", "blocks/regional_address_blocks.yaml")
-			emit(map[string]any{"template": "blocks/regional_address_blocks.yaml", "error": err.Error()})
-		}
+		// Every provisioning error here is a *provision.Error (IsError is
+		// almost always true), so the old "only tally when !IsError" branch
+		// left this failure permanently invisible to the summary — the same
+		// "0 succeeded reads as done" bug this fix targets. Tally it.
+		summaryAppend(summary, "failed", blocksTemplate)
+		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
+	} else {
+		summaryAppend(summary, "succeeded", blocksTemplate)
+		emit(map[string]any{"template": blocksTemplate, "phase": "succeeded",
+			"step": fmt.Sprintf("[%s] succeeded", blocksTemplate)})
 	}
 
 	for _, rel := range d.Provision.SiteTemplateRelPaths(regions) {
@@ -283,13 +290,17 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 			}
 			if b, _ := result["skipped"].(bool); b {
 				summaryAppend(summary, "skipped", rel)
+				emit(map[string]any{"template": rel, "phase": "skipped",
+					"step": fmt.Sprintf("[%s] skipped", rel)})
 			} else {
 				summaryAppend(summary, "succeeded", rel)
+				emit(map[string]any{"template": rel, "phase": "succeeded",
+					"step": fmt.Sprintf("[%s] succeeded", rel)})
 			}
 		}()
 	}
 
-	emit(map[string]any{"done": true, "summary": summary})
+	emit(terminalFrame(summary))
 	if !dry {
 		_, _ = d.Audit.Append("provision-seed-demo", httpx.Actor(r), map[string]any{
 			"regions":   regions,
@@ -407,12 +418,16 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			summaryAppend(summary, "succeeded", rel)
+			emit(map[string]any{"template": rel, "phase": "succeeded",
+				"step": fmt.Sprintf("[%s] succeeded", rel)})
 		}()
 	}
 
+	const blocksTemplate = "blocks/regional_address_blocks.yaml"
 	emit(map[string]any{"step": "Decommissioning regional address-block pool…"})
-	if bt, err := d.Provision.LoadTemplate("blocks/regional_address_blocks.yaml"); err != nil {
-		emit(map[string]any{"template": "blocks/regional_address_blocks.yaml", "error": err.Error()})
+	if bt, err := d.Provision.LoadTemplate(blocksTemplate); err != nil {
+		summaryAppend(summary, "failed", blocksTemplate)
+		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
 	} else {
 		blockName := bstr(bt, "name")
 		blockIPSpace := override
@@ -424,11 +439,16 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if _, err := d.Provision.NewBlockDecommissioner(blockName, provision.PyStr(blockIPSpace), dry, emitter(emit)).Decommission(); err != nil {
-			emit(map[string]any{"template": "blocks/regional_address_blocks.yaml", "error": err.Error()})
+			summaryAppend(summary, "failed", blocksTemplate)
+			emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
+		} else {
+			summaryAppend(summary, "succeeded", blocksTemplate)
+			emit(map[string]any{"template": blocksTemplate, "phase": "succeeded",
+				"step": fmt.Sprintf("[%s] succeeded", blocksTemplate)})
 		}
 	}
 
-	emit(map[string]any{"done": true, "summary": summary})
+	emit(terminalFrame(summary))
 	if !dry {
 		_, _ = d.Audit.Append("teardown-seed-demo", httpx.Actor(r), map[string]any{
 			"regions":   regions,
@@ -684,6 +704,25 @@ func summaryAppend(summary map[string]any, key, val string) {
 func lenOf(summary map[string]any, key string) int {
 	cur, _ := summary[key].([]any)
 	return len(cur)
+}
+
+// terminalFrame builds the seed/teardown stream's final `{"done":true,...}`
+// payload. Before this, the terminal frame carried only the raw summary
+// (arrays of template paths under "succeeded"/"failed"/"skipped") and the
+// client had no cheap signal to distinguish "every template failed" from "every
+// template succeeded" — both looked like a bare `done:true`. This adds explicit
+// integer counts (and a total) alongside the untouched summary arrays, so the
+// UI can branch on outcome instead of inferring success from mere completion.
+func terminalFrame(summary map[string]any) map[string]any {
+	succeeded, failed, skipped := lenOf(summary, "succeeded"), lenOf(summary, "failed"), lenOf(summary, "skipped")
+	return map[string]any{
+		"done":      true,
+		"summary":   summary,
+		"succeeded": succeeded,
+		"failed":    failed,
+		"skipped":   skipped,
+		"total":     succeeded + failed + skipped,
+	}
 }
 
 func mapOf(v any) map[string]any {
