@@ -116,10 +116,15 @@ type ghRelease struct {
 	} `json:"assets"`
 }
 
+// latestRelease uses githubAPIBase (update.go:20), the same seam checkUpdate
+// uses, rather than a hardcoded host. Beyond making this testable: the two
+// functions fetching the same endpoint used to disagree about where it is —
+// anything that repointed the base (a proxy, a mirror, GitHub Enterprise)
+// would have moved the update CHECK without moving the update APPLY.
 func latestRelease() (ghRelease, error) {
 	var rel ghRelease
 	req, _ := http.NewRequest("GET",
-		fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", appRepo), nil)
+		fmt.Sprintf("%s/repos/%s/releases/latest", githubAPIBase, appRepo), nil)
 	req.Header.Set("User-Agent", "bloxsmith")
 	req.Header.Set("Accept", "application/vnd.github+json")
 	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
@@ -398,6 +403,51 @@ func extractTemplatesTarGz(archive []byte, write func(entryPath string, r io.Rea
 	return nil
 }
 
+// fetchVerifiedBinary is the download -> verify signature -> verify checksum
+// -> extract seam pulled out of applyLatest so a test can exercise it without
+// ever reaching selfupdate.Apply or restart(). It returns the extracted
+// bloxsmith binary and the raw archive bytes (the caller still needs the
+// latter for extractTemplates).
+func fetchVerifiedBinary(archAsset, sumAsset, sigAsset, archName string) (bin []byte, archBytes []byte, err error) {
+	progress.set("downloading", 25)
+	archBytes, err = httpGetBytes(archAsset, maxArchiveBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	sums, err := httpGetBytes(sumAsset, maxChecksumBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sigBytes, err := httpGetBytes(sigAsset, maxSignatureBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	progress.set("verifying", 55)
+	// The signature comes FIRST. Verifying the archive against checksums.txt is
+	// worthless until we know checksums.txt is ours: an attacker who can replace
+	// the tarball can replace the checksum sitting beside it, which is precisely
+	// the gap the compiled-in public key closes (see signing.go).
+	if err := verifyReleaseSignature(sums, sigBytes); err != nil {
+		return nil, nil, err
+	}
+	want := checksumFor(sums, archName)
+	if want == "" {
+		return nil, nil, fmt.Errorf("checksums.txt has no entry for %s", archName)
+	}
+	sum := sha256.Sum256(archBytes)
+	if got := hex.EncodeToString(sum[:]); got != want {
+		return nil, nil, fmt.Errorf("checksum mismatch: got %s want %s", got, want)
+	}
+
+	bin, err = extractBinary(archBytes, runtime.GOOS == "windows")
+	if err != nil {
+		return nil, nil, err
+	}
+	return bin, archBytes, nil
+}
+
 // applyLatest runs the whole download -> verify -> swap for the newest release.
 // It advances updateProgress so the frontend can poll GET /api/update/status.
 func applyLatest() error {
@@ -440,39 +490,7 @@ func applyLatest() error {
 			rel.Tag, releaseSigAssetName)
 	}
 
-	progress.set("downloading", 25)
-	archBytes, err := httpGetBytes(archAsset, maxArchiveBytes)
-	if err != nil {
-		return err
-	}
-	sums, err := httpGetBytes(sumAsset, maxChecksumBytes)
-	if err != nil {
-		return err
-	}
-
-	sigBytes, err := httpGetBytes(sigAsset, maxSignatureBytes)
-	if err != nil {
-		return err
-	}
-
-	progress.set("verifying", 55)
-	// The signature comes FIRST. Verifying the archive against checksums.txt is
-	// worthless until we know checksums.txt is ours: an attacker who can replace
-	// the tarball can replace the checksum sitting beside it, which is precisely
-	// the gap the compiled-in public key closes (see signing.go).
-	if err := verifyReleaseSignature(sums, sigBytes); err != nil {
-		return err
-	}
-	want := checksumFor(sums, archName)
-	if want == "" {
-		return fmt.Errorf("checksums.txt has no entry for %s", archName)
-	}
-	sum := sha256.Sum256(archBytes)
-	if got := hex.EncodeToString(sum[:]); got != want {
-		return fmt.Errorf("checksum mismatch: got %s want %s", got, want)
-	}
-
-	bin, err := extractBinary(archBytes, runtime.GOOS == "windows")
+	bin, archBytes, err := fetchVerifiedBinary(archAsset, sumAsset, sigAsset, archName)
 	if err != nil {
 		return err
 	}
