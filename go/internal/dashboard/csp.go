@@ -128,7 +128,7 @@ func dataErr() map[string]any {
 //   - "metadata-degraded": rows fetched fine — the feed itself is healthy —
 //     but the total is missing or inconsistent, so no total is emitted at
 //     all. Never substitute the fetched row count for the missing total.
-//   - "unavailable": the fetch itself failed. No rows, an operator-safe
+//   - "error": the fetch itself failed. No rows, an operator-safe
 //     reason, and the raw upstream error text stays server-side (log.Printf
 //     only) so it never lands in a client-facing response body.
 //
@@ -175,14 +175,14 @@ func exposureFeedResp(rows []map[string]any, total int, haveTotal bool) map[stri
 	return map[string]any{"data": data, "status": "ok", "availability": "metadata-degraded"}
 }
 
-// exposureFeedUnavailable builds the "unavailable" state: no rows, an
+// exposureFeedUnavailable builds the "error" state: no rows, an
 // operator-safe reason, and — deliberately — no raw upstream error text.
 // Callers must log.Printf the raw detail themselves before calling this.
 func exposureFeedUnavailable(reason string) map[string]any {
 	return map[string]any{
 		"data":         map[string]any{},
 		"status":       "error",
-		"availability": "unavailable",
+		"availability": "error",
 		"reason":       reason,
 	}
 }

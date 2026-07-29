@@ -266,13 +266,20 @@ func normAudit(raw []any) []map[string]any {
 			whoRole = getStr(groups[0])
 		}
 		action := strings.ToUpper(orStr(l["action"], l["http_method"], "READ"))
-		code := 200
+		// result has three states, not two. A record that carries no
+		// http_code at all used to default to 200 here, so an entry whose
+		// outcome was never recorded rendered as a confirmed green
+		// "success" — indistinguishable from a verified 2xx. Now an absent
+		// http_code yields "unknown": neither the fabricated success nor
+		// the wrong-in-the-other-direction "failure".
+		result := "unknown"
 		if isDigit(l["http_code"]) {
-			code = toInt(l["http_code"])
-		}
-		result := "success"
-		if code >= 400 {
-			result = "failure"
+			code := toInt(l["http_code"])
+			if code >= 400 {
+				result = "failure"
+			} else {
+				result = "success"
+			}
 		}
 		out = append(out, map[string]any{
 			"id":       orStr(l["id"], ""),

@@ -107,7 +107,7 @@ func TestFetchDNSAnalytics_QueryShapesAndShape(t *testing.T) {
 // test for the bug this migration fixes: a dead cubejs used to collapse to
 // the exact same {volume:[],top_clients:[],query_types:[]} shape as a
 // tenant with genuinely no query activity. It must now surface
-// availability:"unavailable" plus a reason, alongside the (still empty)
+// availability:"error" plus a reason, alongside the (still empty)
 // rows the caller already handled.
 func TestFetchDNSAnalytics_UpstreamErrorReportsUnavailable(t *testing.T) {
 	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
@@ -122,8 +122,8 @@ func TestFetchDNSAnalytics_UpstreamErrorReportsUnavailable(t *testing.T) {
 			t.Errorf("%s = %v, want empty slice on upstream error", key, got[key])
 		}
 	}
-	if got["availability"] != "unavailable" {
-		t.Errorf("availability = %v, want \"unavailable\"", got["availability"])
+	if got["availability"] != "error" {
+		t.Errorf("availability = %v, want \"error\"", got["availability"])
 	}
 	if reason, _ := got["reason"].(string); reason == "" {
 		t.Errorf("reason = %v, want a non-empty operator-safe reason", got["reason"])
@@ -246,7 +246,7 @@ func TestFetchHostMetrics_UnresolvedHostKeepsRawID(t *testing.T) {
 // TestFetchHostMetrics_UpstreamErrorReportsUnavailable is the regression
 // test for the bug this migration fixes: a dead HostMetrics cube used to
 // collapse to the same {"metrics":[]} shape as a tenant with genuinely no
-// per-host metrics. It must now surface availability:"unavailable" plus a
+// per-host metrics. It must now surface availability:"error" plus a
 // reason, alongside the (still empty) metrics list.
 func TestFetchHostMetrics_UpstreamErrorReportsUnavailable(t *testing.T) {
 	s, _ := newRestTestService(t, func(w http.ResponseWriter, r *http.Request) {
@@ -258,8 +258,8 @@ func TestFetchHostMetrics_UpstreamErrorReportsUnavailable(t *testing.T) {
 	if !ok || len(metrics) != 0 {
 		t.Errorf("metrics = %v, want empty slice on upstream error", got["metrics"])
 	}
-	if got["availability"] != "unavailable" {
-		t.Errorf("availability = %v, want \"unavailable\"", got["availability"])
+	if got["availability"] != "error" {
+		t.Errorf("availability = %v, want \"error\"", got["availability"])
 	}
 	if reason, _ := got["reason"].(string); reason == "" {
 		t.Errorf("reason = %v, want a non-empty operator-safe reason", got["reason"])
@@ -345,8 +345,8 @@ func TestFetchInsights_UpstreamErrorReportsLookupFailure(t *testing.T) {
 
 	got := s.FetchInsights()
 
-	if got["availability"] != "unavailable" {
-		t.Errorf("availability = %v, want \"unavailable\"", got["availability"])
+	if got["availability"] != "error" {
+		t.Errorf("availability = %v, want \"error\"", got["availability"])
 	}
 	msg, _ := got["unavailable"].(string)
 	if msg == "" {

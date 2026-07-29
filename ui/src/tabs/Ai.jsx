@@ -162,7 +162,7 @@ function ChatCard() {
 function EntitiesTable({ entities, availability, reason }) {
   // ThreatLookup degrades to entities:[] on a dead upstream search — indistinguishable
   // from a genuine "no matches" unless availability is checked first.
-  if (availability === 'unavailable') {
+  if (availability === 'error') {
     return <FeedUnavailable reason={reason} label="Threat lookup unavailable" />
   }
   if (entities == null) return null

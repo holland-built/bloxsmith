@@ -1,12 +1,12 @@
 package dashboard
 
 // Covers the attack-surface tri-state availability (ok / metadata-degraded /
-// unavailable) added to CSPExposures / CSPExposedHostnames / CSPExposedIPs:
+// error) added to CSPExposures / CSPExposedHostnames / CSPExposedIPs:
 // a well-formed total is trusted, an inconsistent or missing total degrades
 // to "metadata-degraded" with no total emitted (never the row count
 // substituted in), and an upstream fetch failure (e.g. the real 429 the
 // hostnames endpoint returns once it crosses Infoblox's 4 MiB gRPC cap)
-// yields "unavailable" with an operator-safe reason and no raw upstream text.
+// yields "error" with an operator-safe reason and no raw upstream text.
 
 import (
 	"fmt"
@@ -117,8 +117,8 @@ func TestCSPExposedHostnames_429_YieldsUnavailableWithReasonNoRows(t *testing.T)
 
 	got := s.CSPExposedHostnames()
 
-	if got["availability"] != "unavailable" {
-		t.Fatalf("availability = %v, want unavailable", got["availability"])
+	if got["availability"] != "error" {
+		t.Fatalf("availability = %v, want error", got["availability"])
 	}
 	if got["status"] != "error" {
 		t.Fatalf("status = %v, want error", got["status"])

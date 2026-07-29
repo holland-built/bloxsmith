@@ -43,3 +43,24 @@ func TestNormSubnetsUtil(t *testing.T) {
 		t.Fatalf("site: %v", r["site"])
 	}
 }
+
+// TestNormAuditHTTPCode locks the three-state result contract: an absent
+// http_code must render as "unknown", never as a fabricated "success" (the
+// old default was 200) and never as "failure" either. Explicit codes still
+// resolve to their real outcome.
+func TestNormAuditHTTPCode(t *testing.T) {
+	out := normAudit([]any{
+		map[string]any{"id": "1", "action": "GET"},                     // no http_code at all
+		map[string]any{"id": "2", "action": "GET", "http_code": "200"}, // explicit success
+		map[string]any{"id": "3", "action": "GET", "http_code": "500"}, // explicit failure
+	})
+	if got := out[0]["result"]; got != "unknown" {
+		t.Fatalf("missing http_code: got result=%v, want \"unknown\" (must not fabricate success)", got)
+	}
+	if got := out[1]["result"]; got != "success" {
+		t.Fatalf("http_code 200: got result=%v, want \"success\"", got)
+	}
+	if got := out[2]["result"]; got != "failure" {
+		t.Fatalf("http_code 500: got result=%v, want \"failure\"", got)
+	}
+}
