@@ -80,11 +80,18 @@ func (a *Auth) SetOverride(k string) {
 	a.override = k
 }
 
-// Client is the Infoblox REST proxy. Construct one per process.
+// Client is the Infoblox REST proxy. One process-wide Client resolves auth
+// live on every outbound call; Pin() derives a request-scoped copy that does
+// not.
 type Client struct {
 	baseURL string
 	auth    *Auth
 	http    *http.Client
+
+	// pinned freezes the Authorization value for the life of one inbound
+	// request. Empty means "resolve live", which is right for background work
+	// and wrong for anything serving a request — see Pin.
+	pinned string
 }
 
 // New builds a Client. baseURL is INFOBLOX_URL (default handled by config);
@@ -95,6 +102,44 @@ func New(baseURL string, auth *Auth) *Client {
 		auth:    auth,
 		http:    &http.Client{Timeout: timeout},
 	}
+}
+
+// Pin resolves the Authorization value ONCE and returns a Client that uses that
+// value for every call made through it, whatever happens to the shared slot
+// afterwards.
+//
+// WHY. The auth slot is process-global and was read afresh on every outbound
+// call. A single inbound request usually makes many: /api/data fans out across
+// a dozen fetchers, and a provisioning or teardown stream makes dozens over
+// minutes. If an account switch landed midway, the first half of the request
+// ran against tenant A and the rest against tenant B, silently. The worst case
+// is not a confusing dashboard — it is a teardown that starts deleting subnets
+// and DNS zones in tenant A and finishes deleting them in tenant B.
+//
+// Pinning to the value resolved at the START of the request is the correct
+// semantics, not merely the safe one: a teardown of tenant A should finish on
+// tenant A, and a read that began on tenant A should return tenant A's rows or
+// nothing. The switch takes effect on the NEXT request, which is what a user
+// clicking "switch account" actually expects.
+//
+// Background work (pollers, the account manager's own calls) deliberately keeps
+// using the unpinned Client: it belongs to no request and must see live state.
+func (c *Client) Pin() *Client {
+	cp := *c
+	cp.pinned = c.auth.Value()
+	return &cp
+}
+
+// Pinned reports whether this Client is request-scoped.
+func (c *Client) Pinned() bool { return c.pinned != "" }
+
+// authValue is the single place an outbound call resolves its Authorization:
+// the pinned value when this Client belongs to a request, else the live slot.
+func (c *Client) authValue() string {
+	if c.pinned != "" {
+		return c.pinned
+	}
+	return c.auth.Value()
 }
 
 func (c *Client) url(path string, params map[string]string) string {
@@ -128,7 +173,7 @@ func (c *Client) GetEx(path string, params map[string]string) (any, int, error) 
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("Authorization", c.auth.Value())
+	req.Header.Set("Authorization", c.authValue())
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -225,7 +270,7 @@ func (c *Client) getStrict(path string, params map[string]string) ([]any, map[st
 	if err != nil {
 		return nil, nil, &UpstreamError{Path: path, Category: "network"}
 	}
-	req.Header.Set("Authorization", c.auth.Value())
+	req.Header.Set("Authorization", c.authValue())
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -299,7 +344,7 @@ func (c *Client) Write(method, path string, body any, params map[string]string) 
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("Authorization", c.auth.Value())
+	req.Header.Set("Authorization", c.authValue())
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)

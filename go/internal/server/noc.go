@@ -32,14 +32,14 @@ func (d *Deps) registerNOCRoutes(mux *http.ServeMux) {
 // actions is GET /api/actions (server.py:5077): the raw IQ Actions payload.
 func (d *Deps) actions(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/actions")
-	d.json(w, r, 200, d.Dashboard.FetchActions(r.Context()))
+	d.json(w, r, 200, d.dash(r).FetchActions(r.Context()))
 }
 
 // actionDetail is GET /api/actions/{id}: a single IQ Action read.
 func (d *Deps) actionDetail(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/actions/{id}")
 	id := r.PathValue("id")
-	d.json(w, r, 200, d.Dashboard.GetAction(r.Context(), id))
+	d.json(w, r, 200, d.dash(r).GetAction(r.Context(), id))
 }
 
 // actionStatus is POST /api/actions/{id}/status: the first IQ Actions write
@@ -56,7 +56,7 @@ func (d *Deps) actionStatus(w http.ResponseWriter, r *http.Request, b map[string
 	}
 	defer d.recoverEdit(w, r, "/api/actions/{id}/status")
 	status, _ := b["status"].(string)
-	res, err := d.Dashboard.UpdateAction(r.Context(), id, status)
+	res, err := d.dash(r).UpdateAction(r.Context(), id, status)
 	if err != nil {
 		d.json(w, r, 400, map[string]any{"ok": false, "error": err.Error()})
 		d.auditAppend("iq-action-resolve-failed", httpx.Actor(r), map[string]any{
@@ -101,7 +101,7 @@ func (d *Deps) incidents(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}()
-	data := d.Dashboard.FetchDashboardData()
+	data := d.dash(r).FetchDashboardData()
 	signals := d.Store.StampFirstSeen(dashboard.BuildSignals(data))
 	signalsMeta, signalsDegraded := dashboard.SignalsMeta(data)
 	snoozed := d.Store.ActiveSnoozes()
@@ -150,7 +150,7 @@ func (d *Deps) incidentsCategory(w http.ResponseWriter, r *http.Request) {
 				"category": category, "count": 0, "truncated": false, "signals": []any{}})
 		}
 	}()
-	data := d.Dashboard.FetchDashboardData()
+	data := d.dash(r).FetchDashboardData()
 	matches := []map[string]any{}
 	for _, s := range d.Store.StampFirstSeen(dashboard.BuildSignals(data)) {
 		if getCat(s) == category {
@@ -169,13 +169,13 @@ func (d *Deps) incidentsCategory(w http.ResponseWriter, r *http.Request) {
 // insights is GET /api/insights (server.py:5203).
 func (d *Deps) insights(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/insights")
-	d.json(w, r, 200, d.Dashboard.FetchInsights())
+	d.json(w, r, 200, d.dash(r).FetchInsights())
 }
 
 // sources is GET /api/sources (server.py:5054): registry META only.
 func (d *Deps) sources(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/sources")
-	d.json(w, r, 200, d.Dashboard.SourcesMeta())
+	d.json(w, r, 200, d.dash(r).SourcesMeta())
 }
 
 // sourceRows is GET /api/source/<id> (server.py:5285): normalized rows for one
@@ -183,7 +183,7 @@ func (d *Deps) sources(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) sourceRows(w http.ResponseWriter, r *http.Request) {
 	sid := r.PathValue("sid")
 	defer d.recover500(w, r, "/api/source/"+sid)
-	result := d.Dashboard.SourceRows(r.Context(), sid, queryMap(r))
+	result := d.dash(r).SourceRows(r.Context(), sid, queryMap(r))
 	status := 200
 	if result["error"] == "unknown source" {
 		status = 404
@@ -199,13 +199,13 @@ func (d *Deps) dnsAnalytics(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/dns-analytics")
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	d.json(w, r, 200, d.Dashboard.FetchDNSAnalytics(ctx))
+	d.json(w, r, 200, d.dash(r).FetchDNSAnalytics(ctx))
 }
 
 // hostMetrics is GET /api/host-metrics (server.py:5215).
 func (d *Deps) hostMetrics(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/host-metrics")
-	d.json(w, r, 200, d.Dashboard.FetchHostMetrics(r.Context()))
+	d.json(w, r, 200, d.dash(r).FetchHostMetrics(r.Context()))
 }
 
 // threatLookup is GET /api/threat-lookup (server.py:5251): entity search over
@@ -217,7 +217,7 @@ func (d *Deps) threatLookup(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 200, map[string]any{"entities": []any{}, "query": ""})
 		return
 	}
-	d.json(w, r, 200, d.Dashboard.ThreatLookup(r.Context(), q))
+	d.json(w, r, 200, d.dash(r).ThreatLookup(r.Context(), q))
 }
 
 // getCat reads a signal/incident category as a string.

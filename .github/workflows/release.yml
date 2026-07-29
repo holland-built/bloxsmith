@@ -82,6 +82,23 @@ jobs:
       # holland-built/homebrew-tap repo. If the HOMEBREW_TAP_TOKEN secret (PAT,
       # repo scope on homebrew-tap) is present, release everything; if absent,
       # skip only the brew channel so the release never fails for lack of it.
+      # Fail BEFORE publishing anything if the release signing key is missing.
+      # Shipped binaries refuse to self-update to a release with no Ed25519
+      # signature (go/signing.go), so an unsigned release is not a degraded
+      # release — it is one nobody can update to. Better a loud CI failure than
+      # a published tag that quietly strands every installed copy.
+      - name: Release signing key present
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            echo "::error::RELEASE_SIGNING_KEY secret is not set — refusing to publish an unsigned release."
+            echo "Generate one with: cd go && go run ./tools/relsign keygen"
+            echo "Store the private half: gh secret set RELEASE_SIGNING_KEY --repo ${{ github.repository }}"
+            echo "and put the public half in go/signing.go before tagging."
+            exit 1
+          fi
+
       - name: goreleaser release
         working-directory: go
         env:
@@ -94,3 +111,24 @@ jobs:
             echo "HOMEBREW_TAP_TOKEN not set — skipping Homebrew tap publish"
             goreleaser release --clean --skip=homebrew
           fi
+
+      # Sign checksums.txt with a key that does NOT live in the release, and
+      # prove the signature verifies against the public key compiled into the
+      # binaries before uploading it. The key reaches relsign through a file so
+      # it never appears on a command line.
+      - name: Sign and publish checksums.txt.ed25519
+        working-directory: go
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$RELEASE_SIGNING_KEY" > /tmp/relsign.key
+          go run ./tools/relsign sign -key @/tmp/relsign.key \
+            -in dist/checksums.txt -out dist/checksums.txt.ed25519
+          PUB="$(sed -n 's/.*releaseSigningKey = "\([0-9a-f]*\)".*/\1/p' signing.go)"
+          go run ./tools/relsign verify -pub "$PUB" \
+            -in dist/checksums.txt -sig dist/checksums.txt.ed25519
+          rm -f /tmp/relsign.key
+          gh release upload "${GITHUB_REF_NAME}" dist/checksums.txt.ed25519 --clobber

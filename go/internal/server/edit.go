@@ -55,7 +55,7 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 		return
 	}
 	defer d.recoverEdit(w, r, "/api/selfservice/allocate")
-	res, status := d.Edit.SelfserviceAllocate(b)
+	res, status := d.editFor(r).SelfserviceAllocate(b)
 	d.json(w, r, status, res)
 	if resultOK(res) && !isDry(res) {
 		d.auditAppend("selfservice-allocate", httpx.Actor(r), map[string]any{
@@ -72,7 +72,7 @@ func (d *Deps) dnsRecordCreate(w http.ResponseWriter, r *http.Request, b map[str
 		return
 	}
 	defer d.recoverEdit(w, r, "/api/dns/records")
-	res, status := d.Edit.DNSRecordCreate(b)
+	res, status := d.editFor(r).DNSRecordCreate(b)
 	d.json(w, r, status, res)
 	if resultOK(res) && !isDry(res) {
 		d.auditAppend("dns-record-create", httpx.Actor(r), map[string]any{
@@ -88,7 +88,7 @@ func (d *Deps) dnsRecordUpdate(w http.ResponseWriter, r *http.Request, b map[str
 		return
 	}
 	defer d.recoverEdit(w, r, "/api/dns/records PATCH")
-	res, status := d.Edit.DNSRecordUpdate(b)
+	res, status := d.editFor(r).DNSRecordUpdate(b)
 	d.json(w, r, status, res)
 	if resultOK(res) && !isDry(res) {
 		fields := []string{}
@@ -118,7 +118,7 @@ func (d *Deps) dnsRecordDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer d.recoverEdit(w, r, "/api/dns/records DELETE")
-	res, status := d.Edit.Delete(objPath)
+	res, status := d.editFor(r).Delete(objPath)
 	d.json(w, r, status, res)
 }
 
@@ -136,7 +136,7 @@ func (d *Deps) ipamAddressDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer d.recoverEdit(w, r, "/api/ipam/addresses DELETE")
-	res, status := d.Edit.Delete(objPath)
+	res, status := d.editFor(r).Delete(objPath)
 	d.json(w, r, status, res)
 }
 
@@ -144,7 +144,7 @@ func (d *Deps) ipamAddressDelete(w http.ResponseWriter, r *http.Request) {
 
 func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]any) {
 	resource := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/edit/"), "/")
-	res, ok := d.Edit.Resources()[resource]
+	res, ok := d.editFor(r).Resources()[resource]
 	if !ok || res.Create == nil {
 		d.json(w, r, 404, map[string]any{"ok": false, "error": "unknown resource: " + resource})
 		return
@@ -166,7 +166,7 @@ func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]a
 
 func (d *Deps) editUpdate(w http.ResponseWriter, r *http.Request, b map[string]any) {
 	resource, objID := splitEditPath(r.URL.Path)
-	res, ok := d.Edit.Resources()[resource]
+	res, ok := d.editFor(r).Resources()[resource]
 	if !ok || res.Update == nil {
 		d.json(w, r, 404, map[string]any{"ok": false, "error": "unknown resource: " + resource})
 		return
@@ -193,7 +193,7 @@ func (d *Deps) editUpdate(w http.ResponseWriter, r *http.Request, b map[string]a
 
 func (d *Deps) editDelete(w http.ResponseWriter, r *http.Request) {
 	resource, objID := splitEditPath(r.URL.Path)
-	resDef, ok := d.Edit.Resources()[resource]
+	resDef, ok := d.editFor(r).Resources()[resource]
 	if !ok {
 		d.json(w, r, 404, map[string]any{"ok": false, "error": "unknown resource: " + resource})
 		return
@@ -221,7 +221,7 @@ func (d *Deps) editDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer d.recoverEdit(w, r, "/api/edit/"+resource+" DELETE")
-	res, status := d.Edit.Delete(objPath)
+	res, status := d.editFor(r).Delete(objPath)
 	d.json(w, r, status, res)
 	if resultOK(res) {
 		d.auditAppend("edit-"+resource+"-delete", httpx.Actor(r),

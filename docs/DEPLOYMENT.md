@@ -423,6 +423,31 @@ docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
 unlocks the vault — a brand-new install never shows the passphrase screen; the
 browser only asks for your tenant key. Later restarts auto-unlock the same vault.
 
+### What "AES-encrypted vault" is worth, exactly
+
+The crypto is sound — scrypt (N=2^15) key derivation, Fernet, a fresh IV on every
+save, `0600` files in a `0700` directory. The limit is not the crypto; it is where
+the passphrase lives.
+
+**In the default laptop install, the passphrase sits next to the vault it opens.**
+`VAULT_PASSPHRASE` goes in a `.env` in the same directory as `vault.json`, because
+that is what unattended auto-unlock requires: the machine must be able to open the
+vault with nobody present. So any process running as the operator can read the
+`.env` and decrypt the vault outright. Encryption at rest here protects a **stolen
+disk, a stolen backup, or a copied volume** — not the machine it runs on.
+
+That is inherent to auto-unlock, not a defect, and there is no configuration that
+removes it while keeping unattended restarts. What genuinely narrows it:
+
+| Instead of | Do this | What it buys |
+|---|---|---|
+| `VAULT_PASSPHRASE` in `.env` | `VAULT_PASSPHRASE_FILE` pointing at a mounted secret | Keeps it out of `docker inspect` and the process environment; still readable by the operator's own processes |
+| Auto-unlock at all | Leave it unset and unlock in the browser | The passphrase is never on disk — at the cost of a browser visit after every restart |
+
+**Do not read "AES-encrypted vault" as "safe on a compromised machine."** It is
+not, and no setting makes it so. Treat a compromised host as a compromised tenant
+key and rotate it in the CSP portal — scrubbing files does not revoke it.
+
 Keys stay AES-encrypted on disk; whoever can read the passphrase source can decrypt
 the vault, so a stolen `vault.json` alone is useless. A wrong/missing passphrase
 just falls back to manual unlock in the browser.
@@ -448,6 +473,12 @@ For unattended restarts on the [Customer path](#customer-path-compose), set
 - The audit chain is tamper-evident against someone who can write `audit_log.jsonl`, **not**
   against a process running as the operator, which can read the key. See
   [the audit chain's key](#the-audit-chains-key).
+- The vault's encryption protects a stolen disk, not a live machine: with auto-unlock the
+  passphrase is on that machine by necessity. See
+  [what "AES-encrypted vault" is worth](#what-aes-encrypted-vault-is-worth-exactly).
+- Releases are Ed25519-signed with a key that is not in the release, and the in-app updater
+  refuses an unsigned or badly-signed one. That authenticates the release pipeline, not the
+  source — someone who can push a tag or steal the CI secret can still sign.
 
 See [SECURITY.md](../.github/SECURITY.md) for the policy and how to report a vulnerability,
 and [CONTRIBUTING.md](../.github/CONTRIBUTING.md) for local setup and the test suite.

@@ -68,7 +68,7 @@ func (d *Deps) sseCORS(w http.ResponseWriter, r *http.Request) func() {
 
 func (d *Deps) templatesList(w http.ResponseWriter, r *http.Request) {
 	defer d.recoverEdit(w, r, "/api/templates")
-	list, err := d.Provision.ListTemplates()
+	list, err := d.prov(r).ListTemplates()
 	if err != nil {
 		d.logExc("/api/templates", err)
 		d.json(w, r, 500, map[string]any{"error": "internal error"})
@@ -129,7 +129,7 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			}
 			body = bm
 		}
-		result, status, _ := d.Rest.Write("POST", "/api/ddi/v1/"+block+"/nextavailablesubnet",
+		result, status, _ := d.restFor(r).Write("POST", "/api/ddi/v1/"+block+"/nextavailablesubnet",
 			body, map[string]string{"cidr": strconv.Itoa(cidrN)})
 		emit(map[string]any{"step": "Subnet allocation result", "status": status, "result": result})
 		subnet := firstRowLocal(result)
@@ -143,7 +143,7 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			if ferr != nil {
 				return ferr
 			}
-			zresult, zstatus, _ := d.Rest.Write("POST", "/api/ddi/v1/dns/auth_zone",
+			zresult, zstatus, _ := d.restFor(r).Write("POST", "/api/ddi/v1/dns/auth_zone",
 				map[string]any{"fqdn": fqdn}, nil)
 			emit(map[string]any{"step": "Zone creation result", "status": zstatus, "result": zresult})
 		}
@@ -179,7 +179,7 @@ func (d *Deps) provisionSiteStream(w http.ResponseWriter, r *http.Request) {
 		emit(map[string]any{"error": "template is required"})
 		return
 	}
-	template, err := d.Provision.LoadTemplate(name)
+	template, err := d.prov(r).LoadTemplate(name)
 	if err != nil {
 		emit(map[string]any{"error": err.Error()})
 		return
@@ -190,7 +190,7 @@ func (d *Deps) provisionSiteStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	emit(map[string]any{"step": fmt.Sprintf("Provisioning site: %s", cfg.Site)})
-	result, err := d.Provision.NewSiteProvisioner(cfg, emitter(emit)).Provision()
+	result, err := d.prov(r).NewSiteProvisioner(cfg, emitter(emit)).Provision()
 	if err != nil {
 		if !cfg.DryRun {
 			d.auditAppend("provision-site-error", httpx.Actor(r),
@@ -232,7 +232,7 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	}
 	summary := map[string]any{"succeeded": []any{}, "failed": []any{}, "skipped": []any{}}
 
-	if !d.Provision.TemplatesInstalled() {
+	if !d.prov(r).TemplatesInstalled() {
 		emit(map[string]any{"error": "templates not installed — use the release archive or container image (which bundle them), or add YAML templates to the templates directory"})
 		emit(terminalFrame(summary))
 		return
@@ -240,13 +240,13 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 
 	const blocksTemplate = "blocks/regional_address_blocks.yaml"
 	emit(map[string]any{"step": "Seeding blocks…"})
-	if bt, err := d.Provision.LoadTemplate(blocksTemplate); err != nil {
+	if bt, err := d.prov(r).LoadTemplate(blocksTemplate); err != nil {
 		summaryAppend(summary, "failed", blocksTemplate)
 		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
 	} else if bcfg, err := provision.TemplateToBlockConfig(bt, provision.M{"dry": dryParam, "ip_space": override}); err != nil {
 		summaryAppend(summary, "failed", blocksTemplate)
 		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
-	} else if _, err := d.Provision.NewBlockProvisioner(bcfg, emitter(emit)).Provision(true); err != nil {
+	} else if _, err := d.prov(r).NewBlockProvisioner(bcfg, emitter(emit)).Provision(true); err != nil {
 		// Every provisioning error here is a *provision.Error (IsError is
 		// almost always true), so the old "only tally when !IsError" branch
 		// left this failure permanently invisible to the summary — the same
@@ -259,10 +259,10 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 			"step": fmt.Sprintf("[%s] succeeded", blocksTemplate)})
 	}
 
-	for _, rel := range d.Provision.SiteTemplateRelPaths(regions) {
+	for _, rel := range d.prov(r).SiteTemplateRelPaths(regions) {
 		rel := rel
 		func() {
-			template, err := d.Provision.LoadTemplate(rel)
+			template, err := d.prov(r).LoadTemplate(rel)
 			if err != nil {
 				summaryAppend(summary, "failed", rel)
 				emit(map[string]any{"template": rel, "error": err.Error()})
@@ -282,7 +282,7 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 					emit(obj)
 				}
 			}
-			result, err := d.Provision.NewSiteProvisioner(cfg, forward).Provision()
+			result, err := d.prov(r).NewSiteProvisioner(cfg, forward).Provision()
 			if err != nil {
 				summaryAppend(summary, "failed", rel)
 				emit(map[string]any{"template": rel, "error": err.Error()})
@@ -327,7 +327,7 @@ func (d *Deps) teardownSiteStream(w http.ResponseWriter, r *http.Request) {
 		emit(map[string]any{"error": "template is required"})
 		return
 	}
-	template, err := d.Provision.LoadTemplate(name)
+	template, err := d.prov(r).LoadTemplate(name)
 	if err != nil {
 		emit(map[string]any{"error": err.Error()})
 		return
@@ -342,7 +342,7 @@ func (d *Deps) teardownSiteStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	emit(map[string]any{"step": fmt.Sprintf("Decommissioning site: %s", cfg.Site)})
-	result, err := d.Provision.NewSiteDecommissioner(cfg, emitter(emit)).Decommission()
+	result, err := d.prov(r).NewSiteDecommissioner(cfg, emitter(emit)).Decommission()
 	if err != nil {
 		if !cfg.DryRun {
 			d.auditAppend("teardown-site-error", httpx.Actor(r),
@@ -389,10 +389,10 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	}
 	summary := map[string]any{"succeeded": []any{}, "failed": []any{}, "skipped": []any{}}
 
-	for _, rel := range d.Provision.SiteTemplateRelPaths(regions) {
+	for _, rel := range d.prov(r).SiteTemplateRelPaths(regions) {
 		rel := rel
 		func() {
-			template, err := d.Provision.LoadTemplate(rel)
+			template, err := d.prov(r).LoadTemplate(rel)
 			if err != nil {
 				summaryAppend(summary, "failed", rel)
 				emit(map[string]any{"template": rel, "error": err.Error()})
@@ -412,7 +412,7 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 					emit(obj)
 				}
 			}
-			if _, err := d.Provision.NewSiteDecommissioner(cfg, forward).Decommission(); err != nil {
+			if _, err := d.prov(r).NewSiteDecommissioner(cfg, forward).Decommission(); err != nil {
 				summaryAppend(summary, "failed", rel)
 				emit(map[string]any{"template": rel, "error": err.Error()})
 				return
@@ -425,7 +425,7 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 
 	const blocksTemplate = "blocks/regional_address_blocks.yaml"
 	emit(map[string]any{"step": "Decommissioning regional address-block pool…"})
-	if bt, err := d.Provision.LoadTemplate(blocksTemplate); err != nil {
+	if bt, err := d.prov(r).LoadTemplate(blocksTemplate); err != nil {
 		summaryAppend(summary, "failed", blocksTemplate)
 		emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
 	} else {
@@ -438,7 +438,7 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 				blockIPSpace = "default"
 			}
 		}
-		if _, err := d.Provision.NewBlockDecommissioner(blockName, provision.PyStr(blockIPSpace), dry, emitter(emit)).Decommission(); err != nil {
+		if _, err := d.prov(r).NewBlockDecommissioner(blockName, provision.PyStr(blockIPSpace), dry, emitter(emit)).Decommission(); err != nil {
 			summaryAppend(summary, "failed", blocksTemplate)
 			emit(map[string]any{"template": blocksTemplate, "error": err.Error()})
 		} else {
@@ -463,7 +463,7 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) templatesValidate(w http.ResponseWriter, r *http.Request, b map[string]any) {
 	defer d.recoverEdit(w, r, "/api/templates/validate")
 	name := bstr(b, "name")
-	template, err := d.Provision.LoadTemplate(name)
+	template, err := d.prov(r).LoadTemplate(name)
 	if err != nil {
 		if provision.IsError(err) {
 			d.json(w, r, 200, map[string]any{"valid": false, "type": "unknown",
@@ -492,7 +492,7 @@ func (d *Deps) provisionBlock(w http.ResponseWriter, r *http.Request, b map[stri
 		d.json(w, r, 400, map[string]any{"error": "template is required"})
 		return
 	}
-	template, err := d.Provision.LoadTemplate(name)
+	template, err := d.prov(r).LoadTemplate(name)
 	if err != nil {
 		d.provErr(w, r, "/api/provision/block", err)
 		return
@@ -502,7 +502,7 @@ func (d *Deps) provisionBlock(w http.ResponseWriter, r *http.Request, b map[stri
 		d.provErr(w, r, "/api/provision/block", err)
 		return
 	}
-	result, err := d.Provision.NewBlockProvisioner(cfg, noopEmit).Provision(false)
+	result, err := d.prov(r).NewBlockProvisioner(cfg, noopEmit).Provision(false)
 	if err != nil {
 		d.provErr(w, r, "/api/provision/block", err)
 		return
@@ -528,7 +528,7 @@ func (d *Deps) teardownBlock(w http.ResponseWriter, r *http.Request, b map[strin
 		d.json(w, r, 400, map[string]any{"error": "template is required"})
 		return
 	}
-	template, err := d.Provision.LoadTemplate(name)
+	template, err := d.prov(r).LoadTemplate(name)
 	if err != nil {
 		d.provErr(w, r, "/api/teardown/block", err)
 		return
@@ -549,7 +549,7 @@ func (d *Deps) teardownBlock(w http.ResponseWriter, r *http.Request, b map[strin
 		d.json(w, r, 400, map[string]any{"error": "confirmation required"})
 		return
 	}
-	result, err := d.Provision.NewBlockDecommissioner(blockName, ipSpace, dry, noopEmit).Decommission()
+	result, err := d.prov(r).NewBlockDecommissioner(blockName, ipSpace, dry, noopEmit).Decommission()
 	if err != nil {
 		d.provErr(w, r, "/api/teardown/block", err)
 		return
@@ -601,14 +601,14 @@ func (d *Deps) retagBlock(w http.ResponseWriter, r *http.Request, b map[string]a
 		return
 	}
 	spaceID := provision.PyStr(mapOf(spaceResults[0])["id"])
-	blocks, err := d.Provision.FindBlocksForRetag(spaceID, templateName, address, cidr, site)
+	blocks, err := d.prov(r).FindBlocksForRetag(spaceID, templateName, address, cidr, site)
 	if err != nil {
 		d.provErr(w, r, "/api/retag/block", err)
 		return
 	}
 	changed := []any{}
 	for _, blk := range blocks {
-		res, err := d.Provision.RetagBlock(mapOf(blk), status, dry)
+		res, err := d.prov(r).RetagBlock(mapOf(blk), status, dry)
 		if err != nil {
 			d.provErr(w, r, "/api/retag/block", err)
 			return
@@ -631,7 +631,7 @@ func (d *Deps) driftCheck(w http.ResponseWriter, r *http.Request, b map[string]a
 		d.json(w, r, 400, map[string]any{"error": "template is required"})
 		return
 	}
-	template, err := d.Provision.LoadTemplate(name)
+	template, err := d.prov(r).LoadTemplate(name)
 	if err != nil {
 		d.provErr(w, r, "/api/drift/check", err)
 		return
@@ -641,7 +641,7 @@ func (d *Deps) driftCheck(w http.ResponseWriter, r *http.Request, b map[string]a
 		d.provErr(w, r, "/api/drift/check", err)
 		return
 	}
-	live, err := d.Provision.QuerySiteLive(cfg.Site, cfg.IPSpace, cfg.DNSView, cfg.DNSZone())
+	live, err := d.prov(r).QuerySiteLive(cfg.Site, cfg.IPSpace, cfg.DNSView, cfg.DNSZone())
 	if err != nil {
 		d.provErr(w, r, "/api/drift/check", err)
 		return

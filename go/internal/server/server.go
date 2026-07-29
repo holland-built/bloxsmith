@@ -87,6 +87,11 @@ func New(d *Deps) http.Handler {
 	// tenant-data /api/ path until a key is active. No-op when VaultMode=false.
 	gated := d.Guard.VaultGate(d.Cfg.VaultMode, func() bool { return d.Auth.Value() != "" })(mux)
 
+	// Resolve the outbound tenant credential ONCE per request, before routing,
+	// so every outbound call a request makes goes to the same tenant even if an
+	// account switch lands halfway through. See tenant.go for the full reason.
+	pinned := d.withPinnedTenant(gated)
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			d.Guard.CORSPreflight(w, r)
@@ -95,7 +100,7 @@ func New(d *Deps) http.Handler {
 		if d.Guard.WriteGuard(w, r) {
 			return
 		}
-		gated.ServeHTTP(w, r)
+		pinned.ServeHTTP(w, r)
 	})
 }
 

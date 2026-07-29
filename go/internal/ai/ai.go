@@ -49,6 +49,16 @@ func New(creds Creds, tools ToolRunner) *Service {
 	return &Service{creds: creds, tools: tools, http: &http.Client{Timeout: 60 * time.Second}}
 }
 
+// With rebinds the tool runner — in practice the request-scoped dashboard
+// service, so the tools an AI answer calls read the tenant the question was
+// asked against rather than whichever one is active when the LLM gets round to
+// calling them. See rest.Client.Pin.
+func (s *Service) With(tools ToolRunner) *Service {
+	cp := *s
+	cp.tools = tools
+	return &cp
+}
+
 const maxToolChars = 3000 // _MAX_TOOL_CHARS (server.py:3938)
 
 // HandleQuery is handle_query (server.py:4136): run the tool loop under a 55s
