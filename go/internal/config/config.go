@@ -110,6 +110,16 @@ type Config struct {
 	VaultPassphraseFile string // VAULT_PASSPHRASE_FILE (server.py:2759)
 	TemplatesDir        string // TEMPLATES_DIR (server.py:1017)
 
+	// The audit chain's trust root. AuditTrustDir holds the HMAC key and the
+	// sealed head record, and must NOT be the state directory that holds
+	// audit_log.jsonl — a key an attacker can rewrite alongside the log
+	// protects nothing. Empty means audit.DefaultTrustDir() (the per-user
+	// config directory). AuditKey / AuditKeyFile override the machine-local
+	// key with one the host itself need not hold. See internal/audit/key.go.
+	AuditTrustDir string // AUDIT_TRUST_DIR
+	AuditKey      string // AUDIT_KEY (hex, >= 64 chars)
+	AuditKeyFile  string // AUDIT_KEY_FILE
+
 	// Dir is the binary's own directory (analogue of server.py DIR at 160),
 	// used as the vault fallback location when VAULT_DIR is not writable.
 	Dir string
@@ -179,5 +189,9 @@ func Load(dir string) *Config {
 	c.VaultPassphrase = os.Getenv("VAULT_PASSPHRASE")
 	c.VaultPassphraseFile = strings.TrimSpace(os.Getenv("VAULT_PASSPHRASE_FILE"))
 	c.TemplatesDir = getDefault("TEMPLATES_DIR", filepath.Join(dir, "templates"))
+
+	c.AuditTrustDir = strings.TrimSpace(os.Getenv("AUDIT_TRUST_DIR"))
+	c.AuditKey = strings.TrimSpace(os.Getenv("AUDIT_KEY"))
+	c.AuditKeyFile = strings.TrimSpace(os.Getenv("AUDIT_KEY_FILE"))
 	return c
 }
