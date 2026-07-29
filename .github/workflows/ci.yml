@@ -274,8 +274,8 @@ jobs:
           # Print what we are actually asserting against. An assertion that
           # fails without showing its input costs a whole CI round trip to
           # diagnose, which is exactly what happened here.
-          Write-Host "--- install.log as captured (${log}) ---"
-          Get-Content -Path $log | ForEach-Object { Write-Host "| $_" }
+          Write-Host "--- install.log as captured ---"
+          Write-Host (Get-Content -Raw -Path $log)
           Write-Host "--- end install.log ---"
           $text = Get-Content -Raw -Path $log
 
