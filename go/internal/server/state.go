@@ -47,9 +47,15 @@ func (d *Deps) registerStateRoutes(mux *http.ServeMux) {
 // auditLog is GET /api/audit/log (server.py:5083): the whole chain plus its
 // verification verdict. chain_valid/broken_index keep their original
 // meaning (unchanged for existing consumers); chain_verify_error is the added
-// third state — set when the chain could not be fully read, so a caller can
+// third state — set when the chain could not be checked, so a caller can
 // tell "intact" apart from "we could not check". It must never be paired with
 // chain_valid: true.
+//
+// broken_reason is additive and only present on the tampered verdict: it says
+// WHICH check failed (a bad signature, a short chain, an altered seal), since
+// "broken at entry #7" alone does not tell an operator whether they are looking
+// at a forged entry or a truncated tail. Consumers that read only broken_index
+// are unaffected. There are still exactly three states.
 func (d *Deps) auditLog(w http.ResponseWriter, r *http.Request) {
 	entries, _, _ := d.Audit.Read()
 	chain := d.Audit.Verify()
@@ -57,6 +63,7 @@ func (d *Deps) auditLog(w http.ResponseWriter, r *http.Request) {
 		"entries":            entries,
 		"chain_valid":        chain["valid"],
 		"broken_index":       chain["broken_index"],
+		"broken_reason":      chain["broken_reason"],
 		"chain_verify_error": chain["verify_error"],
 	})
 }
@@ -78,6 +85,7 @@ func (d *Deps) auditExport(w http.ResponseWriter, r *http.Request) {
 		"entries":            entries,
 		"chain_valid":        chain["valid"],
 		"broken_index":       chain["broken_index"],
+		"broken_reason":      chain["broken_reason"],
 		"chain_verify_error": chain["verify_error"],
 		"exported_at":        nowUnix(),
 		"app_version":        d.Version,

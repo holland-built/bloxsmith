@@ -308,7 +308,31 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// Phase 1c local state stores, on the same dir as vault.json (server.py:2424
 	// _STATE_DIR = dirname(VAULT_FILE)), so they share the mounted volume.
 	stateDir := filepath.Dir(v.Path())
-	auditLog := audit.New(filepath.Join(stateDir, "audit_log.jsonl"), "app-v"+version, instanceID())
+	// The audit chain's trust root deliberately does NOT live in stateDir: that
+	// is where audit_log.jsonl itself is, and a key stored beside the log it
+	// signs is no key at all. Default is the per-user config directory; AUDIT_KEY
+	// / AUDIT_KEY_FILE move it off the machine entirely. A failure to resolve it
+	// is not fatal — entries are still recorded, unsigned, and Verify() reports
+	// could-not-verify rather than "intact". See internal/audit/key.go.
+	auditTrustDir := cfg.AuditTrustDir
+	if auditTrustDir == "" {
+		d, err := audit.DefaultTrustDir()
+		if err != nil {
+			log.Printf("[audit] no default trust directory: %v (set AUDIT_TRUST_DIR or AUDIT_KEY)", err)
+		}
+		auditTrustDir = d
+	}
+	auditLog := audit.New(
+		filepath.Join(stateDir, "audit_log.jsonl"), "app-v"+version, instanceID(),
+		audit.Options{TrustDir: auditTrustDir, Key: cfg.AuditKey, KeyFile: cfg.AuditKeyFile},
+	)
+	if err := auditLog.KeyError(); err != nil {
+		log.Printf("[audit] the audit chain is UNSIGNED: %v", err)
+	} else if err := auditLog.Adopt(); err != nil {
+		// Adopt refuses on an already-broken chain, which is a finding, not a
+		// startup failure: the server keeps running and /api/audit/log shows it.
+		log.Printf("[audit] chain not sealed: %v", err)
+	}
 	st := store.New(stateDir)
 
 	guard := &httpx.Guard{

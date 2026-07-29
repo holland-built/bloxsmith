@@ -1,10 +1,26 @@
-// Package audit ports server.py's immutable SHA-256 hash-chained action log
-// (server.py:2418-2459): _audit_entry_hash (2429), audit_read (2433),
-// audit_append (2440), audit_verify_chain (2452). Each entry hashes its own
-// payload plus the previous entry's hash, so any edit or deletion breaks the
-// chain. The on-disk format (audit_log.jsonl, one JSON object per line) and the
-// canonical hashing (see canonical.go) are byte-compatible with the Python app,
-// so a chain written by either verifies under the other.
+// Package audit is the append-only, tamper-evident action log.
+//
+// Each entry hashes its own payload plus the previous entry's hash, and — since
+// the keyed rewrite — also carries its position in the chain and an HMAC under
+// a key held outside the log's directory, with a separately sealed record of how
+// many entries the chain is supposed to have. Editing, deleting or truncating
+// the file now requires the key rather than just the (public) algorithm. See
+// key.go for the full rationale and the honest scope of what that key protects.
+//
+// PROVENANCE AND COMPATIBILITY. This started as a port of server.py's
+// _audit_entry_hash (2429), audit_read (2433), audit_append (2440) and
+// audit_verify_chain (2452); the on-disk format is still audit_log.jsonl, one
+// JSON object per line, and the canonical hashing (canonical.go) is still
+// byte-identical to Python's json.dumps(sort_keys=True). Entries written before
+// the keyed rewrite therefore keep verifying unchanged — that mattered more
+// than anything else here, since making an existing operator's real audit log
+// suddenly read as "tampered" would be a fabricated accusation.
+//
+// What is NOT claimed any more: entries written by this binary carry seq,
+// key_id and mac fields, and the Python verifier does not know to exclude mac
+// from the hash payload, so it would call them tampered. Cross-verification
+// under the original Python implementation is no longer offered. Nothing in
+// this repository runs that implementation.
 package audit
 
 import (
@@ -30,18 +46,55 @@ type Log struct {
 	instanceID  string // server.py:72 _INSTANCE_ID (per-process id)
 	mu          sync.Mutex
 	now         func() float64 // injectable for tests; wall clock in prod
+
+	trustDir string // holds audit.key + audit.head; never the log's own directory
+	key      *Key   // nil when no key could be established
+	keyErr   error  // why, surfaced as could-not-verify — never as "intact"
+	keyWarn  sync.Once
 }
 
 // New binds a Log to path, pinning every appended entry to this image+instance
-// (server.py:2445), exactly as audit_append does.
-func New(path, imageDigest, instanceID string) *Log {
-	return &Log{
+// (server.py:2445), and resolves the trust root described in key.go.
+//
+// A trust-root failure is deliberately NOT fatal. The alternative is refusing
+// to record mutations at all, which would leave the operator with no record of
+// a real event in exchange for a property they were not getting before this
+// change anyway. Instead the entry is written unsigned, the reason is logged
+// once, and Verify() reports could-not-verify for as long as the condition
+// lasts — never "intact".
+func New(path, imageDigest, instanceID string, opt Options) *Log {
+	l := &Log{
 		path:        path,
 		imageDigest: imageDigest,
 		instanceID:  instanceID,
 		now:         func() float64 { return float64(time.Now().UnixNano()) / 1e9 },
+		trustDir:    strings.TrimSpace(opt.TrustDir),
 	}
+	l.key, l.keyErr = loadKey(opt)
+	// A trust root inside the log's own directory is not a trust root: anyone
+	// who can rewrite the log can rewrite the key and reseal. Say so rather
+	// than letting the deployment believe it has a property it does not.
+	if l.key != nil && l.trustDir != "" {
+		if abs, err := filepath.Abs(l.trustDir); err == nil {
+			if logDir, err2 := filepath.Abs(filepath.Dir(path)); err2 == nil && abs == logDir {
+				log.Printf("[audit] WARNING: the audit trust directory is the same directory as the log (%s); "+
+					"anyone who can rewrite %s can also rewrite the key and reseal the chain. "+
+					"Set AUDIT_TRUST_DIR (or AUDIT_KEY) to somewhere the log's writer cannot reach.",
+					abs, filepath.Base(path))
+			}
+		}
+	}
+	return l
 }
+
+// KeyID is the short identifier of the key in use, or "" when there is none.
+func (l *Log) KeyID() string { return l.key.ID() }
+
+// KeySource names where the key came from, for the startup log line.
+func (l *Log) KeySource() string { return l.key.Source() }
+
+// KeyError is the reason no key could be established, or nil.
+func (l *Log) KeyError() error { return l.keyErr }
 
 // Read ports audit_read (server.py:2433): every non-blank JSONL line as a map.
 // Numbers are decoded as json.Number so the exact on-disk token is preserved
@@ -92,11 +145,13 @@ func (l *Log) Read() ([]map[string]any, int, error) {
 }
 
 // entryHash ports _audit_entry_hash (server.py:2429): sha256 of the canonical
-// JSON of every field except "hash".
+// JSON of every field except "hash" — and except "mac", which cannot be inside
+// the thing it signs. Entries written before the keyed rewrite have no mac
+// field, so their hash input, and therefore their hash, is untouched.
 func (l *Log) entryHash(e map[string]any) (string, error) {
 	payload := make(map[string]any, len(e))
 	for k, v := range e {
-		if k != "hash" {
+		if k != "hash" && k != "mac" {
 			payload[k] = v
 		}
 	}
@@ -109,10 +164,10 @@ func (l *Log) entryHash(e map[string]any) (string, error) {
 }
 
 // Append ports audit_append (server.py:2440): read the chain, link to the last
-// hash (or 64 zeros), inject image_digest+instance_id into detail, hash, and
-// append one canonical JSON line. The file line is written with the SAME
-// canonical encoder used for hashing so the ts token on disk matches the hashed
-// token exactly. Returns the written entry.
+// hash (or 64 zeros), inject image_digest+instance_id into detail, hash, sign,
+// and append one canonical JSON line, then reseal the head. The file line is
+// written with the SAME canonical encoder used for hashing so the ts token on
+// disk matches the hashed token exactly. Returns the written entry.
 //
 // A chain a caller cannot trust (unreadable, or with a dropped/undecodable
 // line) must not be extended — appending onto an unverifiable prev_hash would
@@ -159,18 +214,35 @@ func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any
 	d["image_digest"] = l.imageDigest
 	d["instance_id"] = l.instanceID
 
+	seq := len(entries)
 	e := map[string]any{
 		"ts":        json.Number(pyFloat(l.now())),
 		"event":     event,
 		"actor":     actor,
 		"detail":    d,
 		"prev_hash": prev,
+		// seq is the running entry count the old chain had no equivalent of.
+		// It is inside the hashed payload, so it is chained like everything
+		// else and cannot be renumbered without breaking the following hashes.
+		"seq": seq,
+	}
+	if l.key != nil {
+		e["key_id"] = l.key.id
+	} else {
+		l.keyWarn.Do(func() {
+			log.Printf("[audit] WARNING: entries are being written UNSIGNED because no audit key is available: %v. "+
+				"The chain still detects corruption, but not an attacker who can write the log. "+
+				"Verify() reports could-not-verify while this lasts.", l.keyErr)
+		})
 	}
 	h, err := l.entryHash(e)
 	if err != nil {
 		return nil, err
 	}
 	e["hash"] = h
+	if l.key != nil {
+		e["mac"] = entryMAC(l.key.secret, seq, h)
+	}
 
 	line, err := canonicalJSON(e)
 	if err != nil {
@@ -187,50 +259,234 @@ func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any
 	if _, err := f.Write(append(line, '\n')); err != nil {
 		return nil, err
 	}
+
+	// Reseal. A failure here is logged but does not fail the append: the entry
+	// is already durably on disk, and the alternative — reporting failure for a
+	// write that succeeded — is its own lie. Verify tolerates a stale head that
+	// is SHORT of the log as long as every entry past it is signed, so this
+	// degrades to "truncation detection lags by n entries", not to a false
+	// tamper verdict. See Verify.
+	if l.key != nil {
+		if err := l.writeHead(seq+1, h); err != nil {
+			log.Printf("[audit] WARNING: entry recorded but the chain head could not be resealed: %v "+
+				"(entries removed from the end may go undetected until the next successful append)", err)
+		}
+	}
 	return e, nil
 }
 
-// Verify ports audit_verify_chain (server.py:2452): walk the chain, checking
-// each entry's prev_hash link and recomputed hash. This is a tri-state
-// verdict, never a bool masquerading as one:
+// Adopt seals the chain as it currently stands, so that a log written before
+// the keyed rewrite — or one whose seal was lost with its trust directory —
+// gains truncation detection from now on instead of reporting could-not-verify
+// forever. Called once at startup.
 //
-//   - {"valid": true,  "broken_index": nil}                     -> chain intact
-//     (a genuinely empty, readable log counts as intact).
-//   - {"valid": false, "broken_index": <int>}                   -> tamper
-//     detected at that index. Unchanged shape/behavior from before.
-//   - {"valid": false, "broken_index": nil, "verify_error": "…"} -> the chain
-//     could NOT be fully read (open error, or lines dropped as undecodable /
-//     oversized), so no verdict on tampering can be made. This case must
-//     never collapse into "valid": true, and is told apart from the broken
-//     case by broken_index being nil while verify_error is set.
+// This is trust on first use, and the limit is worth stating plainly: adopting
+// takes the log as it is at that moment. Anything already removed or edited
+// before the first seal, by an attacker who got there first, is sealed in as
+// legitimate. What it does buy is that every later removal is detected. Adopt
+// refuses to seal a chain whose hash links are already broken, so it can never
+// launder a visibly tampered log into a "valid" one.
 //
-// Matches the JSON shape /api/audit/log and /api/audit/export ship, plus the
-// new verify_error field consumers can check for the third state.
-func (l *Log) Verify() map[string]any {
+// Returns nil when there was nothing to do (already sealed under this key).
+func (l *Log) Adopt() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.key == nil {
+		return fmt.Errorf("audit: cannot seal the chain: %w", l.keyErr)
+	}
+	h, err := l.readHead()
+	if err != nil {
+		return fmt.Errorf("audit: existing head record could not be read: %w", err)
+	}
+	if h != nil && h.KeyID == l.key.id {
+		return nil // already sealed under this key
+	}
 	entries, skipped, err := l.Read()
 	if err != nil {
-		return map[string]any{
-			"valid":        false,
-			"broken_index": nil,
-			"verify_error": fmt.Sprintf("audit log could not be read: %v", err),
-		}
+		return fmt.Errorf("audit: cannot seal, chain unreadable: %w", err)
 	}
 	if skipped > 0 {
-		return map[string]any{
-			"valid":        false,
-			"broken_index": nil,
-			"verify_error": fmt.Sprintf("audit log incomplete: %d line(s) could not be decoded", skipped),
-		}
+		return fmt.Errorf("audit: cannot seal, chain read dropped %d line(s)", skipped)
 	}
+	if idx, _, ok := l.walkLinks(entries); !ok {
+		return fmt.Errorf("audit: refusing to seal a chain that is already broken at entry %d", idx)
+	}
+	last := ""
+	if n := len(entries); n > 0 {
+		last, _ = entries[n-1]["hash"].(string)
+	}
+	if err := l.writeHead(len(entries), last); err != nil {
+		return err
+	}
+	if h == nil {
+		log.Printf("[audit] sealed the existing %d-entry chain under key %s (%s); entries removed from the end are detectable from now on",
+			len(entries), l.key.id, l.key.source)
+	} else {
+		log.Printf("[audit] WARNING: the chain was sealed under key %s but this process holds key %s (%s); resealing at %d entries. "+
+			"Entries signed with the old key can no longer be attested and will report could-not-verify.",
+			h.KeyID, l.key.id, l.key.source, len(entries))
+	}
+	return nil
+}
+
+// walkLinks checks only the hash-chain structure — each entry's prev_hash link
+// and recomputed hash. Returns (index, reason, false) at the first break.
+func (l *Log) walkLinks(entries []map[string]any) (int, string, bool) {
 	prev := zeroHash
 	for i, e := range entries {
 		ph, _ := e["prev_hash"].(string)
 		want, _ := e["hash"].(string)
 		got, err := l.entryHash(e)
-		if err != nil || ph != prev || got != want {
-			return map[string]any{"valid": false, "broken_index": i}
+		if err != nil {
+			return i, "entry could not be hashed: " + err.Error(), false
+		}
+		if ph != prev {
+			return i, "entry does not link to the one before it", false
+		}
+		if got != want {
+			return i, "entry contents do not match its recorded hash", false
 		}
 		prev = want
+	}
+	return 0, "", true
+}
+
+// broken and cannotVerify build the two non-intact verdicts. Keeping them as
+// constructors is what stops a fourth state creeping in.
+func broken(index int, reason string) map[string]any {
+	return map[string]any{"valid": false, "broken_index": index, "broken_reason": reason}
+}
+
+func cannotVerify(reason string) map[string]any {
+	return map[string]any{"valid": false, "broken_index": nil, "verify_error": reason}
+}
+
+// Verify walks the chain and returns a tri-state verdict, never a bool
+// masquerading as one:
+//
+//   - {"valid": true,  "broken_index": nil}                      -> chain intact
+//     (a genuinely empty, readable log counts as intact).
+//   - {"valid": false, "broken_index": <int>, "broken_reason": …} -> tamper
+//     detected. broken_index is the offending entry; for a truncated tail it is
+//     the index of the first entry that should be there and is not, which may
+//     equal the number of entries present. broken_reason is new and additive —
+//     consumers that only read broken_index are unaffected.
+//   - {"valid": false, "broken_index": nil, "verify_error": "…"}  -> the chain
+//     could NOT be checked, so no verdict on tampering can be made. This case
+//     must never collapse into "valid": true, and is told apart from the broken
+//     case by broken_index being nil while verify_error is set.
+//
+// Three states, exactly as before. The keyed rewrite adds new REASONS to reach
+// the second and third — a bad signature, a short chain, a key this process
+// does not hold — but no fourth verdict.
+//
+// The distinction that matters most: a key that is missing, rotated or lost is
+// could-not-verify, NOT tampering. Reporting "someone forged your audit log"
+// because a config directory was wiped would be exactly the kind of invented
+// certainty this codebase spent the week removing.
+func (l *Log) Verify() map[string]any {
+	entries, skipped, err := l.Read()
+	if err != nil {
+		return cannotVerify(fmt.Sprintf("audit log could not be read: %v", err))
+	}
+	if skipped > 0 {
+		return cannotVerify(fmt.Sprintf("audit log incomplete: %d line(s) could not be decoded", skipped))
+	}
+
+	// 1. Structure: the original unkeyed chain check, unchanged in behaviour.
+	if idx, reason, ok := l.walkLinks(entries); !ok {
+		return broken(idx, reason)
+	}
+
+	// 2. Position and signature, per entry. Entries written before the keyed
+	//    rewrite carry neither and are skipped here; they are still covered
+	//    collectively by the sealed head in step 4, because the hash chain
+	//    means any edit to them changes the final hash.
+	foreignKey := ""
+	for i, e := range entries {
+		if raw, ok := e["seq"]; ok {
+			n, isNum := raw.(json.Number)
+			v, nerr := int64(-1), error(nil)
+			if isNum {
+				v, nerr = n.Int64()
+			}
+			if !isNum || nerr != nil || int(v) != i {
+				return broken(i, fmt.Sprintf("entry claims position %v but sits at position %d", raw, i))
+			}
+		}
+		mac, hasMAC := e["mac"].(string)
+		if !hasMAC {
+			continue
+		}
+		kid, _ := e["key_id"].(string)
+		if l.key == nil {
+			foreignKey = kid
+			continue
+		}
+		if kid != "" && kid != l.key.id {
+			foreignKey = kid
+			continue
+		}
+		hash, _ := e["hash"].(string)
+		if !macEqual(mac, entryMAC(l.key.secret, i, hash)) {
+			return broken(i, "entry signature does not match — it was written by something without the audit key")
+		}
+	}
+
+	// 3. No key: the links are consistent, but nothing is attested and a
+	//    truncated tail cannot be ruled out. That is not "intact".
+	if l.key == nil {
+		if len(entries) == 0 {
+			return map[string]any{"valid": true, "broken_index": nil}
+		}
+		return cannotVerify(fmt.Sprintf(
+			"no audit key is available, so the chain's signatures cannot be checked: %v", l.keyErr))
+	}
+	if foreignKey != "" {
+		return cannotVerify(fmt.Sprintf(
+			"entries are signed with audit key %s but this process holds %s; the chain may well be intact, but it cannot be checked with the key configured here",
+			foreignKey, l.key.id))
+	}
+
+	// 4. The sealed head: how many entries there are supposed to be.
+	h, err := l.readHead()
+	if err != nil {
+		return cannotVerify(fmt.Sprintf("the sealed head record could not be read: %v", err))
+	}
+	if h == nil {
+		if len(entries) == 0 {
+			return map[string]any{"valid": true, "broken_index": nil}
+		}
+		return cannotVerify(
+			"this chain has never been sealed, so entries removed from the end cannot be detected; it is sealed at the next restart or audit event")
+	}
+	if h.KeyID != l.key.id {
+		return cannotVerify(fmt.Sprintf(
+			"the chain was sealed with audit key %s but this process holds %s, so the entry count cannot be checked", h.KeyID, l.key.id))
+	}
+	if !macEqual(h.MAC, headMAC(l.key.secret, h.Count, h.Hash)) {
+		return broken(min(h.Count, len(entries)), "the sealed head record's own signature does not match — it was altered")
+	}
+	if len(entries) < h.Count {
+		return broken(len(entries), fmt.Sprintf(
+			"the log holds %d entries but the sealed head records %d — %d were removed from the end",
+			len(entries), h.Count, h.Count-len(entries)))
+	}
+	if h.Count > 0 {
+		sealed, _ := entries[h.Count-1]["hash"].(string)
+		if sealed != h.Hash {
+			return broken(h.Count-1, "the entry at the sealed position does not match the sealed hash")
+		}
+	}
+	// A head SHORT of the log is legitimate only when every entry past it is
+	// signed — that is the stale-seal case Append tolerates. An unsigned entry
+	// appended past the seal is the downgrade attack: strip the signatures,
+	// recompute the plain hashes, and the old verifier would have accepted it.
+	for i := h.Count; i < len(entries); i++ {
+		if _, ok := entries[i]["mac"].(string); !ok {
+			return broken(i, "entry was appended after the sealed head without a signature")
+		}
 	}
 	return map[string]any{"valid": true, "broken_index": nil}
 }

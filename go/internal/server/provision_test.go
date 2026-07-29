@@ -18,7 +18,10 @@ func newRetagTestDeps(t *testing.T, upstream http.HandlerFunc) *Deps {
 	d, closeSrv := newTestDeps(t, upstream)
 	t.Cleanup(closeSrv)
 	d.Guard = &httpx.Guard{Port: "8080"}
-	d.Audit = audit.New(filepath.Join(t.TempDir(), "audit_log.jsonl"), "app-v-test", "test-instance")
+	d.Audit = audit.New(filepath.Join(t.TempDir(), "audit_log.jsonl"), "app-v-test", "test-instance",
+		// Trust root in its own directory, as it is in production — the key
+		// must never sit beside the log it signs.
+		audit.Options{TrustDir: t.TempDir()})
 	return d
 }
 

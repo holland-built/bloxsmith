@@ -345,7 +345,7 @@ known follow-up. Until then, provisioning that relies on bundled templates needs
 | `INFOBLOX_URL`     |          | `https://csp.infoblox.com` | Portal base URL                            |
 | `GROQ_API_KEY`     |          | _(empty)_                | Enables the AI query box (Groq)              |
 | `LLM_API_KEY`      |          | `GROQ_API_KEY`           | Overrides for any OpenAI-compatible provider |
-| `LLM_MODEL`        |          | `qwen/qwen3-32b`         | Model name                                   |
+| `LLM_MODEL`        |          | `llama-3.3-70b-versatile` | Model name. The old `qwen/qwen3-32b` default was decommissioned by Groq in July 2026 and 404s |
 | `LLM_BASE_URL`     |          | _(blank = Groq)_         | OpenAI-compatible endpoint                   |
 | `VAULT_DIR`        |          | `/vault`                 | Where `vault.json` is stored (mount a volume here) |
 | `VAULT_PASSPHRASE` |          | —                        | Vault-mode auto-unlock at boot (see below)   |
@@ -356,6 +356,45 @@ known follow-up. Until then, provisioning that relies on bundled templates needs
 | `ALLOWED_HOSTS`    |          | _(loopback + `HOST`)_    | Comma-separated extra `Host` header values this deployment answers to (DNS-rebinding gate). `localhost`/`127.0.0.1`/`[::1]`/`HOST` are always allowed; anything else gets `421`. A wildcard bind (`HOST=0.0.0.0`, the Docker default) can't know its own names, so the gate is **off** there until you set this |
 | `DISABLE_UPDATE_CHECK` |      | _(unset)_                | Set to `1` to opt out of the daily GitHub Releases update check |
 | `WATCHTOWER_TOKEN` |          | _(generated/default)_    | Shared secret for the optional Watchtower sidecar's HTTP API (alternate update trigger) |
+| `AUDIT_TRUST_DIR`  |          | _(per-user config dir)_  | Where the audit chain's HMAC key and sealed head record live. Must **not** be the directory holding `audit_log.jsonl` — a key an attacker can rewrite beside the log it signs protects nothing. The app warns at startup if you point it there |
+| `AUDIT_KEY`        |          | _(generated locally)_    | Audit HMAC key, hex, ≥64 characters. Set this from an injected secret and the trust root no longer lives on the machine that writes the log |
+| `AUDIT_KEY_FILE`   |          | —                        | Path to a file holding the same hex key; preferred over `AUDIT_KEY` (kept out of `docker inspect` / process env) |
+
+### The audit chain's key
+
+The local action log (`audit_log.jsonl`) hashes each entry to the one before it,
+signs each entry with an HMAC, and keeps a separately sealed record of how many
+entries the chain should contain. The links catch corruption; the signature and
+the sealed count are what catch a person — without the key you cannot edit an
+entry, and you cannot cut entries off the end, without `/api/audit/log`
+reporting it.
+
+**What the default protects, and what it does not.** With nothing configured the
+key is generated once at `<AUDIT_TRUST_DIR>/audit.key`, mode `0600`, on the same
+machine. That defeats an attacker who can write the log file but is not the
+operator: a stolen copy of the state directory, a shared or mounted volume, a
+different local account, a backup. It does **not** defeat a process already
+running as the operator — that process can read the key and forge freely. This
+is the same limit as `VAULT_PASSPHRASE` below, and it is inherent to running
+unattended, not a defect. Set `AUDIT_KEY_FILE` from a secret the log's writer
+cannot read to close it.
+
+**Losing the key is not tampering, and is not reported as tampering.** If the
+trust directory is wiped — a container without persistent storage, a rebuilt
+machine — the existing entries stay signed with a key the new process does not
+hold. The verdict becomes *could not verify*, naming both key IDs, and stays
+there for those entries. It never becomes *tampered*: accusing an operator of
+forgery because their config directory was deleted would be a fabricated claim.
+Mount the trust directory, or set `AUDIT_KEY`, if you need the verdict to
+survive a rebuild.
+
+**Upgrading an existing log.** A chain written before the keyed rewrite has no
+signatures and no seal, so it reports *could not verify* until the app seals it,
+which happens automatically at the first startup after the upgrade. Sealing
+takes the log as it stands at that moment: anything already removed by someone
+who got there first is sealed in as legitimate. Every later removal is detected.
+The app refuses to seal a chain whose links are already broken, so adoption can
+never turn a visibly tampered log into a clean one.
 
 ---
 
@@ -406,6 +445,9 @@ For unattended restarts on the [Customer path](#customer-path-compose), set
 - The compose file mounts the Docker socket into the app for self-update; remove
   that line if you don't want the dashboard to have Docker control.
 - If a token is ever exposed, **rotate it** in the CSP portal — scrubbing files does not revoke it.
+- The audit chain is tamper-evident against someone who can write `audit_log.jsonl`, **not**
+  against a process running as the operator, which can read the key. See
+  [the audit chain's key](#the-audit-chains-key).
 
 See [SECURITY.md](../.github/SECURITY.md) for the policy and how to report a vulnerability,
 and [CONTRIBUTING.md](../.github/CONTRIBUTING.md) for local setup and the test suite.

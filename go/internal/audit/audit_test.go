@@ -70,7 +70,7 @@ func TestCanonicalJSONByteParity(t *testing.T) {
 // exact hashing algorithm, and recomputes each entry's hash identically.
 func TestVerifyPythonWrittenChain(t *testing.T) {
 	exp := loadExpected(t)
-	l := New(filepath.Join("testdata", "audit_log.jsonl"), "app-v1.2.3", "ab12cd34")
+	l := newTestLog(t, filepath.Join("testdata", "audit_log.jsonl"))
 
 	entries, skipped, err := l.Read()
 	if err != nil {
@@ -96,9 +96,30 @@ func TestVerifyPythonWrittenChain(t *testing.T) {
 		}
 	}
 
+	// Before the keyed rewrite this asserted Verify() == valid here, and that
+	// assertion was the defect in miniature: an unsealed chain's tail can be cut
+	// off without a trace, so "valid" was a claim the code could not support.
+	// The hash-parity guarantee this test exists for is the loop above, and it
+	// is unchanged. The verdict is now honest in both directions.
 	res := l.Verify()
+	if v, _ := res["valid"].(bool); v {
+		t.Fatalf("Verify() on an unsealed legacy chain = %v, want could-not-verify", res)
+	}
+	if res["broken_index"] != nil {
+		t.Fatalf("broken_index = %v, want nil — an unsealed chain is not a tampered one", res["broken_index"])
+	}
+	if msg, _ := res["verify_error"].(string); msg == "" {
+		t.Fatalf("no verify_error explaining why the legacy chain cannot be attested: %v", res)
+	}
+
+	// Adopting it (what main.go does at startup) seals the chain as it stands,
+	// and the Python-written entries then verify intact under the Go verifier.
+	if err := l.Adopt(); err != nil {
+		t.Fatalf("Adopt() on a structurally sound Python chain: %v", err)
+	}
+	res = l.Verify()
 	if v, _ := res["valid"].(bool); !v {
-		t.Fatalf("Verify() on Python chain = %v, want valid", res)
+		t.Fatalf("Verify() on the sealed Python chain = %v, want valid", res)
 	}
 }
 
@@ -120,7 +141,7 @@ func TestVerifyDetectsTampering(t *testing.T) {
 	if err := os.WriteFile(p, tampered, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	l := New(p, "app-v1.2.3", "ab12cd34")
+	l := newTestLog(t, p)
 	res := l.Verify()
 	if v, _ := res["valid"].(bool); v {
 		t.Fatal("Verify() accepted a tampered chain")
@@ -143,7 +164,7 @@ func replaceFirst(s, old, new string) string {
 // consistent (Append then Verify green), and links entries correctly.
 func TestGoWrittenChainVerifies(t *testing.T) {
 	dir := t.TempDir()
-	l := New(filepath.Join(dir, "audit_log.jsonl"), "app-v9.9.9", "deadbeef")
+	l := newTestLog(t, filepath.Join(dir, "audit_log.jsonl"))
 	ts := 1752624000.5
 	l.now = func() float64 { ts += 20; return ts } // fractional -> real float repr
 
@@ -175,7 +196,7 @@ func TestGoWrittenChainVerifies(t *testing.T) {
 // empty chain, not a read failure — it must still verify as intact.
 func TestVerifyEmptyLogIsValid(t *testing.T) {
 	dir := t.TempDir()
-	l := New(filepath.Join(dir, "audit_log.jsonl"), "app-v1.2.3", "ab12cd34")
+	l := newTestLog(t, filepath.Join(dir, "audit_log.jsonl"))
 
 	res := l.Verify()
 	if v, _ := res["valid"].(bool); !v {
@@ -199,7 +220,7 @@ func TestVerifyUnreadableFileCannotVerify(t *testing.T) {
 	if err := os.Mkdir(logPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	l := New(logPath, "app-v1.2.3", "ab12cd34")
+	l := newTestLog(t, logPath)
 
 	res := l.Verify()
 	if v, _ := res["valid"].(bool); v {
@@ -221,7 +242,7 @@ func TestVerifyUnreadableFileCannotVerify(t *testing.T) {
 func TestVerifyDroppedLineCannotVerify(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "audit_log.jsonl")
-	l := New(logPath, "app-v9.9.9", "deadbeef")
+	l := newTestLog(t, logPath)
 	ts := 1752624000.5
 	l.now = func() float64 { ts += 20; return ts }
 
@@ -266,7 +287,7 @@ func TestVerifyUnverifiableIsDistinctFromValid(t *testing.T) {
 	if err := os.Mkdir(logPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	l := New(logPath, "app-v1.2.3", "ab12cd34")
+	l := newTestLog(t, logPath)
 
 	unverifiable := l.Verify()
 	valid, _ := unverifiable["valid"].(bool)
@@ -278,7 +299,7 @@ func TestVerifyUnverifiableIsDistinctFromValid(t *testing.T) {
 		t.Fatal("unverifiable chain has no verify_error to distinguish it from a clean valid:false/broken result")
 	}
 
-	emptyLog := New(filepath.Join(dir, "other_audit_log.jsonl"), "app-v1.2.3", "ab12cd34")
+	emptyLog := newTestLog(t, filepath.Join(dir, "other_audit_log.jsonl"))
 	valid2 := emptyLog.Verify()
 	v2, _ := valid2["valid"].(bool)
 	if !v2 {
@@ -315,7 +336,7 @@ func captureLog(t *testing.T) func() string {
 func TestAppendOnCorruptChain_RefusesLoudly_NoSilentNoOp(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "audit_log.jsonl")
-	l := New(logPath, "app-v9.9.9", "deadbeef")
+	l := newTestLog(t, logPath)
 	ts := 1752624000.5
 	l.now = func() float64 { ts += 20; return ts }
 
@@ -385,7 +406,7 @@ func TestAppendOnCorruptChain_RefusesLoudly_NoSilentNoOp(t *testing.T) {
 // verifying exactly as before.
 func TestAppendOnHealthyChain_Unaffected(t *testing.T) {
 	dir := t.TempDir()
-	l := New(filepath.Join(dir, "audit_log.jsonl"), "app-v9.9.9", "deadbeef")
+	l := newTestLog(t, filepath.Join(dir, "audit_log.jsonl"))
 	ts := 1752624000.5
 	l.now = func() float64 { ts += 20; return ts }
 
@@ -418,7 +439,7 @@ func TestAppendOnHealthyChain_Unaffected(t *testing.T) {
 // like TestVerifyEmptyLogIsValid pins for Verify().
 func TestAppendOnGenuinelyEmptyLog_StillWorks(t *testing.T) {
 	dir := t.TempDir()
-	l := New(filepath.Join(dir, "audit_log.jsonl"), "app-v1.2.3", "ab12cd34")
+	l := newTestLog(t, filepath.Join(dir, "audit_log.jsonl"))
 
 	entry, err := l.Append("write-authorized", "loopback",
 		map[string]any{"method": "POST", "path": "/api/edit/host"})
