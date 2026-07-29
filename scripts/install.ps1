@@ -177,7 +177,13 @@ try {
             # it through cmd /c instead, which merges the streams at the OS
             # level before PowerShell ever sees them as its own error records.
             $verOut = (& cmd /c 'ssh -V 2>&1') -join "`n"
-            $vm = [regex]::Match($verOut, 'OpenSSH_(\d+)\.(\d+)')
+            # Version strings differ by platform and the Windows one does NOT
+            # match a naive 'OpenSSH_(\d+)': Linux/macOS report "OpenSSH_9.6p1",
+            # Windows reports "OpenSSH_for_Windows_9.5p2". Anchoring on the
+            # digits after any OpenSSH prefix covers both. Getting this wrong
+            # rejected OpenSSH 9.5 as "predates 8.0" on the only platform this
+            # script runs on.
+            $vm = [regex]::Match($verOut, 'OpenSSH[A-Za-z_]*_(\d+)\.(\d+)')
             if ($vm.Success -and [int]$vm.Groups[1].Value -ge 8) {
                 $sshSupported = $true
             } else {
