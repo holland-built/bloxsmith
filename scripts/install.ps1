@@ -17,13 +17,13 @@ profile (no admin, no Docker). Adds the install dir to your USER PATH.
 
 Notes:
   * ExecutionPolicy: if scripts are blocked, run it for this process only with
-    `powershell -ExecutionPolicy Bypass -File .\install.ps1` — nothing global changes.
+    `powershell -ExecutionPolicy Bypass -File .\install.ps1` - nothing global changes.
   * The SHA-256 check proves the download is INTACT (not corrupt/truncated).
     Before installing, the script also verifies checksums.txt itself was
     signed by this project's release key (ssh-keygen -Y verify against
     checksums.txt.sshsig, key pinned in the script). HONEST SCOPE: this
-    authenticates the release PIPELINE — the artifact left this repo's CI
-    unmodified since it was signed — not the SOURCE, and the exe is still
+    authenticates the release PIPELINE - the artifact left this repo's CI
+    unmodified since it was signed - not the SOURCE, and the exe is still
     unsigned for Windows SmartScreen. Releases before 3.23.0 predate signing;
     if you pin one with -Version, the script says so explicitly rather than
     silently skipping the check.
@@ -133,7 +133,7 @@ try {
     # secrets; the public half is pinned here, so the thing that decides
     # whether a release is genuine does not travel with the release. This
     # authenticates the release PIPELINE (the same signature go/signing.go
-    # checks before a self-update) — it does not authenticate the exe's
+    # checks before a self-update) - it does not authenticate the exe's
     # publisher identity to Windows; that's SmartScreen, a separate control.
     $SIG_SSH_PUBKEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILh1e4Aj8VwLy+7PBMzfkwqDa7amfqAgpSmF1sq4S+g9'
     $SIGNING_SINCE  = [version]'3.23.0'
@@ -148,7 +148,7 @@ try {
 
     # Releases from 3.23.0 onward always carry a signature (CI refuses to
     # publish without one). "latest" and a version number that can't be parsed
-    # are treated the same as ">= 3.23.0" — fail closed, never assume it's old.
+    # are treated the same as ">= 3.23.0" - fail closed, never assume it's old.
     # The ONLY legitimate skip is a version pinned by the caller that
     # genuinely predates signing; that is a fact about that one old release,
     # never phrased as "signing is generally unavailable".
@@ -162,7 +162,7 @@ try {
 
     # ssh-keygen -Y verify needs OpenSSH >= 8.0 (that's when -Y sign/verify was
     # added). Windows 10 1809 shipped OpenSSH 7.7, which doesn't understand -Y
-    # at all — probe the real version rather than assuming ssh-keygen exists
+    # at all - probe the real version rather than assuming ssh-keygen exists
     # or is new enough.
     $sshSupported   = $false
     $sshVersionNote = ''
@@ -203,7 +203,7 @@ try {
     } catch {
         $statusCode = $null
         # Use the PSObject.Properties indexer rather than dereferencing
-        # .Response/.StatusCode directly — under Set-StrictMode -Version
+        # .Response/.StatusCode directly - under Set-StrictMode -Version
         # Latest, touching a property the exception type doesn't declare
         # (e.g. a plain connection failure with no HTTP response at all)
         # throws instead of returning $null.
@@ -431,7 +431,7 @@ failing, open an issue at https://github.com/$REPO/issues
     # "no attached console prevented UI", not "a human is at a terminal"), so
     # without the $env:CI check an unmodified pipeline run would launch a
     # long-lived server and pop a browser inside an automated job. $env:CI is
-    # only the common convention (GitHub Actions and most other CI set it) —
+    # only the common convention (GitHub Actions and most other CI set it) -
     # it does not detect every kind of automation, and anything cleverer risks
     # skipping the launch for a real person sitting at a real terminal, which
     # is the entire point of this step.
@@ -448,7 +448,7 @@ failing, open an issue at https://github.com/$REPO/issues
         }
         Start-Process $url | Out-Null
         if (-not $up) {
-            Write-Host "Bloxsmith is still starting — the browser may need a refresh."
+            Write-Host "Bloxsmith is still starting - the browser may need a refresh."
         }
     }
 
