@@ -245,32 +245,36 @@ try {
         # (and to what was signed). Both streams are tiny (a checksums file
         # and one status line), so writing stdin fully before reading output
         # cannot deadlock on a full pipe buffer here.
-        function ConvertTo-CliArg([string]$arg) {
-            if ($arg -notmatch '[\s"]') { return $arg }
-            return '"' + ($arg -replace '"', '\"') + '"'
-        }
+        # HOW THE DATA REACHES ssh-keygen, and why it is done this way.
+        #
+        # ssh-keygen -Y verify reads the signed data from stdin and checks an
+        # EXACT byte signature. Two approaches were tried:
+        #
+        #   1. Get-Content | ssh-keygen        - rejected outright: the
+        #      PowerShell pipeline re-encodes text and rewrites line endings,
+        #      which corrupts the signed bytes.
+        #   2. ProcessStartInfo with RedirectStandardInput, writing the raw
+        #      bytes onto StandardInput.BaseStream - looks byte-exact, and is
+        #      not. Measured in CI against a genuine release: ssh-keygen
+        #      reported "incorrect signature" for a checksums.txt that verified
+        #      correctly the moment the same bytes were fed in via a cmd
+        #      redirect. A false "does not verify" is the worst outcome
+        #      available here - it accuses a good release of being forged.
+        #
+        # So: cmd's < redirect, which hands the file to the process as raw
+        # bytes with nothing in between. Proven in CI on the same file that
+        # approach 2 rejected. Paths are quoted for cmd because a user's TEMP
+        # or -Prefix may contain spaces.
         $sshExitCode = -1
         $sshStdErr   = ''
         try {
-            $psi = New-Object System.Diagnostics.ProcessStartInfo
-            $psi.FileName = 'ssh-keygen'
-            $argParts = @('-Y', 'verify', '-f', $allowedSigners, '-I', 'bloxsmith-release-signing', '-n', 'bloxsmith-release', '-s', $sshsigPath)
-            $psi.Arguments = (($argParts | ForEach-Object { ConvertTo-CliArg $_ }) -join ' ')
-            $psi.RedirectStandardInput  = $true
-            $psi.RedirectStandardOutput = $true
-            $psi.RedirectStandardError  = $true
-            $psi.UseShellExecute = $false
-            $proc = [System.Diagnostics.Process]::Start($psi)
-            $dataBytes = [System.IO.File]::ReadAllBytes($checksums)
-            $proc.StandardInput.BaseStream.Write($dataBytes, 0, $dataBytes.Length)
-            $proc.StandardInput.BaseStream.Close()
-            $sshStdErr = $proc.StandardError.ReadToEnd()
-            $proc.StandardOutput.ReadToEnd() | Out-Null
-            $proc.WaitForExit()
-            $sshExitCode = $proc.ExitCode
+            $cmdLine = 'ssh-keygen -Y verify -f "{0}" -I bloxsmith-release-signing -n bloxsmith-release -s "{1}" < "{2}" 2>&1' -f `
+                $allowedSigners, $sshsigPath, $checksums
+            $sshStdErr   = (& cmd /c $cmdLine) -join "`n"
+            $sshExitCode = $LASTEXITCODE
         } catch {
             $sshExitCode = -1
-            $sshStdErr = $_.Exception.Message
+            $sshStdErr   = $_.Exception.Message
         }
 
         if ($sshExitCode -eq 0) {
