@@ -84,7 +84,16 @@ else {
         if ($line -like "*$asset") { $hash + '  ' + $asset } else { $line }
     }
     Set-Content -Path (Join-Path $rel 'checksums.txt') -Value $rewritten -Encoding Ascii
-    $mustSay = 'no signature'
+    # HARNESS LIMIT, stated rather than papered over: the shim throws a plain
+    # exception, so install.ps1 sees "could not fetch" rather than a real HTTP
+    # 404. Both are refusals and both are fail-closed, but the genuine-404
+    # branch - the one that also decides whether a pinned pre-3.23.0 release may
+    # proceed - is NOT exercised here. Asserting the exact 404 wording would
+    # mean asserting a message this harness cannot produce; asserting whatever
+    # it happens to print would mean the test proves nothing. So assert the
+    # security property (refused, nothing installed) and that the reason is
+    # about the signature at all.
+    $mustSay = 'signature'
 }
 
 # --- serve those files instead of the network --------------------------------
@@ -145,6 +154,11 @@ if (Test-Path -LiteralPath $exe) {
 }
 if ($text -notmatch [regex]::Escape($mustSay)) {
     Write-Host "::error::install.ps1 refused, but not for the stated reason - '$mustSay' is absent from its output"
+    $failed = $true
+}
+# Whatever the wording, a refusal must never be reported as a success.
+if ($text -match 'Installed bloxsmith') {
+    Write-Host "::error::install.ps1 printed 'Installed bloxsmith' for a release it refused"
     $failed = $true
 }
 if ($failed) { exit 1 }
