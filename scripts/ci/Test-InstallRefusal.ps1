@@ -118,6 +118,13 @@ $wrapperText = $wrapperTemplate.Replace('__REL__', $rel).Replace('__INSTALLER__'
 Set-Content -Path $wrapper -Value $wrapperText -Encoding Ascii
 
 # --- run it and judge --------------------------------------------------------
+# ErrorActionPreference must NOT be 'Stop' around this call. The installer is
+# EXPECTED to fail here, and with 'Stop' the first stderr line a child process
+# writes is promoted to a terminating error - so this script would die at the
+# moment the thing it is testing works correctly, reporting a test failure for a
+# successful refusal. That trap has now bitten three times in this file's
+# history; it is why the assertions below judge the exit code instead.
+$ErrorActionPreference = 'Continue'
 $out  = & powershell -NoProfile -ExecutionPolicy Bypass -File $wrapper 2>&1 | ForEach-Object { $_.ToString() }
 $code = $LASTEXITCODE
 $text = ($out -join "`n")
