@@ -208,22 +208,34 @@ func Correlate(signals []map[string]any) []map[string]any {
 			}
 			sample = append(sample, s["entity_id"])
 		}
-		firstDetected := group[0]["detected_at"].(float64)
+		// detected_at is absent, not merely stale, on every signal in a
+		// degraded StampFirstSeen call (store.go: first_seen_unknown branch) —
+		// a bare type assertion here would panic on the very first such poll.
+		// Track "have we seen a real timestamp" explicitly instead of assuming
+		// group[0] has one.
+		var firstDetected float64
+		haveFirst := false
 		for _, s := range group {
-			if f, ok := s["detected_at"].(float64); ok && f < firstDetected {
+			if f, ok := s["detected_at"].(float64); ok && (!haveFirst || f < firstDetected) {
 				firstDetected = f
+				haveFirst = true
 			}
 		}
-		incidents = append(incidents, map[string]any{
-			"key":               category,
-			"category":          category,
-			"severity":          severity,
-			"count":             len(group),
-			"sample_entities":   sample,
-			"first_detected_at": firstDetected,
-			"message":           fmt.Sprintf("%d %s", len(group), strings.ReplaceAll(category, "-", " ")),
-			"entity_type":       group[0]["entity_type"],
-		})
+		inc := map[string]any{
+			"key":             category,
+			"category":        category,
+			"severity":        severity,
+			"count":           len(group),
+			"sample_entities": sample,
+			"message":         fmt.Sprintf("%d %s", len(group), strings.ReplaceAll(category, "-", " ")),
+			"entity_type":     group[0]["entity_type"],
+		}
+		if haveFirst {
+			inc["first_detected_at"] = firstDetected
+		} else {
+			inc["first_seen_unknown"] = true
+		}
+		incidents = append(incidents, inc)
 	}
 	return incidents
 }

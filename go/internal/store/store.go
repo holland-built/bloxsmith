@@ -267,6 +267,14 @@ func (s *Store) StampFirstSeen(signals []map[string]any) []map[string]any {
 		// gets to try loading the untouched file again.
 		for _, sig := range signals {
 			sig["first_seen_unknown"] = true
+			// BuildSignals stamps every signal with detected_at:now moments
+			// before this runs. Flagging first_seen_unknown without also
+			// deleting that fabricated timestamp left the payload reading
+			// detected_at:<now>, first_seen_unknown:true — a confident-looking
+			// "0s" age and an ackKey that churns every poll, exactly the
+			// falsehood this flag exists to prevent. Delete it so no caller
+			// can accidentally read a timestamp that was never earned.
+			delete(sig, "detected_at")
 		}
 		return signals
 	}
