@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Overview → deeper-tab drill-downs: the click must land on the SAME data, filtered.
 

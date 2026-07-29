@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Second batch of "failure shown as absence" fixes. Same pattern as
 // failure-not-absence.spec.ts: stub the same endpoint twice — once as a hard

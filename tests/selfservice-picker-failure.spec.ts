@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // SelfService.jsx's Allocate / DNS / Manage panels each fetch a picker list
 // (/api/ipam/spaces, /api/dns/zones) via useApi(). A failed read leaves

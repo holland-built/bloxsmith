@@ -31,7 +31,7 @@ func (d *Deps) blockDomain(w http.ResponseWriter, r *http.Request, b map[string]
 	result := d.Dashboard.BlockDomain(r.Context(), domain, d.Cfg.BlockListID)
 	d.json(w, r, outcomeStatus(result), result)
 	if outcome, _ := result["outcome"].(string); outcome == "verified" {
-		_, _ = d.Audit.Append("block-domain", httpx.Actor(r), map[string]any{"domain": domain})
+		d.auditAppend("block-domain", httpx.Actor(r), map[string]any{"domain": domain})
 	}
 }
 
@@ -49,7 +49,7 @@ func (d *Deps) unblockDomain(w http.ResponseWriter, r *http.Request, b map[strin
 	result := d.Dashboard.UnblockDomain(r.Context(), domain, d.Cfg.BlockListID)
 	d.json(w, r, outcomeStatus(result), result)
 	if outcome, _ := result["outcome"].(string); outcome == "verified" {
-		_, _ = d.Audit.Append("unblock-domain", httpx.Actor(r), map[string]any{"domain": domain})
+		d.auditAppend("unblock-domain", httpx.Actor(r), map[string]any{"domain": domain})
 	}
 }
 

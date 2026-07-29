@@ -59,7 +59,7 @@ func (d *Deps) actionStatus(w http.ResponseWriter, r *http.Request, b map[string
 	res, err := d.Dashboard.UpdateAction(r.Context(), id, status)
 	if err != nil {
 		d.json(w, r, 400, map[string]any{"ok": false, "error": err.Error()})
-		_, _ = d.Audit.Append("iq-action-resolve-failed", httpx.Actor(r), map[string]any{
+		d.auditAppend("iq-action-resolve-failed", httpx.Actor(r), map[string]any{
 			"id": id, "old_status": "unknown", "new_status": status, "error": err.Error()})
 		return
 	}
@@ -67,13 +67,13 @@ func (d *Deps) actionStatus(w http.ResponseWriter, r *http.Request, b map[string
 		// UpdateAction returned a non-error but unconfirmed outcome (e.g. an
 		// unparseable upstream response) — surface it as a failure, not a 200.
 		d.json(w, r, 502, res)
-		_, _ = d.Audit.Append("iq-action-resolve-failed", httpx.Actor(r), map[string]any{
+		d.auditAppend("iq-action-resolve-failed", httpx.Actor(r), map[string]any{
 			"id": id, "old_status": res["old_status"], "new_status": res["new_status"],
 			"error": res["error"]})
 		return
 	}
 	d.json(w, r, 200, res)
-	_, _ = d.Audit.Append("iq-action-resolve", httpx.Actor(r), map[string]any{
+	d.auditAppend("iq-action-resolve", httpx.Actor(r), map[string]any{
 		"id": id, "old_status": res["old_status"], "new_status": res["new_status"]})
 }
 

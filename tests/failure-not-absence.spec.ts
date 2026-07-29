@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Seven panels across five tabs used to render a backend-reported FAILURE
 // (an explicit availability/status/signals_degraded flag) identically to a

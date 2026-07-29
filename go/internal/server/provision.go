@@ -149,13 +149,13 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 		}
 		emit(map[string]any{"done": true, "subnet": map[string]any{
 			"id": subnet["id"], "address": subnet["address"], "cidr": subnet["cidr"]}})
-		_, _ = d.Audit.Append("provision-subnet", httpx.Actor(r), map[string]any{
+		d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
 			"block": block, "cidr": cidr, "subnet": subnet["address"]})
 		return nil
 	}()
 	if err != nil {
 		if !dry {
-			_, _ = d.Audit.Append("provision-subnet-error", httpx.Actor(r),
+			d.auditAppend("provision-subnet-error", httpx.Actor(r),
 				map[string]any{"block": block, "error": err.Error()})
 		}
 		emit(map[string]any{"error": err.Error()})
@@ -193,7 +193,7 @@ func (d *Deps) provisionSiteStream(w http.ResponseWriter, r *http.Request) {
 	result, err := d.Provision.NewSiteProvisioner(cfg, emitter(emit)).Provision()
 	if err != nil {
 		if !cfg.DryRun {
-			_, _ = d.Audit.Append("provision-site-error", httpx.Actor(r),
+			d.auditAppend("provision-site-error", httpx.Actor(r),
 				map[string]any{"template": name, "error": err.Error()})
 		}
 		if !provision.IsError(err) {
@@ -204,7 +204,7 @@ func (d *Deps) provisionSiteStream(w http.ResponseWriter, r *http.Request) {
 	}
 	emit(map[string]any{"done": true, "result": result})
 	if !cfg.DryRun {
-		_, _ = d.Audit.Append("provision-site", httpx.Actor(r),
+		d.auditAppend("provision-site", httpx.Actor(r),
 			map[string]any{"template": name, "site": cfg.Site})
 	}
 }
@@ -302,7 +302,7 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 
 	emit(terminalFrame(summary))
 	if !dry {
-		_, _ = d.Audit.Append("provision-seed-demo", httpx.Actor(r), map[string]any{
+		d.auditAppend("provision-seed-demo", httpx.Actor(r), map[string]any{
 			"regions":   regions,
 			"succeeded": lenOf(summary, "succeeded"),
 			"failed":    lenOf(summary, "failed"),
@@ -345,7 +345,7 @@ func (d *Deps) teardownSiteStream(w http.ResponseWriter, r *http.Request) {
 	result, err := d.Provision.NewSiteDecommissioner(cfg, emitter(emit)).Decommission()
 	if err != nil {
 		if !cfg.DryRun {
-			_, _ = d.Audit.Append("teardown-site-error", httpx.Actor(r),
+			d.auditAppend("teardown-site-error", httpx.Actor(r),
 				map[string]any{"template": name, "error": err.Error()})
 		}
 		if !provision.IsError(err) {
@@ -356,7 +356,7 @@ func (d *Deps) teardownSiteStream(w http.ResponseWriter, r *http.Request) {
 	}
 	emit(map[string]any{"done": true, "result": result})
 	if !cfg.DryRun {
-		_, _ = d.Audit.Append("teardown-site", httpx.Actor(r),
+		d.auditAppend("teardown-site", httpx.Actor(r),
 			map[string]any{"template": name, "site": cfg.Site})
 	}
 }
@@ -450,7 +450,7 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 
 	emit(terminalFrame(summary))
 	if !dry {
-		_, _ = d.Audit.Append("teardown-seed-demo", httpx.Actor(r), map[string]any{
+		d.auditAppend("teardown-seed-demo", httpx.Actor(r), map[string]any{
 			"regions":   regions,
 			"succeeded": lenOf(summary, "succeeded"),
 			"failed":    lenOf(summary, "failed"),
@@ -510,7 +510,7 @@ func (d *Deps) provisionBlock(w http.ResponseWriter, r *http.Request, b map[stri
 	d.json(w, r, 200, map[string]any{"blocks_created": result["blocks_created"]})
 	if b2, _ := result["dry_run"].(bool); !b2 {
 		created, _ := result["blocks_created"].([]any)
-		_, _ = d.Audit.Append("provision-block", httpx.Actor(r),
+		d.auditAppend("provision-block", httpx.Actor(r),
 			map[string]any{"template": name, "blocks_created": len(created)})
 	}
 }
@@ -556,7 +556,7 @@ func (d *Deps) teardownBlock(w http.ResponseWriter, r *http.Request, b map[strin
 	}
 	d.json(w, r, 200, map[string]any{"result": result})
 	if !dry {
-		_, _ = d.Audit.Append("teardown-block", httpx.Actor(r),
+		d.auditAppend("teardown-block", httpx.Actor(r),
 			map[string]any{"template": name, "block": blockName})
 	}
 }
@@ -617,7 +617,7 @@ func (d *Deps) retagBlock(w http.ResponseWriter, r *http.Request, b map[string]a
 	}
 	d.json(w, r, 200, map[string]any{"status": status, "changed": changed, "dry_run": dry})
 	if !dry {
-		_, _ = d.Audit.Append("retag-block", httpx.Actor(r),
+		d.auditAppend("retag-block", httpx.Actor(r),
 			map[string]any{"template": templateName, "status": status, "count": len(changed)})
 	}
 }

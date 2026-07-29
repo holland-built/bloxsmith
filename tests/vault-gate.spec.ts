@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('vault locked: shows passphrase input, no tab nav', async ({ page }) => {
   await page.route('**/api/vault/status', (route) =>

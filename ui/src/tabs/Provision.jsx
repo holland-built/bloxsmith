@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { COLORS, Card, Empty, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
+import { withToken } from '../lib/authFetch.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
 
@@ -87,7 +88,9 @@ function useStreamFlow(path) {
     if (status === 'busy' || esRef.current) return
     setLog([]); setRows({}); setResult(null); setError(null); setStatus('busy')
     dryRef.current = dry
-    const es = new EventSource(`${path}?${qs}`)
+    // withToken: EventSource can't send X-Auth-Token, so a token deployment
+    // needs the ?token= query fallback or the stream 403s.
+    const es = new EventSource(withToken(`${path}?${qs}`))
     esRef.current = es
     const stop = (next) => { esRef.current?.close(); esRef.current = null; setStatus(next) }
     es.onmessage = (e) => {

@@ -34,7 +34,7 @@ func (d *Deps) registerEditRoutes(mux *http.ServeMux) {
 func (d *Deps) roleGate(r *http.Request, need string) bool {
 	role := d.Guard.ResolveRole(r)
 	if !httpx.RoleAtLeast(role, need) {
-		_, _ = d.Audit.Append("rbac_denied", role,
+		d.auditAppend("rbac_denied", role,
 			map[string]any{"required": need, "path": strings.SplitN(r.URL.Path, "?", 2)[0]})
 		return false
 	}
@@ -58,7 +58,7 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 	res, status := d.Edit.SelfserviceAllocate(b)
 	d.json(w, r, status, res)
 	if resultOK(res) && !isDry(res) {
-		_, _ = d.Audit.Append("selfservice-allocate", httpx.Actor(r), map[string]any{
+		d.auditAppend("selfservice-allocate", httpx.Actor(r), map[string]any{
 			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
 			"tag_value": b["tag_value"], "count": b["count"]})
 	}
@@ -75,7 +75,7 @@ func (d *Deps) dnsRecordCreate(w http.ResponseWriter, r *http.Request, b map[str
 	res, status := d.Edit.DNSRecordCreate(b)
 	d.json(w, r, status, res)
 	if resultOK(res) && !isDry(res) {
-		_, _ = d.Audit.Append("dns-record-create", httpx.Actor(r), map[string]any{
+		d.auditAppend("dns-record-create", httpx.Actor(r), map[string]any{
 			"zone_id": b["zone_id"], "name_in_zone": b["name_in_zone"], "type": b["type"]})
 	}
 }
@@ -97,7 +97,7 @@ func (d *Deps) dnsRecordUpdate(w http.ResponseWriter, r *http.Request, b map[str
 				fields = append(fields, k)
 			}
 		}
-		_, _ = d.Audit.Append("dns-record-update", httpx.Actor(r),
+		d.auditAppend("dns-record-update", httpx.Actor(r),
 			map[string]any{"id": b["id"], "fields": fields})
 	}
 }
@@ -157,7 +157,7 @@ func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]a
 	result, status := res.Create(b)
 	d.json(w, r, status, result)
 	if resultOK(result) && !isDry(result) {
-		_, _ = d.Audit.Append("edit-"+resource+"-create", httpx.Actor(r),
+		d.auditAppend("edit-"+resource+"-create", httpx.Actor(r),
 			map[string]any{"id": editResultID(result, res.ResultKey)})
 	}
 }
@@ -184,7 +184,7 @@ func (d *Deps) editUpdate(w http.ResponseWriter, r *http.Request, b map[string]a
 	result, status := res.Update(b)
 	d.json(w, r, status, result)
 	if resultOK(result) && !isDry(result) {
-		_, _ = d.Audit.Append("edit-"+resource+"-update", httpx.Actor(r),
+		d.auditAppend("edit-"+resource+"-update", httpx.Actor(r),
 			map[string]any{"id": objID})
 	}
 }
@@ -193,7 +193,8 @@ func (d *Deps) editUpdate(w http.ResponseWriter, r *http.Request, b map[string]a
 
 func (d *Deps) editDelete(w http.ResponseWriter, r *http.Request) {
 	resource, objID := splitEditPath(r.URL.Path)
-	if _, ok := d.Edit.Resources()[resource]; !ok {
+	resDef, ok := d.Edit.Resources()[resource]
+	if !ok {
 		d.json(w, r, 404, map[string]any{"ok": false, "error": "unknown resource: " + resource})
 		return
 	}
@@ -201,15 +202,29 @@ func (d *Deps) editDelete(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 400, map[string]any{"error": "id is required"})
 		return
 	}
+	// objID came from the URL path via splitEditPath, which URL-decodes it —
+	// Go's HTTP transport does not normalize ".." out of an outgoing request
+	// path, so building "/api/ddi/v1/"+objID directly (the bug this closes)
+	// let a caller escape the resource allowlist entirely, e.g.
+	// DELETE /api/edit/dns_record/..%2f..%2f..%2fatlas%2fv1%2f<id> reaching an
+	// arbitrary CSP API path under the server's own tenant key. ObjectPath
+	// rejects "..", encoded/literal slashes, control characters, and any id
+	// that doesn't match this resource's kind — the same validator
+	// dnsRecordDelete/ipamAddressDelete already use.
+	objPath, err := edit.ObjectPath(resDef.Kind, objID)
+	if err != nil {
+		d.json(w, r, 400, map[string]any{"error": "invalid object id"})
+		return
+	}
 	if !d.roleGate(r, "operator") {
 		d.json(w, r, 403, map[string]any{"ok": false, "error": "operator role required"})
 		return
 	}
 	defer d.recoverEdit(w, r, "/api/edit/"+resource+" DELETE")
-	res, status := d.Edit.Delete("/api/ddi/v1/" + objID)
+	res, status := d.Edit.Delete(objPath)
 	d.json(w, r, status, res)
 	if resultOK(res) {
-		_, _ = d.Audit.Append("edit-"+resource+"-delete", httpx.Actor(r),
+		d.auditAppend("edit-"+resource+"-delete", httpx.Actor(r),
 			map[string]any{"id": objID})
 	}
 }

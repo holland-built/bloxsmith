@@ -7,6 +7,8 @@ Tabs fall into two groups:
 - **Read-only** — Overview, Daily, Network, DNS, Security, Infra, Incidents, Audit. They poll and display; they never write to Infoblox.
 - **Write-capable** — Provision, Self-Service, Editor. These create, change, or delete real objects in your tenant. Drift and AI sit in between: Drift only reads, AI reads plus one write action (block a domain).
 
+One property holds across almost every panel on every tab: a feed that failed to load is never rendered the same way as a feed that loaded and came back empty. Where a call errors, times out, or the upstream returns a payload the panel can't trust, the panel says so — "feed unavailable," a chain-verify warning, a fetch-error line — instead of falling back to the same blank state a healthy, empty tenant would produce. If a panel shows no rows, that now means there genuinely are none, not that something failed silently on the way to the screen.
+
 ## The write flow
 
 Every surface that writes to Infoblox uses the same two buttons, in the same order:
@@ -37,7 +39,7 @@ Destructive actions carry extra gates on top of this flow: teardown needs an adm
 | [Incidents](#incidents) | no | SOC triage queue |
 | [Audit](#audit) | no | Who changed what |
 | [Provision](#provision) | **yes** | Build subnets, sites, demo estates |
-| [Self-Service](#self-service) | **yes** | Grab an address, add a DNS record |
+| [Self-Service](#self-service) | **yes** | Grab an address, add a DNS record, edit or remove either |
 | [Editor](#editor) | **yes** | Direct create/update/delete on objects |
 | [Drift](#drift) | no | Template vs. reality |
 | [AI](#ai) | one action | Ask questions, look up threats |
@@ -127,8 +129,8 @@ The SOC queue, polled every 20 seconds.
 Who changed what.
 
 - **Activity Summary** — recent event counts.
-- **Audit Log** — actions taken *through Bloxsmith*, from the local audit trail.
-- **CSP Portal Audit** — activity in the Infoblox portal itself, from the CSP audit API. External changes show up here, not in the Bloxsmith log.
+- **Audit Log** — actions taken *through Bloxsmith*, from the local audit trail. Each entry is hashed to the one before it, and the panel shows the verdict of that check: chain intact, chain tampered (with the entry where it broke), or could not be verified. A verification that fails to run reads as "could not be verified," never as "intact" — a broken check must not look like a clean bill of health.
+- **CSP Portal Audit** — activity in the Infoblox portal itself, from the CSP audit API. External changes show up here, not in the Bloxsmith log. It loads the most recent activity as soon as you open the tab; the search box filters that same feed rather than gating it behind a search.
 
 Two separate logs on purpose: one is what this tool did, the other is what everything else did.
 
@@ -167,7 +169,7 @@ If the template dropdown is empty, no templates are installed — run `scripts/f
 
 Bulk-provisions a full demo estate across the regions you tick (AMER, EMEA, APAC) from the template library. Built for demos and lab tenants.
 
-Per-template progress rolls up as `done/total`, with failures listed individually.
+Per-template progress rolls up as `done/total`, with failures listed individually. The finishing message says what actually happened rather than just that the run ended: a clean run says "Seed complete," a mixed one says "Seed partial — *X* of *N* succeeded, *Y* failed," and a run where nothing succeeded says "Seed failed — 0 of *N* template(s) succeeded" instead of the misleadingly cheerful default.
 
 **Tear down demo** deletes every object the seed created in the selected space. The live run needs admin plus typing `DELETE`.
 
@@ -175,7 +177,7 @@ Per-template progress rolls up as `done/total`, with failures listed individuall
 
 ## Self-Service
 
-**Writes to Infoblox.** Two small forms for the everyday asks, so people don't need the full Editor. Both use the [Preview → Apply flow](#the-write-flow).
+**Writes to Infoblox.** Two small forms for the everyday asks, so people don't need the full Editor, plus two panels for fixing up what already exists. The forms use the [Preview → Apply flow](#the-write-flow); Manage Records and Manage Addresses use a lighter edit/delete flow of their own, described below.
 
 ### Allocate Address
 
@@ -194,6 +196,20 @@ Add a record to an existing zone.
 3. **Preview** sends it to the server for validation and shows the record it would write. **Create** writes it.
 
 The preview shows the record as the *server* parsed it, which is often not what you typed — an SRV value of `10 5 5060 sip.example.com` comes back as separate priority, weight, port, and target fields. Worth a glance.
+
+### Manage Records
+
+Edit or delete a record that already exists in a zone.
+
+Pick a **zone**, then **Edit** any editable row (read-only record types are marked as such and skip straight past Edit/Delete). Change value, TTL, or comment and hit **Preview** — same server-validated preview as the create form. **Update** re-reads the record right before writing and compares it against the copy the preview was built from; if the two don't match, Apply is refused with "record changed since you previewed — preview again" rather than overwriting whatever is there now.
+
+**Delete** is a two-click arm: the first click turns the button into "Click again to delete `<type> <name> -> <value>`" naming the exact record, and it disarms itself after four seconds if you don't confirm.
+
+### Manage Addresses
+
+Release an allocated address back to the pool.
+
+Pick an **IP space**, then a **subnet**, to list its addresses. **Release** is armed the same way as Manage Records' delete — one click shows "Click again to release `<address>`", the second click sends it, and the arm expires after four seconds either way.
 
 ## Editor
 
@@ -246,3 +262,11 @@ If the vault is locked, queries return "Vault locked — unlock to query."
 Enter a domain, IP, or host. Returns matching threat-intel entities plus a dossier for the entity.
 
 **Block domain** adds the looked-up domain to your blocking policy — a real change to your tenant. It needs a dashboard token (set it under ⋯ Settings) and can be undone with **Unblock** in the same place.
+
+---
+
+## Security posture
+
+The five Provision/teardown streams (`#provision`'s subnet/site/seed runs and their teardowns) are `EventSource` GET requests, because a browser's `EventSource` can't send a mutating verb or custom headers — but a GET is also what a hostile page could fire blind. Those five routes carry a stricter gate than the rest of the write surface: a request must carry `Sec-Fetch-Site: same-origin` (or `none`) or a matching Origin/Referer. A bare loopback request with no fetch-metadata at all is refused, where the ordinary write endpoints still trust it. Setting `DASHBOARD_TOKEN` sidesteps this check entirely — since `EventSource` can't set the `X-Auth-Token` header, the dashboard instead passes the token on the stream URL as `?token=`.
+
+Separately, the server checks the `Host` header on every request against an allowlist (`localhost`, `127.0.0.1`, `[::1]`, and whatever it's bound to); an unrecognized `Host` gets `421 Misdirected Request`, which stops DNS-rebinding attacks. A wildcard bind (`HOST=0.0.0.0`, the Docker default) can't know its own hostname, so that check stands down until you set `ALLOWED_HOSTS`. Full variable reference and the rest of the deployment security notes are in [docs/DEPLOYMENT.md](DEPLOYMENT.md#security-notes) — this section only points at what exists, not how to configure it.

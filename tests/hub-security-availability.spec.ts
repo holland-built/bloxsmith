@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Backend contract (go/internal/dashboard/hub.go): /api/hub/security's
 // dns_event read now goes through rest.GetStrict and publishes an explicit
