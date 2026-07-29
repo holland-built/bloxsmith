@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Precondition (the Triage Inbox must have at least one row before the Block
 // button can even be clicked) is stubbed deterministically instead of relying

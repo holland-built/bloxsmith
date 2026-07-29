@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,16 +113,38 @@ func (l *Log) entryHash(e map[string]any) (string, error) {
 // append one canonical JSON line. The file line is written with the SAME
 // canonical encoder used for hashing so the ts token on disk matches the hashed
 // token exactly. Returns the written entry.
+//
+// A chain a caller cannot trust (unreadable, or with a dropped/undecodable
+// line) must not be extended — appending onto an unverifiable prev_hash would
+// either silently link onto garbage or silently drop the tamper-evidence
+// property entirely. So Append refuses and returns an error instead of
+// quarantining the bad tail and starting a fresh segment: a fresh segment
+// would let the exact byte that broke the chain also erase the operator's
+// only signal that it happened, since a new segment verifies clean on its
+// own. Refusing keeps Verify() reporting the could-not-verify tri-state
+// (verify_error, already wired to /api/audit/log and /api/audit/export) for
+// as long as the corruption exists.
+//
+// Every caller in this codebase discards this method's error
+// (`_, _ = Append(...)`), so a refusal that only returned an error would be
+// invisible in practice — the whole point of "loud" is defeated if nothing
+// ever looks at the return value. This log line is the guarantee: it fires
+// here, once, regardless of which of the many call sites triggered it, so a
+// stopped audit trail is never silent even when a caller forgets to check.
 func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	entries, skipped, err := l.Read()
 	if err != nil {
-		return nil, fmt.Errorf("audit: cannot append, chain unreadable: %w", err)
+		wrapped := fmt.Errorf("audit: cannot append, chain unreadable: %w", err)
+		log.Printf("[audit] AUDIT LOGGING STOPPED: %v (event %q by %q was NOT recorded)", wrapped, event, actor)
+		return nil, wrapped
 	}
 	if skipped > 0 {
-		return nil, fmt.Errorf("audit: cannot append, chain read dropped %d line(s); prev hash cannot be trusted", skipped)
+		wrapped := fmt.Errorf("audit: cannot append, chain read dropped %d line(s); prev hash cannot be trusted", skipped)
+		log.Printf("[audit] AUDIT LOGGING STOPPED: %v (event %q by %q was NOT recorded)", wrapped, event, actor)
+		return nil, wrapped
 	}
 	prev := zeroHash
 	if n := len(entries); n > 0 {

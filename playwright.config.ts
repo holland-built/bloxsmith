@@ -11,9 +11,16 @@ const DEFAULT_BASE_URL = 'http://localhost:8090';
 
 export default defineConfig({
   testDir: './tests',
+  // Fails fast with a clear message if the target server never comes up at
+  // all, instead of every spec discovering ERR_CONNECTION_REFUSED on its own.
+  globalSetup: './tests/global-setup.ts',
   // One retry absorbs rare races against a live server (e.g. a global keydown
   // listener not yet attached when Ctrl/Cmd-K is pressed under parallel load).
   // Deterministic failures still fail both attempts — retries never hide real bugs.
+  // (A dev-server restart mid-run — scripts/dev-serve.sh rebuilding on a Go
+  // change — is handled separately, and earlier, by tests/fixtures.ts: it
+  // waits for the server to come back and retries just the navigation, so
+  // this whole-test retry is never the thing absorbing that failure mode.)
   retries: 1,
   // 'html' always writes playwright-report/ (not just on failure) so CI has
   // something to upload as an artifact; 'never' skips auto-opening it locally.

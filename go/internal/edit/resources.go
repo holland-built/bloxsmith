@@ -54,6 +54,15 @@ func (c *Client) ZoneUpdate(body M) (M, int) {
 	if id == "" {
 		return M{"ok": false, "error": "id is required"}, 400
 	}
+	// The id here can arrive from the generic /api/edit/<resource>/<id> PATCH
+	// route (server/edit.go's editUpdate), which URL-decodes the path segment
+	// and previously passed it straight through to "/api/ddi/v1/"+id — the
+	// same traversal-escapes-the-allowlist gap fixed for editDelete. Route
+	// through ObjectPath so a ".."/encoded-slash id is rejected here too.
+	objPath, err := ObjectPath("dns/auth_zone", id)
+	if err != nil {
+		return M{"ok": false, "error": "invalid object id"}, 400
+	}
 	up := M{}
 	if has(body, "comment") {
 		up["comment"] = pyStr(body["comment"])
@@ -70,7 +79,7 @@ func (c *Client) ZoneUpdate(body M) (M, int) {
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
 	}
-	resp, status, method := c.patchThenPut("/api/ddi/v1/"+id, up)
+	resp, status, method := c.patchThenPut(objPath, up)
 	if (status != 200 && status != 201) || resp == nil {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (status %d)", status), "detail": resp, "method": method}, statusOr(status, 502)
 	}
@@ -177,6 +186,10 @@ func (c *Client) SubnetUpdate(body M) (M, int) {
 	if id == "" {
 		return M{"ok": false, "error": "id is required"}, 400
 	}
+	objPath, err := ObjectPath("ipam/subnet", id)
+	if err != nil {
+		return M{"ok": false, "error": "invalid object id"}, 400
+	}
 	up := M{}
 	if has(body, "name") {
 		up["name"] = pyStr(body["name"])
@@ -196,7 +209,7 @@ func (c *Client) SubnetUpdate(body M) (M, int) {
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
 	}
-	resp, status, method := c.patchThenPut("/api/ddi/v1/"+id, up)
+	resp, status, method := c.patchThenPut(objPath, up)
 	if (status != 200 && status != 201) || resp == nil {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (status %d)", status), "detail": resp, "method": method}, statusOr(status, 502)
 	}
@@ -265,6 +278,10 @@ func (c *Client) RangeUpdate(body M) (M, int) {
 	if id == "" {
 		return M{"ok": false, "error": "id is required"}, 400
 	}
+	objPath, err := ObjectPath("ipam/range", id)
+	if err != nil {
+		return M{"ok": false, "error": "invalid object id"}, 400
+	}
 	up := M{}
 	if has(body, "start") {
 		up["start"] = pyStr(body["start"])
@@ -287,7 +304,7 @@ func (c *Client) RangeUpdate(body M) (M, int) {
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
 	}
-	resp, status, method := c.patchThenPut("/api/ddi/v1/"+id, up)
+	resp, status, method := c.patchThenPut(objPath, up)
 	if (status != 200 && status != 201) || resp == nil {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (status %d)", status), "detail": resp, "method": method}, statusOr(status, 502)
 	}
@@ -332,6 +349,10 @@ func (c *Client) HostUpdate(body M) (M, int) {
 	if id == "" {
 		return M{"ok": false, "error": "id is required"}, 400
 	}
+	objPath, err := ObjectPath("ipam/host", id)
+	if err != nil {
+		return M{"ok": false, "error": "invalid object id"}, 400
+	}
 	up := M{}
 	if has(body, "name") {
 		up["name"] = pyStr(body["name"])
@@ -351,7 +372,7 @@ func (c *Client) HostUpdate(body M) (M, int) {
 	if truthyDry(body["dry"]) {
 		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
 	}
-	resp, status, method := c.patchThenPut("/api/ddi/v1/"+id, up)
+	resp, status, method := c.patchThenPut(objPath, up)
 	if (status != 200 && status != 201) || resp == nil {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (status %d)", status), "detail": resp, "method": method}, statusOr(status, 502)
 	}
@@ -367,16 +388,20 @@ type Resource struct {
 	Create    func(M) (M, int)
 	Update    func(M) (M, int)
 	ResultKey string // top-level key the written object lands under (audit id)
+	// Kind is the CSP object-path prefix for this resource (e.g. "ipam/host"),
+	// used by edit.ObjectPath to validate a DELETE route's id. It must match
+	// the kind each Update builder above validates its own "id" field against.
+	Kind string
 }
 
 // Resources returns the dispatch table bound to this client.
 func (c *Client) Resources() map[string]Resource {
 	return map[string]Resource{
-		"dns_zone":      {Create: c.ZoneCreate, Update: c.ZoneUpdate, ResultKey: "zone"},
-		"subnet":        {Create: c.SubnetCreate, Update: c.SubnetUpdate, ResultKey: "subnet"},
-		"address_block": {Create: c.BlockCreate, ResultKey: "block"},
-		"dhcp_range":    {Create: c.RangeCreate, Update: c.RangeUpdate, ResultKey: "range"},
-		"host":          {Create: c.HostCreate, Update: c.HostUpdate, ResultKey: "host"},
+		"dns_zone":      {Create: c.ZoneCreate, Update: c.ZoneUpdate, ResultKey: "zone", Kind: "dns/auth_zone"},
+		"subnet":        {Create: c.SubnetCreate, Update: c.SubnetUpdate, ResultKey: "subnet", Kind: "ipam/subnet"},
+		"address_block": {Create: c.BlockCreate, ResultKey: "block", Kind: "ipam/address_block"},
+		"dhcp_range":    {Create: c.RangeCreate, Update: c.RangeUpdate, ResultKey: "range", Kind: "ipam/range"},
+		"host":          {Create: c.HostCreate, Update: c.HostUpdate, ResultKey: "host", Kind: "ipam/host"},
 	}
 }
 
