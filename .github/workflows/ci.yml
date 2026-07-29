@@ -195,19 +195,24 @@ jobs:
       - name: install.ps1 is pure ASCII (PS 5.1 misreads UTF-8 without a BOM)
         shell: pwsh
         run: |
-          $bytes = [System.IO.File]::ReadAllBytes("scripts/install.ps1")
-          $bad = @()
-          $line = 1
-          foreach ($b in $bytes) {
-            if ($b -eq 10) { $line++ }
-            elseif ($b -gt 127) { $bad += $line }
+          $fail = $false
+          foreach ($f in @('scripts/install.ps1', 'scripts/ci/Test-InstallRefusal.ps1')) {
+            $bytes = [System.IO.File]::ReadAllBytes($f)
+            $bad = @()
+            $line = 1
+            foreach ($b in $bytes) {
+              if ($b -eq 10) { $line++ }
+              elseif ($b -gt 127) { $bad += $line }
+            }
+            if ($bad.Count -gt 0) {
+              $u = ($bad | Sort-Object -Unique) -join ', '
+              Write-Host "::error::${f} contains non-ASCII bytes on line(s) $u - PowerShell 5.1 will mis-decode them and may fail to parse the file"
+              $fail = $true
+            } else {
+              Write-Host "$f is pure ASCII ($($bytes.Length) bytes)"
+            }
           }
-          if ($bad.Count -gt 0) {
-            $u = ($bad | Sort-Object -Unique) -join ', '
-            Write-Host "::error::scripts/install.ps1 contains non-ASCII bytes on line(s) $u - PowerShell 5.1 will mis-decode them and may fail to parse the file"
-            exit 1
-          }
-          Write-Host "install.ps1 is pure ASCII ($($bytes.Length) bytes)"
+          if ($fail) { exit 1 }
 
       # A precise parse check. The step below runs the installer as a child
       # process, and a child's parse error reaches us only as a truncated
@@ -216,16 +221,21 @@ jobs:
       - name: install.ps1 parses under Windows PowerShell
         shell: powershell
         run: |
-          $errors = $null
-          $null = [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path scripts\install.ps1).Path, [ref]$null, [ref]$errors)
-          if ($errors -and $errors.Count -gt 0) {
-            foreach ($e in $errors) {
-              Write-Host "::error::parse error at line $($e.Extent.StartLineNumber) col $($e.Extent.StartColumnNumber): $($e.Message)"
+          $bad = $false
+          foreach ($f in @('scripts\install.ps1', 'scripts\ci\Test-InstallRefusal.ps1')) {
+            $errors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $f).Path, [ref]$null, [ref]$errors)
+            if ($errors -and $errors.Count -gt 0) {
+              foreach ($e in $errors) {
+                Write-Host "::error::${f}: parse error at line $($e.Extent.StartLineNumber) col $($e.Extent.StartColumnNumber): $($e.Message)"
+              }
+              $bad = $true
+            } else {
+              Write-Host "$f parses clean"
             }
-            exit 1
           }
-          Write-Host "install.ps1 parses clean under $($PSVersionTable.PSVersion)"
+          if ($bad) { exit 1 }
 
       - name: Record ssh/ssh-keygen versions (assumption, not yet confirmed)
         shell: powershell
@@ -290,147 +300,18 @@ jobs:
           }
           Write-Host "installed, both verifications printed, exe runs, PATH updated"
 
+      # The refusal logic lives in a committed script, not inline here: the same
+      # PowerShell embedded in YAML failed to parse twice, and each attempt cost
+      # a CI round trip to find out. As a file it is covered by the parse check
+      # above, so a syntax error fails in seconds.
       - name: install.ps1 refuses a tampered checksums.txt
         shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $W = "$env:RUNNER_TEMP\tampered"
-          New-Item -ItemType Directory -Force -Path "$W\rel" | Out-Null
-          $base = 'https://github.com/holland-built/bloxsmith/releases/latest/download'
+        run: .\scripts\ci\Test-InstallRefusal.ps1 -Case tampered
 
-          Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt" -OutFile "$W\rel\checksums.txt"
-          Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt.sshsig" -OutFile "$W\rel\checksums.txt.sshsig"
-          $m = [regex]::Match((Get-Content -Raw "$W\rel\checksums.txt"), 'bloxsmith_([0-9][^_]+)_')
-          if (-not $m.Success) {
-            Write-Host "::error::could not resolve the release version from checksums.txt"
-            exit 1
-          }
-          $num = $m.Groups[1].Value
-          $asset = "bloxsmith_${num}_windows_amd64.zip"
-          Invoke-WebRequest -UseBasicParsing -Uri "$base/$asset" -OutFile "$W\rel\$asset"
-
-          # Flip the first character of every line to break the signed content
-          # cryptographically while leaving asset names (and therefore parsing)
-          # intact — the failure this proves must be a signature/checksum
-          # mismatch, not a parse error.
-          $lines = Get-Content -Path "$W\rel\checksums.txt"
-          $flipped = $lines | ForEach-Object {
-            if ($_.Length -eq 0) { $_ }
-            else {
-              $c = $_.Substring(0,1)
-              $r = if ($c -eq 'f') { '0' } else { 'f' }
-              $r + $_.Substring(1)
-            }
-          }
-          Set-Content -Path "$W\rel\checksums.txt" -Value $flipped
-
-          $shim = "$W\shim.ps1"
-          @"
-          function global:Invoke-WebRequest {
-              param([Parameter(Mandatory)][string]`$Uri, [string]`$OutFile, [switch]`$UseBasicParsing, [int]`$TimeoutSec)
-              `$name = Split-Path -Leaf `$Uri
-              `$local = Join-Path '$W\rel' `$name
-              if (-not (Test-Path -LiteralPath `$local)) { throw "shim: no local file for `$name (simulated 404)" }
-              Copy-Item -LiteralPath `$local -Destination `$OutFile -Force
-          }
-          & '$PWD\scripts\install.ps1' -Prefix '$W\out'
-          exit `$LASTEXITCODE
-          "@ | Set-Content -Path $shim
-
-          $log = "$W\tampered.log"
-          powershell -NoProfile -ExecutionPolicy Bypass -File $shim 2>&1 | Tee-Object -FilePath $log
-          $code = $LASTEXITCODE
-
-          if ($code -eq 0) {
-            Write-Host "::error::install.ps1 exited 0 against a tampered checksums.txt — it must refuse"
-            exit 1
-          }
-          if (Test-Path -LiteralPath "$W\out\bloxsmith.exe") {
-            Write-Host "::error::bloxsmith.exe was installed despite a tampered checksums.txt"
-            exit 1
-          }
-          if (-not (Test-Path -LiteralPath $log)) {
-            Write-Host "::error::tampered.log is missing — cannot confirm why install.ps1 refused"
-            exit 1
-          }
-          if ((Get-Content -Raw -Path $log) -notmatch [regex]::Escape('SIGNATURE DOES NOT VERIFY')) {
-            Write-Host "::error::install.ps1 refused, but not for the right reason — 'SIGNATURE DOES NOT VERIFY' is absent from the log"
-            exit 1
-          }
-          Write-Host "tampered checksums.txt refused, as it must be"
-
-      # THE ACTUAL ATTACK: an attacker who can write release assets replaces the
-      # archive with a forged one that genuinely runs, rewrites checksums.txt to
-      # match the forgery, and DELETES the signature entirely. A checksum alone
-      # can never catch this — it only proves the archive matches checksums.txt,
-      # and the attacker controls both files. Only signature absence/failure can.
       - name: install.ps1 refuses a release whose signature was REMOVED
         shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $W = "$env:RUNNER_TEMP\nosig"
-          New-Item -ItemType Directory -Force -Path "$W\rel", "$W\payload" | Out-Null
-          $base = 'https://github.com/holland-built/bloxsmith/releases/latest/download'
+        run: .\scripts\ci\Test-InstallRefusal.ps1 -Case nosig
 
-          Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt" -OutFile "$W\rel\checksums.txt"
-          $m = [regex]::Match((Get-Content -Raw "$W\rel\checksums.txt"), 'bloxsmith_([0-9][^_]+)_')
-          if (-not $m.Success) {
-            Write-Host "::error::could not resolve the release version from checksums.txt"
-            exit 1
-          }
-          $num = $m.Groups[1].Value
-          $asset = "bloxsmith_${num}_windows_amd64.zip"
-
-          # A forged archive that really does contain a runnable bloxsmith.exe.
-          Set-Content -Path "$W\payload\bloxsmith.exe" -Value 'FORGED, but a real executable is not required for this test to prove the point — Expand-Archive + the exe-count check only need a file named bloxsmith.exe'
-          Compress-Archive -Path "$W\payload\bloxsmith.exe" -DestinationPath "$W\rel\$asset" -Force
-
-          $hash = (Get-FileHash -Algorithm SHA256 -Path "$W\rel\$asset").Hash.ToLower()
-          $newLines = (Get-Content -Path "$W\rel\checksums.txt") | ForEach-Object {
-            if ($_ -match "^\S+\s+\*?$([regex]::Escape($asset))\s*$") { "$hash  $asset" } else { $_ }
-          }
-          Set-Content -Path "$W\rel\checksums.txt" -Value $newLines
-          # ...and no checksums.txt.sshsig / .ed25519 placed in $W\rel at all.
-
-          $shim = "$W\shim.ps1"
-          @"
-          function global:Invoke-WebRequest {
-              param([Parameter(Mandatory)][string]`$Uri, [string]`$OutFile, [switch]`$UseBasicParsing, [int]`$TimeoutSec)
-              `$name = Split-Path -Leaf `$Uri
-              `$local = Join-Path '$W\rel' `$name
-              if (-not (Test-Path -LiteralPath `$local)) { throw "shim: no local file for `$name (simulated 404)" }
-              Copy-Item -LiteralPath `$local -Destination `$OutFile -Force
-          }
-          & '$PWD\scripts\install.ps1' -Prefix '$W\out'
-          exit `$LASTEXITCODE
-          "@ | Set-Content -Path $shim
-
-          $log = "$W\nosig.log"
-          powershell -NoProfile -ExecutionPolicy Bypass -File $shim 2>&1 | Tee-Object -FilePath $log
-          $code = $LASTEXITCODE
-
-          if ($code -eq 0) {
-            Write-Host "::error::install.ps1 exited 0 against a release with the signature removed — it must refuse"
-            exit 1
-          }
-          if (Test-Path -LiteralPath "$W\out\bloxsmith.exe") {
-            Write-Host "::error::a forged bloxsmith.exe was installed despite a missing signature"
-            exit 1
-          }
-          if (-not (Test-Path -LiteralPath $log)) {
-            Write-Host "::error::nosig.log is missing — cannot confirm why install.ps1 refused"
-            exit 1
-          }
-          if ((Get-Content -Raw -Path $log) -notmatch '(?i)no signature') {
-            Write-Host "::error::install.ps1 refused, but not for the right reason — 'no signature' is absent from the log"
-            exit 1
-          }
-          Write-Host "unsigned release refused, and nothing was installed"
-
-      # if: always() so this step also cleans up the runner's user PATH even if
-      # an earlier assertion failed. Step 4 already confirmed the prefix WAS on
-      # the user PATH before this — without that, an empty/absent PATH entry
-      # here would pass by doing nothing, proving nothing.
       - name: install.ps1 -Uninstall removes the binary and the PATH entry
         if: always()
         shell: powershell
