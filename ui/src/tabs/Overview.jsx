@@ -58,6 +58,7 @@ function formatRemaining(days) {
 function LicenseInventory({ licenses }) {
   const { COLORS } = useChartTheme()
   const rows = licenses.data?.licenses ?? []
+  const unavailable = !!licenses.error || licenses.data?.status === 'error'
 
   const columns = [
     { key: 'name', label: 'Name', grow: true },
@@ -138,11 +139,13 @@ function LicenseInventory({ licenses }) {
       // right. Full width removes both the clip and the dead space.
       span={6}
       title="License Inventory"
-      right={<span className="text-[11px] text-muted tabular-nums">{rows.length.toLocaleString()} licenses</span>}
+      right={unavailable ? null : <span className="text-[11px] text-muted tabular-nums">{rows.length.toLocaleString()} licenses</span>}
     >
       {licenses.loading ? (
         <Skeleton h={220} />
-      ) : licenses.error || licenses.data?.status === 'error' || rows.length === 0 ? (
+      ) : unavailable ? (
+        <FeedUnavailable label="License feed unavailable" />
+      ) : rows.length === 0 ? (
         <Empty>no license data available</Empty>
       ) : (
         <DataTable
@@ -163,6 +166,7 @@ function DnsHero({ dns }) {
   const { COLORS, TT } = useChartTheme()
   const theme = useThemeColors()
   const rows = dns.data?.rows ?? []
+  const status = dns.data?.status
   const chartData = rows.map((r) => {
     let label = r.hour
     const d = new Date(r.hour)
@@ -182,7 +186,9 @@ function DnsHero({ dns }) {
     >
       {dns.loading ? (
         <Skeleton h={250} />
-      ) : dns.error || chartData.length === 0 ? (
+      ) : dns.error || status === 'error' ? (
+        <FeedUnavailable label="DNS query rate feed unavailable" />
+      ) : chartData.length === 0 ? (
         <Empty />
       ) : (
         <>

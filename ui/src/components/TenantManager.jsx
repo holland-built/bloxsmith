@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { FeedUnavailable } from './ui.jsx'
 
 const vpost = (url, body) =>
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -12,7 +13,9 @@ const miniBtn = 'px-2 py-1 rounded-lg border border-border text-[11px] text-mute
 
 export default function TenantManager({ onClose }) {
   const [status, setStatus] = useState(null)
+  const [statusError, setStatusError] = useState(false)
   const [accounts, setAccounts] = useState([])
+  const [accountsError, setAccountsError] = useState(null)
   const [dashToken, setDashToken] = useState(() => localStorage.getItem('dashToken') || '')
   const [confirmRm, setConfirmRm] = useState(null)
   const [locking, setLocking] = useState(false)
@@ -27,8 +30,20 @@ export default function TenantManager({ onClose }) {
   }
 
   const load = () => {
-    fetch('/api/vault/status', { cache: 'no-store' }).then((r) => r.json()).then(setStatus).catch(() => {})
-    fetch('/api/accounts', { cache: 'no-store' }).then((r) => r.json()).then((d) => setAccounts(d.accounts || [])).catch(() => {})
+    // A failed status read must not read as "no tenants saved" — that's a
+    // real answer ("you have zero"), this is "we don't know".
+    fetch('/api/vault/status', { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then((d) => { setStatus(d); setStatusError(false) })
+      .catch(() => setStatusError(true))
+    // go/internal/server/account.go:51 already computes {error,status} on a CSP
+    // failure (HTTP 200, accounts:[]) — read and surface them instead of
+    // silently collapsing to an empty switcher indistinguishable from "no
+    // other accounts".
+    fetch('/api/accounts', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => { setAccounts(d.accounts || []); setAccountsError(d && d.error ? d.error : null) })
+      .catch(() => setAccountsError('network error'))
   }
 
   useEffect(() => { load() }, [])
@@ -198,6 +213,11 @@ export default function TenantManager({ onClose }) {
         ) : (
           <>
             <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Vault tenants</div>
+            {statusError ? (
+              <div className="mb-3">
+                <FeedUnavailable label="Tenant status unavailable" reason="Could not read saved tenants — retry." />
+              </div>
+            ) : (
             <div className="space-y-1 mb-3">
               {tenants.map((t) => (
                 <div key={t.id} className="flex items-center gap-1">
@@ -221,11 +241,16 @@ export default function TenantManager({ onClose }) {
               ))}
               {tenants.length === 0 && <div className="text-[11px] text-dim px-1">No tenants saved.</div>}
             </div>
+            )}
             <button className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
               + Add connection
             </button>
 
-            {accounts.length > 0 && (
+            {accountsError ? (
+              <div className="mb-4">
+                <FeedUnavailable label="CSP accounts unavailable" reason={accountsError} />
+              </div>
+            ) : accounts.length > 0 && (
               <>
                 <div className="text-[10px] uppercase tracking-wide text-dim mb-2">CSP account</div>
                 <select

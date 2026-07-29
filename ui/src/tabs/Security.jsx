@@ -70,6 +70,10 @@ function SeverityHero({ hub, events }) {
   const { grid, tick } = useThemeColors()
   const SEV_COLOR = sevColorMap(COLORS)
   const counts = hub.data?.counts ?? {}
+  // hub.error covers the transport path (any non-2xx, or the 12s abort in
+  // lib/api.js) — availability:"unavailable" alone only covers the upstream-
+  // reported failure, missing the case where the fetch itself never completed.
+  const unavailable = hub.data?.availability === 'unavailable' || !!hub.error
   const hourly = useMemo(() => {
     const buckets = new Array(24).fill(0)
     let any = false
@@ -85,12 +89,12 @@ function SeverityHero({ hub, events }) {
   }, [events])
 
   return (
-    <Card span={4} title="Threat Events — by Severity" right={<span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
+    <Card span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
       {hub.loading ? (
         <Skeleton h={230} />
-      ) : hub.data?.availability === 'unavailable' ? (
+      ) : unavailable ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
-      ) : hub.error || events.length === 0 ? (
+      ) : events.length === 0 ? (
         <Empty />
       ) : (
         <>
@@ -138,9 +142,9 @@ function KpiStack({ hub, events, acks }) {
 
   return (
     <Card span={2} title="Response Summary">
-      {hub.loading ? <Skeleton h={200} /> : hub.data?.availability === 'unavailable' ? (
+      {hub.loading ? <Skeleton h={200} /> : hub.data?.availability === 'unavailable' || hub.error ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
-      ) : hub.error ? <Empty /> : (
+      ) : (
         <div className="grid grid-cols-2 gap-3">
           {cells.map((c) => (
             <div key={c.label}>
@@ -250,6 +254,11 @@ function TriageInbox({ hub, events, acks, setAcks }) {
     setAcks((prev) => ({ ...prev, [k]: !prev[k] }))
   }
 
+  // hub.error covers the transport path (any non-2xx, or the 12s abort in
+  // lib/api.js) — availability:"unavailable" alone only covers the upstream-
+  // reported failure, missing the case where the fetch itself never completed.
+  const unavailable = hub.data?.availability === 'unavailable' || !!hub.error
+
   const filtered = useMemo(() => {
     if (sevFilter === 'all') return events
     return events.filter((e) => String(e.severity).toLowerCase() === sevFilter)
@@ -330,14 +339,14 @@ function TriageInbox({ hub, events, acks, setAcks }) {
               {s}
             </button>
           ))}
-          <span className="text-[11px] text-muted ml-1">{rows.length.toLocaleString()}</span>
+          {!unavailable && <span className="text-[11px] text-muted ml-1">{rows.length.toLocaleString()}</span>}
         </div>
       }
     >
-      {hub.loading ? <Skeleton h={260} /> : hub.data?.availability === 'unavailable' ? (
+      {hub.loading ? <Skeleton h={260} /> : unavailable ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
-      ) : hub.error || rows.length === 0 ? (
-        <Empty>{hub.error ? 'no data' : 'no events match'}</Empty>
+      ) : rows.length === 0 ? (
+        <Empty>no events match</Empty>
       ) : (
         <DataTable
           rows={rows}
@@ -445,7 +454,9 @@ function ThreatFeed({ threats }) {
 
   return (
     <Card span={3} title="Threat Feed Activity">
-      {threats.loading ? <Skeleton h={220} /> : threats.error || status === 'error' || rows.length === 0 ? <Empty /> : (
+      {threats.loading ? <Skeleton h={220} /> : threats.error || status === 'error' ? (
+        <FeedUnavailable label="Threat feed activity unavailable" />
+      ) : rows.length === 0 ? <Empty /> : (
         <>
           <div className="flex gap-5 mb-2">
             <div><span className="text-xl font-semibold" style={{ color: COLORS.crit }}>{totals.block.toLocaleString()}</span><div className="text-[11px] text-muted">Blocked</div></div>
@@ -473,6 +484,10 @@ function ThreatFeed({ threats }) {
 
 function InsightsPanel({ insights }) {
   const d = insights.data
+  // FetchInsights returns {"data":[],"unavailable":"…","availability":"unavailable"}
+  // on a dead upstream — reading only d.data (or d directly) can't distinguish
+  // that from a genuine empty result, both render as "no data".
+  const unavailable = !!insights.error || (d && !Array.isArray(d) && d.availability === 'unavailable')
   const rows = Array.isArray(d) ? d : Array.isArray(d?.results) ? d.results : Array.isArray(d?.data) ? d.data : []
   const keys = rows.length ? Object.keys(rows[0]).slice(0, 4) : []
 
@@ -498,8 +513,10 @@ function InsightsPanel({ insights }) {
   }))
 
   return (
-    <Card span={3} title="SOC Insights" right={rows.length ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : null}>
-      {insights.loading ? <Skeleton h={220} /> : insights.error || rows.length === 0 ? <Empty /> : (
+    <Card span={3} title="SOC Insights" right={!unavailable && rows.length ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : null}>
+      {insights.loading ? <Skeleton h={220} /> : unavailable ? (
+        <FeedUnavailable reason={typeof d?.unavailable === 'string' ? d.unavailable : undefined} label="SOC insights unavailable" />
+      ) : rows.length === 0 ? <Empty /> : (
         <DataTable rows={normRows} columns={columns} maxHeight={320} rowCap={150} />
       )}
     </Card>

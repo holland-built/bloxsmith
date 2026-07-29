@@ -1,4 +1,4 @@
-import { useChartTheme } from './ui.jsx'
+import { useChartTheme, FeedUnavailable } from './ui.jsx'
 
 // ---------- parsing helpers ----------
 
@@ -264,8 +264,18 @@ function RawSources({ items }) {
 export default function DossierPanel({ data }) {
   const { COLORS } = useChartTheme()
   if (!data) return null
-  if (data.unavailable) {
-    return <div className="text-[11px] text-muted mt-3">External intel unavailable: {String(data.unavailable)}</div>
+
+  // A non-200 dossier response (vault-gate 503 `{error,locked}`, a recover500
+  // panic body) never carries a real verdict — it lacks `summary`/`sources`
+  // entirely. Falling through to `sum = data.summary || {}` made `mal = false`
+  // for that body, painting a false CLEAN pill for a lookup that never ran.
+  // Treat an explicit `unavailable`, an error/locked body, or a payload simply
+  // missing the fields a real verdict requires the same way: unavailable.
+  const hasVerdictShape = data.summary && typeof data.summary === 'object' && Array.isArray(data.sources)
+  const errorLike = data.error != null || data.locked === true
+  if (data.unavailable || errorLike || !hasVerdictShape) {
+    const reason = data.unavailable ?? data.error ?? (errorLike ? 'locked' : 'incomplete response')
+    return <FeedUnavailable reason={String(reason)} label="Dossier unavailable" />
   }
 
   const sum = data.summary || {}

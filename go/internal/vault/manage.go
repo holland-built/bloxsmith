@@ -32,8 +32,18 @@ func tokenHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-func ok() map[string]any            { return map[string]any{"ok": true} }
+func ok() map[string]any             { return map[string]any{"ok": true} }
 func fail(msg string) map[string]any { return map[string]any{"ok": false, "error": msg} }
+
+// unverifiable is the third TestKey/ConnTest outcome: the request never
+// reached CSP at all (transport error — offline, DNS, TLS/proxy, or timeout),
+// so the key was never judged. It must be visibly distinct from fail() —
+// "unverified":true is the field the UI reads to tell "could not check" apart
+// from "checked and rejected". ok stays false (neither outcome confirms a good
+// key), but the UI must not render its "Invalid: key rejected" copy for this case.
+func unverifiable(msg string) map[string]any {
+	return map[string]any{"ok": false, "unverified": true, "error": msg}
+}
 
 // baseURL returns the configured Infoblox base, defaulting to the CSP portal.
 func (v *Vault) baseURL() string {
@@ -368,7 +378,11 @@ func (v *Vault) TestKey(key string) map[string]any {
 	req.Header.Set("Authorization", k)
 	resp, err := client.Do(req)
 	if err != nil {
-		return fail("key rejected by Infoblox CSP")
+		// The request never reached CSP — offline, DNS failure, TLS/proxy error,
+		// or the 12s timeout. The key was never judged, so this must not be
+		// reported as "rejected"; that conflation is what pushes an operator to
+		// discard a perfectly good credential during first-run setup.
+		return unverifiable("could not reach Infoblox CSP: " + err.Error())
 	}
 	resp.Body.Close()
 	if resp.StatusCode >= 400 {
