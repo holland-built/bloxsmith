@@ -19,10 +19,23 @@ export default function ConnStatus() {
     if (status && (status.ready || status.vaultMode === false)) setLocked(false)
   }, [status])
 
+  const FEED_KEYS = ['subnets', 'hosts', 'leases']
+  const meta = rows?._meta || {}
+  const totals = rows?._totals || {}
+
   const hasData =
     !dataError &&
     rows &&
-    ['subnets', 'hosts', 'leases'].some((k) => Array.isArray(rows[k]) && rows[k].length > 0)
+    FEED_KEYS.some((k) => Array.isArray(rows[k]) && rows[k].length > 0)
+
+  // A degraded/all-error /api/data payload must not present the same "no data"
+  // pill as a genuinely empty tenant — dead feeds still say hasData===false,
+  // so this checks the per-feed _meta and _totals.degraded that /api/data
+  // ships specifically to tell the two apart.
+  const feedsDegraded =
+    !!dataError ||
+    !!totals.degraded ||
+    FEED_KEYS.some((k) => meta[k] === 'error')
 
   useEffect(() => {
     if (hasData) lastFetchRef.current = Date.now()
@@ -47,6 +60,9 @@ export default function ConnStatus() {
     const active = status?.active
     const tenant = status?.tenants?.find((t) => t.id === active)
     label = tenant?.label || 'connected'
+  } else if (statusOk && feedsDegraded) {
+    color = 'var(--color-crit)'
+    label = 'feed error'
   } else if (statusOk) {
     color = 'var(--color-warn)'
     label = 'no data'

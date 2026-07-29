@@ -47,6 +47,7 @@ export default function Dns() {
 function QpsHero({ qps }) {
   const { COLORS, TT } = useChartTheme()
   const rows = qps.data?.rows ?? []
+  const status = qps.data?.status
   const chartData = rows.map((r) => {
     let label = r.hour
     const d = new Date(r.hour)
@@ -66,7 +67,9 @@ function QpsHero({ qps }) {
     >
       {qps.loading ? (
         <Skeleton h={250} />
-      ) : qps.error || chartData.length === 0 ? (
+      ) : qps.error || status === 'error' ? (
+        <FeedUnavailable label="DNS query rate feed unavailable" />
+      ) : chartData.length === 0 ? (
         <Empty />
       ) : (
         <>
@@ -150,7 +153,9 @@ function DnsServices({ services }) {
     <Card span={3} title="DNS Services" right={<span className="text-[11px] text-muted">{rows.length ? `${rows.length} services` : ''}</span>}>
       {services.loading ? (
         <Skeleton h={180} />
-      ) : services.error || status === 'error' || rows.length === 0 ? (
+      ) : services.error || status === 'error' ? (
+        <FeedUnavailable label="DNS services feed unavailable" />
+      ) : rows.length === 0 ? (
         <Empty />
       ) : (
         <DataTable rows={rows} columns={columns} maxHeight={320} rowKey={(r, i) => `${r.id ?? ''}|${i}`} />

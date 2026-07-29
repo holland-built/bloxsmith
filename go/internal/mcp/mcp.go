@@ -47,6 +47,14 @@ const maxRows = 5000
 // No query_stored_data call is issued in this case.
 var ErrTooManyRows = errors.New("mcp: row_count exceeds maxRows cap")
 
+// ErrIncompleteRows is returned by queryAllRows when a transport or decode
+// failure aborts pagination AFTER at least one page has already been read
+// successfully. A short or empty page is a legitimate end of data and is
+// never wrapped in this error — only an outright failure mid-pagination is,
+// because in that case the true row count is unknown and the rows gathered
+// so far must never be presented as the complete set. Match with errors.Is.
+var ErrIncompleteRows = errors.New("mcp: pagination aborted before all rows were read")
+
 // ErrTransport is wrapped into CallToolChecked's returned error whenever the
 // call never reached the tool at all (network/HTTP/JSON-RPC failure) — the
 // write was never sent, so it is always safe to retry. Callers should match
@@ -613,6 +621,18 @@ func storedMeta(text string) (string, int, bool) {
 // queryAllRows is _query_all_rows (server.py:3085): page the stored parquet.
 // Returns ErrTooManyRows (before issuing any request) when rowCount exceeds
 // maxRows.
+//
+// A transport or decode failure on the very FIRST page (offset 0) preserves
+// prior behavior: it breaks the loop and returns (nil, nil), i.e. the same
+// shape as "no data" — nothing was ever successfully read, so there is no
+// partial set to mislabel. A failure on any LATER page is different: at
+// least one page already succeeded, rows is non-empty, and the row_count the
+// caller was told to expect has not been reached — returning that partial
+// slice with a nil error would present it as the complete set. That case
+// returns the rows gathered so far together with ErrIncompleteRows so the
+// caller cannot mistake truncated data for whole data. A short or empty page
+// remains a legitimate end of pagination in both cases and never produces an
+// error.
 func (c *Client) queryAllRows(ctx context.Context, table string, rowCount int, label string) ([]map[string]any, error) {
 	if rowCount > maxRows {
 		return nil, ErrTooManyRows
@@ -624,11 +644,17 @@ func (c *Client) queryAllRows(ctx context.Context, table string, rowCount int, l
 			"sql_query":        fmt.Sprintf(`SELECT * FROM "%s" LIMIT %d OFFSET %d`, table, pageSize, offset),
 		})
 		if err != nil {
-			break
+			if offset == 0 {
+				break
+			}
+			return rows, fmt.Errorf("%w: %s: got %d of %d rows before offset %d failed: %v", ErrIncompleteRows, label, len(rows), rowCount, offset, err)
 		}
 		var raw map[string]any
 		if err := json.Unmarshal([]byte(text), &raw); err != nil {
-			break
+			if offset == 0 {
+				break
+			}
+			return rows, fmt.Errorf("%w: %s: got %d of %d rows before offset %d failed to decode: %v", ErrIncompleteRows, label, len(rows), rowCount, offset, err)
 		}
 		batch := columnarToDicts(raw)
 		if len(batch) == 0 {
