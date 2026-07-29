@@ -161,3 +161,266 @@ jobs:
             exit 1
           }
           Write-Host "PSScriptAnalyzer: no Error-severity findings in scripts/install.ps1"
+
+  # PSScriptAnalyzer only PARSES install.ps1 — it never runs it. v3.23.0 shipped
+  # a shell-side installer (install.sh) that was parse-clean and still broken:
+  # a mangled assignment turned the checksum lookup into a command invocation.
+  # `bash -n` didn't catch that because it was valid syntax, just wrong — the
+  # only check that catches that class of bug is actually running the script.
+  # This job is the PowerShell equivalent of the install-sh job above: it runs
+  # scripts/install.ps1 for real on Windows, once as a genuine install against
+  # the real latest release, and twice more as a refusal test against a local,
+  # deliberately-tampered release, mirroring the two attacks install-sh guards
+  # against (a corrupted checksums.txt, and a signature that was removed).
+  install-ps1:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # ssh-keygen -Y verify needs OpenSSH >= 8.0. windows-latest is assumed to
+      # ship a recent-enough OpenSSH client, but that assumption has never been
+      # confirmed here — log both tools' versions so the assumption is recorded
+      # instead of silently believed. Never fail the job on this: it is a record,
+      # not a gate (the install/refusal steps below are the real gate).
+      - name: Record ssh/ssh-keygen versions (assumption, not yet confirmed)
+        shell: powershell
+        continue-on-error: true
+        run: |
+          Write-Host "-- ssh -V --"
+          ssh -V 2>&1 | Write-Host
+          Write-Host "-- ssh-keygen -Y verify (usage line only, no real args) --"
+          ssh-keygen -Y verify 2>&1 | Select-Object -First 1 | Write-Host
+
+      # Run as a CHILD process (not dot-sourced) so its exit code is capturable
+      # in $LASTEXITCODE / the process exit code, and tee output to a log file
+      # so the assertions below can grep it. GitHub Actions sets CI=true, which
+      # is what the script's launch gate keys on to skip opening a browser /
+      # starting the app — so this step also exercises that gate, not just the
+      # download+verify+install path.
+      - name: install.ps1 installs the latest release, verifying both times
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $log = "$env:RUNNER_TEMP\install.log"
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -Prefix "$env:RUNNER_TEMP\bx" 2>&1 |
+            Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::install.ps1 exited $LASTEXITCODE on a clean install of the real latest release"
+            exit 1
+          }
+
+      # A verification step that silently stops running still looks like a
+      # clean install from the outside — the log greps below exist because
+      # "it printed nothing but also didn't fail" must count as a failure.
+      - name: Assert signature + checksum were verified, and the binary works
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $log = "$env:RUNNER_TEMP\install.log"
+          if (-not (Test-Path -LiteralPath $log)) {
+            Write-Host "::error::install.log is missing (install step never produced output) — cannot confirm verification ran"
+            exit 1
+          }
+          $text = Get-Content -Raw -Path $log
+
+          if ($text -notmatch [regex]::Escape('signature: ok')) {
+            Write-Host "::error::install.log is present but 'signature: ok' is absent — signature verification did not run or was not printed"
+            exit 1
+          }
+          if ($text -notmatch [regex]::Escape('checksum : ok')) {
+            Write-Host "::error::install.log is present but 'checksum : ok' is absent — checksum verification did not run or was not printed"
+            exit 1
+          }
+
+          $exe = "$env:RUNNER_TEMP\bx\bloxsmith.exe"
+          if (-not (Test-Path -LiteralPath $exe)) {
+            Write-Host "::error::bloxsmith.exe is missing at $exe despite a zero exit code"
+            exit 1
+          }
+          $ver = & $exe --version 2>&1
+          if ($ver -notmatch '^bloxsmith \d+\.\d+\.\d+') {
+            Write-Host "::error::bloxsmith.exe --version output did not match '^bloxsmith \d+\.\d+\.\d+' — got: $ver"
+            exit 1
+          }
+
+          # Step 7 (uninstall) proves the PATH entry is actually removed — that
+          # only means something if we first confirm it was actually added here.
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if (-not $userPath -or ($userPath -split ';') -notcontains "$env:RUNNER_TEMP\bx") {
+            Write-Host "::error::install.ps1 did not add $env:RUNNER_TEMP\bx to the user PATH"
+            exit 1
+          }
+          Write-Host "signature: ok, checksum: ok, bloxsmith.exe --version ok, user PATH updated"
+
+      # The refusal paths matter more than the happy one: a check that cannot
+      # fail is decoration. A function named Invoke-WebRequest, defined in the
+      # SAME process as install.ps1 is run in, outranks the real cmdlet in
+      # PowerShell's command precedence — so a wrapper script that defines the
+      # function and then invokes install.ps1 in-process transparently serves
+      # local files instead of hitting the network, without install.ps1 taking
+      # a base-URL parameter or being modified at all.
+      - name: install.ps1 refuses a tampered checksums.txt
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $W = "$env:RUNNER_TEMP\tampered"
+          New-Item -ItemType Directory -Force -Path "$W\rel" | Out-Null
+          $base = 'https://github.com/holland-built/bloxsmith/releases/latest/download'
+
+          Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt" -OutFile "$W\rel\checksums.txt"
+          Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt.sshsig" -OutFile "$W\rel\checksums.txt.sshsig"
+          $m = [regex]::Match((Get-Content -Raw "$W\rel\checksums.txt"), 'bloxsmith_([0-9][^_]+)_')
+          if (-not $m.Success) {
+            Write-Host "::error::could not resolve the release version from checksums.txt"
+            exit 1
+          }
+          $num = $m.Groups[1].Value
+          $asset = "bloxsmith_${num}_windows_amd64.zip"
+          Invoke-WebRequest -UseBasicParsing -Uri "$base/$asset" -OutFile "$W\rel\$asset"
+
+          # Flip the first character of every line to break the signed content
+          # cryptographically while leaving asset names (and therefore parsing)
+          # intact — the failure this proves must be a signature/checksum
+          # mismatch, not a parse error.
+          $lines = Get-Content -Path "$W\rel\checksums.txt"
+          $flipped = $lines | ForEach-Object {
+            if ($_.Length -eq 0) { $_ }
+            else {
+              $c = $_.Substring(0,1)
+              $r = if ($c -eq 'f') { '0' } else { 'f' }
+              $r + $_.Substring(1)
+            }
+          }
+          Set-Content -Path "$W\rel\checksums.txt" -Value $flipped
+
+          $shim = "$W\shim.ps1"
+          @"
+          function global:Invoke-WebRequest {
+              param([Parameter(Mandatory)][string]`$Uri, [string]`$OutFile, [switch]`$UseBasicParsing, [int]`$TimeoutSec)
+              `$name = Split-Path -Leaf `$Uri
+              `$local = Join-Path '$W\rel' `$name
+              if (-not (Test-Path -LiteralPath `$local)) { throw "shim: no local file for `$name (simulated 404)" }
+              Copy-Item -LiteralPath `$local -Destination `$OutFile -Force
+          }
+          & '$PWD\scripts\install.ps1' -Prefix '$W\out'
+          exit `$LASTEXITCODE
+          "@ | Set-Content -Path $shim
+
+          $log = "$W\tampered.log"
+          powershell -NoProfile -ExecutionPolicy Bypass -File $shim 2>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+
+          if ($code -eq 0) {
+            Write-Host "::error::install.ps1 exited 0 against a tampered checksums.txt — it must refuse"
+            exit 1
+          }
+          if (Test-Path -LiteralPath "$W\out\bloxsmith.exe") {
+            Write-Host "::error::bloxsmith.exe was installed despite a tampered checksums.txt"
+            exit 1
+          }
+          if (-not (Test-Path -LiteralPath $log)) {
+            Write-Host "::error::tampered.log is missing — cannot confirm why install.ps1 refused"
+            exit 1
+          }
+          if ((Get-Content -Raw -Path $log) -notmatch [regex]::Escape('SIGNATURE DOES NOT VERIFY')) {
+            Write-Host "::error::install.ps1 refused, but not for the right reason — 'SIGNATURE DOES NOT VERIFY' is absent from the log"
+            exit 1
+          }
+          Write-Host "tampered checksums.txt refused, as it must be"
+
+      # THE ACTUAL ATTACK: an attacker who can write release assets replaces the
+      # archive with a forged one that genuinely runs, rewrites checksums.txt to
+      # match the forgery, and DELETES the signature entirely. A checksum alone
+      # can never catch this — it only proves the archive matches checksums.txt,
+      # and the attacker controls both files. Only signature absence/failure can.
+      - name: install.ps1 refuses a release whose signature was REMOVED
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $W = "$env:RUNNER_TEMP\nosig"
+          New-Item -ItemType Directory -Force -Path "$W\rel", "$W\payload" | Out-Null
+          $base = 'https://github.com/holland-built/bloxsmith/releases/latest/download'
+
+          Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt" -OutFile "$W\rel\checksums.txt"
+          $m = [regex]::Match((Get-Content -Raw "$W\rel\checksums.txt"), 'bloxsmith_([0-9][^_]+)_')
+          if (-not $m.Success) {
+            Write-Host "::error::could not resolve the release version from checksums.txt"
+            exit 1
+          }
+          $num = $m.Groups[1].Value
+          $asset = "bloxsmith_${num}_windows_amd64.zip"
+
+          # A forged archive that really does contain a runnable bloxsmith.exe.
+          Set-Content -Path "$W\payload\bloxsmith.exe" -Value 'FORGED, but a real executable is not required for this test to prove the point — Expand-Archive + the exe-count check only need a file named bloxsmith.exe'
+          Compress-Archive -Path "$W\payload\bloxsmith.exe" -DestinationPath "$W\rel\$asset" -Force
+
+          $hash = (Get-FileHash -Algorithm SHA256 -Path "$W\rel\$asset").Hash.ToLower()
+          $newLines = (Get-Content -Path "$W\rel\checksums.txt") | ForEach-Object {
+            if ($_ -match "^\S+\s+\*?$([regex]::Escape($asset))\s*$") { "$hash  $asset" } else { $_ }
+          }
+          Set-Content -Path "$W\rel\checksums.txt" -Value $newLines
+          # ...and no checksums.txt.sshsig / .ed25519 placed in $W\rel at all.
+
+          $shim = "$W\shim.ps1"
+          @"
+          function global:Invoke-WebRequest {
+              param([Parameter(Mandatory)][string]`$Uri, [string]`$OutFile, [switch]`$UseBasicParsing, [int]`$TimeoutSec)
+              `$name = Split-Path -Leaf `$Uri
+              `$local = Join-Path '$W\rel' `$name
+              if (-not (Test-Path -LiteralPath `$local)) { throw "shim: no local file for `$name (simulated 404)" }
+              Copy-Item -LiteralPath `$local -Destination `$OutFile -Force
+          }
+          & '$PWD\scripts\install.ps1' -Prefix '$W\out'
+          exit `$LASTEXITCODE
+          "@ | Set-Content -Path $shim
+
+          $log = "$W\nosig.log"
+          powershell -NoProfile -ExecutionPolicy Bypass -File $shim 2>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+
+          if ($code -eq 0) {
+            Write-Host "::error::install.ps1 exited 0 against a release with the signature removed — it must refuse"
+            exit 1
+          }
+          if (Test-Path -LiteralPath "$W\out\bloxsmith.exe") {
+            Write-Host "::error::a forged bloxsmith.exe was installed despite a missing signature"
+            exit 1
+          }
+          if (-not (Test-Path -LiteralPath $log)) {
+            Write-Host "::error::nosig.log is missing — cannot confirm why install.ps1 refused"
+            exit 1
+          }
+          if ((Get-Content -Raw -Path $log) -notmatch '(?i)no signature') {
+            Write-Host "::error::install.ps1 refused, but not for the right reason — 'no signature' is absent from the log"
+            exit 1
+          }
+          Write-Host "unsigned release refused, and nothing was installed"
+
+      # if: always() so this step also cleans up the runner's user PATH even if
+      # an earlier assertion failed. Step 4 already confirmed the prefix WAS on
+      # the user PATH before this — without that, an empty/absent PATH entry
+      # here would pass by doing nothing, proving nothing.
+      - name: install.ps1 -Uninstall removes the binary and the PATH entry
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $prefix = "$env:RUNNER_TEMP\bx"
+          $log = "$env:RUNNER_TEMP\uninstall.log"
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -Uninstall -Prefix $prefix 2>&1 |
+            Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::install.ps1 -Uninstall exited $LASTEXITCODE"
+            exit 1
+          }
+          if (Test-Path -LiteralPath "$prefix\bloxsmith.exe") {
+            Write-Host "::error::bloxsmith.exe still exists at $prefix\bloxsmith.exe after -Uninstall"
+            exit 1
+          }
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if ($userPath -and (($userPath -split ';') -contains $prefix)) {
+            Write-Host "::error::$prefix is still on the user PATH after -Uninstall"
+            exit 1
+          }
+          Write-Host "uninstall removed bloxsmith.exe and the PATH entry"

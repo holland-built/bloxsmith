@@ -18,9 +18,15 @@ profile (no admin, no Docker). Adds the install dir to your USER PATH.
 Notes:
   * ExecutionPolicy: if scripts are blocked, run it for this process only with
     `powershell -ExecutionPolicy Bypass -File .\install.ps1` — nothing global changes.
-  * The SHA-256 check proves the download is INTACT (not corrupt/truncated). It
-    does NOT prove publisher identity — the binary is unsigned, and the checksums
-    ship next to it. Signature verification (cosign) is a planned hardening step.
+  * The SHA-256 check proves the download is INTACT (not corrupt/truncated).
+    Before installing, the script also verifies checksums.txt itself was
+    signed by this project's release key (ssh-keygen -Y verify against
+    checksums.txt.sshsig, key pinned in the script). HONEST SCOPE: this
+    authenticates the release PIPELINE — the artifact left this repo's CI
+    unmodified since it was signed — not the SOURCE, and the exe is still
+    unsigned for Windows SmartScreen. Releases before 3.23.0 predate signing;
+    if you pin one with -Version, the script says so explicitly rather than
+    silently skipping the check.
 #>
 
 [CmdletBinding()]
@@ -120,6 +126,204 @@ try {
         Invoke-WebRequest -UseBasicParsing -Uri "$base/$asset" -OutFile $zip
     } catch {
         throw "could not download $asset from $base : $($_.Exception.Message)"
+    }
+
+    # --- verify release signature (fail-closed) --------------------------------
+    # checksums.txt is signed with an Ed25519 key held only in this repo's CI
+    # secrets; the public half is pinned here, so the thing that decides
+    # whether a release is genuine does not travel with the release. This
+    # authenticates the release PIPELINE (the same signature go/signing.go
+    # checks before a self-update) — it does not authenticate the exe's
+    # publisher identity to Windows; that's SmartScreen, a separate control.
+    $SIG_SSH_PUBKEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILh1e4Aj8VwLy+7PBMzfkwqDa7amfqAgpSmF1sq4S+g9'
+    $SIGNING_SINCE  = [version]'3.23.0'
+
+    # Extracts a leading X.Y.Z from a version string, ignoring any -suffix.
+    # Returns $null when the string doesn't start with one at all.
+    function Get-SemverPrefix([string]$v) {
+        $m = [regex]::Match($v, '^(\d+)\.(\d+)\.(\d+)')
+        if (-not $m.Success) { return $null }
+        return [version]("{0}.{1}.{2}" -f $m.Groups[1].Value, $m.Groups[2].Value, $m.Groups[3].Value)
+    }
+
+    # Releases from 3.23.0 onward always carry a signature (CI refuses to
+    # publish without one). "latest" and a version number that can't be parsed
+    # are treated the same as ">= 3.23.0" — fail closed, never assume it's old.
+    # The ONLY legitimate skip is a version pinned by the caller that
+    # genuinely predates signing; that is a fact about that one old release,
+    # never phrased as "signing is generally unavailable".
+    $sigRequired = $true
+    if ($Version -ne 'latest') {
+        $parsedNum = Get-SemverPrefix $num
+        if ($parsedNum -and $parsedNum -lt $SIGNING_SINCE) {
+            $sigRequired = $false
+        }
+    }
+
+    # ssh-keygen -Y verify needs OpenSSH >= 8.0 (that's when -Y sign/verify was
+    # added). Windows 10 1809 shipped OpenSSH 7.7, which doesn't understand -Y
+    # at all — probe the real version rather than assuming ssh-keygen exists
+    # or is new enough.
+    $sshSupported   = $false
+    $sshVersionNote = ''
+    $sshKeygenCmd = Get-Command ssh-keygen -ErrorAction SilentlyContinue
+    $sshCmd       = Get-Command ssh -ErrorAction SilentlyContinue
+    if ($sshKeygenCmd -and $sshCmd) {
+        try {
+            # `ssh -V` writes its version to stderr. Capturing that through the
+            # PowerShell pipeline (2>&1 | Out-String) is a known trap: under
+            # $ErrorActionPreference = 'Stop', native-command stderr lines can
+            # be promoted to a terminating error instead of plain text. Route
+            # it through cmd /c instead, which merges the streams at the OS
+            # level before PowerShell ever sees them as its own error records.
+            $verOut = (& cmd /c 'ssh -V 2>&1') -join "`n"
+            $vm = [regex]::Match($verOut, 'OpenSSH_(\d+)\.(\d+)')
+            if ($vm.Success -and [int]$vm.Groups[1].Value -ge 8) {
+                $sshSupported = $true
+            } else {
+                $sshVersionNote = "ssh-keygen here predates OpenSSH 8.0 ($($verOut.Trim()))"
+            }
+        } catch {
+            $sshVersionNote = "could not determine ssh-keygen's OpenSSH version"
+        }
+    } else {
+        $sshVersionNote = 'ssh-keygen (OpenSSH Client) was not found on PATH'
+    }
+
+    # Fetch checksums.txt.sshsig. A genuine 404 (release truly has no
+    # signature) and a network/local failure (tells us nothing either way)
+    # must not be reported the same way, so tell them apart via HTTP status.
+    $sshsigPath     = Join-Path $tmp 'checksums.txt.sshsig'
+    $sigFetchOk     = $false
+    $sigFetch404    = $false
+    $sigFetchErrMsg = ''
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt.sshsig" -OutFile $sshsigPath
+        $sigFetchOk = $true
+    } catch {
+        $statusCode = $null
+        # Use the PSObject.Properties indexer rather than dereferencing
+        # .Response/.StatusCode directly — under Set-StrictMode -Version
+        # Latest, touching a property the exception type doesn't declare
+        # (e.g. a plain connection failure with no HTTP response at all)
+        # throws instead of returning $null.
+        $responseProp = $_.Exception.PSObject.Properties['Response']
+        if ($responseProp -and $responseProp.Value) {
+            $statusProp = $responseProp.Value.PSObject.Properties['StatusCode']
+            if ($statusProp) {
+                try { $statusCode = [int]$statusProp.Value } catch { $statusCode = $null }
+            }
+        }
+        if ($statusCode -eq 404) {
+            $sigFetch404 = $true
+        } else {
+            $sigFetchErrMsg = $_.Exception.Message
+        }
+    }
+
+    if ($sshSupported -and $sigFetchOk) {
+        $allowedSigners = Join-Path $tmp 'allowed_signers'
+        # Identity first, key WITHOUT a trailing comment - must match the -I
+        # value passed to ssh-keygen below exactly. Written as plain ASCII, no
+        # BOM, since it's just a config line (not signed data itself).
+        [System.IO.File]::WriteAllText($allowedSigners, "bloxsmith-release-signing $SIG_SSH_PUBKEY`n", [System.Text.Encoding]::ASCII)
+
+        # ssh-keygen -Y verify checks an EXACT byte signature over stdin.
+        # Piping through the PowerShell pipeline (Get-Content | ssh-keygen)
+        # re-encodes text and can rewrite line endings (CRLF<->LF), silently
+        # corrupting the bytes being checked - that produces a FALSE "does not
+        # verify" on a genuine release, which is worse than skipping the check
+        # entirely because it looks like tampering. So the process is driven
+        # directly here and checksums.txt's raw bytes are written straight
+        # into its stdin stream, byte-for-byte identical to what's on disk
+        # (and to what was signed). Both streams are tiny (a checksums file
+        # and one status line), so writing stdin fully before reading output
+        # cannot deadlock on a full pipe buffer here.
+        function ConvertTo-CliArg([string]$arg) {
+            if ($arg -notmatch '[\s"]') { return $arg }
+            return '"' + ($arg -replace '"', '\"') + '"'
+        }
+        $sshExitCode = -1
+        $sshStdErr   = ''
+        try {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = 'ssh-keygen'
+            $argParts = @('-Y', 'verify', '-f', $allowedSigners, '-I', 'bloxsmith-release-signing', '-n', 'bloxsmith-release', '-s', $sshsigPath)
+            $psi.Arguments = (($argParts | ForEach-Object { ConvertTo-CliArg $_ }) -join ' ')
+            $psi.RedirectStandardInput  = $true
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError  = $true
+            $psi.UseShellExecute = $false
+            $proc = [System.Diagnostics.Process]::Start($psi)
+            $dataBytes = [System.IO.File]::ReadAllBytes($checksums)
+            $proc.StandardInput.BaseStream.Write($dataBytes, 0, $dataBytes.Length)
+            $proc.StandardInput.BaseStream.Close()
+            $sshStdErr = $proc.StandardError.ReadToEnd()
+            $proc.StandardOutput.ReadToEnd() | Out-Null
+            $proc.WaitForExit()
+            $sshExitCode = $proc.ExitCode
+        } catch {
+            $sshExitCode = -1
+            $sshStdErr = $_.Exception.Message
+        }
+
+        if ($sshExitCode -eq 0) {
+            Write-Host "  signature: ok (ssh-ed25519, key pinned in this script)"
+        } else {
+            Write-Error @"
+RELEASE SIGNATURE DOES NOT VERIFY for checksums.txt - refusing to install.
+$sshStdErr
+checksums.txt was not signed by this project's release key. Do not retry
+blindly; report it at https://github.com/$REPO/issues
+"@
+            exit 1
+        }
+    }
+    elseif ($sigFetchOk -and -not $sshSupported) {
+        # The signature asset exists, but nothing here can check it.
+        if ($sigRequired) {
+            Write-Error @"
+release $num is signed, but this system cannot verify it ($sshVersionNote) -
+refusing to install unverified.
+Windows: add the OpenSSH Client optional feature, or install a newer OpenSSH
+(need version 8.0 or later for ssh-keygen -Y verify).
+Do not retry blindly if this persists; report it at https://github.com/$REPO/issues
+"@
+            exit 1
+        } else {
+            Write-Host "  signature: present but NOT checked ($sshVersionNote)"
+            Write-Host "             the installed binary verifies it on every self-update"
+        }
+    }
+    elseif ($sigFetch404) {
+        # Genuinely absent (a real 404), not a fetch problem.
+        if ($sigRequired) {
+            Write-Error @"
+release $num has no signature asset (checksums.txt.sshsig) - refusing to
+install. Releases from $SIGNING_SINCE onward are always signed, so a release
+in that range with no signature asset cannot be authenticated.
+Do not retry blindly if this persists; report it at https://github.com/$REPO/issues
+"@
+            exit 1
+        } else {
+            Write-Host "  signature: none - release $num predates release signing (introduced in $SIGNING_SINCE); checksum only for this specific old release"
+        }
+    }
+    else {
+        # Neither a successful fetch nor a confirmed-absent (404) outcome - a
+        # fetch problem (network/local), not evidence the release lacks a
+        # signature.
+        if ($sigRequired) {
+            Write-Error @"
+could not download the release signature (checksums.txt.sshsig): $sigFetchErrMsg
+Refusing to install without verifying the signature - this is a fetch
+failure, not a release that lacks a signature; check your network and retry.
+Do not retry blindly if this persists; report it at https://github.com/$REPO/issues
+"@
+            exit 1
+        } else {
+            Write-Host "  signature: could not be downloaded ($sigFetchErrMsg); release $num predates release signing anyway (introduced in $SIGNING_SINCE), so continuing checksum only"
+        }
     }
 
     # --- verify checksum (fail-closed) ----------------------------------------
@@ -223,7 +427,15 @@ failing, open an issue at https://github.com/$REPO/issues
 
     # --- get the user to the dashboard, zero extra steps ----------------------
     $url = 'http://localhost:8080'
-    if ([Environment]::UserInteractive) {
+    # [Environment]::UserInteractive is True on most CI runners too (it means
+    # "no attached console prevented UI", not "a human is at a terminal"), so
+    # without the $env:CI check an unmodified pipeline run would launch a
+    # long-lived server and pop a browser inside an automated job. $env:CI is
+    # only the common convention (GitHub Actions and most other CI set it) —
+    # it does not detect every kind of automation, and anything cleverer risks
+    # skipping the launch for a real person sitting at a real terminal, which
+    # is the entire point of this step.
+    if ([Environment]::UserInteractive -and -not $env:CI) {
         Write-Host ''
         Write-Host "Starting Bloxsmith and opening $url ..."
         Start-Process -FilePath $dest | Out-Null
