@@ -157,7 +157,16 @@ jobs:
           umask 077
           printf '%s\n' "$RELEASE_SSH_SIGNING_KEY" > /tmp/relsign_ssh
           chmod 600 /tmp/relsign_ssh
-          ssh-keygen -Y sign -f /tmp/relsign_ssh -n bloxsmith-release dist/checksums.txt
+          # ssh-keygen -Y sign has no output flag: it always writes <file>.sig
+          # next to its input. dist/checksums.txt.sig is ALREADY TAKEN by the
+          # cosign signature goreleaser produced, so signing dist/checksums.txt
+          # in place collides with it and ssh-keygen stops on an interactive
+          # "Overwrite (y/n)?" prompt — which is exactly how this failed the
+          # first time. Sign a copy outside dist/ instead; the signature covers
+          # the file's contents, so a copy signs identically.
+          cp dist/checksums.txt /tmp/sshsig_input
+          ssh-keygen -Y sign -f /tmp/relsign_ssh -n bloxsmith-release /tmp/sshsig_input
+          mv /tmp/sshsig_input.sig dist/checksums.txt.sshsig
           # Verify what we are about to publish, against the public key exactly as
           # install.sh pins it — a signing step that silently produced something
           # unverifiable would look identical to a good one.
@@ -165,7 +174,6 @@ jobs:
           [ -n "$PUB" ] || { echo "::error::could not read the pinned ssh key from scripts/install.sh"; exit 1; }
           printf '%s %s\n' bloxsmith-release-signing "$(printf '%s' "$PUB" | awk '{print $1" "$2}')" > /tmp/allowed_signers
           ssh-keygen -Y verify -f /tmp/allowed_signers -I bloxsmith-release-signing \
-            -n bloxsmith-release -s dist/checksums.txt.sig < dist/checksums.txt
-          mv dist/checksums.txt.sig dist/checksums.txt.sshsig
-          rm -f /tmp/relsign_ssh /tmp/allowed_signers
+            -n bloxsmith-release -s dist/checksums.txt.sshsig < dist/checksums.txt
+          rm -f /tmp/relsign_ssh /tmp/allowed_signers /tmp/sshsig_input
           gh release upload "${GITHUB_REF_NAME}" dist/checksums.txt.sshsig --clobber
