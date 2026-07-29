@@ -263,18 +263,38 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 	p.emit(M{"step": fmt.Sprintf("%sCreating subnet /%d  name=%s  purpose=%s", mode, cidr, sdef.Name, sdef.Purpose)})
 
 	if p.cfg.DryRun {
-		// Deliberately NOT GetStrict: this is a preview-only lookup for a dry
-		// run. A failed preview must leave subnetAddr blank, never abort the
-		// dry run — the real creation path below uses Rest.Write with its own
-		// status check, so nothing here can create a false duplicate.
-		preview := p.e.Rest.Get("/api/ddi/v1/"+blockID+"/nextavailablesubnet",
+		// GetStrict so a failed preview is DETECTABLE — but it must still
+		// never abort the dry run: the real creation path below uses
+		// Rest.Write with its own status check, so nothing here can create a
+		// false duplicate. What changes is that a failed preview is now
+		// reported as "unavailable" (with an operator-safe reason) instead of
+		// leaving subnetAddr blank, which used to be indistinguishable from a
+		// genuine "no address available in this block" result.
+		preview, err := p.e.Rest.GetStrict("/api/ddi/v1/"+blockID+"/nextavailablesubnet",
 			map[string]string{"cidr": itoa(cidr), "count": "1"})
 		subnetAddr := ""
-		if len(preview) > 0 {
+		extra := M{}
+		switch {
+		case err != nil:
+			// Case 3: the lookup failed outright — never render a blank
+			// address that could pass for a real (if empty) result.
+			subnetAddr = "(unavailable)"
+			extra["address_preview"] = "unavailable"
+			extra["reason"] = upstreamPublic(err)
+		case len(preview) == 0:
+			// Case 2: the lookup succeeded but found nothing — a legitimate
+			// "block is full", kept distinct from a broken lookup.
+			extra["address_preview"] = "none-available"
+		default:
+			// Case 1: unchanged behavior, unchanged fields.
 			subnetAddr = pyStr(asMap(preview[0])["address"])
 		}
 		appendTo(result, "subnets", M{"address": fmt.Sprintf("%s/%d", subnetAddr, cidr), "name": sdef.Name, "id": "(dry-run)"})
-		return M{"dry_run": true, "address": subnetAddr, "cidr": cidr, "name": sdef.Name, "tags": tags}, nil
+		out := M{"dry_run": true, "address": subnetAddr, "cidr": cidr, "name": sdef.Name, "tags": tags}
+		for k, v := range extra {
+			out[k] = v
+		}
+		return out, nil
 	}
 
 	resp, status, _ := p.e.Rest.Write("POST", "/api/ddi/v1/"+blockID+"/nextavailablesubnet", nil,

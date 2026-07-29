@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useChartTheme, Card, Empty, TabIntro } from '../components/ui.jsx'
+import { useChartTheme, Card, Empty, FeedUnavailable, TabIntro } from '../components/ui.jsx'
 import { authFetch } from '../lib/authFetch.js'
 import DossierPanel from '../components/DossierPanel.jsx'
 
@@ -159,7 +159,12 @@ function ChatCard() {
 
 // ---------- threat lookup ----------
 
-function EntitiesTable({ entities }) {
+function EntitiesTable({ entities, availability, reason }) {
+  // ThreatLookup degrades to entities:[] on a dead upstream search — indistinguishable
+  // from a genuine "no matches" unless availability is checked first.
+  if (availability === 'unavailable') {
+    return <FeedUnavailable reason={reason} label="Threat lookup unavailable" />
+  }
   if (entities == null) return null
   if (Array.isArray(entities)) {
     if (!entities.length) return <div className="text-sm text-muted">No matches</div>
@@ -297,7 +302,7 @@ function LookupCard() {
       </div>
       {err && <div className="text-[13px] mb-2" style={{ color: COLORS.sevHigh }}>{err}</div>}
       {!err && !res && !dossier && !busy && <Empty>Look up a domain, IP, or host</Empty>}
-      {res && <EntitiesTable entities={res.entities} />}
+      {res && <EntitiesTable entities={res.entities} availability={res.availability} reason={res.reason} />}
       {(res || dossier) && <BlockDomainButton domain={queryUsed} />}
       <DossierPanel data={dossier} />
     </Card>

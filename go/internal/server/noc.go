@@ -80,6 +80,16 @@ func (d *Deps) actionStatus(w http.ResponseWriter, r *http.Request, b map[string
 // incidents is GET /api/incidents (server.py:5103): build signals, stamp ages,
 // correlate, drop snoozed categories, order + cap the live signal list. On any
 // failure it returns the Python default (empty everything), not a generic 500.
+//
+// It also attaches "_meta" (the "ok"/"empty"/"error" status of the subnets/
+// zones/leases feeds BuildSignals reads, per dashboard.SignalsMeta) and
+// "signals_degraded" (true when any of those feeds errored). Without this, a
+// dead upstream feed made BuildSignals return zero signals and this route
+// forwarded "signals: []" indistinguishable from a genuinely clean estate —
+// the most confident false statement in the product ("no issues detected").
+// The recover() fallback below sets signals_degraded true unconditionally: a
+// panic mid-build means the signals it would have returned are unknown, which
+// is itself a degraded state, not a clean one.
 func (d *Deps) incidents(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -87,11 +97,13 @@ func (d *Deps) incidents(w http.ResponseWriter, r *http.Request) {
 			d.json(w, r, 200, map[string]any{
 				"incidents": []any{}, "snoozes": map[string]any{}, "signals": []any{},
 				"signals_total": 0, "signals_truncated": false,
+				"_meta": map[string]any{}, "signals_degraded": true,
 			})
 		}
 	}()
 	data := d.Dashboard.FetchDashboardData()
 	signals := d.Store.StampFirstSeen(dashboard.BuildSignals(data))
+	signalsMeta, signalsDegraded := dashboard.SignalsMeta(data)
 	snoozed := d.Store.ActiveSnoozes()
 
 	incidents := []map[string]any{}
@@ -115,22 +127,29 @@ func (d *Deps) incidents(w http.ResponseWriter, r *http.Request) {
 	d.json(w, r, 200, map[string]any{
 		"incidents": incidents, "snoozes": snoozed, "signals": live,
 		"signals_total": total, "signals_truncated": truncated,
+		"_meta": signalsMeta, "signals_degraded": signalsDegraded,
 	})
 }
 
 // incidentsCategory is GET /api/incidents/<cat> (server.py:5126): the full
 // signal list for one category (fetched on demand). Deliberately NOT filtered by
 // snooze — a snoozed category must still be inspectable.
+//
+// Carries the same "_meta"/"signals_degraded" feed-health indicator as
+// incidents (see its doc comment) — an empty match list for this category is
+// only an all-clear when the underlying feeds were actually read.
 func (d *Deps) incidentsCategory(w http.ResponseWriter, r *http.Request) {
 	category := r.PathValue("cat")
 	defer func() {
 		if rec := recover(); rec != nil {
 			d.logExc("/api/incidents/category", rec)
 			d.json(w, r, 200, map[string]any{
-				"category": category, "count": 0, "truncated": false, "signals": []any{}})
+				"category": category, "count": 0, "truncated": false, "signals": []any{},
+				"_meta": map[string]any{}, "signals_degraded": true})
 		}
 	}()
 	data := d.Dashboard.FetchDashboardData()
+	signalsMeta, signalsDegraded := dashboard.SignalsMeta(data)
 	matches := []map[string]any{}
 	for _, s := range d.Store.StampFirstSeen(dashboard.BuildSignals(data)) {
 		if getCat(s) == category {
@@ -143,7 +162,8 @@ func (d *Deps) incidentsCategory(w http.ResponseWriter, r *http.Request) {
 		out = matches[:500]
 	}
 	d.json(w, r, 200, map[string]any{
-		"category": category, "count": count, "truncated": count > 500, "signals": out})
+		"category": category, "count": count, "truncated": count > 500, "signals": out,
+		"_meta": signalsMeta, "signals_degraded": signalsDegraded})
 }
 
 // insights is GET /api/insights (server.py:5203).
