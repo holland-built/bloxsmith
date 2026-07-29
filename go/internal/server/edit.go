@@ -14,7 +14,7 @@ import (
 // central write-guard (server.New) already gated the mutation and logged the
 // "write-authorized" audit entry; these handlers add the per-route RBAC gate,
 // the builder call, and the explicit action audit entry, exactly as Python does.
-func (d *Deps) registerEditRoutes(mux *http.ServeMux) {
+func (d *Deps) registerEditRoutes(mux router) {
 	mux.HandleFunc("POST /api/selfservice/allocate", d.body(d.selfserviceAllocate))
 	mux.HandleFunc("POST /api/dns/records", d.body(d.dnsRecordCreate))
 	mux.HandleFunc("PATCH /api/dns/records", d.body(d.dnsRecordUpdate))

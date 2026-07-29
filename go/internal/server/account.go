@@ -14,7 +14,7 @@ import (
 // state-changing POST, so switchAccount enforces its own CSRF gate
 // (same-origin + JSON content type) — CORS alone only blocks reading the
 // response, not sending a cross-origin simple POST.
-func (d *Deps) registerAccountRoutes(mux *http.ServeMux) {
+func (d *Deps) registerAccountRoutes(mux router) {
 	mux.HandleFunc("GET /api/whoami", d.whoami)
 	mux.HandleFunc("GET /api/accounts", d.accounts)
 	mux.HandleFunc("POST /api/switch-account", d.body(d.switchAccount))

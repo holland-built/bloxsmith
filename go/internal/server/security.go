@@ -12,7 +12,7 @@ import (
 // so the chassis write-guard does not gate them — each handler enforces its own
 // X-Auth-Token check (_authed) and appends an audit entry on success, exactly as
 // Python does. The block engine also re-validates domain + BLOCK_LIST_ID.
-func (d *Deps) registerSecurityWriteRoutes(mux *http.ServeMux) {
+func (d *Deps) registerSecurityWriteRoutes(mux router) {
 	mux.HandleFunc("POST /api/block-domain", d.body(d.blockDomain))
 	mux.HandleFunc("POST /api/unblock-domain", d.body(d.unblockDomain))
 }

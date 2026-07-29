@@ -69,6 +69,7 @@ func New(d *Deps) http.Handler {
 		mux.HandleFunc("GET /api/update/status", d.UpdateProgress)
 	}
 	d.registerVaultRoutes(mux)
+	d.registerWriteLockRoutes(mux)
 	d.registerStateRoutes(mux)
 	d.registerDataRoutes(mux)
 	d.registerCSPRoutes(mux)
@@ -87,10 +88,19 @@ func New(d *Deps) http.Handler {
 	// tenant-data /api/ path until a key is active. No-op when VaultMode=false.
 	gated := d.Guard.VaultGate(d.Cfg.VaultMode, func() bool { return d.Auth.Value() != "" })(mux)
 
+	// Per-tenant write lock: provisioning, teardown and every tenant edit refuse
+	// unless THIS tenant was explicitly marked writable. Tenants are read-only
+	// by default. See writelock.go, and internal/vault/writelock.go for why the
+	// tenant identity is the (stored connection, CSP account) pair.
+	//
+	// Inside the pin, outside everything else: it must decide before any handler
+	// gets the chance to make an outbound call, and it must not run for OPTIONS.
+	locked := d.withWriteLock(gated)
+
 	// Resolve the outbound tenant credential ONCE per request, before routing,
 	// so every outbound call a request makes goes to the same tenant even if an
 	// account switch lands halfway through. See tenant.go for the full reason.
-	pinned := d.withPinnedTenant(gated)
+	pinned := d.withPinnedTenant(locked)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
@@ -161,7 +171,7 @@ func (d *Deps) updateApply(w http.ResponseWriter, r *http.Request) {
 
 // --- the 14 /api/vault/* POST routes -----------------------------------------
 
-func (d *Deps) registerVaultRoutes(mux *http.ServeMux) {
+func (d *Deps) registerVaultRoutes(mux router) {
 	// 1. init
 	mux.HandleFunc("POST /api/vault/init", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
 		d.json(w, r, 200, d.Vault.InitR(str(b, "passphrase")))
