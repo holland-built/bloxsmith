@@ -6,7 +6,7 @@ import "net/http"
 // /api/query (server.py:6075). It is read-only + LLM-backed, so — like Python —
 // it carries NO token requirement and is NOT in the mutating-path set (the
 // same-origin CORS allowlist already blocks cross-origin reads).
-func (d *Deps) registerAIRoutes(mux *http.ServeMux) {
+func (d *Deps) registerAIRoutes(mux router) {
 	mux.HandleFunc("POST /api/query", d.body(d.apiQuery))
 }
 

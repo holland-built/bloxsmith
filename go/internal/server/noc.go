@@ -15,7 +15,7 @@ import (
 // drill-down), /api/actions, /api/insights, the source
 // registry (/api/sources + /api/source/<id>) and the analytics reads
 // (/api/dns-analytics, /api/host-metrics, /api/threat-lookup).
-func (d *Deps) registerNOCRoutes(mux *http.ServeMux) {
+func (d *Deps) registerNOCRoutes(mux router) {
 	mux.HandleFunc("GET /api/actions", d.actions)
 	mux.HandleFunc("GET /api/actions/{id}", d.actionDetail)
 	mux.HandleFunc("POST /api/actions/{id}/status", d.body(d.actionStatus))

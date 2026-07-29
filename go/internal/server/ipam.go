@@ -22,7 +22,7 @@ var subnetIDRe = regexp.MustCompile(`^[A-Za-z0-9_.\-]+$`)
 // dns/zones, dns/records (GET), ipam/addresses (GET), ipam/availability,
 // ipam/subnets. Each is a thin, shaped REST passthrough. A bad filter value
 // (rest.CSPQ / CSPQField) maps to Python's ValueError -> HTTP 400.
-func (d *Deps) registerIPAMReadRoutes(mux *http.ServeMux) {
+func (d *Deps) registerIPAMReadRoutes(mux router) {
 	mux.HandleFunc("GET /api/ipam/spaces", d.ipamSpaces)
 	mux.HandleFunc("GET /api/ipam/blocks", d.ipamBlocks)
 	mux.HandleFunc("GET /api/dns/zones", d.dnsZones)

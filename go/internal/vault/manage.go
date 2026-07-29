@@ -221,6 +221,8 @@ func (v *Vault) RemoveTenant(tid string) map[string]any {
 		}
 	}
 	v.tenants = kept
+	// A write permission must not outlive the tenant it was granted for.
+	v.forgetTenantWrites(tid)
 	if removedActive {
 		if len(v.tenants) > 0 {
 			id := v.tenants[0].ID
@@ -272,6 +274,12 @@ func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 	// key was supplied — that's what invalidates cached rows / a portal switch.
 	activeKeyChanged := nk != "" && v.active != nil && *v.active == tid
 	if nk != "" {
+		// A REPLACED KEY REVOKES WRITE PERMISSION. "Delta is writable" was
+		// granted for the account behind that key; swap the key and it may now
+		// point at a completely different account, so the permission has to be
+		// granted again deliberately. A rename alone changes nothing about where
+		// a write lands and keeps it.
+		v.forgetTenantWrites(tid)
 		v.tenants[idx].Key = nk
 		if lbl == "" { // new key, no explicit name → auto-resolve
 			if l := v.portalLabelForKeyUnlocked(nk); l != "" {
@@ -602,6 +610,10 @@ func (v *Vault) Status(version string, vaultMode bool, update any) map[string]an
 		"ready":     ready,
 		"tenants":   tenants,
 		"active":    active,
+		// Identities explicitly opted in to being written to. Sent so the UI can
+		// show the read-only state honestly instead of offering write buttons
+		// that will 403 — see writelock.go.
+		"writeAllowed": append([]string{}, v.writeAllowed...),
 		"hasGroq":   v.groq != "",
 		"llm": map[string]any{
 			"hasKey":   v.groq != "",

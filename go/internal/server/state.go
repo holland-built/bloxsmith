@@ -31,7 +31,7 @@ func intOf(v any) int {
 // read/verify + export (server.py:5083/5086), saved views (5057/5277/6085/6384),
 // and the alert snooze (6282). first-seen has no route of its own — it is an
 // internal store consumed by /api/incidents (a later phase).
-func (d *Deps) registerStateRoutes(mux *http.ServeMux) {
+func (d *Deps) registerStateRoutes(mux router) {
 	mux.HandleFunc("GET /api/audit/log", d.auditLog)
 	mux.HandleFunc("GET /api/audit/export", d.auditExport)
 

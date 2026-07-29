@@ -7,7 +7,7 @@ import "net/http"
 // Each degrades to an {"...":[], "unavailable": "..."} shape on 403/error via
 // the ported fetchers; a genuine panic maps to Python's 500 {"error":"internal
 // error"} through recover500.
-func (d *Deps) registerThreatIntelRoutes(mux *http.ServeMux) {
+func (d *Deps) registerThreatIntelRoutes(mux router) {
 	mux.HandleFunc("GET /api/dossier", d.dossier)
 	mux.HandleFunc("GET /api/lookalikes", d.lookalikes)
 	mux.HandleFunc("GET /api/assets", d.assets)
