@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useThemeColors } from '../lib/theme.jsx'
-import { Card, Empty, Skeleton, utilStatus } from './ui.jsx'
+import { Card, Empty, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
 
 // ---------- extracted shared helpers ----------
 
@@ -146,6 +146,7 @@ export function DataTable({
   emptyText = 'no data',
 }) {
   const theme = useThemeColors()
+  const fit = usePanelFit()
   const isControlled = typeof onSort === 'function'
   const [internalSort, setInternalSort] = useState(null)
   const activeSort = isControlled ? sort : internalSort
@@ -224,6 +225,21 @@ export function DataTable({
 
     const chCap = (maxCh) => Math.ceil(maxCh * zeroWidth + CELL_PAD + MEASURE_BUFFER)
 
+    // The rendered <td> text for one column, taken from the DOM this pass is
+    // measuring. Empty on the very first pass (nothing painted yet), which is
+    // fine: the row set that triggers this effect paints on the next commit and
+    // re-measures then.
+    const bodyRows = wrapper.querySelectorAll('tbody tr')
+    const renderedCells = (idx) => {
+      const out = []
+      if (idx < 0) return out
+      for (const tr of bodyRows) {
+        const td = tr.children[idx]
+        if (td) out.push((td.textContent || '').trim())
+      }
+      return out
+    }
+
     const fixed = {}
     const naturals = {}
     for (const c of cols) {
@@ -233,18 +249,39 @@ export function DataTable({
       }
       const font = c.mono ? monoFont : sansFont
       let w = textWidth(String(c.label ?? ''), headFont) + (c.sortable ? SORT_AFFORDANCE_PAD : 0)
-      // `render` columns still measure off the underlying r[c.key] value — we
-      // can't introspect arbitrary JSX without a second DOM render pass, but
-      // the raw value is almost always what the custom render decorates
-      // (an icon, a pill, a wrapped span), so it's a far better proxy than
-      // header-label-only, which silently starves the column to the width of
-      // its label (the audit log's `User` render is exactly this case: a
-      // <span> wrapping the raw value).
-      for (const r of visible) {
-        const v = r[c.key]
-        const text = c.badge ? String(v || '—') : v != null ? String(v) : '—'
-        const tw = textWidth(text, font) + (c.badge ? BADGE_PAD : 0)
-        if (tw > w) w = tw
+      // A `render` column is measured from the text on screen, read out of the
+      // DOM; every other column from its raw value. The raw value is the WRONG
+      // input for a render column and it was wrong in both directions:
+      //
+      //   Incidents "SOC Queue" — key 'action', which no row carries, renders
+      //   r.title/r.name/r.message. The raw value is undefined, so the column
+      //   was sized to its header label. Survivable while the panel's width was
+      //   declared by hand; once the width FOLLOWS this number it collapsed the
+      //   whole panel to a 197px sliver.
+      //
+      //   Infra "Jobs" — key 'created_at', renders fmtDate(v). The raw value is
+      //   a 24-char ISO timestamp in a mono font (251px); "7/15/2026, 3:55:50
+      //   PM" is 173px. The column was 78px wider than anything ever shown in
+      //   it, which is dead space by construction.
+      //
+      // textContent, not scrollWidth: a rendered cell's scrollWidth is a
+      // function of the width it was already given (its contents wrap), so
+      // feeding that back in would be a measure-grow-measure loop. The text is
+      // the same however narrow the column gets. Before the first paint there
+      // is no DOM to read and the raw value stands in for one pass.
+      const rendered = c.render ? renderedCells(cols.indexOf(c)) : null
+      if (rendered && rendered.length) {
+        for (const text of rendered) {
+          const tw = textWidth(text, font)
+          if (tw > w) w = tw
+        }
+      } else {
+        for (const r of visible) {
+          const v = r[c.key]
+          const text = c.badge ? String(v || '—') : v != null ? String(v) : '—'
+          const tw = textWidth(text, font) + (c.badge ? BADGE_PAD : 0)
+          if (tw > w) w = tw
+        }
       }
       let natural = Math.ceil(w + CELL_PAD + MEASURE_BUFFER)
       if (c.maxCh) natural = Math.min(natural, chCap(c.maxCh))
@@ -276,6 +313,13 @@ export function DataTable({
     const available = wrapper.clientWidth
     const budget = Math.max(0, available - fixedTotal)
     const totalNatural = cols.reduce((a, c) => (c.width ? a : a + naturals[c.key]), 0)
+
+    // Tell the enclosing Card how much width these columns actually need, so
+    // the panel's GRID width can follow its content instead of a hand-declared
+    // span. This number is deliberately independent of `available` — it is the
+    // sum of the columns' natural widths — which is what makes the loop
+    // impossible: a wider panel never asks for more room than a narrow one.
+    if (fit) fit.report(fixedTotal + totalNatural)
 
     const floorFor = (c) => {
       const font = c.mono ? monoFont : sansFont
