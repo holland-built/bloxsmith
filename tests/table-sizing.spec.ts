@@ -16,6 +16,12 @@ import { test, expect } from '@playwright/test';
 
 const TABS = ['overview', 'daily', 'network', 'dns', 'security', 'infra', 'incidents', 'audit'];
 
+// Every tab currently renders at least one <DataTable> (verified against
+// ui/src/tabs/*.jsx). If a tab is ever found to legitimately have no tables
+// under any conditions, name it here with a comment explaining why — do not
+// let the whole suite pass on emptiness by default.
+const TABS_WITH_NO_TABLES = new Set<string>();
+
 type Violation = {
   kind: 'overflow' | 'unbounded-clip';
   panel: string;
@@ -150,6 +156,18 @@ test.describe('table column sizing', () => {
       await page.waitForTimeout(300);
 
       const reports = await page.evaluate(measureTables);
+
+      // measureTables() only returns entries for tables that actually had
+      // `tbody tr` rows at measurement time. If every panel on this tab
+      // failed to load (dead feed, slow server, broken render), reports is
+      // empty and the loop below iterates zero times — silently "passing"
+      // without ever exercising the sizing invariants. Fail loudly instead.
+      if (!TABS_WITH_NO_TABLES.has(tab)) {
+        expect(
+          reports.length,
+          `#${tab}: expected at least one table with rows to be measured, found none — panels likely failed to load`,
+        ).toBeGreaterThan(0);
+      }
 
       const allViolations: Violation[] = [];
       for (const r of reports) {

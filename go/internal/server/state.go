@@ -45,18 +45,25 @@ func (d *Deps) registerStateRoutes(mux *http.ServeMux) {
 }
 
 // auditLog is GET /api/audit/log (server.py:5083): the whole chain plus its
-// verification verdict.
+// verification verdict. chain_valid/broken_index keep their original
+// meaning (unchanged for existing consumers); chain_verify_error is the added
+// third state — set when the chain could not be fully read, so a caller can
+// tell "intact" apart from "we could not check". It must never be paired with
+// chain_valid: true.
 func (d *Deps) auditLog(w http.ResponseWriter, r *http.Request) {
+	entries, _, _ := d.Audit.Read()
 	chain := d.Audit.Verify()
 	d.json(w, r, 200, map[string]any{
-		"entries":      d.Audit.Read(),
-		"chain_valid":  chain["valid"],
-		"broken_index": chain["broken_index"],
+		"entries":            entries,
+		"chain_valid":        chain["valid"],
+		"broken_index":       chain["broken_index"],
+		"chain_verify_error": chain["verify_error"],
 	})
 }
 
 // auditExport is GET /api/audit/export (server.py:5086): admin-only, adds
 // exported_at + app_version. A denial audit-logs rbac_denied (server.py:4998).
+// See auditLog for the chain_verify_error contract.
 func (d *Deps) auditExport(w http.ResponseWriter, r *http.Request) {
 	role := d.Guard.ResolveRole(r)
 	if !httpx.RoleAtLeast(role, "admin") {
@@ -65,13 +72,15 @@ func (d *Deps) auditExport(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 403, map[string]any{"ok": false, "error": "admin required"})
 		return
 	}
+	entries, _, _ := d.Audit.Read()
 	chain := d.Audit.Verify()
 	d.json(w, r, 200, map[string]any{
-		"entries":      d.Audit.Read(),
-		"chain_valid":  chain["valid"],
-		"broken_index": chain["broken_index"],
-		"exported_at":  nowUnix(),
-		"app_version":  d.Version,
+		"entries":            entries,
+		"chain_valid":        chain["valid"],
+		"broken_index":       chain["broken_index"],
+		"chain_verify_error": chain["verify_error"],
+		"exported_at":        nowUnix(),
+		"app_version":        d.Version,
 	})
 }
 

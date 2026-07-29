@@ -103,12 +103,17 @@ function IpamSpaces({ ipam }) {
     .map((r) => ({ ...r, used: Number(r.used) || 0, total: Number(r.total) || 0, pct: ((Number(r.used) || 0) / (Number(r.total) || 1)) * 100 }))
     .sort((a, b) => b.used - a.used)
     .slice(0, 12)
+  // CSPIpamUtil returns status:"error" at HTTP 200 on an upstream failure —
+  // the fetch itself never errors, so `ipam.error` alone never catches this.
+  const status = ipam.data?.status
 
   return (
     <Card span={3} title="IPAM Spaces — Top Used" right={<span className="text-[11px] text-muted">addresses used</span>}>
       {ipam.loading ? (
         <Skeleton h={220} />
-      ) : ipam.error || rows.length === 0 ? (
+      ) : ipam.error || status === 'error' ? (
+        <FeedUnavailable label="IPAM feed unavailable" />
+      ) : rows.length === 0 ? (
         <Empty />
       ) : (
         <div className="flex flex-col gap-2 mt-1">
@@ -135,6 +140,9 @@ function IpamSpaces({ ipam }) {
 function DhcpLeases({ dhcp, innerRef }) {
   const hp = useHashParams()
   const rows = dhcp.data?.rows ?? []
+  // CSPDHCPLeases returns status:"error" at HTTP 200 on an upstream failure —
+  // the fetch itself never errors, so `dhcp.error` alone never catches this.
+  const status = dhcp.data?.status
   const [q, setQ] = useState(hp.lease || '')
   const [state, setState] = useState('')
 
@@ -206,7 +214,9 @@ function DhcpLeases({ dhcp, innerRef }) {
     >
       {dhcp.loading ? (
         <Skeleton h={200} />
-      ) : dhcp.error || rows.length === 0 ? (
+      ) : dhcp.error || status === 'error' ? (
+        <FeedUnavailable label="DHCP leases feed unavailable" />
+      ) : rows.length === 0 ? (
         <Empty />
       ) : tableRows.length === 0 ? (
         <Empty>no leases match</Empty>

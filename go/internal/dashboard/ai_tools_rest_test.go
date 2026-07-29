@@ -585,3 +585,33 @@ func TestRunAITool_MCPUnavailableDoesNotBlockRESTTools(t *testing.T) {
 		t.Fatalf("expected search_entity to report a tool error with nil Mcp, got %q", out)
 	}
 }
+
+// TestRunAITool_SearchEntity_FailedSearchIsNotReportedAsAbsence is the
+// regression guard for defect 2: mcp.Search returns nil on a failed search
+// (transport error, non-2xx, or an unparseable/unexpected payload — see
+// mcp.go's Search doc). search_entity used to check len(hits)==0 before
+// checking for nil, so a dead search collapsed into "No entities found.",
+// telling the model there are no entities when the search never ran.
+func TestRunAITool_SearchEntity_FailedSearchIsNotReportedAsAbsence(t *testing.T) {
+	f := &fakeMCP{searchRawText: `{"unexpected":"shape"}`} // decodes fine but matches none of Search's known shapes -> nil
+	s := newTestService(t, f)
+	out := s.RunAITool(context.Background(), "search_entity", map[string]any{"query": "x"})
+	if out == "No entities found." {
+		t.Fatalf("failed search reported as absence: %q", out)
+	}
+	if !strings.Contains(out, "lookup failure") || !strings.Contains(out, "do not tell the user") {
+		t.Fatalf("expected aiLookupFailed wording, got %q", out)
+	}
+}
+
+// TestRunAITool_SearchEntity_GenuineEmptyKeepsAbsenceWording is the other
+// half: a real search that legitimately matches nothing (a non-nil empty
+// slice) must keep the pre-existing "No entities found." wording.
+func TestRunAITool_SearchEntity_GenuineEmptyKeepsAbsenceWording(t *testing.T) {
+	f := &fakeMCP{searchRawText: `[]`}
+	s := newTestService(t, f)
+	out := s.RunAITool(context.Background(), "search_entity", map[string]any{"query": "x"})
+	if out != "No entities found." {
+		t.Fatalf("got %q, want \"No entities found.\" for a genuine empty search", out)
+	}
+}

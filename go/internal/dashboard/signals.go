@@ -143,6 +143,40 @@ func BuildSignals(data map[string]any) []map[string]any {
 	return signals
 }
 
+// SignalsFeeds are the /api/data feed keys BuildSignals reads to derive
+// alert Signals: subnet utilization, zone anomaly/DNSSEC posture, and expired
+// leases. Exported so a route that calls BuildSignals can also expose
+// whether those specific feeds were actually read — see SignalsMeta.
+var SignalsFeeds = []string{"subnets", "zones", "leases"}
+
+// SignalsMeta extracts, from an /api/data-shaped `data` map, the subset of
+// its "_meta" status ("ok"/"empty"/"error" — the vocabulary fetch_dashboard_data
+// already stamps per feed, dashboard.go:266) for the feeds BuildSignals
+// depends on, plus a degraded flag set when any of those feeds errored.
+//
+// This closes the defect where BuildSignals returning zero signals for a
+// failed feed (an empty slice looks identical whether the feed was read and
+// found clean, or never read at all) was forwarded by /api/incidents with no
+// way to tell the two apart — the response confidently read as "no issues
+// detected" even when subnets/zones/leases had all 5xx'd. A missing or
+// malformed "_meta" entry is itself treated as "error", never silently
+// upgraded to "ok".
+func SignalsMeta(data map[string]any) (meta map[string]any, degraded bool) {
+	full, _ := data["_meta"].(map[string]any)
+	meta = map[string]any{}
+	for _, feed := range SignalsFeeds {
+		status, _ := full[feed].(string)
+		if status == "" {
+			status = "error"
+		}
+		meta[feed] = status
+		if status == "error" {
+			degraded = true
+		}
+	}
+	return meta, degraded
+}
+
 // Correlate is correlate (server.py:2489): one incident per category, keeping
 // first-appearance order (Python dict insertion order).
 func Correlate(signals []map[string]any) []map[string]any {

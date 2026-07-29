@@ -2,10 +2,12 @@ package dashboard
 
 import (
 	"context"
+	"log"
 	"sort"
 	"strings"
 
 	"bloxsmith/internal/cache"
+	"bloxsmith/internal/rest"
 )
 
 // This file ports the three deferred threat-intel fetchers (server.py
@@ -133,10 +135,22 @@ func (s *Service) FetchDossier(q, itype string) map[string]any {
 	if jobID == "" {
 		return dossierUnavail(q, itype, "Dossier lookup failed")
 	}
-	res, _, _ := s.Rest.GetEx("/tide/api/services/intel/lookup/jobs/"+jobID+"/results", nil)
-	var results []any
-	if m, ok := res.(map[string]any); ok {
-		results = asSlice(m["results"])
+	// GetStrict (not GetEx): a 500/403/timeout/decode failure here must never
+	// fall through to normDossier with a nil/empty results list, because
+	// normDossier's zero-value summary (malicious:false, max_threat_level:0)
+	// is indistinguishable from a genuinely clean indicator — the DEFECT 1
+	// bug where a dead lookup rendered as a green CLEAN verdict. On failure
+	// we emit dossierUnavail instead: no verdict fields at all, so
+	// DossierPanel's existing `unavailable` escape hatch fires. The failure
+	// result (not a fabricated clean one) is what gets cached, matching this
+	// package's existing convention (see hub.go FetchHubHealth) of caching
+	// an explicit "unavailable" state rather than skipping the cache.
+	results, err := s.Rest.GetStrict("/tide/api/services/intel/lookup/jobs/"+jobID+"/results", nil)
+	if err != nil {
+		log.Printf("dossier: TIDE results fetch failed for %s indicator %q: %v", itype, q, err)
+		res := dossierUnavail(q, itype, "Dossier results fetch failed")
+		s.Cache.SetGen(ck, res, g)
+		return res
 	}
 	out := normDossier(q, itype, results)
 	s.Cache.SetGen(ck, out, g)
@@ -254,19 +268,62 @@ func (s *Service) FetchLookalikes() map[string]any {
 		return v.(map[string]any)
 	}
 	g := s.Cache.Gen()
-	dom, st1, _ := s.Rest.GetEx("/api/tdlad/v1/lookalike_domains", map[string]string{"_limit": "500"})
-	tgt, st2, _ := s.Rest.GetEx("/api/tdlad/v1/lookalike_targets", nil)
+	// GetPageStrict (not GetEx): failures must be detected per-endpoint, not
+	// just when BOTH happen to return nil/403 together. DEFECT 3 was exactly
+	// this — domains 403 while targets succeeded fell through to the
+	// `default` case and rendered "0 detected" for a dead feed. Any failure
+	// of EITHER read now degrades the whole response; a one-sided success is
+	// not enough to call this "ok". rawBody reconstructs what GetEx used to
+	// hand normLookalikes (the raw decoded body, not the Unwrap()-flattened
+	// rows), because the targets envelope nests its own "results"/"items"
+	// shape that Unwrap would otherwise flatten away.
+	domRows, domBody, domErr := s.Rest.GetPageStrict("/api/tdlad/v1/lookalike_domains", map[string]string{"_limit": "500"})
+	tgtRows, tgtBody, tgtErr := s.Rest.GetPageStrict("/api/tdlad/v1/lookalike_targets", nil)
 	var result map[string]any
 	switch {
-	case st1 == 403 && st2 == 403:
-		result = map[string]any{"domains": []any{}, "targets": []any{}, "unavailable": "Lookalike Domains not entitled"}
-	case dom == nil && tgt == nil:
-		result = map[string]any{"domains": []any{}, "targets": []any{}, "unavailable": "Lookalike Domains service unavailable"}
+	case domErr != nil:
+		log.Printf("lookalikes: domains fetch failed: %v", domErr)
+		result = lookalikeUnavailable(domErr)
+	case tgtErr != nil:
+		log.Printf("lookalikes: targets fetch failed: %v", tgtErr)
+		result = lookalikeUnavailable(tgtErr)
 	default:
-		result = normLookalikes(dom, tgt)
+		result = normLookalikes(rawBody(domRows, domBody), rawBody(tgtRows, tgtBody))
 	}
 	s.Cache.SetGen(ck, result, g)
 	return result
+}
+
+// rawBody reconstructs the value rest.GetEx used to hand callers before the
+// status-aware GetPageStrict existed: the decoded top-level JSON node itself
+// (object or bare array), not GetPageStrict's Unwrap()-flattened rows. It is
+// non-nil (the map) for an object response, else the raw row list for a bare
+// array response.
+func rawBody(rows []any, body map[string]any) any {
+	if body != nil {
+		return body
+	}
+	return rows
+}
+
+// lookalikeUnavailable builds the degrade shape for a failed TDLAD read.
+// "unavailable" stays an operator-safe, human-readable reason; "not_entitled"
+// is a SEPARATE explicit boolean so a caller can tell "this tenant isn't
+// entitled to this feed" (403) apart from a plain service outage (any other
+// failure) instead of collapsing both into entitlement wording. The Security
+// tab currently renders ANY `unavailable` value as "not entitled — <msg>"
+// (ui/src/tabs/Security.jsx:379) — that line needs to switch to keying off
+// `not_entitled` and falling back to a plain outage message otherwise; see
+// this fix's handoff note.
+func lookalikeUnavailable(err error) map[string]any {
+	reason := "Lookalike Domains service unavailable"
+	notEntitled := false
+	if ue, ok := err.(*rest.UpstreamError); ok && ue.Status == 403 {
+		reason = "Lookalike Domains not entitled"
+		notEntitled = true
+	}
+	return map[string]any{"domains": []any{}, "targets": []any{},
+		"unavailable": reason, "not_entitled": notEntitled}
 }
 
 // normLookalikes is norm_lookalikes (server.py:4506).
@@ -325,9 +382,10 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 		return v.(map[string]any)
 	}
 	g := s.Cache.Gen()
-	assets, rollup, trend := []any{}, []any{}, []any{}
-	if s.Mcp != nil && s.Mcp.Initialize(ctx) == nil {
-		invD := s.Mcp.QueryCube(ctx, "SecurityActionAssets",
+	var invD, rollupD, trendD []map[string]any
+	mcpOK := s.Mcp != nil && s.Mcp.Initialize(ctx) == nil
+	if mcpOK {
+		invD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
 			[]string{"SecurityActionAssets.count"}, map[string]any{
 				"dimensions": []string{
 					"SecurityActionAssets.deviceName", "SecurityActionAssets.os",
@@ -337,31 +395,52 @@ func (s *Service) FetchAssets(ctx context.Context) map[string]any {
 					"SecurityActionAssets.lastDetected"},
 				"order": map[string]any{"SecurityActionAssets.count": "desc"}, "limit": 500,
 			})
-		rollupD := s.Mcp.QueryCube(ctx, "SecurityActionAssets",
+		rollupD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
 			[]string{"SecurityActionAssets.uniqueDevices", "SecurityActionAssets.count"},
 			map[string]any{
 				"dimensions": []string{"SecurityActionAssets.os", "SecurityActionAssets.isVerified"},
 				"order":      map[string]any{"SecurityActionAssets.count": "desc"}, "limit": 50,
 			})
-		trendD := s.Mcp.QueryCube(ctx, "SecurityActionAssets",
+		trendD = s.Mcp.QueryCube(ctx, "SecurityActionAssets",
 			[]string{"SecurityActionAssets.count"}, map[string]any{
 				"time_dimensions": []map[string]any{{
 					"dimension": "SecurityActionAssets.createdAt",
 					"dateRange": "30 days", "granularity": "day"}},
 			})
-		assets = normAssets(invD)
-		rollup = flattenCubeRows(rollupD)
-		trend = flattenCubeRows(trendD)
 	}
-	var result map[string]any
-	if len(assets) > 0 || len(rollup) > 0 || len(trend) > 0 {
-		result = map[string]any{"assets": assets, "rollup": rollup, "trend": trend, "unavailable": nil}
-	} else {
-		result = map[string]any{"assets": []any{}, "rollup": []any{}, "trend": []any{},
-			"unavailable": "No security-action assets in the last 30 days for this tenant."}
-	}
+	result := assembleAssetsResult(mcpOK, invD, rollupD, trendD)
 	s.Cache.SetGen(ck, result, g)
 	return result
+}
+
+// assembleAssetsResult shapes the three raw SecurityActionAssets cube
+// results into the FetchAssets payload. QueryCube returns a nil slice on any
+// transport, HTTP, or parse failure and a non-nil slice on success (see
+// internal/mcp.Client.QueryCube and assetcounts.go's scalarCubeTotal, which
+// fixed the identical pattern) — that nil check is the only signal available
+// to tell "queried fine, tenant genuinely has zero" apart from "the query
+// failed". The prior `len(assets)>0 || len(rollup)>0 || len(trend)>0` check
+// collapsed those two cases: a failed query rendered as a factual "No
+// security-action assets in the last 30 days for this tenant" instead of an
+// unavailable marker. Any of the three being nil (including mcpOK being
+// false — MCP absent or its handshake failed) now degrades the WHOLE result
+// to unavailable; only when all three genuinely succeeded (each non-nil,
+// though any may legitimately be an empty slice) does an all-empty result
+// mean a real zero, reported via `note` with `unavailable` left nil.
+func assembleAssetsResult(mcpOK bool, invD, rollupD, trendD []map[string]any) map[string]any {
+	if !mcpOK || invD == nil || rollupD == nil || trendD == nil {
+		return map[string]any{"assets": []any{}, "rollup": []any{}, "trend": []any{},
+			"unavailable": "Security-action assets are unavailable: the query failed."}
+	}
+	assets := normAssets(invD)
+	rollup := flattenCubeRows(rollupD)
+	trend := flattenCubeRows(trendD)
+	if len(assets) == 0 && len(rollup) == 0 && len(trend) == 0 {
+		return map[string]any{"assets": []any{}, "rollup": []any{}, "trend": []any{},
+			"unavailable": nil,
+			"note":        "No security-action assets in the last 30 days for this tenant."}
+	}
+	return map[string]any{"assets": assets, "rollup": rollup, "trend": trend, "unavailable": nil}
 }
 
 // flattenCubeRow is _flatten_cube_row (server.py:4327): strip the "Cube." prefix

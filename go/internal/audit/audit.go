@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,16 +45,31 @@ func New(path, imageDigest, instanceID string) *Log {
 // Read ports audit_read (server.py:2433): every non-blank JSONL line as a map.
 // Numbers are decoded as json.Number so the exact on-disk token is preserved
 // (a Python-written float ts round-trips byte-for-byte into the canonical hash
-// input). Missing file -> empty slice (never nil), matching Python's [].
-func (l *Log) Read() []map[string]any {
+// input). A missing file is NOT an error — the log is genuinely empty — and
+// returns (empty slice, 0, nil), matching Python's [].
+//
+// Any other open failure (permissions, path is a directory, IO error) returns
+// a non-nil error. Individual lines that fail to decode are counted in
+// skipped and excluded from the result rather than silently dropped with no
+// trace; a scan failure partway through the file (e.g. a line exceeding the
+// buffer cap) is also returned as an error, since everything after the
+// failure point was never seen. Callers that need tamper-evidence guarantees
+// (Verify) MUST check both the error and the skipped count — a short slice
+// with err == nil and skipped == 0 is the only result that means "this really
+// is the whole chain".
+func (l *Log) Read() ([]map[string]any, int, error) {
 	out := []map[string]any{}
 	f, err := os.Open(l.path)
 	if err != nil {
-		return out
+		if os.IsNotExist(err) {
+			return out, 0, nil
+		}
+		return out, 0, err
 	}
 	defer f.Close()
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	skipped := 0
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if line == "" {
@@ -62,11 +78,16 @@ func (l *Log) Read() []map[string]any {
 		dec := json.NewDecoder(strings.NewReader(line))
 		dec.UseNumber()
 		var e map[string]any
-		if dec.Decode(&e) == nil {
-			out = append(out, e)
+		if dec.Decode(&e) != nil {
+			skipped++
+			continue
 		}
+		out = append(out, e)
 	}
-	return out
+	if err := sc.Err(); err != nil {
+		return out, skipped, err
+	}
+	return out, skipped, nil
 }
 
 // entryHash ports _audit_entry_hash (server.py:2429): sha256 of the canonical
@@ -95,7 +116,13 @@ func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	entries := l.Read()
+	entries, skipped, err := l.Read()
+	if err != nil {
+		return nil, fmt.Errorf("audit: cannot append, chain unreadable: %w", err)
+	}
+	if skipped > 0 {
+		return nil, fmt.Errorf("audit: cannot append, chain read dropped %d line(s); prev hash cannot be trusted", skipped)
+	}
 	prev := zeroHash
 	if n := len(entries); n > 0 {
 		if h, ok := entries[n-1]["hash"].(string); ok {
@@ -141,10 +168,37 @@ func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any
 }
 
 // Verify ports audit_verify_chain (server.py:2452): walk the chain, checking
-// each entry's prev_hash link and recomputed hash. Returns {"valid": bool,
-// "broken_index": int|nil}, matching the JSON shape /api/audit/log ships.
+// each entry's prev_hash link and recomputed hash. This is a tri-state
+// verdict, never a bool masquerading as one:
+//
+//   - {"valid": true,  "broken_index": nil}                     -> chain intact
+//     (a genuinely empty, readable log counts as intact).
+//   - {"valid": false, "broken_index": <int>}                   -> tamper
+//     detected at that index. Unchanged shape/behavior from before.
+//   - {"valid": false, "broken_index": nil, "verify_error": "…"} -> the chain
+//     could NOT be fully read (open error, or lines dropped as undecodable /
+//     oversized), so no verdict on tampering can be made. This case must
+//     never collapse into "valid": true, and is told apart from the broken
+//     case by broken_index being nil while verify_error is set.
+//
+// Matches the JSON shape /api/audit/log and /api/audit/export ship, plus the
+// new verify_error field consumers can check for the third state.
 func (l *Log) Verify() map[string]any {
-	entries := l.Read()
+	entries, skipped, err := l.Read()
+	if err != nil {
+		return map[string]any{
+			"valid":        false,
+			"broken_index": nil,
+			"verify_error": fmt.Sprintf("audit log could not be read: %v", err),
+		}
+	}
+	if skipped > 0 {
+		return map[string]any{
+			"valid":        false,
+			"broken_index": nil,
+			"verify_error": fmt.Sprintf("audit log incomplete: %d line(s) could not be decoded", skipped),
+		}
+	}
 	prev := zeroHash
 	for i, e := range entries {
 		ph, _ := e["prev_hash"].(string)

@@ -51,7 +51,17 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		if err := s.Mcp.Initialize(ctx); err != nil {
 			return "Tool error: " + err.Error()
 		}
+		// mcp.Search returns nil on a failed search (transport error, non-2xx,
+		// or an unparseable/unexpected payload) and a non-nil (possibly empty)
+		// slice on a genuine search — see mcp.go's Search doc. Checking
+		// len(hits)==0 first, as every other branch here was migrated away
+		// from, would collapse a dead search into "No entities found.",
+		// telling the model (and the human it relays to) there are no
+		// entities when the truth is the search never ran.
 		hits := s.Mcp.Search(ctx, aiStr(args["query"]))
+		if hits == nil {
+			return aiLookupFailed("entities", "could not reach the entity search service")
+		}
 		if len(hits) == 0 {
 			return "No entities found."
 		}

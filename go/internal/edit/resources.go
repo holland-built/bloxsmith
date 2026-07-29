@@ -3,6 +3,8 @@ package edit
 import (
 	"fmt"
 	"strconv"
+
+	"bloxsmith/internal/rest"
 )
 
 // The Cloud Resource Editor create/update builders (server.py:697-1004). Thin
@@ -99,17 +101,38 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	comment := strOr(body, "comment")
 
 	if truthyDry(body["dry"]) {
-		// Deliberately NOT GetStrict: this is a preview-only lookup for a dry
-		// run. A failed preview must leave subnetAddr blank, never abort the
-		// dry run — the real creation path below uses Rest.Write with its own
-		// status check, so nothing here can create a false duplicate.
-		preview := c.Rest.Get("/api/ddi/v1/"+blockID+"/nextavailablesubnet",
+		// GetStrict so a failed preview is DETECTABLE — but it must still
+		// never abort the dry run: the real creation path below uses
+		// Rest.Write with its own status check, so nothing here can create a
+		// false duplicate. What changes is that a failed preview is now
+		// reported as "unavailable" (with an operator-safe reason) instead of
+		// leaving subnetAddr blank, which used to be indistinguishable from a
+		// genuine "no address available in this block" result.
+		preview, err := c.Rest.GetStrict("/api/ddi/v1/"+blockID+"/nextavailablesubnet",
 			map[string]string{"cidr": strconv.Itoa(cidr), "count": "1"})
 		subnetAddr := ""
-		if len(preview) > 0 {
+		would := M{"cidr": cidr, "name": name, "comment": comment, "tags": tags}
+		switch {
+		case err != nil:
+			// Case 3: the lookup failed outright — "address" gets an
+			// obviously-not-real placeholder, never a blank value that could
+			// be mistaken for a genuine (if empty) result.
+			subnetAddr = "(unavailable)"
+			reason := err.Error()
+			if ue, ok := err.(*rest.UpstreamError); ok {
+				reason = ue.Public()
+			}
+			would["address_preview"] = "unavailable"
+			would["reason"] = reason
+		case len(preview) == 0:
+			// Case 2: the lookup succeeded but found nothing — a legitimate
+			// "block is full", kept distinct from a broken lookup.
+			would["address_preview"] = "none-available"
+		default:
+			// Case 1: unchanged behavior, unchanged fields.
 			subnetAddr = pyStr(asMap(preview[0])["address"])
 		}
-		would := M{"address": subnetAddr, "cidr": cidr, "name": name, "comment": comment, "tags": tags}
+		would["address"] = subnetAddr
 		return M{"ok": true, "dry_run": true, "would_create": would}, 200
 	}
 
