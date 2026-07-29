@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
@@ -47,11 +47,13 @@ export default function Audit() {
 function ActivitySummary({ logs, loading, auditLogsStatus }) {
   const { COLORS, TT } = useChartTheme()
   const counts = { CREATE: 0, UPDATE: 0, DELETE: 0 }
-  let ok = 0, fail = 0
+  let ok = 0, fail = 0, unknown = 0
   for (const l of logs) {
     const a = String(l.action || '').toUpperCase()
     if (counts[a] != null) counts[a]++
-    if (/fail|error/i.test(l.result || '')) fail++
+    const r = l.result || ''
+    if (/fail|error/i.test(r)) fail++
+    else if (!r || /^unknown$/i.test(r)) unknown++
     else ok++
   }
   const chartData = Object.entries(counts).map(([name, value]) => ({ name, value }))
@@ -74,6 +76,12 @@ function ActivitySummary({ logs, loading, auditLogsStatus }) {
               <div className="text-[22px] font-semibold" style={{ color: COLORS.crit }}>{fail}</div>
               <div className="text-[11px] text-dim">failed</div>
             </div>
+            {unknown > 0 && (
+              <div>
+                <div className="text-[22px] font-semibold text-dim">{unknown}</div>
+                <div className="text-[11px] text-dim">unknown</div>
+              </div>
+            )}
           </div>
           <ResponsiveContainer width="100%" height={140}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -107,10 +115,45 @@ function ActionPill({ action }) {
   )
 }
 
+// The audit chain hashes each entry to the one before it, so an edited or
+// deleted line is detectable. /api/audit/log carries that verdict as three
+// states: chain_valid true (intact), chain_valid false + broken_index
+// (tampered), or chain_verify_error (the check itself could not run). A
+// fetch failure is folded into the same "could not verify" state — it must
+// never be allowed to read as "chain is fine" just because nothing loaded.
+function ChainVerdict({ result, error, loading }) {
+  const { COLORS } = useChartTheme()
+  if (loading) return null
+  if (error || result == null || result.chain_verify_error) {
+    return (
+      <div className="text-[12px] font-medium mb-2" style={{ color: COLORS.warn }}>
+        chain integrity could not be verified
+      </div>
+    )
+  }
+  if (result.chain_valid === false) {
+    return (
+      <div className="text-sm font-semibold mb-2" style={{ color: COLORS.crit }}>
+        chain tampered — broken at entry #{result.broken_index}
+      </div>
+    )
+  }
+  if (result.chain_valid === true) {
+    return <div className="text-[11px] text-dim mb-2">chain intact — no tampering detected</div>
+  }
+  // Unrecognized shape: same rule as a fetch failure — don't imply "fine".
+  return (
+    <div className="text-[12px] font-medium mb-2" style={{ color: COLORS.warn }}>
+      chain integrity could not be verified
+    </div>
+  )
+}
+
 function AuditTable({ logs, loading, error, auditLogsStatus }) {
   const [filter, setFilter] = useState('')
   const [action, setAction] = useState('')
   const [sort, setSort] = useState({ key: 'ts', dir: 'desc' })
+  const verdict = useApi('/api/audit/log', { poll: 30000 })
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
@@ -175,6 +218,7 @@ function AuditTable({ logs, loading, error, auditLogsStatus }) {
         </div>
       }
     >
+      <ChainVerdict result={verdict.data} error={verdict.error} loading={verdict.loading} />
       {loading ? (
         <Skeleton h={250} />
       ) : error || logs.length === 0 ? (
@@ -204,20 +248,39 @@ function CspAuditTable() {
   const { COLORS } = useChartTheme()
   const [q, setQ] = useState('')
   const [result, setResult] = useState(null)
-  const [loading, setLoading] = useState(false)
+  // Starts true: the mount-time load below fires before first paint reads it,
+  // so the panel shows the loading skeleton instead of a flash of "enter a
+  // search" while that first fetch is in flight.
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // The last query actually searched (not the live input) — distinguishes
+  // "nothing here yet" (mount-time load, no query typed) from "your search
+  // matched nothing" (the user typed a filter that matched zero rows).
+  const [lastQuery, setLastQuery] = useState('')
 
-  function runSearch() {
+  function runSearch(query) {
+    const searched = query ?? q
     setLoading(true)
     setError(null)
+    setLastQuery(searched)
     const params = new URLSearchParams()
-    if (q) params.set('q', q)
+    if (searched) params.set('q', searched)
     fetch(`/api/csp-audit?${params.toString()}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
       .then((j) => setResult(j))
       .catch((e) => setError(e))
       .finally(() => setLoading(false))
   }
+
+  // Every other panel in this tab auto-loads; this one used to sit on a
+  // "enter a search" prompt until the user guessed to click Search, even
+  // though an empty query returns the last 500 rows of real activity
+  // (csp.go CSPAudit — no clauses added when q is blank). Load recent
+  // activity on mount; the search box then FILTERS that same feed.
+  useEffect(() => {
+    runSearch('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const rows = result?.rows ?? []
 
@@ -255,10 +318,10 @@ function CspAuditTable() {
             placeholder="Search user or resource…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && runSearch()}
+            onKeyDown={(e) => e.key === 'Enter' && runSearch(q)}
             className="w-[220px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           />
-          <button onClick={runSearch} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
+          <button onClick={() => runSearch(q)} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
             {loading ? 'Searching…' : 'Search'}
           </button>
           {rows.length > 0 && <span className="text-[11px] text-muted">{rows.length}</span>}
@@ -269,16 +332,16 @@ function CspAuditTable() {
         <Skeleton h={250} />
       ) : error ? (
         <Empty>search failed</Empty>
-      ) : result == null ? (
-        <Empty>enter a search to query the CSP audit feed</Empty>
       ) : rows.length === 0 ? (
         // csp.go:849-851 returns HTTP 200 with {rows:[],count:0,status:"error"}
         // on any upstream failure — a fetch that never actually searched must
         // not be reported with the same wording as a genuine empty result.
         result?.status === 'error' ? (
           <FeedUnavailable label="CSP audit feed unavailable" />
-        ) : (
+        ) : lastQuery ? (
           <Empty>no entries match</Empty>
+        ) : (
+          <Empty>nothing here yet</Empty>
         )
       ) : (
         <DataTable rows={rows} columns={columns} rowCap={150} maxHeight={420} stickyHeader />

@@ -41,15 +41,15 @@ func (s *Service) FetchHubHealth() []map[string]any {
 	if err != nil {
 		// A dead detail_services feed must never masquerade as "0 deployed,
 		// all healthy" — that is the exact failure-reads-as-safety bug this
-		// migration exists to close. Every bucket is marked unavailable
-		// instead of fabricating a healthy rollup from an empty slice.
+		// migration exists to close. Every bucket is marked error instead of
+		// fabricating a healthy rollup from an empty slice.
 		log.Printf("hub: detail_services fetch failed: %v", err)
 		rollup := make([]map[string]any, 0, len(hubBuckets))
 		for _, b := range hubBuckets {
 			rollup = append(rollup, map[string]any{
-				"name": b.name, "status": "unavailable",
+				"name": b.name, "status": "error",
 				"statusLabel": "unavailable", "meta": "feed unavailable",
-				"availability": "unavailable", "reason": "service inventory feed unavailable",
+				"availability": "error", "reason": "service inventory feed unavailable",
 			})
 		}
 		s.Cache.SetGen(ck, rollup, g)
@@ -132,8 +132,8 @@ func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
 	if err != nil {
 		// This is the highest-consequence instance of the empty-vs-error bug:
 		// a dead DNS-threat-event feed must never render as "no threats" — a
-		// failure that reads as safety. Mark the section unavailable instead
-		// of silently emitting zero events/counts.
+		// failure that reads as safety. Mark the section error instead of
+		// silently emitting zero events/counts.
 		log.Printf("hub: dns_event fetch failed: %v", err)
 		result := map[string]any{
 			"events":       []map[string]any{},
@@ -141,7 +141,7 @@ func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
 			"blocked":      0,
 			"logged":       0,
 			"total":        0,
-			"availability": "unavailable",
+			"availability": "error",
 			"reason":       "threat-event feed unavailable",
 		}
 		s.Cache.SetGen(ck, result, g)
@@ -264,7 +264,7 @@ func (s *Service) FetchHubDomains() map[string]any {
 	dfp, errDfp := s.Rest.GetStrict("/api/atcdfp/v1/dfp_services", map[string]string{"_limit": "100"})
 	hosts, errHosts := s.Rest.GetStrict("/api/infra/v1/detail_hosts", map[string]string{"_limit": "200"})
 
-	// availability is one section-name -> "ok"/"unavailable" entry per
+	// availability is one section-name -> "ok"/"error" entry per
 	// independent feed this endpoint combines. Unlike the single-feed
 	// hub/security and hub/health sections (which carry one flat
 	// availability/reason pair each, mirroring csp.go's exposureFeedUnavailable
@@ -275,7 +275,7 @@ func (s *Service) FetchHubDomains() map[string]any {
 	noteAvailability := func(section string, err error) {
 		if err != nil {
 			log.Printf("hub: %s fetch failed: %v", section, err)
-			availability[section] = "unavailable"
+			availability[section] = "error"
 			return
 		}
 		availability[section] = "ok"

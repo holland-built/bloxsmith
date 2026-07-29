@@ -1,5 +1,28 @@
 package dashboard
 
+// Canonical feed-health vocabulary. Every status-shaped value this package
+// emits — the per-feed "_meta" map (dashboard.go/signals.go/server/noc.go),
+// the per-section "availability" scalar (hub.go, analytics.go, csp.go,
+// sources.go), and the per-tile "status" scalar (assetcounts.go, csp.go) —
+// is spelled from the same three words, never a fourth:
+//
+//   - "ok": the read succeeded, whether or not it returned rows.
+//   - "empty": the read succeeded and genuinely found nothing. Never
+//     conflate this with "error" — a quiet feed and a dead one must render
+//     differently, or a real outage silently reads as "all clear".
+//   - "error": the read itself failed (transport error, bad status,
+//     unparseable/unexpected body). Never fabricate an "ok"/"empty" shape
+//     from a failed read just because the failure path also produces zero
+//     rows.
+//
+// The one exception is the attack-surface "availability" tri-state
+// (CSPExposures/CSPExposedHostnames/CSPExposedIPs in csp.go), which adds a
+// fourth, feed-specific value: "metadata-degraded" — rows fetched fine (the
+// feed itself is healthy) but the upstream total is missing or internally
+// inconsistent, so no total is emitted. That is a real third meaning, not a
+// synonym for "error": the rows are trustworthy, only the total isn't. It
+// does not apply outside the exposure feeds; do not spread it to _meta or
+// tile status.
 import (
 	"log"
 	"strconv"

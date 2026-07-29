@@ -41,7 +41,7 @@ function dataPayload(overrides: {
 test.describe('Daily → Security Today panel (threat-event feed)', () => {
   const DEAD = {
     events: [], counts: { critical: 0, high: 0, medium: 0, low: 0 }, blocked: 0, logged: 0, total: 0,
-    availability: 'unavailable', reason: 'threat-event feed unavailable',
+    availability: 'error', reason: 'threat-event feed unavailable',
   };
   const EMPTY_OK = {
     events: [], counts: { critical: 0, high: 0, medium: 0, low: 0 }, blocked: 0, logged: 0, total: 0,
@@ -94,7 +94,7 @@ test.describe('Daily → Open Issues panel (hosts feed, one of three KPI rows)',
 // ---------- 3. Incidents → SOC Queue (FetchActions availability) ----------
 
 test.describe('Incidents → SOC Queue panel (IQ Actions feed)', () => {
-  const DEAD = { actions: [], unavailable: 'IQ Actions service unavailable (upstream error).', availability: 'unavailable' };
+  const DEAD = { actions: [], unavailable: 'IQ Actions service unavailable (upstream error).', availability: 'error' };
   const EMPTY_OK = { actions: [], unavailable: 'No IQ Actions (SOC incidents) for this tenant.', availability: 'ok' };
 
   test('dead feed shows unavailable wording, not "no pending actions"', async ({ page }) => {
@@ -147,7 +147,7 @@ test.describe('Incidents → Triage panel (signals_degraded)', () => {
 
 test.describe('AI → Threat lookup panel (network_entity_search)', () => {
   const DEAD = {
-    entities: [], query: 'evil.example.com', availability: 'unavailable',
+    entities: [], query: 'evil.example.com', availability: 'error',
     reason: 'Entity search (network_entity_search) unavailable (upstream error).',
   };
   const EMPTY_OK = { entities: [], query: 'benign.example.com', availability: 'ok' };

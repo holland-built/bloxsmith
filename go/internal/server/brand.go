@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -125,15 +127,47 @@ func (d *Deps) brandPost(w http.ResponseWriter, r *http.Request, b map[string]an
 		return
 	}
 	if domain != "" {
-		if req, err := http.NewRequestWithContext(r.Context(), "GET",
-			"https://cdn.brandfetch.io/"+domain+"/w/128/h/128", nil); err == nil {
-			req.Header.Set("User-Agent", "Mozilla/5.0")
-			if resp, err := brandHTTP.Do(req); err == nil {
-				data, _ := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				_ = os.WriteFile(d.logoFile(), data, 0o644)
-			}
+		url := "https://cdn.brandfetch.io/" + domain + "/w/128/h/128"
+		if err := cacheLogo(r.Context(), url, d.logoFile()); err != nil {
+			// Best-effort cache refresh: a failed CDN fetch must never cost
+			// the user their existing logo, so cacheLogo already guaranteed
+			// logo.png was left untouched. Just report the failure.
+			d.logExc("/api/brand logo fetch", err)
 		}
 	}
 	d.json(w, r, 200, map[string]any{"ok": true})
+}
+
+// cacheLogo fetches url and, ONLY on a successful 2xx response with a
+// readable body, overwrites dest with the fetched bytes. On any failure —
+// a request-construction error, a network error, a non-2xx status, or a
+// body-read error — dest is left completely untouched and the failure is
+// returned to the caller.
+//
+// Previously the write happened unconditionally whenever brandHTTP.Do
+// returned no transport error, regardless of status code, and regardless of
+// whether the body actually read cleanly. That meant a 404/500 error page
+// (or, if io.ReadAll failed, a zero-byte read) got written straight over the
+// user's working logo.png — a transient CDN hiccup silently destroyed a
+// perfectly good stored logo. Requiring a 2xx status and a clean read before
+// the write closes that data-loss path.
+func cacheLogo(ctx context.Context, url, dest string) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	resp, err := brandHTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("logo fetch %s: unexpected status %d", url, resp.StatusCode)
+	}
+	return os.WriteFile(dest, data, 0o644)
 }

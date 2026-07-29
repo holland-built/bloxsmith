@@ -48,7 +48,7 @@ test.describe('AI → Threat lookup dossier (DossierPanel + Ai.jsx fetch)', () =
 // ---------- 2. Security → SOC Insights (FetchInsights availability) ----------
 
 test.describe('Security → SOC Insights panel (InsightsPanel)', () => {
-  const DEAD = { data: [], unavailable: 'SOC insights feed unavailable (upstream error).', availability: 'unavailable' };
+  const DEAD = { data: [], unavailable: 'SOC insights feed unavailable (upstream error).', availability: 'error' };
   const EMPTY_OK = { data: [], availability: 'ok' };
 
   test('dead feed shows unavailable wording, not "no data"', async ({ page }) => {

@@ -71,9 +71,9 @@ function SeverityHero({ hub, events }) {
   const SEV_COLOR = sevColorMap(COLORS)
   const counts = hub.data?.counts ?? {}
   // hub.error covers the transport path (any non-2xx, or the 12s abort in
-  // lib/api.js) — availability:"unavailable" alone only covers the upstream-
+  // lib/api.js) — availability:"error" alone only covers the upstream-
   // reported failure, missing the case where the fetch itself never completed.
-  const unavailable = hub.data?.availability === 'unavailable' || !!hub.error
+  const unavailable = hub.data?.availability === 'error' || !!hub.error
   const hourly = useMemo(() => {
     const buckets = new Array(24).fill(0)
     let any = false
@@ -142,7 +142,7 @@ function KpiStack({ hub, events, acks }) {
 
   return (
     <Card span={2} title="Response Summary">
-      {hub.loading ? <Skeleton h={200} /> : hub.data?.availability === 'unavailable' || hub.error ? (
+      {hub.loading ? <Skeleton h={200} /> : hub.data?.availability === 'error' || hub.error ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
       ) : (
         <div className="grid grid-cols-2 gap-3">
@@ -255,9 +255,9 @@ function TriageInbox({ hub, events, acks, setAcks }) {
   }
 
   // hub.error covers the transport path (any non-2xx, or the 12s abort in
-  // lib/api.js) — availability:"unavailable" alone only covers the upstream-
+  // lib/api.js) — availability:"error" alone only covers the upstream-
   // reported failure, missing the case where the fetch itself never completed.
-  const unavailable = hub.data?.availability === 'unavailable' || !!hub.error
+  const unavailable = hub.data?.availability === 'error' || !!hub.error
 
   const filtered = useMemo(() => {
     if (sevFilter === 'all') return events
@@ -484,10 +484,10 @@ function ThreatFeed({ threats }) {
 
 function InsightsPanel({ insights }) {
   const d = insights.data
-  // FetchInsights returns {"data":[],"unavailable":"…","availability":"unavailable"}
+  // FetchInsights returns {"data":[],"unavailable":"…","availability":"error"}
   // on a dead upstream — reading only d.data (or d directly) can't distinguish
   // that from a genuine empty result, both render as "no data".
-  const unavailable = !!insights.error || (d && !Array.isArray(d) && d.availability === 'unavailable')
+  const unavailable = !!insights.error || (d && !Array.isArray(d) && d.availability === 'error')
   const rows = Array.isArray(d) ? d : Array.isArray(d?.results) ? d.results : Array.isArray(d?.data) ? d.data : []
   const keys = rows.length ? Object.keys(rows[0]).slice(0, 4) : []
 
@@ -582,7 +582,7 @@ function ExposuresPanel({ exposures }) {
 
   return (
     <Card span={4} title="Exposures" right={rightNode}>
-      {exposures.loading ? <Skeleton h={260} /> : availability === 'unavailable' ? (
+      {exposures.loading ? <Skeleton h={260} /> : availability === 'error' ? (
         <FeedUnavailable reason={payload.reason} label="Exposures feed unavailable" />
       ) : exposures.error || rows.length === 0 ? (
         <Empty>no exposures reported</Empty>
@@ -650,8 +650,8 @@ function ExposedSurfacePanel({ hostnames, ips }) {
   const iCount = iPayload.data?.count ?? iRows.length
 
   const loading = hostnames.loading || ips.loading
-  const hDead = hAvail === 'unavailable'
-  const iDead = iAvail === 'unavailable'
+  const hDead = hAvail === 'error'
+  const iDead = iAvail === 'error'
   const bothDead = hDead && iDead
 
   const SAMPLE = 25

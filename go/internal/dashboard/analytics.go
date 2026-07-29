@@ -36,13 +36,13 @@ func (s *Service) FetchActions(ctx context.Context) map[string]any {
 	if !ok {
 		return map[string]any{"actions": []any{},
 			"unavailable":  "IQ Actions service unavailable (upstream error).",
-			"availability": "unavailable"}
+			"availability": "error"}
 	}
 	data, isMap := raw.(map[string]any)
 	if !isMap {
 		return map[string]any{"actions": []any{},
 			"unavailable":  "IQ Actions returned unexpected data.",
-			"availability": "unavailable"}
+			"availability": "error"}
 	}
 	if v, has := data["actions"]; !has || v == nil {
 		data["actions"] = []any{}
@@ -218,7 +218,7 @@ func (s *Service) FetchInsights() map[string]any {
 		return map[string]any{
 			"data":         []any{},
 			"unavailable":  "SOC Insights (security actions) unavailable (upstream error).",
-			"availability": "unavailable",
+			"availability": "error",
 		}
 	}
 	rows := asSlice(body["insightList"])
@@ -291,7 +291,7 @@ func (s *Service) cubeQuery(query map[string]any) []map[string]any {
 // cubeQuery returns a nil slice on upstream failure and a non-nil (possibly
 // empty) slice on a genuine success, even with zero rows — see cubeQuery's
 // doc comment. That distinction is preserved here as availability: a dead
-// cubejs reports "unavailable" with a reason and empty rows; a tenant with
+// cubejs reports "error" with a reason and empty rows; a tenant with
 // real but zero query activity still reports "ok", mirroring the
 // availability/reason field names csp.go's exposureFeedUnavailable uses for
 // the same failure-vs-empty problem on the attack-surface feeds.
@@ -320,7 +320,7 @@ func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
 		log.Printf("dashboard: DNS analytics cube query failed (NstarDnsActivity unavailable)")
 		return map[string]any{
 			"volume": []any{}, "top_clients": []any{}, "query_types": []any{},
-			"availability": "unavailable",
+			"availability": "error",
 			"reason":       "DNS analytics (NstarDnsActivity) unavailable (upstream error).",
 		}
 	}
@@ -375,7 +375,7 @@ func (s *Service) hostDisplayNames() map[string]string {
 // Same availability treatment as FetchDNSAnalytics: cubeQuery returns nil on
 // upstream failure and a non-nil (possibly empty) slice on a genuine
 // success. A failure on either metric query reports availability
-// "unavailable" with a reason and an empty metrics list; a real tenant with
+// "error" with a reason and an empty metrics list; a real tenant with
 // no per-host metrics still reports "ok" with an empty metrics list. The
 // "metrics" key and its row shape are unchanged.
 func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
@@ -416,7 +416,7 @@ func (s *Service) FetchHostMetrics(ctx context.Context) map[string]any {
 		log.Printf("dashboard: host metrics cube query failed (HostMetrics unavailable)")
 		return map[string]any{
 			"metrics":      []any{},
-			"availability": "unavailable",
+			"availability": "error",
 			"reason":       "Host metrics (HostMetrics) unavailable (upstream error).",
 		}
 	}
@@ -444,7 +444,7 @@ func (s *Service) ThreatLookup(ctx context.Context, query string) map[string]any
 	return map[string]any{
 		"entities":     []any{},
 		"query":        query,
-		"availability": "unavailable",
+		"availability": "error",
 		"reason":       "Entity search (network_entity_search) unavailable (upstream error).",
 	}
 }

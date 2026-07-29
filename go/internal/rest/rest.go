@@ -156,16 +156,6 @@ func (c *Client) GetEx(path string, params map[string]string) (any, int, error) 
 	}
 }
 
-// Get is _rest_get (server.py:354): unwraps results/result to a list, swallowing
-// errors to an empty slice (Python prints a warning and returns []).
-func (c *Client) Get(path string, params map[string]string) []any {
-	body, status, err := c.GetEx(path, params)
-	if err != nil || status == 0 || status >= 400 {
-		return []any{}
-	}
-	return Unwrap(body)
-}
-
 // snippetCap bounds how much of an upstream body GetStrict retains in an
 // UpstreamError. It is enforced at read time via io.LimitReader, never by
 // slicing an already fully-read body, so an oversized error page can't blow

@@ -18,9 +18,10 @@ import (
 // subnet/zone/lease feeds were read and are clean" apart from "those feeds
 // 5xx'd and nothing was evaluated" — the Triage panel then rendered a
 // confident "no issues detected" for a genuinely unreadable estate. The fix
-// (dashboard.SignalsMeta + noc.go's incidents/incidentsCategory handlers)
-// attaches "_meta" (per-feed "ok"/"empty"/"error") and "signals_degraded"
-// (true when any of subnets/zones/leases errored) to the response.
+// (dashboard.SignalsMeta + noc.go's incidents handler) attaches "_meta"
+// (per-feed "ok"/"empty"/"error") and "signals_degraded" (true when any of
+// subnets/zones/leases errored) to the response. incidentsCategory has no
+// consumer and does not carry this indicator — see its doc comment.
 
 // incidentsTestDeps wires a Deps whose Dashboard hits an httptest fake for
 // every /api/data feed, and a real (tempdir-backed) Store — StampFirstSeen

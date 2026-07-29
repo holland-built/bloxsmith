@@ -152,11 +152,11 @@ func newSourcesTestServiceWithMCP(t *testing.T, restHandler http.HandlerFunc, f 
 // TestSourceRows_Incidents_FetcherUnavailableReportsError covers the
 // "incidents" source (backed by FetchActions/IQ Actions over MCP), which was
 // migrated to GetStrict-style fetchers elsewhere but discarded FetchActions'
-// own availability:"unavailable" signal, returning a clean {rows:[],count:0}
+// own availability:"error" signal, returning a clean {rows:[],count:0}
 // with no error key for what was actually a failed read.
 func TestSourceRows_Incidents_FetcherUnavailableReportsError(t *testing.T) {
 	// A 404 on the MCP handshake makes Initialize fail, so actionsAsync
-	// returns ok=false -> FetchActions reports availability:"unavailable".
+	// returns ok=false -> FetchActions reports availability:"error".
 	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))

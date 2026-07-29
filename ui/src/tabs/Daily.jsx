@@ -99,7 +99,7 @@ function SecurityToday({ sec }) {
     <Card span={4} title="Security Today" right={<span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
       {sec.loading ? (
         <Skeleton h={160} />
-      ) : sec.data?.availability === 'unavailable' ? (
+      ) : sec.data?.availability === 'error' ? (
         <FeedUnavailable reason={sec.data?.reason} label="Threat feed unavailable" />
       ) : sec.error || (!sec.data) ? (
         <Empty />

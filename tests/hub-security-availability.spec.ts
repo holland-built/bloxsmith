@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 // Backend contract (go/internal/dashboard/hub.go): /api/hub/security's
 // dns_event read now goes through rest.GetStrict and publishes an explicit
-// `availability` of "ok" | "unavailable" alongside its rows, always as HTTP
+// `availability` of "ok" | "error" alongside its rows, always as HTTP
 // 200 — so ui/src/lib/api.js's `.error` (set only on !res.ok) stays null even
 // when the upstream threat-event feed is dead. Before this fix, a failed read
 // fell back to Rest.Get's swallow-to-[] behavior and rendered exactly like a
@@ -21,7 +21,7 @@ const HUB_SECURITY_DEAD = {
   blocked: 0,
   logged: 0,
   total: 0,
-  availability: 'unavailable',
+  availability: 'error',
   reason: 'threat-event feed unavailable',
 };
 

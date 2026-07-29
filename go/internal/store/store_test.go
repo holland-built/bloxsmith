@@ -132,3 +132,68 @@ func TestStampFirstSeen_UnreadablePath_FailsSafely(t *testing.T) {
 		t.Fatalf("path should still be the untouched directory: err=%v isDir=%v", err, fi != nil && fi.IsDir())
 	}
 }
+
+// A brand-new store whose views/ directory has never been created is a
+// legitimate first run — no view has ever been saved. This must behave
+// exactly as before: an empty list, reported as success (nil error), not a
+// failure.
+func TestViewsList_DirMissing_EmptyAndSuccessful(t *testing.T) {
+	s := newTestStore(t)
+
+	out, err := s.ViewsList()
+	if err != nil {
+		t.Fatalf("a never-created views dir must not be an error, got %v", err)
+	}
+	views, _ := out["views"].([]map[string]any)
+	if len(views) != 0 {
+		t.Fatalf("expected an empty views list, got %v", views)
+	}
+}
+
+// If the views directory exists but cannot be read (here: a plain file sits
+// where the directory should be, so os.ReadDir fails with something other
+// than "not exist"), that is a real failure and must NOT be reported as "no
+// saved views" — the caller needs to be able to tell the two apart.
+func TestViewsList_DirUnreadable_ReportsFailureNotEmpty(t *testing.T) {
+	s := newTestStore(t)
+	if err := os.WriteFile(s.viewsDir, []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := s.ViewsList()
+	if err == nil {
+		t.Fatalf("expected an error when the views dir is unreadable, got out=%v", out)
+	}
+	if out != nil {
+		t.Fatalf("must not also hand back a (fabricated) views list alongside the error, got %v", out)
+	}
+}
+
+// One undecodable file among several otherwise-valid saved views must not
+// silently vanish from the list while the rest render normally — that would
+// misreport a real read/decode failure as "this one view doesn't exist". The
+// failure must surface to the caller instead.
+func TestViewsList_OneUndecodableFile_FailureSurfaced(t *testing.T) {
+	s := newTestStore(t)
+	if err := os.MkdirAll(s.viewsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	good := `{"name":"good-view","saved_at":"2026-01-01T00:00:00Z","folder":""}`
+	if err := os.WriteFile(filepath.Join(s.viewsDir, "a-good.json"), []byte(good), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.viewsDir, "b-bad.json"), []byte("not valid json{{{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.viewsDir, "c-good.json"), []byte(good), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := s.ViewsList()
+	if err == nil {
+		t.Fatalf("expected the undecodable file to surface as an error, got out=%v", out)
+	}
+	if out != nil {
+		t.Fatalf("must not hand back a partial views list alongside the error, got %v", out)
+	}
+}

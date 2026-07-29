@@ -85,8 +85,18 @@ func (d *Deps) auditExport(w http.ResponseWriter, r *http.Request) {
 }
 
 // viewsList is GET /api/views (server.py:5057): names/timestamps only.
+// A views-directory read/decode failure must not be presented as "no saved
+// views" — that would tell the caller their views were deleted when really
+// the read just failed. Report it as a 500 instead; only a genuinely empty
+// (or never-created) views directory renders as {"views": []}.
 func (d *Deps) viewsList(w http.ResponseWriter, r *http.Request) {
-	d.json(w, r, 200, d.Store.ViewsList())
+	out, err := d.Store.ViewsList()
+	if err != nil {
+		d.logExc("/api/views", err)
+		d.json(w, r, 500, map[string]any{"error": "internal error"})
+		return
+	}
+	d.json(w, r, 200, out)
 }
 
 // viewWrite is POST /api/views and /api/views/import (server.py:6085).

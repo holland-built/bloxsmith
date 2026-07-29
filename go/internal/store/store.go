@@ -73,11 +73,22 @@ func (s *Store) viewPath(name string) string {
 }
 
 // ViewsList ports views_list (server.py:2689): name + saved_at + folder only.
-func (s *Store) ViewsList() map[string]any {
+//
+// The returned error distinguishes "I could not read the views directory"
+// from "there are no saved views". A missing viewsDir is a genuine first
+// run (no view has ever been saved) and returns an empty list with a nil
+// error, exactly as before. Any other ReadDir failure, or a per-file
+// read/decode failure, is NOT swallowed into that same empty list — it is
+// reported via the returned error so the caller can tell "empty" apart from
+// "we couldn't check" instead of presenting a read failure as "none saved".
+func (s *Store) ViewsList() (map[string]any, error) {
 	out := []map[string]any{}
 	ents, err := os.ReadDir(s.viewsDir)
 	if err != nil {
-		return map[string]any{"views": out}
+		if os.IsNotExist(err) {
+			return map[string]any{"views": out}, nil
+		}
+		return nil, err
 	}
 	names := make([]string, 0, len(ents))
 	for _, e := range ents {
@@ -89,11 +100,11 @@ func (s *Store) ViewsList() map[string]any {
 	for _, fn := range names {
 		b, err := os.ReadFile(filepath.Join(s.viewsDir, fn))
 		if err != nil {
-			continue
+			return nil, err
 		}
 		var v map[string]any
-		if json.Unmarshal(b, &v) != nil {
-			continue
+		if jerr := json.Unmarshal(b, &v); jerr != nil {
+			return nil, jerr
 		}
 		name := str(v, "name")
 		if name == "" {
@@ -103,7 +114,7 @@ func (s *Store) ViewsList() map[string]any {
 			"name": name, "saved_at": v["saved_at"], "folder": str(v, "folder"),
 		})
 	}
-	return map[string]any{"views": out}
+	return map[string]any{"views": out}, nil
 }
 
 // ViewRead ports view_read (server.py:2707): the full stored blob or nil.
