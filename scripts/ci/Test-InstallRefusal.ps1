@@ -150,3 +150,9 @@ if ($text -notmatch [regex]::Escape($mustSay)) {
 if ($failed) { exit 1 }
 
 Write-Host "'$Case' release refused, nothing installed, reason named"
+
+# Explicit success. The GitHub Actions PowerShell wrapper ends the step with
+# `exit $LASTEXITCODE`, and $LASTEXITCODE here still holds the CHILD's exit code
+# - which is 1, because the child refusing is the whole point. Falling off the
+# end of this script therefore reports a FAILED step for a test that passed.
+exit 0
