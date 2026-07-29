@@ -106,6 +106,43 @@ jobs:
             echo "::error::the refusal did not name the signature as the reason"; cat "$W/tampered.log"; exit 1; }
           echo "tampered checksums.txt refused, as it must be"
 
+      # THE ACTUAL ATTACK, and the one v3.23.1 was vulnerable to: an attacker who
+      # can write release assets replaces the archive, rewrites checksums.txt to
+      # match it, and DELETES the signature files. The shipped v3.23.1 installer
+      # printed "signature: none published for this release — checksum only",
+      # then "checksum : ok", then installed the attacker's binary. Verified by
+      # hand against the real release before the fix. A signature that only
+      # protects you while the attacker leaves it in place protects nobody.
+      - name: install.sh refuses a release whose signature was REMOVED
+        run: |
+          set -euo pipefail
+          W="$RUNNER_TEMP/nosig"; mkdir -p "$W/bin" "$W/rel" "$W/payload"
+          BASE=https://github.com/holland-built/bloxsmith/releases/latest/download
+          curl -fsSLo "$W/rel/checksums.txt" "$BASE/checksums.txt"
+          NUM="$(sed -n 's/.*bloxsmith_\([0-9][^_]*\)_.*/\1/p' "$W/rel/checksums.txt" | head -1)"
+          # A forged archive that really does contain a runnable "bloxsmith".
+          printf '#!/bin/sh\necho FORGED\n' > "$W/payload/bloxsmith"
+          chmod +x "$W/payload/bloxsmith"
+          tar -czf "$W/rel/bloxsmith_${NUM}_linux_amd64.tar.gz" -C "$W/payload" bloxsmith
+          NEW="$(sha256sum "$W/rel/bloxsmith_${NUM}_linux_amd64.tar.gz" | awk '{print $1}')"
+          awk -v s="$NEW" -v f="bloxsmith_${NUM}_linux_amd64.tar.gz" \
+            '{ if ($2==f) print s"  "f; else print }' "$W/rel/checksums.txt" > "$W/t" && mv "$W/t" "$W/rel/checksums.txt"
+          # ...and no checksums.txt.sshsig / .ed25519 in $W/rel at all.
+          printf '%s\n' '#!/bin/sh' 'out=""; url=""' \
+            'while [ $# -gt 0 ]; do case "$1" in -*o) out="$2"; shift 2;; -*) case "$1" in *o) out="$2"; shift 2;; *) shift;; esac;; *) url="$1"; shift;; esac; done' \
+            'f="$(basename "$url")"; [ -f "$REL/$f" ] || exit 22; cp "$REL/$f" "$out"' > "$W/bin/curl"
+          chmod +x "$W/bin/curl"
+          if PATH="$W/bin:$PATH" REL="$W/rel" bash scripts/install.sh --prefix "$W/out" --no-service > "$W/nosig.log" 2>&1; then
+            echo "::error::install.sh installed a forged archive from a release with NO signature"
+            cat "$W/nosig.log"; exit 1
+          fi
+          if [ -x "$W/out/bloxsmith" ]; then
+            echo "::error::a binary was installed despite the refusal"; exit 1
+          fi
+          grep -qi "no signature" "$W/nosig.log" || {
+            echo "::error::the refusal did not say the signature was missing"; cat "$W/nosig.log"; exit 1; }
+          echo "unsigned release refused, and nothing was installed"
+
   # PSScriptAnalyzer gate for the Windows installer — catches PowerShell errors
   # without a manual Windows run. Error severity only; warnings don't fail CI.
   lint-ps1:
