@@ -6,7 +6,7 @@ import (
 )
 
 // TestFetchHubSecurity_DnsEventFailure_MarksUnavailable verifies a dead
-// dns_event feed (500) reports availability "unavailable" with an
+// dns_event feed (500) reports availability "error" with an
 // operator-safe reason and zero events/counts — never the "ok" empty shape,
 // which would render the Security tab's threat panels as "no threats" when
 // the feed actually failed to load.
@@ -17,8 +17,8 @@ func TestFetchHubSecurity_DnsEventFailure_MarksUnavailable(t *testing.T) {
 
 	result := s.FetchHubSecurity(3600, 50)
 
-	if result["availability"] != "unavailable" {
-		t.Fatalf("availability = %v, want \"unavailable\"", result["availability"])
+	if result["availability"] != "error" {
+		t.Fatalf("availability = %v, want \"error\"", result["availability"])
 	}
 	if _, ok := result["reason"].(string); !ok {
 		t.Fatalf("reason missing or wrong type: %v", result["reason"])
@@ -59,7 +59,7 @@ func TestFetchHubSecurity_EmptyRows_StaysOK(t *testing.T) {
 
 // TestFetchHubHealth_DetailServicesFailure_MarksUnavailable verifies a dead
 // detail_services feed never fabricates a healthy "0 deployed" rollup —
-// every bucket must report availability "unavailable" instead.
+// every bucket must report availability "error" instead.
 func TestFetchHubHealth_DetailServicesFailure_MarksUnavailable(t *testing.T) {
 	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -71,8 +71,8 @@ func TestFetchHubHealth_DetailServicesFailure_MarksUnavailable(t *testing.T) {
 		t.Fatalf("rollup has %d buckets, want %d", len(rollup), len(hubBuckets))
 	}
 	for _, b := range rollup {
-		if b["availability"] != "unavailable" {
-			t.Fatalf("bucket %v availability = %v, want \"unavailable\"", b["name"], b["availability"])
+		if b["availability"] != "error" {
+			t.Fatalf("bucket %v availability = %v, want \"error\"", b["name"], b["availability"])
 		}
 		if b["status"] == "ok" {
 			t.Fatalf("bucket %v status = %q, must not read as healthy on a failed feed", b["name"], b["status"])
@@ -102,8 +102,8 @@ func TestFetchHubDomains_OneFeedFailure_OthersIntact(t *testing.T) {
 	if !ok {
 		t.Fatalf("availability missing or wrong type: %v", result["availability"])
 	}
-	if availability["named_lists"] != "unavailable" {
-		t.Fatalf("availability[named_lists] = %v, want \"unavailable\"", availability["named_lists"])
+	if availability["named_lists"] != "error" {
+		t.Fatalf("availability[named_lists] = %v, want \"error\"", availability["named_lists"])
 	}
 	if availability["threat_feeds"] != "ok" {
 		t.Fatalf("availability[threat_feeds] = %v, want \"ok\"", availability["threat_feeds"])

@@ -82,10 +82,10 @@ export default function Incidents() {
   const actionsRows = Array.isArray(actionsApi.data)
     ? actionsApi.data
     : actionsApi.data?.actions || actionsApi.data?.results || actionsApi.data?.data || []
-  // FetchActions degrades to {actions:[], availability:"unavailable"} on a
+  // FetchActions degrades to {actions:[], availability:"error"} on a
   // dead upstream — a genuinely empty tenant stays availability:"ok" with its
   // own "unavailable" NOTE string, so only the availability flag disambiguates.
-  const actionsUnavailable = actionsApi.data?.availability === 'unavailable'
+  const actionsUnavailable = actionsApi.data?.availability === 'error'
 
   function toggleAck(s) {
     const k = ackKey(s)

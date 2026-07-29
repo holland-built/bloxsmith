@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // Backend contract (live-verified): every exposure feed returns an explicit
-// `availability` of "ok" | "unavailable" | "metadata-degraded", all as HTTP 200
+// `availability` of "ok" | "error" | "metadata-degraded", all as HTTP 200
 // — so ui/src/lib/api.js's `.error` (set only on !res.ok) is ALWAYS null here.
 // These specs mock the payload directly to prove Security.jsx branches on
 // `availability`, not on the always-null `.error`. See ExposedSurfacePanel and
@@ -17,7 +17,7 @@ const HOSTNAMES_OK = {
   data: { rows: [{ hostname: 'evil.example.com' }, { hostname: 'bad.example.net' }], count: 2, total_available: 41214 },
 };
 const HOSTNAMES_DEAD = {
-  availability: 'unavailable',
+  availability: 'error',
   status: 'error',
   reason: 'upstream response too large',
   data: {},
@@ -36,7 +36,7 @@ const IPS_DEGRADED = {
   data: { rows: [{ ip: '198.51.100.1' }], count: 1 },
 };
 const IPS_DEAD = {
-  availability: 'unavailable',
+  availability: 'error',
   status: 'error',
   reason: 'upstream timed out',
   data: {},

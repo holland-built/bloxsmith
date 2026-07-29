@@ -135,21 +135,22 @@ func (d *Deps) incidents(w http.ResponseWriter, r *http.Request) {
 // signal list for one category (fetched on demand). Deliberately NOT filtered by
 // snooze — a snoozed category must still be inspectable.
 //
-// Carries the same "_meta"/"signals_degraded" feed-health indicator as
-// incidents (see its doc comment) — an empty match list for this category is
-// only an all-clear when the underlying feeds were actually read.
+// Unlike /api/incidents, this route does NOT carry "_meta"/"signals_degraded":
+// no consumer fetches this per-category endpoint (the Incidents tab filters
+// categories client-side from the main /api/incidents payload, which DOES
+// carry both — see its doc comment), so there is nothing here to read the
+// feed-health indicator. Leaving it out avoids an unread field silently going
+// stale if this route's feed set ever diverges from /api/incidents's.
 func (d *Deps) incidentsCategory(w http.ResponseWriter, r *http.Request) {
 	category := r.PathValue("cat")
 	defer func() {
 		if rec := recover(); rec != nil {
 			d.logExc("/api/incidents/category", rec)
 			d.json(w, r, 200, map[string]any{
-				"category": category, "count": 0, "truncated": false, "signals": []any{},
-				"_meta": map[string]any{}, "signals_degraded": true})
+				"category": category, "count": 0, "truncated": false, "signals": []any{}})
 		}
 	}()
 	data := d.Dashboard.FetchDashboardData()
-	signalsMeta, signalsDegraded := dashboard.SignalsMeta(data)
 	matches := []map[string]any{}
 	for _, s := range d.Store.StampFirstSeen(dashboard.BuildSignals(data)) {
 		if getCat(s) == category {
@@ -162,8 +163,7 @@ func (d *Deps) incidentsCategory(w http.ResponseWriter, r *http.Request) {
 		out = matches[:500]
 	}
 	d.json(w, r, 200, map[string]any{
-		"category": category, "count": count, "truncated": count > 500, "signals": out,
-		"_meta": signalsMeta, "signals_degraded": signalsDegraded})
+		"category": category, "count": count, "truncated": count > 500, "signals": out})
 }
 
 // insights is GET /api/insights (server.py:5203).
