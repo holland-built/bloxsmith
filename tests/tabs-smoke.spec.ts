@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // One h1 per tab (verified against ui/src/tabs/*.jsx). Hopping tab-to-tab
 // after each visit exercises unmount/setState-after-unmount console warnings,

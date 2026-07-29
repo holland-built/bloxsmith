@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // The top-bar tabs are measured-then-fitted: whatever does not fit moves into a
 // "More" menu. That is measurement-dependent code, so it can regress silently —

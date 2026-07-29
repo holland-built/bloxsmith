@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Server contract (shipped alongside this spec): /api/data now carries a
 // per-feed `_meta` status — "ok" | "empty" | "error" — keyed by the same

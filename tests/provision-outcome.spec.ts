@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Regression coverage for the Provision "Seed complete." bug: the seed and
 // teardown-seed-demo SSE streams used to terminate with a bare

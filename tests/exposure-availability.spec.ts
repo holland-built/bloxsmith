@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Backend contract (live-verified): every exposure feed returns an explicit
 // `availability` of "ok" | "error" | "metadata-degraded", all as HTTP 200

@@ -1,4 +1,5 @@
-import { test, expect, Page, Route } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page, Route } from '@playwright/test';
 
 // Covers ManageRecordsPanel + ManageAddressesPanel in ui/src/tabs/SelfService.jsx.
 // Everything the panels fetch is stubbed via page.route() — no live tenant data,

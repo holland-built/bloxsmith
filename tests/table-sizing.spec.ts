@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Locks in the table column-sizing fix (see ui/src/components/DataTable.jsx).
 // Two invariants, checked for every <table> on every tab:

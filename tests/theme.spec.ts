@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('light theme from localStorage applies pre-paint', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('theme', 'light'));

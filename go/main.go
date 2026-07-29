@@ -88,7 +88,16 @@ func securityHeaders(next http.Handler) http.Handler {
 				"img-src 'self' data:; font-src 'self' data:")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
-		h.Set("Referrer-Policy", "no-referrer")
+		// same-origin, not no-referrer: cross-origin destinations still get
+		// nothing (identical leakage posture — and CSP connect-src/img-src
+		// 'self' means there are no cross-origin destinations anyway), but the
+		// dashboard's OWN requests now carry a Referer. That is the fallback
+		// proof of same-origin for the httpx write guard on a browser too old
+		// to send Sec-Fetch-Site (pre-March-2023); under no-referrer such a
+		// browser had no way at all to prove itself and the provision/teardown
+		// streams would 403. The document URL is the SPA shell (#tab hash) and
+		// never carries the ?token=, so nothing secret rides along.
+		h.Set("Referrer-Policy", "same-origin")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -306,10 +315,19 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 		Token:         cfg.DashboardToken,
 		Port:          cfg.Port,
 		MutatingPaths: httpx.DefaultMutatingPaths(),
+		// Host/AllowedHosts seed the DNS-rebinding gate (httpx.HostGuard):
+		// the Host header must name something this bind actually serves.
+		Host:         cfg.Host,
+		AllowedHosts: cfg.AllowedHosts,
 		// _write_guard AUDIT HOOK (server.py:4968): every authorized mutation
-		// appends a "write-authorized" entry to the hash chain.
+		// appends a "write-authorized" entry to the hash chain. auditLog.Append
+		// itself logs on refusal (a corrupt chain), but this call site logs too
+		// so a lost write-authorized entry is tied to the request that caused
+		// it, instead of discarding the error and losing that context.
 		Audit: func(event, actor, method, path string) {
-			_, _ = auditLog.Append(event, actor, map[string]any{"method": method, "path": path})
+			if _, err := auditLog.Append(event, actor, map[string]any{"method": method, "path": path}); err != nil {
+				log.Printf("[audit] failed to record %q %s %s: %v", event, method, path, err)
+			}
 		},
 	}
 
@@ -350,7 +368,9 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 
 	// A graceful *http.Server (not http.ListenAndServe) so the self-updater can
 	// Shutdown() the listener and hand the port to its successor cleanly.
-	srv := &http.Server{Handler: securityHeaders(handler)}
+	// HostGuard is outermost: a DNS-rebound request is rejected before any
+	// handler, static asset or CORS reflection sees it.
+	srv := &http.Server{Handler: securityHeaders(guard.HostGuard(handler))}
 	shutdownServer = srv.Shutdown
 	// Bind cfg.Host (HOST env), not all-interfaces: the laptop/service default
 	// "localhost" stays loopback-only (never expose an auto-unlocked, no-login

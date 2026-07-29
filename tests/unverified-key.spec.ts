@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // First-run vault setup ("Add your first connection" / FirstTenant screen)
 // is what VaultGate renders when vaultMode + exists + unlocked are all true

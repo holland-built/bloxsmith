@@ -109,6 +109,22 @@ func (d *Deps) logExc(label string, rec any) {
 	log.Printf("[error] %s: %v", label, rec)
 }
 
+// auditAppend wraps d.Audit.Append for every call site in this package. Every
+// handler previously discarded the (entry, error) return with `_, _ = ...` —
+// which meant a corrupt chain (audit.Append refuses to extend one, by design)
+// failed completely silently from the request-handling side: the write still
+// succeeded, only the audit trail for it was lost, with nothing in the server
+// logs to say so. audit.Append itself now also logs on refusal (so the
+// failure is never silent even if some future caller reintroduces the bare
+// discard), but this wrapper additionally ties the failure to the specific
+// route/event that lost its audit entry, which is the context an operator
+// actually needs to investigate.
+func (d *Deps) auditAppend(event, actor string, detail map[string]any) {
+	if _, err := d.Audit.Append(event, actor, detail); err != nil {
+		log.Printf("[audit] failed to record %q by %q: %v", event, actor, err)
+	}
+}
+
 // --- vault status ------------------------------------------------------------
 
 func (d *Deps) vaultStatus(w http.ResponseWriter, r *http.Request) {
@@ -129,12 +145,12 @@ func (d *Deps) vaultStatus(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) updateApply(w http.ResponseWriter, r *http.Request) {
 	role := d.Guard.ResolveRole(r)
 	if !httpx.RoleAtLeast(role, "admin") {
-		_, _ = d.Audit.Append("rbac_denied", role,
+		d.auditAppend("rbac_denied", role,
 			map[string]any{"required": "admin", "path": "/api/update/apply"})
 		d.json(w, r, http.StatusForbidden, map[string]any{"ok": false, "error": "admin required"})
 		return
 	}
-	_, _ = d.Audit.Append("update-apply", httpx.Actor(r), map[string]any{"from": d.Version})
+	d.auditAppend("update-apply", httpx.Actor(r), map[string]any{"from": d.Version})
 	d.UpdateApply(w, r)
 }
 
@@ -188,7 +204,7 @@ func (d *Deps) registerVaultRoutes(mux *http.ServeMux) {
 	}))
 	// 11. llm-test
 	mux.HandleFunc("POST /api/vault/llm-test", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
-		d.json(w, r, 200, d.Vault.LLMTest(str(b, "key"), optStr(b, "base_url"), optStr(b, "model"), d.Cfg.LLMModel))
+		d.json(w, r, 200, d.Vault.LLMTest(str(b, "key"), optStr(b, "base_url"), optStr(b, "model"), d.Cfg.LLMModel, d.Cfg.LLMBaseURL))
 	}))
 	// 12. refresh-names
 	mux.HandleFunc("POST /api/vault/refresh-names", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {

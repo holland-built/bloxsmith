@@ -49,6 +49,15 @@ type Guard struct {
 	Port          string          // PORT — builds the same-origin allowlist
 	MutatingPaths map[string]bool // MUTATING_PATHS (server.py:145)
 	Audit         AuditFn         // write-authorized audit hook (1c)
+
+	// Host is the interface the server bound (HOST env, default "localhost").
+	// It seeds the Host-header allowlist used by HostGuard; a wildcard bind
+	// ("", 0.0.0.0, ::) means the legitimate hostnames are unknowable, so the
+	// allowlist stands down unless AllowedHosts names them explicitly.
+	Host string
+	// AllowedHosts is the ALLOWED_HOSTS env list — extra Host values a
+	// deployment legitimately serves (a reverse-proxy name, a LAN hostname).
+	AllowedHosts []string
 }
 
 // allowedOrigins is _allowed_origins (server.py:4892): the same-host loopback
@@ -79,20 +88,111 @@ func (g *Guard) tokenQueryMatches(r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(supplied), []byte(g.Token)) == 1
 }
 
-// SameOrigin is _same_origin (server.py:4907): an Origin/Referer must be
-// allowlisted; with neither header, only a loopback peer is trusted.
-func (g *Guard) SameOrigin(r *http.Request) bool {
-	ref := r.Header.Get("Origin")
-	if ref == "" {
-		ref = r.Header.Get("Referer")
+// --- Fetch Metadata ----------------------------------------------------------
+//
+// Sec-Fetch-Site is a browser-set request header (Fetch Metadata Request
+// Headers, W3C) that page script CANNOT forge: it is on the forbidden-header
+// list, so neither fetch() nor XHR nor an <img>/<form> can set or strip it. It
+// states the relationship between the initiator and the target:
+//
+//	same-origin  — our own page (this is what the dashboard's EventSource sends)
+//	same-site    — a sibling host under the same registrable domain
+//	cross-site   — someone else's page (this is the attacker)
+//	none         — user-initiated: typed URL, bookmark, curl-with-the-header
+//
+// This is the only signal that separates the dashboard's own EventSource GET
+// from a hostile page's no-cors GET, because BOTH omit Origin (fetch omits it
+// for no-cors/safe-verb requests) and a hostile page can strip Referer with
+// referrerPolicy:"no-referrer". Loopback cannot separate them either — the
+// victim's browser genuinely runs on the operator's machine.
+
+// fetchSite returns the normalized Sec-Fetch-Site value, "" when absent.
+func fetchSite(r *http.Request) string {
+	return strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
+}
+
+// selfInitiated reports that the browser vouched for this request as coming
+// from our own origin (or from the user directly).
+func selfInitiated(r *http.Request) bool {
+	s := fetchSite(r)
+	return s == "same-origin" || s == "none"
+}
+
+// foreignInitiated reports that the browser explicitly attributed this request
+// to another site. Present-and-not-ours is a hard reject, loopback or not.
+func foreignInitiated(r *http.Request) bool {
+	s := fetchSite(r)
+	return s != "" && s != "same-origin" && s != "none"
+}
+
+// originOrReferer is Python's `origin or referer` (server.py:4908).
+func originOrReferer(r *http.Request) string {
+	if o := r.Header.Get("Origin"); o != "" {
+		return o
 	}
-	if ref != "" {
-		if pu, err := url.Parse(ref); err == nil {
-			return g.allowedOrigins()[pu.Scheme+"://"+pu.Host]
-		}
+	return r.Header.Get("Referer")
+}
+
+// originAllowed matches a stated Origin/Referer against the loopback allowlist.
+func (g *Guard) originAllowed(ref string) bool {
+	pu, err := url.Parse(ref)
+	if err != nil {
 		return false
 	}
-	return isLoopback(r.RemoteAddr)
+	return g.allowedOrigins()[pu.Scheme+"://"+pu.Host]
+}
+
+// SameOrigin is _same_origin (server.py:4907): an Origin/Referer must be
+// allowlisted; with neither header, a browser that vouches for itself via
+// Sec-Fetch-Site, or a loopback peer, is trusted. A browser that names another
+// site is rejected outright — the loopback fallback never gets to run.
+func (g *Guard) SameOrigin(r *http.Request) bool {
+	if foreignInitiated(r) {
+		return false
+	}
+	if ref := originOrReferer(r); ref != "" {
+		return g.originAllowed(ref)
+	}
+	return selfInitiated(r) || isLoopback(r.RemoteAddr)
+}
+
+// WriteOKStrict is the CSRF gate for a state-changing request that arrives on a
+// SAFE VERB — the five SSE provision/teardown streams, which the UI must drive
+// with EventSource (a GET). It is WriteOK minus the loopback fallback.
+//
+// The fallback is the vulnerability: a hostile page the operator visits can fire
+//
+//	fetch("http://127.0.0.1:8080/api/teardown/seed-demo/stream?confirm=DELETE&dry=0",
+//	      {mode:"no-cors", referrerPolicy:"no-referrer"})
+//
+// which sends no Origin (no-cors GET) and no Referer (policy), so the old
+// Origin/Referer branches both missed and `isLoopback` returned true — the
+// browser really is on the operator's machine. That decommissioned live DNS
+// zones, subnets and address blocks with no response read required; an
+// <img src=...> works the same way. Non-safe verbs (POST/PATCH/DELETE) are not
+// affected — a browser always sends Origin for those — so they keep WriteOK and
+// its loopback trust, which is what tokenless CLI scripting relies on.
+//
+// The rule, tokenless:
+//   - Sec-Fetch-Site names another site  -> reject, loopback notwithstanding
+//   - Origin/Referer present             -> must match the loopback allowlist
+//   - neither, but Sec-Fetch-Site says same-origin/none -> allow (the real UI)
+//   - no evidence at all                 -> reject (was: trust loopback)
+//
+// With a token configured the gate is unchanged: header or ?token= only, which
+// is the supported path for curl/scripts and for browsers too old to send Fetch
+// Metadata.
+func (g *Guard) WriteOKStrict(r *http.Request) bool {
+	if g.Token != "" {
+		return g.Authed(r) || g.tokenQueryMatches(r)
+	}
+	if foreignInitiated(r) {
+		return false
+	}
+	if ref := originOrReferer(r); ref != "" {
+		return g.originAllowed(ref)
+	}
+	return selfInitiated(r)
 }
 
 func isLoopback(remoteAddr string) bool {
@@ -138,7 +238,16 @@ func (g *Guard) WriteGuard(w http.ResponseWriter, r *http.Request) bool {
 	path := strings.SplitN(r.URL.Path, "?", 2)[0]
 	mutating := g.IsMutating(path)
 	if mutating || unsafeAPIWrite(r.Method, path) {
-		if !g.WriteOK(r) {
+		// A mutating route reached on a safe verb (the five SSE streams) gets
+		// the strict fetch-metadata gate — the loopback fallback is forgeable
+		// by any page the operator visits. See WriteOKStrict.
+		ok := false
+		if mutating && safeVerb(r.Method) {
+			ok = g.WriteOKStrict(r)
+		} else {
+			ok = g.WriteOK(r)
+		}
+		if !ok {
 			WriteJSON(w, r, http.StatusForbidden, g.Port,
 				map[string]any{"error": "forbidden — write not authorized"})
 			return true
@@ -155,11 +264,103 @@ func (g *Guard) WriteGuard(w http.ResponseWriter, r *http.Request) bool {
 // before the write guard) are excluded, so read routes and the SSE ?token= GET
 // fallback keep their existing behavior.
 func unsafeAPIWrite(method, path string) bool {
-	switch method {
-	case http.MethodGet, http.MethodHead, http.MethodOptions:
+	if safeVerb(method) || method == http.MethodOptions {
 		return false
 	}
 	return strings.HasPrefix(path, "/api/")
+}
+
+// safeVerb reports the RFC 9110 safe verbs — the ones a browser will issue
+// cross-origin with no Origin header and no preflight.
+func safeVerb(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead
+}
+
+// --- DNS rebinding: Host header allowlist ------------------------------------
+
+// wildcardBind reports a bind address whose legitimate hostnames cannot be
+// derived (0.0.0.0 / :: / unset — the Docker image sets HOST=0.0.0.0 and is
+// reached through whatever name its published port is fronted by).
+func (g *Guard) wildcardBind() bool {
+	switch strings.Trim(strings.ToLower(g.Host), "[]") {
+	case "", "0.0.0.0", "::", "*":
+		return true
+	}
+	return false
+}
+
+// hostAllowlist is the set of Host header values this server answers to, with
+// and without the port.
+func (g *Guard) hostAllowlist() map[string]bool {
+	m := map[string]bool{}
+	add := func(h string) {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h == "" {
+			return
+		}
+		// A bare IPv6 literal (HOST=::1) is written [::1] in a Host header.
+		if strings.Count(h, ":") > 1 && !strings.HasPrefix(h, "[") {
+			h = "[" + h + "]"
+		}
+		m[h] = true
+		if g.Port != "" && !hasPort(h) {
+			m[h+":"+g.Port] = true
+		}
+	}
+	add("localhost")
+	add("127.0.0.1")
+	add("[::1]")
+	if !g.wildcardBind() {
+		add(g.Host)
+	}
+	for _, h := range g.AllowedHosts {
+		add(h)
+	}
+	return m
+}
+
+// hasPort reports whether a host value already carries a :port, handling the
+// bracketed IPv6 form ("[::1]" has colons but no port; "[::1]:8080" does).
+func hasPort(h string) bool {
+	if i := strings.LastIndex(h, "]"); i >= 0 {
+		return strings.Contains(h[i:], ":")
+	}
+	return strings.Contains(h, ":")
+}
+
+// HostAllowed is the DNS-rebinding gate. Nothing else in the stack validates
+// r.Host, so an attacker domain whose DNS re-resolves to 127.0.0.1 becomes
+// same-origin to the dashboard in the browser's eyes — its page then reads
+// every tenant response and passes the CSRF checks legitimately, because from
+// the browser's point of view it IS the dashboard's origin. Pinning the Host
+// header to the names this server actually serves breaks that: the rebound
+// request still carries Host: evil.example, which is not one of them.
+//
+// A wildcard bind with no explicit ALLOWED_HOSTS cannot know its own names, so
+// the gate stands down there rather than break Docker/LAN deployments; set
+// ALLOWED_HOSTS to re-arm it.
+func (g *Guard) HostAllowed(r *http.Request) bool {
+	if g.wildcardBind() && len(g.AllowedHosts) == 0 {
+		return true
+	}
+	host := strings.ToLower(strings.TrimSpace(r.Host))
+	if host == "" {
+		return false
+	}
+	return g.hostAllowlist()[host]
+}
+
+// HostGuard wraps the whole mux with HostAllowed, 421 Misdirected Request for a
+// Host this server does not serve.
+func (g *Guard) HostGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !g.HostAllowed(r) {
+			WriteJSON(w, r, http.StatusMisdirectedRequest, g.Port,
+				map[string]any{"error": "forbidden — unrecognized Host header"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // vaultGateGETExempt is the set of GET routes Python answers BEFORE the vault

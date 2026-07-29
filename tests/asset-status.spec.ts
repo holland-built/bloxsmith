@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Server contract (go/internal/dashboard/assetcounts.go): scalarCount used to
 // return status: "empty" whenever its cube query FAILED, making a dead query

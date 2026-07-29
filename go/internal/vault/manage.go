@@ -17,7 +17,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -400,18 +403,92 @@ func (v *Vault) ConnTest(activeAuth string) map[string]any {
 	return v.TestKey(activeAuth)
 }
 
+// defaultGroqBase is the hardcoded LLM provider default (matches the process
+// fallback below and internal/ai's groq base).
+const defaultGroqBase = "https://api.groq.com/openai/v1"
+
+// isPrivateOrLocalHost reports whether host (already stripped of scheme/port)
+// is a loopback, link-local, unspecified, or RFC1918/RFC4193 private address —
+// the "obvious internal targets" llm-test must never reach regardless of
+// which key it sends (cloud metadata endpoints live at a link-local address:
+// 169.254.169.254).
+func isPrivateOrLocalHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false // a public DNS name — not literally internal
+	}
+	return ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsUnspecified() || ip.IsPrivate()
+}
+
+// validateLLMBase rejects non-HTTPS base URLs and obvious internal/loopback/
+// link-local targets. This runs for EVERY llm-test call, regardless of which
+// key is used: the server makes the outbound request either way, so a
+// body-supplied base_url is an authenticated-request SSRF primitive whether
+// or not the caller also supplied their own credential.
+func validateLLMBase(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Hostname() == "" {
+		return fmt.Errorf("invalid base_url")
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return fmt.Errorf("base_url must use https")
+	}
+	if isPrivateOrLocalHost(u.Hostname()) {
+		return fmt.Errorf("base_url may not target a local/internal host")
+	}
+	return nil
+}
+
+// llmHost extracts the hostname from a base URL, else "".
+func llmHost(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
+}
+
 // LLMTest is vault_llm_test (server.py:3005): send a tiny completion to the
 // OpenAI-compatible provider (plain HTTP, no SDK — per plan). defaultModel is
-// the process LLM_MODEL fallback.
-func (v *Vault) LLMTest(key string, baseURL, model *string, defaultModel string) map[string]any {
+// the process LLM_MODEL fallback; defaultBase is the process LLM_BASE_URL
+// fallback (empty when unconfigured).
+//
+// Security: when the caller does NOT supply their own key, this test runs
+// with the STORED credential — so a body-supplied base_url would otherwise
+// let anyone with access to this endpoint exfiltrate the stored LLM key to an
+// arbitrary host (an authenticated SSRF primitive: internal services, cloud
+// metadata endpoints, etc., bypassing the browser's CSP since the fetch runs
+// server-side). A body-supplied base_url is only honoured in that case when
+// its host is one already trusted independently of this request — Groq's
+// hardcoded default, the operator-configured process default, or whatever is
+// already persisted in the vault. Supplying an explicit key is different: the
+// caller is testing their OWN credential against their OWN endpoint, so any
+// https, non-internal base_url is fine — nothing of the operator's is at risk.
+func (v *Vault) LLMTest(key string, baseURL, model *string, defaultModel, defaultBase string) map[string]any {
 	v.mu.Lock()
 	k := strings.TrimSpace(key)
-	if k == "" {
+	usingStoredKey := k == ""
+	if usingStoredKey {
 		k = v.groq
 	}
 	base := v.llmBase
-	if baseURL != nil {
+	baseSupplied := baseURL != nil && strings.TrimSpace(*baseURL) != ""
+	if baseSupplied {
 		base = strings.TrimSpace(*baseURL)
+	}
+	allowedHosts := map[string]bool{llmHost(defaultGroqBase): true}
+	if h := llmHost(v.llmBase); h != "" {
+		allowedHosts[h] = true
+	}
+	if h := llmHost(defaultBase); h != "" {
+		allowedHosts[h] = true
 	}
 	mdl := ""
 	if model != nil {
@@ -428,7 +505,23 @@ func (v *Vault) LLMTest(key string, baseURL, model *string, defaultModel string)
 		return fail("API key required")
 	}
 	if base == "" {
-		base = "https://api.groq.com/openai/v1"
+		base = defaultGroqBase
+	}
+	// Both checks below only apply to a base_url THIS request supplied — the
+	// already-persisted v.llmBase (or the hardcoded Groq default) was set
+	// through SetLLM, a separate privileged path, not by whoever is calling
+	// llm-test right now, so it is not the caller-controlled SSRF surface
+	// this fix closes. An operator who has legitimately pointed the vault at
+	// an internal LLM gateway keeps being able to test it with no base_url in
+	// the request body; only a base_url this specific call injects is held
+	// to the stricter bar.
+	if baseSupplied {
+		if err := validateLLMBase(base); err != nil {
+			return fail(err.Error())
+		}
+		if usingStoredKey && !allowedHosts[llmHost(base)] {
+			return fail("base_url not allowed with the stored credential — supply an explicit key to test a custom endpoint")
+		}
 	}
 	reqBody, _ := json.Marshal(map[string]any{
 		"model":      mdl,

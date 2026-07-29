@@ -67,7 +67,7 @@ func (d *Deps) auditLog(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) auditExport(w http.ResponseWriter, r *http.Request) {
 	role := d.Guard.ResolveRole(r)
 	if !httpx.RoleAtLeast(role, "admin") {
-		_, _ = d.Audit.Append("rbac_denied", role,
+		d.auditAppend("rbac_denied", role,
 			map[string]any{"required": "admin", "path": "/api/audit/export"})
 		d.json(w, r, 403, map[string]any{"ok": false, "error": "admin required"})
 		return
@@ -130,7 +130,7 @@ func (d *Deps) viewDelete(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) snooze(w http.ResponseWriter, r *http.Request, b map[string]any) {
 	role := d.Guard.ResolveRole(r)
 	if !httpx.RoleAtLeast(role, "operator") {
-		_, _ = d.Audit.Append("rbac_denied", role,
+		d.auditAppend("rbac_denied", role,
 			map[string]any{"required": "operator", "path": "/api/alerts/snooze"})
 		d.json(w, r, 403, map[string]any{"ok": false, "error": "operator required"})
 		return
@@ -145,7 +145,7 @@ func (d *Deps) snooze(w http.ResponseWriter, r *http.Request, b map[string]any) 
 		d.json(w, r, 500, map[string]any{"ok": false, "error": "internal error"})
 		return
 	}
-	_, _ = d.Audit.Append("snooze", httpx.Actor(r),
+	d.auditAppend("snooze", httpx.Actor(r),
 		map[string]any{"category": category, "minutes": minutes})
 	d.json(w, r, 200, map[string]any{"ok": true, "category": category, "minutes": minutes})
 }

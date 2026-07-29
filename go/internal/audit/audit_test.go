@@ -1,9 +1,12 @@
 package audit
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -280,5 +283,154 @@ func TestVerifyUnverifiableIsDistinctFromValid(t *testing.T) {
 	v2, _ := valid2["valid"].(bool)
 	if !v2 {
 		t.Fatalf("genuinely empty log incorrectly reported unverifiable/invalid: %v", valid2)
+	}
+}
+
+// --- Append on a corrupt chain: loud refusal, never a silent no-op ---------
+
+// captureLog redirects the standard logger for the duration of the test and
+// returns a function to fetch what was written so far.
+func captureLog(t *testing.T) func() string {
+	t.Helper()
+	var buf bytes.Buffer
+	orig := log.Writer()
+	origFlags := log.Flags()
+	log.SetOutput(&buf)
+	t.Cleanup(func() {
+		log.SetOutput(orig)
+		log.SetFlags(origFlags)
+	})
+	return func() string { return buf.String() }
+}
+
+// TestAppendOnCorruptChain_RefusesLoudly_NoSilentNoOp is the regression test
+// for the actual defect: a single undecodable line used to hard-fail Append
+// forever, and every caller in the codebase discards Append's error
+// (`_, _ = Append(...)`) — so the failure was completely invisible from the
+// request-handling side even though every write kept succeeding. Append must
+// now (a) still refuse to extend an untrustworthy chain — silently
+// succeeding would destroy the tamper-evidence property — and (b) log the
+// refusal itself, so the condition is visible even though nothing looks at
+// the returned error.
+func TestAppendOnCorruptChain_RefusesLoudly_NoSilentNoOp(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "audit_log.jsonl")
+	l := New(logPath, "app-v9.9.9", "deadbeef")
+	ts := 1752624000.5
+	l.now = func() float64 { ts += 20; return ts }
+
+	if _, err := l.Append("write-authorized", "loopback",
+		map[string]any{"method": "POST", "path": "/api/edit/host"}); err != nil {
+		t.Fatalf("Append on a healthy empty chain failed: %v", err)
+	}
+
+	// Corrupt the chain with one garbage byte, mid-file — a single
+	// undecodable line, exactly the scenario in the bug report.
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("{not valid json\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	getLog := captureLog(t)
+	_, appendErr := l.Append("write-authorized", "loopback",
+		map[string]any{"method": "POST", "path": "/api/edit/host"})
+
+	// (a) must refuse — never silently accept the write onto an unverifiable
+	// chain.
+	if appendErr == nil {
+		t.Fatal("Append() on a corrupt chain returned no error — a corrupt chain must never silently accept a new entry")
+	}
+	after, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("Append() modified the log file despite refusing: before=%q after=%q", before, after)
+	}
+
+	// (b) must be loud: the refusal is logged, not just returned into the
+	// void every caller discards.
+	logged := getLog()
+	if !strings.Contains(logged, "write-authorized") || !strings.Contains(logged, "loopback") {
+		t.Fatalf("Append() refusal was not logged with enough context to investigate: log=%q", logged)
+	}
+	if !strings.Contains(strings.ToLower(logged), "audit") {
+		t.Fatalf("Append() refusal log line doesn't even mention audit: log=%q", logged)
+	}
+
+	// The could-not-verify state must also still be visible via Verify() —
+	// the second half of "loud", already wired to /api/audit/log and
+	// /api/audit/export.
+	res := l.Verify()
+	if v, _ := res["valid"].(bool); v {
+		t.Fatalf("Verify() on the same corrupt chain reported valid:true: %v", res)
+	}
+	if _, hasReason := res["verify_error"]; !hasReason {
+		t.Fatalf("Verify() on the corrupt chain has no verify_error to surface to the operator: %v", res)
+	}
+}
+
+// TestAppendOnHealthyChain_Unaffected pins that the loud-refusal change above
+// does not touch the normal path: a healthy chain keeps appending and
+// verifying exactly as before.
+func TestAppendOnHealthyChain_Unaffected(t *testing.T) {
+	dir := t.TempDir()
+	l := New(filepath.Join(dir, "audit_log.jsonl"), "app-v9.9.9", "deadbeef")
+	ts := 1752624000.5
+	l.now = func() float64 { ts += 20; return ts }
+
+	getLog := captureLog(t)
+
+	for i := 0; i < 3; i++ {
+		if _, err := l.Append("write-authorized", "loopback",
+			map[string]any{"method": "POST", "path": "/api/edit/host"}); err != nil {
+			t.Fatalf("Append %d on a healthy chain failed: %v", i, err)
+		}
+	}
+
+	if logged := getLog(); strings.Contains(logged, "AUDIT LOGGING STOPPED") {
+		t.Fatalf("a healthy chain must never log a stopped-logging warning: %q", logged)
+	}
+
+	res := l.Verify()
+	if v, _ := res["valid"].(bool); !v {
+		t.Fatalf("healthy chain failed to verify: %v", res)
+	}
+	entries, skipped, err := l.Read()
+	if err != nil || skipped != 0 || len(entries) != 3 {
+		t.Fatalf("Read() = (%d entries, %d skipped, err=%v), want (3, 0, nil)", len(entries), skipped, err)
+	}
+}
+
+// TestAppendOnGenuinelyEmptyLog_StillWorks pins the other half of the "never
+// silently stop" requirement in the opposite direction: a log file that has
+// never been written to (not corrupt — just new) must append fine, exactly
+// like TestVerifyEmptyLogIsValid pins for Verify().
+func TestAppendOnGenuinelyEmptyLog_StillWorks(t *testing.T) {
+	dir := t.TempDir()
+	l := New(filepath.Join(dir, "audit_log.jsonl"), "app-v1.2.3", "ab12cd34")
+
+	entry, err := l.Append("write-authorized", "loopback",
+		map[string]any{"method": "POST", "path": "/api/edit/host"})
+	if err != nil {
+		t.Fatalf("Append on a genuinely empty (never-created) log failed: %v", err)
+	}
+	if entry["prev_hash"] != zeroHash {
+		t.Fatalf("prev_hash = %v, want the zero hash for the first entry", entry["prev_hash"])
+	}
+
+	res := l.Verify()
+	if v, _ := res["valid"].(bool); !v {
+		t.Fatalf("Verify() after the first append on an empty log = %v, want valid", res)
 	}
 }

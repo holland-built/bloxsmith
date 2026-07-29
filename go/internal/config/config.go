@@ -88,6 +88,12 @@ type Config struct {
 	Port      string // PORT, default 8080 (server.py:50)
 	Host      string // HOST, default "localhost" (server.py:51)
 
+	// AllowedHosts is ALLOWED_HOSTS (comma-separated): extra Host header values
+	// this deployment legitimately answers to, on top of the loopback names and
+	// the bind host. Feeds httpx.Guard's DNS-rebinding gate. Required to re-arm
+	// that gate on a wildcard (0.0.0.0) bind, where the real names are unknown.
+	AllowedHosts []string
+
 	AppRepo             string // APP_REPO (server.py:68)
 	UpdateCheckDisabled bool   // DISABLE_UPDATE_CHECK (server.py:69)
 
@@ -118,6 +124,18 @@ func or(k, def string) string {
 	return def
 }
 
+// splitList parses a comma-separated env list, dropping blanks. Returns nil for
+// an unset/empty var so callers can test len()==0 for "not configured".
+func splitList(v string) []string {
+	var out []string
+	for _, p := range strings.Split(v, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // getDefault returns the env value if the var is set (even when empty), else
 // def — matches Python's os.environ.get(k, def).
 func getDefault(k, def string) string {
@@ -137,6 +155,7 @@ func Load(dir string) *Config {
 	c.MCPURL = c.BaseURL + "/mcp"
 	c.Port = or("PORT", "8080")
 	c.Host = or("HOST", "localhost")
+	c.AllowedHosts = splitList(os.Getenv("ALLOWED_HOSTS"))
 
 	c.AppRepo = or("APP_REPO", "holland-built/bloxsmith")
 	c.UpdateCheckDisabled = os.Getenv("DISABLE_UPDATE_CHECK") != ""
