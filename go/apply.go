@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -45,6 +47,7 @@ const applyCooldown = 60 * time.Second
 const (
 	maxArchiveBytes        = 200 << 20 // compressed archive
 	maxChecksumBytes       = 4 << 20   // checksums.txt
+	maxSignatureBytes      = 4 << 10   // checksums.txt.ed25519 (base64 of 64 bytes)
 	maxJSONBytes           = 64 << 20  // GitHub release JSON
 	maxBinaryBytes         = 200 << 20 // a single extracted file
 	maxTemplateFileBytes   = 4 << 20   // a single template file (small YAML)
@@ -418,11 +421,23 @@ func applyLatest() error {
 	archName := archiveAssetName(rel.Tag)
 	archAsset := assetURL(rel, archName)
 	sumAsset := assetURL(rel, "checksums.txt")
+	sigAsset := assetURL(rel, releaseSigAssetName)
 	if archAsset == "" {
 		return fmt.Errorf("release %s has no asset %q for this platform", rel.Tag, archName)
 	}
 	if sumAsset == "" {
 		return fmt.Errorf("release %s has no checksums.txt", rel.Tag)
+	}
+	// Refusing outright is deliberate. A missing signature is exactly what an
+	// attacker who can write release assets would arrange, so treating it as
+	// "sign it if you can, otherwise carry on" would leave the checksum
+	// unanchored again and make the whole control decorative. CI fails the
+	// release rather than publishing without one, so this can only fire on a
+	// tampered release — or on one this key was never meant to validate.
+	if sigAsset == "" {
+		return fmt.Errorf("release %s is not signed (no %s) — refusing to self-update; "+
+			"reinstall deliberately with scripts/install.sh if this is expected",
+			rel.Tag, releaseSigAssetName)
 	}
 
 	progress.set("downloading", 25)
@@ -435,7 +450,19 @@ func applyLatest() error {
 		return err
 	}
 
+	sigBytes, err := httpGetBytes(sigAsset, maxSignatureBytes)
+	if err != nil {
+		return err
+	}
+
 	progress.set("verifying", 55)
+	// The signature comes FIRST. Verifying the archive against checksums.txt is
+	// worthless until we know checksums.txt is ours: an attacker who can replace
+	// the tarball can replace the checksum sitting beside it, which is precisely
+	// the gap the compiled-in public key closes (see signing.go).
+	if err := verifyReleaseSignature(sums, sigBytes); err != nil {
+		return err
+	}
 	want := checksumFor(sums, archName)
 	if want == "" {
 		return fmt.Errorf("checksums.txt has no entry for %s", archName)
@@ -630,4 +657,32 @@ func runUpdateCLI(checkOnly bool) int {
 	close(done)
 	fmt.Println("updated to", st.Latest, "— restarting")
 	return 0
+}
+
+
+// verifyReleaseSignature checks the Ed25519 signature over checksums.txt against
+// the public key compiled into this binary (signing.go).
+//
+// Every failure here aborts the update. There is no "warn and continue" branch
+// on purpose: the only reason to run this check is to refuse when it fails, and
+// a check whose failure is survivable is a check an attacker simply causes to
+// fail.
+func verifyReleaseSignature(checksums, signature []byte) error {
+	pub, err := hex.DecodeString(strings.TrimSpace(activeSigningKey))
+	if err != nil || len(pub) != ed25519.PublicKeySize {
+		// A malformed compiled-in key is a build defect, not an attack — but it
+		// must still stop the update rather than wave it through.
+		return fmt.Errorf("this build has no usable release signing key, so the download cannot be authenticated")
+	}
+	sig, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(signature)))
+	if err != nil {
+		return fmt.Errorf("release signature is not valid base64: %w", err)
+	}
+	if len(sig) != ed25519.SignatureSize {
+		return fmt.Errorf("release signature is %d bytes, want %d", len(sig), ed25519.SignatureSize)
+	}
+	if !ed25519.Verify(ed25519.PublicKey(pub), checksums, sig) {
+		return fmt.Errorf("RELEASE SIGNATURE DOES NOT VERIFY — checksums.txt was not signed by this project's release key; refusing to update")
+	}
+	return nil
 }

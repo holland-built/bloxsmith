@@ -328,7 +328,7 @@ func (d *Deps) writeUpstreamError(w http.ResponseWriter, r *http.Request, ue *re
 // transport failure, non-2xx status, or undecodable/unshaped body — so it
 // still flows through here as ok=true with a zero-length rows slice.
 func (d *Deps) getStrictOrErr(w http.ResponseWriter, r *http.Request, path string, params map[string]string) (rows []any, ok bool) {
-	rows, err := d.Rest.GetStrict(path, params)
+	rows, err := d.restFor(r).GetStrict(path, params)
 	if err != nil {
 		ue, isUE := err.(*rest.UpstreamError)
 		if !isUE {
@@ -361,7 +361,7 @@ func (d *Deps) pagedFetch(w http.ResponseWriter, r *http.Request, path string, p
 
 	p["_limit"] = strconv.Itoa(limit + 1)
 	p["_is_total_size_needed"] = "true"
-	fetchRows, body, err := d.Rest.GetPageStrict(path, p)
+	fetchRows, body, err := d.restFor(r).GetPageStrict(path, p)
 	if err != nil {
 		ue, ok := err.(*rest.UpstreamError)
 		if !ok {
@@ -502,7 +502,7 @@ func (d *Deps) ipamAvailability(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 400, map[string]any{"error": "invalid subnet id"})
 		return
 	}
-	body, status, _ := d.Rest.GetEx("/api/ddi/v1/ipam/subnet/"+url.PathEscape(subnet),
+	body, status, _ := d.restFor(r).GetEx("/api/ddi/v1/ipam/subnet/"+url.PathEscape(subnet),
 		map[string]string{"_fields": "id,address,cidr,utilization"})
 	m, ok := body.(map[string]any)
 	if status != 200 || !ok {

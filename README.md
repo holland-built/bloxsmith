@@ -16,7 +16,7 @@
 | **DNS & zones** | records, zones, query rates |
 | **Security & threat feeds** | policies, indicators, audit logs |
 | **Single Go binary** | embedded UI, no runtime deps |
-| **Encrypted vault** | tenant keys AES-encrypted at rest |
+| **Encrypted vault** | tenant keys AES-encrypted at rest — protects a stolen disk, [not a live machine](docs/DEPLOYMENT.md#what-aes-encrypted-vault-is-worth-exactly) |
 | **Optional AI query box** | natural-language over your data |
 
 **[What each tab does →](docs/TABS.md)** — all 13 tabs, which ones write to Infoblox, and how the dry-run/apply flow works.
@@ -82,7 +82,7 @@ Full options and deployment guidance are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT
 <details>
 <summary><b>How the installers verify downloads &amp; where they land</b></summary>
 
-Read it before you run it — that's what inspecting the script first is for. Both installers verify the release's SHA-256 checksum and refuse to install on a mismatch. The checksum proves the download is intact, not that the publisher is who they claim — the binary is unsigned.
+Read it before you run it — that's what inspecting the script first is for. Both installers verify the release's SHA-256 checksum and refuse to install on a mismatch, and `install.sh` also verifies an **Ed25519 signature over `checksums.txt`** against a public key pinned in the script itself — so the thing deciding whether a release is genuine does not travel with the release. (On macOS's LibreSSL that check cannot run and says so plainly rather than passing silently; the installed binary verifies the same signature on every self-update regardless.) The OS binaries themselves are still unsigned for Gatekeeper/SmartScreen purposes — see [Code signing policy](#code-signing-policy).
 
 - **macOS/Linux:** drops `bloxsmith` in `~/.local/bin` (no sudo; override with `--prefix DIR`, pin with `--version vX.Y.Z`).
 - **Windows:** drops `bloxsmith.exe` in `%LOCALAPPDATA%\Programs\Bloxsmith` and adds it to your user PATH. Reopen the shell, then run `bloxsmith`.
@@ -106,7 +106,7 @@ Port 8080 is the default for every install method. If it's already taken (the Do
 > [!WARNING]
 > LAN mode has no login. Anyone on the network can reach the dashboard and query your Infoblox tenant. Keep the vault **locked** when not presenting, or use a secure proxy.
 
-Binding `0.0.0.0` (Docker) or `BIND=0.0.0.0` (compose) instead of `127.0.0.1` exposes the dashboard on the LAN with no auth in front of it. Pin a release with a tag (e.g. `:v2.0.0`) instead of `:latest`. Tenant keys live AES-encrypted in the `noc-vault` volume and survive updates, restarts, and container recreation.
+Binding `0.0.0.0` (Docker) or `BIND=0.0.0.0` (compose) instead of `127.0.0.1` exposes the dashboard on the LAN with no auth in front of it. Pin a release with a tag (e.g. `:v2.0.0`) instead of `:latest`. Tenant keys live AES-encrypted in the `noc-vault` volume and survive updates, restarts, and container recreation. With auto-unlock enabled the passphrase necessarily lives on the same machine, so that encryption protects a stolen disk or backup — not a host someone already has a process on. [What it is worth, exactly](docs/DEPLOYMENT.md#what-aes-encrypted-vault-is-worth-exactly).
 
 Full compose / secure-proxy / Customer-install steps → [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
@@ -204,7 +204,13 @@ Bloxsmith releases are built and published from GitHub Actions.
 
 **OS trust.** The Windows and macOS binaries are **not code-signed** (no Apple notarization, no Windows Authenticode), so a first run trips OS gatekeeping: macOS Gatekeeper — right-click → **Open**, or `xattr -dr com.apple.quarantine` the binary; Windows SmartScreen — **More info → Run anyway**.
 
-**Supply-chain provenance.** Every release's `checksums.txt` is cosign **keyless-signed** in CI using the workflow's GitHub OIDC identity — the same mechanism that signs the ghcr container images. This proves the checksums (and therefore the archives) were built by this repo's release workflow; it is not OS trust and does not remove the warnings above. Verify:
+**Supply-chain provenance.** Two independent signatures, because they answer different questions.
+
+*Ed25519, checked automatically.* `checksums.txt` is signed with an Ed25519 key held only in this repository's GitHub Actions secrets. The public half is compiled into every binary (`go/signing.go`) and pinned in `install.sh`. **The in-app updater refuses to apply a release whose signature is missing or does not verify** — before it looks at the checksum at all, because a checksum fetched from the same release as the archive proves the download is intact, never that this project published it. CI refuses to publish an unsigned release, so a missing signature is not a degraded release; it is a tampered one.
+
+What this does *not* cover: anyone who can push a tag, or who steals the Actions secret, can still produce a signature that verifies. It stops an attacker who can write release assets, not one who owns CI. Rotating the key means shipping a new binary — the price of an anchor that does not live in the release.
+
+*Cosign, checked by hand.* `checksums.txt` is additionally **keyless-signed** in CI using the workflow's GitHub OIDC identity — the same mechanism that signs the ghcr container images. This proves which workflow run built the artifacts and is verifiable by a third party with no prior knowledge of this project. Neither signature is OS trust, and neither removes the warnings above. Verify:
 
 ```bash
 cosign verify-blob \

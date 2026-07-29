@@ -16,15 +16,15 @@ func (d *Deps) registerThreatIntelRoutes(mux *http.ServeMux) {
 func (d *Deps) dossier(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/dossier")
 	q := r.URL.Query()
-	d.json(w, r, 200, d.Dashboard.FetchDossier(q.Get("q"), q.Get("type")))
+	d.json(w, r, 200, d.dash(r).FetchDossier(q.Get("q"), q.Get("type")))
 }
 
 func (d *Deps) lookalikes(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/lookalikes")
-	d.json(w, r, 200, d.Dashboard.FetchLookalikes())
+	d.json(w, r, 200, d.dash(r).FetchLookalikes())
 }
 
 func (d *Deps) assets(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/assets")
-	d.json(w, r, 200, d.Dashboard.FetchAssets(r.Context()))
+	d.json(w, r, 200, d.dash(r).FetchAssets(r.Context()))
 }

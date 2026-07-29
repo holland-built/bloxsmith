@@ -23,6 +23,11 @@ type Client struct{ Rest *rest.Client }
 // New binds the builders to the shared rest.Client.
 func New(r *rest.Client) *Client { return &Client{Rest: r} }
 
+// With rebinds the builders to a request-scoped rest.Client so every write in
+// one request goes to the tenant that request started against. See
+// rest.Client.Pin.
+func (c *Client) With(r *rest.Client) *Client { return &Client{Rest: r} }
+
 // M is the (result, status) response shape every builder returns.
 type M = map[string]any
 

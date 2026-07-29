@@ -26,6 +26,17 @@ type Service struct {
 // New builds the dashboard service.
 func New(r *rest.Client, c *cache.Cache) *Service { return &Service{Rest: r, Cache: c} }
 
+// With returns a copy of the service bound to a different rest.Client — in
+// practice the request-scoped pinned one (see rest.Client.Pin). The copy is
+// shallow on purpose: Cache and Mcp are shared process-wide and must stay
+// shared; only the outbound credential changes. Service holds no lock, so
+// copying it is safe.
+func (s *Service) With(r *rest.Client) *Service {
+	cp := *s
+	cp.Rest = r
+	return &cp
+}
+
 // --- Python-semantics coercion helpers --------------------------------------
 
 // asMap coerces a decoded JSON value to an object, empty on mismatch (Python
