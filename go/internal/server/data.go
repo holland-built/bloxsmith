@@ -16,23 +16,23 @@ func (d *Deps) registerDataRoutes(mux *http.ServeMux) {
 
 func (d *Deps) apiData(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/data")
-	d.json(w, r, 200, d.Dashboard.FetchDashboardData())
+	d.json(w, r, 200, d.dash(r).FetchDashboardData())
 }
 
 func (d *Deps) hubHealth(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/hub/health")
-	d.json(w, r, 200, d.Dashboard.FetchHubHealth())
+	d.json(w, r, 200, d.dash(r).FetchHubHealth())
 }
 
 func (d *Deps) hubSecurity(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/hub/security")
 	// server.py:5246 fetch_hub_security() — the route uses the defaults (1h/50).
-	d.json(w, r, 200, d.Dashboard.FetchHubSecurity(3600, 50))
+	d.json(w, r, 200, d.dash(r).FetchHubSecurity(3600, 50))
 }
 
 func (d *Deps) hubDomains(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/hub/domains")
-	d.json(w, r, 200, d.Dashboard.FetchHubDomains())
+	d.json(w, r, 200, d.dash(r).FetchHubDomains())
 }
 
 // cacheBust is /api/cache-bust (server.py:5265): clear the shared TTL cache.

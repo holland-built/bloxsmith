@@ -96,6 +96,16 @@ func New(r *rest.Client, templatesDir string) *Engine {
 	return &Engine{Rest: r, TemplatesDir: templatesDir}
 }
 
+// With rebinds the engine to a request-scoped rest.Client. This one matters
+// most: a decommission stream makes dozens of DELETEs over minutes, and an
+// account switch landing halfway through used to mean the second half deleted
+// objects in a different tenant. See rest.Client.Pin.
+func (e *Engine) With(r *rest.Client) *Engine {
+	cp := *e
+	cp.Rest = r
+	return &cp
+}
+
 // --- value coercion (YAML yields int; JSON bodies yield float64) -------------
 
 func asMap(v any) M {

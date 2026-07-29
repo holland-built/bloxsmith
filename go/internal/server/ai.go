@@ -21,6 +21,6 @@ func (d *Deps) apiQuery(w http.ResponseWriter, r *http.Request, b map[string]any
 			d.json(w, r, 500, map[string]any{"answer": "Error: internal error", "suggestions": []any{}})
 		}
 	}()
-	result := d.AI.HandleQuery(str(b, "question"), str(b, "context"))
+	result := d.aiFor(r).HandleQuery(str(b, "question"), str(b, "context"))
 	d.json(w, r, 200, result)
 }

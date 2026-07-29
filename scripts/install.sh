@@ -169,13 +169,53 @@ curl --proto '=https' --tlsv1.2 -fsSLo "$WORK/$ASSET" "${BASE}/${ASSET}" \
     || { echo "error: could not download ${ASSET} from ${BASE}" >&2; exit 1; }
 
 # --- verify -----------------------------------------------------------------
-# HONEST SCOPE: checksums.txt comes from the SAME release as the archive, so this
-# catches a corrupt or truncated download and a broken mirror — it does NOT protect
-# against a compromised publisher or a hijacked release, since an attacker who can
-# replace the tarball can replace the checksums beside it. Real publisher
-# authentication needs signature verification (cosign / Sigstore) against a key
-# that does not live in the release; that is the planned hardening step.
-EXPECTED="$(awk -v f="$ASSET" '$2 == f || $2 == "*" f {print $1}' "$WORK/checksums.txt" | head -1)"
+# TWO CHECKS, and they are not the same check.
+#
+# 1. SIGNATURE. checksums.txt is signed with an Ed25519 key held only in this
+#    repository's GitHub Actions secrets. The public half is pinned in this
+#    script, so the thing that decides whether a release is genuine does NOT
+#    travel with the release — which is exactly what a checksum sitting beside
+#    the archive it validates can never do. Verified here when openssl supports
+#    raw Ed25519 (OpenSSL 3.x); macOS ships LibreSSL, which does not, so this
+#    degrades to a stated fact rather than a silent pass. The installed binary
+#    ALWAYS verifies this signature before a self-update, whatever openssl is on
+#    the machine (go/signing.go), so the automated path is never the weak one.
+#
+# 2. CHECKSUM. Proves the archive matches what was signed. On its own it catches
+#    a corrupt or truncated download and a broken mirror — nothing more.
+SIG_PUBKEY_PEM="-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAL0O2g8iJMvkw7ZxIw1NGsD8Cb6X2H+LbFs3e/GYRG4k=
+-----END PUBLIC KEY-----"
+
+if curl --proto '=https' --tlsv1.2 -fsSLo "$WORK/checksums.txt.ed25519" \
+        "${BASE}/checksums.txt.ed25519" 2>/dev/null; then
+    if command -v openssl >/dev/null 2>&1 && openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
+        printf '%s\n' "$SIG_PUBKEY_PEM" > "$WORK/relsign.pem"
+        if ! base64 -d < "$WORK/checksums.txt.ed25519" > "$WORK/checksums.sig" 2>/dev/null \
+           && ! base64 -D < "$WORK/checksums.txt.ed25519" > "$WORK/checksums.sig" 2>/dev/null; then
+            echo "error: could not decode checksums.txt.ed25519 — refusing to install" >&2
+            exit 1
+        fi
+        if openssl pkeyutl -verify -pubin -inkey "$WORK/relsign.pem" -rawin \
+                -in "$WORK/checksums.txt" -sigfile "$WORK/checksums.sig" >/dev/null 2>&1; then
+            echo "  signature: ok (ed25519, key pinned in this script)"
+        else
+            echo "error: RELEASE SIGNATURE DOES NOT VERIFY — refusing to install." >&2
+            echo "  checksums.txt was not signed by this project's release key." >&2
+            echo "  Do not retry blindly; report it at https://github.com/${REPO}/issues" >&2
+            exit 1
+        fi
+    else
+        echo "  signature: present but NOT checked (this openssl cannot verify raw ed25519)"
+        echo "             the installed binary verifies it on every self-update"
+    fi
+else
+    echo "  signature: none published for this release — checksum only"
+    echo "             (a checksum from the same release proves the download is intact,"
+    echo "              not that this project published it)"
+fi
+
+EXPECTED"$(awk -v f="$ASSET" '$2 == f || $2 == "*" f {print $1}' "$WORK/checksums.txt" | head -1)"
 [ -n "$EXPECTED" ] || { echo "error: ${ASSET} has no entry in checksums.txt — refusing to install" >&2; exit 1; }
 
 ACTUAL="$(sha256 "$WORK/$ASSET")"
