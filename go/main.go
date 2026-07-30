@@ -145,6 +145,12 @@ func main() {
 			// Offline verification of the tamper-evident chain, with nothing
 			// running. Read-only by construction — see auditcli.go.
 			os.Exit(runAuditCLI(os.Args[2:]))
+		case "restore-plan":
+			// Read a teardown export back and print what would have to be
+			// re-created, in dependency order. Offline and creates nothing —
+			// named for what it produces, not what it does not do. See
+			// restorecli.go.
+			os.Exit(runRestoreCLI(os.Args[2:]))
 		case "service":
 			// `bloxsmith service install|uninstall|start|stop|status` — run as a
 			// native background service (launchd / systemd / Windows SCM).
@@ -208,6 +214,7 @@ func printUsage() {
 	fmt.Println("  update [--check]          download+verify+swap the latest release, then restart")
 	fmt.Println("  service <cmd>             install|uninstall|start|stop|restart|status  (run at login)")
 	fmt.Println("  audit verify             check the audit chain offline (0 intact, 1 tampered, 2 unchecked)")
+	fmt.Println("  restore-plan FILE        read a teardown export and print what to re-create, in order")
 	fmt.Println("  vault-passphrase <cmd>   set|status|remove — keep the auto-unlock passphrase in the macOS keychain")
 	fmt.Println("  --version, -v             print version")
 	fmt.Println("  --help, -h, help          this help")
