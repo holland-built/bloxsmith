@@ -20,7 +20,7 @@ import (
 // what that buys, are in internal/vault/keychain.go — read that, not this.
 
 func passCLIUsage() {
-	fmt.Println("usage: bloxsmith vault-passphrase <set|status|check|remove>")
+	fmt.Println("usage: bloxsmith vault-passphrase <set|status|check|rotate|remove>")
 	fmt.Println()
 	fmt.Println("  Moves the vault's auto-unlock passphrase into the macOS keychain, so it")
 	fmt.Println("  stops sitting in plaintext next to the vault it unlocks.")
@@ -30,6 +30,10 @@ func passCLIUsage() {
 	fmt.Println("  check    prove the KEYCHAIN copy actually opens this vault, ignoring")
 	fmt.Println("           any .env — run this BEFORE you remove the plaintext copy")
 	fmt.Println("           (0 it opens, 1 it does not, 2 could not be checked)")
+	fmt.Println("  rotate   change the vault's ACTUAL encryption passphrase — verifies the")
+	fmt.Println("           current one first, backs up vault.json, re-encrypts, and only")
+	fmt.Println("           then updates the keychain (if it held an entry). This is the")
+	fmt.Println("           only way to invalidate an exposed passphrase; `set` alone does not.")
 	fmt.Println("  remove   delete the keychain entry")
 	fmt.Println()
 	fmt.Println("  --vault PATH   the vault.json this passphrase unlocks")
@@ -104,6 +108,8 @@ func runPassCLI(args []string) int {
 		return passStatus(vaultPath, cfg.VaultPassphrase, cfg.VaultPassphraseFile)
 	case "set":
 		return passSet(vaultPath)
+	case "rotate":
+		return passRotate(vaultPath, cfg.VaultPassphrase, cfg.VaultPassphraseFile)
 	case "check":
 		msg, code := checkKeychainOpensVault(vaultPath, vault.GetKeychainPassphrase)
 		out := os.Stdout

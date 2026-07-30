@@ -69,11 +69,41 @@ function Message({ item }) {
   )
 }
 
+// BudgetLine is the whole point of this feature, so its rules are literal:
+//   1. No "limit_tokens" in the response -> no denominator, no percent, no bar.
+//      We do not know the provider's cap, so we say only what we counted.
+//   2. The count is what THIS server counted, never the account's true usage —
+//      the same key used elsewhere is invisible to us. Said in plain text, not
+//      buried in a tooltip.
+//   3. "near_limit" true -> a warning that answers are about to stop, as text
+//      (not colour alone) so it survives screen readers and colour-blindness.
+//   4. No "budget" object at all on a response -> render nothing. Silence,
+//      never a fabricated zero.
+function BudgetLine({ budget }) {
+  if (!budget) return null
+  const hasLimit = typeof budget.limit_tokens === 'number'
+  const near = !!budget.near_limit
+  return (
+    <div
+      role={near ? 'status' : undefined}
+      className={`text-[11px] mt-1.5 ${near ? 'font-medium' : 'text-dim'}`}
+      style={near ? { color: 'var(--color-warn)' } : undefined}
+    >
+      {hasLimit
+        ? `${budget.tokens_today.toLocaleString()} / ${budget.limit_tokens.toLocaleString()} tokens today`
+        : `${budget.tokens_today.toLocaleString()} tokens today`}
+      {' '}· counted by this server only — other uses of this key aren't visible to us
+      {near ? ' — near the daily limit, the AI may stop answering soon' : ''}
+    </div>
+  )
+}
+
 function ChatCard() {
   const { COLORS } = useChartTheme()
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [items, setItems] = useState([])
+  const [budget, setBudget] = useState(null)
   const inRef = useRef(null)
 
   const submit = (qArg) => {
@@ -92,6 +122,10 @@ function ChatCard() {
         return { r, j }
       })
       .then(({ r, j }) => {
+        // Budget can ride along on a rate-limit error response too — that IS the
+        // near_limit warning this feature exists for, so read it before branching
+        // on outcome. Only ever set from a real "budget" object; never inferred.
+        if (j && j.budget) setBudget(j.budget)
         if (r.status === 503 || (j && j.locked)) {
           setItems((list) => [...list, { role: 'assistant', error: 'Vault locked — unlock to query.' }])
           return
@@ -161,6 +195,7 @@ function ChatCard() {
           {busy ? 'Asking…' : 'Ask'}
         </button>
       </div>
+      <BudgetLine budget={budget} />
     </Card>
   )
 }

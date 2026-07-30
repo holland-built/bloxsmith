@@ -37,6 +37,8 @@ VAULT_DIRECTORY="$WORK/state"
 VAULT="$VAULT_DIRECTORY/vault.json"
 PASS='p a$s"w'"'"'o\rd	with	tabs and — dash'
 SERVICE_NAME="bloxsmith-vault-passphrase"
+BACKUP=""   # set once rotate creates one (checks 11+); declared here so the
+            # cleanup trap can safely reference it even on an early exit.
 
 pass_count=0
 fail_count=0
@@ -51,6 +53,17 @@ cleanup() {
     if security find-generic-password -a "$VAULT" -s "$SERVICE_NAME" >/dev/null 2>&1; then
         printf '  FAIL cleanup left a keychain entry behind for %s\n' "$VAULT"
         fail_count=$((fail_count + 1))
+    fi
+    # The rotate checks stash a copy of the OLD passphrase under the backup
+    # file's OWN path as a separate keychain account (proves the backup opens
+    # independently of $VAULT's entry). Safety net in case an earlier failure
+    # skipped that check's own inline removal.
+    if [ -n "$BACKUP" ]; then
+        security delete-generic-password -a "$BACKUP" -s "$SERVICE_NAME" >/dev/null 2>&1
+        if security find-generic-password -a "$BACKUP" -s "$SERVICE_NAME" >/dev/null 2>&1; then
+            printf '  FAIL cleanup left a keychain entry behind for %s\n' "$BACKUP"
+            fail_count=$((fail_count + 1))
+        fi
     fi
     rm -rf "$WORK"
 }
@@ -258,6 +271,127 @@ if [ "$code" -eq 3 ]; then ok "no subcommand exits 3 (bad usage)"; else bad "no 
 if [ "$code" -eq 3 ]; then ok "an unknown subcommand exits 3"; else bad "unknown subcommand exited $code, want 3"; fi
 "$BIN" vault-passphrase --help >/dev/null 2>&1; code=$?
 if [ "$code" -eq 0 ]; then ok "--help exits 0"; else bad "--help exited $code, want 0"; fi
+
+# =====================================================================
+# ROTATE — re-encrypts vault.json under a new passphrase. Get this wrong and
+# the operator loses every tenant key permanently, so it gets the same
+# treatment as everything above: the real binary, against the real vault,
+# with keychain entries reached by hand only where the test needs state the
+# CLI itself would never produce.
+#
+# `rotate` (unlike `check`) DOES consult VAULT_PASSPHRASE / .env (see check 6
+# above), and $REPO/.env sets a real one for a real install. Run it from cwd
+# unguarded and that value — not the keychain entry under test — would win
+# and get "verified" against the wrong vault entirely. Every rotate call
+# below runs from $WORK instead, which has no .env of its own.
+# =====================================================================
+
+NEWPASS='rotated-2026-passphrase!'
+
+# --- 11. store the CURRENT passphrase, then rotate to a NEW one --------------
+printf '%s' "$PASS" | "$BIN" vault-passphrase set --vault "$VAULT" >/dev/null 2>&1
+out="$("$BIN" vault-passphrase check --vault "$VAULT" 2>&1)"
+before_tenants="$(printf '%s' "$out" | grep -oE '[0-9]+ tenants? inside' | grep -oE '^[0-9]+')"
+
+out="$(cd "$WORK" && printf '%s' "$NEWPASS" | "$BIN" vault-passphrase rotate --vault "$VAULT" 2>&1)"; code=$?
+if [ "$code" -eq 0 ] && printf '%s' "$out" | grep -q "opens ONLY with the new passphrase"; then
+    ok "rotate exits 0 and says the vault opens only with the new passphrase"
+else
+    bad "rotate: exit $code, output: $out"
+fi
+BACKUP="$(printf '%s' "$out" | sed -n 's/^  backup (still opens with the OLD passphrase): //p')"
+if [ -n "$BACKUP" ] && [ -f "$BACKUP" ]; then
+    ok "rotate created a backup file: $BACKUP"
+else
+    bad "rotate did not report a backup file that actually exists: $out"
+fi
+
+# --- 12. THE POINT: check must now PASS with the keychain holding the NEW
+# passphrase — proving rotate updated the keychain, not just vault.json.
+out="$("$BIN" vault-passphrase check --vault "$VAULT" 2>&1)"; code=$?
+if [ "$code" -eq 0 ] && printf '%s' "$out" | grep -q "opens this vault"; then
+    ok "check passes against the keychain after rotate"
+else
+    bad "check after rotate: exit $code, output: $out"
+fi
+after_tenants="$(printf '%s' "$out" | grep -oE '[0-9]+ tenants? inside' | grep -oE '^[0-9]+')"
+if [ -n "$before_tenants" ] && [ "$before_tenants" = "$after_tenants" ]; then
+    ok "tenant count is preserved across rotate ($before_tenants -> $after_tenants)"
+else
+    bad "tenant count changed across rotate (before: '$before_tenants', after: '$after_tenants')"
+fi
+
+# --- 13. the backup is 0600 and still opens with the OLD passphrase ----------
+perm="$(stat -f '%Lp' "$BACKUP" 2>/dev/null)"
+if [ "$perm" = "600" ]; then
+    ok "the backup file is mode 0600"
+else
+    bad "the backup file has mode '$perm', want 600"
+fi
+# Proven via `check` itself, pointed AT the backup, with the OLD passphrase
+# stashed under a SEPARATE keychain account keyed on the backup's own path —
+# the account name IS the vault path (internal/vault/keychain.go), so this
+# cannot collide with, or be satisfied by, $VAULT's own entry.
+OLD_HEX="$(printf '%s' "$PASS" | xxd -p | tr -d '\n')"
+security add-generic-password -a "$BACKUP" -s "$SERVICE_NAME" -w "bxv1:$OLD_HEX" -U >/dev/null 2>&1
+out="$("$BIN" vault-passphrase check --vault "$BACKUP" 2>&1)"; code=$?
+if [ "$code" -eq 0 ] && printf '%s' "$out" | grep -q "opens this vault"; then
+    ok "the backup still opens with the OLD passphrase"
+else
+    bad "the backup did not open with the OLD passphrase: exit $code, output: $out"
+fi
+security delete-generic-password -a "$BACKUP" -s "$SERVICE_NAME" >/dev/null 2>&1
+if security find-generic-password -a "$BACKUP" -s "$SERVICE_NAME" >/dev/null 2>&1; then
+    bad "the backup's keychain entry was not actually removed"
+else
+    ok "the backup's keychain entry is removed"
+fi
+
+# --- 14. the OLD passphrase must NO LONGER open the (rotated) main vault -----
+security add-generic-password -a "$VAULT" -s "$SERVICE_NAME" -w "bxv1:$OLD_HEX" -U >/dev/null 2>&1
+out="$("$BIN" vault-passphrase check --vault "$VAULT" 2>&1)"; code=$?
+if [ "$code" -eq 1 ] && printf '%s' "$out" | grep -q "does NOT open"; then
+    ok "the OLD passphrase no longer opens the rotated vault"
+else
+    bad "old passphrase after rotate: exit $code, output: $out"
+fi
+# Restore the real post-rotate state before anything downstream depends on it.
+NEW_HEX="$(printf '%s' "$NEWPASS" | xxd -p | tr -d '\n')"
+security add-generic-password -a "$VAULT" -s "$SERVICE_NAME" -w "bxv1:$NEW_HEX" -U >/dev/null 2>&1
+
+# --- 15. a too-short new passphrase is refused, vault.json untouched ---------
+before="$(shasum -a 256 "$VAULT" | cut -d' ' -f1)"
+out="$(cd "$WORK" && printf '%s' "short1" | "$BIN" vault-passphrase rotate --vault "$VAULT" 2>&1)"; code=$?
+after="$(shasum -a 256 "$VAULT" | cut -d' ' -f1)"
+if [ "$code" -eq 1 ] && printf '%s' "$out" | grep -q "at least 8 characters"; then
+    ok "a too-short new passphrase is refused"
+else
+    bad "too-short new passphrase: exit $code, output: $out"
+fi
+if [ "$before" = "$after" ]; then
+    ok "vault.json is byte-identical after a refused too-short rotate"
+else
+    bad "vault.json CHANGED after a refused too-short rotate ($before -> $after)"
+fi
+
+# --- 16. rotate with NO current passphrase available (every source unset) ----
+before="$(shasum -a 256 "$VAULT" | cut -d' ' -f1)"
+security delete-generic-password -a "$VAULT" -s "$SERVICE_NAME" >/dev/null 2>&1
+out="$(cd "$WORK" && printf '%s' "another-new-passphrase" | "$BIN" vault-passphrase rotate --vault "$VAULT" 2>&1)"; code=$?
+after="$(shasum -a 256 "$VAULT" | cut -d' ' -f1)"
+if [ "$code" -eq 1 ] && printf '%s' "$out" | grep -q "no current passphrase is configured"; then
+    ok "rotate refuses when no current passphrase is configured anywhere"
+else
+    bad "rotate with no current passphrase source: exit $code, output: $out"
+fi
+if [ "$before" = "$after" ]; then
+    ok "vault.json is byte-identical after the no-current-passphrase refusal"
+else
+    bad "vault.json CHANGED after a refused rotate with no current passphrase ($before -> $after)"
+fi
+# Restore the keychain entry so the trap's removal-and-proof at the end has
+# the real post-rotate state to remove, same as every check above it left it.
+security add-generic-password -a "$VAULT" -s "$SERVICE_NAME" -w "bxv1:$NEW_HEX" -U >/dev/null 2>&1
 
 echo
 echo "vault-passphrase: $pass_count passed, $fail_count failed"
