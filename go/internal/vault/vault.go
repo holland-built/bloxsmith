@@ -63,9 +63,9 @@ type fileEnvelope struct {
 
 // Vault mirrors the server.py _vault dict (2750) plus its file location.
 type Vault struct {
-	mu       sync.Mutex
-	path     string
-	BaseURL  string // Infoblox base URL for portal name/key lookups (INFOBLOX_URL)
+	mu      sync.Mutex
+	path    string
+	BaseURL string // Infoblox base URL for portal name/key lookups (INFOBLOX_URL)
 	// Mutable secret state — private and only touched while mu is held. External
 	// consumers must read it through the lock-guarded accessors (LLMCreds,
 	// ActiveKey, ActiveLabel, IsUnlocked, Snapshot) so a lock/unlock/set mutation
@@ -413,6 +413,74 @@ func PassphraseFromEnv(passphrase, passphraseFile string) string {
 		}
 	}
 	return passphrase
+}
+
+// PassphraseSource says where an auto-unlock passphrase came from. It exists so
+// the startup log can name it: "unlocked" alone tells an operator nothing about
+// whether the secret they think they removed is still being used.
+type PassphraseSource string
+
+const (
+	FromNowhere  PassphraseSource = "none"
+	FromEnv      PassphraseSource = "VAULT_PASSPHRASE"
+	FromFile     PassphraseSource = "VAULT_PASSPHRASE_FILE"
+	FromKeychain PassphraseSource = "macOS keychain"
+)
+
+// ResolvePassphrase picks the auto-unlock passphrase and reports which source won,
+// plus a warning to log when the answer is one an operator would not expect.
+//
+// PRECEDENCE: VAULT_PASSPHRASE_FILE, then VAULT_PASSPHRASE, then the keychain.
+// Explicit configuration beats the implicit store, because an operator who sets
+// the env var means it — and silently preferring the keychain would make a
+// deliberate override look like it had been ignored.
+//
+// THE WARNING IS THE POINT. That precedence has an obvious trap: store the
+// passphrase in the keychain, forget to delete the old `.env`, and the `.env` keeps
+// winning while the operator believes the secret has moved off disk. They would
+// then be strictly worse off than before — same plaintext file, plus a false sense
+// that it is gone. So when BOTH exist, this says so, names the file that is still
+// being used, and says the keychain entry is being ignored.
+func ResolvePassphrase(vaultPath, passphrase, passphraseFile string) (pass string, src PassphraseSource, warn string) {
+	env := PassphraseFromEnv(passphrase, passphraseFile)
+	envSrc := FromEnv
+	if strings.TrimSpace(passphraseFile) != "" {
+		if _, err := os.ReadFile(passphraseFile); err == nil {
+			envSrc = FromFile
+		}
+	}
+
+	kc := ""
+	kcErr := error(nil)
+	if KeychainSupported() {
+		kc, kcErr = GetKeychainPassphrase(vaultPath)
+	}
+
+	switch {
+	case env != "" && kc != "":
+		return env, envSrc, "a vault passphrase is stored in the macOS keychain AND supplied via " +
+			string(envSrc) + ". The " + string(envSrc) + " value is the one being used and the keychain entry is " +
+			"being ignored. Remove the " + string(envSrc) + " value to actually get the passphrase off disk."
+	case env != "":
+		if KeychainSupported() {
+			return env, envSrc, "the vault passphrase is coming from " + string(envSrc) + ", which means it is " +
+				"stored in plaintext on this machine. `bloxsmith vault-passphrase set` moves it into the macOS " +
+				"keychain so it no longer travels with a disk image or a backup."
+		}
+		return env, envSrc, ""
+	case kc != "":
+		return kc, FromKeychain, ""
+	default:
+		// No passphrase at all is the normal no-auto-unlock case, not a fault. But a
+		// keychain lookup that FAILED (as opposed to finding nothing) must be said
+		// out loud, or a vault that could have unlocked stays locked with no reason
+		// given.
+		if kcErr != nil && !errors.Is(kcErr, ErrNoKeychainEntry) && !errors.Is(kcErr, ErrUnsupported) {
+			return "", FromNowhere, "the macOS keychain could not be read, so a stored vault passphrase " +
+				"(if any) could not be used: " + kcErr.Error()
+		}
+		return "", FromNowhere, ""
+	}
 }
 
 // AutoUnlock replicates the entry-point flow (server.py:6538-6553): if a

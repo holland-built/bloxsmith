@@ -127,6 +127,10 @@ func main() {
 				}
 			}
 			os.Exit(runUpdateCLI(checkOnly))
+		case "vault-passphrase":
+			// Move the auto-unlock passphrase into the macOS keychain so it stops
+			// sitting in plaintext beside the vault it unlocks. See passcli.go.
+			os.Exit(runPassCLI(os.Args[2:]))
 		case "audit":
 			// Offline verification of the tamper-evident chain, with nothing
 			// running. Read-only by construction — see auditcli.go.
@@ -194,6 +198,7 @@ func printUsage() {
 	println("  update [--check]          download+verify+swap the latest release, then restart")
 	println("  service <cmd>             install|uninstall|start|stop|restart|status  (run at login)")
 	println("  audit verify             check the audit chain offline (0 intact, 1 tampered, 2 unchecked)")
+	println("  vault-passphrase <cmd>   set|status|remove — keep the auto-unlock passphrase in the macOS keychain")
 	println("  --version, -v             print version")
 	println("  --help, -h, help          this help")
 }
@@ -277,7 +282,16 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// Vault (Phase 1a) + auto-unlock from env (server.py:6538-6553).
 	v := vault.New(vault.ResolveFile(cfg.VaultDir, dir))
 	v.BaseURL = cfg.BaseURL
-	if pass := vault.PassphraseFromEnv(cfg.VaultPassphrase, cfg.VaultPassphraseFile); pass != "" {
+	// Where the auto-unlock passphrase comes from, and SAYING so. "vault unlocked"
+	// on its own never told an operator whether the plaintext .env they thought
+	// they had removed was still the thing being used. See
+	// internal/vault/keychain.go for what the keychain option does and does not buy.
+	pass, passSrc, passWarn := vault.ResolvePassphrase(v.Path(), cfg.VaultPassphrase, cfg.VaultPassphraseFile)
+	if passWarn != "" {
+		log.Printf("[vault] %s", passWarn)
+	}
+	if pass != "" {
+		log.Printf("[vault] auto-unlock passphrase source: %s", passSrc)
 		if _, err := v.AutoUnlock(pass); err != nil {
 			log.Printf("vault auto-unlock: %v", err)
 		}
