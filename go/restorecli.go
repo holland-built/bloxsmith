@@ -42,17 +42,45 @@ import (
 // restoreUsage documents the command.
 func restoreUsage() {
 	fmt.Println(`usage: bloxsmith restore-plan <export.json> [--json]
+       bloxsmith restore-plan <export.json> --apply --confirm <target>
 
   Read a teardown export (written before the deletes by teardown-exports/) and
   print what would have to be re-created to undo it, in dependency order.
 
   --json   emit the plan as JSON instead of text
 
-  It CREATES NOTHING and makes no network calls. It is a plan, not a restore:
-  the objects are re-created by you, from the full API bodies the export holds.
+  It CREATES NOTHING and makes no network calls by default. It is a plan, not
+  a restore: the objects are re-created by you, from the full API bodies the
+  export holds.
 
-  Exit: 0 a plan was produced
-        1 the export is unusable (missing, unreadable, or not an export)
+  --apply             actually re-create the objects, against the live tenant.
+                       Requires --confirm and an unlockable vault. See below.
+  --confirm <target>  must match the export's own "target" field exactly, the
+                       same discipline the teardown routes require. Without it,
+                       --apply refuses.
+
+  --apply enforces, itself, every check the running server's write-lock
+  middleware would have enforced had this gone through it (a CLI process does
+  not pass through HTTP middleware):
+    - the export's recorded tenant must match the tenant resolved right now
+    - that tenant must be marked writable (Settings, same control as the UI)
+    - --confirm must match the export's target
+    - a prerequisite (ip_space, dns_view) that is missing upstream refuses —
+      it was never deleted, so this tool will not create it
+    - an object already found upstream (by the id the export recorded) is
+      skipped, not duplicated
+    - the first creation failure stops the run; everything created before it
+      is reported, in order, and nothing after it is attempted
+
+  UNVERIFIED API SHAPE: the create call bodies below (in particular, a subnet
+  re-created at its ORIGINAL address) are verified only against a fake
+  upstream in this build's own tests — never against a live Infoblox tenant.
+  This codebase has no other exact-address subnet create to check them
+  against; real subnet provisioning always allocates via nextavailablesubnet,
+  a different operation. Watch the first real run.
+
+  Exit: 0 a plan was produced, or --apply completed with nothing left to do
+        1 the export is unusable, or --apply refused or was stopped by a failure
         2 the export is valid but describes nothing to re-create`)
 }
 
@@ -79,10 +107,24 @@ func runRestoreCLI(args []string) int {
 
 	path := ""
 	asJSON := false
-	for _, a := range args {
+	apply := false
+	confirm := ""
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		switch {
 		case a == "--json":
 			asJSON = true
+		case a == "--apply":
+			apply = true
+		case a == "--confirm":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "restore-plan: --confirm requires a value")
+				return 1
+			}
+			i++
+			confirm = args[i]
+		case strings.HasPrefix(a, "--confirm="):
+			confirm = strings.TrimPrefix(a, "--confirm=")
 		case strings.HasPrefix(a, "-"):
 			fmt.Fprintf(os.Stderr, "restore-plan: unknown option %q\n", a)
 			return 1
@@ -113,6 +155,19 @@ func runRestoreCLI(args []string) int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "restore-plan: %v\n", err)
 		return 1
+	}
+
+	// --apply is a completely different exit from here on: it touches the
+	// network and creates things, where everything above it (and everything
+	// below, in the --json/text branch) never has. Kept as a hard fork rather
+	// than folded into the printing branches below so the plan-only path — the
+	// DEFAULT — is untouched by --apply existing at all. See restorecli_apply.go.
+	if apply {
+		if asJSON {
+			fmt.Fprintln(os.Stderr, "restore-plan: --apply does not support --json")
+			return 1
+		}
+		return runRestoreApplyCLI(path, doc, steps, confirm)
 	}
 
 	if asJSON {
