@@ -107,7 +107,17 @@ func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--version", "-v":
-			println("bloxsmith", version)
+			// fmt.Println, NOT the builtin println: the builtin writes to STDERR,
+			// so `V=$(bloxsmith --version)` captured nothing at all. Requested
+			// output belongs on stdout — a version string is the one piece of this
+			// program's output most likely to be read by a script.
+			//
+			// It went unnoticed because every caller ran it for its visible side
+			// effect rather than capturing it: CI's install steps just invoke it,
+			// and the Homebrew formula's `system "#{bin}/bloxsmith", "--version"`
+			// checks only the exit code. Found the moment a test tried to capture
+			// it — the "nothing executes this" class, one layer down.
+			fmt.Println("bloxsmith", version)
 			return
 		case "update":
 			// Headless self-update for servers with no button: download the
@@ -120,9 +130,9 @@ func main() {
 				case "--check":
 					checkOnly = true
 				case "--help", "-h":
-					println("usage: bloxsmith update [--check]")
-					println("  downloads the latest GitHub release, verifies its checksum,")
-					println("  swaps this binary in place and restarts. --check only reports.")
+					fmt.Println("usage: bloxsmith update [--check]")
+					fmt.Println("  downloads the latest GitHub release, verifies its checksum,")
+					fmt.Println("  swaps this binary in place and restarts. --check only reports.")
 					return
 				}
 			}
@@ -192,15 +202,15 @@ func main() {
 
 // printUsage prints the top-level command summary for `bloxsmith --help`.
 func printUsage() {
-	println("usage: bloxsmith [command]")
-	println("  (no command)              start the server (foreground) on http://localhost:$PORT")
-	println("  --port N, -p N            start on port N instead of 8080 (overrides $PORT)")
-	println("  update [--check]          download+verify+swap the latest release, then restart")
-	println("  service <cmd>             install|uninstall|start|stop|restart|status  (run at login)")
-	println("  audit verify             check the audit chain offline (0 intact, 1 tampered, 2 unchecked)")
-	println("  vault-passphrase <cmd>   set|status|remove — keep the auto-unlock passphrase in the macOS keychain")
-	println("  --version, -v             print version")
-	println("  --help, -h, help          this help")
+	fmt.Println("usage: bloxsmith [command]")
+	fmt.Println("  (no command)              start the server (foreground) on http://localhost:$PORT")
+	fmt.Println("  --port N, -p N            start on port N instead of 8080 (overrides $PORT)")
+	fmt.Println("  update [--check]          download+verify+swap the latest release, then restart")
+	fmt.Println("  service <cmd>             install|uninstall|start|stop|restart|status  (run at login)")
+	fmt.Println("  audit verify             check the audit chain offline (0 intact, 1 tampered, 2 unchecked)")
+	fmt.Println("  vault-passphrase <cmd>   set|status|remove — keep the auto-unlock passphrase in the macOS keychain")
+	fmt.Println("  --version, -v             print version")
+	fmt.Println("  --help, -h, help          this help")
 }
 
 // parsePortFlag scans args (os.Args[1:]) for a --port/-p flag in any of the

@@ -110,10 +110,21 @@ jobs:
       # Proves the keychain tests were not all skipped here too. A suite that
       # silently skips everything is the failure mode this whole job exists for,
       # and it looks identical to a passing one.
+      #
+      # The expected count is COUNTED FROM THE SOURCE, not written here as a
+      # number. The first version of this step hardcoded ">= 3 expected several",
+      # which was a guess — there are two — so it failed on a run where both tests
+      # had passed. A threshold nobody counted is a fabricated value, and it fails
+      # the build for a fact about the check rather than about the code.
       - name: Assert the keychain tests actually RAN (not skipped)
         working-directory: go
         run: |
           set -euo pipefail
+          WANT=$(grep -cE '^func Test[A-Za-z]*Keychain[A-Za-z]*\(' internal/vault/keychain_test.go)
+          if [ "$WANT" -lt 1 ]; then
+            echo "::error::found no Keychain-named tests in internal/vault/keychain_test.go — either they were renamed or this grep is wrong; either way this step is no longer checking anything"
+            exit 1
+          fi
           go test -v -run 'Keychain' ./internal/vault/ 2>&1 | tee /tmp/kc.log
           if grep -qE '^\s*--- SKIP' /tmp/kc.log; then
             echo "::error::a keychain test SKIPPED on macOS — this job exists to run them"
@@ -121,11 +132,11 @@ jobs:
             exit 1
           fi
           RAN=$(grep -cE '^\s*--- PASS' /tmp/kc.log || true)
-          if [ "$RAN" -lt 3 ]; then
-            echo "::error::only $RAN keychain tests passed on macOS — expected several; the run matched nothing"
+          if [ "$RAN" -ne "$WANT" ]; then
+            echo "::error::$RAN of $WANT Keychain tests passed on macOS — the rest did not run"
             exit 1
           fi
-          echo "$RAN keychain tests ran and passed on macOS"
+          echo "all $WANT keychain tests ran and passed on macOS"
 
       # The offline audit verifier on darwin. It was only ever run on Linux, and
       # it shells out to shasum and ssh-keygen, which differ between the two --
@@ -321,7 +332,14 @@ jobs:
             *)  echo "::error::v3.23.2 installed WITHOUT a verified signature"; exit 1 ;;
           esac
           grep -q "checksum : ok" <<<"$out" || { echo "::error::checksum was not verified"; exit 1; }
-          v="$("$RUNNER_TEMP/old/bloxsmith" --version)"
+          # 2>&1 because v3.23.2 predates the fix that moved --version to stdout:
+          # it uses Go's builtin println, which writes to STDERR, so capturing
+          # stdout alone gets an empty string. That is what this step found on its
+          # first run, and it is a real defect in every release up to v3.30.1 —
+          # `V=$(bloxsmith --version)` returned nothing. Fixed going forward and
+          # pinned by go/versionstream_test.go; merged here because this step
+          # installs an OLD binary that will always have the old behaviour.
+          v="$("$RUNNER_TEMP/old/bloxsmith" --version 2>&1)"
           case "$v" in
             "bloxsmith 3.23.2") echo "and the pinned version is the one installed: $v" ;;
             *) echo "::error::--version v3.23.2 installed '$v'"; exit 1 ;;
@@ -340,13 +358,25 @@ jobs:
           if [ "$code" -ne 0 ]; then
             echo "::error::update --check exited $code"; exit 1
           fi
-          # install.sh just installed the LATEST release, so --check must say it is
-          # up to date. "update available" here would mean one of the two disagrees
-          # with the other about what the latest version is.
+          # It must reach a DEFINITE verdict. Deliberately not asserting "up to
+          # date" specifically: a push to master and its release tag land within
+          # seconds of each other, so `latest` can legitimately change between
+          # install.sh fetching it and this step asking — and a gate that goes red
+          # because the project shipped is a gate people learn to ignore.
+          #
+          # Both verdicts are real answers. What this catches is the failure that
+          # is not a verdict at all: a crash, an unparsed flag, a rate-limited or
+          # unreachable API reported as up-to-date, or an error string where the
+          # answer should be. That distinction is exactly what the four
+          # TestCheckUpdate_* Go tests pin at the unit level.
           case "$out" in
-            *"up to date"*) echo "up to date, as it must be right after installing latest" ;;
-            *)  echo "::error::update --check did not report up-to-date immediately after installing the latest release"
+            *"up to date"*)       echo "verdict: up to date" ;;
+            *"update available"*) echo "verdict: update available (a release landed during this run)" ;;
+            *)  echo "::error::update --check reached no verdict at all — got: $out"
                 exit 1 ;;
+          esac
+          case "$out" in
+            *error*|*Error*|*failed*) echo "::error::update --check reported an error: $out"; exit 1 ;;
           esac
           # --check must not have replaced the binary. A "check" that applies is the
           # worst possible reading of the flag.
