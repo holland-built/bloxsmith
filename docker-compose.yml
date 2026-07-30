@@ -8,8 +8,11 @@
 # To apply it, double-click the update script for your OS that ships next to this
 # file (update.command on macOS, update.bat on Windows, update.sh on Linux), or run:
 #   docker compose pull && docker compose up -d
-# Revert: if a new image fails its health check the in-app updater auto-rolls back
-# to the previous image (tagged bloxsmith:rollback).
+# Revert: there is no automatic rollback. This file defines no healthcheck, and
+# the in-app updater never touches the Docker socket, image, or container — it
+# only downloads and swaps its own binary (see go/apply.go). To revert, pin the
+# previous tag or digest in the `image:` line below, then:
+#   docker compose up -d
 # Copy .env.example to .env to set BIND/PORT/token/auth.
 
 services:

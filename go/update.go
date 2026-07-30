@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -82,7 +84,12 @@ func checkUpdate() (updateStatus, error) {
 		if len(s) > maxErrBodySnippet {
 			s = s[:maxErrBodySnippet] + "..."
 		}
-		err := fmt.Errorf("github releases API returned HTTP %d: %s", resp.StatusCode, s)
+		// The raw body (rate-limit message, GitHub's own error JSON, whatever
+		// it is) goes to the server log exactly as before. What reaches the
+		// caller — and from there st.Error / the UI — is the plain sentence
+		// githubFailureDetail builds instead, never this snippet verbatim.
+		log.Printf("checkUpdate: github releases API returned HTTP %d: %s", resp.StatusCode, s)
+		err := fmt.Errorf("%s", githubFailureDetail(resp, s))
 		st.Error = err.Error()
 		return st, err
 	}
@@ -108,4 +115,92 @@ func checkUpdate() (updateStatus, error) {
 	st.Latest, st.URL = rel.Tag, rel.HTMLURL
 	st.Available = latest > verN(version)
 	return st, nil
+}
+
+// A NON-2XX FROM GITHUB IS NOT ONE FAILURE.
+//
+// Live on 2026-07-30: POST /api/update/apply left /api/update/status reading
+// {"error":"github releases: HTTP 403", ...} with no way for the operator to
+// tell why. The server log had the real reason ("API rate limit exceeded for
+// <ip>. ... Authenticated requests get a higher rate limit.") — GitHub's
+// UNAUTHENTICATED limit of 60 requests/hour, shared per IP, which clears on
+// its own. The update worked on retry once the hour rolled over.
+//
+// A 403 alone conflates that with an invalid/blocked token and a private or
+// invisible repo — three different conditions needing three different
+// operator actions, all rendered as the same status code. This follows
+// internal/ai.rateLimitDetail's exact discipline: switch on what the response
+// actually said (status + the rate-limit headers GitHub sends + the body),
+// one plain actionable sentence per condition, and NOTHING invented when the
+// reply can't be read.
+func githubFailureDetail(resp *http.Response, body string) string {
+	status := resp.StatusCode
+	// GitHub sends x-ratelimit-remaining: 0 on the exhausted case; a 429 is by
+	// definition "too many requests" even absent that header; and the body
+	// itself sometimes says "rate limit" in prose (the case this codebase
+	// already had a regression test for) when headers are stripped by a proxy.
+	rateLimited := status == 429 ||
+		resp.Header.Get("X-RateLimit-Remaining") == "0" ||
+		strings.Contains(strings.ToLower(body), "rate limit")
+
+	switch {
+	case (status == 403 || status == 429) && rateLimited:
+		if wait, ok := githubRateLimitWait(resp.Header.Get("X-RateLimit-Reset")); ok {
+			return fmt.Sprintf("GitHub's release API returned %d: its rate limit is exhausted. "+
+				"This is GitHub's unauthenticated limit of 60 requests/hour, shared per IP, and it "+
+				"clears on its own — try again in %s.", status, wait)
+		}
+		// The reset header was missing or unparseable — say the limit is
+		// exhausted and stop there. A guessed wait is a number the operator
+		// would plan around, and it would be fabricated.
+		return fmt.Sprintf("GitHub's release API returned %d: its rate limit is exhausted, and the "+
+			"reply did not say how long until it resets. This is GitHub's unauthenticated limit of "+
+			"60 requests/hour, shared per IP — it clears on its own; wait and try again.", status)
+	case status == 403:
+		return fmt.Sprintf("GitHub's release API returned 403: access was refused. This is not about "+
+			"request volume — the repo %s may be private, not visible without authentication, or a "+
+			"configured token was rejected.", appRepo)
+	case status == 404:
+		return fmt.Sprintf("GitHub's release API returned 404: no release could be found for %s — "+
+			"check that the repo name is correct and it has a published release.", appRepo)
+	case status >= 500:
+		return fmt.Sprintf("GitHub's release API had a server error (%d). Try again shortly.", status)
+	default:
+		return fmt.Sprintf("GitHub's release API returned HTTP %d. The detail is in the server log.", status)
+	}
+}
+
+// githubRateLimitWait turns GitHub's x-ratelimit-reset header (unix seconds)
+// into a plain-language wait, or ok=false when the header is absent or does
+// not parse — the only two cases where inventing a wait would be a guess.
+func githubRateLimitWait(reset string) (wait string, ok bool) {
+	if reset == "" {
+		return "", false
+	}
+	secs, err := strconv.ParseInt(reset, 10, 64)
+	if err != nil {
+		return "", false
+	}
+	d := time.Until(time.Unix(secs, 0))
+	if d < 0 {
+		d = 0
+	}
+	return humanizeWait(d), true
+}
+
+// humanizeWait renders a duration the way an operator reads a wait, not the
+// way a computer does — "about 12 minutes", not "11m47.312s".
+func humanizeWait(d time.Duration) string {
+	mins := int(d.Round(time.Minute) / time.Minute)
+	if mins < 1 {
+		return "under a minute"
+	}
+	if mins < 60 {
+		return fmt.Sprintf("about %d minute%s", mins, plural(mins, "", "s"))
+	}
+	hours, rem := mins/60, mins%60
+	if rem == 0 {
+		return fmt.Sprintf("about %d hour%s", hours, plural(hours, "", "s"))
+	}
+	return fmt.Sprintf("about %d hour%s %d minute%s", hours, plural(hours, "", "s"), rem, plural(rem, "", "s"))
 }

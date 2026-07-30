@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -133,7 +134,21 @@ func latestRelease() (ghRelease, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return rel, fmt.Errorf("github releases: HTTP %d", resp.StatusCode)
+		// This is the exact path the 2026-07-30 live incident hit: applyLatest
+		// -> latestRelease -> progress.fail(err) -> GET /api/update/status's
+		// "error" field, with the raw body previously nowhere at all (the old
+		// "github releases: HTTP 403" didn't even carry it). Bound the read,
+		// send the raw body to the server log, and hand the caller the plain
+		// sentence githubFailureDetail builds — same helper checkUpdate uses,
+		// so the two GitHub-releases call sites can't drift into disagreeing
+		// about what a given status means.
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrBodySnippet+1))
+		s := string(snippet)
+		if len(s) > maxErrBodySnippet {
+			s = s[:maxErrBodySnippet] + "..."
+		}
+		log.Printf("latestRelease: github releases API returned HTTP %d: %s", resp.StatusCode, s)
+		return rel, fmt.Errorf("%s", githubFailureDetail(resp, s))
 	}
 	return rel, json.NewDecoder(io.LimitReader(resp.Body, maxJSONBytes)).Decode(&rel)
 }
@@ -676,7 +691,6 @@ func runUpdateCLI(checkOnly bool) int {
 	fmt.Println("updated to", st.Latest, "— restarting")
 	return 0
 }
-
 
 // verifyReleaseSignature checks the Ed25519 signature over checksums.txt against
 // the public key compiled into this binary (signing.go).
