@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"bloxsmith/internal/audit"
 	"bloxsmith/internal/httpx"
 )
 
@@ -59,12 +60,21 @@ func (d *Deps) registerStateRoutes(mux router) {
 func (d *Deps) auditLog(w http.ResponseWriter, r *http.Request) {
 	entries, _, _ := d.Audit.Read()
 	chain := d.Audit.Verify()
+	state, detail := audit.Classify(chain)
 	d.json(w, r, 200, map[string]any{
 		"entries":            entries,
 		"chain_valid":        chain["valid"],
 		"broken_index":       chain["broken_index"],
 		"broken_reason":      chain["broken_reason"],
 		"chain_verify_error": chain["verify_error"],
+		// chain_state is the same tri-state as the four fields above, decided in
+		// ONE place (audit.Classify) instead of re-derived by each consumer. The
+		// old fields stay: they are what the UI reads today and dropping them
+		// would be a breaking change for no gain. What this adds is a single word
+		// — intact / tampered / could-not-verify — that agrees by construction
+		// with what `bloxsmith audit verify` prints for the same log.
+		"chain_state":  string(state),
+		"chain_detail": detail,
 	})
 }
 
@@ -81,14 +91,20 @@ func (d *Deps) auditExport(w http.ResponseWriter, r *http.Request) {
 	}
 	entries, _, _ := d.Audit.Read()
 	chain := d.Audit.Verify()
+	state, detail := audit.Classify(chain)
 	d.json(w, r, 200, map[string]any{
 		"entries":            entries,
 		"chain_valid":        chain["valid"],
 		"broken_index":       chain["broken_index"],
 		"broken_reason":      chain["broken_reason"],
 		"chain_verify_error": chain["verify_error"],
-		"exported_at":        nowUnix(),
-		"app_version":        d.Version,
+		// Same single word as /api/audit/log, from the same classifier — an
+		// exported bundle that disagreed with the live view about its own
+		// integrity would be worse than useless.
+		"chain_state":  string(state),
+		"chain_detail": detail,
+		"exported_at":  nowUnix(),
+		"app_version":  d.Version,
 	})
 }
 

@@ -42,6 +42,15 @@ jobs:
         run: |
           go build ./...
           go test ./...
+          go vet ./...
+
+      # Runs the SHIPPED `bloxsmith audit verify` binary and asserts all three
+      # verdicts, all four exit codes, and its two refusals (never creates a key,
+      # never reseals). A Go test covers the package; only this covers the thing
+      # an operator types. Kept in a committed script, not inline YAML, for the
+      # reason recorded in v3.24.0.
+      - name: Offline audit verifier (runs the real binary)
+        run: bash scripts/audit-verify-test.sh
 
       # Embedded-UI + multi-arch smoke: cross-compile every target, no publish.
       - name: Set up goreleaser

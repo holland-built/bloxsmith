@@ -127,6 +127,10 @@ func main() {
 				}
 			}
 			os.Exit(runUpdateCLI(checkOnly))
+		case "audit":
+			// Offline verification of the tamper-evident chain, with nothing
+			// running. Read-only by construction — see auditcli.go.
+			os.Exit(runAuditCLI(os.Args[2:]))
 		case "service":
 			// `bloxsmith service install|uninstall|start|stop|status` — run as a
 			// native background service (launchd / systemd / Windows SCM).
@@ -189,6 +193,7 @@ func printUsage() {
 	println("  --port N, -p N            start on port N instead of 8080 (overrides $PORT)")
 	println("  update [--check]          download+verify+swap the latest release, then restart")
 	println("  service <cmd>             install|uninstall|start|stop|restart|status  (run at login)")
+	println("  audit verify             check the audit chain offline (0 intact, 1 tampered, 2 unchecked)")
 	println("  --version, -v             print version")
 	println("  --help, -h, help          this help")
 }

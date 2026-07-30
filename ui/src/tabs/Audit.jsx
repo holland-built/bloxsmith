@@ -129,6 +129,20 @@ function ActionPill({ action }) {
 // key as well as an unreadable file, and an operator who sees it needs to know
 // which — so chain_verify_error is shown, not just its existence. Likewise
 // broken_reason distinguishes a forged entry from a truncated tail.
+// The verdict above is produced by the same program that writes the log, which
+// is the one thing an operator cannot independently rely on. This names the
+// command that answers the same question with nothing running — read-only, on a
+// copied log, on another machine. It is not decoration: without it, an operator
+// has no way to know the option exists.
+function OfflineCheckHint() {
+  return (
+    <span className="text-dim">
+      {' · check it yourself with '}
+      <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-field">bloxsmith audit verify</code>
+    </span>
+  )
+}
+
 function ChainVerdict({ result, error, loading }) {
   const { COLORS } = useChartTheme()
   if (loading) return null
@@ -138,6 +152,7 @@ function ChainVerdict({ result, error, loading }) {
       <div className="text-[12px] font-medium mb-2" style={{ color: COLORS.warn }}>
         chain integrity could not be verified
         {why ? <span className="font-normal text-dim"> — {why}</span> : null}
+        <span className="font-normal"><OfflineCheckHint /></span>
       </div>
     )
   }
@@ -146,11 +161,17 @@ function ChainVerdict({ result, error, loading }) {
       <div className="text-sm font-semibold mb-2" style={{ color: COLORS.crit }}>
         chain tampered — broken at entry #{result.broken_index}
         {result.broken_reason ? <span className="font-normal text-[12px]"> — {result.broken_reason}</span> : null}
+        <span className="font-normal text-[12px]"><OfflineCheckHint /></span>
       </div>
     )
   }
   if (result.chain_valid === true) {
-    return <div className="text-[11px] text-dim mb-2">chain intact — signature and entry count verified</div>
+    return (
+      <div className="text-[11px] text-dim mb-2">
+        chain intact — signature and entry count verified
+        <OfflineCheckHint />
+      </div>
+    )
   }
   // Unrecognized shape: same rule as a fetch failure — don't imply "fine".
   return (
