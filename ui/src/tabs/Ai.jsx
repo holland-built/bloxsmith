@@ -52,6 +52,14 @@ function Message({ item }) {
             {item.trace.map((t, i) => (
               <div key={i}>
                 <span>{t.tool}</span> <span className="opacity-70">{JSON.stringify(t.args)}</span>
+                {/* `fact` is counted by the server from the rows themselves, not
+                    written by the model. Text inside the tenant's own data can
+                    steer the prose above (demonstrated: a hostname carrying an
+                    injected instruction made the model report "all hosts are
+                    online" while holding data showing one offline). It cannot
+                    change this line, so an answer that contradicts it is visibly
+                    contradicted. */}
+                {t.fact ? <div className="opacity-90 not-italic">↳ {t.fact}</div> : null}
               </div>
             ))}
           </div>
@@ -319,6 +327,50 @@ function LookupCard() {
   )
 }
 
+// EgressNotice states, before the box is used, that asking a question sends live
+// tenant data off this machine and to where.
+//
+// NOTHING SAID SO. Not this tab, not the README, not DEPLOYMENT.md. Measured
+// against a capture server standing in for the provider, one question ("which
+// hosts are offline?") sent 5,879 bytes including real hostnames and internal IP
+// addresses; across the eleven tools the same path sends subnet names and
+// addresses, DNS zone FQDNs, DNS view comments, DHCP lease hostnames, threat feed
+// names, and audit log entries with the user identity and role attached.
+//
+// That egress is not a bug — the feature cannot work without it. Not telling the
+// operator was. The destination is read from the configured LLM base URL rather
+// than hardcoded, so a self-hosted or proxied endpoint reports itself honestly
+// instead of being described as Groq.
+function EgressNotice() {
+  const [host, setHost] = useState(null)
+  const [unknown, setUnknown] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/vault/status', { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
+      .then((d) => {
+        const base = (d && d.llm && d.llm.base_url) || ''
+        if (!base) { setHost('api.groq.com'); return }
+        try { setHost(new URL(base).host || base) } catch { setHost(base) }
+      })
+      // A failed read must not render as "nothing leaves" — say we don't know.
+      .catch(() => setUnknown(true))
+  }, [])
+
+  return (
+    <div
+      className="text-[11px] rounded-lg border px-3 py-2 mb-3"
+      style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}
+    >
+      {unknown
+        ? 'Asking a question sends live data from this tenant to your configured AI provider. The provider address could not be read just now.'
+        : host === null
+          ? 'Checking where questions are sent…'
+          : `Asking a question sends live data from this tenant — hostnames, IP addresses, DNS names, audit entries — to ${host}. Nothing is sent until you ask.`}
+    </div>
+  )
+}
+
 // ---------- main ----------
 
 export default function Ai() {
@@ -330,6 +382,7 @@ export default function Ai() {
         where a number came from. Threat lookup takes a domain, IP, or host and returns intel plus a dossier.
         Chat needs an LLM key; Block domain needs a dashboard token.
       </TabIntro>
+      <EgressNotice />
       <div className="grid grid-cols-1 gap-4">
         <ChatCard />
         <LookupCard />
