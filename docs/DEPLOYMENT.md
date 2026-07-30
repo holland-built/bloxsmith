@@ -549,6 +549,51 @@ Note that a teardown is refused outright unless the tenant has been explicitly
 marked writable (see the write lock in Settings), so on a read-only tenant no export
 is written because nothing is being deleted.
 
+#### Reading an export back — `bloxsmith restore-plan`
+
+```
+bloxsmith restore-plan <state dir>/teardown-exports/20260730T091522Z-teardown-site-ams.json
+```
+
+Prints what would have to be re-created to undo that teardown, **in the order it
+has to be created in**:
+
+```
+export:  site teardown of "ams"
+written: 2026-07-30T09:15:22Z by bloxsmith 3.31.0
+tenant:  Infoblox Sales (b84022133fb7/-)
+
+Re-create in this order (each needs the ones above it):
+   1. ip_space      default   (prerequisite — teardown did not delete this)
+   2. dns_view      default   (prerequisite)
+   3. subnet        10.20.0.0/24  ams-general
+   ...
+   8. host          printer.site-ams.example.com
+```
+
+**The order is not the reverse of the delete order**, and assuming it is is how a
+manual rebuild fails halfway. Teardown deletes the forward zone first and hosts
+last; re-creation is driven by what each object needs to exist first — subnets
+before the ranges inside them, zones before the hosts named in them. Address blocks
+invert differently again: deleted deepest-child-first, re-created parent-first.
+
+It **creates nothing and makes no network calls** — it is offline, like
+`bloxsmith audit verify`, so it works with the server stopped, on a copied export,
+on another machine. It is named `restore-plan` rather than `restore` for that
+reason. Two consequences worth knowing:
+
+- it cannot tell you which objects are already back, and says so rather than
+  guessing;
+- you re-create them yourself, from the full API bodies in the export's `.plan`.
+
+`--json` emits the same plan for scripting. Exit `0` a plan was produced, `1` the
+export is unusable, `2` it is valid but there is nothing to re-create.
+
+An export it does not fully understand is **refused**, not read optimistically — a
+newer format, a missing `plan`, an unknown kind. A partly-understood export would
+produce a plan quietly missing objects, and you would rebuild from it believing it
+complete.
+
 ---
 
 ### What the AI box sends, and what can steer it
