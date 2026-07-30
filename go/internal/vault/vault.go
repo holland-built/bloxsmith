@@ -352,6 +352,49 @@ func (v *Vault) Save() error {
 	return v.save()
 }
 
+// Rotate re-encrypts the vault under a NEW passphrase and a freshly random salt,
+// then writes it atomically via the same save() every other mutation uses — so a
+// rotate can never diverge from the on-disk format Unlock expects.
+//
+// Requires an UNLOCKED vault: the payload being re-encrypted is whatever is
+// already in memory, not a re-read from disk, so there is exactly one lock/write
+// cycle rather than an unlock-then-rotate race with itself.
+//
+// If save() fails, the in-memory key and salt are put back exactly as they were.
+// Without that, a failed write would leave the live Vault instance believing it
+// holds the NEW key while vault.json on disk is still (or partially) encrypted
+// under the OLD one — the next in-process save would then seal the file with a
+// key nothing on disk, or in the keychain, actually matches.
+func (v *Vault) Rotate(newPassphrase string) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if !v.unlocked {
+		return errors.New("vault locked — unlock with the current passphrase before rotating")
+	}
+	// Same floor as Init: a rotate that accepted a weaker passphrase than a fresh
+	// vault would let an operator downgrade their own protection without any of
+	// the friction that would flag it.
+	if len(newPassphrase) < 8 {
+		return errors.New("passphrase must be at least 8 characters")
+	}
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return err
+	}
+	key, err := deriveKey(newPassphrase, salt)
+	if err != nil {
+		return err
+	}
+	oldKey, oldSalt := v.key, v.salt
+	v.key = key
+	v.salt = base64.StdEncoding.EncodeToString(salt)
+	if err := v.save(); err != nil {
+		v.key, v.salt = oldKey, oldSalt
+		return err
+	}
+	return nil
+}
+
 // Lock clears secrets from memory (server.py:2943 vault_lock).
 func (v *Vault) Lock() {
 	v.mu.Lock()

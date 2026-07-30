@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -37,17 +38,41 @@ type Creds interface {
 	LLM() (key, base, model string)
 }
 
+// Budget is the narrow persistence surface for THIS SERVER's own daily token
+// spend against the provider's daily cap. *store.Store satisfies it
+// structurally (see internal/store's AddTokens/RecordLimit/Status), which
+// keeps this package free of a concrete dependency on the state layer —
+// same shape as Creds/ToolRunner above.
+//
+// Every method here exists to hold one of the honesty rules this feature is
+// built on, not just to move data:
+//   - AddTokens counts only what passed through THIS server's own chat()
+//     calls. A different integration using the same provider key spends
+//     tokens we never see, so this is a floor on the true daily spend, never
+//     the whole account's figure — HandleQuery's "counted_by" field says so
+//     explicitly rather than letting the number imply more than it knows.
+//   - RecordLimit may only be called with a number that was actually read
+//     out of a 429 body. No caller may invent, default, or guess one.
+//   - Status's hasLimit=false is a real, distinct answer — "never told" —
+//     not a stand-in for a limit of zero.
+type Budget interface {
+	AddTokens(n int) (tokensToday int, day string)
+	RecordLimit(limit int)
+	Status() (tokensToday int, day string, limitTokens int, hasLimit bool)
+}
+
 // Service is the /api/query handler dependency graph.
 type Service struct {
-	creds Creds
-	tools ToolRunner
-	http  *http.Client
+	creds  Creds
+	tools  ToolRunner
+	budget Budget
+	http   *http.Client
 }
 
 // New builds the AI service. The 60s HTTP client is comfortably inside the 55s
 // per-query deadline handle_query enforces.
-func New(creds Creds, tools ToolRunner) *Service {
-	return &Service{creds: creds, tools: tools, http: &http.Client{Timeout: 60 * time.Second}}
+func New(creds Creds, tools ToolRunner, budget Budget) *Service {
+	return &Service{creds: creds, tools: tools, budget: budget, http: &http.Client{Timeout: 60 * time.Second}}
 }
 
 // With rebinds the tool runner — in practice the request-scoped dashboard
@@ -70,6 +95,24 @@ func (s *Service) HandleQuery(question, contextStr string) map[string]any {
 	out := parseAIResponse(raw)
 	if len(trace) > 0 {
 		out["trace"] = trace
+	}
+	out["budget"] = s.budgetField()
+	return out
+}
+
+// budgetField builds HandleQuery's "budget" key. limit_tokens and near_limit
+// are omitted entirely — not zeroed — until Budget.Status reports a limit a
+// 429 body actually stated; see the Budget doc comment for why.
+func (s *Service) budgetField() map[string]any {
+	tokens, day, limit, hasLimit := s.budget.Status()
+	out := map[string]any{
+		"tokens_today": tokens,
+		"day":          day,
+		"counted_by":   "this server only",
+	}
+	if hasLimit {
+		out["limit_tokens"] = limit
+		out["near_limit"] = limit > 0 && float64(tokens) >= 0.8*float64(limit)
 	}
 	return out
 }
@@ -111,6 +154,15 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
 	defer cancel()
 
+	// The tool loop below can call chat() several times for ONE query (a
+	// question, an answer, a follow-up tool call...); each call spends its
+	// own tokens and all of them belong to the same day's count. Sum them
+	// locally and persist ONCE on the way out — whichever way out that is —
+	// rather than once per chat() call, or a single query would look like
+	// several days'-worth of separate entries.
+	var spentTokens int
+	defer func() { s.budget.AddTokens(spentTokens) }()
+
 	if len(contextStr) > 8000 {
 		contextStr = contextStr[:8000]
 	}
@@ -132,8 +184,16 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 				return timeoutJSON
 			}
 			log.Printf("_generate_ai_answer: %v", err)
+			// The daily cap NEVER appears anywhere except this error text
+			// (Groq's rate-limit response headers only carry per-minute /
+			// per-request limits). This is the one and only place it can be
+			// learned, so it is the one and only place it gets persisted.
+			if limit, ok := dailyTokenLimit(err.Error()); ok {
+				s.budget.RecordLimit(limit)
+			}
 			return providerErrJSON(providerFailure(err))
 		}
+		spentTokens += resp.Usage.TotalTokens
 		if len(resp.Choices) == 0 {
 			break
 		}
@@ -204,7 +264,7 @@ func rateLimitDetail(msg string) string {
 	// Requested 1779. Please try again in 9m48.384s."
 	kind := ""
 	switch {
-	case strings.Contains(msg, "tokens per day"), strings.Contains(msg, "(TPD)"):
+	case isDailyTokenLimit(msg):
 		kind = "daily token"
 	case strings.Contains(msg, "tokens per minute"), strings.Contains(msg, "(TPM)"):
 		kind = "per-minute token"
@@ -253,6 +313,38 @@ func rateLimitDetail(msg string) string {
 // leave the operator with no idea how long.
 var retryAfterRe = regexp.MustCompile(`try again in ([0-9]+(?:\.[0-9]+)?(?:[hms][0-9.]*)*[hms])`)
 
+// isDailyTokenLimit is the one place that recognizes Groq's TPD phrasing.
+// rateLimitDetail's kind switch and dailyTokenLimit below both call this
+// instead of each keeping their own copy of the same two substring checks,
+// so the daily-token detection can't quietly drift apart between "what we
+// tell the operator" and "what we persist".
+func isDailyTokenLimit(msg string) bool {
+	return strings.Contains(msg, "tokens per day") || strings.Contains(msg, "(TPD)")
+}
+
+// dailyLimitRe pulls the number out of Groq's "(TPD): Limit 100000, Used
+// 98902" phrasing — the ONLY place the account's actual daily token cap is
+// ever stated. There is no header, no config, no other API that carries it.
+var dailyLimitRe = regexp.MustCompile(`Limit ([0-9]+)`)
+
+// dailyTokenLimit extracts the daily token cap from a 429 body, or ok=false
+// if this body never stated one. Never returns a guessed or default number —
+// callers persist exactly what came back, or nothing.
+func dailyTokenLimit(msg string) (limit int, ok bool) {
+	if !isDailyTokenLimit(msg) {
+		return 0, false
+	}
+	m := dailyLimitRe.FindStringSubmatch(msg)
+	if len(m) != 2 {
+		return 0, false
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
 // providerFailure turns the chat error into one plain sentence an operator can
 // act on, without echoing the provider's body.
 func providerFailure(err error) string {
@@ -298,6 +390,12 @@ type chatResp struct {
 		content   string
 		toolCalls []toolCall
 	} `json:"choices"`
+	// Usage is Groq's top-level accounting object. TotalTokens is the whole
+	// budget-tracking feature's only real signal — everything else here is
+	// bookkeeping for that one number.
+	Usage struct {
+		TotalTokens int `json:"total_tokens"`
+	} `json:"usage"`
 }
 
 type toolCall struct {
