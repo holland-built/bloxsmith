@@ -260,12 +260,53 @@ func runServiceCLI(args []string) int {
 		return 0
 
 	case "restart":
-		if err := s.Restart(); err != nil {
-			fmt.Fprintln(os.Stderr, "restart:", err)
+		// RESTART MUST END WITH THE SERVICE RUNNING, including from stopped.
+		//
+		// kardianos's Restart is `Stop(); if err != nil { return err }; Start()`,
+		// and on launchd stopping an already-stopped service IS an error. So
+		// `service restart` on a stopped service failed and started nothing — the
+		// one command whose whole promise is "it will be running afterwards". An
+		// operator whose service had crashed or been stopped reached for restart,
+		// got an error, and was left with it still down.
+		//
+		// Nothing had ever executed this. install|start|stop|uninstall all worked;
+		// only restart was broken, and it was broken on every platform whose Stop
+		// errors when not running. Found by scripts/service-cli-test.sh on its
+		// first real run (18 of 20 checks passed).
+		//
+		// The status is checked FIRST rather than swallowing the stop error,
+		// because "it was not running" and "stopping it failed" are different
+		// facts and only the first is a reason to carry on. Ignoring every stop
+		// error would hide a service that genuinely refuses to stop, and then
+		// Start would fail confusingly on top of it.
+		st, statusErr := s.Status()
+		switch {
+		case statusErr == service.ErrNotInstalled:
+			fmt.Fprintln(os.Stderr, "restart: not installed — run `bloxsmith service install` first")
 			return 1
+		case statusErr != nil:
+			// Cannot tell whether it is running, so cannot tell whether skipping
+			// the stop is safe. Refuse rather than guess: a Restart here would
+			// either fail on the stop or start a second copy.
+			fmt.Fprintln(os.Stderr, "restart: could not determine whether the service is running:", statusErr)
+			return 1
+		case st == service.StatusRunning:
+			if err := s.Restart(); err != nil {
+				fmt.Fprintln(os.Stderr, "restart:", err)
+				return 1
+			}
+			fmt.Println("restarted", serviceName, "on http://localhost:"+resolvedPort())
+			return 0
+		default:
+			// Stopped. Starting IS the restart, and saying so beats reporting
+			// "restarted" for something that was never running.
+			if err := s.Start(); err != nil {
+				fmt.Fprintln(os.Stderr, "restart:", err)
+				return 1
+			}
+			fmt.Println("started", serviceName, "(it was not running) on http://localhost:"+resolvedPort())
+			return 0
 		}
-		fmt.Println("restarted", serviceName)
-		return 0
 
 	case "status":
 		st, err := s.Status()
