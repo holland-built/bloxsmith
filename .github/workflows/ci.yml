@@ -163,19 +163,34 @@ jobs:
       # The refusal that keeps the step above off a real machine. If it ever stops
       # refusing, someone's live service gets deregistered by a test run.
       - name: the service test REFUSES without the disposable-machine opt-in
+        # The opt-in is deliberately absent here — that is the whole point. The
+        # job-level env sets it for the step above only.
+        env:
+          BLOXSMITH_SERVICE_TEST: ''
         run: |
           set -uo pipefail
-          if bash scripts/service-cli-test.sh > /tmp/refuse.log 2>&1; then
-            echo "::error::service-cli-test.sh ran WITHOUT the opt-in — it would clobber a real deployment"
+          # `code=$?` AFTER an `if` captures the exit status of the IF STATEMENT
+          # (0 when the branch is not taken), not of the command inside it. The
+          # first version of this step did exactly that, read the refusal's exit 2
+          # as 0, and failed a run in which the refusal had worked perfectly.
+          # `|| code=$?` is the form that survives GitHub's default `bash -e`.
+          code=0
+          bash scripts/service-cli-test.sh > /tmp/refuse.log 2>&1 || code=$?
+
+          if [ "$code" -eq 0 ]; then
+            echo "::error::service-cli-test.sh RAN without the opt-in — on a real machine it would have deregistered a live deployment"
+            cat /tmp/refuse.log
             exit 1
           fi
-          code=$?
           if [ "$code" -ne 2 ]; then
-            echo "::error::expected exit 2 (refused), got $code"; cat /tmp/refuse.log; exit 1
+            echo "::error::expected exit 2 (refused), got $code — it failed, but not by refusing"
+            cat /tmp/refuse.log
+            exit 1
           fi
           grep -q "REFUSED" /tmp/refuse.log || {
-            echo "::error::it failed for some reason other than the safety refusal"; cat /tmp/refuse.log; exit 1; }
-          echo "refused correctly, exit 2"
+            echo "::error::exit 2 but no refusal message — it failed for some other reason"
+            cat /tmp/refuse.log; exit 1; }
+          echo "refused correctly, exit 2, with the refusal message"
 
   # install.sh had NO test at all, and it showed: v3.23.0 shipped with a mangled
   # `EXPECTED="$(...)"` assignment that turned the checksum lookup into a command
