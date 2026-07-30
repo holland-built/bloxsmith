@@ -23,8 +23,9 @@ type Store struct {
 	stateDir string
 	viewsDir string
 
-	alertMu sync.Mutex // ALERT_STATE_FILE (server.py:2642 _alert_lock)
-	fsMu    sync.Mutex // FIRST_SEEN_FILE  (server.py:2472 _first_seen_lock)
+	alertMu  sync.Mutex // ALERT_STATE_FILE (server.py:2642 _alert_lock)
+	fsMu     sync.Mutex // FIRST_SEEN_FILE  (server.py:2472 _first_seen_lock)
+	budgetMu sync.Mutex // ai_budget.json — no Python precedent, new in this port
 }
 
 // New builds a Store rooted at stateDir. VIEWS_DIR is stateDir/views
@@ -35,6 +36,7 @@ func New(stateDir string) *Store {
 
 func (s *Store) alertFile() string     { return filepath.Join(s.stateDir, "alert_state.json") }
 func (s *Store) firstSeenFile() string { return filepath.Join(s.stateDir, "first_seen.json") }
+func (s *Store) aiBudgetFile() string  { return filepath.Join(s.stateDir, "ai_budget.json") }
 
 func now() float64 { return float64(time.Now().UnixNano()) / 1e9 }
 
@@ -221,10 +223,10 @@ func (s *Store) ActiveSnoozes() map[string]float64 {
 // ── first-seen tracker (server.py:2461-2639) ─────────────────────────────────
 
 const (
-	firstSeenMeta        = "__meta__"
-	firstSeenGraceS      = 15 * 60      // flap-protection window (server.py:2473)
-	firstSeenRetentionS  = 24 * 60 * 60 // prune entries older than this (2474)
-	firstSeenEntitySep   = "\x00"       // "{category}\x00{entity_id}" key (2622)
+	firstSeenMeta       = "__meta__"
+	firstSeenGraceS     = 15 * 60      // flap-protection window (server.py:2473)
+	firstSeenRetentionS = 24 * 60 * 60 // prune entries older than this (2474)
+	firstSeenEntitySep  = "\x00"       // "{category}\x00{entity_id}" key (2622)
 )
 
 // firstSeenLoad reads the persisted first-seen history. Its second return
@@ -321,6 +323,108 @@ func (s *Store) StampFirstSeen(signals []map[string]any) []map[string]any {
 		log.Printf("store: failed to persist first_seen.json: %v", err)
 	}
 	return signals
+}
+
+// ── AI token budget (new in this port — no Python precedent) ─────────────────
+//
+// WHY THIS EXISTS. The provider's daily token cap is real but never shows up
+// anywhere except the text of a 429 error, and this server is only one of
+// possibly several things spending against the same key. Two honesty rules
+// follow directly from that and are enforced here, not just in package ai:
+//
+//  1. LimitTokens is a pointer, not an int with omitempty. A real daily cap
+//     of 0 is nonsensical, so an int would work in practice — but a pointer
+//     makes "never told a limit" a distinct, unrepresentable-as-zero state
+//     instead of relying on that coincidence. Nothing is ever written here
+//     except a number that arrived in an actual 429 body.
+//  2. Tokens is this server's own running count, not the account's. It is
+//     reset by calendar day (UTC) so a stale day's spend is never reported
+//     as today's — see aiBudgetToday.
+
+// aiBudgetState is the on-disk shape of ai_budget.json.
+type aiBudgetState struct {
+	Day         string `json:"day"`
+	Tokens      int    `json:"tokens"`
+	LimitTokens *int   `json:"limit_tokens,omitempty"`
+	LimitSeenAt string `json:"limit_seen_at,omitempty"`
+}
+
+// aiBudgetToday is today's UTC calendar date, the key the whole file rolls
+// over on. Using UTC (not local time) matches the provider's own reset clock.
+func aiBudgetToday() string { return time.Now().UTC().Format("2006-01-02") }
+
+func (s *Store) aiBudgetLoad() aiBudgetState {
+	var b aiBudgetState
+	raw, err := os.ReadFile(s.aiBudgetFile())
+	if err != nil {
+		return aiBudgetState{}
+	}
+	_ = json.Unmarshal(raw, &b)
+	return b
+}
+
+// AddTokens accumulates n tokens (this server's own chat-completion usage)
+// onto today's running count and persists it, rolling a stale persisted day
+// over to zero first so yesterday's total is never carried into today's.
+// Returns the day's total after the add and the day it was counted against.
+func (s *Store) AddTokens(n int) (tokensToday int, day string) {
+	s.budgetMu.Lock()
+	defer s.budgetMu.Unlock()
+
+	b := s.aiBudgetLoad()
+	today := aiBudgetToday()
+	if b.Day != today {
+		// The limit value itself is a property of the plan, not of the day,
+		// so it survives the rollover — only the spend count resets.
+		b = aiBudgetState{Day: today, LimitTokens: b.LimitTokens, LimitSeenAt: b.LimitSeenAt}
+	}
+	b.Tokens += n
+	if err := atomicWriteJSON(s.aiBudgetFile(), b); err != nil {
+		log.Printf("store: failed to persist ai_budget.json: %v", err)
+	}
+	return b.Tokens, b.Day
+}
+
+// RecordLimit persists a daily token cap read verbatim out of a provider 429
+// body. Never call this with a guessed or default value — see the package
+// doc comment above.
+func (s *Store) RecordLimit(limit int) {
+	s.budgetMu.Lock()
+	defer s.budgetMu.Unlock()
+
+	b := s.aiBudgetLoad()
+	today := aiBudgetToday()
+	if b.Day != today {
+		b = aiBudgetState{Day: today}
+	}
+	l := limit
+	b.LimitTokens = &l
+	b.LimitSeenAt = time.Now().UTC().Format(time.RFC3339)
+	if err := atomicWriteJSON(s.aiBudgetFile(), b); err != nil {
+		log.Printf("store: failed to persist ai_budget.json: %v", err)
+	}
+}
+
+// Status is a read-only snapshot — unlike AddTokens/RecordLimit it never
+// writes, so a plain status check can't itself race a concurrent query's
+// accumulation. hasLimit is false, and limitTokens meaningless, until a 429
+// body has actually stated a cap.
+func (s *Store) Status() (tokensToday int, day string, limitTokens int, hasLimit bool) {
+	s.budgetMu.Lock()
+	defer s.budgetMu.Unlock()
+
+	b := s.aiBudgetLoad()
+	today := aiBudgetToday()
+	tokens := b.Tokens
+	if b.Day != today {
+		// A stale file (server idle since a previous UTC day) must report
+		// zero, not yesterday's leftover count, for a day it never wrote.
+		tokens = 0
+	}
+	if b.LimitTokens != nil {
+		return tokens, today, *b.LimitTokens, true
+	}
+	return tokens, today, 0, false
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

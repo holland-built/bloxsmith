@@ -404,7 +404,7 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 		StateDir:       stateDir,
 		Edit:           edit.New(restClient),
 		Provision:      provision.New(restClient, cfg.TemplatesDir),
-		AI:             ai.New(llmCreds{cfg: cfg, v: v}, dash),
+		AI:             ai.New(llmCreds{cfg: cfg, v: v}, dash, st),
 		Account:        acct,
 		Version:        version,
 		Static:         staticHandler(),
