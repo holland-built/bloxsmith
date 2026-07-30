@@ -33,6 +33,13 @@ jobs:
         id: gate
         run: |
           if [ -z "${{ secrets.INFOBLOX_API_KEY }}" ]; then
+            # A WARNING, not a silent skip. Skipping is correct for a fork with no
+            # key — failing there would be noise nobody can act on. But on the repo
+            # that DOES have one, a key that expired or got deleted would otherwise
+            # leave this job passing green forever while watching nothing, which is
+            # the same dead-check shape as the ImportError that went unnoticed for
+            # two nights. A warning shows on the run summary without breaking forks.
+            echo "::warning::No INFOBLOX_API_KEY secret — the live MCP catalog was NOT checked. Nothing is watching for drift in this run."
             echo "No INFOBLOX_API_KEY secret — skipping live MCP catalog."
             echo "run=false" >> "$GITHUB_OUTPUT"
           else
@@ -44,9 +51,37 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install MCP client
+      # PINNED. This was `pip install mcp`, unpinned, and mcp 2.0.0 renamed
+      # streamablehttp_client -> streamable_http_client. The nightly job died on the
+      # import for two nights running (2026-07-29, 2026-07-30) and nobody found out,
+      # because this workflow only ever spoke up when it FOUND drift — never when it
+      # failed to look. Both halves are fixed: the pin here, and the failure issue
+      # at the bottom.
+      #
+      # 1.29.0 is the last release before the rename and is what the last green run
+      # (2026-07-28) used. Moving to 2.x is a deliberate migration with its own
+      # verification against the live CSP endpoint, not something to inherit by
+      # accident from a nightly cron.
+      - name: Install MCP client (pinned — see comment)
         if: steps.gate.outputs.run == 'true'
-        run: pip install --quiet mcp
+        run: pip install --quiet 'mcp==1.29.0'
+
+      # Fail here, loudly and cheaply, rather than inside the catalog run where the
+      # traceback is buried. A dependency that no longer exports what this repo
+      # imports is a broken detector, and it must not be discovered by reading logs.
+      - name: Assert the MCP client still exports what the scripts import
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          python - <<'PY'
+          import importlib.metadata as md, sys
+          try:
+              from mcp.client.streamable_http import streamablehttp_client  # noqa: F401
+          except ImportError as e:
+              print(f"::error::the pinned mcp package ({md.version('mcp')}) no longer exports "
+                    f"streamablehttp_client, which scripts/mcp_session.py imports: {e}")
+              sys.exit(1)
+          print(f"mcp {md.version('mcp')} exports streamablehttp_client, as scripts/mcp_session.py expects")
+          PY
 
       - name: Catalog live MCP tools, services, cubes
         if: steps.gate.outputs.run == 'true'
@@ -157,3 +192,51 @@ jobs:
           gh issue create --repo "${{ github.repository }}" \
             --title "MCP drift detected ($DATE)" \
             --body "${{ steps.diff.outputs.body }}"
+
+      # A DETECTOR THAT CANNOT REPORT ITS OWN FAILURE IS NOT A DETECTOR.
+      #
+      # This workflow spoke up only when it FOUND drift. So a run that never got as
+      # far as looking — a renamed dependency, an expired key, CSP unreachable —
+      # looked exactly like a clean night: no issue, nothing in the inbox, and the
+      # only evidence a red tick on a page nobody opens. It died on an ImportError
+      # for two nights running before anyone noticed, and during those two nights
+      # Infoblox could have reshuffled the whole surface unseen.
+      #
+      # Silence now means "checked, nothing changed" and nothing else.
+      #
+      # if: failure() so it fires for ANY failed step above, not just the ones
+      # anticipated here. One open issue at a time, reused rather than duplicated —
+      # a nightly cron that opens a fresh issue every night trains you to ignore it,
+      # which is the same end state as saying nothing.
+      - name: Report that the drift check could not run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="MCP drift check is FAILING — it is not watching for drift"
+          RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --search "$TITLE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+
+          BODY=$(cat <<EOF
+          The nightly MCP drift check failed, so **the undocumented Infoblox CSP \`/mcp\`
+          surface is not being watched** until this is fixed. This is not a drift report —
+          it is a report that no drift report can be trusted right now.
+
+          Failed run: $RUN
+
+          Silence from this workflow normally means "checked, nothing changed". While this
+          issue is open it means nothing at all.
+          EOF
+          )
+
+          if [ -n "$EXISTING" ]; then
+            # Comment rather than open a duplicate: still visible, still one thread.
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" \
+              --body "Still failing as of $(date -u +%Y-%m-%d). Run: $RUN"
+          else
+            gh issue create --repo "${{ github.repository }}" \
+              --title "$TITLE" --label "mcp-drift" --body "$BODY" || \
+            gh issue create --repo "${{ github.repository }}" \
+              --title "$TITLE" --body "$BODY"
+          fi
