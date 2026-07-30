@@ -167,14 +167,21 @@ background (current version is `1.0.<commit-count>`) and exposes
 `DISABLE_UPDATE_CHECK=1` opts out entirely. The browser never contacts GitHub
 directly — the server does the check and the browser just reads the status.
 
-Clicking **Update now** pre-pulls the `:latest` image over the mounted Docker
-socket, health-checks the candidate before switching to it, and recreates itself.
-If the new image fails its health check, it auto-rolls back to the previous image
-(tagged `bloxsmith:rollback`). This requires `/var/run/docker.sock` to be mounted,
-which compose does by default (remove the socket line to disable it).
+There is no automatic image rollback. `docker-compose.yml` defines no healthcheck
+and does not mount `/var/run/docker.sock` — the in-app updater never touches the
+Docker socket, image, or container. It only downloads its own release tarball,
+verifies the checksum, and swaps its own binary in place (see
+[go/apply.go](../go/apply.go)), then re-execs. Run inside a container, that
+patches the process only — it does not change the image, so the next `docker
+compose pull && docker compose up -d` (or any container recreate) reverts it.
+For Docker installs, apply updates with the pull/up command or the update
+script above. There is no separate image-rollback path: to go back to a
+known-good version, pin its tag or digest in `docker-compose.yml` and run
+`docker compose up -d`.
 
-Compose also ships a Watchtower sidecar in HTTP-API mode (no polling) as an
-alternate trigger; the in-app button does not require it.
+(No Watchtower sidecar ships in `docker-compose.yml` today — `WATCHTOWER_TOKEN`
+in `.env.example` is unused wiring for a possible future `--profile autoupdate`
+addition, not a shipped feature. Nothing in the Go code reads it.)
 
 There is **no unattended auto-update and no polling updater** — the daily check
 only surfaces availability. Applying an update is always a user action, whether

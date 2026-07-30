@@ -34,7 +34,7 @@ docker run -d --name bloxsmith \
 
 First run: pick a passphrase, then paste your [Infoblox API key](#get-your-infoblox-api-key). Tenant keys live in the encrypted `noc-vault` volume and survive restarts and updates.
 
-Want in-app updates + rollback? Use compose instead — no clone needed:
+Want the in-app update banner and an easy-to-pin image tag for manual rollback? Use compose instead — no clone needed:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/holland-built/bloxsmith/master/docker-compose.yml -o docker-compose.yml
