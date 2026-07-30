@@ -44,6 +44,17 @@ jobs:
           go test ./...
           go vet ./...
 
+      # A green `go test ./...` proves the tests ran; it does not prove any
+      # given security control is what made them pass. Three times in one day
+      # a control was silently unprotected because its test drove a stub
+      # instead of the production wiring (restore-plan --apply's per-tenant
+      # write lock hardcoded to true, vault-rotate's verification result
+      # ignored, the AI budget fabricating a limit it was never told) — and
+      # the WHOLE SUITE stayed green every time. This deletes each control by
+      # hand, one at a time, and fails the build if the suite does not go red.
+      - name: Security controls are actually caught by the test suite (mutation test)
+        run: bash scripts/control-guard.sh
+
       # Runs the SHIPPED `bloxsmith audit verify` binary and asserts all three
       # verdicts, all four exit codes, and its two refusals (never creates a key,
       # never reseals). A Go test covers the package; only this covers the thing
@@ -217,6 +228,7 @@ jobs:
             scripts/relsign-test.sh \
             scripts/vault-passphrase-test.sh \
             scripts/service-cli-test.sh \
+            scripts/control-guard.sh \
             update.sh update.command
 
       # update.sh / update.command / update.bat are the documented Docker update
