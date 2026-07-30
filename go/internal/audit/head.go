@@ -73,6 +73,9 @@ func (l *Log) readHead() (*headRecord, error) {
 // same directory and renames, so a crash mid-write leaves the previous seal
 // intact rather than a half-written one that would read as tampering.
 func (l *Log) writeHead(count int, hash string) error {
+	if l.readOnly {
+		return fmt.Errorf("audit: this log was opened read-only for verification and its head cannot be resealed")
+	}
 	if l.key == nil {
 		return fmt.Errorf("audit: cannot seal the chain without a key: %w", l.keyErr)
 	}

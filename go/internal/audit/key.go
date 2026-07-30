@@ -112,6 +112,14 @@ type Options struct {
 	TrustDir string // AUDIT_TRUST_DIR, defaulting to DefaultTrustDir()
 	Key      string // AUDIT_KEY, hex
 	KeyFile  string // AUDIT_KEY_FILE, path to a file holding the hex key
+
+	// NoGenerate forbids creating a key that does not already exist. It is set
+	// by the offline verifier and it is the single most important property of
+	// that tool: a verifier that generated a missing key would mint the very
+	// trust root it is supposed to be checking against, seal nothing, and then
+	// have no way to tell an untouched chain from a forged one. Verifying must
+	// never be able to change what it is verifying.
+	NoGenerate bool
 }
 
 // DefaultTrustDir is a SIBLING of the app's own config directory, not that
@@ -181,6 +189,11 @@ func loadKey(opt Options) (*Key, error) {
 	}
 	if !os.IsNotExist(err) {
 		return nil, fmt.Errorf("audit: key file %s could not be read: %w", p, err)
+	}
+	if opt.NoGenerate {
+		return nil, fmt.Errorf("audit: no key at %s, and none of AUDIT_KEY / AUDIT_KEY_FILE was supplied; "+
+			"refusing to generate one, because a freshly made key cannot attest anything about a chain "+
+			"that was signed with a different one", p)
 	}
 	return generateKey(opt.TrustDir, p)
 }
