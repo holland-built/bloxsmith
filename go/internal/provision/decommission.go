@@ -60,6 +60,11 @@ type SiteDecommissioner struct {
 	emit    Emitter
 	spaceID string
 	viewID  string
+
+	// The full API bodies behind spaceID/viewID, carried only so the pre-delete
+	// export can record them. See export.go.
+	spaceBody M
+	viewBody  M
 }
 
 func (e *Engine) NewSiteDecommissioner(cfg *DecommissionConfig, emit Emitter) *SiteDecommissioner {
@@ -81,6 +86,9 @@ func (d *SiteDecommissioner) resolveIPSpace() error {
 		return perr("IP space not found: %s", d.cfg.IPSpace)
 	}
 	d.spaceID = pyStr(asMap(results[0])["id"])
+	// The whole body is kept, not just the id, because the export has to hold
+	// enough to rebuild rather than enough to describe. Nothing else reads it.
+	d.spaceBody = asMap(results[0])
 	return nil
 }
 
@@ -97,6 +105,7 @@ func (d *SiteDecommissioner) resolveDNSView() error {
 		return perr("DNS view not found: %s", d.cfg.DNSView)
 	}
 	d.viewID = pyStr(asMap(results[0])["id"])
+	d.viewBody = asMap(results[0])
 	return nil
 }
 
@@ -120,31 +129,35 @@ func (d *SiteDecommissioner) findSubnets() ([]any, error) {
 // planDNSZone is the read half of the forward-zone step: look up whether it
 // exists. zoneID == "" means either keep_zone is set or no matching zone
 // exists — both legitimate "nothing to delete" outcomes, never an error.
-func (d *SiteDecommissioner) planDNSZone() (fqdn string, zoneID string, err error) {
+//
+// body is the zone as the API returned it, nil when there is nothing to delete.
+// It exists for the pre-delete export: an id alone records that something was
+// removed, not enough to put it back.
+func (d *SiteDecommissioner) planDNSZone() (fqdn string, zoneID string, body M, err error) {
 	fqdn = d.cfg.DNSZone()
 	if d.cfg.KeepZone {
 		d.emit(M{"step": fmt.Sprintf("keep_zone set — skipping forward zone: %s", fqdn)})
-		return fqdn, "", nil
+		return fqdn, "", nil, nil
 	}
 	d.emit(M{"step": fmt.Sprintf("%sLooking up forward DNS zone: %s  view=%s", dryPrefix(d.cfg.DryRun), fqdn, d.cfg.DNSView)})
 	fq, err := cspq(fqdn)
 	if err != nil {
-		return fqdn, "", err
+		return fqdn, "", nil, err
 	}
 	vw, err := cspq(d.viewID)
 	if err != nil {
-		return fqdn, "", err
+		return fqdn, "", nil, err
 	}
 	existing, err := d.e.Rest.GetStrict("/api/ddi/v1/dns/auth_zone", map[string]string{
 		"_filter": fmt.Sprintf(`fqdn=="%s." and view=="%s"`, fq, vw)})
 	if err != nil {
-		return fqdn, "", perrWrap(err, "failed to read forward DNS zone %s: %s", fqdn, upstreamPublic(err))
+		return fqdn, "", nil, perrWrap(err, "failed to read forward DNS zone %s: %s", fqdn, upstreamPublic(err))
 	}
 	if len(existing) == 0 {
 		d.emit(M{"step": fmt.Sprintf("  Zone not found — nothing to delete: %s", fqdn)})
-		return fqdn, "", nil
+		return fqdn, "", nil, nil
 	}
-	return fqdn, pyStr(asMap(existing[0])["id"]), nil
+	return fqdn, pyStr(asMap(existing[0])["id"]), asMap(existing[0]), nil
 }
 
 // planRanges is the read half of the DHCP-range step.
@@ -170,6 +183,8 @@ func (d *SiteDecommissioner) planRanges() ([]any, error) {
 type reverseZonePlan struct {
 	fqdn   string
 	zoneID string
+	// body is the zone as the API returned it, for the pre-delete export.
+	body M
 }
 
 // planReverseZones is the read half of the reverse-zone step: for each
@@ -204,7 +219,7 @@ func (d *SiteDecommissioner) planReverseZones(subnets []any) ([]reverseZonePlan,
 		if len(existing) == 0 {
 			continue
 		}
-		planned = append(planned, reverseZonePlan{fqdn: fqdn, zoneID: pyStr(asMap(existing[0])["id"])})
+		planned = append(planned, reverseZonePlan{fqdn: fqdn, zoneID: pyStr(asMap(existing[0])["id"]), body: asMap(existing[0])})
 	}
 	return planned, nil
 }
@@ -354,6 +369,99 @@ func (d *SiteDecommissioner) emitIncomplete(result M, failedStep string, err err
 	})
 }
 
+// recordPlan writes what this teardown is about to delete, and returns the path.
+//
+// A DRY RUN WRITES NOTHING. Nothing is being destroyed, so there is nothing to
+// make recoverable, and a dry run that littered the state directory would give
+// the operator a reason not to use the safe mode. It still reports WHERE the file
+// would go, which is the point of saying it at all: the location can be checked
+// before the run that does delete something.
+//
+// The real run's failure is a refusal, not a warning. Every error path in
+// ExportWriter.Write already reads "refusing to tear down: … Nothing was
+// changed." and that is true here — this is called before the first delete.
+func (d *SiteDecommissioner) recordPlan(zoneFQDN, zoneID string, zoneBody M, subnets, ranges []any, reverseZones []reverseZonePlan, hosts []any) (string, error) {
+	// Only zones that were actually found get recorded. A planned-but-absent
+	// reverse zone is not something that is about to be deleted, and listing it
+	// would make the export claim objects existed that did not.
+	revs := []any{}
+	for _, p := range reverseZones {
+		revs = append(revs, M{"fqdn": p.fqdn, "id": p.zoneID, "object": p.body})
+	}
+	forward := any(nil)
+	if zoneID != "" {
+		forward = M{"fqdn": zoneFQDN, "id": zoneID, "object": zoneBody}
+	}
+
+	plan := M{
+		"site":       d.cfg.Site,
+		"ip_space":   d.cfg.IPSpace,
+		"dns_view":   d.cfg.DNSView,
+		"dns_parent": d.cfg.DNSParent,
+		"keep_zone":  d.cfg.KeepZone,
+		"dry_run":    d.cfg.DryRun,
+		// Resolved ids and their full bodies. The ip_space and dns_view are NOT
+		// deleted by a teardown; they are recorded because a rebuild has to land
+		// back in the same ones, and their names alone do not identify them.
+		"ip_space_object": d.spaceBody,
+		"dns_view_object": d.viewBody,
+		// The five kinds of object a teardown deletes, each as the API returned
+		// it. Empty lists are written rather than omitted: "the read succeeded
+		// and found nothing" must not render the same as "this key is missing".
+		"forward_zone":  forward,
+		"subnets":       subnets,
+		"dhcp_ranges":   ranges,
+		"reverse_zones": revs,
+		"hosts":         hosts,
+		"counts": M{
+			"subnets":       len(subnets),
+			"dhcp_ranges":   len(ranges),
+			"reverse_zones": len(revs),
+			"hosts":         len(hosts),
+			"forward_zone":  boolToInt(zoneID != ""),
+		},
+	}
+
+	if d.cfg.DryRun {
+		path := d.e.Export.PlannedPath(exportKindSite, d.cfg.Site)
+		if strings.TrimSpace(d.e.exportDir()) == "" {
+			// Even a dry run must not report a location it does not have. The
+			// real run would refuse here, and saying so during the dry run is the
+			// whole reason to check first.
+			d.emit(M{"step": "[DRY-RUN] NO record of what would be deleted could be written — no directory " +
+				"is configured for it. A real teardown would REFUSE for this reason."})
+			return "", nil
+		}
+		d.emit(M{"step": fmt.Sprintf("[DRY-RUN] a real teardown would first write what it is about to "+
+			"delete to: %s  (nothing written now — nothing is being deleted)", path)})
+		return path, nil
+	}
+
+	path, err := d.e.Export.Write(exportKindSite, d.cfg.Site, plan)
+	if err != nil {
+		return "", err
+	}
+	d.emit(M{"step": fmt.Sprintf("Wrote what is about to be deleted to: %s", path)})
+	return path, nil
+}
+
+// exportDir reports the configured export directory, "" when there is none.
+// Nil-safe so the dry-run path can distinguish "no recorder at all" from "a
+// recorder with nowhere to write" without panicking on either.
+func (e *Engine) exportDir() string {
+	if e == nil || e.Export == nil {
+		return ""
+	}
+	return e.Export.Dir
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // Decommission is SiteDecommissioner.decommission (server.py:2252).
 func (d *SiteDecommissioner) Decommission() (M, error) {
 	result := M{"site": d.cfg.Site, "ip_space": d.cfg.IPSpace, "dry_run": d.cfg.DryRun,
@@ -379,7 +487,7 @@ func (d *SiteDecommissioner) Decommission() (M, error) {
 	if len(subnets) == 0 {
 		d.emit(M{"step": fmt.Sprintf("No subnets tagged Site=%s found — will still check zone/hosts", d.cfg.Site)})
 	}
-	zoneFQDN, zoneID, err := d.planDNSZone()
+	zoneFQDN, zoneID, zoneBody, err := d.planDNSZone()
 	if err != nil {
 		return nil, err
 	}
@@ -395,6 +503,22 @@ func (d *SiteDecommissioner) Decommission() (M, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// --- RECORD: the plan is complete and nothing has been deleted yet, so this
+	// is the only moment at which the full "before" state exists. Written here
+	// rather than at the top of the function because at the top there is nothing
+	// to write, and rather than per-step because a per-step record cannot be
+	// refused (the first delete has already run by the second step).
+	//
+	// A failure to record STOPS the teardown. See export.go.
+	exportPath, err := d.recordPlan(zoneFQDN, zoneID, zoneBody, subnets, ranges, reverseZones, hosts)
+	if err != nil {
+		return nil, err
+	}
+	result["export_path"] = exportPath
+	// Reported for the dry run too — where the record WOULD go, so the operator
+	// can check the location before the run that actually deletes something.
+	result["export_written"] = !d.cfg.DryRun
 
 	// --- EXECUTE: deletions run only from the plan above, in the original
 	// order (forward zone, ranges, reverse zones, subnets, hosts). Any

@@ -17,6 +17,21 @@ test.describe('per-tenant write lock', () => {
     const section = page.getByText('Changing this tenant');
     await expect(section).toBeVisible();
 
+    // WAIT FOR THE READ TO FINISH FIRST.
+    //
+    // The panel shows "Checking…" while the permission read is in flight, and
+    // that is correct: a read in progress is not a verdict, and rendering one of
+    // the three verdicts before the answer arrives would be exactly the invented
+    // state this test exists to catch.
+    //
+    // Counting the three verdicts without waiting therefore raced the fetch, and
+    // won often enough to fail about 1 run in 3 — reporting "got counts [0,0,0]",
+    // which reads like the panel is broken when it is mid-read. Asserting the
+    // transient state has CLEARED (rather than loosening the count assertion
+    // below, which is the load-bearing one) fixes the race without weakening what
+    // is being proven.
+    await expect(page.getByText('Checking…')).toHaveCount(0);
+
     // Exactly one of the three states, and they must be distinguishable — a
     // failed permission read must never render as "read-only", which would be a
     // verdict we never reached.

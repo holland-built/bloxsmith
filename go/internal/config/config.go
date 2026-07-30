@@ -35,9 +35,45 @@ func LoadDotEnv(path string) {
 		}
 		if _, ok := os.LookupEnv(k); !ok {
 			_ = os.Setenv(k, v)
+			recordOrigin(k, path)
 		}
 	}
 }
+
+// WHERE A SETTING CAME FROM, not just what it is.
+//
+// Several .env files are loaded in first-wins order — the binary's directory, the
+// current directory, and the service config dir — and the value that wins is then
+// indistinguishable from any other. That produced a real, confusing defect:
+//
+//	bloxsmith vault-passphrase status --vault /some/other/vault.json
+//
+// run from a directory whose own .env sets VAULT_PASSPHRASE reported "at next
+// start the passphrase would come from: VAULT_PASSPHRASE" — describing THIS
+// shell's environment while naming a DIFFERENT vault, whose server would never
+// read that file. It is the same family as the v3.30.1 bug: a status command
+// answering a question about one thing with a fact about another.
+//
+// Not fixed by reading fewer files — that is what v3.30.1 was fixing when it made
+// the loading unconditional, and skipping them reintroduces the opposite bug (an
+// env passphrase looking absent). Fixed by saying which file, so a mismatch is
+// visible instead of silent.
+//
+// Only the ORIGIN is recorded, never the value: this map is printed.
+var envOrigin = map[string]string{}
+
+func recordOrigin(key, path string) {
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	envOrigin[key] = path
+}
+
+// OriginOf reports the .env file a setting was loaded from, or "" when it did not
+// come from a file — which means either the real process environment or nothing at
+// all. Those two are different and the caller must not conflate them: check
+// os.LookupEnv to tell "set in the real environment" from "unset".
+func OriginOf(key string) string { return envOrigin[key] }
 
 // UserDir is the per-OS application config directory Bloxsmith owns:
 //
