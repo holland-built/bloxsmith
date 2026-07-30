@@ -157,6 +157,21 @@ func (v *Vault) IsUnlocked() bool {
 	return v.unlocked
 }
 
+// TenantCount reports how many stored connections a successful Unlock found. It
+// exists so `vault-passphrase check` can say what it opened rather than only
+// that it opened: "unlocked" alone does not distinguish the real vault from an
+// empty one, and an empty one is what a wrongly-created vault looks like.
+//
+// Zero on a locked vault, because a locked vault holds no answer to give.
+func (v *Vault) TenantCount() int {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if !v.unlocked {
+		return 0
+	}
+	return len(v.tenants)
+}
+
 // ResolveFile ports _resolve_vault_file (server.py:2404). It tries VAULT_DIR
 // (default "/vault") then dir (the binary's directory), returning the first
 // writable location's vault.json. New for laptops (plan 1a): when neither is

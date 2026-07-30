@@ -450,8 +450,25 @@ removes it while keeping unattended restarts. What genuinely narrows it:
 ```
 bloxsmith vault-passphrase set       # prompts twice, no echo, stores it
 bloxsmith vault-passphrase status    # says where the next start would get it from
+bloxsmith vault-passphrase check     # proves the stored copy really opens the vault
 bloxsmith vault-passphrase remove    # deletes the entry
 ```
+
+**Run `check` before you delete anything.** `status` tells you which source would
+win, which is a different question from whether the stored passphrase actually
+works. Delete your `.env` on the strength of `status` and you find out at the next
+restart — with the vault shut and your tenant keys inside it.
+
+```
+$ bloxsmith vault-passphrase check
+the keychain passphrase opens this vault (2 tenants inside).
+```
+
+It reads the keychain **only** (never `VAULT_PASSPHRASE`/`VAULT_PASSPHRASE_FILE`, or
+it would pass using the very file you are about to remove), and it cannot write —
+it opens the vault read-only and never creates one. Exit `0` it opens, `1` it does
+not, `2` the check could not run. `2` is not a milder `1`: nothing is claimed either
+way.
 
 **Two steps, and skipping the second achieves nothing.** After `set`, remove
 `VAULT_PASSPHRASE` (and any `VAULT_PASSPHRASE_FILE`) from your `.env` — explicit
@@ -492,6 +509,45 @@ just falls back to manual unlock in the browser.
 
 For unattended restarts on the [Customer path](#customer-path-compose), set
 `VAULT_PASSPHRASE_FILE` in `.env` so a server reboot doesn't require a browser visit.
+
+---
+
+### Teardown exports — what a teardown records before it deletes
+
+Teardown is fail-forward: there is no rollback, every step is a delete. So before
+the first delete, it writes what it is about to remove to a file, and **refuses to
+proceed if it cannot**:
+
+```
+<state dir>/teardown-exports/20260730T091522Z-teardown-site-ams.json
+```
+
+One file per teardown run, holding the full object bodies as the Infoblox API
+returned them — subnets, the forward zone, DHCP ranges, reverse zones and hosts, or
+the address blocks for a block teardown — plus which tenant they came from. Enough
+to rebuild by hand.
+
+- **It is not a receipt of deletion.** It is the plan as it stood immediately before
+  the first delete, so if a run failed partway it lists objects that still exist.
+  The run summary is what says how far the run got.
+- **It is not a restore tool.** Nothing re-creates these objects for you.
+- **A dry run writes nothing** (nothing is being destroyed) but prints the path a
+  real run would use, so you can check the location first.
+- **If the export cannot be written, the teardown stops** and says
+  `refusing to tear down: … Nothing was changed.` That is true — it happens before
+  any delete.
+
+**These files hold tenant addressing in plaintext.** Zone FQDNs, subnet addresses
+and host names, mode `0600` in a `0700` directory, beside `audit_log.jsonl`. They are
+deliberately **not** encrypted into the vault: an export that needs the vault open to
+read is useless in exactly the situation it exists for. Nothing prunes them — an
+export auto-deleted after N days is an export missing when someone finally notices
+what went. Treat the directory like the rest of the state directory, and delete old
+exports yourself when you no longer need them.
+
+Note that a teardown is refused outright unless the tenant has been explicitly
+marked writable (see the write lock in Settings), so on a read-only tenant no export
+is written because nothing is being deleted.
 
 ---
 

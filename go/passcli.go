@@ -20,13 +20,16 @@ import (
 // what that buys, are in internal/vault/keychain.go — read that, not this.
 
 func passCLIUsage() {
-	println("usage: bloxsmith vault-passphrase <set|status|remove>")
+	println("usage: bloxsmith vault-passphrase <set|status|check|remove>")
 	println()
 	println("  Moves the vault's auto-unlock passphrase into the macOS keychain, so it")
 	println("  stops sitting in plaintext next to the vault it unlocks.")
 	println()
 	println("  set      read a passphrase (prompted, not echoed) and store it")
 	println("  status   say where the passphrase would come from at the next start")
+	println("  check    prove the KEYCHAIN copy actually opens this vault, ignoring")
+	println("           any .env — run this BEFORE you remove the plaintext copy")
+	println("           (0 it opens, 1 it does not, 2 could not be checked)")
 	println("  remove   delete the keychain entry")
 	println()
 	println("  --vault PATH   the vault.json this passphrase unlocks")
@@ -101,6 +104,15 @@ func runPassCLI(args []string) int {
 		return passStatus(vaultPath, cfg.VaultPassphrase, cfg.VaultPassphraseFile)
 	case "set":
 		return passSet(vaultPath)
+	case "check":
+		msg, code := checkKeychainOpensVault(vaultPath, vault.GetKeychainPassphrase)
+		out := os.Stdout
+		if code != 0 {
+			out = os.Stderr
+		}
+		fmt.Fprintln(out, msg)
+		fmt.Fprintf(out, "  vault: %s\n", vaultPath)
+		return code
 	case "remove":
 		if err := vault.RemoveKeychainPassphrase(vaultPath); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -136,10 +148,111 @@ func passStatus(vaultPath, envPass, envPassFile string) int {
 	_, src, warn := vault.ResolvePassphrase(vaultPath, envPass, envPassFile)
 	fmt.Printf("at next start the passphrase would come from: %s\n", src)
 	fmt.Printf("  vault: %s\n", vaultPath)
+
+	// NAME THE FILE the env value came from.
+	//
+	// Without this, `status --vault /some/other/vault.json` run from a directory
+	// whose own .env sets VAULT_PASSPHRASE reports "would come from:
+	// VAULT_PASSPHRASE" — true of this shell, false of the server that opens that
+	// vault, and indistinguishable from the case where it is true of both. Same
+	// family as the v3.30.1 bug this command already carries a comment about.
+	//
+	// "came from the real environment" and "came from a file" are printed
+	// differently, because only the second one is a file the operator can go and
+	// edit.
+	if origin := envSourceOf(src); origin != "" {
+		fmt.Printf("  %s was read from: %s\n", src, origin)
+	}
 	if warn != "" {
 		fmt.Printf("\n  ! %s\n", warn)
 	}
 	return 0
+}
+
+// envSourceOf describes where the winning env setting was read from, or "" when
+// the source is not an env var at all (the keychain, or nothing).
+func envSourceOf(src vault.PassphraseSource) string {
+	key := ""
+	switch src {
+	case vault.FromEnv:
+		key = "VAULT_PASSPHRASE"
+	case vault.FromFile:
+		key = "VAULT_PASSPHRASE_FILE"
+	default:
+		return ""
+	}
+	if origin := config.OriginOf(key); origin != "" {
+		return origin
+	}
+	// Set in the real process environment rather than any file. Said explicitly:
+	// an operator hunting for a file to edit needs to know there isn't one.
+	return "this shell's environment (not a .env file)"
+}
+
+// checkKeychainOpensVault answers the one question `status` cannot: will the
+// vault still open once the plaintext copy is gone?
+//
+// `status` reports which SOURCE would win. That is not the same question. An
+// operator who reads "a passphrase IS stored in the keychain", deletes their
+// .env on the strength of it and restarts finds out at that moment whether the
+// stored value was the right one — with the vault shut and the tenant keys
+// inside it. This runs that experiment first, while the plaintext copy is still
+// there to fall back on.
+//
+// TWO PROPERTIES MAKE IT WORTH TRUSTING.
+//
+// It reads the KEYCHAIN ONLY. Not VAULT_PASSPHRASE, not VAULT_PASSPHRASE_FILE.
+// Consulting the env here would be the whole point inverted: it would report
+// success using the very file the operator is about to delete, which is the
+// false all-clear this command exists to prevent.
+//
+// It CANNOT WRITE. It calls Unlock, which only reads vault.json, and it checks
+// Exists() first — never AutoUnlock, which INITIALISES a new vault when none is
+// there. A "check" that created an empty vault would report that the passphrase
+// opens it, truthfully, having just replaced the thing being asked about.
+//
+// getPass is a parameter so the three outcomes can be tested on a machine with
+// no keychain at all (every Linux CI runner), which is where this would
+// otherwise go unexercised.
+func checkKeychainOpensVault(vaultPath string, getPass func(string) (string, error)) (string, int) {
+	// Exit 2 is "the check did not run" — the same distinction `bloxsmith audit
+	// verify` draws, and for the same reason: it must never be read as a milder
+	// failure. Nothing is claimed about the passphrase in any of these cases.
+	pass, err := getPass(vaultPath)
+	switch {
+	case errors.Is(err, vault.ErrNoKeychainEntry):
+		return "could not be checked: nothing is stored in the keychain for this vault. " +
+			"Run `bloxsmith vault-passphrase set` first.", 2
+	case err != nil:
+		return "could not be checked: " + err.Error(), 2
+	}
+
+	v := vault.New(vaultPath)
+	if !v.Exists() {
+		return "could not be checked: there is no vault at this path yet, so there is nothing " +
+			"to open. Nothing was created.", 2
+	}
+	if err := v.Unlock(pass); err != nil {
+		if errors.Is(err, vault.ErrWrongPassphrase) {
+			return "the keychain passphrase does NOT open this vault. Do not remove your plaintext " +
+				"copy — re-run `bloxsmith vault-passphrase set` with the passphrase that does.", 1
+		}
+		// A vault that could not be READ is not a wrong passphrase, and saying so
+		// would send the operator to re-store a passphrase that was never at fault.
+		return "could not be checked: the vault could not be read: " + err.Error(), 2
+	}
+	defer v.Lock()
+
+	n := v.TenantCount()
+	return fmt.Sprintf("the keychain passphrase opens this vault (%d %s inside).",
+		n, plural(n, "tenant", "tenants")), 0
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 func passSet(vaultPath string) int {

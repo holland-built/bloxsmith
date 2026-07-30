@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"net/http"
+	"path/filepath"
+	"strings"
 
 	"bloxsmith/internal/ai"
 	"bloxsmith/internal/dashboard"
@@ -103,10 +105,55 @@ func (d *Deps) prov(r *http.Request) *provision.Engine {
 	if d.Provision == nil {
 		return nil
 	}
+	e := d.Provision
 	if c := pinFrom(r); c != nil {
-		return d.Provision.With(c)
+		e = e.With(c)
 	}
-	return d.Provision
+	return e.WithExport(d.exportWriter())
+}
+
+// exportDirName is the subdirectory of StateDir that holds teardown exports. A
+// directory rather than loose files in StateDir, so a state dir that already
+// holds vault.json, .env, the audit log and first_seen.json stays navigable —
+// and so one chmod covers every export.
+const exportDirName = "teardown-exports"
+
+// exportWriter builds the per-request recorder for what a teardown is about to
+// delete. Per-request because the tenant identity it stamps has to be resolved
+// per request; see internal/server/writelock.go.
+//
+// A Deps with no StateDir yields a writer with no Dir, which makes every teardown
+// REFUSE (provision/export.go) rather than run unrecorded. That is the intended
+// behaviour for a misconfigured install, not a gap: the alternative is deleting a
+// live tenant's zones with no record because a path was empty.
+func (d *Deps) exportWriter() *provision.ExportWriter {
+	dir := ""
+	if strings.TrimSpace(d.StateDir) != "" {
+		dir = filepath.Join(d.StateDir, exportDirName)
+	}
+
+	// The SAME identity the write lock checked, resolved the same way. An export
+	// that named a different tenant than the one approved would be worse than
+	// none: it would send a rebuild at the wrong tenant.
+	id, unknown := d.writeIdentity()
+	label := ""
+	if unknown != "" {
+		// Cannot happen through a gated route — the lock refuses "unknown" before
+		// any handler runs. Recorded as the reason rather than left blank anyway,
+		// because a blank tenant in a recovery file reads as "no switch was in
+		// force", which would be a fabricated fact.
+		id = ""
+		label = "unknown: " + unknown
+	} else if d.Vault != nil {
+		label = d.Vault.LabelForTenantID(strings.SplitN(id, "/", 2)[0])
+	}
+
+	return &provision.ExportWriter{
+		Dir:         dir,
+		Tenant:      id,
+		TenantLabel: label,
+		Version:     d.Version,
+	}
 }
 
 func (d *Deps) aiFor(r *http.Request) *ai.Service {

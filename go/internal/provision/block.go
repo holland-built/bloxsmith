@@ -377,11 +377,57 @@ func (d *BlockDecommissioner) Decommission() (M, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// RECORD before the first delete, same rule and same seam as the site
+	// teardown: the reads are done, nothing is gone yet, so this is the only
+	// moment the full "before" state exists. A failure to record refuses.
+	// See export.go.
+	exportPath, err := d.recordPlan(blocks)
+	if err != nil {
+		return nil, err
+	}
+
 	deleted, err := d.deleteBlocks(blocks)
 	if err != nil {
 		return nil, err
 	}
-	return M{"name": d.name, "ip_space": d.ipSpace, "blocks_deleted": deleted, "dry_run": d.dryRun}, nil
+	return M{"name": d.name, "ip_space": d.ipSpace, "blocks_deleted": deleted, "dry_run": d.dryRun,
+		"export_path": exportPath, "export_written": !d.dryRun}, nil
+}
+
+// recordPlan writes the address blocks this teardown is about to delete. A dry
+// run writes nothing and reports where the file would go — see the site
+// decommissioner's recordPlan for why.
+func (d *BlockDecommissioner) recordPlan(blocks []any) (string, error) {
+	plan := M{
+		"template":        d.name,
+		"ip_space":        d.ipSpace,
+		"dry_run":         d.dryRun,
+		"ip_space_id":     d.spaceID,
+		"address_blocks":  blocks,
+		"counts":          M{"address_blocks": len(blocks)},
+		"delete_order":    "highest cidr first (deepest child before its parent)",
+		"restore_caution": "re-creating these must go parent-first, the reverse of the delete order recorded above",
+	}
+
+	if d.dryRun {
+		if strings.TrimSpace(d.e.exportDir()) == "" {
+			d.emit(M{"step": "[DRY-RUN] NO record of which address blocks would be deleted could be " +
+				"written — no directory is configured for it. A real teardown would REFUSE for this reason."})
+			return "", nil
+		}
+		path := d.e.Export.PlannedPath(exportKindBlock, d.name)
+		d.emit(M{"step": fmt.Sprintf("[DRY-RUN] a real teardown would first write the address blocks it is "+
+			"about to delete to: %s  (nothing written now — nothing is being deleted)", path)})
+		return path, nil
+	}
+
+	path, err := d.e.Export.Write(exportKindBlock, d.name, plan)
+	if err != nil {
+		return "", err
+	}
+	d.emit(M{"step": fmt.Sprintf("Wrote the address blocks about to be deleted to: %s", path)})
+	return path, nil
 }
 
 // --- shared small helpers ----------------------------------------------------
