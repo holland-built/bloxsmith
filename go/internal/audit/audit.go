@@ -28,6 +28,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -51,6 +52,40 @@ type Log struct {
 	key      *Key   // nil when no key could be established
 	keyErr   error  // why, surfaced as could-not-verify — never as "intact"
 	keyWarn  sync.Once
+
+	// readOnly is set by OpenReadOnly. Every write path checks it, so a verifier
+	// physically cannot append an entry or reseal the head — not "does not", but
+	// "cannot". An offline check that could reseal would let the act of verifying
+	// launder a truncated chain into a clean one.
+	readOnly bool
+}
+
+// OpenReadOnly binds a Log for verification ONLY, with two guarantees the normal
+// constructor deliberately does not make:
+//
+//	1. It never creates a key. A missing key is an error the caller must report
+//	   as could-not-verify, not something to fix by generating one — a new key
+//	   cannot attest a chain signed with the old one, and pretending otherwise
+//	   would turn "I have no way to check this" into "this is fine".
+//	2. Append and Adopt refuse. Verifying must not be able to change what it is
+//	   verifying, including by resealing a head that an attacker just shortened.
+//
+// It returns an error when the key cannot be established, so the caller decides
+// what to say — rather than degrading silently the way New() must, since New()
+// has to keep recording real events even with a broken trust root.
+func OpenReadOnly(path string, opt Options) (*Log, error) {
+	opt.NoGenerate = true
+	l := &Log{
+		path:     path,
+		trustDir: strings.TrimSpace(opt.TrustDir),
+		readOnly: true,
+		now:      func() float64 { return 0 },
+	}
+	l.key, l.keyErr = loadKey(opt)
+	if l.key == nil {
+		return l, l.keyErr
+	}
+	return l, nil
 }
 
 // New binds a Log to path, pinning every appended entry to this image+instance
@@ -189,6 +224,9 @@ func (l *Log) entryHash(e map[string]any) (string, error) {
 func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.readOnly {
+		return nil, errors.New("audit: this log was opened read-only for verification and cannot be appended to")
+	}
 
 	entries, skipped, err := l.Read()
 	if err != nil {
@@ -291,6 +329,9 @@ func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any
 func (l *Log) Adopt() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.readOnly {
+		return errors.New("audit: this log was opened read-only for verification and cannot be sealed")
+	}
 
 	if l.key == nil {
 		return fmt.Errorf("audit: cannot seal the chain: %w", l.keyErr)
