@@ -70,15 +70,23 @@ func runPassCLI(args []string) int {
 		}
 	}
 
+	// The env files are loaded ALWAYS, not only when --vault was omitted.
+	//
+	// They were once loaded inside that branch, and `status` then reported "at next
+	// start the passphrase would come from: macOS keychain" on a machine whose
+	// service .env sets VAULT_PASSPHRASE_FILE — because with --vault given it never
+	// read the .env, so the env passphrase looked absent. A status command that says
+	// the opposite of what the server will do is worse than no status command: it is
+	// the exact false reassurance this whole feature is trying to remove.
+	dir := "."
+	if exe, err := os.Executable(); err == nil {
+		dir = filepath.Dir(exe)
+	}
+	config.LoadDotEnv(filepath.Join(dir, ".env"))
+	config.LoadDotEnv(".env")
+	config.LoadServiceEnv()
+	cfg := config.Load(dir)
 	if vaultPath == "" {
-		dir := "."
-		if exe, err := os.Executable(); err == nil {
-			dir = filepath.Dir(exe)
-		}
-		config.LoadDotEnv(filepath.Join(dir, ".env"))
-		config.LoadDotEnv(".env")
-		config.LoadServiceEnv()
-		cfg := config.Load(dir)
 		vaultPath = vault.ResolveFile(cfg.VaultDir, dir)
 	}
 	// Resolved to an absolute path because it is the keychain item's account name:
@@ -90,7 +98,7 @@ func runPassCLI(args []string) int {
 
 	switch cmd {
 	case "status":
-		return passStatus(vaultPath)
+		return passStatus(vaultPath, cfg.VaultPassphrase, cfg.VaultPassphraseFile)
 	case "set":
 		return passSet(vaultPath)
 	case "remove":
@@ -110,7 +118,7 @@ func runPassCLI(args []string) int {
 	}
 }
 
-func passStatus(vaultPath string) int {
+func passStatus(vaultPath, envPass, envPassFile string) int {
 	if err := vault.KeychainAvailable(); err != nil {
 		fmt.Printf("keychain: unavailable — %v\n", err)
 	} else {
@@ -125,8 +133,7 @@ func passStatus(vaultPath string) int {
 		}
 	}
 
-	cfg := config.Load(".")
-	_, src, warn := vault.ResolvePassphrase(vaultPath, cfg.VaultPassphrase, cfg.VaultPassphraseFile)
+	_, src, warn := vault.ResolvePassphrase(vaultPath, envPass, envPassFile)
 	fmt.Printf("at next start the passphrase would come from: %s\n", src)
 	fmt.Printf("  vault: %s\n", vaultPath)
 	if warn != "" {
