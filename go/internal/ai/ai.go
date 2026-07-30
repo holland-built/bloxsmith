@@ -17,6 +17,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -171,13 +172,94 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 	return `{"answer": "No response.", "suggestions": []}`
 }
 
+// A 429 IS NOT ONE FAILURE, AND "WAIT A MOMENT" WAS THE WRONG ADVICE.
+//
+// v3.29.0 split "AI error: request failed" into a sentence per status, which was
+// right, and it recorded a next step: a bounded retry on the `http 400: Failed to
+// call a function` seen on 8 of 36 queries during that audit. Measured before
+// building it, that turned out to be aimed at the wrong failure:
+//
+//   - the installed service's log holds ZERO http 400 across ten days of real use;
+//   - 30 queries in 30 seconds produced 28 failures, every one a 429, no 400s; and
+//   - the 429s were not a per-minute throttle at all. They were the free tier's
+//     TOKENS PER DAY cap: "Limit 100000, Used 98902". At ~1,800 tokens a question
+//     that is roughly 55 questions a day, total, after which every question fails
+//     until midnight UTC.
+//
+// So the retry was not built. A retry cannot succeed against a daily cap; it would
+// spend the remaining budget faster and turn one clear failure into several.
+//
+// What the measurement DID show is that the message was actively misleading. "Wait
+// a moment and ask again" is the one thing that does not work when the day's tokens
+// are gone, and it read identically to the case where waiting is exactly right.
+// Groq's own body carries both missing facts — which limit, and how long — and they
+// were going only to the server log.
+//
+// NOTHING HERE IS INVENTED. The limit name and the wait are quoted from the
+// provider or omitted. An unparseable body says the limit was hit and that the
+// details could not be read, because a fabricated "try again in 5 minutes" is
+// worse than no figure at all.
+func rateLimitDetail(msg string) string {
+	// Groq's phrasing: "...on tokens per day (TPD): Limit 100000, Used 98902,
+	// Requested 1779. Please try again in 9m48.384s."
+	kind := ""
+	switch {
+	case strings.Contains(msg, "tokens per day"), strings.Contains(msg, "(TPD)"):
+		kind = "daily token"
+	case strings.Contains(msg, "tokens per minute"), strings.Contains(msg, "(TPM)"):
+		kind = "per-minute token"
+	case strings.Contains(msg, "requests per day"), strings.Contains(msg, "(RPD)"):
+		kind = "daily request"
+	case strings.Contains(msg, "requests per minute"), strings.Contains(msg, "(RPM)"):
+		kind = "per-minute request"
+	}
+
+	wait := ""
+	if m := retryAfterRe.FindStringSubmatch(msg); len(m) == 2 {
+		wait = m[1]
+	}
+
+	// A daily cap and a per-minute throttle need OPPOSITE advice, so they must not
+	// share a sentence.
+	daily := strings.HasPrefix(kind, "daily")
+	switch {
+	case daily && wait != "":
+		return "the AI provider's " + kind + " limit for this key is used up — it says to try again in " +
+			wait + ". Asking again before then will not work. This is the free tier's daily budget " +
+			"(about 100,000 tokens, roughly 50 questions); a paid tier or a different LLM key raises it."
+	case daily:
+		return "the AI provider's " + kind + " limit for this key is used up, and it did not say for how " +
+			"long. Asking again will not work until it resets. This is the free tier's daily budget; a " +
+			"paid tier or a different LLM key raises it."
+	case kind != "" && wait != "":
+		return "the AI provider hit its " + kind + " limit for this key. It says to try again in " +
+			wait + "."
+	case kind != "":
+		return "the AI provider hit its " + kind + " limit for this key. Wait a moment and ask again."
+	case wait != "":
+		return "the AI provider rate-limited this request and says to try again in " + wait +
+			". Which limit was hit is in the server log."
+	default:
+		// The body said 429 and nothing we could read. Do not guess which limit or
+		// how long — say what is known and point at the log.
+		return "the AI provider rate-limited this request. Which limit was hit, and for how long, " +
+			"could not be read from its reply — the full text is in the server log."
+	}
+}
+
+// retryAfterRe pulls Groq's own figure. Deliberately loose about the number's
+// shape: observed values include "4m20.928s", "18m34.56s" and
+// "7m11.135999999s", and a stricter pattern would silently drop the wait and
+// leave the operator with no idea how long.
+var retryAfterRe = regexp.MustCompile(`try again in ([0-9]+(?:\.[0-9]+)?(?:[hms][0-9.]*)*[hms])`)
+
 // providerFailure turns the chat error into one plain sentence an operator can
 // act on, without echoing the provider's body.
 func providerFailure(err error) string {
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "http 429"):
-		return "the AI provider rate-limited this request. Wait a moment and ask again."
+		return rateLimitDetail(msg)
 	case strings.Contains(msg, "http 400"):
 		return "the AI provider rejected the request (400). This is usually a tool-calling " +
 			"hiccup on the free tier — asking again normally works. The full reason is in the server log."

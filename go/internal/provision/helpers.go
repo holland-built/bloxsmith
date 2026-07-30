@@ -89,11 +89,26 @@ func upstreamPublic(err error) string {
 type Engine struct {
 	Rest         *rest.Client
 	TemplatesDir string
+
+	// Export records what a teardown is about to delete, before it deletes it.
+	// A nil Export makes every teardown REFUSE rather than run unrecorded — see
+	// export.go. That is deliberately not a nil-safe no-op: a teardown wired
+	// without a recorder is exactly the case that must not proceed.
+	Export *ExportWriter
 }
 
 // New builds the Engine.
 func New(r *rest.Client, templatesDir string) *Engine {
 	return &Engine{Rest: r, TemplatesDir: templatesDir}
+}
+
+// WithExport rebinds the engine to a request-scoped export writer. Request-scoped
+// because the tenant identity it records is resolved per request — the same
+// reason With exists for the rest client.
+func (e *Engine) WithExport(w *ExportWriter) *Engine {
+	cp := *e
+	cp.Export = w
+	return &cp
 }
 
 // With rebinds the engine to a request-scoped rest.Client. This one matters

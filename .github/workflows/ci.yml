@@ -52,6 +52,14 @@ jobs:
       - name: Offline audit verifier (runs the real binary)
         run: bash scripts/audit-verify-test.sh
 
+      # relsign signs every release. Until now it ran exactly twice in its life,
+      # both inside release.yml at tag time, and only ever on a GOOD signature —
+      # nothing anywhere checked that it REFUSES a tampered file, a wrong key or a
+      # missing signature. It is the trust anchor for `bloxsmith update`, so a
+      # verifier that cannot fail is the worst thing it could quietly become.
+      - name: Release signer refuses tampered/wrong-key/missing signatures
+        run: bash scripts/relsign-test.sh
+
       # Embedded-UI + multi-arch smoke: cross-compile every target, no publish.
       - name: Set up goreleaser
         uses: goreleaser/goreleaser-action@v7
@@ -61,6 +69,102 @@ jobs:
       - name: goreleaser build (snapshot, no publish)
         working-directory: go
         run: goreleaser build --snapshot --clean
+
+  # ── macOS ───────────────────────────────────────────────────────────────────
+  # This repo's CI was Linux-only, and that means two shipped surfaces had NEVER
+  # been executed anywhere:
+  #
+  #   * the macOS keychain. internal/vault/keychain_test.go skips off darwin with
+  #     a stated reason, which is honest — and left the whole feature unexercised
+  #     in CI. v3.30.1 was a bug in exactly that code, found by hand minutes after
+  #     shipping v3.30.0.
+  #   * `bloxsmith service install|start|stop|uninstall`, which is what README.md
+  #     and the Homebrew caveats tell every user to run. install.sh calls it, but
+  #     only when stdin is a TTY, and CI never is — so the existing install job has
+  #     never reached that branch.
+  #
+  # The general form of the lesson: a check that only runs on one OS can be broken
+  # on another and pass silently. That is how a dead privacy scan went unnoticed in
+  # ~/.claude for weeks.
+  macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: go/go.sum
+
+      # The same three commands the Linux job runs, on darwin. The keychain tests
+      # that skip on Linux run for real here, against the runner's login keychain.
+      - name: Go build + test + vet (darwin — runs the keychain tests for real)
+        working-directory: go
+        run: |
+          go build ./...
+          go test ./...
+          go vet ./...
+
+      # Proves the keychain tests were not all skipped here too. A suite that
+      # silently skips everything is the failure mode this whole job exists for,
+      # and it looks identical to a passing one.
+      - name: Assert the keychain tests actually RAN (not skipped)
+        working-directory: go
+        run: |
+          set -euo pipefail
+          go test -v -run 'Keychain' ./internal/vault/ 2>&1 | tee /tmp/kc.log
+          if grep -qE '^\s*--- SKIP' /tmp/kc.log; then
+            echo "::error::a keychain test SKIPPED on macOS — this job exists to run them"
+            grep -E '^\s*--- SKIP' /tmp/kc.log
+            exit 1
+          fi
+          RAN=$(grep -cE '^\s*--- PASS' /tmp/kc.log || true)
+          if [ "$RAN" -lt 3 ]; then
+            echo "::error::only $RAN keychain tests passed on macOS — expected several; the run matched nothing"
+            exit 1
+          fi
+          echo "$RAN keychain tests ran and passed on macOS"
+
+      # The offline audit verifier on darwin. It was only ever run on Linux, and
+      # it shells out to shasum and ssh-keygen, which differ between the two --
+      # macOS openssl cannot do raw ed25519 at all, which is why ssh-keygen -Y is
+      # the only verifier that works on Mac, Linux and Windows alike.
+      - name: Offline audit verifier on macOS (runs the real binary)
+        run: bash scripts/audit-verify-test.sh
+
+      # The keychain CLI, end to end, against a real keychain and a real encrypted
+      # vault created by the real server. Go tests cover the package; only this
+      # covers what an operator types -- which is where v3.30.1's bug was.
+      - name: vault-passphrase CLI round trip (real keychain, real vault)
+        run: bash scripts/vault-passphrase-test.sh
+
+      # install -> status -> start -> HTTP -> stop -> restart -> uninstall, against
+      # real launchd. The runner is disposable, which is the only place this is
+      # safe to run: the service name is a fixed constant, so on a real machine it
+      # would deregister a live deployment. See the script's own refusal.
+      - name: service CLI round trip (real launchd)
+        env:
+          BLOXSMITH_SERVICE_TEST: yes-this-machine-is-disposable
+        run: bash scripts/service-cli-test.sh
+
+      # The refusal that keeps the step above off a real machine. If it ever stops
+      # refusing, someone's live service gets deregistered by a test run.
+      - name: the service test REFUSES without the disposable-machine opt-in
+        run: |
+          set -uo pipefail
+          if bash scripts/service-cli-test.sh > /tmp/refuse.log 2>&1; then
+            echo "::error::service-cli-test.sh ran WITHOUT the opt-in — it would clobber a real deployment"
+            exit 1
+          fi
+          code=$?
+          if [ "$code" -ne 2 ]; then
+            echo "::error::expected exit 2 (refused), got $code"; cat /tmp/refuse.log; exit 1
+          fi
+          grep -q "REFUSED" /tmp/refuse.log || {
+            echo "::error::it failed for some reason other than the safety refusal"; cat /tmp/refuse.log; exit 1; }
+          echo "refused correctly, exit 2"
 
   # install.sh had NO test at all, and it showed: v3.23.0 shipped with a mangled
   # `EXPECTED="$(...)"` assignment that turned the checksum lookup into a command
@@ -75,8 +179,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: shellcheck (Error severity gate)
-        run: shellcheck -S error scripts/install.sh
+      # Every shipped shell script, not just install.sh. shellcheck is a LINTER
+      # and proves nothing on its own — v3.23.0's broken install.sh was valid
+      # syntax — so it is a cheap pre-filter, and the steps that RUN each script
+      # are the real gate.
+      - name: shellcheck (Error severity gate, every shipped shell script)
+        run: |
+          shellcheck -S error \
+            scripts/install.sh \
+            scripts/audit-verify-test.sh \
+            scripts/relsign-test.sh \
+            scripts/vault-passphrase-test.sh \
+            scripts/service-cli-test.sh \
+            update.sh update.command
+
+      # update.sh / update.command / update.bat are the documented Docker update
+      # path (docker-compose.yml's header and docs/SHIP.md both point at them) and
+      # all three do one thing: `docker compose pull && up -d` in their own
+      # directory. Nothing executed them, and the only way they break is the
+      # compose file they depend on failing to parse — so that is what gets
+      # checked. Actually pulling images on every push is not worth the minutes.
+      - name: The Docker update path's compose file parses
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.yml config >/dev/null
+          echo "docker-compose.yml parses; update.{sh,command,bat} have a valid target"
+          # Each script must cd to its own directory first, or double-clicking it
+          # from anywhere runs compose against the wrong (or no) project.
+          for f in update.sh update.command; do
+            grep -q 'cd "$(dirname "$0")"' "$f" || {
+              echo "::error::$f does not cd to its own directory — double-clicking it would fail"; exit 1; }
+          done
+          grep -q 'cd /d "%~dp0"' update.bat || {
+            echo "::error::update.bat does not cd to its own directory"; exit 1; }
 
       - name: install.sh installs the latest release, verifying both times
         run: |
@@ -151,6 +286,99 @@ jobs:
           grep -qi "no signature" "$W/nosig.log" || {
             echo "::error::the refusal did not say the signature was missing"; cat "$W/nosig.log"; exit 1; }
           echo "unsigned release refused, and nothing was installed"
+
+      # THE ED25519 FALLBACK, which nothing had ever executed.
+      #
+      # install.sh prefers checksums.txt.sshsig and falls back to the older raw
+      # checksums.txt.ed25519. Every step above installs `latest`, which carries
+      # BOTH — so the preferred path ran every time and the fallback ran never.
+      #
+      # That matters because the fallback is the ONLY thing that can verify a
+      # pre-sshsig release, and `install.sh --version vX.Y.Z` is the documented
+      # rollback path. v3.23.2 published without its sshsig (deliberately left that
+      # way — see the changelog), so it is verifiable only through this branch. A
+      # broken fallback would mean the rollback path refuses every older release,
+      # and nobody would find out until they needed it.
+      #
+      # --version is also otherwise untested, and it is the flag a rollback uses.
+      - name: install.sh verifies a pre-sshsig release via the ed25519 fallback
+        run: |
+          set -uo pipefail
+          out="$(bash scripts/install.sh --version v3.23.2 --prefix "$RUNNER_TEMP/old" --no-service 2>&1)"
+          code=$?
+          echo "$out"
+          if [ "$code" -ne 0 ]; then
+            echo "::error::install.sh could not install v3.23.2 — the rollback path is broken"; exit 1
+          fi
+          # It must have verified, and specifically via the ed25519 branch. A
+          # "signature: ok (ssh-ed25519...)" here would mean the test is not
+          # exercising the fallback at all and proves nothing about it.
+          case "$out" in
+            *"signature: ok (ed25519,"*) echo "the ed25519 fallback verified a pre-sshsig release" ;;
+            *"signature: ok (ssh-ed25519"*)
+              echo "::error::this release now has an sshsig, so this step no longer exercises the fallback"
+              exit 1 ;;
+            *)  echo "::error::v3.23.2 installed WITHOUT a verified signature"; exit 1 ;;
+          esac
+          grep -q "checksum : ok" <<<"$out" || { echo "::error::checksum was not verified"; exit 1; }
+          v="$("$RUNNER_TEMP/old/bloxsmith" --version)"
+          case "$v" in
+            "bloxsmith 3.23.2") echo "and the pinned version is the one installed: $v" ;;
+            *) echo "::error::--version v3.23.2 installed '$v'"; exit 1 ;;
+          esac
+
+      # `bloxsmith update --check` had no test that ran the COMMAND. checkUpdate is
+      # covered by four Go tests, but the CLI dispatch around it -- flag parsing,
+      # the message, the exit code -- was not, and that is the layer v3.30.1's bug
+      # lived in for the vault-passphrase command.
+      - name: bloxsmith update --check reports against the real release feed
+        run: |
+          set -uo pipefail
+          BIN="$RUNNER_TEMP/bx/bloxsmith"
+          out="$("$BIN" update --check 2>&1)"; code=$?
+          echo "$out"
+          if [ "$code" -ne 0 ]; then
+            echo "::error::update --check exited $code"; exit 1
+          fi
+          # install.sh just installed the LATEST release, so --check must say it is
+          # up to date. "update available" here would mean one of the two disagrees
+          # with the other about what the latest version is.
+          case "$out" in
+            *"up to date"*) echo "up to date, as it must be right after installing latest" ;;
+            *)  echo "::error::update --check did not report up-to-date immediately after installing the latest release"
+                exit 1 ;;
+          esac
+          # --check must not have replaced the binary. A "check" that applies is the
+          # worst possible reading of the flag.
+          "$BIN" --version || { echo "::error::the binary is broken after --check"; exit 1; }
+
+      # install.sh --uninstall was never run. install.ps1's uninstall IS tested on
+      # Windows; the shell one was not, and it is the path that shells out to
+      # `bloxsmith service uninstall` and deletes files.
+      - name: install.sh --uninstall removes the binary and templates, keeps config
+        run: |
+          set -uo pipefail
+          PREFIX="$RUNNER_TEMP/bx"
+          CFG="${XDG_CONFIG_HOME:-$HOME/.config}/bloxsmith"
+          mkdir -p "$CFG"
+          echo "PORT=8080" > "$CFG/.env"
+
+          out="$(bash scripts/install.sh --uninstall --prefix "$PREFIX" 2>&1)"; code=$?
+          echo "$out"
+          if [ "$code" -ne 0 ]; then echo "::error::--uninstall exited $code"; exit 1; fi
+          if [ -e "$PREFIX/bloxsmith" ]; then
+            echo "::error::the binary is still at $PREFIX/bloxsmith after --uninstall"; exit 1
+          fi
+          if [ -d "$PREFIX/templates" ]; then
+            echo "::error::templates/ still present after --uninstall"; exit 1
+          fi
+          # Without --purge the config MUST survive: it holds the vault passphrase
+          # and the API key, and a vault whose passphrase was deleted by an
+          # uninstall is unopenable for good.
+          if [ ! -f "$CFG/.env" ]; then
+            echo "::error::--uninstall deleted $CFG/.env without --purge"; exit 1
+          fi
+          echo "uninstalled; config left in place, as it must be"
 
   # PSScriptAnalyzer gate for the Windows installer — catches PowerShell errors
   # without a manual Windows run. Error severity only; warnings don't fail CI.
