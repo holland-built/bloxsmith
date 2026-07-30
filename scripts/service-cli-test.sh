@@ -192,24 +192,52 @@ else
     bad "service stop reported success but port $PORT_T is still answering"
 fi
 
-# --- 6. restart must bring it back ------------------------------------------
-if "$BIN" service restart >/dev/null 2>&1; then
-    ok "service restart exited 0"
+# --- 6. restart must END WITH THE SERVICE RUNNING, from either state ---------
+# Both directions, because they take different code paths and only one of them
+# ever worked. Restarting from STOPPED is the case that was broken: kardianos's
+# Restart is stop-then-start and aborts if the stop fails, which on launchd it
+# does when nothing is running. `service restart` therefore failed and started
+# nothing — the one command whose entire promise is that it will be running
+# afterwards.
+serving() {
+    for _ in $(seq 1 60); do
+        curl -fsS -o /dev/null "http://localhost:$PORT_T/api/vault/status" 2>/dev/null && return 0
+        sleep 0.5
+    done
+    return 1
+}
+
+# 6a. from STOPPED (the service is stopped at this point, from check 5).
+out="$("$BIN" service restart 2>&1)"; code=$?
+if [ "$code" -eq 0 ]; then
+    ok "service restart from STOPPED exited 0"
 else
-    bad "service restart failed"
+    bad "service restart from STOPPED exited $code: $out"
 fi
-back=no
-for _ in $(seq 1 60); do
-    if curl -fsS -o /dev/null "http://localhost:$PORT_T/api/vault/status" 2>/dev/null; then
-        back=yes; break
-    fi
-    sleep 0.5
-done
-if [ "$back" = yes ]; then
-    ok "restart brought the service back up and serving"
+if serving; then
+    ok "restart from stopped left the service actually serving"
 else
-    bad "restart reported success but nothing is serving on port $PORT_T"
+    bad "after restart from stopped, nothing is serving on port $PORT_T (restart exited $code)"
 fi
+# It must not claim it "restarted" something that was never running.
+case "$out" in
+    *"was not running"*) ok "restart says plainly that it started a service that was not running" ;;
+    *) bad "restart from stopped did not distinguish itself from a real restart: $out" ;;
+esac
+
+# 6b. from RUNNING (it is now running, from 6a).
+out="$("$BIN" service restart 2>&1)"; code=$?
+if [ "$code" -eq 0 ]; then
+    ok "service restart from RUNNING exited 0"
+else
+    bad "service restart from RUNNING exited $code: $out"
+fi
+if serving; then
+    ok "restart from running left the service actually serving"
+else
+    bad "after restart from running, nothing is serving on port $PORT_T"
+fi
+
 "$BIN" service stop >/dev/null 2>&1
 
 # --- 7. uninstall, and prove it is deregistered ------------------------------
