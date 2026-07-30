@@ -441,8 +441,46 @@ removes it while keeping unattended restarts. What genuinely narrows it:
 
 | Instead of | Do this | What it buys |
 |---|---|---|
+| `VAULT_PASSPHRASE` in `.env` | **`bloxsmith vault-passphrase set`** (macOS) | The passphrase moves into the login keychain, so it no longer travels with a disk image, a Time Machine backup or a copied state directory. Still readable by the operator's own processes |
 | `VAULT_PASSPHRASE` in `.env` | `VAULT_PASSPHRASE_FILE` pointing at a mounted secret | Keeps it out of `docker inspect` and the process environment; still readable by the operator's own processes |
 | Auto-unlock at all | Leave it unset and unlock in the browser | The passphrase is never on disk — at the cost of a browser visit after every restart |
+
+#### `bloxsmith vault-passphrase` (macOS only)
+
+```
+bloxsmith vault-passphrase set       # prompts twice, no echo, stores it
+bloxsmith vault-passphrase status    # says where the next start would get it from
+bloxsmith vault-passphrase remove    # deletes the entry
+```
+
+**Two steps, and skipping the second achieves nothing.** After `set`, remove
+`VAULT_PASSPHRASE` (and any `VAULT_PASSPHRASE_FILE`) from your `.env` — explicit
+configuration wins over the keychain by design, so while either is set the plaintext
+file is still the thing being used. The server says so at startup when it finds both:
+
+```
+[vault] a vault passphrase is stored in the macOS keychain AND supplied via
+VAULT_PASSPHRASE. The VAULT_PASSPHRASE value is the one being used and the keychain
+entry is being ignored. Remove the VAULT_PASSPHRASE value to actually get the
+passphrase off disk.
+```
+
+Every start logs which source won (`[vault] auto-unlock passphrase source: …`),
+because "vault unlocked" on its own never told you whether the file you thought you
+had deleted was still in play.
+
+**What it does not buy.** It does **not** make the passphrase secret from this
+machine. The binary is installed by curl, Homebrew or a tarball rather than as a
+signed app with a stable identity, so the keychain item cannot be scoped in a way
+that makes other programs prompt — anything running as you can read it back exactly
+as the server does. It also puts the passphrase on a command line for a fraction of
+a second while storing it (macOS `security` has no way to take a secret on stdin),
+where another local process could catch it in `ps`. One brief window, once, against
+a file that otherwise holds the same secret for the life of the install.
+
+**Windows and Linux: not built.** DPAPI and the Secret Service are not implemented.
+The subcommand refuses on those platforms and names the platform, rather than
+appearing to work; use `VAULT_PASSPHRASE_FILE` or no auto-unlock there.
 
 **Do not read "AES-encrypted vault" as "safe on a compromised machine."** It is
 not, and no setting makes it so. Treat a compromised host as a compromised tenant
@@ -543,7 +581,8 @@ which is a worse failure than the one it would fix.
   against a process running as the operator, which can read the key. See
   [the audit chain's key](#the-audit-chains-key).
 - The vault's encryption protects a stolen disk, not a live machine: with auto-unlock the
-  passphrase is on that machine by necessity. See
+  passphrase is on that machine by necessity. On macOS, `bloxsmith vault-passphrase set`
+  moves it into the login keychain so it at least stops travelling with a backup. See
   [what "AES-encrypted vault" is worth](#what-aes-encrypted-vault-is-worth-exactly).
 - **Asking the AI box a question sends live tenant data to your LLM provider.** Nothing
   else in the dashboard leaves your network. See
