@@ -179,19 +179,44 @@ jobs:
               f.write("BODYEOF\n")
           PY
 
-      - name: Open issue on drift
+      # ONE THREAD, NOT ONE ISSUE A NIGHT.
+      #
+      # This opened a fresh "MCP drift detected (DATE)" issue on every run that saw
+      # drift, and the baselines are only refreshed by hand — so the SAME unrefreshed
+      # difference was re-reported every night and never closed. Five open issues had
+      # piled up (2026-07-24 onward), each mostly repeating the last.
+      #
+      # That is why the two-night outage went unnoticed: the signal was already noise,
+      # and one more quiet night looked like a good night. A detector that cries wolf
+      # nightly has the same end state as one that says nothing.
+      #
+      # Now it comments on the open thread instead. A fresh issue appears only once
+      # the previous one has been dealt with and closed, which makes a NEW issue mean
+      # something again.
+      - name: Open or update the drift issue
         if: steps.gate.outputs.run == 'true' && steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           DATE=$(date -u +%Y-%m-%d)
-          gh issue create --repo "${{ github.repository }}" \
-            --title "MCP drift detected ($DATE)" \
-            --label "mcp-drift" \
-            --body "${{ steps.diff.outputs.body }}" || \
-          gh issue create --repo "${{ github.repository }}" \
-            --title "MCP drift detected ($DATE)" \
-            --body "${{ steps.diff.outputs.body }}"
+          TITLE="MCP drift detected — baselines need review"
+          RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --search "$TITLE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+
+          if [ -n "$EXISTING" ]; then
+            {
+              printf 'Still drifting as of %s ([run](%s)).\n\n' "$DATE" "$RUN"
+              printf '%s\n' "${{ steps.diff.outputs.body }}"
+            } | gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body-file -
+          else
+            printf '%s\n' "${{ steps.diff.outputs.body }}" | \
+              gh issue create --repo "${{ github.repository }}" \
+                --title "$TITLE" --label "mcp-drift" --body-file - || \
+            printf '%s\n' "${{ steps.diff.outputs.body }}" | \
+              gh issue create --repo "${{ github.repository }}" \
+                --title "$TITLE" --body-file -
+          fi
 
       # A DETECTOR THAT CANNOT REPORT ITS OWN FAILURE IS NOT A DETECTOR.
       #
