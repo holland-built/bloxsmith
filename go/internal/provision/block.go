@@ -101,12 +101,26 @@ func (p *BlockProvisioner) blockTags(bdef M) M {
 	return tags
 }
 
-func (p *BlockProvisioner) exists(bdef M) (bool, error) {
+// exists takes the network n that createBlock already parsed, rather than
+// re-reading bdef["address"], so the existence check names the SAME object the
+// create names: createBlock POSTs networkAddr(n) (the masked network address,
+// see ipNet in helpers.go), so a template written 10.0.1.5/24 creates 10.0.1.0.
+// Filtering on the raw string looked for 10.0.1.5, never matched the block the
+// previous run had created, and issued a duplicate create on a live tenant.
+//
+// Honest scope: this is a DELIBERATE divergence from the Python reference,
+// which is not present in this repo and so could not be checked. It is taken
+// anyway because the Go create path is internally inconsistent otherwise —
+// every other participant (the POST body, the dry-run preview, the
+// blocks_created bookkeeping) already uses the masked address. bdef is still
+// read for the cidr term and both error messages. FindBlocksForRetag has the
+// same raw-address bug and is deliberately NOT changed here (finding B-F1).
+func (p *BlockProvisioner) exists(bdef M, n *ipNetT) (bool, error) {
 	space, err := cspq(p.spaceID)
 	if err != nil {
 		return false, err
 	}
-	addr, err := cspq(pyStr(bdef["address"]))
+	addr, err := cspq(networkAddr(n))
 	if err != nil {
 		return false, err
 	}
@@ -140,7 +154,7 @@ func (p *BlockProvisioner) createBlock(bdef M, parent *ipNetT, result M) error {
 		appendTo(result, "blocks_created", M{"address": networkAddr(n), "cidr": cidr,
 			"id": "(dry-run)", "status": pyStr(bdef["status"])})
 	} else {
-		ex, err := p.exists(bdef)
+		ex, err := p.exists(bdef, n)
 		if err != nil {
 			return err
 		}

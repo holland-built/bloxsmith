@@ -1152,3 +1152,119 @@ func TestBlockProvisionCreatesASubnetOfAnExistingBlockAtTheSameAddress(t *testin
 		}
 	}
 }
+
+// RAW TEMPLATE ADDRESS vs MASKED NETWORK ADDRESS.
+//
+// Every fixture above writes addresses that are already network addresses, so
+// masking is a no-op and the two cannot be told apart. These two tests use a
+// HOST address (10.0.1.5/24) — the only shape where the existence check and the
+// create can disagree about which object they mean.
+//
+// Still NOT pinned: IPv6, pagination of the existence read, and
+// FindBlocksForRetag, which has the same raw-address bug and is out of scope.
+
+// THE CONSEQUENCE. A previous run of this same template created 10.0.1.0/24
+// (createBlock POSTs the masked address). Re-running it must recognise its own
+// block and skip. Checking the raw 10.0.1.5 finds nothing and creates a
+// DUPLICATE block on a live tenant, which is why zero POSTs is the assertion
+// and not merely "no error".
+func TestBlockProvisionRerunMatchesItsOwnHostAddressedBlock(t *testing.T) {
+	e, f := newBlockAPIHarness(t)
+
+	// What the tenant holds after the first run: the MASKED address, stored the
+	// way createBlock wrote it. cidr is a string because blockFilterMatches
+	// compares strings — same idiom as the /16 fixture above.
+	existing := map[string]string{
+		"space":   "ipam/ip_space/space-1",
+		"address": "10.0.1.0",
+		"cidr":    "24",
+	}
+	f.blockBodyFor = func(q url.Values) string {
+		if blockFilterMatches(q.Get("_filter"), existing) {
+			return `{"results":[{"id":"ipam/address_block/existing-24","address":"10.0.1.0","cidr":24}]}`
+		}
+		return `{"results":[]}`
+	}
+
+	// Guard: if the fixture would not answer yes to the correct query, this test
+	// could pass for the wrong reason (an empty tenant also produces no match).
+	if !blockFilterMatches(`space=="ipam/ip_space/space-1" and address=="10.0.1.0" and cidr==24`, existing) {
+		t.Fatal("the fixture does not report 10.0.1.0/24 as existing — this test cannot distinguish anything")
+	}
+
+	var steps []string
+	// DryRun is spelled out: the dry-run path never calls exists() at all, so a
+	// defaulted-true config would skip the code under test entirely.
+	p := e.NewBlockProvisioner(&BlockConfig{
+		Name: "regional-pool", IPSpace: "default", DryRun: false, ExtraTags: M{},
+		Blocks: []any{M{"address": "10.0.1.5", "cidr": 24, "status": "deployed"}},
+	}, collectSteps(&steps))
+
+	if _, err := p.Provision(false); err != nil {
+		t.Fatalf("Provision() error = %v, want nil", err)
+	}
+
+	if posts := f.posts(); len(posts) != 0 {
+		t.Fatalf("upstream received %d create(s), want 0: %v\n"+
+			"The tenant already holds 10.0.1.0/24, which is exactly what this template creates "+
+			"(10.0.1.5/24 masks to 10.0.1.0). A create here is a DUPLICATE block on a live tenant, "+
+			"issued because the existence check looked up the raw template address instead of the "+
+			"masked one it would go on to POST.", len(posts), posts)
+	}
+
+	skipped := 0
+	for _, s := range steps {
+		if strings.Contains(s, "Already exists — skipping") {
+			skipped++
+		}
+	}
+	if skipped != 1 {
+		t.Fatalf("saw %d \"Already exists — skipping\" step(s), want exactly 1. steps: %v\n"+
+			"The run must SAY it recognised its own block, not merely happen to send no POST.", skipped, steps)
+	}
+}
+
+// THE QUERY, and the agreement between the two calls. Asserted against an EMPTY
+// tenant so the create actually goes out and both wire messages can be compared:
+// the address the GET filtered on and the address the POST creates must be the
+// same string. Asserting only the filter would leave open that the fix moved the
+// disagreement rather than removing it.
+func TestBlockExistenceCheckQueriesTheMaskedAddress(t *testing.T) {
+	e, f := newBlockAPIHarness(t) // default: nothing exists upstream
+
+	p := e.NewBlockProvisioner(&BlockConfig{
+		Name: "regional-pool", IPSpace: "default", DryRun: false, ExtraTags: M{},
+		Blocks: []any{M{"address": "10.0.1.5", "cidr": 24, "status": "deployed"}},
+	}, func(M) {})
+
+	if _, err := p.Provision(false); err != nil {
+		t.Fatalf("Provision() error = %v, want nil", err)
+	}
+
+	queries := f.blockQueries()
+	if len(queries) != 1 {
+		t.Fatalf("upstream received %d existence read(s), want 1: %v", len(queries), queries)
+	}
+	filter := queries[0].Get("_filter")
+	if !strings.Contains(filter, `address=="10.0.1.0"`) {
+		t.Fatalf("existence read _filter = %q, want address==\"10.0.1.0\" — the create POSTs the masked "+
+			"network address, so the check must look for that same object", filter)
+	}
+	// The negative matters on its own: a filter carrying BOTH terms would satisfy
+	// the assertion above while still asking about the wrong object.
+	if strings.Contains(filter, `address=="10.0.1.5"`) {
+		t.Fatalf("existence read _filter = %q, still carries the raw template address 10.0.1.5 — no block "+
+			"is ever stored under a host address, so this check can never match and every re-run "+
+			"duplicates the block", filter)
+	}
+
+	posts := f.posts()
+	if len(posts) != 1 {
+		t.Fatalf("upstream received %d create(s), want 1 (the tenant is empty): %v", len(posts), posts)
+	}
+	// The check and the create must name the same object, whatever that object is.
+	if got := pyStr(posts[0]["address"]); !strings.Contains(filter, fmt.Sprintf("address==%q", got)) {
+		t.Fatalf("the create POSTed address %q but the existence read filtered on %q — the check and the "+
+			"create are asking about different blocks, so the check can never prevent a duplicate", got, filter)
+	}
+}
