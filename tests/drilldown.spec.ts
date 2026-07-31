@@ -33,7 +33,27 @@ test('host status legend drills to Infra with status chip', async ({ page }) => 
   await expect(offlineRow).toBeVisible();
   await offlineRow.click();
   await expect(page).toHaveURL(/#infra\?status=offline/);
-  await expect(page.getByText(/status: offline/)).toBeVisible();
+
+  // The v3.36.0 fix above made the CLICK reliable. It did not make this
+  // assertion reliable, and the entry said so: "if it returns, the diagnosis
+  // was wrong." It returned twice on 2026-07-31, both times on the first full
+  // run after :8090 rebuilt, and both times HERE — never on the click.
+  //
+  // The cause is a SECOND fetch, not the first. Arriving at #infra mounts a
+  // different tab, and ui/src/tabs/Infra.jsx:187 early-returns
+  // `if (loading && !data) return <Skeleton/>` — so until Infra's own
+  // /api/data resolves, the Host Inventory card and this chip are not in the
+  // DOM at all. The chip itself is derived from the URL, not from the data
+  // (Infra.jsx:290-300), so nothing here is waiting on the right value; it is
+  // waiting on the component being allowed to render.
+  //
+  // Playwright's default 5s expect budget covers that round trip on a warm
+  // server (full suite: ~33s) but not a cold one rebuilding after a deploy
+  // (~1.2m). The explicit budget below is sized for the cold case. This is
+  // NOT a blanket timeout bump to silence a flake: it is scoped to the one
+  // assertion that genuinely waits on a network round trip, and it still
+  // fails — just later — if the data never arrives.
+  await expect(page.getByText(/status: offline/)).toBeVisible({ timeout: 20_000 });
 });
 
 test('Daily zones-with-issues KPI drills to DNS issues-only view', async ({ page }) => {
