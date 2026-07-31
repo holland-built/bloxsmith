@@ -60,6 +60,7 @@ TARGET_RELS=(
   "scripts/install.sh"
   "go/internal/audit/audit.go"
   "go/internal/server/provision.go"
+  "go/internal/provision/block.go"
 )
 
 sha() { shasum -a 256 "$1" | awk '{print $1}'; }
@@ -618,6 +619,79 @@ then
   finish_control "i" "$REL" "$GO" go test ./internal/server/ -run '^TestStreamPanicDoesNotKillTheServer$' -v
 else
   bad "i: anchor not found (defer d.recoverStream(&emit, r) immediately followed by the confirm==DELETE check) — this guard is no longer testing anything"
+fi
+
+# =============================================================================
+# j. rollback deletes newest-first -- go/internal/provision/block.go
+#    the reverse loop in (*BlockProvisioner).rollback made to run FORWARD.
+#    rollback undoes a half-finished provision. Blocks must be deleted
+#    newest-first because a child address block sits INSIDE its parent, so
+#    deleting the parent first can fail outright or orphan the child that is
+#    still nested in it. Forward order silently reverses that: the loop still
+#    runs, still deletes, still reports a rollback -- it just unwinds in the
+#    one order the containment relationship forbids.
+#    SCOPE: this proves only that the ORDER is asserted. It does not prove
+#    rollback is triggered on every failure path, nor that a failed DELETE is
+#    handled -- those are separate controls nobody has written yet.
+# =============================================================================
+say "j. rollback deletes newest-first -- go/internal/provision/block.go"
+REL="go/internal/provision/block.go"
+verify_pristine "$REL"
+if apply_py "$ROOT/$REL" <<'PY'
+import sys
+path = sys.argv[1]
+OLD = "\tfor i := len(created) - 1; i >= 0; i-- {"
+NEW = (
+    "\t// MUTATED by control-guard.sh: rollback now unwinds oldest-first, so a\n"
+    "\t// parent block is deleted before the child nested inside it.\n"
+    "\tfor i := 0; i < len(created); i++ {"
+)
+content = open(path, encoding="utf-8").read()
+n = content.count(OLD)
+if n != 1:
+    sys.stderr.write("ANCHOR_COUNT=%d\n" % n)
+    sys.exit(1)
+open(path, "w", encoding="utf-8").write(content.replace(OLD, NEW, 1))
+PY
+then
+  ok "j: mutation applied (rollback loop reversed to forward order)"
+  finish_control "j" "$REL" "$GO" go test ./internal/provision/ -run '^TestBlockProvisionRollsBackCreatedBlocksInReverseOrder$' -v
+else
+  bad "j: anchor not found (for i := len(created) - 1; i >= 0; i-- {) — this guard is no longer testing anything"
+fi
+
+# =============================================================================
+# k. incomplete-teardown record -- go/internal/provision/decommission.go
+#    deletes `d.emitIncomplete(result, "delete DHCP ranges", err)`.
+#    A teardown deletes irreversibly and has NO rollback. If a delete fails
+#    partway, emitIncomplete is the ONLY record the operator ever gets of what
+#    is already gone. Without it the run just returns an error, and the
+#    operator is left believing the tenant is untouched while the forward zone
+#    (and whatever else ran before the failure) has already been destroyed.
+#    SCOPE: the DHCP-ranges step is the probe. The other four delete steps
+#    carry the same emitIncomplete call and are NOT covered here -- this
+#    control proves the event is asserted at one step, not at all five.
+# =============================================================================
+say "k. incomplete-teardown record -- go/internal/provision/decommission.go"
+REL="go/internal/provision/decommission.go"
+verify_pristine "$REL"
+if apply_py "$ROOT/$REL" <<'PY'
+import sys
+path = sys.argv[1]
+OLD = "\t\td.emitIncomplete(result, \"delete DHCP ranges\", err)\n"
+NEW = "\t\t// MUTATED by control-guard.sh: the incomplete-teardown record is no longer emitted; the operator learns nothing about what was already deleted.\n"
+content = open(path, encoding="utf-8").read()
+n = content.count(OLD)
+if n != 1:
+    sys.stderr.write("ANCHOR_COUNT=%d\n" % n)
+    sys.exit(1)
+open(path, "w", encoding="utf-8").write(content.replace(OLD, NEW, 1))
+PY
+then
+  ok "k: mutation applied (incomplete-teardown event no longer emitted for the DHCP-ranges step)"
+  finish_control "k" "$REL" "$GO" go test ./internal/provision/ -run '^TestDecommissionIncompleteEventReportsWhatWasAlreadyDeleted$' -v
+else
+  bad "k: anchor not found (d.emitIncomplete(result, \"delete DHCP ranges\", err)) — this guard is no longer testing anything"
 fi
 
 printf '\n'
