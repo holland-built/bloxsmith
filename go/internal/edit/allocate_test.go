@@ -73,8 +73,8 @@ type allocFake struct {
 
 // allocTwoAddresses is a two-reservation nextavailableip response. Ids are bare
 // here so the release loop's own logic is what is under test; the full-form id
-// that CSP really returns is characterized separately in
-// TestAllocateReleaseConcatenatesTheRawIDInsteadOfUsingObjectPath.
+// that CSP really returns is covered separately in
+// TestAllocateReleaseUsesObjectPathSoFullFormIDsAreNotDoubled.
 const allocTwoAddresses = `{"results":[{"id":"a-1111","address":"10.7.0.4"},{"id":"a-2222","address":"10.7.0.5"}]}`
 
 // newAllocFake starts the fake and registers its shutdown. The handler branches
@@ -499,26 +499,23 @@ func TestAllocateReleaseSkipsAddressesWithNoID(t *testing.T) {
 	}
 }
 
-// TestAllocateReleaseConcatenatesTheRawIDInsteadOfUsingObjectPath characterizes
-// CURRENT behaviour; it does not endorse it. edit.go:601 builds the release
-// path by string concatenation ("/api/ddi/v1/ipam/address/" + id) while the
-// operator-facing delete route builds the same path with ObjectPath (see
-// internal/server/edit.go:133). CSP object ids are full-form — "ipam/address/<uuid>",
-// the shape used throughout this repo — and ObjectPath exists precisely because
-// prefixing the type path onto a full-form id yields a doubled path that CSP
-// answers 501 (edit.go:141-145).
+// TestAllocateReleaseUsesObjectPathSoFullFormIDsAreNotDoubled is the case that
+// matters in production: CSP returns full-form ids ("ipam/address/<uuid>"), the
+// shape used throughout this repo. The release must build its path with
+// ObjectPath, exactly like the operator-facing delete route (see
+// internal/server/edit.go's ipamAddressDelete), NOT by concatenating the id onto
+// the type path — that yields /api/ddi/v1/ipam/address/ipam/address/<uuid>,
+// which CSP answers 501 (see ObjectPath's doc). While that was the behaviour,
+// every rollback against a real tenant failed and the addresses stayed reserved.
 //
-// So when the tenant returns full-form ids, the release DELETE goes to
-// /api/ddi/v1/ipam/address/ipam/address/<uuid>. This test pins that path
-// exactly, so that whoever fixes it sees this test fail and finds the reasoning
-// here. Reported as a finding, deliberately NOT fixed in a test-only job.
-func TestAllocateReleaseConcatenatesTheRawIDInsteadOfUsingObjectPath(t *testing.T) {
+// This was previously pinned as observed behaviour and is now asserted correct.
+func TestAllocateReleaseUsesObjectPathSoFullFormIDsAreNotDoubled(t *testing.T) {
 	f := newAllocFake(t, allocConfig{
 		allocBody: `{"results":[{"id":"ipam/address/a-1111","address":"10.7.0.4"},{"id":"ipam/address/a-2222","address":"10.7.0.5"}]}`,
 		dnsStatus: 500,
 	})
 
-	_, status := f.client().SelfserviceAllocate(M{
+	res, status := f.client().SelfserviceAllocate(M{
 		"subnet_id": "s-42", "count": float64(2), "dry": false,
 		"dns": M{"zone_id": "z-1", "name": "web"},
 	})
@@ -530,17 +527,57 @@ func TestAllocateReleaseConcatenatesTheRawIDInsteadOfUsingObjectPath(t *testing.
 	if len(dels) != 2 {
 		t.Fatalf("DELETEs = %d, want 2", len(dels))
 	}
-	// INHERITED, not endorsed: the doubled "ipam/address/" segment is the bug.
 	for i, want := range []string{
-		"/api/ddi/v1/ipam/address/ipam/address/a-1111",
-		"/api/ddi/v1/ipam/address/ipam/address/a-2222",
+		"/api/ddi/v1/ipam/address/a-1111",
+		"/api/ddi/v1/ipam/address/a-2222",
 	} {
 		if dels[i].path != want {
-			t.Fatalf("DELETE[%d] path = %q, want the currently-emitted %q\n"+
-				"If this failed because the path is now the correct "+
-				"/api/ddi/v1/ipam/address/a-1111, the finding this test documents "+
-				"has been fixed — update this test rather than the fix.", i, dels[i].path, want)
+			t.Fatalf("DELETE[%d] path = %q, want %q — a doubled \"ipam/address/\" segment "+
+				"is answered 501 by CSP, so the reservation is never released and leaks "+
+				"until the subnet is exhausted", i, dels[i].path, want)
 		}
+	}
+
+	// The report must name the ids as the tenant gave them, full-form.
+	if got := allocIDs(t, "released", res["released"]); !allocEqual(got, []string{"ipam/address/a-1111", "ipam/address/a-2222"}) {
+		t.Fatalf("released = %v, want both full-form ids", got)
+	}
+	if v, present := res["orphaned"]; present {
+		t.Fatalf("orphaned = %v, want the key absent when every release succeeded", v)
+	}
+}
+
+// TestAllocateReleaseOrphansAnIDItCannotTarget: an id ObjectPath rejects (a
+// different kind, traversal, extra segments) yields no DELETE at all, so the
+// address is still reserved in the tenant. It must be reported orphaned —
+// calling it released would tell the operator the cleanup is done while a real
+// IP is stranded.
+func TestAllocateReleaseOrphansAnIDItCannotTarget(t *testing.T) {
+	f := newAllocFake(t, allocConfig{
+		allocBody: `{"results":[{"id":"ipam/address/a-1111","address":"10.7.0.4"},{"id":"ipam/subnet/../../secret","address":"10.7.0.5"}]}`,
+		dnsStatus: 500,
+	})
+
+	res, status := f.client().SelfserviceAllocate(M{
+		"subnet_id": "s-42", "count": float64(2), "dry": false,
+		"dns": M{"zone_id": "z-1", "name": "web"},
+	})
+
+	if status != 502 {
+		t.Fatalf("status = %d, want 502", status)
+	}
+	dels := f.byMethod(http.MethodDelete)
+	if len(dels) != 1 {
+		t.Fatalf("DELETEs = %d, want 1 — an unroutable id must not produce a DELETE at a guessed path", len(dels))
+	}
+	if dels[0].path != "/api/ddi/v1/ipam/address/a-1111" {
+		t.Fatalf("DELETE path = %q, want the one address that could be targeted", dels[0].path)
+	}
+	if got := allocIDs(t, "released", res["released"]); !allocEqual(got, []string{"ipam/address/a-1111"}) {
+		t.Fatalf("released = %v, want only the address actually deleted", got)
+	}
+	if got := allocIDs(t, "orphaned", res["orphaned"]); !allocEqual(got, []string{"ipam/subnet/../../secret"}) {
+		t.Fatalf("orphaned = %v, want the address still reserved in the tenant", got)
 	}
 }
 

@@ -598,7 +598,25 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 				if isFalsy(aid) {
 					continue
 				}
-				_, dstatus, _ := c.Rest.Write("DELETE", "/api/ddi/v1/ipam/address/"+pyStr(aid), nil, nil)
+				// Build the release path the same way every other delete in this
+				// repo does (see internal/server/edit.go's ipamAddressDelete).
+				// This used to be raw concatenation, "/api/ddi/v1/ipam/address/"
+				// + id. CSP ids are full-form ("ipam/address/<uuid>"), so that
+				// produced /api/ddi/v1/ipam/address/ipam/address/<uuid> — the
+				// doubled prefix CSP answers 501 (see ObjectPath's doc). Every
+				// rollback therefore failed against a real tenant: the addresses
+				// landed in `orphaned` and stayed reserved until the subnet was
+				// exhausted, which is exactly what this release exists to prevent.
+				// ObjectPath accepts both id shapes, so bare ids still work.
+				objPath, perr := ObjectPath("ipam/address", pyStr(aid))
+				if perr != nil {
+					// No path can be built for this id, so no DELETE is sent —
+					// the address is still reserved upstream and must be reported
+					// as orphaned, never as released.
+					orphaned = append(orphaned, aid)
+					continue
+				}
+				_, dstatus, _ := c.Rest.Write("DELETE", objPath, nil, nil)
 				if dstatus == 200 || dstatus == 204 || dstatus == 404 {
 					released = append(released, aid)
 				} else {
