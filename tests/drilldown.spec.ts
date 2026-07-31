@@ -47,12 +47,27 @@ test('host status legend drills to Infra with status chip', async ({ page }) => 
   // (Infra.jsx:290-300), so nothing here is waiting on the right value; it is
   // waiting on the component being allowed to render.
   //
-  // Playwright's default 5s expect budget covers that round trip on a warm
-  // server (full suite: ~33s) but not a cold one rebuilding after a deploy
-  // (~1.2m). The explicit budget below is sized for the cold case. This is
-  // NOT a blanket timeout bump to silence a flake: it is scoped to the one
-  // assertion that genuinely waits on a network round trip, and it still
-  // fails — just later — if the data never arrives.
+  // WHAT IS ESTABLISHED, and what is NOT.
+  //
+  // Established from source: this assertion waits on a SECOND fetch, and the
+  // component is not merely slow to fill in — it does not exist yet.
+  //
+  // NOT established: why that takes so long on a cold run. The 20s budget
+  // below was added on 2026-07-31 on the theory that the default 5s simply
+  // was not enough. THAT THEORY IS WRONG, or at least not the whole story:
+  // the very next full run after a rebuild failed here again, with 20s.
+  //
+  // So the honest state is: this test fails on roughly the first full-suite
+  // run after :8090 rebuilds (three occurrences on 2026-07-31, every one on a
+  // ~1.1-1.2m run) and passes every warm run (~33s, 126/126, many times) and
+  // every solo run (~0.5s). Two diagnoses have now been offered for it and
+  // both were wrong. The budget is kept because the second-fetch dependency
+  // above is real and a 5s budget is genuinely too tight for it — but it is
+  // NOT presented as the fix, because it demonstrably is not one.
+  //
+  // Do not "fix" this by widening the locator or by raising the number again
+  // until someone has actually captured which line fails on a cold run and
+  // what the page contains at that moment.
   await expect(page.getByText(/status: offline/)).toBeVisible({ timeout: 20_000 });
 });
 
