@@ -57,6 +57,9 @@ TARGET_RELS=(
   "go/passcli_rotate.go"
   "go/internal/provision/decommission.go"
   "go/internal/store/store.go"
+  "scripts/install.sh"
+  "go/internal/audit/audit.go"
+  "go/internal/server/provision.go"
 )
 
 sha() { shasum -a 256 "$1" | awk '{print $1}'; }
@@ -156,6 +159,73 @@ finish_control() {
 # this is property 1, made mechanical instead of a promise.
 apply_py() {
   python3 - "$1"
+}
+
+# g_install_sig_refusal_test is the scoped "test command" for control g. There
+# is no Go test for install.sh's refusal — ci.yml proves it against the real
+# GitHub release over the network (job install-sh, step "install.sh refuses a
+# tampered or unsigned checksums.txt"), which is impractical to redo inside
+# this script. So this reimplements the SAME curl-shim technique that step
+# uses — a fake `curl` on PATH that serves files from a local directory
+# instead of hitting the network — against a synthetic, fully local release: a
+# forged archive, a matching checksums.txt, and a signature made with a
+# THROWAWAY keypair that is never the project's real one. install.sh's pinned
+# public key cannot verify a throwaway signature, so an intact check must
+# refuse exactly as it would refuse a tampered checksums.txt.
+#
+# Exit 0 (a PASS) when install.sh correctly refuses; exit nonzero when it
+# installs the unverifiable release anyway — which is what must happen once
+# the signature check itself is disabled, and is what proves this test was
+# ever exercising that check.
+g_install_sig_refusal_test() {
+  local w os asset_fmt asset hash out_log
+  w="$(mktemp -d)"
+  mkdir -p "$w/bin" "$w/rel" "$w/payload" "$w/out"
+
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  case "$os" in
+    darwin) asset_fmt='bloxsmith_%s_macOS_universal.tar.gz' ;;
+    linux)  asset_fmt='bloxsmith_%s_linux_amd64.tar.gz' ;;
+    *) echo "g: unsupported OS $os for this offline fixture" >&2; rm -rf "$w"; return 1 ;;
+  esac
+  asset="$(printf "$asset_fmt" "9.9.9")"
+
+  printf '#!/bin/sh\necho FORGED\n' > "$w/payload/bloxsmith"
+  chmod +x "$w/payload/bloxsmith"
+  tar -czf "$w/rel/$asset" -C "$w/payload" bloxsmith
+  hash="$(sha "$w/rel/$asset")"
+  printf '%s  %s\n' "$hash" "$asset" > "$w/rel/checksums.txt"
+
+  ssh-keygen -q -t ed25519 -N '' -f "$w/throwaway" >/dev/null
+  ssh-keygen -Y sign -f "$w/throwaway" -n bloxsmith-release "$w/rel/checksums.txt" >/dev/null 2>&1
+  mv "$w/rel/checksums.txt.sig" "$w/rel/checksums.txt.sshsig"
+
+  printf '%s\n' '#!/bin/sh' 'out=""; url=""' \
+    'while [ $# -gt 0 ]; do case "$1" in -*o) out="$2"; shift 2;; -*) case "$1" in *o) out="$2"; shift 2;; *) shift;; esac;; *) url="$1"; shift;; esac; done' \
+    'f="$(basename "$url")"; [ -f "$REL/$f" ] || exit 22; cp "$REL/$f" "$out"' > "$w/bin/curl"
+  chmod +x "$w/bin/curl"
+
+  out_log="$w/install.log"
+  if PATH="$w/bin:$PATH" REL="$w/rel" bash "$ROOT/scripts/install.sh" \
+      --version v9.9.9 --prefix "$w/out" --no-service >"$out_log" 2>&1; then
+    echo "g: install.sh installed a release whose signature does NOT verify:" >&2
+    cat "$out_log" >&2
+    rm -rf "$w"
+    return 1
+  fi
+  if [ -e "$w/out/bloxsmith" ]; then
+    echo "g: a binary was written despite the refusal" >&2
+    rm -rf "$w"
+    return 1
+  fi
+  if ! grep -q "SIGNATURE DOES NOT VERIFY" "$out_log"; then
+    echo "g: install.sh refused, but not for the right reason:" >&2
+    cat "$out_log" >&2
+    rm -rf "$w"
+    return 1
+  fi
+  rm -rf "$w"
+  return 0
 }
 
 # =============================================================================
@@ -447,6 +517,107 @@ then
   finish_control "f" "$REL" "$GO" go test ./internal/provision/ -run '^(TestSiteTeardownWritesExportBeforeFirstDelete|TestBlockTeardownWritesExportBeforeFirstDeleteAndRefusesWithout)$' -v
 else
   bad "f: anchor not found (the RECORD-then-EXECUTE block in Decommission) — this guard is no longer testing anything"
+fi
+
+# =============================================================================
+# g. install.sh refuses a signature that does not verify -- scripts/install.sh
+#    `< "$WORK/checksums.txt" >/dev/null 2>&1; then` -> `... || true; then`
+#    forces the ssh-keygen -Y verify branch to always take the "signature: ok"
+#    path. checksums.txt is signed with a key held only in this repo's release
+#    secrets; the public half is pinned in install.sh so the thing that decides
+#    a release is genuine does not travel with the release. Covered in CI only
+#    by steps that hit the real GitHub release over the network (install-sh
+#    job) -- nothing proves the refusal still fires if the check is edited
+#    out. g_install_sig_refusal_test (above) reuses that job's curl-shim
+#    technique against a fully local, synthetic release instead.
+# =============================================================================
+say "g. install.sh refuses a signature that does not verify -- scripts/install.sh"
+REL="scripts/install.sh"
+verify_pristine "$REL"
+if apply_py "$ROOT/$REL" <<'PY'
+import sys
+path = sys.argv[1]
+OLD = '            < "$WORK/checksums.txt" >/dev/null 2>&1; then'
+NEW = '            < "$WORK/checksums.txt" >/dev/null 2>&1 || true; then  # MUTATED by control-guard.sh: signature verification failure ignored'
+content = open(path, encoding="utf-8").read()
+n = content.count(OLD)
+if n != 1:
+    sys.stderr.write("ANCHOR_COUNT=%d\n" % n)
+    sys.exit(1)
+open(path, "w", encoding="utf-8").write(content.replace(OLD, NEW, 1))
+PY
+then
+  ok "g: mutation applied (ssh-keygen -Y verify failure ignored)"
+  finish_control "g" "$REL" "$ROOT" g_install_sig_refusal_test
+else
+  bad "g: anchor not found (< \"\$WORK/checksums.txt\" >/dev/null 2>&1; then) — this guard is no longer testing anything"
+fi
+
+# =============================================================================
+# h. offline audit verifier never generates a key -- go/internal/audit/audit.go
+#    `opt.NoGenerate = true` -> `opt.NoGenerate = false` in OpenReadOnly.
+#    A verifier that generated a missing key would mint the very trust root it
+#    is supposed to be checking against, seal nothing, and then have no way to
+#    tell an untouched chain from a forged one. readonly_test.go's own header
+#    comment: "Each of these was watched failing with its guard removed."
+# =============================================================================
+say "h. offline audit verifier never generates a key -- go/internal/audit/audit.go"
+REL="go/internal/audit/audit.go"
+verify_pristine "$REL"
+if apply_py "$ROOT/$REL" <<'PY'
+import sys
+path = sys.argv[1]
+OLD = "\topt.NoGenerate = true"
+NEW = "\topt.NoGenerate = false // MUTATED by control-guard.sh: offline verifier allowed to mint its own key"
+content = open(path, encoding="utf-8").read()
+n = content.count(OLD)
+if n != 1:
+    sys.stderr.write("ANCHOR_COUNT=%d\n" % n)
+    sys.exit(1)
+open(path, "w", encoding="utf-8").write(content.replace(OLD, NEW, 1))
+PY
+then
+  ok "h: mutation applied (OpenReadOnly no longer forbids generating a key)"
+  finish_control "h" "$REL" "$GO" go test ./internal/audit/ -run '^TestOpenReadOnlyNeverCreatesAKey$' -v
+else
+  bad "h: anchor not found (opt.NoGenerate = true) — this guard is no longer testing anything"
+fi
+
+# =============================================================================
+# i. SSE panic guard -- go/internal/server/provision.go
+#    removes the `defer d.recoverStream(&emit, r)` line from
+#    teardownSeedDemoStream (identified by its unique next line, since the
+#    same defer also guards the other four streams). Without it, a panic
+#    inside a teardown killed the whole server process mid-run, with a
+#    partially deleted tenant.
+#    stream_panic_test.go deliberately carries NO recover() of its own, so
+#    with the guard removed the TEST BINARY ITSELF DIES from the unrecovered
+#    panic rather than reporting an ordinary test failure. finish_control
+#    still treats this correctly: it only checks the exit status of the test
+#    command, and a crashed `go test` process exits nonzero exactly like a
+#    normal failure does -- verified by hand (a panicking, guard-removed run
+#    here printed the crash and exited nonzero, same as any other FAIL).
+# =============================================================================
+say "i. SSE panic guard -- go/internal/server/provision.go"
+REL="go/internal/server/provision.go"
+verify_pristine "$REL"
+if apply_py "$ROOT/$REL" <<'PY'
+import sys
+path = sys.argv[1]
+OLD = '\tdefer d.recoverStream(&emit, r)\n\tif !dry && confirm != "DELETE" {'
+NEW = '\t// MUTATED by control-guard.sh: panic guard removed for the teardown/seed-demo stream\n\tif !dry && confirm != "DELETE" {'
+content = open(path, encoding="utf-8").read()
+n = content.count(OLD)
+if n != 1:
+    sys.stderr.write("ANCHOR_COUNT=%d\n" % n)
+    sys.exit(1)
+open(path, "w", encoding="utf-8").write(content.replace(OLD, NEW, 1))
+PY
+then
+  ok "i: mutation applied (recoverStream defer removed from teardown/seed-demo stream)"
+  finish_control "i" "$REL" "$GO" go test ./internal/server/ -run '^TestStreamPanicDoesNotKillTheServer$' -v
+else
+  bad "i: anchor not found (defer d.recoverStream(&emit, r) immediately followed by the confirm==DELETE check) — this guard is no longer testing anything"
 fi
 
 printf '\n'
