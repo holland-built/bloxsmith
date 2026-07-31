@@ -13,11 +13,25 @@ name: MCP drift check
 #
 # REQUIRES a repo secret INFOBLOX_API_KEY (a CSP API token). Without it the job
 # skips the live catalog and does nothing.
+#
+# It also has a second, manual-only mode: `refresh_baselines`. Once drift has been
+# reviewed and found harmless, the snapshots have to be regenerated — and that needs
+# INFOBLOX_API_KEY, which exists ONLY as a repo secret, never on a maintainer's
+# machine. So the refresh runs here, reusing this same catalog, and opens a PR with
+# the diff for a human to read. See the `refresh` job at the bottom.
 
 on:
   schedule:
     - cron: "17 6 * * *" # ~06:17 UTC nightly
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      # Default false, and the `inputs` context is empty on a schedule event, so both
+      # the nightly cron and an ordinary manual run behave exactly as they always
+      # have: catalog, diff, report drift, write nothing.
+      refresh_baselines:
+        description: "Regenerate the committed snapshots and open a PR with the diff (this run will NOT report drift)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,6 +40,9 @@ permissions:
 jobs:
   drift:
     runs-on: ubuntu-latest
+    # Read by the `refresh` job: it must not try to refresh from a catalog that never ran.
+    outputs:
+      catalogued: ${{ steps.gate.outputs.run }}
     steps:
       - uses: actions/checkout@v7
 
@@ -193,8 +210,14 @@ jobs:
       # Now it comments on the open thread instead. A fresh issue appears only once
       # the previous one has been dealt with and closed, which makes a NEW issue mean
       # something again.
+      #
+      # Suppressed on a refresh run. A refresh is the maintainer acknowledging the
+      # drift and rebasing the baselines onto it — commenting "still drifting" on the
+      # very thread that refresh is about to resolve would be the cry-wolf problem
+      # again, wearing a different hat. On a schedule run `inputs.refresh_baselines`
+      # is null, `null != true` is true, and the nightly path is untouched.
       - name: Open or update the drift issue
-        if: steps.gate.outputs.run == 'true' && steps.diff.outputs.changed == 'true'
+        if: steps.gate.outputs.run == 'true' && steps.diff.outputs.changed == 'true' && inputs.refresh_baselines != true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -217,6 +240,37 @@ jobs:
               gh issue create --repo "${{ github.repository }}" \
                 --title "$TITLE" --body-file -
           fi
+
+      # REFRESH PATH ONLY — skipped on every scheduled run and on every manual run
+      # with the box unticked.
+      #
+      # The catalog above is the ONLY place the live surface is read; it is not re-run
+      # for the refresh. Its output is handed to the `refresh` job as an artifact, so
+      # that job can open a PR without ever being given INFOBLOX_API_KEY, and without
+      # this job — the one that installs a third-party pip package and talks to a live
+      # tenant every night — needing write access to the repository.
+      #
+      # if-no-files-found: error, because "the refresh produced no catalog" must be a
+      # red run, never a quiet one.
+      #
+      # Staged into the workspace first rather than uploaded straight from /tmp. Paths
+      # that reach outside the working directory are exactly the shape that passed
+      # every dry run and then failed at the real thing in the goreleaser extra_files
+      # incident; a two-line cp is cheaper than finding out again.
+      - name: Stage the live catalog for the refresh job
+        if: steps.gate.outputs.run == 'true' && inputs.refresh_baselines == true
+        run: |
+          mkdir -p live-catalog
+          cp /tmp/live_tools.json /tmp/live_services.json /tmp/live_cubes.json live-catalog/
+
+      - name: Hand the live catalog to the refresh job
+        if: steps.gate.outputs.run == 'true' && inputs.refresh_baselines == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-mcp-catalog
+          path: live-catalog/
+          if-no-files-found: error
+          retention-days: 1
 
       # A DETECTOR THAT CANNOT REPORT ITS OWN FAILURE IS NOT A DETECTOR.
       #
@@ -264,4 +318,190 @@ jobs:
               --title "$TITLE" --label "mcp-drift" --body "$BODY" || \
             gh issue create --repo "${{ github.repository }}" \
               --title "$TITLE" --body "$BODY"
+          fi
+
+  # REFRESH THE COMMITTED BASELINES — manual only, never scheduled.
+  #
+  # Why a second job at all: opening a PR needs `contents: write` (to push the branch)
+  # and `pull-requests: write`. The drift job needs neither, and it is the job that
+  # installs a third-party pip package and speaks to a live tenant every single night —
+  # mcp 2.0.0 already broke it once from a version bump alone. Permanently widening
+  # THAT job's token, for a button pressed a handful of times a year, is the wrong
+  # trade. So the write scope lives here instead: minimum for the task, in a job that
+  # runs only on an explicit dispatch and is never handed INFOBLOX_API_KEY at all.
+  #
+  # It re-runs nothing. It consumes the catalog the drift job already produced.
+  refresh:
+    needs: drift
+    # `needs:` already skips this job when the drift job failed. Said out loud anyway,
+    # because it is the load-bearing guarantee here: a catalog that could not look must
+    # never produce a PR claiming a refresh it did not perform.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      && inputs.refresh_baselines == true
+      && needs.drift.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the refresh branch
+      pull-requests: write # open the PR against the default branch
+    steps:
+      # A refresh that was asked for and not performed must be a red run, not a green
+      # skip. The drift job warns and skips when there is no INFOBLOX_API_KEY, which is
+      # right for a fork — but here it means the maintainer ticked the box and got
+      # nothing, and a silently skipped job reads exactly like a successful one.
+      - name: Assert the drift job actually catalogued the live surface
+        if: needs.drift.outputs.catalogued != 'true'
+        run: |
+          echo "::error::The drift job did not run the live catalog (no INFOBLOX_API_KEY secret), so there is nothing to refresh the baselines FROM. Nothing was changed and no PR was opened."
+          exit 1
+
+      - uses: actions/checkout@v7
+
+      - name: Fetch the live catalog the drift job already produced
+        uses: actions/download-artifact@v4
+        with:
+          name: live-mcp-catalog
+          path: /tmp/live
+
+      # "THE JOB LOOKED AND FOUND NOTHING" vs "THE JOB COULD NOT LOOK" — the same
+      # distinction the rest of this workflow is built around, applied to the write.
+      #
+      # A catalog script can exit 0 and still be useless: list_all_cubes returning an
+      # empty list, or a per-item lookup that failed and got stored as {"error": ...}
+      # instead of data (see the `except` arms in catalog_services.py and
+      # catalog_cubes.py — both swallow and continue). Either would quietly overwrite a
+      # good, complete baseline with a worse one, and the drift check would then measure
+      # against the damage every night afterwards, reporting green.
+      #
+      # Both are hard failures, checked BEFORE anything is copied. Stdlib json only —
+      # this job deliberately has no mcp dependency and no API key.
+      - name: Refresh the snapshots, refusing anything that is not a complete catalog
+        id: refresh
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, shutil, sys
+
+          PAIRS = [
+              ("/tmp/live/live_tools.json",    "scripts/out_tools.json"),
+              ("/tmp/live/live_services.json", "scripts/out_services.json"),
+              ("/tmp/live/live_cubes.json",    "scripts/out_cubes.json"),
+          ]
+          TOP = {"all_services": "services", "all_cubes": "cubes"}
+          DETAIL = ("service_details", "cube_details")
+
+          def read(path):
+              """(entry count, detail-block count or None, names of blocks that errored)."""
+              with open(path) as fh:
+                  data = json.load(fh)
+              if isinstance(data, list):          # out_tools.json is a bare list
+                  return len(data), None, []
+              if not isinstance(data, dict):
+                  raise ValueError(f"expected an object or a list, got {type(data).__name__}")
+              top = next((k for k in TOP if k in data), None)
+              det = next((k for k in DETAIL if k in data), None)
+              if top is None or det is None:
+                  raise ValueError("unrecognised snapshot shape (keys: "
+                                   + ", ".join(map(str, data)) + ")")
+              block = data[top]
+              entries = block.get(TOP[top], []) if isinstance(block, dict) else block
+              details = data[det] if isinstance(data[det], dict) else {}
+              errored = sorted(n for n, v in details.items()
+                               if isinstance(v, dict) and "error" in v)
+              return len(entries), len(details), errored
+
+          rows, fatal = [], []
+          for live, snap in PAIRS:
+              name = os.path.basename(snap)
+              try:
+                  n_live, d_live, errored = read(live)
+              except Exception as exc:
+                  fatal.append(f"{name}: the live catalog could not be read as a snapshot ({exc})")
+                  continue
+              if n_live == 0:
+                  fatal.append(f"{name}: the live catalog is EMPTY. That is a catalog that could "
+                               f"not look, not a surface with nothing on it, and it will not be "
+                               f"written over a populated baseline.")
+                  continue
+              if errored:
+                  fatal.append(f"{name}: {len(errored)} detail block(s) came back as an error "
+                               f"instead of data ({', '.join(errored)}). That is a partial catalog.")
+                  continue
+              n_snap, d_snap, _ = read(snap)
+              rows.append((name, n_snap, n_live, d_snap, d_live))
+
+          if fatal:
+              for msg in fatal:
+                  print(f"::error::{msg}")
+              print("Nothing was written. The committed baselines are untouched and no PR "
+                    "will be opened.")
+              sys.exit(1)
+
+          for live, snap in PAIRS:
+              shutil.copyfile(live, snap)
+
+          def cell(v):
+              return "—" if v is None else str(v)
+
+          lines = [
+              "Regenerated from the live Infoblox CSP `/mcp` surface by "
+              f"[this workflow run]({os.environ['RUN_URL']}). Done in CI because "
+              "`INFOBLOX_API_KEY` exists only as a repository secret — the catalog "
+              "scripts cannot be run anywhere else.",
+              "",
+              "| snapshot | entries before | entries after | detail blocks before | detail blocks after |",
+              "| --- | ---: | ---: | ---: | ---: |",
+          ]
+          for name, n_snap, n_live, d_snap, d_live in rows:
+              lines.append(f"| `scripts/{name}` | {n_snap} | {n_live} | "
+                           f"{cell(d_snap)} | {cell(d_live)} |")
+          lines += [
+              "",
+              "Every detail block in this catalog returned data; none recorded an error. An "
+              "empty list or an errored block fails the run instead of reaching this point, so "
+              "a partial catalog can never appear here as a refresh.",
+              "",
+              "These counts summarise the file diff, they do not replace it — read the diff. "
+              "A refresh records what the surface *is*; it does not check that nothing in this "
+              "repo depended on what left. Confirm that before merging.",
+              "",
+              "This run did not open or update a drift issue: a refresh is not a drift report.",
+          ]
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write("body<<BODYEOF\n")
+              fh.write("\n".join(lines) + "\n")
+              fh.write("BODYEOF\n")
+          print("\n".join(lines))
+          PY
+
+      # peter-evans/create-pull-request — the de facto standard for this, and the only
+      # new action dependency added here. add-paths pins the commit to exactly the three
+      # snapshots: whatever else a catalog run might have left in the workspace, it
+      # cannot ride along into the branch.
+      #
+      # If the baselines were already current the action commits nothing and opens no
+      # PR. That is the honest outcome, and the step below reports it.
+      - name: Open a PR with the refreshed baselines
+        id: pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: mcp-baseline-refresh
+          delete-branch: true
+          add-paths: |
+            scripts/out_tools.json
+            scripts/out_services.json
+            scripts/out_cubes.json
+          commit-message: "chore: refresh MCP baseline snapshots from the live CSP surface"
+          title: "chore: refresh MCP baseline snapshots"
+          body: ${{ steps.refresh.outputs.body }}
+          labels: mcp-drift
+
+      - name: Say what happened
+        run: |
+          if [ -n "${{ steps.pr.outputs.pull-request-number }}" ]; then
+            echo "PR #${{ steps.pr.outputs.pull-request-number }}: ${{ steps.pr.outputs.pull-request-url }}"
+          else
+            echo "::notice::The live catalog matched the committed baselines exactly. Nothing to refresh, so no PR was opened."
           fi
