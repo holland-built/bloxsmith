@@ -14,7 +14,24 @@ test('Subnets ≥90% KPI drills to Network with minUtil filter chip', async ({ p
 
 test('host status legend drills to Infra with status chip', async ({ page }) => {
   await page.goto('/#overview');
-  await page.getByText('Offline', { exact: true }).first().click();
+
+  // Unlike the other two drill-downs in this file, this legend row does not
+  // exist in the DOM until /api/data has resolved AND at least one host
+  // buckets as Offline — 'Subnets ≥90%' and 'DNS Zones w/ Issues' are static
+  // KPI labels present from first paint (they fall back to a "(loaded rows)"
+  // variant while data is in flight, so the label text is there regardless).
+  // A bare `getByText('Offline', { exact: true }).first()` only ever resolved
+  // correctly because, today, it happens to be the sole exact-case "Offline"
+  // text on the page — an accident of the current UI, not a guarantee, and it
+  // gave no explicit signal that the legend had actually finished loading
+  // before the click fired. Scoping to the one control whose accessible name
+  // starts with "Offline" (the legend row is a role="button" element, unlike
+  // any plain text on the page) removes the .first() guesswork, and waiting
+  // on it explicitly before clicking mirrors write-lock's fix: wait for the
+  // specific condition that makes the click meaningful, don't race the fetch.
+  const offlineRow = page.getByRole('button', { name: /^Offline/ });
+  await expect(offlineRow).toBeVisible();
+  await offlineRow.click();
   await expect(page).toHaveURL(/#infra\?status=offline/);
   await expect(page.getByText(/status: offline/)).toBeVisible();
 });
