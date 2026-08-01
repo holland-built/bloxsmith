@@ -33,6 +33,23 @@ before:
     # build tag unless GOOS is forced here (verified: omitting this produces
     # no .syso and the release ships unsigned-metadata Windows binaries).
     - sh -c "GOOS=windows GOARCH=amd64 go generate ./..."
+    # Write the static version file the updater reads instead of GitHub's REST
+    # API (go/versionfile.go). Fetching a release ASSET is a plain download and
+    # is NOT subject to the 60-unauthenticated-requests/hour API limit, so
+    # `releases/latest/download/version.json` lets any number of installs behind
+    # one IP check for updates for free.
+    #
+    # Generated HERE rather than staged by release.yml (the way install.{sh,ps1}
+    # are) for two reasons: the version has to come from goreleaser's own
+    # {{ .Version }}, the same value that stamps the binary via ldflags, so the
+    # two can never disagree; and it means a local `goreleaser release` produces
+    # it too, with no extra manual step to forget. It lands in go/ — goreleaser's
+    # cwd — so the extra_files glob below stays a bare filename (see the `../`
+    # trap documented there). Gitignored, like the staged installers.
+    #
+    # NOT SIGNED, and deliberately not part of checksums.txt: it only says a tag
+    # exists. See the header comment in go/versionfile.go before adding a field.
+    - sh -c "printf '{\"tag\":\"v{{ .Version }}\"}\n' > version.json"
 
 builds:
   - id: bloxsmith
@@ -127,6 +144,8 @@ release:
   extra_files:
     - glob: install.sh
     - glob: install.ps1
+    # Written by the before-hook above, in go/ for the same `../` reason.
+    - glob: version.json
 
 # --- Homebrew tap: `brew install holland-built/tap/bloxsmith` -----------------
 brews:

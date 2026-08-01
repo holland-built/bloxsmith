@@ -111,6 +111,8 @@ go/dist/
 # Installers staged into go/ for goreleaser release.extra_files (see release.yml)
 go/install.sh
 go/install.ps1
+# Static version file written by goreleaser's before-hook (.goreleaser.yaml)
+go/version.json
 go/web/app.bundle.js
 
 # root-level templates/ is a fetched third-party copy — never commit (our own set lives in go/templates/)

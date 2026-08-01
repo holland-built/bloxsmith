@@ -408,7 +408,7 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 		Account:        acct,
 		Version:        version,
 		Static:         staticHandler(),
-		UpdateCheck:    updateCheckHandler,
+		UpdateCheck:    updateCheckHandler(cfg),
 		UpdateApply:    applyUpdateHandler,
 		UpdateProgress: updateProgressHandler,
 		UpdateStatus: func() any {
@@ -489,12 +489,34 @@ func (c llmCreds) LLM() (key, base, model string) {
 	return
 }
 
-// updateCheckHandler is the real /api/update/check (Phase 0): reaches GitHub.
-func updateCheckHandler(w http.ResponseWriter, r *http.Request) {
-	st, err := checkUpdate()
-	if err != nil {
-		log.Printf("update check: %v", err)
+// updateCheckHandler builds the real /api/update/check (Phase 0): reaches
+// GitHub, through checkUpdate's cache (update.go).
+//
+// DISABLE_UPDATE_CHECK (cfg.UpdateCheckDisabled) is honoured HERE, which is
+// what makes it an off-switch at all: until 2026-08-01 the flag was read into
+// config and reported in /api/vault/status but never consulted on this path,
+// so the documented opt-out did nothing and the check still fired.
+//
+// A disabled check is NOT "you are on the newest version". It returns the one
+// fact the server actually knows without a network call — the running version
+// — plus checkDisabled:true, and no error (nothing failed; the operator turned
+// it off). latest stays empty and available stays false because nothing was
+// looked up, which is why checkDisabled has to be in the response for the
+// caller to tell the two apart. The UI already guards on it
+// (UpdateButton.jsx:122) and renders nothing at all — not "up to date".
+func updateCheckHandler(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if cfg.UpdateCheckDisabled {
+			_ = json.NewEncoder(w).Encode(updateStatus{
+				Current: version, SelfUpdate: true, CheckDisabled: true,
+			})
+			return
+		}
+		st, err := checkUpdate()
+		if err != nil {
+			log.Printf("update check: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(st)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(st)
 }
