@@ -588,10 +588,61 @@ func TestSubnetCreate_CallerTagsWinOverNameDefault(t *testing.T) {
 	builderWantField(t, calls[1], "tags", map[string]any{"Name": "explicit-name"})
 }
 
+// TestSubnetCreate_TagPatchIsRetriedExactlyOnce is the D2 proof. The subnet is
+// already live when the tag PATCH fails, and without those tags no teardown
+// query (_tfilter Site==...) can ever see it — so a transient blip on the
+// PATCH strands a real customer subnet. One retry of an idempotent PATCH clears
+// exactly that case. Bounded to ONE extra attempt: two upstream writes, no
+// more, and the second is the same body as the first.
+// Mutation: delete the retry write in resources.go -> one PATCH, ok:false, red.
+func TestSubnetCreate_TagPatchIsRetriedExactlyOnce(t *testing.T) {
+	patches := 0
+	f := builderFakeServer(t, func(r builderReq) (int, string) {
+		if r.Method == http.MethodPost {
+			return 201, `{"results":[{"id":"ipam/subnet/s1"}]}`
+		}
+		patches++
+		if patches == 1 {
+			return 500, `{"error":"transient tag write failure"}`
+		}
+		return 200, `{"result":{"id":"ipam/subnet/s1","tags":{"Name":"n","Site":"hq"}}}`
+	})
+
+	res, status := f.client().SubnetCreate(M{
+		"block_id": "block-1", "cidr": float64(24), "name": "n",
+		"tags": M{"Site": "hq"}, "dry": false,
+	})
+	if res["ok"] != true || status != 200 {
+		t.Fatalf("= (%v, %d), want ok:true 200 — the retried PATCH succeeded", res, status)
+	}
+
+	calls := f.calls()
+	if len(calls) != 3 {
+		t.Fatalf("%d upstream requests, want 3 (allocate, tag, one retry): %+v", len(calls), calls)
+	}
+	builderWantMethodPath(t, calls[0], http.MethodPost, "/api/ddi/v1/block-1/nextavailablesubnet")
+	for i := 1; i < 3; i++ {
+		builderWantMethodPath(t, calls[i], http.MethodPatch, "/api/ddi/v1/ipam/subnet/s1")
+		builderWantField(t, calls[i], "tags", map[string]any{"Site": "hq", "Name": "n"})
+	}
+	if !reflect.DeepEqual(calls[1].Body, calls[2].Body) {
+		t.Fatalf("the retry body %#v differs from the first PATCH body %#v — the retry must resend the same tags",
+			calls[2].Body, calls[1].Body)
+	}
+	if subnet := asMap(res["subnet"]); subnet == nil || subnet["id"] != "ipam/subnet/s1" {
+		t.Fatalf("subnet = %#v, want the successful PATCH result object", res["subnet"])
+	}
+}
+
 // TestSubnetCreate_TaggingFailureNamesTheId: the subnet EXISTS upstream but is
 // untagged, so it is invisible to teardown. Reporting ok:true here would leak a
 // customer subnet permanently; the id must be returned so an operator can go
-// clean up. Mutation: resources.go:174 condition -> false.
+// clean up. Post-D2 this arm is reached only after the retry ALSO failed — the
+// retry is bounded, so exactly two PATCHes are attempted and never a third, and
+// the just-created subnet is never deleted (no DELETE is issued at all).
+// tagging_failed is what lets the route layer audit the orphan's id
+// (server/edit.go editCreate). Mutation: resources.go's failure condition ->
+// false.
 func TestSubnetCreate_TaggingFailureNamesTheId(t *testing.T) {
 	f := builderFakeServer(t, func(r builderReq) (int, string) {
 		if r.Method == http.MethodPost {
@@ -607,8 +658,21 @@ func TestSubnetCreate_TaggingFailureNamesTheId(t *testing.T) {
 	if res["id"] != "ipam/subnet/s1" {
 		t.Fatalf("id = %v, want the created subnet's id so it can be cleaned up", res["id"])
 	}
+	if res["tagging_failed"] != true {
+		t.Fatalf("tagging_failed = %v, want true so the route layer audits the orphan's id", res["tagging_failed"])
+	}
 	if !strings.Contains(pyStr(res["error"]), "needed for teardown") {
 		t.Fatalf("error = %v, want it to say the tags were needed for teardown", res["error"])
+	}
+
+	calls := f.calls()
+	if len(calls) != 3 {
+		t.Fatalf("%d upstream requests, want 3 (allocate + PATCH + exactly one retry): %+v", len(calls), calls)
+	}
+	for _, c := range calls {
+		if c.Method == http.MethodDelete {
+			t.Fatalf("a just-created subnet was DELETEd on tag failure: %+v", c)
+		}
 	}
 }
 

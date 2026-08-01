@@ -170,10 +170,37 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	if comment != "" {
 		patchBody["comment"] = comment
 	}
+	// The subnet now EXISTS on the live tenant. This PATCH is what makes it
+	// findable again: site teardown selects subnets by tag filter
+	// (_tfilter Site=="<site>", provision/decommission.go), so a subnet that
+	// never gets its tags matches no teardown query, ever.
+	//
+	// Exactly ONE extra attempt, no loop and no backoff. Why one: the PATCH is
+	// idempotent (writing the same tags twice ends in the same state), and the
+	// most plausible failure here is a transient upstream blip, which a single
+	// immediate retry clears. Why not more: this runs inside an operator's
+	// synchronous HTTP request, so a loop or a sleep would hold that request
+	// open against a tenant that is already misbehaving; if two consecutive
+	// writes fail, the fault is not transient and further attempts only delay
+	// the honest error. Note the real failure rate of this path is UNKNOWN — no
+	// occurrence has been observed in production, so the retry is bounded to
+	// the cheapest useful size rather than tuned to evidence we do not have.
+	//
+	// Deliberately NOT done: deleting the just-created subnet. A code-fired
+	// destructive DELETE at the exact moment the tenant is already failing is
+	// the wrong reflex — and the same compensating-delete pattern in
+	// SelfserviceAllocate was broken for its entire life before being fixed.
 	presp, pstatus, _ := c.Rest.Write("PATCH", "/api/ddi/v1/"+sid, patchBody, nil)
 	if pstatus != 200 && pstatus != 201 {
+		presp, pstatus, _ = c.Rest.Write("PATCH", "/api/ddi/v1/"+sid, patchBody, nil)
+	}
+	if pstatus != 200 && pstatus != 201 {
+		// Still ok:false — a subnet that teardown cannot see is not a success.
+		// tagging_failed marks the one failure shape that nonetheless left a
+		// live object behind, so the route layer can audit the id instead of
+		// writing nothing at all (an orphan with no record it was created).
 		return M{"ok": false, "error": fmt.Sprintf("subnet created but tagging failed (needed for teardown): %s", statusPhrase(pstatus)),
-			"detail": presp, "id": sid}, statusOr(pstatus, 502)
+			"detail": presp, "id": sid, "tagging_failed": true}, statusOr(pstatus, 502)
 	}
 	if r := asMap(presp); r != nil && asMap(r["result"]) != nil {
 		subnet = asMap(r["result"])
@@ -408,10 +435,29 @@ func (c *Client) Resources() map[string]Resource {
 // Delete is the uniform DELETE /api/ddi/v1/{id} used by all five resource types
 // plus the /api/dns/records/{id} and /api/ipam/addresses/{id} routes. Returns
 // (result, status) ready for the route layer.
+//
+// UNCHANGED and not up for decision: upstream 404 still maps to ok:true, 200.
+// That is deliberate idempotency — for a DELETE, "no such object" means the
+// requested end state already holds, so re-running a teardown must not fail on
+// what the first run removed.
+//
+// What is new is that the two success shapes are no longer indistinguishable.
+// already_gone is set EXPLICITLY on both arms — true for the 404 arm, false for
+// a real 200/204 — because the route layer records this delete in the audit
+// log, and "this system deleted it" must not read identically to "it was
+// already gone". The chain proves nobody edited the row; it can never prove the
+// object existed, so the row must not imply it did.
+//
+// Honest scope: this cannot be retroactive. Every audit row written before this
+// change carries no already_gone field at all, and its absence there means
+// UNKNOWN — it must never be read as false.
 func (c *Client) Delete(fullPath string) (M, int) {
 	resp, status, _ := c.Rest.Write("DELETE", fullPath, nil, nil)
-	if status == 200 || status == 204 || status == 404 {
-		return M{"ok": true}, 200
+	if status == 404 {
+		return M{"ok": true, "already_gone": true}, 200
+	}
+	if status == 200 || status == 204 {
+		return M{"ok": true, "already_gone": false}, 200
 	}
 	return M{"ok": false, "error": fmt.Sprintf("delete failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 }

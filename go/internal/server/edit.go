@@ -47,6 +47,13 @@ func isDry(res map[string]any) bool { b, _ := res["dry_run"].(bool); return b }
 // resultOK reports the builder's ok flag.
 func resultOK(res map[string]any) bool { b, _ := res["ok"].(bool); return b }
 
+// taggingFailed reports the single ok:false shape that still left a live object
+// behind: edit.SubnetCreate's "subnet created but tagging failed" arm. Every
+// other create failure means nothing was written, so it correctly gets no audit
+// row; this one means a real subnet exists on the tenant that no teardown tag
+// filter can see, so its id has to be recorded (see editCreate).
+func taggingFailed(res map[string]any) bool { b, _ := res["tagging_failed"].(bool); return b }
+
 // --- POST /api/selfservice/allocate (server.py:6144) -------------------------
 
 func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map[string]any) {
@@ -156,9 +163,21 @@ func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]a
 	defer d.recoverEdit(w, r, "/api/edit/"+resource)
 	result, status := res.Create(b)
 	d.json(w, r, status, result)
-	if resultOK(result) && !isDry(result) {
+	switch {
+	case resultOK(result) && !isDry(result):
 		d.auditAppend("edit-"+resource+"-create", httpx.Actor(r),
 			map[string]any{"id": editResultID(result, res.ResultKey)})
+	case taggingFailed(result):
+		// The audit-only-when-ok rule leaves exactly one hole: SubnetCreate can
+		// fail AFTER the subnet exists upstream, when only its teardown tags
+		// failed to attach. That used to write no row at all, so a live subnet
+		// existed with nothing recording that this system created it AND no tag
+		// for teardown to find it by — invisible twice over. This row makes the
+		// orphan recoverable. It does not claim success: the outcome stayed
+		// ok:false in the response, and the row carries tagging_failed so it can
+		// never be read as a clean create.
+		d.auditAppend("edit-"+resource+"-create", httpx.Actor(r),
+			map[string]any{"id": result["id"], "tagging_failed": true})
 	}
 }
 
@@ -224,8 +243,19 @@ func (d *Deps) editDelete(w http.ResponseWriter, r *http.Request) {
 	res, status := d.editFor(r).Delete(objPath)
 	d.json(w, r, status, res)
 	if resultOK(res) {
-		d.auditAppend("edit-"+resource+"-delete", httpx.Actor(r),
-			map[string]any{"id": objID})
+		// edit.Delete maps upstream 404 -> ok (deliberate idempotency, unchanged
+		// here). Without this field both arms wrote a byte-identical row, so
+		// "we deleted X" and "X was already gone" were indistinguishable to
+		// anyone reading the Audit tab — an existence claim the log never
+		// checked. Copied only when the builder actually stated it: if it is
+		// ever missing, the row omits it, and an absent field honestly means
+		// UNKNOWN. Rows written before this change have no already_gone at all
+		// and stay ambiguous forever — this fix is not retroactive.
+		detail := map[string]any{"id": objID}
+		if gone, stated := res["already_gone"].(bool); stated {
+			detail["already_gone"] = gone
+		}
+		d.auditAppend("edit-"+resource+"-delete", httpx.Actor(r), detail)
 	}
 }
 

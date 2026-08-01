@@ -191,6 +191,150 @@ func TestEditUpdate_PathTraversalID_Rejected(t *testing.T) {
 	}
 }
 
+// --- D2: a subnet created but never tagged must not be invisible ------------
+
+// auditRows reads the whole chain back off disk. Nothing else in these tests
+// touches the log, so every row present was written by the handler under test.
+func auditRows(t *testing.T, d *Deps) []map[string]any {
+	t.Helper()
+	rows, skipped, err := d.Audit.Read()
+	if err != nil {
+		t.Fatalf("read audit log: %v", err)
+	}
+	if skipped > 0 {
+		t.Fatalf("audit log dropped %d unreadable line(s) — the rows below are not the whole chain", skipped)
+	}
+	return rows
+}
+
+// auditDetail returns the detail map of the one row with the given event, or
+// fails. "Zero rows" and "a row whose detail is wrong" are reported apart.
+func auditDetail(t *testing.T, rows []map[string]any, event string) map[string]any {
+	t.Helper()
+	var found []map[string]any
+	for _, row := range rows {
+		if row["event"] == event {
+			detail, _ := row["detail"].(map[string]any)
+			found = append(found, detail)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("%d audit rows for %q, want exactly 1: %+v", len(found), event, rows)
+	}
+	return found[0]
+}
+
+// TestEditCreate_SubnetTaggingFailure_AuditsTheOrphanId is the D2 route proof.
+// The upstream creates the subnet and then refuses every tag PATCH, so the
+// subnet is live but carries no Site tag — invisible to every teardown query.
+// Before this change the route audited only ok results, so this left NO record
+// at all that the subnet had ever been created. The row below is the only thing
+// that makes the orphan recoverable.
+// Mutation: drop the taggingFailed arm in editCreate -> no row -> red.
+func TestEditCreate_SubnetTaggingFailure_AuditsTheOrphanId(t *testing.T) {
+	patches := 0
+	d := newEditTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			w.Write([]byte(`{"results":[{"id":"ipam/subnet/s-orphan"}]}`))
+			return
+		}
+		patches++
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"tag write rejected"}`))
+	})
+
+	r := editRequest("POST", "/api/edit/subnet")
+	rr := httptest.NewRecorder()
+	d.editCreate(rr, r, map[string]any{
+		"block_id": "block-1", "cidr": float64(24), "name": "n",
+		"tags": map[string]any{"Site": "hq"}, "dry": false,
+	})
+
+	// The operator still gets the honest failure — this is not a success.
+	if rr.Code != 500 {
+		t.Fatalf("status = %d, want 500: body=%s", rr.Code, rr.Body.String())
+	}
+	if body := decodeBody(t, rr); body["ok"] != false {
+		t.Fatalf("ok = %v, want false — an untagged subnet is not a completed create", body["ok"])
+	}
+	if patches != 2 {
+		t.Fatalf("%d tag PATCHes, want exactly 2 (one attempt + one bounded retry)", patches)
+	}
+
+	detail := auditDetail(t, auditRows(t, d), "edit-subnet-create")
+	if detail["id"] != "ipam/subnet/s-orphan" {
+		t.Fatalf("audit id = %v, want the created subnet's id so teardown can find the orphan", detail["id"])
+	}
+	if detail["tagging_failed"] != true {
+		t.Fatalf("tagging_failed = %v, want true — this row must never read as a clean create", detail["tagging_failed"])
+	}
+}
+
+// TestEditCreate_UpstreamCreateFailure_WritesNoAuditRow keeps the new arm
+// narrow: when the create itself fails, nothing exists upstream, so there is no
+// orphan and no row to write. Only the created-but-untagged shape is audited.
+func TestEditCreate_UpstreamCreateFailure_WritesNoAuditRow(t *testing.T) {
+	d := newEditTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(503)
+	})
+
+	rr := httptest.NewRecorder()
+	d.editCreate(rr, editRequest("POST", "/api/edit/subnet"), map[string]any{
+		"block_id": "block-1", "cidr": float64(24), "dry": false,
+	})
+
+	if rr.Code != 503 {
+		t.Fatalf("status = %d, want 503: body=%s", rr.Code, rr.Body.String())
+	}
+	if rows := auditRows(t, d); len(rows) != 0 {
+		t.Fatalf("%d audit rows, want 0 — nothing was created, so there is nothing to record: %+v", len(rows), rows)
+	}
+}
+
+// --- D3: an already-gone delete must not read like a deletion we performed --
+
+// TestEditDelete_AuditRowDistinguishesAlreadyGone is the D3 proof. Both cases
+// return ok (the 404 -> ok idempotency mapping is unchanged and deliberate),
+// but the rows they write must differ: already_gone true vs false, stated
+// explicitly on both arms so a missing field can only mean "unknown".
+// Mutation: drop the field copy in editDelete (or collapse edit.Delete's two ok
+// arms) -> the two rows become identical again -> red.
+func TestEditDelete_AuditRowDistinguishesAlreadyGone(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		upstream int
+		want     bool
+	}{
+		{"upstream 404 — it was already gone", 404, true},
+		{"upstream 200 — we removed it", 200, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := newEditTestDeps(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.upstream)
+			})
+
+			rr := httptest.NewRecorder()
+			d.editDelete(rr, editRequest("DELETE", "/api/edit/host/ipam/host/h-1"))
+
+			if rr.Code != 200 {
+				t.Fatalf("status = %d, want 200 (404 -> ok is deliberate idempotency): body=%s", rr.Code, rr.Body.String())
+			}
+			detail := auditDetail(t, auditRows(t, d), "edit-host-delete")
+			if detail["id"] != "ipam/host/h-1" {
+				t.Fatalf("audit id = %v, want ipam/host/h-1", detail["id"])
+			}
+			gone, stated := detail["already_gone"].(bool)
+			if !stated {
+				t.Fatalf("audit row has no already_gone field: %+v — without it this row cannot be told from the other case", detail)
+			}
+			if gone != tc.want {
+				t.Fatalf("already_gone = %v, want %v", gone, tc.want)
+			}
+		})
+	}
+}
+
 // TestEditUpdate_LegitimateFullFormID_UnchangedBehavior pins the working
 // PATCH case through the same builder.
 func TestEditUpdate_LegitimateFullFormID_UnchangedBehavior(t *testing.T) {
