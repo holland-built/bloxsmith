@@ -89,9 +89,12 @@ func isFalsy(v any) bool {
 }
 
 // boolPy is Python bool(x): a real bool passes through; a non-empty string /
-// non-zero number / non-empty collection is truthy. Used by the two DNS-record
-// paths, whose dry flag defaults to False (live) — unlike the _edit_*/allocate
-// paths, which default to dry via truthyDry.
+// non-zero number / non-empty collection is truthy. Behaviour unchanged; it is
+// still used for the `disabled` field on several builders (edit.go:457,
+// resources.go:74/204/299) and for `auto_generate_records` (resources.go:327).
+// It is NO LONGER used for any `dry` flag: the two DNS-record paths that used to
+// read `dry` with it now go through dryMustBeExplicitBool (see below), and every
+// other write builder uses truthyDry.
 func boolPy(v any) bool { return !isFalsy(v) }
 
 // truthy is _truthy (server.py:_truthy): nil -> default; real bool -> itself;
@@ -113,6 +116,50 @@ func truthy(v any, def bool) bool {
 
 // truthyDry is _truthy_dry: dry preview unless explicitly disabled (default true).
 func truthyDry(v any) bool { return truthy(v, true) }
+
+// errDryNotBool is the single refusal message both DNS-record builders return
+// for an ambiguous `dry` flag.
+const errDryNotBool = "dry must be true or false"
+
+// dryMustBeExplicitBool is the `dry` gate for the two DNS-record builders ONLY
+// (DNSRecordCreate, DNSRecordUpdate). `dry` must be PRESENT and a JSON true or
+// false. A string ("false", "0", "no", "true"), a number, an explicit null, or
+// an omitted key are all refused — the caller gets a 400 and nothing is sent
+// upstream.
+//
+// WHY. Until now these two builders read `dry` with boolPy while every other
+// write builder used truthyDry, and the two helpers disagree about the same
+// input: the STRING "false" previewed, the BOOLEAN false wrote live, and an
+// OMITTED flag wrote live (every other builder treats omitted as a preview).
+// Same operator intent, opposite outcome, on the one builder family whose
+// mistakes land as real records in a customer's DNS.
+//
+// Refusing the ambiguous flag is the only fix where risk moves strictly
+// downward: nothing that previews today can become a live write, and a caller
+// who relied on omitted-dry-meaning-live now breaks LOUDLY with a 400 instead of
+// silently getting the opposite of what they meant. An ambiguous flag is
+// refused, not guessed — unknown means unknown.
+//
+// DELIBERATE DIVERGENCE from the Python reference. The old boolPy behaviour was
+// documented as server.py parity, but server.py is NOT in this repo, so that
+// parity was only ever ASSUMED and has never been verified by anyone here.
+//
+// BREAKING CHANGE for direct API callers (curl, scripts, an LLM building JSON)
+// of POST/PATCH /api/dns/records who omit `dry` and expect a live write: they
+// must now send `dry: false`. The UI is unaffected — ui/src/tabs/SelfService.jsx
+// always sends `dry` as an explicit JSON boolean.
+//
+// Scope, honestly stated: this applies to DNSRecordCreate and DNSRecordUpdate
+// only. boolPy and truthyDry are unchanged and every other builder keeps its
+// existing default (truthyDry: an omitted `dry` is a preview).
+func dryMustBeExplicitBool(body M) (dry bool, ok bool) {
+	v, present := body["dry"]
+	if !present {
+		return false, false
+	}
+	b, isBool := v.(bool)
+	return b, isBool
+}
 
 // intCoerce is Python int(x) for JSON scalars: (n, ok). float64/int strings ok;
 // a fractional float truncates toward zero, matching int(3.9)==3 is NOT Python —
@@ -317,7 +364,15 @@ func (c *Client) DNSRecordCreate(body M) (M, int) {
 	zoneID := strOr(body, "zone_id")
 	rtype := strings.ToUpper(strOr(body, "type"))
 	value := strOr(body, "value")
-	dry := boolPy(body["dry"])
+
+	// Refuse an ambiguous preview/live flag before anything else. This runs
+	// ahead of the required-field checks on purpose: "would this request write
+	// to the live tenant?" is the one question that must never be guessed, so a
+	// caller who is wrong about it hears about that first. Zero upstream calls.
+	dry, dryOK := dryMustBeExplicitBool(body)
+	if !dryOK {
+		return M{"ok": false, "error": errDryNotBool}, 400
+	}
 
 	nameRaw, nameSet := body["name_in_zone"]
 	if rtype == "" {
@@ -373,7 +428,12 @@ func (c *Client) DNSRecordUpdate(body M) (M, int) {
 	if recordID == "" {
 		return M{"ok": false, "error": "id is required"}, 400
 	}
-	dry := boolPy(body["dry"])
+	// Same gate as DNSRecordCreate, and placed before ObjectPath/GetEx so an
+	// ambiguous flag costs the tenant nothing — not even the pre-update read.
+	dry, dryOK := dryMustBeExplicitBool(body)
+	if !dryOK {
+		return M{"ok": false, "error": errDryNotBool}, 400
+	}
 
 	objPath, err := ObjectPath("dns/record", recordID)
 	if err != nil {

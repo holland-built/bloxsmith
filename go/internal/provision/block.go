@@ -18,16 +18,47 @@ type BlockConfig struct {
 
 // parseBlocks is _parse_blocks (server.py:1320): recursively normalize raw YAML
 // block mappings, filling defaults.
-func parseBlocks(raw []any) []any {
+//
+// A non-mapping entry REFUSES the whole template rather than being skipped.
+// Templates are operator-authored files, so a stray scalar or YAML null is a
+// typo to fix, not data to route around. Skipping it meant a template listing
+// three blocks provisioned two and reported success — and because the dry-run
+// preview iterates this same parsed list, the preview under-reported
+// identically, so an operator who checked first still could not see the missing
+// block. Refusing here happens at config-build time, before any tenant call.
+//
+// Honest scope of the cost: this converts a silent partial success into a hard
+// stop. An existing template carrying a stray YAML null that nobody noticed now
+// blocks its next seeding run until someone edits the file. Nothing on a live
+// tenant changes — this path only ever prevents runs, it never adds a write.
+//
+// path is the caller-facing position of raw ("address_blocks" at the top,
+// "address_blocks[0].children" under recursion) so the error names the exact
+// entry, in the same notation validateBlock already uses (template.go:406).
+func parseBlocks(raw []any, path string) ([]any, error) {
 	parsed := []any{}
-	for _, r := range raw {
+	for i, r := range raw {
+		at := fmt.Sprintf("%s[%d]", path, i)
 		rm := asMap(r)
 		if rm == nil {
-			continue
+			// pyRepr echoes the entry as it actually appears in the file — a
+			// guessed or placeholder value here would send the operator to the
+			// wrong line. pyRepr(nil) is the empty string though, which would
+			// read as a blank value rather than an absent one, so a YAML null
+			// (an empty list item) is named for what it is.
+			got := pyRepr(r)
+			if r == nil {
+				got = "an empty entry (YAML null)"
+			}
+			return nil, perr("%s must be a mapping, got %s — fix the template; nothing was provisioned", at, got)
 		}
 		tags := M{}
 		for k, v := range getMap(rm, "tags") {
 			tags[k] = pyStr(v)
+		}
+		children, err := parseBlocks(getList(rm, "children"), at+".children")
+		if err != nil {
+			return nil, err
 		}
 		parsed = append(parsed, M{
 			"address":     strings.TrimSpace(pyStr(rm["address"])),
@@ -38,17 +69,20 @@ func parseBlocks(raw []any) []any {
 			"location":    pyStr(rm["location"]),
 			"comment":     pyStr(rm["comment"]),
 			"tags":        tags,
-			"children":    parseBlocks(getList(rm, "children")),
+			"children":    children,
 		})
 	}
-	return parsed
+	return parsed, nil
 }
 
 // TemplateToBlockConfig is template_to_block_config (server.py:1369).
 func TemplateToBlockConfig(template, params M) (*BlockConfig, error) {
 	name := resolve(params["name"], template["name"], "")
 	ipSpace := resolve(params["ip_space"], template["ip_space"], defaultIPSpace)
-	blocks := parseBlocks(getList(template, "address_blocks"))
+	blocks, err := parseBlocks(getList(template, "address_blocks"), "address_blocks")
+	if err != nil {
+		return nil, err
+	}
 	if len(blocks) == 0 {
 		return nil, perr("address_blocks (non-empty list) is required")
 	}

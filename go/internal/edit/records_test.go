@@ -186,15 +186,21 @@ func TestDNSRecordCreate_ApexRewritesToEmptyNameOnTheWire(t *testing.T) {
 	}
 }
 
-func TestDNSRecordCreate_DryDefaultsLiveAndWrites(t *testing.T) {
-	// PINS INHERITED BEHAVIOUR, cites finding A-F3. Omitting `dry` on this
-	// path WRITES TO THE LIVE TENANT: DNSRecordCreate reads the flag with
-	// boolPy (edit.go:300), whose default is false/live, while every
-	// _edit_*/allocate builder uses truthyDry and defaults to a preview.
-	// A caller who forgets `dry` here creates a real DNS record. The test
-	// records the trap; whether the default should change is a product
-	// decision, not a coverage task.
-	// Mutation: edit.go:300 boolPy -> truthyDry -> zero POSTs, this fails.
+func TestDNSRecordCreate_OmittedDryIsRefusedNotALiveWrite(t *testing.T) {
+	// WAS TestDNSRecordCreate_DryDefaultsLiveAndWrites, which pinned the
+	// inherited trap: an omitted `dry` created a REAL DNS record because this
+	// builder read the flag with boolPy (default false/live) while every other
+	// write builder used truthyDry (default preview). Decision D1 / Option B
+	// closed that: an omitted flag is now refused with a 400 and nothing
+	// reaches the tenant.
+	//
+	// The refusal, not a flip to preview, is the point: a caller who was
+	// relying on omitted-dry-meaning-live finds out loudly instead of having
+	// their write silently swallowed as a preview.
+	//
+	// Mutation: restore `dry := boolPy(body["dry"])` in DNSRecordCreate ->
+	// this returns 201 and the fake records a live POST -> RED on both
+	// assertions.
 	f := recordsServer(t, 201, M{"result": M{"id": "x"}})
 	c := newTestClient(f.srv)
 
@@ -204,13 +210,16 @@ func TestDNSRecordCreate_DryDefaultsLiveAndWrites(t *testing.T) {
 		// no "dry" key at all
 	})
 
-	if status != 201 || !resultOK(res) {
-		t.Fatalf("want a real create, got status=%d res=%+v", status, res)
+	if status != 400 || resultOK(res) {
+		t.Fatalf("omitted dry must be refused, got status=%d res=%+v", status, res)
+	}
+	if res["error"] != "dry must be true or false" {
+		t.Fatalf("error = %q, want %q", res["error"], "dry must be true or false")
 	}
 	if _, isPreview := res["dry_run"]; isPreview {
-		t.Fatalf("omitted dry must NOT be a preview on this path: %+v", res)
+		t.Fatalf("a refusal must not masquerade as a preview: %+v", res)
 	}
-	recordsOnlyCall(t, f) // exactly one live POST
+	recordsNoCalls(t, f) // the tenant was never touched
 }
 
 func TestDNSRecordCreate_DryTrueSendsNothing(t *testing.T) {
@@ -243,37 +252,183 @@ func TestDNSRecordCreate_DryTrueSendsNothing(t *testing.T) {
 	}
 }
 
-func TestDNSRecordCreate_DryStringFalseIsStillAPreview(t *testing.T) {
-	// FINDING (flip side of A-F3): boolPy is Python bool(), so the STRING
-	// "false" (and "0", and "no") is truthy and yields a PREVIEW, while the
-	// NUMBER 0 and the bool false are falsy and go LIVE. A caller sending
-	// dry:"false" means "do it for real" and gets a preview; a caller sending
-	// dry:0 means the same thing and gets a live write. Two spellings of one
-	// intent, opposite outcomes. Pinned as inherited, not blessed as correct —
-	// the safe direction of the two, but the inconsistency is real. Reported.
-	for _, dry := range []any{"false", "0", "no"} {
+func TestDNSRecordCreate_DryMustBeExplicitBoolean(t *testing.T) {
+	// WAS TestDNSRecordCreate_DryStringFalseIsStillAPreview, which pinned the
+	// other half of the same trap: under boolPy the STRING "false" (and "0",
+	// and "no") previewed while the NUMBER 0 and the bool false wrote LIVE —
+	// two spellings of one operator intent ("do it for real"), opposite
+	// outcomes. Decision D1 / Option B refuses every ambiguous spelling instead
+	// of picking a winner: only a JSON true or false is accepted.
+	//
+	// Every refusal asserts ZERO upstream calls. A 400 returned after the POST
+	// already went out would still have created the record — the failure mode
+	// this test exists for.
+	//
+	// Mutation: restore `dry := boolPy(body["dry"])` in DNSRecordCreate ->
+	// the string cases return 200 dry_run:true and the numeric/null cases send
+	// a live POST -> RED.
+	for _, dry := range []any{
+		"false", "0", "no", "true", "True", "", "  ", // strings, incl. the ones that used to preview
+		float64(0), float64(1), // numbers, incl. the one that used to write live
+		nil,          // explicit JSON null
+		[]any{}, M{}, // collections, which boolPy also had an opinion about
+	} {
 		f := recordsServer(t, 201, M{"result": M{"id": "x"}})
 		c := newTestClient(f.srv)
 		res, status := c.DNSRecordCreate(M{
 			"zone_id": "dns/auth_zone/z1", "name_in_zone": "host1",
 			"type": "A", "value": "10.0.0.5", "dry": dry,
 		})
-		if status != 200 || res["dry_run"] != true {
-			t.Fatalf("dry=%#v: want preview, got status=%d res=%+v", dry, status, res)
+		if status != 400 || resultOK(res) {
+			t.Fatalf("dry=%#v: want a 400 refusal, got status=%d res=%+v", dry, status, res)
+		}
+		if res["error"] != "dry must be true or false" {
+			t.Fatalf("dry=%#v: error = %q, want %q", dry, res["error"], "dry must be true or false")
+		}
+		if _, isPreview := res["dry_run"]; isPreview {
+			t.Fatalf("dry=%#v: a refusal must not masquerade as a preview: %+v", dry, res)
 		}
 		recordsNoCalls(t, f)
 	}
-	for _, dry := range []any{float64(0), false, "", nil} {
-		f := recordsServer(t, 201, M{"result": M{"id": "x"}})
-		c := newTestClient(f.srv)
-		res, status := c.DNSRecordCreate(M{
-			"zone_id": "dns/auth_zone/z1", "name_in_zone": "host1",
-			"type": "A", "value": "10.0.0.5", "dry": dry,
-		})
-		if status != 201 || res["dry_run"] != nil {
-			t.Fatalf("dry=%#v: want a LIVE write, got status=%d res=%+v", dry, status, res)
+
+	// The two accepted spellings still behave exactly as before.
+	f := recordsServer(t, 201, M{"result": M{"id": "x"}})
+	c := newTestClient(f.srv)
+	res, status := c.DNSRecordCreate(M{
+		"zone_id": "dns/auth_zone/z1", "name_in_zone": "host1",
+		"type": "A", "value": "10.0.0.5", "dry": true,
+	})
+	if status != 200 || res["dry_run"] != true {
+		t.Fatalf("dry:true must preview, got status=%d res=%+v", status, res)
+	}
+	recordsNoCalls(t, f)
+
+	f2 := recordsServer(t, 201, M{"result": M{"id": "x"}})
+	c2 := newTestClient(f2.srv)
+	res2, status2 := c2.DNSRecordCreate(M{
+		"zone_id": "dns/auth_zone/z1", "name_in_zone": "host1",
+		"type": "A", "value": "10.0.0.5", "dry": false,
+	})
+	if status2 != 201 || !resultOK(res2) || res2["dry_run"] != nil {
+		t.Fatalf("dry:false must write live, got status=%d res=%+v", status2, res2)
+	}
+	recordsOnlyCall(t, f2) // exactly one POST
+}
+
+// updateFake is a recording fake for DNSRecordUpdate: it answers the
+// pre-update GET with a fixed record and the PATCH with the same, and counts
+// EVERY request — GET included. Counting only writes would let a refusal that
+// happens after the read still pass, and the pre-update read is itself an
+// upstream call this builder must not make on a refused request.
+type updateFake struct {
+	srv   *httptest.Server
+	mu    sync.Mutex
+	calls []recordsCall
+}
+
+func updateServer(t *testing.T) *updateFake {
+	t.Helper()
+	f := &updateFake{}
+	current := map[string]any{
+		"id": "dns/record/abc123", "type": "A", "dns_rdata": "10.0.0.1",
+		"ttl": float64(28800), "comment": "prod host", "name_in_zone": "host1",
+	}
+	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		c := recordsCall{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query()}
+		if len(raw) > 0 {
+			var parsed any
+			if err := json.Unmarshal(raw, &parsed); err == nil {
+				if m, ok := parsed.(map[string]any); ok {
+					c.Body = M(m)
+				}
+			}
 		}
-		recordsOnlyCall(t, f)
+		f.mu.Lock()
+		f.calls = append(f.calls, c)
+		f.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": current})
+	}))
+	t.Cleanup(f.srv.Close)
+	return f
+}
+
+func (f *updateFake) Calls() []recordsCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]recordsCall{}, f.calls...)
+}
+
+func TestDNSRecordUpdate_DryMustBeExplicitBoolean(t *testing.T) {
+	// The Update twin of TestDNSRecordCreate_DryMustBeExplicitBoolean, and the
+	// sharper of the two: DNSRecordUpdate used to read `dry` with boolPy as
+	// well, so an omitted flag PATCHed a live customer record. Decision D1 /
+	// Option B refuses anything that is not a JSON true/false.
+	//
+	// Zero upstream calls means zero — not even the pre-update GET, which is
+	// why this fake counts reads too.
+	//
+	// Mutation: restore `dry := boolPy(body["dry"])` in DNSRecordUpdate ->
+	// the omitted/numeric cases issue a GET plus a live PATCH and the string
+	// cases issue a GET -> RED.
+	for _, dry := range []any{"false", "0", "no", "true", "", float64(0), float64(1), nil, M{}} {
+		f := updateServer(t)
+		c := newTestClient(f.srv)
+		body := M{"id": "abc123", "value": "10.0.0.9"}
+		body["dry"] = dry
+		res, status := c.DNSRecordUpdate(body)
+		if status != 400 || resultOK(res) {
+			t.Fatalf("dry=%#v: want a 400 refusal, got status=%d res=%+v", dry, status, res)
+		}
+		if res["error"] != "dry must be true or false" {
+			t.Fatalf("dry=%#v: error = %q, want %q", dry, res["error"], "dry must be true or false")
+		}
+		if calls := f.Calls(); len(calls) != 0 {
+			t.Fatalf("dry=%#v: want zero upstream calls, got %d: %+v", dry, len(calls), calls)
+		}
+	}
+
+	// Omitted entirely — the case that used to PATCH the live record.
+	f := updateServer(t)
+	c := newTestClient(f.srv)
+	res, status := c.DNSRecordUpdate(M{"id": "abc123", "value": "10.0.0.9"})
+	if status != 400 || res["error"] != "dry must be true or false" {
+		t.Fatalf("omitted dry: want a 400 refusal, got status=%d res=%+v", status, res)
+	}
+	if calls := f.Calls(); len(calls) != 0 {
+		t.Fatalf("omitted dry: want zero upstream calls, got %d: %+v", len(calls), calls)
+	}
+
+	// dry:true reads the current record (needed to build the preview) but
+	// never writes.
+	f2 := updateServer(t)
+	c2 := newTestClient(f2.srv)
+	res2, status2 := c2.DNSRecordUpdate(M{"id": "abc123", "value": "10.0.0.9", "dry": true})
+	if status2 != 200 || !resultOK(res2) {
+		t.Fatalf("dry:true: want a 200 preview, got status=%d res=%+v", status2, res2)
+	}
+	for _, call := range f2.Calls() {
+		if call.Method != http.MethodGet {
+			t.Fatalf("dry:true must not write, got %s %s", call.Method, call.Path)
+		}
+	}
+
+	// dry:false still writes exactly once.
+	f3 := updateServer(t)
+	c3 := newTestClient(f3.srv)
+	res3, status3 := c3.DNSRecordUpdate(M{"id": "abc123", "value": "10.0.0.9", "dry": false})
+	if status3 != 200 || !resultOK(res3) {
+		t.Fatalf("dry:false: want a 200 live update, got status=%d res=%+v", status3, res3)
+	}
+	writes := 0
+	for _, call := range f3.Calls() {
+		if call.Method != http.MethodGet {
+			writes++
+		}
+	}
+	if writes != 1 {
+		t.Fatalf("dry:false: want exactly 1 upstream write, got %d: %+v", writes, f3.Calls())
 	}
 }
 
