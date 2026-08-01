@@ -256,16 +256,15 @@ func TestDelete_RealFailuresAreNotReportedAsSuccess(t *testing.T) {
 	}
 }
 
-func TestDelete_TransportErrorIs502AndInheritsTheStatusZeroWording(t *testing.T) {
-	// The other half of FINDING A-F1, pinned as INHERITED, not blessed. When no
-	// HTTP response ever arrived, rest.Client.Write reports status 0
-	// (rest.go:343). The returned code is correct — statusOr(0, 502) — but the
-	// human-readable string renders "delete failed (status 0)", presenting 0 as
-	// if it were an HTTP status the tenant sent back. "The request never
-	// completed" and "the tenant answered 0" are different facts and this string
-	// makes them look the same. Same class as provision's F4. Reported, not
-	// fixed here (this lane changes no production code); the assertion below
-	// pins today's wording so a future fix is a deliberate, visible change.
+func TestDelete_TransportErrorIs502AndSaysTheTenantWasNeverReached(t *testing.T) {
+	// FINDING A-F2, now FIXED. When no HTTP response ever arrived,
+	// rest.Client.Write reports status 0 (rest.go:344). The returned code was
+	// always correct — statusOr(0, 502) — but the human-readable string used to
+	// render "delete failed (status 0)", presenting 0 as if it were an HTTP
+	// status the tenant sent back. "The request never completed" and "the tenant
+	// answered 0" are different facts and that string made them look the same.
+	// statusPhrase now renders the could-not-reach case in words; this test owns
+	// the exact wording for Delete.
 	res, status := dispatchDeadClient(t).Delete("/api/ddi/v1/ipam/host/h-1")
 
 	if dispatchBool(res, "ok") {
@@ -274,8 +273,9 @@ func TestDelete_TransportErrorIs502AndInheritsTheStatusZeroWording(t *testing.T)
 	if status != 502 {
 		t.Errorf("want 502 for a transport failure, got %d", status)
 	}
-	if msg, _ := res["error"].(string); !strings.Contains(msg, "status 0") {
-		t.Errorf("inherited wording changed; want an error containing %q, got %q", "status 0", msg)
+	const want = "delete failed (could not reach the tenant — no request completed)"
+	if msg, _ := res["error"].(string); msg != want {
+		t.Errorf("error = %q, want %q", msg, want)
 	}
 }
 

@@ -1160,8 +1160,9 @@ func TestBlockProvisionCreatesASubnetOfAnExistingBlockAtTheSameAddress(t *testin
 // HOST address (10.0.1.5/24) — the only shape where the existence check and the
 // create can disagree about which object they mean.
 //
-// Still NOT pinned: IPv6, pagination of the existence read, and
-// FindBlocksForRetag, which has the same raw-address bug and is out of scope.
+// Still NOT pinned: IPv6 and pagination of the existence read.
+// FindBlocksForRetag had the same raw-address bug; it is now fixed and pinned
+// by the two tests at the end of this file.
 
 // THE CONSEQUENCE. A previous run of this same template created 10.0.1.0/24
 // (createBlock POSTs the masked address). Re-running it must recognise its own
@@ -1266,5 +1267,136 @@ func TestBlockExistenceCheckQueriesTheMaskedAddress(t *testing.T) {
 	if got := pyStr(posts[0]["address"]); !strings.Contains(filter, fmt.Sprintf("address==%q", got)) {
 		t.Fatalf("the create POSTed address %q but the existence read filtered on %q — the check and the "+
 			"create are asking about different blocks, so the check can never prevent a duplicate", got, filter)
+	}
+}
+
+// --- FindBlocksForRetag: the same raw-address bug (finding B-F1) -------------
+//
+// The retag selector arm above (TestFindBlocksForRetagSelectorPrecedence) uses
+// 10.0.0.0/16, which is already a network address, so masking is a no-op there
+// and a raw-address lookup is indistinguishable from a masked one. These tests
+// use a HOST address, the only shape that tells them apart.
+
+// THE CONSEQUENCE, not the string. The tenant holds the block as createBlock
+// stored it (10.0.1.0/24). An operator retagging 10.0.1.5/24 means that block.
+// Filtering on the raw 10.0.1.5 matches nothing, and the route reports
+// {"changed": []} with a 200 — a retag that says it worked and changed nothing.
+// So the assertion is that a row comes back, not merely that no error did.
+func TestFindBlocksForRetagMatchesAHostAddressedSelector(t *testing.T) {
+	e, f := newBlockAPIHarness(t)
+
+	existing := map[string]string{
+		"space":   "ipam/ip_space/space-1",
+		"address": "10.0.1.0",
+		"cidr":    "24",
+	}
+	f.blockBodyFor = func(q url.Values) string {
+		if blockFilterMatches(q.Get("_filter"), existing) {
+			return `{"results":[{"id":"ipam/address_block/existing-24","address":"10.0.1.0","cidr":24}]}`
+		}
+		return `{"results":[]}`
+	}
+
+	// Guard: an empty tenant also produces no match, so without this the test
+	// could pass for the wrong reason if the fixture were mis-wired.
+	if !blockFilterMatches(`space=="ipam/ip_space/space-1" and address=="10.0.1.0" and cidr==24`, existing) {
+		t.Fatal("the fixture does not report 10.0.1.0/24 as existing — this test cannot distinguish anything")
+	}
+
+	rows, err := e.FindBlocksForRetag("ipam/ip_space/space-1", "", "10.0.1.5", 24, "")
+	if err != nil {
+		t.Fatalf("FindBlocksForRetag() error = %v, want nil", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("FindBlocksForRetag() returned %d row(s), want 1: %v\n"+
+			"The tenant holds 10.0.1.0/24, which is exactly the block 10.0.1.5/24 names "+
+			"(blocks are stored at the masked network address). No rows means the lookup asked for the "+
+			"raw selector, so the retag would rewrite NOTHING while reporting success.", len(rows), rows)
+	}
+	if got := pyStr(asMap(rows[0])["id"]); got != "ipam/address_block/existing-24" {
+		t.Fatalf("matched block id = %q, want ipam/address_block/existing-24", got)
+	}
+}
+
+// THE QUERY. Asserted against the default empty tenant so nothing about the
+// fixture can explain the filter. The negative is separate on purpose: a filter
+// carrying BOTH addresses would satisfy the positive while still naming an
+// object no block is ever stored under.
+func TestFindBlocksForRetagQueriesTheMaskedAddress(t *testing.T) {
+	e, f := newBlockAPIHarness(t)
+
+	if _, err := e.FindBlocksForRetag("ipam/ip_space/space-1", "", "10.0.1.5", 24, ""); err != nil {
+		t.Fatalf("FindBlocksForRetag() error = %v, want nil", err)
+	}
+
+	queries := f.blockQueries()
+	if len(queries) != 1 {
+		t.Fatalf("upstream received %d retag read(s), want 1: %v", len(queries), queries)
+	}
+	filter := queries[0].Get("_filter")
+	if !strings.Contains(filter, `address=="10.0.1.0"`) {
+		t.Fatalf("retag read _filter = %q, want address==\"10.0.1.0\" — blocks are stored at the masked "+
+			"network address, so the retag lookup must name that same object", filter)
+	}
+	if strings.Contains(filter, `address=="10.0.1.5"`) {
+		t.Fatalf("retag read _filter = %q, still carries the raw host address 10.0.1.5 — no block is ever "+
+			"stored under a host address, so this lookup can never match and the retag silently "+
+			"changes nothing", filter)
+	}
+	if !strings.Contains(filter, "cidr==24") {
+		t.Fatalf("retag read _filter = %q, want the cidr==24 term — without it every prefix at that "+
+			"address is one object to this lookup and the retag rewrites blocks it was not asked about", filter)
+	}
+}
+
+// A selector that cannot be parsed must REFUSE, out loud and before the read.
+// The tempting alternative — fall back to the raw string — is what this whole
+// fix removes: it would put the silent-no-op back for exactly the inputs that
+// trigger it, and "matched nothing" is indistinguishable from a legitimate
+// empty result. So the assertions are the error AND the absence of any query.
+func TestFindBlocksForRetagRefusesAnUnparseableSelector(t *testing.T) {
+	cases := []struct {
+		name    string
+		address string
+		cidr    any
+		wantMsg string
+		raw     string // must not appear in any query that (wrongly) went out
+	}{
+		{
+			name: "cidr is not a number", address: "10.0.1.5", cidr: "twenty-four",
+			wantMsg: "cidr is not an integer", raw: "10.0.1.5",
+		},
+		{
+			name: "address is not an address", address: "not-an-ip", cidr: 24,
+			wantMsg: "Invalid retag selector", raw: "not-an-ip",
+		},
+		{
+			name: "cidr out of range for the family", address: "10.0.1.5", cidr: 99,
+			wantMsg: "Invalid retag selector", raw: "10.0.1.5",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e, f := newBlockAPIHarness(t)
+
+			rows, err := e.FindBlocksForRetag("ipam/ip_space/space-1", "", tc.address, tc.cidr, "")
+			if err == nil {
+				t.Fatalf("FindBlocksForRetag(%q, %v) error = nil (returned %v), want a refusal — an "+
+					"unparseable selector cannot be masked, and passing it through raw retags nothing "+
+					"while reporting success", tc.address, tc.cidr, rows)
+			}
+			if !strings.Contains(err.Error(), tc.wantMsg) {
+				t.Fatalf("error = %q, want it to contain %q so the operator can see WHICH selector was "+
+					"rejected", err.Error(), tc.wantMsg)
+			}
+			if rows != nil {
+				t.Fatalf("FindBlocksForRetag() returned %v alongside a refusal, want nil rows", rows)
+			}
+			for _, q := range f.blockQueries() {
+				t.Fatalf("the rejected selector read upstream anyway (_filter %q) — the refusal must "+
+					"happen before the read, and the raw %q must never reach a filter",
+					q.Get("_filter"), tc.raw)
+			}
+		})
 	}
 }
