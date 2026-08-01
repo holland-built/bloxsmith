@@ -102,7 +102,13 @@ func New(d *Deps) http.Handler {
 	// account switch lands halfway through. See tenant.go for the full reason.
 	pinned := d.withPinnedTenant(locked)
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Diagnostic request log (reqlog.go). No-op unless BLOXSMITH_REQLOG names a
+	// file; when set it appends start/end records for every /api/ request to
+	// that file so they survive a server restart. Outermost so it sees the
+	// request even when the write guard or vault gate short-circuits it.
+	rl := newReqLog()
+
+	return rl.wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			d.Guard.CORSPreflight(w, r)
 			return
@@ -111,7 +117,7 @@ func New(d *Deps) http.Handler {
 			return
 		}
 		pinned.ServeHTTP(w, r)
-	})
+	}))
 }
 
 func (d *Deps) json(w http.ResponseWriter, r *http.Request, status int, data any) {

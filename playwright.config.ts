@@ -11,6 +11,14 @@ const DEFAULT_BASE_URL = 'http://localhost:8090';
 
 export default defineConfig({
   testDir: './tests',
+  // Explicit, because the default did NOT land in this repo. Playwright's
+  // computed default here resolved to /Users/sholland/test-results — outside
+  // the project, outside .gitignore, and nowhere anyone would look — so every
+  // trace, video and screenshot this config now captures would have been
+  // written somewhere invisible. Measured with
+  // `npx playwright test --list --reporter=json`, which reports
+  // projects[0].outputDir.
+  outputDir: './test-results',
   // Fails fast with a clear message if the target server never comes up at
   // all, instead of every spec discovering ERR_CONNECTION_REFUSED on its own.
   globalSetup: './tests/global-setup.ts',
@@ -27,6 +35,22 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: process.env.NOC_BASE || DEFAULT_BASE_URL,
+    // Capture for EVERY failed attempt, not 'on-first-retry'. The drilldown
+    // flake (tests/drilldown.spec.ts) only ever appears on the first full-suite
+    // run after the dev server rebuilds, and the ORIGINAL attempt is the only
+    // genuinely process-cold observation of it — the retry runs against a
+    // materially warmer server, so 'on-first-retry' would systematically
+    // discard the one attempt worth looking at. 'retain-on-failure' records
+    // every attempt and throws the recording away when the attempt passes,
+    // so a green suite costs nothing on disk.
+    //
+    // Attempts are already separated on disk by Playwright's own per-attempt
+    // output directory (…-chromium/ for attempt 0, …-chromium-retry1/ for
+    // attempt 1), and tests/fixtures.ts stamps the retry index into the name
+    // of every diagnostic attachment it adds.
+    trace: 'retain-on-failure',
+    video: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
   projects: [
     {
