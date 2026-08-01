@@ -22,6 +22,36 @@ import (
 // timeout matches server.py's 35-second urlopen timeout on every REST call.
 const timeout = 35 * time.Second
 
+// maxIdleConnsPerHost raises http.DefaultTransport's default of 2. Every call
+// in this process goes to ONE host (the CSP API), so the default meant a
+// fan-out wider than 2 opened fresh TCP+TLS connections that were then thrown
+// away instead of pooled — a handshake tax on every burst. /api/data's
+// aggregate now issues up to dashboardFanOut concurrent calls and the hub
+// endpoints add more alongside it, so the pool is sized to hold all of them
+// idle between the 5-minute TTL refreshes rather than churning.
+//
+// 12 = the aggregate's full call count, i.e. the widest burst this process can
+// produce from one endpoint. Cost is bounded: idle sockets still expire on the
+// inherited IdleConnTimeout (90s), so a quiet process drains back to zero.
+const maxIdleConnsPerHost = 12
+
+// sharedTransport is the single connection pool for every Client in the
+// process. It MUST be shared: a per-Client transport would fragment the pool so
+// each Client (and every Pin-derived copy) kept its own connections, defeating
+// the point. Cloned from http.DefaultTransport so proxy/TLS/timeout defaults
+// are unchanged — only the idle-conn cap differs.
+var sharedTransport = newTransport()
+
+func newTransport() http.RoundTripper {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return http.DefaultTransport // stdlib changed shape; keep working, unpooled
+	}
+	t := base.Clone()
+	t.MaxIdleConnsPerHost = maxIdleConnsPerHost
+	return t
+}
+
 // Auth is the single mutable Authorization slot, replacing Python's global
 // MCP_HEADERS["Authorization"] (set by _apply_active). Value() returns the
 // active tenant key with the static API_KEY as fallback, mirroring
@@ -110,7 +140,7 @@ func New(baseURL string, auth *Auth) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		auth:    auth,
-		http:    &http.Client{Timeout: timeout},
+		http:    &http.Client{Timeout: timeout, Transport: sharedTransport},
 	}
 }
 
