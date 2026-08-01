@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -54,17 +56,167 @@ type updateStatus struct {
 	// not check" from a genuine "you are on the newest version". Empty on
 	// a clean check, whether or not an update is available.
 	Error string `json:"error,omitempty"`
+	// Cached says whether this answer came from the in-process memory of an
+	// earlier check instead of a live call to GitHub. Always emitted (never
+	// omitempty) so a remembered answer can never be read as a fresh one.
+	Cached bool `json:"cached"`
+	// CheckedAt is when GitHub was actually contacted to produce THIS answer,
+	// success or failure, as RFC3339 UTC. Empty only when no contact happened
+	// (the check is disabled) — never a guessed or defaulted time.
+	CheckedAt string `json:"checkedAt,omitempty"`
+	// CheckDisabled is true when DISABLE_UPDATE_CHECK is set and the server
+	// therefore did not contact GitHub at all. When it is true, Latest/URL are
+	// empty and Available is false because NOTHING WAS LOOKED UP — that is not
+	// the same claim as "you are on the newest version", and a consumer must
+	// not render it as one.
+	CheckDisabled bool `json:"checkDisabled,omitempty"`
 }
 
-// checkUpdate hits the GitHub Releases API for the latest tag. Same JSON shape
-// as update_status (server.py:123). Really reaches GitHub — no stub.
+// The update-check cache.
+//
+// WHY: /api/update/check is hit on every dashboard page load (plus a probe
+// every 1.5s while a restart is being confirmed), and GitHub's unauthenticated
+// limit is 60 requests/hour PER SOURCE IP — one shared bucket for every
+// operator behind the same corporate connection. Remembering the last answer
+// caps one install at roughly 2 counted requests/hour instead of one per page
+// load.
+//
+// Why not conditional requests (ETag / If-None-Match) as well: measured live
+// 2026-08-01 against api.github.com — an UNAUTHENTICATED 304 still decrements
+// x-ratelimit-remaining. Conditional requests would save bandwidth, not
+// allowance, so they are deliberately not implemented here.
+//
+// Scope, honestly: in-memory only, per process. A restart costs at most one
+// extra request, where a state file would add I/O, corruption handling and a
+// new file to back up for nothing. It also does not help a large fleet in the
+// hour after a release — each install would still spend one request then. That
+// last gap is now closed by the static version file (versionfile.go): a plain
+// release-asset download, not an API call, so it is not rate limited at all.
+// The cache still earns its keep for releases published before that file
+// existed, which fall back to the API.
+const (
+	updateCheckTTL       = 30 * time.Minute
+	updateCheckTTLJitter = 3 * time.Minute
+	// Failures are remembered far more briefly than successes: long enough
+	// that the 1.5-second restart-confirm probes cannot hammer a failing or
+	// rate-limited GitHub, short enough that recovery is quick.
+	updateCheckErrTTL = 5 * time.Minute
+)
+
+// nowFn is a var so tests can drive the clock instead of sleeping.
+var nowFn = time.Now
+
+// updateCheckJitter spreads cache expiry over ±updateCheckTTLJitter so a fleet
+// of installs started together (site-wide deploy, morning login rush) behind
+// one IP does not re-synchronise its cache misses into a single burst against
+// the shared 60/hour bucket. A var so tests can pin it.
+var updateCheckJitter = func() time.Duration {
+	span := int64(2*updateCheckTTLJitter) + 1
+	return time.Duration(rand.Int64N(span)) - updateCheckTTLJitter
+}
+
+var updateCache struct {
+	mu    sync.Mutex
+	valid bool
+	// st/err are stored exactly as fetchUpdate returned them — including a
+	// failure. A failure REPLACES a remembered success; a stale good answer is
+	// never served in place of a live failure.
+	st        updateStatus
+	err       error
+	checkedAt time.Time
+	expires   time.Time
+}
+
+// resetUpdateCache drops the remembered answer. Tests call it so they stay
+// order-independent; nothing in production does.
+func resetUpdateCache() {
+	updateCache.mu.Lock()
+	defer updateCache.mu.Unlock()
+	updateCache.valid = false
+	updateCache.st = updateStatus{}
+	updateCache.err = nil
+	updateCache.checkedAt = time.Time{}
+	updateCache.expires = time.Time{}
+}
+
+// labelFreshness stamps an answer with where it came from and when GitHub was
+// really consulted. Current is always re-read from the running binary's
+// version so a remembered entry can never report a version this process is not
+// actually running (the UI's restart-confirm loop keys off exactly that field).
+func labelFreshness(st updateStatus, cached bool, checkedAt time.Time) updateStatus {
+	st.Current = version
+	st.Cached = cached
+	if !checkedAt.IsZero() {
+		st.CheckedAt = checkedAt.UTC().Format(time.RFC3339)
+	}
+	return st
+}
+
+// checkUpdate returns the latest-release answer, serving the remembered one
+// while it is still fresh and otherwise contacting GitHub. See the cache
+// comment above for why this exists.
+//
+// The lock is held across the network call on purpose: concurrent page loads
+// queue behind one in-flight request and read its result, instead of each
+// spending a request out of the shared allowance.
+//
+// The APPLY path deliberately does NOT come through here — applyLatest calls
+// latestRelease (apply.go) directly and always fetches fresh. Downloading and
+// installing a binary chosen from a half-hour-old answer is not acceptable;
+// one request per apply is.
+func checkUpdate() (updateStatus, error) {
+	updateCache.mu.Lock()
+	defer updateCache.mu.Unlock()
+
+	now := nowFn()
+	if updateCache.valid && now.Before(updateCache.expires) {
+		return labelFreshness(updateCache.st, true, updateCache.checkedAt), updateCache.err
+	}
+
+	st, err := fetchUpdate()
+	ttl := updateCheckTTL + updateCheckJitter()
+	if err != nil {
+		ttl = updateCheckErrTTL
+	}
+	updateCache.valid = true
+	updateCache.st, updateCache.err = st, err
+	updateCache.checkedAt, updateCache.expires = now, now.Add(ttl)
+	return labelFreshness(st, false, now), err
+}
+
+// fetchUpdate hits the GitHub Releases API for the latest tag. Same JSON shape
+// as update_status (server.py:123). Really reaches GitHub — no stub, and no
+// cache: checkUpdate above is the caching wrapper.
 //
 // A non-200 response, a request/decode error, or a body with no parseable
 // tag_name is a FAILED check, not "no update available": it returns a
 // non-nil error and st.Error is populated so callers (and the UI) can tell
 // the two states apart instead of silently reporting up-to-date.
-func checkUpdate() (updateStatus, error) {
+func fetchUpdate() (updateStatus, error) {
 	st := updateStatus{Current: version, SelfUpdate: true}
+
+	// --- static version file first (versionfile.go) -------------------------
+	// A release-asset download is not a REST API call and costs NOTHING against
+	// GitHub's 60-requests/hour unauthenticated limit, so this is the cheap path
+	// and it is tried before the API. It only reports that a tag EXISTS; the
+	// file is unsigned and is NOT a trust anchor — installing that version still
+	// goes through apply.go's fresh API lookup, checksums and signature
+	// verification, unchanged.
+	//
+	// A failure here is NOT an answer. Every release published before this
+	// feature has no version.json and answers 404, and "the file was missing"
+	// must never surface as "you are up to date" — so nothing is returned, the
+	// reason is logged, and the GitHub API below decides the result (including
+	// reporting its own failure through the usual githubFailureDetail path).
+	if tag, staticErr := staticVersion(); staticErr != nil {
+		log.Printf("fetchUpdate: static version file unusable (%v) — falling back to the GitHub releases API", staticErr)
+	} else {
+		st.Latest, st.URL = tag, releasePageURL(tag)
+		st.Available = verN(tag) > verN(version)
+		return st, nil
+	}
+	// --- end static version file --------------------------------------------
+
 	req, _ := http.NewRequest("GET",
 		fmt.Sprintf("%s/repos/%s/releases/latest", githubAPIBase, appRepo), nil)
 	req.Header.Set("User-Agent", "bloxsmith")
@@ -88,7 +240,7 @@ func checkUpdate() (updateStatus, error) {
 		// it is) goes to the server log exactly as before. What reaches the
 		// caller — and from there st.Error / the UI — is the plain sentence
 		// githubFailureDetail builds instead, never this snippet verbatim.
-		log.Printf("checkUpdate: github releases API returned HTTP %d: %s", resp.StatusCode, s)
+		log.Printf("fetchUpdate: github releases API returned HTTP %d: %s", resp.StatusCode, s)
 		err := fmt.Errorf("%s", githubFailureDetail(resp, s))
 		st.Error = err.Error()
 		return st, err

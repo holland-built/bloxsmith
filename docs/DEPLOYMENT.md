@@ -160,12 +160,35 @@ restart bloxsmith`, or use the in-app **Update now** button.
 **Customer:** `docker compose pull && docker compose up -d`, or use the in-app
 **Update now** button.
 
-The server checks GitHub Releases for `holland-built/bloxsmith` once a day in the
-background (current version is `1.0.<commit-count>`) and exposes
-`update:{current,latest,available,url,selfUpdate,cooldown}` in
-`GET /api/vault/status`. `GET /api/update/check` forces an immediate check;
-`DISABLE_UPDATE_CHECK=1` opts out entirely. The browser never contacts GitHub
-directly — the server does the check and the browser just reads the status.
+The server checks GitHub Releases for `holland-built/bloxsmith` **only when
+asked** — there is no background timer, so an idle server makes no requests at
+all. `GET /api/update/check` is the check; the dashboard calls it on page load
+and every 6 hours per open tab, and `bloxsmith update` calls it from the command
+line. The browser never contacts GitHub directly — the server does the check and
+the browser just reads the result.
+
+The answer is remembered in memory for **30 minutes (±3 minutes)** so repeat page
+loads do not each spend a request against GitHub's unauthenticated limit of 60
+requests/hour, which is shared by every machine behind the same public IP. The
+response says which it is: `cached` (true/false) and `checkedAt` (when GitHub was
+actually contacted). A failed check reports `error` and is never replaced by the
+last good answer — "the check failed" and "you are up to date" are different
+answers and render differently. Applying an update always fetches fresh; the
+cache is on the check only. The cache is per process — restarting the server
+clears it.
+
+`GET /api/vault/status` also embeds an `update` object, but only
+`{current, checkDisabled, selfUpdate}` in it carry information; its `latest`,
+`available` and `url` are always empty/false placeholders because that endpoint
+does no network call. `/api/update/check` is the only source of a real answer.
+
+`DISABLE_UPDATE_CHECK=1` stops `GET /api/update/check` contacting GitHub. It
+returns the running version plus `checkDisabled: true` and no `latest` —
+**deliberately not the same as "you are on the newest version"**, since nothing
+was looked up; the dashboard then shows no update UI at all. Honest scope: this
+switches off the automatic/browser-driven check only. Explicitly running
+`bloxsmith update`, or `POST /api/update/apply`, still contacts GitHub — those
+are direct operator requests to update, not background polling.
 
 There is no automatic image rollback. `docker-compose.yml` defines no healthcheck
 and does not mount `/var/run/docker.sock` — the in-app updater never touches the
@@ -361,7 +384,7 @@ known follow-up. Until then, provisioning that relies on bundled templates needs
 | `HOST`             |          | `localhost` (`0.0.0.0` in Docker) | App bind address                    |
 | `PORT`             |          | `8080`                   | HTTP port                                    |
 | `ALLOWED_HOSTS`    |          | _(loopback + `HOST`)_    | Comma-separated extra `Host` header values this deployment answers to (DNS-rebinding gate). `localhost`/`127.0.0.1`/`[::1]`/`HOST` are always allowed; anything else gets `421`. A wildcard bind (`HOST=0.0.0.0`, the Docker default) can't know its own names, so the gate is **off** there until you set this |
-| `DISABLE_UPDATE_CHECK` |      | _(unset)_                | Set to `1` to opt out of the daily GitHub Releases update check |
+| `DISABLE_UPDATE_CHECK` |      | _(unset)_                | Set to `1` (any non-empty value) to stop `GET /api/update/check` contacting GitHub Releases. It then reports `checkDisabled: true` and no `latest` — not "up to date". `bloxsmith update` and `POST /api/update/apply` still reach GitHub when run explicitly |
 | `WATCHTOWER_TOKEN` |          | _(generated/default)_    | Shared secret for the optional Watchtower sidecar's HTTP API (alternate update trigger) |
 | `AUDIT_TRUST_DIR`  |          | _(per-user config dir)_  | Where the audit chain's HMAC key and sealed head record live. Must **not** be the directory holding `audit_log.jsonl` — a key an attacker can rewrite beside the log it signs protects nothing. The app warns at startup if you point it there |
 | `AUDIT_KEY`        |          | _(generated locally)_    | Audit HMAC key, hex, ≥64 characters. Set this from an injected secret and the trust root no longer lives on the machine that writes the log |

@@ -5,22 +5,33 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // withGithubStub points checkUpdate at a local httptest.Server for the
 // duration of the test instead of reaching the real network, and restores
 // githubAPIBase + version afterwards.
+//
+// It also empties the update-check cache before and after the test and pins
+// the TTL jitter to zero: the cache is package-level state, so without this
+// every test after the first would read the previous test's remembered answer
+// and its own stub would never be hit.
 func withGithubStub(t *testing.T, handler http.HandlerFunc, testVersion string) {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
 	origBase, origVersion := githubAPIBase, version
+	origNow, origJitter := nowFn, updateCheckJitter
 	githubAPIBase = srv.URL
 	version = testVersion
+	updateCheckJitter = func() time.Duration { return 0 }
+	resetUpdateCache()
 	t.Cleanup(func() {
 		githubAPIBase = origBase
 		version = origVersion
+		nowFn, updateCheckJitter = origNow, origJitter
+		resetUpdateCache()
 	})
 }
 
