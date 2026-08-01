@@ -3,6 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
+import { useData } from '../lib/data.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useHashParams } from '../lib/hash.js'
@@ -10,30 +11,39 @@ import { useThemeColors } from '../lib/theme.jsx'
 
 // ---------- main ----------
 
+// The only /api/data slice this tab shows. See Audit.jsx for why the list is
+// declared rather than inferred: the accessors refuse to answer for anything
+// not named here, so an unrequested slice can never be rendered as empty or as
+// broken. (zones pulls dnsViews server-side to resolve view names; that is the
+// server's dependency closure, not something this tab reads.)
+const SLICES = ['zones']
+
 export default function Dns() {
   const qps = useApi('/api/csp/dns-qps', { poll: 30000 })
   const services = useApi('/api/csp/dns-services', { poll: 30000 })
   // Re-enabled 2026-07-22: MCP calls now carry a bounded 12s deadline (mcp.go post()),
   // so a stalled feed errors out instead of hanging goroutines / starving the upstream.
   const analytics = useApi('/api/dns-analytics', { poll: 30000 })
-  const data = useApi('/api/data', { poll: 30000 })
+  const data = useData(SLICES, { poll: 30000 })
   const dnssec = useApi('/api/csp/dnssec', { poll: 30000 })
   const rpz = useApi('/api/csp/rpz', { poll: 30000 })
   const dtcLbdn = useApi('/api/csp/dtc-lbdn', { poll: 30000 })
 
   const hp = useHashParams()
-  const zones = data.data?.zones ?? []
-  const zonesStatus = data.data?._meta?.zones
+  const zones = data.rows('zones')
+  // 'ok' | 'empty' | 'error' — 'error' also when the payload arrived without
+  // the zones slice, because that read did not deliver.
+  const zonesStatus = data.status('zones')
 
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">DNS</h1>
       <CardGrid>
         <QpsHero qps={qps} />
-        <ZoneKpis zones={zones} zonesStatus={zonesStatus} />
+        <ZoneKpis zones={zones} zonesStatus={zonesStatus} loading={data.loading} />
         <DnsServices services={services} />
         <QueryVolume7d analytics={analytics} />
-        <ZoneTable zones={zones} issuesOnly={!!hp.issues} zonesStatus={zonesStatus} />
+        <ZoneTable zones={zones} issuesOnly={!!hp.issues} zonesStatus={zonesStatus} loading={data.loading} />
         <DnssecHealth dnssec={dnssec} />
         <RpzPanel rpz={rpz} />
         <DtcLbdnPanel dtcLbdn={dtcLbdn} />
@@ -104,8 +114,18 @@ function QpsHero({ qps }) {
 
 // ---------- zone kpis ----------
 
-function ZoneKpis({ zones, zonesStatus }) {
+function ZoneKpis({ zones, zonesStatus, loading }) {
   const { COLORS } = useChartTheme()
+  // A load in flight is not a verdict. Without this the panel would print
+  // three confident zeros (before) or a feed-unavailable notice (now that an
+  // unarrived slice reads as 'error') for a read that simply has not finished.
+  if (loading) {
+    return (
+      <Card span={2} className="flex flex-col justify-between">
+        <Skeleton h={200} />
+      </Card>
+    )
+  }
   // All three cells read the same `zones` feed — a dead read means none of
   // these counts are known, not that they're all zero.
   if (zones.length === 0 && zonesStatus === 'error') {
@@ -205,7 +225,7 @@ function QueryVolume7d({ analytics }) {
 
 // ---------- zone table ----------
 
-function ZoneTable({ zones, issuesOnly, zonesStatus }) {
+function ZoneTable({ zones, issuesOnly, zonesStatus, loading }) {
   const { COLORS } = useChartTheme()
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
@@ -295,7 +315,11 @@ function ZoneTable({ zones, issuesOnly, zonesStatus }) {
         </div>
       }
     >
-      {zones.length === 0 ? (
+      {loading ? (
+        // Same reason as ZoneKpis: an unfinished read is neither "no zones"
+        // nor "the feed is dead".
+        <Skeleton h={250} />
+      ) : zones.length === 0 ? (
         zonesStatus === 'error' ? <FeedUnavailable label="DNS zones feed unavailable" /> : <Empty />
       ) : sorted.length === 0 ? (
         <Empty>no zones match</Empty>

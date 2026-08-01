@@ -62,7 +62,7 @@ func TestFetchDashboardData_TotalsFromPageTotalSize(t *testing.T) {
 		}
 	})
 
-	data := s.FetchDashboardData()
+	data := s.FetchDashboardData(nil)
 
 	totals, ok := data["_totals"].(map[string]any)
 	if !ok {
@@ -132,7 +132,7 @@ func TestFetchDashboardData_AtRiskPagingCapDegrades(t *testing.T) {
 		}
 	})
 
-	data := s.FetchDashboardData()
+	data := s.FetchDashboardData(nil)
 
 	if pageHits != atRiskPageCap {
 		t.Fatalf("at-risk paging made %d requests, want exactly atRiskPageCap=%d (loop must stop, not run forever)",
@@ -181,7 +181,7 @@ func TestFetchDashboardData_FailedCountQueryDegradesWithoutContradiction(t *test
 		}
 	})
 
-	data := s.FetchDashboardData()
+	data := s.FetchDashboardData(nil)
 
 	totals, ok := data["_totals"].(map[string]any)
 	if !ok {

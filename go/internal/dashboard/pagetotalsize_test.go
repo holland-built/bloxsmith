@@ -105,7 +105,7 @@ func TestFetchDashboardData_SubnetsCritZeroDoesNotDegrade(t *testing.T) {
 		}
 	})
 
-	data := s.FetchDashboardData()
+	data := s.FetchDashboardData(nil)
 
 	totals, ok := data["_totals"].(map[string]any)
 	if !ok {

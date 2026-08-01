@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
+import { useData } from '../lib/data.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 
@@ -25,10 +26,20 @@ function monoTs(v) {
 
 // ---------- main ----------
 
+// This tab reads ONE slice of /api/data. Fetching the whole aggregate made it
+// wait for eleven upstream calls it never looks at — measured ~9s cold for a
+// slice worth ~0.3s. Declaring the slice list is also what makes the honesty
+// rule enforceable: the accessors below refuse to answer for anything not
+// listed here, so a slice this tab never asked for cannot reach a panel and be
+// drawn as "you have none" or "it broke".
+const SLICES = ['auditLogs']
+
 export default function Audit() {
-  const data = useApi('/api/data', { poll: 30000 })
-  const logs = data.data?.auditLogs ?? []
-  const auditLogsStatus = data.data?._meta?.auditLogs
+  const data = useData(SLICES, { poll: 30000 })
+  const logs = data.rows('auditLogs')
+  // 'ok' | 'empty' | 'error' — and 'error' too when the payload came back
+  // without the slice at all, because that read did not deliver.
+  const auditLogsStatus = data.status('auditLogs')
 
   return (
     <div className="w-full px-6 py-5">

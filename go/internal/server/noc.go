@@ -101,7 +101,7 @@ func (d *Deps) incidents(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}()
-	data := d.dash(r).FetchDashboardData()
+	data := d.dash(r).FetchDashboardData(nil)
 	signals := d.Store.StampFirstSeen(dashboard.BuildSignals(data))
 	signalsMeta, signalsDegraded := dashboard.SignalsMeta(data)
 	snoozed := d.Store.ActiveSnoozes()
@@ -150,7 +150,7 @@ func (d *Deps) incidentsCategory(w http.ResponseWriter, r *http.Request) {
 				"category": category, "count": 0, "truncated": false, "signals": []any{}})
 		}
 	}()
-	data := d.dash(r).FetchDashboardData()
+	data := d.dash(r).FetchDashboardData(nil)
 	matches := []map[string]any{}
 	for _, s := range d.Store.StampFirstSeen(dashboard.BuildSignals(data)) {
 		if getCat(s) == category {

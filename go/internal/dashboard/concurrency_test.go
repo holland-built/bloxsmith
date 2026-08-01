@@ -108,7 +108,7 @@ func TestBuildAggregate_UpstreamCallsRunConcurrently(t *testing.T) {
 	p := newProbe()
 	s := newDashboardTestService(t, slowAggregateHandler(p, 80*time.Millisecond))
 
-	s.FetchDashboardData()
+	s.FetchDashboardData(nil)
 
 	peak, total := p.peakAndTotal()
 	if total != 12 {
@@ -159,7 +159,7 @@ func TestBuildAggregate_AtRiskPagingStaysSequential(t *testing.T) {
 		writeResults(w, nil)
 	})
 
-	s.FetchDashboardData()
+	s.FetchDashboardData(nil)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -205,7 +205,7 @@ func TestBuildAggregate_ConcurrentFailureIsolation(t *testing.T) {
 		writeResults(w, rowsFor[r.URL.Path])
 	})
 
-	data := s.FetchDashboardData()
+	data := s.FetchDashboardData(nil)
 
 	meta, ok := data["_meta"].(map[string]any)
 	if !ok {
@@ -281,7 +281,7 @@ func TestBuildAggregate_EveryFeedFailsIndependently(t *testing.T) {
 				writeResults(w, rowsFor[r.URL.Path])
 			})
 
-			meta, ok := s.FetchDashboardData()["_meta"].(map[string]any)
+			meta, ok := s.FetchDashboardData(nil)["_meta"].(map[string]any)
 			if !ok {
 				t.Fatalf("_meta missing")
 			}
@@ -321,7 +321,7 @@ func TestFetchDashboardData_SingleFlightCollapsesConcurrentColdCallers(t *testin
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			results[i] = s.FetchDashboardData()
+			results[i] = s.FetchDashboardData(nil)
 		}(i)
 	}
 	close(start)
@@ -375,7 +375,7 @@ func TestFetchDashboardData_SingleFlightPreservesFailureWord(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			meta := s.FetchDashboardData()["_meta"].(map[string]any)
+			meta := s.FetchDashboardData(nil)["_meta"].(map[string]any)
 			metas[i] = meta["feeds"]
 		}(i)
 	}
