@@ -419,10 +419,21 @@ func (p *SiteProvisioner) createDNSZone() (M, error) {
 }
 
 // createReverseZone is create_reverse_zone (server.py:1781).
-func (p *SiteProvisioner) createReverseZone(subnetAddr string, cidr int) (M, error) {
+//
+// The second return value says whether THIS run created the zone, and it is the
+// reverse-zone counterpart of the forward zone's p.zoneCreated flag. One bool on
+// the provisioner cannot carry it: a run creates one reverse zone per subnet, so
+// the fact is per-zone and travels with each zone back to createSubnets.
+//
+// Why it has to be tracked at all: a reverse zone is routinely SHARED. A /16 or
+// /8 in-addr.arpa zone covers every subnet under it, so a second site build, or
+// a retry after a partial run, finds the customer's existing zone and reuses it.
+// Deleting a reused zone on rollback destroys reverse DNS for everything else
+// living in it — the one rollback action that is not recoverable by re-running.
+func (p *SiteProvisioner) createReverseZone(subnetAddr string, cidr int) (M, bool, error) {
 	fqdn, err := CidrToReverseZone(subnetAddr, cidr)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if cidr != 8 && cidr != 16 && cidr != 24 && cidr < 24 {
 		p.emit(M{"step": fmt.Sprintf("  Warning: /%d spans multiple reverse zones; only %s will be created", cidr, fqdn)})
@@ -430,37 +441,40 @@ func (p *SiteProvisioner) createReverseZone(subnetAddr string, cidr int) (M, err
 	mode := dryPrefix(p.cfg.DryRun)
 	p.emit(M{"step": fmt.Sprintf("%sEnsuring reverse DNS zone: %s  view=%s", mode, fqdn, p.cfg.DNSView)})
 	if p.cfg.DryRun {
-		return M{"dry_run": true, "fqdn": fqdn, "id": "(dry-run)"}, nil
+		return M{"dry_run": true, "fqdn": fqdn, "id": "(dry-run)"}, false, nil
 	}
 	fq, err := cspq(fqdn)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	vw, err := cspq(p.viewID)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	existing, err := p.e.Rest.GetStrict("/api/ddi/v1/dns/auth_zone", map[string]string{
 		"_filter": fmt.Sprintf(`fqdn=="%s" and view=="%s"`, fq, vw)})
 	if err != nil {
-		return nil, perrWrap(err, "could not read reverse DNS zone %s: %s", fqdn, upstreamPublic(err))
+		return nil, false, perrWrap(err, "could not read reverse DNS zone %s: %s", fqdn, upstreamPublic(err))
 	}
 	if len(existing) > 0 {
+		// Reused, not created — the customer's zone. created=false is what keeps
+		// rollback's hands off it.
 		zone := asMap(existing[0])
-		p.emit(M{"step": fmt.Sprintf("  Reverse zone already exists: %s  id=%s", fqdn, pyStr(zone["id"]))})
-		return zone, nil
+		p.emit(M{"step": fmt.Sprintf("  Reverse zone already exists: %s  id=%s — reusing (rollback will not delete it)",
+			fqdn, pyStr(zone["id"]))})
+		return zone, false, nil
 	}
 	resp, status, _ := p.e.Rest.Write("POST", "/api/ddi/v1/dns/auth_zone",
 		M{"fqdn": fqdn, "view": p.viewID, "primary_type": "cloud"}, nil)
 	if (status != 200 && status != 201) || resp == nil {
-		return nil, perr("Failed to create reverse zone %s: status %d %v", fqdn, status, resp)
+		return nil, false, perr("Failed to create reverse zone %s: status %d %v", fqdn, status, resp)
 	}
 	zone := asMap(asMap(resp)["result"])
 	if zone == nil {
 		zone = M{}
 	}
 	p.emit(M{"step": fmt.Sprintf("  Created reverse zone id=%s", pyStr(zone["id"]))})
-	return zone, nil
+	return zone, true, nil
 }
 
 // createSubnets is create_subnets (server.py:1805).
@@ -482,7 +496,7 @@ func (p *SiteProvisioner) createSubnets(block, result M) (map[string]M, error) {
 			if c, ok := intCoerce(subnet["cidr"]); ok {
 				scidr = c
 			}
-			zone, err := p.createReverseZone(pyStr(subnet["address"]), scidr)
+			zone, zoneCreated, err := p.createReverseZone(pyStr(subnet["address"]), scidr)
 			if err != nil {
 				return nil, err
 			}
@@ -490,7 +504,10 @@ func (p *SiteProvisioner) createSubnets(block, result M) (map[string]M, error) {
 			if id == "" {
 				id = "(dry-run)"
 			}
-			appendTo(result, "reverse_zones", M{"id": id, "fqdn": pyStr(zone["fqdn"])})
+			// "created" travels with the entry because rollback works off this
+			// list and nothing else. An entry without it is UNKNOWN, and
+			// rollback treats unknown as "not ours".
+			appendTo(result, "reverse_zones", M{"id": id, "fqdn": pyStr(zone["fqdn"]), "created": zoneCreated})
 		}
 		created[sdef.Name] = subnet
 	}
@@ -498,6 +515,15 @@ func (p *SiteProvisioner) createSubnets(block, result M) (map[string]M, error) {
 }
 
 // provisionHosts is provision_hosts (server.py:1818).
+//
+// On failure it returns the hosts it ALREADY created alongside the error, and
+// the caller is required to record them before it bails. Every other resource
+// here appends into `result` the moment it is created (createSubnet,
+// createDHCPRange, createSubnets' reverse zones), so a mid-list failure still
+// leaves rollback a complete list to undo. Hosts were the one kind collected
+// into a local slice and handed over only on the success path, so returning nil
+// here dropped hosts 1..k-1 on the floor — they exist upstream, rollback never
+// saw them, and they stayed on the customer's network with no record of it.
 func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 	subnetOffsets := map[string]int{}
 	var results []M
@@ -556,7 +582,9 @@ func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 			continue
 		}
 		if (status != 200 && status != 201) || resp == nil {
-			return nil, perr("Failed to create host %s: status %d %v", hdef.Hostname, status, resp)
+			// `results`, not nil: the hosts before this one are real objects on
+			// the customer's network. Dropping them here is what stranded them.
+			return results, perr("Failed to create host %s: status %d %v", hdef.Hostname, status, resp)
 		}
 		host := asMap(asMap(resp)["result"])
 		if host == nil {
@@ -579,7 +607,15 @@ func (p *SiteProvisioner) rollback(partial M) {
 	residual := []any{}
 
 	del := func(objID, kind, label string) {
-		if objID == "" || objID == "(dry-run)" {
+		// None of these three are ids. "" is a create whose response carried no
+		// id, "(dry-run)" is a preview placeholder, and "(exists)" is what
+		// provisionHosts records when upstream answered 409 — a host the
+		// customer ALREADY had, which this run did not create. Sending any of
+		// them upstream produces a DELETE on a nonsense path like
+		// /api/ddi/v1/(exists) that is certain to fail, and the failure then
+		// appends a residual entry telling the operator a real object could not
+		// be deleted. That entry is fabricated: the object was never ours.
+		if objID == "" || objID == "(dry-run)" || objID == "(exists)" {
 			return
 		}
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+objID, nil, nil)
@@ -604,10 +640,24 @@ func (p *SiteProvisioner) rollback(partial M) {
 			del(zid, "dns_zone", pyStr(partial["dns_zone_fqdn"]))
 		}
 	}
+	// Reverse zones, newest first — but ONLY the ones this run created. The
+	// forward zone is gated on p.zoneCreated for exactly this reason; a reverse
+	// run makes one zone per subnet, so the flag lives per entry instead of once
+	// on the provisioner. An entry with no "created" marker is UNKNOWN and is
+	// left alone: a stray zone is recoverable by deleting it later, a deleted
+	// live zone shared across a /16 is not.
 	rz := getList(partial, "reverse_zones")
 	for i := len(rz) - 1; i >= 0; i-- {
 		z := asMap(rz[i])
-		del(pyStr(z["id"]), "reverse_zone", pyStr(z["fqdn"]))
+		zid := pyStr(z["id"])
+		if !truthy(z["created"], false) {
+			if zid != "" && zid != "(dry-run)" {
+				p.emit(M{"step": fmt.Sprintf("  Rollback: keeping reverse zone %s id=%s — this run did not create it",
+					pyStr(z["fqdn"]), zid)})
+			}
+			continue
+		}
+		del(zid, "reverse_zone", pyStr(z["fqdn"]))
 	}
 	ranges := getList(partial, "dhcp_ranges")
 	for i := len(ranges) - 1; i >= 0; i-- {
@@ -680,9 +730,11 @@ func (p *SiteProvisioner) Provision() (M, error) {
 		}
 		result["dns_zone_fqdn"] = zfqdn
 		hosts, err := p.provisionHosts(subnets)
-		if err != nil {
-			return err
-		}
+		// Recorded BEFORE the error check, deliberately. provisionHosts returns
+		// what it managed to create even when it fails, and rollback deletes
+		// nothing it cannot find in result["hosts"] — so returning early here is
+		// what left already-created hosts alive upstream after a mid-list
+		// failure.
 		outHosts := []any{}
 		for _, h := range hosts {
 			hid := pyStr(h["id"])
@@ -693,6 +745,9 @@ func (p *SiteProvisioner) Provision() (M, error) {
 				"hostname": pyStr(h["hostname"]), "id": hid})
 		}
 		result["hosts"] = outHosts
+		if err != nil {
+			return err
+		}
 		return nil
 	}()
 
