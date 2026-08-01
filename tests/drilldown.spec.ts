@@ -30,7 +30,24 @@ test('host status legend drills to Infra with status chip', async ({ page }) => 
   // on it explicitly before clicking mirrors write-lock's fix: wait for the
   // specific condition that makes the click meaningful, don't race the fetch.
   const offlineRow = page.getByRole('button', { name: /^Offline/ });
-  await expect(offlineRow).toBeVisible();
+  // THIS is the assertion that was actually failing, not the chip below.
+  //
+  // Reproduced on demand at last (2026-08-01): `curl :8090/api/cache-bust`
+  // then run this spec. It fails here — "element(s) not found", 5000ms — and
+  // passes on retry, because the retry runs against a now-warm cache. Three
+  // earlier diagnoses all missed it, and all three blamed the chip.
+  //
+  // The row only enters the DOM once /api/data resolves. That is 0.02s warm
+  // but a measured 6.55–9.65s cold (n=4, after the fan-out change; it was
+  // 16.45–27.63s before). Playwright's default 5s budget sits inside that
+  // window, so a cold cache failed here every time and a warm one never did.
+  //
+  // 13s = worst measured cold load (9.65s) + one full observed spread
+  // (9.65 − 6.55 = 3.1s). Same derivation as the client's own cold budget in
+  // ui/src/lib/api.js. With n=4 there is no basis for a percentile, so one
+  // step of the observed spread above the worst sample is the honest ceiling.
+  // Deliberately not a round number.
+  await expect(offlineRow).toBeVisible({ timeout: 13_000 });
   await offlineRow.click();
   await expect(page).toHaveURL(/#infra\?status=offline/);
 
