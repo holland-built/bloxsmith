@@ -62,7 +62,7 @@
         "title": "Bootstrap App",
         "version": "v1",
         "paths_count": 8,
-        "description": "Manages on-prem host bootstrap configuration, including network interfaces (LAN/WAN), IP addresses, MAC addresses, VLAN settings, NTP, DNS name servers, and local access. Use this service to retrieve or update network interface configuration (LAN/WAN type, IPs) for BloxOne on-prem hosts identified by OPHID."
+        "description": ""
       },
       {
         "service_name": "BulkService",
@@ -132,14 +132,14 @@
         "title": "DNS Configuration API",
         "version": "v1",
         "paths_count": 44,
-        "description": "DNS Configuration API for managing DNS zones, views, servers, hosts, and security policies. Response Policy Zones (RPZs) are also managed through this API under the /dns/rpz endpoints \u2014 use these to list, create, and manage Local RPZ policies on NIOS-X. Do NOT use NIOS WAPI passthrough (B1wapiService) for RPZ queries; use this API instead.\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/view/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `view`, `parent`, or `nsgs` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality."
+        "description": "DNS Configuration API for managing DNS zones, views, servers, hosts, and security policies. Response Policy Zones (RPZs) are also managed through this API under the /dns/rpz endpoints \u2014 use these to list, create, and manage Local RPZ policies on NIOS-X. Do NOT use NIOS WAPI passthrough (B1wapiService) for RPZ queries; use this API instead.\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/view/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `view`, `parent`, or `nsgs` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.\n\nRPZ (Response Policy Zone) guidance: Use /dns/rpz to list, create, read, update, or delete RPZ zones. Do NOT use WAPI or B1wapiService for RPZ operations \u2014 all RPZ management is available via this DnsConfig API. RPZ rules (policy records) are DNS records stored under the RPZ zone and are retrieved via the DnsData service /dns/record endpoint filtered by zone id."
       },
       {
         "service_name": "DnsData",
         "title": "DNS Data API",
         "version": "v1",
         "paths_count": 3,
-        "description": "The DNS Data is a BloxOne DDI service providing primary authoritative zone support. DNS Data is authoritative for all DNS resource records and is acting as a primary DNS server. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. \n\n\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality."
+        "description": "The DNS Data is a BloxOne DDI service providing primary authoritative zone support. DNS Data is authoritative for all DNS resource records and is acting as a primary DNS server. It is part of the full-featured, DDI cloud solution that enables customers to deploy large numbers of protocol servers to deliver DNS and DHCP throughout their enterprise network. \n\n\n\nResource identifiers in this service are opaque, namespaced values of the form `<service>/<type>/<uuid>` (e.g. `dns/record/abc123`, `dns/auth_zone/def456`). The type prefix is part of the value \u2014 never strip it, add it, or reconstruct an identifier from a bare UUID. Foreign-key fields such as `zone` and `view` already contain the full canonical identifier as returned by the API; use them exactly as-is. To determine whether two identifiers refer to the same resource, compare the complete strings for exact equality \u2014 do not transform them or issue additional queries to test equality.\n\nRPZ record listing \u2014 IMPORTANT: When listing records for an RPZ zone, always filter by zone id: _filter=zone=='<rpz_zone_id>' where the zone id comes from the /dns/rpz response (e.g. dns/rpz/abc123). Do NOT issue an unfiltered /dns/record call to retrieve RPZ rules \u2014 it will fail in accounts that contain SVCB/HTTPS records (error: SVCB/HTTPS target_name must not be empty). RPZ policy rule records have source containing 'RPZRULE' \u2014 exclude system-generated NS and SOA records (source 'SYSTEM') when presenting rules to the user."
       },
       {
         "service_name": "HostActivation",
@@ -212,6 +212,13 @@
         "description": "The service facilitates configuration management for the notifications and events pipeline. It provides a REST and grpc interface to manage Channels, Channel Types, Filters, Subscriptions, Triggers, Templates, Delivery Mechanism etc.\n\nThe header for each of the following API calls uses the following format:\n\n<i>Authorization:Token token=&lt;user token here&gt;</i>"
       },
       {
+        "service_name": "Notifications-Mailbox",
+        "title": "Notifications Mailbox",
+        "version": "v1.0",
+        "paths_count": 7,
+        "description": "The Notifications Mailbox API provides access to user and account-level alerts and notifications generated by Infoblox Portal services.\n\nIMPORTANT \u2014 there is NO host_id, resource_id, or structured host reference in alert responses. The fields service_id and service_data are currently always null.\n\nTo answer questions about notifications or alerts for a specific host, connection, or resource:\n1. Fetch ALL alerts using make_get_request with fetch_all=True on /user_alerts or /account_alerts.\n2. Use the table_name returned by make_get_request (e.g. notifications_mailbox_user_alerts_get.parquet) in the query_stored_data SQL \u2014 do NOT guess or hardcode the filename.\n3. Use query_stored_data with a SQL ILIKE filter on the message and subject fields. Example: SELECT * FROM notifications_mailbox_user_alerts_get.parquet WHERE message ILIKE '%<hostname>%' OR subject ILIKE '%<hostname>%'\n4. If the search term contains a single quote, escape it by doubling it (e.g. O''Brien becomes O''Brien in the SQL string).\n\nDo NOT attempt to filter by host_id or resource_id \u2014 these fields do not exist. Do NOT use any other API or service to find host-related alerts."
+      },
+      {
         "service_name": "Notifications-Thresholding",
         "title": "Notifications Thresholding API",
         "version": "v1.0",
@@ -224,6 +231,13 @@
         "version": "v1",
         "paths_count": 3,
         "description": "The cloud controller component provides an API layer to support integration of different NIOS-X on-prem solutions with customer monitoring tools."
+      },
+      {
+        "service_name": "Recyclebin",
+        "title": "Recycle Bin",
+        "version": "1.0",
+        "paths_count": 5,
+        "description": "The Recycle Bin service manages soft-deleted objects from Infoblox Portal (DNS records, IPAM hosts, subnets, ranges, and more). Use this service when a user wants to view recently deleted items or restore accidentally deleted objects.\n\nUse this service to list or restore soft-deleted Infoblox Portal resources. The primary use case is undoing accidental deletions. To restore items: (1) call GET /items to find the deleted item and obtain its id, then (2) call PUT /items/restore with body {\"id\": [\"<uuid>\"]}. IMPORTANT: the restore request body field is named 'id' (an array), not 'ids' \u2014 this differs from the batch-delete request which uses 'ids'. The retention_period in GET/PUT /policy is in seconds (e.g. 2592000 = 30 days)."
       },
       {
         "service_name": "Redirect",
