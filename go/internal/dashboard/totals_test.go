@@ -45,7 +45,14 @@ func TestFetchDashboardData_TotalsFromPageTotalSize(t *testing.T) {
 			case q.Get("_limit") == "1":
 				writeResultsWithPage(w, nil, map[string]any{"total_size": "72316"})
 			default:
-				// The main first page: one row, id "1".
+				// The main first page, now fetched as subnetPageCount
+				// concurrent _offset requests. Only offset 0 carries the row,
+				// so the union stays the same two rows it always was and the
+				// test still reads "first page + at-risk, deduped".
+				if off := q.Get("_offset"); off != "" && off != "0" {
+					writeResults(w, nil)
+					return
+				}
 				writeResults(w, []map[string]any{
 					{"id": "1", "name": "sub1", "address": "10.0.0.0", "cidr": 24,
 						"utilization": map[string]any{"total": 100, "used": 10}},
@@ -99,6 +106,38 @@ func TestFetchDashboardData_TotalsFromPageTotalSize(t *testing.T) {
 	}
 	if !found999 {
 		t.Fatalf("at-risk subnet id 999 missing from unioned subnets: %v", subnets)
+	}
+}
+
+// TestFetchDashboardData_HostsListLimitCoversCount verifies the hosts row
+// fetch asks for _limit=1000, so the list is not silently truncated below the
+// count _totals[hosts] reports. The live tenant returns page.total_size 532;
+// at _limit=500 the list dropped 32 rows while _totals said 532 — the payload
+// contradicted itself. Asserted on the request the server actually received,
+// not on a constant in the source.
+func TestFetchDashboardData_HostsListLimitCoversCount(t *testing.T) {
+	var gotHostsLimit string
+	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if r.URL.Path == "/api/infra/v1/detail_hosts" {
+			if q.Get("_limit") == "1" {
+				// The count query — a different call, not the row fetch.
+				writeResultsWithPage(w, nil, map[string]any{"total_size": "532"})
+				return
+			}
+			gotHostsLimit = q.Get("_limit")
+			writeResultsWithPage(w, []map[string]any{
+				{"display_name": "host1", "composite_status": "online"},
+			}, map[string]any{"total_size": "532"})
+			return
+		}
+		writeResults(w, nil)
+	})
+
+	s.FetchDashboardData(nil)
+
+	if gotHostsLimit != "1000" {
+		t.Fatalf("hosts row fetch sent _limit=%q, want \"1000\": at 500 the list silently drops rows the count (532) claims exist", gotHostsLimit)
 	}
 }
 

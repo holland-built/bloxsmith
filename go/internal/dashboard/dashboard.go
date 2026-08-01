@@ -135,37 +135,69 @@ const (
 // from either source.
 const subnetFields = "id,name,address,cidr,utilization,tags"
 
-// dashboardFanOut bounds how many of buildAggregate's 12 upstream calls are in
+// subnetPageSize/subnetPageCount split the subnets first page into concurrent
+// _offset pages instead of one giant request.
+//
+// The endpoint charges server-side THINK TIME proportional to ROW COUNT, not
+// payload size: ~0.3s fixed + ~1.7ms/row, and `_fields=id` alone (290KB) still
+// takes ~9s. So one `_limit=5000` call costs 8.4s, while ten concurrent
+// `_limit=500&_offset=N` calls return the same 5,000 rows / 5,000 unique ids —
+// no gap, no overlap — in 1.43s wall. That measurement is the whole reason
+// these two constants exist.
+//
+// 10 x 500 = 5,000 reproduces the historic first-page size exactly. 5,000 is
+// itself HISTORICALLY ARBITRARY — inherited from server.py, and no test and no
+// UI asserts it. It is preserved only so the success payload stays
+// byte-identical, because rows.length is the "showing X of N" numerator the UI
+// renders. Do not read meaning into 5,000 that isn't there.
+const (
+	subnetPageSize  = 500
+	subnetPageCount = 10
+)
+
+// dashboardFanOut bounds how many of buildAggregate's 21 upstream calls are in
 // flight at once.
 //
-// WHY 6, and what is NOT known. Measured (4 clean runs, 48 call pairs): the 12
-// calls ran strictly sequentially and summed to ~18.6s of medians, of which the
-// single slowest call (the 5,000-row subnet page) was ~7.5s. With a bound of 6,
-// the theoretical floor is max(slowest call, total/6) = max(7.5s, 3.1s) = 7.5s
-// — identical to an unbounded 12-way burst, because the critical path is one
-// slow call, not queueing. So the bound costs nothing measurable and halves the
-// burst width.
+// WHY 12. The old value was 6, and the reason it was 6 was an explicit gap in
+// the measurement: whether CSP rate-limits a 12-way burst of DISTINCT heavy
+// queries from ONE credential had never been fired. THAT GAP IS NOW CLOSED —
+// measured: 12 concurrent 1,000-row subnet queries from one credential all
+// returned HTTP 200, per-request 1.75-2.78s, wall 2.88s, no 429 and no
+// slowdown. 12 is the width actually measured safe.
 //
-// It is deliberately conservative because of a real gap in the measurement:
-// 4 concurrent full aggregates were fired at CSP and absorbed without slowing
-// down, but a 12-way burst of DISTINCT heavy queries from ONE credential was
-// never fired, so whether CSP rate-limits that shape is UNTESTED. 6 stays near
-// the concurrency that was actually observed to be safe. Raise it only with a
-// measurement, not a guess.
-const dashboardFanOut = 6
+// Task count is now 21 (10 subnet pages + at-risk + 6 other feeds + audit +
+// 3 counts), so the bound is no longer "everything at once": it genuinely
+// queues, and which tasks get the 12 slots at t=0 is decided by registration
+// order (see fanOut, whose admission is deterministic). buildAggregate
+// registers its long poles first for exactly that reason.
+//
+// Not higher than 12: 21-wide is still untested. The old comment's rule stands
+// unchanged — raise it only with a measurement, not a guess. rest.go's
+// maxIdleConnsPerHost is sized to this number and must be raised with it.
+const dashboardFanOut = 12
 
 // fanOut runs tasks concurrently, at most bound at a time, and returns once all
 // have finished. Each task must write only to variables no other task touches;
 // the WaitGroup then establishes happens-before for the caller's reads, so no
 // further locking is needed. stdlib only — this repo has no golang.org/x/sync.
+//
+// REGISTRATION ORDER IS THE ADMISSION ORDER, and callers rely on it. The
+// semaphore is acquired HERE, in this loop, before the goroutine is spawned —
+// not inside the goroutine. The earlier shape (spawn all N, then let each
+// race for `sem <- struct{}{}`) made admission scheduler-dependent: Go's channel
+// wakeup is FIFO only among senders that are ALREADY blocked, and which
+// goroutine blocks first is not ordered by the loop. So the first `bound` tasks
+// to actually start were arbitrary. buildAggregate registers its measured long
+// poles first precisely so they start at t=0; that is a mechanism now, not a
+// hope. Same bound, same happens-before, strictly fewer parked goroutines.
 func fanOut(bound int, tasks ...func()) {
 	sem := make(chan struct{}, bound)
 	var wg sync.WaitGroup
 	for _, task := range tasks {
 		wg.Add(1)
+		sem <- struct{}{}
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{}
 			defer func() { <-sem }()
 			task()
 		}()
@@ -275,6 +307,56 @@ func dedupeSubnets(first, atRisk []any) []any {
 		out = append(out, item)
 	}
 	return out
+}
+
+// assembleSubnetPages folds the concurrent subnet offset pages back into the
+// ONE first-page slice and the ONE status word the rest of the aggregate
+// expects. Pure: no I/O, no shared state.
+//
+// If ANY page reports "error", the whole set reports "error" and contributes
+// ZERO rows (a non-nil empty slice). It does NOT ship the pages that
+// succeeded. A page failing in the middle — say offset 2000 — leaves a HOLE,
+// and every existing meaning of this slice ("the first N loaded rows"; the
+// UI's "showing X of N") asserts a CONTIGUOUS PREFIX. Shipping a holed set
+// under that label states something untrue about the data. Discarding is the
+// only option that is simultaneously honest, spelled in the existing
+// three-word vocabulary, and identical to a state that already exists: today,
+// when the single 5,000-row call fails, fetchStrict returns ([]any{}, "error")
+// and the at-risk union still populates the slice under _meta.subnets =
+// "error". Every consumer already handles exactly that shape.
+//
+// On success the pages are concatenated in OFFSET ORDER — the index order of
+// pages, never completion order — so the rows a caller sees do not depend on
+// which goroutine finished first. Dedupe by id is done HERE and not left to
+// dedupeSubnets, which does not dedupe within its own `first` argument; a
+// subnet created or deleted between two concurrent pages can shift offsets and
+// hand the same row to two pages.
+//
+// Status is the same three words as everywhere else: zero rows across all
+// pages is "empty", any rows is "ok", any failed page is "error". Never a
+// fourth word.
+func assembleSubnetPages(pages [][]any, statuses []string) ([]any, string) {
+	for _, st := range statuses {
+		if st == "error" {
+			return []any{}, "error"
+		}
+	}
+	seen := make(map[any]bool)
+	out := []any{}
+	for _, page := range pages {
+		for _, item := range page {
+			id := idOf(asMap(item)["id"])
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			out = append(out, item)
+		}
+	}
+	if len(out) == 0 {
+		return out, "empty"
+	}
+	return out, "ok"
 }
 
 // FetchDashboardData is fetch_dashboard_data (server.py:3581): the /api/data
@@ -394,16 +476,16 @@ var errRotatedMidFetch = errors.New("dashboard: cache rotated during every aggre
 // Python does; the audit feed goes through GetEx so a 4xx (unavailable) is
 // distinguishable from a genuinely empty feed.
 //
-// ss narrows the attempt: a nil set runs all 12 tasks and returns all 8 data
+// ss narrows the attempt: a nil set runs all 21 tasks and returns all 8 data
 // keys, all 8 _meta keys and _totals (the historic shape). A non-nil set runs
 // ONLY the tasks its slices need and returns ONLY those slices' keys. A slice
 // that was not fetched is absent from both the data map and _meta — absence IS
 // the representation of "not asked for". There is no fourth status word, and
 // the client must never read absence as "you have none".
 func (s *Service) buildAggregate(ss sliceSet) map[string]any {
-	// All 12 upstream calls are independent of each other, and they were
+	// All 21 upstream calls are independent of each other, and they were once
 	// measured running strictly sequentially: every call started at the exact
-	// millisecond the previous one ended, so the cold cost was the SUM of 12
+	// millisecond the previous one ended, so the cold cost was the SUM of the
 	// latencies (~18.6s of medians) rather than the slowest one (~7.5s). They
 	// are fanned out below, bounded by dashboardFanOut.
 	//
@@ -431,12 +513,29 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 
 		subnetsTotal, subnetsCrit, hostsTotal       int
 		subnetsTotalOK, subnetsCritOK, hostsTotalOK bool
+
+		// One slot per concurrent subnet offset page. Pre-sized, never
+		// appended to, so each page task writes only to its own index and the
+		// fan-out's happens-before covers the whole thing without a mutex.
+		subnetPages      = make([][]any, subnetPageCount)
+		subnetPageStatus = make([]string, subnetPageCount)
 	)
 
-	// Tasks are collected in the SAME order they were passed to fanOut before
-	// slice selection existed, so the nil-set path is unchanged down to which
-	// call starts first under the fan-out bound. `want` drops the tasks whose
-	// slice was not asked for; a nil set keeps every one of them.
+	// REGISTRATION ORDER IS LOAD-BEARING. fanOut acquires its semaphore in
+	// registration order before spawning, so the first dashboardFanOut tasks
+	// registered are the first to start — this is a deliberate SCHEDULING
+	// CHOICE, not a compatibility contract with the pre-slice-selection code
+	// that happened to pass them in a fixed order.
+	//
+	// The measured long poles go first: the 10 subnet pages (~1.15s each), the
+	// at-risk pager (~3.3s) and security_policies (~3.9s, and not cheaply
+	// fixable). That is exactly 12 tasks filling the bound at t=0, so the
+	// slowest call starts immediately and the 9 cheap feeds backfill as slots
+	// free. Register a fast feed ahead of secPolicies and it queues behind a
+	// page instead, adding ~1.2s to the cold wall with every test still green.
+	//
+	// `want` drops the tasks whose slice was not asked for; a nil set keeps
+	// every one of them.
 	var tasks []func()
 	want := func(slice string, task func()) {
 		if ss.has(slice) {
@@ -444,31 +543,26 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 		}
 	}
 
-	want("subnets", func() {
-		subnetsD, subnetsStatus = fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet",
-			map[string]string{"_fields": subnetFields, "_limit": "5000"})
-	})
-	want("leases", func() {
-		leasesD, leasesStatus = fetchStrict(s.Rest, "/api/ddi/v1/dhcp/lease",
-			map[string]string{"_fields": "address,hostname,state,client_id", "_limit": "5000"})
-	})
-	want("dnsViews", func() {
-		viewsD, viewsStatus = fetchStrict(s.Rest, "/api/ddi/v1/dns/view",
-			map[string]string{"_fields": "id,name,comment", "_limit": "5000"})
-	})
-	want("zones", func() {
-		zonesD, zonesStatus = fetchStrict(s.Rest, "/api/ddi/v1/dns/auth_zone",
-			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type,dnssec_status", "_limit": "5000"})
-	})
-	want("hosts", func() {
-		hostsD, hostsStatus = fetchStrict(s.Rest, "/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})
-	})
-	want("secPolicies", func() {
-		policiesD, policiesStatus = fetchStrict(s.Rest, "/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})
-	})
-	want("feeds", func() {
-		feedsD, feedsStatus = fetchStrict(s.Rest, "/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})
-	})
+	for i := range subnetPageCount {
+		want("subnets", func() {
+			params := map[string]string{
+				"_fields": subnetFields,
+				"_limit":  strconv.Itoa(subnetPageSize),
+				"_offset": strconv.Itoa(i * subnetPageSize),
+			}
+			subnetPages[i], subnetPageStatus[i] = fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet", params)
+			// Retry ONCE on failure. Splitting one request into ten means
+			// roughly ten times today's chance that some page fails and, by
+			// assembleSubnetPages' all-or-nothing rule, zeroes the whole
+			// slice. One retry takes that amplification from ~10p to ~10p².
+			// No new status word, and no backoff: the failure modes measured
+			// here are transient per-request ones, not a tenant-wide outage
+			// that a sleep would help with.
+			if subnetPageStatus[i] == "error" {
+				subnetPages[i], subnetPageStatus[i] = fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet", params)
+			}
+		})
+	}
 	// The at-risk pager belongs to the subnets slice (dedupeSubnets unions it
 	// with the first page), so it is gated on "subnets", not on its own name.
 	want("subnets", func() {
@@ -479,7 +573,45 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 		// sequential — each request's _offset is derived from the previous
 		// batch's length, so overlapping its pages would fetch the wrong
 		// rows. Do not parallelise inside fetchAtRiskSubnets.
+		//
+		// Why it was NOT split the way the first page was: on a tenant whose
+		// at-risk set fits ONE 5,000-row page — which the measured tenant
+		// does, 1,758 rows — `len(rows) >= total` breaks the loop after a
+		// single request, so there is nothing to parallelise and the gain is
+		// exactly zero. That is tenant-conditional, not universal: on a tenant
+		// with MORE than 5,000 at-risk rows this loop runs sequential ~8.5s
+		// pages and becomes the aggregate's floor instead of security_policies
+		// (and past ~20,000 rows the 30s atRiskTimeCap trips and forces
+		// degraded=true). Revisit trigger: at-risk exceeding 5,000 rows.
 		atRiskD, atRiskTotal, atRiskTotalOK, atRiskDegraded = s.fetchAtRiskSubnets()
+	})
+	want("secPolicies", func() {
+		policiesD, policiesStatus = fetchStrict(s.Rest, "/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})
+	})
+	want("hosts", func() {
+		// _limit is 1000, not 500, because 500 truncated the list without
+		// saying so: the live tenant returns page.total_size 532, so the list
+		// silently dropped 32 rows while _totals[hosts] — a separate _limit=1
+		// count query — correctly reported 532. The payload contradicted its
+		// own count. 1000 is headroom over the measured 532 at no cost
+		// (0.96s vs 0.93-1.08s for 500); it is not a guarantee that every
+		// tenant fits, and a tenant above 1000 hosts would truncate again.
+		hostsD, hostsStatus = fetchStrict(s.Rest, "/api/infra/v1/detail_hosts", map[string]string{"_limit": "1000"})
+	})
+	want("zones", func() {
+		zonesD, zonesStatus = fetchStrict(s.Rest, "/api/ddi/v1/dns/auth_zone",
+			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type,dnssec_status", "_limit": "5000"})
+	})
+	want("feeds", func() {
+		feedsD, feedsStatus = fetchStrict(s.Rest, "/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})
+	})
+	want("leases", func() {
+		leasesD, leasesStatus = fetchStrict(s.Rest, "/api/ddi/v1/dhcp/lease",
+			map[string]string{"_fields": "address,hostname,state,client_id", "_limit": "5000"})
+	})
+	want("dnsViews", func() {
+		viewsD, viewsStatus = fetchStrict(s.Rest, "/api/ddi/v1/dns/view",
+			map[string]string{"_fields": "id,name,comment", "_limit": "5000"})
 	})
 	want("auditLogs", func() {
 		// CSP portal audit — REST, status-surfacing (server.py:3609). MCP
@@ -519,6 +651,11 @@ func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 
 	// Everything below runs after every task has finished (fanOut's WaitGroup
 	// establishes happens-before), so these reads need no synchronisation.
+	//
+	// The concurrent offset pages collapse back into the single first-page
+	// slice and single status word the rest of this function already expects,
+	// so nothing downstream can tell the fetch was split.
+	subnetsD, subnetsStatus = assembleSubnetPages(subnetPages, subnetPageStatus)
 	subnetsUnion := dedupeSubnets(subnetsD, atRiskD)
 
 	viewMap := map[string]string{}

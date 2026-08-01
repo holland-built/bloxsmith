@@ -30,8 +30,19 @@ const timeout = 35 * time.Second
 // endpoints add more alongside it, so the pool is sized to hold all of them
 // idle between the 5-minute TTL refreshes rather than churning.
 //
-// 12 = the aggregate's full call count, i.e. the widest burst this process can
-// produce from one endpoint. Cost is bounded: idle sockets still expire on the
+// 12 = dashboardFanOut, the widest CONCURRENT burst /api/data can put in
+// flight. It is NOT the aggregate's call count — that used to be 12 too, which
+// made the old justification ("the aggregate's full call count") look right by
+// coincidence; the count is now 21 since the subnet first page was split into
+// 10 concurrent offset pages. The pool must be sized to what is in flight at
+// once, which the fan-out bound caps, not to how many calls happen in total.
+// The value is therefore still exactly right, but the two constants are tied:
+// if dashboardFanOut rises, raise this with it. The tie can only be
+// documentary — dashboard imports rest, so a cross-package const reference
+// would be an import cycle.
+//
+// The caveat stands: hub endpoints stack on top of that 12-wide burst, so the
+// pool has zero headroom. Cost is bounded: idle sockets still expire on the
 // inherited IdleConnTimeout (90s), so a quiet process drains back to zero.
 const maxIdleConnsPerHost = 12
 
