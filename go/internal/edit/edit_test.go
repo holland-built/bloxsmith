@@ -53,6 +53,14 @@ func baseCurrent() map[string]any {
 	}
 }
 
+// Every DNSRecordUpdate case below now passes `dry` explicitly. It used to be
+// omitted, which took the live path by accident (boolPy defaulted to live on
+// this builder). Decision D1 / Option B refuses an absent or non-boolean `dry`
+// with a 400 before any upstream call, so an omitted flag here would refuse
+// before reaching the behaviour each test is actually about. The dry gate
+// itself is covered by TestDNSRecordUpdate_DryMustBeExplicitBoolean
+// (records_test.go); these tests are unchanged in intent.
+
 func TestDNSRecordUpdate_StaleValue_Returns409AndNoWrite(t *testing.T) {
 	current := baseCurrent()
 	srv, writes := dnsRecordServer(t, current, false)
@@ -62,6 +70,7 @@ func TestDNSRecordUpdate_StaleValue_Returns409AndNoWrite(t *testing.T) {
 	res, status := c.DNSRecordUpdate(M{
 		"id":    "abc123",
 		"value": "10.0.0.2",
+		"dry":   false,
 		"expected": M{
 			"value": "10.0.0.99", // stale — real value is 10.0.0.1
 		},
@@ -96,6 +105,7 @@ func TestDNSRecordUpdate_StaleTTL_NumericVsString(t *testing.T) {
 			_, status := c.DNSRecordUpdate(M{
 				"id":  "abc123",
 				"ttl": 60,
+				"dry": false,
 				"expected": M{
 					"ttl": tc.expectedTTL,
 				},
@@ -122,6 +132,7 @@ func TestDNSRecordUpdate_TTLMatches_NumericVsStringForms(t *testing.T) {
 	res, status := c.DNSRecordUpdate(M{
 		"id":      "abc123",
 		"comment": "updated",
+		"dry":     false,
 		"expected": M{
 			"ttl": "28800",
 		},
@@ -142,6 +153,7 @@ func TestDNSRecordUpdate_CommentMissingVsEmpty_TreatedEqual(t *testing.T) {
 	res, status := c.DNSRecordUpdate(M{
 		"id":    "abc123",
 		"value": "10.0.0.5",
+		"dry":   false,
 		"expected": M{
 			"value": "10.0.0.1",
 			// no "comment" key
@@ -161,6 +173,7 @@ func TestDNSRecordUpdate_CommentMissingVsEmpty_TreatedEqual(t *testing.T) {
 	res2, status2 := c2.DNSRecordUpdate(M{
 		"id":    "abc123",
 		"value": "10.0.0.5",
+		"dry":   false,
 		"expected": M{
 			"value":   "10.0.0.1",
 			"comment": "",
@@ -180,6 +193,7 @@ func TestDNSRecordUpdate_AllFieldsMatch_ProceedsNormally(t *testing.T) {
 	res, status := c.DNSRecordUpdate(M{
 		"id":    "abc123",
 		"value": "10.0.0.9",
+		"dry":   false,
 		"expected": M{
 			"value":   "10.0.0.1",
 			"ttl":     float64(28800),
@@ -203,6 +217,7 @@ func TestDNSRecordUpdate_ExpectedAbsent_BehavesAsBefore(t *testing.T) {
 	res, status := c.DNSRecordUpdate(M{
 		"id":    "abc123",
 		"value": "10.0.0.9",
+		"dry":   false,
 		// no "expected" key at all
 	})
 	if status != 200 {
@@ -253,6 +268,7 @@ func TestDNSRecordUpdate_NonJSON200OnRead_DecodeFlavoredError(t *testing.T) {
 	res, _ := c.DNSRecordUpdate(M{
 		"id":      "abc123",
 		"comment": "updated",
+		"dry":     false,
 	})
 
 	if res["ok"] != false {
@@ -396,6 +412,7 @@ func TestDNSRecordUpdate_FullFormID_NoDoubledPathPrefix(t *testing.T) {
 	_, status := c.DNSRecordUpdate(M{
 		"id":      "dns/record/abc123",
 		"comment": "updated",
+		"dry":     false,
 	})
 	if status != 200 {
 		t.Fatalf("status = %d, want 200", status)
@@ -431,6 +448,7 @@ func TestDNSRecordUpdate_ExpectedNeverInOutgoingBody(t *testing.T) {
 	_, status := c.DNSRecordUpdate(M{
 		"id":    "abc123",
 		"value": "10.0.0.9",
+		"dry":   false,
 		"expected": M{
 			"value":   "10.0.0.1",
 			"ttl":     float64(28800),

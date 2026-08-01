@@ -189,6 +189,16 @@ func TestDelete_SuccessStatusesReportOk(t *testing.T) {
 			if f.count() != 1 {
 				t.Errorf("want exactly 1 upstream call, got %d", f.count())
 			}
+			// D3: a delete that really removed something must say so
+			// EXPLICITLY. The field is written on this arm too, not just the
+			// 404 arm, so that its absence on a row can only ever mean
+			// "unknown" (a row written before this existed), never "false".
+			gone, stated := res["already_gone"].(bool)
+			if !stated {
+				t.Errorf("upstream %d: want an explicit already_gone on the success arm, got %+v", tc.status, res)
+			} else if gone {
+				t.Errorf("upstream %d: this delete removed a real object, want already_gone:false, got %+v", tc.status, res)
+			}
 		})
 	}
 }
@@ -203,10 +213,10 @@ func TestDelete_404IsDeliberateIdempotencyNotAConflation(t *testing.T) {
 	// read that broke, but a delete of something already gone genuinely
 	// succeeded.
 	//
-	// The cost is real and is stated rather than hidden: server/edit.go:226-229
-	// writes an audit row for any ok result, so a 404 delete is audited as a
-	// deletion this system performed. If this line is ever changed, that audit
-	// semantics changes with it.
+	// The cost used to be that server/edit.go audited any ok result identically,
+	// so a 404 delete was recorded exactly like a deletion this system
+	// performed. That is what already_gone below fixes — the 404 -> ok mapping
+	// itself is unchanged and stays pinned by this test.
 	f := dispatchStatic(t, 404, `{"error":{"message":"not found"}}`)
 
 	res, status := f.client().Delete("/api/ddi/v1/ipam/host/already-gone")
@@ -217,8 +227,14 @@ func TestDelete_404IsDeliberateIdempotencyNotAConflation(t *testing.T) {
 	if status != 200 {
 		t.Errorf("404 delete: want returned status 200, got %d", status)
 	}
-	if len(res) != 1 {
-		t.Errorf("an idempotent delete returns exactly {ok:true}, got %+v", res)
+	if gone, stated := res["already_gone"].(bool); !stated || !gone {
+		t.Errorf("a 404 delete must say already_gone:true so the audit row cannot claim we removed it, got %+v", res)
+	}
+	if _, hasErr := res["error"]; hasErr {
+		t.Errorf("an idempotent delete carries no error, got %+v", res)
+	}
+	if len(res) != 2 {
+		t.Errorf("an idempotent delete returns exactly {ok:true, already_gone:true}, got %+v", res)
 	}
 }
 

@@ -904,10 +904,13 @@ func TestTemplateToBlockConfigRefusesATemplateWithNoBlocks(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		template M
+		wantMsg  string
 	}{
-		{"key absent", M{"name": "tmpl-1"}},
-		{"empty list", M{"name": "tmpl-1", "address_blocks": []any{}}},
-		{"only unusable entries", M{"name": "tmpl-1", "address_blocks": []any{"not-a-mapping"}}},
+		{"key absent", M{"name": "tmpl-1"}, "address_blocks (non-empty list) is required"},
+		{"empty list", M{"name": "tmpl-1", "address_blocks": []any{}}, "address_blocks (non-empty list) is required"},
+		// A list holding only junk is refused for the sharper reason — the
+		// entry it cannot read, named by position — not for being empty.
+		{"only unusable entries", M{"name": "tmpl-1", "address_blocks": []any{"not-a-mapping"}}, "address_blocks[0]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, err := TemplateToBlockConfig(tc.template, M{})
@@ -915,8 +918,8 @@ func TestTemplateToBlockConfigRefusesATemplateWithNoBlocks(t *testing.T) {
 				t.Fatalf("TemplateToBlockConfig() error = nil (cfg %+v), want a refusal — a template "+
 					"with no usable blocks would provision nothing and report success", cfg)
 			}
-			if !strings.Contains(err.Error(), "address_blocks (non-empty list) is required") {
-				t.Fatalf("error = %q, want it to name address_blocks", err.Error())
+			if !strings.Contains(err.Error(), tc.wantMsg) {
+				t.Fatalf("error = %q, want it to contain %q", err.Error(), tc.wantMsg)
 			}
 		})
 	}
@@ -970,12 +973,13 @@ func TestTemplateToBlockConfigParamsBeatTheTemplate(t *testing.T) {
 
 // --- parseBlocks -------------------------------------------------------------
 
-// Well-formed input only, plus the one malformed entry the parser is documented
-// to drop. What is pinned: the default fill, the recursion into children, and
-// the stringification of tag values. What is NOT pinned: cidr, which passes
-// through untouched here and is validated later by createBlock.
+// Well-formed input only. What is pinned: the default fill, the recursion into
+// children, and the stringification of tag values. What is NOT pinned: cidr,
+// which passes through untouched here and is validated later by createBlock.
+// Malformed entries no longer belong in this fixture — they refuse the whole
+// parse now, and that refusal is pinned by the two tests below.
 func TestParseBlocksFillsDefaultsAndRecursesIntoChildren(t *testing.T) {
-	got := parseBlocks([]any{
+	got, err := parseBlocks([]any{
 		M{
 			"address": "  10.0.0.0  ", "cidr": 16, "region": "east",
 			"tags": M{"CostCentre": 4321, "Critical": true},
@@ -983,8 +987,10 @@ func TestParseBlocksFillsDefaultsAndRecursesIntoChildren(t *testing.T) {
 				M{"address": "10.0.1.0", "cidr": 24, "status": "reserved", "comment": "child"},
 			},
 		},
-		"not-a-mapping", // dropped: there is nothing here to provision
-	})
+	}, "address_blocks")
+	if err != nil {
+		t.Fatalf("parseBlocks() error = %v, want nil — every entry here is well-formed", err)
+	}
 
 	want := []any{
 		M{
@@ -1398,5 +1404,149 @@ func TestFindBlocksForRetagRefusesAnUnparseableSelector(t *testing.T) {
 					q.Get("_filter"), tc.raw)
 			}
 		})
+	}
+}
+
+// --- a malformed template entry refuses, before any tenant call --------------
+//
+// The defect this pins: parseBlocks used to skip any entry that was not a
+// mapping, so a template listing three address blocks provisioned two, reported
+// success, and previewed the same under-count — an operator who checked first
+// still could not see the missing block. Partial presented as complete.
+//
+// Both tests run the route's own sequence (build the config, then provision
+// only if it built) against a fake that records EVERY request. Asserting on the
+// error alone would pass just as happily if the refusal came after the first
+// create; the recorded-request count is what proves nothing reached upstream.
+// NO REAL TENANT: httptest only.
+
+type blockRefusalFake struct {
+	mu       sync.Mutex
+	requests []string // "METHOD path", in arrival order
+}
+
+func (f *blockRefusalFake) handler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		f.requests = append(f.requests, r.Method+" "+r.URL.Path)
+		f.mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		// Answer well enough that a provision run which SHOULD have been
+		// refused gets all the way to a create — otherwise a mutation that
+		// reintroduces the silent skip could go green on an upstream error
+		// instead of failing on the request count.
+		switch {
+		case r.Method == http.MethodPost:
+			w.WriteHeader(201)
+			w.Write([]byte(`{"result":{"id":"ipam/address_block/b-1"}}`))
+		case strings.HasSuffix(r.URL.Path, "/ipam/ip_space"):
+			w.Write([]byte(`{"results":[{"id":"ipam/ip_space/space-1","name":"default"}]}`))
+		default:
+			w.Write([]byte(`{"results":[]}`))
+		}
+	}
+}
+
+func (f *blockRefusalFake) seen() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string{}, f.requests...)
+}
+
+func newBlockRefusalHarness(t *testing.T) (*Engine, *blockRefusalFake) {
+	t.Helper()
+	f := &blockRefusalFake{}
+	srv := httptest.NewServer(f.handler())
+	t.Cleanup(srv.Close)
+	return newTestEngine(srv), f
+}
+
+func TestTemplateToBlockConfigRefusesAMalformedEntryNamingItAndCallsNoTenant(t *testing.T) {
+	good := M{"address": "10.0.0.0", "cidr": 16}
+	for _, tc := range []struct {
+		name     string
+		template M
+		wantAt   string
+	}{
+		{
+			// The decision doc's case: three listed, one unreadable.
+			name: "top-level entry",
+			template: M{"name": "tmpl-1", "address_blocks": []any{
+				good,
+				"junk",
+				M{"address": "10.2.0.0", "cidr": 16},
+			}},
+			wantAt: "address_blocks[1]",
+		},
+		{
+			// A child is provisioned by the same recursion, so it must refuse
+			// the same way — and the error has to say WHICH child, not just
+			// which parent.
+			name: "nested child",
+			template: M{"name": "tmpl-1", "address_blocks": []any{
+				M{"address": "10.0.0.0", "cidr": 16, "children": []any{
+					M{"address": "10.0.1.0", "cidr": 24},
+					"junk",
+				}},
+			}},
+			wantAt: "address_blocks[0].children[1]",
+		},
+		{
+			// A stray YAML null reads as an empty line in the file, so it is
+			// the likeliest real-world typo of the lot.
+			name:     "yaml null entry",
+			template: M{"name": "tmpl-1", "address_blocks": []any{good, nil}},
+			wantAt:   "address_blocks[1]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, f := newBlockRefusalHarness(t)
+
+			cfg, err := TemplateToBlockConfig(tc.template, M{"dry": false})
+			if err == nil {
+				// Do what both routes do when the config builds, so a silent
+				// skip shows up as real tenant traffic rather than only as a
+				// nil error: server/provision.go:249 and :505.
+				var steps []string
+				result, provErr := e.NewBlockProvisioner(cfg, collectSteps(&steps)).Provision(false)
+				t.Fatalf("TemplateToBlockConfig() error = nil, want a refusal naming %s. It parsed "+
+					"%d block(s) from a template listing more, and provisioning went ahead: result %v, "+
+					"err %v, requests %v", tc.wantAt, len(cfg.Blocks), result, provErr, f.seen())
+			}
+			if !strings.Contains(err.Error(), tc.wantAt) {
+				t.Fatalf("error = %q, want it to contain %q — an error that does not name the entry "+
+					"sends the operator hunting through the file", err.Error(), tc.wantAt)
+			}
+			if cfg != nil {
+				t.Fatalf("TemplateToBlockConfig() returned a config (%+v) alongside a refusal, want nil — "+
+					"a half-read template must not be provisionable", cfg)
+			}
+			if got := f.seen(); len(got) != 0 {
+				t.Fatalf("the fake received %d request(s) %v, want none — the refusal must land before "+
+					"anything touches the tenant", len(got), got)
+			}
+		})
+	}
+}
+
+// The refusal is a REFUSAL, not a filter: a template whose entries are all
+// readable still builds, with every listed block present. Without this, the
+// test above would pass just as well if parseBlocks refused everything.
+func TestTemplateToBlockConfigStillBuildsWhenEveryEntryIsAMapping(t *testing.T) {
+	template := M{"name": "tmpl-1", "address_blocks": []any{
+		M{"address": "10.0.0.0", "cidr": 16, "children": []any{M{"address": "10.0.1.0", "cidr": 24}}},
+		M{"address": "10.2.0.0", "cidr": 16},
+	}}
+
+	cfg, err := TemplateToBlockConfig(template, M{})
+	if err != nil {
+		t.Fatalf("TemplateToBlockConfig() error = %v, want nil", err)
+	}
+	if len(cfg.Blocks) != 2 {
+		t.Fatalf("parsed %d top-level block(s), want 2 — the template lists 2", len(cfg.Blocks))
+	}
+	if n := len(getList(asMap(cfg.Blocks[0]), "children")); n != 1 {
+		t.Fatalf("parsed %d child block(s) under address_blocks[0], want 1", n)
 	}
 }
