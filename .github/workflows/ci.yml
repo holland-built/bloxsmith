@@ -31,6 +31,12 @@ jobs:
             exit 1
           }
 
+      # Client unit tests (node --test, no test framework dependency). Covers the
+      # request timeout budgets in ui/src/lib/api.js.
+      - name: UI tests
+        working-directory: ui
+        run: npm test
+
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
