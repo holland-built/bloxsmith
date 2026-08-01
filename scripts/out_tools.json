@@ -138,7 +138,7 @@
   },
   {
     "name": "infoblox-portal_list_all_cubes",
-    "description": "List all available CubeJS cubes and their descriptions.\n\nUse this tool to discover what analytical data cubes are available.\nEach cube represents a dataset that can be queried for insights.\nAvailable cubes cover areas including: DNS (activity logs, metrics), DHCP (activity logs, metrics), Tokens (utilization only, capacity is in services), Insights/Actions (network, config, security, Infoblox IQ, assets), Assets (inventory, users, network interfaces, discovery provider details, insights).\n\nWhen 5 or fewer cubes exist, full details (dimensions, measures, segments)\nare automatically included. For more than 5 cubes, use `get_cube_info` to\nget detailed information about a specific cube before querying.\n\nReturns a list of cubes with:\n- name: The cube identifier to use in queries\n- title: Human-readable name\n- description: What data the cube contains\n- type: Whether it's a 'cube' or 'view'\n- dimensions, measures, segments: (only when <= 5 cubes)",
+    "description": "List all available CubeJS cubes and their descriptions.\n\nUse this tool to discover what analytical data cubes are available.\nEach cube represents a dataset that can be queried for insights.\nAvailable cubes cover areas including: DNS (activity logs, metrics, overlapping blocks), DHCP (activity logs, metrics), Tokens (utilization only, capacity is in services), Insights/Actions (network, config, security, Infoblox IQ, assets), Assets (inventory, users, network interfaces, discovery provider details, insights).\n\nWhen 5 or fewer cubes exist, full details (dimensions, measures, segments)\nare automatically included. For more than 5 cubes, use `get_cube_info` to\nget detailed information about a specific cube before querying.\n\nReturns a list of cubes with:\n- name: The cube identifier to use in queries\n- title: Human-readable name\n- description: What data the cube contains\n- type: Whether it's a 'cube' or 'view'\n- dimensions, measures, segments: (only when <= 5 cubes)",
     "params": [],
     "required": []
   },
@@ -215,23 +215,6 @@
     "params": [
       "name*:string",
       "context:object"
-    ],
-    "required": [
-      "name"
-    ]
-  },
-  {
-    "name": "infoblox-portal_list_tools",
-    "description": "Return the catalog of A2UI tools callable via call_tool.",
-    "params": [],
-    "required": []
-  },
-  {
-    "name": "infoblox-portal_call_tool",
-    "description": "Invoke an A2UI tool by name.\n\nThe A2UI client calls this tool to execute a dynamic UI action.\nUse ``list_tools`` to discover available tool names and their schemas.",
-    "params": [
-      "name*:string",
-      "arguments:object"
     ],
     "required": [
       "name"
