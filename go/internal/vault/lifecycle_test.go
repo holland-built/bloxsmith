@@ -405,23 +405,28 @@ func TestReset_MissingFileIsNotAnError(t *testing.T) {
 	}
 }
 
-// TestReset_RemoveFailureReportsAndKeepsState pins the I/O-failure arm.
+// TestReset_RemoveFailureReportsAndStillWipesMemory covers the I/O-failure arm
+// (fix for finding C2-F1).
 //
-// FINDING C2-F1 (reported, deliberately not fixed here): when the file cannot be
-// removed, Reset returns the error and leaves the vault UNLOCKED with every
-// tenant key still in memory. The error is returned rather than swallowed, so
-// the caller is told — but an operator who asked to wipe the vault and got an
-// error may reasonably assume the secrets were at least dropped from memory,
-// and they were not. Whether Reset should clear memory on a failed unlink is a
-// product decision, not a coverage task; this asserts today's behaviour so any
-// change to it is deliberate and visible in a diff.
+// A Reset that cannot unlink the file must still do the half of the wipe it CAN
+// do. Both halves are asserted here because each one alone is a bug:
+//   - the error must still surface, because the vault file really is still on
+//     disk and still decryptable — swallowing that would tell the operator the
+//     wipe succeeded when it did not;
+//   - and the process must no longer hold the tenant API keys, the Groq key or
+//     the derived Fernet key, because "wipe" was the instruction and the failed
+//     unlink is no reason to keep serving requests with live secrets.
 //
 // The failure is forced by pointing the vault at a NON-EMPTY DIRECTORY: os.Stat
 // succeeds so Exists() is true, and os.Remove then fails with "directory not
 // empty" on every platform and for root as well — unlike a chmod fixture, which
 // root ignores.
-func TestReset_RemoveFailureReportsAndKeepsState(t *testing.T) {
+func TestReset_RemoveFailureReportsAndStillWipesMemory(t *testing.T) {
 	v := newUnlockedVault(t, Tenant{ID: "t1", Label: "Delta", Key: "Token k1"})
+	v.groq = "gsk_fixture_not_real"
+	// Granted before the path is swapped, so the write permission is genuinely
+	// present in memory and the post-Reset assertion below is not vacuous.
+	wlGrant(t, v, "t1/-")
 
 	blocked := filepath.Join(t.TempDir(), "vault.json")
 	if err := os.MkdirAll(blocked, 0o755); err != nil {
@@ -436,9 +441,20 @@ func TestReset_RemoveFailureReportsAndKeepsState(t *testing.T) {
 	if err == nil {
 		t.Fatal("Reset reported success although the vault file could not be removed")
 	}
-	if !v.IsUnlocked() || v.TenantCount() != 1 {
-		t.Errorf("state after a FAILED Reset: unlocked=%v count=%d — pinning today's behaviour (finding C2-F1)",
-			v.IsUnlocked(), v.TenantCount())
+	if v.IsUnlocked() {
+		t.Error("vault is still UNLOCKED after a failed Reset; the operator asked for a wipe")
+	}
+	if got := v.TenantCount(); got != 0 {
+		t.Errorf("TenantCount() = %d after a failed Reset; tenant keys were still in memory", got)
+	}
+	if got := v.ActiveKey(); got != "" {
+		t.Errorf("ActiveKey() = %q after a failed Reset; a tenant API key was still in memory", got)
+	}
+	if g, _, _ := v.LLMCreds(); g != "" {
+		t.Errorf("LLM API key = %q after a failed Reset; it was still in memory", g)
+	}
+	if v.WriteAllowed("t1/-") {
+		t.Error("a wiped vault still authorises a write")
 	}
 }
 

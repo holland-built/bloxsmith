@@ -894,16 +894,16 @@ func TestHostCreate_UpstreamFailureIsNotSuccess(t *testing.T) {
 	}
 }
 
-// --- transport failure (finding A-F2, pinned as inherited, NOT endorsed) -----
+// --- transport failure (finding A-F2, FIXED) ---------------------------------
 
 // TestBuilders_TransportErrorReturns502 covers the status==0 arm of statusOr:
-// no HTTP response at all. The RETURNED code is correctly 502.
+// no HTTP response at all. The RETURNED code is 502.
 //
-// FINDING A-F2 (reported, not fixed, not blessed): the human-readable string
-// still reads "create failed (status 0)", presenting 0 as though it were an
-// HTTP status the tenant returned — a could-not-reach rendered like a rejection.
-// The assertion below deliberately checks only that the message is non-empty and
-// distinct from a real status line; it does NOT pin "status 0" as correct.
+// FINDING A-F2 (fixed): the human-readable string used to read "create failed
+// (status 0)", presenting 0 as though it were an HTTP status the tenant
+// returned — a could-not-reach rendered like a rejection. statusPhrase now
+// renders it in words, so this assertion pins the exact message instead of the
+// old "non-empty is good enough" placeholder.
 func TestBuilders_TransportErrorReturns502(t *testing.T) {
 	f := builderFakeServer(t, func(builderReq) (int, string) { return 200, `{}` })
 	c := f.client()
@@ -916,7 +916,93 @@ func TestBuilders_TransportErrorReturns502(t *testing.T) {
 	if res["ok"] != false {
 		t.Fatalf("ok = %v, want false", res["ok"])
 	}
-	if pyStr(res["error"]) == "" {
-		t.Fatalf("error = %v, want a non-empty explanation", res["error"])
+	const want = "create failed (could not reach the tenant — no request completed)"
+	if pyStr(res["error"]) != want {
+		t.Fatalf("error = %q, want %q", res["error"], want)
+	}
+}
+
+// TestBuilders_TransportErrorNeverRendersStatusZero is the regression guard for
+// FINDING A-F2 across EVERY write builder at once, not just the one ZoneCreate
+// path above. Two facts must hold for all of them simultaneously:
+//
+//  1. the message never contains "status 0" — 0 is not an HTTP status, and
+//     showing it presents "nothing answered" in the shape of "the tenant
+//     answered", the exact confusion this package keeps closing elsewhere;
+//  2. the returned code is still 502 — the fix is presentation-only and must
+//     not have moved a status code.
+//
+// Every builder is driven against an already-closed httptest server, so no
+// packet leaves loopback and no tenant is involved.
+func TestBuilders_TransportErrorNeverRendersStatusZero(t *testing.T) {
+	cases := []struct {
+		name string
+		call func(*Client) (M, int)
+		want string
+	}{
+		{"ZoneCreate", func(c *Client) (M, int) {
+			return c.ZoneCreate(M{"fqdn": "example.com.", "view": "v", "dry": false})
+		}, "create failed (could not reach the tenant — no request completed)"},
+		{"ZoneUpdate", func(c *Client) (M, int) {
+			return c.ZoneUpdate(M{"id": "dns/auth_zone/z1", "comment": "c", "dry": false})
+		}, "update failed (could not reach the tenant — no request completed)"},
+		{"SubnetCreate", func(c *Client) (M, int) {
+			return c.SubnetCreate(M{"block_id": "ipam/address_block/b1", "cidr": 24.0, "dry": false})
+		}, "create failed (could not reach the tenant — no request completed)"},
+		{"SubnetUpdate", func(c *Client) (M, int) {
+			return c.SubnetUpdate(M{"id": "ipam/subnet/s1", "name": "n", "dry": false})
+		}, "update failed (could not reach the tenant — no request completed)"},
+		{"BlockCreate", func(c *Client) (M, int) {
+			return c.BlockCreate(M{"address": "10.0.0.0", "cidr": 16.0, "space": "sp", "dry": false})
+		}, "create failed (could not reach the tenant — no request completed)"},
+		{"RangeCreate", func(c *Client) (M, int) {
+			return c.RangeCreate(M{"start": "10.0.0.10", "end": "10.0.0.20", "space": "sp", "dry": false})
+		}, "create failed (could not reach the tenant — no request completed)"},
+		{"RangeUpdate", func(c *Client) (M, int) {
+			return c.RangeUpdate(M{"id": "ipam/range/r1", "comment": "c", "dry": false})
+		}, "update failed (could not reach the tenant — no request completed)"},
+		{"HostCreate", func(c *Client) (M, int) {
+			return c.HostCreate(M{"name": "h", "addresses": []any{M{"address": "10.0.0.5"}}, "dry": false})
+		}, "create failed (could not reach the tenant — no request completed)"},
+		{"HostUpdate", func(c *Client) (M, int) {
+			return c.HostUpdate(M{"id": "ipam/host/h1", "name": "n", "dry": false})
+		}, "update failed (could not reach the tenant — no request completed)"},
+		{"DNSRecordCreate", func(c *Client) (M, int) {
+			return c.DNSRecordCreate(M{"zone_id": "dns/auth_zone/z1", "name_in_zone": "h",
+				"type": "A", "value": "10.0.0.5", "dry": false})
+		}, "create failed (could not reach the tenant — no request completed)"},
+		{"SelfserviceAllocate", func(c *Client) (M, int) {
+			return c.SelfserviceAllocate(M{"subnet_id": "ipam/subnet/s1", "dry": false})
+		}, "allocation failed (could not reach the tenant — no request completed)"},
+		{"Delete", func(c *Client) (M, int) {
+			return c.Delete("/api/ddi/v1/ipam/host/h-1")
+		}, "delete failed (could not reach the tenant — no request completed)"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := builderFakeServer(t, func(builderReq) (int, string) {
+				t.Errorf("%s reached a closed fake", tc.name)
+				return 200, `{}`
+			})
+			c := f.client()
+			f.srv.Close() // nothing is listening: rest.Write reports status 0
+
+			res, status := tc.call(c)
+
+			if status != 502 {
+				t.Errorf("status = %d, want 502 for an unreachable tenant", status)
+			}
+			if res["ok"] != false {
+				t.Errorf("ok = %v, want false", res["ok"])
+			}
+			msg := pyStr(res["error"])
+			if strings.Contains(msg, "status 0") {
+				t.Errorf("error renders a fake HTTP status: %q", msg)
+			}
+			if msg != tc.want {
+				t.Errorf("error = %q, want %q", msg, tc.want)
+			}
+		})
 	}
 }

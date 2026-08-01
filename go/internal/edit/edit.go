@@ -212,6 +212,26 @@ func statusOr(status, fallback int) int {
 	return status
 }
 
+// statusPhrase renders an upstream status for an OPERATOR-FACING string.
+//
+// WHY: 0 is not an HTTP status. rest.Client.Write (rest.go:344) and
+// rest.Client.GetEx report 0 when the request never got a response at all —
+// DNS, dial, TLS or any other transport failure — so the tenant answered
+// nothing. Printing "(status 0)" renders "we could not reach the tenant" in the
+// exact shape of "the tenant replied", which is the one thing an error string
+// here must never do: a call that failed and a call that returned a value must
+// not look the same.
+//
+// SCOPE: presentation only. Every caller still derives its RETURN CODE from
+// statusOr(status, 502), so a transport failure is still a 502 — this function
+// deliberately changes no status code and introduces no new status word.
+func statusPhrase(status int) string {
+	if status == 0 {
+		return "could not reach the tenant — no request completed"
+	}
+	return fmt.Sprintf("status %d", status)
+}
+
 // --- _dns_rdata (server.py:417) ----------------------------------------------
 
 // Rdata is _dns_rdata: presentation-format value -> API rdata dict, covering
@@ -341,7 +361,7 @@ func (c *Client) DNSRecordCreate(body M) (M, int) {
 
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/dns/record", recordBody, nil)
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (status %d)", status), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "record": resultOrSelf(resp)}, status
 }
@@ -370,6 +390,11 @@ func (c *Client) DNSRecordUpdate(body M) (M, int) {
 		if getErr != nil {
 			return M{"ok": false, "error": fmt.Sprintf("could not read current record before update: %v", getErr)}, statusOr(curStatus, 502)
 		}
+		// No statusPhrase here on purpose: curStatus cannot be 0 on this line.
+		// GetEx only reports 0 together with a non-nil error (rest.go:184/190),
+		// which the getErr branch above already returned on. Wrapping it would
+		// add a "record not found (could not reach the tenant)" message that
+		// contradicts itself and can never fire.
 		return M{"ok": false, "error": fmt.Sprintf("record not found (status %d)", curStatus)}, statusOr(curStatus, 502)
 	}
 	curRecord := asMap(curMap["result"])
@@ -441,7 +466,7 @@ func (c *Client) DNSRecordUpdate(body M) (M, int) {
 
 	resp, status, method := c.patchThenPut(objPath, updateBody)
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("update failed (status %d)", status), "detail": resp, "method": method}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
 	}
 	return M{"ok": true, "method": method, "record": resultOrSelf(resp)}, 200
 }
@@ -552,7 +577,7 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		"/api/ddi/v1/ipam/subnet/"+subnetID+"/nextavailableip",
 		bodyExtra, map[string]string{"count": strconv.Itoa(count)})
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("allocation failed (status %d)", status), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("allocation failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 
 	addresses := respAddresses(resp)

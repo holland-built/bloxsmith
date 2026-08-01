@@ -113,8 +113,8 @@ func (p *BlockProvisioner) blockTags(bdef M) M {
 // anyway because the Go create path is internally inconsistent otherwise —
 // every other participant (the POST body, the dry-run preview, the
 // blocks_created bookkeeping) already uses the masked address. bdef is still
-// read for the cidr term and both error messages. FindBlocksForRetag has the
-// same raw-address bug and is deliberately NOT changed here (finding B-F1).
+// read for the cidr term and both error messages. FindBlocksForRetag carried
+// the same raw-address bug and has since been fixed the same way (finding B-F1).
 func (p *BlockProvisioner) exists(bdef M, n *ipNetT) (bool, error) {
 	space, err := cspq(p.spaceID)
 	if err != nil {
@@ -272,12 +272,35 @@ func (e *Engine) FindBlocksForRetag(spaceID, template, address string, cidr any,
 			return nil, err
 		}
 		params["_tfilter"] = fmt.Sprintf(`Site=="%s"`, s)
+	// The address+cidr arm looks up a block by the address it is STORED at, and
+	// createBlock stores the MASKED network address (networkAddr, see ipNet in
+	// helpers.go): a block written 10.0.1.5/24 lives upstream as 10.0.1.0. So
+	// the selector has to be masked the same way before it goes into the filter
+	// — the raw caller string matched nothing and the retag silently changed
+	// NOTHING while reporting success (finding B-F1, the same bug exists() had).
+	//
+	// Unlike exists(), which is handed a network createBlock already parsed,
+	// this arm gets untrusted caller input and must parse it here. A parse
+	// failure REFUSES rather than falling back to the raw address: the fallback
+	// would restore the silent-no-op bug for exactly the inputs that trigger it,
+	// and a retag that matches nothing is indistinguishable from a retag that
+	// legitimately found nothing. Better to name the bad selector out loud.
+	//
+	// Honest scope: only this arm is masked. The template and site arms select
+	// by tag and never name an address, so nothing there to mask.
 	case address != "" && cidr != nil && pyStr(cidr) != "":
-		a, err := cspq(address)
+		c, ok := intCoerce(cidr)
+		if !ok {
+			return nil, perr("Invalid retag selector %s/%s: cidr is not an integer", address, pyStr(cidr))
+		}
+		n, err := ipNet(address, c)
+		if err != nil {
+			return nil, perr("Invalid retag selector %s/%d: %s", address, c, err.Error())
+		}
+		a, err := cspq(networkAddr(n))
 		if err != nil {
 			return nil, err
 		}
-		c, _ := intCoerce(cidr)
 		params["_filter"] += fmt.Sprintf(` and address=="%s" and cidr==%d`, a, c)
 	default:
 		return nil, perr("template, site, or address+cidr is required")

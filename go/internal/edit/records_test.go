@@ -24,7 +24,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
-	"strings"
 	"sync"
 	"testing"
 )
@@ -416,11 +415,10 @@ func TestDNSRecordCreate_UpstreamFailureSurfaces(t *testing.T) {
 	})
 
 	t.Run("transport error maps to 502", func(t *testing.T) {
-		// FINDING A-F2, pinned as inherited, NOT blessed: status 0 means
-		// "no HTTP response happened at all" (could-not-reach), yet the
-		// human string renders it as `status 0` as if 0 were an HTTP code.
-		// The returned code is correctly 502. The message is misleading;
-		// changing it is out of scope for a test-only job.
+		// FINDING A-F2, now FIXED: status 0 means "no HTTP response happened
+		// at all" (could-not-reach). The returned code was always correctly
+		// 502; the human string used to render `status 0` as if 0 were an HTTP
+		// code the tenant sent. statusPhrase now spells the real fact out.
 		f := recordsServer(t, 201, M{"result": M{"id": "x"}})
 		c := newTestClient(f.srv)
 		f.srv.Close() // nothing is listening now
@@ -431,8 +429,9 @@ func TestDNSRecordCreate_UpstreamFailureSurfaces(t *testing.T) {
 		if status != 502 || resultOK(res) {
 			t.Fatalf("want ok:false/502, got %d %+v", status, res)
 		}
-		if !strings.Contains(pyStr(res["error"]), "status 0") {
-			t.Fatalf("inherited message changed: %q", res["error"])
+		const want = "create failed (could not reach the tenant — no request completed)"
+		if pyStr(res["error"]) != want {
+			t.Fatalf("error = %q, want %q", res["error"], want)
 		}
 	})
 }

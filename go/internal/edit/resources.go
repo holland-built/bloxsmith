@@ -44,7 +44,7 @@ func (c *Client) ZoneCreate(body M) (M, int) {
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/dns/auth_zone", zoneBody, nil)
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (status %d)", status), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "zone": resultOrSelf(resp)}, status
 }
@@ -81,7 +81,7 @@ func (c *Client) ZoneUpdate(body M) (M, int) {
 	}
 	resp, status, method := c.patchThenPut(objPath, up)
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("update failed (status %d)", status), "detail": resp, "method": method}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
 	}
 	return M{"ok": true, "method": method, "zone": resultOrSelf(resp)}, 200
 }
@@ -148,7 +148,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/"+blockID+"/nextavailablesubnet",
 		nil, map[string]string{"cidr": strconv.Itoa(cidr), "count": "1"})
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (status %d)", status), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	rows := respAddresses(resp) // same results/result unwrap shape
 	var subnet M
@@ -172,7 +172,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	}
 	presp, pstatus, _ := c.Rest.Write("PATCH", "/api/ddi/v1/"+sid, patchBody, nil)
 	if pstatus != 200 && pstatus != 201 {
-		return M{"ok": false, "error": fmt.Sprintf("subnet created but tagging failed (needed for teardown): status %d", pstatus),
+		return M{"ok": false, "error": fmt.Sprintf("subnet created but tagging failed (needed for teardown): %s", statusPhrase(pstatus)),
 			"detail": presp, "id": sid}, statusOr(pstatus, 502)
 	}
 	if r := asMap(presp); r != nil && asMap(r["result"]) != nil {
@@ -211,7 +211,7 @@ func (c *Client) SubnetUpdate(body M) (M, int) {
 	}
 	resp, status, method := c.patchThenPut(objPath, up)
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("update failed (status %d)", status), "detail": resp, "method": method}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
 	}
 	return M{"ok": true, "method": method, "subnet": resultOrSelf(resp)}, 200
 }
@@ -241,7 +241,7 @@ func (c *Client) BlockCreate(body M) (M, int) {
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/address_block", blockBody, nil)
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (status %d)", status), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "block": resultOrSelf(resp)}, status
 }
@@ -268,7 +268,7 @@ func (c *Client) RangeCreate(body M) (M, int) {
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/range", rangeBody, nil)
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (status %d)", status), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "range": resultOrSelf(resp)}, status
 }
@@ -306,7 +306,7 @@ func (c *Client) RangeUpdate(body M) (M, int) {
 	}
 	resp, status, method := c.patchThenPut(objPath, up)
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("update failed (status %d)", status), "detail": resp, "method": method}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
 	}
 	return M{"ok": true, "method": method, "range": resultOrSelf(resp)}, 200
 }
@@ -339,7 +339,7 @@ func (c *Client) HostCreate(body M) (M, int) {
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/host", hostBody, nil)
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("create failed (status %d)", status), "detail": resp}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "host": resultOrSelf(resp)}, status
 }
@@ -374,7 +374,7 @@ func (c *Client) HostUpdate(body M) (M, int) {
 	}
 	resp, status, method := c.patchThenPut(objPath, up)
 	if (status != 200 && status != 201) || resp == nil {
-		return M{"ok": false, "error": fmt.Sprintf("update failed (status %d)", status), "detail": resp, "method": method}, statusOr(status, 502)
+		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
 	}
 	return M{"ok": true, "method": method, "host": resultOrSelf(resp)}, 200
 }
@@ -413,5 +413,5 @@ func (c *Client) Delete(fullPath string) (M, int) {
 	if status == 200 || status == 204 || status == 404 {
 		return M{"ok": true}, 200
 	}
-	return M{"ok": false, "error": fmt.Sprintf("delete failed (status %d)", status), "detail": resp}, statusOr(status, 502)
+	return M{"ok": false, "error": fmt.Sprintf("delete failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 }

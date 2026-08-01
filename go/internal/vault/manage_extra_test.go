@@ -335,12 +335,16 @@ func TestAddTenant_SaveFailureRestoresEverything(t *testing.T) {
 // goes to csp.infoblox.com for real, which is why every other test in this file
 // passes an explicit label.
 //
-// Both arms matter: a name that resolves becomes the label, and a portal that
-// answers WITHOUT a name falls back to "Tenant N". FINDING C-F4 (reported, not
-// fixed): portalLabelForKey returns "" for both "the network failed" and "the
-// portal answered and had no name", so during an outage a tenant silently gets
-// the placeholder label instead of an error. This test does not bless that — it
-// only pins the two outcomes that are actually distinguishable today.
+// Two arms: a name that resolves becomes the label, and a portal that answers
+// WITHOUT a name falls back to "Tenant N".
+//
+// On finding C-F4 (portalLabelForKey conflating "the network failed" with "the
+// portal has no name"): the two are now separate return values, and this test
+// keeps asserting the reachable arms. The unreachable arm is asserted by
+// TestAddTenant_UnreachablePortalStillAddsWithThePlaceholderLabel below, which
+// is deliberately a SEPARATE test because AddTenant's chosen answer to a
+// could-not-check is the same placeholder — that convergence is a decision about
+// this one call, not evidence that the lookup still conflates them.
 func TestAddTenant_BlankLabelResolvesThroughThePortalFake(t *testing.T) {
 	v := newUnlockedVault(t)
 	v.BaseURL = mxPortalFake(t, map[string]string{
@@ -362,6 +366,37 @@ func TestAddTenant_BlankLabelResolvesThroughThePortalFake(t *testing.T) {
 	}
 	if got, _ := res2["label"].(string); got != "Tenant 2" {
 		t.Errorf("fallback label = %q, want %q (position in the list at the time of the add)", got, "Tenant 2")
+	}
+}
+
+// TestAddTenant_UnreachablePortalStillAddsWithThePlaceholderLabel. When the name
+// lookup cannot reach the portal at all, the add must still succeed with the
+// positional placeholder: the operator supplied a valid key and an outage is not
+// a reason to refuse it, and "Tenant N" is exactly the label RefreshNames
+// re-resolves later. The placeholder claims no portal name, so nothing invented
+// is presented as real.
+//
+// The "portal" here is an httptest server closed before the call, so every
+// request is connection-refused instantly — no live call, no 12s timeout.
+func TestAddTenant_UnreachablePortalStillAddsWithThePlaceholderLabel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	closedURL := srv.URL
+	srv.Close()
+
+	v := newUnlockedVault(t, Tenant{ID: "t1", Label: "Delta", Key: "Token k1"})
+	v.BaseURL = closedURL
+
+	res := v.AddTenant("", "Token k2", nil)
+	if okv, _ := res["ok"].(bool); !okv {
+		t.Fatalf("an unreachable portal must not block the add: %v", res)
+	}
+	if got, _ := res["label"].(string); got != "Tenant 2" {
+		t.Errorf("label = %q, want the placeholder %q", got, "Tenant 2")
+	}
+	// The STORED label must be the RefreshNames-retryable placeholder, not a
+	// made-up name and not blank — and the existing tenant must be untouched.
+	if got := mxLabels(v); !strings.HasPrefix(got, "t1=Delta,") || !strings.HasSuffix(got, "=Tenant 2") {
+		t.Errorf("stored labels = %q; want Delta untouched and the new tenant holding the retryable placeholder", got)
 	}
 }
 
@@ -769,23 +804,22 @@ func TestSetLLM_TrimsAndNilPointersLeaveFieldsAlone(t *testing.T) {
 	}
 }
 
-// TestSetLLM_SaveFailureLeavesTheMutationLiveInMemory PINS A DEFECT, it does not
-// bless it.
+// TestSetLLM_SaveFailureRestoresThePreviousCredentials. Was
+// TestSetLLM_SaveFailureLeavesTheMutationLiveInMemory, which PINNED finding
+// C-F5 rather than blessing it: SetLLM was the only mutation in manage.go with
+// no snapshot/restore around its save, so a failed save left the new credential
+// live in memory while vault.json still held the old one. This process would
+// then send LLM requests with a key no future process has ever seen, and — the
+// part that makes it more than a display bug — the next successful save of ANY
+// unrelated mutation would persist that credential silently.
 //
-// FINDING C-F5 (reported, deliberately NOT fixed in this test-only lane):
-// SetLLM is the ONLY mutation in manage.go that does not snapshot/restore around
-// its save. AddTenant, RemoveTenant, UpdateTenant, SetActive and SetWritable all
-// roll back; SetLLM returns fail(...) with the new key already installed in
-// memory. So after a failed save this process sends LLM requests with a
-// credential that vault.json has never heard of, and the very next successful
-// save of ANY other mutation persists it silently. The fix is the same three
-// lines the others use (snap := v.snapshot() ... v.restore(snap)).
+// C-F5 IS NOW FIXED, so this test asserts the correct behaviour instead: after a
+// failed save, memory and disk agree on the OLD values and nothing of the
+// attempted change survives.
 //
-// The assertions below state what the code does TODAY so that adding the
-// rollback shows up as a deliberate, visible change to this test. What the test
-// asserts as CORRECT is only the part that is correct: ok:false, and the file on
-// disk still holding the old value.
-func TestSetLLM_SaveFailureLeavesTheMutationLiveInMemory(t *testing.T) {
+// The save is proved to have really failed (mxBreakSave fatals otherwise) before
+// any rollback is asserted — a rollback test whose save succeeded is decoration.
+func TestSetLLM_SaveFailureRestoresThePreviousCredentials(t *testing.T) {
 	v := newUnlockedVault(t)
 	if res := v.SetLLM("original-key", strp("https://llm.example/v1"), strp("model-a")); !res["ok"].(bool) {
 		t.Fatalf("seed: %v", res)
@@ -801,7 +835,7 @@ func TestSetLLM_SaveFailureLeavesTheMutationLiveInMemory(t *testing.T) {
 		t.Error("a failed SetLLM must carry a reason")
 	}
 
-	// CORRECT and asserted as such: the persisted vault is untouched.
+	// The persisted vault is untouched.
 	reopened := New(goodPath)
 	if err := reopened.Unlock(mxPass); err != nil {
 		t.Fatalf("reopen: %v", err)
@@ -810,11 +844,59 @@ func TestSetLLM_SaveFailureLeavesTheMutationLiveInMemory(t *testing.T) {
 		t.Errorf("the failed SetLLM reached disk: groq=%q base=%q model=%q", groq, base, model)
 	}
 
-	// PINNED, NOT BLESSED (finding C-F5): in memory the unpersisted values are
-	// still live. If this assertion ever fails because a rollback was added, that
-	// is the defect being FIXED — update this test and delete the finding.
-	if groq, _, _ := v.LLMCreds(); groq != "new-key" {
-		t.Logf("SetLLM now rolls back on a failed save (groq=%q); finding C-F5 appears fixed — update this test", groq)
+	// THE FIX: nothing from the failed SetLLM is live in memory either. All
+	// three fields are asserted — restoring only groq would still leak the new
+	// endpoint, which is where the key would be sent.
+	groq, base, model := v.LLMCreds()
+	if groq != "original-key" {
+		t.Errorf("groq = %q after a failed save, want the pre-mutation %q — an unpersisted credential must not stay live", groq, "original-key")
+	}
+	if base != "https://llm.example/v1" {
+		t.Errorf("llm base = %q after a failed save, want the pre-mutation %q", base, "https://llm.example/v1")
+	}
+	if model != "model-a" {
+		t.Errorf("llm model = %q after a failed save, want the pre-mutation %q", model, "model-a")
+	}
+}
+
+// TestSetLLM_FailedSaveIsNotPersistedByALaterUnrelatedSave is the second half of
+// C-F5, and the half that made it dangerous rather than merely untidy. save()
+// serializes whatever is in memory RIGHT NOW, so a rejected LLM credential left
+// live in memory would be written to disk by the next mutation that happens to
+// succeed — an add, a rename, anything. The operator never asked for it and
+// nothing ever reported it.
+//
+// The vault is repaired between the two steps so the later save genuinely
+// succeeds; without the rollback in SetLLM the reopened vault below holds
+// "new-key" even though SetLLM returned ok:false.
+func TestSetLLM_FailedSaveIsNotPersistedByALaterUnrelatedSave(t *testing.T) {
+	v := newUnlockedVault(t)
+	if res := v.SetLLM("original-key", strp("https://llm.example/v1"), strp("model-a")); !res["ok"].(bool) {
+		t.Fatalf("seed: %v", res)
+	}
+	goodPath := v.Path()
+
+	mxBreakSave(t, v)
+	if res := v.SetLLM("new-key", strp("https://elsewhere.example/v1"), strp("model-b")); res["ok"].(bool) {
+		t.Fatalf("SetLLM reported success despite an unwritable vault: %v", res)
+	}
+
+	// Repair the vault and make a completely unrelated mutation succeed. An
+	// explicit label keeps this off the network (portalLabelForKey would
+	// otherwise call csp.infoblox.com for real).
+	v.path = goodPath
+	if res := v.AddTenant("Golf", "Token k9", nil); !res["ok"].(bool) {
+		t.Fatalf("the repaired vault could not save; the assertion below would prove nothing: %v", res)
+	}
+
+	reopened := New(goodPath)
+	if err := reopened.Unlock(mxPass); err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	groq, base, model := reopened.LLMCreds()
+	if groq != "original-key" || base != "https://llm.example/v1" || model != "model-a" {
+		t.Errorf("an unrelated successful save persisted the REJECTED LLM credential: groq=%q base=%q model=%q; want the original %q/%q/%q",
+			groq, base, model, "original-key", "https://llm.example/v1", "model-a")
 	}
 }
 
@@ -1000,6 +1082,11 @@ func TestRefreshNames_RenamesOnlyPlaceholderLabels(t *testing.T) {
 	if got, _ := res["updated"].(int); got != 2 {
 		t.Errorf("updated = %v, want 2 (only the two placeholders that resolved)", res["updated"])
 	}
+	// t4's portal answered and simply had no name — that is an EMPTY result, not
+	// a failed one, so it must not be counted as unverified (finding C-F4).
+	if got, _ := res["unverified"].(int); got != 0 {
+		t.Errorf("unverified = %v, want 0 — every lookup reached the portal", res["unverified"])
+	}
 	if got := mxLabels(v); got != "t1=PROD - DO NOT TOUCH,t2=Acme Production,t3=Acme Staging,t4=Tenant 4" {
 		t.Errorf("labels after refresh = %q", got)
 	}
@@ -1016,12 +1103,15 @@ func TestRefreshNames_RenamesOnlyPlaceholderLabels(t *testing.T) {
 	}
 }
 
-// TestRefreshNames_NothingToDoReportsZeroWithoutWriting. FINDING C-F3 (reported,
-// not fixed): RefreshNames discards its save error (`_ = v.save()`), so a
-// non-zero `updated` can be reported for labels that never reached disk. This
-// test does not exercise that path — proving it would require asserting the
-// wrong thing is right — it only pins the honest zero case: no placeholders
-// means no work, no write, and no network call at all.
+// TestRefreshNames_NothingToDoReportsZeroWithoutWriting pins the honest zero
+// case: no placeholders means no work, no write, and no network call at all.
+//
+// It also pins the half of finding C-F4 that lives here — this genuinely empty
+// result must carry unverified:0, because that is what makes it different from
+// an outage in which every lookup failed (asserted by
+// TestRefreshNames_UnreachablePortalIsNotReportedAsNothingToDo). The C-F3 leg,
+// the discarded save error, is asserted by
+// TestRefreshNames_SaveFailureIsReportedAndRolledBack.
 func TestRefreshNames_NothingToDoReportsZeroWithoutWriting(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1045,11 +1135,102 @@ func TestRefreshNames_NothingToDoReportsZeroWithoutWriting(t *testing.T) {
 	if got, _ := res["updated"].(int); got != 0 {
 		t.Errorf("updated = %v, want 0", res["updated"])
 	}
+	if got, _ := res["unverified"].(int); got != 0 {
+		t.Errorf("unverified = %v, want 0 — nothing was attempted, so nothing failed to verify", res["unverified"])
+	}
 	if calls != 0 {
 		t.Errorf("RefreshNames made %d portal call(s) with no placeholder labels, want 0", calls)
 	}
 	if !bytes.Equal(before, mxRead(t, v.Path())) {
 		t.Error("a no-op RefreshNames rewrote vault.json")
+	}
+}
+
+// TestRefreshNames_UnreachablePortalIsNotReportedAsNothingToDo is the
+// RefreshNames leg of finding C-F4. portalLabelForKey used to return a bare ""
+// for both "the portal has no name for this key" and "the request never got
+// there", so a total outage rendered as {ok:true, updated:0} — byte-identical to
+// the honest "every label is already correct". An operator pressing Refresh
+// during an outage was told everything was fine.
+//
+// The two are now distinguishable: a lookup that could not be performed is
+// counted as unverified and never as a rename. The portal is a closed httptest
+// server, so every request is connection-refused instantly.
+func TestRefreshNames_UnreachablePortalIsNotReportedAsNothingToDo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	closedURL := srv.URL
+	srv.Close()
+
+	v := newUnlockedVault(t,
+		Tenant{ID: "t1", Label: "PROD - DO NOT TOUCH", Key: "Token k1"},
+		Tenant{ID: "t2", Label: "Tenant 2", Key: "Token k2"},
+		Tenant{ID: "t3", Label: "", Key: "Token k3"},
+	)
+	v.BaseURL = closedURL
+	before := mxRead(t, v.Path())
+
+	res := v.RefreshNames()
+	if okv, _ := res["ok"].(bool); !okv {
+		t.Fatalf("an outage is not a failure of RefreshNames itself: %v", res)
+	}
+	if got, _ := res["updated"].(int); got != 0 {
+		t.Errorf("updated = %v, want 0 — no name was ever learned", res["updated"])
+	}
+	// THE FIX: this is what tells an outage apart from "nothing needed doing".
+	if got, _ := res["unverified"].(int); got != 2 {
+		t.Errorf("unverified = %v, want 2 (the two placeholder tenants whose lookup could not be performed); an unreachable portal must not render the same as an empty result", res["unverified"])
+	}
+	// A label an operator set deliberately is never in scope, so it is not
+	// counted either — unverified must track attempted lookups, not tenants.
+	if got := mxLabels(v); got != "t1=PROD - DO NOT TOUCH,t2=Tenant 2,t3=" {
+		t.Errorf("labels after a failed refresh = %q; nothing may change when nothing resolved", got)
+	}
+	if !bytes.Equal(before, mxRead(t, v.Path())) {
+		t.Error("a RefreshNames that resolved nothing rewrote vault.json")
+	}
+}
+
+// TestRefreshNames_SaveFailureIsReportedAndRolledBack is finding C-F3.
+// RefreshNames used to write `_ = v.save()`, so it reported {ok:true, updated:2}
+// for labels that never reached disk — success for work that did not happen —
+// and left those labels live in memory, where the next successful save of any
+// unrelated mutation would have persisted them.
+//
+// Both halves are asserted: the error must surface, AND the in-memory labels
+// must go back to what disk still holds. The rollback here is per-slot, not the
+// whole-vault snapshot/restore the single-shot mutations use, because
+// RefreshNames releases v.mu across network I/O.
+func TestRefreshNames_SaveFailureIsReportedAndRolledBack(t *testing.T) {
+	v := newUnlockedVault(t,
+		Tenant{ID: "t1", Label: "PROD - DO NOT TOUCH", Key: "Token k1"},
+		Tenant{ID: "t2", Label: "Tenant 2", Key: "Token k2"},
+		Tenant{ID: "t3", Label: "", Key: "Token k3"},
+	)
+	v.BaseURL = mxPortalFake(t, map[string]string{
+		"Token k2": "Acme Production",
+		"Token k3": "Acme Staging",
+	}).URL
+	goodPath := v.Path()
+	before := mxRead(t, goodPath)
+	mxBreakSave(t, v)
+
+	res := v.RefreshNames()
+	if okv, _ := res["ok"].(bool); okv {
+		t.Fatalf("RefreshNames reported success despite an unwritable vault: %v", res)
+	}
+	if msg, _ := res["error"].(string); msg == "" {
+		t.Error("a failed RefreshNames must carry a reason")
+	}
+	if _, present := res["updated"]; present {
+		t.Errorf("a failed RefreshNames must not also report a rename count: %v", res)
+	}
+
+	// THE ROLLBACK: memory agrees with the disk it could not write.
+	if got := mxLabels(v); got != "t1=PROD - DO NOT TOUCH,t2=Tenant 2,t3=" {
+		t.Errorf("labels after an unsaved refresh = %q; unpersisted renames must not stay live in memory", got)
+	}
+	if !bytes.Equal(before, mxRead(t, goodPath)) {
+		t.Error("the original vault.json was modified by a refresh whose save failed")
 	}
 }
 
