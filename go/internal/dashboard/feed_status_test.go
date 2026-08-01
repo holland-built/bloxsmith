@@ -46,7 +46,7 @@ func TestFetchDashboardData_FeedErrorMarksMetaAndDegraded(t *testing.T) {
 		},
 	}))
 
-	data := s.FetchDashboardData()
+	data := s.FetchDashboardData(nil)
 
 	meta, ok := data["_meta"].(map[string]any)
 	if !ok {
@@ -84,7 +84,7 @@ func TestFetchDashboardData_FeedErrorMarksMetaAndDegraded(t *testing.T) {
 func TestFetchDashboardData_FeedEmptyStatusDoesNotDegrade(t *testing.T) {
 	s := newDashboardTestService(t, feedStatusHandler(t, nil))
 
-	data := s.FetchDashboardData()
+	data := s.FetchDashboardData(nil)
 
 	meta, ok := data["_meta"].(map[string]any)
 	if !ok {
@@ -126,7 +126,7 @@ func TestFetchDashboardData_AllFeedsHealthyReportOK(t *testing.T) {
 		writeResults(w, rowsFor[r.URL.Path])
 	})
 
-	data := s.FetchDashboardData()
+	data := s.FetchDashboardData(nil)
 
 	meta, ok := data["_meta"].(map[string]any)
 	if !ok {

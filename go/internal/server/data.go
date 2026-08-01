@@ -1,6 +1,12 @@
 package server
 
-import "net/http"
+import (
+	"net/http"
+	"sort"
+	"strings"
+
+	"bloxsmith/internal/dashboard"
+)
 
 // registerDataRoutes wires the Phase 1d read path: /api/data (the dashboard
 // aggregation) and the three operator-hub endpoints (server.py:5071/5242-5250).
@@ -14,9 +20,49 @@ func (d *Deps) registerDataRoutes(mux router) {
 	mux.HandleFunc("GET /api/cache-bust", d.cacheBust)
 }
 
+// apiData is /api/data. ?only=a,b narrows the read to those slices plus their
+// dependency closure; the response then contains EXACTLY the slices that were
+// read, in both the data map and _meta. A slice nobody asked for is absent —
+// the client must treat absence as "not asked for", never as "you have none".
+//
+// An unknown slice name is a 400, never a 200 that is quietly thinner than
+// asked for: a typo'd slice name that returned a success would render as an
+// empty panel, which is exactly the impersonation this endpoint must not allow.
 func (d *Deps) apiData(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/data")
-	d.json(w, r, 200, d.dash(r).FetchDashboardData())
+	only, unknown := parseOnly(r.URL.Query().Get("only"))
+	if len(unknown) > 0 {
+		d.json(w, r, 400, map[string]any{
+			"error":   "unknown slice(s) in ?only=: " + strings.Join(unknown, ", "),
+			"unknown": unknown,
+			"valid":   dashboard.DataSlices(),
+		})
+		return
+	}
+	d.json(w, r, 200, d.dash(r).FetchDashboardData(only))
+}
+
+// parseOnly splits the ?only= parameter into a sorted, deduped slice list plus
+// the names that are not slices at all. A missing or blank parameter yields a
+// nil list, which FetchDashboardData treats as "the whole aggregate" — the
+// untouched pre-existing path.
+func parseOnly(raw string) (only []string, unknown []string) {
+	seen := map[string]bool{}
+	for _, name := range strings.Split(raw, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		if !dashboard.ValidSlice(name) {
+			unknown = append(unknown, name)
+			continue
+		}
+		only = append(only, name)
+	}
+	sort.Strings(only)
+	sort.Strings(unknown)
+	return only, unknown
 }
 
 func (d *Deps) hubHealth(w http.ResponseWriter, r *http.Request) {

@@ -26,13 +26,100 @@ package dashboard
 import (
 	"errors"
 	"log"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"bloxsmith/internal/cache"
 	"bloxsmith/internal/rest"
 )
+
+// dataSlices is every data key /api/data can return, in the order
+// buildAggregate assembles them. It doubles as the ?only= vocabulary: a name
+// outside this list is rejected with a 400 (server/data.go) rather than quietly
+// dropped, because a thinner-than-asked-for 200 is indistinguishable from
+// "you have none".
+//
+// Deliberately NOT a slice name: "_totals". A narrowed response carries no
+// _totals at all (see buildAggregate), because three of its four numbers come
+// from count queries and the fourth (subnetsWarn) from the heavy at-risk pager
+// — a "totals" pseudo-slice would need its own cheap filtered count and its own
+// tests to earn its place. The only tab that would use it (Infra) is optional
+// scope, so it is not built. Nothing invented, nothing defaulted.
+var dataSlices = []string{"subnets", "leases", "dnsViews", "zones", "hosts", "secPolicies", "feeds", "auditLogs"}
+
+// DataSlices returns the ?only= vocabulary as a fresh copy, so a caller
+// building an error message cannot mutate the package's own list.
+func DataSlices() []string {
+	out := make([]string, len(dataSlices))
+	copy(out, dataSlices)
+	return out
+}
+
+// ValidSlice reports whether name is a slice /api/data knows how to fetch.
+func ValidSlice(name string) bool {
+	for _, s := range dataSlices {
+		if s == name {
+			return true
+		}
+	}
+	return false
+}
+
+// sliceSet is the set of slices ONE /api/data request will actually fetch.
+// A nil set means "all of them" — the historic, byte-identical full aggregate.
+// A non-nil set is always the caller's request PLUS its dependency closure, so
+// the set is literally the list of keys the response will contain.
+type sliceSet map[string]bool
+
+// has reports whether the aggregate should fetch name. A nil set fetches
+// everything, which is what keeps the no-?only= path exactly as it was.
+func (ss sliceSet) has(name string) bool { return ss == nil || ss[name] }
+
+// all reports whether this is the full aggregate (the only shape that carries
+// _totals and the degraded flag).
+func (ss sliceSet) all() bool { return ss == nil }
+
+// key renders the set as a stable, sorted string for the cache key.
+func (ss sliceSet) key() string {
+	names := make([]string, 0, len(ss))
+	for name := range ss {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ",")
+}
+
+// newSliceSet turns a requested slice list into the set that will actually be
+// fetched: the request plus its dependency closure. An empty/nil request
+// returns nil — "no ?only= given" must stay the untouched full path.
+//
+// The closure is not an optimisation, it is a correctness rule: some slices
+// cannot be shaped without another slice's rows, and the response must then
+// REPORT that extra slice too (with its own genuine status), because the
+// contract is "the payload contains exactly what was read".
+func newSliceSet(only []string) sliceSet {
+	if len(only) == 0 {
+		return nil
+	}
+	ss := sliceSet{}
+	for _, name := range only {
+		ss[name] = true
+	}
+	// zones carry a human-readable view NAME, resolved through normZones'
+	// viewMap which is built from the dns/view rows. Fetching zones without
+	// dnsViews would hand back zones whose view is an opaque id — so dnsViews
+	// is fetched, and returned.
+	if ss["zones"] {
+		ss["dnsViews"] = true
+	}
+	// subnets is a union of the first 5,000-row page and the at-risk pager
+	// (dedupeSubnets); both live inside the "subnets" slice, so there is no
+	// extra response key to add for it.
+	return ss
+}
 
 // atRiskPageCap, atRiskRowCap, atRiskTimeCap bound the /api/data at-risk
 // subnet paging loop (fetchAtRiskSubnets): whichever trips first stops the
@@ -198,8 +285,37 @@ func dedupeSubnets(first, atRisk []any) []any {
 // audit feed goes through GetEx so a 4xx (unavailable) is distinguishable from
 // a genuinely empty feed. Cached under the "dashboard_rest" key with the shared
 // TTL, matching the warm-loop's hot-cache behavior.
-func (s *Service) FetchDashboardData() map[string]any {
-	ck := cache.Key("dashboard_rest", "", nil, false)
+//
+// only narrows the read to a subset of dataSlices (plus that subset's
+// dependency closure). nil or empty means the full 12-call aggregate — byte for
+// byte what this function returned before slice selection existed.
+func (s *Service) FetchDashboardData(only []string) map[string]any {
+	ss := newSliceSet(only)
+
+	// Projection bridge. The whole aggregate lives under ONE cache key, so a
+	// narrowed ask cached under its own key would MISS a warm full entry and go
+	// upstream again — slower than the full request it was meant to beat. When
+	// the full entry is warm, answer the narrowed ask straight out of it: zero
+	// upstream calls.
+	//
+	// HONEST SCOPE — the bridge is one-directional. A warm FULL entry answers
+	// narrowed asks, but a narrowed fetch does NOT warm the full entry, and a
+	// warm narrowed entry does not answer a differently-narrowed ask. So within
+	// one TTL a slice can be read twice (once narrowed, once inside a full
+	// aggregate). That is one duplicate read of a read-only endpoint, accepted;
+	// making warmth flow both ways means per-slice cache keys with their own
+	// single-flight and generation fencing, deliberately deferred.
+	if ss != nil {
+		if v, ok := s.Cache.Get(dashboardCacheKey(nil)); ok {
+			if full, ok := v.(map[string]any); ok {
+				if projected := projectFull(full, ss); projected != nil {
+					return projected
+				}
+			}
+		}
+	}
+
+	ck := dashboardCacheKey(ss)
 
 	// Single-flight (cache.Do): the Get-miss -> fetch -> Set path used to be
 	// open, so N concurrent cold callers — two browser tabs, a poll landing on
@@ -217,7 +333,7 @@ func (s *Service) FetchDashboardData() map[string]any {
 		var result map[string]any
 		for attempt := 0; attempt < 2; attempt++ {
 			g := s.Cache.Gen()
-			result = s.buildAggregate()
+			result = s.buildAggregate(ss)
 			if s.Cache.Gen() == g {
 				// Do performs the cache write itself, fenced by the gen it
 				// captured before this whole closure ran. If attempt 0 raced a
@@ -241,6 +357,12 @@ func (s *Service) FetchDashboardData() map[string]any {
 	// Prefer a last-good cached snapshot (marked stale) over handing back a
 	// possibly wrong-tenant aggregate; if no snapshot survived the Rotate (it
 	// clears the cache), fall back to the best-effort result.
+	//
+	// The stale marker lives in _totals, which a narrowed payload does not
+	// carry, so a narrowed snapshot goes back unmarked. Stated plainly rather
+	// than papered over: no client reads _totals.stale today (grepped), so this
+	// loses nothing that is currently used — but it is a real asymmetry, and a
+	// future consumer of staleness needs a marker that both shapes can carry.
 	if v, ok := s.Cache.Get(ck); ok {
 		snap := v.(map[string]any)
 		if totals, ok := snap["_totals"].(map[string]any); ok {
@@ -252,7 +374,7 @@ func (s *Service) FetchDashboardData() map[string]any {
 		// Do's panic guard is the only path that returns a nil value with an
 		// error. It re-panics, so this is unreachable for the leader; a waiter
 		// that got here must not be handed a nil map to dereference.
-		return s.buildAggregate()
+		return s.buildAggregate(ss)
 	}
 	if totals, ok := result["_totals"].(map[string]any); ok {
 		totals["stale"] = true
@@ -271,7 +393,14 @@ var errRotatedMidFetch = errors.New("dashboard: cache rotated during every aggre
 // parquet path is broken server-side, so this uses direct REST exactly as
 // Python does; the audit feed goes through GetEx so a 4xx (unavailable) is
 // distinguishable from a genuinely empty feed.
-func (s *Service) buildAggregate() map[string]any {
+//
+// ss narrows the attempt: a nil set runs all 12 tasks and returns all 8 data
+// keys, all 8 _meta keys and _totals (the historic shape). A non-nil set runs
+// ONLY the tasks its slices need and returns ONLY those slices' keys. A slice
+// that was not fetched is absent from both the data map and _meta — absence IS
+// the representation of "not asked for". There is no fourth status word, and
+// the client must never read absence as "you have none".
+func (s *Service) buildAggregate(ss sliceSet) map[string]any {
 	// All 12 upstream calls are independent of each other, and they were
 	// measured running strictly sequentially: every call started at the exact
 	// millisecond the previous one ended, so the cold cost was the SUM of 12
@@ -304,66 +433,89 @@ func (s *Service) buildAggregate() map[string]any {
 		subnetsTotalOK, subnetsCritOK, hostsTotalOK bool
 	)
 
-	fanOut(dashboardFanOut,
-		func() {
-			subnetsD, subnetsStatus = fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet",
-				map[string]string{"_fields": subnetFields, "_limit": "5000"})
-		},
-		func() {
-			leasesD, leasesStatus = fetchStrict(s.Rest, "/api/ddi/v1/dhcp/lease",
-				map[string]string{"_fields": "address,hostname,state,client_id", "_limit": "5000"})
-		},
-		func() {
-			viewsD, viewsStatus = fetchStrict(s.Rest, "/api/ddi/v1/dns/view",
-				map[string]string{"_fields": "id,name,comment", "_limit": "5000"})
-		},
-		func() {
-			zonesD, zonesStatus = fetchStrict(s.Rest, "/api/ddi/v1/dns/auth_zone",
-				map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type,dnssec_status", "_limit": "5000"})
-		},
-		func() {
-			hostsD, hostsStatus = fetchStrict(s.Rest, "/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})
-		},
-		func() {
-			policiesD, policiesStatus = fetchStrict(s.Rest, "/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})
-		},
-		func() {
-			feedsD, feedsStatus = fetchStrict(s.Rest, "/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})
-		},
-		func() {
-			// The at-risk fetch is the fix for the core bug: BuildSignals
-			// (signals.go) only ever sees data["subnets"], so any at-risk subnet
-			// outside the first 5,000-row page raised no alert. It runs
-			// alongside the other feeds, but its OWN paging loop stays strictly
-			// sequential — each request's _offset is derived from the previous
-			// batch's length, so overlapping its pages would fetch the wrong
-			// rows. Do not parallelise inside fetchAtRiskSubnets.
-			atRiskD, atRiskTotal, atRiskTotalOK, atRiskDegraded = s.fetchAtRiskSubnets()
-		},
-		func() {
-			// CSP portal audit — REST, status-surfacing (server.py:3609). MCP
-			// AuditLog is broken server-side, so this is the only working path.
-			auditBody, auditHTTP, auditErr := s.Rest.GetEx("/api/auditlog/v1/logs",
-				map[string]string{"_limit": "100", "_order_by": "created_at desc"})
-			auditD = rest.Unwrap(auditBody)
-			auditStatus = "empty"
-			if auditErr != nil || auditHTTP == 0 || auditHTTP >= 400 {
-				auditStatus = "error"
-			} else if len(auditD) > 0 {
-				auditStatus = "ok"
-			}
-		},
+	// Tasks are collected in the SAME order they were passed to fanOut before
+	// slice selection existed, so the nil-set path is unchanged down to which
+	// call starts first under the fan-out bound. `want` drops the tasks whose
+	// slice was not asked for; a nil set keeps every one of them.
+	var tasks []func()
+	want := func(slice string, task func()) {
+		if ss.has(slice) {
+			tasks = append(tasks, task)
+		}
+	}
+
+	want("subnets", func() {
+		subnetsD, subnetsStatus = fetchStrict(s.Rest, "/api/ddi/v1/ipam/subnet",
+			map[string]string{"_fields": subnetFields, "_limit": "5000"})
+	})
+	want("leases", func() {
+		leasesD, leasesStatus = fetchStrict(s.Rest, "/api/ddi/v1/dhcp/lease",
+			map[string]string{"_fields": "address,hostname,state,client_id", "_limit": "5000"})
+	})
+	want("dnsViews", func() {
+		viewsD, viewsStatus = fetchStrict(s.Rest, "/api/ddi/v1/dns/view",
+			map[string]string{"_fields": "id,name,comment", "_limit": "5000"})
+	})
+	want("zones", func() {
+		zonesD, zonesStatus = fetchStrict(s.Rest, "/api/ddi/v1/dns/auth_zone",
+			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type,dnssec_status", "_limit": "5000"})
+	})
+	want("hosts", func() {
+		hostsD, hostsStatus = fetchStrict(s.Rest, "/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})
+	})
+	want("secPolicies", func() {
+		policiesD, policiesStatus = fetchStrict(s.Rest, "/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})
+	})
+	want("feeds", func() {
+		feedsD, feedsStatus = fetchStrict(s.Rest, "/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})
+	})
+	// The at-risk pager belongs to the subnets slice (dedupeSubnets unions it
+	// with the first page), so it is gated on "subnets", not on its own name.
+	want("subnets", func() {
+		// The at-risk fetch is the fix for the core bug: BuildSignals
+		// (signals.go) only ever sees data["subnets"], so any at-risk subnet
+		// outside the first 5,000-row page raised no alert. It runs
+		// alongside the other feeds, but its OWN paging loop stays strictly
+		// sequential — each request's _offset is derived from the previous
+		// batch's length, so overlapping its pages would fetch the wrong
+		// rows. Do not parallelise inside fetchAtRiskSubnets.
+		atRiskD, atRiskTotal, atRiskTotalOK, atRiskDegraded = s.fetchAtRiskSubnets()
+	})
+	want("auditLogs", func() {
+		// CSP portal audit — REST, status-surfacing (server.py:3609). MCP
+		// AuditLog is broken server-side, so this is the only working path.
+		auditBody, auditHTTP, auditErr := s.Rest.GetEx("/api/auditlog/v1/logs",
+			map[string]string{"_limit": "100", "_order_by": "created_at desc"})
+		auditD = rest.Unwrap(auditBody)
+		auditStatus = "empty"
+		if auditErr != nil || auditHTTP == 0 || auditHTTP >= 400 {
+			auditStatus = "error"
+		} else if len(auditD) > 0 {
+			auditStatus = "ok"
+		}
+	})
+	if ss.all() {
 		// _totals: additive-only tenant-wide counts, cheap _limit=1 count
 		// queries (reusing atRiskTotal for subnetsWarn instead of a fifth
 		// redundant query). A failed count query is OMITTED, never replaced with
 		// a row-derived number that would contradict it — see fetchCount.
-		func() { subnetsTotal, subnetsTotalOK = s.fetchCount("/api/ddi/v1/ipam/subnet", nil) },
-		func() {
-			subnetsCrit, subnetsCritOK = s.fetchCount("/api/ddi/v1/ipam/subnet",
-				map[string]string{"_filter": "utilization.utilization>=90"})
-		},
-		func() { hostsTotal, hostsTotalOK = s.fetchCount("/api/infra/v1/detail_hosts", nil) },
-	)
+		//
+		// Only the full aggregate carries _totals: subnetsWarn is the at-risk
+		// pager's own first-page total, so a narrowed payload could only report
+		// it by running the very call narrowing exists to skip. A narrowed
+		// response therefore omits _totals entirely rather than shipping a
+		// partial one that reads like a complete one.
+		tasks = append(tasks,
+			func() { subnetsTotal, subnetsTotalOK = s.fetchCount("/api/ddi/v1/ipam/subnet", nil) },
+			func() {
+				subnetsCrit, subnetsCritOK = s.fetchCount("/api/ddi/v1/ipam/subnet",
+					map[string]string{"_filter": "utilization.utilization>=90"})
+			},
+			func() { hostsTotal, hostsTotalOK = s.fetchCount("/api/infra/v1/detail_hosts", nil) },
+		)
+	}
+
+	fanOut(dashboardFanOut, tasks...)
 
 	// Everything below runs after every task has finished (fanOut's WaitGroup
 	// establishes happens-before), so these reads need no synchronisation.
@@ -373,6 +525,41 @@ func (s *Service) buildAggregate() map[string]any {
 	for _, item := range viewsD {
 		v := asMap(item)
 		viewMap[getStr(v["id"])] = getStr(v["name"])
+	}
+
+	// Every value below is produced by the task that was actually run; a slice
+	// that was not requested contributes nothing at all — no key, no status, no
+	// zero standing in for a number nobody read.
+	result := make(map[string]any, len(dataSlices)+2)
+	meta := make(map[string]any, len(dataSlices))
+	for _, name := range dataSlices {
+		if !ss.has(name) {
+			continue
+		}
+		switch name {
+		case "subnets":
+			result[name], meta[name] = normSubnets(subnetsUnion), subnetsStatus
+		case "leases":
+			result[name], meta[name] = normLeases(leasesD), leasesStatus
+		case "dnsViews":
+			result[name], meta[name] = normViews(viewsD), viewsStatus
+		case "zones":
+			result[name], meta[name] = normZones(zonesD, viewMap), zonesStatus
+		case "hosts":
+			result[name], meta[name] = normHosts(hostsD), hostsStatus
+		case "secPolicies":
+			result[name], meta[name] = normPolicies(policiesD), policiesStatus
+		case "feeds":
+			result[name], meta[name] = normFeeds(feedsD), feedsStatus
+		case "auditLogs":
+			result[name], meta[name] = normAudit(auditD), auditStatus
+		}
+	}
+	result["_meta"] = meta
+
+	if !ss.all() {
+		log.Printf("  /api/data narrowed to [%s]: %v", ss.key(), meta)
+		return result
 	}
 
 	degraded := atRiskDegraded
@@ -402,34 +589,59 @@ func (s *Service) buildAggregate() map[string]any {
 		degraded = true
 	}
 	totals["degraded"] = degraded
+	result["_totals"] = totals
 
-	result := map[string]any{
-		"subnets":     normSubnets(subnetsUnion),
-		"leases":      normLeases(leasesD),
-		"dnsViews":    normViews(viewsD),
-		"zones":       normZones(zonesD, viewMap),
-		"hosts":       normHosts(hostsD),
-		"secPolicies": normPolicies(policiesD),
-		"feeds":       normFeeds(feedsD),
-		"auditLogs":   normAudit(auditD),
-		"_meta": map[string]any{
-			"subnets":     subnetsStatus,
-			"leases":      leasesStatus,
-			"dnsViews":    viewsStatus,
-			"zones":       zonesStatus,
-			"hosts":       hostsStatus,
-			"secPolicies": policiesStatus,
-			"feeds":       feedsStatus,
-			"auditLogs":   auditStatus,
-		},
-		"_totals": totals,
-	}
 	log.Printf("  subnets=%d(union, page=%d atRisk=%d, %s) leases=%d(%s) zones=%d(%s) hosts=%d(%s) policies=%d(%s) feeds=%d(%s) audit=%d(%s) totals[subnets=%v subnetsCrit=%v subnetsWarn=%v hosts=%v degraded=%v]",
 		len(subnetsUnion), len(subnetsD), len(atRiskD), subnetsStatus, len(leasesD), leasesStatus,
 		len(zonesD), zonesStatus, len(hostsD), hostsStatus, len(policiesD), policiesStatus,
 		len(feedsD), feedsStatus, len(auditD), auditStatus,
 		totals["subnets"], totals["subnetsCrit"], totals["subnetsWarn"], totals["hosts"], degraded)
 	return result
+}
+
+// dashboardCacheKey is the cache key for one aggregate SHAPE. The full
+// aggregate keeps its historic key byte for byte ("dashboard_rest" with no
+// params), so the existing warm entry — the one ConnStatus keeps hot from every
+// tab — is neither moved nor invalidated by this change. A narrowed ask gets
+// its own key, built from the sorted CLOSED set, so ?only=zones and
+// ?only=zones,dnsViews (identical payloads) share one entry.
+func dashboardCacheKey(ss sliceSet) string {
+	if ss == nil {
+		return cache.Key("dashboard_rest", "", nil, false)
+	}
+	return cache.Key("dashboard_rest", "", map[string]string{"only": ss.key()}, false)
+}
+
+// projectFull answers a narrowed ask out of an already-warm FULL aggregate,
+// with zero upstream calls. It returns nil — meaning "this warm entry cannot
+// answer that ask, go and fetch" — if any requested slice or its status is
+// missing from the full entry, so a future payload change can never make this
+// silently hand back a thinner response than the caller asked for.
+//
+// The row slices are shared with the cached entry rather than copied. That is
+// safe because every consumer of this map only reads it (the handler
+// JSON-encodes it), and it is what makes the projection free.
+func projectFull(full map[string]any, ss sliceSet) map[string]any {
+	fullMeta, ok := full["_meta"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]any, len(ss)+1)
+	meta := make(map[string]any, len(ss))
+	for _, name := range dataSlices {
+		if !ss[name] {
+			continue
+		}
+		rows, hasRows := full[name]
+		st, hasStatus := fullMeta[name]
+		if !hasRows || !hasStatus {
+			return nil
+		}
+		out[name] = rows
+		meta[name] = st
+	}
+	out["_meta"] = meta
+	return out
 }
 
 // fetchStrict wraps Rest.GetStrict with the same three-state status
