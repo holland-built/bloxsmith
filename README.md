@@ -3,6 +3,9 @@
   <h1>Bloxsmith</h1>
   <p>Self-hosted workbench for your Infoblox Portal / CSP data.</p>
 
+  [![CI](https://img.shields.io/github/actions/workflow/status/holland-built/bloxsmith/ci.yml?branch=master&label=CI)](https://github.com/holland-built/bloxsmith/actions/workflows/ci.yml)
+  [![Release](https://img.shields.io/github/v/release/holland-built/bloxsmith?label=release)](https://github.com/holland-built/bloxsmith/releases/latest)
+  [![Last commit](https://img.shields.io/github/last-commit/holland-built/bloxsmith)](https://github.com/holland-built/bloxsmith/commits/master)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
   [![Go](https://img.shields.io/badge/Go-1.26-00ADD8.svg)](https://go.dev/)
   [![Docker ready](https://img.shields.io/badge/Docker-ready-2496ED.svg)](docker-compose.yml)
