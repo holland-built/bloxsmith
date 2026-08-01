@@ -399,6 +399,14 @@ func (v *Vault) Rotate(newPassphrase string) error {
 func (v *Vault) Lock() {
 	v.mu.Lock()
 	defer v.mu.Unlock()
+	v.lockLocked()
+}
+
+// lockLocked is the body of Lock with the mutex already held by the caller.
+// Split out so Reset can reuse the exact clearing Lock performs instead of
+// keeping a hand-copied field list beside it — a duplicate list is what drifts
+// when a new secret field is added and only one of the two sites is updated.
+func (v *Vault) lockLocked() {
 	v.unlocked = false
 	v.tenants = nil
 	v.active = nil
@@ -416,19 +424,30 @@ func (v *Vault) Lock() {
 func (v *Vault) Reset() error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
+	var removeErr error
 	if v.Exists() {
-		if err := os.Remove(v.path); err != nil {
-			return err
-		}
+		removeErr = os.Remove(v.path)
 	}
-	v.unlocked = false
-	v.tenants = nil
-	v.active = nil
-	v.groq, v.llmBase, v.llmModel = "", "", ""
-	v.writeAllowed = nil
-	v.key = nil
+	// The in-memory wipe runs even when the unlink failed (finding C2-F1).
+	// Reset used to return early on a remove error, which left the vault
+	// UNLOCKED with every tenant API key, the Groq key and the derived Fernet
+	// key still live in the process: the operator asked to wipe, was shown an
+	// error, and those secrets kept signing outbound requests until restart.
+	// "The file is still there" and "the secrets are still in RAM" are two
+	// separate exposures — failing the first is no reason to skip the second,
+	// and clearing memory is what the operator actually asked for.
+	//
+	// Honest scope: this drops the process's copy only. The vault file remains
+	// on disk and remains decryptable by anyone with the passphrase, so the
+	// remove error is returned unswallowed — the operator still has to delete
+	// that file by hand.
+	v.lockLocked()
+	// Beyond what Lock clears: the LLM endpoint config is not a credential, but
+	// Reset means first-run state, and the salt must go so a stale salt cannot
+	// be paired with a re-initialised vault.
+	v.llmBase, v.llmModel = "", ""
 	v.salt = ""
-	return nil
+	return removeErr
 }
 
 // ActiveKey returns the API key of the active tenant, else "" (server.py:2786).

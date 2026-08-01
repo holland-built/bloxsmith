@@ -89,22 +89,36 @@ func NormKey(k string) string {
 
 // portalLabelForKey is _portal_label_for_key (server.py:2853): resolve the CSP
 // account name for a key so a tenant auto-names itself.
-func (v *Vault) portalLabelForKey(key string) string {
+//
+// Two outcomes, deliberately NOT collapsed into a bare "" (finding C-F4):
+//   - ("", nil)  the portal answered and has no name for this key
+//   - ("", err)  the request never reached the portal, so nothing was learned
+//
+// Those are different facts and this repo does not render them the same. The
+// second one is a could-not-check, and every caller decides for itself what to
+// do about it rather than being handed a value that looks like an answer.
+func (v *Vault) portalLabelForKey(key string) (string, error) {
 	client := &http.Client{Timeout: 12 * time.Second}
 	get := func(path string) (map[string]any, error) {
 		req, _ := http.NewRequest("GET", v.baseURL()+path, nil)
 		req.Header.Set("Authorization", key)
 		resp, err := client.Do(req)
 		if err != nil {
-			return nil, err
+			return nil, err // offline, DNS, TLS/proxy, or the 12s timeout
 		}
 		defer resp.Body.Close()
 		var m map[string]any
-		return m, json.NewDecoder(resp.Body).Decode(&m)
+		// A body that will not decode (an error page, an empty 401) still means
+		// the portal ANSWERED — it just carries no account list for this key.
+		// That is a "no name" outcome, so the decode error is deliberately
+		// dropped here instead of being reported as "could not reach". Only a
+		// transport failure above is a could-not-check.
+		_ = json.NewDecoder(resp.Body).Decode(&m)
+		return m, nil
 	}
 	body, err := get("/v2/current_user/accounts")
 	if err != nil {
-		return ""
+		return "", err
 	}
 	accts, _ := body["results"].([]any)
 	active := make([]map[string]any, 0, len(accts))
@@ -131,16 +145,16 @@ func (v *Vault) portalLabelForKey(key string) string {
 	for _, a := range active {
 		if id, _ := a["id"].(string); id == aid {
 			if n, _ := a["name"].(string); n != "" {
-				return n
+				return n, nil
 			}
 		}
 	}
 	if len(active) > 0 {
 		if n, _ := active[0]["name"].(string); n != "" {
-			return n
+			return n, nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
 // InitR wraps Init in the {ok,error} shape of vault_init (server.py:2798).
@@ -176,10 +190,16 @@ func (v *Vault) AddTenant(label, key string, groq *string) map[string]any {
 	}
 	label = strings.TrimSpace(label)
 	if label == "" {
-		if l := v.portalLabelForKeyUnlocked(nk); l != "" {
-			label = l
-		} else {
+		// Both no-name outcomes land on the same placeholder, but for different
+		// reasons and that choice is deliberate, not the old conflation: an
+		// unreachable portal must not block the add, and "Tenant N" is exactly
+		// the label RefreshNames re-resolves later. The placeholder is honest —
+		// it claims no portal name — so nothing invented is presented as real.
+		l, err := v.portalLabelForKeyUnlocked(nk)
+		if err != nil || l == "" {
 			label = "Tenant " + strconv.Itoa(len(v.tenants)+1)
+		} else {
+			label = l
 		}
 	}
 	tid := tokenHex(6)
@@ -282,11 +302,17 @@ func (v *Vault) UpdateTenant(tid, key string, label *string) map[string]any {
 		v.forgetTenantWrites(tid)
 		v.tenants[idx].Key = nk
 		if lbl == "" { // new key, no explicit name → auto-resolve
-			if l := v.portalLabelForKeyUnlocked(nk); l != "" {
+			// As in AddTenant: an unreachable portal and a portal with no name
+			// both fall back rather than failing the update, because the key
+			// swap itself must still land. Keeping the existing label (or the
+			// positional placeholder) claims no portal name either way.
+			l, err := v.portalLabelForKeyUnlocked(nk)
+			switch {
+			case err == nil && l != "":
 				lbl = l
-			} else if v.tenants[idx].Label != "" {
+			case v.tenants[idx].Label != "":
 				lbl = v.tenants[idx].Label
-			} else {
+			default:
 				lbl = "Tenant " + strconv.Itoa(idx+1)
 			}
 		}
@@ -360,6 +386,12 @@ func (v *Vault) SetLLM(key string, baseURL, model *string) map[string]any {
 	if !v.unlocked {
 		return fail("locked")
 	}
+	// Same snapshot/restore every other mutation here uses. Without it a failed
+	// save left the new credential live in memory while vault.json still held the
+	// old one — this process would then send LLM requests with a key no future
+	// process has ever seen, and the next successful save of ANY other mutation
+	// would persist it silently (finding C-F5).
+	snap := v.snapshot()
 	v.groq = strings.TrimSpace(key)
 	if baseURL != nil {
 		v.llmBase = strings.TrimSpace(*baseURL)
@@ -368,6 +400,7 @@ func (v *Vault) SetLLM(key string, baseURL, model *string) map[string]any {
 		v.llmModel = strings.TrimSpace(*model)
 	}
 	if err := v.save(); err != nil {
+		v.restore(snap)
 		return fail(err.Error())
 	}
 	return ok()
@@ -380,7 +413,15 @@ func (v *Vault) TestKey(key string) map[string]any {
 	if k == "" {
 		return fail("API key required")
 	}
-	if name := v.portalLabelForKey(k); name != "" {
+	name, err := v.portalLabelForKey(k)
+	if err != nil {
+		// The name lookup never reached CSP. Previously this returned a bare ""
+		// and fell through to the probe below, which was about to fail the same
+		// way — now the could-not-check is reported straight away instead of
+		// costing a second doomed 12s round trip.
+		return unverifiable("could not reach Infoblox CSP: " + err.Error())
+	}
+	if name != "" {
 		return map[string]any{"ok": true, "name": name}
 	}
 	// reachable but no name resolved: probe /v2/current_user
@@ -560,7 +601,10 @@ func (v *Vault) RefreshNames() map[string]any {
 		return fail("locked")
 	}
 	// snapshot keys+labels to resolve without holding the lock across network I/O
-	type slot struct{ i int; key, label string }
+	type slot struct {
+		i          int
+		key, label string
+	}
 	var todo []slot
 	for i, t := range v.tenants {
 		if t.Label == "" || tenantNRe.MatchString(t.Label) {
@@ -569,12 +613,23 @@ func (v *Vault) RefreshNames() map[string]any {
 	}
 	v.mu.Unlock()
 	updated := 0
+	unverified := 0
+	var applied []slot // slots this call rewrote, each holding its PREVIOUS label
 	for _, s := range todo {
-		nm := v.portalLabelForKey(s.key)
+		nm, err := v.portalLabelForKey(s.key)
+		if err != nil {
+			// Could not reach the portal for this tenant, so its name is
+			// unknown — NOT "the portal has no name for it". Counted separately
+			// so a full outage cannot render as the honest "nothing needed
+			// renaming" (finding C-F4).
+			unverified++
+			continue
+		}
 		if nm != "" && nm != s.label {
 			v.mu.Lock()
 			if s.i < len(v.tenants) && v.tenants[s.i].Key == s.key {
 				v.tenants[s.i].Label = nm
+				applied = append(applied, s)
 				updated++
 			}
 			v.mu.Unlock()
@@ -582,10 +637,27 @@ func (v *Vault) RefreshNames() map[string]any {
 	}
 	if updated > 0 {
 		v.mu.Lock()
-		_ = v.save()
+		err := v.save()
+		if err != nil {
+			// Roll back only the labels THIS call wrote. The single-shot
+			// mutations use a whole-vault snapshot/restore; that would be wrong
+			// here because the lock was released for network I/O, so a snapshot
+			// taken before the loop could also undo an unrelated mutation that
+			// landed in the meantime.
+			for _, s := range applied {
+				if s.i < len(v.tenants) && v.tenants[s.i].Key == s.key {
+					v.tenants[s.i].Label = s.label
+				}
+			}
+		}
 		v.mu.Unlock()
+		if err != nil {
+			// Previously `_ = v.save()`: the caller was told `updated: N` for
+			// labels that never reached disk (finding C-F3).
+			return fail(err.Error())
+		}
 	}
-	return map[string]any{"ok": true, "updated": updated}
+	return map[string]any{"ok": true, "updated": updated, "unverified": unverified}
 }
 
 // Status is vault_status (server.py:3040). version, vaultMode, and update come
@@ -614,7 +686,7 @@ func (v *Vault) Status(version string, vaultMode bool, update any) map[string]an
 		// show the read-only state honestly instead of offering write buttons
 		// that will 403 — see writelock.go.
 		"writeAllowed": append([]string{}, v.writeAllowed...),
-		"hasGroq":   v.groq != "",
+		"hasGroq":      v.groq != "",
 		"llm": map[string]any{
 			"hasKey":   v.groq != "",
 			"base_url": v.llmBase,
@@ -629,7 +701,9 @@ func (v *Vault) Status(version string, vaultMode bool, update any) map[string]an
 // portalLabelForKeyUnlocked is called while v.mu is already held. The lookup is
 // pure network I/O against a passed key, touching no vault state, so it is safe
 // to run under the lock (matches Python calling it inside _vault_lock at 2886).
-func (v *Vault) portalLabelForKeyUnlocked(key string) string { return v.portalLabelForKey(key) }
+func (v *Vault) portalLabelForKeyUnlocked(key string) (string, error) {
+	return v.portalLabelForKey(key)
+}
 
 // activeKeyLocked resolves the active tenant key assuming v.mu is held.
 func (v *Vault) activeKeyLocked() string {
