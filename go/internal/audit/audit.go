@@ -115,12 +115,12 @@ func (l *Log) AppendHealth() map[string]any {
 // OpenReadOnly binds a Log for verification ONLY, with two guarantees the normal
 // constructor deliberately does not make:
 //
-//	1. It never creates a key. A missing key is an error the caller must report
-//	   as could-not-verify, not something to fix by generating one — a new key
-//	   cannot attest a chain signed with the old one, and pretending otherwise
-//	   would turn "I have no way to check this" into "this is fine".
-//	2. Append and Adopt refuse. Verifying must not be able to change what it is
-//	   verifying, including by resealing a head that an attacker just shortened.
+//  1. It never creates a key. A missing key is an error the caller must report
+//     as could-not-verify, not something to fix by generating one — a new key
+//     cannot attest a chain signed with the old one, and pretending otherwise
+//     would turn "I have no way to check this" into "this is fine".
+//  2. Append and Adopt refuse. Verifying must not be able to change what it is
+//     verifying, including by resealing a head that an attacker just shortened.
 //
 // It returns an error when the key cannot be established, so the caller decides
 // what to say — rather than degrading silently the way New() must, since New()

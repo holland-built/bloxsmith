@@ -26,13 +26,13 @@ const cspTimeout = 15 * time.Second
 // the shared rest.Auth override slot (consulted before the vault active key),
 // exactly as Python overwrites MCP_HEADERS["Authorization"].
 type Manager struct {
-	mu       sync.Mutex
-	baseURL  string
-	apiKey   string // original env API_KEY (never overwritten)
-	auth     *rest.Auth
-	cache    *cache.Cache
-	http     *http.Client
-	home     string
+	mu      sync.Mutex
+	baseURL string
+	apiKey  string // original env API_KEY (never overwritten)
+	auth    *rest.Auth
+	cache   *cache.Cache
+	http    *http.Client
+	home    string
 	// homeVerified is true only once /v2/current_user has actually resolved an
 	// account_id. Until then, m.home may hold nothing more than the alphabetically
 	// first account (a display guess) and must never be trusted as the home

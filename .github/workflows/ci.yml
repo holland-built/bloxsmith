@@ -50,6 +50,34 @@ jobs:
           go test ./...
           go vet ./...
 
+      # `go vet` has run here since this workflow was written and formatting has
+      # never been checked at all — so four files (internal/account/account.go,
+      # internal/audit/audit.go, internal/rest/rest.go, internal/server/server.go)
+      # were not gofmt-clean for the entire life of the repo and nothing noticed.
+      # The four files were the symptom; the ABSENCE of this step was the defect.
+      # vet and fmt are different tools: vet reports suspicious constructs, gofmt
+      # reports layout, and neither implies the other.
+      #
+      # It names the offending files. A gate that exits 1 without saying what is
+      # wrong just moves the work onto whoever reads the red X.
+      #
+      # Linux job only, deliberately: gofmt's output depends on the Go version,
+      # not the OS, and both jobs pin the same `go-version: '1.26.x'` (local dev
+      # is on 1.26.3 — same formatting rules, so this cannot flake between the
+      # two). Repeating it in the macos job would print the same failure twice
+      # for one defect. The macos job exists for surfaces that genuinely differ
+      # per-OS (keychain, launchd); formatting is not one of them.
+      - name: Go formatting (gofmt -l)
+        working-directory: go
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::not gofmt-clean — run: cd go && gofmt -w ."
+            echo "$unformatted"
+            exit 1
+          fi
+          echo "gofmt: clean"
+
       # A green `go test ./...` proves the tests ran; it does not prove any
       # given security control is what made them pass. Three times in one day
       # a control was silently unprotected because its test drove a stub

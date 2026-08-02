@@ -31,22 +31,22 @@ const maxBody = 64 * 1024
 
 // Deps are everything the router wires. main.go builds these once.
 type Deps struct {
-	Cfg          *config.Config
-	Vault        *vault.Vault
-	Rest         *rest.Client
-	Auth         *rest.Auth
-	Guard        *httpx.Guard
-	Audit        *audit.Log         // hash-chained action log (Phase 1c)
-	Store        *store.Store       // views + snooze + first-seen (Phase 1c)
-	Cache        *cache.Cache       // shared TTL cache (Phase 1d)
-	Dashboard    *dashboard.Service // /api/data + hub fetchers (Phase 1d)
-	Edit         *edit.Client       // DNS + resource-editor write builders (Phase 1f)
-	Provision    *provision.Engine  // provisioning engines + templates (Phase 1g)
-	AI           *ai.Service        // /api/query NL assistant + LLM loop (Phase 1h)
-	Account      *account.Manager   // multi-account switching (Phase 1i)
-	Version      string
-	StateDir     string // dir of vault.json — holds brand.json / logo.png (server.py:2415)
-	Static       http.Handler
+	Cfg            *config.Config
+	Vault          *vault.Vault
+	Rest           *rest.Client
+	Auth           *rest.Auth
+	Guard          *httpx.Guard
+	Audit          *audit.Log         // hash-chained action log (Phase 1c)
+	Store          *store.Store       // views + snooze + first-seen (Phase 1c)
+	Cache          *cache.Cache       // shared TTL cache (Phase 1d)
+	Dashboard      *dashboard.Service // /api/data + hub fetchers (Phase 1d)
+	Edit           *edit.Client       // DNS + resource-editor write builders (Phase 1f)
+	Provision      *provision.Engine  // provisioning engines + templates (Phase 1g)
+	AI             *ai.Service        // /api/query NL assistant + LLM loop (Phase 1h)
+	Account        *account.Manager   // multi-account switching (Phase 1i)
+	Version        string
+	StateDir       string // dir of vault.json — holds brand.json / logo.png (server.py:2415)
+	Static         http.Handler
 	UpdateCheck    http.HandlerFunc // real /api/update/check (network); from main
 	UpdateStatus   func() any       // lightweight update obj embedded in vault status
 	UpdateApply    http.HandlerFunc // POST /api/update/apply download+verify+swap (Phase 3)
