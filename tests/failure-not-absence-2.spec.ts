@@ -14,9 +14,14 @@ function fulfillJson(route: import('@playwright/test').Route, body: unknown, sta
 
 test.describe('AI → Threat lookup dossier (DossierPanel + Ai.jsx fetch)', () => {
   const VAULT_LOCKED_503 = { error: 'vault locked', locked: true };
+  // A genuine clean lookup has at least one EXAMINED source that found nothing.
+  // This fixture used to be `sources: []`, which is a lookup that examined
+  // nothing at all — asserting CLEAN for it pinned the defect that
+  // normDossier's len(sources) == 0 check and DossierPanel's hasVerdictShape
+  // now close together. See tests/dossier-empty-sources.spec.ts for that case.
   const GENUINE_CLEAN = {
-    summary: { malicious: false },
-    sources: [],
+    summary: { malicious: false, max_threat_level: 0 },
+    sources: [{ source: 'atp', detail: 'no records' }],
     query: 'benign.example.com',
     type: 'domain',
   };

@@ -271,10 +271,24 @@ export default function DossierPanel({ data }) {
   // for that body, painting a false CLEAN pill for a lookup that never ran.
   // Treat an explicit `unavailable`, an error/locked body, or a payload simply
   // missing the fields a real verdict requires the same way: unavailable.
-  const hasVerdictShape = data.summary && typeof data.summary === 'object' && Array.isArray(data.sources)
+  //
+  // `Array.isArray(data.sources)` alone was not enough: an EMPTY array is an
+  // array, so a body carrying summary:{malicious:false} with sources:[] passed
+  // this guard and painted CLEAN for an indicator against which zero sources
+  // were examined. A verdict now requires at least one examined source. The
+  // server no longer emits that body (threatintel.go normDossier degrades to
+  // the unavailable shape when no source survives its loop) — this half keeps
+  // the panel from accepting one if anything ever produces it again.
+  const hasSummary = data.summary != null && typeof data.summary === 'object'
+  const sourcesArr = Array.isArray(data.sources) ? data.sources : null
+  const hasVerdictShape = hasSummary && sourcesArr != null && sourcesArr.length > 0
   const errorLike = data.error != null || data.locked === true
   if (data.unavailable || errorLike || !hasVerdictShape) {
-    const reason = data.unavailable ?? data.error ?? (errorLike ? 'locked' : 'incomplete response')
+    const noSourcesExamined = hasSummary && sourcesArr != null && sourcesArr.length === 0
+    const reason =
+      data.unavailable ??
+      data.error ??
+      (errorLike ? 'locked' : noSourcesExamined ? 'no source returned usable data — nothing was checked' : 'incomplete response')
     return <FeedUnavailable reason={String(reason)} label="Dossier unavailable" />
   }
 

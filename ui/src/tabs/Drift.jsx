@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react'
 import { COLORS, Card, Empty, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
+// Same component SelfService.jsx already uses — /api/templates answers 500 and
+// /api/ipam/spaces answers 502 on an upstream failure, and both collapse into
+// the same empty list a tenant that owns nothing produces.
+import { FetchError } from './SelfService.jsx'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
 
@@ -100,6 +104,12 @@ export default function Drift() {
                 ))}
               </select>
             </label>
+            <div>
+              <FetchError error={templatesApi.error} stale={templates.length > 0} />
+              <FetchError error={spacesApi.error} stale={spaces.length > 0} />
+              {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>no templates</Empty>}
+              {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+            </div>
             <button
               disabled={checking || !template}
               onClick={check}

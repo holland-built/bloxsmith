@@ -145,6 +145,15 @@ func (s *Service) FetchDossier(q, itype string) map[string]any {
 	// result (not a fabricated clean one) is what gets cached, matching this
 	// package's existing convention (see hub.go FetchHubHealth) of caching
 	// an explicit "unavailable" state rather than skipping the cache.
+	//
+	// This arm alone does NOT close DEFECT 1 — it only guarantees that a
+	// results read which FAILED never reaches normDossier. A results read
+	// that SUCCEEDS can still carry nothing usable (an empty results list, or
+	// records that all lack a `data` object), and shaping that into the same
+	// zero-value summary is the same green-CLEAN-for-an-unchecked-indicator
+	// failure by a different route. The guarantee "no verdict without an
+	// examined source" is enforced by normDossier itself, at its own
+	// len(sources) == 0 check; see there.
 	results, err := s.Rest.GetStrict("/tide/api/services/intel/lookup/jobs/"+jobID+"/results", nil)
 	if err != nil {
 		log.Printf("dossier: TIDE results fetch failed for %s indicator %q: %v", itype, q, err)
@@ -250,6 +259,22 @@ func normDossier(query, itype string, results []any) map[string]any {
 			entry["detail"] = trunc(jstr(data), 400)
 		}
 		sources = append(sources, entry)
+	}
+	// A verdict requires having actually examined at least one source. Every
+	// record above was skipped for want of a usable `data` object, or TIDE
+	// returned a successful-but-empty results list: nothing was checked, so
+	// there is nothing to be clean OR malicious about. Falling through here
+	// would emit the zero-value summary (malicious:false, max_threat_level:0)
+	// with sources:[] and unavailable:nil — a green CLEAN pill for a lookup
+	// that read no source at all, which is the FetchDossier failure arm's bug
+	// arriving by the success path. Degrade to the same dossierUnavail shape
+	// that arm uses (no verdict fields at all) so DossierPanel's `unavailable`
+	// escape hatch fires. Guessing MALICIOUS instead would be equally
+	// fabricated; the honest state is "we did not check". The reason wording
+	// is deliberately distinct from the fetch-failure reasons: this lookup
+	// ran and answered, it just answered with nothing usable.
+	if len(sources) == 0 {
+		return dossierUnavail(query, itype, "Dossier lookup returned no usable sources")
 	}
 	summary["max_threat_level"] = maxTL
 	summary["threat_classes"] = sortedCap(threatClasses, 15)

@@ -497,28 +497,45 @@ function InsightsPanel({ insights }) {
   // that from a genuine empty result, both render as "no data".
   const unavailable = !!insights.error || (d && !Array.isArray(d) && d.availability === 'error')
   const rows = Array.isArray(d) ? d : Array.isArray(d?.results) ? d.results : Array.isArray(d?.data) ? d.data : []
-  const keys = rows.length ? Object.keys(rows[0]).slice(0, 4) : []
 
-  // Flatten object cells to strings up front so the primitive renders text only.
+  // Columns are named explicitly. They used to be Object.keys(rows[0]).slice(0, 4)
+  // — an alphabetical slice of whatever the payload happened to contain, which
+  // is how a constant `count: 1` field became the operator's headline column
+  // and pushed the threat name off the table. What is worth showing is a
+  // decision, not an accident of key order.
   const normRows = useMemo(
     () =>
-      rows.map((r) => {
-        const o = {}
-        for (const k of keys) o[k] = typeof r[k] === 'object' && r[k] !== null ? JSON.stringify(r[k]) : (r[k] ?? '—')
-        return o
-      }),
-    [rows, keys.join('|')],
+      rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        severity: r.severity,
+        currentStatus: r.currentStatus,
+        totalEvents: r.totalEvents,
+        // null when upstream did not report it — DataTable renders that as an
+        // em-dash and auto-hides the column when no row reports it.
+        totalVerifiedAssets: r.totalVerifiedAssets,
+        feedSource: r.feedSource,
+        lastSeen: r.mostRecentAt ? fmtDate(r.mostRecentAt) : '—',
+        lastSeenAt: r.mostRecentAt ?? '',
+      })),
+    [rows],
   )
 
-  // First column is the ID/hash-like field — force one mono line + ellipsis (was
-  // wrapping into a 4-line stack). The rest line-clamp as normal text.
-  const columns = keys.map((k, i) => ({
-    key: k,
-    label: k.replace(/_/g, ' '),
-    sortable: true,
-    ...(i === 0 ? { mono: true, grow: true } : {}),
-    ...(k === 'id' ? { maxCh: 14 } : {}), // measured: bare 36-char UUID overflows the card; cap it
-  }))
+  // hideWhenConstant (DataTable): drop a column whose non-empty values are all
+  // identical — one feed source across every row, or an assets count upstream
+  // does not vary — because a column that says the same thing on every row
+  // costs width and tells the operator nothing. DataTable already drops a
+  // column that is empty ('—') on every row, which is what an unreported
+  // totalVerifiedAssets now is: null on the wire, never a fabricated 0.
+  const columns = [
+    { key: 'name', label: 'Threat', grow: true, sortable: true },
+    { key: 'severity', label: 'Severity', sortable: true, sortAccessor: (r) => sevRank(r.severity) },
+    { key: 'currentStatus', label: 'Status', sortable: true },
+    { key: 'totalEvents', label: 'Events', align: 'right', mono: true, sortable: true },
+    { key: 'totalVerifiedAssets', label: 'Assets', align: 'right', mono: true, sortable: true, hideWhenConstant: true },
+    { key: 'feedSource', label: 'Feed', sortable: true, hideWhenConstant: true },
+    { key: 'lastSeen', label: 'Last Seen', sortable: true, sortAccessor: (r) => r.lastSeenAt },
+  ]
 
   return (
     <Card span={3} title="SOC Insights" right={!unavailable && rows.length ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : null}>

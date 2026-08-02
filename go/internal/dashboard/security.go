@@ -31,11 +31,13 @@ import (
 // it is interpolated into the endpoint path.
 var blockListRE = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_.\-]{0,127}$`)
 
-// Four outcomes, and only four: "invalid" (a local fault — nothing was ever
-// sent upstream; fix the request or config and retry), "rejected" (the call
-// reached upstream and upstream refused it; safe to retry as-is), "verified"
-// (read-back confirms the desired state), "unverified" (submitted, but
-// convergence wasn't observed within the budget; refresh before retrying).
+// Four outcomes, and only four: "invalid" (a local fault, detected before any
+// request is built — nothing was ever sent upstream; fix the request or config
+// and retry), "rejected" (a transport error, which does NOT mean upstream
+// refused it — see isMcpTransportError: the write may already have landed, so
+// the outcome is unknown and the audit log records it), "verified" (read-back
+// confirms the desired state), "unverified" (submitted, but convergence wasn't
+// observed within the budget; refresh before retrying).
 
 // --- read-back verification budget ------------------------------------------
 //
@@ -77,17 +79,28 @@ func canonDomain(d string) string {
 }
 
 // isMcpTransportError reports whether err came from CallToolChecked's
-// TRANSPORT-error branch (network/HTTP/JSON-RPC failure — the write never
-// reached the tool in any recognisable way) rather than its fail-closed
-// "rejected" branch (a decoded-or-undecodable payload that didn't match the
-// success predicate). Block/unblock pass a nil predicate below because the
-// success shape for these two tools has never been observed live, so the
-// fail-closed branch fires on every call regardless of whether the write
-// actually succeeded upstream — only a transport error is a genuine, safe-to-
-// retry rejection here. Ground truth for everything else comes from the
-// named-list read-back, never from guessing a predicate. Matches via
-// errors.Is against the mcp package's exported sentinel rather than the
-// error's message text, which is free to be reworded without notice.
+// TRANSPORT-error branch rather than its fail-closed branch (a
+// decoded-or-undecodable payload that didn't match the success predicate).
+//
+// WHAT IT DOES NOT TELL YOU: whether the write reached the tool.
+// CallToolChecked wraps every error out of CallTool as ErrTransport, and that
+// covers the 12s call timeout expiring AFTER the PATCH/DELETE was dispatched,
+// an HTTP status >= 400 from the gateway once the tool may already have
+// executed, a response-body read failure after it ran, a JSON decode failure
+// after it ran, and a JSON-RPC error in the reply. At this layer "never sent"
+// and "sent, outcome unknown" are indistinguishable, so a true result means
+// UNKNOWN — not "nothing was applied" — and the caller's "rejected" outcome is
+// recorded in the audit log for exactly that reason (server/security.go's
+// auditOutcome). Retrying is safe only because these two writes are idempotent,
+// not because the first attempt is known to have missed.
+//
+// Block/unblock pass a nil predicate below because the success shape for these
+// two tools has never been observed live, so the fail-closed branch fires on
+// every call regardless of whether the write actually succeeded upstream.
+// Ground truth comes from the named-list read-back, never from guessing a
+// predicate. Matches via errors.Is against the mcp package's exported sentinel
+// rather than the error's message text, which is free to be reworded without
+// notice.
 func isMcpTransportError(err error) bool {
 	return errors.Is(err, mcp.ErrTransport)
 }

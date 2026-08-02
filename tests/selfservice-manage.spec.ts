@@ -201,7 +201,11 @@ test.describe('ManageRecordsPanel', () => {
     await page.route('**/api/dns/records*', (route) => route.fulfill({ json: { records: [rec] } }));
     await page.route('**/api/dns/records/*', (route) => {
       deletes.push(route.request().url());
-      return route.fulfill({ json: { ok: true } });
+      // already_gone is set EXPLICITLY on both of edit.Client.Delete's success
+      // arms (go/internal/edit/resources.go:445) — false for a real 200/204,
+      // true for a 404. This stub predated the field and its absence now means
+      // UNKNOWN, which the UI must not render as a confirmed deletion.
+      return route.fulfill({ json: { ok: true, already_gone: false } });
     });
 
     await page.goto('/#selfservice');
@@ -230,7 +234,11 @@ test.describe('ManageRecordsPanel', () => {
     await page.route('**/api/dns/records*', (route) => route.fulfill({ json: { records: [rec] } }));
     await page.route('**/api/dns/records/*', (route) => {
       deletes.push(route.request().url());
-      return route.fulfill({ json: { ok: true } });
+      // already_gone is set EXPLICITLY on both of edit.Client.Delete's success
+      // arms (go/internal/edit/resources.go:445) — false for a real 200/204,
+      // true for a 404. This stub predated the field and its absence now means
+      // UNKNOWN, which the UI must not render as a confirmed deletion.
+      return route.fulfill({ json: { ok: true, already_gone: false } });
     });
 
     await page.goto('/#selfservice');
@@ -256,7 +264,11 @@ test.describe('ManageAddressesPanel', () => {
     await page.route('**/api/ipam/addresses*', (route) => route.fulfill({ json: { addresses: [addr] } }));
     await page.route('**/api/ipam/addresses/*', (route) => {
       deletes.push(route.request().url());
-      return route.fulfill({ json: { ok: true } });
+      // already_gone is set EXPLICITLY on both of edit.Client.Delete's success
+      // arms (go/internal/edit/resources.go:445) — false for a real 200/204,
+      // true for a 404. This stub predated the field and its absence now means
+      // UNKNOWN, which the UI must not render as a confirmed deletion.
+      return route.fulfill({ json: { ok: true, already_gone: false } });
     });
 
     await page.goto('/#selfservice');
