@@ -470,6 +470,32 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 			}
 			if _, err := d.prov(r).NewSiteDecommissioner(cfg, forward).Decommission(); err != nil {
 				summaryAppend(summary, "failed", rel)
+				// Decommission deletes DNS zones, DHCP ranges, subnets and hosts
+				// FAIL-FORWARD — there is no rollback, so this arm is reached with
+				// part of a real site already destroyed, and the loop then moves on
+				// to the next template. Until now the only record of the whole run
+				// was the aggregate teardown-seed-demo entry below, carrying
+				// succeeded/failed/skipped COUNTS: "failed: 1" out of three
+				// templates cannot say WHICH region's estate is now half gone.
+				//
+				// This entry is the exact match of teardownSiteStream's
+				// teardown-site-error (same event, same {template, error} detail) —
+				// the single-site route has always written it on this same path.
+				// It is additive to the aggregate, which stays as it is.
+				//
+				// Template and error are ALL that is available here. Decommission
+				// returns (nil, err) on every failure path: the "what was already
+				// deleted" inventory it builds goes only to the operator's stream
+				// (emitIncomplete, decommission.go), never to the caller. Recording
+				// a residual list here would mean inventing one.
+				//
+				// Scoped to this branch only, like the seed-demo provision twin: the
+				// LoadTemplate and TemplateToDecommissionConfig arms above fail
+				// before the first DELETE, so nothing was destroyed to report.
+				if !dry {
+					d.auditAppend("teardown-site-error", httpx.Actor(r),
+						map[string]any{"template": rel, "error": err.Error()})
+				}
 				emit(map[string]any{"template": rel, "error": err.Error()})
 				return
 			}

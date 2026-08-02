@@ -54,6 +54,41 @@ func resultOK(res map[string]any) bool { b, _ := res["ok"].(bool); return b }
 // filter can see, so its id has to be recorded (see editCreate).
 func taggingFailed(res map[string]any) bool { b, _ := res["tagging_failed"].(bool); return b }
 
+// createdUnreadable is taggingFailed's wider sibling and closes the same hole one
+// step earlier: edit's create builders now return edit.CreatedUnreadableKey when
+// upstream ACCEPTED the write (200/201) and the response body could not be read
+// back, so the object is LIVE on the tenant and no id for it exists anywhere.
+//
+// This result carries no "ok" key at all — resultOK is false for it and
+// resultOK-gated audit rows correctly skip it, because it is not a create we can
+// name. It still has to be RECORDED: the object exists, and a create that leaves
+// something on a customer's tenant with no row is precisely the failure this
+// whole family of fixes is about. The rows below use their own event names for
+// it so a create nobody can identify is never counted as a clean create.
+//
+// It cannot over-fire into "audit every failure": a 4xx/5xx never reaches this
+// state (see edit.writeUnreadable) — upstream answered and refused, nothing was
+// created, and those paths still write nothing.
+func createdUnreadable(res map[string]any) bool {
+	b, _ := res[edit.CreatedUnreadableKey].(bool)
+	return b
+}
+
+// unreadableDetail builds the audit detail for a created-but-unreadable object:
+// the resource name, the marker, and the request fields that identify what was
+// asked for. There is deliberately NO id key — an absent id says "unknown",
+// where a placeholder would say "this is the id". Fields the caller omitted are
+// omitted here too, never filled in.
+func unreadableDetail(resource string, identity []string, b map[string]any) map[string]any {
+	detail := map[string]any{"resource": resource, "created_unreadable": true}
+	for _, k := range identity {
+		if v, ok := b[k]; ok && v != nil {
+			detail[k] = v
+		}
+	}
+	return detail
+}
+
 // deleteOutcomeUnknown reports whether a FAILED edit.Client.Delete left the
 // object's fate undecided rather than untouched, keyed to the status that
 // builder reports.
@@ -108,6 +143,16 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 		d.auditAppend("selfservice-allocate", httpx.Actor(r), map[string]any{
 			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
 			"tag_value": b["tag_value"], "count": b["count"]})
+	case createdUnreadable(res):
+		// The allocate path's DNS record write was accepted and could not be read
+		// back, so the record is live and the addresses stayed reserved for it on
+		// purpose (edit.SelfserviceAllocate skips the compensating release here —
+		// releasing them would strip a live record of its addresses). The
+		// addresses ARE known, so they go in the row; the record's id is not, so
+		// nothing stands in for it.
+		d.auditAppend("selfservice-allocate-record-unreadable", httpx.Actor(r), map[string]any{
+			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"], "tag_value": b["tag_value"],
+			"addresses": res["addresses"], "still_reserved": true, "created_unreadable": true})
 	case !isDry(res):
 		// The ok-only gate left the same hole editCreate had: an ok:false that
 		// nonetheless left live objects on the tenant. Here they are IP addresses
@@ -139,8 +184,17 @@ func (d *Deps) dnsRecordCreate(w http.ResponseWriter, r *http.Request, b map[str
 	defer d.recoverEdit(w, r, "/api/dns/records")
 	res, status := d.editFor(r).DNSRecordCreate(b)
 	d.json(w, r, status, res)
-	if resultOK(res) && !isDry(res) {
+	switch {
+	case resultOK(res) && !isDry(res):
 		d.auditAppend("dns-record-create", httpx.Actor(r), map[string]any{
+			"zone_id": b["zone_id"], "name_in_zone": b["name_in_zone"], "type": b["type"]})
+	case createdUnreadable(res):
+		// The record is answering DNS queries on the customer's tenant and the
+		// operator was told the create failed. This row is the only way back to
+		// it: same identifying fields as the clean row, no id, and an event name
+		// that cannot be miscounted as a completed create.
+		d.auditAppend("dns-record-create-unreadable", httpx.Actor(r), map[string]any{
+			"resource": "DNS record", "created_unreadable": true,
 			"zone_id": b["zone_id"], "name_in_zone": b["name_in_zone"], "type": b["type"]})
 	}
 }
@@ -258,6 +312,13 @@ func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]a
 	case resultOK(result) && !isDry(result):
 		d.auditAppend("edit-"+resource+"-create", httpx.Actor(r),
 			map[string]any{"id": editResultID(result, res.ResultKey)})
+	case createdUnreadable(result):
+		// The object is live upstream and unidentifiable here. A separate event
+		// name because this row can never carry the id that
+		// "edit-<resource>-create" rows are read for — filing it under that name
+		// would put an idless row among rows whose id is the point.
+		d.auditAppend("edit-"+resource+"-create-unreadable", httpx.Actor(r),
+			unreadableDetail(resource, res.Identity, b))
 	case taggingFailed(result):
 		// The audit-only-when-ok rule leaves exactly one hole: SubnetCreate can
 		// fail AFTER the subnet exists upstream, when only its teardown tags
