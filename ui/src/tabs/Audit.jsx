@@ -192,6 +192,42 @@ function ChainVerdict({ result, error, loading }) {
   )
 }
 
+// Entries the server could NOT write. This is a different fact from the chain
+// verdict above and is deliberately not folded into it: a refused append leaves
+// the chain on disk genuinely intact, because the entry was never written and
+// nothing was tampered with. Saying "tampered" here would be an accusation
+// nobody made, and saying "intact" alone would let a shorter list of entries
+// read as a quiet day.
+//
+// HONEST LIMIT: append_failures is an in-memory counter scoped to "since this
+// process started". A restart resets it to 0 and the banner disappears — the
+// entry it was counting is still gone, and nothing on disk records that it ever
+// existed. So this is a live warning, not an audit of past losses.
+//
+// Absent field (an older server that predates the counter) renders nothing at
+// all — not an all-clear. Only a number greater than zero renders.
+function AppendFailures({ result }) {
+  const { COLORS } = useChartTheme()
+  const n = result?.append_failures
+  if (typeof n !== 'number' || n <= 0) return null
+  const last = result.last_append_failure
+  return (
+    <div className="text-sm font-semibold mb-2" style={{ color: COLORS.crit }}>
+      {n} audit record{n === 1 ? '' : 's'} failed to write since the server started
+      {last?.event ? (
+        <span className="font-normal text-[12px]">
+          {' — last: '}
+          <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-field">{last.event}</code>
+          {last.error ? <span className="text-dim"> ({last.error})</span> : null}
+        </span>
+      ) : null}
+      <span className="font-normal text-[12px] text-dim">
+        {' · the chain on disk is unaffected; the missing record cannot be recovered'}
+      </span>
+    </div>
+  )
+}
+
 function AuditTable({ logs, loading, error, auditLogsStatus }) {
   const [filter, setFilter] = useState('')
   const [action, setAction] = useState('')
@@ -262,6 +298,7 @@ function AuditTable({ logs, loading, error, auditLogsStatus }) {
       }
     >
       <ChainVerdict result={verdict.data} error={verdict.error} loading={verdict.loading} />
+      <AppendFailures result={verdict.data} />
       {loading ? (
         <Skeleton h={250} />
       ) : error || logs.length === 0 ? (
