@@ -235,7 +235,16 @@ Infoblox API key, with an optional Groq key for the AI box). Keys are
 **AES-encrypted at rest** in the `noc-vault` volume under your passphrase. Switch
 between tenants any time from the sidebar.
 
-Pin a release with a tag (`:v1.0.0`, `:1.0.0`, or `:1.0`) instead of `:latest`.
+### Pinning a version
+
+`:latest` follows every release. To freeze a deploy, use the exact version tag —
+**no `v` prefix, full `major.minor.patch`**, copied from the release badge or the
+[Releases page](https://github.com/holland-built/bloxsmith/releases/latest).
+Shortened (`:3.52`) and `v`-prefixed (`:v3.52.1`) tags are **not** published.
+
+Pinning opts you out of updates: `docker compose pull` re-fetches the same image
+and the in-app **Update now** button has nothing to move to. Updating a pinned
+deploy means editing the number yourself.
 
 > **Single key via env (skip the vault):** pass `-e INFOBLOX_API_KEY="Token <key>"`
 > (and optionally `-e GROQ_API_KEY=...`); the dashboard loads straight to data.
