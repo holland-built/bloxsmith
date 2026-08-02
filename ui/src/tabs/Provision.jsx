@@ -75,6 +75,11 @@ function useStreamFlow(path) {
   const [rows, setRows] = useState({})
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  // The failure frame carries a rollback report alongside the error string.
+  // Keeping only the string threw away the one fact the operator needs most —
+  // what cleanup could NOT delete, i.e. what is still live on their network —
+  // and sent them to the audit log to find it.
+  const [rollback, setRollback] = useState(null)
   const esRef = useRef(null)
   const dryRef = useRef(true)
 
@@ -86,7 +91,7 @@ function useStreamFlow(path) {
 
   function run(qs, dry) {
     if (status === 'busy' || esRef.current) return
-    setLog([]); setRows({}); setResult(null); setError(null); setStatus('busy')
+    setLog([]); setRows({}); setResult(null); setError(null); setRollback(null); setStatus('busy')
     dryRef.current = dry
     // withToken: EventSource can't send X-Auth-Token, so a token deployment
     // needs the ?token= query fallback or the stream 403s.
@@ -98,7 +103,10 @@ function useStreamFlow(path) {
       try { j = JSON.parse(e.data) } catch { return }
       setLog((prev) => [...prev, j])
       if (j?.template) setRows((prev) => ({ ...prev, [j.template]: { phase: j.phase, error: j.error } }))
-      if (j?.error && !j.template) { setError(j.error); stop('idle') }
+      // `rollback` is absent on frames from an older server — that is an
+      // unknown answer, held as null so it renders as nothing at all rather
+      // than as a confident all-clear.
+      if (j?.error && !j.template) { setError(j.error); setRollback(j.rollback ?? null); stop('idle') }
       else if (j?.done) {
         setResult(j)
         setStale(false)
@@ -108,7 +116,58 @@ function useStreamFlow(path) {
     es.onerror = () => { if (!esRef.current) return; setError((p) => p || 'Stream connection error'); stop('idle') }
   }
 
-  return { status, stale, log, rows, result, error, markStale, run }
+  return { status, stale, log, rows, result, error, rollback, markStale, run }
+}
+
+// ---------- rollback report ----------
+//
+// What the server attempted to undo after a provision failed, and — the part
+// that matters — what it could not. A residual object is still live on the
+// customer's network: it was created by the run that failed and cleanup could
+// not delete it, so someone has to go remove it by hand.
+//
+// Only 'incomplete' is critical. 'complete' and 'not_needed' are calm one-
+// liners, because they are the answer "nothing is left behind". Both silent
+// cases are silent on purpose: 'skipped_dry_run' means no cleanup was ever
+// attempted (a preview writes nothing, so there is nothing to report), and an
+// absent/unrecognised outcome means the server did not tell us — and an
+// unknown answer must never be painted as a reassuring one.
+function RollbackReport({ report }) {
+  if (!report) return null
+  const residual = Array.isArray(report.residual) ? report.residual : []
+  const deleted = report.deleted ?? 0
+  const attempted = report.attempted ?? 0
+
+  if (report.outcome === 'incomplete') {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <div className="text-sm font-semibold" style={{ color: COLORS.crit }}>
+          Cleanup could not remove {residual.length || attempted - deleted} object
+          {(residual.length || attempted - deleted) === 1 ? '' : 's'} — they are still live on the customer&rsquo;s
+          network
+        </div>
+        <div className="text-[12px] text-dim mb-1">{deleted} of {attempted} removed</div>
+        {residual.map((o, i) => (
+          <div key={o?.id || i} className="font-mono text-[12px]" style={{ color: COLORS.crit }}>
+            ✕ {o?.kind || 'object'}{' '}
+            <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-field">{o?.label || o?.id || '—'}</code>
+            {o?.status ? <span className="text-dim"> (HTTP {o.status})</span> : null}
+          </div>
+        ))}
+      </div>
+    )
+  }
+  if (report.outcome === 'complete') {
+    return (
+      <div className="text-[12px] text-dim">
+        Cleanup removed all {deleted} object{deleted === 1 ? '' : 's'} it had created — nothing was left behind.
+      </div>
+    )
+  }
+  if (report.outcome === 'not_needed') {
+    return <div className="text-[12px] text-dim">Nothing had been created, so nothing needed removing.</div>
+  }
+  return null
 }
 
 // ---------- log rendering ----------
@@ -232,7 +291,9 @@ function SubnetMode() {
                 : flow.status === 'applied' ? `Provisioned — subnet ${subnet?.address || subnet?.id || ''}`
                 : null
             }
-          />
+          >
+            <RollbackReport report={flow.rollback} />
+          </PreviewApply>
         </div>
       </Card>
 
@@ -318,7 +379,9 @@ function SiteMode({ isAdmin }) {
                 : build.status === 'applied' ? 'Site provisioned.'
                 : null
             }
-          />
+          >
+            <RollbackReport report={build.rollback} />
+          </PreviewApply>
         </div>
       </Card>
 
@@ -475,7 +538,9 @@ function SeedMode({ isAdmin }) {
                 : seed.status === 'applied' && seedOutcome?.kind === 'success' ? 'Seed complete.'
                 : null
             }
-          />
+          >
+            <RollbackReport report={seed.rollback} />
+          </PreviewApply>
         </div>
       </Card>
 
