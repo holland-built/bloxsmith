@@ -29,6 +29,13 @@ type router interface {
 // tenantWritePaths are the routes that change data in the CUSTOMER'S TENANT.
 // These are what the write lock gates.
 //
+// A path here is gated for STATE-CHANGING VERBS ONLY, with the five SSE streams
+// as the stated exception — see requestChangesTenant. The list cannot be read as
+// "gate every verb": /api/dns/records is registered three times, POST and PATCH
+// in edit.go (writes) and GET in ipam.go (dnsRecordsGet, the record list the
+// Self-Service tab shows), and gating that GET refused a plain read with
+// "Nothing was changed" on every tenant nobody had marked writable.
+//
 // This is a deliberate list and not httpx.DefaultMutatingPaths, which is a
 // different question (which routes need a CSRF check) and gets a different
 // answer in both directions: it includes /api/alerts/snooze, which writes only
@@ -40,7 +47,8 @@ type router interface {
 var tenantWritePaths = map[string]bool{
 	// Provisioning and teardown. These are SSE streams driven by EventSource, so
 	// they arrive as GETs — the reason IsMutating exists as a concept separate
-	// from the HTTP verb, and the reason this map is keyed by path not method.
+	// from the HTTP verb, and the reason this map is keyed by path. They are the
+	// ONLY entries here that a GET still reaches the lock for.
 	"/api/provision/stream":           true,
 	"/api/provision/site/stream":      true,
 	"/api/provision/seed-demo/stream": true,
@@ -120,7 +128,16 @@ var nonTenantWritePrefixes = []string{
 	"/api/vault/",
 }
 
-// isTenantWrite reports whether this request would change data in the tenant.
+// isTenantWrite reports whether this PATH is one where the tenant can be
+// changed. It is half the question and deliberately only half: a path can carry
+// both verbs. /api/dns/records is POST + PATCH in edit.go and GET in ipam.go, so
+// a path-only answer says "tenant write" about a read as well.
+//
+// Anything gating a live request must ask requestChangesTenant, which adds the
+// verb. What isTenantWrite answers is "is this path on the list at all", which
+// is the question the route-coverage guards (writelock_routes_test.go,
+// tenant_write_audit_test.go) ask — they enumerate registered routes and pair
+// the path with the verb themselves.
 func isTenantWrite(path string) bool {
 	if tenantWritePaths[path] {
 		return true
@@ -136,6 +153,45 @@ func isTenantWrite(path string) bool {
 		return true
 	}
 	return false
+}
+
+// tenantWriteOnGet reports whether a GET at this path changes the tenant anyway.
+// The provision and teardown SSE streams do: EventSource cannot issue anything
+// but a GET, and they are the most destructive routes in the program.
+//
+// It is a shape test rather than a second copy of the five stream paths on
+// purpose — this is character for character the rule writelock_routes_test.go
+// applies when it decides which registered routes must be classified, and
+// tenant_write_audit_test.go's twaStateChanging repeats. A sixth stream added
+// under /api/provision/ or /api/teardown/ is therefore gated by the same commit
+// that makes those guards start demanding it be classified, instead of one
+// commit later.
+func tenantWriteOnGet(path string) bool {
+	return strings.Contains(path, "/provision/") || strings.Contains(path, "/teardown/")
+}
+
+// requestChangesTenant reports whether THIS request — verb and path together —
+// would change data in the customer's tenant. This is what the lock gates on.
+//
+// The verb half is not decoration. isTenantWrite is keyed by path so the SSE
+// streams cannot escape, and the cost of that is that a path carrying both a
+// write and a read reads as a write for both: GET /api/dns/records is the record
+// list the Self-Service tab renders, and gating it refused an ordinary read on
+// every tenant nobody had opted in, with a message asserting "Nothing was
+// changed" about a request that never tried to change anything.
+//
+// So: a state-changing verb at a tenant-write path is gated, and a GET or HEAD
+// is gated only at the streams. Nothing that can change anything is let through
+// by this — the five streams are the whole of the GET exception, and every other
+// tenant-write route is registered for POST, PATCH or DELETE only.
+func requestChangesTenant(method, path string) bool {
+	if !isTenantWrite(path) {
+		return false
+	}
+	if method == http.MethodGet || method == http.MethodHead {
+		return tenantWriteOnGet(path)
+	}
+	return true
 }
 
 // writeIdentity resolves WHERE a write from this request would land, as the
@@ -210,6 +266,12 @@ func (d *Deps) writeLockRefusal(id, unknown, path string) map[string]any {
 // withWriteLock refuses a tenant-changing request unless that exact tenant has
 // been marked writable. 403, nothing attempted, and the refusal is audited.
 //
+// "Tenant-changing" is a question about the verb AND the path — see
+// requestChangesTenant. A read that merely shares a path with a write (GET
+// /api/dns/records) is not one, and must not be refused: telling an operator
+// "Nothing was changed" about a list they asked for is both a broken tab and a
+// lie about what the server did.
+//
 // ORDERING NOTE, because the audit trail shows both. The chassis write-guard
 // (httpx.WriteGuard) runs first and records "write-authorized" for a mutating
 // path once the CSRF/token check passes. A request refused here therefore leaves
@@ -219,7 +281,7 @@ func (d *Deps) writeLockRefusal(id, unknown, path string) map[string]any {
 func (d *Deps) withWriteLock(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.SplitN(r.URL.Path, "?", 2)[0]
-		if !isTenantWrite(path) {
+		if !requestChangesTenant(r.Method, path) {
 			next.ServeHTTP(w, r)
 			return
 		}

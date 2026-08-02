@@ -481,17 +481,38 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus }) {
 
 // ---------- host status ----------
 
+// "unknown" is the backend's word (go/internal/dashboard/norm.go) for a host
+// whose upstream status was absent or unrecognised — deliberately not the real
+// lifecycle state "pending" it used to masquerade as. It is its own bucket, not
+// part of Other: "we do not know this host's state" is a fact an operator acts
+// on, and folding it into a catch-all made this donut disagree with Infra's
+// (Unknown 2% / Other 8% there vs a single Other 10% here) about the same hosts.
+//
+// Mirrors statusBucket() / BUCKET_LABEL / the bucket order in ui/src/tabs/
+// Infra.jsx, which does not export them. Keep the two in step: same names, same
+// order, same colours, so the two screens read as one number.
+function statusBucket(s) {
+  s = s || ''
+  if (/^unknown$/i.test(s)) return 'unknown'
+  if (/online|up|active/i.test(s)) return 'active'
+  if (/degraded|warn/i.test(s)) return 'degraded'
+  if (/off|down|error|fail/i.test(s)) return 'offline'
+  return 'other'
+}
+
+const BUCKET_LABEL = { active: 'Active', degraded: 'Degraded', offline: 'Offline', unknown: 'Unknown', other: 'Other' }
+
 function HostStatus({ hosts, totals = {}, hostsStatus }) {
   const { COLORS, TT } = useChartTheme()
-  const buckets = { Active: 0, Degraded: 0, Offline: 0, Other: 0 }
-  for (const h of hosts) {
-    const s = h.status || ''
-    if (/online|up|active/i.test(s)) buckets.Active++
-    else if (/degraded|warn/i.test(s)) buckets.Degraded++
-    else if (/off|down|error|fail/i.test(s)) buckets.Offline++
-    else buckets.Other++
+  const buckets = { Active: 0, Degraded: 0, Offline: 0, Unknown: 0, Other: 0 }
+  for (const h of hosts) buckets[BUCKET_LABEL[statusBucket(h.status)]]++
+  const colorMap = {
+    Active: COLORS.accent,
+    Degraded: COLORS.warn,
+    Offline: COLORS.crit,
+    Unknown: COLORS.other,
+    Other: COLORS.purple,
   }
-  const colorMap = { Active: COLORS.accent, Degraded: COLORS.warn, Offline: COLORS.crit, Other: COLORS.other }
   const hasHostTotal = typeof totals.hosts === 'number'
   const total = hasHostTotal ? totals.hosts : hosts.length
   const loaded = hosts.length
