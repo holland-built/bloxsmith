@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"bloxsmith/internal/edit"
 )
 
 // THE POINT OF THIS FILE: a write route that nobody classified must fail the
@@ -243,8 +245,42 @@ func TestKnownDestructiveRoutesClassifiedAsTenantWrites(t *testing.T) {
 // The refusal REASON is asserted, not merely the 403. A 403 from the CSRF guard
 // ("forbidden — write not authorized") would otherwise stand in for a write-lock
 // refusal and this test would go quietly vacuous a second time.
+// gatedRouteServer is lockedTestServer plus the one dependency it leaves nil:
+// Deps.Edit.
+//
+// Why that matters here and not in writelock_test.go. lockedTestServer already
+// deliberately supplies a real (empty) provision.Engine rather than nil, so that
+// removing the lock to prove these refusals are load-bearing does not simply
+// panic — the comment there says so. Deps.Edit was the same hole, unnoticed:
+// with the lock unwired, the three delete routes below
+//
+//	DELETE /api/dns/records/{id}
+//	DELETE /api/ipam/addresses/{id}
+//	DELETE /api/edit/{type}/{id}
+//
+// dereferenced a nil *edit.Client and came back 500 from recoverEdit, not from
+// their handlers. Those cases therefore could not tell "the lock refused it"
+// from "it would have crashed regardless" — a guard test whose negative case is
+// a nil panic is not testing the guard. Wiring Edit makes the mutation answer a
+// real handler result, so the 403 in the unmutated run is unambiguously the
+// lock's doing.
+//
+// edit.New(d.Rest) reuses the SAME fake upstream lockedTestServer already
+// counts, which is what keeps the zero-upstream-hits assertion honest for these
+// routes: an Edit client pointed anywhere else would be invisible to the
+// counter and the assertion would pass by not looking.
+//
+// Assigning after New() is intentional and safe: the mux holds method values
+// bound to this *Deps, and each handler reads d.Edit when the request arrives.
+func gatedRouteServer(t *testing.T) (http.Handler, *Deps, *int) {
+	t.Helper()
+	h, d, hits := lockedTestServer(t)
+	d.Edit = edit.New(d.Rest)
+	return h, d, hits
+}
+
 func TestKnownDestructiveRoutesAreGated(t *testing.T) {
-	h, _, hits := lockedTestServer(t)
+	h, _, hits := gatedRouteServer(t)
 
 	for _, tc := range knownDestructiveRoutes {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
@@ -264,7 +300,12 @@ func TestKnownDestructiveRoutesAreGated(t *testing.T) {
 					tc.method, tc.path, reason, rr.Body.String())
 			}
 			// Refusing AFTER acting would be worse than not refusing: the 403
-			// would read like the change never happened.
+			// would read like the change never happened. This now means
+			// something for EVERY route in the table: with Deps.Edit wired by
+			// gatedRouteServer, the three delete routes have a live client that
+			// would reach the counted upstream if the lock let them through, so
+			// a zero here is evidence the lock stopped them rather than evidence
+			// they had nothing to call with.
 			if *hits != before {
 				t.Errorf("%s %s was refused but still reached the upstream (%d -> %d calls)",
 					tc.method, tc.path, before, *hits)

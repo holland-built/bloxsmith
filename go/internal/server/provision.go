@@ -155,10 +155,14 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}()
 	if err != nil {
-		if !dry {
-			d.auditAppend("provision-subnet-error", httpx.Actor(r),
-				map[string]any{"block": block, "error": err.Error()})
-		}
+		// There is deliberately NO !dry gate here, unlike every sibling error arm
+		// in this file. A dry run cannot reach this line: the `if dry` branch above
+		// emits its preview and returns nil before the first statement that can
+		// produce an error (the cidr parse), so `dry` is always false here. The
+		// gate that used to sit here read as an active control over a preview and
+		// was not one — no test could make it fire, in either direction.
+		d.auditAppend("provision-subnet-error", httpx.Actor(r),
+			map[string]any{"block": block, "error": err.Error()})
 		emit(map[string]any{"error": err.Error()})
 	}
 }
@@ -211,6 +215,13 @@ func (d *Deps) provisionSiteStream(w http.ResponseWriter, r *http.Request) {
 		// failure path, and an "outcome":"complete" report with an empty
 		// residual is a load-bearing record ("rollback ran and deleted
 		// everything") that a len() guard would erase into silence.
+		//
+		// UNREACHABLE `else` TODAY, stated so nobody reads this as a live
+		// control: SiteProvisioner.Provision has exactly one failure return and
+		// it always carries the key (provision/site.go:820), so `ok` is always
+		// true here. It is kept because the alternative is unconditional
+		// assignment, which would write "rollback": null the day the callee
+		// stops setting it — a fabricated report is worse than an absent one.
 		detail := map[string]any{"template": name, "error": err.Error()}
 		frame := map[string]any{"error": err.Error()}
 		if rb, ok := result["rollback"]; ok {
@@ -312,7 +323,12 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 				summaryAppend(summary, "failed", rel)
 				// Same copy-through as the single-site stream: the report as-is,
 				// selected by presence (never length), into both the frame and a
-				// per-template audit entry.
+				// per-template audit entry — and, like there, the presence check
+				// cannot currently be false: provision/site.go:820 is Provision's
+				// only failure return and it always carries the key. Kept, not
+				// deleted, for the same reason: unconditional assignment would
+				// fabricate a "rollback": null the day the callee stopped setting
+				// it. Stated here so it is not mistaken for a live control.
 				//
 				// This audit entry is NEW: until now a seed-demo run that
 				// stranded objects left no per-template record at all, only the
@@ -737,17 +753,17 @@ func (d *Deps) retagBlock(w http.ResponseWriter, r *http.Request, b map[string]a
 			// how far the loop got before it stopped. Modelled on teardown-site-error
 			// and teardown-block-error.
 			//
-			// The !dry gate mirrors every sibling arm. It cannot currently fire on a
-			// dry run — RetagBlock sends no PATCH when dryRun is set and so returns
-			// no error — so it guards against a future dry-run failure mode rather
-			// than an existing one.
-			if !dry {
-				d.auditAppend("retag-block-error", httpx.Actor(r), map[string]any{
-					"template": templateName,
-					"status":   status,
-					"count":    len(changed),
-					"error":    err.Error()})
-			}
+			// There is deliberately NO !dry gate here, unlike the sibling arms. A
+			// dry run cannot reach this line: RetagBlock does its only fallible
+			// work — the PATCH — inside `if !dryRun` and returns a nil error on a
+			// dry run (provision/block.go:434-440), so `dry` is always false by the
+			// time err is non-nil. The gate that used to sit here read as an active
+			// control and was not one; no test could make it fire either way.
+			d.auditAppend("retag-block-error", httpx.Actor(r), map[string]any{
+				"template": templateName,
+				"status":   status,
+				"count":    len(changed),
+				"error":    err.Error()})
 			d.provErr(w, r, "/api/retag/block", err)
 			return
 		}
@@ -936,6 +952,15 @@ func (d *Deps) recoverStream(emit *sse.Emit, r *http.Request) {
 	if d.Audit != nil {
 		d.auditAppend("stream-aborted", httpx.Actor(r), map[string]any{"route": path})
 	}
+	// Both halves of this nil check are UNREACHABLE today and are kept only as
+	// defence, which this comment says out loud so it is not read as a live
+	// control: all five call sites pass &emit on a local, so the pointer is never
+	// nil, and each one returns early unless sse.Start reported ok — and Start
+	// returns a nil Emit only together with ok == false (sse/sse.go:29-33), so the
+	// closure is never nil either. It stays because this function runs while the
+	// stack is already unwinding, exactly like the d.Audit guard above: calling
+	// through a nil Emit here would panic inside a deferred recover and kill the
+	// process, which is the one outcome recoverStream exists to prevent.
 	if emit != nil && *emit != nil {
 		// Deliberately not the panic text: it can carry internal detail, and the
 		// operator's actionable fact is that the run stopped partway.

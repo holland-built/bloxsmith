@@ -297,6 +297,14 @@ func (d *Deps) ipamAddressDelete(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) editCreate(w http.ResponseWriter, r *http.Request, b map[string]any) {
 	resource := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/edit/"), "/")
 	res, ok := d.editFor(r).Resources()[resource]
+	// `res.Create == nil` is UNREACHABLE today — stated so it is not mistaken for
+	// a live control: all five entries in the dispatch table define a Create
+	// (edit/resources.go:455-464). It is kept rather than deleted because the
+	// table already contains the same shape one field over — address_block has no
+	// Update, which is what makes editUpdate's identical nil check a live one — so
+	// a create-less resource is a plausible next entry, and without this the call
+	// below would be a nil dereference (a 500 through recoverEdit) instead of the
+	// 404 the route promises.
 	if !ok || res.Create == nil {
 		d.json(w, r, 404, map[string]any{"ok": false, "error": "unknown resource: " + resource})
 		return
@@ -403,6 +411,14 @@ func (d *Deps) editDelete(w http.ResponseWriter, r *http.Request) {
 		// ever missing, the row omits it, and an absent field honestly means
 		// UNKNOWN. Rows written before this change have no already_gone at all
 		// and stay ambiguous forever — this fix is not retroactive.
+		//
+		// The `stated` arm is UNREACHABLE today and this says so rather than
+		// letting it read as a live control: edit.Client.Delete sets the field
+		// explicitly on BOTH of its ok:true returns (edit/resources.go:490+493),
+		// and this is the only ok:true shape that reaches here, so the assertion
+		// always succeeds. Kept because the only alternative is assigning the
+		// zero value unconditionally, which would state already_gone:false — a
+		// positive existence claim — for a builder that never made it.
 		detail := map[string]any{"id": objID}
 		if gone, stated := res["already_gone"].(bool); stated {
 			detail["already_gone"] = gone
