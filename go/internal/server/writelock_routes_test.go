@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"regexp"
 	"sort"
@@ -150,36 +151,56 @@ func TestEveryWriteRouteIsClassified(t *testing.T) {
 	}
 }
 
-// TestKnownDestructiveRoutesAreGated is the belt to the braces above. The list
-// test proves nothing was FORGOTTEN; this proves the classifier actually says
-// "gate it" for the specific routes whose whole reason for existing is to delete
-// live DNS zones, subnets and address blocks. A refactor that made
-// isTenantWrite() return false for everything would pass the test above (every
-// route would then be reported as unclassified — but a refactor that made
-// isNonTenantWrite return true for everything would pass it).
-func TestKnownDestructiveRoutesAreGated(t *testing.T) {
-	mustGate := []string{
-		"/api/teardown/site/stream",
-		"/api/teardown/seed-demo/stream",
-		"/api/teardown/block",
-		"/api/provision/stream",
-		"/api/provision/site/stream",
-		"/api/provision/seed-demo/stream",
-		"/api/provision/block",
-		"/api/retag/block",
-		"/api/selfservice/allocate",
-		"/api/dns/records",
-		"/api/dns/records/some-record-id",
-		"/api/ipam/addresses/some-address-id",
-		"/api/edit/dns_zone/some-id",
-		"/api/edit/", // empty id: must be gated, not fall through as a route miss
-		"/api/block-domain",
-		"/api/unblock-domain",
-		"/api/actions/some-action-id/status",
-	}
-	for _, p := range mustGate {
-		if !isTenantWrite(p) {
-			t.Errorf("%s changes data in the customer's tenant but isTenantWrite() says it does not — it would bypass the write lock entirely", p)
+// knownDestructiveRoutes are the routes whose entire reason for existing is to
+// change or destroy data in the customer's tenant, each paired with the verb it
+// is actually reached by — the five SSE streams are GETs because EventSource
+// cannot issue anything else, which is precisely why a verb-based gate would
+// miss them.
+//
+// Two tests consume this list and they are NOT redundant:
+// TestKnownDestructiveRoutesClassifiedAsTenantWrites asks the classifier, and
+// TestKnownDestructiveRoutesAreGated puts a real request through the real
+// server and requires it to come back refused.
+var knownDestructiveRoutes = []struct{ method, path string }{
+	{"GET", "/api/teardown/site/stream"},
+	{"GET", "/api/teardown/seed-demo/stream"},
+	{"POST", "/api/teardown/block"},
+	{"GET", "/api/provision/stream"},
+	{"GET", "/api/provision/site/stream"},
+	{"GET", "/api/provision/seed-demo/stream"},
+	{"POST", "/api/provision/block"},
+	{"POST", "/api/retag/block"},
+	{"POST", "/api/selfservice/allocate"},
+	{"POST", "/api/dns/records"},
+	{"DELETE", "/api/dns/records/some-record-id"},
+	{"DELETE", "/api/ipam/addresses/some-address-id"},
+	{"DELETE", "/api/edit/dns_zone/some-id"},
+	// Empty id: must be gated, not fall through as a route miss.
+	{"POST", "/api/edit/"},
+	{"POST", "/api/block-domain"},
+	{"POST", "/api/unblock-domain"},
+	{"POST", "/api/actions/some-action-id/status"},
+}
+
+// TestKnownDestructiveRoutesClassifiedAsTenantWrites is the belt to the braces
+// above, and it is a PURE CLASSIFIER test — the name says so on purpose. The
+// list test proves nothing was FORGOTTEN; this proves isTenantWrite() actually
+// says "gate it" for the routes that delete live DNS zones, subnets and address
+// blocks. A refactor that made isTenantWrite() return false for everything would
+// pass the test above (every route would then be reported as unclassified — but
+// a refactor that made isNonTenantWrite return true for everything would pass
+// it).
+//
+// What it CANNOT see, because it calls isTenantWrite() directly and never builds
+// a request: the middleware being unwired from server.New's chain. Deleting
+// `d.withWriteLock` from server.go leaves every assertion here green, because the
+// classifier still classifies — it is simply no longer consulted. That is what
+// TestKnownDestructiveRoutesAreGated below exists for, and why this test carries
+// a name that claims classification and not gating.
+func TestKnownDestructiveRoutesClassifiedAsTenantWrites(t *testing.T) {
+	for _, tc := range knownDestructiveRoutes {
+		if !isTenantWrite(tc.path) {
+			t.Errorf("%s changes data in the customer's tenant but isTenantWrite() says it does not — it would bypass the write lock entirely", tc.path)
 		}
 	}
 
@@ -203,6 +224,52 @@ func TestKnownDestructiveRoutesAreGated(t *testing.T) {
 		if isTenantWrite(p) {
 			t.Errorf("%s does not change the customer's tenant but isTenantWrite() says it does — the write lock would refuse a read or a local action", p)
 		}
+	}
+}
+
+// TestKnownDestructiveRoutesAreGated keeps the promise its name makes: each
+// route is sent through the REAL handler server.New builds — reqlog, CSRF write
+// guard, vault gate, tenant pin and write lock, in the order production runs
+// them — and must come back refused BY THE WRITE LOCK, having reached no
+// upstream.
+//
+// Asking the classifier is not the same question. This test was previously
+// classifier-only, and removing `d.withWriteLock` from server.New's chain
+// entirely left it passing: nothing in it ever constructed a request, so nothing
+// in it could notice that the gate was gone. Verified by mutation both ways —
+// with the lock unwired, every case here fails with the handler's own answer
+// instead of a refusal.
+//
+// The refusal REASON is asserted, not merely the 403. A 403 from the CSRF guard
+// ("forbidden — write not authorized") would otherwise stand in for a write-lock
+// refusal and this test would go quietly vacuous a second time.
+func TestKnownDestructiveRoutesAreGated(t *testing.T) {
+	h, _, hits := lockedTestServer(t)
+
+	for _, tc := range knownDestructiveRoutes {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			before := *hits
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, lockReq(tc.method, tc.path))
+
+			if rr.Code != http.StatusForbidden {
+				t.Fatalf("%s %s changes data in the customer's tenant, but the server answered %d instead of refusing it — "+
+					"the per-tenant write lock is not gating this route: %s",
+					tc.method, tc.path, rr.Code, rr.Body.String())
+			}
+			b := bodyOf(t, rr)
+			if reason, _ := b["reason"].(string); reason != "tenant-read-only" {
+				t.Fatalf("%s %s was refused, but not by the write lock (reason %q) — "+
+					"some other gate answered first, so this case proves nothing about the lock: %s",
+					tc.method, tc.path, reason, rr.Body.String())
+			}
+			// Refusing AFTER acting would be worse than not refusing: the 403
+			// would read like the change never happened.
+			if *hits != before {
+				t.Errorf("%s %s was refused but still reached the upstream (%d -> %d calls)",
+					tc.method, tc.path, before, *hits)
+			}
+		})
 	}
 }
 

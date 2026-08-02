@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"bloxsmith/internal/mcp"
@@ -44,16 +45,106 @@ func TestUpdateActionValidatesStatus(t *testing.T) {
 	}
 }
 
+// mcpCall is one tools/call as it actually arrived over the wire: the tool
+// name AND the arguments object. Recording only the name (what this double
+// used to do) makes every "did we send the right thing?" assertion
+// impossible, so a test can pass while the code sends garbage to the wrong
+// endpoint.
+type mcpCall struct {
+	Name string
+	Args map[string]any
+}
+
+// arg returns a top-level string argument ("" when absent or not a string).
+func (c mcpCall) arg(key string) string {
+	s, _ := c.Args[key].(string)
+	return s
+}
+
+// argsJSON re-marshals the whole arguments object, for asserting a value
+// nested anywhere inside it (e.g. the domain buried in body.items_described).
+func (c mcpCall) argsJSON() string {
+	b, err := json.Marshal(c.Args)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// bodyJSON is the "body" argument alone, re-marshalled. It must be asserted
+// separately from the rest of the arguments: task_description also happens to
+// mention the domain, so a whole-arguments substring check would happily pass
+// on a completely garbage body.
+func (c mcpCall) bodyJSON() string {
+	b, err := json.Marshal(c.Args["body"])
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// callRecorder is the shared wire log for this package's MCP fakes: every
+// tools/call, in order, with its arguments. fakeMCP embeds it, and
+// newSecurityTestService's fake uses one, so both can assert what actually
+// went upstream instead of merely that something was called.
+type callRecorder struct {
+	mu    sync.Mutex
+	calls []mcpCall
+}
+
+func (r *callRecorder) record(name string, args map[string]any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, mcpCall{Name: name, Args: args})
+}
+
+// toolNames lists the recorded tool names in call order.
+func (r *callRecorder) toolNames() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	names := make([]string, len(r.calls))
+	for i, c := range r.calls {
+		names[i] = c.Name
+	}
+	return names
+}
+
+// callsTo returns every recorded call to the named tool, in order.
+func (r *callRecorder) callsTo(name string) []mcpCall {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []mcpCall
+	for _, c := range r.calls {
+		if c.Name == name {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// onlyCallTo returns the single recorded call to the named tool, failing the
+// test when there is not exactly one. "the write never happened" and "it
+// happened twice" are both defects a wire assertion has to catch.
+func (r *callRecorder) onlyCallTo(t *testing.T, name string) mcpCall {
+	t.Helper()
+	got := r.callsTo(name)
+	if len(got) != 1 {
+		t.Fatalf("expected exactly 1 upstream call to %q, got %d (all calls: %v)", name, len(got), r.toolNames())
+	}
+	return got[0]
+}
+
 // rpcHandler builds a fake MCP streamable-HTTP endpoint. get/update act as the
 // two tools UpdateAction depends on; list serves paginated iq-actions_list_actions
-// responses keyed by offset.
+// responses keyed by offset. Every call is recorded with its arguments via the
+// embedded callRecorder.
 type fakeMCP struct {
+	callRecorder
 	listPages     map[float64]map[string]any // offset -> response body
 	getBody       map[string]any
 	updateBody    map[string]any
 	updateRawText string // when set, overrides updateBody with this literal (possibly-invalid) text
 	searchRawText string // raw text served for infoblox-portal_network_entity_search
-	calledTools   []string
 }
 
 func (f *fakeMCP) handler(t *testing.T) http.HandlerFunc {
@@ -87,7 +178,7 @@ func (f *fakeMCP) handler(t *testing.T) http.HandlerFunc {
 			t.Fatalf("unexpected method %q", req.Method)
 		}
 
-		f.calledTools = append(f.calledTools, req.Params.Name)
+		f.record(req.Params.Name, req.Params.Arguments)
 
 		var text []byte
 		switch req.Params.Name {
@@ -122,6 +213,32 @@ func newTestService(t *testing.T, f *fakeMCP) *Service {
 	return &Service{Mcp: client}
 }
 
+// assertUpdateWire pins what actually reached iq-actions_update_action. The
+// result map's "id"/"new_status" are built from the caller's own arguments, so
+// they stay correct even when the code sends something else entirely
+// upstream — only the recorded call proves the write carried the caller's id
+// and the caller's status.
+func assertUpdateWire(t *testing.T, f *fakeMCP, wantID, wantStatus string) {
+	t.Helper()
+	c := f.onlyCallTo(t, "iq-actions_update_action")
+	if got := c.arg("id"); got != wantID {
+		t.Fatalf("iq-actions_update_action sent id %q, want the caller's id %q (args: %s)", got, wantID, c.argsJSON())
+	}
+	if got := c.arg("status"); got != wantStatus {
+		t.Fatalf("iq-actions_update_action sent status %q, want the caller's status %q (args: %s)", got, wantStatus, c.argsJSON())
+	}
+}
+
+// assertGetActionWire pins the pre-read: old_status only means anything if the
+// get was for the caller's own action.
+func assertGetActionWire(t *testing.T, f *fakeMCP, wantID string) {
+	t.Helper()
+	c := f.onlyCallTo(t, "iq-actions_get_action")
+	if got := c.arg("id"); got != wantID {
+		t.Fatalf("iq-actions_get_action sent id %q, want the caller's id %q (args: %s)", got, wantID, c.argsJSON())
+	}
+}
+
 // TestUpdateActionCapturesOldStatus verifies the get-before-update sequencing:
 // old_status comes from iq-actions_get_action, new_status from the caller.
 func TestUpdateActionCapturesOldStatus(t *testing.T) {
@@ -143,6 +260,8 @@ func TestUpdateActionCapturesOldStatus(t *testing.T) {
 	if res["ok"] != true {
 		t.Fatalf("ok: got %v want true", res["ok"])
 	}
+	assertGetActionWire(t, f, "abc")
+	assertUpdateWire(t, f, "abc", "resolved")
 }
 
 // TestUpdateActionDegradesOldStatusOnGetFailure: when the pre-read fails, the
@@ -160,6 +279,10 @@ func TestUpdateActionDegradesOldStatusOnGetFailure(t *testing.T) {
 	if res["old_status"] != "unknown" {
 		t.Fatalf("old_status: got %v want unknown", res["old_status"])
 	}
+	// A failed pre-read must not change WHAT gets written: the write still
+	// has to carry the caller's own id and status.
+	assertGetActionWire(t, f, "missing")
+	assertUpdateWire(t, f, "missing", "active")
 }
 
 // TestActionsAsyncPagesUntilHasMoreFalse locks the truncation fix: two pages
@@ -214,8 +337,8 @@ func TestUpdateActionRejectsEmptyID(t *testing.T) {
 		if !strings.Contains(err.Error(), "id is required") {
 			t.Fatalf("id %q: expected \"id is required\" error, got %q", id, err.Error())
 		}
-		if len(f.calledTools) != 0 {
-			t.Fatalf("id %q: expected no upstream calls, got %v", id, f.calledTools)
+		if names := f.toolNames(); len(names) != 0 {
+			t.Fatalf("id %q: expected no upstream calls, got %v", id, names)
 		}
 	}
 }
@@ -243,6 +366,10 @@ func TestUpdateActionUnparseableResponseIsNotSuccess(t *testing.T) {
 	if res["old_status"] != "active" || res["new_status"] != "resolved" {
 		t.Fatalf("old/new status should still be reported: got %v/%v", res["old_status"], res["new_status"])
 	}
+	// The reported old/new status above are echoes of the caller's own
+	// arguments; only this proves the unparseable reply came from a write
+	// that actually carried them.
+	assertUpdateWire(t, f, "abc", "resolved")
 }
 
 // TestUpdateActionSuccessFieldTrueYieldsOk locks the real observed success
@@ -267,6 +394,7 @@ func TestUpdateActionSuccessFieldTrueYieldsOk(t *testing.T) {
 	if ok, _ := res["ok"].(bool); !ok {
 		t.Fatalf("ok: got %v, want true for success:true payload", res["ok"])
 	}
+	assertUpdateWire(t, f, "427de4b8-9b32-4ce8-9492-ad88a70662cd", "resolved")
 }
 
 // TestUpdateActionForbiddenIsNotSuccess is the core fix under test: an
@@ -300,6 +428,9 @@ func TestUpdateActionForbiddenIsNotSuccess(t *testing.T) {
 	if res["old_status"] != "active" || res["new_status"] != "resolved" {
 		t.Fatalf("old/new status should still be reported: got %v/%v", res["old_status"], res["new_status"])
 	}
+	// A 403 is only evidence about THIS action's write if the write carried
+	// this action's id and status.
+	assertUpdateWire(t, f, "abc", "resolved")
 }
 
 // TestUpdateActionUnrecognisedShapeFailsClosed verifies the fail-closed
@@ -318,4 +449,5 @@ func TestUpdateActionUnrecognisedShapeFailsClosed(t *testing.T) {
 	if ok, _ := res["ok"].(bool); ok {
 		t.Fatalf("ok: got true, want false for an unrecognised payload shape")
 	}
+	assertUpdateWire(t, f, "abc", "resolved")
 }
