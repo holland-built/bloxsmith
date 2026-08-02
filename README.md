@@ -26,7 +26,11 @@
 
 ## Install
 
-**Docker** (recommended) — one command, then open http://localhost:8080:
+Pick your platform, copy the whole block, paste it into a terminal. No block needs
+you to run its lines one at a time. The script installers ask one yes/no question
+at the end (whether to start Bloxsmith at login) — answer it and you're done.
+
+### Docker — any OS
 
 ```bash
 docker run -d --name bloxsmith \
@@ -35,41 +39,63 @@ docker run -d --name bloxsmith \
   ghcr.io/holland-built/bloxsmith:latest
 ```
 
-First run: pick a passphrase, then paste your [Infoblox API key](#get-your-infoblox-api-key). Tenant keys live in the encrypted `noc-vault` volume and survive restarts and updates.
+### macOS
 
-Want the in-app update banner and an easy-to-pin image tag for manual rollback? Use compose instead — no clone needed:
+```bash
+brew install holland-built/tap/bloxsmith
+bloxsmith
+```
+
+No Homebrew? Use the **macOS / Linux script** below instead.
+
+### Windows
+
+Open **Command Prompt** (press <kbd>Win</kbd>, type `cmd`, hit Enter), then paste:
+
+```bat
+powershell -Command "iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1"
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+The same two lines also work in PowerShell. `powershell -Command` is what makes
+`iwr` run from `cmd.exe`.
+
+### macOS / Linux script
+
+```bash
+curl --proto '=https' --tlsv1.2 -fsSLo install.sh https://github.com/holland-built/bloxsmith/releases/latest/download/install.sh
+sh install.sh
+```
+
+**Then open <http://localhost:8080>.** Pick a passphrase, paste your
+[Infoblox API key](#get-your-infoblox-api-key). Keys are encrypted at rest and
+survive restarts and updates.
+
+Docker keeps running on its own. The macOS/Linux `bloxsmith` command holds the
+terminal open — close it with <kbd>Ctrl</kbd>+<kbd>C</kbd>, or run
+`bloxsmith service install` once to start it automatically at login instead.
+
+<details>
+<summary><b>Read the installer before running it · Docker Compose</b></summary>
+
+**Inspect first.** The installers check a SHA-256 checksum and an Ed25519 signature
+and refuse to install if either fails — but you should still read what you run. Paste
+the *first* line of the block above on its own, then:
+
+```bash
+less install.sh        # macOS / Linux — press q to quit
+```
+```bat
+notepad install.ps1
+```
+
+…and paste the second line once you're happy.
+
+**Docker Compose** — gives you the in-app update banner and an easy tag to pin:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/holland-built/bloxsmith/master/docker-compose.yml -o docker-compose.yml
 docker compose up -d
-```
-
-<details>
-<summary><b>Other platforms — macOS/Linux script · Windows · Homebrew</b></summary>
-
-**macOS / Linux** — inspect, then install; it opens the dashboard for you:
-
-```bash
-curl --proto '=https' --tlsv1.2 -fsSLo install.sh \
-  https://github.com/holland-built/bloxsmith/releases/latest/download/install.sh
-less install.sh   # read it before running
-sh install.sh
-```
-
-**Windows** — paste into **Command Prompt or PowerShell** (each `powershell` line works from either); it downloads, you inspect, then it installs and opens the dashboard:
-
-```bat
-powershell -Command "iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1"
-notepad install.ps1
-powershell -ExecutionPolicy Bypass -File .\install.ps1
-```
-
-Line 1 downloads it, Notepad opens it to read — close Notepad, then line 3 installs. Prefixing with `powershell -Command` is what makes `iwr` work from cmd.exe.
-
-**Homebrew** (macOS / Linux):
-
-```bash
-brew install holland-built/tap/bloxsmith
 ```
 
 Full options and deployment guidance are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
@@ -109,7 +135,7 @@ Port 8080 is the default for every install method. If it's already taken (the Do
 > [!WARNING]
 > LAN mode has no login. Anyone on the network can reach the dashboard and query your Infoblox tenant. Keep the vault **locked** when not presenting, or use a secure proxy.
 
-Binding `0.0.0.0` (Docker) or `BIND=0.0.0.0` (compose) instead of `127.0.0.1` exposes the dashboard on the LAN with no auth in front of it. Pin a release with a tag (e.g. `:v2.0.0`) instead of `:latest`. Tenant keys live AES-encrypted in the `noc-vault` volume and survive updates, restarts, and container recreation. With auto-unlock enabled the passphrase necessarily lives on the same machine, so that encryption protects a stolen disk or backup — not a host someone already has a process on. [What it is worth, exactly](docs/DEPLOYMENT.md#what-aes-encrypted-vault-is-worth-exactly).
+Binding `0.0.0.0` (Docker) or `BIND=0.0.0.0` (compose) instead of `127.0.0.1` exposes the dashboard on the LAN with no auth in front of it. Pinning an exact version instead of `:latest` freezes the deploy — and opts you out of updates, including the **Update now** button ([how to pin](docs/DEPLOYMENT.md#pinning-a-version)). Tenant keys live AES-encrypted in the `noc-vault` volume and survive updates, restarts, and container recreation. With auto-unlock enabled the passphrase necessarily lives on the same machine, so that encryption protects a stolen disk or backup — not a host someone already has a process on. [What it is worth, exactly](docs/DEPLOYMENT.md#what-aes-encrypted-vault-is-worth-exactly).
 
 Full compose / secure-proxy / Customer-install steps → [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
