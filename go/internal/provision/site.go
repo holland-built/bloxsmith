@@ -307,6 +307,21 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 	if pyStr(subnet["address"]) == "" || sid == "" {
 		return nil, perr("No free /%d subnet available in block for %s", cidr, sdef.Name)
 	}
+	// Recorded the moment the subnet EXISTS upstream, before the tagging PATCH —
+	// same rule as createDHCPRange and createSubnets' reverse zones, and the same
+	// bug provisionHosts had. The PATCH below can fail, and when it does this
+	// function returns an error saying tagging is "needed for teardown". Recording
+	// afterwards meant that subnet was simultaneously untagged (teardown cannot
+	// find it by tag) and unrecorded (rollback cannot find it by id) — nothing
+	// could ever find it again. The values come from the create response rather
+	// than the PATCH echo: `sid` is already validated non-empty here, and the
+	// allocated address/cidr are what the create returned.
+	scidr := cidr
+	if c, ok := intCoerce(subnet["cidr"]); ok {
+		scidr = c
+	}
+	appendTo(result, "subnets", M{"address": fmt.Sprintf("%s/%d", pyStr(subnet["address"]), scidr),
+		"name": sdef.Name, "id": sid})
 	patchBody := M{"name": sdef.Name,
 		"comment": fmt.Sprintf("%s site - %s network", capitalize(p.cfg.Site), sdef.Purpose), "tags": tags}
 	presp, pstatus, _ := p.e.Rest.Write("PATCH", "/api/ddi/v1/"+sid, patchBody, nil)
@@ -317,12 +332,6 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 		subnet = pr
 	}
 	p.emit(M{"step": fmt.Sprintf("  Created subnet id=%s", sid)})
-	scidr := cidr
-	if c, ok := intCoerce(subnet["cidr"]); ok {
-		scidr = c
-	}
-	appendTo(result, "subnets", M{"address": fmt.Sprintf("%s/%d", pyStr(subnet["address"]), scidr),
-		"name": sdef.Name, "id": pyStr(subnet["id"])})
 	return subnet, nil
 }
 
@@ -602,9 +611,18 @@ func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 
 // rollback is SiteProvisioner._rollback (server.py:1866): reverse-order compensating
 // deletes, tolerating failed deletes into a residual list.
-func (p *SiteProvisioner) rollback(partial M) {
+//
+// It returns a report of what it did — {outcome, attempted, deleted, residual} —
+// because a residual list alone cannot tell "8 objects were deleted successfully"
+// apart from "nothing was ever created": both produce an empty list. Cardinality
+// is not a status, so the outcome word is explicit and is always present.
+//
+// It still writes partial["rollback_residual"] as before; that write is the
+// in-place side effect existing callers and tests read.
+func (p *SiteProvisioner) rollback(partial M) M {
 	p.emit(M{"step": "Rolling back partial site provisioning…"})
 	residual := []any{}
+	attempted, deleted := 0, 0
 
 	del := func(objID, kind, label string) {
 		// None of these three are ids. "" is a create whose response carried no
@@ -618,11 +636,14 @@ func (p *SiteProvisioner) rollback(partial M) {
 		if objID == "" || objID == "(dry-run)" || objID == "(exists)" {
 			return
 		}
+		attempted++
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+objID, nil, nil)
 		if !(status >= 200 && status < 300) {
 			p.emit(M{"step": fmt.Sprintf("  Rollback: failed to delete %s id=%s (status=%d)", kind, objID, status)})
 			residual = append(residual, M{"kind": kind, "id": objID, "label": label, "status": status})
+			return
 		}
+		deleted++
 	}
 
 	hosts := getList(partial, "hosts")
@@ -666,16 +687,55 @@ func (p *SiteProvisioner) rollback(partial M) {
 	subnets := getList(partial, "subnets")
 	for i := len(subnets) - 1; i >= 0; i-- {
 		s := asMap(subnets[i])
-		del(pyStr(s["id"]), "subnet", fmt.Sprintf("%s/%s", pyStr(s["address"]), pyStr(s["cidr"])))
+		// The label is s["address"] alone: createSubnet records it already
+		// carrying the prefix ("10.10.1.0/24"), and these entries have no
+		// "cidr" key at all. Appending pyStr(s["cidr"]) rendered every subnet
+		// as "10.10.1.0/24/" — harmless while the residual was unreachable,
+		// but it is now read by an operator and written into the signed audit
+		// log, where it cannot be corrected later.
+		del(pyStr(s["id"]), "subnet", pyStr(s["address"]))
 	}
 
 	partial["rollback_residual"] = residual
 	if len(residual) > 0 {
 		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) could not be deleted", len(residual))})
 	}
+
+	// "not_needed" is the honest word for a rollback that ran and found nothing
+	// to undo (the run failed before creating anything). The old design wrote an
+	// empty residual list for that case, indistinguishable from a rollback that
+	// deleted everything successfully — and wrote it into an append-only, signed
+	// audit log that can never be amended.
+	outcome := "not_needed"
+	switch {
+	case attempted == 0:
+		outcome = "not_needed"
+	case deleted == attempted:
+		outcome = "complete"
+	default:
+		outcome = "incomplete"
+	}
+	return M{"outcome": outcome, "attempted": attempted, "deleted": deleted, "residual": residual}
 }
 
 // Provision is SiteProvisioner.provision (server.py:1894).
+//
+// On success it returns the full result map and a nil error, unchanged.
+//
+// On FAILURE it returns (M{"rollback": report}, err) — both non-nil, and the map
+// carries the rollback report and NOTHING else. The internal `result` map is
+// deliberately not exported on this path: after rollback it is a mixed bag, not a
+// description of live state. `block_id` names a PRE-EXISTING block rollback never
+// deletes; a reused forward or reverse zone and any "(exists)" host are live and
+// were never ours; the subnets, ranges and hosts this run created are tombstones
+// that rollback has just deleted. Returning it would state things that are not
+// true, and the next caller would render deleted objects as live ones.
+//
+// The report is always present on the failure path — {outcome, attempted,
+// deleted, residual} — so no meaning is ever carried by a missing key. A record
+// with no "rollback" key is a legacy entry, which is honest and permanently
+// distinguishable. On a dry-run failure the outcome is "skipped_dry_run":
+// rollback deliberately does not run, because a preview created nothing.
 func (p *SiteProvisioner) Provision() (M, error) {
 	result := M{"block_id": "", "block_address": "", "subnets": []any{}, "dhcp_ranges": []any{},
 		"dns_zone_id": "", "dns_zone_fqdn": "", "reverse_zones": []any{}, "hosts": []any{},
@@ -752,11 +812,12 @@ func (p *SiteProvisioner) Provision() (M, error) {
 	}()
 
 	if runErr != nil {
+		report := M{"outcome": "skipped_dry_run", "attempted": 0, "deleted": 0, "residual": []any{}}
 		if !p.cfg.DryRun {
 			p.emit(M{"step": fmt.Sprintf("Provisioning failed (%s) — initiating rollback", runErr.Error())})
-			p.rollback(result)
+			report = p.rollback(result)
 		}
-		return nil, runErr
+		return M{"rollback": report}, runErr
 	}
 	return result, nil
 }

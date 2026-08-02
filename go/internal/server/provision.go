@@ -194,14 +194,36 @@ func (d *Deps) provisionSiteStream(w http.ResponseWriter, r *http.Request) {
 	emit(map[string]any{"step": fmt.Sprintf("Provisioning site: %s", cfg.Site)})
 	result, err := d.prov(r).NewSiteProvisioner(cfg, emitter(emit)).Provision()
 	if err != nil {
+		// Provision's failure value carries the rollback report
+		// ({outcome, attempted, deleted, residual}) and nothing else. Both the
+		// operator's error frame and the permanent audit record get the SAME
+		// complete report: the stream already says "N object(s) could not be
+		// deleted" in prose, and the diagnosis' whole point is that a count is
+		// not enough to go clean up with.
+		//
+		// Copied through AS-IS. The report is already the only shape
+		// canonicalJSON accepts (map[string]any, int counts, []any residual);
+		// rebuilding it as []M / []map[string]any / a struct hits encode's
+		// default branch, and auditAppend only LOGS that error — the HTTP
+		// response would still succeed with nothing recorded.
+		//
+		// Presence check, never length: the report is unconditional on the
+		// failure path, and an "outcome":"complete" report with an empty
+		// residual is a load-bearing record ("rollback ran and deleted
+		// everything") that a len() guard would erase into silence.
+		detail := map[string]any{"template": name, "error": err.Error()}
+		frame := map[string]any{"error": err.Error()}
+		if rb, ok := result["rollback"]; ok {
+			detail["rollback"] = rb
+			frame["rollback"] = rb
+		}
 		if !cfg.DryRun {
-			d.auditAppend("provision-site-error", httpx.Actor(r),
-				map[string]any{"template": name, "error": err.Error()})
+			d.auditAppend("provision-site-error", httpx.Actor(r), detail)
 		}
 		if !provision.IsError(err) {
 			d.logExc("/api/provision/site/stream", err)
 		}
-		emit(map[string]any{"error": err.Error()})
+		emit(frame)
 		return
 	}
 	emit(map[string]any{"done": true, "result": result})
@@ -288,7 +310,31 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 			result, err := d.prov(r).NewSiteProvisioner(cfg, forward).Provision()
 			if err != nil {
 				summaryAppend(summary, "failed", rel)
-				emit(map[string]any{"template": rel, "error": err.Error()})
+				// Same copy-through as the single-site stream: the report as-is,
+				// selected by presence (never length), into both the frame and a
+				// per-template audit entry.
+				//
+				// This audit entry is NEW: until now a seed-demo run that
+				// stranded objects left no per-template record at all, only the
+				// aggregate "provision-seed-demo" entry with its succeeded/
+				// failed/skipped COUNTS (emitted below, and still emitted — these
+				// are additive to it, not a duplicate of it). A count cannot name
+				// the orphans.
+				//
+				// Deliberately scoped to THIS branch. The LoadTemplate and
+				// TemplateToSiteConfig failures above fail before a single
+				// upstream object is created, so there is no orphan to record and
+				// nothing was done to the tenant — they stay exactly as they are.
+				detail := map[string]any{"template": rel, "error": err.Error()}
+				frame := map[string]any{"template": rel, "error": err.Error()}
+				if rb, ok := result["rollback"]; ok {
+					detail["rollback"] = rb
+					frame["rollback"] = rb
+				}
+				if !dry {
+					d.auditAppend("provision-site-error", httpx.Actor(r), detail)
+				}
+				emit(frame)
 				return
 			}
 			if b, _ := result["skipped"].(bool); b {
@@ -305,8 +351,13 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 
 	emit(terminalFrame(summary))
 	if !dry {
+		// regions goes in as []any, NOT the []string parseRegions returns:
+		// canonicalJSON's type switch is closed and []string falls through to its
+		// "unsupported type" default, which auditAppend only LOGS. Passing the
+		// slice straight through made this whole entry vanish while the request
+		// still returned 200.
 		d.auditAppend("provision-seed-demo", httpx.Actor(r), map[string]any{
-			"regions":   regions,
+			"regions":   anySlice(regions),
 			"succeeded": lenOf(summary, "succeeded"),
 			"failed":    lenOf(summary, "failed"),
 			"skipped":   lenOf(summary, "skipped")})
@@ -455,8 +506,12 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 
 	emit(terminalFrame(summary))
 	if !dry {
+		// Same conversion, same reason as provisionSeedDemoStream: canonicalJSON
+		// accepts []any and rejects []string, and auditAppend swallows the
+		// rejection into a log line. This is a destructive bulk teardown, so the
+		// dropped entry was the worse of the two.
 		d.auditAppend("teardown-seed-demo", httpx.Actor(r), map[string]any{
-			"regions":   regions,
+			"regions":   anySlice(regions),
 			"succeeded": lenOf(summary, "succeeded"),
 			"failed":    lenOf(summary, "failed"),
 			"skipped":   lenOf(summary, "skipped")})
@@ -509,7 +564,29 @@ func (d *Deps) provisionBlock(w http.ResponseWriter, r *http.Request, b map[stri
 	}
 	result, err := d.prov(r).NewBlockProvisioner(cfg, noopEmit).Provision(false)
 	if err != nil {
-		d.provErr(w, r, "/api/provision/block", err)
+		// provErr's IsError split is INLINED for this one route, because provErr
+		// writes the 400 body itself and this body must gain the rollback report.
+		// provErr stays byte-identical and every other caller (including the two
+		// branches above, which fail before any block is created and so have no
+		// orphan to report) keeps using it.
+		//
+		// Report copied as-is and selected by presence, never length — see the
+		// long note in provisionSiteStream for why both of those matter.
+		detail := map[string]any{"template": name, "error": err.Error()}
+		body := map[string]any{"error": err.Error()}
+		if rb, ok := result["rollback"]; ok {
+			detail["rollback"] = rb
+			body["rollback"] = rb
+		}
+		if !cfg.DryRun {
+			d.auditAppend("provision-block-error", httpx.Actor(r), detail)
+		}
+		if provision.IsError(err) {
+			d.json(w, r, 400, body)
+			return
+		}
+		d.logExc("/api/provision/block", err)
+		d.json(w, r, 500, map[string]any{"error": "internal error"})
 		return
 	}
 	d.json(w, r, 200, map[string]any{"blocks_created": result["blocks_created"]})
@@ -688,6 +765,20 @@ func parseRegions(raw string) []string {
 	}
 	if len(out) == 0 {
 		out = []string{"amer", "emea", "apac"}
+	}
+	return out
+}
+
+// anySlice widens a []string for the audit boundary. audit.canonicalJSON has a
+// closed type switch (nil/bool/string/json.Number/float64/int/int64/
+// map[string]any/[]any) and errors on anything else, and auditAppend only logs
+// that error — so a []string in a detail map silently costs the whole entry.
+// parseRegions keeps returning []string for its other callers; the widening
+// happens here, at the only boundary that cares.
+func anySlice(s []string) []any {
+	out := make([]any, len(s))
+	for i, v := range s {
+		out[i] = v
 	}
 	return out
 }
