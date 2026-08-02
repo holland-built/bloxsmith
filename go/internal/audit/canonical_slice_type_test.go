@@ -21,9 +21,12 @@ import (
 // (which passed parseRegions' []string straight through) went unrecorded from
 // the day they were written.
 //
-// So: widen to []any at the audit boundary. This test pins both halves of that
-// rule so the next person who adds a slice to a detail map finds the answer
-// here instead of in a silent gap in the log.
+// So: widen to []any at the audit boundary. Append now does that for every
+// caller (widen.go), which is what makes the closed switch below safe to rely
+// on rather than a trap — but the switch staying closed is the reason widen can
+// refuse a struct honestly instead of inventing a rendering for it. This test
+// pins both halves: the rejection that keeps unrepresentable values out, and
+// the []any encoding that widening must produce.
 func TestCanonicalJSONRejectsStringSliceAcceptsAnySlice(t *testing.T) {
 	regions := []string{"amer", "emea"}
 

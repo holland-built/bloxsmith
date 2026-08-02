@@ -58,6 +58,58 @@ type Log struct {
 	// "cannot". An offline check that could reseal would let the act of verifying
 	// launder a truncated chain into a clean one.
 	readOnly bool
+
+	// appendFailures counts entries Append refused or failed to write, and
+	// lastFailure names the most recent one. Both are guarded by mu.
+	//
+	// Every caller discards Append's error into a log line, so before this the
+	// only trace of an unrecorded event was one Printf nobody reads. A count the
+	// process can report turns "the audit log looks quiet" into a question the
+	// operator can actually answer: quiet because nothing happened, or quiet
+	// because n writes were refused. Exposed through AppendHealth.
+	appendFailures int
+	lastFailure    *appendFailure
+}
+
+// appendFailure is the record of one entry that never reached disk.
+type appendFailure struct {
+	event string
+	actor string
+	err   string
+	ts    float64
+}
+
+// recordAppendFailure counts a failed append and remembers it, then hands the
+// error straight back so call sites stay one line. The caller MUST already hold
+// l.mu — every use is inside Append, which holds it for its whole body.
+func (l *Log) recordAppendFailure(event, actor string, err error) error {
+	l.appendFailures++
+	l.lastFailure = &appendFailure{event: event, actor: actor, err: err.Error(), ts: l.now()}
+	return err
+}
+
+// AppendHealth reports what the audit log could not record.
+//
+//	{"append_failures": 0}                            -> nothing has failed
+//	{"append_failures": 2, "last_append_failure": {…}} -> 2 failed, here is the last
+//
+// last_append_failure is ABSENT when nothing has failed, rather than present
+// with empty strings and a zero ts. A zero-value placeholder would make a
+// healthy log and a log that dropped an entry at time zero render identically
+// in any consumer that only checks whether the key exists.
+func (l *Log) AppendHealth() map[string]any {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	h := map[string]any{"append_failures": l.appendFailures}
+	if l.lastFailure != nil {
+		h["last_append_failure"] = map[string]any{
+			"event": l.lastFailure.event,
+			"actor": l.lastFailure.actor,
+			"error": l.lastFailure.err,
+			"ts":    l.lastFailure.ts,
+		}
+	}
+	return h
 }
 
 // OpenReadOnly binds a Log for verification ONLY, with two guarantees the normal
@@ -232,12 +284,12 @@ func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any
 	if err != nil {
 		wrapped := fmt.Errorf("audit: cannot append, chain unreadable: %w", err)
 		log.Printf("[audit] AUDIT LOGGING STOPPED: %v (event %q by %q was NOT recorded)", wrapped, event, actor)
-		return nil, wrapped
+		return nil, l.recordAppendFailure(event, actor, wrapped)
 	}
 	if skipped > 0 {
 		wrapped := fmt.Errorf("audit: cannot append, chain read dropped %d line(s); prev hash cannot be trusted", skipped)
 		log.Printf("[audit] AUDIT LOGGING STOPPED: %v (event %q by %q was NOT recorded)", wrapped, event, actor)
-		return nil, wrapped
+		return nil, l.recordAppendFailure(event, actor, wrapped)
 	}
 	prev := zeroHash
 	if n := len(entries); n > 0 {
@@ -247,7 +299,10 @@ func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any
 	}
 	d := map[string]any{}
 	for k, v := range detail {
-		d[k] = v
+		// widen, not v: canonicalJSON's encoder is a closed type switch, and a
+		// detail value outside it (a []string, a map[string]string) used to cost
+		// the operator the whole entry. See widen.go.
+		d[k] = widen(v)
 	}
 	d["image_digest"] = l.imageDigest
 	d["instance_id"] = l.instanceID
@@ -275,7 +330,7 @@ func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any
 	}
 	h, err := l.entryHash(e)
 	if err != nil {
-		return nil, err
+		return nil, l.recordAppendFailure(event, actor, err)
 	}
 	e["hash"] = h
 	if l.key != nil {
@@ -284,18 +339,18 @@ func (l *Log) Append(event, actor string, detail map[string]any) (map[string]any
 
 	line, err := canonicalJSON(e)
 	if err != nil {
-		return nil, err
+		return nil, l.recordAppendFailure(event, actor, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(l.path), 0o755); err != nil {
-		return nil, err
+		return nil, l.recordAppendFailure(event, actor, err)
 	}
 	f, err := os.OpenFile(l.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
-		return nil, err
+		return nil, l.recordAppendFailure(event, actor, err)
 	}
 	defer f.Close()
 	if _, err := f.Write(append(line, '\n')); err != nil {
-		return nil, err
+		return nil, l.recordAppendFailure(event, actor, err)
 	}
 
 	// Reseal. A failure here is logged but does not fail the append: the entry

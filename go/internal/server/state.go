@@ -61,7 +61,7 @@ func (d *Deps) auditLog(w http.ResponseWriter, r *http.Request) {
 	entries, _, _ := d.Audit.Read()
 	chain := d.Audit.Verify()
 	state, detail := audit.Classify(chain)
-	d.json(w, r, 200, map[string]any{
+	out := map[string]any{
 		"entries":            entries,
 		"chain_valid":        chain["valid"],
 		"broken_index":       chain["broken_index"],
@@ -75,7 +75,28 @@ func (d *Deps) auditLog(w http.ResponseWriter, r *http.Request) {
 		// with what `bloxsmith audit verify` prints for the same log.
 		"chain_state":  string(state),
 		"chain_detail": detail,
-	})
+	}
+	mergeAppendHealth(out, d.Audit.AppendHealth())
+	d.json(w, r, 200, out)
+}
+
+// mergeAppendHealth copies the audit log's append-failure counters alongside the
+// chain verdict, without touching it.
+//
+// These are deliberately SEPARATE facts, and the separation is the whole point.
+// chain_state answers "is what is on disk still what was written"; append_failures
+// answers "did something never reach disk at all". A dropped entry leaves the
+// chain genuinely intact — the entry was never written, so nothing was tampered
+// with — and folding the two together would either invent a fourth chain state
+// or make "tampered" mean two different things, and an operator reading either
+// one would be misled about which failure they are looking at.
+//
+// last_append_failure is absent, not zeroed, when nothing has failed; see
+// audit.AppendHealth for why a placeholder would be its own small lie.
+func mergeAppendHealth(out, health map[string]any) {
+	for k, v := range health {
+		out[k] = v
+	}
 }
 
 // auditExport is GET /api/audit/export (server.py:5086): admin-only, adds
@@ -92,7 +113,7 @@ func (d *Deps) auditExport(w http.ResponseWriter, r *http.Request) {
 	entries, _, _ := d.Audit.Read()
 	chain := d.Audit.Verify()
 	state, detail := audit.Classify(chain)
-	d.json(w, r, 200, map[string]any{
+	out := map[string]any{
 		"entries":            entries,
 		"chain_valid":        chain["valid"],
 		"broken_index":       chain["broken_index"],
@@ -105,7 +126,13 @@ func (d *Deps) auditExport(w http.ResponseWriter, r *http.Request) {
 		"chain_detail": detail,
 		"exported_at":  nowUnix(),
 		"app_version":  d.Version,
-	})
+	}
+	// An export that shows only the entries that made it, with no count of the
+	// ones that did not, reads as a complete record of the period it covers.
+	// It is not one whenever append_failures > 0, so the bundle carries the
+	// same counters as the live view.
+	mergeAppendHealth(out, d.Audit.AppendHealth())
+	d.json(w, r, 200, out)
 }
 
 // viewsList is GET /api/views (server.py:5057): names/timestamps only.
