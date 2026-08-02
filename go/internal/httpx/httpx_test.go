@@ -44,10 +44,34 @@ const teardownStream = "/api/teardown/seed-demo/stream?confirm=DELETE&dry=0"
 
 // --- the exploit -------------------------------------------------------------
 
+// The exploit at the top of this file, reproduced exactly as it arrives.
+//
+// The decisive detail is what the request does NOT carry: mode:"no-cors" on a
+// safe verb means fetch sends no Origin, referrerPolicy:"no-referrer" strips the
+// Referer, and it comes from 127.0.0.1 because the victim's browser genuinely
+// runs on the operator's machine. That is the ladder that used to end at
+// "loopback -> trusted" and really decommissioned zones.
+//
+// This test used to set Sec-Fetch-Site: cross-site and nothing else, which
+// SameOrigin already rejected before the fix existed — so it passed with the fix
+// reverted and proved nothing about the hole it is named for. Both rungs are
+// asserted below; the first is the one the fix added.
 func TestWriteGuard_HostilePageNoCorsGET_Rejected(t *testing.T) {
 	g := testGuard()
-	r := req("GET", teardownStream, map[string]string{"Sec-Fetch-Site": "cross-site"})
-	if guarded(g, r) {
+
+	// Rung one — no Origin, no Referer, no Sec-Fetch-Site to fall back on
+	// (a browser predating Fetch Metadata, or any client that omits it).
+	// Loopback is all that is left, and loopback must no longer be proof.
+	if guarded(g, req("GET", teardownStream, nil)) {
+		t.Fatal("the hostile page's no-cors GET — no Origin, no Referer, from loopback — was authorized " +
+			"on loopback trust alone; a page the operator visits can decommission production DNS")
+	}
+
+	// Rung two — the same page on a browser that DOES send Fetch Metadata, which
+	// names the initiator as someone else's site. Page script cannot forge or
+	// strip this header.
+	if guarded(g, req("GET", teardownStream, map[string]string{
+		"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "empty"})) {
 		t.Fatal("cross-site no-cors GET to a mutating SSE stream was authorized — " +
 			"a hostile page can decommission production DNS")
 	}

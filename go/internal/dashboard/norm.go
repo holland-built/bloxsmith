@@ -247,8 +247,26 @@ func normPolicies(raw []any) []map[string]any {
 	out := make([]map[string]any, 0, len(raw))
 	for _, item := range raw {
 		p := asMap(item)
-		actionRaw := orStr(p["default_action"], p["action"], "action_allow")
-		action := strings.ReplaceAll(actionRaw, "action_", "")
+		// A policy whose action upstream did not report used to default to
+		// "action_allow" and render as a confident "allow". On a security
+		// product that is the worst possible direction to guess in: an
+		// operator reading the policy list saw a definite permit where nobody
+		// had actually said what the policy does, and a policy that in reality
+		// blocks would have been indistinguishable from one that permits.
+		//
+		// Presence is the test, not truthiness — firstPresent, not orStr, so a
+		// key that IS reported is honoured whatever it holds. A reported action
+		// passes through byte-identically (minus the "action_" prefix the UI
+		// never wanted); only a genuine absence says "unknown". A present key
+		// carrying nothing usable ("" or a bare "action_") is an absence too:
+		// it is not the name of a real action, exactly as normHosts treats a
+		// status word its map has never heard of.
+		action := "unknown"
+		if raw, ok := firstPresent(p, "default_action", "action"); ok {
+			if a := strings.ReplaceAll(getStr(raw), "action_", ""); a != "" {
+				action = a
+			}
+		}
 		rules := len(asSlice(orAny(p["rules"], p["rule_names"], p["network_lists"], []any{})))
 		created := orStr(p["created_time"], "")
 		if len(created) > 10 {
@@ -273,18 +291,40 @@ func normFeeds(raw []any) []map[string]any {
 	out := make([]map[string]any, 0, len(raw))
 	for _, item := range raw {
 		f := asMap(item)
-		confLevel := strings.ToLower(orStr(f["confidence_level"], "MEDIUM"))
-		threatLevel := strings.ToLower(getStr(f["threat_level"]))
-		if threatLevel == "" {
-			if v, ok := levels[confLevel]; ok {
-				threatLevel = v
-			} else {
-				threatLevel = "medium"
+		// Two fabrications lived here, and the first manufactured the second.
+		// An unreported confidence defaulted to "MEDIUM", and that invented
+		// word was then fed through the levels map to DERIVE a threat_level of
+		// "high" — so a feed nobody had graded arrived at the operator (and at
+		// the AI tools, which read these rows verbatim) carrying two confident
+		// gradings, neither of which upstream ever made. Separately, any
+		// confidence word this code did not recognise was silently rewritten to
+		// "medium", quietly restating an unknown grade as a known middling one.
+		//
+		// Presence is the test — firstPresent, not orStr — so a confidence that
+		// really was reported passes through unchanged. Only a genuine absence,
+		// or a word outside the high/medium/low vocabulary, is "unknown", and
+		// an "unknown" confidence derives nothing: levels has no such key, so
+		// the threat level stays unknown rather than being invented from a
+		// guess.
+		conf := "unknown"
+		if raw, ok := firstPresent(f, "confidence_level"); ok {
+			switch c := strings.ToLower(getStr(raw)); c {
+			case "high", "medium", "low":
+				conf = c
 			}
 		}
-		conf := confLevel
-		if conf != "high" && conf != "medium" && conf != "low" {
-			conf = "medium"
+		// A REPORTED threat_level is a real value in its own right and does not
+		// depend on confidence, so it is kept exactly as before. Only a feed
+		// that reported no threat_level falls back to the confidence
+		// derivation, and that derivation now fires only for a confidence that
+		// was genuinely reported and recognised.
+		threatLevel := strings.ToLower(getStr(f["threat_level"]))
+		if threatLevel == "" {
+			if v, ok := levels[conf]; ok {
+				threatLevel = v
+			} else {
+				threatLevel = "unknown"
+			}
 		}
 		out = append(out, map[string]any{
 			"id":      idOf(f["id"]),
