@@ -440,8 +440,8 @@ func Unwrap(body any) []any {
 // --- filter injection guards ------------------------------------------------
 
 var (
-	cspCtrl  = regexp.MustCompile(`[\x00-\x1f\x7f]`)      // control chars (server.py _CSP_CTRL)
-	cspField = regexp.MustCompile(`^[A-Za-z0-9_.\-]+$`)   // identifier-safe field name
+	cspCtrl  = regexp.MustCompile(`[\x00-\x1f\x7f]`)    // control chars (server.py _CSP_CTRL)
+	cspField = regexp.MustCompile(`^[A-Za-z0-9_.\-]+$`) // identifier-safe field name
 )
 
 // ErrBadFilter maps to HTTP 400 (Python raises ValueError).
