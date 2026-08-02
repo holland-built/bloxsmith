@@ -224,25 +224,95 @@ func (p *BlockProvisioner) createBlock(bdef M, parent *ipNetT, result M) error {
 	return nil
 }
 
-func (p *BlockProvisioner) rollback(result M) {
+// rollback deletes the blocks this run created, youngest first, tolerating a
+// failed delete into a residual list instead of abandoning the rest.
+//
+// It returns a report of what it did — {outcome, attempted, deleted, residual} —
+// because a residual list alone cannot tell "both blocks were deleted
+// successfully" apart from "nothing was ever created": both produce an empty
+// list. Cardinality is not a status, so the outcome word is explicit and is
+// always present. Same shape and same reasoning as SiteProvisioner.rollback.
+//
+// It still writes result["rollback_residual"] as before; that write is the
+// in-place side effect existing callers and tests read.
+//
+// The residual label is address/cidr. Unlike the site's subnet entries, a
+// blocks_created entry genuinely carries both fields (createBlock records
+// "address" and an int "cidr" on both the dry-run and the real branch), so the
+// label names a real block rather than rendering a trailing slash over a key
+// that was never written.
+func (p *BlockProvisioner) rollback(result M) M {
 	p.emit(M{"step": "Rolling back created address blocks…"})
 	created := getList(result, "blocks_created")
+	residual := []any{}
+	attempted, deleted := 0, 0
 	for i := len(created) - 1; i >= 0; i-- {
 		block := asMap(created[i])
 		blockID := pyStr(block["id"])
 		if blockID == "" || blockID == "(dry-run)" {
 			continue
 		}
+		attempted++
 		_, status, _ := p.e.Rest.Write("DELETE", "/api/ddi/v1/"+blockID, nil, nil)
 		if !(status >= 200 && status < 300) {
 			p.emit(M{"step": fmt.Sprintf("  Rollback: failed to delete block id=%s", blockID)})
+			residual = append(residual, M{
+				"kind":   "address_block",
+				"id":     blockID,
+				"label":  fmt.Sprintf("%s/%s", pyStr(block["address"]), pyStr(block["cidr"])),
+				"status": status,
+			})
+			continue
 		}
+		deleted++
 	}
+
+	result["rollback_residual"] = residual
+	if len(residual) > 0 {
+		p.emit(M{"step": fmt.Sprintf("  Rollback incomplete: %d object(s) could not be deleted", len(residual))})
+	}
+
+	// "not_needed" is the honest word for a rollback that ran and found nothing
+	// to undo (the run failed before creating anything, or every block already
+	// existed and was skipped). The old design recorded nothing at all for that
+	// case, which is indistinguishable from a rollback that deleted everything
+	// successfully.
+	outcome := "not_needed"
+	switch {
+	case attempted == 0:
+		outcome = "not_needed"
+	case deleted == attempted:
+		outcome = "complete"
+	default:
+		outcome = "incomplete"
+	}
+	return M{"outcome": outcome, "attempted": attempted, "deleted": deleted, "residual": residual}
 }
 
 // Provision is BlockProvisioner.provision (server.py:1466). resilient=true skips
 // a failed subtree and keeps the rest (seed use); default is atomic with
 // rollback-on-failure.
+//
+// On success it returns the full result map and a nil error, unchanged.
+//
+// On FAILURE it returns (M{"rollback": report}, err) — both non-nil, and the map
+// carries the rollback report and NOTHING else. The internal `result` map is
+// deliberately not exported on this path: `blocks_created` lists the ids
+// rollback has just DELETEd, and the success HTTP path renders that same field
+// as the run's created objects, so returning it on failure would present
+// tombstones as live blocks.
+//
+// The report is always present on the failure path — {outcome, attempted,
+// deleted, residual} — so no meaning is ever carried by a missing key. A record
+// with no "rollback" key is a legacy entry, which is honest and permanently
+// distinguishable. On a dry-run failure the outcome is "skipped_dry_run":
+// rollback deliberately does not run, because a preview created nothing.
+//
+// The IP-space lookup failures ABOVE still `return nil, err`, deliberately and
+// asymmetrically: they happen before the provisioning closure runs, so nothing
+// has been created, no rollback is possible, and there is no report to carry.
+// A fabricated "not_needed" report there would describe a rollback that never
+// ran at all.
 func (p *BlockProvisioner) Provision(resilient bool) (M, error) {
 	p.resilient = resilient
 	result := M{"name": p.cfg.Name, "ip_space": p.cfg.IPSpace,
@@ -275,11 +345,12 @@ func (p *BlockProvisioner) Provision(resilient bool) (M, error) {
 		return nil
 	}()
 	if runErr != nil {
+		report := M{"outcome": "skipped_dry_run", "attempted": 0, "deleted": 0, "residual": []any{}}
 		if !p.cfg.DryRun {
 			p.emit(M{"step": fmt.Sprintf("Block provisioning failed (%s) — initiating rollback", runErr.Error())})
-			p.rollback(result)
+			report = p.rollback(result)
 		}
-		return nil, runErr
+		return M{"rollback": report}, runErr
 	}
 	return result, nil
 }

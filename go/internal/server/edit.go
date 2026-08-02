@@ -104,8 +104,10 @@ func (d *Deps) dnsRecordUpdate(w http.ResponseWriter, r *http.Request, b map[str
 				fields = append(fields, k)
 			}
 		}
+		// anySlice, not fields: canonicalJSON rejects []string and auditAppend
+		// only logs that, so the raw slice cost this entry every single time.
 		d.auditAppend("dns-record-update", httpx.Actor(r),
-			map[string]any{"id": b["id"], "fields": fields})
+			map[string]any{"id": b["id"], "fields": anySlice(fields)})
 	}
 }
 
