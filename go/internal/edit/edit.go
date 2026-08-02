@@ -279,6 +279,61 @@ func statusPhrase(status int) string {
 	return fmt.Sprintf("status %d", status)
 }
 
+// --- the third create outcome ------------------------------------------------
+
+// CreatedUnreadableKey is the result field marking the one outcome a create can
+// have that is NEITHER a success NOR a failure: upstream ACCEPTED the write
+// (200/201) and the object is LIVE on the customer's tenant, but the response
+// body cannot be read as the object it created, so we hold no id for it.
+//
+// WHY IT HAS TO EXIST. rest.Client.Write (rest.go) returns a nil body for an
+// empty 2xx response and, because it discards the decode error
+// (`_ = json.Unmarshal`), for a non-JSON 2xx response too. Every create builder
+// used to fold that nil into its failure arm — `(status != 200 && status != 201)
+// || resp == nil` — so a 201 with an unreadable body was reported to the
+// operator as "create failed" and, being ok:false, was audited nowhere. The
+// object existed on the tenant with the screen saying it did not and the log
+// saying nothing at all. Nothing could find it again. This is the same family as
+// SubnetCreate's tagging_failed arm (see internal/server/edit.go): an outcome
+// that left a live object behind must still be recorded.
+//
+// WHAT THIS RESULT PROMISES. It claims nothing it cannot prove. There is no
+// "ok" key at all — ok:true would hand the caller a success with no id, and
+// ok:false is the lie that lost the object. No id, no object body and no other
+// field is invented; the only things stated are the resource kind, the upstream
+// status, and a message telling the operator plainly that the thing exists and
+// must be found by hand. The route layer keys its audit row off this field
+// (server/edit.go), so the row exists even though the id does not.
+const CreatedUnreadableKey = "created_unreadable"
+
+// writeUnreadable reports whether a write landed in that state: upstream said
+// 200/201, and what came back is not a JSON object we can pull the created
+// object out of (empty body, non-JSON body — both nil out of rest.Write — or a
+// 2xx body that is not an object). A 4xx/5xx is NOT this: upstream answered and
+// refused, nothing was created, and the caller's genuine failure arm still runs.
+func writeUnreadable(resp any, status int) bool {
+	return (status == 200 || status == 201) && asMap(resp) == nil
+}
+
+// createdUnreadable builds that result. `what` names the resource in operator
+// words ("DNS zone"); `alsoUnknown`, when non-empty, appends the one extra
+// consequence this particular call site carries (SubnetCreate cannot tag a
+// subnet whose id it never saw).
+func createdUnreadable(what string, status int, alsoUnknown string) M {
+	msg := fmt.Sprintf("the tenant ACCEPTED this %s (%s) but returned no readable body: the %s EXISTS "+
+		"and its id is unknown here. Find it in the tenant before retrying — a retry creates a duplicate",
+		what, statusPhrase(status), what)
+	if alsoUnknown != "" {
+		msg += ". " + alsoUnknown
+	}
+	return M{
+		CreatedUnreadableKey: true,
+		"resource":           what,
+		"status":             status,
+		"error":              msg,
+	}
+}
+
 // --- _dns_rdata (server.py:417) ----------------------------------------------
 
 // Rdata is _dns_rdata: presentation-format value -> API rdata dict, covering
@@ -415,7 +470,13 @@ func (c *Client) DNSRecordCreate(body M) (M, int) {
 	}
 
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/dns/record", recordBody, nil)
-	if (status != 200 && status != 201) || resp == nil {
+	if writeUnreadable(resp, status) {
+		// The record is LIVE in the customer's DNS. Reporting the old ok:false
+		// here told the operator their record did not exist while it answered
+		// queries, and wrote no audit row to find it by.
+		return createdUnreadable("DNS record", status, ""), status
+	}
+	if status != 200 && status != 201 {
 		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "record": resultOrSelf(resp)}, status
@@ -673,6 +734,26 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 				recID = rec["id"]
 			}
 			out["record"] = M{"ok": true, "id": recID, "status": rstatus}
+		} else if writeUnreadable(rresp, rstatus) {
+			// Upstream ACCEPTED the record write and we cannot read back what it
+			// made. The compensating release below MUST NOT run here: releasing
+			// the addresses would strip them out from under a record that exists
+			// and answers queries — the reservation is the only thing still
+			// holding those addresses for it. So the reservation stays, and the
+			// result says so instead of claiming either outcome.
+			//
+			// "ok" is DELETED rather than set: this is neither the clean
+			// allocation ok:true promises nor the rolled-back failure ok:false
+			// promises. The addresses stay in the result because they are known
+			// and correct; the record carries no id because there is none.
+			rec := createdUnreadable("DNS record", rstatus,
+				"The address(es) reserved for it are deliberately still reserved — releasing them "+
+					"would strip a live record of its addresses")
+			delete(out, "ok")
+			out[CreatedUnreadableKey] = true
+			out["record"] = rec
+			out["error"] = rec["error"]
+			return out, statusOr(rstatus, 502)
 		} else {
 			// Compensating release (plan 016): the DNS step failed, so roll back
 			// the reservation(s) we just made — otherwise they exhaust the subnet.

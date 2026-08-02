@@ -43,7 +43,10 @@ func (c *Client) ZoneCreate(body M) (M, int) {
 		return M{"ok": true, "dry_run": true, "would_create": zoneBody}, 200
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/dns/auth_zone", zoneBody, nil)
-	if (status != 200 && status != 201) || resp == nil {
+	if writeUnreadable(resp, status) {
+		return createdUnreadable("DNS zone", status, ""), status
+	}
+	if status != 200 && status != 201 {
 		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "zone": resultOrSelf(resp)}, status
@@ -147,7 +150,15 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/"+blockID+"/nextavailablesubnet",
 		nil, map[string]string{"cidr": strconv.Itoa(cidr), "count": "1"})
-	if (status != 200 && status != 201) || resp == nil {
+	if writeUnreadable(resp, status) {
+		// nextavailablesubnet carved a subnet out of the block and we cannot
+		// read which one. No id means the tagging PATCH below cannot run
+		// either, so the subnet is invisible to teardown as well — both facts
+		// go in the message rather than being flattened into "create failed".
+		return createdUnreadable("subnet", status,
+			"Its teardown tags could not be applied either, so no tag filter will find it"), status
+	}
+	if status != 200 && status != 201 {
 		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	rows := respAddresses(resp) // same results/result unwrap shape
@@ -267,7 +278,10 @@ func (c *Client) BlockCreate(body M) (M, int) {
 		return M{"ok": true, "dry_run": true, "would_create": blockBody}, 200
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/address_block", blockBody, nil)
-	if (status != 200 && status != 201) || resp == nil {
+	if writeUnreadable(resp, status) {
+		return createdUnreadable("address block", status, ""), status
+	}
+	if status != 200 && status != 201 {
 		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "block": resultOrSelf(resp)}, status
@@ -294,7 +308,10 @@ func (c *Client) RangeCreate(body M) (M, int) {
 		return M{"ok": true, "dry_run": true, "would_create": rangeBody}, 200
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/range", rangeBody, nil)
-	if (status != 200 && status != 201) || resp == nil {
+	if writeUnreadable(resp, status) {
+		return createdUnreadable("DHCP range", status, ""), status
+	}
+	if status != 200 && status != 201 {
 		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "range": resultOrSelf(resp)}, status
@@ -365,7 +382,10 @@ func (c *Client) HostCreate(body M) (M, int) {
 		return M{"ok": true, "dry_run": true, "would_create": hostBody}, 200
 	}
 	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/ipam/host", hostBody, nil)
-	if (status != 200 && status != 201) || resp == nil {
+	if writeUnreadable(resp, status) {
+		return createdUnreadable("host", status, ""), status
+	}
+	if status != 200 && status != 201 {
 		return M{"ok": false, "error": fmt.Sprintf("create failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
 	}
 	return M{"ok": true, "host": resultOrSelf(resp)}, status
@@ -419,16 +439,29 @@ type Resource struct {
 	// used by edit.ObjectPath to validate a DELETE route's id. It must match
 	// the kind each Update builder above validates its own "id" field against.
 	Kind string
+	// Identity names the REQUEST fields that identify the object a create makes,
+	// in the order an operator would search by. It exists for the one row that
+	// can never carry an id: the CreatedUnreadableKey audit entry, where the
+	// object is live on the tenant and the only true things we hold are what we
+	// asked for. The route layer copies these keys out of the request body
+	// verbatim (server/edit.go) — it never substitutes a placeholder for a field
+	// the caller omitted.
+	Identity []string
 }
 
 // Resources returns the dispatch table bound to this client.
 func (c *Client) Resources() map[string]Resource {
 	return map[string]Resource{
-		"dns_zone":      {Create: c.ZoneCreate, Update: c.ZoneUpdate, ResultKey: "zone", Kind: "dns/auth_zone"},
-		"subnet":        {Create: c.SubnetCreate, Update: c.SubnetUpdate, ResultKey: "subnet", Kind: "ipam/subnet"},
-		"address_block": {Create: c.BlockCreate, ResultKey: "block", Kind: "ipam/address_block"},
-		"dhcp_range":    {Create: c.RangeCreate, Update: c.RangeUpdate, ResultKey: "range", Kind: "ipam/range"},
-		"host":          {Create: c.HostCreate, Update: c.HostUpdate, ResultKey: "host", Kind: "ipam/host"},
+		"dns_zone": {Create: c.ZoneCreate, Update: c.ZoneUpdate, ResultKey: "zone", Kind: "dns/auth_zone",
+			Identity: []string{"fqdn", "view"}},
+		"subnet": {Create: c.SubnetCreate, Update: c.SubnetUpdate, ResultKey: "subnet", Kind: "ipam/subnet",
+			Identity: []string{"block_id", "cidr", "name"}},
+		"address_block": {Create: c.BlockCreate, ResultKey: "block", Kind: "ipam/address_block",
+			Identity: []string{"address", "cidr", "space"}},
+		"dhcp_range": {Create: c.RangeCreate, Update: c.RangeUpdate, ResultKey: "range", Kind: "ipam/range",
+			Identity: []string{"start", "end", "space"}},
+		"host": {Create: c.HostCreate, Update: c.HostUpdate, ResultKey: "host", Kind: "ipam/host",
+			Identity: []string{"name"}},
 	}
 }
 
