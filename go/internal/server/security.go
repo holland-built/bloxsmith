@@ -30,9 +30,7 @@ func (d *Deps) blockDomain(w http.ResponseWriter, r *http.Request, b map[string]
 	}
 	result := d.dash(r).BlockDomain(r.Context(), domain, d.Cfg.BlockListID)
 	d.json(w, r, outcomeStatus(result), result)
-	if outcome, _ := result["outcome"].(string); outcome == "verified" {
-		d.auditAppend("block-domain", httpx.Actor(r), map[string]any{"domain": domain})
-	}
+	d.auditOutcome("block-domain", r, domain, result)
 }
 
 func (d *Deps) unblockDomain(w http.ResponseWriter, r *http.Request, b map[string]any) {
@@ -48,9 +46,35 @@ func (d *Deps) unblockDomain(w http.ResponseWriter, r *http.Request, b map[strin
 	}
 	result := d.dash(r).UnblockDomain(r.Context(), domain, d.Cfg.BlockListID)
 	d.json(w, r, outcomeStatus(result), result)
-	if outcome, _ := result["outcome"].(string); outcome == "verified" {
-		d.auditAppend("unblock-domain", httpx.Actor(r), map[string]any{"domain": domain})
+	d.auditOutcome("unblock-domain", r, domain, result)
+}
+
+// auditOutcome records a block/unblock attempt whenever the write actually
+// reached the customer's live block list, and carries the outcome word itself
+// into the detail so a reader can tell the two recordable cases apart.
+//
+// Keyed to the outcomeStatus contract above (dashboard/security.go's four
+// outcomes):
+//   - "verified"   — read-back confirms the desired state. Recorded.
+//   - "unverified" — SUBMITTED, but read-back didn't confirm within budget.
+//     Recorded, because the mutation may well have landed on the live block
+//     list; only the confirmation is missing. Recording only "verified" left
+//     a real change to DNS blocking with no trace anywhere — these two routes
+//     are absent from DefaultMutatingPaths, so there is no "write-authorized"
+//     row either.
+//   - "invalid"    — a local fault; nothing was ever sent upstream. Not
+//     recorded: there is no change to account for.
+//   - "rejected"   — reached upstream and upstream refused it; nothing was
+//     applied. Not recorded, same reason.
+//
+// The outcome goes in the detail rather than being folded into one word, so
+// "we confirmed it" is never mistaken for "we could not confirm it".
+func (d *Deps) auditOutcome(event string, r *http.Request, domain string, result map[string]any) {
+	outcome, _ := result["outcome"].(string)
+	if outcome != "verified" && outcome != "unverified" {
+		return
 	}
+	d.auditAppend(event, httpx.Actor(r), map[string]any{"domain": domain, "outcome": outcome})
 }
 
 // outcomeStatus maps a block/unblock result to an HTTP status so the status

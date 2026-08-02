@@ -9,6 +9,32 @@ import { DataTable, sortRows } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 
+// A number the backend actually measured, or null when it did not.
+//
+// go/internal/dashboard/norm.go emits JSON null — not 0 — for util/total/used
+// on a subnet whose upstream row reports no total. `Number(x) || 0` turns that
+// null into a healthy-looking 0%, i.e. "this subnet is empty", which is
+// precisely the claim we cannot make. Everything downstream carries the null
+// instead and renders it as —. Checked against the live tenant: every subnet
+// there currently reports a total, so this is a guard, not a live symptom —
+// the 295 rows sitting at 0% do report total=0 and are a real measurement.
+function num(v) {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+// total - used, or null when either side is unknown: an unknown minus a known
+// is not a number of free addresses.
+function freeOf(s) {
+  const total = num(s.total)
+  const used = num(s.used)
+  return total === null || used === null ? null : total - used
+}
+
+// A count we could not fetch is not a count of zero.
+const DASH = '—'
+
 // IP address octet-order comparator (ascending); DataTable applies direction.
 function ipCompare(a, b) {
   const av = (a.address || '').split('.').map(Number)
@@ -31,6 +57,19 @@ export default function Network() {
   const totals = data.data?._totals
   const meta = data.data?._meta ?? {}
 
+  // The whole /api/data request failed — a 500, or the cold-request abort
+  // (measured 17-26s cold against a 12s warm budget). There is then no payload
+  // at all: no `_meta`, so every per-slice status is undefined, and every
+  // slice reads as [] — which the panels below would render as "you have
+  // none" over a dead backend. This is the same rule lib/data.js gives the
+  // useData() tabs (see its header: "Requested but missing => 'error'"); this
+  // tab reads /api/data raw and so has to apply it itself. The status
+  // vocabulary stays exactly ok / empty / error.
+  //
+  // Not while loading: a request still in flight is a Skeleton, not a failure.
+  const feedDown = !data.loading && (!!data.error || data.data == null)
+  const subnetsStatus = feedDown ? 'error' : meta.subnets
+
   const leasesRef = useRef(null)
   useEffect(() => {
     if (hp.focus === 'leases' && leasesRef.current) {
@@ -42,10 +81,10 @@ export default function Network() {
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Network</h1>
       <CardGrid>
-        <UtilBands subnets={subnets} totals={totals} subnetsStatus={meta.subnets} />
+        <UtilBands subnets={subnets} totals={totals} subnetsStatus={subnetsStatus} />
         <IpamSpaces ipam={ipam} />
         <DhcpLeases dhcp={dhcp} innerRef={leasesRef} />
-        <ExhaustionTable subnets={subnets} hp={hp} subnetsStatus={meta.subnets} />
+        <ExhaustionTable subnets={subnets} hp={hp} subnetsStatus={subnetsStatus} />
       </CardGrid>
     </div>
   )
@@ -61,21 +100,37 @@ function UtilBands({ subnets, totals, subnetsStatus }) {
     { key: '70-85', label: '70–85%', test: (u) => u >= 70 && u <= 85, color: COLORS.warn },
     { key: '85-100', label: '>85%', test: (u) => u > 85, color: COLORS.crit },
   ]
+  // A subnet with no reported utilisation belongs in no band — counted as 0 it
+  // lands in "<70%" and inflates the healthy bar with subnets nobody measured.
+  // It is excluded from the bands and declared in the scope label.
+  const measured = subnets.filter((s) => num(s.util) !== null)
+  const unmeasured = subnets.length - measured.length
   const counts = BANDS.map((b) => ({
     label: b.label,
-    value: subnets.filter((s) => b.test(Number(s.util) || 0)).length,
+    value: measured.filter((s) => b.test(num(s.util))).length,
     color: b.color,
   }))
-  const hasData = subnets.length > 0
+  const hasData = measured.length > 0
   const estateTotal = Number.isFinite(totals?.subnets) ? totals.subnets : null
-  const scopeLabel = estateTotal !== null
-    ? `${subnets.length.toLocaleString()} loaded of ${estateTotal.toLocaleString()} total`
-    : `${subnets.length.toLocaleString()} loaded (estate total unavailable)`
+  const unmeasuredLabel = unmeasured > 0 ? ` · ${unmeasured.toLocaleString()} util unknown` : ''
+  // "0 loaded" over a dead feed reads as an empty estate; the count is
+  // unknown, so it prints as an em-dash.
+  const scopeLabel = subnetsStatus === 'error'
+    ? `${DASH} loaded (count unavailable)`
+    : estateTotal !== null
+      ? `${subnets.length.toLocaleString()} loaded of ${estateTotal.toLocaleString()} total${unmeasuredLabel}`
+      : `${subnets.length.toLocaleString()} loaded (estate total unavailable)${unmeasuredLabel}`
 
   return (
     <Card span={3} title="Utilization Distribution" right={<span className="text-[11px] text-muted">{scopeLabel}</span>}>
       {!hasData ? (
-        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
+        subnetsStatus === 'error' ? (
+          <FeedUnavailable label="Subnets feed unavailable" />
+        ) : subnets.length > 0 ? (
+          <Empty>no loaded subnet reports utilisation</Empty>
+        ) : (
+          <Empty />
+        )
       ) : (
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={counts} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -232,13 +287,27 @@ function DhcpLeases({ dhcp, innerRef }) {
 
 // ---------- exhaustion table ----------
 
-// Per-key accessors for the controlled sort; sortRows does the string/number branch.
-const EXHAUSTION_SORT = {
-  network: (r) => r.addr || r.cidr || '',
-  site: (r) => r.site || '',
-  used: (r) => Number(r.used) || 0,
-  free: (r) => (Number(r.total) || 0) - (Number(r.used) || 0),
-  util: (r) => Number(r.util) || 0,
+// Where an unknown (null) number sorts: always the BOTTOM of whichever
+// direction is on screen. Ordering it as 0 would present an unmeasured subnet
+// as the emptiest one; putting it at the top of the default worst-first sort
+// would present it as the most exhausted. Neither is known.
+//
+// MAX_SAFE_INTEGER rather than Infinity because sortRows subtracts the two
+// accessor values, and Infinity - Infinity is NaN — a NaN comparator makes
+// Array#sort's result implementation-defined.
+const UNKNOWN_RANK = Number.MAX_SAFE_INTEGER
+
+// Per-key accessors for the controlled sort; sortRows does the string/number
+// branch. Direction-dependent, so it is built per sort rather than frozen.
+function exhaustionSort(dir) {
+  const unknown = dir === 'asc' ? UNKNOWN_RANK : -UNKNOWN_RANK
+  return {
+    network: (r) => r.addr || r.cidr || '',
+    site: (r) => r.site || '',
+    used: (r) => num(r.used) ?? unknown,
+    free: (r) => freeOf(r) ?? unknown,
+    util: (r) => num(r.util) ?? unknown,
+  }
 }
 
 function ExhaustionTable({ subnets, hp, subnetsStatus }) {
@@ -260,25 +329,34 @@ function ExhaustionTable({ subnets, hp, subnetsStatus }) {
     const q = filter.trim().toLowerCase()
     return base.filter((s) => {
       if (site && s.site !== site) return false
-      if (minUtil !== null && (Number(s.util) || 0) < minUtil) return false
+      // An unknown utilisation cannot satisfy "util >= N", so it is excluded
+      // explicitly. Counted as 0 it would pass a minUtil of 0 as if measured
+      // at zero, and fail every other threshold for the wrong reason.
+      if (minUtil !== null) {
+        const u = num(s.util)
+        if (u === null || u < minUtil) return false
+      }
       if (!q) return true
       return [s.addr, s.cidr, s.site, s.name].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
     })
   }, [base, filter, site, minUtil])
 
-  const sorted = useMemo(() => sortRows(filtered, sort, EXHAUSTION_SORT), [filtered, sort])
+  const sorted = useMemo(() => sortRows(filtered, sort, exhaustionSort(sort.dir)), [filtered, sort])
 
   const top20 = sorted.slice(0, 20)
 
   // Normalize numerics + derive network/free so column keys match sort keys.
+  // util/used/free stay null when unmeasured — every cell below renders that
+  // as —, and utilStatus() is never asked to grade it.
   const tableRows = useMemo(
     () =>
-      top20.map((s) => {
-        const util = Number(s.util) || 0
-        const used = Number(s.used) || 0
-        const free = (Number(s.total) || 0) - used
-        return { ...s, util, used, free, network: s.addr || s.cidr || '—' }
-      }),
+      top20.map((s) => ({
+        ...s,
+        util: num(s.util),
+        used: num(s.used),
+        free: freeOf(s),
+        network: s.addr || s.cidr || '—',
+      })),
     [top20],
   )
 
@@ -297,13 +375,15 @@ function ExhaustionTable({ subnets, hp, subnetsStatus }) {
       sortable: true,
       grow: true,
       render: (_v, r) => {
-        const status = utilStatus(r.util)
+        const status = r.util === null ? null : utilStatus(r.util)
         return (
           <div className="flex items-center gap-2">
             <div className="h-[5px] rounded-full bg-line overflow-hidden flex-1 min-w-[70px]">
-              <div className="h-full" style={{ width: `${Math.min(100, r.util)}%`, background: status.color }} />
+              {/* no bar at all for an unknown util — a zero-width bar and a 0%
+                  bar are indistinguishable, and one of them is a lie */}
+              {status && <div className="h-full" style={{ width: `${Math.min(100, r.util)}%`, background: status.color }} />}
             </div>
-            <span className="text-muted w-9 text-right">{r.util}%</span>
+            <span className="text-muted w-9 text-right">{r.util === null ? DASH : `${r.util}%`}</span>
           </div>
         )
       },
@@ -312,6 +392,12 @@ function ExhaustionTable({ subnets, hp, subnetsStatus }) {
       key: 'status',
       label: 'Status',
       render: (_v, r) => {
+        // utilStatus(null) answers "Healthy" (null >= 92 and null >= 75 are
+        // both false) — a green badge on a subnet nobody measured. Unknown
+        // gets its own neutral badge instead.
+        if (r.util === null) {
+          return <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium bg-line text-muted">Unknown</span>
+        }
         const status = utilStatus(r.util)
         return (
           <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: status.bg, color: status.fg }}>
@@ -320,8 +406,8 @@ function ExhaustionTable({ subnets, hp, subnetsStatus }) {
         )
       },
     },
-    { key: 'used', label: 'Used', align: 'right', sortable: true, render: (v) => <span className="text-muted">{(Number(v) || 0).toLocaleString()}</span> },
-    { key: 'free', label: 'Free', align: 'right', sortable: true, render: (v) => <span className="text-muted">{(Number(v) || 0).toLocaleString()} free</span> },
+    { key: 'used', label: 'Used', align: 'right', sortable: true, render: (v) => <span className="text-muted">{v === null ? DASH : v.toLocaleString()}</span> },
+    { key: 'free', label: 'Free', align: 'right', sortable: true, render: (v) => <span className="text-muted">{v === null ? DASH : `${v.toLocaleString()} free`}</span> },
   ]
 
   return (

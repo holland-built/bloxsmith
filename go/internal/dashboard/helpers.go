@@ -113,6 +113,24 @@ func orAny(vals ...any) any {
 // orStr is orAny rendered as a string.
 func orStr(vals ...any) string { return getStr(orAny(vals...)) }
 
+// firstPresent returns the value of the first of keys that the map actually
+// REPORTS, and whether any of them did.
+//
+// It exists because orAny cannot answer this question: orAny is Python's `a or
+// b`, so it treats a reported 0 exactly like a missing key. That is the right
+// rule for picking a display name and the wrong one for deciding whether a
+// measurement happened — "the subnet holds 0 addresses" and "nobody told us how
+// many addresses the subnet holds" must not collapse into the same answer.
+// A key present with a JSON null also counts as not reported.
+func firstPresent(m map[string]any, keys ...string) (any, bool) {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			return v, true
+		}
+	}
+	return nil, false
+}
+
 // toInt is Python int(x): truncates floats, parses numeric strings, bool→0/1.
 func toInt(v any) int {
 	switch t := v.(type) {

@@ -8,6 +8,42 @@ import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkl
 import { DataTable } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 
+// A number the backend actually measured, or null when it did not.
+//
+// go/internal/dashboard/norm.go emits JSON null — not 0 — for util/total/used
+// on a subnet whose upstream row reports no total. `Number(x) || 0` turns that
+// null into a healthy-looking 0%, i.e. "this subnet is empty", which is
+// precisely the claim we cannot make. Everything downstream carries the null
+// instead and renders it as —. Checked against the live tenant: every subnet
+// there currently reports a total, so this is a guard, not a live symptom —
+// the 295 rows sitting at 0% do report total=0 and are a real measurement.
+function num(v) {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+// total - used, or null when either side is unknown: an unknown minus a known
+// is not a number of free addresses.
+function freeOf(s) {
+  const total = num(s.total)
+  const used = num(s.used)
+  return total === null || used === null ? null : total - used
+}
+
+// A count we could not fetch is not a count of zero.
+const DASH = '—'
+
+// Compare two possibly-null numbers, unknown always LAST in the direction on
+// screen: 0 would rank an unmeasured subnet as the emptiest one, and the top
+// of a worst-first sort would rank it as the most exhausted. Neither is known.
+function cmpMaybe(av, bv, dir) {
+  if (av === null && bv === null) return 0
+  if (av === null) return 1
+  if (bv === null) return -1
+  return dir === 'asc' ? av - bv : bv - av
+}
+
 // ---------- main ----------
 
 export default function Overview() {
@@ -21,6 +57,19 @@ export default function Overview() {
   const totals = data.data?._totals ?? {}
   const meta = data.data?._meta ?? {}
 
+  // The whole /api/data request failed — a 500, or the cold-request abort
+  // (measured 17-26s cold against a 12s warm budget). There is then no payload
+  // at all: no `_meta`, so every per-slice status is undefined, and every
+  // slice reads as [] — which the panels below would render as "you have
+  // none" over a dead backend. This is the same rule lib/data.js gives the
+  // useData() tabs (see its header: "Requested but missing => 'error'"); these
+  // tabs read /api/data raw and so have to apply it themselves. The status
+  // vocabulary stays exactly ok / empty / error.
+  //
+  // Not while loading: a request still in flight is a Skeleton, not a failure.
+  const feedDown = !data.loading && (!!data.error || data.data == null)
+  const sliceStatus = (name) => (feedDown ? 'error' : meta[name])
+
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Overview</h1>
@@ -31,11 +80,11 @@ export default function Overview() {
       )}
       <CardGrid>
         <DnsHero dns={dns} />
-        <KpiStack subnets={subnets} leases={leases} totals={totals} meta={meta} />
-        <TopUtilization subnets={subnets} totals={totals} subnetsStatus={meta.subnets} />
-        <SubnetHeatmap subnets={subnets} totals={totals} subnetsStatus={meta.subnets} />
-        <HostStatus hosts={hosts} totals={totals} hostsStatus={meta.hosts} />
-        <SubnetTable subnets={subnets} totals={totals} subnetsStatus={meta.subnets} />
+        <KpiStack subnets={subnets} leases={leases} totals={totals} leasesStatus={sliceStatus('leases')} subnetsStatus={sliceStatus('subnets')} />
+        <TopUtilization subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
+        <SubnetHeatmap subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
+        <HostStatus hosts={hosts} totals={totals} hostsStatus={sliceStatus('hosts')} />
+        <SubnetTable subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
         <LicenseInventory licenses={licenses} />
       </CardGrid>
     </div>
@@ -223,23 +272,38 @@ function DnsHero({ dns }) {
 
 // ---------- kpi stack ----------
 
-function KpiStack({ subnets, leases, totals, meta = {} }) {
+function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus }) {
   const { COLORS } = useChartTheme()
-  const utils = [...subnets.map((s) => Number(s.util) || 0)].sort((a, b) => a - b)
+  const leasesDown = leasesStatus === 'error'
+  const subnetsDown = subnetsStatus === 'error'
+  // Unmeasured utilisation is left OUT of the sparkline rather than plotted as
+  // 0 — a floor of fake zeros draws a fleet of empty subnets that don't exist.
+  const utils = subnets.map((s) => num(s.util)).filter((u) => u !== null).sort((a, b) => a - b)
   const activeLeases = leases.filter((l) => l.state === 'active').length
 
   const hasSubnetsTotal = typeof totals.subnets === 'number'
   const hasCritTotal = typeof totals.subnetsCrit === 'number'
-  const rowCritSubnets = subnets.filter((s) => Number(s.util) >= 90).length
+  // A subnet whose utilisation was never reported is neither ≥90% nor under
+  // it. It is counted in neither direction, and the label says how many rows
+  // the figure actually covers.
+  const measured = subnets.filter((s) => num(s.util) !== null)
+  const rowCritSubnets = measured.filter((s) => num(s.util) >= 90).length
+  const unmeasured = subnets.length - measured.length
 
   const cells = [
-    { label: 'Active Leases', value: activeLeases.toLocaleString(), color: COLORS.accent, hash: 'network?focus=leases', status: meta.leases },
+    { label: 'Active Leases', value: leasesDown ? DASH : activeLeases.toLocaleString(), color: COLORS.accent, hash: 'network?focus=leases', status: leasesStatus },
     hasSubnetsTotal
       ? { label: 'Subnets', value: totals.subnets.toLocaleString(), color: COLORS.purple, hash: 'network' }
-      : { label: 'Subnets (loaded rows)', value: subnets.length.toLocaleString(), color: COLORS.purple, hash: 'network' },
+      : { label: 'Subnets (loaded rows)', value: subnetsDown ? DASH : subnets.length.toLocaleString(), color: COLORS.purple, hash: 'network', status: subnetsStatus },
     hasCritTotal
       ? { label: 'Subnets ≥90%', value: totals.subnetsCrit.toLocaleString(), color: COLORS.crit, hash: 'network?minUtil=90' }
-      : { label: 'Subnets ≥90% (loaded rows)', value: rowCritSubnets.toLocaleString(), color: COLORS.crit, hash: 'network?minUtil=90' },
+      : {
+          label: unmeasured > 0 ? 'Subnets ≥90% (loaded rows w/ known util)' : 'Subnets ≥90% (loaded rows)',
+          value: subnetsDown ? DASH : rowCritSubnets.toLocaleString(),
+          color: COLORS.crit,
+          hash: 'network?minUtil=90',
+          status: subnetsStatus,
+        },
   ]
 
   return (
@@ -283,18 +347,29 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus }) {
   const theme = useThemeColors()
   // Rank by addresses USED, not util% — util ranking is a wall of 100% /32 infra links
   // (learned in old app: commits 7789ae8 / 46e591c)
-  const top = [...subnets]
-    .filter((s) => s.addr || s.cidr)
-    .sort((a, b) => (Number(b.used) || 0) - (Number(a.used) || 0))
-    .slice(0, 12)
+  //
+  // A subnet whose `used` is null was never measured, so it has no place in a
+  // ranking BY addresses used — it is excluded and counted in the label,
+  // rather than ranked as if it used zero addresses.
+  const named = subnets.filter((s) => s.addr || s.cidr)
+  const measured = named.filter((s) => num(s.used) !== null)
+  const unmeasured = named.length - measured.length
+  const top = [...measured].sort((a, b) => num(b.used) - num(a.used)).slice(0, 12)
   const estateLabel = typeof totals.subnets === 'number'
     ? `top 12 of ${totals.subnets.toLocaleString()} subnets`
     : `top 12 · estate total unknown`
+  const unmeasuredLabel = unmeasured > 0 ? ` · ${unmeasured.toLocaleString()} unmeasured` : ''
 
   return (
-    <Card span={2} title="Top Consumers" right={<span className="text-[11px] text-muted">addresses used · {estateLabel}</span>}>
+    <Card span={2} title="Top Consumers" right={<span className="text-[11px] text-muted">addresses used · {estateLabel}{unmeasuredLabel}</span>}>
       {top.length === 0 ? (
-        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
+        subnetsStatus === 'error' ? (
+          <FeedUnavailable label="Subnets feed unavailable" />
+        ) : named.length > 0 ? (
+          <Empty>no loaded subnet reports addresses used</Empty>
+        ) : (
+          <Empty />
+        )
       ) : (
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={top} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -335,26 +410,39 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus }) {
   const CAP = 288 // 24 x 12
   // /29-/32 are infra links, always ~100% — they'd paint the whole map red (old app: 67db14e)
   const all = subnets.filter((s) => (s.addr || s.cidr) && (Number(s.cidr) || 0) <= 28)
-  const cells = [...all].sort((a, b) => (Number(b.util) || 0) - (Number(a.util) || 0)).slice(0, CAP)
+  // A null util has no colour on a util heatmap: painted as 0 it is a cool,
+  // near-transparent "healthy" tile, which is a claim about a subnet nobody
+  // measured. Unmeasured subnets are left off the map and counted in the
+  // label instead.
+  const measured = all.filter((s) => num(s.util) !== null)
+  const unmeasured = all.length - measured.length
+  const cells = [...measured].sort((a, b) => num(b.util) - num(a.util)).slice(0, CAP)
   const cols = 24
   const rows = Math.max(1, Math.ceil(cells.length / cols))
   const gap = 0.6
   const cw = 100 / cols
   const ch = 100 / rows
   const estateTotal = typeof totals.subnets === 'number' ? totals.subnets.toLocaleString() : null
-  const heatmapLabel = cells.length < all.length
-    ? `worst ${cells.length} of ${all.length.toLocaleString()} loaded${estateTotal ? ` (${estateTotal} in estate)` : ''}`
+  const heatmapLabel = cells.length < measured.length
+    ? `worst ${cells.length} of ${measured.length.toLocaleString()} loaded${estateTotal ? ` (${estateTotal} in estate)` : ''}`
     : `util by subnet — ${cells.length.toLocaleString()} loaded${estateTotal ? ` of ${estateTotal}` : ''}`
+  const unmeasuredLabel = unmeasured > 0 ? ` · ${unmeasured.toLocaleString()} util unknown` : ''
 
   return (
-    <Card span={2} title="Subnet Heatmap" right={<span className="text-[11px] text-muted">{heatmapLabel}</span>}>
+    <Card span={2} title="Subnet Heatmap" right={<span className="text-[11px] text-muted">{heatmapLabel}{unmeasuredLabel}</span>}>
       {cells.length === 0 ? (
-        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
+        subnetsStatus === 'error' ? (
+          <FeedUnavailable label="Subnets feed unavailable" />
+        ) : all.length > 0 ? (
+          <Empty>no loaded subnet reports utilisation</Empty>
+        ) : (
+          <Empty />
+        )
       ) : (
         <>
           <svg width="100%" height="110" viewBox="0 0 100 100" preserveAspectRatio="none">
             {cells.map((s, i) => {
-              const util = Number(s.util) || 0
+              const util = num(s.util) // never null: `cells` is the measured set
               const r = Math.floor(i / cols)
               const c = i % cols
               const color = util >= 92 ? COLORS.crit : util >= 75 ? COLORS.warn : COLORS.accent
@@ -493,14 +581,16 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus }) {
     const arr = [...filtered]
     const { key, dir } = sort
     arr.sort((a, b) => {
-      let av, bv
-      if (key === 'network') { av = a.addr || a.cidr || ''; bv = b.addr || b.cidr || '' }
-      else if (key === 'site') { av = a.site || ''; bv = b.site || '' }
-      else if (key === 'free') { av = (Number(a.total) || 0) - (Number(a.used) || 0); bv = (Number(b.total) || 0) - (Number(b.used) || 0) }
-      else if (key === 'util') { av = Number(a.util) || 0; bv = Number(b.util) || 0 }
-      else { av = Number(a.util) || 0; bv = Number(b.util) || 0 }
-      if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-      return dir === 'asc' ? av - bv : bv - av
+      if (key === 'network' || key === 'site') {
+        const av = key === 'network' ? a.addr || a.cidr || '' : a.site || ''
+        const bv = key === 'network' ? b.addr || b.cidr || '' : b.site || ''
+        return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      // util (and anything unmapped) plus free: both can be null, and
+      // cmpMaybe parks null at the bottom of whichever direction is shown
+      // instead of ordering it as 0.
+      if (key === 'free') return cmpMaybe(freeOf(a), freeOf(b), dir)
+      return cmpMaybe(num(a.util), num(b.util), dir)
     })
     return arr
   }, [filtered, sort])
@@ -508,19 +598,22 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus }) {
   const rows = useMemo(
     () =>
       sorted.map((s) => {
-        const util = Number(s.util) || 0
-        const free = (Number(s.total) || 0) - (Number(s.used) || 0)
-        const st = utilStatus(util)
+        const util = num(s.util)
+        const free = freeOf(s)
+        // utilStatus(null) would answer "Healthy" (null >= 92 and null >= 75
+        // are both false), i.e. a green badge on a subnet nobody measured.
+        // Unknown gets its own neutral badge and no colour bar.
+        const st = util === null ? null : utilStatus(util)
         return {
           network: s.addr || s.cidr || '—',
           site: s.site || '—',
           util,
           free,
-          status: st.label,
+          status: st ? st.label : 'Unknown',
           _addr: s.addr || s.cidr,
-          _color: st.color,
-          _bg: st.bg,
-          _fg: st.fg,
+          _color: st?.color,
+          _bg: st?.bg,
+          _fg: st?.fg,
         }
       }),
     [sorted],
@@ -530,11 +623,15 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus }) {
     const header = ['Network', 'Site', 'Utilization', 'Status', 'Free']
     const lines = [header.join(',')]
     for (const s of sorted) {
-      const util = Number(s.util) || 0
-      const free = (Number(s.total) || 0) - (Number(s.used) || 0)
-      const status = utilStatus(util).label
+      // "unknown", not 0% / 0 free — the CSV outlives the screen and is the
+      // artefact people paste into a capacity plan.
+      const util = num(s.util)
+      const free = freeOf(s)
+      const status = util === null ? 'Unknown' : utilStatus(util).label
       const network = s.addr || s.cidr || ''
-      lines.push([network, s.site || '', `${util}%`, status, free].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      const utilCell = util === null ? 'unknown' : `${util}%`
+      const freeCell = free === null ? 'unknown' : free
+      lines.push([network, s.site || '', utilCell, status, freeCell].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -556,27 +653,32 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus }) {
       render: (util, r) => (
         <div className="flex items-center gap-2">
           <div className="h-[5px] rounded-full bg-line overflow-hidden flex-1 min-w-[70px]">
-            <div className="h-full" style={{ width: `${Math.min(100, util)}%`, background: r._color }} />
+            {/* no bar at all for an unknown util — a zero-width bar and a 0%
+                bar are indistinguishable, and one of them is a lie */}
+            {util !== null && <div className="h-full" style={{ width: `${Math.min(100, util)}%`, background: r._color }} />}
           </div>
-          <span className="text-muted w-9 text-right">{util}%</span>
+          <span className="text-muted w-9 text-right">{util === null ? DASH : `${util}%`}</span>
         </div>
       ),
     },
     {
       key: 'status',
       label: 'Status',
-      render: (_v, r) => (
-        <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: r._bg, color: r._fg }}>
-          {r.status}
-        </span>
-      ),
+      render: (_v, r) =>
+        r.util === null ? (
+          <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium bg-line text-muted">Unknown</span>
+        ) : (
+          <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: r._bg, color: r._fg }}>
+            {r.status}
+          </span>
+        ),
     },
     {
       key: 'free',
       label: 'Free',
       align: 'right',
       sortable: true,
-      render: (free) => <span className="text-muted">{free.toLocaleString()} free</span>,
+      render: (free) => <span className="text-muted">{free === null ? DASH : `${free.toLocaleString()} free`}</span>,
     },
   ]
 
@@ -588,9 +690,13 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus }) {
       right={
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted tabular-nums">
-            {typeof totals.subnets === 'number'
-              ? `showing ${rows.length.toLocaleString()} of ${totals.subnets.toLocaleString()}`
-              : `${rows.length.toLocaleString()} loaded`}
+            {/* "0 loaded" over a dead feed reads as an empty estate; the count
+                is unknown, so it prints as an em-dash. */}
+            {subnetsStatus === 'error'
+              ? `${DASH} loaded`
+              : typeof totals.subnets === 'number'
+                ? `showing ${rows.length.toLocaleString()} of ${totals.subnets.toLocaleString()}`
+                : `${rows.length.toLocaleString()} loaded`}
           </span>
           <input
             aria-label="Filter subnets"

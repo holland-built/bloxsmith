@@ -1,6 +1,27 @@
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
+import { sliceState } from '../lib/data.js'
+
+// Per-slice status for a RAW useApi('/api/data') read.
+//
+// This tab reads the route directly, so it does not get the honesty rule that
+// ui/src/lib/data.js applies for useData() tabs. Without it, a request that
+// fails outright (a 500, or the cold-request abort) leaves data.data null =>
+// _meta {} => the slice status undefined => every `=== 'error'` branch below
+// falls through to <Empty/> — "all hosts online", "no DNS zone issues" — for a
+// read that never happened. Same rule as lib/data.js: requested but missing =>
+// 'error', whether the whole request died or the payload came back without the
+// slice.
+//
+// The vocabulary stays exactly ok / empty / error. A first read still in flight
+// is not a verdict at all — it returns undefined so the panel keeps its
+// skeleton rather than accusing the feed.
+function feedStatus(api, name) {
+  if (api.loading && !api.data) return undefined
+  if (api.error || !api.data) return 'error'
+  return sliceState(api.data, name).status
+}
 
 // ---------- main ----------
 
@@ -12,7 +33,13 @@ export default function Daily() {
   const hosts = data.data?.hosts ?? []
   const zones = data.data?.zones ?? []
   const totals = data.data?._totals
-  const meta = data.data?._meta ?? {}
+  // Each panel reads a DIFFERENT slice, so the status is per-slice — but a
+  // failure of the whole request is a failure of all three.
+  const meta = {
+    subnets: feedStatus(data, 'subnets'),
+    hosts: feedStatus(data, 'hosts'),
+    zones: feedStatus(data, 'zones'),
+  }
 
   return (
     <div className="w-full px-6 py-5">
@@ -95,14 +122,17 @@ function SecurityToday({ sec }) {
     { label: 'blocked', value: Number(sec.data?.blocked) || 0, color: COLORS.ok },
   ]
 
+  // A dead threat feed is not a quiet day. The fetch failing, or finishing with
+  // no body at all, is the same "we do not know" as an explicit
+  // availability:"error" — never four zeros and "0 events".
+  const secDead = !sec.loading && (!!sec.error || !sec.data || sec.data.availability === 'error')
+
   return (
-    <Card span={4} title="Security Today" right={<span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
+    <Card span={4} title="Security Today" right={<span className="text-[11px] text-muted">{secDead ? '—' : events.length.toLocaleString()} events</span>}>
       {sec.loading ? (
         <Skeleton h={160} />
-      ) : sec.data?.availability === 'error' ? (
+      ) : secDead ? (
         <FeedUnavailable reason={sec.data?.reason} label="Threat feed unavailable" />
-      ) : sec.error || (!sec.data) ? (
-        <Empty />
       ) : (
         <div className="grid grid-cols-4 gap-3 mt-1">
           {chips.map((c) => (
@@ -122,6 +152,7 @@ function SecurityToday({ sec }) {
 // ---------- top capacity risks ----------
 
 function TopCapacityRisks({ subnets, loading, subnetsStatus }) {
+  const feedDead = subnetsStatus === 'error' && subnets.length === 0
   const rows = [...subnets]
     .filter((s) => (s.addr || s.cidr) && (Number(s.cidr) || 0) <= 28)
     .map((s) => ({
@@ -155,8 +186,10 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus }) {
     <Card span={3} title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-[11px] text-muted">top 10</span>}>
       {loading ? (
         <Skeleton h={220} />
+      ) : feedDead ? (
+        <FeedUnavailable label="Subnets feed unavailable" />
       ) : rows.length === 0 ? (
-        subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
+        <Empty />
       ) : (
         <DataTable
           rows={rows}
@@ -174,6 +207,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus }) {
 function HostsAttention({ hosts, loading, hostsStatus }) {
   const { COLORS } = useChartTheme()
   const rows = hosts.filter((h) => !/online|active/i.test(h.status || ''))
+  const feedDead = hostsStatus === 'error' && hosts.length === 0
 
   const columns = [
     {
@@ -193,11 +227,18 @@ function HostsAttention({ hosts, loading, hostsStatus }) {
   ]
 
   return (
-    <Card span={3} title="Hosts Needing Attention" right={<span className="text-[11px] text-muted">{rows.length} shown</span>}>
+    <Card
+      span={3}
+      title="Hosts Needing Attention"
+      // "0 shown" off a dead feed reads as "nothing needs attention".
+      right={<span className="text-[11px] text-muted">{feedDead ? '—' : rows.length} shown</span>}
+    >
       {loading ? (
         <Skeleton h={220} />
+      ) : feedDead ? (
+        <FeedUnavailable label="Hosts feed unavailable" />
       ) : rows.length === 0 ? (
-        hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty>all hosts online</Empty>
+        <Empty>all hosts online</Empty>
       ) : (
         <DataTable
           rows={rows}
@@ -217,6 +258,7 @@ function DnsZoneIssues({ zones, loading, zonesStatus }) {
   const rows = zones
     .filter((z) => Array.isArray(z.issues) && z.issues.length > 0)
     .map((z) => ({ ...z, count: z.issues.length, issuesText: z.issues.join(', ') }))
+  const feedDead = zonesStatus === 'error' && zones.length === 0
 
   const columns = [
     {
@@ -235,11 +277,18 @@ function DnsZoneIssues({ zones, loading, zonesStatus }) {
   ]
 
   return (
-    <Card span={6} title="DNS Zone Issues" right={<span className="text-[11px] text-muted">{rows.length} zones</span>}>
+    <Card
+      span={6}
+      title="DNS Zone Issues"
+      // "0 zones" off a dead feed reads as a clean estate.
+      right={<span className="text-[11px] text-muted">{feedDead ? '—' : rows.length} zones</span>}
+    >
       {loading ? (
         <Skeleton h={160} />
+      ) : feedDead ? (
+        <FeedUnavailable label="DNS zones feed unavailable" />
       ) : rows.length === 0 ? (
-        zonesStatus === 'error' ? <FeedUnavailable label="DNS zones feed unavailable" /> : <Empty>no DNS zone issues</Empty>
+        <Empty>no DNS zone issues</Empty>
       ) : (
         <DataTable
           rows={rows}

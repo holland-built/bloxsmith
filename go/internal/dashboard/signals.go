@@ -48,6 +48,16 @@ func BuildSignals(data map[string]any) []map[string]any {
 	now := signalsNow()
 
 	for _, subnet := range rowsOf(data["subnets"]) {
+		// A subnet whose utilization was never reported emits util = nil
+		// (normSubnets). Falling through would coerce that nil to 0, sail under
+		// both thresholds and classify the subnet "ok" by arithmetic accident —
+		// an alerting engine quietly asserting a subnet is fine when it has no
+		// idea. Skip it: no signal at all. An invented alert is as bad as a
+		// missed one, and the honest state — "we do not know" — belongs on the
+		// row as an em-dash, not in the incident list as an alarm.
+		if subnet["util"] == nil {
+			continue
+		}
 		util := toInt(orAny(subnet["util"], 0))
 		severity := "ok"
 		if util >= 90 {

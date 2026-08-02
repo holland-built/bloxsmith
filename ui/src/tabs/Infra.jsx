@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Cell, PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
+import { sliceState } from '../lib/data.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
-import { DataTable, FeedCard } from '../components/DataTable.jsx'
+import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
 
@@ -14,6 +15,25 @@ function fmtDate(v) {
   if (!v) return '—'
   const ms = new Date(v).getTime()
   return isNaN(ms) ? '—' : new Date(ms).toLocaleString()
+}
+
+// Per-slice status for a RAW useApi('/api/data') read.
+//
+// This tab reads the route directly, so it does not get the honesty rule that
+// ui/src/lib/data.js applies for useData() tabs. Without it, a request that
+// fails outright (a 500, or the cold-request abort) leaves data.data null =>
+// _meta {} => the slice status undefined => every `=== 'error'` branch below
+// falls through to <Empty/>, i.e. "you have no hosts" for a read that never
+// happened. Same rule as lib/data.js: requested but missing => 'error', whether
+// the whole request died or the payload came back without the slice.
+//
+// The vocabulary stays exactly ok / empty / error. A first read still in flight
+// is not a verdict at all — it returns undefined so the panel keeps its
+// skeleton rather than accusing the feed.
+function feedStatus(api, name) {
+  if (api.loading && !api.data) return undefined
+  if (api.error || !api.data) return 'error'
+  return sliceState(api.data, name).status
 }
 
 // ---------- main ----------
@@ -31,7 +51,8 @@ export default function Infra() {
   const hp = useHashParams()
   const hosts = data.data?.hosts ?? []
   const totalHosts = data.data?._totals?.hosts
-  const hostsStatus = data.data?._meta?.hosts
+  const hostsStatus = feedStatus(data, 'hosts')
+  const dataLoading = data.loading && !data.data
   const maintEnabled = maint.data?.enabled
   const maintOk = maint.data?.status !== 'error' && !maint.error && maintEnabled != null
 
@@ -52,7 +73,7 @@ export default function Infra() {
         )}
       </div>
       <CardGrid>
-        <HostStatus hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} />
+        <HostStatus hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <FeedCard
           span={2}
           title="Host Health"
@@ -82,7 +103,7 @@ export default function Infra() {
           ]}
         />
         <DiscoveryStatus feed={discovery} />
-        <HostTable hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} />
+        <HostTable hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <FeedCard
           span={3}
           title="Jobs"
@@ -115,17 +136,22 @@ export default function Infra() {
 
 // ---------- host status ----------
 
-function HostStatus({ hosts, totalHosts, hostsStatus }) {
+function HostStatus({ hosts, totalHosts, hostsStatus, loading }) {
   const { COLORS, TT } = useChartTheme()
-  const buckets = { Active: 0, Degraded: 0, Offline: 0, Other: 0 }
-  for (const h of hosts) {
-    const s = h.status || ''
-    if (/online|up|active/i.test(s)) buckets.Active++
-    else if (/degraded|warn/i.test(s)) buckets.Degraded++
-    else if (/off|down|error|fail/i.test(s)) buckets.Offline++
-    else buckets.Other++
+  // Buckets come from the same statusBucket() the table sorts and filters by,
+  // so one host cannot be "Other" here and "unknown" there. Unknown is its own
+  // slice rather than part of Other: a host whose status the upstream never
+  // reported is not a category of health, and burying 52-of-532 in "Other"
+  // hides exactly the population an operator needs to go look at.
+  const buckets = { Active: 0, Degraded: 0, Offline: 0, Unknown: 0, Other: 0 }
+  for (const h of hosts) buckets[BUCKET_LABEL[statusBucket(h.status)]]++
+  const colorMap = {
+    Active: COLORS.accent,
+    Degraded: COLORS.warn,
+    Offline: COLORS.crit,
+    Unknown: COLORS.other,
+    Other: COLORS.purple,
   }
-  const colorMap = { Active: COLORS.accent, Degraded: COLORS.warn, Offline: COLORS.crit, Other: COLORS.other }
   // Headline uses the real estate total when the backend has it; the pie is
   // always built from the fetched rows only (loaded !== estate), so its
   // slices are shown as a % of rows loaded, never scaled to invent the gap.
@@ -138,8 +164,15 @@ function HostStatus({ hosts, totalHosts, hostsStatus }) {
 
   return (
     <Card span={2} title="Host Status">
-      {total === 0 ? (
-        hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty />
+      {loading ? (
+        // An unfinished read is neither "no hosts" nor a dead feed.
+        <Skeleton h={130} />
+      ) : hostsStatus === 'error' && loaded === 0 ? (
+        // Checked BEFORE the zero test: a dead read has no total, and printing
+        // the empty state for it claims an estate with no hosts in it.
+        <FeedUnavailable label="Hosts feed unavailable" />
+      ) : total === 0 ? (
+        <Empty />
       ) : (
         <div className="flex items-center gap-4">
           <div className="relative w-[130px] h-[130px] shrink-0">
@@ -227,18 +260,52 @@ function DiscoveryStatus({ feed }) {
 
 // ---------- host inventory table ----------
 
+// "unknown" is the backend's word for a host whose upstream status was absent
+// or unrecognised (norm.go). It used to be reported as "pending" — a real
+// lifecycle state an operator acts on — so it gets its own bucket everywhere
+// and is never folded back into pending, active or offline.
 function statusBucket(s) {
   s = s || ''
+  if (/^unknown$/i.test(s)) return 'unknown'
   if (/online|up|active/i.test(s)) return 'active'
   if (/degraded|warn/i.test(s)) return 'degraded'
   if (/off|down|error|fail/i.test(s)) return 'offline'
   return 'other'
 }
 
-// Severity rank for status sort: offline first, then degraded, active, other.
-const SEV_ORDER = { offline: 0, degraded: 1, active: 2, other: 3 }
+const BUCKET_LABEL = { active: 'Active', degraded: 'Degraded', offline: 'Offline', unknown: 'Unknown', other: 'Other' }
+
+// Severity rank for status sort: offline first, then degraded, then unknown,
+// then active, then other. Unknown sorts ABOVE healthy because "we could not
+// tell" is a thing to go and check, and BELOW degraded because it is not a
+// confirmed fault.
+const SEV_ORDER = { offline: 0, degraded: 1, unknown: 2, active: 3, other: 4 }
 function sevRank(s) {
-  return SEV_ORDER[statusBucket(s)] ?? 3
+  return SEV_ORDER[statusBucket(s)] ?? 4
+}
+
+// Status badge. Same pill as DataTable's own `badge` renderer for every status
+// it knows; an unknown one is deliberately not one of those colours — neutral
+// grey and italic, so it never reads as the green of a healthy host or the
+// amber of a pending one, and it carries why in its tooltip.
+function renderStatus(v) {
+  if (statusBucket(v) === 'unknown') {
+    return (
+      <span
+        className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium italic"
+        style={{ background: 'var(--pill-neutral-bg)', color: 'var(--pill-neutral-fg)' }}
+        title="upstream reported no status for this host"
+      >
+        unknown
+      </span>
+    )
+  }
+  const st = statusBadgeColor(v) || { bg: 'var(--pill-neutral-bg)', fg: 'var(--pill-neutral-fg)' }
+  return (
+    <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: st.bg, color: st.fg }}>
+      {v || '—'}
+    </span>
+  )
 }
 
 // Octet-aware IP compare.
@@ -254,11 +321,13 @@ function ipCompare(a, b) {
 const HOST_COLUMNS = [
   { key: 'name', label: 'Name', sortable: true, keep: true },
   { key: 'ip', label: 'IP', mono: true, sortable: true, comparator: (a, b) => ipCompare(a.ip, b.ip) },
-  { key: 'status', label: 'Status', badge: true, sortable: true, comparator: (a, b) => sevRank(a.status) - sevRank(b.status) },
+  // badge stays set so the column keeps its badge width measurement; render
+  // takes precedence over it for the actual cell.
+  { key: 'status', label: 'Status', badge: true, sortable: true, render: (v) => renderStatus(v), comparator: (a, b) => sevRank(a.status) - sevRank(b.status) },
   { key: 'type', label: 'Type', priority: 'low' },
 ]
 
-function HostTable({ hosts, status, totalHosts, hostsStatus }) {
+function HostTable({ hosts, status, totalHosts, hostsStatus, loading }) {
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
   const [type, setType] = useState('')
@@ -277,12 +346,17 @@ function HostTable({ hosts, status, totalHosts, hostsStatus }) {
     })
   }, [hosts, filter, type, statusFilter])
 
+  const feedDead = hostsStatus === 'error' && hosts.length === 0
   const total = totalHosts ?? hosts.length
-  const countLabel = filtered.length === hosts.length
-    ? (totalHosts != null && totalHosts !== hosts.length
-        ? `${hosts.length.toLocaleString()} loaded of ${total.toLocaleString()} hosts`
-        : `${hosts.length.toLocaleString()} hosts`)
-    : `${filtered.length.toLocaleString()} of ${hosts.length.toLocaleString()} loaded (${total.toLocaleString()} total)`
+  // A dead read knows no counts. "0 hosts" is a claim about the estate; "—" is
+  // the truth, which is that nothing came back to count.
+  const countLabel = feedDead
+    ? '— hosts'
+    : filtered.length === hosts.length
+      ? (totalHosts != null && totalHosts !== hosts.length
+          ? `${hosts.length.toLocaleString()} loaded of ${total.toLocaleString()} hosts`
+          : `${hosts.length.toLocaleString()} hosts`)
+      : `${filtered.length.toLocaleString()} of ${hosts.length.toLocaleString()} loaded (${total.toLocaleString()} total)`
 
   return (
     <Card
@@ -323,8 +397,12 @@ function HostTable({ hosts, status, totalHosts, hostsStatus }) {
         </div>
       }
     >
-      {hosts.length === 0 ? (
-        hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty />
+      {loading ? (
+        <Skeleton h={220} />
+      ) : feedDead ? (
+        <FeedUnavailable label="Hosts feed unavailable" />
+      ) : hosts.length === 0 ? (
+        <Empty />
       ) : filtered.length === 0 ? (
         <Empty>no hosts match</Empty>
       ) : (
