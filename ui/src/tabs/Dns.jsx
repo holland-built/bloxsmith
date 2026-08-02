@@ -112,6 +112,36 @@ function QpsHero({ qps }) {
   )
 }
 
+// ---------- zone ttl ----------
+//
+// A zone whose upstream carries no zone_authority publishes no TTL at all, so
+// the backend emits ttl/neg_ttl as null and skips the TTL health checks for it
+// (issues/anomaly stay null) rather than fabricating 3600 and declaring the
+// zone healthy. The UI has to keep that distinction: an unknown TTL is not a
+// value, so it is not a number, not a zero, and not a clean result.
+
+/** Numeric TTL, or null when the zone never published one. */
+function ttlValue(v) {
+  if (v == null) return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/** True when this zone was actually run through the TTL checks. */
+function ttlChecked(z) {
+  return Array.isArray(z.issues)
+}
+
+// Sort by TTL with unknowns last in BOTH directions. `Number(null) || 0` used
+// to file every unknown-TTL zone at the very front of an ascending sort, right
+// among the genuinely dangerous 30-second zones.
+function ttlCompare(a, b, dir) {
+  const av = ttlValue(a.ttl)
+  const bv = ttlValue(b.ttl)
+  if (av == null || bv == null) return av == null && bv == null ? 0 : av == null ? 1 : -1
+  return dir === 'asc' ? av - bv : bv - av
+}
+
 // ---------- zone kpis ----------
 
 function ZoneKpis({ zones, zonesStatus, loading }) {
@@ -138,11 +168,33 @@ function ZoneKpis({ zones, zonesStatus, loading }) {
 
   const issueCount = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length
   const anomalyCount = zones.filter((z) => z.anomaly).length
+  // Zones with no published TTL were never run through the checks. They are
+  // not clean zones — they are unexamined ones, so "3 of N have issues" would
+  // be a claim about zones that were never all looked at. Both verdict tiles
+  // therefore name the population they actually cover. On the live tenant
+  // today every zone reports a TTL, so the coverage note stays hidden.
+  const checked = zones.filter(ttlChecked).length
+  const unchecked = zones.length - checked
+  const coverage = unchecked > 0 ? `of ${checked.toLocaleString()} checked` : null
 
   const cells = [
-    { label: 'Zones', value: zones.length.toLocaleString() },
-    { label: 'Zones w/ issues', value: issueCount.toLocaleString(), color: issueCount > 0 ? COLORS.crit : COLORS.accent },
-    { label: 'Anomalies', value: anomalyCount.toLocaleString(), color: anomalyCount > 0 ? COLORS.warn : COLORS.accent },
+    {
+      label: 'Zones',
+      value: zones.length.toLocaleString(),
+      note: unchecked > 0 ? `${unchecked.toLocaleString()} publish no TTL` : null,
+    },
+    {
+      label: 'Zones w/ issues',
+      value: issueCount.toLocaleString(),
+      color: issueCount > 0 ? COLORS.crit : COLORS.accent,
+      note: coverage,
+    },
+    {
+      label: 'Anomalies',
+      value: anomalyCount.toLocaleString(),
+      color: anomalyCount > 0 ? COLORS.warn : COLORS.accent,
+      note: coverage,
+    },
   ]
 
   return (
@@ -151,6 +203,7 @@ function ZoneKpis({ zones, zonesStatus, loading }) {
         <div key={c.label} className={`py-3.5 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}>
           <div className="text-muted text-xs">{c.label}</div>
           <div className="text-2xl font-semibold tracking-tight my-1" style={{ color: c.color }}>{c.value}</div>
+          {c.note && <div className="text-dim text-[10px] leading-tight">{c.note}</div>}
         </div>
       ))}
     </Card>
@@ -242,11 +295,13 @@ function ZoneTable({ zones, issuesOnly, zonesStatus, loading }) {
     const arr = [...filtered]
     const { key, dir } = sort
     arr.sort((a, b) => {
+      // TTL has a third outcome — unknown — so it cannot go through the
+      // number branch below, which would rank it as 0.
+      if (key === 'ttl') return ttlCompare(a, b, dir)
       let av, bv
       if (key === 'fqdn') { av = a.fqdn || ''; bv = b.fqdn || '' }
       else if (key === 'view') { av = a.view || ''; bv = b.view || '' }
       else if (key === 'records') { av = Number(a.records) || 0; bv = Number(b.records) || 0 }
-      else if (key === 'ttl') { av = Number(a.ttl) || 0; bv = Number(b.ttl) || 0 }
       else if (key === 'issues') { av = (a.issues?.length) || 0; bv = (b.issues?.length) || 0 }
       else { av = a.fqdn || ''; bv = b.fqdn || '' }
       if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
@@ -264,12 +319,18 @@ function ZoneTable({ zones, issuesOnly, zonesStatus, loading }) {
       <span className="font-mono text-[11px]" style={{ color: COLORS.crit }}>{z.issues.join(', ')}</span>
     ) : z.anomaly ? (
       <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }}>anomaly</span>
-    ) : '—'
+    ) : ttlChecked(z) ? '—' : (
+      // Distinct from the clean '—': this zone published no TTL, so the checks
+      // never ran on it. Silence here would read as "checked, nothing wrong".
+      <span className="text-[11px] italic text-dim" title="no TTL published — TTL checks did not run for this zone">not checked</span>
+    )
+    const ttl = ttlValue(z.ttl)
     return {
       fqdn: z.fqdn,
       view: z.view,
       records: (Number(z.records) || 0).toLocaleString(),
-      ttl: z.ttl,
+      // No TTL published => em-dash, never a number this zone does not have.
+      ttl: ttl == null ? '—' : ttl,
       issues: issuesCell,
       _hasIssues: hasIssues,
     }
@@ -279,7 +340,11 @@ function ZoneTable({ zones, issuesOnly, zonesStatus, loading }) {
     { key: 'fqdn', label: 'Zone', mono: true, keep: true, grow: true, sortable: true },
     { key: 'view', label: 'View', sortable: true },
     { key: 'records', label: 'Records', align: 'right', hideWhenConstant: true, sortable: true },
-    { key: 'ttl', label: 'TTL', mono: true, sortable: true },
+    // keep: DataTable auto-hides a column whose every cell is empty, and '—' is
+    // an empty cell to it. A view where no zone publishes a TTL must still show
+    // the TTL column full of dashes — silently dropping it reads as "TTL isn't
+    // tracked" instead of "we don't know it".
+    { key: 'ttl', label: 'TTL', mono: true, sortable: true, keep: true },
     { key: 'issues', label: 'Issues', hideWhenConstant: true, sortable: true },
   ]
 

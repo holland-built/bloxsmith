@@ -382,9 +382,17 @@ function LookalikeTable({ lookalikes }) {
     },
   ]
 
+  // "0 detected" is a measurement. When the fetch failed, or upstream declared
+  // itself unavailable, nothing was measured — the count is unknown, not zero.
+  const counted = !lookalikes.error && !d.unavailable
+
   return (
-    <Card span={3} title="Lookalike Domains" right={<span className="text-[11px] text-muted">{rows.length} detected</span>}>
-      {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error || d.unavailable || rows.length === 0 ? (
+    <Card span={3} title="Lookalike Domains" right={<span className="text-[11px] text-muted">{counted ? rows.length : '—'} detected</span>}>
+      {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error ? (
+        // Previously byte-identical to a genuinely empty result ("no data") —
+        // a dead feed read as a clean estate.
+        <FeedUnavailable reason={lookalikes.error.message || undefined} label="Lookalike domain feed unavailable" />
+      ) : d.unavailable || rows.length === 0 ? (
         <Empty>{d.unavailable ? (d.not_entitled ? `not entitled — ${d.unavailable}` : d.unavailable) : 'no data'}</Empty>
       ) : (
         <DataTable rows={rows} columns={columns} maxHeight={320} rowCap={150} />
@@ -584,7 +592,11 @@ function ExposuresPanel({ exposures }) {
     <Card span={4} title="Exposures" right={rightNode}>
       {exposures.loading ? <Skeleton h={260} /> : availability === 'error' ? (
         <FeedUnavailable reason={payload.reason} label="Exposures feed unavailable" />
-      ) : exposures.error || rows.length === 0 ? (
+      ) : exposures.error ? (
+        // A transport failure/500/abort used to fall into "no exposures
+        // reported" — an all-clear attack surface produced by a dead fetch.
+        <FeedUnavailable reason={exposures.error.message || undefined} label="Exposures feed unavailable" />
+      ) : rows.length === 0 ? (
         <Empty>no exposures reported</Empty>
       ) : (
         <>

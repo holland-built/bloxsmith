@@ -632,6 +632,16 @@ func (d *Deps) teardownBlock(w http.ResponseWriter, r *http.Request, b map[strin
 	}
 	result, err := d.prov(r).NewBlockDecommissioner(blockName, ipSpace, dry, noopEmit).Decommission()
 	if err != nil {
+		// Decommission deletes blocks one at a time and can fail PART WAY THROUGH,
+		// so this arm is reached with address blocks already gone from the tenant.
+		// Returning through provErr skipped the teardown-block entry below and had
+		// no error sibling, making a partial destructive teardown the one outcome
+		// the log never mentioned. teardownSiteStream already writes exactly this
+		// entry on exactly this path (teardown-site-error); this is its match.
+		if !dry {
+			d.auditAppend("teardown-block-error", httpx.Actor(r),
+				map[string]any{"template": name, "error": err.Error()})
+		}
 		d.provErr(w, r, "/api/teardown/block", err)
 		return
 	}
@@ -691,6 +701,27 @@ func (d *Deps) retagBlock(w http.ResponseWriter, r *http.Request, b map[string]a
 	for _, blk := range blocks {
 		res, err := d.prov(r).RetagBlock(mapOf(blk), status, dry)
 		if err != nil {
+			// RetagBlock PATCHes one address block per iteration, so this arm is
+			// reached with len(changed) blocks ALREADY re-tagged upstream. Returning
+			// through provErr discards `changed` and skips the retag-block entry at
+			// the bottom, so a half-retagged estate was the one outcome the log never
+			// mentioned — and block tags are what teardown filters select by, so the
+			// blocks left carrying the new Status are exactly the ones that later go
+			// missing from a cleanup. The count is the load-bearing field: it says
+			// how far the loop got before it stopped. Modelled on teardown-site-error
+			// and teardown-block-error.
+			//
+			// The !dry gate mirrors every sibling arm. It cannot currently fire on a
+			// dry run — RetagBlock sends no PATCH when dryRun is set and so returns
+			// no error — so it guards against a future dry-run failure mode rather
+			// than an existing one.
+			if !dry {
+				d.auditAppend("retag-block-error", httpx.Actor(r), map[string]any{
+					"template": templateName,
+					"status":   status,
+					"count":    len(changed),
+					"error":    err.Error()})
+			}
 			d.provErr(w, r, "/api/retag/block", err)
 			return
 		}
@@ -859,6 +890,26 @@ func (d *Deps) recoverStream(emit *sse.Emit, r *http.Request) {
 	}
 	path := r.URL.Path
 	d.logExc(path, rec)
+	// The frame below sends the operator to the audit log — and for the
+	// provisioning and teardown streams the panic unwinds past every auditAppend
+	// in the handler, so that log held NOTHING about the run. The message pointed
+	// at an empty page during an incident, which is worse than saying nothing: it
+	// reads as "nothing had been applied yet". This entry makes it true. It is the
+	// only record of the run that can exist once the stack has unwound, so it is
+	// unconditional — there is no dry-run flag to consult that recoverStream can
+	// trust after a panic of unknown origin.
+	//
+	// The panic text stays out of it, for the same reason it stays out of the
+	// operator's frame: it can carry internal detail. It is in the server log
+	// (logExc, above), which is where the cause belongs. What this row records is
+	// that a run aborted, on which route, by whom.
+	//
+	// Guarded on d.Audit because this function runs while the stack is already
+	// unwinding: auditAppend on a nil log would panic here and kill the process,
+	// which is the one thing recoverStream exists to prevent.
+	if d.Audit != nil {
+		d.auditAppend("stream-aborted", httpx.Actor(r), map[string]any{"route": path})
+	}
 	if emit != nil && *emit != nil {
 		// Deliberately not the panic text: it can carry internal detail, and the
 		// operator's actionable fact is that the run stopped partway.

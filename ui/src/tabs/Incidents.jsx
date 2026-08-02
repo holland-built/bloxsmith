@@ -128,8 +128,8 @@ export default function Incidents() {
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Incidents</h1>
       <CardGrid>
-        <CategoryChips categories={categories} loading={incApi.loading} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
-        <SeverityKpis signals={signals} truncated={signalsTruncated} loading={incApi.loading} />
+        <CategoryChips categories={categories} loading={incApi.loading} error={incApi.error} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
+        <SeverityKpis signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} />
         <IncidentsTable
           signals={signals}
           signalsTotal={signalsTotal}
@@ -162,13 +162,20 @@ export default function Incidents() {
 
 // ---------- category chips ----------
 
-function CategoryChips({ categories, loading, category, onCategory, degraded, meta = {} }) {
+function CategoryChips({ categories, loading, error, category, onCategory, degraded, meta = {} }) {
   const { COLORS } = useChartTheme()
   const failed = Object.entries(meta).filter(([, v]) => v === 'error').map(([k]) => k)
   return (
     <Card span={6} title="Categories" note="click to filter Triage">
       {loading ? (
         <Skeleton h={40} />
+      ) : error ? (
+        // A failed /api/incidents leaves categories at [] — without this branch
+        // a dead backend rendered "no active categories", i.e. all-clear.
+        <FeedUnavailable
+          label="Categories unavailable"
+          reason={error.message ? `could not load incidents: ${error.message}` : 'could not load incidents'}
+        />
       ) : categories.length === 0 && degraded ? (
         <FeedUnavailable
           label="Category check incomplete"
@@ -204,7 +211,7 @@ function CategoryChips({ categories, loading, category, onCategory, degraded, me
 
 // ---------- severity kpi row ----------
 
-function SeverityKpis({ signals, truncated, loading }) {
+function SeverityKpis({ signals, truncated, loading, error }) {
   const { COLORS } = useChartTheme()
   const counts = { critical: 0, high: 0, medium: 0, low: 0 }
   for (const s of signals) {
@@ -217,6 +224,29 @@ function SeverityKpis({ signals, truncated, loading }) {
     { label: 'Medium', value: counts.medium, color: COLORS.warn },
     { label: 'Low', value: counts.low, color: COLORS.accent },
   ]
+
+  // A failed fetch leaves `signals` at [], so every count is 0. Printing those
+  // zeros asserts "no critical incidents" on the strength of a dead backend —
+  // the counts are unknown, not zero, so they render as em-dashes under an
+  // explicit failure banner.
+  if (error) {
+    return (
+      <Card span={6} className="flex flex-col" note="counts unknown — fetch failed">
+        <FeedUnavailable
+          label="Severity counts unavailable"
+          reason={error.message ? `could not load incidents: ${error.message}` : 'could not load incidents'}
+        />
+        <div className="flex flex-row items-stretch justify-between">
+          {cells.map((c, i) => (
+            <div key={c.label} className={`flex-1 py-1 px-3 ${i < cells.length - 1 ? 'border-r border-line-2' : ''}`}>
+              <div className="text-muted text-xs">{c.label}</div>
+              <div className="text-2xl font-semibold tracking-tight my-1 text-muted">—</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    )
+  }
 
   return (
     <Card

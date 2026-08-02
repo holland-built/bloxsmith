@@ -54,6 +54,23 @@ func resultOK(res map[string]any) bool { b, _ := res["ok"].(bool); return b }
 // filter can see, so its id has to be recorded (see editCreate).
 func taggingFailed(res map[string]any) bool { b, _ := res["tagging_failed"].(bool); return b }
 
+// strandedReservations is taggingFailed's sibling for the allocate path, and
+// closes the same hole: edit.SelfserviceAllocate can return ok:false AFTER it
+// has reserved real addresses, when the DNS record write fails and the
+// compensating release cannot give an address back. Those addresses come back in
+// "orphaned" and are STILL RESERVED on the customer's tenant. It returns the list
+// rather than a bool because the ids are the whole point — a row that only says
+// "some addresses leaked" cannot be acted on. Nil when the key is absent, empty
+// or not a list: the builder sets it only when the release actually failed, so
+// its absence is a clean rollback and correctly gets no row.
+func strandedReservations(res map[string]any) []any {
+	list, _ := res["orphaned"].([]any)
+	if len(list) == 0 {
+		return nil
+	}
+	return list
+}
+
 // --- POST /api/selfservice/allocate (server.py:6144) -------------------------
 
 func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map[string]any) {
@@ -64,10 +81,29 @@ func (d *Deps) selfserviceAllocate(w http.ResponseWriter, r *http.Request, b map
 	defer d.recoverEdit(w, r, "/api/selfservice/allocate")
 	res, status := d.editFor(r).SelfserviceAllocate(b)
 	d.json(w, r, status, res)
-	if resultOK(res) && !isDry(res) {
+	switch {
+	case resultOK(res) && !isDry(res):
 		d.auditAppend("selfservice-allocate", httpx.Actor(r), map[string]any{
 			"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
 			"tag_value": b["tag_value"], "count": b["count"]})
+	case !isDry(res):
+		// The ok-only gate left the same hole editCreate had: an ok:false that
+		// nonetheless left live objects on the tenant. Here they are IP addresses
+		// the builder reserved and then could not release, which stay reserved and
+		// eat the subnet until someone finds them — and nothing recorded that this
+		// system created them or who asked for it.
+		//
+		// A separate event name on purpose: reusing "selfservice-allocate" would
+		// file a failed allocation under the same name as a successful one, and
+		// anyone counting allocations would count this as one. The ids are copied
+		// through as the builder's own []any (audit/widen.go handles the element
+		// types) so the row names each stranded address.
+		if orphans := strandedReservations(res); orphans != nil {
+			d.auditAppend("selfservice-allocate-orphaned", httpx.Actor(r), map[string]any{
+				"subnet_id": b["subnet_id"], "tag_key": b["tag_key"],
+				"tag_value": b["tag_value"],
+				"orphaned":  orphans, "count": len(orphans)})
+		}
 	}
 }
 
@@ -130,6 +166,13 @@ func (d *Deps) dnsRecordDelete(w http.ResponseWriter, r *http.Request) {
 	defer d.recoverEdit(w, r, "/api/dns/records DELETE")
 	res, status := d.editFor(r).Delete(objPath)
 	d.json(w, r, status, res)
+	// This route removes a record from the customer's live DNS and wrote nothing
+	// at all — its sibling dnsRecordUpdate audits a mere field change, while the
+	// irreversible half of the pair left no trace. Same gate as the update path:
+	// a preview is not a deletion, and a failure deleted nothing.
+	if resultOK(res) && !isDry(res) {
+		d.auditAppend("dns-record-delete", httpx.Actor(r), map[string]any{"id": id})
+	}
 }
 
 // --- DELETE /api/ipam/addresses/<id> (server.py:6409) -------------------------
@@ -148,6 +191,11 @@ func (d *Deps) ipamAddressDelete(w http.ResponseWriter, r *http.Request) {
 	defer d.recoverEdit(w, r, "/api/ipam/addresses DELETE")
 	res, status := d.editFor(r).Delete(objPath)
 	d.json(w, r, status, res)
+	// Identical gap to dnsRecordDelete: an IPAM address was released from the
+	// live tenant with no record of who released it or which one.
+	if resultOK(res) && !isDry(res) {
+		d.auditAppend("ipam-address-delete", httpx.Actor(r), map[string]any{"id": id})
+	}
 }
 
 // --- POST /api/edit/<resource> (server.py:6300) -------------------------------
