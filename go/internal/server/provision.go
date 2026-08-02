@@ -351,13 +351,13 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 
 	emit(terminalFrame(summary))
 	if !dry {
-		// regions goes in as []any, NOT the []string parseRegions returns:
-		// canonicalJSON's type switch is closed and []string falls through to its
-		// "unsupported type" default, which auditAppend only LOGS. Passing the
-		// slice straight through made this whole entry vanish while the request
-		// still returned 200.
+		// regions is a []string, which canonicalJSON's closed type switch does NOT
+		// accept — and auditAppend only LOGS that rejection, so passing it raw
+		// once made this whole entry vanish while the request still returned 200.
+		// It is safe here because audit.Log.Append widens every detail value
+		// first (audit/widen.go); do not add a local conversion back.
 		d.auditAppend("provision-seed-demo", httpx.Actor(r), map[string]any{
-			"regions":   anySlice(regions),
+			"regions":   regions,
 			"succeeded": lenOf(summary, "succeeded"),
 			"failed":    lenOf(summary, "failed"),
 			"skipped":   lenOf(summary, "skipped")})
@@ -506,12 +506,11 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 
 	emit(terminalFrame(summary))
 	if !dry {
-		// Same conversion, same reason as provisionSeedDemoStream: canonicalJSON
-		// accepts []any and rejects []string, and auditAppend swallows the
-		// rejection into a log line. This is a destructive bulk teardown, so the
-		// dropped entry was the worse of the two.
+		// Same []string, same trap as provisionSeedDemoStream, and audit.Append's
+		// widening (audit/widen.go) is what makes it safe. This is a destructive
+		// bulk teardown, so the dropped entry was the worse of the two.
 		d.auditAppend("teardown-seed-demo", httpx.Actor(r), map[string]any{
-			"regions":   anySlice(regions),
+			"regions":   regions,
 			"succeeded": lenOf(summary, "succeeded"),
 			"failed":    lenOf(summary, "failed"),
 			"skipped":   lenOf(summary, "skipped")})
@@ -765,20 +764,6 @@ func parseRegions(raw string) []string {
 	}
 	if len(out) == 0 {
 		out = []string{"amer", "emea", "apac"}
-	}
-	return out
-}
-
-// anySlice widens a []string for the audit boundary. audit.canonicalJSON has a
-// closed type switch (nil/bool/string/json.Number/float64/int/int64/
-// map[string]any/[]any) and errors on anything else, and auditAppend only logs
-// that error — so a []string in a detail map silently costs the whole entry.
-// parseRegions keeps returning []string for its other callers; the widening
-// happens here, at the only boundary that cares.
-func anySlice(s []string) []any {
-	out := make([]any, len(s))
-	for i, v := range s {
-		out[i] = v
 	}
 	return out
 }
