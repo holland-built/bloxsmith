@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { COLORS, Card, Empty, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { withToken } from '../lib/authFetch.js'
+// Same component SelfService.jsx already uses. /api/ipam/spaces and
+// /api/ipam/blocks answer 502 on an upstream failure and /api/templates answers
+// 500 — and `data?.spaces ?? []` collapses every one of those into the empty
+// array a tenant that genuinely owns nothing produces. Unread, the select falls
+// back to its placeholder and Apply sits disabled with no reason given.
+import { FetchError } from './SelfService.jsx'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
 
@@ -277,6 +283,13 @@ function SubnetMode() {
           </Field>
           <CheckRow checked={makeZone} onChange={(v) => { setMakeZone(v); flow.markStale() }} label="Create matching DNS zone" />
 
+          <div>
+            <FetchError error={spacesApi.error} stale={spaces.length > 0} />
+            <FetchError error={blocksApi.error} stale={blocks.length > 0} />
+            {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+            {space && !blocksApi.loading && !blocksApi.error && blocks.length === 0 && <Empty>no address blocks</Empty>}
+          </div>
+
           <PreviewApply
             status={flow.status}
             stale={flow.stale}
@@ -364,6 +377,13 @@ function SiteMode({ isAdmin }) {
               ))}
             </select>
           </Field>
+
+          <div>
+            <FetchError error={spacesApi.error} stale={spaces.length > 0} />
+            <FetchError error={templatesApi.error} stale={templates.length > 0} />
+            {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+            {!templatesApi.loading && !templatesApi.error && templates.length === 0 && <Empty>no templates</Empty>}
+          </div>
 
           <PreviewApply
             status={build.status}
@@ -516,6 +536,11 @@ function SeedMode({ isAdmin }) {
               {spaces.map((sp) => <option key={sp.id} value={sp.name}>{sp.name}</option>)}
             </select>
           </Field>
+
+          <div>
+            <FetchError error={spacesApi.error} stale={spaces.length > 0} />
+            {!spacesApi.loading && !spacesApi.error && spaces.length === 0 && <Empty>no IP spaces</Empty>}
+          </div>
 
           <PreviewApply
             status={seed.status}

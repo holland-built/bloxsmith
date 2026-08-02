@@ -31,9 +31,12 @@ import (
 // assertion stays green whether or not anything was recorded. Only the file
 // tells "recorded" from "returned an honest status and forgot about it".
 //
-// The two negative tests (invalid / rejected) are what stop "just audit
-// unconditionally" from passing: in those cases nothing reached, or nothing was
-// applied by, upstream, so a record would be a lie.
+// The negative test (invalid) is what stops "just audit unconditionally" from
+// passing: every "invalid" return in dashboard/security.go happens before
+// CallToolChecked is called, so no request was ever built and a record would be
+// a lie. "rejected" is NOT such a case — it is a transport error, which cannot
+// tell "never sent" from "sent, outcome unknown" (see isMcpTransportError), so
+// it is recorded.
 
 const (
 	auditBlockListID  = "block_list_1"
@@ -208,9 +211,13 @@ func TestBlockDomain_InvalidIsNotAudited(t *testing.T) {
 	}
 }
 
-// TestUnblockDomain_RejectedIsNotAudited: upstream refused the call at the
-// transport level. Nothing was applied, so nothing is recorded.
-func TestUnblockDomain_RejectedIsNotAudited(t *testing.T) {
+// TestUnblockDomain_RejectedIsStillAudited: a transport error on the removal
+// side. It was recorded as "upstream refused it, nothing was applied" and
+// therefore audited nowhere — but CallToolChecked wraps EVERY CallTool error as
+// ErrTransport, including a timeout that fires after the DELETE was dispatched
+// and a gateway error raised once the tool may already have run. The domain may
+// be off the customer's block list right now.
+func TestUnblockDomain_RejectedIsStillAudited(t *testing.T) {
 	d, logPath := newSecurityAuditDeps(t, auditBlockListID, 500, "", []string{"evil.example.com"})
 
 	rr := httptest.NewRecorder()
@@ -219,8 +226,40 @@ func TestUnblockDomain_RejectedIsNotAudited(t *testing.T) {
 	if rr.Code != 502 {
 		t.Fatalf("status = %d, want 502 (rejected); body=%s", rr.Code, rr.Body.String())
 	}
-	if n := len(auditEntries(t, logPath, "")); n != 0 {
-		t.Fatalf("audit entries on disk = %d, want 0 — upstream refused the delete, so the domain is "+
-			"still blocked and a record would misreport the block list", n)
+	entries := auditEntries(t, logPath, "unblock-domain")
+	if len(entries) != 1 {
+		t.Fatalf("unblock-domain entries on disk = %d, want 1 — a transport error cannot tell "+
+			"\"never sent\" from \"sent, outcome unknown\", and these routes have no write-authorized "+
+			"row to fall back on", len(entries))
+	}
+	detail := residualAuditDetail(t, entries[0])
+	if detail["domain"] != "evil.example.com" {
+		t.Fatalf("audit domain = %v, want evil.example.com", detail["domain"])
+	}
+	if detail["outcome"] != "rejected" {
+		t.Fatalf("audit outcome = %v, want \"rejected\" — the row must stay distinguishable from a "+
+			"confirmed removal and from an unconfirmed one", detail["outcome"])
+	}
+}
+
+// TestBlockDomain_RejectedIsStillAudited: the same unknown outcome on the
+// blocking side — the PATCH may already have added the domain to the live list.
+func TestBlockDomain_RejectedIsStillAudited(t *testing.T) {
+	d, logPath := newSecurityAuditDeps(t, auditBlockListID, 500, "", []string{"other.example.com"})
+
+	rr := httptest.NewRecorder()
+	d.body(d.blockDomain)(rr, securityWriteRequest("/api/block-domain", "evil.example.com"))
+
+	if rr.Code != 502 {
+		t.Fatalf("status = %d, want 502 (rejected); body=%s", rr.Code, rr.Body.String())
+	}
+	entries := auditEntries(t, logPath, "block-domain")
+	if len(entries) != 1 {
+		t.Fatalf("block-domain entries on disk = %d, want 1 — \"rejected\" names a transport error, "+
+			"not a refusal by the tenant", len(entries))
+	}
+	detail := residualAuditDetail(t, entries[0])
+	if detail["outcome"] != "rejected" {
+		t.Fatalf("audit outcome = %v, want \"rejected\"", detail["outcome"])
 	}
 }

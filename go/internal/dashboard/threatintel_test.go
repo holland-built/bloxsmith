@@ -64,9 +64,15 @@ func TestFetchDossier_ResultsFetchFailure_NoCleanVerdictCached(t *testing.T) {
 }
 
 // TestFetchDossier_ResultsFetchSuccess_CleanVerdictEmitted proves the fix
-// didn't break the legitimate path: a real 200 with no malicious records
-// must still emit a genuine clean verdict (malicious:false,
-// max_threat_level:0), not an unavailable marker.
+// didn't break the legitimate path: a real 200 whose sources WERE examined
+// and found nothing malicious must still emit a genuine clean verdict
+// (malicious:false, max_threat_level:0), not an unavailable marker.
+//
+// The fixture used to be `{"results":[]}`. That was never a clean lookup —
+// it is a lookup that examined nothing, and asserting CLEAN for it pinned
+// the very defect normDossier's len(sources) == 0 check now closes (see
+// dossier_nosource_test.go). It is now one genuinely usable source with no
+// threat records, which is what "genuinely clean" actually looks like.
 func TestFetchDossier_ResultsFetchSuccess_CleanVerdictEmitted(t *testing.T) {
 	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -74,7 +80,7 @@ func TestFetchDossier_ResultsFetchSuccess_CleanVerdictEmitted(t *testing.T) {
 		case strings.Contains(r.URL.Path, "/lookup/indicator/"):
 			_, _ = w.Write([]byte(`{"job_id":"job-2"}`))
 		case strings.Contains(r.URL.Path, "/results"):
-			_, _ = w.Write([]byte(`{"results":[]}`))
+			_, _ = w.Write([]byte(`{"results":[{"params":{"source":"atp"},"data":{"records":[]}}]}`))
 		default:
 			_, _ = w.Write([]byte(`{}`))
 		}

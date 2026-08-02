@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { COLORS, Card, Empty, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { deletedMsg } from './SelfService.jsx'
 
 const inputCls = 'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none'
 
@@ -215,7 +216,7 @@ export default function Editor() {
           setStatus('idle')
           return
         }
-        setResult({ ok: true, msg: `${spec.label} deleted.` })
+        setResult({ ok: true, msg: deletedMsg(j, spec.label) })
         setEditId('')
         setFields({})
         setPreview(null)

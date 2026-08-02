@@ -234,7 +234,33 @@ func (s *Service) FetchInsights() map[string]any {
 	return result
 }
 
-// normInsights is norm_insights (server.py:4229).
+// normInsights is norm_insights (server.py:4229): it maps a REST
+// /api/v1/insights row onto the field names the (dead) SecurityActionSummaryView
+// cube used to produce, so consumers see one stable contract.
+//
+// Only some of that contract has a source. insightId/tFamily/threatType/
+// priorityText/status/numEvents/feedSource/startedAt/mostRecentAt are real
+// upstream fields and are mapped here. totalVerifiedAssets and timeSaved were
+// cube columns with NO REST counterpart, and were emitted as a literal 0 —
+// "0 assets verified", "0 seconds saved" — which reads as a measurement rather
+// than as the absence of one. They are now passed through only when the row
+// actually reports them, and are nil (JSON null, an em-dash in the UI)
+// otherwise. No alias is guessed for them: if upstream turns out to report
+// these under another name (numEvents -> totalEvents is the precedent), the
+// name goes in firstPresent's key list here and nowhere else.
+//
+// PRESENCE, not truthiness, is the test — firstPresent, never orAny: a row
+// that genuinely reports 0 verified assets is a real measurement and must
+// survive as 0, and orAny (Python's `a or b`) would silently downgrade it to
+// unknown, which is the opposite lie.
+//
+// count (always 1) and totalTimeSaved (always 0) are gone rather than nulled:
+// both are cube AGGREGATE measures — "how many security actions", "seconds
+// saved across them" — that have no per-row meaning at all, no upstream field
+// to ever fill them, and no reader anywhere in go/ or ui/. `count` was also the
+// visible symptom: json.Marshal sorts keys, so the SOC Insights table's
+// first-four-keys column picker put a column of literal 1s in front of the
+// operator.
 func normInsights(raw []any) []any {
 	out := []any{}
 	for _, ri := range raw {
@@ -246,16 +272,16 @@ func normInsights(raw []any) []any {
 		if severity == "" {
 			severity = "medium"
 		}
+		verifiedAssets, _ := firstPresent(r, "totalVerifiedAssets")
+		timeSaved, _ := firstPresent(r, "timeSaved")
 		out = append(out, map[string]any{
 			"id":                  orStr(r["insightId"], ""),
 			"name":                orStr(r["tFamily"], r["threatType"], r["insightId"], ""),
 			"severity":            severity,
 			"currentStatus":       orStr(r["status"], ""),
 			"totalEvents":         toInt(orAny(r["numEvents"], 0)),
-			"totalVerifiedAssets": 0,
-			"timeSaved":           0,
-			"count":               1,
-			"totalTimeSaved":      0,
+			"totalVerifiedAssets": verifiedAssets,
+			"timeSaved":           timeSaved,
 			"feedSource":          orStr(r["feedSource"], ""),
 			"startedAt":           orStr(r["startedAt"], ""),
 			"mostRecentAt":        orStr(r["mostRecentAt"], ""),

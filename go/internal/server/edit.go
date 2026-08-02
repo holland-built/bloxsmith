@@ -54,6 +54,28 @@ func resultOK(res map[string]any) bool { b, _ := res["ok"].(bool); return b }
 // filter can see, so its id has to be recorded (see editCreate).
 func taggingFailed(res map[string]any) bool { b, _ := res["tagging_failed"].(bool); return b }
 
+// deleteOutcomeUnknown reports whether a FAILED edit.Client.Delete left the
+// object's fate undecided rather than untouched, keyed to the status that
+// builder reports.
+//
+// edit.Client.Delete derives its status from statusOr(upstream, 502): every
+// real upstream status passes straight through, and the one case that has no
+// status to pass — rest.Client.Write reporting 0, i.e. no HTTP response was
+// ever received — becomes 502. Status 0 is what a client-side timeout or a
+// dropped connection produces, and by then the DELETE was already on the wire:
+// the object may well be gone from the customer's tenant. Recording nothing
+// there loses the only trace of a destructive call.
+//
+// A definite upstream status (400/403/404/409/500 …) is upstream having
+// answered and refused. That is a genuine non-event and stays unrecorded, which
+// is what keeps the entry below from degenerating into "audit every failure".
+//
+// The conflation this accepts is one-way and deliberate: a real upstream 502 or
+// 504 is a gateway saying it could not get an answer from the backend, which is
+// the same unknown, so it belongs on the recorded side too. Nothing upstream
+// positively refused can land here.
+func deleteOutcomeUnknown(status int) bool { return status == 502 || status == 504 }
+
 // strandedReservations is taggingFailed's sibling for the allocate path, and
 // closes the same hole: edit.SelfserviceAllocate can return ok:false AFTER it
 // has reserved real addresses, when the DNS record write fails and the
@@ -172,6 +194,17 @@ func (d *Deps) dnsRecordDelete(w http.ResponseWriter, r *http.Request) {
 	// a preview is not a deletion, and a failure deleted nothing.
 	if resultOK(res) && !isDry(res) {
 		d.auditAppend("dns-record-delete", httpx.Actor(r), map[string]any{"id": id})
+	} else if deleteOutcomeUnknown(status) {
+		// The ok-only gate above still lost one destructive case: a DELETE that
+		// was dispatched and then never answered (see deleteOutcomeUnknown). The
+		// record may be gone from the customer's live DNS with nothing anywhere
+		// saying this system asked for it. Same shape as teardown-site-error /
+		// teardown-block-error, and a separate event name on purpose — filing it
+		// as "dns-record-delete" would count an unknown outcome as a deletion.
+		// It claims nothing: outcome is "unknown" and the builder's own error
+		// text travels with it.
+		d.auditAppend("dns-record-delete-error", httpx.Actor(r),
+			map[string]any{"id": id, "outcome": "unknown", "error": res["error"]})
 	}
 }
 
@@ -195,6 +228,13 @@ func (d *Deps) ipamAddressDelete(w http.ResponseWriter, r *http.Request) {
 	// live tenant with no record of who released it or which one.
 	if resultOK(res) && !isDry(res) {
 		d.auditAppend("ipam-address-delete", httpx.Actor(r), map[string]any{"id": id})
+	} else if deleteOutcomeUnknown(status) {
+		// Identical unknown-outcome hole on the IPAM half: the address may have
+		// been released from the live tenant and the reply lost. See
+		// dnsRecordDelete above for the reasoning and deleteOutcomeUnknown for
+		// why a definite upstream refusal is still not recorded.
+		d.auditAppend("ipam-address-delete-error", httpx.Actor(r),
+			map[string]any{"id": id, "outcome": "unknown", "error": res["error"]})
 	}
 }
 
