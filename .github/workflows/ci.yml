@@ -78,6 +78,26 @@ jobs:
           fi
           echo "gofmt: clean"
 
+      # Nothing in this repo has ever checked a dependency for known CVEs. The
+      # npm side of the tree gets `npm audit`; the Go side — which is the actual
+      # product, and the only half that touches Infoblox credentials — got
+      # nothing at all. `go build` and `go vet` do not look at advisories.
+      #
+      # govulncheck over `npm audit`'s model deliberately: it is call-graph
+      # aware, so it reports a CVE only when this code can actually reach the
+      # affected function. A version-range matcher would flag every transitive
+      # module and train whoever reads the red X to skip it.
+      #
+      # First run (2026-08-03, local, Go 1.26.3) found three reachable stdlib
+      # advisories — GO-2026-5856 / -5039 / -5037 — all fixed by the toolchain
+      # patch alone. CI was already green on them, because `go-version: 1.26.x`
+      # resolves to the newest patch while local dev sat on .3. That asymmetry
+      # is the reason this belongs in CI *and* the reason CI alone is not
+      # enough: a developer's machine can be behind what CI ships.
+      - name: Go known-vulnerability scan (govulncheck)
+        working-directory: go
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
       # A green `go test ./...` proves the tests ran; it does not prove any
       # given security control is what made them pass. Three times in one day
       # a control was silently unprotected because its test drove a stub
