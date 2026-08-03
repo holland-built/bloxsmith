@@ -212,10 +212,20 @@ func envSourceOf(src vault.PassphraseSource) string {
 // success using the very file the operator is about to delete, which is the
 // false all-clear this command exists to prevent.
 //
-// It CANNOT WRITE. It calls Unlock, which only reads vault.json, and it checks
-// Exists() first — never AutoUnlock, which INITIALISES a new vault when none is
-// there. A "check" that created an empty vault would report that the passphrase
-// opens it, truthfully, having just replaced the thing being asked about.
+// It CANNOT CREATE OR CHANGE A VAULT. It checks Exists() first and then calls
+// Unlock — never AutoUnlock, which INITIALISES a new vault when none is there. A
+// "check" that created an empty vault would report that the passphrase opens it,
+// truthfully, having just replaced the thing being asked about.
+//
+// ONE WRITE IS POSSIBLE and it is stated rather than hidden: opening a vault
+// still on the legacy v1 scrypt parameters re-seals it under the current ones
+// (vault.go, migrateLocked), so vault.json can come back with a new "v" and a
+// new token. It is the same payload under the same passphrase, so the answer
+// this command gives is exactly as true afterwards as before, and a failure to
+// re-seal leaves the file byte-identical. Nothing is created, no secret changes,
+// and no tenant data is touched — but the file's bytes are not guaranteed
+// unchanged for a v1 vault, and claiming otherwise here would be a lie an
+// operator could check.
 //
 // getPass is a parameter so the three outcomes can be tested on a machine with
 // no keychain at all (every Linux CI runner), which is where this would
