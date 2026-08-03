@@ -13,9 +13,11 @@ import (
 //
 // v3.23.0 documented this and did not fix it: with auto-unlock the passphrase
 // lives in a `.env` in the SAME DIRECTORY as vault.json. So the vault's own
-// encryption — scrypt N=2^15, Fernet, 0600 — protects a stolen disk, a backup or
-// a copied volume, and then the file sitting next to it hands the passphrase to
-// anyone who took the same copy. The control was cancelling itself out.
+// encryption — scrypt (kdfByVersion in vault.go), Fernet, 0600 — protects a
+// stolen disk, a backup or a copied volume, and then the file sitting next to it
+// hands the passphrase to anyone who took the same copy. The control was
+// cancelling itself out. Note that hardening the KDF does nothing about this:
+// no scrypt cost matters when the passphrase is readable beside the file.
 //
 // WHAT THIS BUYS, EXACTLY. On macOS the login keychain is encrypted at rest under
 // the user's login password and only unlocked after they log in. Moving the

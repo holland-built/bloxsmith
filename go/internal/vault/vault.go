@@ -1,14 +1,15 @@
 // Package vault ports Bloxsmith's encrypted credential store from server.py
-// (lines 2404-2416, 2750-3055). It reads and writes the EXACT on-disk format
-// the Python app produces so an existing user's vault.json unlocks unchanged.
+// (lines 2404-2416, 2750-3055). It reads and writes the on-disk format the
+// Python app produced so an existing user's vault.json unlocks unchanged.
 //
-// Crypto parity (server.py:2768-2779):
-//   - KDF:    scrypt(passphrase, salt, N=2^15, r=8, p=1, dkLen=32)  [_derive_key]
-//     then base64.urlsafe_b64encode(dk) -> the 44-char Fernet key.
+// On-disk format:
 //   - cipher: Fernet (AES-128-CBC + HMAC-SHA256, standard token layout).
-//   - file:   {"v":1, "salt": <std-b64 of 16 salt bytes>, "data": <fernet token>}
+//   - KDF:    scrypt(passphrase, salt, N, r, p, dkLen) then
+//     base64.urlsafe_b64encode(dk) -> the 44-char Fernet key. The scrypt
+//     parameters are chosen by the envelope's "v" — see kdfByVersion.
+//   - file:   {"v":N, "salt": <std-b64 of 16 salt bytes>, "data": <fernet token>}
 //     at $VAULT_DIR/vault.json; plaintext is the JSON payload
-//     {tenants, active, groq, llm_base, llm_model}.
+//     {tenants, active, groq, llm_base, llm_model, write_allowed}.
 package vault
 
 import (
@@ -16,6 +17,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,13 +28,33 @@ import (
 	"golang.org/x/crypto/scrypt"
 )
 
-// scrypt parameters — MUST match server.py:2769 exactly.
-const (
-	scryptN     = 1 << 15 // 32768
-	scryptR     = 8
-	scryptP     = 1
-	scryptKeyLn = 32
-)
+// kdfParams is one generation of scrypt settings.
+type kdfParams struct{ N, R, P, KeyLen int }
+
+// kdfByVersion maps the envelope's "v" to the scrypt parameters that vault file
+// was sealed with. THE MAP IS THE COMPATIBILITY CONTRACT: every version listed
+// here is a vault this build can still open, so an entry may be reordered or
+// documented but MUST NOT be deleted or have its numbers edited — changing 1's
+// numbers does not re-encrypt anybody's file, it just makes every v1 vault on
+// every disk report a wrong passphrase, permanently, with no recovery.
+//
+// The old comment on these constants said they "MUST match server.py:2769".
+// That is no longer the constraint and has not been since the Python server was
+// retired: server.py does not exist in this repo. The real constraint is the
+// vault.json files already sitting on operators' disks, which is why the v1 row
+// is frozen rather than tracking anyone's current recommendation.
+var kdfByVersion = map[int]kdfParams{
+	// What the Python server shipped, from Go's 2017 scrypt docs. Frozen.
+	1: {N: 1 << 15, R: 8, P: 1, KeyLen: 32}, // 32 MiB
+	// OWASP's current minimum for scrypt. 2^17 costs ~128 MiB per derive.
+	2: {N: 1 << 17, R: 8, P: 1, KeyLen: 32},
+}
+
+// currentVaultVersion is what a NEW or re-keyed vault is written as. Unlock
+// upgrades anything older in place (migrateLocked); it refuses anything newer,
+// because a build that cannot derive the key cannot tell a wrong passphrase
+// from an unsupported file and must not guess.
+const currentVaultVersion = 2
 
 // Tenant is one stored connection (server.py:2891 shape).
 type Tenant struct {
@@ -55,6 +78,13 @@ type payload struct {
 }
 
 // fileEnvelope is the cleartext on-disk wrapper (server.py:2778).
+//
+// V WAS WRITTEN AND NEVER READ until the KDF migration: every writer hardcoded
+// 1 and Unlock ignored it. It now SELECTS THE KDF (kdfByVersion), so it is load
+// bearing in both directions — a file whose V does not match the parameters its
+// token was actually sealed with is unopenable by anything, which is why save()
+// takes V from v.ver (set beside v.key, never independently) instead of from a
+// literal.
 type fileEnvelope struct {
 	V    int    `json:"v"`
 	Salt string `json:"salt"` // std base64 of the 16 raw salt bytes
@@ -78,6 +108,12 @@ type Vault struct {
 	llmModel string
 	key      *fernet.Key // derived Fernet key
 	salt     string      // std-b64 salt (as stored)
+	// ver is the vault-file version v.key was derived under, and therefore the
+	// only correct value for the next save()'s envelope. It travels WITH the key
+	// — every site that assigns one assigns the other in the same statement, and
+	// every rollback restores both — because writing a version the in-memory key
+	// does not match produces a file nothing can ever open.
+	ver int
 	// writeAllowed holds the identities explicitly opted in to being written to
 	// (see writelock.go). Empty means nothing is writable, which is the default.
 	writeAllowed []string
@@ -220,10 +256,18 @@ func (v *Vault) Exists() bool {
 	return err == nil
 }
 
-// deriveKey ports _derive_key (server.py:2768). It runs scrypt then wraps the
-// result as a Fernet key via urlsafe-base64 (exactly what Python feeds Fernet).
-func deriveKey(passphrase string, salt []byte) (*fernet.Key, error) {
-	dk, err := scrypt.Key([]byte(passphrase), salt, scryptN, scryptR, scryptP, scryptKeyLn)
+// deriveKey ports _derive_key (server.py:2768). It runs scrypt with the
+// parameters ver names, then wraps the result as a Fernet key via
+// urlsafe-base64 (exactly what Python feeds Fernet).
+//
+// ver is always the version of the FILE being opened or written — never a
+// default — so a v1 file is derived with v1's parameters however old it is.
+func deriveKey(passphrase string, salt []byte, ver int) (*fernet.Key, error) {
+	p, ok := kdfByVersion[ver]
+	if !ok {
+		return nil, fmt.Errorf("vault file version %d is newer than this build understands; upgrade bloxsmith", ver)
+	}
+	dk, err := scrypt.Key([]byte(passphrase), salt, p.N, p.R, p.P, p.KeyLen)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +290,7 @@ func (v *Vault) Init(passphrase string) error {
 	if _, err := rand.Read(salt); err != nil {
 		return err
 	}
-	key, err := deriveKey(passphrase, salt)
+	key, err := deriveKey(passphrase, salt, currentVaultVersion)
 	if err != nil {
 		return err
 	}
@@ -254,7 +298,7 @@ func (v *Vault) Init(passphrase string) error {
 	v.tenants = nil
 	v.active = nil
 	v.groq, v.llmBase, v.llmModel = "", "", ""
-	v.key = key
+	v.key, v.ver = key, currentVaultVersion
 	v.salt = base64.StdEncoding.EncodeToString(salt)
 	return v.save()
 }
@@ -263,6 +307,20 @@ func (v *Vault) Init(passphrase string) error {
 // A wrong passphrase (or tampered file) returns ErrWrongPassphrase.
 var ErrWrongPassphrase = errors.New("wrong passphrase")
 
+// Unlock reads vault.json, derives the key under the parameters that FILE was
+// sealed with, decrypts, and only then upgrades an older file in place.
+//
+// THE ORDER OF THE STEPS BELOW IS THE SAFETY PROPERTY, not house style:
+//
+//  1. An unknown version is refused BEFORE any scrypt work. A v2 derive costs
+//     ~128 MiB and hundreds of milliseconds; spending that on a file this build
+//     has already established it cannot open turns a bad file (or a hostile one)
+//     into a memory spike.
+//  2. Nothing touches v's state until the payload has decrypted AND parsed. A
+//     half-populated vault left behind by a failed unlock would be a locked
+//     vault holding a live key.
+//  3. The migration runs LAST, on a vault that is already fully open and
+//     correct, so it can only ever fail forward: see migrateLocked.
 func (v *Vault) Unlock(passphrase string) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -277,11 +335,17 @@ func (v *Vault) Unlock(passphrase string) error {
 	if err := json.Unmarshal(b, &env); err != nil {
 		return err
 	}
+	// (1) Unknown version: refuse now, before scrypt. Deliberately NOT
+	// ErrWrongPassphrase — the passphrase was never tested and telling an
+	// operator theirs is wrong would send them to rotate a secret that is fine.
+	if _, ok := kdfByVersion[env.V]; !ok {
+		return fmt.Errorf("vault file version %d is newer than this build understands; upgrade bloxsmith", env.V)
+	}
 	salt, err := base64.StdEncoding.DecodeString(env.Salt)
 	if err != nil {
 		return err
 	}
-	key, err := deriveKey(passphrase, salt)
+	key, err := deriveKey(passphrase, salt, env.V)
 	if err != nil {
 		return err
 	}
@@ -295,6 +359,7 @@ func (v *Vault) Unlock(passphrase string) error {
 	if err := json.Unmarshal(plain, &p); err != nil {
 		return ErrWrongPassphrase
 	}
+	// (2) Decrypted and parsed — only now does any of this become v's state.
 	v.unlocked = true
 	v.tenants = p.Tenants
 	v.active = p.Active
@@ -302,8 +367,52 @@ func (v *Vault) Unlock(passphrase string) error {
 	v.llmBase = p.LLMBase
 	v.llmModel = p.LLMModel
 	v.writeAllowed = p.WriteAllowed
-	v.key = key
+	v.key, v.ver = key, env.V
 	v.salt = env.Salt
+	// (3) The unlock has already succeeded. Whatever the upgrade does or fails
+	// to do, this function returns nil from here on.
+	if env.V < currentVaultVersion {
+		if err := v.migrateLocked(passphrase, salt); err != nil {
+			log.Printf("[vault] %s is still on v%d key-derivation parameters: the in-place upgrade to v%d "+
+				"could not be written (%v). The vault is open and the file is untouched, so nothing is lost "+
+				"and the upgrade will be retried at the next unlock.", v.path, env.V, currentVaultVersion, err)
+		}
+	}
+	return nil
+}
+
+// migrateLocked re-seals an already-unlocked vault under currentVaultVersion's
+// KDF parameters. The caller holds v.mu, has just populated v from a file of an
+// older version, and passes the RAW salt bytes that file carried.
+//
+// THE SALT IS DELIBERATELY REUSED. It is already 16 bytes of crypto/rand from
+// whichever Init created the vault, and it is not a secret — its only job is to
+// make the derive unique to this file, which it still does. Minting a new one
+// here would buy nothing and would mean a migration that failed halfway had
+// changed two things instead of one. Rotate exists for a genuine salt refresh.
+//
+// A FAILURE HERE IS NOT AN UNLOCK FAILURE. The vault in memory is open, correct
+// and sealed under a key that matches what is on disk; save()'s tmp+rename means
+// a failed write leaves the original v1 file byte-intact. So the caller logs and
+// carries on, and the next unlock tries again.
+//
+// THE ONE ORDERING THAT MATTERS. v.key and v.ver are assigned together, after
+// the new key exists, and restored together if the write fails. save() takes the
+// envelope's version from v.ver and encrypts with v.key: if those two ever
+// disagree — a `V: 2` envelope holding a token sealed with the v1 key — the file
+// is unopenable by this build or any other, with no recovery and no passphrase
+// to blame. Mirrors Rotate's rollback for the same reason.
+func (v *Vault) migrateLocked(passphrase string, salt []byte) error {
+	newKey, err := deriveKey(passphrase, salt, currentVaultVersion)
+	if err != nil {
+		return err
+	}
+	oldKey, oldVer := v.key, v.ver
+	v.key, v.ver = newKey, currentVaultVersion
+	if err := v.save(); err != nil {
+		v.key, v.ver = oldKey, oldVer
+		return err
+	}
 	return nil
 }
 
@@ -312,6 +421,16 @@ func (v *Vault) Unlock(passphrase string) error {
 func (v *Vault) save() error {
 	if v.key == nil {
 		return errors.New("vault locked")
+	}
+	// A version this build cannot derive is a version it must not write: the
+	// resulting file would be refused by its own Unlock forever. Unreachable
+	// today (every site that sets v.key sets v.ver in the same statement) and
+	// kept anyway, because the cost of being wrong is an unopenable vault and
+	// the cost of the check is a map lookup. Failing here is safe — the write
+	// has not started, so vault.json is whatever it already was.
+	if _, ok := kdfByVersion[v.ver]; !ok {
+		return fmt.Errorf("refusing to write vault file version %d: this build has no key-derivation "+
+			"parameters for it, so the file it produced could never be unlocked", v.ver)
 	}
 	p := payload{
 		Tenants:      v.tenants,
@@ -329,7 +448,9 @@ func (v *Vault) save() error {
 	if err != nil {
 		return err
 	}
-	env := fileEnvelope{V: 1, Salt: v.salt, Data: string(tok)}
+	// V comes from v.ver — the version v.key was actually derived under. Never a
+	// literal: a hardcoded version is how the envelope and the token drift apart.
+	env := fileEnvelope{V: v.ver, Salt: v.salt, Data: string(tok)}
 	out, err := json.Marshal(env)
 	if err != nil {
 		return err
@@ -381,15 +502,17 @@ func (v *Vault) Rotate(newPassphrase string) error {
 	if _, err := rand.Read(salt); err != nil {
 		return err
 	}
-	key, err := deriveKey(newPassphrase, salt)
+	key, err := deriveKey(newPassphrase, salt, currentVaultVersion)
 	if err != nil {
 		return err
 	}
-	oldKey, oldSalt := v.key, v.salt
-	v.key = key
+	// A rotate is also the moment a legacy vault stops being one: it is already
+	// re-deriving and re-writing everything, so it emits currentVaultVersion.
+	oldKey, oldSalt, oldVer := v.key, v.salt, v.ver
+	v.key, v.ver = key, currentVaultVersion
 	v.salt = base64.StdEncoding.EncodeToString(salt)
 	if err := v.save(); err != nil {
-		v.key, v.salt = oldKey, oldSalt
+		v.key, v.salt, v.ver = oldKey, oldSalt, oldVer
 		return err
 	}
 	return nil
@@ -444,9 +567,13 @@ func (v *Vault) Reset() error {
 	v.lockLocked()
 	// Beyond what Lock clears: the LLM endpoint config is not a credential, but
 	// Reset means first-run state, and the salt must go so a stale salt cannot
-	// be paired with a re-initialised vault.
+	// be paired with a re-initialised vault. The file version goes with it — it
+	// describes the salt/key pair that no longer exists, and a leftover value
+	// would be the one thing about the deleted vault that survived into the next
+	// one. Init sets both again from scratch.
 	v.llmBase, v.llmModel = "", ""
 	v.salt = ""
+	v.ver = 0
 	return removeErr
 }
 
