@@ -4,7 +4,7 @@ What each tab in Bloxsmith does, what it reads, and what it can change.
 
 Tabs fall into two groups:
 
-- **Read-only** — Overview, Daily, Network, DNS, Security, Infra, Incidents, Audit. They poll and display; they never write to Infoblox.
+- **Read-only** — Overview, Daily, Network, DNS, Security, Infra, Assets, Incidents, Audit. They poll and display; they never write to Infoblox. Assets is the one exception to the polling half: it re-reads only when you ask it to, for the reason given in its own section.
 - **Write-capable** — Provision, Self-Service, Editor. These create, change, or delete real objects in your tenant. Drift and AI sit in between: Drift only reads, AI reads plus one write action (block a domain).
 
 One property holds across almost every panel on every tab: a feed that failed to load is never rendered the same way as a feed that loaded and came back empty. Where a call errors, times out, or the upstream returns a payload the panel can't trust, the panel says so — "feed unavailable," a chain-verify warning, a fetch-error line — instead of falling back to the same blank state a healthy, empty tenant would produce. If a panel shows no rows, that now means there genuinely are none, not that something failed silently on the way to the screen.
@@ -36,6 +36,7 @@ Destructive actions carry extra gates on top of this flow: teardown needs an adm
 | [DNS](#dns) | no | Query rate, services, DNSSEC, RPZ, DTC |
 | [Security](#security) | no | Threats, exposures, lookalikes |
 | [Infra](#infra) | no | Host and service health |
+| [Assets](#assets) | no | Every discovered asset, searchable and paged |
 | [Incidents](#incidents) | no | SOC triage queue |
 | [Audit](#audit) | no | Who changed what |
 | [Provision](#provision) | **yes** | Build subnets, sites, demo estates |
@@ -114,6 +115,22 @@ Host and service health. Host health polls every 15 seconds; the rest every 30�
 - **Asset Discovery** — discovery run status.
 
 Deep-linkable: `#infra?status=offline`.
+
+## Assets
+
+The inventory behind the counts. Infra's **Asset Discovery** tile and Security's **Asset Insights** tile can both tell you how many assets there are; this tab is where you find out which ones.
+
+- **Asset Inventory** — the total, and a chip per asset type with its own count. Click a chip to filter the list to that type; click the same chip again to clear it. The chips are the types *your tenant actually has*, not a catalog of every type that exists, so a chip never filters to nothing.
+- **Assets** — the list itself: name, type, provider, vendor, last seen. Sortable on any of the five columns, 50 rows to a page.
+- **Row detail** — click any row for the fields too sparse to justify a table column: OS, IP addresses, MAC addresses, model, location. OS is recorded for roughly a quarter of assets, so as a column it would be mostly empty; on the one asset you asked about it is often the first thing you want.
+
+Search matches the asset **name** and is case-insensitive. It runs on the server against the whole estate, not against the page on screen — searching from page 4 of 48 searches all 48 pages, and puts you back on page 1 of the result.
+
+Everything is server-side: the search, the type filter, the sort and the paging. The browser is never sent 2,000-plus assets to show you fifty of them.
+
+**This tab does not poll, and that is deliberate.** Every other read-only tab refreshes itself on a timer because the thing it watches changes minute to minute. Asset inventory changes when a discovery sync runs, so a timer here would re-fetch the same rows over and over — and it would do it while you are half-way down page 4, which is the one moment a table must not move under you. Use **Refresh** when you want it re-read. Refresh means "ask again"; the server keeps its own short-lived cache, so two refreshes in quick succession can honestly return the same rows.
+
+A panel that says **unavailable** means the read failed and names the reason. A list that is genuinely empty says so in different words. The two are never rendered the same way, so an empty table here means your filter matched nothing — not that something broke quietly on the way to the screen. The same rule applies to the total: if the count query fails but the list does not, the total is shown as unavailable rather than as a number, because a wrong total is worse than no total.
 
 ## Incidents
 

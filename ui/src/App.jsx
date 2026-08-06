@@ -5,6 +5,7 @@ import Network from './tabs/Network.jsx'
 import Dns from './tabs/Dns.jsx'
 import Security from './tabs/Security.jsx'
 import Infra from './tabs/Infra.jsx'
+import Assets from './tabs/Assets.jsx'
 import Incidents from './tabs/Incidents.jsx'
 import Audit from './tabs/Audit.jsx'
 import Provision from './tabs/Provision.jsx'
@@ -71,6 +72,11 @@ const TABS = [
   { id: 'dns', label: 'DNS', el: Dns },
   { id: 'security', label: 'Security', el: Security },
   { id: 'infra', label: 'Infra', el: Infra },
+  // Assets sits after Infra, not at the end: Infra's "Asset Discovery" tile is
+  // where an operator first sees an asset count, and this is the tab that
+  // answers the next question. A read-only tab appended after the write-capable
+  // ones would also break the read-then-write ordering the nav already has.
+  { id: 'assets', label: 'Assets', el: Assets },
   { id: 'incidents', label: 'Incidents', el: Incidents },
   { id: 'audit', label: 'Audit', el: Audit },
   { id: 'provision', label: 'Provision', el: Provision },
@@ -137,7 +143,7 @@ export default function App() {
 
   const Active = TABS.find((t) => t.id === tab)?.el ?? Overview
 
-  // Overflow nav: measure hidden probes (all 13 tab labels + a worst-case
+  // Overflow nav: measure hidden probes (every tab label + a worst-case
   // "More" label) against the nav's real rendered width, decide how many
   // tabs fit inline, and promote the active tab into the visible set if it
   // would otherwise land in the overflow menu.
