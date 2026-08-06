@@ -37,6 +37,31 @@ jobs:
         working-directory: ui
         run: npm test
 
+      # oxlint is in ui/devDependencies and `npm run lint` is in
+      # ui/package.json, and neither has ever been executed by anything — not
+      # this workflow, not a hook, not a pre-commit. `ui/.oxlintrc.json` even
+      # raises react/rules-of-hooks to "error", so the repo wrote down a rule
+      # it considered build-breaking and then never ran the tool that
+      # enforces it. An installed linter no job invokes is not a gate, it is
+      # a belief. The missing step was the defect; whatever it finds is only
+      # the symptom.
+      #
+      # First run (2026-08-06, local, oxlint 1.71.0) exited 0 with 36
+      # warnings and zero errors: 17 no-unused-vars (dead recharts imports in
+      # src/components/ui.jsx, unused catch bindings), 10
+      # react/only-export-components, 6 react-hooks/exhaustive-deps, 3
+      # no-unused-expressions.
+      #
+      # Those 36 are non-blocking today, deliberately: oxlint's exit code
+      # counts errors only, so warnings do not fail the build. Landing the
+      # step at that setting means a NEW error — a rules-of-hooks violation
+      # above all — stops the build the day it is written, instead of never.
+      # Clearing the 36 and then adding `--deny-warnings` is follow-up work.
+      # Gating on them now would have meant not landing the gate at all.
+      - name: UI lint (oxlint)
+        working-directory: ui
+        run: npm run lint
+
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
