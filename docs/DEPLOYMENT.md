@@ -47,8 +47,137 @@ the background at login, and `bloxsmith update` upgrades in place.
 > The multi-arch **ghcr images** are now cosign keyless-signed in CI (GitHub OIDC
 > identity — verify with `cosign verify ghcr.io/holland-built/bloxsmith:<tag>
 > --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/'
-> --certificate-oidc-issuer https://token.actions.githubusercontent.com`); the
+> --certificate-oidc-issuer https://token.actions.githubusercontent.com`), and each
+> architecture of the image also carries an SBOM attestation — see
+> [the image attestation](#the-container-images-sbom-attestation). The
 > standalone binary remains checksum-only.
+
+### The SBOM (what's inside the release)
+
+Every release also publishes an **SBOM** — a machine-readable list of the
+libraries compiled into the binary — one per archive, named
+`<archive-name>.sbom.json`. That is what to hand a security review that asks
+what the software is made of, and what to grep the morning a CVE lands in a Go
+module.
+
+Format is **SPDX 2.3 JSON**, produced by [syft](https://github.com/anchore/syft).
+Contents are the Go module graph read back out of the compiled binary — direct
+and transitive dependencies with exact versions, plus a `stdlib` entry pinning
+the Go toolchain the release was built with.
+
+Fetch one and read it:
+
+```bash
+V=3.53.0   # the release version, no v prefix
+BASE=https://github.com/holland-built/bloxsmith/releases/download/v$V
+curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
+
+# every dependency and its version
+jq -r '.packages[] | "\(.name) \(.versionInfo)"' "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
+```
+
+The SBOM is signed the same way everything else in the release is — cosign
+keyless, with the release workflow's GitHub OIDC identity, no key stored
+anywhere. Verify it before trusting it:
+
+```bash
+curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.sig"
+curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.pem"
+
+cosign verify-blob \
+  --certificate "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.pem" \
+  --signature   "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.sig" \
+  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
+```
+
+Each SBOM is also listed in `checksums.txt`, so it is covered by that file's
+Ed25519 and `ssh-keygen` signatures as well. The standalone `.sig`/`.pem` pair
+exists because an SBOM is the one artifact that gets forwarded on its own —
+attached to a ticket, uploaded to a vendor portal — where `checksums.txt` is
+nowhere in sight.
+
+#### The dashboard UI's npm dependencies
+
+The archive SBOMs above are read out of the **compiled binary**, and the web UI
+inside it (`go/web/app.bundle.js`) is a minified blob embedded with `go:embed`.
+Nothing in a Go module list can see React, recharts or tailwind, so a fifth
+document is published alongside them:
+
+```bash
+curl -fsSLO "$BASE/bloxsmith_${V}_ui_npm.sbom.json"
+jq -r '.packages[] | "\(.name) \(.versionInfo)"' "bloxsmith_${V}_ui_npm.sbom.json" | sort
+```
+
+Same format, same signing, same `checksums.txt` entry as the archive SBOMs. It is
+built from `ui/package-lock.json` rather than from the bundle, and it is the
+**production dependency closure** — the packages whose code can reach the bundle.
+`devDependencies` are excluded, so the linter and the type stubs are not in it.
+
+One thing that looks wrong and is not: `vite` and its `@rolldown/*` bindings
+*are* listed even though `vite` sits in `devDependencies`. `@tailwindcss/vite` is
+a production dependency and peer-depends on vite, so npm does not mark vite
+dev-only and it is genuinely part of the production closure. The set is therefore
+a **superset** of what literally ends up in `app.bundle.js` — it also carries
+build-time tools reachable from a production dependency, such as tailwind itself.
+That is the deliberate direction to err in: it over-reports rather than hiding
+something that shipped.
+
+### The container image's SBOM (attestation)
+
+`docker run` is the first install path in the README, and until now it was the
+one artifact with no ingredients list at all. The pushed image now carries its
+SBOM as a **cosign attestation** — signed with the same keyless GitHub OIDC
+identity as the image signature, stored in the registry beside the image, and
+covering **every architecture separately**.
+
+`ghcr.io/holland-built/bloxsmith:<tag>` is a multi-arch index, and `cosign attest`
+has no recursive mode, so an attestation on the tag would be one architecture's
+SBOM claiming to describe both. Nothing is attached to the index for that reason.
+**Resolve the architecture digest first:**
+
+```bash
+V=3.53.0                                # release version, no v prefix
+IMAGE=ghcr.io/holland-built/bloxsmith
+ARCH=amd64                              # or arm64
+
+DIGEST=$(docker buildx imagetools inspect --raw "$IMAGE:$V" \
+  | jq -r --arg a "$ARCH" '.manifests[] | select(.platform.architecture == $a) | .digest')
+
+cosign verify-attestation --type spdxjson \
+  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  "$IMAGE@$DIGEST" \
+  | jq -r '.payload | @base64d | fromjson | .predicate
+           | "\(.name):", (.packages[] | "  \(.name) \(.versionInfo)")'
+```
+
+Two attestations come back per architecture, and the `.predicate.name` tells them
+apart:
+
+| `.predicate.name` | What it lists |
+|---|---|
+| `ghcr.io/holland-built/bloxsmith` | The image scanned in the registry — the Go module graph **and** the distroless base's own packages (`base-files`, `media-types`, `netbase`, `tzdata`, `tzdata-legacy`) with their Debian versions |
+| `bloxsmith-ui-npm` | The same UI npm closure published as a release artifact above — attached here too, because the bundle is inside the binary inside this image |
+
+Together those two are the whole image. `<tag>` and `latest` resolve to the same
+index, so both are covered by the same per-architecture attestations.
+
+> **What is still not covered.** Two things, and neither is hidden by a green
+> check elsewhere:
+>
+> The **UI SBOM is derived from the lockfile, not from the shipped bundle.** It
+> says what the bundle was built from; it does not prove `app.bundle.js` was built
+> from exactly that. The check that ties the two together is a different one — the
+> "UI dist up to date" step in [ci.yml](../.github/workflows/ci.yml) rebuilds the
+> bundle from `ui/` and fails if `go/web/` differs.
+>
+> The **`ghcr.io` image attestation only exists for releases cut after this
+> change**. Tags published earlier have a cosign image *signature* but no SBOM
+> attestation, and `cosign verify-attestation` against them will correctly find
+> nothing. For those, generate one yourself:
+> `syft ghcr.io/holland-built/bloxsmith:<tag> -o spdx-json`.
 
 ### Windows
 
@@ -221,6 +350,9 @@ to publish AND cosign keyless-sign the multi-arch image to GitHub Container Regi
 the manual fallback. The push/PR CI ([ci.yml](../.github/workflows/ci.yml)) only
 builds and tests the tree — it does not publish or sign images.
 
+To see what is inside the image you are about to run, read its SBOM attestation:
+[the container image's SBOM](#the-container-images-sbom-attestation).
+
 ```bash
 docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
   -v noc-vault:/vault \
@@ -294,6 +426,35 @@ docker rm -f bloxsmith       # stop + remove
 docker start bloxsmith       # restart existing
 PORT=8090 ./bloxsmith        # standalone binary on a different port
 ```
+
+### Health
+
+`GET /healthz` returns `200 {"status":"ok","version":"…"}` when the server is
+serving and its state directory is reachable, and `503` when it is not. It
+answers a narrow question — is this process able to do its job — so a locked
+vault is reported healthy: that is the normal resting state of a fresh install,
+and failing it would restart-loop a container before anyone could type the
+passphrase. For vault state, read `GET /api/vault/status` instead.
+
+```bash
+curl -s localhost:8080/healthz     # {"status":"ok","version":"…"}
+bloxsmith healthcheck              # same probe, as an exit code: 0 healthy, 1 not
+docker compose ps                  # STATUS column shows healthy / unhealthy
+```
+
+The compose file runs `bloxsmith healthcheck` inside the container as its
+`healthcheck.test`. The image is distroless — no shell, no curl — so the probe
+has to be the binary itself. Note that Docker Engine does **not** restart an
+unhealthy container: `restart: unless-stopped` acts on exit, not on health.
+The healthcheck makes the failure visible (`docker compose ps`, `docker inspect`,
+the `health_status` event) and makes `depends_on: {condition: service_healthy}`
+work; automatic recovery still needs a supervisor above Docker, or an
+orchestrator that acts on health.
+
+`/healthz` is the one route exempt from the `ALLOWED_HOSTS` check, because a
+prober addresses the container by an IP or a name the server does not know it
+answers to and would otherwise get `421` forever. Its body carries only the
+status and the version — no tenant data, no paths, no vault state.
 
 ---
 
@@ -393,6 +554,7 @@ known follow-up. Until then, provisioning that relies on bundled templates needs
 | `HOST`             |          | `localhost` (`0.0.0.0` in Docker) | App bind address                    |
 | `PORT`             |          | `8080`                   | HTTP port                                    |
 | `ALLOWED_HOSTS`    |          | _(loopback + `HOST`)_    | Comma-separated extra `Host` header values this deployment answers to (DNS-rebinding gate). `localhost`/`127.0.0.1`/`[::1]`/`HOST` are always allowed; anything else gets `421`. A wildcard bind (`HOST=0.0.0.0`, the Docker default) can't know its own names, so the gate is **off** there until you set this |
+| `TRUSTED_PROXIES`  |          | _(empty — nothing trusted)_ | Comma-separated IPs and/or CIDR ranges of reverse proxies in front of the app. `X-Forwarded-For` is read **only** from these peers, and only to identify the client for the unlock rate limit. Set it when you run a proxy — see [Behind a reverse proxy](#behind-a-reverse-proxy). Leave it empty when the app is reached directly |
 | `DISABLE_UPDATE_CHECK` |      | _(unset)_                | Set to `1` (any non-empty value) to stop `GET /api/update/check` contacting GitHub Releases. It then reports `checkDisabled: true` and no `latest` — not "up to date". `bloxsmith update` and `POST /api/update/apply` still reach GitHub when run explicitly |
 | `WATCHTOWER_TOKEN` |          | _(generated/default)_    | Shared secret for the optional Watchtower sidecar's HTTP API (alternate update trigger) |
 | `AUDIT_TRUST_DIR`  |          | _(per-user config dir)_  | Where the audit chain's HMAC key and sealed head record live. Must **not** be the directory holding `audit_log.jsonl` — a key an attacker can rewrite beside the log it signs protects nothing. The app warns at startup if you point it there |
@@ -551,6 +713,85 @@ For unattended restarts on the [Customer path](#customer-path-compose), set
 
 ---
 
+## Backup & restore
+
+Everything this product persists lives in one directory — the one holding
+`vault.json`. On the Docker path that is the `noc-vault` volume; on a laptop it is
+wherever `VAULT_DIR` resolved to. Losing it loses **every tenant API key**, and
+they are not recoverable from the Infoblox side: they are re-issued, one portal
+visit per tenant.
+
+```bash
+bloxsmith vault-backup /path/to/bloxsmith-2026-08-06.tar.gz
+```
+
+That writes one gzipped tar, mode `0600`, containing the whole state directory:
+`vault.json`, `audit_log.jsonl`, `brand.json`, `logo.png`, `alert_state.json`,
+`first_seen.json`, `ai_budget.json`, `views/` and `teardown-exports/`.
+
+**No passphrase is asked for, and that is correct.** `vault.json` is already a
+Fernet envelope, so this is a byte copy of an already-encrypted file — nothing is
+decrypted at any point. The consequence is the thing to hold on to: **the archive
+is exactly as secret as the passphrase that opens it, and no more.** Store it like
+a credential.
+
+It refuses to overwrite an existing archive unless you pass `--force`, and it fails
+rather than writing an empty tarball if the state directory isn't there — an
+empty-but-valid backup is indistinguishable from a good one at exactly the moment
+you are about to destroy the original.
+
+### Two things are deliberately not in the archive
+
+| Not included | Why | What to do |
+|---|---|---|
+| The audit trust directory (`AUDIT_TRUST_DIR`, default `<config dir>/bloxsmith-audit`) | It holds the audit chain's HMAC signing key, and it lives outside the state dir on purpose — a key stored beside the log it signs is not a key. Sweeping it in here would let anyone holding the backup re-sign a doctored log | Back it up separately. Without it, a restored install's `bloxsmith audit verify` reports **could-not-verify** forever — the entries are intact, the machine just has no key to check them with |
+| `.env` | On the default install it holds the auto-unlock passphrase. Putting it in the same tarball as the vault it opens is the "travels with a backup" exposure that [`vault-passphrase set`](#bloxsmith-vault-passphrase-macos-only) exists to close — one plaintext entry would make encrypting the other one decorative | Copy it separately and deliberately, if you need it at all |
+
+Both are printed on every run, so nobody discovers the gap at restore time.
+
+### From Docker
+
+The container has no shell (`gcr.io/distroless/static`), so run the binary
+directly and then copy the file off the volume:
+
+```bash
+docker compose exec bloxsmith bloxsmith vault-backup /vault/backup.tar.gz
+docker cp bloxsmith:/vault/backup.tar.gz ./bloxsmith-backup-$(date +%F).tar.gz
+docker compose exec bloxsmith rm /vault/backup.tar.gz   # don't leave it in the volume
+```
+
+Writing into `/vault` is safe: the destination is skipped while the directory is
+being walked, so the archive is never packed into itself.
+
+### Restoring
+
+```bash
+bloxsmith vault-restore ./bloxsmith-backup-2026-08-06.tar.gz --confirm restore
+```
+
+**Stop the server first.** A running server holds the vault open in memory and
+rewrites `vault.json` on the next tenant change, which would silently undo the
+restore some minutes later. The command warns if something is listening on the
+configured port, but it cannot tell your server from anything else on that port,
+so it warns rather than refuses.
+
+| Guard | Behaviour |
+|---|---|
+| `--confirm restore` | **Required, spelled out.** Without it nothing is touched and the exit code is `3`. Not a y/n prompt — a script answers those with `yes \|` |
+| Non-empty target | Refused unless you pass `--force`. `--force` replaces the files the archive names and **leaves everything else alone** — it is not a wipe |
+| `../` or absolute paths in the tar | The archive is **rejected whole**, not quietly cleaned up. Same for symlink and hard-link entries. An archive containing one did not come from `vault-backup` |
+| Truncated or non-gzip archive | Rejected before anything moves. Extraction goes to a staging directory inside the target and only then renames into place, so a bad archive can never leave a half-restored state dir |
+| `vault.json` permissions | Forced to `0600` after restore, regardless of what the archive's header claimed |
+
+Afterwards the vault opens with its **original** passphrase — nothing was
+re-encrypted. Start the server and unlock as usual.
+
+Not to be confused with [`bloxsmith restore-plan`](#teardown-exports--what-a-teardown-records-before-it-deletes),
+which is unrelated: it reads a teardown export and prints what to re-create. It
+touches no files and knows nothing about the vault.
+
+---
+
 ### Teardown exports — what a teardown records before it deletes
 
 Teardown is fail-forward: there is no rollback, every step is a delete. So before
@@ -704,6 +945,44 @@ Injected text is deliberately **not** stripped or rewritten. A hostname is data;
 editing the tenant's own values would make the dashboard misrepresent their network,
 which is a worse failure than the one it would fix.
 
+## Behind a reverse proxy
+
+If anything sits in front of the app — the `secure` Caddy profile, nginx, a cloud
+load balancer — **set `TRUSTED_PROXIES`**:
+
+```bash
+TRUSTED_PROXIES=127.0.0.1,::1        # Caddy on the same host (the secure profile)
+TRUSTED_PROXIES=172.18.0.0/16        # a proxy elsewhere on the docker network
+TRUSTED_PROXIES=10.0.0.7             # a single load balancer
+```
+
+**Why it matters.** `POST /api/vault/unlock` is rate limited per client: wrong
+guesses lock that client out for 1, 2, 4, 8, 16, then 30 seconds. Through a proxy
+every request arrives from the proxy's address, so without this setting there is
+only ever **one** client — and one person's six wrong guesses lock out everyone,
+including you. Naming the proxy lets the app read `X-Forwarded-For` and count
+each client separately.
+
+**Why it is off by default and has to be typed by hand.** A server cannot tell
+whether it is behind a proxy, and `X-Forwarded-For` is written by whoever sent
+the request. Believing it unasked would let anyone put a fresh value on each
+guess and never be locked out at all. So the header is read **only** from a peer
+you have named, the client is taken from the end of the chain your proxy wrote
+(not the start, which the sender controls), and anything that does not add up
+falls back to the peer address.
+
+Entries are bare IPs or CIDR ranges, IPv4 or IPv6 — no ports, no hostnames. One
+that does not parse is **named in a warning at startup** and ignored; if none
+parse, the app says so and keeps using the peer address.
+
+**Scope: the unlock rate limit only.** The loopback/CSRF check and the audit
+log's actor label deliberately keep using the real peer address, whatever
+`TRUSTED_PROXIES` says. Loopback there is an authorization decision backed by
+the connection itself, and a mistyped range must not be able to turn a header
+into an admin bypass or into a forged name in a tamper-evident log.
+
+---
+
 ## Security notes
 
 - **Never commit `.env`** (gitignored). Use `.env.example` as the template.
@@ -716,6 +995,9 @@ which is a worse failure than the one it would fix.
   auth/TLS (the `secure` Caddy profile, or a VPN).
 - The compose file mounts the Docker socket into the app for self-update; remove
   that line if you don't want the dashboard to have Docker control.
+- **Running a reverse proxy? Set `TRUSTED_PROXIES`.** Without it the unlock rate limit
+  sees one client — the proxy — so anyone's wrong guesses lock out everybody. See
+  [Behind a reverse proxy](#behind-a-reverse-proxy).
 - If a token is ever exposed, **rotate it** in the CSP portal — scrubbing files does not revoke it.
 - The audit chain is tamper-evident against someone who can write `audit_log.jsonl`, **not**
   against a process running as the operator, which can read the key. See
@@ -730,6 +1012,12 @@ which is a worse failure than the one it would fix.
 - Releases are Ed25519-signed with a key that is not in the release, and the in-app updater
   refuses an unsigned or badly-signed one. That authenticates the release pipeline, not the
   source — someone who can push a tag or steal the CI secret can still sign.
+- Every release ships a signed **SBOM**, so "what libraries are in this?" is answerable
+  without unpacking anything: one per archive for the Go modules, one for the embedded
+  UI's npm closure, and a cosign **attestation** on each architecture of the ghcr image.
+  The UI SBOM is read from the lockfile, so it says what the bundle was built from rather
+  than proving what is in it. See [the SBOM](#the-sbom-whats-inside-the-release) and
+  [the image attestation](#the-container-images-sbom-attestation).
 
 See [SECURITY.md](../.github/SECURITY.md) for the policy and how to report a vulnerability,
 and [CONTRIBUTING.md](../.github/CONTRIBUTING.md) for local setup and the test suite.

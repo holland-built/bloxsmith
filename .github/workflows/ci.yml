@@ -37,17 +37,134 @@ jobs:
         working-directory: ui
         run: npm test
 
+      # oxlint is in ui/devDependencies and `npm run lint` is in
+      # ui/package.json, and neither has ever been executed by anything — not
+      # this workflow, not a hook, not a pre-commit. `ui/.oxlintrc.json` even
+      # raises react/rules-of-hooks to "error", so the repo wrote down a rule
+      # it considered build-breaking and then never ran the tool that
+      # enforces it. An installed linter no job invokes is not a gate, it is
+      # a belief. The missing step was the defect; whatever it finds is only
+      # the symptom.
+      #
+      # First run (2026-08-06, local, oxlint 1.71.0) exited 0 with 36
+      # warnings and zero errors: 17 no-unused-vars (dead recharts imports in
+      # src/components/ui.jsx, unused catch bindings), 10
+      # react/only-export-components, 6 react-hooks/exhaustive-deps, 3
+      # no-unused-expressions.
+      #
+      # Those 36 are non-blocking today, deliberately: oxlint's exit code
+      # counts errors only, so warnings do not fail the build. Landing the
+      # step at that setting means a NEW error — a rules-of-hooks violation
+      # above all — stops the build the day it is written, instead of never.
+      # Clearing the 36 and then adding `--deny-warnings` is follow-up work.
+      # Gating on them now would have meant not landing the gate at all.
+      - name: UI lint (oxlint)
+        working-directory: ui
+        run: npm run lint
+
+      # The govulncheck comment further down this file states that "the npm
+      # side of the tree gets `npm audit`". It did not. No step in this
+      # workflow — or in release.yml — has ever run `npm audit`. The sentence
+      # was written as justification for adding the Go scan and was false the
+      # day it was committed; it is true as of this step. A comment asserting
+      # a control that does not exist is worse than no comment at all,
+      # because it is exactly what stopped anyone from looking.
+      #
+      # What it was covering, from the first real run (2026-08-06): postcss
+      # <=8.5.22, GHSA-fxqj-rqcc-2cmp, moderate — an incomplete fix of
+      # GHSA-6g55-p6wh-862q, where an attacker-controlled sourceMappingURL
+      # reads arbitrary .map files when `from` is unset. Transitive via
+      # vite@8.1.5, so it is build tooling only and never reaches a shipped
+      # bundle or a browser. Closed in the same commit as this step by `npm
+      # audit fix` (postcss 8.5.22 -> 8.5.26, nanoid 3.3.16 -> 3.3.17;
+      # ui/package-lock.json only). The bundle was rebuilt and diffed against
+      # go/web afterwards and is byte-identical, so the "UI dist up to date"
+      # step above is unaffected.
+      #
+      # --audit-level=moderate rather than the default: npm audit exits
+      # non-zero on any advisory including "low", and a gate that reddens on
+      # noise is a gate people learn to click past.
+      - name: UI dependency vulnerability scan (npm audit)
+        working-directory: ui
+        run: npm audit --audit-level=moderate
+
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
           go-version: '1.26.x'
           cache-dependency-path: go/go.sum
 
-      - name: Go build + test
+      # `go test` without -race has been the only thing checking this repo's
+      # concurrent surface since the day it was written. Not "rarely run" —
+      # never: `git log --all -S'-race' -- .github/ scripts/` returns no commit
+      # at all, so the flag has never been added, never removed, never there.
+      #
+      # What that let through is a specific class, not a vague one: a data race
+      # whose outcome happens to be correct on the machine that ran it. In Go an
+      # unsynchronised access from two goroutines is undefined behaviour, and its
+      # two usual endings are a torn read that only misbehaves under a different
+      # scheduler or word size, and a concurrent map write that aborts the whole
+      # process with no recovery. A green `go test ./...` cannot tell either of
+      # those apart from correct code, because both produce the right answer on
+      # the run that observed them. The race detector is the only thing here that
+      # reports the ACCESS rather than the result.
+      #
+      # Three places in the tree were already written on the belief this was on,
+      # which is the real evidence that its absence was a defect rather than a
+      # missing nicety:
+      #
+      #   * internal/sse/sse_test.go — TestEmit_SingleGoroutineUsage_RaceClean,
+      #     whose own comment says it "runs it under -race as a regression check".
+      #     Without -race that test asserts nothing whatsoever: it calls emit 50
+      #     times and inspects no value, so the only way it could ever fail was a
+      #     panic. It has been a no-op for its entire life, and its name says
+      #     otherwise.
+      #   * internal/vault/vault.go:102 — the lock-guarded accessors are
+      #     documented as a "(data-race fix)". Nothing has ever confirmed the fix
+      #     holds. A guard never watched to refuse is a belief, not a guard.
+      #   * internal/store/budget_test.go — TestBudget_ConcurrentAddTokens, "run
+      #     with -race, per the task ... would catch both the data race and the
+      #     lost-update". That sentence is wrong, and it is recorded here rather
+      #     than left to mislead whoever reads it next: budgetMu serialises a
+      #     read-modify-write of ai_budget.json, which is a FILE. The detector
+      #     instruments memory accesses and is blind to it. Checked by deleting
+      #     the lock — the test fails either way, but on its token-total
+      #     assertion ("= 37, want 1850"), and -race reports no race at all. The
+      #     assertion is that test's guard; this flag is not.
+      #
+      # This step was watched to refuse before it was committed, rather than
+      # assumed to work. Deleting the c.mu.Lock()/Unlock() pairs from Cache.Do in
+      # internal/cache/cache.go — the single-flight path the package's concurrent
+      # tests drive from many goroutines at once — leaves `go test
+      # ./internal/cache/` GREEN in 0.33s, and produces four "WARNING: DATA RACE"
+      # reports under `go test -race`, on concurrent reads and writes of the
+      # entries and inflight maps. That is the class described above,
+      # demonstrated against this repo's own code: as the suite stands today it
+      # reports an unsynchronised map access as a pass. The lock was restored
+      # immediately and none of that experiment is in this commit.
+      #
+      # First run (2026-08-06, local, darwin/arm64, Go 1.26.3): ZERO races. Full
+      # suite at -count=1, all 16 test packages, nothing cached. Then repeated,
+      # because one pass of a timing-dependent check is one sample and not a
+      # result — -count=5 over sse, cache, store, httpx, dashboard, rest and mcp,
+      # and -count=3 over internal/server and the root package (the two slowest).
+      # Still zero. So this step lands as a gate on what gets written next, not
+      # as the fix for something found today, and that is stated here rather than
+      # left for someone to infer from an empty diff.
+      #
+      # Cost, measured rather than estimated: 21.2s -> 156.1s wall for the full
+      # suite. internal/vault is 153.7s of that (19.7s without), and all of it is
+      # scrypt — kdfByVersion runs at N=2^17 and the instrumentation multiplies
+      # every round. Vault is kept in regardless: it holds the repo's only
+      # "(data-race fix)" comment, so it is the last package that should be
+      # exempted to save minutes. The macos job below runs in parallel with this
+      # one, so the critical path grows by about that same 2.5 minutes, not twice
+      # it.
+      - name: Go build + test (-race) + vet
         working-directory: go
         run: |
           go build ./...
-          go test ./...
+          go test -race ./...
           go vet ./...
 
       # `go vet` has run here since this workflow was written and formatting has
@@ -131,9 +248,178 @@ jobs:
         with:
           install-only: true
 
+      # goreleaser does not bundle an SBOM generator; the `sboms:` block in
+      # go/.goreleaser.yaml shells out to `syft` and the pipe FAILS the run if it
+      # is missing. release.yml installs it too — the copy here is the point of
+      # this step, not a redundancy. A syft installer that breaks (moved asset,
+      # yanked tag, deprecated action) would otherwise surface for the first time
+      # at `git push --tags`, on a tag that already exists, midway through
+      # publishing a release. Here it is a red X on a pull request.
+      - name: Install syft (goreleaser shells out to it for SBOMs)
+        uses: anchore/sbom-action/download-syft@v0
+
       - name: goreleaser build (snapshot, no publish)
         working-directory: go
         run: goreleaser build --snapshot --clean
+
+      # `goreleaser build` CANNOT produce an SBOM, and that is the whole reason
+      # this second, heavier invocation exists. Measured 2026-08-06 with
+      # goreleaser v2.17.0: `build --snapshot --clean` emits only the per-target
+      # binary directories and artifacts.json — no archives at all — and
+      # `sboms: artifacts: archive` has nothing to catalog, so the pipe never
+      # runs and prints nothing. An assertion bolted onto the step above could
+      # therefore never pass, and the honest fix is to run the mode that does the
+      # work rather than to weaken the assertion until it goes green.
+      #
+      # `release --snapshot` runs the archive → sbom → checksum chain for real.
+      # The three skips are each load-bearing:
+      #   publish — no tag, no GitHub Release, nothing leaves the runner
+      #   sign    — cosign keyless needs an OIDC token, and this workflow
+      #             deliberately has no `id-token: write` permission (it is a
+      #             build/test workflow; release.yml is the one that signs). The
+      #             sbom signing entry in .goreleaser.yaml is therefore NOT
+      #             exercised here. It was verified locally instead, by putting a
+      #             stub `cosign` on PATH and confirming the sign pipe is handed
+      #             all four .sbom.json paths after cataloguing and writes a .sig
+      #             and .pem beside each.
+      #   docker  — dockers_v2 builds linux/amd64 + linux/arm64, which needs the
+      #             QEMU and buildx setup that only release.yml does.
+      #
+      # Cost: it repeats the cross-compile the step above already did (~30s
+      # locally). Kept separate rather than replacing that step, because the
+      # plain `build` smoke test is the narrower check and is worth keeping able
+      # to fail on its own. If CI minutes ever matter more than that, the two
+      # collapse into this one — `release --snapshot` is a strict superset.
+      - name: goreleaser release (snapshot) — the mode that actually emits SBOMs
+        working-directory: go
+        run: goreleaser release --snapshot --skip=publish,sign,docker,homebrew --clean
+
+      # A skipped step and a working one look identical from the outside, and
+      # this step exists because ONE of the two ways this breaks is exactly that
+      # shape. Both were run rather than assumed (2026-08-06, local):
+      #
+      #   * syft missing from PATH — LOUD. goreleaser stops the release with
+      #     `could not catalog artifact ... executable file not found in $PATH`.
+      #     Confirmed by hiding the syft binary and re-running. The Install syft
+      #     step above is what keeps that from happening at tag time.
+      #   * the `sboms:` block's artifact selector no longer matching anything —
+      #     SILENT. Confirmed by running the same config with `artifacts:`
+      #     changed to a value this project produces none of: goreleaser printed
+      #     nothing, wrote zero SBOMs, and EXITED 0. A release cut that way stays
+      #     green and every artifact from then on ships with no ingredients list,
+      #     with nothing anywhere saying so. Deleting the block entirely does the
+      #     same. That is the failure this step catches and nothing else does.
+      #
+      # It does not just check "a file exists" — it counts. One SBOM PER ARCHIVE
+      # is the contract, so a run that silently catalogued three of four archives
+      # fails here rather than shipping a partial answer.
+      #
+      # Watched to refuse before being committed, on four hand-made bad dist/
+      # trees: one SBOM deleted ("3 SBOMs for 4 archives"), all four deleted
+      # ("ZERO SBOMs for 4 archives"), one replaced by a syntactically valid but
+      # hollow document ("has no stdlib"), and one removed from checksums.txt
+      # ("not in checksums.txt"). All four exited 1; the untouched tree passed.
+      #
+      # The two counts are now kept APART. The `ui-npm-sbom` entry added a fifth
+      # document that is not derived from any archive, and the original check
+      # counted every *.sbom.json against the archive count — so landing that
+      # entry would have turned this step red for the wrong reason ("5 SBOMs for
+      # 4 archives") and the tempting fix is to loosen the comparison to `-ge`.
+      # That would throw away the whole point of counting. Each family is
+      # asserted against its own expected number instead.
+      - name: The SBOMs actually exist, one per archive plus the UI's, and are in checksums.txt
+        working-directory: go
+        run: |
+          set -euo pipefail
+          # Expected filenames, confirmed from a real run rather than guessed:
+          # goreleaser names each archive SBOM <archive>.sbom.json, e.g.
+          # bloxsmith_3.53.1-snapshot-<sha>_linux_amd64.tar.gz.sbom.json, and the
+          # UI one is named by the `documents:` template —
+          # bloxsmith_3.53.1-snapshot-<sha>_ui_npm.sbom.json.
+          archives=$(find dist -maxdepth 1 \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l | tr -d ' ')
+          sboms=$(find dist -maxdepth 1 \( -name '*.tar.gz.sbom.json' -o -name '*.zip.sbom.json' \) | wc -l | tr -d ' ')
+          echo "archives=$archives archive-sboms=$sboms"
+          ls -la dist/*.sbom.json || true
+
+          if [ "$archives" -eq 0 ]; then
+            echo "::error::no archives in dist/ at all — the archive pipe did not run, so this step cannot say anything about SBOMs"
+            exit 1
+          fi
+          if [ "$sboms" -eq 0 ]; then
+            echo "::error::goreleaser produced $archives archives and ZERO SBOMs — the sboms: block in go/.goreleaser.yaml did not run (syft missing from PATH, or its artifact selector no longer matches anything)"
+            exit 1
+          fi
+          if [ "$sboms" -ne "$archives" ]; then
+            echo "::error::$sboms SBOMs for $archives archives — some archive shipped without one"
+            exit 1
+          fi
+
+          # Non-empty and structurally real. syft's default output here is SPDX
+          # 2.3 JSON (NOT CycloneDX — `.packages`, not `.components`); a zero-byte
+          # or truncated file would still satisfy a bare existence check.
+          for f in dist/*.tar.gz.sbom.json dist/*.zip.sbom.json; do
+            n=$(jq '.packages | length' "$f")
+            if [ "$n" -lt 2 ]; then
+              echo "::error::$f lists $n packages — an SBOM naming only the archive itself is an empty answer"
+              exit 1
+            fi
+            # The compiled-in toolchain version is the one entry that is always
+            # present when syft really read the binary, so it is the cheapest
+            # proof this catalogued the Go module graph rather than an empty dir.
+            jq -e '.packages[] | select(.name == "stdlib")' "$f" >/dev/null || {
+              echo "::error::$f has no stdlib package — syft did not read the Go binary inside the archive"; exit 1; }
+            echo "$f: $n packages"
+          done
+
+          # --- the UI's npm SBOM -------------------------------------------
+          # Its own family, its own failure modes. `artifacts: any` runs a
+          # command goreleaser does not understand the output of, so the ways it
+          # breaks are different from the archive pipe's: the hardcoded
+          # `file:../../ui/package-lock.json` path resolving to nothing (the cmd
+          # runs with cwd=dist/, so a plausible-looking `../ui` is wrong), or
+          # syft cataloguing the lockfile but finding no packages in it.
+          ui=$(find dist -maxdepth 1 -name '*_ui_npm.sbom.json' | wc -l | tr -d ' ')
+          if [ "$ui" -ne 1 ]; then
+            echo "::error::expected exactly 1 UI npm SBOM in dist/, found $ui — the ui-npm-sbom entry in go/.goreleaser.yaml did not run"
+            exit 1
+          fi
+          uif=$(find dist -maxdepth 1 -name '*_ui_npm.sbom.json')
+          un=$(jq '.packages | length' "$uif")
+          echo "$uif: $un packages"
+          [ "$(jq -r '.name' "$uif")" = "bloxsmith-ui-npm" ] || {
+            echo "::error::$uif does not call itself bloxsmith-ui-npm — --source-name was dropped, and the image attestation in release.yml keys off that name"; exit 1; }
+
+          # It must name what actually ends up in go/web/app.bundle.js. These
+          # three are the reason this SBOM exists at all: they are compiled into
+          # the bundle, the bundle is //go:embed'd, and none of them appear in
+          # any archive SBOM above.
+          for p in react react-dom recharts; do
+            jq -e --arg p "$p" '.packages[] | select(.name == $p)' "$uif" >/dev/null || {
+              echo "::error::$uif does not list $p — it catalogued something, but not this project's UI dependencies"; exit 1; }
+          done
+
+          # ...and it must NOT overstate. syft's javascript cataloger has
+          # include-dev-dependencies off by default, which is what keeps this to
+          # the production closure; if that default ever flips, this SBOM starts
+          # claiming a linter ships inside the binary. oxlint is the cleanest
+          # canary: it is a devDependency with no production package
+          # peer-depending on it. `vite` is deliberately NOT checked here — it is
+          # in devDependencies but @tailwindcss/vite (a production dependency)
+          # peer-depends on it, so npm does not mark it dev and it legitimately
+          # appears. See the block comment in go/.goreleaser.yaml.
+          if jq -e '.packages[] | select(.name == "oxlint")' "$uif" >/dev/null; then
+            echo "::error::$uif lists oxlint — devDependencies leaked in, so this SBOM claims build tooling ships inside the binary"
+            exit 1
+          fi
+
+          # checksums.txt is what the Ed25519 and sshsig release signatures cover,
+          # so an SBOM missing from it is an SBOM outside the signed set.
+          for f in dist/*.sbom.json; do
+            grep -q " $(basename "$f")\$" dist/checksums.txt || {
+              echo "::error::$(basename "$f") is not listed in checksums.txt — it falls outside the signed set"
+              cat dist/checksums.txt; exit 1; }
+          done
+          echo "$sboms archive SBOMs + 1 UI npm SBOM ($un packages), all non-trivial and all in checksums.txt"
 
   # ── macOS ───────────────────────────────────────────────────────────────────
   # This repo's CI was Linux-only, and that means two shipped surfaces had NEVER
@@ -165,11 +451,27 @@ jobs:
 
       # The same three commands the Linux job runs, on darwin. The keychain tests
       # that skip on Linux run for real here, against the runner's login keychain.
-      - name: Go build + test + vet (darwin — runs the keychain tests for real)
+      #
+      # -race is here for the same reason the whole job is, and it is not
+      # redundant with the Linux copy. The detector is compiled into the test
+      # binary per GOOS/GOARCH, so a clean run on linux/amd64 says nothing about
+      # the darwin/arm64 build users actually install; and whether two goroutines
+      # interleave badly is decided by the scheduler and the core count, which
+      # differ between ubuntu-latest and macos-latest. A race that never loses on
+      # one runner can lose on the other, which is the same lesson this job's own
+      # header records about one-OS checks. See the Linux step for what the
+      # flag's absence let through and for the measured cost.
+      #
+      # Deliberately NOT added to the "Assert the keychain tests actually RAN"
+      # step below: that step exists to prove those two tests are not skipped, it
+      # re-runs what this line already covered under the detector, and adding it
+      # there would pay internal/vault's scrypt-under-instrumentation bill a
+      # second time in the same job for no extra coverage.
+      - name: Go build + test (-race) + vet (darwin — runs the keychain tests for real)
         working-directory: go
         run: |
           go build ./...
-          go test ./...
+          go test -race ./...
           go vet ./...
 
       # Proves the keychain tests were not all skipped here too. A suite that

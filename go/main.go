@@ -46,24 +46,30 @@ func instanceID() string {
 // version is overridden at build time via -ldflags "-X main.version=...".
 var version = "0.0.0-poc"
 
-// staticHandler serves the frontend. Normally the embedded copy (embed.go webFS);
-// when WEB_DIR is set it serves that directory from disk instead — dev live-reload
-// (scripts/dev-serve.sh rebuilds ui/ into go/web in place, no recompile). Inert in prod:
-// WEB_DIR is unset there, so the embed stays the default. index.html and assets
-// both send no-store cache headers (mirror server.py:6509-6512).
+// uiFS is the filesystem the frontend is served from. Normally the embedded copy
+// (embed.go webFS); when WEB_DIR is set it is that directory on disk instead —
+// dev live-reload (scripts/dev-serve.sh rebuilds ui/ into go/web in place, no
+// recompile). Inert in prod: WEB_DIR is unset there, so the embed stays the
+// default. staticHandler and cspPolicy both go through here so the CSP script
+// hashes are always computed from the index.html this process actually serves.
+func uiFS() fs.FS {
+	if dir := os.Getenv("WEB_DIR"); dir != "" {
+		return os.DirFS(dir)
+	}
+	sub, err := fs.Sub(webFS, "web")
+	if err != nil {
+		log.Fatal(err)
+	}
+	return sub
+}
+
+// staticHandler serves the frontend out of uiFS. index.html and assets both send
+// no-store cache headers (mirror server.py:6509-6512).
 func staticHandler() http.Handler {
-	var fsys fs.FS
 	if dir := os.Getenv("WEB_DIR"); dir != "" {
 		log.Printf("dev: serving UI from disk WEB_DIR=%s (not embed)", dir)
-		fsys = os.DirFS(dir)
-	} else {
-		sub, err := fs.Sub(webFS, "web")
-		if err != nil {
-			log.Fatal(err)
-		}
-		fsys = sub
 	}
-	fileServer := http.FileServer(http.FS(fsys))
+	fileServer := http.FileServer(http.FS(uiFS()))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		fileServer.ServeHTTP(w, r)
@@ -76,16 +82,24 @@ func staticHandler() http.Handler {
 // are: (1) frame-ancestors 'none' + X-Frame-Options DENY to block clickjacking of
 // the vault/provision controls, (2) connect-src 'self' + img-src 'self' data: to
 // deny an injected script any outbound channel to exfiltrate the X-Auth-Token.
-// script-src/style-src keep 'unsafe-inline' because the shipped app relies on it —
-// the index.html theme-bootstrap <script> and React's inline style props — so a
-// bare default-src 'self' would break the UI; data: covers Vite-inlined assets.
+// style-src keeps 'unsafe-inline' because React writes component style props as
+// inline style="" attributes and there is no bounded set of those to enumerate,
+// but style-src-elem 'self' narrows that to what actually needs it: the
+// attributes keep working (style-src-attr is not emitted, so it inherits the
+// keyword) while an injected <style> block is refused on every browser that
+// implements the CSP Level 3 split. data: covers Vite-inlined assets.
+// script-src does NOT take 'unsafe-inline': the only inline script
+// the shipped app has is index.html's theme bootstrap, and cspPolicy hashes it
+// at startup so that one script is allowed by name and every other inline
+// script — including an injected one — is refused.
+//
+// The policy is built once here rather than per request: this wraps every
+// response, and it is a constant string for the life of the process.
 func securityHeaders(next http.Handler) http.Handler {
+	policy := cspPolicy()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy",
-			"default-src 'self'; connect-src 'self'; frame-ancestors 'none'; "+
-				"script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "+
-				"img-src 'self' data:; font-src 'self' data:")
+		h.Set("Content-Security-Policy", policy)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		// same-origin, not no-referrer: cross-origin destinations still get
@@ -145,6 +159,22 @@ func main() {
 			// Offline verification of the tamper-evident chain, with nothing
 			// running. Read-only by construction — see auditcli.go.
 			os.Exit(runAuditCLI(os.Args[2:]))
+		case "vault-backup":
+			// Copy the whole state directory out into one gzipped tar. No
+			// passphrase: vault.json is already encrypted. See vaultbackupcli.go.
+			os.Exit(runVaultBackupCLI(os.Args[2:]))
+		case "vault-restore":
+			// Unpack a vault-backup archive back into the state directory. NOT
+			// `restore-plan` below, which is unrelated and touches no files.
+			// Requires `--confirm restore`. See vaultbackupcli.go.
+			os.Exit(runVaultRestoreCLI(os.Args[2:]))
+		case "healthcheck":
+			// The container's health probe, and the only shape it can take: the
+			// release image is gcr.io/distroless/static (Dockerfile.goreleaser),
+			// which has no shell, no curl and no wget, so a Docker CMD-SHELL
+			// healthcheck has nothing to run. The probe therefore has to be this
+			// binary. See runHealthcheckCLI.
+			os.Exit(runHealthcheckCLI(os.Args[2:]))
 		case "restore-plan":
 			// Read a teardown export back and print what would have to be
 			// re-created, in dependency order. Offline and creates nothing —
@@ -215,9 +245,85 @@ func printUsage() {
 	fmt.Println("  service <cmd>             install|uninstall|start|stop|restart|status  (run at login)")
 	fmt.Println("  audit verify             check the audit chain offline (0 intact, 1 tampered, 2 unchecked)")
 	fmt.Println("  restore-plan FILE        read a teardown export and print what to re-create, in order")
+	fmt.Println("  vault-backup FILE.tar.gz copy the state dir (vault.json + views + audit log) to one archive")
+	fmt.Println("  vault-restore FILE.tar.gz --confirm restore   unpack that archive back into the state dir")
 	fmt.Println("  vault-passphrase <cmd>   set|status|remove — keep the auto-unlock passphrase in the macOS keychain")
+	fmt.Println("  healthcheck [--port N]   probe a running server's /healthz — exit 0 healthy, 1 not (Docker uses this)")
 	fmt.Println("  --version, -v             print version")
 	fmt.Println("  --help, -h, help          this help")
+}
+
+// healthcheckTimeout is how long the probe waits for the whole exchange. The
+// route it calls does one os.Stat and marshals two fields, so anything slower
+// than this is a server that is not answering rather than a server that is
+// busy — which is the condition the probe is being run to detect. Kept below
+// the compose healthcheck's own `timeout: 3s` so the failure is this process
+// exiting 1 with a reason on stderr, rather than Docker killing it with none.
+const healthcheckTimeout = 2 * time.Second
+
+// runHealthcheckCLI is `bloxsmith healthcheck`: GET /healthz on the loopback
+// address, exit 0 on 200 and 1 on anything else. It exists because the release
+// image is distroless — no shell, no curl, no wget — so the only executable
+// available to a Docker HEALTHCHECK is this binary itself.
+//
+// IT RESOLVES THE PORT THE WAY THE SERVER DOES, and that is the part most
+// likely to be got wrong. Hardcoding 8080 would work in the image (which sets
+// PORT=8080) and silently fail for every operator running `bloxsmith --port
+// 9090` or with PORT in a .env — the probe would connect to nothing, report
+// unhealthy, and be right about a server that was fine. So it walks the same
+// three steps main() walks: --port/-p wins, then the .env files are loaded
+// setdefault-style, then config.Load applies the PORT-or-8080 default. Only
+// cfg.Port is read from the result, and cfg.Port does not depend on the dir
+// argument, which is why "." is passed rather than re-deriving the executable's
+// directory.
+//
+// It always talks to 127.0.0.1 and never to cfg.Host: the probe runs beside the
+// server (same container, same machine), and the image binds HOST=0.0.0.0,
+// which is not an address you can connect to. Loopback also means the Host
+// header is `127.0.0.1:PORT`, which is permanently in the Host allowlist — the
+// /healthz exemption in internal/httpx is for the OTHER probers, not this one.
+func runHealthcheckCLI(args []string) int {
+	for _, a := range args {
+		if a == "--help" || a == "-h" {
+			fmt.Println("usage: bloxsmith healthcheck [--port N]")
+			fmt.Println("  GET /healthz on http://127.0.0.1:$PORT and report the result as an")
+			fmt.Println("  exit code: 0 healthy, 1 unreachable or not 200. Prints nothing when")
+			fmt.Println("  healthy. This is what the Docker healthcheck runs.")
+			return 0
+		}
+	}
+	port, err := parsePortFlag(args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	if port != "" {
+		os.Setenv("PORT", port)
+	}
+	loadForegroundEnv()
+	return healthcheckAt("http://127.0.0.1:" + config.Load(".").Port + "/healthz")
+}
+
+// healthcheckAt performs the probe against one URL and returns the exit code.
+// Split out from the flag/env resolution above so a test can point it at a real
+// httptest server, and at a port with nothing on it, without touching the
+// process environment.
+func healthcheckAt(url string) int {
+	client := &http.Client{Timeout: healthcheckTimeout}
+	resp, err := client.Get(url)
+	if err != nil {
+		// The common case here is connection refused — no server. Printing it
+		// is the whole diagnostic an operator gets from `docker inspect`'s
+		// health log, so it goes to stderr rather than being swallowed.
+		fmt.Fprintf(os.Stderr, "healthcheck: %v\n", err)
+		return 1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "healthcheck: %s returned %s\n", url, resp.Status)
+		return 1
+	}
+	return 0
 }
 
 // parsePortFlag scans args (os.Args[1:]) for a --port/-p flag in any of the
@@ -371,6 +477,25 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	}
 	st := store.New(stateDir)
 
+	// WHO THE UNLOCK THROTTLE THINKS A CLIENT IS. Unset (the default), the peer
+	// address — unchanged from before this setting existed. Set, the front ends
+	// whose X-Forwarded-For may be believed, which is what stops a proxied
+	// deployment from collapsing every client into one rate-limit bucket.
+	//
+	// BOTH OUTCOMES ARE LOGGED, and the warning is the important one: an entry
+	// that does not parse leaves the server looking configured while silently
+	// keying on the proxy's own address again, and the first symptom of that is
+	// every operator locked out at once by someone else's wrong guesses.
+	trustedProxies, proxyWarn := httpx.ParseTrustedProxies(cfg.TrustedProxies)
+	if proxyWarn != "" {
+		log.Printf("[proxy] %s", proxyWarn)
+	} else if !trustedProxies.Empty() {
+		log.Printf("[proxy] trusting X-Forwarded-For from %s, for the unlock throttle only — "+
+			"the loopback/CSRF check and the audit actor still use the peer address", trustedProxies)
+	}
+	unlockThrottle := httpx.NewUnlockThrottle()
+	unlockThrottle.Proxies = trustedProxies
+
 	guard := &httpx.Guard{
 		Token:         cfg.DashboardToken,
 		Port:          cfg.Port,
@@ -392,20 +517,27 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	}
 
 	handler := server.New(&server.Deps{
-		Cfg:            cfg,
-		Vault:          v,
-		Rest:           restClient,
-		Auth:           auth,
-		Guard:          guard,
-		Audit:          auditLog,
-		Store:          st,
-		Cache:          sharedCache,
-		Dashboard:      dash,
-		StateDir:       stateDir,
-		Edit:           edit.New(restClient),
-		Provision:      provision.New(restClient, cfg.TemplatesDir),
-		AI:             ai.New(llmCreds{cfg: cfg, v: v}, dash, st),
-		Account:        acct,
+		Cfg:       cfg,
+		Vault:     v,
+		Rest:      restClient,
+		Auth:      auth,
+		Guard:     guard,
+		Audit:     auditLog,
+		Store:     st,
+		Cache:     sharedCache,
+		Dashboard: dash,
+		StateDir:  stateDir,
+		Edit:      edit.New(restClient),
+		Provision: provision.New(restClient, cfg.TemplatesDir),
+		AI:        ai.New(llmCreds{cfg: cfg, v: v}, dash, st),
+		Account:   acct,
+		// The lock on the vault's front door. POST /api/vault/unlock is
+		// reachable with no credential — that is what unlocking means — and
+		// each call costs a 128 MiB scrypt derive, so it is rate limited per
+		// client and serialised process-wide. Built here, once, so the limit
+		// is visible in the assembly rather than buried in a route.
+		// See internal/httpx/unlock_throttle.go.
+		UnlockThrottle: unlockThrottle,
 		Version:        version,
 		Static:         staticHandler(),
 		UpdateCheck:    updateCheckHandler(cfg),

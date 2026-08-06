@@ -8,8 +8,9 @@
 # To apply it, double-click the update script for your OS that ships next to this
 # file (update.command on macOS, update.bat on Windows, update.sh on Linux), or run:
 #   docker compose pull && docker compose up -d
-# Revert: there is no automatic rollback. This file defines no healthcheck, and
-# the in-app updater never touches the Docker socket, image, or container — it
+# Revert: there is no automatic rollback, and the healthcheck below does not add
+# one — it reports health, nothing acts on it (see the healthcheck comment). The
+# in-app updater never touches the Docker socket, image, or container either — it
 # only downloads and swaps its own binary (see go/apply.go). To revert, pin the
 # previous tag or digest in the `image:` line below, then:
 #   docker compose up -d
@@ -47,6 +48,46 @@ services:
       VAULT_PASSPHRASE: ${VAULT_PASSPHRASE:-}
       VAULT_PASSPHRASE_FILE: ${VAULT_PASSPHRASE_FILE:-}
     networks: [noc-net]
+    # ── Health probe ───────────────────────────────────────────────────
+    # Before this existed, the only thing Docker knew about this container was
+    # whether PID 1 had exited. A server that was running but wedged — a
+    # deadlock, a vault volume that vanished, a machine out of memory — was
+    # indistinguishable from a working one, and `docker compose ps` said "Up"
+    # the whole time. GET /healthz answers the real question: it stats the
+    # /vault state dir, so a container that can no longer persist anything says
+    # so instead of quietly serving a UI that cannot save.
+    #
+    # WHY EXEC FORM AND WHY THE BINARY. The image is gcr.io/distroless/static
+    # (go/Dockerfile.goreleaser) — no shell, no curl, no wget. A CMD-SHELL test
+    # has nothing to run and a `curl -f` test has no curl, so both fail
+    # permanently and look like an unhealthy app. Watched happen, on this image:
+    # the shell form reports `exec: "/bin/sh": no such file or directory` and
+    # the container goes unhealthy in two intervals with the app perfectly fine.
+    # So this test stays in EXEC form (["CMD", …], not a bare string, which
+    # Docker interprets as CMD-SHELL). The probe is the app itself:
+    # `bloxsmith healthcheck` GETs 127.0.0.1:$PORT/healthz and exits 0 or 1, and
+    # it resolves $PORT exactly the way the server does rather than assuming
+    # 8080. Path must match the ENTRYPOINT in Dockerfile.goreleaser.
+    #
+    # WHAT THIS DOES *NOT* DO, because it is easy to assume otherwise:
+    # `restart: unless-stopped` above does not fire on an unhealthy container.
+    # Docker Engine restarts on EXIT, not on health; acting on health is a Swarm
+    # / Kubernetes / Nomad behaviour. What you get here is the truth being
+    # visible and actionable — `docker compose ps` and `docker inspect` report
+    # unhealthy with the probe's stderr attached, a `health_status: unhealthy`
+    # event is emitted for anything watching the Docker event stream, and
+    # `depends_on: {condition: service_healthy}` becomes usable. Turning that
+    # into an automatic restart needs a supervisor (or autoheal) on top.
+    #
+    # start_period is short because startup is: bind a port, open a JSON file.
+    # 30s/3s/3 means an outage is reported in ~90s and one dropped probe on a
+    # busy host does not flap the container's status.
+    healthcheck:
+      test: ["CMD", "/app/bloxsmith", "healthcheck"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
 
   # Opt-in reverse proxy: TLS (self-signed local CA) + basic-auth in front of the
   # dashboard. Use when exposing on an untrusted LAN. Set BIND=127.0.0.1 so the

@@ -3,7 +3,10 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"bloxsmith/internal/httpx"
 )
 
 // This file exercises the package that decides which passphrase, which
@@ -358,7 +361,7 @@ func TestGetDefault_ExplicitEmptyIsPreservedNotDefaulted(t *testing.T) {
 
 // loadRelevantKeys lists every env var Load(dir) reads, per config.go.
 var loadRelevantKeys = []string{
-	"INFOBLOX_API_KEY", "INFOBLOX_URL", "PORT", "HOST", "ALLOWED_HOSTS",
+	"INFOBLOX_API_KEY", "INFOBLOX_URL", "PORT", "HOST", "ALLOWED_HOSTS", "TRUSTED_PROXIES",
 	"APP_REPO", "DISABLE_UPDATE_CHECK", "DASHBOARD_TOKEN", "BLOCK_LIST_ID",
 	"GROQ_API_KEY", "LLM_API_KEY", "LLM_MODEL", "LLM_BASE_URL",
 	"VAULT_DIR", "VAULT_PASSPHRASE", "VAULT_PASSPHRASE_FILE", "TEMPLATES_DIR",
@@ -424,5 +427,61 @@ func TestLoad_AllowedHostsEmptyWhenUnconfigured(t *testing.T) {
 	c := Load("/tmp/dir")
 	if len(c.AllowedHosts) != 0 {
 		t.Fatalf("Load().AllowedHosts = %#v with ALLOWED_HOSTS unset, want empty: a non-empty default here would silently widen the DNS-rebinding guard's trusted Host list", c.AllowedHosts)
+	}
+}
+
+// ---------------------------------------------------------------------
+// 9. TRUSTED_PROXIES. Unset must stay unset — the unlock throttle then keys
+// on the peer address exactly as it did before the setting existed. Set, it
+// must arrive as the operator wrote it, because httpx.ParseTrustedProxies is
+// what decides which entries are usable and what to warn about; splitting
+// here must not quietly drop or "fix" anything on the way.
+// ---------------------------------------------------------------------
+
+func TestLoad_TrustedProxiesEmptyWhenUnconfigured(t *testing.T) {
+	clearLoadEnv(t)
+	c := Load("/tmp/dir")
+	if len(c.TrustedProxies) != 0 {
+		t.Fatalf("Load().TrustedProxies = %#v with TRUSTED_PROXIES unset, want empty: anything non-empty here would make the server believe an X-Forwarded-For header nobody authorized, and an attacker could then pick their own rate-limit bucket on /api/vault/unlock", c.TrustedProxies)
+	}
+}
+
+func TestLoad_TrustedProxiesSplitsAndTrims(t *testing.T) {
+	clearLoadEnv(t)
+	t.Setenv("TRUSTED_PROXIES", " 10.0.0.0/8 , 172.18.0.2,, ::1 ")
+	c := Load("/tmp/dir")
+	want := []string{"10.0.0.0/8", "172.18.0.2", "::1"}
+	if len(c.TrustedProxies) != len(want) {
+		t.Fatalf("Load().TrustedProxies = %#v, want %#v — a stray space or a trailing comma in a .env line must not become an entry", c.TrustedProxies, want)
+	}
+	for i, w := range want {
+		if c.TrustedProxies[i] != w {
+			t.Fatalf("TrustedProxies[%d] = %q, want %q — order is load-bearing only for the log message, but a mangled entry would be dropped by the parser and silently reduce what is trusted", i, c.TrustedProxies[i], w)
+		}
+	}
+}
+
+// A typo in TRUSTED_PROXIES must not be silent. This is the end-to-end path an
+// operator actually hits: env -> Load -> httpx.ParseTrustedProxies -> startup
+// log. The value below is a plausible mistake (a truncated CIDR), and the
+// failure it causes is invisible from the outside — the server looks configured
+// for a proxy and keys every unlock attempt on the proxy's own address, so one
+// attacker's guesses lock out every user behind it.
+func TestLoad_TrustedProxiesTypoParsesToNothingAndWarns(t *testing.T) {
+	clearLoadEnv(t)
+	t.Setenv("TRUSTED_PROXIES", "10.0.0/8")
+	c := Load("/tmp/dir")
+	if len(c.TrustedProxies) != 1 {
+		t.Fatalf("Load().TrustedProxies = %#v, want the raw entry passed through for the parser to judge", c.TrustedProxies)
+	}
+	set, warn := httpx.ParseTrustedProxies(c.TrustedProxies)
+	if !set.Empty() {
+		t.Fatalf("ParseTrustedProxies(%q) trusts %s, want nothing — %q is not a CIDR", "10.0.0/8", set, "10.0.0/8")
+	}
+	if warn == "" {
+		t.Fatalf("a TRUSTED_PROXIES value that parses to nothing produced no warning: the operator gets a server that looks proxy-aware and is not, and finds out when everybody is locked out at once")
+	}
+	if !strings.Contains(warn, "10.0.0/8") {
+		t.Fatalf("warning does not name the offending entry, so an operator with a list of ten cannot tell which one is wrong: %q", warn)
 	}
 }
