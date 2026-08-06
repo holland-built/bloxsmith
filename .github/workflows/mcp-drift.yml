@@ -485,7 +485,7 @@ jobs:
       # PR. That is the honest outcome, and the step below reports it.
       - name: Open a PR with the refreshed baselines
         id: pr
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: mcp-baseline-refresh
           delete-branch: true
