@@ -63,7 +63,18 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-python@v5
+      # v7, was v5. `python-version` is untouched: v5's and v7's action.yml
+      # differ by one ADDED input (`pip-version`) and `using: node20` ->
+      # `node24`, which wants runner >= 2.327.1 — the GitHub-hosted
+      # ubuntu-latest above is past it. v7 does remove an input, `pip-install`,
+      # but that one only ever existed in v6.1 through v6.3, so nothing here
+      # could have been using it. This action asks for no permissions.
+      #
+      # Unlike the artifact steps further down, this one is gated on the API
+      # key alone, not on refresh_baselines — so an ordinary manual dispatch
+      # does exercise it, and the nightly cron exercises it every night. It is
+      # still unreachable from a pull request, because nothing in this file is.
+      - uses: actions/setup-python@v7
         if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.13"
@@ -263,9 +274,19 @@ jobs:
           mkdir -p live-catalog
           cp /tmp/live_tools.json /tmp/live_services.json /tmp/live_cubes.json live-catalog/
 
+      # v7, was v4. Nothing this step passes moved: `name`, `path`,
+      # `if-no-files-found` and `retention-days` are identical in v4's and v7's
+      # action.yml. v5/v6/v7 were a Node 20 -> 24 runtime march requiring runner
+      # >= 2.327.1, which the GitHub-hosted ubuntu-latest above already is.
+      #
+      # v7's one new input is `archive`, default `true` — the v4 behaviour, and
+      # left at the default on purpose. `archive: false` uploads a single file
+      # unzipped and IGNORES `name`, and the refresh job fetches this artifact
+      # BY name. Setting it would break the handoff at the only moment this path
+      # ever runs.
       - name: Hand the live catalog to the refresh job
         if: steps.gate.outputs.run == 'true' && inputs.refresh_baselines == true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: live-mcp-catalog
           path: live-catalog/
@@ -357,8 +378,21 @@ jobs:
 
       - uses: actions/checkout@v7
 
+      # v8, was v4. `name` and `path` are unchanged across v5-v8. v5's breaking
+      # change moved the output path only for downloads by `artifact-ids`; this
+      # one is by name, which that release explicitly left alone. No new scopes:
+      # a same-run artifact needs none, and `github-token` + `actions: read` are
+      # only for reaching into another run.
+      #
+      # v8 does change one behaviour that lands here. A digest mismatch used to
+      # log a warning and carry on; it now defaults to failing the run
+      # (`digest-mismatch: error`). Left at the default deliberately — a catalog
+      # that arrived corrupted is a catalog that could not look, and the guards
+      # below exist precisely so that such a thing is never written over a good
+      # baseline. A warning in a log nobody reads is how it would have got past
+      # them before.
       - name: Fetch the live catalog the drift job already produced
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: live-mcp-catalog
           path: /tmp/live
@@ -483,9 +517,16 @@ jobs:
       #
       # If the baselines were already current the action commits nothing and opens no
       # PR. That is the honest outcome, and the step below reports it.
+      #
+      # v8, was v7. This one is a Node 20 -> 24 runtime bump and nothing else —
+      # the v7 and v8 action.yml differ by exactly one line, `using:`. Every
+      # input below survives, both outputs the next step reads
+      # (`pull-request-number`, `pull-request-url`) survive, and the required
+      # scopes are unchanged: `contents: write` and `pull-requests: write`,
+      # already declared on this job above.
       - name: Open a PR with the refreshed baselines
         id: pr
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: mcp-baseline-refresh
           delete-branch: true
