@@ -354,6 +354,35 @@ docker start bloxsmith       # restart existing
 PORT=8090 ./bloxsmith        # standalone binary on a different port
 ```
 
+### Health
+
+`GET /healthz` returns `200 {"status":"ok","version":"…"}` when the server is
+serving and its state directory is reachable, and `503` when it is not. It
+answers a narrow question — is this process able to do its job — so a locked
+vault is reported healthy: that is the normal resting state of a fresh install,
+and failing it would restart-loop a container before anyone could type the
+passphrase. For vault state, read `GET /api/vault/status` instead.
+
+```bash
+curl -s localhost:8080/healthz     # {"status":"ok","version":"…"}
+bloxsmith healthcheck              # same probe, as an exit code: 0 healthy, 1 not
+docker compose ps                  # STATUS column shows healthy / unhealthy
+```
+
+The compose file runs `bloxsmith healthcheck` inside the container as its
+`healthcheck.test`. The image is distroless — no shell, no curl — so the probe
+has to be the binary itself. Note that Docker Engine does **not** restart an
+unhealthy container: `restart: unless-stopped` acts on exit, not on health.
+The healthcheck makes the failure visible (`docker compose ps`, `docker inspect`,
+the `health_status` event) and makes `depends_on: {condition: service_healthy}`
+work; automatic recovery still needs a supervisor above Docker, or an
+orchestrator that acts on health.
+
+`/healthz` is the one route exempt from the `ALLOWED_HOSTS` check, because a
+prober addresses the container by an IP or a name the server does not know it
+answers to and would otherwise get `421` forever. Its body carries only the
+status and the version — no tenant data, no paths, no vault state.
+
 ---
 
 ## Getting the keys

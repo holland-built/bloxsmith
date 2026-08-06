@@ -154,6 +154,13 @@ func main() {
 			// `restore-plan` below, which is unrelated and touches no files.
 			// Requires `--confirm restore`. See vaultbackupcli.go.
 			os.Exit(runVaultRestoreCLI(os.Args[2:]))
+		case "healthcheck":
+			// The container's health probe, and the only shape it can take: the
+			// release image is gcr.io/distroless/static (Dockerfile.goreleaser),
+			// which has no shell, no curl and no wget, so a Docker CMD-SHELL
+			// healthcheck has nothing to run. The probe therefore has to be this
+			// binary. See runHealthcheckCLI.
+			os.Exit(runHealthcheckCLI(os.Args[2:]))
 		case "restore-plan":
 			// Read a teardown export back and print what would have to be
 			// re-created, in dependency order. Offline and creates nothing —
@@ -227,8 +234,82 @@ func printUsage() {
 	fmt.Println("  vault-backup FILE.tar.gz copy the state dir (vault.json + views + audit log) to one archive")
 	fmt.Println("  vault-restore FILE.tar.gz --confirm restore   unpack that archive back into the state dir")
 	fmt.Println("  vault-passphrase <cmd>   set|status|remove — keep the auto-unlock passphrase in the macOS keychain")
+	fmt.Println("  healthcheck [--port N]   probe a running server's /healthz — exit 0 healthy, 1 not (Docker uses this)")
 	fmt.Println("  --version, -v             print version")
 	fmt.Println("  --help, -h, help          this help")
+}
+
+// healthcheckTimeout is how long the probe waits for the whole exchange. The
+// route it calls does one os.Stat and marshals two fields, so anything slower
+// than this is a server that is not answering rather than a server that is
+// busy — which is the condition the probe is being run to detect. Kept below
+// the compose healthcheck's own `timeout: 3s` so the failure is this process
+// exiting 1 with a reason on stderr, rather than Docker killing it with none.
+const healthcheckTimeout = 2 * time.Second
+
+// runHealthcheckCLI is `bloxsmith healthcheck`: GET /healthz on the loopback
+// address, exit 0 on 200 and 1 on anything else. It exists because the release
+// image is distroless — no shell, no curl, no wget — so the only executable
+// available to a Docker HEALTHCHECK is this binary itself.
+//
+// IT RESOLVES THE PORT THE WAY THE SERVER DOES, and that is the part most
+// likely to be got wrong. Hardcoding 8080 would work in the image (which sets
+// PORT=8080) and silently fail for every operator running `bloxsmith --port
+// 9090` or with PORT in a .env — the probe would connect to nothing, report
+// unhealthy, and be right about a server that was fine. So it walks the same
+// three steps main() walks: --port/-p wins, then the .env files are loaded
+// setdefault-style, then config.Load applies the PORT-or-8080 default. Only
+// cfg.Port is read from the result, and cfg.Port does not depend on the dir
+// argument, which is why "." is passed rather than re-deriving the executable's
+// directory.
+//
+// It always talks to 127.0.0.1 and never to cfg.Host: the probe runs beside the
+// server (same container, same machine), and the image binds HOST=0.0.0.0,
+// which is not an address you can connect to. Loopback also means the Host
+// header is `127.0.0.1:PORT`, which is permanently in the Host allowlist — the
+// /healthz exemption in internal/httpx is for the OTHER probers, not this one.
+func runHealthcheckCLI(args []string) int {
+	for _, a := range args {
+		if a == "--help" || a == "-h" {
+			fmt.Println("usage: bloxsmith healthcheck [--port N]")
+			fmt.Println("  GET /healthz on http://127.0.0.1:$PORT and report the result as an")
+			fmt.Println("  exit code: 0 healthy, 1 unreachable or not 200. Prints nothing when")
+			fmt.Println("  healthy. This is what the Docker healthcheck runs.")
+			return 0
+		}
+	}
+	port, err := parsePortFlag(args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	if port != "" {
+		os.Setenv("PORT", port)
+	}
+	loadForegroundEnv()
+	return healthcheckAt("http://127.0.0.1:" + config.Load(".").Port + "/healthz")
+}
+
+// healthcheckAt performs the probe against one URL and returns the exit code.
+// Split out from the flag/env resolution above so a test can point it at a real
+// httptest server, and at a port with nothing on it, without touching the
+// process environment.
+func healthcheckAt(url string) int {
+	client := &http.Client{Timeout: healthcheckTimeout}
+	resp, err := client.Get(url)
+	if err != nil {
+		// The common case here is connection refused — no server. Printing it
+		// is the whole diagnostic an operator gets from `docker inspect`'s
+		// health log, so it goes to stderr rather than being swallowed.
+		fmt.Fprintf(os.Stderr, "healthcheck: %v\n", err)
+		return 1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "healthcheck: %s returned %s\n", url, resp.Status)
+		return 1
+	}
+	return 0
 }
 
 // parsePortFlag scans args (os.Args[1:]) for a --port/-p flag in any of the

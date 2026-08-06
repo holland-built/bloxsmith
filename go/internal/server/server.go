@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"bloxsmith/internal/account"
@@ -99,6 +100,10 @@ func New(d *Deps) http.Handler {
 	d.registerNOCRoutes(mux)
 	d.registerBrandRoutes(mux)
 	d.registerSecurityWriteRoutes(mux)
+	// The container's own health probe. Registered last of the named routes and
+	// deliberately NOT under /api/, so no gate in this file — the vault lock, the
+	// write guard, the write lock — has any opinion about it. See healthz.
+	mux.HandleFunc("GET /healthz", d.healthz)
 	mux.Handle("/", d.Static)
 
 	// VAULT_MODE lock (server.py 5065/6071): a chassis-level gate that 503s every
@@ -171,6 +176,67 @@ func (d *Deps) vaultStatus(w http.ResponseWriter, r *http.Request) {
 		upd = d.UpdateStatus()
 	}
 	d.json(w, r, http.StatusOK, d.Vault.Status(d.Version, d.Cfg.VaultMode, upd))
+}
+
+// --- GET /healthz ------------------------------------------------------------
+
+// healthz answers "is this process still able to do its job", for a supervisor
+// that has no other way to ask.
+//
+// THE DEFECT. Until this route existed, the only liveness signal this server
+// emitted was that its PID had not exited. Docker's `restart: unless-stopped`,
+// systemd, and launchd all key off exactly that, so a process that was running
+// but wedged — a deadlocked mutex, a full or unmounted vault volume, a
+// goroutine leak that ate the machine — looked identical to a healthy one and
+// was left in place indefinitely. The dashboard would hang in a browser and
+// nothing anywhere would say why.
+//
+// WHAT IT CHECKS. os.Stat on the state directory. That is a small check on
+// purpose, but it is not a decorative one: stateDir is the mounted volume
+// (/vault in the image), it is where vault.json, the audit chain and the saved
+// views live, and every write path in this server ends up there. A container
+// whose volume vanished — an unmounted bind, a deleted named volume, a full or
+// read-only filesystem — keeps serving the static UI perfectly while silently
+// being unable to persist anything. That is precisely the "running but useless"
+// state this route exists to name. It also exercises the goroutine scheduler and
+// a real syscall, so a fully wedged process cannot answer it at all.
+//
+// A LOCKED VAULT IS HEALTHY. This is the one real judgement call here, and it
+// goes the other way from the obvious reading. A locked vault is not a fault —
+// it is the resting state of every fresh install, and of every restart of an
+// install that deliberately does not auto-unlock (no VAULT_PASSPHRASE_FILE, the
+// documented posture for anything on a LAN). Reporting it as unhealthy would
+// mean a brand-new container is marked unhealthy from first boot until a human
+// opens a browser and types a passphrase, and under any supervisor that acts on
+// health, it would be killed and restarted on a loop before that human ever got
+// the chance. The vault's own state has a route that reports it honestly —
+// GET /api/vault/status, with `locked` — and that is where a UI or an operator
+// should read it. This route answers a different question, for a different
+// caller, and conflating the two would break the install path.
+//
+// WHAT IS NOT IN THE BODY. Status, and the version already printed by
+// `bloxsmith --version` and by the release artifacts. No tenant names, no
+// account ids, no filesystem paths (the failure case says the state directory is
+// unreachable; it does not say where it looked), no vault or key material. That
+// matters because this is the one route exempt from the Host allowlist — see
+// HostGuard in internal/httpx — so a DNS-rebound page can read this response
+// when it can read no other. Everything here is safe for that reader; nothing
+// added to it later is, unless it is checked against that sentence first.
+func (d *Deps) healthz(w http.ResponseWriter, r *http.Request) {
+	if _, err := os.Stat(d.StateDir); err != nil {
+		// 503, not 500: the process is fine, its storage is not, and a
+		// supervisor reading status codes should treat that as "not ready to
+		// serve" rather than "crashed". The error itself is logged, not
+		// returned, because it contains the path.
+		log.Printf("[healthz] state directory unreachable: %v", err)
+		d.json(w, r, http.StatusServiceUnavailable, map[string]any{
+			"status":  "unavailable",
+			"version": d.Version,
+			"reason":  "state directory unreachable",
+		})
+		return
+	}
+	d.json(w, r, http.StatusOK, map[string]any{"status": "ok", "version": d.Version})
 }
 
 // --- POST /api/update/apply (Phase 3) ----------------------------------------
