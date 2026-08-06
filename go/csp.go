@@ -52,8 +52,44 @@ func cspPolicy() string {
 // style-src keeps 'unsafe-inline' and that is not an oversight. React writes
 // component style props as inline style="" attributes, which style-src governs;
 // there is no bounded set of them to hash and no way to enumerate them from a
-// built file. script-src never needed 'unsafe-inline' for that — the two
-// directives were relaxed together, and only one of them had a reason.
+// built file (113 style={{…}} props across 18 files in ui/src today).
+// script-src never needed 'unsafe-inline' for that — the two directives were
+// relaxed together, and only one of them had a reason.
+//
+// style-src-elem 'self' recovers most of what style-src had to give away.
+// CSP Level 3 splits the old directive in two: style-src-elem governs <style>
+// elements and <link rel=stylesheet>, style-src-attr governs style=""
+// attributes. React's style props are attributes, so ONLY style-src-attr has
+// to stay permissive — an injected <style> block, which is the CSS-injection
+// vector that matters here (attribute selectors that exfiltrate field values
+// through background-image URLs, and full-page UI spoofing), has no legitimate
+// counterpart in this app and can be refused outright.
+//
+// Both style-src-elem and style-src-attr fall back to style-src when absent
+// (then to default-src), which is what makes this strictly safer rather than a
+// trade. style-src-attr is deliberately NOT emitted: it inherits
+// 'unsafe-inline' from style-src on every browser, old or new, so React's
+// props keep working everywhere. A browser that knows style-src-elem enforces
+// 'self' on <style> elements; a browser that does not ignores the directive
+// entirely and behaves exactly as it did before this line existed. Nothing
+// regresses in either direction.
+//
+// Support, from MDN's browser-compat-data for Content-Security-Policy (checked
+// 2026-08-06): Chrome/Edge 75, Firefox 108, Safari 26.2. Safari 15.4 through
+// 26.1 is the case worth naming — it PARSES style-src-elem and then does
+// nothing with it (webkit.org/b/276931), so those versions get no protection
+// but also do not break; they are the fallback path in practice, not an
+// exception to it.
+//
+// The premise that this is free rests on the app never creating a <style>
+// element, which was checked rather than assumed: ui/src renders no <style>
+// and passes no `precedence` prop (React 19's style-hoisting path is in the
+// bundle but unreachable without one), recharts 3.10 draws with attributes and
+// ships no CSS-in-JS injector, and Tailwind v4 through vite emits a real
+// stylesheet file that 'self' already covers. Vite's HMR does inject <style>,
+// but only under `vite dev`, which never serves through this handler. If a
+// future dependency starts injecting one, it will fail loudly in the console
+// with a style-src-elem violation — which is the right way to find out.
 func cspPolicyFrom(index []byte) (string, error) {
 	hashes, err := inlineScriptHashes(index)
 	if err != nil {
@@ -61,7 +97,7 @@ func cspPolicyFrom(index []byte) (string, error) {
 	}
 	return "default-src 'self'; connect-src 'self'; frame-ancestors 'none'; " +
 		"script-src 'self' " + strings.Join(hashes, " ") + "; " +
-		"style-src 'self' 'unsafe-inline'; " +
+		"style-src 'self' 'unsafe-inline'; style-src-elem 'self'; " +
 		"img-src 'self' data:; font-src 'self' data:", nil
 }
 

@@ -83,8 +83,12 @@ func staticHandler() http.Handler {
 // the vault/provision controls, (2) connect-src 'self' + img-src 'self' data: to
 // deny an injected script any outbound channel to exfiltrate the X-Auth-Token.
 // style-src keeps 'unsafe-inline' because React writes component style props as
-// inline style="" attributes and there is no bounded set of those to enumerate;
-// data: covers Vite-inlined assets. script-src does NOT: the only inline script
+// inline style="" attributes and there is no bounded set of those to enumerate,
+// but style-src-elem 'self' narrows that to what actually needs it: the
+// attributes keep working (style-src-attr is not emitted, so it inherits the
+// keyword) while an injected <style> block is refused on every browser that
+// implements the CSP Level 3 split. data: covers Vite-inlined assets.
+// script-src does NOT take 'unsafe-inline': the only inline script
 // the shipped app has is index.html's theme bootstrap, and cspPolicy hashes it
 // at startup so that one script is allowed by name and every other inline
 // script — including an injected one — is refused.

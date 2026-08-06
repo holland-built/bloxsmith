@@ -62,10 +62,50 @@ func TestScriptSrcIsHashedNotUnsafeInline(t *testing.T) {
 // TestStyleSrcKeepsUnsafeInline guards the half of the old comment that WAS
 // real: React writes component style props as inline style="" attributes, which
 // style-src governs. Removing it here would blank the UI.
+//
+// It stays after style-src-elem was added, and that is the point: style-src is
+// now the fallback that keeps style="" attributes working on every browser,
+// old or new, because style-src-attr is deliberately not emitted. Drop
+// 'unsafe-inline' from here and 113 style={{…}} props across ui/src stop
+// applying.
 func TestStyleSrcKeepsUnsafeInline(t *testing.T) {
 	styleSrc := directive(t, servedCSP(t), "style-src")
 	if !strings.Contains(styleSrc, "'unsafe-inline'") {
 		t.Errorf("style-src lost 'unsafe-inline'; React's inline style props would be blocked: %s", styleSrc)
+	}
+}
+
+// TestStyleSrcElemRefusesInlineStyleElements is the defect this change closes:
+// under style-src alone, 'unsafe-inline' had to cover style="" attributes and
+// so also allowed any injected <style> block — the CSS-injection vector for
+// exfiltration and UI spoofing.
+//
+// The two assertions are a pair, and neither is sufficient. A style-src-elem
+// without 'self' would refuse the app's own /assets/*.css and leave the UI
+// unstyled; a style-src-elem carrying 'unsafe-inline' would parse fine, apply
+// fine, and protect nothing — the exact silent failure this test exists to
+// catch, since the page looks identical either way.
+func TestStyleSrcElemRefusesInlineStyleElements(t *testing.T) {
+	styleSrcElem := directive(t, servedCSP(t), "style-src-elem")
+	if strings.Contains(styleSrcElem, "'unsafe-inline'") {
+		t.Errorf("style-src-elem allows any injected <style> block: %s", styleSrcElem)
+	}
+	if !strings.Contains(styleSrcElem, "'self'") {
+		t.Errorf("style-src-elem dropped 'self'; the bundled /assets/*.css would be refused and the UI would render unstyled: %s", styleSrcElem)
+	}
+}
+
+// TestStyleSrcAttrIsNotEmitted pins the deliberate absence. style-src-attr is
+// left out so it falls back to style-src's 'unsafe-inline' on every browser
+// that implements the split — emitting it, in any form, would be a second place
+// that has to be kept in agreement with style-src, and getting it wrong blocks
+// React's style props on new browsers only, which is precisely the bug class
+// that never shows up on the developer's machine.
+func TestStyleSrcAttrIsNotEmitted(t *testing.T) {
+	for _, d := range strings.Split(servedCSP(t), ";") {
+		if strings.HasPrefix(strings.TrimSpace(d), "style-src-attr") {
+			t.Errorf("style-src-attr is emitted (%q); it is meant to inherit 'unsafe-inline' from style-src", strings.TrimSpace(d))
+		}
 	}
 }
 
@@ -213,7 +253,7 @@ func TestCSPPolicyFromShape(t *testing.T) {
 	sum := sha256.Sum256([]byte("boot()"))
 	want := "default-src 'self'; connect-src 'self'; frame-ancestors 'none'; " +
 		"script-src 'self' 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'; " +
-		"style-src 'self' 'unsafe-inline'; " +
+		"style-src 'self' 'unsafe-inline'; style-src-elem 'self'; " +
 		"img-src 'self' data:; font-src 'self' data:"
 	if policy != want {
 		t.Errorf("policy =\n  %s\nwant\n  %s", policy, want)
