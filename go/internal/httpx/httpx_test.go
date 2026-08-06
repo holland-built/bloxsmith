@@ -324,6 +324,61 @@ func TestHostGuard_RejectsRebindWith421(t *testing.T) {
 	}
 }
 
+// THE EXEMPTION, AND ITS BLAST RADIUS.
+//
+// A health prober addresses the container by whatever it knows it as — a pod
+// IP, a bridge address, a target-group member, a monitor's hostname — and none
+// of those are in the allowlist. Without the exemption the gate answers 421,
+// which is not a timeout and not a 5xx: the prober simply records "not 200",
+// marks the target unhealthy, and does so forever, on a server that is fine.
+//
+// The second half is what stops the exemption from becoming a hole: it is one
+// exact path, not a prefix and not a mood, so the very same hostile Host that
+// gets a 200 on /healthz still gets a 421 on everything else. Both halves are
+// asserted here because either one alone passes with the feature broken — an
+// exemption that never fires, or an exemption that opened the gate.
+func TestHostGuard_ExemptsHealthz(t *testing.T) {
+	g := testGuard() // Host: localhost — the gate is armed, not standing down.
+
+	reached := ""
+	h := g.HostGuard(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { reached = r.URL.Path }))
+
+	probe := func(target string) *http.Request {
+		r := httptest.NewRequest("GET", "http://evil.example"+target, nil)
+		r.Host = "evil.example" // as hostile as it gets, and as unrecognised
+		r.RemoteAddr = "127.0.0.1:54321"
+		return r
+	}
+
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, probe("/healthz"))
+	if w.Code == http.StatusMisdirectedRequest {
+		t.Fatal("/healthz got 421 on an unrecognised Host — every orchestrator probe is silently unhealthy")
+	}
+	if reached != "/healthz" {
+		t.Fatalf("/healthz never reached the handler (reached %q)", reached)
+	}
+
+	reached = ""
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, probe("/api/dashboard"))
+	if w.Code != http.StatusMisdirectedRequest {
+		t.Fatalf("non-exempt path under the same hostile Host = %d, want 421 — the exemption widened the gate", w.Code)
+	}
+	if reached != "" {
+		t.Fatalf("non-exempt path reached the handler as %q", reached)
+	}
+
+	// Neither a prefix nor a suffix: only the exact path is exempt.
+	for _, p := range []string{"/healthz/", "/healthz/../api/dashboard", "/api/healthz", "/healthzz"} {
+		w = httptest.NewRecorder()
+		h.ServeHTTP(w, probe(p))
+		if w.Code != http.StatusMisdirectedRequest {
+			t.Errorf("%q = %d under a hostile Host, want 421 — the exemption is not an exact match", p, w.Code)
+		}
+	}
+}
+
 func TestHostAllowed_BindHostAndExtras(t *testing.T) {
 	g := &Guard{Port: "8090", Host: "noc.internal", AllowedHosts: []string{"dash.example.com"}}
 	for _, h := range []string{"noc.internal:8090", "noc.internal", "dash.example.com:8090", "localhost:8090"} {

@@ -130,6 +130,16 @@ type Config struct {
 	// that gate on a wildcard (0.0.0.0) bind, where the real names are unknown.
 	AllowedHosts []string
 
+	// TrustedProxies is TRUSTED_PROXIES (comma-separated IPs and/or CIDR
+	// ranges): the front ends whose X-Forwarded-For this process will believe.
+	// Empty — the default — means the header is ignored entirely and every
+	// per-client decision uses the peer address, which is the behaviour before
+	// this setting existed. It is read only by the unlock throttle; the entries
+	// are validated by httpx.ParseTrustedProxies, which returns a warning for
+	// anything unparseable, because an ignored typo silently reverts a
+	// proxied deployment to a single shared rate-limit bucket.
+	TrustedProxies []string
+
 	AppRepo             string // APP_REPO (server.py:68)
 	UpdateCheckDisabled bool   // DISABLE_UPDATE_CHECK (server.py:69)
 
@@ -202,6 +212,7 @@ func Load(dir string) *Config {
 	c.Port = or("PORT", "8080")
 	c.Host = or("HOST", "localhost")
 	c.AllowedHosts = splitList(os.Getenv("ALLOWED_HOSTS"))
+	c.TrustedProxies = splitList(os.Getenv("TRUSTED_PROXIES"))
 
 	c.AppRepo = or("APP_REPO", "holland-built/bloxsmith")
 	c.UpdateCheckDisabled = os.Getenv("DISABLE_UPDATE_CHECK") != ""

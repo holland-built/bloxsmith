@@ -195,12 +195,33 @@ func (g *Guard) WriteOKStrict(r *http.Request) bool {
 	return selfInitiated(r)
 }
 
-func isLoopback(remoteAddr string) bool {
+// hostOf strips the :port and any IPv6 brackets off an http.Request.RemoteAddr,
+// leaving the bare peer address ("127.0.0.1:54321" -> "127.0.0.1",
+// "[::1]:54321" -> "::1"). A value with no port at all is returned unchanged.
+//
+// The one place this is derived, for the three things that key off the peer:
+// the loopback check below, the audit actor label, and the unlock throttle's
+// per-client counter (unlock_throttle.go). It was two hand-copied
+// LastIndex-then-Trim blocks before that third caller; a security decision and
+// an audit label disagreeing about who the peer is would be a very quiet bug.
+//
+// THE PEER, NOT THE CLIENT, AND THE TWO ARE NOW DIFFERENT THINGS. Behind a
+// reverse proxy the peer is the proxy, and TrustedProxies.ClientIP
+// (trusted_proxies.go) recovers the address behind it from X-Forwarded-For.
+// Only the throttle uses that. isLoopback and actor below stay on this
+// function, deliberately: see the "what this deliberately does not touch"
+// section of trusted_proxies.go for why a header-derived address must not reach
+// an authorization decision or a tamper-evident log.
+func hostOf(remoteAddr string) string {
 	host := remoteAddr
 	if i := strings.LastIndex(host, ":"); i >= 0 {
 		host = host[:i]
 	}
-	host = strings.Trim(host, "[]")
+	return strings.Trim(host, "[]")
+}
+
+func isLoopback(remoteAddr string) bool {
+	host := hostOf(remoteAddr)
 	return host == "127.0.0.1" || host == "::1"
 }
 
@@ -350,11 +371,46 @@ func (g *Guard) HostAllowed(r *http.Request) bool {
 	return g.hostAllowlist()[host]
 }
 
+// hostGuardExempt is the set of paths answered BEFORE the Host allowlist, in the
+// same shape as vaultGateGETExempt below: an explicit, closed list, not a prefix.
+//
+// ONE ENTRY, AND IT HAS TO BE JUSTIFIED. /healthz is the container/orchestrator
+// health probe (internal/server, GET /healthz). A prober does not know or care
+// what name this server answers to; it asks whatever address it holds — a pod
+// IP, a container IP on a bridge network, a target-group member address, the
+// hostname an uptime monitor was configured with — and the Host header carries
+// that. None of those are in hostAllowlist, so without this exemption the gate
+// returns 421 to every one of them.
+//
+// The consequence is worse than a wrong answer, because 421 is not a 5xx and is
+// not a timeout: the prober records a non-200, marks the target unhealthy, and
+// keeps doing so forever. The server is perfectly healthy the whole time and
+// says nothing about why it is being failed. That is the exact silent-and-
+// permanent failure this list exists to prevent, and it is the reason the
+// exemption is written together with the route rather than after someone
+// deploys it. (The compose probe this repo ships would in fact pass the
+// allowlist today — it runs `bloxsmith healthcheck` inside the container against
+// 127.0.0.1, and loopback is always allowlisted. It is every OTHER prober,
+// including the Kubernetes/ALB deployments the standalone binary invites, that
+// this covers.)
+//
+// WHAT IT COSTS. A DNS-rebound page gets a 200 with {"status","version"} where
+// it previously got a 421. It does not gain any tenant data, any path, or any
+// vault state — see the healthz comment for why the body is the shape it is —
+// and it already knew the target existed, because rebinding requires naming it.
+// The version string is the whole of the leak, and it is the trade being made.
+// Nothing else goes on this list without the same argument.
+func hostGuardExempt(path string) bool {
+	return path == "/healthz"
+}
+
 // HostGuard wraps the whole mux with HostAllowed, 421 Misdirected Request for a
-// Host this server does not serve.
+// Host this server does not serve. hostGuardExempt names the routes that answer
+// before the allowlist and explains why.
 func (g *Guard) HostGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !g.HostAllowed(r) {
+		path := strings.SplitN(r.URL.Path, "?", 2)[0]
+		if !hostGuardExempt(path) && !g.HostAllowed(r) {
 			WriteJSON(w, r, http.StatusMisdirectedRequest, g.Port,
 				map[string]any{"error": "forbidden — unrecognized Host header"})
 			return
@@ -444,11 +500,7 @@ func actor(r *http.Request) string {
 	if isLoopback(r.RemoteAddr) {
 		return "loopback"
 	}
-	host := r.RemoteAddr
-	if i := strings.LastIndex(host, ":"); i >= 0 {
-		host = host[:i]
-	}
-	return host
+	return hostOf(r.RemoteAddr)
 }
 
 // --- _json responder --------------------------------------------------------

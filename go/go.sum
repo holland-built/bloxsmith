@@ -1,5 +1,6 @@
-aead.dev/minisign v0.2.0 h1:kAWrq/hBRu4AARY6AlciO83xhNnW9UaC8YipS2uhLPk=
 aead.dev/minisign v0.2.0/go.mod h1:zdq6LdSd9TbuSxchxwhpA9zEb9YXcVGoE8JakuiGaIQ=
+aead.dev/minisign v0.3.0 h1:8Xafzy5PEVZqYDNP60yJHARlW1eOQtsKNp/Ph2c0vRA=
+aead.dev/minisign v0.3.0/go.mod h1:NLvG3Uoq3skkRMDuc3YHpWUTMTrSExqm+Ij73W13F6Y=
 github.com/fernet/fernet-go v0.0.0-20240119011108-303da6aec611 h1:JwYtKJ/DVEoIA5dH45OEU7uoryZY/gjd/BQiwwAOImM=
 github.com/fernet/fernet-go v0.0.0-20240119011108-303da6aec611/go.mod h1:zHMNeYgqrTpKyjawjitDg0Osd1P/FmeA0SZLYK3RfLQ=
 github.com/kardianos/service v1.3.0 h1:/LGy+xPP2TM+GLTiCZ2di7cy0Jd/qrawlTUfqKYFdTI=

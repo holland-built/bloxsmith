@@ -151,6 +151,13 @@ Full update modes → [docs/DEPLOYMENT.md#updating](docs/DEPLOYMENT.md#updating)
 </details>
 
 <details>
+<summary><b>Backing up the vault</b></summary>
+
+`bloxsmith vault-backup ./backup.tar.gz` copies the whole state directory — the encrypted vault, saved views, brand and audit log — into one `0600` archive; `bloxsmith vault-restore ./backup.tar.gz --confirm restore` puts it back. No passphrase either way: `vault.json` is already encrypted, so the archive is exactly as secret as the passphrase that opens it. From Docker, `docker compose exec bloxsmith bloxsmith vault-backup /vault/backup.tar.gz` then `docker cp bloxsmith:/vault/backup.tar.gz .`. The audit signing key and `.env` are deliberately **not** in it — [what that means, and the restore guards](docs/DEPLOYMENT.md#backup--restore).
+
+</details>
+
+<details>
 <summary><b>Uninstalling</b></summary>
 
 Each install method removes cleanly. Config + the encrypted vault are **kept by default** so a reinstall keeps your tenants — add the purge flag to delete them too.

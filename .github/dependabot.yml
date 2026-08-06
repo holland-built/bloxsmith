@@ -1,0 +1,48 @@
+# Nothing in this repo has ever told anyone that a dependency moved.
+#
+# CI now refuses a KNOWN-BAD dependency — govulncheck on the Go module,
+# `npm audit` on ui/ — but both only fire once an advisory has been published
+# against a version already committed here. Neither says a word about a
+# release that simply exists and is newer. So the only way a bump has ever
+# happened is a human noticing, and the state of the tree shows how well that
+# works: aead.dev/minisign has sat on v0.2.0 with v0.3.0 out, on the code path
+# that verifies release signatures for `bloxsmith update`.
+#
+# Weekly, not daily: this is a small tree with three ecosystems, and daily
+# turns a maintenance signal into background noise that gets filtered.
+#
+# open-pull-requests-limit: 5 is what Dependabot would default to anyway; it
+# is written out per ecosystem so the cap is a decision on record rather than
+# an inherited default someone later raises without knowing why it mattered.
+# The first run will find every dependency that has drifted since the repo was
+# written, and 15 open PRs across three ecosystems is already the edge of
+# reviewable — an uncapped wall is how this gets switched off in week one.
+#
+# Directories are per-manifest, and this repo keeps none at the root: the Go
+# module is go/go.mod, the web app is ui/package.json, and the workflow files
+# are the one thing that genuinely lives at "/".
+version: 2
+updates:
+  # The product. Also the only half that touches Infoblox credentials.
+  - package-ecosystem: gomod
+    directory: /go
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Build tooling and the embedded UI. A bump here changes go/web, so these
+  # PRs need `cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/`
+  # before CI's "UI dist up to date" step will pass — expect red until then.
+  - package-ecosystem: npm
+    directory: /ui
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # The actions in .github/workflows. These are pinned by major tag, so they
+  # move underneath us silently and no lockfile records what actually ran.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
