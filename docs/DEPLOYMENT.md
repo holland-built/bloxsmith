@@ -481,6 +481,7 @@ known follow-up. Until then, provisioning that relies on bundled templates needs
 | `HOST`             |          | `localhost` (`0.0.0.0` in Docker) | App bind address                    |
 | `PORT`             |          | `8080`                   | HTTP port                                    |
 | `ALLOWED_HOSTS`    |          | _(loopback + `HOST`)_    | Comma-separated extra `Host` header values this deployment answers to (DNS-rebinding gate). `localhost`/`127.0.0.1`/`[::1]`/`HOST` are always allowed; anything else gets `421`. A wildcard bind (`HOST=0.0.0.0`, the Docker default) can't know its own names, so the gate is **off** there until you set this |
+| `TRUSTED_PROXIES`  |          | _(empty — nothing trusted)_ | Comma-separated IPs and/or CIDR ranges of reverse proxies in front of the app. `X-Forwarded-For` is read **only** from these peers, and only to identify the client for the unlock rate limit. Set it when you run a proxy — see [Behind a reverse proxy](#behind-a-reverse-proxy). Leave it empty when the app is reached directly |
 | `DISABLE_UPDATE_CHECK` |      | _(unset)_                | Set to `1` (any non-empty value) to stop `GET /api/update/check` contacting GitHub Releases. It then reports `checkDisabled: true` and no `latest` — not "up to date". `bloxsmith update` and `POST /api/update/apply` still reach GitHub when run explicitly |
 | `WATCHTOWER_TOKEN` |          | _(generated/default)_    | Shared secret for the optional Watchtower sidecar's HTTP API (alternate update trigger) |
 | `AUDIT_TRUST_DIR`  |          | _(per-user config dir)_  | Where the audit chain's HMAC key and sealed head record live. Must **not** be the directory holding `audit_log.jsonl` — a key an attacker can rewrite beside the log it signs protects nothing. The app warns at startup if you point it there |
@@ -871,6 +872,44 @@ Injected text is deliberately **not** stripped or rewritten. A hostname is data;
 editing the tenant's own values would make the dashboard misrepresent their network,
 which is a worse failure than the one it would fix.
 
+## Behind a reverse proxy
+
+If anything sits in front of the app — the `secure` Caddy profile, nginx, a cloud
+load balancer — **set `TRUSTED_PROXIES`**:
+
+```bash
+TRUSTED_PROXIES=127.0.0.1,::1        # Caddy on the same host (the secure profile)
+TRUSTED_PROXIES=172.18.0.0/16        # a proxy elsewhere on the docker network
+TRUSTED_PROXIES=10.0.0.7             # a single load balancer
+```
+
+**Why it matters.** `POST /api/vault/unlock` is rate limited per client: wrong
+guesses lock that client out for 1, 2, 4, 8, 16, then 30 seconds. Through a proxy
+every request arrives from the proxy's address, so without this setting there is
+only ever **one** client — and one person's six wrong guesses lock out everyone,
+including you. Naming the proxy lets the app read `X-Forwarded-For` and count
+each client separately.
+
+**Why it is off by default and has to be typed by hand.** A server cannot tell
+whether it is behind a proxy, and `X-Forwarded-For` is written by whoever sent
+the request. Believing it unasked would let anyone put a fresh value on each
+guess and never be locked out at all. So the header is read **only** from a peer
+you have named, the client is taken from the end of the chain your proxy wrote
+(not the start, which the sender controls), and anything that does not add up
+falls back to the peer address.
+
+Entries are bare IPs or CIDR ranges, IPv4 or IPv6 — no ports, no hostnames. One
+that does not parse is **named in a warning at startup** and ignored; if none
+parse, the app says so and keeps using the peer address.
+
+**Scope: the unlock rate limit only.** The loopback/CSRF check and the audit
+log's actor label deliberately keep using the real peer address, whatever
+`TRUSTED_PROXIES` says. Loopback there is an authorization decision backed by
+the connection itself, and a mistyped range must not be able to turn a header
+into an admin bypass or into a forged name in a tamper-evident log.
+
+---
+
 ## Security notes
 
 - **Never commit `.env`** (gitignored). Use `.env.example` as the template.
@@ -883,6 +922,9 @@ which is a worse failure than the one it would fix.
   auth/TLS (the `secure` Caddy profile, or a VPN).
 - The compose file mounts the Docker socket into the app for self-update; remove
   that line if you don't want the dashboard to have Docker control.
+- **Running a reverse proxy? Set `TRUSTED_PROXIES`.** Without it the unlock rate limit
+  sees one client — the proxy — so anyone's wrong guesses lock out everybody. See
+  [Behind a reverse proxy](#behind-a-reverse-proxy).
 - If a token is ever exposed, **rotate it** in the CSP portal — scrubbing files does not revoke it.
 - The audit chain is tamper-evident against someone who can write `audit_log.jsonl`, **not**
   against a process running as the operator, which can read the key. See

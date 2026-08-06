@@ -277,7 +277,7 @@ func (d *Deps) registerVaultRoutes(mux router) {
 	// 401 it always did — the throttle adds statuses, it changes none.
 	mux.HandleFunc("POST /api/vault/unlock", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
 		var res map[string]any
-		verdict, wait := d.UnlockThrottle.Do(r.Context(), r.RemoteAddr, func() bool {
+		verdict, wait := d.UnlockThrottle.Do(r, func() bool {
 			res = d.Vault.UnlockR(str(b, "passphrase"))
 			ok, _ := res["ok"].(bool)
 			return ok

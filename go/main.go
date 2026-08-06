@@ -477,6 +477,25 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	}
 	st := store.New(stateDir)
 
+	// WHO THE UNLOCK THROTTLE THINKS A CLIENT IS. Unset (the default), the peer
+	// address — unchanged from before this setting existed. Set, the front ends
+	// whose X-Forwarded-For may be believed, which is what stops a proxied
+	// deployment from collapsing every client into one rate-limit bucket.
+	//
+	// BOTH OUTCOMES ARE LOGGED, and the warning is the important one: an entry
+	// that does not parse leaves the server looking configured while silently
+	// keying on the proxy's own address again, and the first symptom of that is
+	// every operator locked out at once by someone else's wrong guesses.
+	trustedProxies, proxyWarn := httpx.ParseTrustedProxies(cfg.TrustedProxies)
+	if proxyWarn != "" {
+		log.Printf("[proxy] %s", proxyWarn)
+	} else if !trustedProxies.Empty() {
+		log.Printf("[proxy] trusting X-Forwarded-For from %s, for the unlock throttle only — "+
+			"the loopback/CSRF check and the audit actor still use the peer address", trustedProxies)
+	}
+	unlockThrottle := httpx.NewUnlockThrottle()
+	unlockThrottle.Proxies = trustedProxies
+
 	guard := &httpx.Guard{
 		Token:         cfg.DashboardToken,
 		Port:          cfg.Port,
@@ -518,7 +537,7 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 		// client and serialised process-wide. Built here, once, so the limit
 		// is visible in the assembly rather than buried in a route.
 		// See internal/httpx/unlock_throttle.go.
-		UnlockThrottle: httpx.NewUnlockThrottle(),
+		UnlockThrottle: unlockThrottle,
 		Version:        version,
 		Static:         staticHandler(),
 		UpdateCheck:    updateCheckHandler(cfg),

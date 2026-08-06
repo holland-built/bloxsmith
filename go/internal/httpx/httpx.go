@@ -204,6 +204,14 @@ func (g *Guard) WriteOKStrict(r *http.Request) bool {
 // per-client counter (unlock_throttle.go). It was two hand-copied
 // LastIndex-then-Trim blocks before that third caller; a security decision and
 // an audit label disagreeing about who the peer is would be a very quiet bug.
+//
+// THE PEER, NOT THE CLIENT, AND THE TWO ARE NOW DIFFERENT THINGS. Behind a
+// reverse proxy the peer is the proxy, and TrustedProxies.ClientIP
+// (trusted_proxies.go) recovers the address behind it from X-Forwarded-For.
+// Only the throttle uses that. isLoopback and actor below stay on this
+// function, deliberately: see the "what this deliberately does not touch"
+// section of trusted_proxies.go for why a header-derived address must not reach
+// an authorization decision or a tamper-evident log.
 func hostOf(remoteAddr string) string {
 	host := remoteAddr
 	if i := strings.LastIndex(host, ":"); i >= 0 {

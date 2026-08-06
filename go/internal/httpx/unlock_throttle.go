@@ -47,6 +47,14 @@ package httpx
 // internal/server's TestUnlockRoute_ThrottleDoesNotReachDirectVaultCallers
 // pins that: it locks out an HTTP client and then auto-unlocks the same vault.
 //
+// WHO A "CLIENT" IS. The counter keys on the peer address, and behind a reverse
+// proxy every request has the SAME peer — the proxy — so the map collapses into
+// one bucket and one attacker's guesses lock out every legitimate user. That is
+// opt-in to fix, by naming the proxy in TRUSTED_PROXIES; unset (the default) the
+// peer address is used exactly as before. The whole argument, including why
+// X-Forwarded-For is walked from the right and why the loopback check and the
+// audit actor do NOT get the same treatment, is in trusted_proxies.go.
+//
 // PROCESS-LOCAL, AND A RESTART CLEARS IT. Both mechanisms live in memory, so an
 // attacker who can restart the server resets every counter. That is accepted
 // rather than overlooked: an attacker who can restart the process has already
@@ -58,6 +66,7 @@ package httpx
 import (
 	"context"
 	"math"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -122,6 +131,12 @@ type UnlockThrottle struct {
 	// per server lifetime — there is no throughput to protect here.
 	sem chan struct{}
 
+	// Proxies is the TRUSTED_PROXIES set used to resolve which client a request
+	// belongs to. nil — the value NewUnlockThrottle leaves — trusts nothing and
+	// keys on the peer address, which is the behaviour this throttle shipped
+	// with. main.go sets it from config; see trusted_proxies.go.
+	Proxies *TrustedProxies
+
 	mu    sync.Mutex
 	fails map[string]unlockFailure
 
@@ -162,8 +177,16 @@ func NewUnlockThrottle() *UnlockThrottle {
 // Do is a single entry point rather than exported Check/Acquire/Record calls
 // for the same reason: a caller cannot get that ordering wrong, forget to
 // release the slot, or forget to record the outcome.
-func (t *UnlockThrottle) Do(ctx context.Context, remoteAddr string, derive func() bool) (UnlockVerdict, time.Duration) {
-	key := hostOf(remoteAddr)
+//
+// It takes the whole request, not the peer address, because deciding WHICH
+// CLIENT this is now needs the request's headers as well as its peer — see
+// TrustedProxies.ClientIP. Passing only the address would have left the caller
+// to resolve that itself, which is the one place this decision must not be
+// duplicated. The request's own context is what the wait honours: a caller that
+// hung up should not hold a place in the queue.
+func (t *UnlockThrottle) Do(r *http.Request, derive func() bool) (UnlockVerdict, time.Duration) {
+	key := t.Proxies.ClientIP(r)
+	ctx := r.Context()
 
 	if wait := t.blockedFor(key); wait > 0 {
 		return UnlockBlocked, wait
@@ -320,18 +343,23 @@ func RetryAfterSeconds(d time.Duration) int {
 
 // --- what this deliberately does NOT do --------------------------------------
 //
-// CLIENTS BEHIND ONE NAT OR REVERSE PROXY SHARE A BUCKET. Every request from an
-// office behind one public address, or through a proxy that does not preserve
-// the peer address, counts as the same client, so one person fat-fingering
-// their passphrase can lock out everyone behind it. Accepted for v1: the
-// deployment this control is FOR is the LAN one where the peer address is the
-// real client, and the failure mode is a 30-second wait on a route that is used
-// once per server lifetime.
+// CLIENTS BEHIND ONE NAT STILL SHARE A BUCKET. Every request from an office
+// behind one public address counts as the same client, so one person
+// fat-fingering their passphrase can lock out everyone behind it. Accepted: NAT
+// leaves no trace in the request for anyone to read, so there is nothing to key
+// on, and the failure mode is a 30-second wait on a route used once per server
+// lifetime.
 //
-// AND IT MUST NOT BE "FIXED" BY READING X-Forwarded-For. That header is set by
-// whoever sent the request unless a trusted proxy overwrites it, and this
-// server has no idea whether one exists. Keying the counter on it would let an
-// attacker put a fresh value on every guess and reset their own lockout at will
-// — the throttle would still be running, still be reporting counts, and be
-// worth exactly nothing. The peer address is the only client identifier this
-// process can verify, so it is the only one used.
+// THE REVERSE-PROXY CASE IS NOT THE SAME PROBLEM, and it is no longer on this
+// list — it was a denial-of-service lever, not an inconvenience, because the
+// proxy is the ONLY peer the server ever sees and the whole map becomes one
+// bucket. TRUSTED_PROXIES fixes it opt-in; trusted_proxies.go carries the
+// argument, including why the header is still ignored by default and why it is
+// walked from the right rather than the left.
+//
+// AND IT IS STILL NEVER "FIXED" BY READING X-Forwarded-For FROM AN UNNAMED
+// SOURCE. Unless the operator has told this process which peer is a proxy, that
+// header is written by whoever sent the request. Keying the counter on it blind
+// would let an attacker put a fresh value on every guess and reset their own
+// lockout at will — the throttle would still be running, still be reporting
+// counts, and be worth exactly nothing.

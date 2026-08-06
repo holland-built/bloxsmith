@@ -3,6 +3,8 @@ package httpx
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -35,6 +37,26 @@ func testThrottle(clk *fakeClock) *UnlockThrottle {
 
 const testClient = "192.0.2.10:51000"
 
+// peerReq is an unlock POST from one peer, in the shape net/http hands to a
+// handler: RemoteAddr always carries a port. Tests that also exercise the
+// forwarded chain use fwdReq below.
+func peerReq(remoteAddr string) *http.Request {
+	r := httptest.NewRequest(http.MethodPost, "/api/vault/unlock", nil)
+	r.RemoteAddr = remoteAddr
+	return r
+}
+
+// fwdReq is peerReq plus an X-Forwarded-For, one header value per argument, so a
+// test can build a multi-line chain the way an attacker's header plus a proxy's
+// appended one actually arrives.
+func fwdReq(remoteAddr string, xff ...string) *http.Request {
+	r := peerReq(remoteAddr)
+	for _, v := range xff {
+		r.Header.Add("X-Forwarded-For", v)
+	}
+	return r
+}
+
 func failingDerive() bool { return false }
 func passingDerive() bool { return true }
 
@@ -53,11 +75,11 @@ func TestUnlockThrottle_LockoutEscalatesAndCaps(t *testing.T) {
 		16 * time.Second, 30 * time.Second, 30 * time.Second, 30 * time.Second,
 	}
 	for i, w := range want {
-		if v, _ := th.Do(context.Background(), testClient, failingDerive); v != UnlockRan {
+		if v, _ := th.Do(peerReq(testClient), failingDerive); v != UnlockRan {
 			t.Fatalf("failure %d: verdict = %v, want UnlockRan — the attempt was refused before it "+
 				"was even allowed to be wrong", i+1, v)
 		}
-		v, wait := th.Do(context.Background(), testClient, func() bool {
+		v, wait := th.Do(peerReq(testClient), func() bool {
 			t.Errorf("failure %d: a locked-out client reached the derive — the whole point of "+
 				"checking the counter first is that this costs 128 MiB", i+1)
 			return false
@@ -84,11 +106,11 @@ func TestUnlockThrottle_BlockedRequestRunsNoDerive(t *testing.T) {
 	derives := 0
 	count := func() bool { derives++; return false }
 
-	if v, _ := th.Do(context.Background(), testClient, count); v != UnlockRan {
+	if v, _ := th.Do(peerReq(testClient), count); v != UnlockRan {
 		t.Fatalf("first attempt was not allowed to run")
 	}
 	for i := 0; i < 20; i++ {
-		if v, _ := th.Do(context.Background(), testClient, count); v != UnlockBlocked {
+		if v, _ := th.Do(peerReq(testClient), count); v != UnlockBlocked {
 			t.Fatalf("attempt %d: verdict = %v, want UnlockBlocked", i+2, v)
 		}
 	}
@@ -107,10 +129,10 @@ func TestUnlockThrottle_SuccessClearsTheCounter(t *testing.T) {
 	th := testThrottle(clk)
 
 	for i := 0; i < 3; i++ {
-		th.Do(context.Background(), testClient, failingDerive)
+		th.Do(peerReq(testClient), failingDerive)
 		clk.advance(unlockMaxDelay) // wait out each lockout
 	}
-	if v, _ := th.Do(context.Background(), testClient, passingDerive); v != UnlockRan {
+	if v, _ := th.Do(peerReq(testClient), passingDerive); v != UnlockRan {
 		t.Fatalf("the correct passphrase was refused: %v", v)
 	}
 	if n := len(th.fails); n != 0 {
@@ -118,8 +140,8 @@ func TestUnlockThrottle_SuccessClearsTheCounter(t *testing.T) {
 	}
 
 	// And the next wrong guess starts the curve over at 1s, not at 8s.
-	th.Do(context.Background(), testClient, failingDerive)
-	if _, wait := th.Do(context.Background(), testClient, failingDerive); wait != time.Second {
+	th.Do(peerReq(testClient), failingDerive)
+	if _, wait := th.Do(peerReq(testClient), failingDerive); wait != time.Second {
 		t.Fatalf("first failure after a success locked out for %v, want 1s — the counter was not "+
 			"reset, only its entry", wait)
 	}
@@ -135,15 +157,15 @@ func TestUnlockThrottle_ClientsAreIndependent(t *testing.T) {
 	const operator = "192.0.2.44:40000"
 
 	for i := 0; i < 6; i++ {
-		th.Do(context.Background(), attacker, failingDerive)
+		th.Do(peerReq(attacker), failingDerive)
 		clk.advance(unlockMaxDelay)
 	}
 	// The attacker is now at the ceiling.
-	th.Do(context.Background(), attacker, failingDerive)
-	if v, _ := th.Do(context.Background(), attacker, failingDerive); v != UnlockBlocked {
+	th.Do(peerReq(attacker), failingDerive)
+	if v, _ := th.Do(peerReq(attacker), failingDerive); v != UnlockBlocked {
 		t.Fatalf("attacker verdict = %v, want UnlockBlocked", v)
 	}
-	if v, _ := th.Do(context.Background(), operator, passingDerive); v != UnlockRan {
+	if v, _ := th.Do(peerReq(operator), passingDerive); v != UnlockRan {
 		t.Fatalf("operator verdict = %v, want UnlockRan — one client's failures locked out another", v)
 	}
 }
@@ -156,8 +178,8 @@ func TestUnlockThrottle_KeyIgnoresThePort(t *testing.T) {
 	clk := newFakeClock()
 	th := testThrottle(clk)
 
-	th.Do(context.Background(), "203.0.113.9:1111", failingDerive)
-	v, _ := th.Do(context.Background(), "203.0.113.9:2222", func() bool {
+	th.Do(peerReq("203.0.113.9:1111"), failingDerive)
+	v, _ := th.Do(peerReq("203.0.113.9:2222"), func() bool {
 		t.Error("a new source port from the same host was treated as a new client")
 		return false
 	})
@@ -172,13 +194,13 @@ func TestUnlockThrottle_ForgetsIdleClients(t *testing.T) {
 	clk := newFakeClock()
 	th := testThrottle(clk)
 
-	th.Do(context.Background(), testClient, failingDerive)
+	th.Do(peerReq(testClient), failingDerive)
 	clk.advance(unlockForget + time.Second)
 
-	if v, _ := th.Do(context.Background(), testClient, failingDerive); v != UnlockRan {
+	if v, _ := th.Do(peerReq(testClient), failingDerive); v != UnlockRan {
 		t.Fatalf("verdict = %v, want UnlockRan after idling past the forget window", v)
 	}
-	if _, wait := th.Do(context.Background(), testClient, failingDerive); wait != time.Second {
+	if _, wait := th.Do(peerReq(testClient), failingDerive); wait != time.Second {
 		t.Fatalf("lockout after the forget window = %v, want 1s — the old count survived", wait)
 	}
 }
@@ -198,7 +220,7 @@ func TestUnlockThrottle_FailureMapIsBounded(t *testing.T) {
 	for i := 0; i < rotations; i++ {
 		clk.advance(time.Millisecond)
 		addr := fmt.Sprintf("198.51.100.%d:%d", i%256, 40000+i)
-		if v, _ := th.Do(context.Background(), addr, failingDerive); v != UnlockRan {
+		if v, _ := th.Do(peerReq(addr), failingDerive); v != UnlockRan {
 			t.Fatalf("rotation %d: verdict = %v, want UnlockRan", i, v)
 		}
 	}
@@ -223,12 +245,12 @@ func TestUnlockThrottle_ExpiredEntriesEvictedBeforeLiveOnes(t *testing.T) {
 	th.maxTracked = 8
 
 	for i := 0; i < 8; i++ {
-		th.Do(context.Background(), fmt.Sprintf("198.51.100.%d:1", i), failingDerive)
+		th.Do(peerReq(fmt.Sprintf("198.51.100.%d:1", i)), failingDerive)
 	}
 	clk.advance(unlockForget + time.Second) // every entry above is now stale
 
 	const live = "192.0.2.99:1"
-	th.Do(context.Background(), live, failingDerive)
+	th.Do(peerReq(live), failingDerive)
 
 	if n := len(th.fails); n != 1 {
 		t.Fatalf("map holds %d entries, want 1 — the stale sweep did not run, so live entries are "+
@@ -260,7 +282,7 @@ func TestUnlockThrottle_DerivesAreSerialised(t *testing.T) {
 			// Distinct clients, all succeeding, so neither the lockout nor the
 			// counter can be what serialises them — only the slot can.
 			addr := fmt.Sprintf("192.0.2.%d:5000", i+1)
-			v, _ := th.Do(context.Background(), addr, func() bool {
+			v, _ := th.Do(peerReq(addr), func() bool {
 				mu.Lock()
 				inFlight++
 				if inFlight > peak {
@@ -304,7 +326,7 @@ func TestUnlockThrottle_BusyWhenTheSlotIsHeld(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		th.Do(context.Background(), "192.0.2.1:1", func() bool {
+		th.Do(peerReq("192.0.2.1:1"), func() bool {
 			close(holding)
 			<-release
 			return true
@@ -312,7 +334,7 @@ func TestUnlockThrottle_BusyWhenTheSlotIsHeld(t *testing.T) {
 	}()
 	<-holding
 
-	v, wait := th.Do(context.Background(), "192.0.2.2:1", func() bool {
+	v, wait := th.Do(peerReq("192.0.2.2:1"), func() bool {
 		t.Error("a second derive started while the slot was held")
 		return false
 	})
@@ -336,7 +358,7 @@ func TestUnlockThrottle_CancelledContextDoesNotQueue(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		th.Do(context.Background(), "192.0.2.1:1", func() bool {
+		th.Do(peerReq("192.0.2.1:1"), func() bool {
 			close(holding)
 			<-release
 			return true
@@ -347,7 +369,7 @@ func TestUnlockThrottle_CancelledContextDoesNotQueue(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	start := time.Now()
-	v, _ := th.Do(ctx, "192.0.2.2:1", func() bool {
+	v, _ := th.Do(peerReq("192.0.2.2:1").WithContext(ctx), func() bool {
 		t.Error("a cancelled request still ran a derive")
 		return false
 	})
@@ -372,10 +394,10 @@ func TestUnlockThrottle_PanicReleasesTheSlot(t *testing.T) {
 
 	func() {
 		defer func() { _ = recover() }()
-		th.Do(context.Background(), "192.0.2.1:1", func() bool { panic("derive exploded") })
+		th.Do(peerReq("192.0.2.1:1"), func() bool { panic("derive exploded") })
 	}()
 
-	if v, _ := th.Do(context.Background(), "192.0.2.2:1", passingDerive); v != UnlockRan {
+	if v, _ := th.Do(peerReq("192.0.2.2:1"), passingDerive); v != UnlockRan {
 		t.Fatalf("verdict = %v, want UnlockRan — the slot was never released after a panic", v)
 	}
 }
@@ -401,6 +423,116 @@ func TestRetryAfterSeconds(t *testing.T) {
 	for _, c := range cases {
 		if got := RetryAfterSeconds(c.in); got != c.want {
 			t.Errorf("RetryAfterSeconds(%v) = %d, want %d", c.in, got, c.want)
+		}
+	}
+}
+
+// --- who a client is, behind a proxy ------------------------------------------
+//
+// These four are the throttle-level half of TRUSTED_PROXIES; the resolution
+// rules themselves are pinned in trusted_proxies_test.go. What is asserted here
+// is the consequence that matters: which requests land in the SAME bucket.
+
+// The safe default, and the regression guard on it. With nothing configured an
+// X-Forwarded-For must not influence the key at all — if it did, an attacker
+// would put a fresh value on every guess and never be locked out, and the
+// counter would keep running and keep meaning nothing.
+func TestUnlockThrottle_IgnoresForwardedForByDefault(t *testing.T) {
+	clk := newFakeClock()
+	th := testThrottle(clk) // Proxies is nil, as NewUnlockThrottle leaves it
+
+	th.Do(fwdReq(testClient, "203.0.113.1"), failingDerive)
+	v, _ := th.Do(fwdReq(testClient, "203.0.113.2"), func() bool {
+		t.Error("a new X-Forwarded-For value bought a fresh bucket with no proxy configured")
+		return false
+	})
+	if v != UnlockBlocked {
+		t.Fatalf("verdict = %v, want UnlockBlocked — one header edit per guess is unlimited guesses", v)
+	}
+}
+
+// THE WHOLE POINT OF THE SETTING. Two real clients arriving through one trusted
+// proxy have to be counted separately. Without this the proxy is the only peer
+// the server sees, every request shares one bucket, and six wrong guesses from
+// anyone reachable through that proxy lock out every legitimate operator — a
+// denial of service handed to the attacker by the control meant to stop them.
+func TestUnlockThrottle_ClientsBehindOneTrustedProxyAreIndependent(t *testing.T) {
+	clk := newFakeClock()
+	th := testThrottle(clk)
+	th.Proxies, _ = ParseTrustedProxies([]string{"10.0.0.7"})
+
+	const proxy = "10.0.0.7:44321"
+	const attacker = "203.0.113.9"
+	const operator = "198.51.100.4"
+
+	// Drive the attacker to the ceiling, waiting out each lockout so the
+	// escalation is real and not just the first 1s step.
+	for i := 0; i < 6; i++ {
+		th.Do(fwdReq(proxy, attacker), failingDerive)
+		clk.advance(unlockMaxDelay)
+	}
+	th.Do(fwdReq(proxy, attacker), failingDerive)
+	if v, _ := th.Do(fwdReq(proxy, attacker), failingDerive); v != UnlockBlocked {
+		t.Fatalf("attacker verdict = %v, want UnlockBlocked — the throttle stopped working once a proxy was trusted", v)
+	}
+	if v, _ := th.Do(fwdReq(proxy, operator), passingDerive); v != UnlockRan {
+		t.Fatalf("operator verdict = %v, want UnlockRan — both clients are still sharing the proxy's single bucket, which is the defect TRUSTED_PROXIES exists to fix", v)
+	}
+}
+
+// A peer that is NOT a configured proxy gets its header ignored, no exceptions.
+// Otherwise anyone who can reach the app port directly — a LAN peer, another
+// container on the same bridge network — walks around the whole scheme by
+// writing their own X-Forwarded-For.
+func TestUnlockThrottle_UntrustedPeerCannotUseForwardedFor(t *testing.T) {
+	clk := newFakeClock()
+	th := testThrottle(clk)
+	th.Proxies, _ = ParseTrustedProxies([]string{"10.0.0.7"})
+
+	const direct = "203.0.113.50:9000" // not the proxy
+
+	th.Do(fwdReq(direct, "198.51.100.1"), failingDerive)
+	v, _ := th.Do(fwdReq(direct, "198.51.100.2"), func() bool {
+		t.Error("an untrusted peer changed buckets by editing X-Forwarded-For")
+		return false
+	})
+	if v != UnlockBlocked {
+		t.Fatalf("verdict = %v, want UnlockBlocked — the header is only readable from a peer the operator named", v)
+	}
+}
+
+// The spoofing attempt this design is shaped around. The attacker prepends
+// their own entries, including ones that look like trusted proxies, hoping the
+// server reads the LEFT end of the chain. Walking from the right, everything
+// they wrote sits to the left of the address our own proxy appended and is
+// never reached — so every guess lands in the same bucket no matter what the
+// header says.
+func TestUnlockThrottle_SpoofedChainCannotEscapeItsBucket(t *testing.T) {
+	clk := newFakeClock()
+	th := testThrottle(clk)
+	th.Proxies, _ = ParseTrustedProxies([]string{"10.0.0.0/24"})
+
+	const proxy = "10.0.0.7:44321"
+	const attacker = "203.0.113.9"
+
+	spoofs := []string{
+		"1.2.3.4",                    // a plain lie
+		"10.0.0.9, 10.0.0.8",         // fake trusted hops, hoping the walk continues past them
+		"127.0.0.1",                  // the loopback trick
+		"9.9.9.9, 10.0.0.5, 1.1.1.1", // a whole fabricated chain
+		"not-an-address",             // garbage, hoping a parse failure opens something
+	}
+	// First failure establishes the bucket; the client is locked out from here.
+	th.Do(fwdReq(proxy, attacker), failingDerive)
+	for _, s := range spoofs {
+		// The proxy appends the address it actually saw, to the RIGHT of
+		// whatever the attacker sent. That is the only entry we believe.
+		v, _ := th.Do(fwdReq(proxy, s+", "+attacker), func() bool {
+			t.Errorf("X-Forwarded-For %q escaped the lockout and ran a derive", s)
+			return false
+		})
+		if v != UnlockBlocked {
+			t.Fatalf("X-Forwarded-For %q: verdict = %v, want UnlockBlocked — the attacker picked their own bucket and the throttle counts nothing", s, v)
 		}
 	}
 }
