@@ -94,11 +94,77 @@ jobs:
           go-version: '1.26.x'
           cache-dependency-path: go/go.sum
 
-      - name: Go build + test
+      # `go test` without -race has been the only thing checking this repo's
+      # concurrent surface since the day it was written. Not "rarely run" —
+      # never: `git log --all -S'-race' -- .github/ scripts/` returns no commit
+      # at all, so the flag has never been added, never removed, never there.
+      #
+      # What that let through is a specific class, not a vague one: a data race
+      # whose outcome happens to be correct on the machine that ran it. In Go an
+      # unsynchronised access from two goroutines is undefined behaviour, and its
+      # two usual endings are a torn read that only misbehaves under a different
+      # scheduler or word size, and a concurrent map write that aborts the whole
+      # process with no recovery. A green `go test ./...` cannot tell either of
+      # those apart from correct code, because both produce the right answer on
+      # the run that observed them. The race detector is the only thing here that
+      # reports the ACCESS rather than the result.
+      #
+      # Three places in the tree were already written on the belief this was on,
+      # which is the real evidence that its absence was a defect rather than a
+      # missing nicety:
+      #
+      #   * internal/sse/sse_test.go — TestEmit_SingleGoroutineUsage_RaceClean,
+      #     whose own comment says it "runs it under -race as a regression check".
+      #     Without -race that test asserts nothing whatsoever: it calls emit 50
+      #     times and inspects no value, so the only way it could ever fail was a
+      #     panic. It has been a no-op for its entire life, and its name says
+      #     otherwise.
+      #   * internal/vault/vault.go:102 — the lock-guarded accessors are
+      #     documented as a "(data-race fix)". Nothing has ever confirmed the fix
+      #     holds. A guard never watched to refuse is a belief, not a guard.
+      #   * internal/store/budget_test.go — TestBudget_ConcurrentAddTokens, "run
+      #     with -race, per the task ... would catch both the data race and the
+      #     lost-update". That sentence is wrong, and it is recorded here rather
+      #     than left to mislead whoever reads it next: budgetMu serialises a
+      #     read-modify-write of ai_budget.json, which is a FILE. The detector
+      #     instruments memory accesses and is blind to it. Checked by deleting
+      #     the lock — the test fails either way, but on its token-total
+      #     assertion ("= 37, want 1850"), and -race reports no race at all. The
+      #     assertion is that test's guard; this flag is not.
+      #
+      # This step was watched to refuse before it was committed, rather than
+      # assumed to work. Deleting the c.mu.Lock()/Unlock() pairs from Cache.Do in
+      # internal/cache/cache.go — the single-flight path the package's concurrent
+      # tests drive from many goroutines at once — leaves `go test
+      # ./internal/cache/` GREEN in 0.33s, and produces four "WARNING: DATA RACE"
+      # reports under `go test -race`, on concurrent reads and writes of the
+      # entries and inflight maps. That is the class described above,
+      # demonstrated against this repo's own code: as the suite stands today it
+      # reports an unsynchronised map access as a pass. The lock was restored
+      # immediately and none of that experiment is in this commit.
+      #
+      # First run (2026-08-06, local, darwin/arm64, Go 1.26.3): ZERO races. Full
+      # suite at -count=1, all 16 test packages, nothing cached. Then repeated,
+      # because one pass of a timing-dependent check is one sample and not a
+      # result — -count=5 over sse, cache, store, httpx, dashboard, rest and mcp,
+      # and -count=3 over internal/server and the root package (the two slowest).
+      # Still zero. So this step lands as a gate on what gets written next, not
+      # as the fix for something found today, and that is stated here rather than
+      # left for someone to infer from an empty diff.
+      #
+      # Cost, measured rather than estimated: 21.2s -> 156.1s wall for the full
+      # suite. internal/vault is 153.7s of that (19.7s without), and all of it is
+      # scrypt — kdfByVersion runs at N=2^17 and the instrumentation multiplies
+      # every round. Vault is kept in regardless: it holds the repo's only
+      # "(data-race fix)" comment, so it is the last package that should be
+      # exempted to save minutes. The macos job below runs in parallel with this
+      # one, so the critical path grows by about that same 2.5 minutes, not twice
+      # it.
+      - name: Go build + test (-race) + vet
         working-directory: go
         run: |
           go build ./...
-          go test ./...
+          go test -race ./...
           go vet ./...
 
       # `go vet` has run here since this workflow was written and formatting has
@@ -216,11 +282,27 @@ jobs:
 
       # The same three commands the Linux job runs, on darwin. The keychain tests
       # that skip on Linux run for real here, against the runner's login keychain.
-      - name: Go build + test + vet (darwin — runs the keychain tests for real)
+      #
+      # -race is here for the same reason the whole job is, and it is not
+      # redundant with the Linux copy. The detector is compiled into the test
+      # binary per GOOS/GOARCH, so a clean run on linux/amd64 says nothing about
+      # the darwin/arm64 build users actually install; and whether two goroutines
+      # interleave badly is decided by the scheduler and the core count, which
+      # differ between ubuntu-latest and macos-latest. A race that never loses on
+      # one runner can lose on the other, which is the same lesson this job's own
+      # header records about one-OS checks. See the Linux step for what the
+      # flag's absence let through and for the measured cost.
+      #
+      # Deliberately NOT added to the "Assert the keychain tests actually RAN"
+      # step below: that step exists to prove those two tests are not skipped, it
+      # re-runs what this line already covered under the detector, and adding it
+      # there would pay internal/vault's scrypt-under-instrumentation bill a
+      # second time in the same job for no extra coverage.
+      - name: Go build + test (-race) + vet (darwin — runs the keychain tests for real)
         working-directory: go
         run: |
           go build ./...
-          go test ./...
+          go test -race ./...
           go vet ./...
 
       # Proves the keychain tests were not all skipped here too. A suite that
