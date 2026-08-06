@@ -67,6 +67,19 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
+      # goreleaser's `sboms:` block does not bundle an SBOM generator — it shells
+      # out to `syft`, and if syft is not on PATH the pipe fails and takes the
+      # whole release with it. So this step is a hard prerequisite of publishing,
+      # exactly like cosign above, and it sits next to it for that reason.
+      #
+      # The same install is repeated in ci.yml before its snapshot build. That is
+      # deliberate duplication, not an oversight: without it, a syft installer
+      # that broke — a moved release asset, a yanked tag, an action deprecation —
+      # would first be discovered at `git push --tags`, with the tag already
+      # created and the release half-published. On PRs it is a red X on a branch.
+      - name: Install syft (goreleaser shells out to it for SBOMs)
+        uses: anchore/sbom-action/download-syft@v0
+
       # Stage the installers into go/ so goreleaser's release.extra_files can
       # glob them without a `../` prefix (which its zglob rejects at publish
       # time). Kept out of git via .gitignore.

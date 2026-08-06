@@ -101,6 +101,58 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+# --- SBOM (software bill of materials) ----------------------------------------
+# Every release up to now was signed but had no ingredients list. Signatures
+# answer "did this come from the Bloxsmith pipeline"; they say nothing about
+# what is INSIDE. That is the question a corporate security team asks before
+# approving an install, and the question asked again the morning a CVE lands in
+# a transitive Go module — and until this block existed the only way to answer
+# either was to download the archive and run `go version -m` on the binary
+# yourself. govulncheck in ci.yml checks the tree we build FROM; an SBOM
+# records what actually shipped, which is not the same artifact.
+#
+# goreleaser does NOT bundle syft — it shells out to it, and if syft is absent
+# this pipe fails the release. It is installed by the "Install syft" step in
+# release.yml, and (deliberately) also in ci.yml so a broken installer reddens
+# a PR instead of a tag.
+#
+# `artifacts: archive` produces ONE SBOM PER ARCHIVE, named
+# <archive>.sbom.json — verified locally 2026-08-06 with goreleaser v2.17.0 +
+# syft v1.50.0:
+#   bloxsmith_<ver>_linux_amd64.tar.gz.sbom.json      (11 packages, 16 KB)
+#   bloxsmith_<ver>_linux_arm64.tar.gz.sbom.json
+#   bloxsmith_<ver>_macOS_universal.tar.gz.sbom.json  (both arches, 27 KB)
+#   bloxsmith_<ver>_windows_amd64.zip.sbom.json
+# Format is syft's default, SPDX 2.3 JSON (NOT CycloneDX — do not write that in
+# the docs without changing `args` here first). Contents are the Go module
+# graph read back out of the compiled binary: aead.dev/minisign v0.3.0,
+# fernet-go, kardianos/service, minio/selfupdate, golang.org/x/*, yaml.v3, and
+# the `stdlib` pseudo-package pinning the exact toolchain (go1.26.5 locally).
+#
+# WHAT THIS DOES NOT COVER — say it plainly rather than let "we ship an SBOM"
+# imply more than it does:
+#   * The pushed ghcr.io image. goreleaser's sboms pipe runs over release
+#     ARTIFACTS (archives), and dockers_v2 builds the image afterwards from the
+#     binary; nothing here catalogs the image or attaches an attestation to it.
+#     The gap is narrow because the base is gcr.io/distroless/static — no shell,
+#     no package manager, nothing but ca-certificates, tzdata and /etc/passwd
+#     (see Dockerfile.goreleaser) over the same binary and the same committed
+#     templates/ the archives already carry, so the Go module list above IS the
+#     image's application inventory. It is still not an image SBOM, and an
+#     auditor asking for one should be told to run it themselves:
+#       syft ghcr.io/holland-built/bloxsmith:<tag> -o spdx-json
+#   * go/web/ — the embedded UI bundle is a //go:embed'd blob inside the binary,
+#     so the npm tree behind it does not appear. `npm audit` in ci.yml is what
+#     covers that half; there is no shipped artifact syft can read it from.
+#
+# The SBOMs ARE in checksums.txt (confirmed: the sbom pipe runs during the
+# archive phase, before checksums are calculated), so they inherit the Ed25519
+# and sshsig signatures release.yml puts over that file — plus a direct cosign
+# signature of their own, below.
+sboms:
+  - id: archive-sbom
+    artifacts: archive
+
 # cosign keyless-sign checksums.txt (covers every archive via its sha256 entry).
 # Same CI identity/mechanism as docker_signs below. Verify with:
 #   cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
@@ -110,6 +162,40 @@ checksum:
 signs:
   - cmd: cosign
     artifacts: checksum
+    certificate: "${artifact}.pem"
+    output: true
+    args:
+      - sign-blob
+      - "--yes"
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+  # Identical cmd/args to the checksum entry above — same keyless CI identity,
+  # same verify command, only the artifact selector differs. A separate entry
+  # rather than widening the one above to `artifacts: all`, which would also
+  # sign every archive and binary and roughly triple the Rekor round trips for
+  # coverage checksums.txt already provides.
+  #
+  # Signing the SBOM directly, even though it is listed in checksums.txt, is the
+  # point: an SBOM is the artifact that gets forwarded on its own — pasted into
+  # a ticket, uploaded to a vendor portal, mailed to a security reviewer —
+  # detached from the release page and from checksums.txt. Verified in that
+  # state it proves nothing unless it carries its own signature. Each SBOM gets
+  # <name>.sbom.json.sig and .sbom.json.pem. Verify one with:
+  #   cosign verify-blob \
+  #     --certificate bloxsmith_<ver>_linux_amd64.tar.gz.sbom.json.pem \
+  #     --signature   bloxsmith_<ver>_linux_amd64.tar.gz.sbom.json.sig \
+  #     --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+  #     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  #     bloxsmith_<ver>_linux_amd64.tar.gz.sbom.json
+  #
+  # `id:` is REQUIRED here and its absence is a hard error, not a warning:
+  # goreleaser defaults every unnamed signs entry to the id `default` and then
+  # refuses the config with "found 2 signs with the ID 'default'". The entry
+  # above keeps the implicit `default` so nothing that referred to it changes.
+  - id: sbom
+    cmd: cosign
+    artifacts: sbom
     certificate: "${artifact}.pem"
     output: true
     args:

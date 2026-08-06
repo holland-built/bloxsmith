@@ -248,9 +248,127 @@ jobs:
         with:
           install-only: true
 
+      # goreleaser does not bundle an SBOM generator; the `sboms:` block in
+      # go/.goreleaser.yaml shells out to `syft` and the pipe FAILS the run if it
+      # is missing. release.yml installs it too — the copy here is the point of
+      # this step, not a redundancy. A syft installer that breaks (moved asset,
+      # yanked tag, deprecated action) would otherwise surface for the first time
+      # at `git push --tags`, on a tag that already exists, midway through
+      # publishing a release. Here it is a red X on a pull request.
+      - name: Install syft (goreleaser shells out to it for SBOMs)
+        uses: anchore/sbom-action/download-syft@v0
+
       - name: goreleaser build (snapshot, no publish)
         working-directory: go
         run: goreleaser build --snapshot --clean
+
+      # `goreleaser build` CANNOT produce an SBOM, and that is the whole reason
+      # this second, heavier invocation exists. Measured 2026-08-06 with
+      # goreleaser v2.17.0: `build --snapshot --clean` emits only the per-target
+      # binary directories and artifacts.json — no archives at all — and
+      # `sboms: artifacts: archive` has nothing to catalog, so the pipe never
+      # runs and prints nothing. An assertion bolted onto the step above could
+      # therefore never pass, and the honest fix is to run the mode that does the
+      # work rather than to weaken the assertion until it goes green.
+      #
+      # `release --snapshot` runs the archive → sbom → checksum chain for real.
+      # The three skips are each load-bearing:
+      #   publish — no tag, no GitHub Release, nothing leaves the runner
+      #   sign    — cosign keyless needs an OIDC token, and this workflow
+      #             deliberately has no `id-token: write` permission (it is a
+      #             build/test workflow; release.yml is the one that signs). The
+      #             sbom signing entry in .goreleaser.yaml is therefore NOT
+      #             exercised here. It was verified locally instead, by putting a
+      #             stub `cosign` on PATH and confirming the sign pipe is handed
+      #             all four .sbom.json paths after cataloguing and writes a .sig
+      #             and .pem beside each.
+      #   docker  — dockers_v2 builds linux/amd64 + linux/arm64, which needs the
+      #             QEMU and buildx setup that only release.yml does.
+      #
+      # Cost: it repeats the cross-compile the step above already did (~30s
+      # locally). Kept separate rather than replacing that step, because the
+      # plain `build` smoke test is the narrower check and is worth keeping able
+      # to fail on its own. If CI minutes ever matter more than that, the two
+      # collapse into this one — `release --snapshot` is a strict superset.
+      - name: goreleaser release (snapshot) — the mode that actually emits SBOMs
+        working-directory: go
+        run: goreleaser release --snapshot --skip=publish,sign,docker,homebrew --clean
+
+      # A skipped step and a working one look identical from the outside, and
+      # this step exists because ONE of the two ways this breaks is exactly that
+      # shape. Both were run rather than assumed (2026-08-06, local):
+      #
+      #   * syft missing from PATH — LOUD. goreleaser stops the release with
+      #     `could not catalog artifact ... executable file not found in $PATH`.
+      #     Confirmed by hiding the syft binary and re-running. The Install syft
+      #     step above is what keeps that from happening at tag time.
+      #   * the `sboms:` block's artifact selector no longer matching anything —
+      #     SILENT. Confirmed by running the same config with `artifacts:`
+      #     changed to a value this project produces none of: goreleaser printed
+      #     nothing, wrote zero SBOMs, and EXITED 0. A release cut that way stays
+      #     green and every artifact from then on ships with no ingredients list,
+      #     with nothing anywhere saying so. Deleting the block entirely does the
+      #     same. That is the failure this step catches and nothing else does.
+      #
+      # It does not just check "a file exists" — it counts. One SBOM PER ARCHIVE
+      # is the contract, so a run that silently catalogued three of four archives
+      # fails here rather than shipping a partial answer.
+      #
+      # Watched to refuse before being committed, on four hand-made bad dist/
+      # trees: one SBOM deleted ("3 SBOMs for 4 archives"), all four deleted
+      # ("ZERO SBOMs for 4 archives"), one replaced by a syntactically valid but
+      # hollow document ("has no stdlib"), and one removed from checksums.txt
+      # ("not in checksums.txt"). All four exited 1; the untouched tree passed.
+      - name: The SBOMs actually exist, one per archive, and are in checksums.txt
+        working-directory: go
+        run: |
+          set -euo pipefail
+          # Expected filenames, confirmed from a real run rather than guessed:
+          # goreleaser names each one <archive>.sbom.json, e.g.
+          # bloxsmith_3.53.1-snapshot-<sha>_linux_amd64.tar.gz.sbom.json
+          archives=$(find dist -maxdepth 1 \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l | tr -d ' ')
+          sboms=$(find dist -maxdepth 1 -name '*.sbom.json' | wc -l | tr -d ' ')
+          echo "archives=$archives sboms=$sboms"
+          ls -la dist/*.sbom.json || true
+
+          if [ "$archives" -eq 0 ]; then
+            echo "::error::no archives in dist/ at all — the archive pipe did not run, so this step cannot say anything about SBOMs"
+            exit 1
+          fi
+          if [ "$sboms" -eq 0 ]; then
+            echo "::error::goreleaser produced $archives archives and ZERO SBOMs — the sboms: block in go/.goreleaser.yaml did not run (syft missing from PATH, or its artifact selector no longer matches anything)"
+            exit 1
+          fi
+          if [ "$sboms" -ne "$archives" ]; then
+            echo "::error::$sboms SBOMs for $archives archives — some archive shipped without one"
+            exit 1
+          fi
+
+          # Non-empty and structurally real. syft's default output here is SPDX
+          # 2.3 JSON (NOT CycloneDX — `.packages`, not `.components`); a zero-byte
+          # or truncated file would still satisfy a bare existence check.
+          for f in dist/*.sbom.json; do
+            n=$(jq '.packages | length' "$f")
+            if [ "$n" -lt 2 ]; then
+              echo "::error::$f lists $n packages — an SBOM naming only the archive itself is an empty answer"
+              exit 1
+            fi
+            # The compiled-in toolchain version is the one entry that is always
+            # present when syft really read the binary, so it is the cheapest
+            # proof this catalogued the Go module graph rather than an empty dir.
+            jq -e '.packages[] | select(.name == "stdlib")' "$f" >/dev/null || {
+              echo "::error::$f has no stdlib package — syft did not read the Go binary inside the archive"; exit 1; }
+            echo "$f: $n packages"
+          done
+
+          # checksums.txt is what the Ed25519 and sshsig release signatures cover,
+          # so an SBOM missing from it is an SBOM outside the signed set.
+          for f in dist/*.sbom.json; do
+            grep -q " $(basename "$f")\$" dist/checksums.txt || {
+              echo "::error::$(basename "$f") is not listed in checksums.txt — it falls outside the signed set"
+              cat dist/checksums.txt; exit 1; }
+          done
+          echo "$sboms SBOMs, one per archive, all non-trivial and all in checksums.txt"
 
   # ── macOS ───────────────────────────────────────────────────────────────────
   # This repo's CI was Linux-only, and that means two shipped surfaces had NEVER

@@ -50,6 +50,65 @@ the background at login, and `bloxsmith update` upgrades in place.
 > --certificate-oidc-issuer https://token.actions.githubusercontent.com`); the
 > standalone binary remains checksum-only.
 
+### The SBOM (what's inside the release)
+
+Every release also publishes an **SBOM** — a machine-readable list of the
+libraries compiled into the binary — one per archive, named
+`<archive-name>.sbom.json`. That is what to hand a security review that asks
+what the software is made of, and what to grep the morning a CVE lands in a Go
+module.
+
+Format is **SPDX 2.3 JSON**, produced by [syft](https://github.com/anchore/syft).
+Contents are the Go module graph read back out of the compiled binary — direct
+and transitive dependencies with exact versions, plus a `stdlib` entry pinning
+the Go toolchain the release was built with.
+
+Fetch one and read it:
+
+```bash
+V=3.53.0   # the release version, no v prefix
+BASE=https://github.com/holland-built/bloxsmith/releases/download/v$V
+curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
+
+# every dependency and its version
+jq -r '.packages[] | "\(.name) \(.versionInfo)"' "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
+```
+
+The SBOM is signed the same way everything else in the release is — cosign
+keyless, with the release workflow's GitHub OIDC identity, no key stored
+anywhere. Verify it before trusting it:
+
+```bash
+curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.sig"
+curl -fsSLO "$BASE/bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.pem"
+
+cosign verify-blob \
+  --certificate "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.pem" \
+  --signature   "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json.sig" \
+  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  "bloxsmith_${V}_linux_amd64.tar.gz.sbom.json"
+```
+
+Each SBOM is also listed in `checksums.txt`, so it is covered by that file's
+Ed25519 and `ssh-keygen` signatures as well. The standalone `.sig`/`.pem` pair
+exists because an SBOM is the one artifact that gets forwarded on its own —
+attached to a ticket, uploaded to a vendor portal — where `checksums.txt` is
+nowhere in sight.
+
+> **What the SBOM does not cover.** It catalogs the **release archives**, not the
+> pushed `ghcr.io` image and not the web UI's npm tree.
+>
+> The image gap is narrow rather than zero: the base is `gcr.io/distroless/static`
+> — no shell, no package manager, just CA certificates and timezone data over the
+> same binary the archives carry — so the module list above *is* the image's
+> application inventory. It is still not an image SBOM. If you need one, generate
+> it yourself: `syft ghcr.io/holland-built/bloxsmith:<tag> -o spdx-json`.
+>
+> The UI gap is structural: `go/web/` is embedded into the binary as an opaque
+> blob, so syft cannot see the npm packages behind it. `npm audit` in
+> [ci.yml](../.github/workflows/ci.yml) is what covers that half.
+
 ### Windows
 
 No winget. The primary path is **download-inspect-run** `install.ps1` — no admin,
@@ -809,6 +868,10 @@ which is a worse failure than the one it would fix.
 - Releases are Ed25519-signed with a key that is not in the release, and the in-app updater
   refuses an unsigned or badly-signed one. That authenticates the release pipeline, not the
   source — someone who can push a tag or steal the CI secret can still sign.
+- Every release ships a signed **SBOM** per archive, so "what libraries are in this?" is
+  answerable without unpacking the binary. It covers the archives, **not** the ghcr image
+  and not the embedded UI's npm tree. See
+  [the SBOM](#the-sbom-whats-inside-the-release).
 
 See [SECURITY.md](../.github/SECURITY.md) for the policy and how to report a vulnerability,
 and [CONTRIBUTING.md](../.github/CONTRIBUTING.md) for local setup and the test suite.
