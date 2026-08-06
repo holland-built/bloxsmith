@@ -63,7 +63,18 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-python@v5
+      # v7, was v5. `python-version` is untouched: v5's and v7's action.yml
+      # differ by one ADDED input (`pip-version`) and `using: node20` ->
+      # `node24`, which wants runner >= 2.327.1 — the GitHub-hosted
+      # ubuntu-latest above is past it. v7 does remove an input, `pip-install`,
+      # but that one only ever existed in v6.1 through v6.3, so nothing here
+      # could have been using it. This action asks for no permissions.
+      #
+      # Unlike the artifact steps further down, this one is gated on the API
+      # key alone, not on refresh_baselines — so an ordinary manual dispatch
+      # does exercise it, and the nightly cron exercises it every night. It is
+      # still unreachable from a pull request, because nothing in this file is.
+      - uses: actions/setup-python@v7
         if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.13"
