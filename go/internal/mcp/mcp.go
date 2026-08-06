@@ -35,12 +35,35 @@ var tableRE = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_.\-]{0,127}$`)
 // mcp_inline_row_cap). query_stored_data pages through the parquet in blocks.
 const pageSize = 100
 
-// maxRows bounds how many rows queryAllRows will ever page through. Verified
-// 2026-07-26: query_stored_data is broken upstream (every read, by
-// table_name, resource_id, or read_resource, returns "No stored data found in
-// this session"), so any page loop against it is dead weight — but this cap
-// also guards the day it's fixed, so one huge stored table can't turn a
-// single dashboard load into thousands of tool calls.
+// maxRows bounds how many rows queryAllRows will ever page through.
+//
+// CORRECTION, 2026-08-06. This comment used to read: "Verified 2026-07-26:
+// query_stored_data is broken upstream (every read, by table_name,
+// resource_id, or read_resource, returns 'No stored data found in this
+// session'), so any page loop against it is dead weight — but this cap also
+// guards the day it's fixed."
+//
+// WHAT IS TRUE: the readback is not broken. Every dimensioned cube query
+// issued in the 2026-08-06 session stored its result and read it back
+// successfully, 100 rows per query_stored_data call (the pageSize cap above),
+// paging cleanly to the end of the table.
+//
+// HOW IT WAS MEASURED: live, against the real tenant, via
+// infoblox-portal_query_cube on the AssetDetails_ch_agg cube — dimensioned
+// queries (name / taxonomy_type_label / providers_label / vendor / last_seen
+// keyed on cqid), read back in full, with cube-side limit/offset paging
+// confirmed non-overlapping (offset 2500 returned 50 rows, offset 2600
+// returned 20, against a real total of 2,620 assets).
+//
+// WHY THE 2026-07-26 READING WAS PLAUSIBLE ANYWAY: a measures-only cube query
+// carries its answer inline in `message` and stores nothing, so a
+// query_stored_data call chasing it genuinely does answer "No stored data
+// found in this session" — correctly. Generalising that to "every read" is
+// what was wrong.
+//
+// So this cap is not dead weight guarding a hypothetical: it is live, and it
+// is the only thing stopping one large stored table from turning a single
+// dashboard load into thousands of tool calls. Do not remove it.
 const maxRows = 5000
 
 // ErrTooManyRows is returned by queryAllRows when row_count exceeds maxRows.
@@ -448,9 +471,11 @@ func columnarToDicts(raw map[string]any) []map[string]any {
 
 // parseInline extracts rows from a measure-only cube/REST response that
 // carries its result INLINE instead of stashing it for query_stored_data.
-// Verified 2026-07-26 live: query_stored_data is broken upstream (every read
-// fails), but a dimensionless cube query still returns its data inline in
-// `message`, e.g.:
+// This used to say "query_stored_data is broken upstream (every read fails)";
+// it is not, see the maxRows correction above. The fact that actually
+// justifies this function is narrower and still holds: a measures-only
+// (dimensionless) cube query never stores anything at all, and instead
+// returns its data inline in `message`, e.g.:
 //
 //	{"table_name":"...","row_count":1,"message":"Query Result: [{'AssetDiscoveryStatus.count': '319397'}]. If necessary, ..."}
 //
@@ -568,9 +593,11 @@ func parseInline(text string) (rows []map[string]any, ok bool) {
 
 // Get is _mcp_get (server.py:3107): make_get_request stores the feed as a
 // parquet, then query_stored_data pages 100 rows at a time (the MCP inline
-// cap). Returns the assembled rows. Since query_stored_data is broken
-// upstream (see parseInline), inline results are tried first and returned
-// immediately when present.
+// cap). Returns the assembled rows. Inline results are tried FIRST — this
+// used to be justified as "query_stored_data is broken upstream", which is
+// wrong (see the maxRows correction). The real reason: a response that
+// already carries its rows inline stored nothing, so paging it would be a
+// call that must fail.
 func (c *Client) Get(ctx context.Context, service, endpoint string, params map[string]any, fetchAll bool) []map[string]any {
 	args := map[string]any{
 		"task_description": fmt.Sprintf("Fetch %s %s for NOC dashboard", service, endpoint),

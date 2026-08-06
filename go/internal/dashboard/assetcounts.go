@@ -1,13 +1,40 @@
 // Package dashboard: scalar-count tiles backed by measures-only cube queries.
 //
-// Dimensioned cube results land in an upstream store that cannot be read back
-// (a broken MCP stored-data path), so these tiles never send a `dimensions`
-// opt. A per-value breakdown was tried via filtered measures-only queries
-// (equals/contains on the dimension), but live probing showed every filtered
-// query returns 0 even though set/notSet confirm the column is fully
-// populated — the breakdown is unobtainable upstream. These tiles now return
-// only the real unfiltered total and mark the breakdown unavailable rather
-// than shipping buckets that are 100% "other".
+// CORRECTION, 2026-08-06. This doc used to assert two things about the
+// upstream cube API, and BOTH were wrong. They are written out here rather
+// than deleted, because the wrong belief is why these tiles are shaped the
+// way they are, and a reader who only sees the corrected text cannot tell
+// which parts of the shape are still load-bearing.
+//
+// WHAT WAS BELIEVED (1): "dimensioned cube results land in an upstream store
+// that cannot be read back (a broken MCP stored-data path)". WHAT IS TRUE:
+// the readback works. See internal/mcp's maxRows comment for that
+// correction and its measurement — the same 2026-08-06 probe covers both.
+//
+// WHAT WAS BELIEVED (2): "every filtered query returns 0 even though
+// set/notSet confirm the column is fully populated — the breakdown is
+// unobtainable upstream". WHAT IS TRUE: filtered measures-only counts work
+// fine. The zeros were self-inflicted, by a wrong string literal in the
+// probe that produced that sentence, not by anything upstream.
+// AssetDiscoveryStatus.overall_status takes the values OK, ERROR and "" —
+// upper case. The probe filtered on "Ok", which matches no row, so every
+// filtered count came back 0 and the shape of the zero (every value, every
+// time) read as an upstream refusal rather than as a typo.
+//
+// HOW IT WAS MEASURED: live, against the real tenant, via the
+// infoblox-portal_query_cube MCP tool on 2026-08-06. equals "Ok" -> 0;
+// equals "OK" -> 14. On the AssetDetails_ch_agg cube the same session got a
+// filtered measures-only count of 125 for taxonomy_type_label equals
+// "Laptop" against a real total of 2,620. A filtered measures-only count is
+// therefore an ordinary working query.
+//
+// WHAT DID NOT CHANGE: these tiles still send no `dimensions` opt and still
+// report breakdown_available:false. That is now a statement about this code
+// — no breakdown is built here — and no longer a claim about upstream. The
+// grep that backs "no live code carries the wrong literal": the string "Ok"
+// appears nowhere in this repo outside this correction. The defect the wrong
+// belief DID ship was the two note strings below, which stated the false
+// upstream claim to operators on screen; they are fixed.
 package dashboard
 
 import (
@@ -36,7 +63,11 @@ func (s *Service) scalarCubeTotal(ctx context.Context, cube, measure string) (to
 }
 
 // scalarCount fetches the real unfiltered total for one cube+measure. No
-// per-value breakdown is attempted — see the package doc for why. A failed
+// per-value breakdown is attempted: not because upstream cannot serve one
+// (it can — see the package doc's correction), but because none is built
+// here. `note` is rendered on screen next to the tile, so it must describe
+// THIS code, never make a claim about upstream that nothing measured. A
+// failed
 // cube query reuses the same "error" status as an MCP init failure, so a
 // dead lookup is never reported to the UI as "empty" (a fact about the
 // tenant's data) — see scalarCubeTotal.
@@ -69,8 +100,12 @@ func (s *Service) CSPDiscoveryStatus(ctx context.Context) map[string]any {
 		return v.(map[string]any)
 	}
 	g := s.Cache.Gen()
+	// Old note: "Per-status breakdown is unavailable: filtered queries on
+	// overall_status return 0 upstream." That was the false claim, printed at
+	// operators, and it was the wrong-literal probe talking (package doc).
+	// The replacement says only what is true: this tile asks for one number.
 	result := s.scalarCount(ctx, "AssetDiscoveryStatus", "AssetDiscoveryStatus.count",
-		"Per-status breakdown is unavailable: filtered queries on overall_status return 0 upstream.")
+		"Total only — this tile does not request a per-status breakdown.")
 	s.Cache.SetGen(ck, result, g)
 	return result
 }
@@ -82,8 +117,12 @@ func (s *Service) CSPAssetInsights(ctx context.Context) map[string]any {
 		return v.(map[string]any)
 	}
 	g := s.Cache.Gen()
+	// Same correction as CSPDiscoveryStatus above. Note that AssetInsight's
+	// severity dimension was never itself probed — the 2026-08-06 session
+	// measured AssetDiscoveryStatus.overall_status and AssetDetails_ch_agg —
+	// so the honest note claims nothing about it either way.
 	result := s.scalarCount(ctx, "AssetInsight", "AssetInsight.count",
-		"Per-severity breakdown is unavailable: filtered queries on severity return 0 upstream.")
+		"Total only — this tile does not request a per-severity breakdown.")
 	s.Cache.SetGen(ck, result, g)
 	return result
 }
