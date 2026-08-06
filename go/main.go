@@ -46,24 +46,30 @@ func instanceID() string {
 // version is overridden at build time via -ldflags "-X main.version=...".
 var version = "0.0.0-poc"
 
-// staticHandler serves the frontend. Normally the embedded copy (embed.go webFS);
-// when WEB_DIR is set it serves that directory from disk instead — dev live-reload
-// (scripts/dev-serve.sh rebuilds ui/ into go/web in place, no recompile). Inert in prod:
-// WEB_DIR is unset there, so the embed stays the default. index.html and assets
-// both send no-store cache headers (mirror server.py:6509-6512).
+// uiFS is the filesystem the frontend is served from. Normally the embedded copy
+// (embed.go webFS); when WEB_DIR is set it is that directory on disk instead —
+// dev live-reload (scripts/dev-serve.sh rebuilds ui/ into go/web in place, no
+// recompile). Inert in prod: WEB_DIR is unset there, so the embed stays the
+// default. staticHandler and cspPolicy both go through here so the CSP script
+// hashes are always computed from the index.html this process actually serves.
+func uiFS() fs.FS {
+	if dir := os.Getenv("WEB_DIR"); dir != "" {
+		return os.DirFS(dir)
+	}
+	sub, err := fs.Sub(webFS, "web")
+	if err != nil {
+		log.Fatal(err)
+	}
+	return sub
+}
+
+// staticHandler serves the frontend out of uiFS. index.html and assets both send
+// no-store cache headers (mirror server.py:6509-6512).
 func staticHandler() http.Handler {
-	var fsys fs.FS
 	if dir := os.Getenv("WEB_DIR"); dir != "" {
 		log.Printf("dev: serving UI from disk WEB_DIR=%s (not embed)", dir)
-		fsys = os.DirFS(dir)
-	} else {
-		sub, err := fs.Sub(webFS, "web")
-		if err != nil {
-			log.Fatal(err)
-		}
-		fsys = sub
 	}
-	fileServer := http.FileServer(http.FS(fsys))
+	fileServer := http.FileServer(http.FS(uiFS()))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		fileServer.ServeHTTP(w, r)
@@ -76,16 +82,20 @@ func staticHandler() http.Handler {
 // are: (1) frame-ancestors 'none' + X-Frame-Options DENY to block clickjacking of
 // the vault/provision controls, (2) connect-src 'self' + img-src 'self' data: to
 // deny an injected script any outbound channel to exfiltrate the X-Auth-Token.
-// script-src/style-src keep 'unsafe-inline' because the shipped app relies on it —
-// the index.html theme-bootstrap <script> and React's inline style props — so a
-// bare default-src 'self' would break the UI; data: covers Vite-inlined assets.
+// style-src keeps 'unsafe-inline' because React writes component style props as
+// inline style="" attributes and there is no bounded set of those to enumerate;
+// data: covers Vite-inlined assets. script-src does NOT: the only inline script
+// the shipped app has is index.html's theme bootstrap, and cspPolicy hashes it
+// at startup so that one script is allowed by name and every other inline
+// script — including an injected one — is refused.
+//
+// The policy is built once here rather than per request: this wraps every
+// response, and it is a constant string for the life of the process.
 func securityHeaders(next http.Handler) http.Handler {
+	policy := cspPolicy()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy",
-			"default-src 'self'; connect-src 'self'; frame-ancestors 'none'; "+
-				"script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "+
-				"img-src 'self' data:; font-src 'self' data:")
+		h.Set("Content-Security-Policy", policy)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		// same-origin, not no-referrer: cross-origin destinations still get
