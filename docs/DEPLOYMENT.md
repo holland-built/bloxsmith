@@ -551,6 +551,85 @@ For unattended restarts on the [Customer path](#customer-path-compose), set
 
 ---
 
+## Backup & restore
+
+Everything this product persists lives in one directory — the one holding
+`vault.json`. On the Docker path that is the `noc-vault` volume; on a laptop it is
+wherever `VAULT_DIR` resolved to. Losing it loses **every tenant API key**, and
+they are not recoverable from the Infoblox side: they are re-issued, one portal
+visit per tenant.
+
+```bash
+bloxsmith vault-backup /path/to/bloxsmith-2026-08-06.tar.gz
+```
+
+That writes one gzipped tar, mode `0600`, containing the whole state directory:
+`vault.json`, `audit_log.jsonl`, `brand.json`, `logo.png`, `alert_state.json`,
+`first_seen.json`, `ai_budget.json`, `views/` and `teardown-exports/`.
+
+**No passphrase is asked for, and that is correct.** `vault.json` is already a
+Fernet envelope, so this is a byte copy of an already-encrypted file — nothing is
+decrypted at any point. The consequence is the thing to hold on to: **the archive
+is exactly as secret as the passphrase that opens it, and no more.** Store it like
+a credential.
+
+It refuses to overwrite an existing archive unless you pass `--force`, and it fails
+rather than writing an empty tarball if the state directory isn't there — an
+empty-but-valid backup is indistinguishable from a good one at exactly the moment
+you are about to destroy the original.
+
+### Two things are deliberately not in the archive
+
+| Not included | Why | What to do |
+|---|---|---|
+| The audit trust directory (`AUDIT_TRUST_DIR`, default `<config dir>/bloxsmith-audit`) | It holds the audit chain's HMAC signing key, and it lives outside the state dir on purpose — a key stored beside the log it signs is not a key. Sweeping it in here would let anyone holding the backup re-sign a doctored log | Back it up separately. Without it, a restored install's `bloxsmith audit verify` reports **could-not-verify** forever — the entries are intact, the machine just has no key to check them with |
+| `.env` | On the default install it holds the auto-unlock passphrase. Putting it in the same tarball as the vault it opens is the "travels with a backup" exposure that [`vault-passphrase set`](#bloxsmith-vault-passphrase-macos-only) exists to close — one plaintext entry would make encrypting the other one decorative | Copy it separately and deliberately, if you need it at all |
+
+Both are printed on every run, so nobody discovers the gap at restore time.
+
+### From Docker
+
+The container has no shell (`gcr.io/distroless/static`), so run the binary
+directly and then copy the file off the volume:
+
+```bash
+docker compose exec bloxsmith bloxsmith vault-backup /vault/backup.tar.gz
+docker cp bloxsmith:/vault/backup.tar.gz ./bloxsmith-backup-$(date +%F).tar.gz
+docker compose exec bloxsmith rm /vault/backup.tar.gz   # don't leave it in the volume
+```
+
+Writing into `/vault` is safe: the destination is skipped while the directory is
+being walked, so the archive is never packed into itself.
+
+### Restoring
+
+```bash
+bloxsmith vault-restore ./bloxsmith-backup-2026-08-06.tar.gz --confirm restore
+```
+
+**Stop the server first.** A running server holds the vault open in memory and
+rewrites `vault.json` on the next tenant change, which would silently undo the
+restore some minutes later. The command warns if something is listening on the
+configured port, but it cannot tell your server from anything else on that port,
+so it warns rather than refuses.
+
+| Guard | Behaviour |
+|---|---|
+| `--confirm restore` | **Required, spelled out.** Without it nothing is touched and the exit code is `3`. Not a y/n prompt — a script answers those with `yes \|` |
+| Non-empty target | Refused unless you pass `--force`. `--force` replaces the files the archive names and **leaves everything else alone** — it is not a wipe |
+| `../` or absolute paths in the tar | The archive is **rejected whole**, not quietly cleaned up. Same for symlink and hard-link entries. An archive containing one did not come from `vault-backup` |
+| Truncated or non-gzip archive | Rejected before anything moves. Extraction goes to a staging directory inside the target and only then renames into place, so a bad archive can never leave a half-restored state dir |
+| `vault.json` permissions | Forced to `0600` after restore, regardless of what the archive's header claimed |
+
+Afterwards the vault opens with its **original** passphrase — nothing was
+re-encrypted. Start the server and unlock as usual.
+
+Not to be confused with [`bloxsmith restore-plan`](#teardown-exports--what-a-teardown-records-before-it-deletes),
+which is unrelated: it reads a teardown export and prints what to re-create. It
+touches no files and knows nothing about the vault.
+
+---
+
 ### Teardown exports — what a teardown records before it deletes
 
 Teardown is fail-forward: there is no rollback, every step is a delete. So before

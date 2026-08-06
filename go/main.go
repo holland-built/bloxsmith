@@ -145,6 +145,15 @@ func main() {
 			// Offline verification of the tamper-evident chain, with nothing
 			// running. Read-only by construction — see auditcli.go.
 			os.Exit(runAuditCLI(os.Args[2:]))
+		case "vault-backup":
+			// Copy the whole state directory out into one gzipped tar. No
+			// passphrase: vault.json is already encrypted. See vaultbackupcli.go.
+			os.Exit(runVaultBackupCLI(os.Args[2:]))
+		case "vault-restore":
+			// Unpack a vault-backup archive back into the state directory. NOT
+			// `restore-plan` below, which is unrelated and touches no files.
+			// Requires `--confirm restore`. See vaultbackupcli.go.
+			os.Exit(runVaultRestoreCLI(os.Args[2:]))
 		case "restore-plan":
 			// Read a teardown export back and print what would have to be
 			// re-created, in dependency order. Offline and creates nothing —
@@ -215,6 +224,8 @@ func printUsage() {
 	fmt.Println("  service <cmd>             install|uninstall|start|stop|restart|status  (run at login)")
 	fmt.Println("  audit verify             check the audit chain offline (0 intact, 1 tampered, 2 unchecked)")
 	fmt.Println("  restore-plan FILE        read a teardown export and print what to re-create, in order")
+	fmt.Println("  vault-backup FILE.tar.gz copy the state dir (vault.json + views + audit log) to one archive")
+	fmt.Println("  vault-restore FILE.tar.gz --confirm restore   unpack that archive back into the state dir")
 	fmt.Println("  vault-passphrase <cmd>   set|status|remove — keep the auto-unlock passphrase in the macOS keychain")
 	fmt.Println("  --version, -v             print version")
 	fmt.Println("  --help, -h, help          this help")
