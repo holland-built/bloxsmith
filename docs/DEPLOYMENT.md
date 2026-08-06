@@ -47,7 +47,9 @@ the background at login, and `bloxsmith update` upgrades in place.
 > The multi-arch **ghcr images** are now cosign keyless-signed in CI (GitHub OIDC
 > identity — verify with `cosign verify ghcr.io/holland-built/bloxsmith:<tag>
 > --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/'
-> --certificate-oidc-issuer https://token.actions.githubusercontent.com`); the
+> --certificate-oidc-issuer https://token.actions.githubusercontent.com`), and each
+> architecture of the image also carries an SBOM attestation — see
+> [the image attestation](#the-container-images-sbom-attestation). The
 > standalone binary remains checksum-only.
 
 ### The SBOM (what's inside the release)
@@ -96,18 +98,86 @@ exists because an SBOM is the one artifact that gets forwarded on its own —
 attached to a ticket, uploaded to a vendor portal — where `checksums.txt` is
 nowhere in sight.
 
-> **What the SBOM does not cover.** It catalogs the **release archives**, not the
-> pushed `ghcr.io` image and not the web UI's npm tree.
+#### The dashboard UI's npm dependencies
+
+The archive SBOMs above are read out of the **compiled binary**, and the web UI
+inside it (`go/web/app.bundle.js`) is a minified blob embedded with `go:embed`.
+Nothing in a Go module list can see React, recharts or tailwind, so a fifth
+document is published alongside them:
+
+```bash
+curl -fsSLO "$BASE/bloxsmith_${V}_ui_npm.sbom.json"
+jq -r '.packages[] | "\(.name) \(.versionInfo)"' "bloxsmith_${V}_ui_npm.sbom.json" | sort
+```
+
+Same format, same signing, same `checksums.txt` entry as the archive SBOMs. It is
+built from `ui/package-lock.json` rather than from the bundle, and it is the
+**production dependency closure** — the packages whose code can reach the bundle.
+`devDependencies` are excluded, so the linter and the type stubs are not in it.
+
+One thing that looks wrong and is not: `vite` and its `@rolldown/*` bindings
+*are* listed even though `vite` sits in `devDependencies`. `@tailwindcss/vite` is
+a production dependency and peer-depends on vite, so npm does not mark vite
+dev-only and it is genuinely part of the production closure. The set is therefore
+a **superset** of what literally ends up in `app.bundle.js` — it also carries
+build-time tools reachable from a production dependency, such as tailwind itself.
+That is the deliberate direction to err in: it over-reports rather than hiding
+something that shipped.
+
+### The container image's SBOM (attestation)
+
+`docker run` is the first install path in the README, and until now it was the
+one artifact with no ingredients list at all. The pushed image now carries its
+SBOM as a **cosign attestation** — signed with the same keyless GitHub OIDC
+identity as the image signature, stored in the registry beside the image, and
+covering **every architecture separately**.
+
+`ghcr.io/holland-built/bloxsmith:<tag>` is a multi-arch index, and `cosign attest`
+has no recursive mode, so an attestation on the tag would be one architecture's
+SBOM claiming to describe both. Nothing is attached to the index for that reason.
+**Resolve the architecture digest first:**
+
+```bash
+V=3.53.0                                # release version, no v prefix
+IMAGE=ghcr.io/holland-built/bloxsmith
+ARCH=amd64                              # or arm64
+
+DIGEST=$(docker buildx imagetools inspect --raw "$IMAGE:$V" \
+  | jq -r --arg a "$ARCH" '.manifests[] | select(.platform.architecture == $a) | .digest')
+
+cosign verify-attestation --type spdxjson \
+  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  "$IMAGE@$DIGEST" \
+  | jq -r '.payload | @base64d | fromjson | .predicate
+           | "\(.name):", (.packages[] | "  \(.name) \(.versionInfo)")'
+```
+
+Two attestations come back per architecture, and the `.predicate.name` tells them
+apart:
+
+| `.predicate.name` | What it lists |
+|---|---|
+| `ghcr.io/holland-built/bloxsmith` | The image scanned in the registry — the Go module graph **and** the distroless base's own packages (`base-files`, `media-types`, `netbase`, `tzdata`, `tzdata-legacy`) with their Debian versions |
+| `bloxsmith-ui-npm` | The same UI npm closure published as a release artifact above — attached here too, because the bundle is inside the binary inside this image |
+
+Together those two are the whole image. `<tag>` and `latest` resolve to the same
+index, so both are covered by the same per-architecture attestations.
+
+> **What is still not covered.** Two things, and neither is hidden by a green
+> check elsewhere:
 >
-> The image gap is narrow rather than zero: the base is `gcr.io/distroless/static`
-> — no shell, no package manager, just CA certificates and timezone data over the
-> same binary the archives carry — so the module list above *is* the image's
-> application inventory. It is still not an image SBOM. If you need one, generate
-> it yourself: `syft ghcr.io/holland-built/bloxsmith:<tag> -o spdx-json`.
+> The **UI SBOM is derived from the lockfile, not from the shipped bundle.** It
+> says what the bundle was built from; it does not prove `app.bundle.js` was built
+> from exactly that. The check that ties the two together is a different one — the
+> "UI dist up to date" step in [ci.yml](../.github/workflows/ci.yml) rebuilds the
+> bundle from `ui/` and fails if `go/web/` differs.
 >
-> The UI gap is structural: `go/web/` is embedded into the binary as an opaque
-> blob, so syft cannot see the npm packages behind it. `npm audit` in
-> [ci.yml](../.github/workflows/ci.yml) is what covers that half.
+> The **`ghcr.io` image attestation only exists for releases cut after this
+> change**. Tags published earlier have a cosign image *signature* but no SBOM
+> attestation, and `cosign verify-attestation` against them will correctly find
+> nothing. For those, generate one yourself:
+> `syft ghcr.io/holland-built/bloxsmith:<tag> -o spdx-json`.
 
 ### Windows
 
@@ -279,6 +349,9 @@ to publish AND cosign keyless-sign the multi-arch image to GitHub Container Regi
 (GHCR) alongside the binary tarballs (see [SHIP.md](SHIP.md)); local goreleaser is
 the manual fallback. The push/PR CI ([ci.yml](../.github/workflows/ci.yml)) only
 builds and tests the tree — it does not publish or sign images.
+
+To see what is inside the image you are about to run, read its SBOM attestation:
+[the container image's SBOM](#the-container-images-sbom-attestation).
 
 ```bash
 docker run -d --name bloxsmith -p 127.0.0.1:8080:8080 \
@@ -939,10 +1012,12 @@ into an admin bypass or into a forged name in a tamper-evident log.
 - Releases are Ed25519-signed with a key that is not in the release, and the in-app updater
   refuses an unsigned or badly-signed one. That authenticates the release pipeline, not the
   source — someone who can push a tag or steal the CI secret can still sign.
-- Every release ships a signed **SBOM** per archive, so "what libraries are in this?" is
-  answerable without unpacking the binary. It covers the archives, **not** the ghcr image
-  and not the embedded UI's npm tree. See
-  [the SBOM](#the-sbom-whats-inside-the-release).
+- Every release ships a signed **SBOM**, so "what libraries are in this?" is answerable
+  without unpacking anything: one per archive for the Go modules, one for the embedded
+  UI's npm closure, and a cosign **attestation** on each architecture of the ghcr image.
+  The UI SBOM is read from the lockfile, so it says what the bundle was built from rather
+  than proving what is in it. See [the SBOM](#the-sbom-whats-inside-the-release) and
+  [the image attestation](#the-container-images-sbom-attestation).
 
 See [SECURITY.md](../.github/SECURITY.md) for the policy and how to report a vulnerability,
 and [CONTRIBUTING.md](../.github/CONTRIBUTING.md) for local setup and the test suite.

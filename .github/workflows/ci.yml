@@ -319,16 +319,26 @@ jobs:
       # ("ZERO SBOMs for 4 archives"), one replaced by a syntactically valid but
       # hollow document ("has no stdlib"), and one removed from checksums.txt
       # ("not in checksums.txt"). All four exited 1; the untouched tree passed.
-      - name: The SBOMs actually exist, one per archive, and are in checksums.txt
+      #
+      # The two counts are now kept APART. The `ui-npm-sbom` entry added a fifth
+      # document that is not derived from any archive, and the original check
+      # counted every *.sbom.json against the archive count — so landing that
+      # entry would have turned this step red for the wrong reason ("5 SBOMs for
+      # 4 archives") and the tempting fix is to loosen the comparison to `-ge`.
+      # That would throw away the whole point of counting. Each family is
+      # asserted against its own expected number instead.
+      - name: The SBOMs actually exist, one per archive plus the UI's, and are in checksums.txt
         working-directory: go
         run: |
           set -euo pipefail
           # Expected filenames, confirmed from a real run rather than guessed:
-          # goreleaser names each one <archive>.sbom.json, e.g.
-          # bloxsmith_3.53.1-snapshot-<sha>_linux_amd64.tar.gz.sbom.json
+          # goreleaser names each archive SBOM <archive>.sbom.json, e.g.
+          # bloxsmith_3.53.1-snapshot-<sha>_linux_amd64.tar.gz.sbom.json, and the
+          # UI one is named by the `documents:` template —
+          # bloxsmith_3.53.1-snapshot-<sha>_ui_npm.sbom.json.
           archives=$(find dist -maxdepth 1 \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l | tr -d ' ')
-          sboms=$(find dist -maxdepth 1 -name '*.sbom.json' | wc -l | tr -d ' ')
-          echo "archives=$archives sboms=$sboms"
+          sboms=$(find dist -maxdepth 1 \( -name '*.tar.gz.sbom.json' -o -name '*.zip.sbom.json' \) | wc -l | tr -d ' ')
+          echo "archives=$archives archive-sboms=$sboms"
           ls -la dist/*.sbom.json || true
 
           if [ "$archives" -eq 0 ]; then
@@ -347,7 +357,7 @@ jobs:
           # Non-empty and structurally real. syft's default output here is SPDX
           # 2.3 JSON (NOT CycloneDX — `.packages`, not `.components`); a zero-byte
           # or truncated file would still satisfy a bare existence check.
-          for f in dist/*.sbom.json; do
+          for f in dist/*.tar.gz.sbom.json dist/*.zip.sbom.json; do
             n=$(jq '.packages | length' "$f")
             if [ "$n" -lt 2 ]; then
               echo "::error::$f lists $n packages — an SBOM naming only the archive itself is an empty answer"
@@ -361,6 +371,47 @@ jobs:
             echo "$f: $n packages"
           done
 
+          # --- the UI's npm SBOM -------------------------------------------
+          # Its own family, its own failure modes. `artifacts: any` runs a
+          # command goreleaser does not understand the output of, so the ways it
+          # breaks are different from the archive pipe's: the hardcoded
+          # `file:../../ui/package-lock.json` path resolving to nothing (the cmd
+          # runs with cwd=dist/, so a plausible-looking `../ui` is wrong), or
+          # syft cataloguing the lockfile but finding no packages in it.
+          ui=$(find dist -maxdepth 1 -name '*_ui_npm.sbom.json' | wc -l | tr -d ' ')
+          if [ "$ui" -ne 1 ]; then
+            echo "::error::expected exactly 1 UI npm SBOM in dist/, found $ui — the ui-npm-sbom entry in go/.goreleaser.yaml did not run"
+            exit 1
+          fi
+          uif=$(find dist -maxdepth 1 -name '*_ui_npm.sbom.json')
+          un=$(jq '.packages | length' "$uif")
+          echo "$uif: $un packages"
+          [ "$(jq -r '.name' "$uif")" = "bloxsmith-ui-npm" ] || {
+            echo "::error::$uif does not call itself bloxsmith-ui-npm — --source-name was dropped, and the image attestation in release.yml keys off that name"; exit 1; }
+
+          # It must name what actually ends up in go/web/app.bundle.js. These
+          # three are the reason this SBOM exists at all: they are compiled into
+          # the bundle, the bundle is //go:embed'd, and none of them appear in
+          # any archive SBOM above.
+          for p in react react-dom recharts; do
+            jq -e --arg p "$p" '.packages[] | select(.name == $p)' "$uif" >/dev/null || {
+              echo "::error::$uif does not list $p — it catalogued something, but not this project's UI dependencies"; exit 1; }
+          done
+
+          # ...and it must NOT overstate. syft's javascript cataloger has
+          # include-dev-dependencies off by default, which is what keeps this to
+          # the production closure; if that default ever flips, this SBOM starts
+          # claiming a linter ships inside the binary. oxlint is the cleanest
+          # canary: it is a devDependency with no production package
+          # peer-depending on it. `vite` is deliberately NOT checked here — it is
+          # in devDependencies but @tailwindcss/vite (a production dependency)
+          # peer-depends on it, so npm does not mark it dev and it legitimately
+          # appears. See the block comment in go/.goreleaser.yaml.
+          if jq -e '.packages[] | select(.name == "oxlint")' "$uif" >/dev/null; then
+            echo "::error::$uif lists oxlint — devDependencies leaked in, so this SBOM claims build tooling ships inside the binary"
+            exit 1
+          fi
+
           # checksums.txt is what the Ed25519 and sshsig release signatures cover,
           # so an SBOM missing from it is an SBOM outside the signed set.
           for f in dist/*.sbom.json; do
@@ -368,7 +419,7 @@ jobs:
               echo "::error::$(basename "$f") is not listed in checksums.txt — it falls outside the signed set"
               cat dist/checksums.txt; exit 1; }
           done
-          echo "$sboms SBOMs, one per archive, all non-trivial and all in checksums.txt"
+          echo "$sboms archive SBOMs + 1 UI npm SBOM ($un packages), all non-trivial and all in checksums.txt"
 
   # ── macOS ───────────────────────────────────────────────────────────────────
   # This repo's CI was Linux-only, and that means two shipped surfaces had NEVER

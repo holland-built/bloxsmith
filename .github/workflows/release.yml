@@ -190,3 +190,194 @@ jobs:
             -n bloxsmith-release -s dist/checksums.txt.sshsig < dist/checksums.txt
           rm -f /tmp/relsign_ssh /tmp/allowed_signers /tmp/sshsig_input
           gh release upload "${GITHUB_REF_NAME}" dist/checksums.txt.sshsig --clobber
+
+      # The `sboms:` block in go/.goreleaser.yaml catalogs release ARCHIVES. The
+      # pushed ghcr image was never covered by it and could not be: goreleaser's
+      # sbom pipe runs during the archive phase, and dockers_v2 builds and pushes
+      # the image afterwards, so at sbom time there is no image to read. README's
+      # FIRST install path is `docker run`, which meant the most-used artifact
+      # this project ships was the one with no ingredients list — the exact
+      # inversion the SBOM work was supposed to fix.
+      #
+      # It runs HERE, last, for two reasons: `cosign attest` needs an image that
+      # is already in the registry (it writes the attestation as a second tag
+      # against the image's digest), and it needs the same OIDC token the
+      # `docker_signs:` block used, which only exists inside this workflow.
+      #
+      # MULTI-ARCH IS THE PART THAT IS EASY TO GET WRONG. `ghcr.io/...:<tag>` is
+      # an OCI *index* pointing at one manifest per platform, and `cosign attest`
+      # has no `--recursive` (checked against the cosign docs — `cosign sign` has
+      # one, `attest` does not). Attesting the index ref would therefore attach a
+      # single SBOM to the whole list, and that SBOM would have been read from
+      # exactly one architecture's image. Calling that "the image's SBOM" would
+      # be a lie for the other architecture. So this enumerates the index's
+      # children and attests EACH per-architecture digest with an SBOM read from
+      # that same digest. `latest` and `<version>` resolve to the same index, so
+      # both tags are covered by attesting the children once.
+      #
+      # The `unknown/unknown` filter is load-bearing and was watched to matter,
+      # not assumed: rebuilding the same context with `--provenance=mode=max`
+      # turns a 2-manifest index into a 4-manifest one whose two extra entries
+      # are buildx attestation blobs with platform `unknown/unknown`. Without the
+      # filter the count check below fails and syft gets pointed at a provenance
+      # blob instead of an image.
+      #
+      # Nothing is attested to the index digest itself, deliberately. That is why
+      # docs/DEPLOYMENT.md's verify recipe resolves the architecture digest
+      # first: a bare `cosign verify-attestation ghcr.io/...:<tag>` finds nothing
+      # and that is the honest answer, because no one SBOM is true for both
+      # architectures.
+      #
+      # TWO predicates go on each digest. The image scan covers the Go module
+      # graph AND the distroless base's own packages (measured locally against a
+      # real 2-platform build of Dockerfile.goreleaser: 16 packages — the 9 Go
+      # modules, `stdlib`, and base-files / media-types / netbase / tzdata /
+      # tzdata-legacy with Debian versions, which the archive SBOMs never named).
+      # It still cannot see the npm tree, because that is inside the same
+      # //go:embed'd blob it is inside in the archives — so the UI SBOM produced
+      # by the `ui-npm-sbom` entry is attached as a second spdxjson predicate to
+      # the same digest. Together they are the whole image. Tell them apart by
+      # `.predicate.name`: the image scan names itself after the image, the UI
+      # one is `bloxsmith-ui-npm`.
+      #
+      # WHAT WAS PROVEN BEFORE COMMITTING, AND WHAT WAS NOT. This block was run
+      # verbatim — extracted from this file, not retyped — against a real
+      # two-platform build of Dockerfile.goreleaser pushed to a throwaway
+      # `registry:2`, with a stub `cosign` on PATH that recorded every argv,
+      # stored each `--predicate` file per digest, and replayed them as in-toto
+      # DSSE envelopes on verify-attestation. Green: four attest calls, two per
+      # digest, then one verify per digest finding both predicates. Five
+      # refusals were watched rather than assumed, each exiting 1 with its own
+      # message: a single-platform tag (a plain manifest with no `.manifests`
+      # key), the `unknown/unknown` filter deleted (4 manifests vs the 2
+      # .goreleaser.yaml declares), the image renamed out of .goreleaser.yaml,
+      # no UI SBOM in dist/, and a stub that silently dropped the UI predicate
+      # so only one attestation came back.
+      #
+      # What a stub CANNOT prove is the half that needs Fulcio and Rekor: that
+      # the OIDC token is accepted, that the attestation is really written to
+      # the registry, and that a genuine `cosign verify-attestation` finds and
+      # cryptographically checks it. Nothing in ci.yml can prove it either —
+      # that workflow has no `id-token: write` and pushes no images, so an
+      # assertion there could never pass and none was added. The first real tag
+      # is the first time that half runs, which is exactly why the verify loop
+      # is inside this step: it must go red on the tag rather than publish an
+      # image everyone believes is attested.
+      - name: SBOM attestation for the pushed ghcr images (every architecture)
+        working-directory: go
+        env:
+          IMAGE: ghcr.io/holland-built/bloxsmith
+          IDENTITY: '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/'
+          ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -euo pipefail
+          V="${GITHUB_REF_NAME#v}"
+
+          # Drift guard: this step hardcodes the repo it attests, so if
+          # dockers_v2 is ever repointed somewhere else it must fail rather than
+          # attest an image nobody publishes any more.
+          grep -q "$IMAGE" .goreleaser.yaml || {
+            echo "::error::$IMAGE no longer appears in .goreleaser.yaml — dockers_v2 images: was renamed and this step is attesting the wrong repository"
+            exit 1; }
+
+          # `|| true` is not sloppiness: a bare `$(ls dist/*...)` that matches
+          # nothing exits non-zero, `set -e` kills the step on the assignment,
+          # and the reader gets `ls: No such file or directory` instead of the
+          # message below. Watched happen before this line was written this way.
+          UI_SBOM=$(ls dist/*_ui_npm.sbom.json 2>/dev/null || true)
+          [ -n "$UI_SBOM" ] && [ -s "$UI_SBOM" ] || {
+            echo "::error::no UI npm SBOM in dist/ — the ui-npm-sbom entry in .goreleaser.yaml did not run, so there is nothing to attest the UI half of the image with"
+            exit 1; }
+
+          docker buildx imagetools inspect --raw "$IMAGE:$V" > /tmp/index.json
+          if ! jq -e 'has("manifests")' /tmp/index.json >/dev/null; then
+            echo "::error::$IMAGE:$V is a single image manifest, not a multi-arch index — dockers_v2 pushed one platform"
+            cat /tmp/index.json; exit 1
+          fi
+
+          # Counted from .goreleaser.yaml rather than written here as a number.
+          # A hardcoded 2 would keep passing on the day a third platform is added
+          # and quietly leave it unattested. `- linux/...` appears only in
+          # dockers_v2's platforms: list (`builds.goos` is `- linux`, no slash).
+          WANT=$(grep -cE '^ +- linux/' .goreleaser.yaml)
+          jq -r '
+            .manifests[]
+            | select(.platform.os != "unknown" and .platform.architecture != "unknown")
+            | "\(.digest) \(.platform.os)/\(.platform.architecture)"' /tmp/index.json > /tmp/children
+          GOT=$(wc -l < /tmp/children | tr -d ' ')
+          if [ "$GOT" -ne "$WANT" ]; then
+            echo "::error::the pushed index has $GOT platform manifests, .goreleaser.yaml declares $WANT — some architecture would ship unattested"
+            cat /tmp/index.json; exit 1
+          fi
+          echo "$GOT platform manifests, matching .goreleaser.yaml"
+
+          # Read the child list on fd 3, not stdin: syft, cosign and docker all
+          # inherit the loop's stdin, and one of them consuming a line would skip
+          # an architecture silently — which is the single worst way this step
+          # could fail, because the log would still look clean.
+          while read -r DIGEST PLATFORM <&3; do
+            ARCH="${PLATFORM#*/}"
+            # /tmp, not dist/: dist/ is "what was published", and these are
+            # written after checksums.txt was calculated and signed, so a copy
+            # sitting there would be an SBOM outside the signed set. Its
+            # published form is the attestation, which carries its own signature.
+            OUT="/tmp/bloxsmith_${V}_image_${ARCH}.sbom.json"
+            # Scanning the child digest (not the tag) is what makes this
+            # per-architecture — no --platform flag needed, and no chance of
+            # silently cataloguing the runner's own architecture twice.
+            syft scan "registry:$IMAGE@$DIGEST" -o "spdx-json=$OUT" -q
+            N=$(jq '.packages | length' "$OUT")
+            jq -e '.packages[] | select(.name == "stdlib")' "$OUT" >/dev/null || {
+              echo "::error::$OUT has no stdlib package — syft did not read the Go binary in $PLATFORM"; exit 1; }
+            echo "$PLATFORM $DIGEST: $N packages"
+
+            cosign attest --yes --type spdxjson --predicate "$OUT"     "$IMAGE@$DIGEST"
+            cosign attest --yes --type spdxjson --predicate "$UI_SBOM" "$IMAGE@$DIGEST"
+          done 3< /tmp/children
+
+          # Read back what was just written. An attestation that failed to attach
+          # looks exactly like one that worked from the outside, and this is the
+          # only place in the whole pipeline where the real Fulcio/Rekor path
+          # runs — a stub proved the argv, it cannot prove the registry accepted
+          # anything.
+          while read -r DIGEST PLATFORM <&3; do
+            cosign verify-attestation --type spdxjson \
+              --certificate-identity-regexp "$IDENTITY" \
+              --certificate-oidc-issuer "$ISSUER" \
+              "$IMAGE@$DIGEST" > /tmp/att.json
+            # cosign writes the envelopes to stdout as newline-delimited JSON
+            # (the human-readable verification summary goes to stderr). Pulled
+            # out with a recursive select rather than a bare `.payload` so a
+            # future cosign that wraps them in an array still parses — the
+            # assertions below are the gate, and they must not go green because
+            # the extraction silently produced nothing.
+            jq -r '.. | objects | select(has("payload")) | .payload' /tmp/att.json > /tmp/payloads
+            [ -s /tmp/payloads ] || {
+              echo "::error::cosign verify-attestation returned no DSSE payloads for $PLATFORM"; cat /tmp/att.json; exit 1; }
+
+            # Each line is one DSSE payload: base64 of an in-toto statement
+            # wrapping the SPDX document. Decoded one at a time rather than as
+            # one stream — concatenated padded base64 does not decode as a unit.
+            # The assertions walk the decoded object with `..` instead of naming
+            # a fixed path, so a change in how cosign nests the predicate turns
+            # into a red release rather than a false pass on a document nobody
+            # read.
+            IMG=0; UI=0; TOTAL=0
+            while read -r PAYLOAD <&4; do
+              TOTAL=$((TOTAL + 1))
+              printf '%s' "$PAYLOAD" | base64 -d > /tmp/pred.json
+              if jq -e '[.. | objects | select(.name? == "bloxsmith-ui-npm")] | length >= 1' /tmp/pred.json >/dev/null; then
+                UI=$((UI + 1))
+                jq -e '[.. | objects | select(.name? == "react")] | length >= 1' /tmp/pred.json >/dev/null || {
+                  echo "::error::the bloxsmith-ui-npm attestation on $PLATFORM does not list react — it is not the UI SBOM"; exit 1; }
+              elif jq -e '[.. | objects | select(.name? == "stdlib")] | length >= 1' /tmp/pred.json >/dev/null; then
+                IMG=$((IMG + 1))
+              fi
+            done 4< /tmp/payloads
+
+            [ "$IMG" -ge 1 ] || {
+              echo "::error::$PLATFORM has no image SBOM attestation ($TOTAL attestations back, none listing stdlib)"; exit 1; }
+            [ "$UI" -ge 1 ] || {
+              echo "::error::$PLATFORM has no bloxsmith-ui-npm attestation ($TOTAL back) — the UI npm tree is not attached to the image"; exit 1; }
+            echo "$PLATFORM: $TOTAL attestations verified against the workflow's OIDC identity ($IMG image, $UI ui-npm)"
+          done 3< /tmp/children
