@@ -8,9 +8,11 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 
 	"bloxsmith/internal/account"
 	"bloxsmith/internal/ai"
@@ -31,19 +33,24 @@ const maxBody = 64 * 1024
 
 // Deps are everything the router wires. main.go builds these once.
 type Deps struct {
-	Cfg            *config.Config
-	Vault          *vault.Vault
-	Rest           *rest.Client
-	Auth           *rest.Auth
-	Guard          *httpx.Guard
-	Audit          *audit.Log         // hash-chained action log (Phase 1c)
-	Store          *store.Store       // views + snooze + first-seen (Phase 1c)
-	Cache          *cache.Cache       // shared TTL cache (Phase 1d)
-	Dashboard      *dashboard.Service // /api/data + hub fetchers (Phase 1d)
-	Edit           *edit.Client       // DNS + resource-editor write builders (Phase 1f)
-	Provision      *provision.Engine  // provisioning engines + templates (Phase 1g)
-	AI             *ai.Service        // /api/query NL assistant + LLM loop (Phase 1h)
-	Account        *account.Manager   // multi-account switching (Phase 1i)
+	Cfg       *config.Config
+	Vault     *vault.Vault
+	Rest      *rest.Client
+	Auth      *rest.Auth
+	Guard     *httpx.Guard
+	Audit     *audit.Log         // hash-chained action log (Phase 1c)
+	Store     *store.Store       // views + snooze + first-seen (Phase 1c)
+	Cache     *cache.Cache       // shared TTL cache (Phase 1d)
+	Dashboard *dashboard.Service // /api/data + hub fetchers (Phase 1d)
+	Edit      *edit.Client       // DNS + resource-editor write builders (Phase 1f)
+	Provision *provision.Engine  // provisioning engines + templates (Phase 1g)
+	AI        *ai.Service        // /api/query NL assistant + LLM loop (Phase 1h)
+	Account   *account.Manager   // multi-account switching (Phase 1i)
+	// UnlockThrottle rate limits POST /api/vault/unlock — the one route that
+	// spends a 128 MiB scrypt derive for an unauthenticated caller. main.go
+	// builds it; New() supplies one when this is nil, so the route can never
+	// end up with no limiter. See internal/httpx/unlock_throttle.go.
+	UnlockThrottle *httpx.UnlockThrottle
 	Version        string
 	StateDir       string // dir of vault.json — holds brand.json / logo.png (server.py:2415)
 	Static         http.Handler
@@ -57,6 +64,16 @@ type Deps struct {
 // exactly as Python runs do_OPTIONS / _write_guard at the top of each verb.
 func New(d *Deps) http.Handler {
 	mux := http.NewServeMux()
+
+	// A default rather than a required field: the throttle is the only limit
+	// on how many scrypt derives an anonymous caller can queue up, and a
+	// control that is off whenever someone forgets to wire it is not a
+	// control. main.go passes one explicitly so the limit is visible where the
+	// app is assembled; this is the backstop for every other caller, including
+	// tests, which would otherwise nil-deref on the route instead.
+	if d.UnlockThrottle == nil {
+		d.UnlockThrottle = httpx.NewUnlockThrottle()
+	}
 
 	mux.HandleFunc("GET /api/vault/status", d.vaultStatus)
 	if d.UpdateCheck != nil {
@@ -182,10 +199,47 @@ func (d *Deps) registerVaultRoutes(mux router) {
 	mux.HandleFunc("POST /api/vault/init", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
 		d.json(w, r, 200, d.Vault.InitR(str(b, "passphrase")))
 	}))
-	// 2. unlock — 200 ok / 401
+	// 2. unlock — 200 ok / 401 wrong passphrase / 429 locked out / 503 busy.
+	//
+	// The only route in this file that is rate limited, because it is the only
+	// one that spends a 128 MiB scrypt derive per call on behalf of a caller
+	// who has proved nothing. Why the limit is two mechanisms and what each of
+	// them stops is in internal/httpx/unlock_throttle.go; the shape here is
+	// that UnlockR runs inside the closure, so a refusal costs no derive.
+	//
+	// A wrong passphrase that is NOT yet locked out still returns exactly the
+	// 401 it always did — the throttle adds statuses, it changes none.
 	mux.HandleFunc("POST /api/vault/unlock", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
-		res := d.Vault.UnlockR(str(b, "passphrase"))
-		d.json(w, r, code(res, 401), res)
+		var res map[string]any
+		verdict, wait := d.UnlockThrottle.Do(r.Context(), r.RemoteAddr, func() bool {
+			res = d.Vault.UnlockR(str(b, "passphrase"))
+			ok, _ := res["ok"].(bool)
+			return ok
+		})
+		switch verdict {
+		case httpx.UnlockBlocked:
+			// Retry-After is set BEFORE d.json, which writes the status line.
+			// A header added after that call is silently discarded — the
+			// response still says 429 and the client is told nothing about how
+			// long to wait, which is the failure this ordering exists to avoid.
+			secs := httpx.RetryAfterSeconds(wait)
+			w.Header().Set("Retry-After", strconv.Itoa(secs))
+			d.json(w, r, http.StatusTooManyRequests, map[string]any{
+				"ok":    false,
+				"error": fmt.Sprintf("too many failed unlock attempts, retry in %ds", secs),
+			})
+		case httpx.UnlockBusy:
+			// Another unlock held the single derive slot past the acquire
+			// timeout. Same {ok,error} shape, and a Retry-After for the same
+			// reason: a derive takes well under a second, so 1 is honest.
+			w.Header().Set("Retry-After", "1")
+			d.json(w, r, http.StatusServiceUnavailable, map[string]any{
+				"ok":    false,
+				"error": "another unlock is already in progress, retry in 1s",
+			})
+		default:
+			d.json(w, r, code(res, 401), res)
+		}
 	}))
 	// 3. tenant (add) — 200 / 400
 	mux.HandleFunc("POST /api/vault/tenant", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {

@@ -403,20 +403,27 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	}
 
 	handler := server.New(&server.Deps{
-		Cfg:            cfg,
-		Vault:          v,
-		Rest:           restClient,
-		Auth:           auth,
-		Guard:          guard,
-		Audit:          auditLog,
-		Store:          st,
-		Cache:          sharedCache,
-		Dashboard:      dash,
-		StateDir:       stateDir,
-		Edit:           edit.New(restClient),
-		Provision:      provision.New(restClient, cfg.TemplatesDir),
-		AI:             ai.New(llmCreds{cfg: cfg, v: v}, dash, st),
-		Account:        acct,
+		Cfg:       cfg,
+		Vault:     v,
+		Rest:      restClient,
+		Auth:      auth,
+		Guard:     guard,
+		Audit:     auditLog,
+		Store:     st,
+		Cache:     sharedCache,
+		Dashboard: dash,
+		StateDir:  stateDir,
+		Edit:      edit.New(restClient),
+		Provision: provision.New(restClient, cfg.TemplatesDir),
+		AI:        ai.New(llmCreds{cfg: cfg, v: v}, dash, st),
+		Account:   acct,
+		// The lock on the vault's front door. POST /api/vault/unlock is
+		// reachable with no credential — that is what unlocking means — and
+		// each call costs a 128 MiB scrypt derive, so it is rate limited per
+		// client and serialised process-wide. Built here, once, so the limit
+		// is visible in the assembly rather than buried in a route.
+		// See internal/httpx/unlock_throttle.go.
+		UnlockThrottle: httpx.NewUnlockThrottle(),
 		Version:        version,
 		Static:         staticHandler(),
 		UpdateCheck:    updateCheckHandler(cfg),

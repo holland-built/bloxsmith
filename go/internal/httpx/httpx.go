@@ -195,12 +195,25 @@ func (g *Guard) WriteOKStrict(r *http.Request) bool {
 	return selfInitiated(r)
 }
 
-func isLoopback(remoteAddr string) bool {
+// hostOf strips the :port and any IPv6 brackets off an http.Request.RemoteAddr,
+// leaving the bare peer address ("127.0.0.1:54321" -> "127.0.0.1",
+// "[::1]:54321" -> "::1"). A value with no port at all is returned unchanged.
+//
+// The one place this is derived, for the three things that key off the peer:
+// the loopback check below, the audit actor label, and the unlock throttle's
+// per-client counter (unlock_throttle.go). It was two hand-copied
+// LastIndex-then-Trim blocks before that third caller; a security decision and
+// an audit label disagreeing about who the peer is would be a very quiet bug.
+func hostOf(remoteAddr string) string {
 	host := remoteAddr
 	if i := strings.LastIndex(host, ":"); i >= 0 {
 		host = host[:i]
 	}
-	host = strings.Trim(host, "[]")
+	return strings.Trim(host, "[]")
+}
+
+func isLoopback(remoteAddr string) bool {
+	host := hostOf(remoteAddr)
 	return host == "127.0.0.1" || host == "::1"
 }
 
@@ -444,11 +457,7 @@ func actor(r *http.Request) string {
 	if isLoopback(r.RemoteAddr) {
 		return "loopback"
 	}
-	host := r.RemoteAddr
-	if i := strings.LastIndex(host, ":"); i >= 0 {
-		host = host[:i]
-	}
-	return host
+	return hostOf(r.RemoteAddr)
 }
 
 // --- _json responder --------------------------------------------------------
