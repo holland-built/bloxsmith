@@ -1508,8 +1508,17 @@ export function Empty({ children = 'no data' }) {
 // and lexically distinct from <Empty>: no zero-count language, no "no data".
 export function FeedUnavailable({ reason, label = 'Feed unavailable' }) {
   const { COLORS } = useChartTheme()
+  // data-feed-unavailable carries the label so a test can name WHICH feed is
+  // down without scraping the rendered text. tests/contrast.spec.ts uses it to
+  // tell "the page never loaded" apart from "the page loaded and its feeds did
+  // not answer" — two states that look identical to an element count.
+  // Attribute only: no text and no class changes, because the
+  // failure-not-absence-*.spec.ts suite asserts this component's exact copy.
   return (
-    <div className="h-full min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4">
+    <div
+      data-feed-unavailable={label}
+      className="h-full min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4"
+    >
       <div className="text-sm font-semibold" style={{ color: COLORS.crit }}>{label}</div>
       {reason ? <div className="text-[11px]" style={{ color: COLORS.warn }}>{reason}</div> : null}
     </div>

@@ -149,6 +149,14 @@ const QUIET_TEXT = '.text-dim, .text-muted, thead th';
 // loaded #assets is 28, 71 or 126 elements depending on nothing the test
 // controls, and its shell is 19–20. There is no number that separates those.
 // The skeleton count separates them cleanly, and needs no per-route constant.
+//
+// The per-route floors added further down on 2026-08-07 do not contradict this
+// and do not replace it. They are not a loaded-ness test: they are never
+// consulted until settle() has already returned, and they only catch a settled
+// page that yielded almost nothing to measure. The instrument for "has this
+// finished loading" is still, only, the skeleton count — which is why the
+// #assets shell still measures 17 (re-measured 2026-08-07 with the csp calls
+// held open) and is still caught here rather than by any floor.
 const LOADING = '.animate-pulse';
 
 // Three consecutive equal reads, not two: an earlier two-read version accepted
@@ -207,11 +215,50 @@ async function settle(page: Page, route: string) {
   );
 }
 
+// ui.jsx's FeedUnavailable, the panel a failed fetch renders. It draws NO
+// skeleton, so settle() legitimately returns on a page whose feeds all failed:
+// nothing is loading any more. The attribute carries the panel's label.
+const FEED_UNAVAILABLE = '[data-feed-unavailable]';
+
+// A dead feed here is a client-side timeout, not a broken build. ui/src/lib/
+// api.js aborts a request at COLD_TIMEOUT_MS = 12000 and useApi has no retry,
+// so one slow read under full-suite load poisons that page load permanently —
+// measured on 2026-08-07: `npx playwright test contrast --repeat-each=5` put
+// #assets into "Asset filter feed unavailable / Asset inventory unavailable —
+// signal is aborted without reason" on 1 of 30 tests. A fresh load is the only
+// recovery the app offers, and the server does NOT come back warmer for it:
+// cache.Do (go/internal/cache/cache.go:204) stores only on err == nil, and an
+// aborted request cancels r.Context() so the fetch it was leading returns an
+// error and caches nothing. The reload wins by getting a fresh 12s budget
+// after the load spike, not by hitting a warm entry — which is why two of them
+// with a pause between is the shape, rather than an immediate retry.
+const RECOVERY_RELOADS = 2;
+const RECOVERY_PAUSE_MS = 1_000;
+
+/** Every FeedUnavailable panel currently on screen, with its label and reason. */
+async function unavailableFeeds(page: Page): Promise<Array<{ label: string; reason: string }>> {
+  return page.evaluate((sel) => {
+    return [...document.querySelectorAll(sel)].map((el) => {
+      const kids = [...el.children];
+      return {
+        label: el.getAttribute('data-feed-unavailable') || '(unlabelled)',
+        // FeedUnavailable renders the reason as a second child, or omits it.
+        reason: kids.length > 1 ? (kids[kids.length - 1].textContent || '').trim() : '',
+      };
+    });
+  }, FEED_UNAVAILABLE);
+}
+
 async function open(page: Page, theme: 'dark' | 'light', route: string) {
   await page.addInitScript(`localStorage.setItem('theme', ${JSON.stringify(theme)})`);
   await page.goto('/' + route);
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
   await settle(page, route);
+  for (let i = 0; i < RECOVERY_RELOADS && (await unavailableFeeds(page)).length > 0; i++) {
+    await page.waitForTimeout(RECOVERY_PAUSE_MS);
+    await page.reload();
+    await settle(page, route);
+  }
   await page.evaluate(PROBE);
 }
 
@@ -264,10 +311,51 @@ for (const theme of ['dark', 'light'] as const) {
     // #changes carries the actor and kind columns at 11.5px and the band
     // captions; #dossier carries the lane labels; #overview and #assets are the
     // dense screens that were never part of the build this fix came out of.
-    const routes = ['#overview', '#assets', '#changes', '#dossier?q=172.16.128.1'];
+    //
+    // The second number is the "we measured almost nothing" floor, per route,
+    // because the four routes are nowhere near the same size and one constant
+    // for all of them either blinds three screens or flakes on the fourth.
+    // Route and floor live in one literal so they cannot drift apart.
+    //
+    // Measured 2026-08-07 against :8090, warm, 3 reads per route per theme,
+    // identical in dark and light (a standalone driver replaying settle() and
+    // __sweep's own visible/non-empty filter):
+    //
+    //   #overview 365 · #changes 600 (the sweep's own 600-element cap) ·
+    //   #dossier 75 · #assets 125
+    //
+    // #assets is the one that needs its own number, and these are the states
+    // that number has to separate — same driver, same day:
+    //
+    //   17  both /api/csp feeds aborted, zero skeletons  -> MUST fail
+    //   17  shell, both panels still loading             -> settle() catches it
+    //   24  only /api/csp/asset-filters aborted          -> feeds named, passes
+    //   26  filters ok but zero type chips, table loaded -> MUST pass
+    //   125 healthy, 22 type chips                       -> passes
+    //
+    // 20 is the only kind of number that fits: above the 17 this spec flaked on
+    // (1 of 30 on --repeat-each=5, dark #assets, both panels FeedUnavailable)
+    // and six clear of the thinnest page that has genuinely loaded. The
+    // zero-chip 26 is the gap the old comment here documented and left open;
+    // it is closed now. A FLAT 20 for all four routes was rejected: it would
+    // let a 21-element partial render pass on screens whose loaded counts are
+    // 365-600, which is exactly the "green run that measured nothing" this
+    // backstop exists to prevent.
+    //
+    // What this deliberately does NOT do: fail because a feed is unavailable
+    // while still leaving enough quiet text to measure (the 24 row above). This
+    // file grades contrast; tests/failure-not-absence-*.spec.ts grades
+    // availability, and duplicating that here would add a new flake surface on
+    // all four routes to fix one on #assets.
+    const routes: Array<[route: string, floor: number]> = [
+      ['#overview', 40],
+      ['#assets', 20],
+      ['#changes', 40],
+      ['#dossier?q=172.16.128.1', 40],
+    ];
     const failures: string[] = [];
 
-    for (const route of routes) {
+    for (const [route, floor] of routes) {
       await open(page, theme, route);
       // The quiet-text family only. Other colours (accent links, severity pills)
       // are a separate question and are not what this file locks down.
@@ -278,22 +366,29 @@ for (const theme of ['dark', 'light'] as const) {
       expect(samples.length, `${route} rendered no quiet text to measure`).toBeGreaterThan(0);
       // Guards against a green run that measured nothing: the sample rows are
       // deduped by colour pair, so this counts the elements behind them. This
-      // is the backstop, not the fix — settle() is what proves the page
-      // finished loading before we get here.
-      //
-      // KNOWN GAP, left in place deliberately rather than quietly widened. 40
-      // was chosen when the thinnest loaded screen was #assets at 65. #assets
-      // is upstream-variable: when /api/csp/asset-filters returns zero type
-      // chips — observed on 2026-08-07 at 06:01 with availability "ok", total
-      // 2374 and 50 table rows rendered, i.e. a page that HAD loaded — the
-      // sweep sees 23, and this line fails saying "page had not loaded", which
-      // in that state is untrue. It did not fire in either full-suite run
-      // (#assets scanned 66 both times), so it is a latent flake, not a
-      // present failure. Fixing it means a per-route scanned floor, not a
-      // smaller number here; a smaller number here would blind the other three
-      // screens too.
+      // is the backstop, not the fix — settle() is what proves nothing is
+      // still loading before we get here.
       const scanned = samples.reduce((n, s) => n + (s.count ?? 0), 0);
-      expect(scanned, `${route} scanned only ${scanned} elements — page had not loaded`).toBeGreaterThan(40);
+      if (scanned <= floor) {
+        // The message is built only on the failing path, and it has to say
+        // WHICH of the two things went wrong, because the old wording said the
+        // wrong one: "page had not loaded" was printed about a page that had
+        // loaded, into two FeedUnavailable panels, after settle() correctly
+        // saw zero skeletons. Never again — either the feeds are named, or the
+        // message states that no feed reported a failure.
+        const dead = await unavailableFeeds(page);
+        const why = dead.length
+          ? `The page LOADED and its feeds did not answer: ${dead.length} panel(s) still ` +
+            `unavailable after ${RECOVERY_RELOADS} reload(s) — ` +
+            dead.map((d) => `${d.label} (${d.reason || 'no reason rendered'})`).join('; ') +
+            `. That is an upstream/timeout failure, not a contrast regression.`
+          : `No panel reported a failed feed, so this is a genuinely thin render — ` +
+            `fewer quiet-text elements than any loaded ${route} has been measured at.`;
+        expect(
+          scanned,
+          `${route} scanned only ${scanned} elements, at or below its floor of ${floor}. ${why}`,
+        ).toBeGreaterThan(floor);
+      }
       for (const s of samples) {
         if (s.ratio < AA_NORMAL_TEXT) failures.push(describe(`${theme} ${route}`, s));
       }

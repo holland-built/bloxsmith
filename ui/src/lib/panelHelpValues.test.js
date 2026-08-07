@@ -115,6 +115,56 @@
 // this file covers.
 //
 // ---------------------------------------------------------------------------
+// COVERAGE — telling "unverified" apart from "makes no claim".
+//
+// Before this section, a panel absent from CLAIMS and absent from EXCLUDED meant
+// two different things at once: either nobody had checked its numbers, or it
+// states no numbers to check. Silence said both, so silence said nothing — the
+// same failure this file exists to kill one level up.
+//
+// `classifyPanels()` puts every panel in PANEL_HELP into exactly one bucket, and
+// the third one is COMPUTED, never listed:
+//
+//   verified                  every fact-shaped sentence is bound by a CLAIMS row
+//   excluded-with-reason      at least one is excused by an EXCLUDED row, rest bound
+//   makes-no-factual-claim    the detector fired on nothing
+//   (unclassified)            a fact-shaped sentence is neither — this is the RED
+//
+// A hand-kept "these panels make no claim" list would be a lie the day somebody
+// adds a number to one of them. So there is no list: the bucket is the negative
+// result of the FACT lexicon, recomputed from the copy on every run.
+//
+// WHAT THE DETECTOR CANNOT SEE — read this before trusting the bucket counts.
+//
+//   - It is LEXICON-BOUNDED. A claim with no digit, colour, threshold word,
+//     window or count word in it is invisible: "the busiest come first",
+//     "Hidden when no DHCP service is detected", "sorted low to high", "worst
+//     first". Those are real factual claims about real code and they land in
+//     makes-no-factual-claim. That bucket means "no NUMBER, COLOUR or WINDOW was
+//     stated", not "this sentence promises nothing".
+//   - "one" and "a single" are deliberately NOT count words. Including them
+//     flags a third of the copy on phrasing ("One row per device", "one line per
+//     thing it creates") rather than on arithmetic. The cost is that per-item
+//     cardinality claims are invisible too.
+//   - It inherits this file's weakest link unchanged: a proof matches a literal
+//     in a named file, which never proves the panel on the row runs that code.
+//     A panel can be fully "verified" here and still be fed by something else.
+//   - Colour word to hex is still the dated human check described above. The
+//     detector only notices that the word "red" was used.
+//
+// OVER-FLAGGING IS THE CORRECT FAILURE MODE. A sentence the lexicon flags
+// wrongly cannot be ignored — it reds the enforcement test until somebody either
+// binds it or writes it into EXCLUDED with a reason. A sentence it misses goes
+// silently green. So the lexicon is tuned loose on purpose: "greyed out", "the
+// red button", "two clicks" are all fact-shaped enough to answer for.
+//
+// Sentence splitting is `(?<=[.!?])\s+`, validated against the real copy on
+// 2026-08-07: across all 158 `what`/`look` strings there are zero decimals, zero
+// abbreviations ("e.g.", "etc."), zero ellipses and zero terminators followed by
+// a lowercase letter, so no sentence is split mid-claim. `what` and `look` are
+// split SEPARATELY, so no claim may straddle the two.
+//
+// ---------------------------------------------------------------------------
 // There is deliberately no LLM grading here, for the same reason
 // panelHelpTruth.test.js gives: a model asked whether the copy is true answers
 // differently on different days, which is the opposite of what a regression
@@ -229,8 +279,10 @@ const CHANGES_TAB = 'ui/src/tabs/Changes.jsx'
 const PROVISION = 'ui/src/tabs/Provision.jsx'
 const SELFSERVICE = 'ui/src/tabs/SelfService.jsx'
 const DRIFT = 'ui/src/tabs/Drift.jsx'
+const EDITOR = 'ui/src/tabs/Editor.jsx'
 const CHANGES_LIB = 'ui/src/lib/changes.js'
 const GO_DATA = 'go/internal/server/data.go'
+const GO_PROVISION = 'go/internal/server/provision.go'
 const GO_CSP = 'go/internal/dashboard/csp.go'
 const GO_ANALYTICS = 'go/internal/dashboard/analytics.go'
 
@@ -246,6 +298,29 @@ const UTIL_STATUS_PROOFS = [
     expect: "utilStatus() grades util >= 75 Warning / COLORS.warn (amber)",
   },
 ]
+
+// `PreviewApply` is one component behind every Provision and Editor flow, so
+// the "appears only after a preview" and "red when it destroys something"
+// claims are the same two lines for all of them. Written once so a flip there
+// reds every row that leans on it.
+const APPLY_BUTTON_PROOFS = [
+  {
+    re: /const showApply = status === 'previewed' && !stale && !busy/,
+    expect: 'the Apply button exists only after a preview, and only while that preview has not gone stale',
+  },
+  {
+    re: /style=\{\{ background: destructive \? COLORS\.crit : COLORS\.ok, color: '#fff' \}\}/,
+    expect: 'Apply is COLORS.crit (red) on a panel that declares itself destructive, COLORS.ok (green) otherwise',
+  },
+]
+
+// LogView is shared by all six provision logs. Same regex as the two log rows
+// already in the colours section; repeated rather than hoisted because those
+// rows name a different sentence and deleting one must not touch the other.
+const LOG_ERROR_RED_PROOF = {
+  re: /color: l\.error \? 'var\(--color-crit\)' : l\.done \? 'var\(--color-ok\)'/,
+  expect: 'a log line is crit (red) when that step reported an error',
+}
 
 const SEV_COLOUR_PROOFS = [
   { re: /critical: COLORS\.crit/, expect: 'critical painted COLORS.crit (red)' },
@@ -425,10 +500,14 @@ const CLAIMS = [
   },
   {
     panel: 'daily-open-issues',
-    says: /subnets over 85% full/,
+    says: /subnets 85% full or more \(tiny networks under 16 addresses left out\)/,
     file: DAILY,
     proofs: [
-      { re: /\(Number\(s\.util\) \|\| 0\) > 85\)\.length/, expect: 'the count is util > 85' },
+      { re: /\(Number\(s\.util\) \|\| 0\) >= 85\)\.length/, expect: 'the count is util >= 85, inclusive like the drill-down' },
+      {
+        re: /\.filter\(\(s\) => \(Number\(s\.cidr\) \|\| 0\) <= 28 &&/,
+        expect: 'prefixes longer than /28 (fewer than 16 addresses) are filtered out before the util test',
+      },
       { re: /hash: 'network\?minUtil=85'/, expect: 'the row links to the same 85 threshold' },
     ],
   },
@@ -686,6 +765,215 @@ const CLAIMS = [
       { re: /label: 'blocked', value: Number\(sec\.data\?\.blocked\) \|\| 0, color: COLORS\.ok/, expect: 'blocked is COLORS.ok (green)' },
     ],
   },
+
+  // ---- from the 2026-08-07 coverage triage ----
+  // Every row below answers a sentence the FACT lexicon flagged and nothing was
+  // checking. They are grouped by where they came from, not by kind, so the
+  // next person can see what the detector actually bought.
+  {
+    panel: 'kpi-stack',
+    says: /Click any of the three to open the matching list\./,
+    file: OVERVIEW,
+    proofs: [
+      {
+        re: /const cells = \[\n\s*\{ label: 'Active Leases',[\s\S]{0,400}?label: 'Subnets'[\s\S]{0,400}?label: 'Subnets ≥90%'[\s\S]{0,400}?\n\s*\]\n/,
+        expect: 'the KpiStack cells array holds three entries — Active Leases, Subnets, Subnets ≥90% — and closes after the third',
+      },
+      { re: /onClick=\{\(\) => \{ location\.hash = c\.hash \}\}/, expect: 'each of those cells navigates to its own hash when clicked' },
+    ],
+  },
+  {
+    panel: 'daily-hosts-attention',
+    says: /The count in the header shows a dash, not 0, when the machines could not be read\./,
+    file: DAILY,
+    proofs: [
+      { re: /const feedDead = hostsStatus === 'error' && hosts\.length === 0/, expect: 'a dead hosts feed with nothing loaded is what "could not be read" means here' },
+      { re: /\{feedDead \? '—' : rows\.length\} shown/, expect: 'the header count is an em dash, not 0, when the feed is dead' },
+    ],
+  },
+  {
+    panel: 'daily-dns-zone-issues',
+    says: /DNS zones with at least one configuration problem recorded against them/,
+    file: DAILY,
+    proofs: [
+      {
+        re: /\.filter\(\(z\) => Array\.isArray\(z\.issues\) && z\.issues\.length > 0\)/,
+        expect: 'only zones with a non-empty issues list are kept — "at least one"',
+      },
+    ],
+  },
+  {
+    panel: 'daily-dns-zone-issues',
+    says: /The red number is how many problems that zone has\./,
+    file: DAILY,
+    proofs: [
+      { re: /\.map\(\(z\) => \(\{ \.\.\.z, count: z\.issues\.length/, expect: 'the number in that column is the length of the zone\'s issues list' },
+      {
+        re: /background: 'var\(--pill-crit-bg\)', color: 'var\(--pill-crit-fg\)'/,
+        expect: 'that count is drawn in the crit (red) pill',
+      },
+    ],
+  },
+  {
+    panel: 'security-lookalike-domains',
+    says: /A dash instead of a count means the feed could not be reached, so nothing was checked; 0 means checked and none found\./,
+    file: SECURITY,
+    proofs: [
+      { re: /const counted = !lookalikes\.error && !d\.unavailable/, expect: 'a count is only claimed when the fetch worked and upstream did not declare itself unavailable' },
+      { re: /\{counted \? rows\.length : '—'\} detected/, expect: 'otherwise the header prints an em dash rather than 0' },
+    ],
+  },
+  {
+    panel: 'infra-host-status',
+    says: /When those two numbers differ, a line under the list says so\./,
+    file: INFRA,
+    proofs: [
+      { re: /const partial = totalHosts != null && totalHosts !== loaded/, expect: 'the two numbers are the estate total and the rows loaded' },
+      {
+        re: /\{partial && \([\s\S]{0,200}?breakdown of \{loaded\.toLocaleString\(\)\} loaded of \{total\.toLocaleString\(\)\} total/,
+        expect: 'the extra line renders only when those two differ',
+      },
+    ],
+  },
+  {
+    panel: 'assets-list',
+    says: /Provider and Vendor share one column while every row agrees on both, and split back into two when they stop\./,
+    file: ASSETS,
+    proofs: [
+      {
+        re: /\.\.\.\(merged\n\s*\? \[\{ key: 'provider', label: 'Provider \/ Vendor'/,
+        expect: 'a merged state contributes ONE column headed Provider / Vendor',
+      },
+      {
+        re: /\{ key: 'provider', label: 'Provider',[\s\S]{0,200}?\{ key: 'vendor', label: 'Vendor',/,
+        expect: 'the unmerged branch contributes two columns instead',
+      },
+    ],
+  },
+  {
+    panel: 'assets-detail',
+    says: /The five fields kept out of the table/,
+    file: ASSETS,
+    proofs: [
+      {
+        re: /const fields = \[\n\s*\['OS',[\s\S]{0,300}?\['Location', d\?\.detail\?\.location\],\n\s*\]/,
+        expect: 'the detail field list runs from OS to Location and closes — five entries, matching the five the copy names',
+      },
+    ],
+  },
+  {
+    panel: 'audit-activity-summary',
+    says: /The "unknown" figure only appears when at least one action reported nothing back\./,
+    file: AUDIT,
+    proofs: [
+      { re: /else if \(!r \|\| \/\^unknown\$\/i\.test\(r\)\) unknown\+\+/, expect: 'an action with no result, or a literal "unknown" one, is what the counter counts' },
+      { re: /\{unknown > 0 && \(/, expect: 'the figure is rendered only when that counter is above zero' },
+    ],
+  },
+  {
+    panel: 'provision-subnet-request',
+    says: /the green Provision button appears only after that, and disappears again the moment you edit a field/,
+    file: UI,
+    proofs: APPLY_BUTTON_PROOFS,
+  },
+  {
+    panel: 'provision-subnet-request',
+    says: /the green Provision button appears only after that, and disappears again the moment you edit a field/,
+    file: PROVISION,
+    proofs: [
+      { re: /applyLabel="Provision"/, expect: 'the button on this panel is the one labelled Provision' },
+      { re: /setSpace\(e\.target\.value\); setBlock\(''\); flow\.markStale\(\)/, expect: 'editing the Space field marks the preview stale, which is what withdraws the button' },
+    ],
+  },
+  {
+    panel: 'provision-site-teardown',
+    says: /The red button needs an admin token and the site name typed in exactly/,
+    file: PROVISION,
+    proofs: [
+      { re: /panelId="provision-site-teardown"[\s\S]{0,1400}?destructive\n/, expect: 'this panel declares its Apply destructive, which is what paints it red' },
+      { re: /applyDisabled=\{!isAdmin \|\| !tdConfirm\.trim\(\)\}/, expect: 'Apply is refused without the admin role and without something typed in the confirm box' },
+    ],
+  },
+  {
+    panel: 'provision-site-teardown',
+    says: /The red button needs an admin token and the site name typed in exactly/,
+    file: UI,
+    proofs: APPLY_BUTTON_PROOFS,
+  },
+  {
+    // "exactly" is the whole point of this row. The browser only checks the box
+    // is non-empty; it is the server that compares it to the site name, so a
+    // client-side proof alone would be weaker than the sentence it answers.
+    panel: 'provision-site-teardown',
+    says: /the site name typed in exactly/,
+    file: GO_PROVISION,
+    proofs: [
+      {
+        re: /if !cfg\.DryRun && provision\.PyStr\(qp\["confirm"\]\) != cfg\.Site \{/,
+        expect: 'a live teardown is refused unless the typed confirmation equals the site name',
+      },
+    ],
+  },
+  {
+    panel: 'provision-site-teardown-log',
+    says: /Red lines are objects it could not delete\./,
+    file: PROVISION,
+    proofs: [LOG_ERROR_RED_PROOF],
+  },
+  {
+    panel: 'provision-seed-request',
+    says: /Which of the three regions to build demo sites for/,
+    file: PROVISION,
+    proofs: [{ re: /\{\['amer', 'emea', 'apac'\]\.map\(\(r\) => \(/, expect: 'exactly three regions are offered as tick boxes' }],
+  },
+  {
+    panel: 'provision-seed-teardown',
+    says: /The red button needs an admin token and the word DELETE typed in/,
+    file: PROVISION,
+    proofs: [
+      { re: /panelId="provision-seed-teardown"[\s\S]{0,1400}?destructive\n/, expect: 'this panel declares its Apply destructive, which is what paints it red' },
+      { re: /applyDisabled=\{!isAdmin \|\| tdConfirm\.trim\(\) !== 'DELETE'\}/, expect: 'Apply is refused without the admin role and without the exact word DELETE' },
+    ],
+  },
+  {
+    panel: 'provision-seed-teardown',
+    says: /The red button needs an admin token and the word DELETE typed in/,
+    file: UI,
+    proofs: APPLY_BUTTON_PROOFS,
+  },
+  {
+    panel: 'provision-seed-teardown-log',
+    says: /Red lines are objects it could not delete\./,
+    file: PROVISION,
+    proofs: [LOG_ERROR_RED_PROOF],
+  },
+  {
+    panel: 'selfservice-manage-records',
+    says: /Delete takes two clicks\./,
+    file: SELFSERVICE,
+    proofs: [
+      { re: /function handleDeleteClick\(row\) \{\n\s*if \(armedId !== row\.id\) \{/, expect: 'the first click on an unarmed row does not delete' },
+      { re: /setArmLabel\(`Click again to delete \$\{fresh\.type\}/, expect: 'it arms the row and asks for a second click instead' },
+    ],
+  },
+  {
+    panel: 'selfservice-manage-addresses',
+    says: /It takes two clicks to confirm and then happens immediately — there is no preview and no undo\./,
+    file: SELFSERVICE,
+    proofs: [
+      { re: /function handleRelease\(row\) \{\n\s*if \(armedId !== row\.id\) \{/, expect: 'the first click on an unarmed row does not release the address' },
+      { re: /setArmLabel\(`Click again to release \$\{fresh\.address\}/, expect: 'it arms the row and asks for a second click instead' },
+    ],
+  },
+  {
+    panel: 'editor-object-form',
+    says: /Delete takes two clicks and is final\./,
+    file: EDITOR,
+    proofs: [
+      { re: /if \(!delArmed\) \{\n\s*setDelArmed\(true\)/, expect: 'the first click only arms the delete' },
+      { re: /\{delArmed \? 'Click again to permanently delete' :/, expect: 'the armed button asks for the second click' },
+    ],
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -723,7 +1011,91 @@ const EXCLUDED = [
     phrase: 'or that the total itself is unknown',
     why: 'Depends on whether the upstream feed reported a total at all — a runtime property of a payload this test never sees. There is no literal in any file that is true only when the total is unknown.',
   },
+  {
+    // The first entry here that exists because the FACT lexicon was WRONG, and
+    // it is kept rather than tuned away on purpose: this is what over-flagging
+    // is supposed to look like — loud, in the table, with a reason.
+    panel: 'infra-dfp-services',
+    phrase: 'so the two never look the same',
+    why: 'A FALSE FLAG. "the two" is a pronoun for the two states the same sentence just named, not a count of anything, so there is no value to bind. What is left underneath is a rendering-branch claim (Empty for a configured-none, FeedUnavailable for a failed read, both inside a shared FeedCard) — a behavioural shape of rule, which is the sibling file\'s machine, not this one\'s.',
+  },
 ]
+
+// ---------------------------------------------------------------------------
+// THE FACT LEXICON. See the COVERAGE section of the header for what it cannot
+// see, and why it is tuned to over-flag.
+//
+// `under \d` / `past \d` / `over \d` are already caught by `digits`; they are
+// written out anyway so the report names WHICH shape of claim fired, which is
+// what a triager needs in order to write the proof.
+// ---------------------------------------------------------------------------
+const FACT_LEXICON = [
+  { kind: 'number', re: /\d/ },
+  { kind: 'percentage', re: /%/ },
+  { kind: 'colour', re: /\b(red|amber|blue|green|grey|gray|pink)\b/i },
+  {
+    kind: 'threshold',
+    re: /\b(at most|at least|no more than|fewer than|more than|up to|or more|or fewer|under \d|past \d|over \d)\b/i,
+  },
+  {
+    kind: 'window',
+    re: /\b(last hour|last 24 hours|24 hours|7 days|seven days|each day|per day|hour by hour|day by day|each of the last)\b/i,
+  },
+  {
+    kind: 'count word',
+    // "one" and "a single" are deliberately absent — see the header.
+    re: /\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundred|dozen)\b/i,
+  },
+]
+
+// Validated against the real copy — see the header. Terminal punctuation is
+// kept, because several `says` regexes end in an escaped full stop.
+function splitSentences(text) {
+  return String(text || '')
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function sentencesOf(entry) {
+  return [...splitSentences(entry.what), ...splitSentences(entry.look)]
+}
+
+function factKinds(sentence) {
+  return FACT_LEXICON.filter((l) => l.re.test(sentence)).map((l) => l.kind)
+}
+
+// One panel -> its bucket, plus the working the report and the guard both need.
+function classifyPanel(panelId) {
+  const entry = PANEL_HELP[panelId]
+  const flagged = sentencesOf(entry)
+    .map((sentence) => ({ sentence, kinds: factKinds(sentence) }))
+    .filter((s) => s.kinds.length > 0)
+
+  const claims = CLAIMS.filter((c) => c.panel === panelId)
+  const excluded = EXCLUDED.filter((e) => e.panel === panelId)
+
+  const claimed = []
+  const excused = []
+  const unclassified = []
+  for (const f of flagged) {
+    if (claims.some((c) => c.says.test(f.sentence))) claimed.push(f)
+    else if (excluded.some((e) => f.sentence.includes(e.phrase))) excused.push(f)
+    else unclassified.push(f)
+  }
+
+  let bucket
+  if (unclassified.length) bucket = 'unclassified'
+  else if (excused.length) bucket = 'excluded-with-reason'
+  else if (flagged.length) bucket = 'verified'
+  else bucket = 'makes-no-factual-claim'
+
+  return { panel: panelId, bucket, flagged, claimed, excused, unclassified }
+}
+
+function classifyPanels() {
+  return Object.keys(PANEL_HELP).map(classifyPanel)
+}
 
 // ---------------------------------------------------------------------------
 // Helpers for the failure message the plan specifies:
@@ -912,5 +1284,52 @@ test('no claim is also excluded', () => {
     [],
     'a phrase is listed as undecidable in EXCLUDED and also checked by a claim row. One of the two is wrong:\n  ' +
       both.join('\n  '),
+  )
+})
+
+test('coverage report: every panel in exactly one bucket', (t) => {
+  const rows = classifyPanels()
+  const by = (b) => rows.filter((r) => r.bucket === b)
+  const verified = by('verified')
+  const excused = by('excluded-with-reason')
+  const silent = by('makes-no-factual-claim')
+  const open = by('unclassified')
+
+  t.diagnostic(`PANEL_HELP coverage — ${rows.length} panels, ${rows.reduce((n, r) => n + r.flagged.length, 0)} fact-shaped sentences`)
+  t.diagnostic(`  verified               ${verified.length}`)
+  t.diagnostic(`  excluded-with-reason   ${excused.length}`)
+  t.diagnostic(`  makes-no-factual-claim ${silent.length}  (computed: the detector fired on nothing)`)
+  t.diagnostic(`  UNCLASSIFIED           ${open.length}  <- fact-shaped copy nobody has bound or excused`)
+  for (const r of open) {
+    for (const f of r.unclassified) t.diagnostic(`    ${r.panel} [${f.kinds.join(', ')}]: ${f.sentence}`)
+  }
+
+  // An EXCLUDED row whose phrase sits in no flagged sentence is excusing
+  // something the detector never asked about. Not a failure — the staleness test
+  // above already keeps it honest — but it is worth saying out loud, because it
+  // means the row is doing no coverage work.
+  const idle = EXCLUDED.filter((ex) => {
+    const entry = PANEL_HELP[ex.panel]
+    if (!entry) return false
+    return !sentencesOf(entry).some((s) => s.includes(ex.phrase) && factKinds(s).length > 0)
+  })
+  if (idle.length) t.diagnostic(`  EXCLUDED rows the detector never flags: ${idle.map((e) => e.panel).join(', ')}`)
+
+  assert.equal(rows.length, Object.keys(PANEL_HELP).length, 'a panel fell out of the classification entirely')
+})
+
+test('every fact-shaped sentence is either claimed or excluded', () => {
+  const open = []
+  for (const r of classifyPanels()) {
+    for (const f of r.unclassified) open.push(`${r.panel} [${f.kinds.join(', ')}]: "${f.sentence}"`)
+  }
+  assert.deepEqual(
+    open,
+    [],
+    `${open.length} sentence(s) state a number, a colour, a threshold, a window or a count that nothing in this ` +
+      'file answers for. This is the gap the coverage buckets exist to make visible: until one of these is bound ' +
+      'to code by a CLAIMS row or written into EXCLUDED with a reason, a reader cannot tell whether it was ' +
+      'checked and passed or never looked at. A false flag is fine — put it in EXCLUDED and say why:\n  ' +
+      open.join('\n  '),
   )
 })
