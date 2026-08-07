@@ -21,4 +21,10 @@
 ## Release
 Post-push verification only — Step 4 already published.
 - The pushed tag triggers .github/workflows/release.yml → goreleaser → ghcr image + GitHub release
-- Verify: `gh run watch` then :8080 "Check now" self-updates
+- Verify: `gh run watch`, then on :8080 open Settings → Updates → **Check for updates**
+
+  That control is the only user-driven check in the app, and it forces a fresh lookup
+  (`/api/update/check?force=1`). Without it you are reading a cached answer: the server
+  remembers its last GitHub reply for 30 minutes, so a release published inside that
+  window shows as "up to date" until the cache expires or the service restarts. This
+  line used to say "Check now", naming a button that did not exist anywhere in the UI.

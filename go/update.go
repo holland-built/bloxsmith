@@ -103,6 +103,16 @@ const (
 	updateCheckErrTTL = 5 * time.Minute
 )
 
+// forcedCheckMinInterval is the floor between two FORCED checks — the only
+// thing standing between a mashed "check now" and the 60/hour allowance.
+//
+// It is seconds, deliberately, and must never be raised toward updateCheckTTL:
+// a long floor on the forced path is precisely the bug the force flag exists to
+// fix (a deliberate check silently answered from a half-hour-old memory). Five
+// seconds is longer than anyone can double-click and short enough that a real
+// second look — "did my release land yet?" — is never refused.
+const forcedCheckMinInterval = 5 * time.Second
+
 // nowFn is a var so tests can drive the clock instead of sleeping.
 var nowFn = time.Now
 
@@ -125,6 +135,11 @@ var updateCache struct {
 	err       error
 	checkedAt time.Time
 	expires   time.Time
+	// lastForced is when a FORCED check last actually reached GitHub, and it
+	// is the only state forcedCheckMinInterval reads. Separate from checkedAt
+	// because the background poll must never consume the click budget, nor be
+	// throttled by it.
+	lastForced time.Time
 }
 
 // resetUpdateCache drops the remembered answer. Tests call it so they stay
@@ -137,6 +152,7 @@ func resetUpdateCache() {
 	updateCache.err = nil
 	updateCache.checkedAt = time.Time{}
 	updateCache.expires = time.Time{}
+	updateCache.lastForced = time.Time{}
 }
 
 // labelFreshness stamps an answer with where it came from and when GitHub was
@@ -164,13 +180,40 @@ func labelFreshness(st updateStatus, cached bool, checkedAt time.Time) updateSta
 // latestRelease (apply.go) directly and always fetches fresh. Downloading and
 // installing a binary chosen from a half-hour-old answer is not acceptable;
 // one request per apply is.
-func checkUpdate() (updateStatus, error) {
+func checkUpdate() (updateStatus, error) { return checkUpdateForce(false) }
+
+// checkUpdateForce is checkUpdate with the escape hatch for a DELIBERATE user
+// action (the ?force= parameter on /api/update/check).
+//
+// WHY THIS EXISTS: the cache above was written to stop the BACKGROUND poll
+// spending the shared 60/hour allowance, and it did — but it also answered the
+// operator's explicit "check again" from memory, which was never the intent.
+// Observed live 2026-08-07 on v3.55.0: v3.56.0 was published at 12:37 and the
+// endpoint still reported v3.55.0 at 12:40, because the answer had been
+// remembered at 12:21 and there was no way to ask for a new one. A cache the
+// user cannot get past is indistinguishable, from where they are standing,
+// from a check that does not work.
+//
+// force=true skips a still-valid entry and asks GitHub, then STORES the result
+// as the new entry — so the request the click paid for also refreshes what the
+// next background poll reads, instead of it flipping straight back to the
+// stale answer.
+//
+// The floor (forcedCheckMinInterval) is what stops that hatch becoming a hole:
+// a click inside the floor is answered from the cache exactly as before, and
+// says cached:true, because it is. Note what is NOT throttled — a forced check
+// arriving when the entry has already expired is just an ordinary miss and
+// fetches regardless; the floor only governs the bypass.
+func checkUpdateForce(force bool) (updateStatus, error) {
 	updateCache.mu.Lock()
 	defer updateCache.mu.Unlock()
 
 	now := nowFn()
 	if updateCache.valid && now.Before(updateCache.expires) {
-		return labelFreshness(updateCache.st, true, updateCache.checkedAt), updateCache.err
+		bypass := force && now.Sub(updateCache.lastForced) >= forcedCheckMinInterval
+		if !bypass {
+			return labelFreshness(updateCache.st, true, updateCache.checkedAt), updateCache.err
+		}
 	}
 
 	st, err := fetchUpdate()
@@ -181,6 +224,9 @@ func checkUpdate() (updateStatus, error) {
 	updateCache.valid = true
 	updateCache.st, updateCache.err = st, err
 	updateCache.checkedAt, updateCache.expires = now, now.Add(ttl)
+	if force {
+		updateCache.lastForced = now
+	}
 	return labelFreshness(st, false, now), err
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FeedUnavailable } from './ui.jsx'
 import ThemeSwitch from './ThemeSwitch.jsx'
 import DensitySwitch from './DensitySwitch.jsx'
+import { UpdateCheck } from './UpdateButton.jsx'
 import { CONTROL_HELP } from '../lib/controlHelp.js'
 
 const vpost = (url, body) =>
@@ -492,6 +493,17 @@ export default function TenantManager({ onClose }) {
               <p className="m-0 mt-1 text-[11px] leading-relaxed text-dim">{CONTROL_HELP.density.what}</p>
             </div>
 
+            {/* Same shape as Appearance above — section label, control, caption
+                from the same dictionary the header dialog reads.
+                The running version lives HERE and nowhere else in this sheet:
+                it used to sit alone in the footer, and printing it twice inside
+                one 420px panel would invite the reader to check whether the two
+                agreed. `version` is the /api/vault/status reading, kept as the
+                fallback for a server too old to answer the check endpoint at
+                all — otherwise a failed check would take the version off screen
+                with it. */}
+            <UpdateCheck version={(status && status.version) || ''} />
+
             <label htmlFor="tm-dash-token" className="block text-[10px] uppercase tracking-wide text-dim mb-2">Dashboard token</label>
             <input
               id="tm-dash-token"
@@ -505,10 +517,6 @@ export default function TenantManager({ onClose }) {
             <button className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-crit hover:text-crit disabled:opacity-50" onClick={lockNow} disabled={locking}>
               {locking ? 'Locking…' : 'Lock vault now'}
             </button>
-
-            <div className="mt-4 pt-3 border-t border-line-2 text-[11px] text-dim text-center">
-              Bloxsmith {(status && status.version) || '…'}
-            </div>
           </>
         )}
       </div>

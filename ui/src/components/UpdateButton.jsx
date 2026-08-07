@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { CONTROL_HELP } from '../lib/controlHelp.js';
 
 // Ported from src/96.chrome-topbar.jsx (useSelfUpdate + UpdatePill).
 // Endpoints: GET /api/update/check -> {current,latest,available,url,selfUpdate}
@@ -170,4 +171,163 @@ export default function UpdateButton() {
   }
 
   return null // up to date — version shown in Settings
+}
+
+// ---------------------------------------------------------------------------
+// UpdateCheck — the settings sheet's Updates section.
+//
+// WHY IT EXISTS. The pill above is the only thing in the app that ever asked
+// GitHub anything, and it asks on mount and then every six hours. The server
+// remembers its answer for thirty minutes on top of that. Observed live on
+// 2026-08-07: v3.56.0 was published at 12:37, the answer had been remembered at
+// 12:21, and the app said nothing was available until the operator restarted
+// the service. There was no button anywhere that meant "look again".
+//
+// This is that button, and it is deliberately NOT a second apply flow. When
+// there is something to install, the pill in the header is what installs it,
+// and this section says so — two buttons that both claim to update the app is
+// how one of them ends up being the stale one.
+// ---------------------------------------------------------------------------
+
+// The floor the server puts under forced checks (forcedCheckMinInterval in
+// go/update.go). Mirrored here so the button goes quiet for exactly as long as
+// a second press would be answered from memory — a press that cannot produce a
+// new answer should not look like one that can.
+const FORCED_MIN_MS = 5000;
+
+// How long the answer's age can drift on screen while the sheet sits open.
+const AGE_TICK_MS = 30000;
+
+/**
+ * "3 minutes ago", in the words someone would actually say. Returns '' for a
+ * missing or unparseable stamp — an answer with no time on it is not given a
+ * guessed one, because the whole failure this closes was a stale answer that
+ * looked current.
+ */
+function agoText(iso, now) {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '';
+  const secs = Math.max(0, Math.round((now - t) / 1000));
+  if (secs < 45) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return mins === 1 ? '1 minute ago' : `${mins} minutes ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? '1 day ago' : `${days} days ago`;
+}
+
+export function UpdateCheck({ version }) {
+  const [info, setInfo] = useState(null);
+  const [state, setState] = useState('idle'); // idle | checking | resting
+  // True when the request itself never landed — a different fact from
+  // info.error, which is the server telling us ITS request never landed.
+  const [unreachable, setUnreachable] = useState(false);
+  const [fromMemory, setFromMemory] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const restTimer = useRef(null);
+
+  // One unforced read when the sheet opens, so the section can say when GitHub
+  // was last asked without spending a request to find out. Forcing here would
+  // make merely opening Settings cost a request out of the shared 60/hour.
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/update/check', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive) setInfo(d);
+      })
+      .catch(() => {
+        if (alive) setUnreachable(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Keeps "Last checked 3 minutes ago" true for as long as the sheet is open.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), AGE_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => () => clearTimeout(restTimer.current), []);
+
+  const check = async () => {
+    if (state !== 'idle') return;
+    setState('checking');
+    setUnreachable(false);
+    setFromMemory(false);
+    try {
+      const d = await fetchT('/api/update/check?force=1', null, 15000).then((r) => r.json());
+      setInfo(d);
+      // The server answered from memory anyway (a second press inside its own
+      // five-second floor). Say so rather than presenting it as a fresh look.
+      setFromMemory(!!d.cached);
+      setNow(Date.now());
+    } catch {
+      setUnreachable(true);
+    }
+    setState('resting');
+    restTimer.current = setTimeout(() => setState('idle'), FORCED_MIN_MS);
+  };
+
+  const disabled = info && info.checkDisabled;
+  const running = String((info && info.current) || version || '').replace(/^v/, '');
+  const latest = String((info && info.latest) || '').replace(/^v/, '');
+  const checkedAgo = agoText(info && info.checkedAt, now);
+
+  let said = '';
+  let tone = 'text-dim';
+  if (state === 'checking') {
+    said = 'Checking…';
+  } else if (unreachable) {
+    said = 'Could not check just now — this app could not be reached. Try again in a moment.';
+    tone = 'text-crit';
+  } else if (!info) {
+    said = '';
+  } else if (info.checkDisabled) {
+    said = 'Checking for new versions is switched off on this server, so nothing was looked up.';
+  } else if (info.error) {
+    said = 'Could not check just now — the update service could not be reached. Nothing on this machine has changed.';
+    tone = 'text-crit';
+  } else if (info.available) {
+    said = `Version ${latest} is ready to install. Use the update button at the top of the screen — this is only a check.`;
+    tone = 'text-txt';
+  } else {
+    said = "You're on the latest version.";
+  }
+  if (said && fromMemory && state !== 'checking') {
+    said = `Just checked a moment ago, so this is the same answer. ${said}`;
+  }
+
+  return (
+    <>
+      <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Updates</div>
+      <div className="mb-4">
+        <div className="text-[11px] text-dim">
+          {running ? `Bloxsmith v${running}` : 'Bloxsmith — version unknown'}
+          {checkedAgo ? ` · Last checked ${checkedAgo}` : ''}
+        </div>
+        {!disabled && (
+          <button
+            type="button"
+            onClick={check}
+            disabled={state !== 'idle'}
+            className="w-full mt-2 px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover disabled:opacity-50"
+          >
+            Check for updates
+          </button>
+        )}
+        {/* In the tree from the first render, empty rather than absent: a live
+            region added at the same moment as its text is not announced. Same
+            pattern as DossierPage.jsx's. */}
+        <p role="status" aria-live="polite" className={`m-0 mt-1.5 text-[11px] leading-relaxed ${tone}`}>
+          {said}
+        </p>
+        <p className="m-0 mt-1 text-[11px] leading-relaxed text-dim">{CONTROL_HELP.updates.what}</p>
+      </div>
+    </>
+  );
 }
