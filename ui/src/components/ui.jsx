@@ -609,7 +609,7 @@ const LAYOUT_HELP =
 const reportedHelpGaps = new Set()
 
 function reportMissingHelp(panelId, title) {
-  const key = panelId || ` no-panel-id:${typeof title === 'string' ? title : '(computed title)'}`
+  const key = panelId || `\0no-panel-id:${typeof title === 'string' ? title : '(computed title)'}`
   if (reportedHelpGaps.has(key)) return
   reportedHelpGaps.add(key)
   if (!panelId) {
