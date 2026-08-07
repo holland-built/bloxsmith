@@ -4,8 +4,9 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
-import { useChartTheme, Card, CardGrid, Empty, Skeleton, FeedUnavailable } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, HiddenPanels, Skeleton, FeedUnavailable } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
+import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
 
 const SEV_RANK = ['critical', 'high', 'medium', 'low', 'info']
@@ -39,6 +40,10 @@ export default function Security() {
   const exposedIps = useApi('/api/csp/exposed-ips', { poll: 30000 })
   const ctemAssets = useApi('/api/csp/ctem-assets', { poll: 30000 })
   const [acks, setAcks] = useState({})
+  // One shared read of /api/service-inventory per page load — deliberately not
+  // useApi(), which would join the 30s poll above for an answer that cannot
+  // change while the page is open.
+  const owned = useOwnedServices()
 
   const events = hub.data?.events ?? []
 
@@ -46,9 +51,15 @@ export default function Security() {
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Security</h1>
       <CardGrid>
-        <SeverityHero hub={hub} events={events} />
-        <KpiStack hub={hub} events={events} acks={acks} />
-        <TriageInbox hub={hub} events={events} acks={acks} setAcks={setAcks} />
+        {/* All three read /api/hub/security -> dns_event, which the
+            forwarding-proxy tier produces. Hidden as one group, and only when
+            the inventory read authoritatively says neither dfp nor orpheus is
+            deployed. */}
+        <HiddenPanels {...SERVICE_GROUPS.threatDefense} state={owned}>
+          <SeverityHero hub={hub} events={events} />
+          <KpiStack hub={hub} events={events} acks={acks} />
+          <TriageInbox hub={hub} events={events} acks={acks} setAcks={setAcks} />
+        </HiddenPanels>
         <LookalikeTable lookalikes={lookalikes} />
         <CtemPanel ctem={ctem} />
         <AssetInsights assetInsights={assetInsights} />

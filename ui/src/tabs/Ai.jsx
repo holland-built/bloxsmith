@@ -357,6 +357,18 @@ function LookupCard() {
       {!err && !res && !dossier && !busy && <Empty>Look up a domain, IP, or host</Empty>}
       {res && <EntitiesTable entities={res.entities} availability={res.availability} reason={res.reason} />}
       {(res || dossier) && <BlockDomainButton domain={queryUsed} />}
+      {/* Threat intel is one of five sources the dossier page shows for the
+          same indicator (assets, DNS, IPAM and recent changes are the other
+          four). Nothing here is removed or moved — this is a way OUT of a
+          card that only ever answers one of those five questions. */}
+      {queryUsed && (
+        <a
+          href={`#dossier?q=${encodeURIComponent(queryUsed)}`}
+          className="inline-block mt-2 text-[12px] no-underline text-muted hover:text-field-txt"
+        >
+          open full dossier →
+        </a>
+      )}
       <DossierPanel data={dossier} />
     </Card>
   )

@@ -30,6 +30,28 @@ export default defineConfig({
   // waits for the server to come back and retries just the navigation, so
   // this whole-test retry is never the thing absorbing that failure mode.)
   retries: 1,
+  // One worker, because two specs in this suite are exclusive owners of shared
+  // state and the default (2) let them run against each other:
+  //   - tests/layout-persist.spec.ts SIGTERMs the Go binary to prove a saved
+  //     layout survives a restart. That is hostile to EVERY spec running
+  //     concurrently, not just to one — anything mid-request when the process
+  //     dies sees a connection error it has no reason to expect.
+  //   - tests/layout-drag.spec.ts writes the same single saved view,
+  //     `__layout_overview`, that the persistence spec reads back.
+  // Observed under 2 workers: a drag assertion read back `host-status: 4` —
+  // the persistence spec's fixture, not the order it had just dragged — and a
+  // persistence assertion read an order the drag spec had written moments
+  // earlier. Neither spec is wrong; they are two exclusive owners of one
+  // resource, plus a process kill.
+  //
+  // Two narrower fixes were considered and do NOT work. Giving the drag spec
+  // its own view name fixes only the shared-key half, and leaves the restart
+  // free to break whatever else is in flight. `test.describe.serial` serialises
+  // within ONE file, so it cannot order two files against each other.
+  // The targeted fix, if the wall-clock cost of this ever becomes a problem,
+  // is a second Playwright project holding only the restart spec, run after
+  // the parallel one — more config than the current runtime justifies.
+  workers: 1,
   // 'html' always writes playwright-report/ (not just on failure) so CI has
   // something to upload as an artifact; 'never' skips auto-opening it locally.
   reporter: [['list'], ['html', { open: 'never' }]],

@@ -13,9 +13,26 @@
   --color-txt: #ededed;
   --color-field-txt: #dddddd;
   --color-muted: #8a8a8a;
-  --color-dim: #777777;
+  /* --color-dim and --color-tick were both #777777. Measured from live computed
+     styles against the surfaces they actually sit on, that was below WCAG AA's
+     4.5:1 for normal text everywhere except the page background: 4.31:1 on a
+     card, 4.11:1 on a field, 4.04:1 for the 9px caret on --color-line, and
+     3.81:1 for a band caption on --color-line-2 — the worst case, and the one
+     that sets this value. #858585 clears all five (4.62:1 on line-2 through
+     5.52:1 on the page background). The light block below has the same fix and
+     the same reasoning. Both are locked down by tests/contrast.spec.ts.
+
+     Cost, recorded rather than hidden: --color-muted is #8a8a8a, so raising dim
+     to #858585 narrows the dim/muted step from ΔL* 7.4 to ΔL* 1.8, i.e. the two
+     quiet greys are now nearly the same colour in dark theme. Light theme was
+     already at ΔL* 2.0 before this change, so the two themes now agree. The
+     hierarchy the token exists for — quiet text against --color-txt #ededed —
+     is untouched: 5.23:1 versus 16.49:1 on a card. Restoring a visible dim/muted
+     step would mean moving --color-muted to about #9a9a9a, which is a second
+     app-wide colour change that nothing here has failed a check on. */
+  --color-dim: #858585;
   --color-grid: #222222;
-  --color-tick: #777777;
+  --color-tick: #858585;
   --color-accent: #0070f3;
   --color-purple: #8b5cf6;
   --color-ok: #4ade80;
@@ -50,9 +67,23 @@
   --color-txt: #111111;
   --color-field-txt: #111111;
   --color-muted: #666666;
-  --color-dim: #6b6b6b;
+  /* #6b6b6b measured 4.23:1 against --color-line-2 (#e5e5e5), the band-caption
+     background on #changes — the one light surface it failed on. #656565 is the
+     smallest step that clears 4.5:1 there (4.63:1) with margin, and it stays
+     well clear elsewhere (5.02:1 on --color-line, 5.83:1 on a card).
+     Consequence, stated plainly: light --color-muted is #666666, so dim is now
+     one 8-bit step DARKER than muted rather than one step lighter. Nothing in
+     light theme can be both quieter than #666666 and pass 4.5:1 on #e5e5e5, so
+     the alternative was leaving small text below AA. The inversion is ΔL* 0.4 —
+     below the perceptual threshold, unlike the failure it replaces.
+
+     --color-tick was #999999: 2.85:1 on a card at 11px, the worst reading in the
+     whole palette and worse than the finding this change came from. Chart axis
+     labels are ordinary 11px text, not decoration, so they get the same value as
+     dim — which is what the dark block has always done. */
+  --color-dim: #656565;
   --color-grid: #e5e5e5;
-  --color-tick: #999999;
+  --color-tick: #656565;
   --color-accent: #0070f3;
   --color-purple: #7c3aed;
   --color-ok: #16a34a;
@@ -69,6 +100,39 @@
   --pill-ok-fg: #0757c9;
   --pill-neutral-bg: #f0f0f0;
   --pill-neutral-fg: #555555;
+}
+
+/* ---------- density tokens ----------
+   The file had colour tokens, one radius and one font, and no spacing token at
+   all, so spacing was hard-coded in the shared components and there was no knob
+   to turn. These three are that knob.
+
+   Comfortable is today's spacing to the pixel — 18px is Card's old `p-[18px]`
+   (ui.jsx), 0.75rem is CardGrid's old `gap-3`, 0.5rem is the DataTable cell's
+   old `py-2`. Measured before the swap on #overview and #assets at 1920: card
+   padding 18px on all four sides, grid row/column gap 12px, th/td padding-y 8px,
+   table row offsetHeight 38px. With no data-density attribute set those are all
+   unchanged, because these are the same numbers under a different name.
+
+   VERTICAL AND GAPS ONLY, and horizontal CELL padding is deliberately not on
+   this list. DataTable measures its column widths with a canvas and adds a
+   hard-coded CELL_PAD = 20 for the px-2.5 on both sides of a cell
+   (DataTable.jsx:100). A density that moved that padding would leave the
+   measurer computing widths for a table that no longer exists, which is exactly
+   the column overflow the whole fit system was built to make arithmetically
+   impossible. Card's own horizontal padding IS density-driven, which is safe
+   for the opposite reason: Card reads it live from getComputedStyle when it
+   reports its width (ui.jsx publish()), so nothing is hard-coded to go stale. */
+:root {
+  --sp-card-pad: 18px;
+  --sp-grid-gap: 0.75rem;
+  --sp-cell-y: 0.5rem;
+}
+
+html[data-density="compact"] {
+  --sp-card-pad: 12px;
+  --sp-grid-gap: 0.5rem;
+  --sp-cell-y: 0.25rem;
 }
 
 html { background: var(--color-bg); }

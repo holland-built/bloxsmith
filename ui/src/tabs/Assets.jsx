@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
+import { mergeStateKey, nextMergeState } from '../lib/assetColumns.js'
 import { Card, CardGrid, Empty, FeedUnavailable, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 
@@ -249,6 +250,20 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
   const total = typeof d?.total === 'number' ? d.total : null
   const hasMore = d?.has_more === true
 
+  // Provider and Vendor collapse into one column when they hold the same value
+  // on every row. The decision lives in assetColumns.js, not here, because it
+  // is not a property of this render: it is made once per search/type/sort
+  // state and held across that state's pages, and a page that shows the two
+  // differing loses the merge for good. See that file for why.
+  //
+  // The ref is written during render on purpose. Deriving it in an effect would
+  // paint the two-column header first and merge on the following frame — a
+  // visible header flicker on every page change. nextMergeState is idempotent
+  // for a repeated page, so a StrictMode double-invoke lands on the same answer.
+  const mergeRef = useRef(null)
+  mergeRef.current = nextMergeState(mergeRef.current, mergeStateKey({ q: searched, type, sort }), rows)
+  const merged = mergeRef.current.merged
+
   // keep: true on every column. DataTable auto-hides a column whose cells are
   // all empty, which is right for a one-shot panel and wrong for a paged one:
   // a page where nobody happens to have a vendor recorded would silently drop
@@ -257,8 +272,17 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
   const columns = [
     { key: 'name', label: 'Name', sortable: true, keep: true, grow: true, render: textCell },
     { key: 'type', label: 'Type', sortable: true, keep: true, badge: true },
-    { key: 'provider', label: 'Provider', sortable: true, keep: true, render: textCell },
-    { key: 'vendor', label: 'Vendor', sortable: true, keep: true, render: textCell },
+    // The merged column keeps the `provider` key. Both keys are server-side
+    // sortable (assets.go assetSortDims whitelists provider and vendor alike),
+    // so this is not a capability limit — it is that a merged column must sort
+    // by one of the two, and picking `provider` keeps the sort key stable when
+    // a later page unmerges the column back into two.
+    ...(merged
+      ? [{ key: 'provider', label: 'Provider / Vendor', sortable: true, keep: true, render: textCell }]
+      : [
+          { key: 'provider', label: 'Provider', sortable: true, keep: true, render: textCell },
+          { key: 'vendor', label: 'Vendor', sortable: true, keep: true, render: textCell },
+        ]),
     {
       key: 'last_seen',
       label: 'Last seen',
@@ -285,6 +309,10 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
   return (
     <Card
       span={6}
+      // The one card in the app that opts out of content-driven width: this is
+      // the page's primary table, not a dashboard panel, so it takes the full
+      // six tracks it declares rather than shrinking to its columns.
+      fit={false}
       title="Assets"
       right={
         rows.length > 0 && (

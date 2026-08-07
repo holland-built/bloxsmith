@@ -20,10 +20,17 @@ function fulfillJson(route: import('@playwright/test').Route, body: unknown) {
   return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
+// `exact: true`, because a bare `name: 'Ask'` is a SUBSTRING match and the nav
+// now carries an "Ask" group button too. The ambiguity was fixed on the app
+// side first — the five nav buttons name themselves "<Group> section", so no
+// two controls answer to the same accessible name any more (see
+// tests/nav-groups.spec.ts). Exact matching is what pins the remaining one:
+// this must click the button whose whole name is "Ask", i.e. the send button,
+// and fail loudly if a second control ever takes that exact name again.
 async function askSomething(page: import('@playwright/test').Page) {
   await page.goto('/#ai');
   await page.getByPlaceholder('Ask about your network…').fill('Which hosts are offline?');
-  await page.getByRole('button', { name: 'Ask' }).click();
+  await page.getByRole('button', { name: 'Ask', exact: true }).click();
 }
 
 test.describe('AI token-budget line — honesty rules', () => {

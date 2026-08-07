@@ -78,14 +78,20 @@ export default function Overview() {
           some estate-wide counts could not be fetched this cycle — figures below marked as provisional
         </div>
       )}
-      <CardGrid>
-        <DnsHero dns={dns} />
-        <KpiStack subnets={subnets} leases={leases} totals={totals} leasesStatus={sliceStatus('leases')} subnetsStatus={sliceStatus('subnets')} />
-        <TopUtilization subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
-        <SubnetHeatmap subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
-        <HostStatus hosts={hosts} totals={totals} hostsStatus={sliceStatus('hosts')} />
-        <SubnetTable subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
-        <LicenseInventory licenses={licenses} />
+      {/* panelId sits on the wrapper component, not only on the Card inside
+          it, because CardGrid reads it off its own direct children to work out
+          the saved order. Each component forwards it to its Card, which is
+          what registers the saved span. Nothing here changes what renders
+          until a layout has actually been saved for this tab: with no saved
+          view the GET 404s, no order is applied and no span is overridden. */}
+      <CardGrid layoutKey="overview">
+        <DnsHero panelId="dns-hero" dns={dns} />
+        <KpiStack panelId="kpi-stack" subnets={subnets} leases={leases} totals={totals} leasesStatus={sliceStatus('leases')} subnetsStatus={sliceStatus('subnets')} />
+        <TopUtilization panelId="top-consumers" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
+        <SubnetHeatmap panelId="subnet-heatmap" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
+        <HostStatus panelId="host-status" hosts={hosts} totals={totals} hostsStatus={sliceStatus('hosts')} />
+        <SubnetTable panelId="subnet-table" subnets={subnets} totals={totals} subnetsStatus={sliceStatus('subnets')} />
+        <LicenseInventory panelId="license-inventory" licenses={licenses} />
       </CardGrid>
     </div>
   )
@@ -104,7 +110,7 @@ function formatRemaining(days) {
   return `~${Math.round(abs / 365.25)}y${sign ? ' ' + sign : ''}`
 }
 
-function LicenseInventory({ licenses }) {
+function LicenseInventory({ licenses, panelId }) {
   const { COLORS } = useChartTheme()
   const rows = licenses.data?.licenses ?? []
   const unavailable = !!licenses.error || licenses.data?.status === 'error'
@@ -181,6 +187,7 @@ function LicenseInventory({ licenses }) {
 
   return (
     <Card
+      panelId={panelId}
       // span 6, not 4: this panel now carries six columns (name, sku, state,
       // expiry, time left, quantity). At span 4 the added column pushed the
       // total past the card width, so the auto-sizer shrank headers until
@@ -211,7 +218,7 @@ function LicenseInventory({ licenses }) {
 
 // ---------- hero ----------
 
-function DnsHero({ dns }) {
+function DnsHero({ dns, panelId }) {
   const { COLORS, TT } = useChartTheme()
   const theme = useThemeColors()
   const rows = dns.data?.rows ?? []
@@ -229,6 +236,7 @@ function DnsHero({ dns }) {
 
   return (
     <Card
+      panelId={panelId}
       span={4}
       title={<span role="button" tabIndex={0} onClick={() => { location.hash = 'dns' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'dns' } }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS Query Rate — 24h</span>}
       right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
@@ -272,7 +280,7 @@ function DnsHero({ dns }) {
 
 // ---------- kpi stack ----------
 
-function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus }) {
+function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus, panelId }) {
   const { COLORS } = useChartTheme()
   const leasesDown = leasesStatus === 'error'
   const subnetsDown = subnetsStatus === 'error'
@@ -307,7 +315,7 @@ function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus }) {
   ]
 
   return (
-    <Card span={2} className="flex flex-col justify-between">
+    <Card panelId={panelId} span={2} className="flex flex-col justify-between">
       {cells.map((c, i) => {
         const unavailable = c.status === 'error'
         return (
@@ -342,7 +350,7 @@ function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus }) {
 
 // ---------- top utilization ----------
 
-function TopUtilization({ subnets, totals = {}, subnetsStatus }) {
+function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
   const { COLORS, TT } = useChartTheme()
   const theme = useThemeColors()
   // Rank by addresses USED, not util% — util ranking is a wall of 100% /32 infra links
@@ -361,7 +369,7 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus }) {
   const unmeasuredLabel = unmeasured > 0 ? ` · ${unmeasured.toLocaleString()} unmeasured` : ''
 
   return (
-    <Card span={2} title="Top Consumers" right={<span className="text-[11px] text-muted">addresses used · {estateLabel}{unmeasuredLabel}</span>}>
+    <Card panelId={panelId} span={2} title="Top Consumers" right={<span className="text-[11px] text-muted">addresses used · {estateLabel}{unmeasuredLabel}</span>}>
       {top.length === 0 ? (
         subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnets feed unavailable" />
@@ -404,7 +412,7 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus }) {
 
 // ---------- subnet heatmap ----------
 
-function SubnetHeatmap({ subnets, totals = {}, subnetsStatus }) {
+function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
   const { COLORS } = useChartTheme()
   // Worst N only — a cell per subnet at 5k subnets = sub-pixel rects (invisible). Cap + say so.
   const CAP = 288 // 24 x 12
@@ -429,7 +437,7 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus }) {
   const unmeasuredLabel = unmeasured > 0 ? ` · ${unmeasured.toLocaleString()} util unknown` : ''
 
   return (
-    <Card span={2} title="Subnet Heatmap" right={<span className="text-[11px] text-muted">{heatmapLabel}{unmeasuredLabel}</span>}>
+    <Card panelId={panelId} span={2} title="Subnet Heatmap" right={<span className="text-[11px] text-muted">{heatmapLabel}{unmeasuredLabel}</span>}>
       {cells.length === 0 ? (
         subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnets feed unavailable" />
@@ -502,7 +510,7 @@ function statusBucket(s) {
 
 const BUCKET_LABEL = { active: 'Active', degraded: 'Degraded', offline: 'Offline', unknown: 'Unknown', other: 'Other' }
 
-function HostStatus({ hosts, totals = {}, hostsStatus }) {
+function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
   const { COLORS, TT } = useChartTheme()
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Unknown: 0, Other: 0 }
   for (const h of hosts) buckets[BUCKET_LABEL[statusBucket(h.status)]]++
@@ -521,7 +529,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus }) {
     .map(([name, value]) => ({ name, value, color: colorMap[name] }))
 
   return (
-    <Card span={2} title="Host Status">
+    <Card panelId={panelId} span={2} title="Host Status">
       {total === 0 ? (
         hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty />
       ) : (
@@ -580,7 +588,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus }) {
 
 // ---------- table ----------
 
-function SubnetTable({ subnets, totals = {}, subnetsStatus }) {
+function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId }) {
   const [filter, setFilter] = useState('')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
@@ -705,6 +713,7 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus }) {
 
   return (
     <Card
+      panelId={panelId}
       span={6}
       title="Top Subnets by Utilization"
       note="excl. /29–/32 infra links"

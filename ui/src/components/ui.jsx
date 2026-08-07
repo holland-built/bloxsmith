@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import {
-  AreaChart, Area, BarChart, Bar, Cell, PieChart, Pie,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts'
+import { Children, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useThemeColors } from '../lib/theme.jsx'
+import { shouldHidePanel, showAnyway } from '../lib/services.js'
+import {
+  insertionIndex, loadLayout, moveItem, resolveSpan, saveLayout,
+  shiftItem, sortByOrder, spanFromWidth, stepSpan, unseenPanelIds, widthAnnouncement,
+} from '../lib/layout.js'
 
 // Static COLORS as CSS var() strings: fine for inline HTML styles (auto-flip with
 // theme), NOT for Recharts SVG props/gradients — chart code uses useChartTheme()
@@ -81,13 +82,63 @@ const GridFitContext = createContext(null)
 // the grid ITEM is not always the Card element (Network.jsx's DHCP Leases card
 // is the live example). Walking the grid's own children is the only way to
 // address the real grid items in every case.
-function applyLayout(grid, items) {
+//
+// It is also the SINGLE write site for el.style.gridColumn, which is why the
+// saved-layout span override is resolved here rather than written by the Card
+// itself. Two writers of one property re-applying on their own schedules is a
+// race, and the fit system's ResizeObserver would win it about half the time;
+// resolveSpan (lib/layout.js) collapses both into one decision — user span >
+// measured need > declared span — taken once per element per frame.
+//
+// readGeometry is that same read, factored out because item 8's drag and
+// resize convert pointer pixels against exactly these numbers. Two independent
+// readings of the track width would be a silent divergence waiting to happen:
+// the resize would snap to one grid and applyLayout would render against
+// another, and the disagreement would only show up as an off-by-one span.
+//
+// IMPLICIT COLUMNS ARE NOT TRACKS. getComputedStyle serialises the implicit
+// columns alongside the declared ones, and an implicit column is exactly what
+// a too-wide card creates — so tracks.length lets one over-wide card raise the
+// ceiling that is supposed to bring it back down, and the wrong span becomes a
+// fixpoint. Measured on #overview after dragging at 1920 and narrowing to 390:
+// gridTemplateColumns read "159px 159px 0px" on a grid-cols-2 grid, so
+// trackCount read 3, so the card's span 3 clamped to 3 and survived forever.
+//
+// The grid's own content box is the honest answer, because it does not move
+// when an implicit column appears: the declared 1fr tracks simply shrink to
+// pay for the extra gap. How many track-plus-gap units fit across clientWidth
+// is therefore N whatever the card is doing — algebraically exact when the
+// grid is healthy (N*(W+g)/(W+g)), and 2.07 rather than 3 in the case above.
+// The epsilon is against float noise in a sub-pixel track width, not against
+// the implicit column, which is never within 0.001 of the next integer.
+function readGeometry(grid) {
   const gs = getComputedStyle(grid)
   const tracks = gs.gridTemplateColumns.split(' ').filter(Boolean)
-  const trackCount = tracks.length
   const track = parseFloat(tracks[0])
+  if (!tracks.length || !(track > 0)) return null
   const gap = parseFloat(gs.columnGap) || 0
-  if (!trackCount || !(track > 0)) return
+  const fitting = Math.floor((grid.clientWidth + gap) / (track + gap) + 0.001)
+  return { track, gap, trackCount: Math.max(1, Math.min(tracks.length, fitting)) }
+}
+
+// The grid ITEMS that carry a panel identity, in DOM order — which, with no
+// CSS `order` anywhere in this file, is also visual order. Walks grid.children
+// rather than querying for [data-panel-id] directly because a couple of
+// callers wrap their Card in a plain div, and the drag has to move the real
+// grid item, not the Card inside it.
+function panelItems(grid) {
+  return Array.from(grid.children)
+    .map((el) => ({
+      el,
+      id: el.getAttribute('data-panel-id') || el.querySelector('[data-panel-id]')?.getAttribute('data-panel-id') || null,
+    }))
+    .filter((entry) => entry.id)
+}
+
+function applyLayout(grid, items, overrides) {
+  const geo = readGeometry(grid)
+  if (!geo) return
+  const { track, gap, trackCount } = geo
 
   // Width of a span-s item: s tracks plus the (s-1) gaps it swallows.
   const widthOf = (s) => s * track + (s - 1) * gap
@@ -117,29 +168,140 @@ function applyLayout(grid, items) {
   // On-Prem Hosts their wide empty middles straight back.
   for (const el of Array.from(grid.children)) {
     const entry = items.get(el)
-    if (!entry || entry.need == null) continue
-    const span = spanFor(entry.need)
+    const measuredSpan = entry && entry.need != null ? spanFor(entry.need) : null
+    // trackCount is read live above, so a saved span 6 clamps to 2 on the base
+    // grid and back to 6 at xl — the ResizeObserver below re-runs this across
+    // every breakpoint change. The STORED span is never touched by the clamp.
+    const { span } = resolveSpan({ userSpan: overrides.get(el) ?? null, measuredSpan, trackCount })
+    // null span = "leave the declared SPAN_CLASS alone", the untouched path for
+    // every panel that neither measures nor carries a saved override.
+    if (span == null) continue
     const next = `span ${span} / span ${span}`
     if (el.style.gridColumn !== next) el.style.gridColumn = next
   }
 }
 
-export function CardGrid({ className = '', children }) {
+// `layoutKey` opts a grid into server-side layout persistence: it names the
+// saved view (`__layout_<layoutKey>`) looked up on mount. Everything about the
+// feature is behind that one prop — a CardGrid without it issues no request,
+// holds no layout state, sorts nothing and registers no override, so every tab
+// that has not been wired renders exactly as it did before this existed. A tab
+// that has never had a layout saved lands in the same place, which is the
+// common case and the one that has to be pixel-identical: measured at 1920 and
+// 390 with the feature wired vs. removed, every card's left/top/width and
+// computed grid-column were identical.
+export function CardGrid({ className = '', layoutKey, children }) {
   const ref = useRef(null)
   const itemsRef = useRef(new Map())
+  const overridesRef = useRef(new Map())
   const rafRef = useRef(null)
+  const liveRef = useRef(null)
+  const [layout, setLayout] = useState(null)
+  // Which panel is in keyboard move mode, and the order+spans it had when it
+  // entered (what Escape restores).
+  //
+  // This lives in the GRID, not in the Card that owns the handle, and that is
+  // structural: an arrow press rewrites `layout`, which re-sorts the children,
+  // and a Card holding its own move-mode state could be re-rendered out from
+  // under the gesture. Keeping it here also means one place knows which handle
+  // has to keep focus.
+  const [moveId, setMoveId] = useState(null)
+  const preMoveRef = useRef(null)
 
   const schedule = useCallback(() => {
     if (rafRef.current) return
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null
-      if (ref.current) applyLayout(ref.current, itemsRef.current)
+      if (ref.current) applyLayout(ref.current, itemsRef.current, overridesRef.current)
     })
   }, [])
+
+  useEffect(() => {
+    if (!layoutKey) return undefined
+    let live = true
+    // loadLayout never rejects: a 404, a network failure and a record that
+    // fails the strict payload check all resolve to null, i.e. "render as if
+    // nothing was ever saved".
+    loadLayout(layoutKey).then((loaded) => {
+      if (live && loaded) setLayout(loaded)
+    })
+    return () => {
+      live = false
+    }
+  }, [layoutKey])
 
   const ctx = useMemo(
     () => ({
       gridRef: ref,
+      // The one switch every item-8 affordance hangs off. A grid with no
+      // layoutKey hands its Cards `managed: false`, so no handle, no resize
+      // hotspot and no pointer listener is created at all — not hidden, not
+      // disabled, not rendered.
+      managed: !!layoutKey,
+      // Read by Card to find its own saved span. undefined when no layout is
+      // loaded, which is what makes every Card's override path a no-op.
+      spans: layout?.spans,
+      // Announcements are written straight to the DOM rather than held in
+      // state: "Moved to position 3 of 7" must not re-render the grid it is
+      // describing, and a render during a gesture is exactly what re-enters
+      // the measurement loops this feature has to stay out of.
+      announce(text) {
+        if (liveRef.current) liveRef.current.textContent = text
+      },
+      geometry() {
+        return ref.current ? readGeometry(ref.current) : null
+      },
+      // The live truth of what is on screen, read from the DOM rather than
+      // from `layout`. It has to be the DOM: a saved order may omit panels
+      // (they render at the end) and may name panels that no longer exist, so
+      // only the rendered children answer "what order is this actually in".
+      // That also makes "DOM order matches visual order after a drop" true by
+      // construction rather than by assertion.
+      snapshot() {
+        const grid = ref.current
+        return {
+          order: grid ? panelItems(grid).map((entry) => entry.id) : [],
+          spans: { ...(layout?.spans ?? {}) },
+        }
+      },
+      // The single commit path. Pointer drop, pointer resize and keyboard
+      // move mode all land here, so all three are validated by the same
+      // schema — saveLayout throws on anything validateSave rejects, before
+      // it reaches the network. `save: false` is the keyboard preview: the
+      // layout moves on screen but nothing is written until Enter.
+      apply(next, save) {
+        setLayout(next)
+        if (save && layoutKey) {
+          saveLayout(layoutKey, next).catch((err) => {
+            console.error('layout save failed', err)
+            if (liveRef.current) liveRef.current.textContent = 'Layout could not be saved'
+          })
+        }
+      },
+      // ---- keyboard move mode ----
+      //
+      // The pointer and the keyboard share everything below the decision: both
+      // end at apply(), so both are validated by the same schema on the way to
+      // the server. The only thing move mode adds is a preview state — arrows
+      // apply without saving, and Enter is what writes.
+      moveId,
+      beginMove(id, pre) {
+        preMoveRef.current = pre
+        setMoveId(id)
+      },
+      endMove(commit, current) {
+        const pre = preMoveRef.current
+        preMoveRef.current = null
+        setMoveId(null)
+        if (commit) {
+          this.apply(current, true)
+        } else if (pre) {
+          // Restored locally and NOT saved: nothing was written during move
+          // mode, so the server still holds the pre-move state and re-POSTing
+          // it would only be a chance to fail.
+          setLayout(pre)
+        }
+      },
       set(itemEl, entry) {
         const prev = itemsRef.current.get(itemEl)
         if (prev && prev.need === entry.need && prev.declared === entry.declared) return
@@ -149,9 +311,111 @@ export function CardGrid({ className = '', children }) {
       remove(itemEl) {
         if (itemsRef.current.delete(itemEl)) schedule()
       },
+      setOverride(itemEl, span) {
+        if (overridesRef.current.get(itemEl) === span) return
+        overridesRef.current.set(itemEl, span)
+        schedule()
+      },
+      clearOverride(itemEl) {
+        // Clearing the inline value as well as the map entry: applyLayout
+        // skips an element it has nothing to say about, so without this an
+        // un-overridden panel would keep the last span the override wrote.
+        if (overridesRef.current.delete(itemEl)) {
+          itemEl.style.gridColumn = ''
+          schedule()
+        }
+      },
     }),
-    [schedule],
+    [schedule, layout, layoutKey, moveId],
   )
+
+  // The saved order is applied by rearranging the REAL children, never CSS
+  // `order` — see sortByOrder's comment for why DOM order is the thing that
+  // has to move.
+  //
+  // A grid with NO layoutKey passes `children` straight through: no
+  // Children.toArray, so no re-keying and no remount on a tab that has not
+  // been wired. A grid WITH one is toArray'd from the first render, even
+  // before a layout has loaded, and that is deliberate rather than tidy: the
+  // two shapes carry different keys, so switching between them mid-session
+  // remounts every panel in the tab. That remount lands exactly on the first
+  // arrow press of a keyboard move — destroying the focused handle in the
+  // middle of the gesture that needs it. Keying the same way from the start
+  // removes the transition instead of trying to survive it.
+  const ordered = useMemo(() => {
+    if (!layoutKey) return children
+    const arr = Children.toArray(children)
+    const order = layout?.order
+    if (!order || order.length === 0) return arr
+    return sortByOrder(arr, order, (child) => child?.props?.panelId ?? null)
+  }, [children, layout, layoutKey])
+
+  // Focus stays on the handle throughout a keyboard move. React moves the real
+  // DOM nodes when the order changes, and a browser blurs an element that is
+  // detached and re-inserted, so this puts focus back on the handle after every
+  // render the gesture causes. It runs only while move mode is active.
+  //
+  // RECLAIMS ONLY THE FOCUS THE RE-SORT DROPPED. Written without the
+  // activeElement test below, this fired on EVERY render while moveId was set,
+  // including renders it had nothing to do with. Observed live on #overview:
+  // move mode was entered and abandoned, focus was parked in the "Filter
+  // subnets" input, and 35s later the /api/data poll's re-render pulled focus
+  // onto the dns-hero Move handle — after which one ArrowRight, typed at what
+  // the operator believed was a filter box, reordered the dashboard
+  // (dns-hero,kpi-stack,… -> kpi-stack,dns-hero,…).
+  //
+  // When React moves the focused handle's node the browser leaves
+  // document.activeElement at <body>, so <body> (or nothing) is the one state
+  // worth reclaiming from. Anything else is focus the operator has since
+  // placed on something real, and taking it is the bug. Card's own blur
+  // handler is the other half of this: it ends move mode when focus genuinely
+  // leaves, so this effect stops running at all.
+  useLayoutEffect(() => {
+    if (!moveId || !ref.current) return
+    const handle = ref.current.querySelector(`[data-panel-id="${CSS.escape(moveId)}"] [data-layout-handle]`)
+    if (!handle) return
+    const active = document.activeElement
+    if (active === handle) return
+    if (active && active !== document.body && active !== document.documentElement) return
+    handle.focus()
+  })
+
+  // ---- the HiddenPanels / layoutKey landmine, made loud ----
+  //
+  // snapshot() reads panel ids off the DOM, where a wrapped Card is visible;
+  // sortByOrder reads props.panelId off the React children, where the wrapper
+  // carries none and ranks last. A tab using both would save an order it
+  // cannot honour and push the whole wrapped run to the end on reload. Nothing
+  // in the repo does today — layoutKey is only on Overview, which uses no
+  // HiddenPanels — so this is a guard for whoever wires the second tab.
+  //
+  // console.error rather than a throw: a broken saved order must not take the
+  // tab down. NOT gated behind import.meta.env.DEV, because both the dev
+  // server (scripts/dev-serve.sh) and the e2e harness serve a PRODUCTION Vite
+  // build — a DEV-only warning would fire in no environment anyone runs.
+  // tests/tabs-smoke.spec.ts fails any tab that logs a console error, so this
+  // is caught by the existing suite the moment it becomes true.
+  const conflictRef = useRef('')
+  useEffect(() => {
+    if (!layoutKey || !ref.current) return
+    const unseen = unseenPanelIds(
+      panelItems(ref.current).map((entry) => entry.id),
+      Children.toArray(children).map((child) => child?.props?.panelId ?? null),
+    )
+    // Logged once per distinct set: this effect runs on every render, and a
+    // 30s poll repeating the same error forever helps nobody.
+    const key = unseen.join(',')
+    if (key === conflictRef.current) return
+    conflictRef.current = key
+    if (!unseen.length) return
+    console.error(
+      `CardGrid layoutKey="${layoutKey}": ${unseen.join(', ')} ` +
+        `${unseen.length === 1 ? 'is a grid item whose' : 'are grid items whose'} panelId this grid ` +
+        'cannot see on its own children — a HiddenPanels wrapper, or a plain div carrying the span ' +
+        'class. The saved order records these panels but cannot restore them, so they would jump to ' +
+        'the end on reload. Put panelId on the direct grid child, or drop layoutKey from this grid.',
+    )
+  })
 
   // The grid's own width changes at every breakpoint and on a window resize;
   // the track width that pixels are converted against changes with it.
@@ -165,9 +429,14 @@ export function CardGrid({ className = '', children }) {
 
   return (
     <GridFitContext.Provider value={ctx}>
-      <div ref={ref} data-card-grid="" className={`grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 ${className}`}>
-        {children}
+      <div ref={ref} data-card-grid="" className={`grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-[var(--sp-grid-gap)] ${className}`}>
+        {ordered}
       </div>
+      {/* One live region per managed grid, OUTSIDE the grid element so it is
+          never a grid item and can never take a track. Rendered only when
+          layoutKey is set, so an unmanaged tab's DOM is unchanged down to the
+          element count. */}
+      {layoutKey && <div ref={liveRef} data-layout-live="" aria-live="polite" aria-atomic="true" className="sr-only" />}
     </GridFitContext.Provider>
   )
 }
@@ -181,6 +450,26 @@ const SPAN_CLASS = {
   6: 'col-span-2 md:col-span-4 xl:col-span-6',
 }
 
+// ---------- item 8: the overlay layer ----------
+//
+// Every transient piece of drag chrome — the resize indicator, the drag ghost,
+// the insertion line — is created here, appended to document.body, positioned
+// with `position: fixed`, and removed when the pointer comes up. None of it is
+// React state and none of it is a descendant of a measured card.
+//
+// That is the structural reason a drag cannot re-enter the three measure ->
+// render feedback loops documented above and in DataTable.jsx: the real card
+// is never moved, never resized and never re-rendered while the pointer is
+// down. A fixed-position element also contributes nothing to any ancestor's
+// scrollWidth, so it cannot make a table look like it overflows.
+function overlayEl(attr, css) {
+  const el = document.createElement('div')
+  el.setAttribute(attr, '')
+  el.style.cssText = `position:fixed;z-index:60;pointer-events:none;${css}`
+  document.body.appendChild(el)
+  return el
+}
+
 // PanelFitContext is how a self-measuring body (DataTable) tells its Card how
 // much width its content actually needs. A body that does not measure simply
 // never calls it, and the Card keeps its declared span.
@@ -190,7 +479,21 @@ export function usePanelFit() {
   return useContext(PanelFitContext)
 }
 
-export function Card({ title, note, right, span = 2, className = '', innerRef, children }) {
+// `fit` opts a panel OUT of the content-driven width above, keeping its
+// declared span. The content-fit system is right for a dashboard panel, whose
+// job is to be as small as its contents allow; it is wrong for a full-page
+// primary table, whose job is to be as wide as the page. Measured on #assets at
+// 1920: the Assets table reported the natural width of its five columns and the
+// grid handed it 4 of 6 tracks (1244px) against the declared span={6} (1872px),
+// leaving 628px of the page empty beside the widest table in the app.
+// This is a per-card opt-out and not a change to applyLayout on purpose
+// — every other measuring panel must keep shrinking to its content.
+//
+// `panelId` is the stable identity a saved layout refers to. Explicit, never
+// derived from the title: a title is copy, it gets reworded, and a layout
+// keyed on it would silently detach from its panel the first time someone
+// edited a heading. A Card without one is invisible to the layout system.
+export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = true, className = '', innerRef, children }) {
   const spanClass = SPAN_CLASS[span] || SPAN_CLASS[6]
   const ref = useRef(null)
   const headRef = useRef(null)
@@ -248,6 +551,10 @@ export function Card({ title, note, right, span = 2, className = '', innerRef, c
   }, [])
 
   const publish = useCallback(() => {
+    // Two independent doors into applyLayout, so an opted-out card closes both:
+    // the body's fit.report (blocked by handing PanelFitContext null below) and
+    // this header-need path, which the layout effect calls on every render.
+    if (!fitEnabled) return
     const el = ref.current
     const item = gridItem()
     if (!el || !item || !grid) return
@@ -259,31 +566,75 @@ export function Card({ title, note, right, span = 2, className = '', innerRef, c
     // the card's own border and padding, plus any wrapper chrome.
     const chrome = item.getBoundingClientRect().width - (el.clientWidth - padX)
     grid.set(item, { declared: span, need: Math.ceil(Math.max(bodyNeed, headNeed()) + chrome) })
-  }, [grid, gridItem, headNeed, span])
+  }, [fitEnabled, grid, gridItem, headNeed, span])
 
+  // null, not a no-op reporter: usePanelFit() returning null is the shape
+  // DataTable already tests for (`if (fit) fit.report(...)`), so an opted-out
+  // card costs the body nothing to measure and nothing to send.
   const fit = useMemo(
-    () => ({
-      report(px) {
-        if (bodyNeedRef.current === px) return
-        bodyNeedRef.current = px
-        publish()
-      },
-    }),
-    [publish],
+    () =>
+      fitEnabled
+        ? {
+            report(px) {
+              if (bodyNeedRef.current === px) return
+              bodyNeedRef.current = px
+              publish()
+            },
+          }
+        : null,
+    [fitEnabled, publish],
   )
 
   // Re-publish when the header content changes (a count in `right` growing a
   // digit changes what the header needs) and drop out of the grid's map on
   // unmount, so a removed panel never keeps holding a row open.
+  //
+  // THE EVICTION IS UNMOUNT-ONLY, and that is not tidiness. `grid` is the ctx
+  // memo whose deps include `layout`, so every drop, resize, arrow press and
+  // the initial loadLayout resolve hands this Card a NEW ctx object. An effect
+  // keyed on [grid, gridItem] therefore ran its cleanup — grid.remove(item) —
+  // on every layout change, emptying the fit map for every card at once, and
+  // the re-registration that would repair it never came: publish() runs in the
+  // LAYOUT phase, before this passive cleanup, and set() early-returns on an
+  // unchanged entry. The map then stayed empty until the next 30s data poll
+  // re-rendered the Cards.
+  //
+  // Measured on #overview at 1920 before this change: drag a panel, then
+  // narrow to 390 inside that window and the grid computed
+  // `159px 159px 0px` — a third, implicit column — with subnet-table and
+  // license-inventory still carrying the `span 3 / span 3` written for six
+  // tracks and rendering 342px against every other card's 330px. Escape out of
+  // move mode had the same root cause: clearOverride blanked gridColumn and
+  // applyLayout, with no measured span left to fall back on, skipped the card
+  // down to its declared SPAN_CLASS.
+  const evictRef = useRef(null)
   useLayoutEffect(() => {
     publish()
+    evictRef.current = grid ? { grid, item: gridItem() } : null
   })
-  useEffect(() => {
+  useEffect(
+    () => () => {
+      const evict = evictRef.current
+      if (evict?.item) evict.grid.remove(evict.item)
+    },
+    [],
+  )
+
+  // The saved span, registered against the real grid item (which is this Card
+  // unless a caller wrapped it). Registered rather than written: applyLayout
+  // owns the one write to gridColumn, so this only tells it what the user
+  // chose and lets it resolve the precedence. undefined savedSpan — no
+  // layoutKey, no panelId, or a layout that does not mention this panel —
+  // clears nothing that was never set.
+  const savedSpan = panelId && grid?.spans ? grid.spans[panelId] : undefined
+  useLayoutEffect(() => {
+    if (!grid?.setOverride) return undefined
     const item = gridItem()
-    return () => {
-      if (item && grid) grid.remove(item)
-    }
-  }, [grid, gridItem])
+    if (!item) return undefined
+    if (typeof savedSpan === 'number') grid.setOverride(item, savedSpan)
+    else grid.clearOverride(item)
+    return () => grid.clearOverride(item)
+  }, [grid, gridItem, savedSpan])
 
   const setRef = (node) => {
     ref.current = node
@@ -291,11 +642,345 @@ export function Card({ title, note, right, span = 2, className = '', innerRef, c
     else if (innerRef) innerRef.current = node
   }
 
+  // A panel is rearrangeable only inside a grid that persists layouts AND only
+  // if it has the stable identity a saved layout refers to. Both, or neither:
+  // a handle on a panel with no panelId would move something nothing could
+  // record.
+  const managed = !!(grid?.managed && panelId)
+
+  // ---- resize: the right-edge hotspot ----
+  //
+  // Live preview is an INDICATOR LINE, never live reflow. The card keeps the
+  // width it had until the pointer comes up; only then is a whole-integer span
+  // written, through the same save path everything else uses. Re-sizing the
+  // real card on every pointermove is the exact shape of the bug the fit
+  // system's comments above were written about.
+  const onResizeDown = useCallback(
+    (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      const item = gridItem()
+      const geo = grid?.geometry?.()
+      if (!item || !geo) return
+      // Stops the pointerdown from reaching a row handler or starting a text
+      // selection; deliberately NOT a document-level listener, so nothing
+      // about wheel, scroll or click anywhere else changes.
+      e.preventDefault()
+      e.stopPropagation()
+      const hotspot = e.currentTarget
+      try {
+        hotspot.setPointerCapture(e.pointerId)
+      } catch {
+        // Capture is an optimisation (it keeps events coming if the pointer
+        // leaves the element); the listeners below work without it.
+      }
+      const { track, gap, trackCount } = geo
+      let span = spanFromWidth(item.getBoundingClientRect().width, track, gap, trackCount)
+      const line = overlayEl('data-layout-resize-indicator', 'width:2px;border-radius:1px;background:var(--color-accent);')
+      const place = (rect, s) => {
+        line.style.left = `${rect.left + s * track + (s - 1) * gap - 1}px`
+        line.style.top = `${rect.top}px`
+        line.style.height = `${rect.height}px`
+      }
+      place(item.getBoundingClientRect(), span)
+
+      const ac = new AbortController()
+      const { signal } = ac
+      const done = (commit) => {
+        ac.abort()
+        line.remove()
+        if (!commit) return
+        const snap = grid.snapshot()
+        grid.apply({ order: snap.order, spans: { ...snap.spans, [panelId]: span } }, true)
+        // spanFromWidth already clamped to trackCount, so this can only take
+        // the plain branch — it goes through the same function as the keyboard
+        // so the two routes can never drift into announcing differently.
+        grid.announce(widthAnnouncement(span, trackCount))
+      }
+      // The rect is re-read each move rather than captured once: the page can
+      // still be scrolled under a captured pointer, and a stale top would put
+      // the indicator somewhere the card no longer is.
+      hotspot.addEventListener(
+        'pointermove',
+        (ev) => {
+          const rect = item.getBoundingClientRect()
+          span = spanFromWidth(ev.clientX - rect.left, track, gap, trackCount)
+          place(rect, span)
+        },
+        { signal },
+      )
+      hotspot.addEventListener('pointerup', () => done(true), { signal })
+      hotspot.addEventListener('pointercancel', () => done(false), { signal })
+    },
+    [grid, gridItem, panelId],
+  )
+
+  // A panel's `title` is not always a string — Overview's DNS hero passes a
+  // clickable <span> so the heading deep-links to the DNS tab. Interpolating
+  // that into a template literal produces the accessible name
+  // "Move [object Object]", which is why the handle is labelled by REFERENCE
+  // (a hidden "Move" plus the real <h2>) whenever a title exists, and only
+  // falls back to aria-label for the titleless case. Announcements read the
+  // heading's RENDERED text instead, which works for both shapes.
+  const titleId = panelId ? `panel-title-${panelId}` : undefined
+  const moveWordId = panelId ? `panel-move-${panelId}` : undefined
+  const labelText = useCallback(
+    () => (typeof title === 'string' ? title : titleRef.current?.textContent || panelId),
+    [panelId, title],
+  )
+
+  // ---- drag: a header handle, a ghost, and an insertion line ----
+  //
+  // What moves during the drag is a ghost appended to document.body. The real
+  // card is not translated, not re-parented and not re-rendered until the
+  // pointer comes up — the drop rewrites the saved `order`, which re-sorts the
+  // real children (sortByOrder), so DOM order and visual order can never
+  // disagree the way a CSS-`order` implementation would let them.
+  const onHandleDown = useCallback(
+    (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      const gridEl = grid?.gridRef?.current
+      const item = gridItem()
+      if (!gridEl || !item) return
+      const handleEl = e.currentTarget
+      const startX = e.clientX
+      const startY = e.clientY
+      let started = false
+      let ghost = null
+      let line = null
+      let items = []
+      let target = 0
+
+      const ac = new AbortController()
+      const { signal } = ac
+
+      // Nothing is created until the pointer has actually travelled. Below the
+      // threshold this is a click on a button, and a button that is also a
+      // keyboard control must stay clickable and focusable.
+      const begin = () => {
+        started = true
+        items = panelItems(gridEl)
+        const rect = item.getBoundingClientRect()
+        ghost = overlayEl(
+          'data-layout-ghost',
+          `width:${Math.round(rect.width)}px;height:${Math.round(Math.min(rect.height, 120))}px;` +
+            'border-radius:12px;border:2px solid var(--color-accent);background:var(--color-card);' +
+            'opacity:.9;padding:12px;font:600 13px system-ui,sans-serif;color:var(--color-txt);overflow:hidden;',
+        )
+        ghost.textContent = labelText()
+        line = overlayEl('data-layout-insert-line', 'width:3px;border-radius:2px;background:var(--color-accent);')
+        // Scoped to the gesture and reversed in finish(): without it a drag
+        // across the page selects every heading it crosses.
+        document.body.style.userSelect = 'none'
+      }
+
+      const placeLine = (idx) => {
+        if (!items.length) return
+        const last = idx >= items.length
+        const r = items[last ? items.length - 1 : idx].el.getBoundingClientRect()
+        line.style.left = `${(last ? r.right + 3 : r.left - 6)}px`
+        line.style.top = `${r.top}px`
+        line.style.height = `${r.height}px`
+      }
+
+      const finish = (commit) => {
+        ac.abort()
+        if (ghost) ghost.remove()
+        if (line) line.remove()
+        document.body.style.userSelect = ''
+        if (!commit || !started) return
+        const snap = grid.snapshot()
+        const next = moveItem(snap.order, snap.order.indexOf(panelId), target)
+        grid.apply({ order: next, spans: snap.spans }, true)
+        grid.announce(`Moved to position ${next.indexOf(panelId) + 1} of ${next.length}`)
+      }
+
+      handleEl.addEventListener(
+        'pointermove',
+        (ev) => {
+          if (!started) {
+            if (Math.abs(ev.clientX - startX) < 4 && Math.abs(ev.clientY - startY) < 4) return
+            begin()
+          }
+          ghost.style.left = `${ev.clientX + 10}px`
+          ghost.style.top = `${ev.clientY + 10}px`
+          // Re-read each move rather than caching at begin(): the real cards
+          // do not move during a drag, but the page underneath them can still
+          // be scrolled, and a stale rect would aim the drop at the wrong slot.
+          target = insertionIndex(
+            items.map((entry) => entry.el.getBoundingClientRect()),
+            ev.clientX,
+            ev.clientY,
+          )
+          placeLine(target)
+        },
+        { signal },
+      )
+      handleEl.addEventListener('pointerup', () => finish(true), { signal })
+      handleEl.addEventListener('pointercancel', () => finish(false), { signal })
+      try {
+        handleEl.setPointerCapture(e.pointerId)
+      } catch {
+        // Best-effort, as with resize: the listeners above work without it.
+      }
+    },
+    [grid, gridItem, labelText, panelId],
+  )
+
+  // ---- keyboard: move mode ----
+  //
+  // The keyboard does everything the pointer does, not merely cancel: Left and
+  // Right move the card one position, Up and Down change its width by one
+  // column, Enter saves, Escape puts back both the order AND the span. A
+  // focusable handle with only an Escape key is not accessible reordering, it
+  // is an accessible way to give up.
+  const moveActive = managed && grid.moveId === panelId
+
+  // Move mode has to end when focus genuinely leaves the handle, and it is the
+  // word GENUINELY that makes this awkward: an arrow press re-sorts the real
+  // DOM children, React moves the focused handle's node, and the browser
+  // blurs it. That blur is the component's own re-render, not the operator
+  // leaving, and CardGrid's layout effect puts focus straight back in the same
+  // commit.
+  //
+  // So the decision is deferred by one task. A re-sort blur has been undone by
+  // the time this runs (activeElement is the handle again); a real one has
+  // not. Measured before this existed: entering move mode, clicking into the
+  // "Filter subnets" input and waiting one 30s poll left aria-pressed="true"
+  // the whole time, and the next ArrowRight reordered the tab.
+  //
+  // Cancel rather than commit, because nothing was written: arrow presses
+  // apply with save:false and only Enter POSTs, so restoring the pre-move
+  // state is the only outcome that leaves the screen and the server agreeing.
+  const handleRef = useRef(null)
+  const moveActiveRef = useRef(false)
+  useLayoutEffect(() => {
+    moveActiveRef.current = moveActive
+  }, [moveActive])
+
+  const onHandleBlur = useCallback(() => {
+    if (!moveActiveRef.current) return
+    setTimeout(() => {
+      // Read through the ref, not the closure: Enter and Escape can have ended
+      // move mode between the blur and this callback, and re-cancelling would
+      // announce a cancellation that did not happen.
+      if (!moveActiveRef.current) return
+      if (document.activeElement === handleRef.current) return
+      grid.endMove(false)
+      grid.announce(`Move cancelled. ${labelText()} is back where it started.`)
+    }, 0)
+  }, [grid, labelText])
+
+  // The span this card is rendering right now: the saved override if it has
+  // one, otherwise whatever applyLayout or the declared SPAN_CLASS put on the
+  // element. Read from the DOM rather than assumed, so the first Arrow Up on a
+  // measured table panel steps up from the width the operator can SEE, not
+  // from the span the JSX declared.
+  const liveSpan = useCallback(() => {
+    if (typeof savedSpan === 'number') return savedSpan
+    const item = gridItem()
+    if (!item) return span
+    const match = /span (\d+)/.exec(item.style.gridColumn || getComputedStyle(item).gridColumnEnd || '')
+    return match ? Number(match[1]) : span
+  }, [gridItem, savedSpan, span])
+
+  const onHandleKey = useCallback(
+    (e) => {
+      if (!managed) return
+      const label = labelText()
+
+      if (!moveActive) {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+          // preventDefault on Space is not cosmetic: without it the browser
+          // scrolls the page AND synthesises a click on this button.
+          e.preventDefault()
+          const snap = grid.snapshot()
+          grid.beginMove(panelId, snap)
+          grid.announce(
+            `Moving ${label}. Position ${snap.order.indexOf(panelId) + 1} of ${snap.order.length}. ` +
+              'Left and right arrows to move, up and down to change width, Enter to save, Escape to cancel.',
+          )
+        }
+        return
+      }
+
+      const snap = grid.snapshot()
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault()
+        const next = shiftItem(snap.order, panelId, e.key === 'ArrowLeft' ? -1 : 1)
+        // A no-op at either end returns the same array, so the position is
+        // re-announced rather than a move being claimed that did not happen.
+        grid.apply({ order: next, spans: snap.spans }, false)
+        grid.announce(`Moved to position ${next.indexOf(panelId) + 1} of ${next.length}`)
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        const next = stepSpan(liveSpan(), e.key === 'ArrowUp' ? 1 : -1)
+        grid.apply({ order: snap.order, spans: { ...snap.spans, [panelId]: next } }, false)
+        // The STORED span is `next`, unclamped on purpose (stepSpan's comment);
+        // what gets rendered is that clamped to the tracks this breakpoint
+        // actually has, and the announcement is about what renders.
+        grid.announce(widthAnnouncement(next, grid.geometry()?.trackCount))
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        grid.endMove(true, snap)
+        grid.announce(`${label} placed at position ${snap.order.indexOf(panelId) + 1} of ${snap.order.length}. Layout saved.`)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        grid.endMove(false)
+        grid.announce(`Move cancelled. ${label} is back where it started.`)
+      }
+    },
+    [grid, labelText, liveSpan, managed, moveActive, panelId],
+  )
+
+  const handle = managed ? (
+    <button
+      type="button"
+      ref={handleRef}
+      data-layout-handle=""
+      // The panel's own words, so a screen reader announces which panel this
+      // moves — never a bare "drag handle" repeated seven times down a tab.
+      {...(title ? { 'aria-labelledby': `${moveWordId} ${titleId}` } : { 'aria-label': `Move ${panelId}` })}
+      aria-pressed={moveActive}
+      title="Drag to move, or press Enter to move with the arrow keys"
+      onPointerDown={onHandleDown}
+      onKeyDown={onHandleKey}
+      onBlur={onHandleBlur}
+      className={`shrink-0 cursor-grab touch-none select-none rounded-md border px-1.5 py-0.5 text-[11px] leading-none ${
+        moveActive ? 'border-accent text-accent' : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
+      }`}
+    >
+      {title && <span id={moveWordId} className="sr-only">Move</span>}
+      ⠿
+    </button>
+  ) : null
+
   return (
     <div
       ref={setRef}
-      className={`bg-card border border-card-border rounded-card p-[18px] ${spanClass} ${className}`}
+      data-panel-id={panelId}
+      // `relative` is the positioning context for the resize hotspot below.
+      // It is inert on its own — no offsets are set on the card itself — so it
+      // changes no geometry, and the hotspot is absolutely positioned, so it
+      // is out of flow and invisible to every measurement in this file.
+      data-move-mode={moveActive ? '' : undefined}
+      // The ring is drawn OUTSIDE the border box (ring, not an extra border),
+      // so entering move mode does not change the card's content width and
+      // cannot nudge a measured table by a pixel.
+      className={`relative bg-card border border-card-border rounded-card p-[var(--sp-card-pad)] ${moveActive ? 'ring-2 ring-accent' : ''} ${spanClass} ${className}`}
     >
+      {managed && (
+        // An 8px strip over the card's own right padding, not over its
+        // content: a DataTable's cells stop at the padding edge, so this
+        // cannot sit on top of a row and swallow its click. It carries no
+        // wheel, scroll or click handler of any kind.
+        <div
+          data-layout-resize=""
+          title="Drag to resize"
+          onPointerDown={onResizeDown}
+          className="absolute top-0 right-0 h-full w-2 cursor-col-resize touch-none rounded-r-card opacity-0 hover:opacity-100 focus-visible:opacity-100"
+          style={{ background: 'linear-gradient(to right, transparent, var(--color-accent))' }}
+        />
+      )}
       {title && (
         // min-w-0 on the text items and shrink-0 on `right`: without them these
         // are flex items at their default min-width:auto, so at a narrow card
@@ -318,13 +1003,120 @@ export function Card({ title, note, right, span = 2, className = '', innerRef, c
         // stays shrink-0 relative to the title — squeezing a live control to
         // keep a heading on one line is the wrong way round.
         <div ref={headRef} className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
-          <h2 ref={titleRef} className="text-[13.5px] font-semibold min-w-0 break-words">{title}</h2>
+          <h2 id={titleId} ref={titleRef} className="text-[13.5px] font-semibold min-w-0 break-words">{title}</h2>
           {note && <span ref={noteRef} className="text-[11px] text-dim min-w-0 break-words">{note}</span>}
           <span className="flex-1" />
-          {right && <span ref={rightRef} className="shrink-0 max-w-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">{right}</span>}
+          {/* The drag handle goes INSIDE the `right` slot, not beside it, and
+              that placement is the whole reason headNeed keeps working: the
+              floor under a panel's width is measured as title + gap +
+              rightRef.scrollWidth, so a handle rendered as a sibling of this
+              span would be a header element the measurement could not see —
+              and the header would overflow the card by exactly the handle's
+              width. Sitting inside rightRef, it is counted for free. */}
+          {(right || handle) && (
+            <span ref={rightRef} className="shrink-0 max-w-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
+              {right}
+              {handle}
+            </span>
+          )}
         </div>
       )}
+      {/* A managed panel with no title (Overview's KPI stack) has no header to
+          put the handle in. Absolutely positioned rather than given a header
+          of its own: adding a header row would change that card's layout, and
+          "zero visual change until you actually use the feature" is the rule
+          this whole item is built under. Out of flow, so no measurement in
+          this file can see it either. */}
+      {managed && !title && <span className="absolute top-2 right-3 z-10">{handle}</span>}
       <PanelFitContext.Provider value={fit}>{children}</PanelFitContext.Provider>
+    </div>
+  )
+}
+
+// ---------- panels for services this tenant does not own ----------
+//
+// Wraps a contiguous run of grid children and either renders them exactly as
+// they were, or replaces the whole run with one compact row. Nothing about a
+// shown panel changes: HiddenPanels renders a fragment, so its children stay
+// DIRECT children of the CardGrid and keep their own spans and content-fit
+// measurement. That is why this wraps at the Card boundary and never reaches
+// inside a panel's own state machine — the two tabs this is applied to are the
+// biggest in the repo, and their conditional rendering is untouched.
+//
+// The collapsed row is itself a grid child, but it never registers with the
+// grid's fit map, so applyLayout skips it and it keeps the full-width span
+// class below.
+//
+// The group's session key is derived from the service list, so two separate
+// runs that need the same service (DNS Query Rate and DNS Services sit either
+// side of a panel that is NOT hidden) share one "show anyway": revealing one
+// reveals both, which is what an operator who asked to see the DNS panels
+// meant.
+export function HiddenPanels({ services, label, state, children }) {
+  const groupKey = [...services].sort().join('+')
+  const n = Children.count(children)
+  const hidden = shouldHidePanel(state, services) && !state.revealed.has(groupKey) && n > 0
+
+  // WHERE FOCUS GOES WHEN THE RUN IS REVEALED. The button that had focus is
+  // unmounted by its own click — this component renders a fragment once the
+  // panels are shown — so without this, focus falls to <body> and a keyboard
+  // or screen-reader user is dropped back at the top of the document with no
+  // way to tell whether anything appeared.
+  //
+  // The slot is remembered as "whatever follows this row's previous sibling",
+  // not as a child index: `showAnyway` reveals every group sharing this key at
+  // once (DNS Query Rate and DNS Services sit either side of a panel that is
+  // NOT hidden), so an earlier group expanding from one row into several
+  // panels shifts every index after it. A sibling reference survives that.
+  const rowRef = useRef(null)
+  const focusSlotRef = useRef(null)
+  useLayoutEffect(() => {
+    const slot = focusSlotRef.current
+    focusSlotRef.current = null
+    if (!slot) return
+    const el = slot.prev ? slot.prev.nextElementSibling : slot.parent.firstElementChild
+    if (!el) return
+    // tabindex -1, so it is focusable by script and stays out of the tab order.
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
+    el.focus()
+  })
+
+  if (!hidden) return <>{children}</>
+
+  const reveal = () => {
+    const row = rowRef.current
+    const parent = row?.parentElement
+    if (parent) focusSlotRef.current = { parent, prev: row.previousElementSibling }
+    showAnyway(groupKey)
+  }
+
+  return (
+    <div
+      ref={rowRef}
+      data-testid="hidden-panels"
+      className="col-span-2 md:col-span-4 xl:col-span-6 flex flex-wrap items-center gap-2 rounded-card border border-dashed border-card-border px-3 py-2 text-[11px] text-muted"
+    >
+      <span>
+        {n} panel{n === 1 ? '' : 's'} hidden — no {label} service detected on this tenant
+      </span>
+      <button
+        type="button"
+        onClick={reveal}
+        // "show anyway" on its own is the same name on every group on the page
+        // and says nothing about what would appear — a screen reader reads the
+        // identical button two or three times down one tab. The accessible
+        // name STARTS with the visible words, so WCAG 2.5.3 Label in Name
+        // still holds and a voice-control user can still say "show anyway".
+        aria-label={`Show anyway: ${n} hidden ${label} panel${n === 1 ? '' : 's'}`}
+        // A collapsed disclosure, which is what this is. No aria-controls: the
+        // panels it reveals are UNMOUNTED while it is on screen, and once they
+        // exist this button is gone, so any id here would be a dangling
+        // reference. The focus move above is what stands in for it.
+        aria-expanded={false}
+        className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted cursor-pointer hover:text-field-txt"
+      >
+        show anyway
+      </button>
     </div>
   )
 }
