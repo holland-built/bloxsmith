@@ -271,6 +271,241 @@ func TestApplyPath_NeverServedFromCache(t *testing.T) {
 	}
 }
 
+// --- the forced check ------------------------------------------------------
+//
+// The cache above exists to protect a 60/hour shared allowance from the
+// BACKGROUND poll. It was also swallowing the operator's deliberate "check
+// now": observed live 2026-08-07 on v3.55.0 — v3.56.0 was published at 12:37
+// and /api/update/check still answered v3.55.0 at 12:40 with cached:true,
+// because the answer had been remembered at 12:21 and there was no way to ask
+// again. These tests pin the escape hatch and its own limiter.
+
+// TestCheckUpdate_ForcedCheckBypassesFreshCache is the regression test: a
+// forced check must reach GitHub even when the remembered entry is still well
+// inside its 30-minute window, while an unforced one still must not.
+func TestCheckUpdate_ForcedCheckBypassesFreshCache(t *testing.T) {
+	var hits atomic.Int32
+	tag := "v3.55.0"
+	withGithubStub(t, countingStub(&hits, func(w http.ResponseWriter, r *http.Request) {
+		okRelease(tag)(w, r)
+	}), "3.55.0")
+	advance := fakeClock(t, time.Date(2026, 8, 7, 12, 21, 47, 0, time.UTC))
+
+	if _, err := checkUpdate(); err != nil {
+		t.Fatalf("first check: %v", err)
+	}
+
+	// 12:37 — v3.56.0 ships. 12:40 — the operator looks.
+	advance(19 * time.Minute)
+	tag = "v3.56.0"
+
+	background, err := checkUpdate()
+	if err != nil {
+		t.Fatalf("background poll: %v", err)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("github requests after the background poll = %d, want 1 — the poll must still be served from memory", got)
+	}
+	if !background.Cached || background.Latest != "v3.55.0" {
+		t.Fatalf("background poll = %+v, want the remembered v3.55.0 with cached:true", background)
+	}
+
+	forced, err := checkUpdateForce(true)
+	if err != nil {
+		t.Fatalf("forced check: %v", err)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("github requests after the forced check = %d, want 2 — a deliberate check must ask GitHub, not the cache", got)
+	}
+	if forced.Cached {
+		t.Fatal("forced check reported Cached = true — it contacted GitHub, so it must say so")
+	}
+	if forced.Latest != "v3.56.0" {
+		t.Fatalf("forced Latest = %q, want the newly published v3.56.0", forced.Latest)
+	}
+	if !forced.Available {
+		t.Fatal("forced Available = false, want true — 3.56.0 is newer than the running 3.55.0")
+	}
+	if forced.CheckedAt != nowFn().Format(time.RFC3339) {
+		t.Fatalf("forced CheckedAt = %q, want now (%q)", forced.CheckedAt, nowFn().Format(time.RFC3339))
+	}
+}
+
+// TestCheckUpdate_ForcedResultReplacesTheCacheEntry: the fresh answer a click
+// paid for must become what the background poll sees next, otherwise the UI
+// flips back to the stale version on its next tick.
+func TestCheckUpdate_ForcedResultReplacesTheCacheEntry(t *testing.T) {
+	var hits atomic.Int32
+	tag := "v3.55.0"
+	withGithubStub(t, countingStub(&hits, func(w http.ResponseWriter, r *http.Request) {
+		okRelease(tag)(w, r)
+	}), "3.55.0")
+	advance := fakeClock(t, time.Date(2026, 8, 7, 12, 21, 47, 0, time.UTC))
+
+	if _, err := checkUpdate(); err != nil {
+		t.Fatalf("first check: %v", err)
+	}
+	advance(19 * time.Minute)
+	tag = "v3.56.0"
+	forced, err := checkUpdateForce(true)
+	if err != nil {
+		t.Fatalf("forced check: %v", err)
+	}
+
+	// The very next background poll reads the forced answer, not the old one,
+	// and does not spend a request doing it.
+	advance(time.Minute)
+	after, err := checkUpdate()
+	if err != nil {
+		t.Fatalf("poll after force: %v", err)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("github requests = %d, want 2 — the poll after a force must be served from the refreshed entry", got)
+	}
+	if !after.Cached {
+		t.Fatal("poll after force reported Cached = false — the forced result must have been stored")
+	}
+	if after.Latest != "v3.56.0" {
+		t.Fatalf("poll after force = %q, want the forced v3.56.0 — the stale entry survived", after.Latest)
+	}
+	if after.CheckedAt != forced.CheckedAt {
+		t.Fatalf("poll CheckedAt = %q, want the forced check's contact time %q", after.CheckedAt, forced.CheckedAt)
+	}
+}
+
+// TestCheckUpdate_ForcedChecksAreRateLimited: the escape hatch must not become
+// a hole in the 60/hour allowance. A mashed button is floored at
+// forcedCheckMinInterval, and the floor is short — reusing the 30-minute TTL
+// here would just recreate the bug this whole section fixes.
+func TestCheckUpdate_ForcedChecksAreRateLimited(t *testing.T) {
+	var hits atomic.Int32
+	withGithubStub(t, countingStub(&hits, okRelease("v3.56.0")), "3.55.0")
+	advance := fakeClock(t, time.Date(2026, 8, 7, 12, 40, 0, 0, time.UTC))
+
+	if _, err := checkUpdateForce(true); err != nil {
+		t.Fatalf("first forced check: %v", err)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("github requests = %d, want 1", got)
+	}
+
+	// Mashing: five more clicks inside the floor buy nothing.
+	for i := 0; i < 5; i++ {
+		advance(200 * time.Millisecond)
+		st, err := checkUpdateForce(true)
+		if err != nil {
+			t.Fatalf("mashed forced check %d: %v", i, err)
+		}
+		if !st.Cached {
+			t.Fatalf("mashed forced check %d reported Cached = false — a throttled force must admit it served the remembered answer", i)
+		}
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("github requests after mashing = %d, want 1 — the forced path is not rate limited", got)
+	}
+
+	// ...but the floor is seconds, not the 30-minute TTL: once it passes, a
+	// click works again.
+	advance(forcedCheckMinInterval)
+	if _, err := checkUpdateForce(true); err != nil {
+		t.Fatalf("forced check after the floor: %v", err)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("github requests after the floor = %d, want 2 — the floor must clear after %s", got, forcedCheckMinInterval)
+	}
+	if forcedCheckMinInterval >= updateCheckTTL {
+		t.Fatalf("forcedCheckMinInterval = %s, want far below the %s cache TTL — a long floor is the original bug",
+			forcedCheckMinInterval, updateCheckTTL)
+	}
+}
+
+// TestUpdateCheckHandler_ForceParamReachesGitHub wires the query parameter to
+// the behaviour above: without it the handler serves the remembered answer,
+// with it the handler asks.
+func TestUpdateCheckHandler_ForceParamReachesGitHub(t *testing.T) {
+	var hits atomic.Int32
+	withGithubStub(t, countingStub(&hits, okRelease("v3.56.0")), "3.55.0")
+
+	call := func(target string) updateStatus {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		updateCheckHandler(&config.Config{})(rec, httptest.NewRequest("GET", target, nil))
+		var st updateStatus
+		if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil {
+			t.Fatalf("unmarshal %s: %v", rec.Body.Bytes(), err)
+		}
+		return st
+	}
+
+	if st := call("/api/update/check"); st.Cached {
+		t.Fatal("setup: the first plain check should have been fresh")
+	}
+	if st := call("/api/update/check"); !st.Cached {
+		t.Fatal("the second plain check was not cached — the background poll must stay cheap")
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("github requests from the two plain checks = %d, want 1", got)
+	}
+
+	forced := call("/api/update/check?force=1")
+	if forced.Cached {
+		t.Fatalf("forced handler response = %+v, want cached:false", forced)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("github requests after ?force=1 = %d, want 2 — the query parameter is not wired through", got)
+	}
+	if forced.Latest != "v3.56.0" {
+		t.Fatalf("forced Latest = %q, want v3.56.0", forced.Latest)
+	}
+}
+
+// TestUpdateCheckHandler_DisabledRefusesForcedCheck: DISABLE_UPDATE_CHECK is an
+// off-switch, not a default. A force parameter must not talk its way past it.
+func TestUpdateCheckHandler_DisabledRefusesForcedCheck(t *testing.T) {
+	var hits atomic.Int32
+	withGithubStub(t, countingStub(&hits, okRelease("v3.56.0")), "3.55.0")
+
+	rec := httptest.NewRecorder()
+	updateCheckHandler(&config.Config{UpdateCheckDisabled: true})(
+		rec, httptest.NewRequest("GET", "/api/update/check?force=1", nil))
+
+	if got := hits.Load(); got != 0 {
+		t.Fatalf("github requests = %d, want 0 — a forced check must still be refused when the off-switch is on", got)
+	}
+	var st updateStatus
+	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil {
+		t.Fatalf("unmarshal %s: %v", rec.Body.Bytes(), err)
+	}
+	if !st.CheckDisabled {
+		t.Fatalf("body = %s, want checkDisabled:true", rec.Body.Bytes())
+	}
+	if st.Latest != "" || st.Available || st.CheckedAt != "" {
+		t.Fatalf("disabled+forced returned %+v — nothing was looked up, so nothing may be claimed", st)
+	}
+}
+
+// TestUpdateCheckHandler_ForceParamNeedsAnAffirmativeValue: only an explicit
+// yes forces. An absent, empty or "0" parameter is the background poll, and
+// must not spend a request out of the shared allowance.
+func TestUpdateCheckHandler_ForceParamNeedsAnAffirmativeValue(t *testing.T) {
+	var hits atomic.Int32
+	withGithubStub(t, countingStub(&hits, okRelease("v3.56.0")), "3.55.0")
+
+	for _, target := range []string{
+		"/api/update/check",
+		"/api/update/check?force=0",
+		"/api/update/check?force=false",
+		"/api/update/check?force=",
+	} {
+		rec := httptest.NewRecorder()
+		updateCheckHandler(&config.Config{})(rec, httptest.NewRequest("GET", target, nil))
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("github requests = %d, want 1 — only the first, uncached call may reach GitHub; %q must not force",
+			got, "force=0/false/empty")
+	}
+}
+
 // TestUpdateCheckHandler_DisabledNeverContactsGitHub: DISABLE_UPDATE_CHECK is
 // documented as opting out entirely (docs/DEPLOYMENT.md). Before 2026-08-01 it
 // was read into config and never consulted, so the check still fired.

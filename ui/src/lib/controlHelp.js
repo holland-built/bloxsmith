@@ -45,7 +45,7 @@ export const CONTROL_HELP = {
   },
   updates: {
     label: 'Update v…',
-    what: 'Only appears when a newer version exists; nothing is shown here when you are already up to date. Pressing it installs that version and reloads the page.',
+    what: 'Appears at the top of the screen only when a newer version exists, and nothing is shown there when you are already up to date. Pressing it installs that version and reloads the page.',
   },
   theme: {
     label: 'Sun · Monitor · Moon',

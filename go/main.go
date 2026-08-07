@@ -636,6 +636,13 @@ func (c llmCreds) LLM() (key, base, model string) {
 // looked up, which is why checkDisabled has to be in the response for the
 // caller to tell the two apart. The UI already guards on it
 // (UpdateButton.jsx:122) and renders nothing at all — not "up to date".
+//
+// ?force=1 marks the request as a DELIBERATE user action and skips the cached
+// answer (see checkUpdateForce). It is opt-in and affirmative-only, so the
+// background poll — which sends no parameter — keeps the cache it was built
+// for. The off-switch is still checked FIRST and above: force means "ask
+// GitHub now rather than remember", never "ask GitHub after the operator said
+// not to".
 func updateCheckHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -645,10 +652,21 @@ func updateCheckHandler(cfg *config.Config) http.HandlerFunc {
 			})
 			return
 		}
-		st, err := checkUpdate()
+		st, err := checkUpdateForce(truthyParam(r.URL.Query().Get("force")))
 		if err != nil {
 			log.Printf("update check: %v", err)
 		}
 		_ = json.NewEncoder(w).Encode(st)
 	}
+}
+
+// truthyParam reads an affirmative query-string flag. Absent, empty, "0" and
+// "false" all mean no — the default has to be the cheap path, because a typo
+// in a query string must not silently start spending GitHub's allowance.
+func truthyParam(v string) bool {
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }
