@@ -442,7 +442,12 @@ test('the AI tab lookup still renders inline and links to the full page', async 
   // disabled (it is disabled until this specific input has a value).
   const input = page.getByPlaceholder('domain, IP, or host…');
   await input.fill('172.16.128.1');
-  await page.getByRole('button', { name: 'Lookup' }).click();
+  // `exact: true` for the same reason the other five call sites in this suite
+  // already have it (failure-not-absence, failure-not-absence-2,
+  // dossier-empty-sources): an accessible name matches as a SUBSTRING by
+  // default, and this panel's ⓘ button is named "About: Threat lookup", which
+  // contains "Lookup". Exact is the stricter assertion, not a looser one.
+  await page.getByRole('button', { name: 'Lookup', exact: true }).click();
 
   // Page-scoped: the AI tab has exactly one of each of these, and walking up
   // from the input lands on whichever ancestor `.first()`/`.last()` happens to

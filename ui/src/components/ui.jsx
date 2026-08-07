@@ -1,5 +1,6 @@
 import { Children, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useThemeColors } from '../lib/theme.jsx'
+import { PANEL_HELP } from '../lib/panelHelp.js'
 import { shouldHidePanel, showAnyway } from '../lib/services.js'
 import {
   insertionIndex, loadLayout, moveItem, resolveSpan, saveLayout,
@@ -489,6 +490,52 @@ export function usePanelFit() {
 // This is a per-card opt-out and not a change to applyLayout on purpose
 // — every other measuring panel must keep shrinking to its content.
 //
+// The one sentence that explains reorder and resize, appended by Card to the
+// help of any panel that really is rearrangeable. It lives here rather than in
+// panelHelp.js because it is a fact about the LAYOUT SYSTEM, not about a
+// panel: which grids are managed can change, and 96 hand-copied sentences
+// would go stale the moment one did.
+const LAYOUT_HELP =
+  'You can move this panel: drag the ⠿ handle, or put the keyboard focus on it, ' +
+  'press Enter and use the arrow keys. Drag the panel’s right edge to make it wider ' +
+  'or narrower. Your arrangement saves on its own.'
+
+// ---- the runtime half of the help guarantee ----
+//
+// panelHelp.test.js reads the JSX and catches every LITERAL panelId. What it
+// cannot see is a computed one — `panelId={`dns-zone-${view}`}` produces an id
+// no static scan can enumerate, and a Card built by a file outside tabs/ and
+// components/ is not scanned at all. Those only exist at run time, so this is
+// the check that runs there.
+//
+// NOT gated behind import.meta.env.DEV, for the reason spelled out at the
+// HiddenPanels/layoutKey guard above: the dev server and the e2e harness both
+// serve a PRODUCTION Vite build, so a DEV-only warning would fire in no
+// environment anybody runs. tests/tabs-smoke.spec.ts fails any tab that logs a
+// console error, which is what turns this line into a test.
+//
+// Once per id, because a Card re-renders on every fit measurement and a
+// per-render error would bury the tab's real output in thousands of copies.
+const reportedHelpGaps = new Set()
+
+function reportMissingHelp(panelId, title) {
+  const key = panelId || ` no-panel-id:${typeof title === 'string' ? title : '(computed title)'}`
+  if (reportedHelpGaps.has(key)) return
+  reportedHelpGaps.add(key)
+  if (!panelId) {
+    console.error(
+      `[panel-help] a Card rendered with no panelId (title: ${
+        typeof title === 'string' ? `"${title}"` : 'not a plain string'
+      }). Without an id it has no help, and the layout system cannot see it.`,
+    )
+    return
+  }
+  console.error(
+    `[panel-help] panelId "${panelId}" has no entry in PANEL_HELP, so this panel's ⓘ ` +
+      'button does not render. Add an entry to ui/src/lib/panelHelp.js.',
+  )
+}
+
 // `panelId` is the stable identity a saved layout refers to. Explicit, never
 // derived from the title: a title is copy, it gets reworded, and a layout
 // keyed on it would silently detach from its panel the first time someone
@@ -954,6 +1001,101 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
     </button>
   ) : null
 
+  // ---- the ⓘ panel-help disclosure ----
+  //
+  // Tap to open, not hover, and not a `title=` tooltip — the same reasoning
+  // already written above TabIntro at the bottom of this file: hover does not
+  // exist on touch, so a tooltip is unreadable on exactly the devices a
+  // dashboard gets glanced at from. A native <button> also makes Enter, Space,
+  // focus and the expanded/collapsed announcement free.
+  //
+  // WHERE THE BUTTON GOES IS NOT A FREE CHOICE. It renders INSIDE the rightRef
+  // span alongside the drag handle, for the reason spelled out at that span:
+  // headNeed measures the width floor as title + gap + rightRef.scrollWidth,
+  // so a header control rendered as a SIBLING of that span is width the
+  // measurement cannot see, and the header overflows the card by exactly that
+  // control's width. Inside it, it is counted for free. Its own width is
+  // intrinsic — shrink-0, one glyph — so unlike the flex-1 spacer of failed
+  // attempt #1 it cannot grow with the panel and cannot re-enter the loop. It
+  // does raise every measured panel's width floor by its own width, which is
+  // the one real cost and what tests/table-sizing.spec.ts is re-run for.
+  //
+  // The BODY is a block BELOW the header and is invisible to both measurers:
+  // headNeed reads only the title canvas and rightRef, bodyNeed is whatever
+  // DataTable reported about its own table. The fit system is width-only, so
+  // the height this adds costs nothing.
+  //
+  // The CONTAINER is rendered even while collapsed, with `hidden`, so
+  // aria-controls always resolves. A reference to an element that does not
+  // exist is the shape HiddenPanels' comment below already rejects.
+  //
+  // Its CONTENTS are not. A closed disclosure holds no text, because text in
+  // the DOM that nobody can read is not free: with 83 entries, every tab was
+  // carrying a few thousand words of `display:none` prose, and anything that
+  // matches on document text rather than on what is painted matches it. That
+  // is not hypothetical — it broke eight existing Playwright specs at once
+  // (audit-verdict, dossier-page, exposure-availability, hidden-panels,
+  // per-tab-slices), each of which locates a panel by a phrase that the help
+  // copy happens to reuse: `text=DNS Zones` began matching dns-zone-kpis'
+  // invisible "How many DNS zones you hold…" before it reached the real <h2>.
+  // The app was correct and the panels rendered; the page simply contained
+  // words it was not showing. Find-in-page, copy-all, translation tools and
+  // text scrapers all read the same way a test locator does, so keeping the
+  // copy out of the document until it is asked for is the honest shape, and
+  // it kept all eight specs' assertions untouched.
+  const help = panelId ? PANEL_HELP[panelId] : null
+  // In an effect, not in the render body: React renders a component twice under
+  // StrictMode and again on every fit pass, and an error thrown from render
+  // ordering is harder to read than one attached to a mount.
+  useEffect(() => {
+    if (!help) reportMissingHelp(panelId, title)
+  }, [help, panelId, title])
+  const [helpOpen, setHelpOpen] = useState(false)
+  const helpId = panelId ? `panel-help-${panelId}` : undefined
+  const aboutWordId = panelId ? `panel-about-${panelId}` : undefined
+
+  const infoBtn = help ? (
+    <button
+      type="button"
+      data-panel-help-toggle=""
+      // Labelled by REFERENCE for the same reason as the handle above: a title
+      // can be a React node, and interpolating one into a template literal
+      // gives the accessible name "About [object Object]".
+      {...(title ? { 'aria-labelledby': `${aboutWordId} ${titleId}` } : { 'aria-label': `About ${panelId}` })}
+      aria-expanded={helpOpen}
+      aria-controls={helpId}
+      onClick={() => setHelpOpen((open) => !open)}
+      className={`shrink-0 cursor-pointer rounded-md border px-1.5 py-0.5 text-[11px] leading-none ${
+        helpOpen ? 'border-accent text-accent' : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
+      }`}
+    >
+      {title && <span id={aboutWordId} className="sr-only">About:</span>}
+      ⓘ
+    </button>
+  ) : null
+
+  const helpBody = help ? (
+    <div
+      id={helpId}
+      data-panel-help=""
+      hidden={!helpOpen}
+      className="mb-2 rounded-lg border border-line-2 bg-line px-2.5 py-2 text-[11px] leading-relaxed text-muted max-w-[80ch]"
+    >
+      {helpOpen && (
+        <>
+          <p>{help.what}</p>
+          {help.look && <p className="mt-1">{help.look}</p>}
+          {/* Generated, never written per panel: reorder and resize exist only
+              on a grid with a layoutKey, so a hand-written sentence would go
+              stale the moment a grid was wired or unwired. It is also the only
+              place the feature is stated at all — the resize hotspot is
+              opacity-0 until hover, i.e. invisible on touch. */}
+          {managed && <p className="mt-1">{LAYOUT_HELP}</p>}
+        </>
+      )}
+    </div>
+  ) : null
+
   return (
     <div
       ref={setRef}
@@ -1013,9 +1155,10 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
               span would be a header element the measurement could not see —
               and the header would overflow the card by exactly the handle's
               width. Sitting inside rightRef, it is counted for free. */}
-          {(right || handle) && (
+          {(right || infoBtn || handle) && (
             <span ref={rightRef} className="shrink-0 max-w-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
               {right}
+              {infoBtn}
               {handle}
             </span>
           )}
@@ -1027,7 +1170,15 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
           "zero visual change until you actually use the feature" is the rule
           this whole item is built under. Out of flow, so no measurement in
           this file can see it either. */}
-      {managed && !title && <span className="absolute top-2 right-3 z-10">{handle}</span>}
+      {/* Widened from `managed && !title` to cover the help button too: a
+          titleless panel with neither renders nothing, exactly as before. */}
+      {!title && (infoBtn || handle) && (
+        <span className="absolute top-2 right-3 z-10 flex items-center gap-1.5">
+          {infoBtn}
+          {handle}
+        </span>
+      )}
+      {helpBody}
       <PanelFitContext.Provider value={fit}>{children}</PanelFitContext.Provider>
     </div>
   )

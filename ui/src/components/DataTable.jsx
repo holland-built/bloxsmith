@@ -622,13 +622,13 @@ export function DataTable({
 
 // ---------- FeedCard (thin Card + gates + DataTable) ----------
 
-export function FeedCard({ span, title, note, feed, columns, limit, viewAllHref, count }) {
+export function FeedCard({ span, panelId, title, note, feed, columns, limit, viewAllHref, count }) {
   const rows = feed.data?.rows ?? []
   const bad = feed.error || feed.data?.status === 'error'
   const right = count && rows.length > 0 ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : undefined
 
   return (
-    <Card span={span} title={title} note={note} right={right}>
+    <Card span={span} panelId={panelId} title={title} note={note} right={right}>
       {feed.loading && !feed.data ? (
         <Skeleton h={160} />
       ) : bad ? (

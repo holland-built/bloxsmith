@@ -94,7 +94,7 @@ export default function Changes() {
         cannot show more than {ROW_CAP} events, and it holds no history from before the window.
       </p>
       <CardGrid>
-        <Card span={6} title="Notability" note="four questions asked of this window, each answered or explicitly not answered">
+        <Card panelId="changes-notability" span={6} title="Notability" note="four questions asked of this window, each answered or explicitly not answered">
           {state === 'loading' ? (
             <Skeleton h={120} />
           ) : state === 'unavailable' ? (
@@ -115,6 +115,7 @@ export default function Changes() {
         </Card>
 
         <Card
+          panelId="changes-changed-objects"
           span={6}
           title="Changed objects"
           note="grouped by what was touched, newest group first"

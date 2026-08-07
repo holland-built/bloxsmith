@@ -78,7 +78,7 @@ export default function Drift() {
       </TabIntro>
 
       <div className="max-w-[720px] mx-auto">
-        <Card span={6} title="Check drift" note="compare a site template against live Infoblox state">
+        <Card panelId="drift-check" span={6} title="Check drift" note="compare a site template against live Infoblox state">
           <div className="flex flex-col gap-3">
             <label className="text-xs text-muted flex flex-col gap-1">
               Template
@@ -124,7 +124,7 @@ export default function Drift() {
 
       {err && (
         <div className="max-w-[720px] mx-auto mt-3">
-          <Card span={6} title="Error">
+          <Card panelId="drift-error" span={6} title="Error">
             <div className="text-sm" style={{ color: COLORS.crit }}>{err}</div>
           </Card>
         </div>
@@ -132,7 +132,7 @@ export default function Drift() {
 
       {result && (
         <div className="mt-3">
-          <Card span={6} title="Result">
+          <Card panelId="drift-result" span={6} title="Result">
             {result.found === false ? (
               <Empty>site not found for this template</Empty>
             ) : (

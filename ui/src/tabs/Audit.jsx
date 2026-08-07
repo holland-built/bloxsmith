@@ -71,7 +71,7 @@ function ActivitySummary({ logs, loading, auditLogsStatus }) {
   const total = logs.length
 
   return (
-    <Card span={2} title="Activity Summary" right={<span className="text-[11px] text-muted">last {total} events</span>}>
+    <Card panelId="audit-activity-summary" span={2} title="Activity Summary" right={<span className="text-[11px] text-muted">last {total} events</span>}>
       {loading ? (
         <Skeleton h={200} />
       ) : total === 0 ? (
@@ -272,6 +272,7 @@ function AuditTable({ logs, loading, error, auditLogsStatus }) {
 
   return (
     <Card
+      panelId="audit-log"
       span={4}
       title="Audit Log"
       note="Bloxsmith actions"
@@ -389,6 +390,7 @@ function CspAuditTable() {
 
   return (
     <Card
+      panelId="audit-csp-portal"
       span={6}
       title="CSP Portal Audit"
       note="external — Infoblox portal activity"

@@ -103,7 +103,7 @@ function AllocatePanel() {
   const body = () => ({ subnet_id: subnetId, count: Number(count) || 1, name })
 
   return (
-    <Card title="Allocate Address" note="pick space → block → subnet">
+    <Card panelId="selfservice-allocate" title="Allocate Address" note="pick space → block → subnet">
       <div className="grid grid-cols-2 gap-3 mb-3">
         <Field label="IP Space">
           <select
@@ -198,7 +198,7 @@ function DnsPanel() {
   }
 
   return (
-    <Card title="Create DNS Record" note="preview is validated by the server">
+    <Card panelId="selfservice-create-record" title="Create DNS Record" note="preview is validated by the server">
       <div className="grid grid-cols-2 gap-3 mb-3">
         <Field label="Zone">
           <select className={inputCls} value={zoneId} onChange={(e) => { setZoneId(e.target.value); flow.markStale() }}>
@@ -453,7 +453,7 @@ function ManageRecordsPanel() {
   const note = truncNote(recordsApi.data, records)
 
   return (
-    <Card title="Manage Records" note="edit or delete existing DNS records">
+    <Card panelId="selfservice-manage-records" title="Manage Records" note="edit or delete existing DNS records">
       <div className="mb-3">
         <Field label="Zone">
           <select
@@ -605,7 +605,7 @@ function ManageAddressesPanel() {
   const note = truncNote(addressesApi.data, addresses)
 
   return (
-    <Card title="Manage Addresses" note="release an allocated address">
+    <Card panelId="selfservice-manage-addresses" title="Manage Addresses" note="release an allocated address">
       <div className="grid grid-cols-2 gap-3 mb-3">
         <Field label="IP Space">
           <select
