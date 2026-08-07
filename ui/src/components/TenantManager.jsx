@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FeedUnavailable } from './ui.jsx'
 import ThemeSwitch from './ThemeSwitch.jsx'
 import DensitySwitch from './DensitySwitch.jsx'
+import { CONTROL_HELP } from '../lib/controlHelp.js'
 
 const vpost = (url, body) =>
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -466,14 +467,29 @@ export default function TenantManager({ onClose }) {
                 screen. Same component, so the two cannot drift; shown at every
                 width because a settings sheet is where a reader looks for it
                 anyway. */}
+            {/* The caption under each switch is the SAME sentence the header's
+                control-help dialog shows, read from the same dictionary, so the
+                two can no more drift than the switches themselves can.
+                It is written out rather than hidden behind a second ⓘ because
+                this sheet is the only place a phone can read it at all — the
+                header folds both switches, and the dialog with them.
+                And it is what the row beside it never said: "Comfortable ·
+                Compact" names the two settings, which is exactly what the
+                pressed icon already showed. What it does was the missing part. */}
             <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Appearance</div>
-            <div className="flex items-center gap-2 mb-2">
-              <ThemeSwitch />
-              <span className="text-[11px] text-dim">Light · System · Dark</span>
+            <div className="mb-3">
+              <div className="flex items-center gap-2">
+                <ThemeSwitch />
+                <span className="text-[11px] text-dim">Light · System · Dark</span>
+              </div>
+              <p className="m-0 mt-1 text-[11px] leading-relaxed text-dim">{CONTROL_HELP.theme.what}</p>
             </div>
-            <div className="flex items-center gap-2 mb-4">
-              <DensitySwitch />
-              <span className="text-[11px] text-dim">Comfortable · Compact</span>
+            <div className="mb-4">
+              <div className="flex items-center gap-2">
+                <DensitySwitch />
+                <span className="text-[11px] text-dim">Comfortable · Compact</span>
+              </div>
+              <p className="m-0 mt-1 text-[11px] leading-relaxed text-dim">{CONTROL_HELP.density.what}</p>
             </div>
 
             <label htmlFor="tm-dash-token" className="block text-[10px] uppercase tracking-wide text-dim mb-2">Dashboard token</label>

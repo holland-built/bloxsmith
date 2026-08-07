@@ -128,9 +128,13 @@ export default function Incidents() {
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Incidents</h1>
       <CardGrid>
-        <CategoryChips categories={categories} loading={incApi.loading} error={incApi.error} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
-        <SeverityKpis signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} />
+        <CategoryChips panelId="incidents-categories" categories={categories} loading={incApi.loading} error={incApi.error} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
+        {/* panelId sits on the wrapper, not on the Card: SeverityKpis renders a
+            different Card on its error branch, and both are the same panel — one
+            literal here keeps the id unique and both branches attributed. */}
+        <SeverityKpis panelId="incidents-severity" signals={signals} truncated={signalsTruncated} loading={incApi.loading} error={incApi.error} />
         <IncidentsTable
+          panelId="incidents-triage"
           signals={signals}
           signalsTotal={signalsTotal}
           signalsTruncated={signalsTruncated}
@@ -145,6 +149,7 @@ export default function Incidents() {
           onClearAcks={() => setAcks({})}
         />
         <SocQueue
+          panelId="incidents-soc-queue"
           rows={actionsRows}
           loading={actionsApi.loading}
           error={actionsApi.error}
@@ -154,7 +159,7 @@ export default function Incidents() {
           openActionId={openActionId}
           onOpenAction={setOpenActionId}
         />
-        <ActionTrendStrip rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} unavailable={actionsUnavailable} />
+        <ActionTrendStrip panelId="incidents-action-volume" rows={actionsRows} loading={actionsApi.loading} error={actionsApi.error} unavailable={actionsUnavailable} />
       </CardGrid>
     </div>
   )
@@ -162,11 +167,11 @@ export default function Incidents() {
 
 // ---------- category chips ----------
 
-function CategoryChips({ categories, loading, error, category, onCategory, degraded, meta = {} }) {
+function CategoryChips({ categories, loading, error, category, onCategory, degraded, meta = {}, panelId }) {
   const { COLORS } = useChartTheme()
   const failed = Object.entries(meta).filter(([, v]) => v === 'error').map(([k]) => k)
   return (
-    <Card span={6} title="Categories" note="click to filter Triage">
+    <Card panelId={panelId} span={6} title="Categories" note="click to filter Triage">
       {loading ? (
         <Skeleton h={40} />
       ) : error ? (
@@ -211,7 +216,7 @@ function CategoryChips({ categories, loading, error, category, onCategory, degra
 
 // ---------- severity kpi row ----------
 
-function SeverityKpis({ signals, truncated, loading, error }) {
+function SeverityKpis({ signals, truncated, loading, error, panelId }) {
   const { COLORS } = useChartTheme()
   const counts = { critical: 0, high: 0, medium: 0, low: 0 }
   for (const s of signals) {
@@ -231,7 +236,7 @@ function SeverityKpis({ signals, truncated, loading, error }) {
   // explicit failure banner.
   if (error) {
     return (
-      <Card span={6} className="flex flex-col" note="counts unknown — fetch failed">
+      <Card panelId={panelId} span={6} className="flex flex-col" note="counts unknown — fetch failed">
         <FeedUnavailable
           label="Severity counts unavailable"
           reason={error.message ? `could not load incidents: ${error.message}` : 'could not load incidents'}
@@ -250,6 +255,7 @@ function SeverityKpis({ signals, truncated, loading, error }) {
 
   return (
     <Card
+      panelId={panelId}
       span={6}
       className="flex flex-row items-stretch justify-between"
       note={truncated ? 'of shown signals — list is capped' : undefined}
@@ -272,7 +278,7 @@ function SeverityKpis({ signals, truncated, loading, error }) {
 
 // ---------- incidents table ----------
 
-function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, error, degraded, meta = {}, category, onCategory, acks, onToggleAck, onClearAcks }) {
+function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, error, degraded, meta = {}, category, onCategory, acks, onToggleAck, onClearAcks, panelId }) {
   const { COLORS } = useChartTheme()
   const [filter, setFilter] = useState('')
   const failedFeeds = Object.entries(meta).filter(([, v]) => v === 'error').map(([k]) => k)
@@ -329,6 +335,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
 
   return (
     <Card
+      panelId={panelId}
       span={4}
       title="Triage"
       note={category ? `filtered · ${category}` : undefined}
@@ -393,7 +400,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
 
 // ---------- SOC action queue ----------
 
-function SocQueue({ rows, loading, error, unavailable, statusState, onSetStatus, openActionId, onOpenAction }) {
+function SocQueue({ rows, loading, error, unavailable, statusState, onSetStatus, openActionId, onOpenAction, panelId }) {
   const { COLORS } = useChartTheme()
   const columns = [
     {
@@ -446,7 +453,7 @@ function SocQueue({ rows, loading, error, unavailable, statusState, onSetStatus,
   const right = rows.length > 0 ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : undefined
 
   return (
-    <Card span={2} title="SOC Queue" note="IQ Actions" right={right}>
+    <Card panelId={panelId} span={2} title="SOC Queue" note="IQ Actions" right={right}>
       {loading ? (
         <Skeleton h={280} />
       ) : unavailable ? (
@@ -507,7 +514,7 @@ function ActionDetailDrawer({ actionId, onClose }) {
 
 // ---------- action volume trend strip ----------
 
-function ActionTrendStrip({ rows, loading, error, unavailable }) {
+function ActionTrendStrip({ rows, loading, error, unavailable, panelId }) {
   const { COLORS } = useChartTheme()
 
   const { byDay, byPriority } = useMemo(() => {
@@ -529,7 +536,7 @@ function ActionTrendStrip({ rows, loading, error, unavailable }) {
   }, [rows])
 
   return (
-    <Card span={2} title="Action Volume" note="by day">
+    <Card panelId={panelId} span={2} title="Action Volume" note="by day">
       {loading ? (
         <Skeleton h={220} />
       ) : unavailable ? (

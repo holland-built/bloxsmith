@@ -251,7 +251,7 @@ export default function Editor() {
         ))}
       </div>
 
-      <Card title={`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}>
+      <Card panelId="editor-object-form" title={`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}>
         <div className="flex flex-col gap-3">
           <label className="text-xs text-muted flex flex-col gap-1">
             Object ID (leave blank to create new)

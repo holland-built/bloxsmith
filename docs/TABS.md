@@ -61,6 +61,16 @@ Estate at a glance. Refreshes every 30 seconds.
 
 Where a count could not be fetched for the whole estate, the panel says "loaded rows" instead of implying it covered everything.
 
+### Rearranging panels
+
+Overview is the only tab whose panels move. The other tabs render a fixed grid — no handles, no resize edge, nothing saved.
+
+- **Move** — drag the ⠿ handle in a panel's header. Without a mouse: Tab to the handle, press Enter, move with ← and →, then Enter to keep the new position or Escape to put it back.
+- **Resize** — drag a panel's right edge. In keyboard move mode, ↑ and ↓ do the same thing.
+- **Saving** — there is no Save button, and nothing to remember to press. Every move and every resize is written as soon as you let go, and the arrangement comes back on your next visit and after a server restart.
+
+Panels cannot be added or deleted. A panel is only ever absent because the service behind it was not detected on this tenant, and when that happens the tab says so in a row that offers to show it anyway.
+
 ## Daily
 
 The morning read. Same 30-second polling.

@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, TabIntro, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 
@@ -73,6 +73,21 @@ export default function Overview() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Overview</h1>
+      {/* The layout sentence lives HERE and on no other tab, because Overview
+          is the only grid with a layoutKey — every other tab renders a plain
+          grid with no handles, no resize edge and nothing to persist. Telling
+          those tabs' readers they can rearrange would be describing a feature
+          they do not have.
+          "…saves automatically" is the whole answer to "how do I save my
+          layout", and it is written out because the honest answer is that
+          there is nothing to press: every drop and every resize commit writes
+          the view by itself. A reader hunting a Save button finds none and
+          concludes their arrangement was lost. */}
+      <TabIntro anchor="overview">
+        Your estate at a glance — DNS load, address use, subnet fullness and host health.
+        On this tab you can drag a panel’s ⠿ handle to rearrange it, or drag its right
+        edge to resize, and your arrangement saves automatically.
+      </TabIntro>
       {totals.degraded && (
         <div className="text-[11px] text-dim mb-2">
           some estate-wide counts could not be fetched this cycle — figures below marked as provisional

@@ -142,6 +142,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
   return (
     <Card
       span={6}
+      panelId="assets-filter-bar"
       title="Asset Inventory"
       note="CSP discovery"
       right={
@@ -313,6 +314,7 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
       // the page's primary table, not a dashboard panel, so it takes the full
       // six tracks it declares rather than shrinking to its columns.
       fit={false}
+      panelId="assets-list"
       title="Assets"
       right={
         rows.length > 0 && (
@@ -407,6 +409,7 @@ function AssetDetail({ cqid, row, onClose }) {
   return (
     <Card
       span={6}
+      panelId="assets-detail"
       title={row.name || row.cqid}
       note="asset detail"
       right={

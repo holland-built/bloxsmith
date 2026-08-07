@@ -78,7 +78,7 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading }) {
   ]
 
   return (
-    <Card span={2} title="Open Issues" className="flex flex-col justify-between">
+    <Card span={2} panelId="daily-open-issues" title="Open Issues" className="flex flex-col justify-between">
       {loading ? (
         <Skeleton h={160} />
       ) : (
@@ -128,7 +128,7 @@ function SecurityToday({ sec }) {
   const secDead = !sec.loading && (!!sec.error || !sec.data || sec.data.availability === 'error')
 
   return (
-    <Card span={4} title="Security Today" right={<span className="text-[11px] text-muted">{secDead ? '—' : events.length.toLocaleString()} events</span>}>
+    <Card span={4} panelId="daily-security-today" title="Security Today" right={<span className="text-[11px] text-muted">{secDead ? '—' : events.length.toLocaleString()} events</span>}>
       {sec.loading ? (
         <Skeleton h={160} />
       ) : secDead ? (
@@ -183,7 +183,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus }) {
   ]
 
   return (
-    <Card span={3} title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-[11px] text-muted">top 10</span>}>
+    <Card span={3} panelId="daily-top-capacity-risks" title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-[11px] text-muted">top 10</span>}>
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
@@ -229,6 +229,7 @@ function HostsAttention({ hosts, loading, hostsStatus }) {
   return (
     <Card
       span={3}
+      panelId="daily-hosts-attention"
       title="Hosts Needing Attention"
       // "0 shown" off a dead feed reads as "nothing needs attention".
       right={<span className="text-[11px] text-muted">{feedDead ? '—' : rows.length} shown</span>}
@@ -279,6 +280,7 @@ function DnsZoneIssues({ zones, loading, zonesStatus }) {
   return (
     <Card
       span={6}
+      panelId="daily-dns-zone-issues"
       title="DNS Zone Issues"
       // "0 zones" off a dead feed reads as a clean estate.
       right={<span className="text-[11px] text-muted">{feedDead ? '—' : rows.length} zones</span>}

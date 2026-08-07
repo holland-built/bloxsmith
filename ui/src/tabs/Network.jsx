@@ -130,7 +130,7 @@ function UtilBands({ subnets, totals, subnetsStatus }) {
       : `${subnets.length.toLocaleString()} loaded (estate total unavailable)${unmeasuredLabel}`
 
   return (
-    <Card span={3} title="Utilization Distribution" right={<span className="text-[11px] text-muted">{scopeLabel}</span>}>
+    <Card panelId="network-utilization-distribution" span={3} title="Utilization Distribution" right={<span className="text-[11px] text-muted">{scopeLabel}</span>}>
       {!hasData ? (
         subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnets feed unavailable" />
@@ -171,7 +171,7 @@ function IpamSpaces({ ipam }) {
   const status = ipam.data?.status
 
   return (
-    <Card span={3} title="IPAM Spaces — Top Used" right={<span className="text-[11px] text-muted">addresses used</span>}>
+    <Card panelId="network-ipam-spaces" span={3} title="IPAM Spaces — Top Used" right={<span className="text-[11px] text-muted">addresses used</span>}>
       {ipam.loading ? (
         <Skeleton h={220} />
       ) : ipam.error || status === 'error' ? (
@@ -251,6 +251,7 @@ function DhcpLeases({ dhcp, innerRef }) {
     // class must match SPAN_CLASS[6] in ui.jsx so it reflows with the rest of the grid
     <div ref={innerRef} className="col-span-2 md:col-span-4 xl:col-span-6">
     <Card
+      panelId="network-dhcp-leases"
       span={6}
       title="DHCP Leases"
       right={
@@ -420,6 +421,7 @@ function ExhaustionTable({ subnets, hp, subnetsStatus }) {
 
   return (
     <Card
+      panelId="network-exhaustion"
       span={6}
       title={
         <>

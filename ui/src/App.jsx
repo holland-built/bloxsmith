@@ -20,6 +20,7 @@ import UpdateButton from './components/UpdateButton.jsx'
 import ConnStatus from './components/ConnStatus.jsx'
 import VaultGate from './components/VaultGate.jsx'
 import TenantManager from './components/TenantManager.jsx'
+import HeaderHelp from './components/HeaderHelp.jsx'
 import { BrandLogoImg, BrandEdit } from './components/BrandLogo.jsx'
 import ThemeSwitch from './components/ThemeSwitch.jsx'
 import DensitySwitch from './components/DensitySwitch.jsx'
@@ -185,6 +186,7 @@ const GroupSection = ({ group, tab, onPick }) => {
 export default function App() {
   const [tab, setTab] = useState(hashTab)
   const [showAccounts, setShowAccounts] = useState(false)
+  const [showHeaderHelp, setShowHeaderHelp] = useState(false)
   const [showBrand, setShowBrand] = useState(false)
   const [brandDomain, setBrandDomain] = useState(() => localStorage.getItem('orgDomain') || '')
   const [logoBust, setLogoBust] = useState(0)
@@ -212,6 +214,7 @@ export default function App() {
   const menuRef = useRef(null)
   const mainRef = useRef(null)
   const settingsBtnRef = useRef(null)
+  const helpBtnRef = useRef(null)
   const currentGroup = groupOf(tab)
   const activeLabel = PAGES.find((t) => t.id === tab)?.label ?? ''
 
@@ -310,6 +313,19 @@ export default function App() {
     }
   }, [showAccounts])
 
+  // Same contract for the control-help dialog, and deliberately a second copy
+  // of five lines rather than a shared hook: the two sheets have different
+  // triggers and are unmounted at different times, and a hook parameterised
+  // over "which ref, which flag" would be longer than what it replaced.
+  const helpWasOpen = useRef(false)
+  useEffect(() => {
+    if (showHeaderHelp) helpWasOpen.current = true
+    else if (helpWasOpen.current) {
+      helpWasOpen.current = false
+      helpBtnRef.current?.focus()
+    }
+  }, [showHeaderHelp])
+
   // Digits 1-5 open their group. Each button draws its digit as a keycap, and
   // a keycap that isn't bound to anything is a lie — so the binding is real.
   // It stands down for editable targets (these tabs are full of text inputs)
@@ -318,8 +334,11 @@ export default function App() {
   // It also stands down while the settings sheet is open: that sheet is a modal
   // dialog now, and a digit reaching past it would open a menu behind the
   // dialog — focus in one place, the thing that just opened in another.
+  //
+  // The control-help dialog is the same kind of modal and gets the same
+  // standdown for the same reason — it is not a second special case.
   useEffect(() => {
-    if (showAccounts) return undefined
+    if (showAccounts || showHeaderHelp) return undefined
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const t = e.target
@@ -338,7 +357,7 @@ export default function App() {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [showAccounts])
+  }, [showAccounts, showHeaderHelp])
 
   return (
     <VaultGate>
@@ -348,7 +367,7 @@ export default function App() {
             inside the dialog. `display: contents` keeps this wrapper out of
             layout entirely — the header's sticky positioning and the flex rows
             below it see exactly the box tree they saw before. */}
-        <div style={{ display: 'contents' }} inert={showAccounts}>
+        <div style={{ display: 'contents' }} inert={showAccounts || showHeaderHelp}>
           <header className="flex items-center gap-3 px-5 py-3 border-b border-line-2 bg-bg/95 backdrop-blur sticky top-0 z-10">
             <button
               type="button"
@@ -511,6 +530,27 @@ export default function App() {
                   splitting them across the fold would leave half the pair on a
                   1024px laptop and half of it two clicks away. */}
               <DensitySwitch className="hidden lg:flex" />
+              {/* Folds at the same `lg` as the two switches, and that is the
+                  whole argument for the breakpoint: above it, the theme and
+                  density switches are in this row and a reader can hold the
+                  dialog's list against the row it names. Below it those two are
+                  not in the header at all, so the same dialog would explain
+                  controls that are not on screen and send a phone user hunting
+                  a bar that does not hold them. The narrow-width answer is not
+                  missing, it is somewhere better: the settings sheet carries
+                  the same sentences as always-visible captions, right beside
+                  the switches themselves. */}
+              <button
+                ref={helpBtnRef}
+                type="button"
+                onClick={() => setShowHeaderHelp(true)}
+                aria-label="What these controls do"
+                aria-haspopup="dialog"
+                aria-expanded={showHeaderHelp}
+                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-lg border border-border bg-field text-muted hover:text-txt hover:border-border-hover cursor-pointer"
+              >
+                ⓘ
+              </button>
               <button
                 ref={settingsBtnRef}
                 onClick={() => setShowAccounts(true)}
@@ -548,6 +588,11 @@ export default function App() {
           {`${activeLabel} tab`}
         </div>
         {showAccounts && <TenantManager onClose={() => setShowAccounts(false)} />}
+        {/* Outside the inert wrapper, like the settings sheet above it and for
+            the same reason: inert content is not exposed at all, so a dialog
+            rendered inside it would be unreachable by the pointer, the Tab key
+            and a screen reader alike. */}
+        {showHeaderHelp && <HeaderHelp onClose={() => setShowHeaderHelp(false)} />}
         {showBrand && (
           <BrandEdit
             onClose={() => setShowBrand(false)}

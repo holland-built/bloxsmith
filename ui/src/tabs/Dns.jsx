@@ -50,7 +50,11 @@ export default function Dns() {
         <HiddenPanels {...SERVICE_GROUPS.dns} state={owned}>
           <QpsHero qps={qps} />
         </HiddenPanels>
-        <ZoneKpis zones={zones} zonesStatus={zonesStatus} loading={data.loading} />
+        {/* The id sits on the call site, not on the Cards inside: ZoneKpis
+            returns a different Card for loading / dead feed / data, and all
+            three are the same panel. One literal id, forwarded to whichever
+            Card renders — see panelHelp.test.js on the wrapper pattern. */}
+        <ZoneKpis panelId="dns-zone-kpis" zones={zones} zonesStatus={zonesStatus} loading={data.loading} />
         <HiddenPanels {...SERVICE_GROUPS.dns} state={owned}>
           <DnsServices services={services} />
         </HiddenPanels>
@@ -83,6 +87,7 @@ function QpsHero({ qps }) {
 
   return (
     <Card
+      panelId="dns-query-rate"
       span={4}
       title="DNS Query Rate — 24h"
       right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
@@ -156,14 +161,14 @@ function ttlCompare(a, b, dir) {
 
 // ---------- zone kpis ----------
 
-function ZoneKpis({ zones, zonesStatus, loading }) {
+function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   const { COLORS } = useChartTheme()
   // A load in flight is not a verdict. Without this the panel would print
   // three confident zeros (before) or a feed-unavailable notice (now that an
   // unarrived slice reads as 'error') for a read that simply has not finished.
   if (loading) {
     return (
-      <Card span={2} className="flex flex-col justify-between">
+      <Card panelId={panelId} span={2} className="flex flex-col justify-between">
         <Skeleton h={200} />
       </Card>
     )
@@ -172,7 +177,7 @@ function ZoneKpis({ zones, zonesStatus, loading }) {
   // these counts are known, not that they're all zero.
   if (zones.length === 0 && zonesStatus === 'error') {
     return (
-      <Card span={2} className="flex flex-col justify-between">
+      <Card panelId={panelId} span={2} className="flex flex-col justify-between">
         <FeedUnavailable label="DNS zones feed unavailable" />
       </Card>
     )
@@ -210,7 +215,7 @@ function ZoneKpis({ zones, zonesStatus, loading }) {
   ]
 
   return (
-    <Card span={2} className="flex flex-col justify-between">
+    <Card panelId={panelId} span={2} className="flex flex-col justify-between">
       {cells.map((c, i) => (
         <div key={c.label} className={`py-3.5 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}>
           <div className="text-muted text-xs">{c.label}</div>
@@ -235,7 +240,7 @@ function DnsServices({ services }) {
   ]
 
   return (
-    <Card span={3} title="DNS Services" right={<span className="text-[11px] text-muted">{rows.length ? `${rows.length} services` : ''}</span>}>
+    <Card panelId="dns-services" span={3} title="DNS Services" right={<span className="text-[11px] text-muted">{rows.length ? `${rows.length} services` : ''}</span>}>
       {services.loading ? (
         <Skeleton h={180} />
       ) : services.error || status === 'error' ? (
@@ -262,7 +267,7 @@ function QueryVolume7d({ analytics }) {
   const chartData = volume.map((r, i) => ({ label: r.hour ?? i, value: Number(r.total_query_count) || 0 }))
 
   return (
-    <Card span={3} title="Query Volume — 7d" note={broken ? 'feed unavailable' : undefined}>
+    <Card panelId="dns-query-volume-7d" span={3} title="Query Volume — 7d" note={broken ? 'feed unavailable' : undefined}>
       {analytics.loading ? (
         <Skeleton h={180} />
       ) : broken ? (
@@ -362,6 +367,7 @@ function ZoneTable({ zones, issuesOnly, zonesStatus, loading }) {
 
   return (
     <Card
+      panelId="dns-zones"
       span={6}
       title={
         issuesOnly ? (
@@ -452,6 +458,7 @@ function DnssecHealth({ dnssec }) {
 
   return (
     <Card
+      panelId="dns-dnssec-health"
       span={3}
       title="DNSSEC Health"
       right={
@@ -525,7 +532,7 @@ function RpzPanel({ rpz }) {
   ]
 
   return (
-    <Card span={3} title="RPZ Policy Zones" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} zones` : ''}</span>}>
+    <Card panelId="dns-rpz" span={3} title="RPZ Policy Zones" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} zones` : ''}</span>}>
       {rpz.loading ? (
         <Skeleton h={200} />
       ) : rpz.error || status === 'error' ? (
@@ -565,7 +572,7 @@ function DtcLbdnPanel({ dtcLbdn }) {
   ]
 
   return (
-    <Card span={3} title="DTC Load-Balanced Names" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} names` : ''}</span>}>
+    <Card panelId="dns-dtc-lbdn" span={3} title="DTC Load-Balanced Names" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} names` : ''}</span>}>
       {dtcLbdn.loading ? (
         <Skeleton h={200} />
       ) : dtcLbdn.error || status === 'error' ? (

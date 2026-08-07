@@ -76,6 +76,7 @@ export default function Infra() {
         <HostStatus hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <FeedCard
           span={2}
+          panelId="infra-host-health"
           title="Host Health"
           note="CSP"
           feed={health}
@@ -91,6 +92,7 @@ export default function Infra() {
         />
         <FeedCard
           span={2}
+          panelId="infra-onprem-hosts"
           title="On-Prem Hosts"
           note="CSP"
           feed={onprem}
@@ -106,6 +108,7 @@ export default function Infra() {
         <HostTable hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <FeedCard
           span={3}
+          panelId="infra-jobs"
           title="Jobs"
           note="recent"
           feed={jobs}
@@ -120,6 +123,7 @@ export default function Infra() {
         />
         <FeedCard
           span={3}
+          panelId="infra-dfp-services"
           title="DFP Services"
           note="CSP"
           feed={dfp}
@@ -163,7 +167,7 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading }) {
     .map(([name, value]) => ({ name, value, color: colorMap[name] }))
 
   return (
-    <Card span={2} title="Host Status">
+    <Card span={2} panelId="infra-host-status" title="Host Status">
       {loading ? (
         // An unfinished read is neither "no hosts" nor a dead feed.
         <Skeleton h={130} />
@@ -213,47 +217,43 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading }) {
 
 // ---------- asset discovery status ----------
 
+// One Card, four bodies. This used to be four early-return Cards with the same
+// title; they were collapsed because a panelId is a panel's identity, and the
+// same panel in four states must not claim four identities (the help scanner
+// checks ids are unique, and Card writes the id into the DOM).
+// The branch ORDER is unchanged and load-bearing: an unfinished read is not a
+// dead feed, and a dead feed is not a tenant with nothing discovered.
 function DiscoveryStatus({ feed }) {
   const { COLORS } = useChartTheme()
   const { data, error, loading } = feed
 
-  if (loading && !data) {
-    return (
-      <Card span={2} title="Asset Discovery">
-        <Skeleton />
-      </Card>
-    )
-  }
-  if (error || data?.status === 'error') {
-    return (
-      <Card span={2} title="Asset Discovery">
-        <FeedUnavailable label="Asset discovery unavailable" />
-      </Card>
-    )
-  }
-  if (data?.status === 'empty' || !data?.total) {
-    return (
-      <Card span={2} title="Asset Discovery">
-        <Empty>no discovery data for this tenant</Empty>
-      </Card>
-    )
-  }
-
-  const total = data.total
+  const pending = loading && !data
+  const dead = !pending && (error || data?.status === 'error')
+  const blank = !pending && !dead && (data?.status === 'empty' || !data?.total)
+  const ok = !pending && !dead && !blank
 
   return (
     <Card
       span={2}
+      panelId="infra-asset-discovery"
       title="Asset Discovery"
-      note="CSP"
-      right={!data.breakdown_available && data.note && (
+      note={ok ? 'CSP' : undefined}
+      right={ok && !data.breakdown_available && data.note ? (
         <span className="text-[11px] text-dim">{data.note}</span>
-      )}
+      ) : undefined}
     >
-      <div>
-        <span className="text-lg font-semibold" style={{ color: COLORS.accent }}>{total.toLocaleString()}</span>
-        <span className="text-dim text-[11px] ml-1.5">assets with discovery status tracked</span>
-      </div>
+      {pending ? (
+        <Skeleton />
+      ) : dead ? (
+        <FeedUnavailable label="Asset discovery unavailable" />
+      ) : blank ? (
+        <Empty>no discovery data for this tenant</Empty>
+      ) : (
+        <div>
+          <span className="text-lg font-semibold" style={{ color: COLORS.accent }}>{data.total.toLocaleString()}</span>
+          <span className="text-dim text-[11px] ml-1.5">assets with discovery status tracked</span>
+        </div>
+      )}
     </Card>
   )
 }
@@ -361,6 +361,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading }) {
   return (
     <Card
       span={6}
+      panelId="infra-host-inventory"
       title={
         statusFilter ? (
           <span className="inline-flex items-center gap-2">

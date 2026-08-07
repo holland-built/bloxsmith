@@ -157,7 +157,7 @@ function ChatCard() {
   const ask = (sg) => submit(sg)
 
   return (
-    <Card title="Ask AI" span={1}>
+    <Card panelId="ai-ask" title="Ask AI" span={1}>
       <div role="log" aria-live="polite" className="flex flex-col gap-2 min-h-[280px] max-h-[480px] overflow-y-auto mb-3">
         {items.length === 0 ? (
           <Empty>Ask a question or pick a suggestion below</Empty>
@@ -335,7 +335,7 @@ function LookupCard() {
   }
 
   return (
-    <Card title="Threat lookup" span={1}>
+    <Card panelId="ai-threat-lookup" title="Threat lookup" span={1}>
       <div className="flex gap-2 mb-3">
         <input
           className={`${inputCls} flex-1 text-[13px]`}

@@ -100,7 +100,7 @@ function SeverityHero({ hub, events }) {
   }, [events])
 
   return (
-    <Card span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
+    <Card panelId="security-threat-events" span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
       {hub.loading ? (
         <Skeleton h={230} />
       ) : unavailable ? (
@@ -152,7 +152,7 @@ function KpiStack({ hub, events, acks }) {
   ]
 
   return (
-    <Card span={2} title="Response Summary">
+    <Card panelId="security-response-summary" span={2} title="Response Summary">
       {hub.loading ? <Skeleton h={200} /> : hub.data?.availability === 'error' || hub.error ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
       ) : (
@@ -333,6 +333,7 @@ function TriageInbox({ hub, events, acks, setAcks }) {
 
   return (
     <Card
+      panelId="security-triage-inbox"
       span={6}
       title="Triage Inbox"
       right={
@@ -398,7 +399,7 @@ function LookalikeTable({ lookalikes }) {
   const counted = !lookalikes.error && !d.unavailable
 
   return (
-    <Card span={3} title="Lookalike Domains" right={<span className="text-[11px] text-muted">{counted ? rows.length : '—'} detected</span>}>
+    <Card panelId="security-lookalike-domains" span={3} title="Lookalike Domains" right={<span className="text-[11px] text-muted">{counted ? rows.length : '—'} detected</span>}>
       {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error ? (
         // Previously byte-identical to a genuinely empty result ("no data") —
         // a dead feed read as a clean estate.
@@ -445,7 +446,7 @@ function CtemPanel({ ctem }) {
   ]
 
   return (
-    <Card span={3} title="CTEM Exposure" right={d?.total_exposures ? <span className="text-[11px] text-muted">{d.total_exposures.toLocaleString()} total</span> : null}>
+    <Card panelId="security-ctem-exposure" span={3} title="CTEM Exposure" right={d?.total_exposures ? <span className="text-[11px] text-muted">{d.total_exposures.toLocaleString()} total</span> : null}>
       {ctem.loading ? <Skeleton h={220} /> : ctem.error || status === 'error' ? (
         <FeedUnavailable label="CTEM exposure feed unavailable" />
       ) : empty ? <Empty /> : (
@@ -472,7 +473,7 @@ function ThreatFeed({ threats }) {
   }, { block: 0, allow: 0 })
 
   return (
-    <Card span={3} title="Threat Feed Activity">
+    <Card panelId="security-threat-feed-activity" span={3} title="Threat Feed Activity">
       {threats.loading ? <Skeleton h={220} /> : threats.error || status === 'error' ? (
         <FeedUnavailable label="Threat feed activity unavailable" />
       ) : rows.length === 0 ? <Empty /> : (
@@ -549,7 +550,7 @@ function InsightsPanel({ insights }) {
   ]
 
   return (
-    <Card span={3} title="SOC Insights" right={!unavailable && rows.length ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : null}>
+    <Card panelId="security-soc-insights" span={3} title="SOC Insights" right={!unavailable && rows.length ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : null}>
       {insights.loading ? <Skeleton h={220} /> : unavailable ? (
         <FeedUnavailable reason={typeof d?.unavailable === 'string' ? d.unavailable : undefined} label="SOC insights unavailable" />
       ) : rows.length === 0 ? <Empty /> : (
@@ -567,7 +568,7 @@ function AssetInsights({ assetInsights }) {
   const hasTotal = typeof d.total === 'number' && d.total > 0
 
   return (
-    <Card span={3} title="Asset Insights">
+    <Card panelId="security-asset-insights" span={3} title="Asset Insights">
       {assetInsights.loading ? <Skeleton h={220} /> : assetInsights.error || status === 'error' ? (
         <FeedUnavailable label="Asset insights unavailable" />
       ) : status === 'empty' || !hasTotal ? (
@@ -617,7 +618,7 @@ function ExposuresPanel({ exposures }) {
         : count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null
 
   return (
-    <Card span={4} title="Exposures" right={rightNode}>
+    <Card panelId="security-exposures" span={4} title="Exposures" right={rightNode}>
       {exposures.loading ? <Skeleton h={260} /> : availability === 'error' ? (
         <FeedUnavailable reason={payload.reason} label="Exposures feed unavailable" />
       ) : exposures.error ? (
@@ -665,7 +666,7 @@ function AssetRiskPanel({ assetRisk }) {
   ]
 
   return (
-    <Card span={4} title="Asset Risk" right={count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null}>
+    <Card panelId="security-asset-risk" span={4} title="Asset Risk" right={count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null}>
       {assetRisk.loading ? <Skeleton h={260} /> : assetRisk.error || status === 'error' ? (
         <FeedUnavailable label="Asset risk feed unavailable" />
       ) : rows.length === 0 ? (
@@ -705,6 +706,7 @@ function ExposedSurfacePanel({ hostnames, ips }) {
 
   return (
     <Card
+      panelId="security-exposed-surface"
       span={4}
       title="Exposed Surface"
       right={
@@ -784,6 +786,7 @@ function CtemAssetsPanel({ ctemAssets }) {
 
   return (
     <Card
+      panelId="security-ctem-assets"
       span={4}
       title="CTEM Assets"
       right={assetCount ? <span className="text-[11px] text-muted">{assetCount.toLocaleString()} assets</span> : null}
