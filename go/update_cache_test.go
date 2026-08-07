@@ -540,6 +540,56 @@ func TestUpdateCheckHandler_DisabledNeverContactsGitHub(t *testing.T) {
 	}
 }
 
+// TestUpdateCLICheckBypassesWarmCache pins that `bloxsmith update --check` asks
+// GitHub rather than reading a remembered answer.
+//
+// HONEST SCOPE — this test does not cover a bug that can happen today. The
+// subcommand runs in a fresh process (main.go dispatches it and calls os.Exit),
+// so updateCache is always cold on the real CLI path and every invocation
+// already reaches GitHub. This test drives runUpdateCLI in-process, which is
+// the only place a warm cache can exist, and it pins the INTENT: an operator
+// typing an explicit check must never be answered from memory. It becomes a
+// live regression test the day the check path is embedded in a longer-lived
+// process.
+func TestUpdateCLICheckBypassesWarmCache(t *testing.T) {
+	var hits atomic.Int32
+	tag := "v3.55.0"
+	withGithubStub(t, countingStub(&hits, func(w http.ResponseWriter, r *http.Request) {
+		okRelease(tag)(w, r)
+	}), "3.55.0")
+	advance := fakeClock(t, time.Date(2026, 8, 7, 12, 21, 47, 0, time.UTC))
+
+	// Warm the cache the way a background poll would.
+	if _, err := checkUpdate(); err != nil {
+		t.Fatalf("priming check: %v", err)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("github requests after priming = %d, want 1", got)
+	}
+
+	// A newer release ships, well inside the remembered entry's 30-minute window
+	// and well outside the forced-check floor.
+	advance(time.Minute)
+	tag = "v3.56.0"
+
+	var code int
+	out := captureStdout(t, func() { code = runUpdateCLI(true) })
+
+	if code != 0 {
+		t.Fatalf("runUpdateCLI(--check) exit code = %d, want 0; output=%q", code, out)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("github requests after the CLI check = %d, want 2 — the CLI check was served from the warm cache instead of asking GitHub; output=%q",
+			got, out)
+	}
+	if !strings.Contains(out, "v3.56.0") {
+		t.Fatalf("CLI output = %q, want it to name the newly published v3.56.0", out)
+	}
+	if strings.Contains(out, "up to date") {
+		t.Fatalf("CLI output = %q, want the available-update line — it reported the stale remembered answer", out)
+	}
+}
+
 // TestUpdateCheckHandler_DisabledDiffersFromUpToDate: "the check is off" and
 // "the check ran and found nothing newer" are different states and must not
 // serialise to the same thing.

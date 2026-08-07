@@ -3,8 +3,9 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
+import { fmtShortDay } from '../lib/chartFormat.js'
 
 // ---------- severity vocab ----------
 // Signals carry crit/warn/ok (this app) or critical/high/medium/low (upstream) —
@@ -529,9 +530,13 @@ function ActionTrendStrip({ rows, loading, error, unavailable, panelId }) {
       const p = String(r.priority || '').toLowerCase()
       if (pri[p] != null) pri[p]++
     }
+    // The whole date is kept, not `date.slice(5)`: "01-27" is a machine's way of
+    // writing a day, and it is also ambiguous outside the US. fmtShortDay turns
+    // it into "Jan 27" for both the axis and the hover, reading the digits out of
+    // the string rather than through Date, so no bar shifts by a timezone.
     const byDay = Object.entries(days)
       .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-      .map(([date, count]) => ({ date: date.slice(5), count }))
+      .map(([date, count]) => ({ date, count }))
     return { byDay, byPriority: pri }
   }, [rows])
 
@@ -550,9 +555,9 @@ function ActionTrendStrip({ rows, loading, error, unavailable, panelId }) {
           <ResponsiveContainer width="100%" height={150}>
             <BarChart data={byDay} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="date" tick={{ fill: 'var(--color-tick)', fontSize: 10 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={20} />
+              <XAxis dataKey="date" tickFormatter={fmtShortDay} tick={{ fill: 'var(--color-tick)', fontSize: 10 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={20} />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', fontSize: 12 }} />
+              <Tooltip content={<ChartTip name="actions" />} />
               <Bar dataKey="count" fill={COLORS.accent} radius={[3, 3, 0, 0]} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>

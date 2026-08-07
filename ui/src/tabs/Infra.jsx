@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Cell, PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
@@ -141,7 +141,7 @@ export default function Infra() {
 // ---------- host status ----------
 
 function HostStatus({ hosts, totalHosts, hostsStatus, loading }) {
-  const { COLORS, TT } = useChartTheme()
+  const { COLORS } = useChartTheme()
   // Buckets come from the same statusBucket() the table sorts and filters by,
   // so one host cannot be "Other" here and "unknown" there. Unknown is its own
   // slice rather than part of Other: a host whose status the upstream never
@@ -187,7 +187,18 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading }) {
                     <Cell key={d.name} fill={d.color} />
                   ))}
                 </Pie>
-                <Tooltip {...TT} position={{ y: 100 }} allowEscapeViewBox={{ x: false, y: true }} />
+                {/* A pie has no category axis, so recharts hands the tooltip no
+                    usable `label` — the slice's name lives on the payload row.
+                    Reading it there keeps the first line ("Offline") that the
+                    default renderer used to print, with the count underneath as
+                    "4 hosts" instead of "Offline : 4".
+                    position / allowEscapeViewBox are an earlier fix for the
+                    tooltip being clipped by this 130px donut; carried through. */}
+                <Tooltip
+                  content={<ChartTip name="hosts" labelFormat={(_l, p) => p?.[0]?.name ?? ''} />}
+                  position={{ y: 100 }}
+                  allowEscapeViewBox={{ x: false, y: true }}
+                />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">

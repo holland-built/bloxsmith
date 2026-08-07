@@ -640,7 +640,15 @@ func updateProgressHandler(w http.ResponseWriter, r *http.Request) {
 // runUpdateCLI is the `bloxsmith update` subcommand (headless servers, no
 // button): same download+verify+swap+exit, driven from the command line.
 func runUpdateCLI(checkOnly bool) int {
-	st, err := checkUpdate()
+	// Forced, because typing `bloxsmith update` is a deliberate ask, not the
+	// background poll the cache exists to keep cheap.
+	//
+	// This fixes NO live bug and must not be described as one: the subcommand
+	// runs in a fresh process (main.go dispatches it, then os.Exit), so
+	// updateCache is always cold here and checkUpdate already reached GitHub
+	// every time. It states the intent, and it only becomes load-bearing if
+	// this check path is ever called from a process that has already polled.
+	st, err := checkUpdateForce(true)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "update check failed:", err)
 		return 1

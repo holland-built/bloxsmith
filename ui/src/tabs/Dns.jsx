@@ -4,8 +4,9 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, HiddenPanels, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, HiddenPanels, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
+import { dnssecPanelLabel, fmtShortDay } from '../lib/chartFormat.js'
 import { useHashParams } from '../lib/hash.js'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
@@ -71,7 +72,7 @@ export default function Dns() {
 // ---------- hero ----------
 
 function QpsHero({ qps }) {
-  const { COLORS, TT } = useChartTheme()
+  const { COLORS } = useChartTheme()
   const rows = qps.data?.rows ?? []
   const status = qps.data?.status
   const chartData = rows.map((r) => {
@@ -119,7 +120,12 @@ function QpsHero({ qps }) {
               <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="label" tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={40} />
               <YAxis hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
-              <Tooltip {...TT} />
+              {/* The big number above this chart already rounds to one decimal;
+                  the hover used to disagree with it by ten digits (`value :
+                  274.715`). Same series, same rounding, and the unit said out
+                  loud — the point labels are already clock times ("03:00 PM"),
+                  which fmtShortDay hands back untouched. */}
+              <Tooltip content={<ChartTip name="queries per second" />} />
               <Area type="monotone" dataKey="value" stroke={COLORS.accent} strokeWidth={1.8} fill="url(#qpsFill)" isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
@@ -257,14 +263,24 @@ function DnsServices({ services }) {
 // ---------- query volume 7d (known-broken feed) ----------
 
 function QueryVolume7d({ analytics }) {
-  const { COLORS, TT } = useChartTheme()
+  const { COLORS } = useChartTheme()
   // dns-analytics can legitimately return zero rows for a tenant with no query
   // activity — that must render as empty, not as a dead feed. Only a fetch
   // error or an explicit availability:"error" from the backend (a dead
   // cubejs) counts as broken; a genuinely empty "ok" fetch does not.
   const volume = analytics.data?.volume ?? []
   const broken = !!analytics.error || analytics.data?.availability === 'error'
-  const chartData = volume.map((r, i) => ({ label: r.hour ?? i, value: Number(r.total_query_count) || 0 }))
+  // `r.hour ?? i` was reading a field these rows have never carried. Verified
+  // against the live feed on 2026-08-07: each row is
+  // {timestamp, "timestamp.day", total_query_count} — no `hour` anywhere, so
+  // every label fell through to the array index and this chart spent its life
+  // labelling seven days of traffic 0,1,2,3,4,5,6 on the axis AND in the hover.
+  // `hour` stays in the chain because the qps feed does use that name and this
+  // panel is the one that would inherit it if the two were ever merged.
+  const chartData = volume.map((r, i) => ({
+    label: r.timestamp ?? r.hour ?? i,
+    value: Number(r.total_query_count) || 0,
+  }))
 
   return (
     <Card panelId="dns-query-volume-7d" span={3} title="Query Volume — 7d" note={broken ? 'feed unavailable' : undefined}>
@@ -282,9 +298,12 @@ function QueryVolume7d({ analytics }) {
               </linearGradient>
             </defs>
             <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={40} />
+            {/* The label is now the day itself, so both the axis and the hover
+                have to spell it — an ISO timestamp on the axis would just be a
+                different kind of unreadable than the index it replaced. */}
+            <XAxis dataKey="label" tickFormatter={fmtShortDay} tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={40} />
             <YAxis hide />
-            <Tooltip {...TT} />
+            <Tooltip content={<ChartTip name="queries" />} />
             <Area type="monotone" dataKey="value" stroke={COLORS.purple} strokeWidth={1.8} fill="url(#volFill)" isAnimationActive={false} />
           </AreaChart>
         </ResponsiveContainer>
@@ -439,7 +458,19 @@ function DnssecHealth({ dnssec }) {
   const unsignedCount = rows.filter((r) => r.dnssec_status === 'UNSIGNED').length
   const signedShare = rows.length ? (signedCount / rows.length) * 100 : null
 
-  const unsigned = rows.filter((r) => r.dnssec_status === 'UNSIGNED')
+  // This panel used to say "worst 150" over `unsigned.slice(0, DNSSEC_CAP)` of
+  // whatever order the upstream happened to return. Checked the live payload on
+  // 2026-08-07: a row carries fqdn, view, id, dnssec_status and
+  // dnssec_signing_policy, and nothing else. There is no severity, no age, no
+  // record count — nothing that ranks one unsigned zone above another, so
+  // "worst" was a claim the data cannot make and the cut was also non-repeatable
+  // between reloads. Sorting A–Z cannot invent severity, but it does make the
+  // 150 you see the same 150 every time, and the header now says which 150 they
+  // are. If the upstream ever adds a real severity field, sort by that instead
+  // and the header should say so.
+  const unsigned = rows
+    .filter((r) => r.dnssec_status === 'UNSIGNED')
+    .sort((a, b) => String(a.fqdn ?? '').localeCompare(String(b.fqdn ?? '')))
   const shown = unsigned.slice(0, DNSSEC_CAP)
 
   const tableRows = shown.map((r, i) => ({
@@ -462,13 +493,7 @@ function DnssecHealth({ dnssec }) {
       span={3}
       title="DNSSEC Health"
       right={
-        <span className="text-[11px] text-muted">
-          {unsigned.length > DNSSEC_CAP
-            ? `worst ${DNSSEC_CAP} of ${unsigned.length.toLocaleString()} unsigned`
-            : unsigned.length
-              ? `${unsigned.length.toLocaleString()} unsigned`
-              : ''}
-        </span>
+        <span className="text-[11px] text-muted">{dnssecPanelLabel(unsigned.length, DNSSEC_CAP)}</span>
       }
     >
       {dnssec.loading ? (

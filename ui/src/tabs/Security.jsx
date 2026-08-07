@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
-import { useChartTheme, Card, CardGrid, Empty, HiddenPanels, Skeleton, FeedUnavailable } from '../components/ui.jsx'
+import { useChartTheme, ChartTip, Card, CardGrid, Empty, HiddenPanels, Skeleton, FeedUnavailable } from '../components/ui.jsx'
+import { fmtShortDay } from '../lib/chartFormat.js'
 import { DataTable } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
@@ -77,7 +78,7 @@ export default function Security() {
 // ---------- severity hero ----------
 
 function SeverityHero({ hub, events }) {
-  const { COLORS, TT } = useChartTheme()
+  const { COLORS } = useChartTheme()
   const { grid, tick } = useThemeColors()
   const SEV_COLOR = sevColorMap(COLORS)
   const counts = hub.data?.counts ?? {}
@@ -126,7 +127,10 @@ function SeverityHero({ hub, events }) {
                 <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="hour" tick={{ fill: tick, fontSize: 10 }} axisLine={{ stroke: grid }} tickLine={false} minTickGap={30} />
                 <YAxis hide />
-                <Tooltip {...TT} />
+                {/* The bar is a count of flagged lookups in that hour of the
+                    day, so the unit IS "events" — the same word the panel's own
+                    right-hand count uses. Recharts' default said `value : 0`. */}
+                <Tooltip content={<ChartTip name="events" />} />
                 <Bar dataKey="value" radius={[3, 3, 0, 0]} fill={COLORS.accent} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
@@ -458,19 +462,49 @@ function CtemPanel({ ctem }) {
 
 // ---------- threat feed activity ----------
 
+// One row per day, not one per (day, action).
+//
+// /api/csp/threats returns the upstream cube verbatim: a row for every
+// (day, action) pair, so seven days arrive as fourteen rows —
+//   {"action":"Allow","day":"2026-07-31T00:00:00.000","requests":21420}
+//   {"action":"Block","day":"2026-07-31T00:00:00.000","requests":438914}
+// — and not even in a stable order (Jul 31 arrives Allow-first, Aug 1
+// Block-first). Handing that straight to recharts drew fourteen bars under
+// seven repeated date labels, in whatever order the feed felt like, which is
+// why the axis had to fall back to raw ISO strings to keep them apart.
+//
+// Folding to {day, blocked, allowed} gives the chart the shape it was always
+// describing: one column per day, split by outcome. The right fix is arguably
+// upstream — go/internal/dashboard/csp.go:630 asks Cube for the `action`
+// dimension and passes the result through untouched — but the pivot is four
+// lines here and a schema change there, so it lives here for now.
+//
+// Day order is first-appearance, not sorted: the feed returns oldest-first and
+// re-sorting ISO strings would silently reorder any feed that doesn't.
+function pivotByDay(rows) {
+  const byDay = new Map()
+  for (const r of rows) {
+    const day = r.day ?? ''
+    if (!byDay.has(day)) byDay.set(day, { day, blocked: 0, allowed: 0 })
+    const bucket = byDay.get(day)
+    const n = Number(r.requests) || 0
+    const action = String(r.action || '').toLowerCase()
+    if (action === 'block') bucket.blocked += n
+    else if (action === 'allow') bucket.allowed += n
+  }
+  return [...byDay.values()]
+}
+
 function ThreatFeed({ threats }) {
-  const { COLORS, TT } = useChartTheme()
+  const { COLORS } = useChartTheme()
   const { grid, tick } = useThemeColors()
   const rows = threats.data?.rows ?? []
   const status = threats.data?.status
-  const chartData = rows.map((r) => ({ day: r.day, requests: Number(r.requests) || 0, action: String(r.action || '').toLowerCase() }))
-  const totals = rows.reduce((m, r) => {
-    const a = String(r.action || '').toLowerCase()
-    const n = Number(r.requests) || 0
-    if (a === 'block') m.block += n
-    else if (a === 'allow') m.allow += n
-    return m
-  }, { block: 0, allow: 0 })
+  const chartData = useMemo(() => pivotByDay(rows), [rows])
+  const totals = chartData.reduce(
+    (m, d) => ({ block: m.block + d.blocked, allow: m.allow + d.allowed }),
+    { block: 0, allow: 0 },
+  )
 
   return (
     <Card panelId="security-threat-feed-activity" span={3} title="Threat Feed Activity">
@@ -484,14 +518,17 @@ function ThreatFeed({ threats }) {
           </div>
           <ResponsiveContainer width="100%" height={150}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <XAxis dataKey="day" tick={{ fill: tick, fontSize: 10 }} axisLine={{ stroke: grid }} tickLine={false} minTickGap={30} />
+              <XAxis dataKey="day" tickFormatter={fmtShortDay} tick={{ fill: tick, fontSize: 10 }} axisLine={{ stroke: grid }} tickLine={false} minTickGap={30} />
               <YAxis hide />
-              <Tooltip {...TT} />
-              <Bar dataKey="requests" radius={[3, 3, 0, 0]} isAnimationActive={false}>
-                {chartData.map((r, i) => (
-                  <Cell key={i} fill={r.action === 'block' ? COLORS.crit : COLORS.accent} />
-                ))}
-              </Bar>
+              {/* Both outcomes for the day in one hover: "Jul 31 / Blocked
+                  438,914 / Allowed 21,420". The colours come from the bars, so
+                  the tooltip and the totals above it read the same. */}
+              <Tooltip content={<ChartTip names={{ blocked: 'Blocked', allowed: 'Allowed' }} />} cursor={{ fill: grid, fillOpacity: 0.35 }} />
+              {/* Stacked, so the column height is the day's whole matched
+                  volume and the split is visible inside it. Allowed sits on
+                  top and carries the rounded cap. */}
+              <Bar dataKey="blocked" stackId="day" fill={COLORS.crit} isAnimationActive={false} />
+              <Bar dataKey="allowed" stackId="day" radius={[3, 3, 0, 0]} fill={COLORS.accent} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </>

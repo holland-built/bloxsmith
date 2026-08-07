@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, HiddenPanels, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, HiddenPanels, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable, sortRows } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
@@ -101,7 +101,7 @@ export default function Network() {
 // ---------- utilization distribution ----------
 
 function UtilBands({ subnets, totals, subnetsStatus }) {
-  const { COLORS, TT } = useChartTheme()
+  const { COLORS } = useChartTheme()
   const { grid, tick } = useThemeColors()
   const BANDS = [
     { key: '0-70', label: '<70%', test: (u) => u < 70, color: COLORS.accent },
@@ -145,7 +145,10 @@ function UtilBands({ subnets, totals, subnetsStatus }) {
             <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" tick={{ fill: tick, fontSize: 11 }} axisLine={{ stroke: grid }} tickLine={false} />
             <YAxis tick={{ fill: tick, fontSize: 11 }} axisLine={{ stroke: grid }} tickLine={false} allowDecimals={false} />
-            <Tooltip {...TT} formatter={(v) => [`${v} subnets`, null]} />
+            {/* Already said "<70% · 486 subnets" before ChartTip existed; the
+                move is for one shared tooltip, and it also puts a separator in
+                a four-figure count that the old formatter printed raw. */}
+            <Tooltip content={<ChartTip name="subnets" />} />
             <Bar dataKey="value" radius={[3, 3, 0, 0]} isAnimationActive={false}>
               {counts.map((c) => (
                 <Cell key={c.label} fill={c.color} />

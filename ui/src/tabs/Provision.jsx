@@ -371,7 +371,7 @@ function SiteMode({ isAdmin }) {
             <select className={inputCls} value={siteTemplate} onChange={(e) => onInput(setSiteTemplate)(e.target.value)}>
               <option value="">{templatesApi.loading ? 'Loading templates…' : 'Select a template'}</option>
               {templates.map((t) => (
-                <option key={t.name} value={t.name}>
+                <option key={t.name} value={t.name} disabled={t.valid === false}>
                   {t.name} — {t.region || ''}/{t.environment || ''}{t.valid === false ? ' (invalid)' : ''}
                 </option>
               ))}
