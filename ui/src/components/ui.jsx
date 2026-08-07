@@ -1,5 +1,6 @@
 import { Children, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useThemeColors } from '../lib/theme.jsx'
+import { fmtShortDay, fmtValue } from '../lib/chartFormat.js'
 import { PANEL_HELP } from '../lib/panelHelp.js'
 import { shouldHidePanel, showAnyway } from '../lib/services.js'
 import {
@@ -27,15 +28,104 @@ export function useChartTheme() {
       other: colors.other,
       sevHigh: colors.sevHigh,
     },
-    TT: {
-      contentStyle: { background: colors.field, border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 12 },
-      labelStyle: { color: colors.muted },
-      itemStyle: { color: colors.txt },
-    },
   }
 }
 
+// ---------- ChartTip ----------
+//
+// The one thing every chart on this dashboard says when you point at it.
+//
+// What stood here before was `TT`, a style bag on useChartTheme: it made
+// recharts' default tooltip match the theme and left the WORDS to recharts. What
+// recharts writes by default is the series' `dataKey` and the raw number behind
+// it, which is how eleven charts came to greet a network operator with
+// `value : 346.1144444444444` and `requests : 312011` under
+// `2026-08-01T00:00:00.000`. Every one of those is accurate about the code and
+// useless about the network.
+//
+// TT is deleted rather than deprecated, and that is the point: while it existed,
+// "every chart shares one tooltip" was a convention any new chart could opt out
+// of by spreading {...TT}. With it gone, a `<Tooltip>` either uses this component
+// or writes raw dataKeys that tests/chart-tooltips.spec.ts fails on.
+//
+// So the copy decision moves here, once, instead of being made eleven times:
+//
+//   name    a plain-English label for a SINGLE series, written as the unit it is
+//           measured in — "queries per second", "events", "subnets". Reads as
+//           "346.1 queries per second", the way a person says it out loud.
+//   names   a { dataKey: label } map for a chart with more than one series,
+//           where each label is a CATEGORY rather than a unit — "Blocked",
+//           "Allowed". Reads as "Blocked  438,914", label first, because that is
+//           how a person says a category. Each row carries the series' own
+//           colour so the tooltip and the bars agree without a legend.
+//
+// valueFormat / labelFormat are the escape hatches for the two charts that
+// genuinely need their own sentence (Top Consumers already says
+// "204 used (80%)", which is better than anything a generic rule would write).
+// The defaults are the honest ones: at most one decimal, and dates spelled the
+// way people spell them.
+//
+// Passed to recharts as `content`, so it replaces the default renderer rather
+// than decorating it: <Tooltip content={<ChartTip name="queries per second" />} />.
+// It draws inside recharts' own tooltip wrapper, which lives in the chart body —
+// it adds nothing to a Card header, so none of the header-measurement machinery
+// further down this file can see it.
+export function ChartTip({
+  active, payload, label,
+  name, names, valueFormat = fmtValue, labelFormat = fmtShortDay,
+}) {
+  const colors = useThemeColors()
+  if (!active || !payload || payload.length === 0) return null
 
+  // A series that is currently hidden, or one whose value never arrived, has
+  // nothing to say — printing "—" for it would invent a row the chart isn't drawing.
+  const rows = payload.filter((p) => p && p.value !== null && p.value !== undefined && p.hide !== true)
+  if (rows.length === 0) return null
+
+  const head = labelFormat(label, payload)
+
+  return (
+    <div
+      style={{
+        background: colors.field,
+        border: `1px solid ${colors.border}`,
+        borderRadius: 8,
+        fontSize: 12,
+        padding: '6px 9px',
+        lineHeight: 1.45,
+        // The tooltip follows the cursor across the plot area; letting it take
+        // the pointer would steal clicks from the bars and slices underneath,
+        // several of which are the drill-down into the tab below.
+        pointerEvents: 'none',
+      }}
+    >
+      {head ? <div style={{ color: colors.muted, marginBottom: 2 }}>{head}</div> : null}
+      {rows.map((p, i) => {
+        const seriesLabel = names ? (names[p.dataKey] ?? names[p.name] ?? null) : null
+        const value = valueFormat(p.value, p)
+        return (
+          <div key={`${p.dataKey ?? p.name ?? i}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {seriesLabel ? (
+              <>
+                <i
+                  aria-hidden="true"
+                  style={{
+                    width: 8, height: 8, borderRadius: 2, display: 'inline-block', flex: 'none',
+                    background: p.color || p.fill || p.stroke || colors.muted,
+                  }}
+                />
+                <span style={{ color: colors.muted }}>{seriesLabel}</span>
+                <span style={{ color: colors.txt, fontWeight: 600, marginLeft: 'auto', paddingLeft: 10 }}>{value}</span>
+              </>
+            ) : (
+              <span style={{ color: colors.txt }}>{name ? `${value} ${name}` : value}</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 // ---------- shared bits ----------
 //

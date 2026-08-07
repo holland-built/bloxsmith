@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   AreaChart, Area, BarChart, Bar, Cell, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, TabIntro, utilStatus } from '../components/ui.jsx'
+import { ChartTip, useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, TabIntro, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
+import { fmtValue } from '../lib/chartFormat.js'
 import { useThemeColors } from '../lib/theme.jsx'
 
 // A number the backend actually measured, or null when it did not.
@@ -42,6 +43,45 @@ function cmpMaybe(av, bv, dir) {
   if (av === null) return 1
   if (bv === null) return -1
   return dir === 'asc' ? av - bv : bv - av
+}
+
+// Tap once to read it, tap again to follow it.
+//
+// A mouse gets two separate gestures: hover shows the number, click drills into
+// the tab below, and by the time you click you have already read the value. A
+// finger has only one gesture. On Top Consumers and Host Status that single tap
+// fired the bar's / slice's onClick, the hash changed, and Overview unmounted
+// before the tooltip could be read — measured, not assumed: tapping the donut
+// went straight to `#infra?status=offline` having shown nothing at all. So on a
+// phone the number those two panels exist to report was simply unreadable.
+//
+// The fix keeps both jobs and orders them. `onPointerDownCapture` records
+// whether this gesture came from a finger (it runs before recharts' own click
+// handling, so the answer is ready when the click arrives). On a mouse nothing
+// changes — `drills()` always says yes. On touch the first tap on a bar or slice
+// only reveals it (Chromium's tap-to-mouse compatibility events are what make
+// recharts show the tooltip); a second tap on the SAME one navigates, and
+// tapping a different one moves the arming there instead. Navigation stays one
+// tap away, which is why this is not "tap-to-navigate lost".
+function useTapThenDrill() {
+  const fromTouch = useRef(false)
+  const armed = useRef(null)
+
+  const onPointerDownCapture = useCallback((e) => {
+    fromTouch.current = e.pointerType === 'touch'
+  }, [])
+
+  const drills = useCallback((key) => {
+    if (!fromTouch.current) return true
+    if (armed.current === key) {
+      armed.current = null
+      return true
+    }
+    armed.current = key
+    return false
+  }, [])
+
+  return { onPointerDownCapture, drills }
 }
 
 // ---------- main ----------
@@ -234,7 +274,7 @@ function LicenseInventory({ licenses, panelId }) {
 // ---------- hero ----------
 
 function DnsHero({ dns, panelId }) {
-  const { COLORS, TT } = useChartTheme()
+  const { COLORS } = useChartTheme()
   const theme = useThemeColors()
   const rows = dns.data?.rows ?? []
   const status = dns.data?.status
@@ -283,7 +323,10 @@ function DnsHero({ dns, panelId }) {
               <CartesianGrid stroke={theme.grid} strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="label" tick={{ fill: theme.tick, fontSize: 11 }} axisLine={{ stroke: theme.grid }} tickLine={false} minTickGap={40} />
               <YAxis hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
-              <Tooltip {...TT} />
+              {/* The headline above this chart already rounds the same series to
+                  one decimal; the tooltip used to answer `value : 346.1144444444444`
+                  for the very same point. One decimal, and the unit spelled out. */}
+              <Tooltip content={<ChartTip name="queries per second" />} />
               <Area type="monotone" dataKey="value" stroke={COLORS.accent} strokeWidth={1.8} fill="url(#dnsFill)" isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
@@ -366,8 +409,9 @@ function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus, panelI
 // ---------- top utilization ----------
 
 function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
-  const { COLORS, TT } = useChartTheme()
+  const { COLORS } = useChartTheme()
   const theme = useThemeColors()
+  const tap = useTapThenDrill()
   // Rank by addresses USED, not util% — util ranking is a wall of 100% /32 infra links
   // (learned in old app: commits 7789ae8 / 46e591c)
   //
@@ -394,15 +438,25 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
           <Empty />
         )
       ) : (
+        <div onPointerDownCapture={tap.onPointerDownCapture}>
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={top} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <XAxis dataKey="addr" tick={false} axisLine={{ stroke: theme.grid }} tickLine={false} />
             <YAxis hide />
+            {/* This panel's sentence was already the one the other ten charts are
+                being moved towards ("10.61.30.0 / 177 used (69%)"), so the words
+                are carried over verbatim — only the renderer changes, so that
+                every tooltip in the app is now the same component. */}
             <Tooltip
-              contentStyle={TT.contentStyle}
-              labelStyle={{ color: theme.txt }}
-              formatter={(v, _n, p) => [`${Number(v).toLocaleString()} used (${p?.payload?.util ?? '?'}%)`, null]}
-              labelFormatter={(_, p) => p?.[0]?.payload?.addr ?? p?.[0]?.payload?.cidr ?? ''}
+              content={
+                <ChartTip
+                  labelFormat={(_l, p) => p?.[0]?.payload?.addr ?? p?.[0]?.payload?.cidr ?? ''}
+                  valueFormat={(v, p) => {
+                    const util = p?.payload?.util
+                    return `${fmtValue(v)} used (${util === null || util === undefined ? '?' : fmtValue(util)}%)`
+                  }}
+                />
+              }
             />
             <Bar
               dataKey="used"
@@ -411,7 +465,8 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
               cursor="pointer"
               onClick={(payload) => {
                 const addr = payload?.addr
-                if (addr) location.hash = 'network?subnet=' + encodeURIComponent(addr)
+                if (!addr || !tap.drills(addr)) return
+                location.hash = 'network?subnet=' + encodeURIComponent(addr)
               }}
             >
               {top.map((s, i) => (
@@ -420,6 +475,7 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        </div>
       )}
     </Card>
   )
@@ -429,6 +485,23 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
 
 function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
   const { COLORS } = useChartTheme()
+  // The readout that replaced the native <title>: which square, and where the
+  // pointer is inside the grid so the chip can follow it.
+  const [tip, setTip] = useState(null)
+  const gridRef = useRef(null)
+
+  // Every square calls this on enter AND on move, because a finger dragged
+  // across the grid never fires `enter` again after the first square.
+  const showTip = useCallback((e, addr, util) => {
+    const box = gridRef.current?.getBoundingClientRect()
+    if (!box) return
+    setTip({ addr, util, x: e.clientX - box.left, y: e.clientY - box.top, w: box.width, h: box.height })
+  }, [])
+  // Cleared from the grid, not from each square: moving between two squares
+  // fires the old one's `leave` and the new one's `enter`, and if those two ever
+  // arrive in the other order the readout would blank out mid-drag.
+  const hideTip = useCallback(() => setTip(null), [])
+
   // Worst N only — a cell per subnet at 5k subnets = sub-pixel rects (invisible). Cap + say so.
   const CAP = 288 // 24 x 12
   // /29-/32 are infra links, always ~100% — they'd paint the whole map red (old app: 67db14e)
@@ -463,34 +536,70 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
         )
       ) : (
         <>
-          <svg width="100%" height="110" viewBox="0 0 100 100" preserveAspectRatio="none">
-            {cells.map((s, i) => {
-              const util = num(s.util) // never null: `cells` is the measured set
-              const r = Math.floor(i / cols)
-              const c = i % cols
-              const color = util >= 92 ? COLORS.crit : util >= 75 ? COLORS.warn : COLORS.accent
-              const opacity = Math.max(0.15, Math.min(1, util / 100))
-              return (
-                <rect
-                  key={`${s.addr ?? s.cidr ?? ''}|${i}`}
-                  x={c * cw + gap / 2}
-                  y={r * ch + gap / 2}
-                  width={cw - gap}
-                  height={ch - gap}
-                  rx={0.8}
-                  fill={color}
-                  opacity={opacity}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => {
-                    const addr = s.addr || s.cidr
-                    if (addr) location.hash = 'network?subnet=' + encodeURIComponent(addr)
-                  }}
-                >
-                  <title>{`${s.addr || s.cidr} — ${util}%`}</title>
-                </rect>
-              )
-            })}
-          </svg>
+          {/* The 288 squares used to say what they were through a native
+              <title>: about a second of hovering before the OS drew it, no way
+              to make it match anything else on the page, and nothing at all on a
+              touchscreen — which is the whole complaint this panel was raised
+              on. It is replaced, not supplemented: keeping both would draw two
+              tooltips on a mouse. The aria-label on each square is the one thing
+              <title> did well, kept.
+
+              This wrapper is `relative` so the readout can be positioned against
+              the grid. It sits inside the card BODY; nothing here goes near the
+              card header or the layout machinery that measures it. */}
+          <div ref={gridRef} className="relative" onPointerLeave={hideTip}>
+            {/* touch-action: none so a finger dragged along the grid keeps
+                delivering pointermove to these squares instead of being taken
+                over as a page scroll — the same reason the layout drag handle
+                carries `touch-none`. A tap is unaffected and still navigates. */}
+            <svg width="100%" height="110" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ touchAction: 'none' }}>
+              {cells.map((s, i) => {
+                const util = num(s.util) // never null: `cells` is the measured set
+                const addr = s.addr || s.cidr
+                const r = Math.floor(i / cols)
+                const c = i % cols
+                const color = util >= 92 ? COLORS.crit : util >= 75 ? COLORS.warn : COLORS.accent
+                const opacity = Math.max(0.15, Math.min(1, util / 100))
+                return (
+                  <rect
+                    key={`${s.addr ?? s.cidr ?? ''}|${i}`}
+                    x={c * cw + gap / 2}
+                    y={r * ch + gap / 2}
+                    width={cw - gap}
+                    height={ch - gap}
+                    rx={0.8}
+                    fill={color}
+                    opacity={opacity}
+                    aria-label={`${addr} — ${fmtValue(util)}% used`}
+                    style={{ cursor: 'pointer' }}
+                    onPointerEnter={(e) => showTip(e, addr, util)}
+                    onPointerMove={(e) => showTip(e, addr, util)}
+                    onClick={() => {
+                      if (addr) location.hash = 'network?subnet=' + encodeURIComponent(addr)
+                    }}
+                  />
+                )
+              })}
+            </svg>
+            {tip && (
+              <div
+                data-heatmap-readout
+                className="absolute z-10 pointer-events-none whitespace-nowrap rounded-lg border border-border bg-field px-2 py-1 text-[11px] shadow-sm"
+                style={{
+                  // Clamped to the grid on both axes so the chip can never
+                  // escape the card body — half its own width in from each edge
+                  // horizontally, and pushed back up when the pointer is on the
+                  // bottom row.
+                  left: Math.min(Math.max(tip.x, 74), Math.max(74, tip.w - 74)),
+                  top: Math.min(Math.max(tip.y + 12, 2), Math.max(2, tip.h - 26)),
+                  transform: 'translateX(-50%)',
+                }}
+              >
+                <span className="font-medium">{tip.addr}</span>
+                <span className="text-muted"> — {fmtValue(tip.util)}% used</span>
+              </div>
+            )}
+          </div>
           <div className="flex gap-3.5 mt-2 text-[11px] text-muted">
             <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />ok</span>
             <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.warn }} />&gt;75%</span>
@@ -526,7 +635,8 @@ function statusBucket(s) {
 const BUCKET_LABEL = { active: 'Active', degraded: 'Degraded', offline: 'Offline', unknown: 'Unknown', other: 'Other' }
 
 function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
-  const { COLORS, TT } = useChartTheme()
+  const { COLORS } = useChartTheme()
+  const tap = useTapThenDrill()
   const buckets = { Active: 0, Degraded: 0, Offline: 0, Unknown: 0, Other: 0 }
   for (const h of hosts) buckets[BUCKET_LABEL[statusBucket(h.status)]]++
   const colorMap = {
@@ -549,7 +659,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
         hostsStatus === 'error' ? <FeedUnavailable label="Hosts feed unavailable" /> : <Empty />
       ) : (
         <div className="flex items-center gap-4">
-          <div className="relative w-[130px] h-[130px] shrink-0">
+          <div className="relative w-[130px] h-[130px] shrink-0" onPointerDownCapture={tap.onPointerDownCapture}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -562,13 +672,30 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
                   stroke="none"
                   isAnimationActive={false}
                   cursor="pointer"
-                  onClick={(d) => { location.hash = 'infra?status=' + d.name.toLowerCase() }}
+                  onClick={(d) => {
+                    if (!d?.name || !tap.drills(d.name)) return
+                    location.hash = 'infra?status=' + d.name.toLowerCase()
+                  }}
                 >
                   {pieData.map((d) => (
                     <Cell key={d.name} fill={d.color} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={TT.contentStyle} position={{ y: 100 }} allowEscapeViewBox={{ x: false, y: true }} />
+                {/* A slice's own bucket is its label, so the count reads
+                    "Offline / 12 hosts" instead of the default `value : 12`.
+                    position/allowEscapeViewBox are carried through unchanged —
+                    they are an earlier fix for this 130px donut clipping its own
+                    tooltip, and have nothing to do with the copy. */}
+                <Tooltip
+                  content={
+                    <ChartTip
+                      labelFormat={(_l, p) => p?.[0]?.name ?? ''}
+                      valueFormat={(v) => `${fmtValue(v)} ${Number(v) === 1 ? 'host' : 'hosts'}`}
+                    />
+                  }
+                  position={{ y: 100 }}
+                  allowEscapeViewBox={{ x: false, y: true }}
+                />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">

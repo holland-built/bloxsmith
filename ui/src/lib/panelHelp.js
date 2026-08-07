@@ -59,7 +59,7 @@ export const PANEL_HELP = {
   },
   'subnet-heatmap': {
     what: 'One square per subnet, coloured by how full it is: blue is fine, amber past 75% full, red past 92%.',
-    look: 'Only the fullest few hundred are drawn, worst first. Point at a square to see its name and figure, or click it to open that subnet.',
+    look: 'Only the fullest few hundred are drawn, worst first. Point at a square, or drag a finger across them, to read its name and figure. Click or tap one to open that subnet.',
   },
   'host-status': {
     what: 'How your Infoblox machines split by state: running, struggling, offline, anything else, or a state nothing reported back.',
@@ -128,7 +128,7 @@ export const PANEL_HELP = {
     look: 'This panel is hidden when no DNS service is detected; a dashed row takes its place and offers to show it anyway.',
   },
   'dns-query-volume-7d': {
-    what: 'The total number of lookups answered each hour over the past seven days.',
+    what: 'The total number of lookups your DNS servers answered on each of the last seven days.',
     look: 'When this feed cannot be read the heading says "feed unavailable" and the panel stays empty, rather than drawing a flat line you could mistake for silence.',
   },
   'dns-zones': {
@@ -169,7 +169,7 @@ export const PANEL_HELP = {
   },
   'security-threat-feed-activity': {
     what: 'How many requests matched the threat feed each day, split into ones that were stopped and ones that were let through.',
-    look: 'Red bars are blocked requests, blue are allowed. A day gets one bar per outcome, so the same date can appear twice.',
+    look: 'Each day is one column: the red part was blocked, the blue cap on top was let through. Point at a column to read both figures.',
   },
   'security-soc-insights': {
     what: 'Threat campaigns the security service has raised against your tenant, with how many events each caused and when it was last seen.',
@@ -299,7 +299,7 @@ export const PANEL_HELP = {
   },
   'provision-site-request': {
     what: 'Which saved site template to build, and optionally an IP space to build it into instead of the one the template names.',
-    look: 'A template listed as (invalid) has an error in its own file. Preview walks the whole plan without creating anything; the button to build for real appears only after that.',
+    look: 'A template listed as (invalid) has an error in its own file and cannot be selected. Preview walks the whole plan without creating anything; the button to build for real appears only after that.',
   },
   'provision-site-log': {
     what: 'The server’s running commentary on the site build — one line per thing it creates, or would create on a preview.',

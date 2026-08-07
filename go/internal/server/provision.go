@@ -190,6 +190,21 @@ func (d *Deps) provisionSiteStream(w http.ResponseWriter, r *http.Request) {
 		emit(map[string]any{"error": err.Error()})
 		return
 	}
+	// The same check /api/templates/validate runs, before anything is created.
+	// Without it this stream went straight to TemplateToSiteConfig, which only
+	// requires the five mandatory values and an integer subnet_size — so an
+	// out-of-range CIDR, a duplicate subnet name, a DHCP offset outside 1-254
+	// or a host naming a subnet that does not exist all passed through, and a
+	// template the UI had already labelled "(invalid)" could allocate real
+	// subnets and zones and then fail part way through.
+	//
+	// Previews are refused too: the file is broken either way, and walking a
+	// plan that can never be built is a worse answer than saying so.
+	if v := provision.ValidateTemplate(template, name); v["valid"] != true {
+		errs, _ := v["errors"].([]provision.M)
+		emit(map[string]any{"error": invalidTemplateMessage(name, errs)})
+		return
+	}
 	cfg, err := provision.TemplateToSiteConfig(template, qp)
 	if err != nil {
 		emit(map[string]any{"error": err.Error()})
@@ -815,6 +830,37 @@ func (d *Deps) provErr(w http.ResponseWriter, r *http.Request, label string, err
 	}
 	d.logExc(label, err)
 	d.json(w, r, 500, map[string]any{"error": "internal error"})
+}
+
+// invalidTemplateMessage turns ValidateTemplate's errors[] into one sentence
+// the person who has to fix it can act on: which file, which line of it, what
+// is wrong, and that nothing was created. The reader of this frame is an
+// operator looking at a form, not a Go developer reading a stack trace, so it
+// says the file name and the YAML path — never an engine error string.
+//
+// Every offending field is listed, not just the first: a half-corrected
+// template comes straight back here on the next attempt.
+func invalidTemplateMessage(name string, errs []provision.M) string {
+	var parts []string
+	for _, e := range errs {
+		field := strings.TrimSpace(provision.PyStr(e["field"]))
+		msg := strings.TrimSpace(provision.PyStr(e["message"]))
+		switch {
+		case field == "":
+			parts = append(parts, msg)
+		case msg == "":
+			parts = append(parts, field)
+		default:
+			parts = append(parts, field+" — "+msg)
+		}
+	}
+	// Empty only if validation failed with no error entries, which no current
+	// rule produces. Kept so the operator never gets a dangling sentence.
+	if len(parts) == 0 {
+		return fmt.Sprintf("The template file %s has a problem, so nothing was created. Check the file and try again.", name)
+	}
+	return fmt.Sprintf("The template file %s has a problem, so nothing was created: %s. Fix the template file and try again.",
+		name, strings.Join(parts, "; "))
 }
 
 // emitter adapts an sse.Emit to a provision.Emitter (identical signature).

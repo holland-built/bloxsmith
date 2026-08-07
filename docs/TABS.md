@@ -76,7 +76,7 @@ Panels cannot be added or deleted. A panel is only ever absent because the servi
 The morning read. Same 30-second polling.
 
 - **Open Issues** — the single count of things wanting a decision.
-- **Security Today** — threat events from the last day.
+- **Security Today** — threat events from the last hour, 50 at most.
 - **Top Capacity Risks** — the 10 subnets with the least free space, infra links excluded.
 - **Hosts Needing Attention** — anything not healthy.
 - **DNS Zone Issues** — zones with a configuration problem.
