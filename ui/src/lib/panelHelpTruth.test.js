@@ -25,16 +25,23 @@
 // ---------------------------------------------------------------------------
 // WHAT THIS TEST CANNOT CATCH. Read this before trusting a green run.
 //
-//   - NUMBERS. "150 at most", "top twelve", "50 events", "the first 25 of each",
-//     "500 at most". Every cap, count and limit in the copy is unchecked here. A
-//     cap changed from 150 to 50 in the code leaves this test green.
-//   - THRESHOLDS. "amber past 75% full", "red under 30 days", "over 85% full".
-//     Unchecked. The comparison operators could all flip and nothing here moves.
-//   - COLOUR MEANINGS. "red is blocked, blue is allowed", "green created, blue
-//     updated, red deleted". Which series gets which colour is unchecked.
-//   - DATA-SOURCE CLAIMS. "the last hour", "the past seven days", "from the
-//     server, not this page", "counted by the day each was last touched". These
-//     are claims about an API and its payload; nothing here reads either.
+//   - NUMBERS, THRESHOLDS, COLOUR MEANINGS and TIME WINDOWS are now CHECKED IN
+//     panelHelpValues.test.js, not here. "150 at most", "top twelve", "the first
+//     25 of each"; "amber past 75% full", "red under 30 days", "over 85% full";
+//     "green created, blue updated, red deleted"; "the last hour", "the last
+//     seven days". That file is a declarative claim table binding one sentence
+//     to one line in one named file — including ui.jsx, lib/ and Go, which the
+//     file-level scan below cannot reach. THIS file still cannot catch any of
+//     them: a cap changed from 150 to 50, or every comparison operator flipped,
+//     leaves everything here green. Read that file's header for what its own
+//     coverage does and does not prove — in particular, it matches a literal in
+//     a Go file without proving the panel calls that endpoint, and it pairs a
+//     colour token with an English word by a hand-written dictionary.
+//   - DATA-SOURCE CLAIMS. "from the server, not this page", "counted by the day
+//     each was last touched", "the split is never guessed". These are claims
+//     about where work happens and what a payload contained; nothing in either
+//     file reads a request or a response. panelHelpValues.test.js lists the ones
+//     it deliberately declined in its own EXCLUDED table.
 //   - ANY SENTENCE OUTSIDE THE FIVE RULES ABOVE. That is most of the file.
 //     "Click the heading", "click a chip", "click a label", "Preview creates
 //     nothing", "Delete takes two clicks", "hidden when no DNS service is
