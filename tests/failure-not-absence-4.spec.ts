@@ -185,7 +185,7 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
 
     await expect(card(page, 'Top Capacity Risks').getByText('Subnets feed unavailable')).toBeVisible();
 
-    for (const label of ['Subnets >85% Util', 'Hosts Not Online', 'DNS Zones w/ Issues']) {
+    for (const label of ['Subnets ≥85% Util', 'Hosts Not Online', 'DNS Zones w/ Issues']) {
       const row = kpi(page, label);
       await expect(row.getByText('unavailable', { exact: true })).toBeVisible();
       await expect(row.getByText('0', { exact: true })).toHaveCount(0);
@@ -207,7 +207,7 @@ test.describe('Daily → Hosts Needing Attention / capacity / zones (/api/data d
     await expect(zones.getByText('no DNS zone issues')).toBeVisible();
     await expect(zones.getByText('0 zones', { exact: true })).toBeVisible();
 
-    for (const label of ['Subnets >85% Util', 'Hosts Not Online', 'DNS Zones w/ Issues']) {
+    for (const label of ['Subnets ≥85% Util', 'Hosts Not Online', 'DNS Zones w/ Issues']) {
       const row = kpi(page, label);
       await expect(row.getByText('0', { exact: true })).toBeVisible();
       await expect(row.getByText('unavailable', { exact: true })).toHaveCount(0);

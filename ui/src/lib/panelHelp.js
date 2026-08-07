@@ -76,7 +76,7 @@ export const PANEL_HELP = {
 
   // ---- Daily ----
   'daily-open-issues': {
-    what: 'Three counts: subnets over 85% full, machines not reporting as online, and DNS zones with at least one problem recorded.',
+    what: 'Three counts: subnets 85% full or more (tiny networks under 16 addresses left out), machines not reporting as online, and DNS zones with a problem recorded.',
     look: 'Click any row to open the list behind it. A row reading "unavailable" in red means that one feed failed — the other two rows are still real.',
   },
   'daily-security-today': {

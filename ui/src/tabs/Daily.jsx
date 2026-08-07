@@ -61,18 +61,24 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading }) {
   const { COLORS } = useChartTheme()
   // `subnets` (data.subnets) is the union of the first-5,000 page and every
   // subnet with util >= 70, deduped. That union is COMPLETE for any threshold
-  // >= 70 — a subnet at util > 85 is necessarily >= 70, so it cannot be missing
+  // >= 70 — a subnet at util >= 85 is necessarily >= 70, so it cannot be missing
   // from the union. Counting rows here is therefore an exact estate figure for
   // this tile, not a coverage-set sample — do not swap this for a `_totals`
   // lookup (`_totals.subnetsCrit` is util >= 90, a different threshold).
-  const gt85 = subnets.filter((s) => (Number(s.cidr) || 0) <= 28 && (Number(s.util) || 0) > 85).length
+  //
+  // The threshold is INCLUSIVE (>= 85) to agree with the drill-down this row
+  // links to: Network.jsx keeps `u >= minUtil`, so a strict `> 85` here would
+  // show a subnet at exactly 85.0% in the list but not in the count. The
+  // `<= 28` rule mirrors that same drill-down (Network.jsx `base`), which drops
+  // /29-/32 infra links; it is disclosed in the help copy for this panel.
+  const atLeast85 = subnets.filter((s) => (Number(s.cidr) || 0) <= 28 && (Number(s.util) || 0) >= 85).length
   const notOnline = hosts.filter((h) => !/online|active/i.test(h.status || '')).length
   const zoneIssues = zones.filter((z) => Array.isArray(z.issues) && z.issues.length > 0).length
 
   // Each KPI reads a DIFFERENT feed (subnets/hosts/zones) — one can be dead
   // while the other two are fine, so the gate is per-row, not per-card.
   const cells = [
-    { label: 'Subnets >85% Util', value: gt85, color: COLORS.crit, hash: 'network?minUtil=85', status: meta.subnets },
+    { label: 'Subnets ≥85% Util', value: atLeast85, color: COLORS.crit, hash: 'network?minUtil=85', status: meta.subnets },
     { label: 'Hosts Not Online', value: notOnline, color: COLORS.warn, hash: 'infra?status=error', status: meta.hosts },
     { label: 'DNS Zones w/ Issues', value: zoneIssues, color: COLORS.other, hash: 'dns?issues=1', status: meta.zones },
   ]
