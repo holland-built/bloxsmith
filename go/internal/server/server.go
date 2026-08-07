@@ -97,6 +97,7 @@ func New(d *Deps) http.Handler {
 	d.registerAccountRoutes(mux)
 	d.registerThreatIntelRoutes(mux)
 	d.registerIPAMReadRoutes(mux)
+	d.registerSearchRoutes(mux)
 	d.registerNOCRoutes(mux)
 	d.registerBrandRoutes(mux)
 	d.registerSecurityWriteRoutes(mux)

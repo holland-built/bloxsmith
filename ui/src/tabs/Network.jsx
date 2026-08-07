@@ -4,8 +4,9 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, HiddenPanels, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable, sortRows } from '../components/DataTable.jsx'
+import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams, setHashParams } from '../lib/hash.js'
 
@@ -52,6 +53,8 @@ export default function Network() {
   const ipam = useApi('/api/csp/ipam-util', { poll: 30000 })
   const dhcp = useApi('/api/csp/dhcp-leases', { poll: 30000 })
   const hp = useHashParams()
+  // One shared read of /api/service-inventory per page load — see Security.jsx.
+  const owned = useOwnedServices()
 
   const subnets = data.data?.subnets ?? []
   const totals = data.data?._totals
@@ -83,7 +86,12 @@ export default function Network() {
       <CardGrid>
         <UtilBands subnets={subnets} totals={totals} subnetsStatus={subnetsStatus} />
         <IpamSpaces ipam={ipam} />
-        <DhcpLeases dhcp={dhcp} innerRef={leasesRef} />
+        {/* Leases are issued by a deployed DHCP service. The IPAM panels above
+            and the subnet table below read address-space config, which exists
+            with no DHCP service at all — so neither is mapped. */}
+        <HiddenPanels {...SERVICE_GROUPS.dhcp} state={owned}>
+          <DhcpLeases dhcp={dhcp} innerRef={leasesRef} />
+        </HiddenPanels>
         <ExhaustionTable subnets={subnets} hp={hp} subnetsStatus={subnetsStatus} />
       </CardGrid>
     </div>

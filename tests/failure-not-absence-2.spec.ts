@@ -172,17 +172,28 @@ test.describe('Overview → License Inventory panel', () => {
 // ---------- 7. VaultGate (a failed /api/vault/status read must not open the dashboard) ----------
 
 test.describe('VaultGate (failed vault status read)', () => {
+  // "The dashboard opened" used to be read off the flat tab strip's Overview
+  // link. That strip is gone (5 group menus replaced 14 top-level links), so
+  // the same property is now read off the nav bar plus the tab it renders:
+  // five group buttons AND the Overview heading. A page that got past the gate
+  // but rendered nothing would fail both halves.
   test('a failed status read shows unavailable wording, not the full dashboard', async ({ page }) => {
     await page.route('**/api/vault/status*', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }));
+    await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/');
     await expect(page.getByText(/vault status unavailable/i)).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Overview' })).toHaveCount(0);
+    await expect(page.locator('header button[data-group]')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /^Overview/ })).toHaveCount(0);
   });
 
   test('a genuine successful status read still opens the dashboard', async ({ page }) => {
     await page.route('**/api/vault/status*', (route) => fulfillJson(route, { vaultMode: false, ready: true }));
+    await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/');
-    await expect(page.getByRole('link', { name: 'Overview' })).toBeVisible();
+    const groups = page.locator('header button[data-group]');
+    await expect(groups).toHaveCount(5);
+    await expect(groups.first()).toBeVisible();
+    await expect(page.locator('h1').first()).toHaveText(/^Overview/);
     await expect(page.getByText(/vault status unavailable/i)).toHaveCount(0);
   });
 });

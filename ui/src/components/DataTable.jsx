@@ -460,7 +460,10 @@ export function DataTable({
           {cols.map((c) => {
             const alignRight = c.align === 'right'
             const lowPri = c.priority === 'low' ? ' @max-[360px]:hidden' : ''
-            const base = `${headBg} text-[10.5px] font-medium text-dim uppercase tracking-wide py-2 px-2.5 border-b border-line-2 overflow-hidden text-ellipsis ${alignRight ? 'text-right' : 'text-left'}${lowPri}`
+            // py-[var(--sp-cell-y)] is density-driven; px-2.5 is NOT, and must
+            // never become so — CELL_PAD above hard-codes it for the canvas
+            // measurer, so a density that moved it would desync the two.
+            const base = `${headBg} text-[10.5px] font-medium text-dim uppercase tracking-wide py-[var(--sp-cell-y)] px-2.5 border-b border-line-2 overflow-hidden text-ellipsis ${alignRight ? 'text-right' : 'text-left'}${lowPri}`
             if (c.sortable) {
               const isActive = activeSort && activeSort.key === c.key
               const ariaSort = isActive ? (activeSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'
@@ -514,7 +517,7 @@ export function DataTable({
               const v = r[c.key]
               const alignRight = c.align === 'right'
               const lowPri = c.priority === 'low' ? ' @max-[360px]:hidden' : ''
-              const tdBase = `py-2 px-2.5 border-b border-line overflow-hidden ${alignRight ? 'text-right' : ''}${lowPri}`
+              const tdBase = `py-[var(--sp-cell-y)] px-2.5 border-b border-line overflow-hidden ${alignRight ? 'text-right' : ''}${lowPri}`
               // 5. render -> badge -> mono -> default text.
               if (c.render) {
                 return (

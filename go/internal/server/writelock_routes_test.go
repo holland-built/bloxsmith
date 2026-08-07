@@ -55,6 +55,7 @@ func allRoutes(t *testing.T) []string {
 	d.registerAccountRoutes(rr)
 	d.registerThreatIntelRoutes(rr)
 	d.registerIPAMReadRoutes(rr)
+	d.registerSearchRoutes(rr)
 	d.registerNOCRoutes(rr)
 	d.registerBrandRoutes(rr)
 	d.registerSecurityWriteRoutes(rr)

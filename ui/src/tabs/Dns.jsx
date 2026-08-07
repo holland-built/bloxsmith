@@ -4,9 +4,10 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, HiddenPanels, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { useHashParams } from '../lib/hash.js'
+import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
 
 // ---------- main ----------
@@ -30,6 +31,9 @@ export default function Dns() {
   const dtcLbdn = useApi('/api/csp/dtc-lbdn', { poll: 30000 })
 
   const hp = useHashParams()
+  // One shared read of /api/service-inventory per page load — see Security.jsx:
+  // deliberately not useApi(), so it never joins the 30s poll above.
+  const owned = useOwnedServices()
   const zones = data.rows('zones')
   // 'ok' | 'empty' | 'error' — 'error' also when the payload arrived without
   // the zones slice, because that read did not deliver.
@@ -39,9 +43,17 @@ export default function Dns() {
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">DNS</h1>
       <CardGrid>
-        <QpsHero qps={qps} />
+        {/* Two separate runs, one group key: the panels either side of
+            ZoneKpis both need a deployed DNS service, but ZoneKpis reads zone
+            CONFIG, which exists whether or not one is deployed — so it is not
+            mapped and cannot be swept into the group. */}
+        <HiddenPanels {...SERVICE_GROUPS.dns} state={owned}>
+          <QpsHero qps={qps} />
+        </HiddenPanels>
         <ZoneKpis zones={zones} zonesStatus={zonesStatus} loading={data.loading} />
-        <DnsServices services={services} />
+        <HiddenPanels {...SERVICE_GROUPS.dns} state={owned}>
+          <DnsServices services={services} />
+        </HiddenPanels>
         <QueryVolume7d analytics={analytics} />
         <ZoneTable zones={zones} issuesOnly={!!hp.issues} zonesStatus={zonesStatus} loading={data.loading} />
         <DnssecHealth dnssec={dnssec} />

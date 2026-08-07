@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FeedUnavailable } from './ui.jsx'
+import ThemeSwitch from './ThemeSwitch.jsx'
+import DensitySwitch from './DensitySwitch.jsx'
 
 const vpost = (url, body) =>
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -10,6 +12,13 @@ const inCls =
   'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none focus:border-accent'
 const rowBtn = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm text-field-txt hover:bg-line'
 const miniBtn = 'px-2 py-1 rounded-lg border border-border text-[11px] text-muted hover:text-txt hover:border-border-hover'
+
+// Everything that can hold focus inside the sheet, in document order. Read
+// fresh on every Tab because this sheet swaps whole sections in and out (add a
+// connection, replace a key, confirm a removal) — a list captured on open would
+// describe a sheet that is no longer on screen.
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 export default function TenantManager({ onClose }) {
   const [status, setStatus] = useState(null)
@@ -60,6 +69,50 @@ export default function TenantManager({ onClose }) {
   }
 
   useEffect(() => { load() }, [])
+
+  // ---- modal behaviour -----------------------------------------------------
+  //
+  // This sheet is the only route to tenant switching, the version, the theme
+  // switch and the density switch below `lg`, and it shipped as a bare
+  // div.fixed: no dialog role, no focus move, no trap, and Escape did nothing.
+  // Measured before this change: 177 Tab presses from the "…" that opens it to
+  // its own ✕. On a phone that is not a slow route, it is no route.
+  //
+  // Focus goes to the panel itself rather than to the first control, so what a
+  // screen reader reads on open is the dialog and its name, not "Close button"
+  // with no idea what would be closed. App.jsx owns the other half — the
+  // background goes inert, and focus returns to the "…" on close.
+  const panelRef = useRef(null)
+  useEffect(() => { panelRef.current?.focus() }, [])
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      // Stopped here so it cannot also reach App.jsx's document-level Escape,
+      // which is the group menus' and has no business firing off this one.
+      e.stopPropagation()
+      onClose()
+      return
+    }
+    if (e.key !== 'Tab') return
+    const items = [...panelRef.current.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null)
+    if (!items.length) {
+      e.preventDefault()
+      panelRef.current.focus()
+      return
+    }
+    const first = items[0]
+    const last = items[items.length - 1]
+    const cur = document.activeElement
+    // Only the two ends need handling: everything between them is the
+    // browser's own Tab order, which is already correct.
+    if (e.shiftKey && (cur === first || cur === panelRef.current)) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && cur === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
 
   const tenants = (status && status.tenants) || []
   const activeId = status && status.active
@@ -173,13 +226,18 @@ export default function TenantManager({ onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4" onClick={onClose} onKeyDown={onKeyDown}>
       <div
-        className="w-[420px] max-w-full max-h-[80vh] overflow-y-auto bg-card border border-card-border rounded-card p-5"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tm-title"
+        tabIndex={-1}
+        className="w-[420px] max-w-full max-h-[80vh] overflow-y-auto bg-card border border-card-border rounded-card p-5 outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">
-          <h2 className="text-sm font-semibold">Settings</h2>
+          <h2 id="tm-title" className="text-sm font-semibold">Settings</h2>
           <span className="flex-1" />
           <button className="text-muted text-sm" onClick={onClose} aria-label="Close">✕</button>
         </div>
@@ -402,6 +460,21 @@ export default function TenantManager({ onClose }) {
                 </select>
               </>
             )}
+
+            {/* The header bar folds the theme switch away below `lg` (see
+                App.jsx's A3 fold), so this is where it is reached on a narrow
+                screen. Same component, so the two cannot drift; shown at every
+                width because a settings sheet is where a reader looks for it
+                anyway. */}
+            <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Appearance</div>
+            <div className="flex items-center gap-2 mb-2">
+              <ThemeSwitch />
+              <span className="text-[11px] text-dim">Light · System · Dark</span>
+            </div>
+            <div className="flex items-center gap-2 mb-4">
+              <DensitySwitch />
+              <span className="text-[11px] text-dim">Comfortable · Compact</span>
+            </div>
 
             <label htmlFor="tm-dash-token" className="block text-[10px] uppercase tracking-wide text-dim mb-2">Dashboard token</label>
             <input

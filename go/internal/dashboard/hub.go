@@ -114,6 +114,76 @@ func (s *Service) FetchHubHealth() []map[string]any {
 	return rollup
 }
 
+// --- service inventory -------------------------------------------------------
+
+// serviceInventoryLimit is the _limit sent to detail_services, and therefore
+// also the row count at which the answer stops being trustworthy — see the
+// "partial" state below. Same value FetchHubHealth sends (hub.go:40).
+const serviceInventoryLimit = 500
+
+// FetchServiceInventory is the raw owned-service-type set behind
+// FetchHubHealth's three-bucket rollup. Same feed, same limit; what differs is
+// that no rollup is applied, so dfp/orpheus/ndns survive as themselves.
+//
+// Three availability states, not two, because the caller uses this to HIDE UI:
+//
+//	ok      — the read succeeded and the list is complete. service_types is a
+//	          non-nil slice; empty means this tenant genuinely owns nothing.
+//	error   — the read failed. service_types is nil, never an empty slice: a
+//	          dead feed answering "you own nothing" is the same
+//	          failure-reads-as-safety bug the comment at FetchHubHealth's error
+//	          branch exists to prevent, and hiding a panel on it would be worse
+//	          than the empty card it replaced.
+//	partial — the response came back at or over the limit, so a service_type
+//	          that is absent is indistinguishable from one that was truncated
+//	          away. The types we did see are returned (they are real), but the
+//	          SET is not authoritative, so the caller must fail open exactly as
+//	          it does for error. Paging is deliberately not built.
+func (s *Service) FetchServiceInventory() map[string]any {
+	ck := cache.Key("service_inventory", "", nil, false)
+	if v, ok := s.Cache.Get(ck); ok {
+		return v.(map[string]any)
+	}
+	g := s.Cache.Gen()
+	services, err := s.Rest.GetStrict("/api/infra/v1/detail_services",
+		map[string]string{"_limit": fmt.Sprint(serviceInventoryLimit)})
+	if err != nil {
+		log.Printf("service inventory: detail_services fetch failed: %v", err)
+		result := map[string]any{
+			"service_types": []string(nil),
+			"availability":  "error",
+			"reason":        "service inventory feed unavailable",
+		}
+		s.Cache.SetGen(ck, result, g)
+		return result
+	}
+
+	seen := map[string]bool{}
+	types := []string{}
+	for _, item := range services {
+		st := getStr(asMap(item)["service_type"])
+		if st == "" || seen[st] {
+			continue
+		}
+		seen[st] = true
+		types = append(types, st)
+	}
+	sort.Strings(types)
+
+	result := map[string]any{
+		"service_types": types,
+		"availability":  "ok",
+	}
+	if len(services) >= serviceInventoryLimit {
+		result["availability"] = "partial"
+		result["reason"] = fmt.Sprintf(
+			"inventory truncated at the %d-row limit — an absent service type may exist but not be listed",
+			serviceInventoryLimit)
+	}
+	s.Cache.SetGen(ck, result, g)
+	return result
+}
+
 // --- hub/security ------------------------------------------------------------
 
 // FetchHubSecurity is fetch_hub_security (server.py:3685).

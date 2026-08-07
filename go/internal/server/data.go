@@ -17,6 +17,7 @@ func (d *Deps) registerDataRoutes(mux router) {
 	mux.HandleFunc("GET /api/hub/health", d.hubHealth)
 	mux.HandleFunc("GET /api/hub/security", d.hubSecurity)
 	mux.HandleFunc("GET /api/hub/domains", d.hubDomains)
+	mux.HandleFunc("GET /api/service-inventory", d.serviceInventory)
 	mux.HandleFunc("GET /api/cache-bust", d.cacheBust)
 }
 
@@ -79,6 +80,17 @@ func (d *Deps) hubSecurity(w http.ResponseWriter, r *http.Request) {
 func (d *Deps) hubDomains(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/hub/domains")
 	d.json(w, r, 200, d.dash(r).FetchHubDomains())
+}
+
+// serviceInventory is /api/service-inventory: the raw owned service_type set,
+// for deciding which panels a tenant has no services behind. It answers 200
+// even when the upstream feed is dead — availability carries that, and the
+// caller must fail open on anything other than "ok". A 5xx here would be read
+// by a fetch() as "no data", which is the outcome this endpoint exists to
+// prevent.
+func (d *Deps) serviceInventory(w http.ResponseWriter, r *http.Request) {
+	defer d.recover500(w, r, "/api/service-inventory")
+	d.json(w, r, 200, d.dash(r).FetchServiceInventory())
 }
 
 // cacheBust is /api/cache-bust (server.py:5265): clear the shared TTL cache.

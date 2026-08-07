@@ -5,7 +5,7 @@ import { test, expect } from './fixtures';
 // not just the initial mount.
 const TABS = [
   'overview', 'daily', 'network', 'dns', 'security', 'infra', 'incidents',
-  'audit', 'provision', 'selfservice', 'editor', 'drift', 'ai',
+  'audit', 'changes', 'provision', 'selfservice', 'editor', 'drift', 'ai',
 ];
 
 function isNoise(text: string) {

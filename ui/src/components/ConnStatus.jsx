@@ -80,8 +80,15 @@ export default function ConnStatus() {
   return (
     <span className="text-[11px] text-muted flex items-center gap-1.5" title={title}>
       <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-      {label}
-      {version && <span className="text-dim">· v{version}</span>}
+      {/* Below `lg` only the dot survives on the bar (the v11 A3 fold). The
+          words it stands for are not lost: the same tenant and version are
+          spelled out in the "…" Settings sheet, which is reachable at every
+          width. The dot keeps its colour, so a locked vault or a dead feed is
+          still visible on a phone. */}
+      <span className="hidden lg:flex items-center gap-1.5">
+        {label}
+        {version && <span className="text-dim">· v{version}</span>}
+      </span>
     </span>
   )
 }
