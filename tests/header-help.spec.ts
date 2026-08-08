@@ -136,8 +136,12 @@ test('Overview says how to rearrange it, and that nothing needs saving', async (
 
   // "How do I save my layout?" has no button as its answer — there is no save
   // button and there never was; every drop and resize writes itself. Overview
-  // is also the ONLY rearrangeable tab, so the sentence belongs on it and
-  // nowhere else.
+  // is checked here because it is the tab this intro copy lives on, NOT
+  // because it is the only rearrangeable one: since 2026-08-08 all 15 tabs
+  // carry a layoutKey, and each panel states the same thing for itself in its
+  // ⓘ help (the LAYOUT_HELP sentence in components/ui.jsx, rendered only when
+  // the grid is managed). This assertion is about the tab intro, so it stays
+  // on the tab that has one.
   const intro = page.locator('main p').first();
   await expect(intro).toContainText('drag');
   await expect(intro).toContainText('resize');

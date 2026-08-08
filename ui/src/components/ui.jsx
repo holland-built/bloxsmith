@@ -300,6 +300,56 @@ export function CardGrid({ className = '', layoutKey, children }) {
   const [moveId, setMoveId] = useState(null)
   const preMoveRef = useRef(null)
 
+  // ---- the names of the tiles, so the "bring it back" strip has words ----
+  //
+  // A hidden Card renders null, so its title JSX never runs and nothing in the
+  // grid's own DOM says what the tile was called. The Card therefore hands its
+  // title UP, in an effect that runs before it returns null, and this is where
+  // it is kept.
+  //
+  // A ref plus a counter rather than plain state, because this is written by
+  // every Card on the tab on mount: state would be a re-render per panel,
+  // where the counter only moves when a name actually changed, and titles do
+  // not change after the first paint. The counter is still needed — on a
+  // reload, `hidden` arrives from the server before any Card has registered,
+  // so the strip's first render has no names at all and has to be told when
+  // they land, or it would sit on the raw panel ids until something else
+  // happened to re-render the grid.
+  const titlesRef = useRef(new Map())
+  const [, bumpTitles] = useState(0)
+
+  // ---- can this grid be rearranged at all? ----
+  //
+  // WHY THIS EXISTS. Reordering needs somewhere to reorder TO. #editor renders
+  // exactly one panel (editor-object-form) and always will, and on that tab the
+  // ⠿ handle had nowhere to drag to, move mode's arrow keys moved nothing, and
+  // the generated help sentence below still told the operator "You can move
+  // this panel" — a claim the tab could not honour. Resize and hide are not
+  // affected: both do real work on a one-panel grid, so both stay exactly as
+  // they were.
+  //
+  // Counted from the React children rather than the DOM, for two reasons: it is
+  // right on the FIRST render (a DOM count would be a frame late, and reading
+  // it in an effect would be another render), and a hidden tile has no element
+  // to count — `hidden` only exists in state. Children with no panelId are not
+  // panels: that is what excludes hiddenPanelGroup's "N panels hidden" row,
+  // which carries no id and is not something anyone can move.
+  //
+  // Recomputed whenever the children or the layout change, because the count is
+  // not static: #drift shows one panel until a drift check runs and two
+  // afterwards, and hiding one of two panels takes a grid back down to one.
+  const reorderable = useMemo(() => {
+    if (!layoutKey) return false
+    const hidden = new Set(layout?.hidden ?? [])
+    let visible = 0
+    for (const child of Children.toArray(children)) {
+      const id = child?.props?.panelId
+      if (id && !hidden.has(id)) visible++
+      if (visible >= 2) return true
+    }
+    return false
+  }, [children, layout, layoutKey])
+
   const schedule = useCallback(() => {
     if (rafRef.current) return
     rafRef.current = requestAnimationFrame(() => {
@@ -330,9 +380,33 @@ export function CardGrid({ className = '', layoutKey, children }) {
       // hotspot and no pointer listener is created at all — not hidden, not
       // disabled, not rendered.
       managed: !!layoutKey,
+      // The second switch, and only the move gesture hangs off it: true only
+      // while this grid actually shows two or more panels. See the comment at
+      // its computation above — a one-panel grid can be resized and hidden, but
+      // it cannot be rearranged, and it must not say that it can.
+      reorderable,
       // Read by Card to find its own saved span. undefined when no layout is
       // loaded, which is what makes every Card's override path a no-op.
       spans: layout?.spans,
+      // The tiles the operator has taken off this page. undefined until a
+      // layout loads, so a tab with nothing saved renders every panel exactly
+      // as it did before this existed.
+      hidden: layout?.hidden,
+      // Card calls this before it can return null, so the strip below the grid
+      // can name a tile that is no longer rendering anything. Only a plain
+      // string is kept: a title can be a React node (Overview's DNS hero
+      // passes a clickable <span>), and there is no honest way to print one as
+      // a line of text — the panel id is a worse name but a true one.
+      registerTitle(id, title) {
+        // Nothing to name on an unmanaged grid: there is no strip, nothing can
+        // be hidden, and a tab that has not been wired must not pick up a
+        // re-render it never used to do.
+        if (!layoutKey || !id) return
+        const name = typeof title === 'string' && title.trim() !== '' ? title : null
+        if (titlesRef.current.get(id) === name) return
+        titlesRef.current.set(id, name)
+        bumpTitles((n) => n + 1)
+      },
       // Announcements are written straight to the DOM rather than held in
       // state: "Moved to position 3 of 7" must not re-render the grid it is
       // describing, and a render during a gesture is exactly what re-enters
@@ -349,11 +423,18 @@ export function CardGrid({ className = '', layoutKey, children }) {
       // only the rendered children answer "what order is this actually in".
       // That also makes "DOM order matches visual order after a drop" true by
       // construction rather than by assertion.
+      //
+      // `hidden` is the one part that CANNOT come from the DOM, and not as a
+      // matter of taste: a hidden tile renders null, so there is no element to
+      // read it off. Reading the DOM for it would answer "nothing is hidden"
+      // every single time, and the first drag after hiding a tile would save
+      // that answer over the truth. It comes from React state instead.
       snapshot() {
         const grid = ref.current
         return {
           order: grid ? panelItems(grid).map((entry) => entry.id) : [],
           spans: { ...(layout?.spans ?? {}) },
+          hidden: [...(layout?.hidden ?? [])],
         }
       },
       // The single commit path. Pointer drop, pointer resize and keyboard
@@ -418,8 +499,26 @@ export function CardGrid({ className = '', layoutKey, children }) {
         }
       },
     }),
-    [schedule, layout, layoutKey, moveId],
+    [schedule, layout, layoutKey, moveId, reorderable],
   )
+
+  // A move that has run out of things to move. If the grid drops to one visible
+  // panel WHILE move mode is running — the operator hides the other one, or a
+  // data-driven tab loses a panel under them — the handle stops rendering and
+  // the gesture would be left half-open: no key can reach it, nothing can
+  // commit or cancel it, and the grid would still be holding the pre-move
+  // layout it restores on Escape.
+  //
+  // Cancelled rather than committed, exactly as Escape and a real blur do:
+  // arrow presses apply with save:false and only Enter POSTs, so nothing was
+  // written and putting the pre-move state back is the only outcome that leaves
+  // the screen and the server agreeing. endMove clears moveId, so this runs
+  // once.
+  useEffect(() => {
+    if (!moveId || reorderable) return
+    ctx.endMove(false)
+    ctx.announce('Move cancelled: there is only one panel on this page, so there is nowhere to move it.')
+  }, [ctx, moveId, reorderable])
 
   // The saved order is applied by rearranging the REAL children, never CSS
   // `order` — see sortByOrder's comment for why DOM order is the thing that
@@ -472,14 +571,21 @@ export function CardGrid({ className = '', layoutKey, children }) {
     handle.focus()
   })
 
-  // ---- the HiddenPanels / layoutKey landmine, made loud ----
+  // ---- the wrapped-panel / layoutKey landmine, made loud ----
   //
   // snapshot() reads panel ids off the DOM, where a wrapped Card is visible;
-  // sortByOrder reads props.panelId off the React children, where the wrapper
-  // carries none and ranks last. A tab using both would save an order it
-  // cannot honour and push the whole wrapped run to the end on reload. Nothing
-  // in the repo does today — layoutKey is only on Overview, which uses no
-  // HiddenPanels — so this is a guard for whoever wires the second tab.
+  // sortByOrder reads props.panelId off the React children, where a wrapper
+  // that does not carry one ranks last. A tab in that shape saves an order it
+  // cannot honour and pushes the wrapped panel to the end on reload.
+  //
+  // The service-ownership wrapper was the loudest way to end up here, and no
+  // longer is: `hiddenPanelGroup()` (below) is a plain function returning an
+  // ARRAY, so each Card is a direct child of this grid again. What is left is
+  // the ordinary mistake — a panel whose call site renders <SomePanel …/> with
+  // the panelId literal buried on the <Card> inside it, or a plain <div>
+  // carrying the span class. Overview shows the shape that works: the id goes
+  // on the direct child (`<DnsHero panelId="dns-hero" …/>`) and is forwarded
+  // down to the Card.
   //
   // console.error rather than a throw: a broken saved order must not take the
   // tab down. NOT gated behind import.meta.env.DEV, because both the dev
@@ -519,11 +625,78 @@ export function CardGrid({ className = '', layoutKey, children }) {
     return () => ro.disconnect()
   }, [schedule])
 
+  // ---- the way back for a tile that has been put away ----
+  //
+  // Whatever is hidden, named, with a button each. The panel id is the fallback
+  // name, and it is a poor one on purpose: it is at least true, where guessing
+  // a title from an id would not be.
+  const hiddenTiles = (layout?.hidden ?? []).map((id) => ({ id, name: titlesRef.current.get(id) || id }))
+
+  const showTile = (ids) => {
+    const snap = ctx.snapshot()
+    const gone = new Set(ids)
+    ctx.apply({ order: snap.order, spans: snap.spans, hidden: snap.hidden.filter((id) => !gone.has(id)) }, true)
+    // Named, not counted: "1 tile shown" says nothing about which one came
+    // back, and the panel appears at the end of the page rather than where it
+    // was, so a screen-reader user needs to be told what to look for.
+    ctx.announce(
+      ids.length === 1
+        ? `${hiddenTiles.find((t) => t.id === ids[0])?.name ?? ids[0]} is back on the page.`
+        : `${ids.length} tiles are back on the page.`,
+    )
+  }
+
   return (
     <GridFitContext.Provider value={ctx}>
       <div ref={ref} data-card-grid="" className={`grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-[var(--sp-grid-gap)] ${className}`}>
         {ordered}
       </div>
+      {/* Below the grid and OUTSIDE it, exactly like the live region: a strip
+          inside the grid would be a grid item, take a track, and be reordered
+          by the very saved order it exists to undo. data-testid is
+          "hidden-tiles", NOT "hidden-panels" — that name belongs to the
+          service-ownership row further down this file, and
+          tests/hidden-panels.spec.ts asserts an exact count of it. */}
+      {layoutKey && hiddenTiles.length > 0 && (
+        <div
+          data-testid="hidden-tiles"
+          className="mt-3 flex flex-wrap items-center gap-2 rounded-card border border-dashed border-card-border px-3 py-2 text-[11px] text-muted"
+        >
+          <span>
+            {hiddenTiles.length} {hiddenTiles.length === 1 ? 'tile is' : 'tiles are'} hidden. Press Show to put one back
+            on the page.
+          </span>
+          {hiddenTiles.map((tile) => (
+            <span key={tile.id} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5">
+              <span className="text-field-txt">{tile.name}</span>
+              <button
+                type="button"
+                data-layout-show=""
+                // Every row's button says the same visible word, so the name a
+                // screen reader or a voice-control user gets has to carry the
+                // tile. It STARTS with the visible word, which is what keeps
+                // WCAG 2.5.3 Label in Name true and "click Show" working.
+                aria-label={`Show ${tile.name}`}
+                onClick={() => showTile([tile.id])}
+                className="cursor-pointer rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted hover:text-field-txt hover:border-border-hover"
+              >
+                Show
+              </button>
+            </span>
+          ))}
+          {hiddenTiles.length > 1 && (
+            <button
+              type="button"
+              data-layout-show-all=""
+              aria-label={`Show tiles: put all ${hiddenTiles.length} back on the page`}
+              onClick={() => showTile(hiddenTiles.map((tile) => tile.id))}
+              className="cursor-pointer rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:text-field-txt hover:border-border-hover"
+            >
+              Show tiles
+            </button>
+          )}
+        </div>
+      )}
       {/* One live region per managed grid, OUTSIDE the grid element so it is
           never a grid item and can never take a track. Rendered only when
           layoutKey is set, so an unmanaged tab's DOM is unchanged down to the
@@ -581,15 +754,27 @@ export function usePanelFit() {
 // This is a per-card opt-out and not a change to applyLayout on purpose
 // — every other measuring panel must keep shrinking to its content.
 //
-// The one sentence that explains reorder and resize, appended by Card to the
-// help of any panel that really is rearrangeable. It lives here rather than in
-// panelHelp.js because it is a fact about the LAYOUT SYSTEM, not about a
+// The sentences that explain reorder, resize and hide, appended by Card to the
+// help of any panel that really has them. They live here rather than in
+// panelHelp.js because they are facts about the LAYOUT SYSTEM, not about a
 // panel: which grids are managed can change, and 96 hand-copied sentences
 // would go stale the moment one did.
-const LAYOUT_HELP =
+//
+// TWO PARTS, BECAUSE THEY ARE NOT TRUE OF THE SAME PANELS. Moving needs another
+// panel to move past; resizing, auto-save and hiding do not. #editor renders
+// one panel and always will, so on that tab the move sentence was describing a
+// gesture the operator could not perform — and the ⠿ handle it names is not
+// rendered there either. The two are appended by the same condition, so the
+// copy and the chrome can never disagree.
+const LAYOUT_HELP_MOVE =
   'You can move this panel: drag the ⠿ handle, or put the keyboard focus on it, ' +
-  'press Enter and use the arrow keys. Drag the panel’s right edge to make it wider ' +
-  'or narrower. Your arrangement saves on its own.'
+  'press Enter and use the arrow keys.'
+
+const LAYOUT_HELP_REST =
+  'Drag the panel’s right edge to make it wider ' +
+  'or narrower. Your arrangement saves on its own. The ✕ button takes this panel off ' +
+  'the page; everything you have taken off is listed just below the panels, each with ' +
+  'a Show button that puts it back at the end.'
 
 // ---- the runtime half of the help guarantee ----
 //
@@ -600,7 +785,7 @@ const LAYOUT_HELP =
 // the check that runs there.
 //
 // NOT gated behind import.meta.env.DEV, for the reason spelled out at the
-// HiddenPanels/layoutKey guard above: the dev server and the e2e harness both
+// wrapped-panel/layoutKey guard above: the dev server and the e2e harness both
 // serve a PRODUCTION Vite build, so a DEV-only warning would fire in no
 // environment anybody runs. tests/tabs-smoke.spec.ts fails any tab that logs a
 // console error, which is what turns this line into a test.
@@ -641,6 +826,23 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
   const headCanvasRef = useRef(null)
   const bodyNeedRef = useRef(null)
   const grid = useContext(GridFitContext)
+
+  // A panel is rearrangeable only inside a grid that persists layouts AND only
+  // if it has the stable identity a saved layout refers to. Both, or neither:
+  // a handle on a panel with no panelId would move something nothing could
+  // record.
+  //
+  // Declared up here, before the first effect, because `isHidden` gates what
+  // those effects do — the same reason the early `return null` has to wait
+  // until the very bottom of this component.
+  const managed = !!(grid?.managed && panelId)
+  // ...and it can only be MOVED if the grid it sits in currently shows another
+  // panel to move it past. See CardGrid's `reorderable` for why: a one-panel
+  // tab (#editor) grew a drag handle and a help sentence promising a move that
+  // could not happen. Resize and hide are not gated on it — both work on a
+  // one-panel grid.
+  const reorderable = managed && !!grid.reorderable
+  const isHidden = managed && !!grid.hidden?.includes(panelId)
 
   // The grid item is this Card, unless a caller wrapped it in a div that
   // carries the span class — then it is that wrapper. Resolved from the DOM so
@@ -747,6 +949,19 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
   // down to its declared SPAN_CLASS.
   const evictRef = useRef(null)
   useLayoutEffect(() => {
+    // A hidden tile renders null, so its element is gone from the DOM but this
+    // component is still mounted — the unmount eviction below will never run
+    // for it. Left registered, its stale entry would keep a row open in the
+    // fit map for a panel nobody can see. remove() is the grid's own entry
+    // point for exactly this, and it is called from here rather than by
+    // teaching applyLayout or publish() about hiding: those two are the
+    // measurement loop this feature is not allowed to re-enter.
+    if (isHidden) {
+      const evict = evictRef.current
+      evictRef.current = null
+      if (evict?.item) evict.grid.remove(evict.item)
+      return
+    }
     publish()
     evictRef.current = grid ? { grid, item: gridItem() } : null
   })
@@ -757,6 +972,15 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
     },
     [],
   )
+
+  // Hand the panel's name up to the grid, so the "put it back" strip can list
+  // this tile by what it is called after this Card has stopped rendering
+  // anything. It has to happen in an effect that runs whether or not the
+  // component returned null, which is why every hook in this file sits above
+  // that early return.
+  useEffect(() => {
+    grid?.registerTitle?.(panelId, title)
+  }, [grid, panelId, title])
 
   // The saved span, registered against the real grid item (which is this Card
   // unless a caller wrapped it). Registered rather than written: applyLayout
@@ -779,12 +1003,6 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
     if (typeof innerRef === 'function') innerRef(node)
     else if (innerRef) innerRef.current = node
   }
-
-  // A panel is rearrangeable only inside a grid that persists layouts AND only
-  // if it has the stable identity a saved layout refers to. Both, or neither:
-  // a handle on a panel with no panelId would move something nothing could
-  // record.
-  const managed = !!(grid?.managed && panelId)
 
   // ---- resize: the right-edge hotspot ----
   //
@@ -828,7 +1046,7 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
         line.remove()
         if (!commit) return
         const snap = grid.snapshot()
-        grid.apply({ order: snap.order, spans: { ...snap.spans, [panelId]: span } }, true)
+        grid.apply({ order: snap.order, spans: { ...snap.spans, [panelId]: span }, hidden: snap.hidden }, true)
         // spanFromWidth already clamped to trackCount, so this can only take
         // the plain branch — it goes through the same function as the keyboard
         // so the two routes can never drift into announcing differently.
@@ -928,7 +1146,7 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
         if (!commit || !started) return
         const snap = grid.snapshot()
         const next = moveItem(snap.order, snap.order.indexOf(panelId), target)
-        grid.apply({ order: next, spans: snap.spans }, true)
+        grid.apply({ order: next, spans: snap.spans, hidden: snap.hidden }, true)
         grid.announce(`Moved to position ${next.indexOf(panelId) + 1} of ${next.length}`)
       }
 
@@ -1047,12 +1265,12 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
         const next = shiftItem(snap.order, panelId, e.key === 'ArrowLeft' ? -1 : 1)
         // A no-op at either end returns the same array, so the position is
         // re-announced rather than a move being claimed that did not happen.
-        grid.apply({ order: next, spans: snap.spans }, false)
+        grid.apply({ order: next, spans: snap.spans, hidden: snap.hidden }, false)
         grid.announce(`Moved to position ${next.indexOf(panelId) + 1} of ${next.length}`)
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault()
         const next = stepSpan(liveSpan(), e.key === 'ArrowUp' ? 1 : -1)
-        grid.apply({ order: snap.order, spans: { ...snap.spans, [panelId]: next } }, false)
+        grid.apply({ order: snap.order, spans: { ...snap.spans, [panelId]: next }, hidden: snap.hidden }, false)
         // The STORED span is `next`, unclamped on purpose (stepSpan's comment);
         // what gets rendered is that clamped to the tracks this breakpoint
         // actually has, and the announcement is about what renders.
@@ -1070,7 +1288,7 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
     [grid, labelText, liveSpan, managed, moveActive, panelId],
   )
 
-  const handle = managed ? (
+  const handle = reorderable ? (
     <button
       type="button"
       ref={handleRef}
@@ -1089,6 +1307,42 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
     >
       {title && <span id={moveWordId} className="sr-only">Move</span>}
       ⠿
+    </button>
+  ) : null
+
+  // ---- hide: take this tile off the page ----
+  //
+  // Same commit path as the drop and the resize — snapshot, add this panel to
+  // the hidden list, apply and save — so hiding is validated by the one schema
+  // on its way to the server and cannot write a shape the loader will reject.
+  //
+  // The order is left exactly as the DOM reports it, which still names this
+  // panel: it is on screen at the moment of the click. Once it is gone the
+  // next snapshot will not name it, so bringing it back puts it at the end of
+  // the page. That is the same rule a panel added after a save already
+  // follows, and it is stated in the ⓘ help rather than papered over.
+  const hideWordId = panelId ? `panel-hide-${panelId}` : undefined
+  const onHide = useCallback(() => {
+    const snap = grid.snapshot()
+    if (snap.hidden.includes(panelId)) return
+    grid.apply({ order: snap.order, spans: snap.spans, hidden: [...snap.hidden, panelId] }, true)
+    grid.announce(`${labelText()} hidden. It is listed below the panels, with a Show button to bring it back.`)
+  }, [grid, labelText, panelId])
+
+  const hideBtn = managed ? (
+    <button
+      type="button"
+      data-layout-hide=""
+      // By reference when there is a title, by id when there is not — the same
+      // shape as the handle above, and for the same reason: a title can be a
+      // React node, and interpolating one gives "Hide [object Object]".
+      {...(title ? { 'aria-labelledby': `${hideWordId} ${titleId}` } : { 'aria-label': `Hide ${panelId}` })}
+      title="Hide this panel"
+      onClick={onHide}
+      className="shrink-0 cursor-pointer rounded-md border border-border px-1.5 py-0.5 text-[11px] leading-none text-dim hover:text-field-txt hover:border-border-hover"
+    >
+      {title && <span id={hideWordId} className="sr-only">Hide</span>}
+      ✕
     </button>
   ) : null
 
@@ -1118,7 +1372,7 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
   //
   // The CONTAINER is rendered even while collapsed, with `hidden`, so
   // aria-controls always resolves. A reference to an element that does not
-  // exist is the shape HiddenPanels' comment below already rejects.
+  // exist is the shape hiddenPanelGroup's row below already rejects.
   //
   // Its CONTENTS are not. A closed disclosure holds no text, because text in
   // the DOM that nobody can read is not free: with 83 entries, every tab was
@@ -1180,12 +1434,30 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
               on a grid with a layoutKey, so a hand-written sentence would go
               stale the moment a grid was wired or unwired. It is also the only
               place the feature is stated at all — the resize hotspot is
-              opacity-0 until hover, i.e. invisible on touch. */}
-          {managed && <p className="mt-1">{LAYOUT_HELP}</p>}
+              opacity-0 until hover, i.e. invisible on touch.
+              The move sentence is dropped on a grid showing one panel, where it
+              would name a ⠿ handle that is not on screen and a gesture that
+              moves nothing — the same condition that decides the handle, so the
+              two cannot disagree. */}
+          {managed && (
+            <p className="mt-1">{reorderable ? `${LAYOUT_HELP_MOVE} ${LAYOUT_HELP_REST}` : LAYOUT_HELP_REST}</p>
+          )}
         </>
       )}
     </div>
   ) : null
+
+  // A hidden tile draws nothing at all — not a collapsed stub, not a
+  // zero-height box. Anything left in the DOM would still be a grid item and
+  // would still take a track, which is the opposite of what "hide this" asks
+  // for, and find-in-page and text scrapers would keep reading its contents.
+  //
+  // LAST, after every hook above, because React counts hooks per render and a
+  // component that runs eleven of them on one render and none on the next
+  // crashes the tab. The component stays mounted while hidden; only its output
+  // goes away, which is also what lets the effects above keep registering this
+  // panel's name and evicting it from the fit map.
+  if (isHidden) return null
 
   return (
     <div
@@ -1246,10 +1518,11 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
               span would be a header element the measurement could not see —
               and the header would overflow the card by exactly the handle's
               width. Sitting inside rightRef, it is counted for free. */}
-          {(right || infoBtn || handle) && (
+          {(right || infoBtn || handle || hideBtn) && (
             <span ref={rightRef} className="shrink-0 max-w-full flex flex-wrap items-center justify-end gap-2 [&_input]:min-w-0 [&_select]:min-w-0">
               {right}
               {infoBtn}
+              {hideBtn}
               {handle}
             </span>
           )}
@@ -1263,9 +1536,10 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
           this file can see it either. */}
       {/* Widened from `managed && !title` to cover the help button too: a
           titleless panel with neither renders nothing, exactly as before. */}
-      {!title && (infoBtn || handle) && (
+      {!title && (infoBtn || handle || hideBtn) && (
         <span className="absolute top-2 right-3 z-10 flex items-center gap-1.5">
           {infoBtn}
+          {hideBtn}
           {handle}
         </span>
       )}
@@ -1277,33 +1551,69 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
 
 // ---------- panels for services this tenant does not own ----------
 //
-// Wraps a contiguous run of grid children and either renders them exactly as
+// Takes a contiguous run of grid children and either hands them back exactly as
 // they were, or replaces the whole run with one compact row. Nothing about a
-// shown panel changes: HiddenPanels renders a fragment, so its children stay
-// DIRECT children of the CardGrid and keep their own spans and content-fit
-// measurement. That is why this wraps at the Card boundary and never reaches
-// inside a panel's own state machine — the two tabs this is applied to are the
-// biggest in the repo, and their conditional rendering is untouched.
+// shown panel changes: it stays a DIRECT child of the CardGrid and keeps its
+// own span and content-fit measurement. That is why this works at the Card
+// boundary and never reaches inside a panel's own state machine — the two tabs
+// it is applied to are the biggest in the repo, and their conditional
+// rendering is untouched.
 //
-// The collapsed row is itself a grid child, but it never registers with the
+// A FUNCTION RETURNING AN ARRAY, NOT A COMPONENT RETURNING A FRAGMENT, AND
+// THAT IS THE WHOLE POINT OF THE SHAPE. As a component this rendered
+// `<>{children}</>`, which made the run ONE React child of the grid carrying
+// no panelId of its own. CardGrid reads the live order off the DOM, where each
+// wrapped Card is plainly visible, but applies a saved order to its React
+// children (sortByOrder), where that same run was a single anonymous node
+// ranked last. So a tab with both a layoutKey and one of these runs saved an
+// order it could not honour and shoved the run to the end on reload — the
+// disagreement lib/layout.js's unseenPanelIds exists to shout about. Returning
+// an array means React flattens each Card straight into the grid's children
+// again, with its own props.panelId, and the two views agree.
+//
+// Called inline from the tab, so the run reads as part of the JSX:
+//
+//   {hiddenPanelGroup({ ...SERVICE_GROUPS.dns, state: owned, children: [
+//     <QpsHero key="dns-query-rate" panelId="dns-query-rate" qps={qps} />,
+//   ] })}
+//
+// The collapsed row is still a grid child, but it never registers with the
 // grid's fit map, so applyLayout skips it and it keeps the full-width span
-// class below.
+// class below. It carries no data-panel-id either, so a collapsed run writes
+// nothing into the saved order that could not be restored.
 //
 // The group's session key is derived from the service list, so two separate
 // runs that need the same service (DNS Query Rate and DNS Services sit either
 // side of a panel that is NOT hidden) share one "show anyway": revealing one
 // reveals both, which is what an operator who asked to see the DNS panels
 // meant.
-export function HiddenPanels({ services, label, state, children }) {
+export function hiddenPanelGroup({ services, label, state, children }) {
+  const panels = Children.toArray(children)
   const groupKey = [...services].sort().join('+')
-  const n = Children.count(children)
-  const hidden = shouldHidePanel(state, services) && !state.revealed.has(groupKey) && n > 0
+  const hidden = shouldHidePanel(state, services) && !state.revealed.has(groupKey) && panels.length > 0
+  if (!hidden) return panels
+  return [<HiddenPanelsRow key={`hidden-panels-${groupKey}`} groupKey={groupKey} label={label} n={panels.length} />]
+}
 
+// The collapsed row, kept as its own component for one reason: it needs a hook,
+// and hiddenPanelGroup above is a plain function that cannot legally hold one.
+// Everything a test can see — the testid, the sentence, the button's name, its
+// aria-expanded, where focus lands — is what it was when this markup lived in
+// the wrapper component.
+function HiddenPanelsRow({ groupKey, label, n }) {
   // WHERE FOCUS GOES WHEN THE RUN IS REVEALED. The button that had focus is
-  // unmounted by its own click — this component renders a fragment once the
-  // panels are shown — so without this, focus falls to <body> and a keyboard
-  // or screen-reader user is dropped back at the top of the document with no
-  // way to tell whether anything appeared.
+  // unmounted by its own click — the whole row is replaced by the panels it was
+  // standing in for — so without this, focus falls to <body> and a keyboard or
+  // screen-reader user is dropped back at the top of the document with no way
+  // to tell whether anything appeared.
+  //
+  // ON UNMOUNT, VIA useEffect, AND THE CHOICE OF EFFECT IS LOAD-BEARING. When
+  // this markup lived in the wrapper component, the component survived the
+  // reveal (it re-rendered as a fragment) and a useLayoutEffect could do the
+  // work. This row does not survive it. A useLayoutEffect cleanup runs during
+  // the mutation phase, where React processes deletions BEFORE placements — the
+  // revealed panels would not be in the document yet. A passive cleanup runs
+  // after the whole commit, so the panels are there to be focused.
   //
   // The slot is remembered as "whatever follows this row's previous sibling",
   // not as a child index: `showAnyway` reveals every group sharing this key at
@@ -1312,18 +1622,19 @@ export function HiddenPanels({ services, label, state, children }) {
   // panels shifts every index after it. A sibling reference survives that.
   const rowRef = useRef(null)
   const focusSlotRef = useRef(null)
-  useLayoutEffect(() => {
-    const slot = focusSlotRef.current
-    focusSlotRef.current = null
-    if (!slot) return
-    const el = slot.prev ? slot.prev.nextElementSibling : slot.parent.firstElementChild
-    if (!el) return
-    // tabindex -1, so it is focusable by script and stays out of the tab order.
-    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
-    el.focus()
-  })
-
-  if (!hidden) return <>{children}</>
+  useEffect(
+    () => () => {
+      const slot = focusSlotRef.current
+      focusSlotRef.current = null
+      if (!slot) return
+      const el = slot.prev ? slot.prev.nextElementSibling : slot.parent.firstElementChild
+      if (!el) return
+      // tabindex -1, so it is focusable by script and stays out of the tab order.
+      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
+      el.focus()
+    },
+    [],
+  )
 
   const reveal = () => {
     const row = rowRef.current

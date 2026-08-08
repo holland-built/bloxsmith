@@ -11,6 +11,27 @@ import { execSync } from 'node:child_process';
 //
 // Every expected value below is a hand-written literal, read off the JSX in
 // ui/src/tabs/Overview.jsx, never recomputed from the app's own code.
+//
+// ---------------------------------------------------------------------------
+// VIEW OWNERSHIP, AND WHY THIS FILE FORCES `workers: 1`.
+//
+// A `__layout_<key>` server view has exactly one record per tenant, so a spec
+// that writes one is its exclusive owner: a second writer shows up as the
+// first reading back an order it never saved. This file and
+// tests/layout-drag.spec.ts both own `__layout_overview`, and this one
+// additionally SIGTERMs the Go binary to prove P8 — which is hostile to every
+// spec running concurrently, not just to the other owner.
+//
+// Overview is NOT the only tab with a layoutKey any more; since 2026-08-08 all
+// 15 carry one, so the shared resource is a namespace rather than a single
+// record. The rest of it is spoken for: layout-drag.spec.ts owns
+// `__layout_network`, `__layout_dns` and `__layout_security`, and
+// tests/hidden-tiles.spec.ts owns `__layout_daily`. Adding a spec that writes
+// a layout means claiming a key nobody else writes and deleting it afterwards.
+//
+// The process kill is the part no key allocation can fix, and it is why
+// playwright.config.ts pins `workers: 1` rather than merely renaming a view.
+// ---------------------------------------------------------------------------
 
 const VIEW = '__layout_overview';
 

@@ -1,5 +1,9 @@
 import { test, expect } from './fixtures';
-import { validateSave } from '../ui/src/lib/layout.js';
+import {
+  activeHandlePanel, cardBox, clampY, domOrder, dragOntoRightHalfOf, expectEverySpanWellFormed,
+  expectPersistedBlobIsValid, geometry, gotoTab, grabRightEdge, inlineSpans, liveText,
+  savedBlob as savedBlobFor, strayDragStyles, tableOverflow, tabToHandle,
+} from './layout-helpers';
 
 // P9 (item 8) — drag-to-rearrange with column snapping, and edge-drag resize.
 //
@@ -11,25 +15,32 @@ import { validateSave } from '../ui/src/lib/layout.js';
 // gesture re-enters the fit system's measure -> render loops.
 //
 // Every expected span, position and order below is a hand-written literal read
-// off ui/src/tabs/Overview.jsx. None is recomputed with the app's own logic.
+// off the tab's own JSX. None is recomputed with the app's own logic.
+//
+// The gestures themselves live in ./layout-helpers.ts, shared with
+// tests/hidden-tiles.spec.ts so that both specs drive the SAME drag.
 
 // ---------------------------------------------------------------------------
 // RUN THIS FILE WITH --workers=1 ALONGSIDE tests/layout-persist.spec.ts.
 //
-// Measured, not guessed: playwright.config.ts sets no `workers`, so the
-// default is 2 on this machine, and Playwright spreads SPEC FILES across
-// workers even though both files are `mode: 'serial'` internally. This file
-// and layout-persist.spec.ts both own the one server-side view
-// `__layout_overview` — Overview is the only tab wired with a layoutKey — and
-// layout-persist additionally SIGTERMs the Go binary as part of P8. Run in
-// parallel they corrupt each other: on the first full-suite run, P9b read back
-// `host-status: 4`, which is layout-persist's SAVE_BODY, not anything a drag
-// wrote, and P8 read an order this file had just saved.
+// Measured, not guessed: with the Playwright default of 2 workers, spec FILES
+// are spread across workers even though both files are `mode: 'serial'`
+// internally. This file and layout-persist.spec.ts both own the one
+// server-side view `__layout_overview`, and layout-persist additionally
+// SIGTERMs the Go binary as part of P8. Run in parallel they corrupt each
+// other: on the first full-suite run, P9b read back `host-status: 4`, which is
+// layout-persist's SAVE_BODY, not anything a drag wrote, and P8 read an order
+// this file had just saved.
 //
-// Neither file is wrong on its own; they are simply two exclusive owners of
-// one resource. The fix is one line in playwright.config.ts (`workers: 1`) or
-// merging the two files, and both are decisions for whoever owns that config.
-// Until then: `npx playwright test --workers=1`.
+// Since 2026-08-08 every one of the 15 tabs carries a layoutKey, so the shared
+// resource is no longer one view but a namespace: this file now also owns
+// `__layout_network`, `__layout_dns` and `__layout_security` (the per-tab
+// block at the bottom), and tests/hidden-tiles.spec.ts owns `__layout_daily`.
+// Two specs writing one `__layout_<key>` is the hazard; each spec therefore
+// names the keys it writes at the top and deletes them again when it is done.
+//
+// Neither file is wrong on its own; they are simply exclusive owners of shared
+// resources. playwright.config.ts pins `workers: 1` for this reason.
 // ---------------------------------------------------------------------------
 
 const VIEW = '__layout_overview';
@@ -47,129 +58,13 @@ const DECLARED_ORDER = [
 
 type Page = import('@playwright/test').Page;
 
-// The drag tests run in a viewport tall enough to hold all seven panels at
-// once (height 2400, not 1080). That is a limitation of the FEATURE, stated
-// plainly rather than worked around: a drag does not auto-scroll the page, so
-// a card whose target slot is off-screen cannot be dropped there by pointer
-// today. The keyboard route has no such limit — it moves by position, not by
-// pixels — which is one more reason step 3 is not a courtesy.
-async function gotoOverview(page: Page, width = 1920, height = 1080) {
-  await page.setViewportSize({ width, height });
-  await page.goto('/#overview');
-  await page.waitForFunction(
-    () => document.querySelectorAll('[data-panel-id]').length === 7,
-    { timeout: 20_000 },
-  );
-  // The layout GET resolves on mount and applyLayout re-runs on a rAF; the
-  // DataTables measure themselves on top of that.
-  await page.waitForTimeout(1200);
-}
+// Overview's own front door. The height default is 1080 rather than
+// layout-helpers' 2400 because most of the tests below only touch the top two
+// rows; the three that need every panel on screen at once pass 2400 by hand.
+const gotoOverview = (page: Page, width = 1920, height = 1080) =>
+  gotoTab(page, 'overview', DECLARED_ORDER.length, width, height);
 
-const domOrder = (page: Page) =>
-  page.$$eval('[data-panel-id]', (els) => els.map((e) => e.getAttribute('data-panel-id')));
-
-// The grid's own geometry, read the same way the browser reports it. Used to
-// aim the pointer — never to compute an expected result.
-const geometry = (page: Page) =>
-  page.evaluate(() => {
-    const grid = document.querySelector('[data-card-grid]') as HTMLElement;
-    const cs = getComputedStyle(grid);
-    const tracks = cs.gridTemplateColumns.split(' ').filter(Boolean);
-    return { track: parseFloat(tracks[0]), gap: parseFloat(cs.columnGap) || 0, trackCount: tracks.length };
-  });
-
-const cardBox = (page: Page, id: string) =>
-  page.evaluate((panelId) => {
-    const el = document.querySelector(`[data-panel-id="${panelId}"]`) as HTMLElement;
-    const r = el.getBoundingClientRect();
-    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
-  }, id);
-
-// The inline gridColumn of every managed card, exactly as applyLayout wrote it.
-const inlineSpans = (page: Page) =>
-  page.$$eval('[data-panel-id]', (els) => {
-    const out: Record<string, string> = {};
-    for (const el of els) out[el.getAttribute('data-panel-id')!] = (el as HTMLElement).style.gridColumn || '';
-    return out;
-  });
-
-// P9's third clause, applied to whatever is on screen right now.
-function expectEverySpanWellFormed(spans: Record<string, string>) {
-  for (const [id, value] of Object.entries(spans)) {
-    if (value === '') continue; // no override and no measurement: the declared class is in charge
-    expect(value, `${id} carries a malformed gridColumn`).toMatch(/^span [1-6] \/ span [1-6]$/);
-  }
-}
-
-// P9's fifth clause. A drag that left a transform, a left or a top on a real
-// card means the ghost was not a ghost.
-const strayDragStyles = (page: Page) =>
-  page.$$eval('[data-panel-id]', (els) =>
-    els
-      .map((el) => {
-        const s = (el as HTMLElement).style;
-        const stray = [
-          s.transform ? `transform:${s.transform}` : '',
-          s.translate ? `translate:${s.translate}` : '',
-          s.left ? `left:${s.left}` : '',
-          s.top ? `top:${s.top}` : '',
-          s.position ? `position:${s.position}` : '',
-        ].filter(Boolean);
-        return stray.length ? `${el.getAttribute('data-panel-id')}: ${stray.join(', ')}` : null;
-      })
-      .filter(Boolean),
-  );
-
-// The regression that matters most here: re-entering the measurement loops
-// shows up as a table wider than the wrapper that is supposed to contain it.
-const tableOverflow = (page: Page) =>
-  page.$$eval('table', (tables) =>
-    tables
-      .map((t) => {
-        const wrap = t.parentElement as HTMLElement;
-        return wrap.scrollWidth > wrap.clientWidth
-          ? { panel: t.closest('[data-panel-id]')?.getAttribute('data-panel-id') ?? '?', scrollWidth: wrap.scrollWidth, clientWidth: wrap.clientWidth }
-          : null;
-      })
-      .filter(Boolean),
-  );
-
-// Keeps a pointer target inside the viewport: the mouse cannot be moved to a
-// y the browser is not showing.
-function clampY(page: Page, y: number) {
-  const h = page.viewportSize()?.height ?? 1080;
-  return Math.min(Math.max(y, 8), h - 10);
-}
-
-// Grabs a card's right-edge hotspot and presses, without committing.
-//
-// The grab point is 20px below the card's TOP, not its vertical middle: a card
-// resized down to one track grows past 500px tall, and its midpoint then falls
-// outside a 1080px viewport where the mouse cannot reach it. That is not a
-// hypothetical — it is what made the first run of this file fail.
-async function grabRightEdge(page: Page, id: string) {
-  await page.locator(`[data-panel-id="${id}"]`).scrollIntoViewIfNeeded();
-  const box = await cardBox(page, id);
-  const y = clampY(page, box.top + 20);
-  await page.mouse.move(box.right - 2, y);
-  await page.mouse.down();
-  return { box, y };
-}
-
-async function savedBlob(request: import('@playwright/test').APIRequestContext) {
-  const res = await request.get(`/api/views/${VIEW}`);
-  expect(res.status(), 'nothing was saved').toBe(200);
-  return await res.json();
-}
-
-// The blob the server hands back carries ViewWrite's envelope
-// (widgets/folder/saved_at), which validateSave — correctly — rejects. What
-// P9 asks is that the PAYLOAD the UI sent passes it, so the envelope is
-// stripped and the exact save shape is rebuilt before it is checked.
-function expectPersistedBlobIsValid(blob: any) {
-  const verdict = validateSave({ name: blob.name, order: blob.order, layout: blob.layout });
-  expect(verdict.ok, `persisted blob rejected: ${verdict.error}`).toBe(true);
-}
+const savedBlob = (request: import('@playwright/test').APIRequestContext) => savedBlobFor(request, VIEW);
 
 test.describe.configure({ mode: 'serial' });
 
@@ -263,47 +158,7 @@ test('P9: a resized span survives a reload, and no table overflows afterwards', 
 // Step 2 — drag to rearrange.
 // ---------------------------------------------------------------------------
 
-// Drops the card `id` onto the right half of whatever card is currently at DOM
-// position `slot`. That aim gives the same insertion index whichever row the
-// two cards happen to be on: the dragged card is counted either because the
-// pointer is past its midpoint (same row) or because it is below it entirely
-// (lower row), and the card to the RIGHT of the target is never counted,
-// because the pointer stops short of the target's own right edge.
-async function dragOntoRightHalfOf(page: Page, id: string, slot: number) {
-  const ids = await domOrder(page);
-  const targetBox = await cardBox(page, ids[slot]!);
-  const handle = page.locator(`[data-panel-id="${id}"] [data-layout-handle]`);
-  await expect(handle).toHaveCount(1);
-  const hb = (await handle.boundingBox())!;
-  const before = await cardBox(page, id);
-
-  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(hb.x + 40, hb.y + 40, { steps: 5 });
-  await page.mouse.move(
-    (targetBox.left + targetBox.right) / 2 + 20,
-    clampY(page, targetBox.top + 20),
-    { steps: 15 },
-  );
-
-  // Mid-drag: the ghost and the insertion line exist, and the REAL card has
-  // not moved a pixel. A card that moved mid-drag is the failure this whole
-  // design exists to prevent.
-  await expect(page.locator('[data-layout-ghost]')).toHaveCount(1);
-  await expect(page.locator('[data-layout-insert-line]')).toHaveCount(1);
-  // P9's "at all times" clause again — mid-drag, not only after the drop.
-  expectEverySpanWellFormed(await inlineSpans(page));
-  expect(await strayDragStyles(page)).toEqual([]);
-  const during = await cardBox(page, id);
-  expect(during.left, 'the real card moved mid-drag').toBeCloseTo(before.left, 0);
-  expect(during.top, 'the real card moved mid-drag').toBeCloseTo(before.top, 0);
-  expect(during.width, 'the real card resized mid-drag').toBeCloseTo(before.width, 0);
-
-  await page.mouse.up();
-  await page.waitForTimeout(700);
-  await expect(page.locator('[data-layout-ghost]')).toHaveCount(0);
-  await expect(page.locator('[data-layout-insert-line]')).toHaveCount(0);
-}
+// The drag gesture itself is dragOntoRightHalfOf() in ./layout-helpers.ts.
 
 test('P9a: dragging card A past card B persists the new order and it survives a reload', async ({ page, request }) => {
   test.setTimeout(120_000);
@@ -393,22 +248,7 @@ test('two drags in a row keep DOM order and visual order in step', async ({ page
 // merely focusable by script.
 // ---------------------------------------------------------------------------
 
-const activeHandlePanel = (page: Page) =>
-  page.evaluate(() => {
-    const el = document.activeElement as HTMLElement | null;
-    if (!el || !el.hasAttribute('data-layout-handle')) return null;
-    return el.closest('[data-panel-id]')?.getAttribute('data-panel-id') ?? null;
-  });
-
-const liveText = (page: Page) => page.locator('[data-layout-live]').innerText();
-
-async function tabToHandle(page: Page, id: string, max = 400) {
-  for (let i = 0; i < max; i++) {
-    await page.keyboard.press('Tab');
-    if ((await activeHandlePanel(page)) === id) return i + 1;
-  }
-  throw new Error(`the ${id} move handle was not reachable within ${max} Tab presses`);
-}
+// activeHandlePanel, liveText and tabToHandle are in ./layout-helpers.ts.
 
 test('P9c: a keyboard-only run moves a card two positions, changes its span, and both persist', async ({ page, request }) => {
   test.setTimeout(180_000);
@@ -649,8 +489,15 @@ test('at a narrow breakpoint the announced width is what renders, not the stored
 // child of its CardGrid carries a panelId — so the guard must be silent here,
 // and must fire the moment the grid holds a panel its own children cannot
 // name. The positive case is provoked by grafting an unnamed grid item into
-// the DOM, because no tab in the repo combines layoutKey with HiddenPanels
-// (which is exactly why this is a landmine and not a live bug).
+// the DOM, because no tab in the repo is in that shape any more: the
+// service-ownership wrapper was the loudest way to end up there and is now
+// hiddenPanelGroup(), a plain function returning an ARRAY, so each Card is
+// once again a direct grid child carrying its own panelId. (Network, DNS and
+// Security are the three tabs that combine a layoutKey with those runs, and
+// the per-tab block at the bottom of this file drives all three.) The guard
+// still guards the ordinary mistake — a wrapper whose call site leaves the id
+// on the <Card> inside — so it is exercised by construction rather than by
+// finding a tab that is already broken.
 test('a grid whose DOM holds a panel its children cannot name says so, loudly', async ({ page }) => {
   test.setTimeout(120_000);
   const errors: string[] = [];
@@ -681,15 +528,315 @@ test('a grid whose DOM holds a panel its children cannot name says so, loudly', 
   expect(errors.join('\n')).toContain('layoutKey="overview"');
 });
 
-test('an unmanaged tab grows no handle, no hotspot and no live region', async ({ page }) => {
-  // #network has no layoutKey, so item 8 must be structurally absent there —
-  // not hidden, not disabled, not rendered.
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto('/#network');
-  await page.waitForSelector('[data-card-grid]', { timeout: 20_000 });
-  await page.waitForTimeout(1200);
+// ---------------------------------------------------------------------------
+// Step 5 — every tab, and what replaced the unmanaged-tab test.
+//
+// WHAT THIS USED TO BE, AND WHY IT IS NOT THAT ANY MORE. Until 2026-08-08 this
+// slot held `an unmanaged tab grows no handle, no hotspot and no live region`,
+// which navigated to #network and asserted zero of each. Network is now wired
+// with layoutKey="network", so it found four, and the TEST was the thing that
+// was out of date — the code was right.
+//
+// The invariant it guarded is still real and still worth protecting: a
+// CardGrid with no layoutKey must create no handle, no hotspot, no listener
+// and no live region — not hidden, not disabled, not rendered. What changed is
+// that NO SURFACE IN THE APP IS IN THAT STATE ANY MORE. Checked before this
+// was rewritten: `grep -rn CardGrid ui/src` finds 19 render sites across the
+// 15 tabs (Provision renders three, one per mode) and every one of them
+// carries a layoutKey. There is nothing left for a browser to point at, so
+// pointing at Network anyway — or at any other tab — would be a test that
+// passes by accident and says something false in its name.
+//
+// The coverage was therefore split in two rather than deleted:
+//
+//   - the POSITIVE truth, below, in a real browser: each of the 15 tabs grows
+//     exactly the chrome its own panel count entitles it to, and exactly one
+//     live region. That is strictly more than the old test checked — it fails
+//     on a tab that grows too LITTLE chrome as well as too much, which the old
+//     zero-assertion could not do.
+//   - the STRUCTURAL invariant, in ui/src/lib/layoutChrome.test.js, which
+//     reads components/ui.jsx and asserts each affordance has exactly one
+//     render site and that each of those sites is behind the `managed` /
+//     `layoutKey` gate. It is a source-shape check and cannot prove a render;
+//     it is here because `node --test` runs plain .js with no JSX transform,
+//     so this repo cannot mount a React tree outside a browser, and the
+//     browser has no unmanaged grid left to mount.
+// ---------------------------------------------------------------------------
 
-  expect(await page.locator('[data-layout-resize]').count()).toBe(0);
-  expect(await page.locator('[data-layout-handle]').count()).toBe(0);
-  expect(await page.locator('[data-layout-live]').count()).toBe(0);
+// tabId -> the number of panels that tab renders against the live dev feeds,
+// counted in the browser on 2026-08-08 and written down by hand. `provision`
+// is the subnet mode, which is the one it opens on.
+const TAB_PANEL_COUNTS: Record<string, number> = {
+  overview: 7,
+  daily: 5,
+  network: 4,
+  dns: 8,
+  security: 12,
+  infra: 7,
+  assets: 2,
+  incidents: 5,
+  audit: 3,
+  changes: 2,
+  provision: 2,
+  selfservice: 4,
+  editor: 1,
+  drift: 1,
+  ai: 2,
+};
+
+test('every tab grows exactly the layout chrome its panels entitle it to', async ({ page }) => {
+  test.setTimeout(300_000);
+  await page.setViewportSize({ width: 1920, height: 2400 });
+
+  const seen: Record<string, unknown> = {};
+  for (const [tabId, panels] of Object.entries(TAB_PANEL_COUNTS)) {
+    await page.goto(`/#${tabId}`);
+    await expect(page.locator('h1').first()).toBeVisible();
+    await page.waitForFunction((n) => document.querySelectorAll('[data-panel-id]').length === n, panels, {
+      timeout: 20_000,
+    });
+    await page.waitForTimeout(400);
+
+    seen[tabId] = await page.evaluate(() => ({
+      panels: document.querySelectorAll('[data-panel-id]').length,
+      // One resize hotspot and one hide button PER PANEL, and one move handle
+      // per panel ONLY on a tab that shows two or more of them — see the
+      // expected object below. The affordances are per-Card and gated on
+      // `managed`, so a count that disagrees is a Card that lost its gate or a
+      // Card that never got one.
+      handles: document.querySelectorAll('[data-layout-handle]').length,
+      hotspots: document.querySelectorAll('[data-layout-resize]').length,
+      hides: document.querySelectorAll('[data-layout-hide]').length,
+      // Exactly ONE per managed grid, and never inside it — see the comment at
+      // its render site. Two would mean two grids announcing over each other.
+      live: document.querySelectorAll('[data-layout-live]').length,
+      grids: document.querySelectorAll('[data-card-grid]').length,
+      // No tile is hidden in this run, so the strip must be absent entirely
+      // rather than present and empty.
+      strips: document.querySelectorAll('[data-testid="hidden-tiles"]').length,
+    }));
+
+    // MOVING NEEDS SOMEWHERE TO MOVE TO, so the handle count is not simply the
+    // panel count. #editor renders exactly one panel (editor-object-form) and
+    // always will, and #drift renders one until a drift check runs — on a
+    // one-panel grid the ⠿ handle had nothing to drag past, move mode's arrow
+    // keys moved nothing, and the ⓘ help still said "You can move this panel".
+    // The handle is now gated on `managed && reorderable`, so it is absent
+    // there and present on every panel of every tab that shows two or more.
+    //
+    // Written as an expression rather than as two literals per tab on purpose:
+    // it is one rule, and it fails in BOTH directions. A tab that shows two
+    // panels and grows fewer handles than panels fails, and a one-panel tab
+    // that grows any handle at all fails — which is exactly what #editor and
+    // #drift did before this change. The hotspot and the hide count stay at
+    // `panels` for every tab, because resizing and hiding do real work on a
+    // one-panel grid and must keep doing it.
+    const expectedHandles = panels >= 2 ? panels : 0;
+
+    expect(seen[tabId], `#${tabId}`).toEqual({
+      panels,
+      handles: expectedHandles,
+      hotspots: panels,
+      hides: panels,
+      live: 1,
+      grids: 1,
+      strips: 0,
+    });
+  }
+
+  // The rule above is only worth having if the suite actually contains both
+  // shapes. Asserted rather than assumed: if every tab in TAB_PANEL_COUNTS
+  // grew past one panel, `panels >= 2 ? panels : 0` would be an untested branch
+  // dressed up as a check.
+  const counts = Object.values(TAB_PANEL_COUNTS);
+  expect(counts.filter((n) => n === 1).length, 'no one-panel tab left, so the handle rule proves nothing')
+    .toBeGreaterThan(0);
+  expect(counts.filter((n) => n >= 2).length, 'no multi-panel tab left, so the handle rule proves nothing')
+    .toBeGreaterThan(0);
 });
+
+// ---------------------------------------------------------------------------
+// Step 6 — the three tabs the old blocker made impossible.
+//
+// Network, DNS and Security each carry at least one hiddenPanelGroup() run.
+// While that wrapper was a component returning a fragment, a whole run of
+// Cards sat behind ONE React child with no panelId, so those three tabs could
+// not be given a layoutKey at all without the grid saving an order it could
+// not restore. The wrapper is a function returning an array now, so this block
+// proves the three gestures actually work THERE — on the tabs that were
+// blocked — and not merely on Overview, which never had the problem.
+//
+// Each phase starts from a deleted view so its expected order is the DECLARED
+// one, written out by hand from the tab's JSX rather than carried over from
+// the phase before.
+// ---------------------------------------------------------------------------
+
+type TabCase = {
+  id: string;
+  declared: string[];
+  // A panel that neither measures itself nor carries a saved span, so its
+  // inline gridColumn is empty on a clean load — the clean subject for a
+  // resize, exactly as host-status is on Overview.
+  resizeSubject: string;
+  // The declared span of declared[0], read off its SPAN_CLASS in the JSX. One
+  // ArrowUp takes it to this + 1.
+  firstDeclaredSpan: number;
+};
+
+const TAB_CASES: TabCase[] = [
+  {
+    id: 'network',
+    declared: [
+      'network-utilization-distribution',
+      'network-ipam-spaces',
+      'network-dhcp-leases', // inside hiddenPanelGroup({...SERVICE_GROUPS.dhcp})
+      'network-exhaustion',
+    ],
+    resizeSubject: 'network-ipam-spaces',
+    firstDeclaredSpan: 3,
+  },
+  {
+    id: 'dns',
+    declared: [
+      'dns-query-rate', // hiddenPanelGroup run #1
+      'dns-zone-kpis',
+      'dns-services', // hiddenPanelGroup run #2
+      'dns-query-volume-7d',
+      'dns-zones',
+      'dns-dnssec-health',
+      'dns-rpz',
+      'dns-dtc-lbdn',
+    ],
+    resizeSubject: 'dns-zone-kpis',
+    firstDeclaredSpan: 4,
+  },
+  {
+    id: 'security',
+    declared: [
+      // The first three are one hiddenPanelGroup run of three Cards — the
+      // exact shape that used to collapse into a single unnamed grid child.
+      'security-threat-events',
+      'security-response-summary',
+      'security-triage-inbox',
+      'security-lookalike-domains',
+      'security-ctem-exposure',
+      'security-asset-insights',
+      'security-exposures',
+      'security-asset-risk',
+      'security-exposed-surface',
+      'security-ctem-assets',
+      'security-threat-feed-activity',
+      'security-soc-insights',
+    ],
+    resizeSubject: 'security-response-summary',
+    firstDeclaredSpan: 4,
+  },
+];
+
+for (const tab of TAB_CASES) {
+  const view = `__layout_${tab.id}`;
+  // Dropping declared[0] on the right half of the card in slot 1 puts it in
+  // slot 1 and lifts declared[1] to the front — the same insertion arithmetic
+  // P9a spells out for Overview, and the same result one ArrowRight gives.
+  const swapped = [tab.declared[1], tab.declared[0], ...tab.declared.slice(2)];
+
+  test.describe(`per-tab layout: #${tab.id}`, () => {
+    test.beforeEach(async ({ request }) => {
+      await request.delete(`/api/views/${view}`);
+    });
+    // This spec is this view's only writer; leave the tenant as it was found so
+    // nothing else in the suite loads a layout it did not ask for. afterEach
+    // rather than afterAll because `request` is a test-scoped fixture and
+    // Playwright refuses it in a beforeAll/afterAll hook.
+    test.afterEach(async ({ request }) => {
+      await request.delete(`/api/views/${view}`);
+    });
+
+    test(`edge-drag resize writes a whole-integer span through the validated path`, async ({ page, request }) => {
+      test.setTimeout(120_000);
+      await gotoTab(page, tab.id, tab.declared.length);
+      expect(await domOrder(page)).toEqual(tab.declared);
+
+      const { track, gap, trackCount } = await geometry(page);
+      expect(trackCount).toBe(6); // xl:grid-cols-6 at 1920
+      expect((await inlineSpans(page))[tab.resizeSubject]).toBe('');
+
+      const g = await grabRightEdge(page, tab.resizeSubject);
+      await page.mouse.move(g.box.left + 4 * track + 3 * gap, g.y, { steps: 12 });
+      await page.mouse.up();
+      await page.waitForTimeout(600);
+
+      expect((await inlineSpans(page))[tab.resizeSubject]).toBe('span 4 / span 4');
+      expectEverySpanWellFormed(await inlineSpans(page));
+      expect(await strayDragStyles(page)).toEqual([]);
+      expect(await tableOverflow(page)).toEqual([]);
+
+      const blob = await savedBlobFor(request, view);
+      expect(blob.layout.spans[tab.resizeSubject]).toBe(4);
+      expect(blob.layout.hidden).toEqual([]); // resizing hides nothing
+      expectPersistedBlobIsValid(blob);
+
+      // Read back from the server, not from anything the page still held.
+      await gotoTab(page, tab.id, tab.declared.length);
+      expect((await inlineSpans(page))[tab.resizeSubject]).toBe('span 4 / span 4');
+      expect(await domOrder(page)).toEqual(tab.declared); // resize moves nothing
+    });
+
+    test(`a pointer drag rearranges it and the new order survives a reload`, async ({ page, request }) => {
+      test.setTimeout(120_000);
+      await gotoTab(page, tab.id, tab.declared.length);
+      expect(await domOrder(page)).toEqual(tab.declared);
+
+      await dragOntoRightHalfOf(page, tab.declared[0], 1);
+      expect(await domOrder(page)).toEqual(swapped);
+
+      const blob = await savedBlobFor(request, view);
+      expect(blob.order).toEqual(swapped);
+      expectPersistedBlobIsValid(blob);
+      expect(await strayDragStyles(page)).toEqual([]);
+      expect(await tableOverflow(page)).toEqual([]);
+
+      await gotoTab(page, tab.id, tab.declared.length);
+      expect(await domOrder(page)).toEqual(swapped);
+    });
+
+    test(`a keyboard-only move reaches the same saved layout`, async ({ page, request }) => {
+      test.setTimeout(180_000);
+      await gotoTab(page, tab.id, tab.declared.length);
+      expect(await domOrder(page)).toEqual(tab.declared);
+
+      // Reached by Tab alone — no page.mouse call in this test.
+      await tabToHandle(page, tab.declared[0]);
+      await page.keyboard.press('Enter');
+      expect(await liveText(page)).toContain(`Position 1 of ${tab.declared.length}`);
+
+      await page.keyboard.press('ArrowRight');
+      expect(await liveText(page)).toBe(`Moved to position 2 of ${tab.declared.length}`);
+      expect(await domOrder(page)).toEqual(swapped);
+      // Focus survived a re-sort of the real DOM children.
+      expect(await activeHandlePanel(page)).toBe(tab.declared[0]);
+
+      await page.keyboard.press('ArrowUp');
+      const widened = tab.firstDeclaredSpan + 1;
+      expect(await liveText(page)).toBe(`Width ${widened} of 6 columns`);
+      expect((await inlineSpans(page))[tab.declared[0]]).toBe(`span ${widened} / span ${widened}`);
+
+      // Nothing has been written yet — Enter is what saves.
+      expect((await request.get(`/api/views/${view}`)).status()).toBe(404);
+
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(600);
+      expect(await liveText(page)).toContain('Layout saved');
+
+      const blob = await savedBlobFor(request, view);
+      expect(blob.order).toEqual(swapped);
+      expect(blob.layout.spans[tab.declared[0]]).toBe(widened);
+      expectPersistedBlobIsValid(blob);
+
+      await gotoTab(page, tab.id, tab.declared.length);
+      expect(await domOrder(page)).toEqual(swapped);
+      expect((await inlineSpans(page))[tab.declared[0]]).toBe(`span ${widened} / span ${widened}`);
+      expect(await tableOverflow(page)).toEqual([]);
+    });
+  });
+}

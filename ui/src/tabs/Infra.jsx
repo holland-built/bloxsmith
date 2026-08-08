@@ -72,8 +72,12 @@ export default function Infra() {
           </span>
         )}
       </div>
-      <CardGrid>
-        <HostStatus hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
+      {/* The panelIds sit on the call sites, not only on the Card each wrapper
+          returns: CardGrid reads panelId off its OWN direct children to apply a
+          saved order, and a wrapper that keeps the id inside is invisible to
+          that read. Each wrapper forwards it to its Card unchanged. */}
+      <CardGrid layoutKey="infra">
+        <HostStatus panelId="infra-host-status" hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <FeedCard
           span={2}
           panelId="infra-host-health"
@@ -104,8 +108,8 @@ export default function Infra() {
             { key: 'app_count', label: 'Apps', mono: true },
           ]}
         />
-        <DiscoveryStatus feed={discovery} />
-        <HostTable hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
+        <DiscoveryStatus panelId="infra-asset-discovery" feed={discovery} />
+        <HostTable panelId="infra-host-inventory" hosts={hosts} status={hp.status} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <FeedCard
           span={3}
           panelId="infra-jobs"
@@ -140,7 +144,7 @@ export default function Infra() {
 
 // ---------- host status ----------
 
-function HostStatus({ hosts, totalHosts, hostsStatus, loading }) {
+function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
   const { COLORS } = useChartTheme()
   // Buckets come from the same statusBucket() the table sorts and filters by,
   // so one host cannot be "Other" here and "unknown" there. Unknown is its own
@@ -167,7 +171,7 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading }) {
     .map(([name, value]) => ({ name, value, color: colorMap[name] }))
 
   return (
-    <Card span={2} panelId="infra-host-status" title="Host Status">
+    <Card span={2} panelId={panelId} title="Host Status">
       {loading ? (
         // An unfinished read is neither "no hosts" nor a dead feed.
         <Skeleton h={130} />
@@ -234,7 +238,7 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading }) {
 // checks ids are unique, and Card writes the id into the DOM).
 // The branch ORDER is unchanged and load-bearing: an unfinished read is not a
 // dead feed, and a dead feed is not a tenant with nothing discovered.
-function DiscoveryStatus({ feed }) {
+function DiscoveryStatus({ feed, panelId }) {
   const { COLORS } = useChartTheme()
   const { data, error, loading } = feed
 
@@ -246,7 +250,7 @@ function DiscoveryStatus({ feed }) {
   return (
     <Card
       span={2}
-      panelId="infra-asset-discovery"
+      panelId={panelId}
       title="Asset Discovery"
       note={ok ? 'CSP' : undefined}
       right={ok && !data.breakdown_available && data.note ? (
@@ -338,7 +342,7 @@ const HOST_COLUMNS = [
   { key: 'type', label: 'Type', priority: 'low' },
 ]
 
-function HostTable({ hosts, status, totalHosts, hostsStatus, loading }) {
+function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId }) {
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
   const [type, setType] = useState('')
@@ -372,7 +376,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading }) {
   return (
     <Card
       span={6}
-      panelId="infra-host-inventory"
+      panelId={panelId}
       title={
         statusFilter ? (
           <span className="inline-flex items-center gap-2">

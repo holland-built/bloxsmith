@@ -4,7 +4,7 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
-import { useChartTheme, ChartTip, Card, CardGrid, Empty, HiddenPanels, Skeleton, FeedUnavailable } from '../components/ui.jsx'
+import { useChartTheme, ChartTip, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedUnavailable } from '../components/ui.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { DataTable } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
@@ -51,25 +51,35 @@ export default function Security() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Security</h1>
-      <CardGrid>
+      {/* Every direct child of a grid with a layoutKey carries its own panelId:
+          CardGrid applies the saved order to its React children by reading
+          `props.panelId` off them, while it reads the live order off the DOM. A
+          wrapper whose id only exists on the <Card> inside it is visible to the
+          second and invisible to the first, and the panel jumps to the end on
+          reload. Each wrapper below forwards the id to its Card. */}
+      <CardGrid layoutKey="security">
         {/* All three read /api/hub/security -> dns_event, which the
             forwarding-proxy tier produces. Hidden as one group, and only when
             the inventory read authoritatively says neither dfp nor orpheus is
             deployed. */}
-        <HiddenPanels {...SERVICE_GROUPS.threatDefense} state={owned}>
-          <SeverityHero hub={hub} events={events} />
-          <KpiStack hub={hub} events={events} acks={acks} />
-          <TriageInbox hub={hub} events={events} acks={acks} setAcks={setAcks} />
-        </HiddenPanels>
-        <LookalikeTable lookalikes={lookalikes} />
-        <CtemPanel ctem={ctem} />
-        <AssetInsights assetInsights={assetInsights} />
-        <ExposuresPanel exposures={exposures} />
-        <AssetRiskPanel assetRisk={assetRisk} />
-        <ExposedSurfacePanel hostnames={exposedHostnames} ips={exposedIps} />
-        <CtemAssetsPanel ctemAssets={ctemAssets} />
-        <ThreatFeed threats={threats} />
-        <InsightsPanel insights={insights} />
+        {hiddenPanelGroup({
+          ...SERVICE_GROUPS.threatDefense,
+          state: owned,
+          children: [
+            <SeverityHero key="security-threat-events" panelId="security-threat-events" hub={hub} events={events} />,
+            <KpiStack key="security-response-summary" panelId="security-response-summary" hub={hub} events={events} acks={acks} />,
+            <TriageInbox key="security-triage-inbox" panelId="security-triage-inbox" hub={hub} events={events} acks={acks} setAcks={setAcks} />,
+          ],
+        })}
+        <LookalikeTable panelId="security-lookalike-domains" lookalikes={lookalikes} />
+        <CtemPanel panelId="security-ctem-exposure" ctem={ctem} />
+        <AssetInsights panelId="security-asset-insights" assetInsights={assetInsights} />
+        <ExposuresPanel panelId="security-exposures" exposures={exposures} />
+        <AssetRiskPanel panelId="security-asset-risk" assetRisk={assetRisk} />
+        <ExposedSurfacePanel panelId="security-exposed-surface" hostnames={exposedHostnames} ips={exposedIps} />
+        <CtemAssetsPanel panelId="security-ctem-assets" ctemAssets={ctemAssets} />
+        <ThreatFeed panelId="security-threat-feed-activity" threats={threats} />
+        <InsightsPanel panelId="security-soc-insights" insights={insights} />
       </CardGrid>
     </div>
   )
@@ -77,7 +87,7 @@ export default function Security() {
 
 // ---------- severity hero ----------
 
-function SeverityHero({ hub, events }) {
+function SeverityHero({ panelId, hub, events }) {
   const { COLORS } = useChartTheme()
   const { grid, tick } = useThemeColors()
   const SEV_COLOR = sevColorMap(COLORS)
@@ -101,7 +111,7 @@ function SeverityHero({ hub, events }) {
   }, [events])
 
   return (
-    <Card panelId="security-threat-events" span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
+    <Card panelId={panelId} span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
       {hub.loading ? (
         <Skeleton h={230} />
       ) : unavailable ? (
@@ -143,7 +153,7 @@ function SeverityHero({ hub, events }) {
 
 // ---------- kpi stack ----------
 
-function KpiStack({ hub, events, acks }) {
+function KpiStack({ panelId, hub, events, acks }) {
   const { COLORS } = useChartTheme()
   const d = hub.data ?? {}
   const unackedCrit = events.filter((e) => !acks[ackKey(e)] && String(e.severity).toLowerCase() === 'critical').length
@@ -156,7 +166,7 @@ function KpiStack({ hub, events, acks }) {
   ]
 
   return (
-    <Card panelId="security-response-summary" span={2} title="Response Summary">
+    <Card panelId={panelId} span={2} title="Response Summary">
       {hub.loading ? <Skeleton h={200} /> : hub.data?.availability === 'error' || hub.error ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
       ) : (
@@ -259,7 +269,7 @@ function BlockCell({ domain }) {
 
 // ---------- triage inbox ----------
 
-function TriageInbox({ hub, events, acks, setAcks }) {
+function TriageInbox({ panelId, hub, events, acks, setAcks }) {
   const { COLORS } = useChartTheme()
   const SEV_COLOR = sevColorMap(COLORS)
   const [sevFilter, setSevFilter] = useState('all')
@@ -337,7 +347,7 @@ function TriageInbox({ hub, events, acks, setAcks }) {
 
   return (
     <Card
-      panelId="security-triage-inbox"
+      panelId={panelId}
       span={6}
       title="Triage Inbox"
       right={
@@ -379,7 +389,7 @@ function TriageInbox({ hub, events, acks, setAcks }) {
 
 // ---------- lookalike domains ----------
 
-function LookalikeTable({ lookalikes }) {
+function LookalikeTable({ panelId, lookalikes }) {
   const { COLORS } = useChartTheme()
   const d = lookalikes.data ?? {}
   const rows = Array.isArray(d.domains) ? d.domains : []
@@ -403,7 +413,7 @@ function LookalikeTable({ lookalikes }) {
   const counted = !lookalikes.error && !d.unavailable
 
   return (
-    <Card panelId="security-lookalike-domains" span={3} title="Lookalike Domains" right={<span className="text-[11px] text-muted">{counted ? rows.length : '—'} detected</span>}>
+    <Card panelId={panelId} span={3} title="Lookalike Domains" right={<span className="text-[11px] text-muted">{counted ? rows.length : '—'} detected</span>}>
       {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error ? (
         // Previously byte-identical to a genuinely empty result ("no data") —
         // a dead feed read as a clean estate.
@@ -419,7 +429,7 @@ function LookalikeTable({ lookalikes }) {
 
 // ---------- CTEM exposure ----------
 
-function CtemPanel({ ctem }) {
+function CtemPanel({ panelId, ctem }) {
   const { COLORS } = useChartTheme()
   const SEV_COLOR = sevColorMap(COLORS)
   const d = ctem.data?.data ?? null
@@ -450,7 +460,7 @@ function CtemPanel({ ctem }) {
   ]
 
   return (
-    <Card panelId="security-ctem-exposure" span={3} title="CTEM Exposure" right={d?.total_exposures ? <span className="text-[11px] text-muted">{d.total_exposures.toLocaleString()} total</span> : null}>
+    <Card panelId={panelId} span={3} title="CTEM Exposure" right={d?.total_exposures ? <span className="text-[11px] text-muted">{d.total_exposures.toLocaleString()} total</span> : null}>
       {ctem.loading ? <Skeleton h={220} /> : ctem.error || status === 'error' ? (
         <FeedUnavailable label="CTEM exposure feed unavailable" />
       ) : empty ? <Empty /> : (
@@ -495,7 +505,7 @@ function pivotByDay(rows) {
   return [...byDay.values()]
 }
 
-function ThreatFeed({ threats }) {
+function ThreatFeed({ panelId, threats }) {
   const { COLORS } = useChartTheme()
   const { grid, tick } = useThemeColors()
   const rows = threats.data?.rows ?? []
@@ -507,7 +517,7 @@ function ThreatFeed({ threats }) {
   )
 
   return (
-    <Card panelId="security-threat-feed-activity" span={3} title="Threat Feed Activity">
+    <Card panelId={panelId} span={3} title="Threat Feed Activity">
       {threats.loading ? <Skeleton h={220} /> : threats.error || status === 'error' ? (
         <FeedUnavailable label="Threat feed activity unavailable" />
       ) : rows.length === 0 ? <Empty /> : (
@@ -539,7 +549,7 @@ function ThreatFeed({ threats }) {
 
 // ---------- SOC insights ----------
 
-function InsightsPanel({ insights }) {
+function InsightsPanel({ panelId, insights }) {
   const d = insights.data
   // FetchInsights returns {"data":[],"unavailable":"…","availability":"error"}
   // on a dead upstream — reading only d.data (or d directly) can't distinguish
@@ -587,7 +597,7 @@ function InsightsPanel({ insights }) {
   ]
 
   return (
-    <Card panelId="security-soc-insights" span={3} title="SOC Insights" right={!unavailable && rows.length ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : null}>
+    <Card panelId={panelId} span={3} title="SOC Insights" right={!unavailable && rows.length ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : null}>
       {insights.loading ? <Skeleton h={220} /> : unavailable ? (
         <FeedUnavailable reason={typeof d?.unavailable === 'string' ? d.unavailable : undefined} label="SOC insights unavailable" />
       ) : rows.length === 0 ? <Empty /> : (
@@ -599,13 +609,13 @@ function InsightsPanel({ insights }) {
 
 // ---------- asset insights (severity buckets) ----------
 
-function AssetInsights({ assetInsights }) {
+function AssetInsights({ panelId, assetInsights }) {
   const d = assetInsights.data ?? {}
   const status = d.status
   const hasTotal = typeof d.total === 'number' && d.total > 0
 
   return (
-    <Card panelId="security-asset-insights" span={3} title="Asset Insights">
+    <Card panelId={panelId} span={3} title="Asset Insights">
       {assetInsights.loading ? <Skeleton h={220} /> : assetInsights.error || status === 'error' ? (
         <FeedUnavailable label="Asset insights unavailable" />
       ) : status === 'empty' || !hasTotal ? (
@@ -633,7 +643,7 @@ function fmtDate(v) {
   return isNaN(ms) ? '—' : new Date(ms).toLocaleDateString()
 }
 
-function ExposuresPanel({ exposures }) {
+function ExposuresPanel({ panelId, exposures }) {
   const payload = exposures.data ?? {}
   const availability = payload.availability
   const rows = payload.data?.rows ?? []
@@ -655,7 +665,7 @@ function ExposuresPanel({ exposures }) {
         : count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null
 
   return (
-    <Card panelId="security-exposures" span={4} title="Exposures" right={rightNode}>
+    <Card panelId={panelId} span={4} title="Exposures" right={rightNode}>
       {exposures.loading ? <Skeleton h={260} /> : availability === 'error' ? (
         <FeedUnavailable reason={payload.reason} label="Exposures feed unavailable" />
       ) : exposures.error ? (
@@ -682,7 +692,7 @@ function ExposuresPanel({ exposures }) {
 
 // ---------- asset risk ----------
 
-function AssetRiskPanel({ assetRisk }) {
+function AssetRiskPanel({ panelId, assetRisk }) {
   const raw = assetRisk.data?.data?.rows ?? []
   const count = assetRisk.data?.data?.count ?? raw.length
   // CSPAssetRisk returns status:"error" at HTTP 200 on an upstream failure —
@@ -703,7 +713,7 @@ function AssetRiskPanel({ assetRisk }) {
   ]
 
   return (
-    <Card panelId="security-asset-risk" span={4} title="Asset Risk" right={count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null}>
+    <Card panelId={panelId} span={4} title="Asset Risk" right={count ? <span className="text-[11px] text-muted">{count.toLocaleString()}</span> : null}>
       {assetRisk.loading ? <Skeleton h={260} /> : assetRisk.error || status === 'error' ? (
         <FeedUnavailable label="Asset risk feed unavailable" />
       ) : rows.length === 0 ? (
@@ -717,7 +727,7 @@ function AssetRiskPanel({ assetRisk }) {
 
 // ---------- exposed hostnames / ips (huge single-column lists) ----------
 
-function ExposedSurfacePanel({ hostnames, ips }) {
+function ExposedSurfacePanel({ panelId, hostnames, ips }) {
   const hPayload = hostnames.data ?? {}
   const iPayload = ips.data ?? {}
   const hAvail = hPayload.availability
@@ -743,7 +753,7 @@ function ExposedSurfacePanel({ hostnames, ips }) {
 
   return (
     <Card
-      panelId="security-exposed-surface"
+      panelId={panelId}
       span={4}
       title="Exposed Surface"
       right={
@@ -802,7 +812,7 @@ function summarizeArr(arr, n = 6) {
   return { count: arr.length, sample }
 }
 
-function CtemAssetsPanel({ ctemAssets }) {
+function CtemAssetsPanel({ panelId, ctemAssets }) {
   const d = ctemAssets.data?.data ?? null
   const assetCount = d?.asset_count
   // CSPCtemAssets returns status:"error" at HTTP 200 on an upstream failure —
@@ -823,7 +833,7 @@ function CtemAssetsPanel({ ctemAssets }) {
 
   return (
     <Card
-      panelId="security-ctem-assets"
+      panelId={panelId}
       span={4}
       title="CTEM Assets"
       right={assetCount ? <span className="text-[11px] text-muted">{assetCount.toLocaleString()} assets</span> : null}

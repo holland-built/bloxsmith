@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, HiddenPanels, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, hiddenPanelGroup, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable, sortRows } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
@@ -83,16 +83,34 @@ export default function Network() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Network</h1>
-      <CardGrid>
-        <UtilBands subnets={subnets} totals={totals} subnetsStatus={subnetsStatus} />
-        <IpamSpaces ipam={ipam} />
+      {/* Every direct child of a grid with a layoutKey carries its own panelId,
+          because CardGrid reads the saved order off `props.panelId` of its own
+          children while it reads the live order off the DOM. A wrapper whose id
+          only exists on the <Card> inside it is invisible to the first and
+          visible to the second, which is exactly the mismatch the guard in
+          components/ui.jsx logs. Each wrapper below forwards the id to its
+          Card, which is what registers the saved span. */}
+      <CardGrid layoutKey="network">
+        <UtilBands panelId="network-utilization-distribution" subnets={subnets} totals={totals} subnetsStatus={subnetsStatus} />
+        <IpamSpaces panelId="network-ipam-spaces" ipam={ipam} />
         {/* Leases are issued by a deployed DHCP service. The IPAM panels above
             and the subnet table below read address-space config, which exists
-            with no DHCP service at all — so neither is mapped. */}
-        <HiddenPanels {...SERVICE_GROUPS.dhcp} state={owned}>
-          <DhcpLeases dhcp={dhcp} innerRef={leasesRef} />
-        </HiddenPanels>
-        <ExhaustionTable subnets={subnets} hp={hp} subnetsStatus={subnetsStatus} />
+            with no DHCP service at all — so neither is mapped.
+
+            hiddenPanelGroup is a function, not a component, so each panel in
+            the run stays a direct child of the grid and keeps its own panelId —
+            see its comment in components/ui.jsx for why that matters to a saved
+            layout. The id lives here rather than on the <Card> inside
+            DhcpLeases for the same reason it does on Overview: the grid reads
+            it off this element. */}
+        {hiddenPanelGroup({
+          ...SERVICE_GROUPS.dhcp,
+          state: owned,
+          children: [
+            <DhcpLeases key="network-dhcp-leases" panelId="network-dhcp-leases" dhcp={dhcp} innerRef={leasesRef} />,
+          ],
+        })}
+        <ExhaustionTable panelId="network-exhaustion" subnets={subnets} hp={hp} subnetsStatus={subnetsStatus} />
       </CardGrid>
     </div>
   )
@@ -100,7 +118,7 @@ export default function Network() {
 
 // ---------- utilization distribution ----------
 
-function UtilBands({ subnets, totals, subnetsStatus }) {
+function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
   const { COLORS } = useChartTheme()
   const { grid, tick } = useThemeColors()
   const BANDS = [
@@ -130,7 +148,7 @@ function UtilBands({ subnets, totals, subnetsStatus }) {
       : `${subnets.length.toLocaleString()} loaded (estate total unavailable)${unmeasuredLabel}`
 
   return (
-    <Card panelId="network-utilization-distribution" span={3} title="Utilization Distribution" right={<span className="text-[11px] text-muted">{scopeLabel}</span>}>
+    <Card panelId={panelId} span={3} title="Utilization Distribution" right={<span className="text-[11px] text-muted">{scopeLabel}</span>}>
       {!hasData ? (
         subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnets feed unavailable" />
@@ -163,7 +181,7 @@ function UtilBands({ subnets, totals, subnetsStatus }) {
 
 // ---------- IPAM spaces ----------
 
-function IpamSpaces({ ipam }) {
+function IpamSpaces({ panelId, ipam }) {
   const rows = (ipam.data?.rows ?? [])
     .filter((r) => (Number(r.total) || 0) > 0)
     .map((r) => ({ ...r, used: Number(r.used) || 0, total: Number(r.total) || 0, pct: ((Number(r.used) || 0) / (Number(r.total) || 1)) * 100 }))
@@ -174,7 +192,7 @@ function IpamSpaces({ ipam }) {
   const status = ipam.data?.status
 
   return (
-    <Card panelId="network-ipam-spaces" span={3} title="IPAM Spaces — Top Used" right={<span className="text-[11px] text-muted">addresses used</span>}>
+    <Card panelId={panelId} span={3} title="IPAM Spaces — Top Used" right={<span className="text-[11px] text-muted">addresses used</span>}>
       {ipam.loading ? (
         <Skeleton h={220} />
       ) : ipam.error || status === 'error' ? (
@@ -203,7 +221,7 @@ function IpamSpaces({ ipam }) {
 
 // ---------- DHCP leases ----------
 
-function DhcpLeases({ dhcp, innerRef }) {
+function DhcpLeases({ panelId, dhcp, innerRef }) {
   const hp = useHashParams()
   const rows = dhcp.data?.rows ?? []
   // CSPDHCPLeases returns status:"error" at HTTP 200 on an upstream failure —
@@ -250,11 +268,19 @@ function DhcpLeases({ dhcp, innerRef }) {
   ]
 
   return (
-    // span must live on the grid item — a bare wrapper div here collapsed the card;
-    // class must match SPAN_CLASS[6] in ui.jsx so it reflows with the rest of the grid
-    <div ref={innerRef} className="col-span-2 md:col-span-4 xl:col-span-6">
+    // No wrapper div. The span must live on the GRID ITEM, and with the wrapper
+    // gone the Card is that item — span={6} puts SPAN_CLASS[6]
+    // ("col-span-2 md:col-span-4 xl:col-span-6") on the Card's own element, the
+    // exact class the wrapper used to carry, so the rendered width is unchanged.
+    // The wrapper had to go for two reasons: a plain div carrying the span class
+    // is one of the two shapes CardGrid's layoutKey guard rejects, because the
+    // panelId it can see on the DOM is not on the child it sorts; and once this
+    // tile is hidden the Card renders null while the div stayed a grid item,
+    // holding a blank gap open where the panel used to be. `innerRef` is Card's
+    // own ref-forwarding prop, so #network?focus=leases still scrolls here.
     <Card
-      panelId="network-dhcp-leases"
+      innerRef={innerRef}
+      panelId={panelId}
       span={6}
       title="DHCP Leases"
       right={
@@ -293,7 +319,6 @@ function DhcpLeases({ dhcp, innerRef }) {
         </div>
       )}
     </Card>
-    </div>
   )
 }
 
@@ -322,7 +347,7 @@ function exhaustionSort(dir) {
   }
 }
 
-function ExhaustionTable({ subnets, hp, subnetsStatus }) {
+function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
   const [filter, setFilter] = useState(hp.subnet || '')
   const [site, setSite] = useState('')
   const [sort, setSort] = useState({ key: 'util', dir: 'desc' })
@@ -424,7 +449,7 @@ function ExhaustionTable({ subnets, hp, subnetsStatus }) {
 
   return (
     <Card
-      panelId="network-exhaustion"
+      panelId={panelId}
       span={6}
       title={
         <>
