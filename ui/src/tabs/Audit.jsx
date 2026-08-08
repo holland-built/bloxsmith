@@ -44,10 +44,14 @@ export default function Audit() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Audit</h1>
-      <CardGrid>
-        <ActivitySummary logs={logs} loading={data.loading} auditLogsStatus={auditLogsStatus} />
-        <AuditTable logs={logs} loading={data.loading} error={data.error} auditLogsStatus={auditLogsStatus} />
-        <CspAuditTable />
+      {/* The panelIds sit on the call sites, not only on the Card each wrapper
+          returns: CardGrid reads panelId off its OWN direct children to apply a
+          saved order, and a wrapper that keeps the id inside is invisible to
+          that read. Each wrapper forwards it to its Card unchanged. */}
+      <CardGrid layoutKey="audit">
+        <ActivitySummary panelId="audit-activity-summary" logs={logs} loading={data.loading} auditLogsStatus={auditLogsStatus} />
+        <AuditTable panelId="audit-log" logs={logs} loading={data.loading} error={data.error} auditLogsStatus={auditLogsStatus} />
+        <CspAuditTable panelId="audit-csp-portal" />
       </CardGrid>
     </div>
   )
@@ -55,7 +59,7 @@ export default function Audit() {
 
 // ---------- activity summary ----------
 
-function ActivitySummary({ logs, loading, auditLogsStatus }) {
+function ActivitySummary({ logs, loading, auditLogsStatus, panelId }) {
   const { COLORS } = useChartTheme()
   const counts = { CREATE: 0, UPDATE: 0, DELETE: 0 }
   let ok = 0, fail = 0, unknown = 0
@@ -71,7 +75,7 @@ function ActivitySummary({ logs, loading, auditLogsStatus }) {
   const total = logs.length
 
   return (
-    <Card panelId="audit-activity-summary" span={2} title="Activity Summary" right={<span className="text-[11px] text-muted">last {total} events</span>}>
+    <Card panelId={panelId} span={2} title="Activity Summary" right={<span className="text-[11px] text-muted">last {total} events</span>}>
       {loading ? (
         <Skeleton h={200} />
       ) : total === 0 ? (
@@ -230,7 +234,7 @@ function AppendFailures({ result }) {
   )
 }
 
-function AuditTable({ logs, loading, error, auditLogsStatus }) {
+function AuditTable({ logs, loading, error, auditLogsStatus, panelId }) {
   const [filter, setFilter] = useState('')
   const [action, setAction] = useState('')
   const [sort, setSort] = useState({ key: 'ts', dir: 'desc' })
@@ -274,7 +278,7 @@ function AuditTable({ logs, loading, error, auditLogsStatus }) {
 
   return (
     <Card
-      panelId="audit-log"
+      panelId={panelId}
       span={4}
       title="Audit Log"
       note="Bloxsmith actions"
@@ -327,7 +331,7 @@ function AuditTable({ logs, loading, error, auditLogsStatus }) {
 
 // ---------- CSP portal audit ----------
 
-function CspAuditTable() {
+function CspAuditTable({ panelId }) {
   const { COLORS } = useChartTheme()
   const [q, setQ] = useState('')
   const [result, setResult] = useState(null)
@@ -392,7 +396,7 @@ function CspAuditTable() {
 
   return (
     <Card
-      panelId="audit-csp-portal"
+      panelId={panelId}
       span={6}
       title="CSP Portal Audit"
       note="external — Infoblox portal activity"

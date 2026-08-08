@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { COLORS, Card, Empty, Skeleton, TabIntro } from '../components/ui.jsx'
+import { COLORS, Card, CardGrid, Empty, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 // Same component SelfService.jsx already uses — /api/templates answers 500 and
 // /api/ipam/spaces answers 502 on an upstream failure, and both collapse into
@@ -77,8 +77,19 @@ export default function Drift() {
         extra. Read-only — it reports gaps, it never closes them.
       </TabIntro>
 
-      <div className="max-w-[720px] mx-auto">
-        <Card panelId="drift-check" span={6} title="Check drift" note="compare a site template against live Infoblox state">
+      {/* The 720px cap that used to live on a plain <div> around these two cards
+          is now on the cards themselves. A div wrapping a Card hides that Card's
+          panelId from CardGrid (it reads props.panelId off its DIRECT children),
+          and a grid item with max-width + auto side margins centres in its track
+          exactly the way the wrapper centred inside the page. */}
+      <CardGrid layoutKey="drift">
+        <Card
+          panelId="drift-check"
+          span={6}
+          className="max-w-[720px] mx-auto"
+          title="Check drift"
+          note="compare a site template against live Infoblox state"
+        >
           <div className="flex flex-col gap-3">
             <label className="text-xs text-muted flex flex-col gap-1">
               Template
@@ -120,19 +131,15 @@ export default function Drift() {
             </button>
           </div>
         </Card>
-      </div>
 
-      {err && (
-        <div className="max-w-[720px] mx-auto mt-3">
-          <Card panelId="drift-error" span={6} title="Error">
+        {err && (
+          <Card key="drift-error" panelId="drift-error" span={6} className="max-w-[720px] mx-auto" title="Error">
             <div className="text-sm" style={{ color: COLORS.crit }}>{err}</div>
           </Card>
-        </div>
-      )}
+        )}
 
-      {result && (
-        <div className="mt-3">
-          <Card panelId="drift-result" span={6} title="Result">
+        {result && (
+          <Card key="drift-result" panelId="drift-result" span={6} title="Result">
             {result.found === false ? (
               <Empty>site not found for this template</Empty>
             ) : (
@@ -202,8 +209,8 @@ export default function Drift() {
               </>
             )}
           </Card>
-        </div>
-      )}
+        )}
+      </CardGrid>
     </div>
   )
 }

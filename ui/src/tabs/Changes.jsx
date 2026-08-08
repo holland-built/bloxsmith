@@ -93,7 +93,7 @@ export default function Changes() {
         Infoblox portal activity, {FEED_PROMISE}. This is a window on the audit route, not a change log: it
         cannot show more than {ROW_CAP} events, and it holds no history from before the window.
       </p>
-      <CardGrid>
+      <CardGrid layoutKey="changes">
         <Card panelId="changes-notability" span={6} title="Notability" note="four questions asked of this window, each answered or explicitly not answered">
           {state === 'loading' ? (
             <Skeleton h={120} />

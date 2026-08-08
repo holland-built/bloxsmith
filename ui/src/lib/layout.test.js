@@ -61,7 +61,7 @@ const SERVER_ENVELOPE = {
 
 test('parseLoad accepts the real server envelope, widgets/folder/saved_at and all', () => {
   const got = parseLoad(SERVER_ENVELOPE)
-  assert.deepEqual(got, { order: ['dns-hero', 'kpi-stack'], spans: { 'dns-hero': 4 } })
+  assert.deepEqual(got, { order: ['dns-hero', 'kpi-stack'], spans: { 'dns-hero': 4 }, hidden: [] })
 })
 
 test('parseLoad still rejects an unknown key nested inside layout', () => {
@@ -79,6 +79,85 @@ test('parseLoad rejects a non-record, so a 404 body or garbage renders the defau
   assert.equal(parseLoad(null), null)
   assert.equal(parseLoad({ error: 'not found' }), null)
   assert.equal(parseLoad('nope'), null)
+})
+
+// ---------- layout.hidden: which tiles the operator took off the page ----------
+//
+// Checked exactly as strictly as `order`, because it is the same kind of thing
+// — a list of panel names — and both go through one helper so the two cannot
+// drift apart. It is OPTIONAL, which is the whole reason LAYOUT_VERSION did not
+// move: every layout saved before this feature has no such key and must still
+// load, rather than being thrown away as unreadable.
+
+const HIDDEN_GOOD = {
+  name: '__layout_overview',
+  order: ['dns-hero', 'kpi-stack'],
+  layout: { version: 1, spans: { 'dns-hero': 4 }, hidden: ['kpi-stack'] },
+}
+
+test('a hidden list of panel ids is accepted', () => {
+  assert.equal(validateSave(HIDDEN_GOOD).ok, true)
+  assert.equal(validateSave({ ...HIDDEN_GOOD, layout: { version: 1, spans: {}, hidden: [] } }).ok, true)
+})
+
+test('hidden must hold non-empty strings, and no id twice', () => {
+  const withHidden = (hidden) => validateSave({ ...HIDDEN_GOOD, layout: { version: 1, spans: {}, hidden } })
+  assert.equal(withHidden(['a', 3]).ok, false)
+  assert.equal(withHidden(['a', null]).ok, false)
+  assert.equal(withHidden(['a', '']).ok, false)
+  assert.equal(withHidden(['a', 'a']).ok, false)
+  assert.equal(withHidden('kpi-stack').ok, false)
+  assert.equal(withHidden({ 'kpi-stack': true }).ok, false)
+})
+
+test('the rejection message names the field that was wrong, not just "the layout"', () => {
+  // One helper checks both lists, so the field name has to be threaded through
+  // it — otherwise a bad `hidden` would report itself as a bad `order`.
+  assert.match(
+    validateSave({ ...HIDDEN_GOOD, layout: { version: 1, spans: {}, hidden: ['a', 'a'] } }).error,
+    /layout\.hidden must not repeat/,
+  )
+  assert.match(validateSave({ ...GOOD, order: ['a', 'a'] }).error, /^order must not repeat/)
+})
+
+test('hidden may name a panel the order does not, and vice versa', () => {
+  // A panel added or deleted since the last save leaves the two disagreeing.
+  // That must not condemn the whole layout — the same tolerance sortByOrder
+  // already has for an order naming a panel that no longer exists.
+  assert.equal(
+    validateSave({ ...HIDDEN_GOOD, order: ['dns-hero'], layout: { version: 1, spans: {}, hidden: ['long-gone'] } }).ok,
+    true,
+  )
+})
+
+test('a layout record saved before hiding existed still loads, with nothing hidden', () => {
+  // Byte-for-byte the shape this app wrote until now: no `hidden` key at all.
+  const old = { ...SERVER_ENVELOPE, layout: { version: 1, spans: { 'dns-hero': 4 } } }
+  assert.deepEqual(parseLoad(old), {
+    order: ['dns-hero', 'kpi-stack'],
+    spans: { 'dns-hero': 4 },
+    hidden: [],
+  })
+})
+
+test('parseLoad reads a saved hidden list back, and rejects a malformed one', () => {
+  assert.deepEqual(
+    parseLoad({ ...SERVER_ENVELOPE, layout: { version: 1, spans: {}, hidden: ['kpi-stack', 'host-status'] } }),
+    { order: ['dns-hero', 'kpi-stack'], spans: {}, hidden: ['kpi-stack', 'host-status'] },
+  )
+  assert.equal(parseLoad({ ...SERVER_ENVELOPE, layout: { version: 1, spans: {}, hidden: [7] } }), null)
+  assert.equal(parseLoad({ ...SERVER_ENVELOPE, layout: { version: 1, spans: {}, hidden: 'kpi-stack' } }), null)
+})
+
+test('the returned hidden list is a copy, so a caller cannot mutate the parsed record', () => {
+  const record = { ...SERVER_ENVELOPE, layout: { version: 1, spans: {}, hidden: ['kpi-stack'] } }
+  parseLoad(record).hidden.push('mutated')
+  assert.deepEqual(record.layout.hidden, ['kpi-stack'])
+})
+
+test('an unknown key inside layout is still rejected now that hidden is allowed', () => {
+  // Widening the allow-list by one key must not have opened it generally.
+  assert.equal(validateSave({ ...HIDDEN_GOOD, layout: { version: 1, spans: {}, hidden: [], px: 12 } }).ok, false)
 })
 
 // ---------- the clamp: a saved span is stored unclamped, rendered clamped ----------
@@ -150,7 +229,8 @@ test('a panelId absent from the saved order keeps its declared position, at the 
 })
 
 test('children with no panelId are never moved out of their declared run', () => {
-  // HiddenPanels wrappers and plain divs sit in a CardGrid with no panelId.
+  // A collapsed "N panels hidden" row, and a plain div wrapper, sit in a
+  // CardGrid with no panelId.
   const items = [{ id: 'a' }, { id: null }, { id: 'b' }, { id: null }]
   const out = sortByOrder(items, ['b', 'a'], idOf)
   assert.deepEqual(out.map((x) => x.id), ['b', 'a', null, null])
@@ -176,11 +256,19 @@ test('an empty or missing order returns the very same array, untouched', () => {
 // is not cosmetic — a top-level `version`/`spans` blob POSTs with {"ok":true}
 // and reads back empty. Hand-written literal, on purpose.
 
-test('the POST body nests version and spans inside layout, and order stays top-level', () => {
-  assert.deepEqual(buildSaveBlob('overview', ['dns-hero', 'kpi-stack'], { 'dns-hero': 4 }), {
+test('the POST body nests version, spans and hidden inside layout, and order stays top-level', () => {
+  assert.deepEqual(buildSaveBlob('overview', ['dns-hero', 'kpi-stack'], { 'dns-hero': 4 }, ['kpi-stack']), {
     name: '__layout_overview',
     order: ['dns-hero', 'kpi-stack'],
-    layout: { version: 1, spans: { 'dns-hero': 4 } },
+    layout: { version: 1, spans: { 'dns-hero': 4 }, hidden: ['kpi-stack'] },
+  })
+})
+
+test('hidden is written even when nothing is hidden, so "none" and "old build" stay distinguishable', () => {
+  assert.deepEqual(buildSaveBlob('overview', ['dns-hero'], { 'dns-hero': 4 }), {
+    name: '__layout_overview',
+    order: ['dns-hero'],
+    layout: { version: 1, spans: { 'dns-hero': 4 }, hidden: [] },
   })
 })
 
@@ -233,7 +321,7 @@ test('loadLayout asks for the right URL and parses the envelope', async () => {
   })
   const got = await loadLayout('overview', fetchImpl)
   assert.deepEqual(seen, ['/api/views', '/api/views/__layout_overview'])
-  assert.deepEqual(got, { order: ['b', 'a'], spans: { b: 6 } })
+  assert.deepEqual(got, { order: ['b', 'a'], spans: { b: 6 }, hidden: [] })
 })
 
 test('a tab with no saved layout never requests the view, so it never provokes a 404', async () => {
@@ -267,8 +355,15 @@ test('saveLayout POSTs the validated body to /api/views', async () => {
   assert.deepEqual(JSON.parse(call.opts.body), {
     name: '__layout_overview',
     order: ['a'],
-    layout: { version: 1, spans: { a: 2 } },
+    layout: { version: 1, spans: { a: 2 }, hidden: [] },
   })
+})
+
+test('saveLayout carries the hidden list through to the wire', async () => {
+  let call = null
+  const fetchImpl = async (url, opts) => { call = { url, opts }; return { ok: true, status: 200 } }
+  await saveLayout('overview', { order: ['a', 'b'], spans: { a: 2 }, hidden: ['b'] }, fetchImpl)
+  assert.deepEqual(JSON.parse(call.opts.body).layout, { version: 1, spans: { a: 2 }, hidden: ['b'] })
 })
 
 test('saveLayout refuses to POST a blob the validator rejects — item 7s guard on the wire', async () => {
@@ -448,8 +543,9 @@ test('with no track count read, the announcement claims no denominator at all', 
 // ---------- the panels a saved order can record but never restore ----------
 //
 // snapshot() reads data-panel-id off the grid's DOM children, so a panel
-// wrapped in a HiddenPanels fragment or a plain div IS written into the saved
-// order. sortByOrder reads props.panelId off the React children, where that
+// whose direct grid child does not name it — a plain div wrapper, or a wrapper
+// component whose call site left the id on the <Card> inside — IS written into
+// the saved order. sortByOrder reads props.panelId off the React children, where that
 // same panel is invisible and ranks last. The two disagreeing silently is the
 // one outcome that is not acceptable, so the disagreement is computed here and
 // shouted about at the call site.

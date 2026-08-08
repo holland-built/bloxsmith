@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { Card, COLORS, Empty, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { Card, CardGrid, COLORS, Empty, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none'
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
@@ -82,7 +82,7 @@ function useWriteFlow(url) {
 
 // ---------- allocate ----------
 
-function AllocatePanel() {
+function AllocatePanel({ panelId }) {
   const spacesApi = useApi('/api/ipam/spaces')
   const [space, setSpace] = useState('')
   const blocksApi = useApi(space ? `/api/ipam/blocks?space=${encodeURIComponent(space)}` : null)
@@ -103,7 +103,7 @@ function AllocatePanel() {
   const body = () => ({ subnet_id: subnetId, count: Number(count) || 1, name })
 
   return (
-    <Card panelId="selfservice-allocate" title="Allocate Address" note="pick space → block → subnet">
+    <Card panelId={panelId} span={3} title="Allocate Address" note="pick space → block → subnet">
       <div className="grid grid-cols-2 gap-3 mb-3">
         <Field label="IP Space">
           <select
@@ -179,7 +179,7 @@ function AllocatePanel() {
 
 // ---------- dns ----------
 
-function DnsPanel() {
+function DnsPanel({ panelId }) {
   const zonesApi = useApi('/api/dns/zones')
   const [zoneId, setZoneId] = useState('')
   const [name, setName] = useState('')
@@ -198,7 +198,7 @@ function DnsPanel() {
   }
 
   return (
-    <Card panelId="selfservice-create-record" title="Create DNS Record" note="preview is validated by the server">
+    <Card panelId={panelId} span={3} title="Create DNS Record" note="preview is validated by the server">
       <div className="grid grid-cols-2 gap-3 mb-3">
         <Field label="Zone">
           <select className={inputCls} value={zoneId} onChange={(e) => { setZoneId(e.target.value); flow.markStale() }}>
@@ -279,7 +279,7 @@ function truncNote(data, rows) {
   return null
 }
 
-function ManageRecordsPanel() {
+function ManageRecordsPanel({ panelId, span }) {
   const zonesApi = useApi('/api/dns/zones')
   const [zoneId, setZoneId] = useState('')
   const recordsApi = useApi(zoneId ? `/api/dns/records?zone=${encodeURIComponent(zoneId)}&_limit=200` : null)
@@ -453,7 +453,7 @@ function ManageRecordsPanel() {
   const note = truncNote(recordsApi.data, records)
 
   return (
-    <Card panelId="selfservice-manage-records" title="Manage Records" note="edit or delete existing DNS records">
+    <Card panelId={panelId} span={span} title="Manage Records" note="edit or delete existing DNS records">
       <div className="mb-3">
         <Field label="Zone">
           <select
@@ -554,7 +554,7 @@ function ManageRecordsPanel() {
 
 // ---------- manage addresses ----------
 
-function ManageAddressesPanel() {
+function ManageAddressesPanel({ panelId }) {
   const spacesApi = useApi('/api/ipam/spaces')
   const [space, setSpace] = useState('')
   const subnetsApi = useApi(space ? `/api/ipam/subnets?space=${encodeURIComponent(space)}` : null)
@@ -605,7 +605,7 @@ function ManageAddressesPanel() {
   const note = truncNote(addressesApi.data, addresses)
 
   return (
-    <Card panelId="selfservice-manage-addresses" title="Manage Addresses" note="release an allocated address">
+    <Card panelId={panelId} span={3} title="Manage Addresses" note="release an allocated address">
       <div className="grid grid-cols-2 gap-3 mb-3">
         <Field label="IP Space">
           <select
@@ -686,14 +686,27 @@ export default function SelfService() {
         The two everyday asks, without the full Editor: take the next free address out of a subnet, or add a
         record to an existing DNS zone. Preview checks the request against the server; Apply commits it.
       </TabIntro>
-      <div className="flex flex-wrap gap-3">
-        <div className="flex-1 min-w-[420px] max-w-[640px]"><AllocatePanel /></div>
-        <div className="flex-1 min-w-[420px] max-w-[640px]"><DnsPanel /></div>
-      </div>
-      <div className="flex flex-wrap gap-3 mt-3">
-        <div className={SHOW_MANAGE_ADDRESSES ? 'flex-1 min-w-[560px]' : 'flex-1'}><ManageRecordsPanel /></div>
-        {SHOW_MANAGE_ADDRESSES && <div className="flex-1 min-w-[560px]"><ManageAddressesPanel /></div>}
-      </div>
+      {/* The two flex rows these panels used to sit in are one CardGrid now, and
+          the div around each panel is gone rather than kept: a div wrapping a
+          Card hides that Card's panelId from the grid, which reads props.panelId
+          off its DIRECT children (lib/layout.js sortByOrder) and logs a console
+          error when it cannot see one. The panelId literal therefore sits on the
+          call site and each panel forwards it to its Card.
+
+          span={3} is what the flex widths already resolved to: two `flex-1`
+          items in a row are (W - gap) / 2 wide each, and three of six tracks is
+          3t + 2g = (W - g) / 2 — the same number, at xl, at md (SPAN_CLASS[3]
+          renders col-span-2 of 4) and stacked at the base 2-track grid. The one
+          place it differs is a viewport wide enough for the old
+          `max-w-[640px]` to bind (content wider than ~1292px, i.e. around 1340
+          and up): Allocate and Create DNS Record now grow with the row instead
+          of stopping at 640px and leaving the right of the page empty. */}
+      <CardGrid layoutKey="selfservice">
+        <AllocatePanel panelId="selfservice-allocate" />
+        <DnsPanel panelId="selfservice-create-record" />
+        <ManageRecordsPanel panelId="selfservice-manage-records" span={SHOW_MANAGE_ADDRESSES ? 3 : 6} />
+        {SHOW_MANAGE_ADDRESSES && <ManageAddressesPanel key="selfservice-manage-addresses" panelId="selfservice-manage-addresses" />}
+      </CardGrid>
     </div>
   )
 }

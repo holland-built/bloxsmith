@@ -30,14 +30,22 @@ export default defineConfig({
   // waits for the server to come back and retries just the navigation, so
   // this whole-test retry is never the thing absorbing that failure mode.)
   retries: 1,
-  // One worker, because two specs in this suite are exclusive owners of shared
-  // state and the default (2) let them run against each other:
+  // One worker, because several specs in this suite are exclusive owners of
+  // shared state and the default (2) let them run against each other:
   //   - tests/layout-persist.spec.ts SIGTERMs the Go binary to prove a saved
   //     layout survives a restart. That is hostile to EVERY spec running
   //     concurrently, not just to one — anything mid-request when the process
   //     dies sees a connection error it has no reason to expect.
   //   - tests/layout-drag.spec.ts writes the same single saved view,
   //     `__layout_overview`, that the persistence spec reads back.
+  //   - since 2026-08-08 every one of the 15 tabs carries a layoutKey, so the
+  //     shared resource is a whole `__layout_<key>` namespace rather than one
+  //     record. layout-drag.spec.ts also owns `__layout_network`,
+  //     `__layout_dns` and `__layout_security`; tests/hidden-tiles.spec.ts
+  //     owns `__layout_daily`. Each of those specs deletes its own keys before
+  //     and after every test, but there is still exactly one record per key
+  //     per tenant, so two writers in parallel would corrupt each other the
+  //     same way the two Overview owners did.
   // Observed under 2 workers: a drag assertion read back `host-status: 4` —
   // the persistence spec's fixture, not the order it had just dragged — and a
   // persistence assertion read an order the drag spec had written moments

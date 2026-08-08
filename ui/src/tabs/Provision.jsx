@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { COLORS, Card, Empty, PreviewApply, TabIntro } from '../components/ui.jsx'
+import { COLORS, Card, CardGrid, Empty, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { withToken } from '../lib/authFetch.js'
 // Same component SelfService.jsx already uses. /api/ipam/spaces and
@@ -257,8 +257,12 @@ function SubnetMode() {
   const subnet = flow.result?.subnet
 
   return (
-    <div className="flex flex-col gap-3">
-      <Card title="Request" panelId="provision-subnet-request" span={6}>
+    // One saved arrangement PER MODE, not per tab. Provision renders a
+    // different grid for each mode and only one is ever mounted, so a single
+    // shared key would make each mode's save overwrite the others' order with
+    // a list naming only its own panels.
+    <CardGrid layoutKey="provision-subnet">
+      <Card key="provision-subnet-request" title="Request" panelId="provision-subnet-request" span={6}>
         <div className="flex flex-col gap-3">
           <Field label="Space">
             <select className={inputCls} value={space} onChange={(e) => { setSpace(e.target.value); setBlock(''); flow.markStale() }}>
@@ -310,18 +314,18 @@ function SubnetMode() {
         </div>
       </Card>
 
-      <Card title="Live log" panelId="provision-subnet-log" span={6}>
+      <Card key="provision-subnet-log" title="Live log" panelId="provision-subnet-log" span={6}>
         <LogView log={flow.log} doneLabel={flow.status === 'previewed' ? 'plan complete — nothing written' : 'done'} />
       </Card>
 
       {flow.status === 'applied' && subnet && (
-        <Card title="Result" panelId="provision-subnet-result" span={6}>
+        <Card key="provision-subnet-result" title="Result" panelId="provision-subnet-result" span={6}>
           <div className="font-mono text-[12px]">
             Subnet id: {subnet.id ?? '—'} · {subnet.address || ''}{subnet.cidr ? `/${subnet.cidr}` : ''}
           </div>
         </Card>
       )}
-    </div>
+    </CardGrid>
   )
 }
 
@@ -358,8 +362,9 @@ function SiteMode({ isAdmin }) {
   const built = build.result?.result
 
   return (
-    <div className="flex flex-col gap-3">
-      <Card title="Request" panelId="provision-site-request" span={6}>
+    // Its own key, for the reason spelled out on the subnet grid above.
+    <CardGrid layoutKey="provision-site">
+      <Card key="provision-site-request" title="Request" panelId="provision-site-request" span={6}>
         <div className="flex flex-col gap-3">
           <Field label="IP space (override)">
             <select className={inputCls} value={siteSpace} onChange={(e) => onInput(setSiteSpace)(e.target.value)}>
@@ -405,12 +410,12 @@ function SiteMode({ isAdmin }) {
         </div>
       </Card>
 
-      <Card title="Live log" panelId="provision-site-log" span={6}>
+      <Card key="provision-site-log" title="Live log" panelId="provision-site-log" span={6}>
         <LogView log={build.log} doneLabel={build.status === 'previewed' ? 'plan complete — nothing written' : 'done'} />
       </Card>
 
       {build.status === 'applied' && built && (
-        <Card title="Result" panelId="provision-site-result" span={6}>
+        <Card key="provision-site-result" title="Result" panelId="provision-site-result" span={6}>
           {built.skipped ? (
             <div className="font-mono text-[12px] text-muted">Skipped — {built.skip_reason || 'already provisioned'}.</div>
           ) : (
@@ -427,7 +432,7 @@ function SiteMode({ isAdmin }) {
         </Card>
       )}
 
-      <Card title="Tear down this site" note="permanently deletes its provisioned objects" panelId="provision-site-teardown" span={6}>
+      <Card key="provision-site-teardown" title="Tear down this site" note="permanently deletes its provisioned objects" panelId="provision-site-teardown" span={6}>
         <div className="flex flex-col gap-3">
           {isAdmin ? (
             <Field label="Type the site name to confirm">
@@ -459,12 +464,12 @@ function SiteMode({ isAdmin }) {
       </Card>
 
       {teardown.log.length > 0 && (
-        <Card title="Teardown log" panelId="provision-site-teardown-log" span={6}>
+        <Card key="provision-site-teardown-log" title="Teardown log" panelId="provision-site-teardown-log" span={6}>
           <LogView log={teardown.log} doneLabel={teardown.status === 'previewed' ? 'plan complete — nothing deleted' : 'done'} />
         </Card>
       )}
       {teardown.result?.result && (
-        <Card title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown result'} panelId="provision-site-teardown-result" span={6}>
+        <Card key="provision-site-teardown-result" title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown result'} panelId="provision-site-teardown-result" span={6}>
           <div className="font-mono text-[12px] flex flex-col gap-0.5">
             <div><span className="text-muted">Site: </span>{teardown.result.result.site || siteTemplate || '—'}</div>
             <div>
@@ -480,7 +485,7 @@ function SiteMode({ isAdmin }) {
           </div>
         </Card>
       )}
-    </div>
+    </CardGrid>
   )
 }
 
@@ -515,8 +520,9 @@ function SeedMode({ isAdmin }) {
   const teardownOutcome = runOutcome(teardown.result)
 
   return (
-    <div className="flex flex-col gap-3">
-      <Card title="Seed multi-region demo data" panelId="provision-seed-request" span={6}>
+    // Its own key, for the reason spelled out on the subnet grid above.
+    <CardGrid layoutKey="provision-seed">
+      <Card key="provision-seed-request" title="Seed multi-region demo data" panelId="provision-seed-request" span={6}>
         <div className="text-[11px] text-dim mb-3">
           Provisions a full set of demo sites, subnets, and zones across the selected regions from the template
           library. Preview the plan before writing real objects — this creates a lot of them.
@@ -569,23 +575,23 @@ function SeedMode({ isAdmin }) {
         </div>
       </Card>
 
-      <Card title="Progress" panelId="provision-seed-progress" span={6}>
+      <Card key="provision-seed-progress" title="Progress" panelId="provision-seed-progress" span={6}>
         <RowsRollup rows={seed.rows} />
       </Card>
 
-      <Card title="Live log" panelId="provision-seed-log" span={6}>
+      <Card key="provision-seed-log" title="Live log" panelId="provision-seed-log" span={6}>
         <LogView log={seed.log} doneLabel={seed.status === 'previewed' ? 'plan complete — nothing written' : 'done'} />
       </Card>
 
       {seedOutcome && (
-        <Card title={seed.status === 'previewed' ? 'Planned' : 'Summary'} panelId="provision-seed-summary" span={6}>
+        <Card key="provision-seed-summary" title={seed.status === 'previewed' ? 'Planned' : 'Summary'} panelId="provision-seed-summary" span={6}>
           <div className="font-mono text-[12px]">
             Succeeded: {seedOutcome.succeeded} · Failed: {seedOutcome.failed} · Skipped: {seedOutcome.skipped}
           </div>
         </Card>
       )}
 
-      <Card title="Tear down demo" note={`permanently deletes every seed-created object in ${seedSpace || 'the default space'}`} panelId="provision-seed-teardown" span={6}>
+      <Card key="provision-seed-teardown" title="Tear down demo" note={`permanently deletes every seed-created object in ${seedSpace || 'the default space'}`} panelId="provision-seed-teardown" span={6}>
         <div className="flex flex-col gap-3">
           {isAdmin ? (
             <Field label="Type DELETE to confirm">
@@ -624,23 +630,23 @@ function SeedMode({ isAdmin }) {
       </Card>
 
       {Object.keys(teardown.rows).length > 0 && (
-        <Card title="Teardown progress" panelId="provision-seed-teardown-progress" span={6}>
+        <Card key="provision-seed-teardown-progress" title="Teardown progress" panelId="provision-seed-teardown-progress" span={6}>
           <RowsRollup rows={teardown.rows} />
         </Card>
       )}
       {teardown.log.length > 0 && (
-        <Card title="Teardown log" panelId="provision-seed-teardown-log" span={6}>
+        <Card key="provision-seed-teardown-log" title="Teardown log" panelId="provision-seed-teardown-log" span={6}>
           <LogView log={teardown.log} doneLabel={teardown.status === 'previewed' ? 'plan complete — nothing deleted' : 'done'} />
         </Card>
       )}
       {teardownOutcome && (
-        <Card title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown summary'} panelId="provision-seed-teardown-summary" span={6}>
+        <Card key="provision-seed-teardown-summary" title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown summary'} panelId="provision-seed-teardown-summary" span={6}>
           <div className="font-mono text-[12px]">
             Succeeded: {teardownOutcome.succeeded} · Failed: {teardownOutcome.failed} · Skipped: {teardownOutcome.skipped}
           </div>
         </Card>
       )}
-    </div>
+    </CardGrid>
   )
 }
 

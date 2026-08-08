@@ -92,8 +92,13 @@ export default function Assets() {
         Every asset discovery found, searchable by name and filterable by type. Click a row for the
         fields too sparse to keep in the table.
       </TabIntro>
-      <CardGrid>
+      {/* The panelIds sit on the call sites, not only on the Card each wrapper
+          returns: CardGrid reads panelId off its OWN direct children to apply a
+          saved order, and a wrapper that keeps the id inside is invisible to
+          that read. Each wrapper forwards it to its Card unchanged. */}
+      <CardGrid layoutKey="assets">
         <FilterBar
+          panelId="assets-filter-bar"
           filters={filters}
           type={type}
           onType={setType}
@@ -106,6 +111,7 @@ export default function Assets() {
           busy={list.loading || filters.loading}
         />
         <AssetList
+          panelId="assets-list"
           list={list}
           searched={q}
           type={type}
@@ -116,7 +122,19 @@ export default function Assets() {
           selected={selected}
           onSelect={setSelected}
         />
-        {selected && <AssetDetail cqid={selected.cqid} row={selected} onClose={() => setSelected(null)} />}
+        {/* The only conditional child in this grid, so it carries an explicit
+            key as well as the panelId. Without one its key is positional, and
+            Children.toArray would hand the same key to whatever child sits at
+            that index once the detail panel closes. */}
+        {selected && (
+          <AssetDetail
+            key="assets-detail"
+            panelId="assets-detail"
+            cqid={selected.cqid}
+            row={selected}
+            onClose={() => setSelected(null)}
+          />
+        )}
       </CardGrid>
     </div>
   )
@@ -128,7 +146,7 @@ export default function Assets() {
 // It is the real total and the type chips, so the first thing on screen tells
 // you the size and shape of the estate — and every chip is a one-click way to
 // ask a question, which a search box the operator has to guess at is not.
-function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, searched, onRefresh, busy }) {
+function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, searched, onRefresh, busy, panelId }) {
   const { COLORS } = useChartTheme()
   const d = filters.data
   // Two separate failure sources, and they must both land in the same state:
@@ -142,7 +160,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
   return (
     <Card
       span={6}
-      panelId="assets-filter-bar"
+      panelId={panelId}
       title="Asset Inventory"
       note="CSP discovery"
       right={
@@ -244,7 +262,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
 
 // ---------- the list ----------
 
-function AssetList({ list, searched, type, sort, onSort, page, onPage, selected, onSelect }) {
+function AssetList({ list, searched, type, sort, onSort, page, onPage, selected, onSelect, panelId }) {
   const d = list.data
   const unavailable = !!list.error || d?.availability === 'error'
   const rows = d?.rows ?? []
@@ -314,7 +332,7 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
       // the page's primary table, not a dashboard panel, so it takes the full
       // six tracks it declares rather than shrinking to its columns.
       fit={false}
-      panelId="assets-list"
+      panelId={panelId}
       title="Assets"
       right={
         rows.length > 0 && (
@@ -393,7 +411,7 @@ function Pager({ page, onPage, hasMore, total, loading }) {
 // reason this panel exists at all: it is blank on 72% of assets, so it costs
 // a table column almost nothing is in — but on the one asset someone clicked,
 // it is often the first thing they wanted.
-function AssetDetail({ cqid, row, onClose }) {
+function AssetDetail({ cqid, row, onClose, panelId }) {
   const detail = useApi(`/api/csp/asset-detail?cqid=${encodeURIComponent(cqid)}`)
   const d = detail.data
   const unavailable = !!detail.error || d?.availability === 'error'
@@ -409,7 +427,7 @@ function AssetDetail({ cqid, row, onClose }) {
   return (
     <Card
       span={6}
-      panelId="assets-detail"
+      panelId={panelId}
       title={row.name || row.cqid}
       note="asset detail"
       right={

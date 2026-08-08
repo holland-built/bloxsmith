@@ -44,12 +44,16 @@ export default function Daily() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">Daily Briefing</h1>
-      <CardGrid>
-        <IssueKpis subnets={subnets} hosts={hosts} zones={zones} totals={totals} meta={meta} loading={data.loading} />
-        <SecurityToday sec={sec} />
-        <TopCapacityRisks subnets={subnets} loading={data.loading} subnetsStatus={meta.subnets} />
-        <HostsAttention hosts={hosts} loading={data.loading} hostsStatus={meta.hosts} />
-        <DnsZoneIssues zones={zones} loading={data.loading} zonesStatus={meta.zones} />
+      {/* The panelIds sit on the call sites, not only on the Card each wrapper
+          returns: CardGrid reads panelId off its OWN direct children to apply a
+          saved order, and a wrapper that keeps the id inside is invisible to
+          that read. Each wrapper forwards it to its Card unchanged. */}
+      <CardGrid layoutKey="daily">
+        <IssueKpis panelId="daily-open-issues" subnets={subnets} hosts={hosts} zones={zones} totals={totals} meta={meta} loading={data.loading} />
+        <SecurityToday panelId="daily-security-today" sec={sec} />
+        <TopCapacityRisks panelId="daily-top-capacity-risks" subnets={subnets} loading={data.loading} subnetsStatus={meta.subnets} />
+        <HostsAttention panelId="daily-hosts-attention" hosts={hosts} loading={data.loading} hostsStatus={meta.hosts} />
+        <DnsZoneIssues panelId="daily-dns-zone-issues" zones={zones} loading={data.loading} zonesStatus={meta.zones} />
       </CardGrid>
     </div>
   )
@@ -57,7 +61,7 @@ export default function Daily() {
 
 // ---------- KPI cards ----------
 
-function IssueKpis({ subnets, hosts, zones, meta = {}, loading }) {
+function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
   const { COLORS } = useChartTheme()
   // `subnets` (data.subnets) is the union of the first-5,000 page and every
   // subnet with util >= 70, deduped. That union is COMPLETE for any threshold
@@ -84,7 +88,7 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading }) {
   ]
 
   return (
-    <Card span={2} panelId="daily-open-issues" title="Open Issues" className="flex flex-col justify-between">
+    <Card span={2} panelId={panelId} title="Open Issues" className="flex flex-col justify-between">
       {loading ? (
         <Skeleton h={160} />
       ) : (
@@ -117,7 +121,7 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading }) {
 
 // ---------- security today ----------
 
-function SecurityToday({ sec }) {
+function SecurityToday({ sec, panelId }) {
   const { COLORS } = useChartTheme()
   const counts = sec.data?.counts ?? {}
   const events = sec.data?.events ?? []
@@ -134,7 +138,7 @@ function SecurityToday({ sec }) {
   const secDead = !sec.loading && (!!sec.error || !sec.data || sec.data.availability === 'error')
 
   return (
-    <Card span={4} panelId="daily-security-today" title="Security Today" right={<span className="text-[11px] text-muted">{secDead ? '—' : events.length.toLocaleString()} events</span>}>
+    <Card span={4} panelId={panelId} title="Security Today" right={<span className="text-[11px] text-muted">{secDead ? '—' : events.length.toLocaleString()} events</span>}>
       {sec.loading ? (
         <Skeleton h={160} />
       ) : secDead ? (
@@ -157,7 +161,7 @@ function SecurityToday({ sec }) {
 
 // ---------- top capacity risks ----------
 
-function TopCapacityRisks({ subnets, loading, subnetsStatus }) {
+function TopCapacityRisks({ subnets, loading, subnetsStatus, panelId }) {
   const feedDead = subnetsStatus === 'error' && subnets.length === 0
   const rows = [...subnets]
     .filter((s) => (s.addr || s.cidr) && (Number(s.cidr) || 0) <= 28)
@@ -189,7 +193,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus }) {
   ]
 
   return (
-    <Card span={3} panelId="daily-top-capacity-risks" title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-[11px] text-muted">top 10</span>}>
+    <Card span={3} panelId={panelId} title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-[11px] text-muted">top 10</span>}>
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
@@ -210,7 +214,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus }) {
 
 // ---------- hosts needing attention ----------
 
-function HostsAttention({ hosts, loading, hostsStatus }) {
+function HostsAttention({ hosts, loading, hostsStatus, panelId }) {
   const { COLORS } = useChartTheme()
   const rows = hosts.filter((h) => !/online|active/i.test(h.status || ''))
   const feedDead = hostsStatus === 'error' && hosts.length === 0
@@ -235,7 +239,7 @@ function HostsAttention({ hosts, loading, hostsStatus }) {
   return (
     <Card
       span={3}
-      panelId="daily-hosts-attention"
+      panelId={panelId}
       title="Hosts Needing Attention"
       // "0 shown" off a dead feed reads as "nothing needs attention".
       right={<span className="text-[11px] text-muted">{feedDead ? '—' : rows.length} shown</span>}
@@ -261,7 +265,7 @@ function HostsAttention({ hosts, loading, hostsStatus }) {
 
 // ---------- DNS zone issues ----------
 
-function DnsZoneIssues({ zones, loading, zonesStatus }) {
+function DnsZoneIssues({ zones, loading, zonesStatus, panelId }) {
   const rows = zones
     .filter((z) => Array.isArray(z.issues) && z.issues.length > 0)
     .map((z) => ({ ...z, count: z.issues.length, issuesText: z.issues.join(', ') }))
@@ -286,7 +290,7 @@ function DnsZoneIssues({ zones, loading, zonesStatus }) {
   return (
     <Card
       span={6}
-      panelId="daily-dns-zone-issues"
+      panelId={panelId}
       title="DNS Zone Issues"
       // "0 zones" off a dead feed reads as a clean estate.
       right={<span className="text-[11px] text-muted">{feedDead ? '—' : rows.length} zones</span>}

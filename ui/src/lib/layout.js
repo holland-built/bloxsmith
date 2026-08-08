@@ -14,6 +14,11 @@
 // TWO VALIDATORS, NOT ONE — save and load are asymmetric. `ViewRead` hands
 // back that whole record, so a strict "no unknown top-level keys" rule applied
 // on load would reject every layout the server ever returns.
+//
+// `layout.hidden` — the panels the operator has taken off the page — nests in
+// the same place and for the same reason: it is a NEW key, and a new TOP-LEVEL
+// key is exactly what ViewWrite's whitelist throws away. `layout` itself is
+// stored as an opaque map, so no Go change was needed to add it.
 
 export const LAYOUT_VERSION = 1
 
@@ -38,6 +43,18 @@ function extraKeys(obj, allowed) {
   return Object.keys(obj).filter((k) => !allowed.includes(k))
 }
 
+// A list of panel ids. `order` and `layout.hidden` are the same kind of thing —
+// a set of panel names, written once each — so they are checked by one function
+// rather than by two copies of the rules that can drift apart.
+function checkIdList(value, name) {
+  if (!Array.isArray(value)) return bad(`${name} must be an array`)
+  if (value.some((id) => typeof id !== 'string' || id === '')) {
+    return bad(`${name} must hold non-empty panel id strings`)
+  }
+  if (new Set(value).size !== value.length) return bad(`${name} must not repeat a panel id`)
+  return { ok: true }
+}
+
 // The payload check both validators share: `order` and `layout` only, integer
 // spans in range, and nothing else at either level. This is where a pixel
 // offset would have to live, so this is where it is made unrepresentable.
@@ -46,16 +63,28 @@ function checkPayload(payload) {
   if (extra.length) return bad(`unknown payload key(s): ${extra.join(', ')}`)
 
   const { order, layout } = payload
-  if (!Array.isArray(order)) return bad('order must be an array')
-  if (order.some((id) => typeof id !== 'string' || id === '')) {
-    return bad('order must hold non-empty panel id strings')
-  }
-  if (new Set(order).size !== order.length) return bad('order must not repeat a panel id')
+  const orderCheck = checkIdList(order, 'order')
+  if (!orderCheck.ok) return orderCheck
 
   if (!isPlainObject(layout)) return bad('layout must be an object')
-  const layoutExtra = extraKeys(layout, ['version', 'spans'])
+  const layoutExtra = extraKeys(layout, ['version', 'spans', 'hidden'])
   if (layoutExtra.length) return bad(`unknown layout key(s): ${layoutExtra.join(', ')}`)
   if (layout.version !== LAYOUT_VERSION) return bad(`layout.version must be ${LAYOUT_VERSION}`)
+
+  // OPTIONAL, AND THAT IS WHY LAYOUT_VERSION DID NOT MOVE. Every layout saved
+  // before a tile could be hidden has no `hidden` key at all; bumping the
+  // version would have made all of them fail the check and load as "nothing
+  // saved", throwing away arrangements nobody asked to lose. An absent key
+  // means the same thing as an empty list, so the old records stay valid.
+  //
+  // DELIBERATELY NOT CROSS-CHECKED AGAINST `order`. A panel added or deleted
+  // since the last save leaves the two lists disagreeing, and that is ordinary
+  // — sortByOrder already tolerates exactly this in the other direction. An id
+  // in `hidden` that names nothing simply hides nothing.
+  if (layout.hidden !== undefined) {
+    const hiddenCheck = checkIdList(layout.hidden, 'layout.hidden')
+    if (!hiddenCheck.ok) return hiddenCheck
+  }
 
   const spans = layout.spans
   if (!isPlainObject(spans)) return bad('layout.spans must be an object')
@@ -89,13 +118,19 @@ export function validateSave(blob) {
 // strictly as on save, so an unknown key inside `layout` — where a smuggled
 // pixel offset would live — still falls back to the unsaved default.
 //
-// Returns {order, spans}, or null for "there is no usable saved layout",
-// which every caller renders as today's untouched layout.
+// Returns {order, spans, hidden}, or null for "there is no usable saved
+// layout", which every caller renders as today's untouched layout. `hidden`
+// defaults to an empty list so a record written before this key existed loads
+// as "nothing is hidden" rather than as undefined every caller has to guard.
 export function parseLoad(record) {
   if (!isPlainObject(record)) return null
   const payload = { order: record.order, layout: record.layout }
   if (!checkPayload(payload).ok) return null
-  return { order: [...payload.order], spans: { ...payload.layout.spans } }
+  return {
+    order: [...payload.order],
+    spans: { ...payload.layout.spans },
+    hidden: [...(payload.layout.hidden ?? [])],
+  }
 }
 
 // clampSpan — a render concern, never a storage one.
@@ -191,19 +226,27 @@ export function widthAnnouncement(storedSpan, trackCount) {
 // CardGrid reads the live order off the DOM (snapshot -> panelItems, which
 // descends into a wrapper to find data-panel-id) but applies a saved order to
 // the REACT children (sortByOrder, which reads props.panelId off the direct
-// child and ranks anything without one last). A panel wrapped in a
-// <HiddenPanels> fragment, or in a plain div carrying the span class, is
-// visible to the first and invisible to the second — so the tab saves an order
-// it cannot honour and pushes the whole wrapped run to the end on reload.
+// child and ranks anything without one last). Any panel that is visible to the
+// first and invisible to the second makes the tab save an order it cannot
+// honour, and pushes that panel to the end on reload.
 //
-// The two are not made to compose here, and that is a decision rather than an
-// omission: a hidden run collapses N panels into ONE grid child, so while it
-// is collapsed there is no arrangement of N ids that describes what is on
-// screen. What this does instead is compute the disagreement so the call site
-// can refuse to answer silently.
+// THE SERVICE-OWNERSHIP WRAPPER USED TO BE THE MAIN WAY TO HIT THIS, AND IS
+// NOT ANY MORE. `<HiddenPanels>` was a component rendering a fragment, so the
+// whole run of Cards sat behind ONE React child carrying no panelId. It is now
+// `hiddenPanelGroup()` (components/ui.jsx), a plain function returning an
+// ARRAY, so each Card is a direct child of the grid again with its own
+// props.panelId. What is left for this to catch is a panel whose direct grid
+// child does not name it: a plain `<div>` wrapper carrying the span class, or
+// a wrapper component whose call site forgot `panelId="…"` and only sets it on
+// the <Card> deeper inside.
+//
+// While a run really is collapsed, N panels do become ONE grid child — but
+// that child renders no data-panel-id at all, so nothing is written into the
+// saved order that could not be restored, and this stays quiet.
 //
 // One-directional on purpose. A child naming a panel the DOM does not show is
-// ordinary conditional rendering; only a panel the children cannot name breaks
+// ordinary conditional rendering — and is now also the normal state of a tile
+// the operator has hidden; only a panel the children cannot name breaks
 // sorting.
 export function unseenPanelIds(domIds, childIds) {
   const known = new Set(childIds.filter((id) => id != null))
@@ -283,7 +326,10 @@ export function shiftItem(order, id, delta) {
 // A stable sort on rank, where rank is the panel's index in the saved order
 // and Infinity for anything the saved order does not name. So a panel added to
 // a tab after the layout was saved — and every child with no panelId at all,
-// like a HiddenPanels wrapper — keeps its declared position, at the end.
+// like the collapsed "N panels hidden" row — keeps its declared position, at
+// the end. A tile the operator has hidden and then brought back lands there
+// too: it was not in the DOM while it was hidden, so the order saved in the
+// meantime does not name it.
 //
 // Returns the very same array when there is nothing to apply, so the
 // no-saved-layout path does not even allocate.
@@ -312,11 +358,18 @@ export function sortByOrder(items, order, keyOf) {
 // The one place the POST body is constructed. Nothing else in the app should
 // hand-roll this shape, because getting the nesting wrong fails SILENTLY: the
 // server answers {"ok":true} and the discarded keys are simply never seen again.
-export function buildSaveBlob(tabId, order, spans) {
+//
+// `hidden` is always written, even empty — the same way `spans` is always
+// written, even empty. A key that only appears sometimes is a key that reads
+// as "this build didn't know about hiding" when it is really "nothing is
+// hidden", and the two have to be told apart when a record is looked at by
+// hand. Reading is still tolerant of its absence (parseLoad), because records
+// written before this key existed genuinely do not have it.
+export function buildSaveBlob(tabId, order, spans, hidden = []) {
   return {
     name: layoutViewName(tabId),
     order: [...order],
-    layout: { version: LAYOUT_VERSION, spans: { ...spans } },
+    layout: { version: LAYOUT_VERSION, spans: { ...spans }, hidden: [...hidden] },
   }
 }
 
@@ -356,8 +409,8 @@ export async function loadLayout(tabId, fetchImpl = fetch) {
 // Validated before it is sent, not after. This is item 7's guard standing
 // between the drag UI of item 8 and the disk: a pixel offset stashed "just
 // temporarily" in the blob throws here and never reaches the network.
-export async function saveLayout(tabId, { order, spans }, fetchImpl = fetch) {
-  const blob = buildSaveBlob(tabId, order, spans)
+export async function saveLayout(tabId, { order, spans, hidden }, fetchImpl = fetch) {
+  const blob = buildSaveBlob(tabId, order, spans, hidden)
   const verdict = validateSave(blob)
   if (!verdict.ok) throw new Error(`refusing to save an invalid layout: ${verdict.error}`)
   const res = await fetchImpl('/api/views', {

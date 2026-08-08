@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useChartTheme, Card, Empty, FeedUnavailable, TabIntro } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, TabIntro } from '../components/ui.jsx'
 import { authFetch } from '../lib/authFetch.js'
 import DossierPanel from '../components/DossierPanel.jsx'
 
@@ -98,7 +98,7 @@ function BudgetLine({ budget }) {
   )
 }
 
-function ChatCard() {
+function ChatCard({ panelId }) {
   const { COLORS } = useChartTheme()
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -157,7 +157,7 @@ function ChatCard() {
   const ask = (sg) => submit(sg)
 
   return (
-    <Card panelId="ai-ask" title="Ask AI" span={1}>
+    <Card panelId={panelId} title="Ask AI" span={6}>
       <div role="log" aria-live="polite" className="flex flex-col gap-2 min-h-[280px] max-h-[480px] overflow-y-auto mb-3">
         {items.length === 0 ? (
           <Empty>Ask a question or pick a suggestion below</Empty>
@@ -296,7 +296,7 @@ function BlockDomainButton({ domain }) {
   )
 }
 
-function LookupCard() {
+function LookupCard({ panelId }) {
   const { COLORS } = useChartTheme()
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -335,7 +335,7 @@ function LookupCard() {
   }
 
   return (
-    <Card panelId="ai-threat-lookup" title="Threat lookup" span={1}>
+    <Card panelId={panelId} title="Threat lookup" span={6}>
       <div className="flex gap-2 mb-3">
         <input
           className={`${inputCls} flex-1 text-[13px]`}
@@ -430,10 +430,13 @@ export default function Ai() {
         Chat needs an LLM key; Block domain needs a dashboard token.
       </TabIntro>
       <EgressNotice />
-      <div className="grid grid-cols-1 gap-4">
-        <ChatCard />
-        <LookupCard />
-      </div>
+      {/* panelId sits on the wrapper component, not only on the Card inside it:
+          CardGrid reads it off its own direct children to work out the saved
+          order, and a literal buried on the inner <Card> is invisible to that. */}
+      <CardGrid layoutKey="ai">
+        <ChatCard panelId="ai-ask" />
+        <LookupCard panelId="ai-threat-lookup" />
+      </CardGrid>
     </div>
   )
 }

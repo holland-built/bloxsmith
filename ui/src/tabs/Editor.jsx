@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { COLORS, Card, Empty, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { COLORS, Card, CardGrid, Empty, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 import { deletedMsg } from './SelfService.jsx'
 
 const inputCls = 'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none'
@@ -251,7 +251,8 @@ export default function Editor() {
         ))}
       </div>
 
-      <Card panelId="editor-object-form" title={`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}>
+      <CardGrid layoutKey="editor">
+        <Card panelId="editor-object-form" span={6} title={`${spec.label}${isUpdate ? ' — Update' : ' — Create'}`}>
         <div className="flex flex-col gap-3">
           <label className="text-xs text-muted flex flex-col gap-1">
             Object ID (leave blank to create new)
@@ -298,7 +299,8 @@ export default function Editor() {
             </div>
           )}
         </div>
-      </Card>
+        </Card>
+      </CardGrid>
 
       {!spec && <Empty>unknown type</Empty>}
     </div>

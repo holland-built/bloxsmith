@@ -4,7 +4,7 @@ import {
 } from 'recharts'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
-import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, HiddenPanels, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, hiddenPanelGroup, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { dnssecPanelLabel, fmtShortDay } from '../lib/chartFormat.js'
 import { useHashParams } from '../lib/hash.js'
@@ -43,27 +43,37 @@ export default function Dns() {
   return (
     <div className="w-full px-6 py-5">
       <h1 className="text-lg font-semibold tracking-tight mb-3">DNS</h1>
-      <CardGrid>
+      {/* Every direct child of a grid with a layoutKey carries its own panelId:
+          CardGrid applies the saved order to its React children by reading
+          `props.panelId` off them, while it reads the live order off the DOM. A
+          wrapper whose id only exists on the <Card> inside it is visible to the
+          second and invisible to the first, and the panel jumps to the end on
+          reload. Each wrapper below forwards the id to its Card. */}
+      <CardGrid layoutKey="dns">
         {/* Two separate runs, one group key: the panels either side of
             ZoneKpis both need a deployed DNS service, but ZoneKpis reads zone
             CONFIG, which exists whether or not one is deployed — so it is not
             mapped and cannot be swept into the group. */}
-        <HiddenPanels {...SERVICE_GROUPS.dns} state={owned}>
-          <QpsHero qps={qps} />
-        </HiddenPanels>
+        {hiddenPanelGroup({
+          ...SERVICE_GROUPS.dns,
+          state: owned,
+          children: [<QpsHero key="dns-query-rate" panelId="dns-query-rate" qps={qps} />],
+        })}
         {/* The id sits on the call site, not on the Cards inside: ZoneKpis
             returns a different Card for loading / dead feed / data, and all
             three are the same panel. One literal id, forwarded to whichever
             Card renders — see panelHelp.test.js on the wrapper pattern. */}
         <ZoneKpis panelId="dns-zone-kpis" zones={zones} zonesStatus={zonesStatus} loading={data.loading} />
-        <HiddenPanels {...SERVICE_GROUPS.dns} state={owned}>
-          <DnsServices services={services} />
-        </HiddenPanels>
-        <QueryVolume7d analytics={analytics} />
-        <ZoneTable zones={zones} issuesOnly={!!hp.issues} zonesStatus={zonesStatus} loading={data.loading} />
-        <DnssecHealth dnssec={dnssec} />
-        <RpzPanel rpz={rpz} />
-        <DtcLbdnPanel dtcLbdn={dtcLbdn} />
+        {hiddenPanelGroup({
+          ...SERVICE_GROUPS.dns,
+          state: owned,
+          children: [<DnsServices key="dns-services" panelId="dns-services" services={services} />],
+        })}
+        <QueryVolume7d panelId="dns-query-volume-7d" analytics={analytics} />
+        <ZoneTable panelId="dns-zones" zones={zones} issuesOnly={!!hp.issues} zonesStatus={zonesStatus} loading={data.loading} />
+        <DnssecHealth panelId="dns-dnssec-health" dnssec={dnssec} />
+        <RpzPanel panelId="dns-rpz" rpz={rpz} />
+        <DtcLbdnPanel panelId="dns-dtc-lbdn" dtcLbdn={dtcLbdn} />
       </CardGrid>
     </div>
   )
@@ -71,7 +81,7 @@ export default function Dns() {
 
 // ---------- hero ----------
 
-function QpsHero({ qps }) {
+function QpsHero({ panelId, qps }) {
   const { COLORS } = useChartTheme()
   const rows = qps.data?.rows ?? []
   const status = qps.data?.status
@@ -88,7 +98,7 @@ function QpsHero({ qps }) {
 
   return (
     <Card
-      panelId="dns-query-rate"
+      panelId={panelId}
       span={4}
       title="DNS Query Rate — 24h"
       right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
@@ -235,7 +245,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
 
 // ---------- dns services ----------
 
-function DnsServices({ services }) {
+function DnsServices({ panelId, services }) {
   const rows = services.data?.rows ?? []
   const status = services.data?.status
 
@@ -246,7 +256,7 @@ function DnsServices({ services }) {
   ]
 
   return (
-    <Card panelId="dns-services" span={3} title="DNS Services" right={<span className="text-[11px] text-muted">{rows.length ? `${rows.length} services` : ''}</span>}>
+    <Card panelId={panelId} span={3} title="DNS Services" right={<span className="text-[11px] text-muted">{rows.length ? `${rows.length} services` : ''}</span>}>
       {services.loading ? (
         <Skeleton h={180} />
       ) : services.error || status === 'error' ? (
@@ -262,7 +272,7 @@ function DnsServices({ services }) {
 
 // ---------- query volume 7d (known-broken feed) ----------
 
-function QueryVolume7d({ analytics }) {
+function QueryVolume7d({ panelId, analytics }) {
   const { COLORS } = useChartTheme()
   // dns-analytics can legitimately return zero rows for a tenant with no query
   // activity — that must render as empty, not as a dead feed. Only a fetch
@@ -283,7 +293,7 @@ function QueryVolume7d({ analytics }) {
   }))
 
   return (
-    <Card panelId="dns-query-volume-7d" span={3} title="Query Volume — 7d" note={broken ? 'feed unavailable' : undefined}>
+    <Card panelId={panelId} span={3} title="Query Volume — 7d" note={broken ? 'feed unavailable' : undefined}>
       {analytics.loading ? (
         <Skeleton h={180} />
       ) : broken ? (
@@ -314,7 +324,7 @@ function QueryVolume7d({ analytics }) {
 
 // ---------- zone table ----------
 
-function ZoneTable({ zones, issuesOnly, zonesStatus, loading }) {
+function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
   const { COLORS } = useChartTheme()
   const theme = useThemeColors()
   const [filter, setFilter] = useState('')
@@ -386,7 +396,7 @@ function ZoneTable({ zones, issuesOnly, zonesStatus, loading }) {
 
   return (
     <Card
-      panelId="dns-zones"
+      panelId={panelId}
       span={6}
       title={
         issuesOnly ? (
@@ -446,7 +456,7 @@ function ZoneTable({ zones, issuesOnly, zonesStatus, loading }) {
 
 const DNSSEC_CAP = 150
 
-function DnssecHealth({ dnssec }) {
+function DnssecHealth({ panelId, dnssec }) {
   const { COLORS } = useChartTheme()
   const rows = dnssec.data?.rows ?? []
   const total = dnssec.data?.count ?? rows.length
@@ -489,7 +499,7 @@ function DnssecHealth({ dnssec }) {
 
   return (
     <Card
-      panelId="dns-dnssec-health"
+      panelId={panelId}
       span={3}
       title="DNSSEC Health"
       right={
@@ -533,7 +543,7 @@ function DnssecHealth({ dnssec }) {
 
 // ---------- rpz policy zones ----------
 
-function RpzPanel({ rpz }) {
+function RpzPanel({ panelId, rpz }) {
   const rows = rpz.data?.rows ?? []
   const total = rpz.data?.count ?? rows.length
   // Same errRows() contract as DnssecHealth — status:"error" at HTTP 200.
@@ -557,7 +567,7 @@ function RpzPanel({ rpz }) {
   ]
 
   return (
-    <Card panelId="dns-rpz" span={3} title="RPZ Policy Zones" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} zones` : ''}</span>}>
+    <Card panelId={panelId} span={3} title="RPZ Policy Zones" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} zones` : ''}</span>}>
       {rpz.loading ? (
         <Skeleton h={200} />
       ) : rpz.error || status === 'error' ? (
@@ -573,7 +583,7 @@ function RpzPanel({ rpz }) {
 
 // ---------- dtc load-balanced names ----------
 
-function DtcLbdnPanel({ dtcLbdn }) {
+function DtcLbdnPanel({ panelId, dtcLbdn }) {
   const rows = dtcLbdn.data?.rows ?? []
   const total = dtcLbdn.data?.count ?? rows.length
   // Same errRows() contract as DnssecHealth/RpzPanel — status:"error" at HTTP 200.
@@ -597,7 +607,7 @@ function DtcLbdnPanel({ dtcLbdn }) {
   ]
 
   return (
-    <Card panelId="dns-dtc-lbdn" span={3} title="DTC Load-Balanced Names" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} names` : ''}</span>}>
+    <Card panelId={panelId} span={3} title="DTC Load-Balanced Names" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} names` : ''}</span>}>
       {dtcLbdn.loading ? (
         <Skeleton h={200} />
       ) : dtcLbdn.error || status === 'error' ? (
