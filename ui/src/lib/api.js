@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 // Why there is a timeout at all (unchanged): some feeds (e.g. /api/dns-analytics)
 // hang forever server-side, and without a cap the panel shows an eternal
@@ -56,17 +56,130 @@ export function abortAfter(ms) {
 }
 
 /**
+ * Should this failure be asked again, or is the answer final?
+ *
+ * Transient means a second ask could plausibly succeed: our own budget aborting
+ * (which is the failure this whole mechanism exists for — under load a feed hit
+ * the 12s guard above and the panel then stayed broken until a page reload), a
+ * network-level fetch rejection, a 5xx, or a 429. A 400/403/404 answers the
+ * same way forever, so retrying it only adds load to a server already in
+ * trouble.
+ *
+ * The 429 branch is currently unreachable and included anyway. Checked on
+ * 2026-08-08: this server has no inbound rate limiter, and every status it
+ * writes is a literal (200, 404, 409, 425, 500, 503 — httpx.go:555 takes its
+ * status from the caller, never from an upstream response). The only 429s in
+ * go/ are ones it READS, from GitHub and Groq. Classifying it costs nothing and
+ * is already right if a limiter or a proxy ever puts one in front.
+ */
+export function isTransientError(err) {
+  if (!err) return false
+  // Name rather than instanceof: the abort reason is a DOMException, and a
+  // fetch that never connected rejects with a TypeError from another realm.
+  if (err.name === 'AbortError' || err.name === 'TypeError') return true
+  if (typeof err.status !== 'number') return false
+  return err.status >= 500 || err.status === 429
+}
+
+// 2s, then 8s. A warm read answers in 0.008-0.036s, so the first retry catches
+// a blip almost free without hammering a server that failed half a second ago.
+// The second is deliberately longer than the worst cold load ever measured here
+// (7.49s): a feed that just failed to answer inside 12s will not be healthy
+// again in 500ms, so it gets one full worst-case load of room first. Two
+// entries IS the cap — three attempts total, then a terminal state, because an
+// unbounded retry is just poll under another name and leaves the manual button
+// nothing to act on.
+const RETRY_BASE_MS = [2000, 8000]
+
+/**
+ * Wait before the attempt after this one, or null when the budget is spent.
+ *
+ * Full jitter, x(0.5-1.5), not a polite +-10%: the observed failure mode is
+ * every no-poll panel dying at once, so the job is spreading them across a
+ * window, not nudging them. rng is injectable so tests assert the bounds
+ * instead of sampling them.
+ */
+export function retryDelayMs(attempt, rng = Math.random) {
+  const base = RETRY_BASE_MS[attempt - 1]
+  if (base === undefined) return null
+  return Math.round(base * (0.5 + rng()))
+}
+
+// ---------- which mounted feeds are currently broken ----------
+//
+// Module state read through useSyncExternalStore, the shape services.js already
+// proves out, and for the same reason: every FeedUnavailable on every tab needs
+// this answer and none of them sits in a subtree a provider could wrap. The
+// alternative was threading a retry callback through 63 useApi call sites and
+// 75 render sites by hand, which is the per-call-site mistake this codebase has
+// already had to undo once.
+
+const feeds = new Set() // entries: { failed, retrying, retry(delayMs) }
+const feedListeners = new Set()
+let feedSnapshot = { failed: false, retrying: false }
+
+function publishFeeds() {
+  let failed = false
+  let retrying = false
+  for (const feed of feeds) {
+    if (feed.failed) failed = true
+    if (feed.retrying) retrying = true
+  }
+  // Same object identity while nothing changed, which useSyncExternalStore
+  // requires of getSnapshot.
+  if (failed === feedSnapshot.failed && retrying === feedSnapshot.retrying) return
+  feedSnapshot = { failed, retrying }
+  for (const listener of feedListeners) listener()
+}
+
+function subscribeFeeds(listener) {
+  feedListeners.add(listener)
+  return () => feedListeners.delete(listener)
+}
+
+function getFeedSnapshot() {
+  return feedSnapshot
+}
+
+/**
+ * Is anything on the page broken, and is anything already trying again?
+ * `failed` stays true while a retry is pending, so the pair tells "trying
+ * again..." apart from "this is as far as it got, here is a button".
+ */
+export function useFeedRecovery() {
+  return useSyncExternalStore(subscribeFeeds, getFeedSnapshot, getFeedSnapshot)
+}
+
+/**
+ * Load every currently-failed feed again with its attempt budget reset —
+ * including polling ones, which otherwise wait out their interval. Spread over
+ * 0-500ms because one click can fire every panel on the page at once.
+ */
+export function retryFailedFeeds() {
+  for (const feed of feeds) {
+    if (feed.failed) feed.retry(Math.round(Math.random() * 500))
+  }
+}
+
+/**
  * Fetch a URL, optionally polling on an interval.
- * Returns { data, error, loading, refetch }.
+ * Returns { data, error, loading, retrying, refetch }.
  */
 export function useApi(url, { poll } = {}) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [retrying, setRetrying] = useState(false)
   const aliveRef = useRef(true)
   const warmRef = useRef(false) // flips once a load has succeeded for this url
+  const failuresRef = useRef(0) // consecutive failures for this url
+  const retryTimerRef = useRef(null)
+  // One stable object for the whole life of the hook; only its fields change,
+  // so the registry never has to re-register to stay current.
+  const entryRef = useRef({ failed: false, retrying: false, retry: null })
 
-  const load = useCallback(() => {
+  // Named so the retry timer can call it without a ref hop.
+  const load = useCallback(function run() {
     if (!url) return
     // Cold budget until this url has answered once, then the original hang guard.
     const { signal, cancel } = abortAfter(budgetMs(warmRef.current))
@@ -84,7 +197,13 @@ export function useApi(url, { poll } = {}) {
             return null
           }
         }
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        // The status rides along on the error: it is the only thing that tells
+        // a retryable 503 apart from a 404 that will never change its mind.
+        if (!res.ok) {
+          throw Object.assign(new Error(`${res.status} ${res.statusText}`), {
+            status: res.status,
+          })
+        }
         return res.json()
       })
       .then((json) => {
@@ -93,21 +212,76 @@ export function useApi(url, { poll } = {}) {
         // even if this component unmounted mid-flight.
         warmRef.current = true
         if (!aliveRef.current) return
+        failuresRef.current = 0
         setData(json)
         setError(null)
         setLoading(false)
+        setRetrying(false)
       })
       .catch((err) => {
         if (!aliveRef.current) return
+        // error stays set and loading stays false for the whole retry wait, so
+        // no existing branch at any call site sees a state it did not see
+        // before; `retrying` is the only new signal.
         setError(err)
         setLoading(false)
+        const attempt = (failuresRef.current += 1)
+        // A poll IS the retry — it re-fires on its own interval regardless of
+        // the error — and a second timer alongside it could put two loads in
+        // flight at once, which this function does not guard against.
+        const delay = poll || !isTransientError(err) ? null : retryDelayMs(attempt)
+        if (delay === null) {
+          setRetrying(false)
+          return
+        }
+        setRetrying(true)
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null
+          if (aliveRef.current) run()
+        }, delay)
       })
       .finally(cancel)
-  }, [url])
+  }, [url, poll])
+
+  /** Start over: full attempt budget, optionally after a spreading delay. */
+  const retry = useCallback(
+    (delayMs = 0) => {
+      clearTimeout(retryTimerRef.current)
+      failuresRef.current = 0
+      setRetrying(true)
+      retryTimerRef.current = setTimeout(() => {
+        retryTimerRef.current = null
+        if (aliveRef.current) load()
+      }, delayMs)
+    },
+    [load],
+  )
+
+  useEffect(() => {
+    const entry = entryRef.current
+    feeds.add(entry)
+    return () => {
+      feeds.delete(entry)
+      publishFeeds()
+    }
+  }, [])
+
+  // No dep array: this mirrors state into the registry entry, and publishes
+  // only when one of the two booleans actually moved.
+  useEffect(() => {
+    const entry = entryRef.current
+    entry.retry = retry
+    const failed = error !== null
+    if (entry.failed === failed && entry.retrying === retrying) return
+    entry.failed = failed
+    entry.retrying = retrying
+    publishFeeds()
+  })
 
   useEffect(() => {
     aliveRef.current = true
     warmRef.current = false // a new url is cold again
+    failuresRef.current = 0 // and gets a full retry budget
     setLoading(true)
     load()
     let id
@@ -115,8 +289,12 @@ export function useApi(url, { poll } = {}) {
     return () => {
       aliveRef.current = false
       if (id) clearInterval(id)
+      // A retry queued for the url this hook is leaving must never land on the
+      // one it is arriving at, and must never land at all after unmount.
+      clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
     }
   }, [load, poll])
 
-  return { data, error, loading, refetch: load }
+  return { data, error, loading, retrying, refetch: load }
 }

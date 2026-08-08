@@ -1,4 +1,5 @@
 import { Children, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { fmtShortDay, fmtValue } from '../lib/chartFormat.js'
 import { PANEL_HELP } from '../lib/panelHelp.js'
@@ -1506,14 +1507,29 @@ export function Empty({ children = 'no data' }) {
 
 // A dead upstream feed must never read as "you have none" — this is visually
 // and lexically distinct from <Empty>: no zero-count language, no "no data".
-export function FeedUnavailable({ reason, label = 'Feed unavailable' }) {
+//
+// `onRetry` is for the handful of callers that own their own fetch and are not
+// in the useApi registry (VaultGate, TenantManager). Everyone else gets the
+// page-wide answer, which is the point: threading a callback through 75 render
+// sites is the per-call-site mistake this codebase has already had to undo.
+export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry }) {
   const { COLORS } = useChartTheme()
+  // failed = something on this page is broken; retrying = something is already
+  // loading again. The pair separates "hold on" from "this is as far as it got".
+  const { failed, retrying } = useFeedRecovery()
+  // A caller that passed onRetry has already decided it is stuck — it has no
+  // registry entry to set `failed`, so the global pair cannot answer for it.
+  const showButton = onRetry ? true : failed && !retrying
   // data-feed-unavailable carries the label so a test can name WHICH feed is
   // down without scraping the rendered text. tests/contrast.spec.ts uses it to
   // tell "the page never loaded" apart from "the page loaded and its feeds did
   // not answer" — two states that look identical to an element count.
   // Attribute only: no text and no class changes, because the
   // failure-not-absence-*.spec.ts suite asserts this component's exact copy.
+  // The recovery line and button below are APPENDED for the same reason: the
+  // two divs above, their classes and the attribute stay byte-identical, and
+  // neither addition may contain "unavailable" or "no data", which other specs
+  // assert absent when a feed is genuinely empty rather than broken.
   return (
     <div
       data-feed-unavailable={label}
@@ -1521,6 +1537,17 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable' }) {
     >
       <div className="text-sm font-semibold" style={{ color: COLORS.crit }}>{label}</div>
       {reason ? <div className="text-[11px]" style={{ color: COLORS.warn }}>{reason}</div> : null}
+      {showButton ? (
+        <button
+          type="button"
+          onClick={onRetry || retryFailedFeeds}
+          className="mt-1 px-2.5 py-1 rounded-lg border border-border bg-field text-field-txt text-[11px]"
+        >
+          Try again
+        </button>
+      ) : retrying ? (
+        <div className="text-[11px] text-dim">{"Didn't load — trying again…"}</div>
+      ) : null}
     </div>
   )
 }

@@ -336,7 +336,7 @@ export default function TenantManager({ onClose }) {
             <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Vault tenants</div>
             {statusError ? (
               <div className="mb-3">
-                <FeedUnavailable label="Tenant status unavailable" reason="Could not read saved tenants — retry." />
+                <FeedUnavailable label="Tenant status unavailable" reason="Could not read saved tenants — retry." onRetry={load} />
               </div>
             ) : (
             <div className="space-y-1 mb-3">

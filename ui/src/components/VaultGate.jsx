@@ -260,7 +260,7 @@ export default function VaultGate({ children }) {
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-bg px-6">
         <div className="text-sm font-semibold">Bloxsmith</div>
-        <FeedUnavailable label="Vault status unavailable" reason="Could not reach the server to confirm vault state — retry." />
+        <FeedUnavailable label="Vault status unavailable" reason="Could not reach the server to confirm vault state — retry." onRetry={refresh} />
       </div>
     )
   }
