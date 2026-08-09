@@ -849,6 +849,38 @@ export function CardGrid({ className = '', layoutKey, children }) {
 const ARRANGE_FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+// The sentences that explain reorder, resize, hide and auto-save. They live
+// here rather than in panelHelp.js because they are facts about the LAYOUT
+// SYSTEM, not about a panel: which grids are managed can change, and 96
+// hand-copied sentences would go stale the moment one did. Still ONE string in
+// ONE place, still generated from the same truth — only the place it is read
+// has moved.
+//
+// SAID ONCE PER PAGE, NOT ONCE PER PANEL. Until 2026-08-09 Card appended these
+// to EVERY managed panel's help, so the same ~60 words printed 83 times on a
+// tab, under text that was otherwise about that one panel. Reported as "dont
+// need that every time". They now render only inside the "Arrange this page"
+// window — where somebody is standing precisely when they want to know how
+// arranging works — folded into the footer line that already said changes save
+// themselves, so the window gains one paragraph rather than stacking two.
+//
+// TWO PARTS, BECAUSE THEY ARE NOT TRUE OF THE SAME PAGES. Moving needs another
+// panel to move past; resizing, auto-save and hiding do not. #editor renders
+// one panel and always will, so on that tab the move sentence was describing a
+// gesture the operator could not perform — and the ⠿ handle it names is not
+// rendered there either. The gate is `items.length > 1`, which is the same
+// count CardGrid's `reorderable` uses (arrangeItems is the order minus the
+// hidden tiles) AND the same one that decides whether the rows in this window
+// are draggable at all, so the copy and the chrome cannot disagree.
+const LAYOUT_HELP_MOVE =
+  'Drag a row up or down to change the order, or use the buttons. On the page ' +
+  'itself you can drag a panel by its ⠿ grip.'
+
+const LAYOUT_HELP_REST =
+  'Drag a panel’s right edge to make it wider or narrower. The ✕ on a panel ' +
+  'takes it off the page, and the list here puts it back at the end. Changes here save ' +
+  'right away — there is no Save button.'
+
 // ---------- "Arrange this page" ----------
 //
 // A VIEW OF THE GRID'S STATE, NEVER A COPY OF IT. Every button here calls
@@ -1182,11 +1214,14 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, 
           </>
         )}
 
-        {/* Says the drag exists, because a ⠿ on a row does not say it to
-            anyone who has not already met the pattern. The second half is
-            unchanged wording — tests/hidden-tiles.spec.ts reads it. */}
+        {/* THE ONE PLACE THE LAYOUT SYSTEM IS EXPLAINED. Says the drag exists,
+            because a ⠿ on a row does not say it to anyone who has not already
+            met the pattern; says resize and hide, which are otherwise invisible
+            (the resize hotspot is opacity-0 until hover); and says nothing
+            needs saving. Generated from the same gate as the rows above, so a
+            window listing one panel never promises a reorder. */}
         <p className="m-0 text-[11px] text-muted">
-          Drag a row up or down to move it, or use the buttons. Changes here save right away — there’s no separate Save button.
+          {items.length > 1 ? `${LAYOUT_HELP_MOVE} ${LAYOUT_HELP_REST}` : LAYOUT_HELP_REST}
         </p>
       </div>
     </div>
@@ -1241,27 +1276,10 @@ export function usePanelFit() {
 // This is a per-card opt-out and not a change to applyLayout on purpose
 // — every other measuring panel must keep shrinking to its content.
 //
-// The sentences that explain reorder, resize and hide, appended by Card to the
-// help of any panel that really has them. They live here rather than in
-// panelHelp.js because they are facts about the LAYOUT SYSTEM, not about a
-// panel: which grids are managed can change, and 96 hand-copied sentences
-// would go stale the moment one did.
-//
-// TWO PARTS, BECAUSE THEY ARE NOT TRUE OF THE SAME PANELS. Moving needs another
-// panel to move past; resizing, auto-save and hiding do not. #editor renders
-// one panel and always will, so on that tab the move sentence was describing a
-// gesture the operator could not perform — and the ⠿ handle it names is not
-// rendered there either. The two are appended by the same condition, so the
-// copy and the chrome can never disagree.
-const LAYOUT_HELP_MOVE =
-  'You can move this panel: drag the ⠿ handle, or put the keyboard focus on it, ' +
-  'press Enter and use the arrow keys.'
-
-const LAYOUT_HELP_REST =
-  'Drag the panel’s right edge to make it wider ' +
-  'or narrower. Your arrangement saves on its own. The ✕ button takes this panel off ' +
-  'the page; the “Arrange panels” button above the panels opens a window listing ' +
-  'everything you have taken off, with a button that puts it back at the end.'
+// (The sentences that explain reorder, resize, hide and auto-save used to be
+// declared here and appended by Card to every managed panel's help. They now
+// live above ArrangeDialog and are said once, in the window that button opens —
+// see the comment there for why.)
 
 // ---- the runtime half of the help guarantee ----
 //
@@ -1827,7 +1845,8 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   // panel: it is on screen at the moment of the click. Once it is gone the
   // next snapshot will not name it, so bringing it back puts it at the end of
   // the page. That is the same rule a panel added after a save already
-  // follows, and it is stated in the About help rather than papered over.
+  // follows, and it is stated in the "Arrange this page" window's footer
+  // ("puts it back at the end") rather than papered over.
   const hideWordId = panelId ? `panel-hide-${panelId}` : undefined
   const onHide = useCallback(() => {
     const snap = grid.snapshot()
@@ -1855,10 +1874,13 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
 
   // ---- the "About" panel-help disclosure ----
   //
-  // THE CONTROL SAYS THE WORD "About", not an ⓘ glyph. 83 identical circled-i
-  // icons down a dashboard read as decoration; the word says what pressing it
-  // does without anyone having to learn a symbol. It is the same element in the
-  // same slot, and it still carries data-panel-help-toggle.
+  // THE CONTROL DRAWS AN ⓘ GLYPH. It said the word "About" for one release; the
+  // reversal is the user's — "the i cirle is better than about". ONLY the
+  // visible glyph changed back: it is the same <button> in the same slot, it
+  // still carries data-panel-help-toggle, aria-expanded and aria-controls, and
+  // its ACCESSIBLE NAME is still the words "About: <panel>" (the sr-only span
+  // below), so a screen reader and voice control hear a name, never a symbol.
+  // All three doors below are untouched.
   //
   // THREE DOORS, ONE RULE. Hover it with a mouse, or move the keyboard focus
   // onto it, and the help appears while that lasts. Click it (or press Enter or
@@ -1885,21 +1907,19 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   // so a header control rendered as a SIBLING of that span is width the
   // measurement cannot see, and the header overflows the card by exactly that
   // control's width. Inside it, it is counted for free. Its own width is
-  // intrinsic — shrink-0, one short word — so unlike the flex-1 spacer of
-  // failed attempt #1 it cannot grow with the panel and cannot re-enter the
-  // loop. It does raise every measured panel's width floor by its own width,
-  // which is the one real cost and what tests/table-sizing.spec.ts is re-run
-  // for. The word costs more than the glyph did — measured in Chromium, the
-  // button went 25px -> 45px, so every measured header's floor rose by ~20px.
-  // Measured across #security, #assets, #network and #dns at 1920, 1280, 1024,
-  // 768 and 390 before and after: no header gained an overflow (the only two
-  // that spill, assets-filter-bar's search box and network-dhcp-leases' search
-  // row at 390, spill by exactly the same 52px and 28px they did with the
-  // glyph). Two headers take one more wrapped line (assets-filter-bar at 768,
-  // security-lookalike-domains at 390) and two panels win a wider grid track
-  // from the higher floor (network-exhaustion at 1280 and 1920, dns-services at
-  // 1920) — which is the fit system working, not a break. panel-help.spec.ts
-  // re-measures all five widths so this cannot rot.
+  // intrinsic — shrink-0, one glyph — so unlike the flex-1 spacer of failed
+  // attempt #1 it cannot grow with the panel and cannot re-enter the loop. It
+  // does raise every measured panel's width floor by its own width, which is
+  // the one real cost and what tests/table-sizing.spec.ts is re-run for.
+  //
+  // THE GLYPH COSTS LESS THAN THE WORD DID, MEASURED. While it drew "About" the
+  // button was 45px; back as ⓘ it measures 24.83px in Chromium, identical at
+  // 1920, 1280, 1024, 768 and 390. Re-running panel-help.spec.ts's sweep over
+  // #security, #assets, #network and #dns at those five widths found ZERO
+  // headings, buttons or open disclosures spilling past their card — including
+  // assets-filter-bar and network-dhcp-leases at 390, which the word-era spec
+  // had to exclude. That exclusion list is deleted, not carried forward, and
+  // the spec now holds all four tabs at all five widths to zero.
   //
   // The BODY is a block BELOW the header and is invisible to both measurers:
   // headNeed reads only the title canvas and rightRef, bodyNeed is whatever
@@ -1973,10 +1993,10 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       data-panel-help-toggle=""
       // Labelled by REFERENCE for the same reason as the handle above: a title
       // can be a React node, and interpolating one into a template literal
-      // gives the accessible name "About [object Object]". The reference also
-      // keeps the name to "About: <panel>" now that the button draws the word
-      // itself — aria-labelledby replaces the content-derived name outright, so
-      // it never reads "About: Subnet Heatmap About".
+      // gives the accessible name "About [object Object]". It also carries the
+      // whole accessible name now that the visible content is a glyph again —
+      // the sr-only "About:" span is the only text in the name, so nothing
+      // reads out "circled latin small letter i".
       {...(title ? { 'aria-labelledby': `${aboutWordId} ${titleId}` } : { 'aria-label': `About ${panelId}` })}
       aria-expanded={helpOpen}
       aria-controls={helpId}
@@ -2004,7 +2024,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       }`}
     >
       {title && <span id={aboutWordId} className="sr-only">About:</span>}
-      About
+      ⓘ
     </button>
   ) : null
 
@@ -2031,20 +2051,12 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
     >
       {helpOpen && (
         <>
+          {/* THIS PANEL, AND NOTHING ELSE. The layout sentences that used to be
+              appended here are gone: the same ~60 words under all 83 panels
+              said nothing about the panel the reader had just opened. They are
+              said once instead, in the "Arrange this page" window. */}
           <p>{help.what}</p>
           {help.look && <p className="mt-1">{help.look}</p>}
-          {/* Generated, never written per panel: reorder and resize exist only
-              on a grid with a layoutKey, so a hand-written sentence would go
-              stale the moment a grid was wired or unwired. It is also the only
-              place the feature is stated at all — the resize hotspot is
-              opacity-0 until hover, i.e. invisible on touch.
-              The move sentence is dropped on a grid showing one panel, where it
-              would name a ⠿ handle that is not on screen and a gesture that
-              moves nothing — the same condition that decides the handle, so the
-              two cannot disagree. */}
-          {managed && (
-            <p className="mt-1">{reorderable ? `${LAYOUT_HELP_MOVE} ${LAYOUT_HELP_REST}` : LAYOUT_HELP_REST}</p>
-          )}
         </>
       )}
     </div>

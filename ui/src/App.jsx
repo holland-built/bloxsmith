@@ -564,7 +564,12 @@ export default function App() {
                   The DIALOG does not fold — only this button does. Below `lg`
                   it is opened from the settings sheet's "What these controls
                   do →" row, which is where both switches have moved to, so the
-                  list is read next to the row it names at every width. */}
+                  list is read next to the row it names at every width.
+                  THAT ROW IS `lg:hidden`, the exact inverse of this button's
+                  `hidden lg:flex` — one door at any width, never two. Reported
+                  as "that what do these do is redundant" when both showed at
+                  once. If this class is edited, edit that one too
+                  (components/TenantManager.jsx). */}
               <button
                 ref={helpBtnRef}
                 type="button"
