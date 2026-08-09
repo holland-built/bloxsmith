@@ -54,7 +54,12 @@ const arrangeRows = (page: import('@playwright/test').Page) =>
       const colon = attr.indexOf(':');
       return {
         id: colon === -1 ? null : attr.slice(colon + 1),
-        name: (li.querySelector('span')?.textContent ?? '').trim(),
+        // [data-arrange-name], not "the row's first span". The rows carry a
+        // drag grip ahead of the name now, so a positional read would grade the
+        // grip glyph on every tab and call every panel unnamed. The attribute
+        // names the thing being read, so nothing added to a row later can move
+        // it again.
+        name: (li.querySelector('[data-arrange-name]')?.textContent ?? '').trim(),
         section: attr.startsWith('back:') ? 'Off this page' : 'On this page',
       };
     }),
