@@ -611,9 +611,12 @@ test('every tab grows exactly the layout chrome its panels entitle it to', async
       // its render site. Two would mean two grids announcing over each other.
       live: document.querySelectorAll('[data-layout-live]').length,
       grids: document.querySelectorAll('[data-card-grid]').length,
-      // No tile is hidden in this run, so the strip must be absent entirely
-      // rather than present and empty.
+      // The "Arrange panels" strip. Standing chrome now, not a thing that only
+      // appears once a panel has already vanished — see the expected object
+      // below for the one tab shape that still has none.
       strips: document.querySelectorAll('[data-testid="hidden-tiles"]').length,
+      // And it holds exactly one button per strip, never one per panel.
+      arrange: document.querySelectorAll('[data-layout-arrange]').length,
     }));
 
     // MOVING NEEDS SOMEWHERE TO MOVE TO, so the handle count is not simply the
@@ -632,6 +635,14 @@ test('every tab grows exactly the layout chrome its panels entitle it to', async
     // `panels` for every tab, because resizing and hiding do real work on a
     // one-panel grid and must keep doing it.
     const expectedHandles = panels >= 2 ? panels : 0;
+    // THE STRIP RIDES THE SAME RULE AS THE HANDLE, and it is the same rule for
+    // the same reason: `reorderable`. A tab showing one panel has nothing to
+    // rearrange, and nothing is hidden anywhere in this run, so #editor and
+    // #drift grow no strip at all — while every multi-panel tab grows exactly
+    // one, whether or not anything has ever been hidden on it. Before
+    // 2026-08-09 this was `strips: 0` everywhere, because the strip only
+    // existed after a panel had already been taken off the page.
+    const expectedStrips = panels >= 2 ? 1 : 0;
 
     expect(seen[tabId], `#${tabId}`).toEqual({
       panels,
@@ -640,7 +651,8 @@ test('every tab grows exactly the layout chrome its panels entitle it to', async
       hides: panels,
       live: 1,
       grids: 1,
-      strips: 0,
+      strips: expectedStrips,
+      arrange: expectedStrips,
     });
   }
 

@@ -451,6 +451,11 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
     <Card
       panelId={panelId}
       span={6}
+      // The heading is a fragment — it carries a clear-filter chip when the tab
+      // has been drilled into — and a fragment is not a name, so "Arrange this
+      // page" listed this panel as "network-exhaustion". The words are the
+      // heading's own, minus the chip.
+      panelName="Which Subnets Run Out First?"
       title={
         <>
           Which Subnets Run Out First?

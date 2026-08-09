@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { CONTROL_HELP } from '../lib/controlHelp.js';
 
 // Ported from src/96.chrome-topbar.jsx (useSelfUpdate + UpdatePill).
 // Endpoints: GET /api/update/check -> {current,latest,available,url,selfUpdate}
@@ -326,7 +325,14 @@ export function UpdateCheck({ version }) {
         <p role="status" aria-live="polite" className={`m-0 mt-1.5 text-[11px] leading-relaxed ${tone}`}>
           {said}
         </p>
-        <p className="m-0 mt-1 text-[11px] leading-relaxed text-dim">{CONTROL_HELP.updates.what}</p>
+        {/* What the header's Update pill is FOR used to be printed here as a
+            second paragraph, word for word out of CONTROL_HELP. It was the
+            same sentence the control-help dialog already shows, and a settings
+            section is not where a feature explains itself — the sheet's
+            "What these controls do →" link is. Removed 2026-08-09; the
+            sentence still exists, once, in lib/controlHelp.js.
+            What stays is the live region above: that is not an explanation of
+            a feature, it is the result of the button beside it. */}
       </div>
     </>
   );

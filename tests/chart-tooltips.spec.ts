@@ -179,7 +179,18 @@ test('heatmap: pointing at a square shows an in-app readout naming the subnet an
   const rect = page.locator(`[data-panel-id="${HEATMAP.panel}"] svg rect`).first();
   await expect(rect, 'the heatmap never drew a square').toBeVisible({ timeout: CHART_READY_MS });
 
+  // MUST scroll first, for the reason already written out at chartBox() above:
+  // mouse.move() takes VIEWPORT coordinates and does not auto-scroll, while
+  // boundingBox() reports the box wherever it currently sits. Measured on
+  // 2026-08-09 at the default 1280x720: this square sat at y=696 and passed by
+  // 24px, and adding one 22px row of chrome above the grid (the Arrange panels
+  // strip) put it at y=731 — off the bottom of the window, where the sweep
+  // reported "no readout" for a panel that was working perfectly. The margin
+  // was luck, not a guarantee, so it is removed rather than restored.
+  await rect.scrollIntoViewIfNeeded();
   const box = (await rect.boundingBox())!;
+  expect(box.y + box.height, 'the heatmap square is still below the fold after scrolling')
+    .toBeLessThanOrEqual(page.viewportSize()!.height);
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
   const readout = page.locator(`[data-panel-id="${HEATMAP.panel}"] [data-heatmap-readout]`);

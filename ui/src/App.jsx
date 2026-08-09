@@ -215,6 +215,9 @@ export default function App() {
   const mainRef = useRef(null)
   const settingsBtnRef = useRef(null)
   const helpBtnRef = useRef(null)
+  // The element the control-help dialog hands focus back to. Not always the ⓘ:
+  // the dialog has two doors now, and focus belongs on the one that was used.
+  const helpReturnRef = useRef(null)
   const currentGroup = groupOf(tab)
   const activeLabel = PAGES.find((t) => t.id === tab)?.label ?? ''
 
@@ -317,14 +320,36 @@ export default function App() {
   // of five lines rather than a shared hook: the two sheets have different
   // triggers and are unmounted at different times, and a hook parameterised
   // over "which ref, which flag" would be longer than what it replaced.
+  //
+  // The one difference is WHERE focus lands: `helpReturnRef` is set by whichever
+  // door opened the dialog. Always returning to the ⓘ would be wrong twice over
+  // when the sheet's link was used — the reader's attention was on "…", and
+  // below `lg` the ⓘ is display:none, so focus() on it does nothing at all and
+  // the keyboard user is dropped on BODY.
   const helpWasOpen = useRef(false)
   useEffect(() => {
     if (showHeaderHelp) helpWasOpen.current = true
     else if (helpWasOpen.current) {
       helpWasOpen.current = false
-      helpBtnRef.current?.focus()
+      helpReturnRef.current?.focus()
     }
   }, [showHeaderHelp])
+
+  // The settings sheet's "What these controls do →" row. Close, then open —
+  // not two stacked modals, which would mean two focus traps and two Escape
+  // handlers over each other, and a background that is inert for one reason
+  // while a dialog inside it is inert for another.
+  //
+  // `sheetWasOpen` is cleared by hand because both state changes land in one
+  // commit: the sheet's focus-return effect would otherwise fire in the same
+  // pass that mounts the dialog and yank focus straight back out of it. Focus
+  // still reaches the "…" — just later, when the dialog itself closes.
+  const openHelpFromSettings = () => {
+    sheetWasOpen.current = false
+    helpReturnRef.current = settingsBtnRef.current
+    setShowAccounts(false)
+    setShowHeaderHelp(true)
+  }
 
   // Digits 1-5 open their group. Each button draws its digit as a keycap, and
   // a keycap that isn't bound to anything is a lie — so the binding is real.
@@ -534,16 +559,16 @@ export default function App() {
                   whole argument for the breakpoint: above it, the theme and
                   density switches are in this row and a reader can hold the
                   dialog's list against the row it names. Below it those two are
-                  not in the header at all, so the same dialog would explain
-                  controls that are not on screen and send a phone user hunting
-                  a bar that does not hold them. The narrow-width answer is not
-                  missing, it is somewhere better: the settings sheet carries
-                  the same sentences as always-visible captions, right beside
-                  the switches themselves. */}
+                  not in the header at all, so a trigger sitting here would
+                  point at controls that are not on screen.
+                  The DIALOG does not fold — only this button does. Below `lg`
+                  it is opened from the settings sheet's "What these controls
+                  do →" row, which is where both switches have moved to, so the
+                  list is read next to the row it names at every width. */}
               <button
                 ref={helpBtnRef}
                 type="button"
-                onClick={() => setShowHeaderHelp(true)}
+                onClick={() => { helpReturnRef.current = helpBtnRef.current; setShowHeaderHelp(true) }}
                 aria-label="What these controls do"
                 aria-haspopup="dialog"
                 aria-expanded={showHeaderHelp}
@@ -587,7 +612,9 @@ export default function App() {
         <div data-tab-live="" aria-live="polite" aria-atomic="true" className="sr-only">
           {`${activeLabel} tab`}
         </div>
-        {showAccounts && <TenantManager onClose={() => setShowAccounts(false)} />}
+        {showAccounts && (
+          <TenantManager onClose={() => setShowAccounts(false)} onOpenHelp={openHelpFromSettings} />
+        )}
         {/* Outside the inert wrapper, like the settings sheet above it and for
             the same reason: inert content is not exposed at all, so a dialog
             rendered inside it would be unreachable by the pointer, the Tab key

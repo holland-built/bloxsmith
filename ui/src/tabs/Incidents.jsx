@@ -237,7 +237,7 @@ function SeverityKpis({ signals, truncated, loading, error, panelId }) {
   // explicit failure banner.
   if (error) {
     return (
-      <Card panelId={panelId} span={6} className="flex flex-col" note="counts unknown — fetch failed">
+      <Card panelId={panelId} span={6} panelName="Severity Counts" className="flex flex-col" note="counts unknown — fetch failed">
         <FeedUnavailable
           label="Severity counts unavailable"
           reason={error.message ? `could not load incidents: ${error.message}` : 'could not load incidents'}
@@ -258,6 +258,10 @@ function SeverityKpis({ signals, truncated, loading, error, panelId }) {
     <Card
       panelId={panelId}
       span={6}
+      // Both branches of this component are one panel and share the name: the
+      // four cells are their own labels, so there is no heading to read and the
+      // popup used to list it as "incidents-severity".
+      panelName="Severity Counts"
       className="flex flex-row items-stretch justify-between"
       note={truncated ? 'of shown signals — list is capped' : undefined}
     >

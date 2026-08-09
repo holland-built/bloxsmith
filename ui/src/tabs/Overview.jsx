@@ -293,6 +293,11 @@ function DnsHero({ dns, panelId }) {
     <Card
       panelId={panelId}
       span={4}
+      // The heading is a clickable <span> so it can deep-link to the DNS tab,
+      // and a React node is not a name — "Arrange this page" listed this panel
+      // as "dns-hero". The words are the heading's own, verbatim, so the row in
+      // the popup and the heading on screen are the same phrase to look for.
+      panelName="DNS Query Rate — 24h"
       title={<span role="button" tabIndex={0} onClick={() => { location.hash = 'dns' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'dns' } }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS Query Rate — 24h</span>}
       right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
     >
@@ -373,7 +378,12 @@ function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus, panelI
   ]
 
   return (
-    <Card panelId={panelId} span={2} className="flex flex-col justify-between">
+    // No title by design — the three cells below are their own headings, and a
+    // fourth heading above them would say nothing. `panelName` is the words for
+    // the places that have to name this panel in a sentence, and it draws
+    // nothing: without it the popup called it "kpi-stack". Named for what the
+    // cells actually count (leases, subnets, and the subnets ≥90% full).
+    <Card panelId={panelId} span={2} panelName="Leases & Subnets" className="flex flex-col justify-between">
       {cells.map((c, i) => {
         const unavailable = c.status === 'error'
         return (
