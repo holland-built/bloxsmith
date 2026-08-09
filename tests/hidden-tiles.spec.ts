@@ -522,3 +522,178 @@ test('hiding does not wipe a saved order, and dragging does not wipe the hidden 
   }
   await expect(dialog(page)).not.toContainText('Off this page');
 });
+
+// ---------------------------------------------------------------------------
+// 7 — dragging a row inside the window.
+//
+// The reported ask was "inside arrange panel allow drag to location as well" —
+// AS WELL, so Move up / Move down are still there and still do the whole job
+// for a keyboard. What these four tests hold down is that the new gesture is
+// not a second implementation of reordering: it lands on the same saved order
+// the buttons produce, through the same single commit path, and it cannot
+// reach the one section of the window that has no ranks to change.
+// ---------------------------------------------------------------------------
+
+// The real gesture, not a lookalike. Pointer down on the row, past the 4px
+// threshold so the drag actually begins, then onto the target row and up.
+//
+// `where` picks which half of the target row the pointer stops in, and that is
+// the whole aim: the drop slot is counted by insertionIndex against the row
+// MIDPOINTS, so "above" inserts before the target and "below" inserts after it.
+// Written here rather than in tests/layout-helpers.ts because this file is its
+// only caller — that file exists for gestures two specs share.
+async function dragRow(page: Page, id: string, targetIndex: number, where: 'above' | 'below') {
+  const src = (await page.locator(`[data-arrange-row="${id}"]`).boundingBox())!;
+  const dst = (await page.locator('[data-arrange-row]').nth(targetIndex).boundingBox())!;
+  expect(src, `no draggable row for ${id}`).not.toBeNull();
+
+  // 40px in from the row's left edge is over its name, never over one of its
+  // three buttons — a press on a button is a click on that button, by design.
+  await page.mouse.move(src.x + 40, src.y + src.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(src.x + 40, src.y + src.height / 2 - 12, { steps: 3 });
+  await page.mouse.move(dst.x + 40, where === 'above' ? dst.y + 2 : dst.y + dst.height - 2, { steps: 12 });
+  // The chrome exists while the pointer is down, and is gone after it comes up:
+  // an insertion line left on <body> is a fixed-position artefact over the
+  // whole app.
+  await expect(page.locator('[data-arrange-insert-line]')).toHaveCount(1);
+  await page.mouse.up();
+  await page.waitForTimeout(700);
+  await expect(page.locator('[data-arrange-insert-line]')).toHaveCount(0);
+}
+
+test('a drag inside the window saves exactly the order Move up saves', async ({ page, request }) => {
+  test.setTimeout(240_000);
+
+  // --- route A: the drag ---
+  await goto(page);
+  expect(await domOrder(page)).toEqual(DECLARED_ORDER);
+  await openArrange(page);
+  await dragRow(page, SECURITY_TODAY.id, 0, 'above');
+
+  expect(await domOrder(page)).toEqual(MOVED_UP);
+  // The window is describing the same page while it is still open — not after
+  // a close-and-reopen, which could hide a stale copy.
+  expect(await popupOrder(page)).toEqual(MOVED_UP);
+  const draggedOrder = (await savedBlob(request)).order;
+  expect(draggedOrder).toEqual(MOVED_UP);
+  expectPersistedBlobIsValid(await savedBlob(request));
+  // Plain words, through the same live region the buttons already use.
+  expect(await liveText(page)).toContain(`Moved ${SECURITY_TODAY.name} to position 1 of 5.`);
+
+  // --- route B: the button, from an identical clean start ---
+  await request.delete(`/api/views/${VIEW}`);
+  await reloadTab(page, DECLARED_ORDER.length);
+  expect(await domOrder(page), 'the tab did not reload back to its declared order').toEqual(DECLARED_ORDER);
+  await openArrange(page);
+  await moveUp(page, SECURITY_TODAY.name).click();
+  await page.waitForTimeout(600);
+
+  expect(
+    (await savedBlob(request)).order,
+    'the drag and the Move up button disagree about the same rearrangement',
+  ).toEqual(draggedOrder);
+});
+
+test('a dragged row is still there after a reload', async ({ page, request }) => {
+  test.setTimeout(240_000);
+  await goto(page);
+  await openArrange(page);
+
+  // The other direction from the test above, and the one that exercises
+  // moveItem's off-by-one: dropping BELOW a row further down the list is
+  // counted against a list that still contains the dragged row, so the slot has
+  // to lose one on the way in. A hand-written version of that sum lands the row
+  // one position short, which a reload would then make permanent.
+  await dragRow(page, OPEN_ISSUES.id, 2, 'below');
+  const DRAGGED_DOWN = [
+    'daily-security-today',
+    'daily-top-capacity-risks',
+    'daily-open-issues',
+    'daily-hosts-attention',
+    'daily-dns-zone-issues',
+  ];
+  expect(await domOrder(page)).toEqual(DRAGGED_DOWN);
+  expect((await savedBlob(request)).order).toEqual(DRAGGED_DOWN);
+
+  await reloadTab(page, DECLARED_ORDER.length);
+  expect(await domOrder(page), 'the dragged order did not come back from the server').toEqual(DRAGGED_DOWN);
+  await openArrange(page);
+  expect(await popupOrder(page)).toEqual(DRAGGED_DOWN);
+});
+
+test('a row under "Off this page" cannot be dragged into the ordered list', async ({ page, request }) => {
+  test.setTimeout(240_000);
+  await goto(page);
+  await openArrange(page);
+  await takeOff(page, HOSTS_ATTENTION.name).click();
+  await page.waitForTimeout(600);
+  await expect(putBack(page, HOSTS_ATTENTION.name)).toBeVisible();
+
+  const VISIBLE = DECLARED_ORDER.filter((id) => id !== HOSTS_ATTENTION.id);
+  expect(await popupOrder(page)).toEqual(VISIBLE);
+  // The hidden row carries no drag hook at all, so there is no gesture to make.
+  // `order` and `layout.hidden` are separate fields in the saved blob, and a
+  // hidden tile holding a rank is a state the grid itself can never render.
+  await expect(page.locator('[data-arrange-row]')).toHaveCount(VISIBLE.length);
+  const hiddenRow = page.locator('li', { has: page.locator(`[data-arrange="back:${HOSTS_ATTENTION.id}"]`) }).last();
+  await expect(hiddenRow).toHaveCount(1);
+  expect(await hiddenRow.getAttribute('data-arrange-row')).toBeNull();
+
+  // And driving the pointer at it anyway changes nothing — no line, no move.
+  //
+  // Compared against the blob as it stands RIGHT NOW rather than against a
+  // literal: `order` here is still all five ids, because the window snapshots
+  // the order off the DOM at the moment of the click and the tile was still on
+  // the page then (see test 6). That rule is not what this test is about — what
+  // it is about is that the attempted drag changes neither field.
+  const before = await savedBlob(request);
+  const from = (await hiddenRow.boundingBox())!;
+  const top = (await page.locator('[data-arrange-row]').first().boundingBox())!;
+  await page.mouse.move(from.x + 40, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 40, from.y + from.height / 2 - 12, { steps: 3 });
+  await page.mouse.move(top.x + 40, top.y + 2, { steps: 12 });
+  await expect(page.locator('[data-arrange-insert-line]')).toHaveCount(0);
+  await page.mouse.up();
+  await page.waitForTimeout(700);
+
+  expect(await popupOrder(page), 'a hidden tile was dragged into the ordered list').toEqual(VISIBLE);
+  const blob = await savedBlob(request);
+  expect(blob.order, 'the attempted drag rewrote the saved order').toEqual(before.order);
+  expect(blob.layout.hidden, 'the attempted drag rewrote the hidden list').toEqual([HOSTS_ATTENTION.id]);
+  expect(blob.layout.hidden).toEqual(before.layout.hidden);
+  expectPersistedBlobIsValid(blob);
+});
+
+test('after a drag the window still traps Tab, closes on Escape and hands focus back', async ({ page }) => {
+  test.setTimeout(240_000);
+  await goto(page);
+  await openArrange(page);
+  await dragRow(page, SECURITY_TODAY.id, 0, 'above');
+
+  // Focus did not fall out of the window when the rows re-sorted under the
+  // drop. The row is now at the top, so its own Move up is disabled and the
+  // fallback target — its Move down — is what should hold focus.
+  expect(
+    (await focusedInfo(page))?.action,
+    'the drop dropped focus out of the window',
+  ).toBe(`down:${SECURITY_TODAY.id}`);
+
+  // The trap still holds: Tab from anywhere inside stays inside.
+  for (let i = 0; i < 30; i++) {
+    await page.keyboard.press('Tab');
+    const info = await focusedInfo(page);
+    expect(
+      info?.action !== null || info?.role === 'dialog' || info?.label === 'Close',
+      `Tab #${i + 1} after a drag left the window (${JSON.stringify(info)})`,
+    ).toBe(true);
+  }
+
+  await page.keyboard.press('Escape');
+  await expect(dialog(page)).toHaveCount(0);
+  expect(
+    (await focusedInfo(page))?.arrange,
+    'focus did not return to the Arrange panels button after a drag',
+  ).toBe(true);
+});

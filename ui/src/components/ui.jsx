@@ -721,6 +721,28 @@ export function CardGrid({ className = '', layoutKey, children }) {
     )
   }
 
+  // The pointer drop inside the popup, and the same rule as movePanel above: no
+  // arithmetic is written here. `to` arrives as an insertionIndex — a slot
+  // counted against the list that still CONTAINS the dragged row — and moveItem
+  // is the one function that knows a rightward/downward drop has to lose one
+  // once the row is pulled out. Writing that subtraction a second time in this
+  // file is exactly the off-by-one moveItem's comment is about.
+  //
+  // Same commit path as every button in the popup: ctx.apply(next, true). No
+  // draft list, no Save button, so the popup still cannot drift from the grid.
+  const dropPanel = (id, to) => {
+    const snap = ctx.snapshot()
+    const from = snap.order.indexOf(id)
+    if (from < 0) return
+    const next = moveItem(snap.order, from, to)
+    // Both slots that mean "where it already was" collapse to no move (see
+    // moveItem), so a drop that changed nothing announces nothing and saves
+    // nothing — the same silence a disabled Move up button gives.
+    if (next.indexOf(id) === from) return
+    ctx.apply({ order: next, spans: snap.spans, hidden: snap.hidden }, true)
+    ctx.announce(`Moved ${nameOf(id)} to position ${next.indexOf(id) + 1} of ${next.length}.`)
+  }
+
   return (
     <GridFitContext.Provider value={ctx}>
       {/* ---- the way in, ABOVE the grid ----
@@ -760,7 +782,24 @@ export function CardGrid({ className = '', layoutKey, children }) {
             aria-haspopup="dialog"
             aria-expanded={arrangeOpen}
             onClick={() => setArrangeOpen(true)}
-            className="cursor-pointer rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:text-field-txt hover:border-border-hover"
+            // LOUD ENOUGH TO BE FOUND, QUIET ENOUGH NOT TO BE THE PAGE'S MAIN
+            // ACTION. It used to be text-muted inside a hairline border, which
+            // is the exact treatment this file gives DISABLED chrome — an
+            // operator scanning the page read straight past it.
+            //
+            // What changed, and why this and not something else: the accent
+            // token already in the palette (--color-accent, #0070f3) carries
+            // the border and a 15% wash behind the label, and the label itself
+            // moves to full --color-txt at 12px semibold. Nothing here is a new
+            // colour, a gradient, a shadow, an icon or an animation — the tint
+            // and the border are doing the work, and the words stay words.
+            //
+            // It stays SECOND to "+ Provision" in the top bar by one deliberate
+            // step: that button is a SOLID accent fill with white text, this one
+            // is the tonal version of the same accent. Filled beats tinted at a
+            // glance, which is the ranking a page control should have against
+            // the page's primary action.
+            className="cursor-pointer rounded-md border border-accent bg-accent/15 px-2.5 py-1 text-xs font-semibold text-txt hover:bg-accent/25 hover:border-accent"
           >
             Arrange panels
           </button>
@@ -787,6 +826,7 @@ export function CardGrid({ className = '', layoutKey, children }) {
           hiddenTiles={hiddenTiles}
           nameOf={nameOf}
           onMove={movePanel}
+          onDrop={dropPanel}
           onTakeOff={takeOffPage}
           onPutBack={(id) => showTile([id])}
           onClose={() => setArrangeOpen(false)}
@@ -834,7 +874,7 @@ const ARRANGE_FOCUSABLE =
 // HeaderHelp this component's trigger button stays mounted the whole time: the
 // strip keeps rendering behind the popup, so the button is still there to
 // receive focus when the popup goes.
-function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onTakeOff, onPutBack, onClose }) {
+function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, onPutBack, onClose }) {
   const panelRef = useRef(null)
 
   // Focus goes to the panel, not to its ✕: what a screen reader then reads is
@@ -872,9 +912,132 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onTakeOff, onPutBac
     run()
   }
 
+  // ---- drag a row to a new position ----
+  //
+  // WHY THE BUTTONS STAYED. Dragging is the fast way for a pointer; it is no
+  // way at all for a keyboard, a screen reader or a shaky hand. Move up / Move
+  // down are still the whole feature for those, so this is added ALONGSIDE
+  // them and neither route knows about the other — both end at the grid's one
+  // ctx.apply(next, true).
+  //
+  // ONLY THE ORDERED SECTION IS DRAGGABLE. The rows under "Off this page" get
+  // no handler and no [data-arrange-row], so there is no gesture that can put a
+  // hidden tile into the ranked list. `order` and `layout.hidden` are separate
+  // fields in the saved blob, and a hidden tile with a rank is a state the grid
+  // itself can never produce.
+  const dragCancelRef = useRef(null)
+  // A drag released over the backdrop would otherwise fire a click there and
+  // close the window on the operator mid-task. Cleared on the next task, i.e.
+  // after that click has been and gone.
+  const swallowClickRef = useRef(false)
+  const [dragId, setDragId] = useState(null)
+
+  // A drag left running when the popup unmounts — Escape, or the tab changing
+  // under it — must not leave its insertion line behind on <body>.
+  useEffect(() => () => dragCancelRef.current?.(), [])
+
+  // WHICH SLOT THE POINTER IS ASKING FOR, and the reason there is no counting
+  // loop here. insertionIndex (lib/layout.js) already answers exactly this
+  // question for the grid, where the items sit side by side; this list is the
+  // same problem rotated 90°, so the rects are handed to it TRANSPOSED — each
+  // row's top/bottom goes in as left/right, and the pointer's y goes in as x.
+  // Every rect then falls into its "these two are on the same row, so the
+  // midpoint decides" branch, which is precisely the rule a single column
+  // needs: count the rows whose middle the pointer has passed.
+  const rowSlot = (rects, y) =>
+    insertionIndex(rects.map((r) => ({ top: 0, bottom: 0, left: r.top, right: r.bottom })), y, 0)
+
+  const onRowPointerDown = (e, id) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    // A press on one of the row's own buttons is a click on that button.
+    if (e.target.closest('button')) return
+    // Keeps the press from blurring whatever inside the dialog currently holds
+    // focus. Without it, focus falls to <body> and the Tab trap below — which
+    // reasons about first/last — has nothing sensible to trap.
+    e.preventDefault()
+
+    const rowEl = e.currentTarget
+    const startY = e.clientY
+    let started = false
+    let line = null
+    let target = 0
+    const ac = new AbortController()
+    const { signal } = ac
+
+    // Re-read on every move rather than cached at the start: the popup is
+    // scrollable, and a stale rect aims the drop at the wrong slot.
+    const rowRects = () =>
+      [...(panelRef.current?.querySelectorAll('[data-arrange-row]') ?? [])].map((el) =>
+        el.getBoundingClientRect(),
+      )
+
+    const begin = () => {
+      started = true
+      setDragId(id)
+      // z-index 210 clears the dialog's own z-[200]; overlayEl writes 60 first
+      // and the later declaration in the same inline style wins.
+      line = overlayEl(
+        'data-arrange-insert-line',
+        'height:3px;border-radius:2px;background:var(--color-accent);z-index:210;',
+      )
+      document.body.style.userSelect = 'none'
+      dragCancelRef.current = () => finish(false)
+    }
+
+    const placeLine = (idx, rects) => {
+      if (!rects.length) return
+      const last = idx >= rects.length
+      const r = rects[last ? rects.length - 1 : idx]
+      line.style.left = `${r.left}px`
+      line.style.width = `${r.width}px`
+      line.style.top = `${(last ? r.bottom : r.top) - 1}px`
+    }
+
+    function finish(commit) {
+      ac.abort()
+      dragCancelRef.current = null
+      if (line) line.remove()
+      document.body.style.userSelect = ''
+      if (!started) return
+      setDragId(null)
+      swallowClickRef.current = true
+      setTimeout(() => { swallowClickRef.current = false }, 0)
+      if (!commit) return
+      // Through act(), exactly as every button here does: the rows re-sort
+      // under the drop, and naming where focus should land afterwards is what
+      // keeps a keyboard user inside the window.
+      act(() => onDrop(id, target), `[data-arrange="up:${id}"]`, `[data-arrange="down:${id}"]`)
+    }
+
+    rowEl.addEventListener(
+      'pointermove',
+      (ev) => {
+        if (!started) {
+          // Below the threshold this is still a press, not a drag.
+          if (Math.abs(ev.clientY - startY) < 4) return
+          begin()
+        }
+        const rects = rowRects()
+        target = rowSlot(rects, ev.clientY)
+        placeLine(target, rects)
+      },
+      { signal },
+    )
+    rowEl.addEventListener('pointerup', () => finish(true), { signal })
+    rowEl.addEventListener('pointercancel', () => finish(false), { signal })
+    try {
+      rowEl.setPointerCapture(e.pointerId)
+    } catch {
+      // Best-effort, as everywhere else in this file: the listeners work without it.
+    }
+  }
+
   const onKeyDown = (e) => {
     if (e.key === 'Escape') {
       e.stopPropagation()
+      // A drag still in flight is abandoned rather than committed, the same way
+      // Escape abandons a keyboard move: nothing was saved on the way here.
+      dragCancelRef.current?.()
       onClose()
       return
     }
@@ -903,7 +1066,10 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onTakeOff, onPutBac
   return (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4"
-      onClick={onClose}
+      // Clicking the backdrop closes the window — unless the "click" is the
+      // tail of a drag that happened to be released out here, which is a move,
+      // not a dismissal.
+      onClick={() => { if (!swallowClickRef.current) onClose() }}
       onKeyDown={onKeyDown}
     >
       <div
@@ -928,8 +1094,28 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onTakeOff, onPutBac
         ) : (
           <ul className="m-0 mb-4 list-none p-0">
             {items.map((id, i) => (
-              <li key={id} className="flex items-center gap-1.5 py-1 border-b border-line-2 last:border-b-0">
-                <span className="flex-1 min-w-0 truncate text-[11px] text-field-txt">{nameOf(id)}</span>
+              // A list of one has nowhere to drag to, so it gets no grip, no
+              // grab cursor and no handler — the same rule the grid's own ⠿
+              // handle follows on a one-panel tab, and for the same reason: an
+              // affordance for a gesture that cannot do anything is a lie.
+              <li
+                key={id}
+                {...(items.length > 1
+                  ? { 'data-arrange-row': id, onPointerDown: (e) => onRowPointerDown(e, id) }
+                  : null)}
+                className={`flex items-center gap-1.5 py-1 border-b border-line-2 last:border-b-0 ${
+                  items.length > 1 ? 'cursor-grab' : ''
+                } ${dragId === id ? 'opacity-40' : ''}`}
+              >
+                {/* The affordance, and it is only that — the row itself is the
+                    drag surface, so nobody has to hit a 10px target to move a
+                    panel. Hidden from assistive tech: it names no action a
+                    keyboard user can take, and the two Move buttons beside it
+                    do. */}
+                {items.length > 1 && (
+                  <span aria-hidden="true" className="select-none text-dim text-[11px] leading-none">⠿</span>
+                )}
+                <span data-arrange-name="" className="flex-1 min-w-0 truncate text-[11px] text-field-txt">{nameOf(id)}</span>
                 {/* DISABLED, never missing. A button that vanishes at the top
                     of the list moves every other button under the pointer and
                     out from under the keyboard, and gives no answer to "why
@@ -980,7 +1166,7 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onTakeOff, onPutBac
             <ul className="m-0 mb-4 list-none p-0">
               {hiddenTiles.map((tile) => (
                 <li key={tile.id} className="flex items-center gap-1.5 py-1 border-b border-line-2 last:border-b-0">
-                  <span className="flex-1 min-w-0 truncate text-[11px] text-field-txt">{tile.name}</span>
+                  <span data-arrange-name="" className="flex-1 min-w-0 truncate text-[11px] text-field-txt">{tile.name}</span>
                   <button
                     type="button"
                     data-arrange={`back:${tile.id}`}
@@ -996,7 +1182,12 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onTakeOff, onPutBac
           </>
         )}
 
-        <p className="m-0 text-[11px] text-muted">Changes here save right away — there’s no separate Save button.</p>
+        {/* Says the drag exists, because a ⠿ on a row does not say it to
+            anyone who has not already met the pattern. The second half is
+            unchanged wording — tests/hidden-tiles.spec.ts reads it. */}
+        <p className="m-0 text-[11px] text-muted">
+          Drag a row up or down to move it, or use the buttons. Changes here save right away — there’s no separate Save button.
+        </p>
       </div>
     </div>
   )
@@ -1822,7 +2013,21 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       id={helpId}
       data-panel-help=""
       hidden={!helpOpen}
-      className="mb-2 rounded-lg border border-line-2 bg-line px-2.5 py-2 text-[11px] leading-relaxed text-muted max-w-[80ch]"
+      // FULL PANEL WIDTH, AND THE TRADE THAT BUYS. This used to carry
+      // max-w-[80ch], the standard readability measure — past roughly 80
+      // characters the eye loses its place jumping back to the start of the
+      // next line. On a narrow panel that cap did nothing, because the panel
+      // was already the narrower of the two; on a wide one it left an obvious
+      // band of empty grey to the right of the text, which is what was
+      // reported. Full width was asked for and is what is here, so on a
+      // six-column panel these lines now run long — that is the cost, and it is
+      // paid for a help block of two or three sentences that is read once, not
+      // for body copy that is read for minutes.
+      //
+      // TabIntro (further down this file) keeps its 80ch cap: it is a permanent
+      // line of page furniture under the tab heading, not a block the operator
+      // opened on purpose, and nothing was reported about it.
+      className="mb-2 rounded-lg border border-line-2 bg-line px-2.5 py-2 text-[11px] leading-relaxed text-muted"
     >
       {helpOpen && (
         <>

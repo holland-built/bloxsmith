@@ -270,10 +270,21 @@ test('the popup edits the ONE layout state, through the ONE commit path', () => 
   assert.ok(close > 0, 'ArrangeDialog has no closing brace at column 0 — this reader cannot bound it')
   const body = after.slice(0, close)
 
-  assert.doesNotMatch(
-    body,
-    /useState/,
-    'ArrangeDialog now holds state — the popup must be a VIEW of the grid layout, never a draft copy of it',
+  // NOT "no useState at all" any more, and the loosening is one named value.
+  // Dragging a row needs exactly one piece of transient chrome — which row is
+  // under the pointer right now, so it can be dimmed while it travels. That is
+  // not an order, it does not outlive the gesture, and nothing ever writes it.
+  // What must still be unrepresentable is a draft LIST: state holding the
+  // order, the items, or the hidden tiles. Naming the permitted state rather
+  // than pattern-matching what it holds is what keeps this a real guard — a
+  // second useState of any kind fails here and has to argue its case in this
+  // comment.
+  const stateNames = [...body.matchAll(/const \[(\w+),\s*\w+\] = useState\(/g)].map((m) => m[1])
+  assert.deepEqual(
+    stateNames,
+    ['dragId'],
+    'ArrangeDialog holds state beyond the drag\'s own dragId — the popup must be a VIEW of the grid ' +
+      'layout, never a draft copy of it',
   )
   assert.doesNotMatch(
     body,
@@ -289,6 +300,43 @@ test('the popup edits the ONE layout state, through the ONE commit path', () => 
     src,
     /const movePanel = \(id, delta\) => \{\n\s*const snap = ctx\.snapshot\(\)\n\s*const next = shiftItem\(snap\.order, id, delta\)/,
     'the popup no longer reorders with shiftItem off a fresh snapshot — it is re-deriving the move arithmetic',
+  )
+  // The drag route, held to the same rule as the buttons. `to` is an
+  // insertionIndex — counted against the list that still contains the dragged
+  // row — and moveItem is the only thing that knows it has to lose one on a
+  // downward drop. A hand-written `to - 1` here would be the classic
+  // drag-and-drop off-by-one, in the one file it has already been solved in.
+  assert.match(
+    src,
+    /const dropPanel = \(id, to\) => \{\n\s*const snap = ctx\.snapshot\(\)\n\s*const from = snap\.order\.indexOf\(id\)\n\s*if \(from < 0\) return\n\s*const next = moveItem\(snap\.order, from, to\)/,
+    'the popup drag no longer drops with moveItem off a fresh snapshot — it is re-deriving the drop arithmetic',
+  )
+  assert.match(
+    src,
+    /const dropPanel[\s\S]*?ctx\.apply\(\{ order: next, spans: snap\.spans, hidden: snap\.hidden \}, true\)/,
+    'the popup drag no longer commits through ctx.apply(next, true) — it has grown a second save path',
+  )
+  // The slot the pointer is asking for is insertionIndex's job, transposed for
+  // a single column (see rowSlot's comment in components/ui.jsx). A counting
+  // loop written here instead is the same arithmetic a second time.
+  assert.match(
+    body,
+    /const rowSlot = \(rects, y\) =>\n\s*insertionIndex\(/,
+    'the popup drag no longer asks insertionIndex which slot the pointer wants',
+  )
+  // Only the ranked section is draggable. A hidden tile has no rank — `order`
+  // and `layout.hidden` are separate fields — so a gesture that could drop one
+  // into the ordered list would save a state the grid can never produce.
+  // Anchored on the rendered heading, not on the words: "Off this page" also
+  // appears in the comments above, and slicing from there would hand this
+  // assertion the whole drag implementation to complain about.
+  const heading = body.indexOf('>Off this page</h3>')
+  assert.ok(heading > 0, 'the "Off this page" heading has been renamed — this reader cannot find the hidden section')
+  const hiddenSection = body.slice(heading)
+  assert.doesNotMatch(
+    hiddenSection,
+    /onPointerDown|data-arrange-row/,
+    'a row under "Off this page" became draggable — a hidden tile must not be rankable',
   )
   // A hidden tile is never given a rank. `order` and `hidden` are separate
   // fields in the saved blob, and interleaving them would let the popup write a
