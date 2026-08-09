@@ -314,7 +314,7 @@ test('a change made in the window survives a reload, both ways round', async ({ 
   await expect(page.locator(`[data-panel-id="${SECURITY_TODAY.id}"]`)).toHaveCount(1);
   // At the END of the page, because it was not in the DOM when the order was
   // last saved and so the saved order does not name it. That is the same rule a
-  // newly added panel follows, and it is stated in the panel's own ⓘ help
+  // newly added panel follows, and it is stated in the panel's own About help
   // rather than papered over here.
   expect(await domOrder(page)).toEqual([...AFTER, SECURITY_TODAY.id]);
   expect(await liveText(page)).toContain(`${SECURITY_TODAY.name} is back on the page.`);

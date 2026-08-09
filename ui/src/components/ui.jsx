@@ -1103,7 +1103,7 @@ function reportMissingHelp(panelId, title) {
     return
   }
   console.error(
-    `[panel-help] panelId "${panelId}" has no entry in PANEL_HELP, so this panel's ⓘ ` +
+    `[panel-help] panelId "${panelId}" has no entry in PANEL_HELP, so this panel's About ` +
       'button does not render. Add an entry to ui/src/lib/panelHelp.js.',
   )
 }
@@ -1636,7 +1636,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   // panel: it is on screen at the moment of the click. Once it is gone the
   // next snapshot will not name it, so bringing it back puts it at the end of
   // the page. That is the same rule a panel added after a save already
-  // follows, and it is stated in the ⓘ help rather than papered over.
+  // follows, and it is stated in the About help rather than papered over.
   const hideWordId = panelId ? `panel-hide-${panelId}` : undefined
   const onHide = useCallback(() => {
     const snap = grid.snapshot()
@@ -1662,13 +1662,31 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
     </button>
   ) : null
 
-  // ---- the ⓘ panel-help disclosure ----
+  // ---- the "About" panel-help disclosure ----
   //
-  // Tap to open, not hover, and not a `title=` tooltip — the same reasoning
-  // already written above TabIntro at the bottom of this file: hover does not
-  // exist on touch, so a tooltip is unreadable on exactly the devices a
-  // dashboard gets glanced at from. A native <button> also makes Enter, Space,
-  // focus and the expanded/collapsed announcement free.
+  // THE CONTROL SAYS THE WORD "About", not an ⓘ glyph. 83 identical circled-i
+  // icons down a dashboard read as decoration; the word says what pressing it
+  // does without anyone having to learn a symbol. It is the same element in the
+  // same slot, and it still carries data-panel-help-toggle.
+  //
+  // THREE DOORS, ONE RULE. Hover it with a mouse, or move the keyboard focus
+  // onto it, and the help appears while that lasts. Click it (or press Enter or
+  // Space) and the help is PINNED: it stays after the pointer leaves and after
+  // the focus leaves, so a long entry can be read without holding the mouse
+  // still. In one line: leaving closes it only if it was never clicked.
+  // Clicking a pinned panel closes it and cancels the hover/focus preview you
+  // are still inside — otherwise "click again to close" would be a lie, because
+  // the pointer resting on the control (and the focus a click leaves behind)
+  // would re-open it the instant it shut. Move away and come back and the
+  // preview works again, because that is a fresh pointerenter/focus.
+  //
+  // Not a `title=` tooltip and not a floating layer. The disclosure stays a
+  // block in normal flow under the header — the shape already proven here — for
+  // the reason written above TabIntro at the bottom of this file: hover does not
+  // exist on touch, so anything that ONLY hovers is unreadable on exactly the
+  // devices a dashboard gets glanced at from. Hover is an addition to the click,
+  // never a replacement for it. A native <button> keeps Enter, Space, focus and
+  // the expanded/collapsed announcement free.
   //
   // WHERE THE BUTTON GOES IS NOT A FREE CHOICE. It renders INSIDE the rightRef
   // span alongside the drag handle, for the reason spelled out at that span:
@@ -1676,10 +1694,21 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   // so a header control rendered as a SIBLING of that span is width the
   // measurement cannot see, and the header overflows the card by exactly that
   // control's width. Inside it, it is counted for free. Its own width is
-  // intrinsic — shrink-0, one glyph — so unlike the flex-1 spacer of failed
-  // attempt #1 it cannot grow with the panel and cannot re-enter the loop. It
-  // does raise every measured panel's width floor by its own width, which is
-  // the one real cost and what tests/table-sizing.spec.ts is re-run for.
+  // intrinsic — shrink-0, one short word — so unlike the flex-1 spacer of
+  // failed attempt #1 it cannot grow with the panel and cannot re-enter the
+  // loop. It does raise every measured panel's width floor by its own width,
+  // which is the one real cost and what tests/table-sizing.spec.ts is re-run
+  // for. The word costs more than the glyph did — measured in Chromium, the
+  // button went 25px -> 45px, so every measured header's floor rose by ~20px.
+  // Measured across #security, #assets, #network and #dns at 1920, 1280, 1024,
+  // 768 and 390 before and after: no header gained an overflow (the only two
+  // that spill, assets-filter-bar's search box and network-dhcp-leases' search
+  // row at 390, spill by exactly the same 52px and 28px they did with the
+  // glyph). Two headers take one more wrapped line (assets-filter-bar at 768,
+  // security-lookalike-domains at 390) and two panels win a wider grid track
+  // from the higher floor (network-exhaustion at 1280 and 1920, dns-services at
+  // 1920) — which is the fit system working, not a break. panel-help.spec.ts
+  // re-measures all five widths so this cannot rot.
   //
   // The BODY is a block BELOW the header and is invisible to both measurers:
   // headNeed reads only the title canvas and rightRef, bodyNeed is whatever
@@ -1704,6 +1733,15 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   // text scrapers all read the same way a test locator does, so keeping the
   // copy out of the document until it is asked for is the honest shape, and
   // it kept all eight specs' assertions untouched.
+  //
+  // ADDING HOVER DID NOT RELAX THIS, and it is the one way this feature could
+  // have brought the regression back. The obvious way to build a hover reveal —
+  // render the text always and flip a CSS class — would put all 83 entries back
+  // in the document on every tab, which is exactly the state that broke those
+  // eight specs. So hover changes only WHEN `helpOpen` is true; it changes
+  // nothing about what is mounted while it is false. panel-help.spec.ts asserts
+  // that document.body.textContent does not contain a closed panel's sentence,
+  // which fails the moment anyone renders it unconditionally.
   const help = panelId ? PANEL_HELP[panelId] : null
   // In an effect, not in the render body: React renders a component twice under
   // StrictMode and again on every fit pass, and an error thrown from render
@@ -1711,9 +1749,32 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
   useEffect(() => {
     if (!help) reportMissingHelp(panelId, title)
   }, [help, panelId, title])
-  const [helpOpen, setHelpOpen] = useState(false)
+  // THREE PIECES OF STATE, ONE DERIVED ANSWER, because the three doors are not
+  // the same kind of open. `pinned` is a decision the operator made and only
+  // another click takes it back; `peek` and `focus` are previews that last
+  // exactly as long as the pointer or the focus does. They are separate rather
+  // than one counter so that a mouse leaving while the button still holds the
+  // keyboard focus does NOT close it — each door closes only its own preview.
+  const [helpPinned, setHelpPinned] = useState(false)
+  const [helpPeek, setHelpPeek] = useState(false)
+  const [helpFocus, setHelpFocus] = useState(false)
+  const helpOpen = helpPinned || helpPeek || helpFocus
   const helpId = panelId ? `panel-help-${panelId}` : undefined
   const aboutWordId = panelId ? `panel-about-${panelId}` : undefined
+
+  // Closing wins over both previews — see the rule in the block comment above.
+  // A click leaves the focus ON this button and usually leaves the pointer on
+  // it too, so unpinning without clearing them would shut the panel and reopen
+  // it in the same frame.
+  const toggleHelp = useCallback(() => {
+    if (helpPinned) {
+      setHelpPinned(false)
+      setHelpPeek(false)
+      setHelpFocus(false)
+      return
+    }
+    setHelpPinned(true)
+  }, [helpPinned])
 
   const infoBtn = help ? (
     <button
@@ -1721,17 +1782,38 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       data-panel-help-toggle=""
       // Labelled by REFERENCE for the same reason as the handle above: a title
       // can be a React node, and interpolating one into a template literal
-      // gives the accessible name "About [object Object]".
+      // gives the accessible name "About [object Object]". The reference also
+      // keeps the name to "About: <panel>" now that the button draws the word
+      // itself — aria-labelledby replaces the content-derived name outright, so
+      // it never reads "About: Subnet Heatmap About".
       {...(title ? { 'aria-labelledby': `${aboutWordId} ${titleId}` } : { 'aria-label': `About ${panelId}` })}
       aria-expanded={helpOpen}
       aria-controls={helpId}
-      onClick={() => setHelpOpen((open) => !open)}
+      onClick={toggleHelp}
+      // pointerenter, guarded on pointerType, rather than mouseenter: a tap on a
+      // touchscreen synthesises mouse events, so mouseenter would "hover" a
+      // panel open on the same tap that clicks it and then leave it stuck open
+      // with no pointer to move away.
+      onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHelpPeek(true) }}
+      onPointerLeave={() => setHelpPeek(false)}
+      // Focus, not focus-visible: a keyboard user must not have to press
+      // anything to read the help, and this is also what makes the preview come
+      // back after a close — blur clears it, the next focus sets it again.
+      onFocus={() => setHelpFocus(true)}
+      onBlur={() => setHelpFocus(false)}
       className={`shrink-0 cursor-pointer rounded-md border px-1.5 py-0.5 text-[11px] leading-none ${
-        helpOpen ? 'border-accent text-accent' : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
+        // Hover does not fight the pinned state: pinned always wins the accent,
+        // a preview gets the plain hover treatment, and the closed state keeps
+        // the CSS :hover fallback for anything the JS previews miss.
+        helpPinned
+          ? 'border-accent text-accent'
+          : helpOpen
+            ? 'border-border-hover text-field-txt'
+            : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
       }`}
     >
       {title && <span id={aboutWordId} className="sr-only">About:</span>}
-      ⓘ
+      About
     </button>
   ) : null
 

@@ -623,7 +623,7 @@ test('every tab grows exactly the layout chrome its panels entitle it to', async
     // panel count. #editor renders exactly one panel (editor-object-form) and
     // always will, and #drift renders one until a drift check runs — on a
     // one-panel grid the ⠿ handle had nothing to drag past, move mode's arrow
-    // keys moved nothing, and the ⓘ help still said "You can move this panel".
+    // keys moved nothing, and the About help still said "You can move this panel".
     // The handle is now gated on `managed && reorderable`, so it is absent
     // there and present on every panel of every tab that shows two or more.
     //

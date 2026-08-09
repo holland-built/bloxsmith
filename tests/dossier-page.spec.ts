@@ -445,7 +445,7 @@ test('the AI tab lookup still renders inline and links to the full page', async 
   // `exact: true` for the same reason the other five call sites in this suite
   // already have it (failure-not-absence, failure-not-absence-2,
   // dossier-empty-sources): an accessible name matches as a SUBSTRING by
-  // default, and this panel's ⓘ button is named "About: Threat lookup", which
+  // default, and this panel's About button is named "About: Threat lookup", which
   // contains "Lookup". Exact is the stricter assertion, not a looser one.
   await page.getByRole('button', { name: 'Lookup', exact: true }).click();
 
