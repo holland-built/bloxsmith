@@ -377,6 +377,11 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
     <Card
       span={6}
       panelId={panelId}
+      // Same shape as Dns.jsx's zone table: the heading turns into a React node
+      // while a status filter is on, so the popup's row for this panel flipped
+      // between "Host Inventory" and the raw "infra-host-inventory" depending
+      // on how the tab had been drilled into.
+      panelName="Host Inventory"
       title={
         statusFilter ? (
           <span className="inline-flex items-center gap-2">

@@ -224,13 +224,78 @@ test('an unmanaged grid does no layout work either — no request, no state, no 
   )
 })
 
-test('the hidden-tiles strip is additionally gated on something actually being hidden', () => {
-  // An always-rendered empty strip would be a permanent band of chrome on
-  // every clean dashboard. tests/hidden-tiles.spec.ts asserts the absence in a
-  // browser; this is the same rule read at its source.
+test('the Arrange panels strip is on any rearrangeable tab, and on any tab holding something off the page', () => {
+  // WHAT THIS USED TO SAY. Until the strip moved above the grid it was gated on
+  // `hiddenTiles.length > 0` alone, and this test asserted exactly that. That
+  // gate is what the reported complaint was about: the way back existed only
+  // AFTER a panel had already vanished, and it sat below every panel on the
+  // page, so on a long tab it was off screen and on a tidy tab it did not
+  // exist. You cannot look for a control you have never seen.
+  //
+  // The rule now has two arms and both are load-bearing:
+  //
+  //   reorderable            — the strip is standing chrome on every tab with
+  //                            two or more visible panels, so the operator has
+  //                            met it before they need it.
+  //   hiddenTiles.length > 0 — and it does NOT disappear when hiding drops a
+  //                            tab to one visible panel. #assets and #changes
+  //                            render two panels; gating on `reorderable`
+  //                            alone would take the only way back off screen at
+  //                            the exact moment it is the only thing that
+  //                            matters.
   assert.match(
     src,
-    /\{layoutKey && hiddenTiles\.length > 0 && \(/,
-    'the hidden-tiles strip is no longer gated on hiddenTiles.length',
+    /\{layoutKey && \(reorderable \|\| hiddenTiles\.length > 0\) && \(/,
+    'the Arrange panels strip is no longer gated on `reorderable || hiddenTiles.length` — either it is ' +
+      'back to appearing only after something has been hidden, or hiding the second-to-last panel now ' +
+      'takes the way back off screen',
+  )
+})
+
+test('the popup edits the ONE layout state, through the ONE commit path', () => {
+  // THE REGRESSION THIS EXISTS FOR: a popup that holds its own draft order and
+  // writes it on close. That shape gives the tab two writers, and the loser is
+  // whichever gesture the operator used first — drag a card, open the popup,
+  // press anything, and the drag is silently undone.
+  //
+  // So: every action in the popup is one of the three helpers below, each of
+  // which snapshots, calls ctx.apply(next, true), and announces. Read as source
+  // because `npm test` cannot mount JSX (see this file's header).
+  const dialog = /^function ArrangeDialog\(/m.exec(src)
+  assert.ok(dialog, 'ArrangeDialog has been renamed or removed from components/ui.jsx')
+  // Just this component, not the rest of the file: its closing brace is the
+  // first `}` back at column 0, because everything inside it is indented.
+  const after = src.slice(dialog.index)
+  const close = after.indexOf('\n}\n')
+  assert.ok(close > 0, 'ArrangeDialog has no closing brace at column 0 — this reader cannot bound it')
+  const body = after.slice(0, close)
+
+  assert.doesNotMatch(
+    body,
+    /useState/,
+    'ArrangeDialog now holds state — the popup must be a VIEW of the grid layout, never a draft copy of it',
+  )
+  assert.doesNotMatch(
+    body,
+    /saveLayout|fetch\(/,
+    'ArrangeDialog now writes to the server directly — every change must go through CardGrid\'s ctx.apply',
+  )
+  assert.doesNotMatch(body, /\bSave\b(?!\s*button)/, 'ArrangeDialog grew a Save step; changes save on their own')
+
+  // Reorder reuses lib/layout.js's shiftItem rather than re-deriving the
+  // arithmetic. moveItem's own comment is about how easy that sum is to get
+  // wrong by one, and a second copy of it is a second chance to.
+  assert.match(
+    src,
+    /const movePanel = \(id, delta\) => \{\n\s*const snap = ctx\.snapshot\(\)\n\s*const next = shiftItem\(snap\.order, id, delta\)/,
+    'the popup no longer reorders with shiftItem off a fresh snapshot — it is re-deriving the move arithmetic',
+  )
+  // A hidden tile is never given a rank. `order` and `hidden` are separate
+  // fields in the saved blob, and interleaving them would let the popup write a
+  // state dragging can never produce.
+  assert.match(
+    src,
+    /const arrangeItems = useMemo\(\(\) => \{[\s\S]*?const hidden = new Set\(layout\?\.hidden \?\? \[\]\)[\s\S]*?if \(id && !hidden\.has\(id\)\) out\.push\(id\)/,
+    '"On this page" no longer excludes the hidden tiles, so the popup could rank a panel that is off the page',
   )
 })

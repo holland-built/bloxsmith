@@ -3,7 +3,6 @@ import { FeedUnavailable } from './ui.jsx'
 import ThemeSwitch from './ThemeSwitch.jsx'
 import DensitySwitch from './DensitySwitch.jsx'
 import { UpdateCheck } from './UpdateButton.jsx'
-import { CONTROL_HELP } from '../lib/controlHelp.js'
 
 const vpost = (url, body) =>
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -22,7 +21,7 @@ const miniBtn = 'px-2 py-1 rounded-lg border border-border text-[11px] text-mute
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-export default function TenantManager({ onClose }) {
+export default function TenantManager({ onClose, onOpenHelp }) {
   const [status, setStatus] = useState(null)
   const [statusError, setStatusError] = useState(false)
   const [accounts, setAccounts] = useState([])
@@ -468,33 +467,40 @@ export default function TenantManager({ onClose }) {
                 screen. Same component, so the two cannot drift; shown at every
                 width because a settings sheet is where a reader looks for it
                 anyway. */}
-            {/* The caption under each switch is the SAME sentence the header's
-                control-help dialog shows, read from the same dictionary, so the
-                two can no more drift than the switches themselves can.
-                It is written out rather than hidden behind a second ⓘ because
-                this sheet is the only place a phone can read it at all — the
-                header folds both switches, and the dialog with them.
-                And it is what the row beside it never said: "Comfortable ·
-                Compact" names the two settings, which is exactly what the
-                pressed icon already showed. What it does was the missing part. */}
+            {/* ONE link, where three explanation paragraphs used to be. Each
+                switch here carried the same sentence the header's control-help
+                dialog shows, and Updates carried a third — reported as "in a
+                setting kabob why have feature description". A settings panel
+                holds controls; the manual is a click away, not printed under
+                every row. The sentences now exist in exactly one place
+                (lib/controlHelp.js) rendered by exactly one component
+                (HeaderHelp.jsx), so there is nothing left to drift.
+                The link is not a convenience — it is the phone's only route.
+                The header's ⓘ is `hidden lg:flex` (App.jsx's A3 fold), so below
+                `lg` this row is the only way that dialog can be opened at all.
+                It closes this sheet and opens the dialog rather than stacking
+                two modals; App.jsx owns the other half and sends focus back to
+                the "…" when the dialog closes, because that is the button the
+                reader actually pressed. */}
             <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Appearance</div>
-            <div className="mb-3">
-              <div className="flex items-center gap-2">
-                <ThemeSwitch />
-                <span className="text-[11px] text-dim">Light · System · Dark</span>
-              </div>
-              <p className="m-0 mt-1 text-[11px] leading-relaxed text-dim">{CONTROL_HELP.theme.what}</p>
+            <button
+              type="button"
+              onClick={onOpenHelp}
+              aria-haspopup="dialog"
+              className="block mb-3 text-left text-[11px] font-medium text-accent hover:underline underline-offset-2"
+            >
+              What these controls do →
+            </button>
+            <div className="mb-3 flex items-center gap-2">
+              <ThemeSwitch />
+              <span className="text-[11px] text-dim">Light · System · Dark</span>
             </div>
-            <div className="mb-4">
-              <div className="flex items-center gap-2">
-                <DensitySwitch />
-                <span className="text-[11px] text-dim">Comfortable · Compact</span>
-              </div>
-              <p className="m-0 mt-1 text-[11px] leading-relaxed text-dim">{CONTROL_HELP.density.what}</p>
+            <div className="mb-4 flex items-center gap-2">
+              <DensitySwitch />
+              <span className="text-[11px] text-dim">Comfortable · Compact</span>
             </div>
 
-            {/* Same shape as Appearance above — section label, control, caption
-                from the same dictionary the header dialog reads.
+            {/* Same shape as Appearance above — section label, then controls.
                 The running version lives HERE and nowhere else in this sheet:
                 it used to sit alone in the footer, and printing it twice inside
                 one 420px panel would invite the reader to check whether the two

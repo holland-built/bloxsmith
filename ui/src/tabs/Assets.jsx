@@ -428,6 +428,11 @@ function AssetDetail({ cqid, row, onClose, panelId }) {
     <Card
       span={6}
       panelId={panelId}
+      // The heading is whichever device is open, so it is a fine heading and a
+      // useless NAME: the popup's row would change every time a different row
+      // was clicked, and would fall back to the raw "assets-detail" for a
+      // device carrying neither a name nor a cqid.
+      panelName="Asset Detail"
       title={row.name || row.cqid}
       note="asset detail"
       right={

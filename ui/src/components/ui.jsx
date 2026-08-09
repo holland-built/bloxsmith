@@ -300,6 +300,25 @@ export function CardGrid({ className = '', layoutKey, children }) {
   const [moveId, setMoveId] = useState(null)
   const preMoveRef = useRef(null)
 
+  // ---- "Arrange panels": open/closed, and where focus goes when it closes ----
+  //
+  // The trigger button survives the popup (the strip keeps rendering behind
+  // it), so focus return is a plain re-focus once the dialog has unmounted —
+  // hence an effect rather than a call inside the close handler, which would
+  // aim at a button while the dialog still held focus.
+  const [arrangeOpen, setArrangeOpen] = useState(false)
+  const arrangeBtnRef = useRef(null)
+  const arrangeWasOpen = useRef(false)
+  useEffect(() => {
+    if (arrangeOpen) {
+      arrangeWasOpen.current = true
+      return
+    }
+    if (!arrangeWasOpen.current) return
+    arrangeWasOpen.current = false
+    arrangeBtnRef.current?.focus()
+  }, [arrangeOpen])
+
   // ---- the names of the tiles, so the "bring it back" strip has words ----
   //
   // A hidden Card renders null, so its title JSX never runs and nothing in the
@@ -397,6 +416,12 @@ export function CardGrid({ className = '', layoutKey, children }) {
       // string is kept: a title can be a React node (Overview's DNS hero
       // passes a clickable <span>), and there is no honest way to print one as
       // a line of text — the panel id is a worse name but a true one.
+      //
+      // Card resolves `panelName ?? title` before it calls this, so a panel
+      // that draws no heading (or draws a React node instead of one) can still
+      // hand up words. The panelId fallback below stays as the LAST resort, so
+      // a panel can never drop out of the popup entirely — it is just no longer
+      // the first thing a titleless panel gets. See Card's `panelName` prop.
       registerTitle(id, title) {
         // Nothing to name on an unmanaged grid: there is no strip, nothing can
         // be hidden, and a tab that has not been wired must not pick up a
@@ -630,8 +655,36 @@ export function CardGrid({ className = '', layoutKey, children }) {
   // Whatever is hidden, named, with a button each. The panel id is the fallback
   // name, and it is a poor one on purpose: it is at least true, where guessing
   // a title from an id would not be.
-  const hiddenTiles = (layout?.hidden ?? []).map((id) => ({ id, name: titlesRef.current.get(id) || id }))
+  const nameOf = (id) => titlesRef.current.get(id) || id
+  const hiddenTiles = (layout?.hidden ?? []).map((id) => ({ id, name: nameOf(id) }))
 
+  // What "On this page" lists, in the order the page is actually in.
+  //
+  // Read off `ordered` — the very array the grid renders — rather than off
+  // `layout.order`, because the saved order can name panels this tab no longer
+  // has and can omit panels added since the save. sortByOrder has already
+  // resolved both, so this list and the DOM cannot disagree.
+  //
+  // A tile the operator has taken off the page is filtered out and given NO
+  // rank here. `order` and `hidden` are separate fields in the saved blob, so
+  // interleaving a hidden tile into this list would let the popup write a saved
+  // state that dragging can never produce.
+  const arrangeItems = useMemo(() => {
+    if (!layoutKey) return []
+    const hidden = new Set(layout?.hidden ?? [])
+    const out = []
+    for (const child of Children.toArray(ordered)) {
+      const id = child?.props?.panelId
+      if (id && !hidden.has(id)) out.push(id)
+    }
+    return out
+  }, [ordered, layout, layoutKey])
+
+  // Every button in the popup lands in one of the three helpers below, and all
+  // three end at ctx.apply(next, true) — the identical path the drag, the
+  // resize and keyboard move mode already use. There is no draft copy of the
+  // order held anywhere in the popup, which is what makes "the popup and the
+  // grid can never disagree" a property of the wiring rather than a promise.
   const showTile = (ids) => {
     const snap = ctx.snapshot()
     const gone = new Set(ids)
@@ -641,61 +694,103 @@ export function CardGrid({ className = '', layoutKey, children }) {
     // was, so a screen-reader user needs to be told what to look for.
     ctx.announce(
       ids.length === 1
-        ? `${hiddenTiles.find((t) => t.id === ids[0])?.name ?? ids[0]} is back on the page.`
+        ? `${nameOf(ids[0])} is back on the page.`
         : `${ids.length} tiles are back on the page.`,
+    )
+  }
+
+  const takeOffPage = (id) => {
+    const snap = ctx.snapshot()
+    if (snap.hidden.includes(id)) return
+    ctx.apply({ order: snap.order, spans: snap.spans, hidden: [...snap.hidden, id] }, true)
+    ctx.announce(`${nameOf(id)} is off the page. The Arrange panels button puts it back.`)
+  }
+
+  // shiftItem, not arithmetic written a second time. "One position up" in a
+  // list the drag also edits is exactly the sum lib/layout.js already owns, and
+  // a second copy of it here is a second chance to get the off-by-one wrong.
+  const movePanel = (id, delta) => {
+    const snap = ctx.snapshot()
+    const next = shiftItem(snap.order, id, delta)
+    // shiftItem hands back the SAME array when nothing moved, so a disabled
+    // button that somehow fired announces nothing and saves nothing.
+    if (next === snap.order) return
+    ctx.apply({ order: next, spans: snap.spans, hidden: snap.hidden }, true)
+    ctx.announce(
+      `Moved ${nameOf(id)} ${delta < 0 ? 'up' : 'down'} to position ${next.indexOf(id) + 1} of ${next.length}.`,
     )
   }
 
   return (
     <GridFitContext.Provider value={ctx}>
+      {/* ---- the way in, ABOVE the grid ----
+
+          WHERE IT SITS IS THE WHOLE FIX. This strip used to render after the
+          grid and only when something was hidden, so an operator who pressed ✕
+          on a long tab was told the way back existed somewhere below seven
+          panels they could not see, and on a tidy tab there was nothing to find
+          at all. It now renders first, directly under the tab's heading, and it
+          is there BEFORE anything is hidden — you cannot look for a control you
+          have never seen.
+
+          OUTSIDE the grid element, exactly like the live region below: a strip
+          inside the grid would be a grid item, would take a track, and would be
+          reordered by the very saved order it exists to edit.
+
+          THE TESTID DID NOT CHANGE, and that is deliberate: it names the
+          feature ("the operator's hidden tiles"), not the position, and the
+          specs that already find the way back by this name should keep
+          working across the move. It is still NOT "hidden-panels" — that name
+          belongs to the service-ownership row further down this file, and
+          tests/hidden-panels.spec.ts asserts an exact count of it.
+
+          Rendered whenever this grid can be rearranged, and ALSO whenever
+          something is off the page even if it cannot: hiding one of a two-panel
+          tab's panels drops `reorderable` to false, and gating on that alone
+          would take the only way back off screen at the moment it is needed. */}
+      {layoutKey && (reorderable || hiddenTiles.length > 0) && (
+        <div data-testid="hidden-tiles" className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+          {/* One plain, worded button. Not an icon: the control that undoes
+              "I pressed a ✕ and my panel vanished" cannot itself be a glyph
+              the same operator has to decode. */}
+          <button
+            type="button"
+            ref={arrangeBtnRef}
+            data-layout-arrange=""
+            aria-haspopup="dialog"
+            aria-expanded={arrangeOpen}
+            onClick={() => setArrangeOpen(true)}
+            className="cursor-pointer rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:text-field-txt hover:border-border-hover"
+          >
+            Arrange panels
+          </button>
+          {/* Only when there is something to say. A permanent "0 tiles are off
+              the page." is a line of chrome that never changes and so is never
+              read. */}
+          {hiddenTiles.length > 0 && (
+            <span>
+              {hiddenTiles.length === 1
+                ? '1 tile is off the page.'
+                : `${hiddenTiles.length} tiles are off the page.`}
+            </span>
+          )}
+        </div>
+      )}
       <div ref={ref} data-card-grid="" className={`grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-[var(--sp-grid-gap)] ${className}`}>
         {ordered}
       </div>
-      {/* Below the grid and OUTSIDE it, exactly like the live region: a strip
-          inside the grid would be a grid item, take a track, and be reordered
-          by the very saved order it exists to undo. data-testid is
-          "hidden-tiles", NOT "hidden-panels" — that name belongs to the
-          service-ownership row further down this file, and
-          tests/hidden-panels.spec.ts asserts an exact count of it. */}
-      {layoutKey && hiddenTiles.length > 0 && (
-        <div
-          data-testid="hidden-tiles"
-          className="mt-3 flex flex-wrap items-center gap-2 rounded-card border border-dashed border-card-border px-3 py-2 text-[11px] text-muted"
-        >
-          <span>
-            {hiddenTiles.length} {hiddenTiles.length === 1 ? 'tile is' : 'tiles are'} hidden. Press Show to put one back
-            on the page.
-          </span>
-          {hiddenTiles.map((tile) => (
-            <span key={tile.id} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5">
-              <span className="text-field-txt">{tile.name}</span>
-              <button
-                type="button"
-                data-layout-show=""
-                // Every row's button says the same visible word, so the name a
-                // screen reader or a voice-control user gets has to carry the
-                // tile. It STARTS with the visible word, which is what keeps
-                // WCAG 2.5.3 Label in Name true and "click Show" working.
-                aria-label={`Show ${tile.name}`}
-                onClick={() => showTile([tile.id])}
-                className="cursor-pointer rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted hover:text-field-txt hover:border-border-hover"
-              >
-                Show
-              </button>
-            </span>
-          ))}
-          {hiddenTiles.length > 1 && (
-            <button
-              type="button"
-              data-layout-show-all=""
-              aria-label={`Show tiles: put all ${hiddenTiles.length} back on the page`}
-              onClick={() => showTile(hiddenTiles.map((tile) => tile.id))}
-              className="cursor-pointer rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:text-field-txt hover:border-border-hover"
-            >
-              Show tiles
-            </button>
-          )}
-        </div>
+      {/* The popup, also outside the grid element and for the same reason. It
+          is position:fixed, so where it sits in this tree costs no layout. */}
+      {arrangeOpen && (
+        <ArrangeDialog
+          items={arrangeItems}
+          hiddenTiles={hiddenTiles}
+          nameOf={nameOf}
+          onMove={movePanel}
+          onTakeOff={takeOffPage}
+          onPutBack={(id) => showTile([id])}
+          onClose={() => setArrangeOpen(false)}
+        />
       )}
       {/* One live region per managed grid, OUTSIDE the grid element so it is
           never a grid item and can never take a track. Rendered only when
@@ -703,6 +798,207 @@ export function CardGrid({ className = '', layoutKey, children }) {
           element count. */}
       {layoutKey && <div ref={liveRef} data-layout-live="" aria-live="polite" aria-atomic="true" className="sr-only" />}
     </GridFitContext.Provider>
+  )
+}
+
+// Everything that can hold focus inside the popup, in document order. Read
+// fresh on every Tab, exactly as HeaderHelp and TenantManager do: this list
+// changes with every button press here — taking a tile off the page moves a row
+// from one section to the other — so a list captured on open would describe a
+// dialog that is no longer on screen.
+const ARRANGE_FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+// ---------- "Arrange this page" ----------
+//
+// A VIEW OF THE GRID'S STATE, NEVER A COPY OF IT. Every button here calls
+// straight back into CardGrid's helpers, which call ctx.apply(next, true) —
+// the one commit path. There is no draft order in this component, no Save
+// button and no second place that writes, so the popup cannot drift from the
+// page behind it and there is nothing to reconcile when it closes.
+//
+// THE MODAL MACHINERY IS COPIED FROM HeaderHelp.jsx, NOT INVENTED. Dialog role,
+// focus onto the panel rather than onto its first button, a Tab trap re-read on
+// every press, Escape stopped so it cannot also reach App.jsx's document-level
+// Escape (which belongs to the nav menus). That file's own comment says a
+// second, subtly different dialog is the version that rots, so this one follows
+// it line for line.
+//
+// ONE DELIBERATE DIFFERENCE: HeaderHelp's background is made `inert` by
+// App.jsx, which owns the flag. This dialog is opened from inside the tab
+// content that App.jsx's inert wrapper contains, so it cannot set that flag on
+// its own ancestor without editing App.jsx. The Tab trap below is what holds
+// focus instead — stated rather than left as a silent gap.
+//
+// FOCUS RETURN is owned here rather than by the caller, because unlike
+// HeaderHelp this component's trigger button stays mounted the whole time: the
+// strip keeps rendering behind the popup, so the button is still there to
+// receive focus when the popup goes.
+function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onTakeOff, onPutBack, onClose }) {
+  const panelRef = useRef(null)
+
+  // Focus goes to the panel, not to its ✕: what a screen reader then reads is
+  // the dialog and its name, rather than "Close button" with no idea what would
+  // be closed. Same choice, same reason, as the settings sheet.
+  useEffect(() => { panelRef.current?.focus() }, [])
+
+  // WHERE FOCUS GOES AFTER A BUTTON DOES ITS JOB. Every action here re-orders
+  // or re-sections the rows, and React moving a focused node between parents
+  // drops focus to <body> — which would dump a keyboard user out of the popup
+  // mid-task, once per press. So each handler names the control it wants focus
+  // on afterwards, and this effect puts it there once the new rows exist.
+  // The fallback matters: Move up on the row that just reached the top leaves
+  // its own button disabled, so focus lands on that row's Move down instead.
+  const refocusRef = useRef(null)
+  useEffect(() => {
+    const wanted = refocusRef.current
+    if (!wanted) return
+    refocusRef.current = null
+    const panel = panelRef.current
+    if (!panel) return
+    for (const sel of wanted) {
+      if (!sel) continue
+      const el = panel.querySelector(sel)
+      if (el && !el.disabled) {
+        el.focus()
+        return
+      }
+    }
+    panel.focus()
+  })
+
+  const act = (run, ...refocus) => {
+    refocusRef.current = refocus
+    run()
+  }
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      onClose()
+      return
+    }
+    if (e.key !== 'Tab') return
+    const focusable = [...panelRef.current.querySelectorAll(ARRANGE_FOCUSABLE)].filter((el) => el.offsetParent !== null)
+    if (!focusable.length) {
+      e.preventDefault()
+      panelRef.current.focus()
+      return
+    }
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const cur = document.activeElement
+    if (e.shiftKey && (cur === first || cur === panelRef.current)) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && cur === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
+
+  const rowBtn =
+    'cursor-pointer rounded-md border border-border px-1.5 py-0.5 text-[11px] leading-none text-muted hover:text-field-txt hover:border-border-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted disabled:hover:border-border'
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4"
+      onClick={onClose}
+      onKeyDown={onKeyDown}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="arrange-title"
+        data-arrange-dialog=""
+        tabIndex={-1}
+        className="w-[460px] max-w-full max-h-[80vh] overflow-y-auto bg-card border border-card-border rounded-card p-5 outline-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center mb-4">
+          <h2 id="arrange-title" className="text-sm font-semibold">Arrange this page</h2>
+          <span className="flex-1" />
+          <button type="button" className="text-muted text-sm cursor-pointer" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+
+        <h3 className="text-[11px] font-semibold text-field-txt mb-1.5">On this page</h3>
+        {items.length === 0 ? (
+          <p className="m-0 mb-4 text-[11px] text-muted">Every panel is off the page right now.</p>
+        ) : (
+          <ul className="m-0 mb-4 list-none p-0">
+            {items.map((id, i) => (
+              <li key={id} className="flex items-center gap-1.5 py-1 border-b border-line-2 last:border-b-0">
+                <span className="flex-1 min-w-0 truncate text-[11px] text-field-txt">{nameOf(id)}</span>
+                {/* DISABLED, never missing. A button that vanishes at the top
+                    of the list moves every other button under the pointer and
+                    out from under the keyboard, and gives no answer to "why
+                    can't I move this one up". */}
+                <button
+                  type="button"
+                  data-arrange={`up:${id}`}
+                  disabled={i === 0}
+                  // Every row's button says the same two words, so the name a
+                  // screen reader or a voice-control user gets has to carry the
+                  // panel. It STARTS with the visible words, which is what keeps
+                  // WCAG 2.5.3 Label in Name true and "click Move up" working.
+                  aria-label={`Move up: ${nameOf(id)}`}
+                  onClick={() => act(() => onMove(id, -1), `[data-arrange="up:${id}"]`, `[data-arrange="down:${id}"]`)}
+                  className={rowBtn}
+                >
+                  Move up
+                </button>
+                <button
+                  type="button"
+                  data-arrange={`down:${id}`}
+                  disabled={i === items.length - 1}
+                  aria-label={`Move down: ${nameOf(id)}`}
+                  onClick={() => act(() => onMove(id, 1), `[data-arrange="down:${id}"]`, `[data-arrange="up:${id}"]`)}
+                  className={rowBtn}
+                >
+                  Move down
+                </button>
+                <button
+                  type="button"
+                  data-arrange={`off:${id}`}
+                  aria-label={`Take off the page: ${nameOf(id)}`}
+                  onClick={() => act(() => onTakeOff(id), `[data-arrange="back:${id}"]`)}
+                  className={rowBtn}
+                >
+                  Take off the page
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Only when there is something off the page. An empty "Off this page"
+            heading on every tidy tab is a section that says nothing. */}
+        {hiddenTiles.length > 0 && (
+          <>
+            <h3 className="text-[11px] font-semibold text-field-txt mb-1.5">Off this page</h3>
+            <ul className="m-0 mb-4 list-none p-0">
+              {hiddenTiles.map((tile) => (
+                <li key={tile.id} className="flex items-center gap-1.5 py-1 border-b border-line-2 last:border-b-0">
+                  <span className="flex-1 min-w-0 truncate text-[11px] text-field-txt">{tile.name}</span>
+                  <button
+                    type="button"
+                    data-arrange={`back:${tile.id}`}
+                    aria-label={`Put back on the page: ${tile.name}`}
+                    onClick={() => act(() => onPutBack(tile.id), `[data-arrange="off:${tile.id}"]`)}
+                    className={rowBtn}
+                  >
+                    Put back on the page
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        <p className="m-0 text-[11px] text-muted">Changes here save right away — there’s no separate Save button.</p>
+      </div>
+    </div>
   )
 }
 
@@ -773,8 +1069,8 @@ const LAYOUT_HELP_MOVE =
 const LAYOUT_HELP_REST =
   'Drag the panel’s right edge to make it wider ' +
   'or narrower. Your arrangement saves on its own. The ✕ button takes this panel off ' +
-  'the page; everything you have taken off is listed just below the panels, each with ' +
-  'a Show button that puts it back at the end.'
+  'the page; the “Arrange panels” button above the panels opens a window listing ' +
+  'everything you have taken off, with a button that puts it back at the end.'
 
 // ---- the runtime half of the help guarantee ----
 //
@@ -816,7 +1112,18 @@ function reportMissingHelp(panelId, title) {
 // derived from the title: a title is copy, it gets reworded, and a layout
 // keyed on it would silently detach from its panel the first time someone
 // edited a heading. A Card without one is invisible to the layout system.
-export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = true, className = '', innerRef, children }) {
+//
+// `panelName` is WHAT THIS PANEL IS CALLED IN WORDS, and it renders nothing.
+// The "Arrange this page" popup, the announcements, and the move/hide buttons'
+// accessible names all have to name a panel in a sentence, and until this prop
+// existed the only source was `title` — so the two Overview panels that draw no
+// plain-string heading (the DNS hero, whose title is a clickable <span>, and the
+// KPI stack, which has no title at all) were listed to a non-engineer as
+// "dns-hero" and "kpi-stack". It is deliberately NOT the title: a panel can
+// carry a heading that is a node, a heading that changes with a filter, or no
+// heading at all, and all three still need one stable line of text. Setting it
+// changes no element, no layout and no pixel on the card itself.
+export function Card({ title, panelName, note, right, span = 2, panelId, fit: fitEnabled = true, className = '', innerRef, children }) {
   const spanClass = SPAN_CLASS[span] || SPAN_CLASS[6]
   const ref = useRef(null)
   const headRef = useRef(null)
@@ -978,9 +1285,13 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
   // anything. It has to happen in an effect that runs whether or not the
   // component returned null, which is why every hook in this file sits above
   // that early return.
+  //
+  // `panelName` first, then the title, then nothing — and registerTitle keeps
+  // only a plain string, so a React-node title still falls through to the
+  // panelId exactly as it did before this prop existed.
   useEffect(() => {
-    grid?.registerTitle?.(panelId, title)
-  }, [grid, panelId, title])
+    grid?.registerTitle?.(panelId, panelName ?? title)
+  }, [grid, panelId, panelName, title])
 
   // The saved span, registered against the real grid item (which is this Card
   // unless a caller wrapped it). Registered rather than written: applyLayout
@@ -1079,9 +1390,14 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
   // heading's RENDERED text instead, which works for both shapes.
   const titleId = panelId ? `panel-title-${panelId}` : undefined
   const moveWordId = panelId ? `panel-move-${panelId}` : undefined
+  //
+  // `panelName` wins here for the same reason it wins in registerTitle: it is
+  // the one line of words the panel is guaranteed to have. Without it a
+  // titleless panel announced "Moving kpi-stack" — the identical raw-id leak
+  // the popup had, one layer down.
   const labelText = useCallback(
-    () => (typeof title === 'string' ? title : titleRef.current?.textContent || panelId),
-    [panelId, title],
+    () => panelName || (typeof title === 'string' ? title : titleRef.current?.textContent || panelId),
+    [panelId, panelName, title],
   )
 
   // ---- drag: a header handle, a ghost, and an insertion line ----
@@ -1295,7 +1611,7 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
       data-layout-handle=""
       // The panel's own words, so a screen reader announces which panel this
       // moves — never a bare "drag handle" repeated seven times down a tab.
-      {...(title ? { 'aria-labelledby': `${moveWordId} ${titleId}` } : { 'aria-label': `Move ${panelId}` })}
+      {...(title ? { 'aria-labelledby': `${moveWordId} ${titleId}` } : { 'aria-label': `Move ${panelName || panelId}` })}
       aria-pressed={moveActive}
       title="Drag to move, or press Enter to move with the arrow keys"
       onPointerDown={onHandleDown}
@@ -1326,7 +1642,7 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
     const snap = grid.snapshot()
     if (snap.hidden.includes(panelId)) return
     grid.apply({ order: snap.order, spans: snap.spans, hidden: [...snap.hidden, panelId] }, true)
-    grid.announce(`${labelText()} hidden. It is listed below the panels, with a Show button to bring it back.`)
+    grid.announce(`${labelText()} is off the page. The Arrange panels button at the top of the page puts it back.`)
   }, [grid, labelText, panelId])
 
   const hideBtn = managed ? (
@@ -1336,7 +1652,7 @@ export function Card({ title, note, right, span = 2, panelId, fit: fitEnabled = 
       // By reference when there is a title, by id when there is not — the same
       // shape as the handle above, and for the same reason: a title can be a
       // React node, and interpolating one gives "Hide [object Object]".
-      {...(title ? { 'aria-labelledby': `${hideWordId} ${titleId}` } : { 'aria-label': `Hide ${panelId}` })}
+      {...(title ? { 'aria-labelledby': `${hideWordId} ${titleId}` } : { 'aria-label': `Hide ${panelName || panelId}` })}
       title="Hide this panel"
       onClick={onHide}
       className="shrink-0 cursor-pointer rounded-md border border-border px-1.5 py-0.5 text-[11px] leading-none text-dim hover:text-field-txt hover:border-border-hover"

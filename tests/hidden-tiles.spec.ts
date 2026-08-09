@@ -4,14 +4,25 @@ import {
   savedBlob as savedBlobFor, tabToHandle,
 } from './layout-helpers';
 
-// Per-panel hide and show — the operator takes a tile off the page, and it
-// stays off until they put it back.
+// "Arrange panels" — the one window that says what is on this page, what is off
+// it, and lets you change either.
+//
+// WHAT THIS FILE USED TO COVER, AND WHY IT CHANGED. It used to describe a strip
+// that rendered BELOW every panel and only once something had been hidden. The
+// reported complaint was exactly that shape: an operator pressed a panel's ✕,
+// the panel vanished, and the way back was a band of chrome under seven panels
+// they could not see without scrolling — and on a tab where nothing had ever
+// been hidden, it did not exist at all, so there was nothing to learn from
+// before you needed it. The strip is now above the grid, present on every tab
+// that has two or more panels, and it is a trigger rather than the feature: one
+// plainly worded button that opens a window listing both halves.
 //
 // NOT THE SAME FEATURE AS tests/hidden-panels.spec.ts, despite the names. That
 // file covers service-ownership hiding: the APP decides, because the tenant
 // owns no DHCP service, and the row it renders is `data-testid="hidden-panels"`.
-// This file covers the operator deciding, and its strip is
-// `data-testid="hidden-tiles"`. Nothing below touches the other testid.
+// This file covers the operator deciding. Its strip keeps the testid
+// `hidden-tiles` across the move, because that name says which feature it is
+// and not where it sits. Nothing below touches the other testid.
 //
 // ---------------------------------------------------------------------------
 // VIEW OWNERSHIP — read tests/layout-persist.spec.ts's header and
@@ -43,24 +54,68 @@ const DECLARED_ORDER = [
   'daily-dns-zone-issues',
 ];
 
-// The two tiles this file hides, and the words the strip has to use for them.
-// The name comes from the Card's own title via registerTitle — a hidden Card
-// renders null, so if that hand-up ever breaks the strip falls back to the raw
-// panel id and these assertions fail, which is the point of asserting the
-// words rather than a count.
+// The tiles this file names, and the words the window has to use for them. The
+// name comes from the Card's own title via registerTitle — a hidden Card
+// renders null, so if that hand-up ever breaks the window falls back to the raw
+// panel id and these assertions fail, which is the point of asserting the words
+// rather than a count.
+const OPEN_ISSUES = { id: 'daily-open-issues', name: 'Open Issues' };
 const SECURITY_TODAY = { id: 'daily-security-today', name: 'Security Today' };
 const HOSTS_ATTENTION = { id: 'daily-hosts-attention', name: 'Hosts Needing Attention' };
 
 type Page = import('@playwright/test').Page;
 
 const goto = (page: Page) => gotoTab(page, TAB, DECLARED_ORDER.length);
-// After a tile is hidden the grid holds one panel fewer, so the mount wait has
-// to expect the smaller number or it times out on a page that is already right.
-const gotoWith = (page: Page, panels: number) => gotoTab(page, TAB, panels);
+
+// A REAL reload, and this file needs one where it used to call gotoTab again.
+//
+// MEASURED, NOT ASSUMED: `page.goto('/#daily')` on a page already at `/#daily`
+// is a same-DOCUMENT navigation — the fragment does not change, so Chromium
+// never tears the React tree down. Observed on 2026-08-09 while writing the
+// test below: the saved view was DELETED over the API and the tab re-`goto`d,
+// and the grid still showed the order that had just been dragged, because
+// nothing had remounted and no layout GET was ever re-issued. Every "and it
+// came back from the server" claim in this file rests on the tree actually
+// being destroyed, so it has to be page.reload().
+//
+// After a tile is taken off the page the grid holds one panel fewer, so the
+// mount wait has to be told the smaller number or it times out on a page that
+// is already right.
+async function reloadTab(page: Page, panels: number) {
+  await page.reload();
+  await page.waitForFunction(
+    (n) => document.querySelectorAll('[data-panel-id]').length === n,
+    panels,
+    { timeout: 20_000 },
+  );
+  // The layout GET resolves on mount and applyLayout re-runs on a rAF; the
+  // DataTables measure themselves on top of that. Same wait gotoTab uses.
+  await page.waitForTimeout(1200);
+}
 
 const strip = (page: Page) => page.getByTestId('hidden-tiles');
+const arrangeBtn = (page: Page) => page.getByRole('button', { name: 'Arrange panels', exact: true });
+const dialog = (page: Page) => page.locator('[data-arrange-dialog]');
 const hideButton = (page: Page, id: string) => page.locator(`[data-panel-id="${id}"] [data-layout-hide]`);
-const showButton = (page: Page, name: string) => page.getByRole('button', { name: `Show ${name}`, exact: true });
+
+const moveUp = (page: Page, name: string) => page.getByRole('button', { name: `Move up: ${name}`, exact: true });
+const moveDown = (page: Page, name: string) => page.getByRole('button', { name: `Move down: ${name}`, exact: true });
+const takeOff = (page: Page, name: string) =>
+  page.getByRole('button', { name: `Take off the page: ${name}`, exact: true });
+const putBack = (page: Page, name: string) =>
+  page.getByRole('button', { name: `Put back on the page: ${name}`, exact: true });
+
+// The order the WINDOW believes the page is in, read off its own rows. Compared
+// against domOrder() to prove the two cannot drift: the window is a view of the
+// grid's state, not a copy of it, so a difference here is the popup having
+// grown a draft order of its own.
+const popupOrder = (page: Page) =>
+  page.$$eval('[data-arrange^="up:"]', (els) => els.map((e) => e.getAttribute('data-arrange')!.slice(3)));
+
+async function openArrange(page: Page) {
+  await arrangeBtn(page).click();
+  await expect(dialog(page)).toBeVisible();
+}
 
 const savedBlob = (request: import('@playwright/test').APIRequestContext) => savedBlobFor(request, VIEW);
 
@@ -74,16 +129,48 @@ test.afterEach(async ({ request }) => {
 });
 
 // ---------------------------------------------------------------------------
-// 1 — the tile goes away, and something on screen says where it went.
+// 1 — the way in is there BEFORE anything goes wrong, and it is above the fold.
+//
+// This is the complaint, turned into an assertion. Nothing is hidden, the tab
+// has never been touched, and the control still has to be on screen without
+// scrolling — because the moment it is needed is the moment after a panel has
+// already disappeared, which is the worst possible moment to go looking.
 // ---------------------------------------------------------------------------
 
-test('hiding a tile takes it off the grid and names it in the strip below', async ({ page, request }) => {
+test('the Arrange panels button is on screen before anything is hidden, above every panel', async ({ page }) => {
+  test.setTimeout(120_000);
+  // A REAL laptop viewport, not the tall 2400px one the drag helpers use: the
+  // whole point is that this is visible without scrolling on the screen an
+  // operator actually has.
+  await gotoTab(page, TAB, DECLARED_ORDER.length, 1920, 1080);
+
+  await expect(strip(page)).toBeVisible();
+  await expect(arrangeBtn(page)).toBeVisible();
+  // Nothing is off the page, so the strip says nothing about it. A permanent
+  // "0 tiles are off the page." is a line that never changes and so never gets
+  // read.
+  await expect(strip(page)).not.toContainText('off the page');
+
+  // Above the first panel, and inside the first screenful.
+  // boundingBox() reports x/y/width/height, not a DOMRect — `.top` here would
+  // be undefined, and `expect(undefined).toBeLessThan(...)` fails with a
+  // matcher error rather than a useful one.
+  const stripBox = (await strip(page).boundingBox())!;
+  const firstPanel = (await page.locator('[data-panel-id]').first().boundingBox())!;
+  expect(stripBox, 'the strip has no layout box').not.toBeNull();
+  expect(stripBox.y, 'the strip is not above the panels').toBeLessThan(firstPanel.y);
+  expect(stripBox.y + stripBox.height, 'the strip is below the fold on a 1080px screen').toBeLessThan(1080);
+  expect(await page.evaluate(() => window.scrollY), 'the page was scrolled to see it').toBe(0);
+});
+
+// ---------------------------------------------------------------------------
+// 2 — the tile goes away, the strip says so in words, and the window lists it.
+// ---------------------------------------------------------------------------
+
+test('hiding a tile takes it off the grid, and the window lists it under "Off this page"', async ({ page, request }) => {
   test.setTimeout(120_000);
   await goto(page);
   expect(await domOrder(page)).toEqual(DECLARED_ORDER);
-  // Nothing is hidden, so the strip is ABSENT — not present and empty. An
-  // empty strip would be a permanent band of chrome on every clean dashboard.
-  await expect(strip(page)).toHaveCount(0);
 
   await hideButton(page, SECURITY_TODAY.id).click();
   await page.waitForTimeout(600);
@@ -93,15 +180,25 @@ test('hiding a tile takes it off the grid and names it in the strip below', asyn
   expect(await domOrder(page)).toEqual(DECLARED_ORDER.filter((id) => id !== SECURITY_TODAY.id));
   await expect(page.locator(`[data-panel-id="${SECURITY_TODAY.id}"]`)).toHaveCount(0);
 
-  // ...and the way back is on screen, naming the tile in words.
-  await expect(strip(page)).toBeVisible();
-  await expect(strip(page)).toContainText('1 tile is hidden');
-  await expect(strip(page)).toContainText(SECURITY_TODAY.name);
-  await expect(showButton(page, SECURITY_TODAY.name)).toBeVisible();
+  // The strip counts it, in the singular.
+  await expect(strip(page)).toContainText('1 tile is off the page.');
 
-  // The screen-reader channel said so too, and named the tile.
+  // ...and the screen-reader channel said where the way back is.
   expect(await liveText(page)).toContain(SECURITY_TODAY.name);
-  expect(await liveText(page)).toContain('hidden');
+  expect(await liveText(page)).toContain('Arrange panels');
+
+  // The window names it, under the right heading, with the right button.
+  await openArrange(page);
+  await expect(dialog(page)).toContainText('Arrange this page');
+  await expect(dialog(page)).toContainText('On this page');
+  await expect(dialog(page)).toContainText('Off this page');
+  await expect(dialog(page)).toContainText('Changes here save right away');
+  await expect(putBack(page, SECURITY_TODAY.name)).toBeVisible();
+  // A hidden tile is NOT ranked among the visible ones — `order` and
+  // `layout.hidden` are separate fields, and interleaving them would let this
+  // window save a state dragging can never produce.
+  expect(await popupOrder(page)).not.toContain(SECURITY_TODAY.id);
+  expect(await popupOrder(page)).toEqual(await domOrder(page));
 
   // The SERVER has it — inside `layout`, where ViewWrite's top-level whitelist
   // cannot silently drop it, and in a shape the save validator accepts.
@@ -111,54 +208,136 @@ test('hiding a tile takes it off the grid and names it in the strip below', asyn
 });
 
 // ---------------------------------------------------------------------------
-// 2 — it round-tripped through the server, not through React state.
+// 3 — the window's Move up is the SAME move a drag makes.
+//
+// Two routes to one saved order. If the popup ever grows its own arithmetic —
+// or its own draft copy of the order — this is where it shows up, because the
+// two runs start from an identical deleted view and are compared to each other
+// rather than each to a literal of its own.
 // ---------------------------------------------------------------------------
 
-test('a hidden tile is still hidden after a reload, and showing it again also sticks', async ({ page, request }) => {
-  test.setTimeout(180_000);
+const MOVED_UP = [
+  'daily-security-today',
+  'daily-open-issues',
+  'daily-top-capacity-risks',
+  'daily-hosts-attention',
+  'daily-dns-zone-issues',
+];
+
+test('Move up in the window saves exactly the order a drag saves', async ({ page, request }) => {
+  test.setTimeout(240_000);
+
+  // --- route A: the pointer, using the app's real drag rather than a lookalike ---
+  //
+  // Dragging Open Issues past Security Today and moving Security Today up past
+  // Open Issues are the SAME rearrangement, expressed from either end. The
+  // drag has to be written this way round because the only drop the helper
+  // aims is "onto the right half of the card at slot n", and dropping a card on
+  // the right half of the card immediately before it is one of the two slots
+  // that mean "where you already are" — it correctly moves nothing.
   await goto(page);
-  await hideButton(page, SECURITY_TODAY.id).click();
+  await dragOntoRightHalfOf(page, OPEN_ISSUES.id, 1);
+  expect(await domOrder(page)).toEqual(MOVED_UP);
+  const draggedOrder = (await savedBlob(request)).order;
+  expect(draggedOrder).toEqual(MOVED_UP);
+
+  // --- route B: the window, from the same clean start ---
+  await request.delete(`/api/views/${VIEW}`);
+  await reloadTab(page, DECLARED_ORDER.length);
+  expect(await domOrder(page), 'the tab did not actually reload back to its declared order').toEqual(DECLARED_ORDER);
+
+  await openArrange(page);
+  // The first row cannot go up and the last cannot go down. DISABLED, not
+  // missing: a button that vanishes at the ends moves every other button out
+  // from under the pointer and answers nothing.
+  await expect(moveUp(page, OPEN_ISSUES.name)).toBeDisabled();
+  await expect(moveDown(page, OPEN_ISSUES.name)).toBeEnabled();
+  await expect(moveDown(page, 'DNS Zone Issues')).toBeDisabled();
+
+  await moveUp(page, SECURITY_TODAY.name).click();
   await page.waitForTimeout(600);
-  expect((await savedBlob(request)).layout.hidden).toEqual([SECURITY_TODAY.id]);
 
-  // A full navigation: the React tree that did the hiding is gone, so the only
-  // place this can come back from is GET /api/views/__layout_daily.
-  await gotoWith(page, DECLARED_ORDER.length - 1);
-  await expect(page.locator(`[data-panel-id="${SECURITY_TODAY.id}"]`)).toHaveCount(0);
-  await expect(strip(page)).toContainText(SECURITY_TODAY.name);
+  // Same order, from the same starting point, by the other route.
+  const popupSaved = (await savedBlob(request)).order;
+  expect(popupSaved, 'the window and the drag disagree about what "up one" means').toEqual(draggedOrder);
+  expectPersistedBlobIsValid(await savedBlob(request));
 
-  // Show puts it back — at the END of the page, because it was not in the DOM
-  // when the order was last saved and so the saved order does not name it.
-  // That is the same rule a newly added panel follows, and it is stated in the
-  // panel's own ⓘ help rather than papered over here.
-  await showButton(page, SECURITY_TODAY.name).click();
-  await page.waitForTimeout(600);
-  await expect(page.locator(`[data-panel-id="${SECURITY_TODAY.id}"]`)).toHaveCount(1);
-  await expect(strip(page)).toHaveCount(0);
-  expect(await domOrder(page)).toEqual([
-    ...DECLARED_ORDER.filter((id) => id !== SECURITY_TODAY.id),
-    SECURITY_TODAY.id,
-  ]);
+  // The grid moved with it, and the window is describing the same page — while
+  // it is still open, not after a close-and-reopen that could hide a stale copy.
+  expect(await domOrder(page)).toEqual(MOVED_UP);
+  expect(await popupOrder(page)).toEqual(MOVED_UP);
+  expect(await liveText(page)).toContain(`Moved ${SECURITY_TODAY.name} up to position 1 of 5.`);
 
-  const blob = await savedBlob(request);
-  expect(blob.layout.hidden).toEqual([]);
-  expectPersistedBlobIsValid(blob);
-
-  // And the coming-back sticks too. A feature that only persists one of its
-  // two states is worse than one that persists neither.
-  await gotoWith(page, DECLARED_ORDER.length);
-  await expect(page.locator(`[data-panel-id="${SECURITY_TODAY.id}"]`)).toHaveCount(1);
-  await expect(strip(page)).toHaveCount(0);
+  // Now it is at the top, its own Move up is the disabled one.
+  await expect(moveUp(page, SECURITY_TODAY.name)).toBeDisabled();
+  await expect(moveUp(page, OPEN_ISSUES.name)).toBeEnabled();
 });
 
 // ---------------------------------------------------------------------------
-// 3 — a hidden tile is never unreachable.
+// 4 — it round-tripped through the server, not through React state.
+// ---------------------------------------------------------------------------
+
+test('a change made in the window survives a reload, both ways round', async ({ page, request }) => {
+  test.setTimeout(240_000);
+  await goto(page);
+
+  // Take one off the page from inside the window.
+  await openArrange(page);
+  await takeOff(page, SECURITY_TODAY.name).click();
+  await page.waitForTimeout(600);
+  await expect(page.locator(`[data-panel-id="${SECURITY_TODAY.id}"]`)).toHaveCount(0);
+  await expect(putBack(page, SECURITY_TODAY.name)).toBeVisible();
+  expect((await savedBlob(request)).layout.hidden).toEqual([SECURITY_TODAY.id]);
+
+  // And move one, so the reload has to carry both halves of the blob.
+  await moveUp(page, HOSTS_ATTENTION.name).click();
+  await page.waitForTimeout(600);
+  const AFTER = [
+    'daily-open-issues',
+    'daily-hosts-attention',
+    'daily-top-capacity-risks',
+    'daily-dns-zone-issues',
+  ];
+  expect(await domOrder(page)).toEqual(AFTER);
+  expect((await savedBlob(request)).order).toEqual(AFTER);
+
+  // A full navigation: the React tree that made the changes is gone, so the
+  // only place this can come back from is GET /api/views/__layout_daily.
+  await reloadTab(page, DECLARED_ORDER.length - 1);
+  expect(await domOrder(page)).toEqual(AFTER);
+  await expect(strip(page)).toContainText('1 tile is off the page.');
+
+  // Put it back, from the window on a page nobody has interacted with.
+  await openArrange(page);
+  await putBack(page, SECURITY_TODAY.name).click();
+  await page.waitForTimeout(600);
+  await expect(page.locator(`[data-panel-id="${SECURITY_TODAY.id}"]`)).toHaveCount(1);
+  // At the END of the page, because it was not in the DOM when the order was
+  // last saved and so the saved order does not name it. That is the same rule a
+  // newly added panel follows, and it is stated in the panel's own ⓘ help
+  // rather than papered over here.
+  expect(await domOrder(page)).toEqual([...AFTER, SECURITY_TODAY.id]);
+  expect(await liveText(page)).toContain(`${SECURITY_TODAY.name} is back on the page.`);
+  // The "Off this page" section is gone with the last tile in it, but the way
+  // in is still there — that is the whole change.
+  await expect(dialog(page)).not.toContainText('Off this page');
+  await expect(strip(page)).not.toContainText('off the page');
+
+  // And the coming-back sticks too. A feature that only persists one of its two
+  // states is worse than one that persists neither.
+  await reloadTab(page, DECLARED_ORDER.length);
+  expect((await savedBlob(request)).layout.hidden).toEqual([]);
+  await expect(page.locator(`[data-panel-id="${SECURITY_TODAY.id}"]`)).toHaveCount(1);
+});
+
+// ---------------------------------------------------------------------------
+// 5 — keyboard alone, end to end, including the way out.
 //
-// This is the accessibility clause, and it is the one that makes hiding safe
-// to ship at all: a control that can remove content has to have a way back
-// that does not need a mouse. Not one page.mouse call below — focus is reached
-// by pressing Tab, which also proves both buttons are in the tab order rather
-// than merely focusable by script.
+// This is the accessibility clause, and it is the one that makes hiding safe to
+// ship at all: a control that can remove content has to have a way back that
+// does not need a mouse. Not one page.mouse call below — every control is
+// reached by pressing Tab, which also proves it is in the tab order rather than
+// merely focusable by script.
 // ---------------------------------------------------------------------------
 
 const focusedInfo = (page: Page) =>
@@ -166,8 +345,10 @@ const focusedInfo = (page: Page) =>
     const el = document.activeElement as HTMLElement | null;
     if (!el) return null;
     return {
-      show: el.hasAttribute('data-layout-show'),
+      arrange: el.hasAttribute('data-layout-arrange'),
       hide: el.hasAttribute('data-layout-hide'),
+      role: el.getAttribute('role'),
+      action: el.getAttribute('data-arrange'),
       label: el.getAttribute('aria-label'),
       panel: el.closest('[data-panel-id]')?.getAttribute('data-panel-id') ?? null,
     };
@@ -181,14 +362,11 @@ async function tabUntil(page: Page, match: (info: any) => boolean, what: string,
   throw new Error(`${what} was not reachable within ${max} Tab presses`);
 }
 
-test('a tile can be hidden and brought back by keyboard alone, across a reload', async ({ page, request }) => {
-  test.setTimeout(180_000);
+test('the window can be opened, driven and closed by keyboard alone, and hands focus back', async ({ page, request }) => {
+  test.setTimeout(240_000);
   await goto(page);
 
-  // Hide, from the keyboard. The hide button sits in the panel header next to
-  // the move handle, so tabToHandle gets focus into the right panel and one
-  // more Tab reaches the button — but that ordering is an implementation
-  // detail, so this walks until it finds the right button instead of assuming.
+  // Hide, from the keyboard, so the window has something to put back.
   await tabToHandle(page, HOSTS_ATTENTION.id);
   await tabUntil(
     page,
@@ -198,48 +376,60 @@ test('a tile can be hidden and brought back by keyboard alone, across a reload',
   await page.keyboard.press('Enter');
   await page.waitForTimeout(600);
   await expect(page.locator(`[data-panel-id="${HOSTS_ATTENTION.id}"]`)).toHaveCount(0);
-  expect((await savedBlob(request)).layout.hidden).toEqual([HOSTS_ATTENTION.id]);
 
   // Reload, so the way back has to be found on a page nobody has interacted
   // with — the state a returning operator actually arrives in.
-  await gotoWith(page, DECLARED_ORDER.length - 1);
+  await reloadTab(page, DECLARED_ORDER.length - 1);
 
   // VISIBLE, not merely in the DOM: a way back rendered inside a collapsed or
   // sr-only container would satisfy a count and help nobody.
-  const show = showButton(page, HOSTS_ATTENTION.name);
-  await expect(show).toBeVisible();
-  const box = await show.boundingBox();
-  expect(box, 'the Show control has no layout box').not.toBeNull();
-  expect(box!.width, 'the Show control renders at zero width').toBeGreaterThan(0);
-  expect(box!.height, 'the Show control renders at zero height').toBeGreaterThan(0);
+  const box = await arrangeBtn(page).boundingBox();
+  expect(box, 'the Arrange panels button has no layout box').not.toBeNull();
+  expect(box!.width, 'the Arrange panels button renders at zero width').toBeGreaterThan(0);
+  expect(box!.height, 'the Arrange panels button renders at zero height').toBeGreaterThan(0);
 
-  // Reached by Tab, from the top of the document.
+  // Reached by Tab, from the top of the document, and opened with Enter.
   await page.keyboard.press('Tab');
-  const presses = await tabUntil(
-    page,
-    (info) => info?.show && info.label === `Show ${HOSTS_ATTENTION.name}`,
-    'the Show control',
-  );
-  expect(presses).toBeGreaterThan(0);
+  await tabUntil(page, (info) => info?.arrange, 'the Arrange panels button');
+  await page.keyboard.press('Enter');
+  await expect(dialog(page)).toBeVisible();
+  // Focus lands on the dialog itself, not on its ✕ — what a screen reader then
+  // reads is the window and its name, rather than "Close button" with no idea
+  // what would be closed.
+  expect((await focusedInfo(page))?.role).toBe('dialog');
 
-  // Operated by Enter on a native button — no click, no pointer.
+  // Reorder from inside the window, by Tab and Enter.
+  await tabUntil(page, (info) => info?.action === `down:${OPEN_ISSUES.id}`, 'the first row\'s Move down');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(600);
+  expect(await liveText(page)).toContain(`Moved ${OPEN_ISSUES.name} down to position 2 of 4.`);
+  expect(await popupOrder(page)).toEqual(await domOrder(page));
+  // Focus did not fall out of the window when the rows re-sorted under it.
+  expect((await focusedInfo(page))?.action).toBe(`down:${OPEN_ISSUES.id}`);
+
+  // Put the hidden tile back, by Tab and Enter.
+  await tabUntil(page, (info) => info?.action === `back:${HOSTS_ATTENTION.id}`, 'the Put back button');
   await page.keyboard.press('Enter');
   await page.waitForTimeout(600);
   await expect(page.locator(`[data-panel-id="${HOSTS_ATTENTION.id}"]`)).toHaveCount(1);
-  await expect(strip(page)).toHaveCount(0);
-  expect(await liveText(page)).toContain(`${HOSTS_ATTENTION.name} is back on the page.`);
   expect((await savedBlob(request)).layout.hidden).toEqual([]);
+
+  // Escape closes it, and focus goes back to the button that opened it — not to
+  // <body>, which would drop a keyboard user at the top of the document.
+  await page.keyboard.press('Escape');
+  await expect(dialog(page)).toHaveCount(0);
+  expect((await focusedInfo(page))?.arrange, 'focus did not return to the Arrange panels button').toBe(true);
 });
 
 // ---------------------------------------------------------------------------
-// 4 — the two states share one saved record, so each has to survive the other.
+// 6 — the two states share one saved record, so each has to survive the other.
 //
 // `order` and `layout.hidden` live in the same `__layout_daily` blob, and every
 // gesture rewrites the WHOLE blob. A hide that snapshots the order it is about
 // to change, or a drag that snapshots hidden as "whatever the DOM says" (the
 // DOM cannot say — a hidden tile renders nothing), silently destroys the other
-// half. That is the regression most likely to bite, so it gets both
-// directions.
+// half. That is the regression most likely to bite, so it gets both directions,
+// and now the window is a third writer that has to obey the same rule.
 // ---------------------------------------------------------------------------
 
 test('hiding does not wipe a saved order, and dragging does not wipe the hidden list', async ({ page, request }) => {
@@ -282,9 +472,9 @@ test('hiding does not wipe a saved order, and dragging does not wipe the hidden 
   }
 
   const ORDER_A_VISIBLE = ORDER_A.filter((id) => id !== HOSTS_ATTENTION.id);
-  await gotoWith(page, DECLARED_ORDER.length - 1);
+  await reloadTab(page, DECLARED_ORDER.length - 1);
   expect(await domOrder(page), 'the saved order did not survive the hide').toEqual(ORDER_A_VISIBLE);
-  await expect(strip(page)).toContainText(HOSTS_ATTENTION.name);
+  await expect(strip(page)).toContainText('1 tile is off the page.');
 
   // --- direction 2: drag, and the hidden list must still be there ---
   //
@@ -311,15 +501,24 @@ test('hiding does not wipe a saved order, and dragging does not wipe the hidden 
     expectPersistedBlobIsValid(blob);
   }
 
-  // Both halves come back together from the server.
-  await gotoWith(page, DECLARED_ORDER.length - 1);
-  expect(await domOrder(page)).toEqual(ORDER_B);
-  await expect(page.locator(`[data-panel-id="${HOSTS_ATTENTION.id}"]`)).toHaveCount(0);
-  await expect(strip(page)).toContainText(HOSTS_ATTENTION.name);
+  // --- direction 3: the window, which must not wipe either half ---
+  await reloadTab(page, DECLARED_ORDER.length - 1);
+  await openArrange(page);
+  expect(await popupOrder(page), 'the window opened describing a page that is not on screen').toEqual(ORDER_B);
+  await expect(putBack(page, HOSTS_ATTENTION.name)).toBeVisible();
 
-  // And the tile is still reachable after all of that.
-  await showButton(page, HOSTS_ATTENTION.name).click();
+  await putBack(page, HOSTS_ATTENTION.name).click();
   await page.waitForTimeout(600);
   expect(await domOrder(page)).toEqual([...ORDER_B, HOSTS_ATTENTION.id]);
-  await expect(strip(page)).toHaveCount(0);
+  {
+    const blob = await savedBlob(request);
+    // ORDER_B, not ORDER_B plus the restored tile: the window snapshots the
+    // order off the DOM at the moment of the click, when the tile is still off
+    // the page. Same rule the ✕ follows in the other direction, and the reason
+    // a tile comes back at the end rather than where it was.
+    expect(blob.order, 'the window wiped the dragged order').toEqual(ORDER_B);
+    expect(blob.layout.hidden).toEqual([]);
+    expectPersistedBlobIsValid(blob);
+  }
+  await expect(dialog(page)).not.toContainText('Off this page');
 });

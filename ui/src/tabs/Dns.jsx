@@ -184,7 +184,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   // unarrived slice reads as 'error') for a read that simply has not finished.
   if (loading) {
     return (
-      <Card panelId={panelId} span={2} className="flex flex-col justify-between">
+      <Card panelId={panelId} span={2} panelName="Zone Counts" className="flex flex-col justify-between">
         <Skeleton h={200} />
       </Card>
     )
@@ -193,7 +193,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   // these counts are known, not that they're all zero.
   if (zones.length === 0 && zonesStatus === 'error') {
     return (
-      <Card panelId={panelId} span={2} className="flex flex-col justify-between">
+      <Card panelId={panelId} span={2} panelName="Zone Counts" className="flex flex-col justify-between">
         <FeedUnavailable label="DNS zones feed unavailable" />
       </Card>
     )
@@ -231,7 +231,12 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
   ]
 
   return (
-    <Card panelId={panelId} span={2} className="flex flex-col justify-between">
+    // All three branches of this component are the SAME panel and carry the
+    // same `panelName`: they are the loading, the dead-feed and the data views
+    // of one tile, so the popup must call it one thing whichever is on screen.
+    // It draws no heading — the cells are their own labels — which is why it
+    // used to be listed as "dns-zone-kpis".
+    <Card panelId={panelId} span={2} panelName="Zone Counts" className="flex flex-col justify-between">
       {cells.map((c, i) => (
         <div key={c.label} className={`py-3.5 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}>
           <div className="text-muted text-xs">{c.label}</div>
@@ -398,6 +403,11 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
     <Card
       panelId={panelId}
       span={6}
+      // The heading becomes a React node the moment the issues-only filter is
+      // on, so without this the popup's row for this panel flipped between
+      // "DNS Zones" and the raw "dns-zones" depending on how the tab was
+      // filtered. The name is the heading's constant half.
+      panelName="DNS Zones"
       title={
         issuesOnly ? (
           <span className="inline-flex items-center gap-2">
