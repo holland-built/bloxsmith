@@ -4,7 +4,7 @@
 // WHY A DICTIONARY AND NOT A PROP. A `help=` prop next to every `<Card` would
 // put the copy 95 places, where nobody can read it as a set and nothing can
 // check it is complete. Keyed by panelId it has exactly one home, one reader
-// (Card's ⓘ disclosure), and one enforcement test — panelHelp.test.js scans the
+// (Card's About disclosure), and one enforcement test — panelHelp.test.js scans the
 // tabs and fails when a Card exists that this file has never heard of.
 //
 // The key is `panelId`, which is also what a saved layout refers to. That is
