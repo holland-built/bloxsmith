@@ -1,7 +1,13 @@
 import { test, expect } from './fixtures';
 
-// The per-panel help affordance: an "About" button in every panel header that
-// opens one or two lines of plain English underneath it.
+// The per-panel help affordance: an ⓘ button in every panel header that opens
+// one or two lines of plain English underneath it.
+//
+// THE GLYPH IS THE VISIBLE LABEL AND THE WORDS ARE THE ACCESSIBLE ONE. It drew
+// the word "About" for one release; the user reversed that ("the i cirle is
+// better than about"). Nothing else moved — the accessible name is still
+// "About: <panel>", which is why every locator below still reads that way, and
+// the three doors (hover, focus, click-to-pin) are unchanged.
 //
 // WHY A DISCLOSURE AND NOT A TOOLTIP, AND WHY HOVER IS AN ADDITION. The
 // reasoning above TabIntro in ui/src/components/ui.jsx still holds — hover does
@@ -24,12 +30,17 @@ import { test, expect } from './fixtures';
 //
 // SCOPE OF THIS SPEC. The behaviour tests below all drive #overview, because
 // its panel names are stable and short. The width test at the bottom drives the
-// four busiest tabs instead, since the word "About" is wider than the ⓘ it
-// replaced and a header is only at risk where the header is already crowded.
+// four busiest tabs instead, because a header is only at risk where the header
+// is already crowded.
 
 const HEATMAP_HELP = 'One square per subnet';
+// Verbatim out of LAYOUT_HELP_REST in ui/src/components/ui.jsx. Written out
+// here rather than imported so that rewording the string has to come past this
+// file — which is the point, since where these words appear is the whole
+// subject of the last two tests.
+const LAYOUT_SENTENCE = 'Drag a panel’s right edge to make it wider or narrower';
 
-test('a panel header carries an About button named after its own panel', async ({ page }) => {
+test('a panel header carries an ⓘ button named after its own panel', async ({ page }) => {
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
@@ -38,9 +49,25 @@ test('a panel header carries an About button named after its own panel', async (
   const btn = page.getByRole('button', { name: 'About: Subnet Heatmap', exact: true });
   await expect(btn).toBeVisible();
   await expect(btn).toHaveAttribute('aria-expanded', 'false');
+  // The visible label is the glyph, and the name is still the words. Both
+  // halves asserted, because shipping one without the other is the failure:
+  // a glyph with a glyph for a name reads as "circled latin small letter i",
+  // and the word "About" back on screen is the thing that was reverted.
+  //
+  // Read as the button's OWN text nodes, skipping the sr-only <span>. The
+  // element's textContent holds "About:" too — that span is what supplies the
+  // accessible name above — so a plain toHaveText would assert the opposite of
+  // what is painted.
+  const painted = await btn.evaluate((el) =>
+    Array.from(el.childNodes)
+      .filter((n) => n.nodeType === Node.TEXT_NODE)
+      .map((n) => (n.textContent || '').trim())
+      .join(''),
+  );
+  expect(painted).toBe('ⓘ');
 });
 
-test('clicking About reveals the help text and flips aria-expanded', async ({ page }) => {
+test('clicking ⓘ reveals the help text and flips aria-expanded', async ({ page }) => {
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
@@ -194,21 +221,61 @@ test('the disclosure is operable with the keyboard alone', async ({ page }) => {
   await expect(btn).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('a rearrangeable panel says so; the sentence is generated, not written per panel', async ({ page }) => {
+test("an open panel's help is about that panel and nothing else", async ({ page }) => {
+  // WHAT THIS USED TO ASSERT, AND WHY IT FLIPPED. Until 2026-08-09 this test
+  // required the layout sentences INSIDE every managed panel's help ("a
+  // rearrangeable panel says so"). Reported as "dont need that every time":
+  // the same ~60 words printed 83 times a page, under copy that was otherwise
+  // about the one panel the reader had just opened. The sentences did not get
+  // weaker, they moved — the test below proves they are still said, once, in
+  // the window where somebody is standing when they want them.
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
   const btn = page.getByRole('button', { name: 'About: Top Consumers', exact: true });
   await btn.click();
   const region = page.locator(`#${await btn.getAttribute('aria-controls')}`);
-  // Overview is the one grid with layoutKey set, so its panels ARE movable and
-  // the disclosure has to say how — reordering and resizing are otherwise
-  // invisible (the resize hotspot is opacity-0 until hover).
-  await expect(region).toContainText('drag');
-  await expect(region).toContainText('save');
+  await expect(region).toBeVisible();
+  // Its own copy is still there — otherwise this passes on an empty box.
+  await expect(region).toContainText('The twelve subnets handing out the most addresses');
+  await expect(region).not.toContainText(LAYOUT_SENTENCE);
 });
 
-test('a titleless panel still gets its About button', async ({ page }) => {
+test('the layout sentences are said once on a page, in the Arrange window', async ({ page }) => {
+  // The other half of the move: they must not have been deleted. Overview
+  // carries a layoutKey, so its panels really are movable, and reorder/resize
+  // are otherwise invisible (the resize hotspot is opacity-0 until hover) —
+  // this is the only place the operator is ever told.
+  await page.goto('/#overview');
+  await expect(page.locator('h1').first()).toBeVisible();
+
+  // Open EVERY panel's help first, so "once on the page" is counted against the
+  // worst case rather than against a page where nothing is expanded.
+  const buttons = page.getByRole('button', { name: /^About[: ]/ });
+  const count = await buttons.count();
+  expect(count, 'expected the Overview panels to carry help buttons').toBeGreaterThan(0);
+  for (let i = 0; i < count; i++) await buttons.nth(i).click();
+
+  const occurrences = (haystack: string, needle: string) => haystack.split(needle).length - 1;
+  const bodyText = () => page.evaluate(() => document.body.textContent || '');
+
+  // Zero while the window is shut — 83 open disclosures and not one of them
+  // says it. document.body.textContent, so hidden copy counts too.
+  expect(occurrences(await bodyText(), LAYOUT_SENTENCE)).toBe(0);
+
+  await page.locator('[data-layout-arrange]').first().click();
+  const dialog = page.locator('[data-arrange-dialog]');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText(LAYOUT_SENTENCE);
+  // Exactly one, page-wide: the window says it, and nothing else does.
+  expect(occurrences(await bodyText(), LAYOUT_SENTENCE)).toBe(1);
+  // Overview shows several panels, so the reorder half is on too, and it is
+  // one paragraph rather than two stacked ones.
+  await expect(dialog).toContainText('Drag a row up or down to change the order');
+  await expect(dialog.locator('p').last()).toContainText(LAYOUT_SENTENCE);
+});
+
+test('a titleless panel still gets its ⓘ button', async ({ page }) => {
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
@@ -221,7 +288,7 @@ test('a titleless panel still gets its About button', async ({ page }) => {
 });
 
 test('at 375px an open disclosure does not push the header outside its card', async ({ page }) => {
-  // The named risk this affordance carries: the About button adds width to the `right`
+  // The named risk this affordance carries: the ⓘ button adds width to the `right`
   // span, and the 13-headers-overflowing fix at 360-480px depends on that span
   // being able to wrap. Measured against the card, not the viewport — a header
   // painting over the panel beside it is the failure mode.
@@ -258,22 +325,23 @@ test('at 375px an open disclosure does not push the header outside its card', as
   expect(overflows, overflows.join('\n') || undefined).toEqual([]);
 });
 
-// The word is wider than the glyph — 45px against 25px, measured in Chromium —
-// and every measured panel's width floor rose by that ~20px, so this walks the
-// four busiest tabs at five widths and checks each About button, heading and
-// open disclosure against its own card.
+// Every panel header this control sits in, on the four busiest tabs, at five
+// widths — each ⓘ button, heading and open disclosure measured against its own
+// card. This is where the control's width cost is held honest, so it is re-run
+// whenever that width changes.
 //
-// TWO PANELS ARE EXCLUDED AT 390 AND ONLY AT 390, named rather than skipped
-// quietly. assets-filter-bar's search box spills 52px and network-dhcp-leases'
-// search row spills 28px at that width — both measured at exactly those numbers
-// BEFORE this change, with the ⓘ in place, so they are older bugs about a
-// fixed-width search input, not something the word About did. Every other panel
-// at 390, and all four tabs at the other four widths, are held to zero.
+// THE EXCLUSION LIST IS GONE, AND THAT IS A MEASUREMENT, NOT AN OPINION. While
+// this button drew the word "About" it was 45px wide, and two panels were
+// excluded at 390 for spilling 52px and 28px. Reverting the label to the glyph
+// (the user: "the i cirle is better than about") took the button back to
+// 24.83px in Chromium, measured at every width in this list, and re-running the
+// same sweep found ZERO spills anywhere — including those two. So the list was
+// deleted rather than carried forward: an exclusion nobody re-measures is a bug
+// with a permit. All four tabs at all five widths are now held to zero.
 const BUSY_TABS = ['#security', '#assets', '#network', '#dns'];
 const WIDTHS = [1920, 1280, 1024, 768, 390];
-const PRE_EXISTING_390 = new Set(['assets-filter-bar', 'network-dhcp-leases']);
 
-test('the About word fits every busy header from 1920 down to 390', async ({ page }) => {
+test('the ⓘ fits every busy header from 1920 down to 390', async ({ page }) => {
   const findings: string[] = [];
   let checkedButtons = 0;
 
@@ -288,44 +356,44 @@ test('the About word fits every busy header from 1920 down to 390', async ({ pag
 
       const buttons = page.getByRole('button', { name: /^About[: ]/ });
       const count = await buttons.count();
-      expect(count, `${tab} at ${width} should carry About buttons`).toBeGreaterThan(0);
+      expect(count, `${tab} at ${width} should carry ⓘ buttons`).toBeGreaterThan(0);
       // Open every one, so the disclosure body is measured too.
       for (let i = 0; i < count; i++) await buttons.nth(i).click();
       checkedButtons += count;
       await page.waitForTimeout(400);
 
-      const bad = await page.evaluate(
-        ({ excluded }) => {
-          const out: string[] = [];
-          for (const card of Array.from(document.querySelectorAll('[data-panel-id]'))) {
-            const id = card.getAttribute('data-panel-id') || '(no id)';
-            const cardRect = card.getBoundingClientRect();
-            const parts = Array.from(
-              card.querySelectorAll('h2, [data-panel-help], [data-panel-help-toggle]'),
-            );
-            for (const el of parts) {
-              const r = el.getBoundingClientRect();
-              if (r.width === 0 && r.height === 0) continue;
-              const spill = Math.max(r.right - cardRect.right, cardRect.left - r.left);
-              const what = el.hasAttribute('data-panel-help-toggle')
-                ? 'the About button'
-                : el.hasAttribute('data-panel-help')
-                  ? 'the open disclosure'
-                  : 'the heading';
-              if (spill > 1 && !excluded.includes(id)) {
-                out.push(`${id}: ${what} spills ${Math.round(spill)}px past its card`);
-              }
-              // A control squeezed to nothing is as broken as one that spills,
-              // and it is the failure the word About was most likely to cause.
-              if (el.hasAttribute('data-panel-help-toggle') && r.width < 30) {
-                out.push(`${id}: the About button is squeezed to ${Math.round(r.width)}px`);
-              }
+      const bad = await page.evaluate(() => {
+        const out: string[] = [];
+        for (const card of Array.from(document.querySelectorAll('[data-panel-id]'))) {
+          const id = card.getAttribute('data-panel-id') || '(no id)';
+          const cardRect = card.getBoundingClientRect();
+          const parts = Array.from(
+            card.querySelectorAll('h2, [data-panel-help], [data-panel-help-toggle]'),
+          );
+          for (const el of parts) {
+            const r = el.getBoundingClientRect();
+            if (r.width === 0 && r.height === 0) continue;
+            const spill = Math.max(r.right - cardRect.right, cardRect.left - r.left);
+            const what = el.hasAttribute('data-panel-help-toggle')
+              ? 'the ⓘ button'
+              : el.hasAttribute('data-panel-help')
+                ? 'the open disclosure'
+                : 'the heading';
+            if (spill > 1) {
+              out.push(`${id}: ${what} spills ${Math.round(spill)}px past its card`);
+            }
+            // A control squeezed to nothing is as broken as one that spills.
+            // The floor is 20px because the glyph button measures 24.83px in
+            // Chromium at every width in this sweep — a threshold above that
+            // would fire on a healthy control, which is how a guard gets
+            // deleted instead of fixed.
+            if (el.hasAttribute('data-panel-help-toggle') && r.width < 20) {
+              out.push(`${id}: the ⓘ button is squeezed to ${Math.round(r.width)}px`);
             }
           }
-          return out;
-        },
-        { excluded: width === 390 ? Array.from(PRE_EXISTING_390) : [] },
-      );
+        }
+        return out;
+      });
 
       for (const line of bad) findings.push(`${width}px ${tab} — ${line}`);
     }

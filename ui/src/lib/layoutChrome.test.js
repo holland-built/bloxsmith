@@ -151,21 +151,81 @@ test('`reorderable` is exactly "this grid is showing two or more panels right no
   )
 })
 
-test('the generated help sentence about moving rides the same switch as the handle it names', () => {
-  // The whole point of the split: the move sentence names the ⠿ handle, so it
-  // must appear exactly where that handle does. Read as source rather than
-  // rendered because `npm test` cannot mount JSX (see the header).
+test('the generated help sentence about moving rides the same switch as the rows it names', () => {
+  // The whole point of the split: the move sentence names the ⠿ grip and the
+  // draggable rows, so it must appear exactly where those do. Read as source
+  // rather than rendered because `npm test` cannot mount JSX (see the header).
+  //
+  // THE SWITCH MOVED ON 2026-08-09, THE RULE DID NOT. It used to be Card's
+  // `reorderable`, because the sentences were appended to every panel's help.
+  // They are said once now, in the "Arrange this page" window, so the gate is
+  // that window's `items.length > 1` — the same count `reorderable` is derived
+  // from (arrangeItems is the saved order minus the hidden tiles) and the same
+  // one that decides whether the rows above it are draggable at all.
   assert.match(
     src,
-    /reorderable \? `\$\{LAYOUT_HELP_MOVE\} \$\{LAYOUT_HELP_REST\}` : LAYOUT_HELP_REST/,
-    'the help body no longer picks its sentences with `reorderable` — a one-panel panel would promise a move it cannot do',
+    /\{items\.length > 1 \? `\$\{LAYOUT_HELP_MOVE\} \$\{LAYOUT_HELP_REST\}` : LAYOUT_HELP_REST\}/,
+    'the window footer no longer picks its sentences with `items.length > 1` — a one-panel page would ' +
+      'promise a reorder it cannot do',
   )
   const rest = /const LAYOUT_HELP_REST =\n([\s\S]*?)\n\n/.exec(src)
   assert.ok(rest, 'LAYOUT_HELP_REST has been renamed or removed')
-  // The half that is appended unconditionally may not mention the handle or the
+  // The half that is rendered unconditionally may not mention the grip or the
   // gesture — those belong to LAYOUT_HELP_MOVE, which is gated.
-  assert.doesNotMatch(rest[1], /⠿/, 'LAYOUT_HELP_REST names the ⠿ handle, which a one-panel grid does not render')
-  assert.doesNotMatch(rest[1], /\bmove\b/i, 'LAYOUT_HELP_REST claims a move, which a one-panel grid cannot do')
+  assert.doesNotMatch(rest[1], /⠿/, 'LAYOUT_HELP_REST names the ⠿ grip, which a one-panel page does not render')
+  assert.doesNotMatch(rest[1], /\bmove\b/i, 'LAYOUT_HELP_REST claims a move, which a one-panel page cannot do')
+})
+
+test('the layout sentences are said in ONE place, and it is not the per-panel help', () => {
+  // THE COMPLAINT, ASSERTED: "dont need that every time". The same ~60 words
+  // rendered under all 83 panels, below copy that was otherwise about that one
+  // panel. Two things have to stay true for that not to come back.
+  //
+  // (a) Each string is declared once and read once. A second read site is how a
+  //     "just this one panel too" exception gets in.
+  const reads = src
+    .split('\n')
+    .map((line, i) => ({ line: i + 1, text: line.trim() }))
+    .filter((l) => /LAYOUT_HELP_(MOVE|REST)/.test(l.text) && !l.text.startsWith('//'))
+  const declarations = reads.filter((l) => /^const LAYOUT_HELP_/.test(l.text))
+  assert.equal(
+    declarations.length,
+    2,
+    `expected exactly two LAYOUT_HELP declarations, found ${declarations.length} ` +
+      `(lines ${declarations.map((d) => d.line).join(', ')})`,
+  )
+  const renders = reads.filter((l) => !/^const LAYOUT_HELP_/.test(l.text))
+  assert.equal(
+    renders.length,
+    1,
+    `the layout sentences are rendered in ${renders.length} places (lines ${renders
+      .map((r) => r.line)
+      .join(', ')}); they must be said once per page, in the "Arrange this page" window`,
+  )
+
+  // (b) That one render site is inside ArrangeDialog, not inside Card. Bounded
+  //     the same way the popup test below bounds it: from the function keyword
+  //     to the first `}` back at column 0.
+  const dialog = /^function ArrangeDialog\(/m.exec(src)
+  assert.ok(dialog, 'ArrangeDialog has been renamed or removed from components/ui.jsx')
+  const dialogStart = src.slice(0, dialog.index).split('\n').length
+  const dialogEnd = dialogStart + src.slice(dialog.index).slice(0, src.slice(dialog.index).indexOf('\n}\n')).split('\n').length
+  assert.ok(
+    renders[0].line > dialogStart && renders[0].line < dialogEnd,
+    `the layout sentences are rendered at line ${renders[0].line}, outside ArrangeDialog ` +
+      `(lines ${dialogStart}-${dialogEnd}) — they are back on something that is not the arrange window`,
+  )
+
+  // (c) And Card's help body renders the panel's own two sentences and nothing
+  //     else. Anchored on the disclosure's own JSX so this reads the real block.
+  const body = /\{helpOpen && \(\n([\s\S]*?)\n\s*\)\}/.exec(src)
+  assert.ok(body, "Card's help disclosure body has been restructured — this reader cannot find it")
+  assert.match(body[1], /<p>\{help\.what\}<\/p>/, "the panel's own `what` line is no longer rendered")
+  assert.doesNotMatch(
+    body[1],
+    /LAYOUT_HELP|managed &&/,
+    "the panel help block is appending the layout sentences again — that is the 83-times repetition the user asked to stop",
+  )
 })
 
 test('each layout affordance has exactly one render site', () => {

@@ -481,13 +481,23 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 It closes this sheet and opens the dialog rather than stacking
                 two modals; App.jsx owns the other half and sends focus back to
                 the "…" when the dialog closes, because that is the button the
-                reader actually pressed. */}
+                reader actually pressed.
+
+                AND IT IS SHOWN ONLY THERE — `lg:hidden`, the exact inverse of
+                the header button's `hidden lg:flex`. On a desktop the same ⓘ is
+                already sitting in the top bar a few inches away, and a second
+                door to it inside Settings was reported as redundant. Deleting
+                the row outright is what the inverse gate prevents: below `lg`
+                there is no other door, which is the gap this row was added to
+                close. One route at every width, never two and never none — if
+                either class is edited, edit both, and header-help.spec.ts
+                asserts the pairing at 1920 and at 390. */}
             <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Appearance</div>
             <button
               type="button"
               onClick={onOpenHelp}
               aria-haspopup="dialog"
-              className="block mb-3 text-left text-[11px] font-medium text-accent hover:underline underline-offset-2"
+              className="block lg:hidden mb-3 text-left text-[11px] font-medium text-accent hover:underline underline-offset-2"
             >
               What these controls do →
             </button>

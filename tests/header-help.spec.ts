@@ -5,11 +5,19 @@ import { test, expect } from './fixtures';
 // explaining itself through a `title=` hover tooltip that does not exist on
 // touch and is never read on a desk either.
 //
-// ONE DIALOG, TWO DOORS. Above `lg` the header's ⓘ opens it. Below `lg` that
-// button is display:none (App.jsx's A3 fold takes it with the two switches it
-// describes), so the settings sheet's "What these controls do →" row is the
-// door — and it is the door at every width, because the switches themselves
-// live in that sheet too.
+// ONE DIALOG, ONE DOOR AT ANY GIVEN WIDTH. Above `lg` the header's ⓘ opens it.
+// Below `lg` that button is display:none (App.jsx's A3 fold takes it with the
+// two switches it describes) and the settings sheet's "What these controls do →"
+// row is the door instead.
+//
+// THE SHEET LINK USED TO BE SHOWN AT EVERY WIDTH, AND IT IS NOT ANY MORE.
+// Reported as "that what do these do is redundant" — on a desktop the same ⓘ is
+// sitting in the top bar a few inches away, so Settings was a second door to a
+// dialog already on screen. The row is now `lg:hidden`, the exact inverse of the
+// header button's `hidden lg:flex`. Deleting it outright was the wrong fix and
+// the tests below say why: below `lg` it is the ONLY route, which is the gap it
+// was added to close. So the pairing is what is asserted — exactly one way in at
+// 1920 and exactly one at 390, never two and never none.
 //
 // WHAT THIS FILE STOPPED ASSERTING, AND WHY. The sheet used to print the same
 // sentences as always-visible captions, once under each switch and once under
@@ -140,6 +148,8 @@ test('the settings sheet holds controls, not explanations', async ({ page }) => 
 });
 
 test('one link, not one per setting', async ({ page }) => {
+  // Below `lg`, where the link exists at all.
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
   await page.getByRole('button', SETTINGS).click();
@@ -151,7 +161,43 @@ test('one link, not one per setting', async ({ page }) => {
   await expect(sheet.getByRole('button', SHEET_LINK)).toHaveAttribute('aria-haspopup', 'dialog');
 });
 
+test('at 1920 Settings shows no link, because the header ⓘ is right there', async ({ page }) => {
+  // THE COMPLAINT, ASSERTED. Two doors to one dialog, inches apart. The header
+  // button is checked in the same breath so this can never pass by both of them
+  // being gone — which would leave a desktop with no route at all.
+  await page.setViewportSize({ width: 1920, height: 1000 });
+  await page.goto('/#overview');
+  await expect(page.locator('h1').first()).toBeVisible();
+  await expect(page.getByRole('button', OPEN)).toBeVisible();
+
+  await page.getByRole('button', SETTINGS).click();
+  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  await expect(sheet).toBeVisible();
+  // The controls it names are still in the sheet — the row that was removed is
+  // the explanation link, not the switches.
+  await expect(sheet).toContainText('Light · System · Dark');
+  await expect(sheet.getByRole('button', SHEET_LINK)).toHaveCount(0);
+  // And the explanation did not get copied back in to compensate.
+  for (const sentence of EXPLANATIONS) {
+    await expect(sheet).not.toContainText(sentence);
+  }
+});
+
+test('at 390 Settings shows the link, because the header ⓘ is not there', async ({ page }) => {
+  // The inverse of the test above, and the reason the row was not simply
+  // deleted: this is the phone's only route to the dialog.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#overview');
+  await expect(page.locator('h1').first()).toBeVisible();
+  await expect(page.getByRole('button', OPEN)).toBeHidden();
+
+  await page.getByRole('button', SETTINGS).click();
+  const sheet = page.getByRole('dialog', { name: 'Settings' });
+  await expect(sheet.getByRole('button', SHEET_LINK)).toBeVisible();
+});
+
 test('the link closes Settings and opens the dialog, rather than stacking two', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
   await page.getByRole('button', SETTINGS).click();
@@ -168,6 +214,8 @@ test('the link closes Settings and opens the dialog, rather than stacking two', 
 });
 
 test('closing that dialog puts focus back on the Settings button, not the ⓘ', async ({ page }) => {
+  // Narrow, because that is where the sheet's link lives now.
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
@@ -182,12 +230,16 @@ test('closing that dialog puts focus back on the Settings button, not the ⓘ', 
 
   // "…" is where the reader's attention was — they pressed it, and the sheet
   // it opened vanished on the way here. Landing on the header's ⓘ instead
-  // would drop them somewhere they never went.
+  // would drop them somewhere they never went. At this width that button is
+  // display:none, so "not focused" is asserted as "not on screen at all" —
+  // getByRole does not match a hidden element, and a `not.toBeFocused()` on a
+  // locator that resolves to nothing would prove nothing about where focus is.
   await expect(settings).toBeFocused();
-  await expect(page.getByRole('button', OPEN)).not.toBeFocused();
+  await expect(page.getByRole('button', OPEN)).toBeHidden();
 });
 
 test('the ✕ takes the same route home', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#overview');
   await expect(page.locator('h1').first()).toBeVisible();
 
