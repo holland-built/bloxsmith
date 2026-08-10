@@ -435,7 +435,7 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// switcher's active state, and Rotate() the cache (fence in-flight fetches +
 	// drop prior-tenant rows). Portal /api/switch-account keeps its own override
 	// and only Rotates — it is intentionally NOT cleared here.
-	acct := account.New(cfg.BaseURL, cfg.APIKey, auth, sharedCache)
+	acct := account.New(cfg.BaseURL, auth, sharedCache)
 	v.SetAuthReset(func() {
 		auth.SetOverride("")
 		acct.ResetActive()

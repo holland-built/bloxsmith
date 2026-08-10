@@ -16,7 +16,7 @@ func wireLive(t *testing.T, baseURL string) (*rest.Auth, *Manager) {
 	t.Helper()
 	c := cache.New()
 	auth := rest.NewAuth("ENVKEY", func() string { return "" })
-	m := New(baseURL, "ENVKEY", auth, c)
+	m := New(baseURL, auth, c)
 	return auth, m
 }
 

@@ -444,7 +444,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
 
             {accountsError ? (
               <div className="mb-4">
-                <FeedUnavailable label="CSP accounts unavailable" reason={accountsError} />
+                <FeedUnavailable label="Account switching unavailable" reason={accountsError} />
               </div>
             ) : accounts.length > 0 && (
               <>

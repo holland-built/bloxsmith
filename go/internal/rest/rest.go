@@ -102,6 +102,34 @@ func (a *Auth) Value() string {
 	return a.fallback
 }
 
+// IdentityValue resolves the credential that identifies the PERSON, not the
+// account they switched into: the env fallback when set, else the active tenant
+// key, and NEVER the account-switch override.
+//
+// The override is a short-lived Bearer JWT minted FOR one target account by
+// /v2/session/account_switch. Letting it leak into an identity call would ask
+// CSP "who is this account?" instead of "who is this user, and what may they
+// switch to?" — so the account list would narrow to the switched-in account and
+// an expired JWT would lock the user out of switching back (this package's doc
+// comment forbids exactly that). Value() is therefore the wrong resolver here:
+// it returns the override FIRST by design, because every REST proxy call must
+// follow the switch.
+//
+// Fallback is consulted before active() so env-key mode behaves byte-identically
+// to reading the env API_KEY directly, which is what account.Manager did before
+// it used this method.
+func (a *Auth) IdentityValue() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.fallback != "" {
+		return a.fallback
+	}
+	if a.active != nil {
+		return a.active()
+	}
+	return ""
+}
+
 // SetFallback replaces the env fallback key. Guarded so concurrent reads are safe.
 func (a *Auth) SetFallback(k string) {
 	a.mu.Lock()

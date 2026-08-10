@@ -74,3 +74,30 @@ than assume every listed view is operator-created.
 Layouts cannot express anything the grid cannot render — no free placement, no
 overlap, no fractional widths — and adding such a capability later means a
 `layout.version` bump plus a migration path in `parseLoad`, not a field addition.
+
+### 2026-08-09 — a fourth field, `layout.hidden`
+
+Taking a panel off the page shipped in v3.59.0 (2026-08-08), after the decision above
+was written. A saved layout is now `{name, order, layout:{version, spans, hidden}}`.
+`hidden` is a list of panel ids the operator has taken off the page — the same kind of
+value `order` already holds, and checked by the same `checkIdList` rather than by a
+second copy of the rules. `buildSaveBlob` always writes it, even when empty, so a
+record read by hand can tell "nothing is hidden" apart from "this build predates
+hiding"; `parseLoad` still tolerates its absence and defaults it to an empty list.
+
+**It nests inside `layout`, not at the top level, and that is not a style choice.**
+`ViewWrite` builds its record from the whitelist named in the Context above and
+silently discards every other top-level key, so a top-level `hidden` would POST,
+answer `{"ok":true}`, and read back gone — a failure with no visible symptom. `layout`
+is stored as an opaque map, so the field cost no Go change at all. The verification
+that the whitelist behaves this way is recorded in the header comment of
+`ui/src/lib/layout.js`.
+
+`LAYOUT_VERSION` deliberately did not move. Bumping it would have failed the version
+check on every layout saved before hiding existed, and each of those would have loaded
+as "nothing saved" — throwing away arrangements nobody asked to lose. An absent
+`hidden` means the same thing as an empty one, so the old records stay valid.
+
+The decision itself is unchanged: `hidden` is a list of panel ids, which is exactly as
+unable to name a pixel as `order` is, and `validateSave` still rejects any key beyond
+`version`, `spans` and `hidden` inside `layout`.

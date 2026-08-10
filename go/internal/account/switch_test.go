@@ -22,7 +22,7 @@ func wire(t *testing.T) (*vault.Vault, *rest.Auth, *Manager, *cache.Cache) {
 		t.Fatalf("init vault: %v", err)
 	}
 	auth := rest.NewAuth("ENVKEY", v.ActiveKey)
-	m := New("https://csp.example", "ENVKEY", auth, c)
+	m := New("https://csp.example", auth, c)
 	v.SetAuthReset(func() {
 		auth.SetOverride("")
 		m.ResetActive()
@@ -31,18 +31,32 @@ func wire(t *testing.T) (*vault.Vault, *rest.Auth, *Manager, *cache.Cache) {
 	return v, auth, m, c
 }
 
-// TestResetActive checks the account.Manager reset in isolation: active returns
-// to home and the JWT timestamp is zeroed.
+// TestResetActive checks the account.Manager reset in isolation: active, home,
+// homeVerified and the JWT timestamp are all cleared.
+//
+// home/homeVerified belong to the OLD tenant's key. Leaving them set (the
+// original behaviour) meant the next tenant inherited the previous tenant's home
+// account, so SwitchAccount could take its home-branch and report ok:true for an
+// account the new key may not belong to. That was unreachable while vault mode
+// 401'd on every identity call and became live the moment cspJSON started
+// sending a real credential.
 func TestResetActive(t *testing.T) {
 	_, _, m, _ := wire(t)
 	m.home = "home-acct"
+	m.homeVerified = true
 	m.active = "other-acct"
 	m.jwtIssue = time.Now()
 
 	m.ResetActive()
 
-	if m.Active() != "home-acct" {
-		t.Fatalf("active not reset to home: %q", m.Active())
+	if m.Active() != "" {
+		t.Fatalf("active not cleared: %q", m.Active())
+	}
+	if m.home != "" {
+		t.Fatalf("home not cleared — the previous tenant's home leaked: %q", m.home)
+	}
+	if m.homeVerified {
+		t.Fatal("homeVerified not cleared: the new tenant's identity was never checked")
 	}
 	if !m.jwtIssue.IsZero() {
 		t.Fatal("jwtIssue not cleared")
@@ -82,8 +96,11 @@ func TestVaultSwitchClearsPortalOverrideAndAccount(t *testing.T) {
 	if got := auth.Value(); got != "Token bbb" {
 		t.Fatalf("Auth.Value must be the new tenant key, got %q", got)
 	}
-	if m.Active() != "home-acct" {
+	if m.Active() != "" {
 		t.Fatalf("account.Manager active not reset: %q", m.Active())
+	}
+	if m.home != "" || m.homeVerified {
+		t.Fatalf("previous tenant's home survived the vault switch: home=%q verified=%v", m.home, m.homeVerified)
 	}
 	if !m.jwtIssue.IsZero() {
 		t.Fatal("account JWT timestamp not reset")

@@ -42,11 +42,20 @@ func (d *Deps) accounts(w http.ResponseWriter, r *http.Request) {
 	res, err := d.Account.ListAccounts()
 	if err != nil {
 		d.logExc("/api/accounts", err)
-		msg := "Infoblox CSP unreachable"
+		// These strings are read by a non-engineer in the Settings sheet, so they
+		// say what is broken and what still works — no status codes, no "CSP".
+		// A 401/403 is still genuinely possible after the vault-mode credential
+		// fix (a key really can lack multi-account scope), so the message stays
+		// honest about it rather than promising the problem is gone.
+		msg := "Could not reach Infoblox."
 		var status any
 		if he, ok := err.(*account.HTTPError); ok {
 			status = he.Code
-			msg = "CSP rejected this key (" + itoaStatus(he.Code) + ")"
+			if he.Code == 401 || he.Code == 403 {
+				msg = "This key cannot list your Infoblox accounts. Everything else works; only account switching is off."
+			} else {
+				msg = "Could not reach Infoblox to list your accounts. Try again."
+			}
 		}
 		d.json(w, r, 200, map[string]any{"accounts": []any{}, "active": "", "error": msg, "status": status})
 		return

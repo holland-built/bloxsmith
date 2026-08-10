@@ -28,7 +28,6 @@ const cspTimeout = 15 * time.Second
 type Manager struct {
 	mu      sync.Mutex
 	baseURL string
-	apiKey  string // original env API_KEY (never overwritten)
 	auth    *rest.Auth
 	cache   *cache.Cache
 	http    *http.Client
@@ -42,12 +41,13 @@ type Manager struct {
 	jwtIssue     time.Time
 }
 
-// New builds the Manager from the immutable env API_KEY plus the shared auth +
-// cache. baseURL is INFOBLOX_URL.
-func New(baseURL, apiKey string, auth *rest.Auth, c *cache.Cache) *Manager {
+// New builds the Manager from the shared auth slot + cache. baseURL is
+// INFOBLOX_URL. The identity credential is resolved live from auth rather than
+// captured here: in vault mode there IS no env API_KEY, so a captured copy was
+// always the empty string and every identity call 401'd.
+func New(baseURL string, auth *rest.Auth, c *cache.Cache) *Manager {
 	return &Manager{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
 		auth:    auth,
 		cache:   c,
 		http:    &http.Client{Timeout: cspTimeout},
@@ -55,7 +55,9 @@ func New(baseURL, apiKey string, auth *rest.Auth, c *cache.Cache) *Manager {
 }
 
 // cspJSON is _csp_json (server.py:262): a small sync call to a CSP identity
-// endpoint, always signed with the original API_KEY.
+// endpoint, always signed with the caller's own identity credential — the env
+// API_KEY when there is one, else the active vault tenant's key. Never the
+// switched-account JWT; see rest.Auth.IdentityValue.
 func (m *Manager) cspJSON(path string, body any) (map[string]any, int, error) {
 	var rdr *bytes.Reader
 	var req *http.Request
@@ -73,7 +75,7 @@ func (m *Manager) cspJSON(path string, body any) (map[string]any, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("Authorization", m.apiKey)
+	req.Header.Set("Authorization", m.auth.IdentityValue())
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := m.http.Do(req)
 	if err != nil {
@@ -215,15 +217,30 @@ func (m *Manager) SwitchAccount(accountID string) (map[string]any, error) {
 	return map[string]any{"ok": true, "active": accountID, "name": known[accountID]}, nil
 }
 
-// ResetActive clears the portal account-switch state (active back to the home
-// account, JWT timestamp zeroed). It is called by the vault's coordinated reset
-// on a vault-tenant mutation so the account context can't outlive the tenant it
-// belonged to. It does NOT touch the auth override or the cache — the coordinated
-// caller (main's authReset) clears the override and rotates the cache.
+// ResetActive clears the portal account-switch state (home, active and the JWT
+// timestamp) on a vault-tenant mutation, so the account context can't outlive
+// the tenant it belonged to. It does NOT touch the auth override or the cache —
+// the coordinated caller (main's authReset) clears the override and rotates the
+// cache.
+//
+// home and homeVerified MUST be cleared with active. They identify the CSP
+// account belonging to the OLD tenant's key; the new tenant is a different
+// credential for, in general, a different person. Keeping them would let
+// SwitchAccount take its home-branch — clear the override, report ok:true — for
+// an account the new key may not even belong to, and would pin the switcher's
+// default to the previous tenant. Clearing them makes the next listAccountsLocked
+// re-resolve identity via /v2/current_user, which is the only source of truth.
+//
+// This was unreachable until now for a single reason: in vault mode every
+// identity call authenticated with an empty header and 401'd, so home was never
+// populated in the first place. Fixing that (cspJSON now uses
+// auth.IdentityValue) is exactly what makes this path live.
 func (m *Manager) ResetActive() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.active = m.home
+	m.home = ""
+	m.homeVerified = false
+	m.active = ""
 	m.jwtIssue = time.Time{}
 }
 

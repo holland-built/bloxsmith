@@ -79,7 +79,7 @@ func lockedTestServer(t *testing.T) (h http.Handler, d *Deps, upstreamHits *int)
 		Rest:    rest.New(upstream.URL, auth),
 		Guard:   &httpx.Guard{Port: "8080", MutatingPaths: httpx.DefaultMutatingPaths()},
 		Cache:   cache,
-		Account: account.New(csp.URL, "abc123def456", auth, cache),
+		Account: account.New(csp.URL, auth, cache),
 		Audit: audit.New(filepath.Join(dir, "audit_log.jsonl"), "app-v-test", "test-instance",
 			audit.Options{TrustDir: t.TempDir()}),
 		// A real (if empty) provisioning engine, not nil. With nil, disabling the

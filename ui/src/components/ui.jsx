@@ -273,6 +273,49 @@ function applyLayout(grid, items, overrides) {
   }
 }
 
+// ---- the save pill: the layout feature's only word to a SIGHTED operator ----
+//
+// WHY THERE IS A SECOND ELEMENT AT ALL, when the live region already carries
+// this news. Two reasons, and each one is on its own sufficient.
+//
+//   1. The live region is `sr-only` and has to stay that way. Unhiding it would
+//      make a screen-reader user hear every message twice — once from the live
+//      region firing, once when they read the page — and would put "Moved to
+//      position 3 of 7" permanently on screen for everyone else. So the region
+//      keeps its job (assistive tech, every message) and the pill gets a
+//      narrower one (sighted operators, the save verdict only).
+//   2. tests/layout-drag.spec.ts pins the region's exact text with `toBe` in
+//      nine places (`grep -n 'liveText(page)).toBe' tests/layout-drag.spec.ts`
+//      — counted, not remembered; line numbers are not quoted here because
+//      they move every time that file grows a case). Any visible chrome added
+//      inside the region changes the string all nine compare against.
+//
+// The pill is `aria-hidden` for the mirror-image reason: assistive tech is
+// already being told, by the region, in its own words. Announcing the same
+// outcome from two elements is the duplicate-message bug, pointed the other way.
+//
+// This is deliberately not a toast SYSTEM. PRODUCT.md's first principle is
+// "density over decoration — every pixel should carry information or
+// structure", and there is exactly ONE message type in the whole app that needs
+// to be said this way. A context, a portal and a queue would be an order of
+// magnitude more code than one ref-driven div, for a generality nothing has
+// asked for. If a second message type ever appears, that is the moment to build
+// the system — not before.
+const SAVE_PILL_BASE =
+  'pointer-events-none fixed bottom-4 right-4 z-[150] rounded-md border px-3 py-1.5 text-[11px] font-semibold'
+// `hidden`, not `opacity-0`: an empty bordered box is still a painted box.
+const SAVE_PILL_HIDDEN = `${SAVE_PILL_BASE} hidden`
+const SAVE_PILL_OK = `${SAVE_PILL_BASE} border-[var(--pill-ok-fg)] bg-[var(--pill-ok-bg)] text-[var(--pill-ok-fg)]`
+const SAVE_PILL_FAIL = `${SAVE_PILL_BASE} border-[var(--pill-crit-fg)] bg-[var(--pill-crit-bg)] text-[var(--pill-crit-fg)]`
+const SAVE_PILL_MS = 2500
+
+// The words. Short enough to read at a glance on success, because the operator
+// already saw the panel move and only needs confirming; explicit about the
+// CONSEQUENCE on failure, because "Save failed" tells somebody who does not
+// know what a POST is precisely nothing about what to do next.
+const SAVE_PILL_OK_TEXT = 'Saved'
+const SAVE_PILL_FAIL_TEXT = 'Could not save — your change is only on this screen.'
+
 // `layoutKey` opts a grid into server-side layout persistence: it names the
 // saved view (`__layout_<layoutKey>`) looked up on mount. Everything about the
 // feature is behind that one prop — a CardGrid without it issues no request,
@@ -288,6 +331,13 @@ export function CardGrid({ className = '', layoutKey, children }) {
   const overridesRef = useRef(new Map())
   const rafRef = useRef(null)
   const liveRef = useRef(null)
+  // The VISIBLE half of "your change was written", and the timer that takes it
+  // away again. See SAVE_PILL_* below for why this is a second element rather
+  // than the live region, and why neither of them is React state.
+  const toastRef = useRef(null)
+  const toastTimerRef = useRef(null)
+  // Which save is allowed to speak. See ctx.apply.
+  const saveSeqRef = useRef(0)
   const [layout, setLayout] = useState(null)
   // Which panel is in keyboard move mode, and the order+spans it had when it
   // entered (what Escape restores).
@@ -376,6 +426,61 @@ export function CardGrid({ className = '', layoutKey, children }) {
       if (ref.current) applyLayout(ref.current, itemsRef.current, overridesRef.current)
     })
   }, [])
+
+  // showSavePill — the one writer of the visible pill. Written to the DOM by
+  // hand, exactly as announce() below is and for exactly the same reason: this
+  // fires at the end of a drag, and a setState here would re-render the grid
+  // the gesture just finished measuring. That is the loop the whole layout
+  // feature is built to stay out of, and it is why there is no `savedMessage`
+  // state anywhere in this file.
+  //
+  // The timer lives in a ref so a second save inside 2.5s replaces the first
+  // message instead of stacking two timers that each clear it.
+  const showSavePill = useCallback((text, tone) => {
+    const el = toastRef.current
+    if (!el) return
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    el.textContent = text
+    el.className = tone === 'fail' ? SAVE_PILL_FAIL : SAVE_PILL_OK
+    toastTimerRef.current = setTimeout(() => {
+      toastTimerRef.current = null
+      if (!toastRef.current) return
+      toastRef.current.textContent = ''
+      toastRef.current.className = SAVE_PILL_HIDDEN
+    }, SAVE_PILL_MS)
+  }, [])
+
+  // sayVerdict — the save outcome, APPENDED to the live region rather than
+  // written over it, and that is not a style choice.
+  //
+  // Every gesture calls ctx.apply(next, true) and then ctx.announce("Moved to
+  // position 3 of 7") synchronously, so the save always resolves after the
+  // gesture has already said what it did. Replacing would therefore delete the
+  // only sentence that names WHAT moved and WHERE — the message the operator
+  // actually asked for — and leave a bare "Layout saved" behind. Both facts
+  // matter, they are about the same action, and `aria-atomic="true"` means the
+  // region is re-read whole, so one sentence carrying both is what a screen
+  // reader wants anyway.
+  //
+  // The trailing full stop is normalised because the announcements disagree
+  // about it: "Moved to position 3 of 7" has none, "Layout is back where it
+  // started." does.
+  const sayVerdict = useCallback((text) => {
+    const el = liveRef.current
+    if (!el) return
+    const said = (el.textContent ?? '').trim()
+    el.textContent = said ? `${said.replace(/\.?$/, '.')} ${text}` : text
+  }, [])
+
+  // A tab switch unmounts the grid mid-timer. Without this the callback fires
+  // against a detached node — harmless today, but it is also the shape that
+  // leaks a timer per tab change for the life of the session.
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     if (!layoutKey) return undefined
@@ -467,13 +572,38 @@ export function CardGrid({ className = '', layoutKey, children }) {
       // schema — saveLayout throws on anything validateSave rejects, before
       // it reaches the network. `save: false` is the keyboard preview: the
       // layout moves on screen but nothing is written until Enter.
+      //
+      // AND THE SINGLE PLACE THE OUTCOME IS REPORTED. Until 2026-08-10 this
+      // had a `.catch` and no `.then`, and saveLayout resolved `false` on a
+      // non-ok response — so a 500 was silent in every channel at once. Both
+      // halves are fixed: saveLayout throws (lib/layout.js), and both arms are
+      // handled here.
       apply(next, save) {
         setLayout(next)
         if (save && layoutKey) {
-          saveLayout(layoutKey, next).catch((err) => {
-            console.error('layout save failed', err)
-            if (liveRef.current) liveRef.current.textContent = 'Layout could not be saved'
-          })
+          // THE SEQUENCE GUARD, AND IT IS THE ONE REAL HAZARD IN THIS FILE.
+          // Two gestures in a row put two POSTs in flight and nothing orders
+          // the responses. Without this, a slow FIRST save resolving after a
+          // fast second one would write its verdict over the newer one's — so
+          // a page whose latest save was rejected could sit there reading
+          // "Saved". Only the newest save may write a message; an older one
+          // that comes home late is dropped, because its verdict is no longer
+          // about what is on screen.
+          const seq = ++saveSeqRef.current
+          saveLayout(layoutKey, next)
+            .then(() => {
+              if (seq !== saveSeqRef.current) return
+              sayVerdict('Layout saved')
+              showSavePill(SAVE_PILL_OK_TEXT, 'ok')
+            })
+            .catch((err) => {
+              // Logged whether or not this save is still the newest: a stale
+              // failure is still a real failure and still worth a console line.
+              console.error('layout save failed', err)
+              if (seq !== saveSeqRef.current) return
+              sayVerdict('Layout could not be saved')
+              showSavePill(SAVE_PILL_FAIL_TEXT, 'fail')
+            })
         }
       },
       // ---- keyboard move mode ----
@@ -524,7 +654,7 @@ export function CardGrid({ className = '', layoutKey, children }) {
         }
       },
     }),
-    [schedule, layout, layoutKey, moveId, reorderable],
+    [schedule, sayVerdict, showSavePill, layout, layoutKey, moveId, reorderable],
   )
 
   // A move that has run out of things to move. If the grid drops to one visible
@@ -832,11 +962,18 @@ export function CardGrid({ className = '', layoutKey, children }) {
           onClose={() => setArrangeOpen(false)}
         />
       )}
-      {/* One live region per managed grid, OUTSIDE the grid element so it is
-          never a grid item and can never take a track. Rendered only when
-          layoutKey is set, so an unmanaged tab's DOM is unchanged down to the
-          element count. */}
-      {layoutKey && <div ref={liveRef} data-layout-live="" aria-live="polite" aria-atomic="true" className="sr-only" />}
+      {/* One live region per managed grid, and one save pill — both OUTSIDE the
+          grid element so neither is ever a grid item that could take a track.
+          Rendered only when layoutKey is set, so an unmanaged tab's DOM is
+          unchanged down to the element count. The two say the same news to two
+          different audiences; SAVE_PILL_BASE's comment is why that is two
+          elements and not one. */}
+      {layoutKey && (
+        <>
+          <div ref={liveRef} data-layout-live="" aria-live="polite" aria-atomic="true" className="sr-only" />
+          <div ref={toastRef} data-layout-toast="" aria-hidden="true" className={SAVE_PILL_HIDDEN} />
+        </>
+      )}
     </GridFitContext.Provider>
   )
 }
@@ -1803,7 +1940,13 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       } else if (e.key === 'Enter') {
         e.preventDefault()
         grid.endMove(true, snap)
-        grid.announce(`${label} placed at position ${snap.order.indexOf(panelId) + 1} of ${snap.order.length}. Layout saved.`)
+        // NO "Layout saved." HERE ANY MORE. This ran synchronously, before the
+        // POST had even left, so on a rejected save it was a flat lie — and it
+        // was the only path that claimed it, so the drag and the keyboard
+        // disagreed about whether saving was worth mentioning. The verdict is
+        // appended by ctx.apply when the server has actually answered, which
+        // makes both paths say it and neither say it early.
+        grid.announce(`${label} placed at position ${snap.order.indexOf(panelId) + 1} of ${snap.order.length}.`)
       } else if (e.key === 'Escape') {
         e.preventDefault()
         grid.endMove(false)
