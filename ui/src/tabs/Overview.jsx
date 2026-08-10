@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
+import { useHasArranged } from '../lib/arrangedOnce.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, TabIntro, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
@@ -88,6 +89,7 @@ const SubnetUsageBars = lazy(() => import('../charts/SubnetUsageBars.jsx'))
 const StatusDonut = lazy(() => import('../charts/StatusDonut.jsx'))
 
 export default function Overview() {
+  const arrangedOnce = useHasArranged()
   const dns = useApi('/api/csp/dns-qps', { poll: 30000 })
   const data = useApi('/api/data', { poll: 30000 })
   const licenses = useApi('/api/csp/license-alerts', { poll: 30000 })
@@ -123,11 +125,29 @@ export default function Overview() {
           layout", and it is written out because the honest answer is that
           there is nothing to press: every drop and every resize commit writes
           the view by itself. A reader hunting a Save button finds none and
-          concludes their arrangement was lost. */}
+          concludes their arrangement was lost.
+
+          AND IT STOPS ONCE IT HAS BEEN LEARNED. It is onboarding, not
+          reference: worth 30 words on the first visit and worth nothing on the
+          four hundredth, where it is just permanent instructions above the
+          thing you came to read. The moment a rearrangement actually saves
+          (lib/arrangedOnce.js) it is retired for good on this browser. What
+          stays is the one-line summary of what the tab IS, which does not go
+          out of date the way a lesson does.
+
+          NOTHING IS LOST WHEN IT GOES. The Arrange panels button below is
+          always there, and the window it opens says the same thing in full —
+          "Changes here save right away — there is no Save button" — so the
+          answer to "how do I save my layout" is still one click away from this
+          page forever. The Docs button beside this line has it too. */}
       <TabIntro anchor="overview">
         Your estate at a glance — DNS load, address use, subnet fullness and host health.
-        On this tab you can drag a panel’s ⠿ handle to rearrange it, or drag its right
-        edge to resize, and your arrangement saves automatically.
+        {!arrangedOnce && (
+          <>
+            {' '}On this tab you can drag a panel’s ⠿ handle to rearrange it, or drag its right
+            edge to resize, and your arrangement saves automatically.
+          </>
+        )}
       </TabIntro>
       {totals.degraded && (
         <div className="text-[11px] text-dim mb-2">
