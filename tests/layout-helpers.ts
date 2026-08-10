@@ -61,6 +61,72 @@ export const geometry = (page: Page) =>
     return { track: parseFloat(tracks[0]), gap: parseFloat(cs.columnGap) || 0, trackCount: tracks.length };
   });
 
+// ---------------------------------------------------------------------------
+// The wide <-> narrow transition
+// ---------------------------------------------------------------------------
+//
+// WHY THIS EXISTS. Every layout spec in this repo used to arrive at its width by
+// loading fresh there, and that is exactly the case the collapse bug does NOT
+// occur in. A fresh 390px load never writes an inline `span 6`, so there is
+// nothing stale for the grid to trip over; the failure needs a grid that was
+// laid out WIDE and is then made narrow while those spans are still on the
+// elements. Measured at commit b41767a, loading #security at 1920 and narrowing
+// to 390: gridTemplateColumns reported five tracks ("0px 0px 110.3px 110.3px
+// 73.4px") on a grid-cols-2 grid and security-threat-events rendered 38px wide.
+// A fresh 390 load of the same tab was, and is, correct. So the transition is
+// the thing under test, and it needs a function that performs it honestly.
+const SETTLE_MS = 800;
+
+// Changes the viewport and waits for the grid to finish reacting to it.
+//
+// TWO FRAMES, NOT ONE, and that is not padding. The ResizeObserver on the grid
+// delivers on the frame AFTER the layout that changed its box, and CardGrid's
+// schedule() then defers applyLayout to a requestAnimationFrame of its own. A
+// single frame lands between those two and reads a grid mid-repair, which would
+// make this helper report the bug on a fixed build.
+//
+// The settle on top of that is for the bodies: a DataTable re-measures its
+// columns at the new width, and a changed measurement republishes a need, which
+// schedules one more applyLayout. Height is carried over from the current
+// viewport so a caller narrowing a 2400px-tall page does not silently shorten it.
+export async function narrowTo(page: Page, width: number, height?: number) {
+  await page.setViewportSize({ width, height: height ?? page.viewportSize()?.height ?? 2400 });
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+  await page.waitForTimeout(SETTLE_MS);
+}
+
+// Everything about the grid that a breakpoint change is allowed to move, in one
+// read, so "and it is identical a second later" can be a single toEqual.
+//
+// `rendered` is the track count the BROWSER produced (implicit columns and all);
+// `declared` is the --grid-tracks the CSS set at this breakpoint, which is the
+// same number readGeometry works from. The two disagreeing is the bug, stated
+// directly: anything above `declared` is a column no rule ever asked for.
+export const gridShape = (page: Page) =>
+  page.evaluate(() => {
+    const grid = document.querySelector('[data-card-grid]') as HTMLElement;
+    if (!grid) return null;
+    const cs = getComputedStyle(grid);
+    const tracks = cs.gridTemplateColumns.split(' ').filter(Boolean);
+    const cards = [...document.querySelectorAll('[data-panel-id]')].map((el) => ({
+      id: el.getAttribute('data-panel-id')!,
+      // Rounded to whole pixels: sub-pixel jitter between two reads of a
+      // stationary card is the browser's rounding, not an oscillation.
+      width: Math.round((el as HTMLElement).getBoundingClientRect().width),
+      span: (el as HTMLElement).style.gridColumn || '',
+    }));
+    return {
+      rendered: tracks.length,
+      declared: Number(cs.getPropertyValue('--grid-tracks').trim()),
+      trackPx: tracks.join(' '),
+      gridWidth: grid.clientWidth,
+      gap: parseFloat(cs.columnGap) || 0,
+      cards,
+    };
+  });
+
 export const cardBox = (page: Page, id: string) =>
   page.evaluate((panelId) => {
     const el = document.querySelector(`[data-panel-id="${panelId}"]`) as HTMLElement;

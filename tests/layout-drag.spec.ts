@@ -1,8 +1,8 @@
 import { test, expect } from './fixtures';
 import {
   activeHandlePanel, cardBox, clampY, domOrder, dragOntoRightHalfOf, expectEverySpanWellFormed,
-  expectPersistedBlobIsValid, geometry, gotoTab, grabRightEdge, inlineSpans, liveText,
-  savedBlob as savedBlobFor, strayDragStyles, tableOverflow, tabToHandle,
+  expectPersistedBlobIsValid, geometry, gotoTab, grabRightEdge, gridShape, inlineSpans, liveText,
+  narrowTo, savedBlob as savedBlobFor, strayDragStyles, tableOverflow, tabToHandle,
 } from './layout-helpers';
 
 // P9 (item 8) — drag-to-rearrange with column snapping, and edge-drag resize.
@@ -815,6 +815,92 @@ for (const tab of TAB_CASES) {
 
       await gotoTab(page, tab.id, tab.declared.length);
       expect(await domOrder(page)).toEqual(swapped);
+    });
+
+    // ---- the transition, with a gesture in front of it ----
+    //
+    // The sibling cases in tests/table-sizing.spec.ts narrow a grid nobody has
+    // touched. This one narrows a grid an operator has just DRAGGED at 1920,
+    // which is the state the collapse was originally reported from and the
+    // worst version of it: the drop rewrites `order`, which re-sorts the real
+    // children, and until 2026-08-10 that also emptied the fit map for every
+    // card at once (see the eviction comment on Card's layout effect). A card
+    // with no measured need left could not be re-clamped, so its inline
+    // `span 4 / span 4`, written for six tracks, survived into a two-track grid.
+    //
+    // #security is the sharpest subject: 12 panels, three of them from a
+    // hiddenPanelGroup run, and it is the tab that measured five rendered
+    // tracks ("0px 0px 110.3px 110.3px 73.4px") with security-threat-events at
+    // 38px wide at commit b41767a.
+    test(`a drag at 1920 then a narrow window leaves the grid the shape the CSS declares`, async ({ page }) => {
+      test.setTimeout(180_000);
+      await gotoTab(page, tab.id, tab.declared.length);
+      expect((await gridShape(page))!.declared).toBe(6);
+
+      await dragOntoRightHalfOf(page, tab.declared[0], 1);
+      expect(await domOrder(page)).toEqual(swapped);
+
+      // Narrowed straight away, inside the window before the 30s data poll
+      // re-renders the Cards and repairs anything by accident.
+      await narrowTo(page, 390);
+      const narrow = (await gridShape(page))!;
+
+      expect(narrow.declared, 'grid-cols-2 is the base grid').toBe(2);
+      expect(
+        narrow.rendered,
+        `#${tab.id} at 390px after a drag: the browser laid out ${narrow.rendered} columns where the CSS ` +
+          `declares ${narrow.declared} — gridTemplateColumns "${narrow.trackPx}"`,
+      ).toBe(narrow.declared);
+      // One track is the narrowest a card may legally be; 38px on a grid whose
+      // track is 165px is the starvation people report. Asserted as a floor
+      // rather than as "everything is full width" so a panel that genuinely
+      // declares span={1} stays legal.
+      const narrowTrack = (narrow.gridWidth - narrow.gap) / 2;
+      for (const card of narrow.cards) {
+        const n = Number((/span (\d+)/.exec(card.span) || ['', '0'])[1]);
+        expect(n, `${card.id} renders "${card.span}" against 2 tracks`).toBeLessThanOrEqual(2);
+        expect(
+          card.width,
+          `${card.id} is ${card.width}px, under one ${Math.round(narrowTrack)}px track`,
+        ).toBeGreaterThanOrEqual(Math.floor(narrowTrack) - 1);
+      }
+      expect(narrow.cards[0].width, 'the first card does not fill the 2-track grid').toBe(narrow.gridWidth);
+      const doc = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(doc.scrollWidth, `page overflows horizontally: ${doc.scrollWidth} > ${doc.clientWidth}`)
+        .toBeLessThanOrEqual(doc.clientWidth);
+
+      // Self-sustaining, not transient: at b41767a this read identically a
+      // second later, so "wait longer" was never the fix and "it settles" is
+      // never the proof.
+      await page.waitForTimeout(1000);
+      expect(await gridShape(page), 'the grid changed shape a second after settling').toEqual(narrow);
+
+      // ---- and back out again ----
+      //
+      // The reverse direction is not symmetric and is not covered by the
+      // forward case: widening RAISES the track count, so a span that was
+      // clamped down to 2 has to be recomputed upward from the saved/measured
+      // intent rather than merely clamped again. A fix that only ever shrank
+      // spans would pass every narrowing test and leave the page permanently
+      // two columns wide after one visit to a phone width.
+      await narrowTo(page, 1920);
+      const wide = (await gridShape(page))!;
+      expect(wide.declared, 'xl:grid-cols-6 at 1920').toBe(6);
+      expect(
+        wide.rendered,
+        `#${tab.id} back at 1920: gridTemplateColumns "${wide.trackPx}" against ${wide.declared} declared`,
+      ).toBe(wide.declared);
+      // The tab is not stuck narrow: something is wider than one track again.
+      const oneTrack = (wide.gridWidth - 5 * wide.gap) / 6;
+      expect(
+        Math.max(...wide.cards.map((c) => c.width)),
+        `#${tab.id} never recovered its width after the round trip — every card is at most one ${Math.round(oneTrack)}px track`,
+      ).toBeGreaterThan(oneTrack * 2);
+      expect(await tableOverflow(page)).toEqual([]);
+      expect(await domOrder(page)).toEqual(swapped); // the round trip moved nothing
     });
 
     test(`a keyboard-only move reaches the same saved layout`, async ({ page, request }) => {

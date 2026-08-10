@@ -135,6 +135,67 @@ html[data-density="compact"] {
   --sp-cell-y: 0.25rem;
 }
 
+/* ---------- the card grid's track count, declared where the browser decides it ----------
+
+   `--grid-tracks` is the number of columns [data-card-grid] ACTUALLY declares at
+   this viewport, mirroring the `grid-cols-2 md:grid-cols-4 xl:grid-cols-6` on
+   the element itself (ui.jsx's CardGrid). readGeometry (ui.jsx) reads it and
+   computes the track width arithmetically instead of parsing
+   `gridTemplateColumns`.
+
+   WHY IT IS NOT READ OFF gridTemplateColumns ANY MORE. getComputedStyle
+   serialises IMPLICIT columns alongside the declared ones, and a card carrying
+   an inline `span 6` written for the xl grid creates exactly those. Measured on
+   this tree at commit b41767a, loading at 1920 and narrowing to 390:
+
+     #security   gridTemplateColumns "0px 0px 110.3px 110.3px 73.4px"   5 tracks
+     #network    gridTemplateColumns "0px 0px 153px 153px"              4 tracks
+     #incidents  gridTemplateColumns "23.6px 23.6px 129.4px 129.4px"    4 tracks
+
+   The declared `minmax(0,1fr)` tracks are crushed toward 0 to pay for implicit
+   columns that take real width, so the parsed `track` falls, the count of tracks
+   that "fit" rises, the clamp stops clamping, the span 6 survives at 390px — and
+   that is what keeps the implicit columns alive. Self-sustaining. The victim was
+   security-threat-events at 38px, starved by its neighbours' stale spans.
+
+   WHY THIS TERMINATES, and why it is not a third go at the same failed idea.
+   The two earlier attempts (see headNeed's comment in ui.jsx) both measured a
+   DOM width that was itself a function of the width being decided. Every input
+   here is strictly upstream of the output:
+
+     - a custom property is inherited DOWN. No child can change it, so nothing
+       the cards do can move the track count.
+     - the media queries key off the VIEWPORT, which no element affects.
+     - grid.clientWidth is a block-level div's padding-box width: set by its
+       ancestor, and never widened by an overflowing child.
+
+   So the computation is one pass with no cycle in it. There is no fixpoint to
+   converge to and none to diverge from.
+
+   THE THRESHOLDS ARE DUPLICATED, DELIBERATELY AND UNDER TEST. They live here as
+   media queries and in ui.jsx as Tailwind `md:`/`xl:` prefixes, and the two must
+   agree or the count is a lie at exactly one breakpoint. Written in rem at
+   Tailwind v4's own `--breakpoint-md: 48rem` / `--breakpoint-xl: 80rem` so the
+   query text is character-identical to the one Tailwind emits — no px/rem
+   rounding to disagree about. ui/src/lib/gridTracks.test.js fails if the class
+   string, these queries and Tailwind's own theme ever drift apart.
+
+   `grid-auto-columns: 0` makes readGeometry's old assumption ("an implicit
+   column is 0px") true by construction rather than by hope. It is a belt to the
+   braces above: with the track count no longer read from the serialisation, an
+   implicit column can no longer raise the ceiling — this just stops one from
+   taking visible width on the way to being cleared. */
+[data-card-grid] {
+  --grid-tracks: 2;
+  grid-auto-columns: 0;
+}
+@media (width >= 48rem) {
+  [data-card-grid] { --grid-tracks: 4; }
+}
+@media (width >= 80rem) {
+  [data-card-grid] { --grid-tracks: 6; }
+}
+
 html { background: var(--color-bg); }
 body {
   margin: 0;

@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { gridShape, narrowTo } from './layout-helpers';
 
 // Locks in the panel-sizing model: DataTable.jsx's measured column widths plus
 // ui.jsx's content-driven grid span. Three invariants, checked for every <table>
@@ -297,6 +298,117 @@ test.describe('table column sizing', () => {
         .join('\n');
 
       expect(allViolations, message || undefined).toEqual([]);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// THE WIDTHS ABOVE ARE ALL FRESH LOADS, AND THAT IS WHY THEY PASSED.
+//
+// The sweep at the top of this file visits four widths by navigating at each
+// one. A grid that has only ever been laid out at 390px carries no inline span
+// written for six tracks, so there is nothing stale in it and the sizing
+// invariants hold. The failure people actually hit is a grid laid out WIDE and
+// then narrowed with those spans still on the elements — and it was invisible
+// to every spec in this repo for exactly that reason.
+//
+// Measured at commit b41767a by loading at 1920 and narrowing to 390:
+//
+//   #security   gridTemplateColumns "0px 0px 110.3px 110.3px 73.4px"  5 tracks
+//   #network    gridTemplateColumns "0px 0px 153px 153px"             4 tracks
+//   #incidents  gridTemplateColumns "23.6px 23.6px 129.4px 129.4px"   4 tracks
+//
+// on a `grid-cols-2` grid, with the widest inline span reading `span 5 / span 5`
+// and security-threat-events rendering 38px wide. Re-read a second later it was
+// byte-identical — a fixpoint, not a frame of transient churn, which is why the
+// third assertion below is "and it is the same one second later" rather than a
+// longer wait.
+//
+// WHY IT RUNS DOWN THROUGH 1024 RATHER THAN STRAIGHT TO 390. 1024 is the md
+// grid (4 tracks) — the one breakpoint where the arithmetic readGeometry now
+// does, (clientWidth - (N-1)*gap) / N, could disagree with the browser's own
+// rounding without either end being obviously wrong. Passing through it makes
+// the chain of breakpoints the test, not just its endpoints.
+const TRANSITION_STEPS = [
+  { width: 1920, tracks: 6 },
+  { width: 1024, tracks: 4 },
+  { width: 390, tracks: 2 },
+];
+
+test.describe('breakpoint transitions', () => {
+  for (const tab of TABS) {
+    test(`tab "#${tab}": narrowing from 1920 keeps the grid the shape the CSS declares`, async ({ page }) => {
+      test.setTimeout(150_000);
+
+      await page.setViewportSize({ width: TRANSITION_STEPS[0].width, height: 2400 });
+      await page.goto(`/#${tab}`);
+      await expect(page.locator('h1').first()).toBeVisible();
+      await page
+        .waitForFunction(
+          () => Array.from(document.querySelectorAll('table')).some((t) => t.querySelectorAll('tbody tr').length > 0),
+          { timeout: 15000 },
+        )
+        .catch(() => {});
+      await page.waitForTimeout(800);
+
+      let shape = await gridShape(page);
+      expect(shape, `#${tab} renders no [data-card-grid]`).not.toBeNull();
+
+      for (const step of TRANSITION_STEPS) {
+        if (step.width !== TRANSITION_STEPS[0].width) await narrowTo(page, step.width);
+        shape = (await gridShape(page))!;
+
+        // The CSS and the class string agree about this number — that is what
+        // ui/src/lib/gridTracks.test.js checks statically. Pinned to a literal
+        // here as well so this spec fails if BOTH sides move together.
+        expect(shape.declared, `#${tab} at ${step.width}px: --grid-tracks`).toBe(step.tracks);
+
+        // THE ASSERTION THE BUG WOULD HAVE FAILED. Anything above `declared` is
+        // an implicit column, which only exists because some card asked for more
+        // tracks than this breakpoint has.
+        expect(
+          shape.rendered,
+          `#${tab} at ${step.width}px: the browser laid out ${shape.rendered} columns where the CSS declares ` +
+            `${shape.declared} — gridTemplateColumns "${shape.trackPx}". The extra ones are implicit columns ` +
+            `created by a card carrying a stale inline span; see readGeometry in ui/src/components/ui.jsx.`,
+        ).toBe(shape.declared);
+
+        // No card may ask for more tracks than exist. The inline span is the
+        // offender in this bug — the starved card is only its victim.
+        for (const card of shape.cards) {
+          const n = Number((/span (\d+)/.exec(card.span) || ['', '0'])[1]);
+          expect(n, `#${tab} at ${step.width}px: ${card.id} carries "${card.span}"`).toBeLessThanOrEqual(shape.declared);
+        }
+
+        // And nothing may be starved below a single track. 38px on a grid whose
+        // narrowest legal card is one track wide is the symptom that gets
+        // reported, so it is asserted directly rather than inferred.
+        const oneTrack = (shape.gridWidth - (shape.declared - 1) * shape.gap) / shape.declared;
+        for (const card of shape.cards) {
+          expect(
+            card.width,
+            `#${tab} at ${step.width}px: ${card.id} is ${card.width}px, under one ${Math.round(oneTrack)}px track`,
+          ).toBeGreaterThanOrEqual(Math.floor(oneTrack) - 1);
+        }
+      }
+
+      // At 390 the grid has two tracks and every panel's content needs both, so
+      // the first card spans the full width. Checked only here: at 1920 a card
+      // taking fewer than six tracks is the content-driven span working, not a
+      // fault, so the same assertion would be wrong up there.
+      expect(shape.cards[0].width, `#${tab} at 390px: the first card does not fill the grid`).toBe(shape.gridWidth);
+
+      // NO OSCILLATION. The 2026-08-10 failure was self-sustaining — the stale
+      // span kept the implicit columns alive, which kept the clamp from firing,
+      // which kept the stale span — so it read identically a second later and a
+      // "wait longer" fix would never have arrived. The mirror-image regression
+      // is a layout that repairs itself by ratcheting a track off per pass, and
+      // this catches that too. (The one legitimate way these two reads can
+      // differ is the 30s data poll landing inside the window and changing a
+      // table's measured need; if that is ever seen, widen this to compare only
+      // `rendered`/`declared`/`trackPx` — do not delete it.)
+      const again = await gridShape(page);
+      expect(again, `#${tab}: the grid changed shape one second after settling at 390px`).toEqual(shape);
     });
   }
 });
