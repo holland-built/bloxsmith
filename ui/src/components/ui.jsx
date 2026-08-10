@@ -188,29 +188,65 @@ const GridFitContext = createContext(null)
 // the resize would snap to one grid and applyLayout would render against
 // another, and the disagreement would only show up as an off-by-one span.
 //
-// IMPLICIT COLUMNS ARE NOT TRACKS. getComputedStyle serialises the implicit
-// columns alongside the declared ones, and an implicit column is exactly what
-// a too-wide card creates — so tracks.length lets one over-wide card raise the
-// ceiling that is supposed to bring it back down, and the wrong span becomes a
-// fixpoint. Measured on #overview after dragging at 1920 and narrowing to 390:
-// gridTemplateColumns read "159px 159px 0px" on a grid-cols-2 grid, so
-// trackCount read 3, so the card's span 3 clamped to 3 and survived forever.
+// THE TRACK COUNT COMES FROM THE SAME BREAKPOINT THE CSS USES, never from
+// getComputedStyle().gridTemplateColumns, and this is the third and last
+// attempt at the class of bug documented at headNeed below: a DOM width that is
+// itself a function of the width being decided.
 //
-// The grid's own content box is the honest answer, because it does not move
-// when an implicit column appears: the declared 1fr tracks simply shrink to
-// pay for the extra gap. How many track-plus-gap units fit across clientWidth
-// is therefore N whatever the card is doing — algebraically exact when the
-// grid is healthy (N*(W+g)/(W+g)), and 2.07 rather than 3 in the case above.
-// The epsilon is against float noise in a sub-pixel track width, not against
-// the implicit column, which is never within 0.001 of the next integer.
+// WHAT THE SERIALISATION ACTUALLY SAYS. gridTemplateColumns lists the IMPLICIT
+// columns alongside the declared ones, and an implicit column is exactly what a
+// card carrying an inline `span 6` written for the xl grid creates once the
+// window narrows to two tracks. Measured on this tree at b41767a by loading at
+// 1920 and narrowing to 390:
+//
+//   #security   "0px 0px 110.3px 110.3px 73.4px"   5 "tracks", widest span 5
+//   #network    "0px 0px 153px 153px"              4 "tracks", widest span 4
+//   #incidents  "23.6px 23.6px 129.4px 129.4px"    4 "tracks", widest span 4
+//
+// The declared minmax(0,1fr) tracks are crushed toward 0 to pay for implicit
+// columns that take real width. So BOTH inputs the old code read were poisoned
+// at once: tracks.length rose AND tracks[0] fell, which made the "how many
+// track-plus-gap units fit across clientWidth" defence — written against an
+// implicit column assumed to be 0px — compute a larger count, not a smaller
+// one. The clamp stopped clamping, the span 6 survived at 390px, and that is
+// what kept the implicit columns alive. Self-sustaining, and it never
+// recovered: re-measured a second later it was byte-identical.
+//
+// The 41px card people report is the VICTIM, not the offender. It never
+// measures itself, so publish() bails and applyLayout skips it — it is simply
+// what is left of one 1fr track once its neighbours have eaten the grid.
+//
+// WHY THIS TERMINATES. `--grid-tracks` is declared on [data-card-grid] in
+// index.css with media queries at the same thresholds as the element's own
+// Tailwind classes. Every input below is strictly upstream of the output:
+//
+//   - a custom property inherits DOWN, so no child can change it;
+//   - the media queries key off the viewport, which no element affects;
+//   - clientWidth is a block-level div's padding box, set by its ancestor and
+//     never widened by an overflowing child.
+//
+// One pass, no cycle, nothing to converge to or diverge from. That is what
+// makes this different from attempts 1 and 2, both of which closed a loop.
+//
+// The arithmetic is the grid's own: N tracks share whatever is left of
+// clientWidth after the N-1 gaps between them, which is the definition of
+// repeat(N, minmax(0,1fr)). No parse, so nothing a card does can be read back
+// as geometry.
+//
+// A grid whose custom property has not resolved — no stylesheet, a detached
+// node, a test that mounts the element bare — returns null, and every caller
+// already reads that as "say nothing": applyLayout returns before it writes,
+// and the drag/resize hotspots decline to start. That is the same silence the
+// old code produced for an unresolved gridTemplateColumns, and it is safer than
+// guessing a count.
 function readGeometry(grid) {
   const gs = getComputedStyle(grid)
-  const tracks = gs.gridTemplateColumns.split(' ').filter(Boolean)
-  const track = parseFloat(tracks[0])
-  if (!tracks.length || !(track > 0)) return null
+  const trackCount = parseInt(gs.getPropertyValue('--grid-tracks'), 10)
+  if (!Number.isInteger(trackCount) || trackCount < 1) return null
   const gap = parseFloat(gs.columnGap) || 0
-  const fitting = Math.floor((grid.clientWidth + gap) / (track + gap) + 0.001)
-  return { track, gap, trackCount: Math.max(1, Math.min(tracks.length, fitting)) }
+  const track = (grid.clientWidth - (trackCount - 1) * gap) / trackCount
+  if (!(track > 0)) return null
+  return { track, gap, trackCount }
 }
 
 // The grid ITEMS that carry a panel identity, in DOM order — which, with no
@@ -267,7 +303,19 @@ function applyLayout(grid, items, overrides) {
     const { span } = resolveSpan({ userSpan: overrides.get(el) ?? null, measuredSpan, trackCount })
     // null span = "leave the declared SPAN_CLASS alone", the untouched path for
     // every panel that neither measures nor carries a saved override.
-    if (span == null) continue
+    //
+    // CLEARED, NOT SKIPPED. `continue` alone meant an element that had ONCE
+    // been given a span kept it for ever: the measurement that produced it can
+    // go away (a panel whose table unmounts, a card evicted from the fit map)
+    // while the inline `span 6 / span 6` written for the xl grid stays on the
+    // element, asking a two-track grid for six columns. Writing '' hands the
+    // element back to its responsive SPAN_CLASS, which is what "leave it alone"
+    // was always supposed to mean. Guarded on the current value so an element
+    // that never carried one — most grid children — is not written to at all.
+    if (span == null) {
+      if (el.style.gridColumn) el.style.gridColumn = ''
+      continue
+    }
     const next = `span ${span} / span ${span}`
     if (el.style.gridColumn !== next) el.style.gridColumn = next
   }
