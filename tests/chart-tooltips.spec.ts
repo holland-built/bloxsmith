@@ -110,6 +110,44 @@ async function chartBox(page: import('@playwright/test').Page, panel: string) {
     `panel "${panel}" never rendered a recharts surface — either the panel is hidden, ` +
       `its feed failed, or the panelId changed`,
   ).toBeVisible({ timeout: CHART_READY_MS });
+
+  // AND THEN WAIT FOR IT TO HAVE DRAWN SOMETHING. A visible `.recharts-wrapper`
+  // is not a chart you can point at: ResponsiveContainer renders the wrapper
+  // first and measures itself a frame later, so for that frame the surface
+  // exists at zero size with no bars, slices or line in it. Sweeping then finds
+  // 36 points of empty space and reports "no tooltip anywhere" — which reads
+  // like a broken tooltip and is really a chart that had not finished arriving.
+  //
+  // THIS BECAME REACHABLE ON 2026-08-10, when the chart bodies moved behind
+  // `lazy(() => import(...))` so a tab could paint without waiting 392 kB for
+  // recharts. Before that the chart was part of the tab's first render and had
+  // always settled by the time a test could navigate to it; now it mounts after
+  // the page does, and the gap between "wrapper exists" and "chart is drawn" is
+  // wide enough to lose a race in. Observed twice in full-suite runs on
+  // security-threat-feed-activity, never in an isolated run of this file —
+  // which is exactly the shape of a readiness check that is too early.
+  //
+  // The condition is the marks themselves, not a timeout: every chart in this
+  // app draws at least one <path> or <rect> inside its SVG once it has data and
+  // a size, and none of them draws any before that.
+  await expect
+    .poll(
+      async () =>
+        wrapper.evaluate((el) => {
+          const svg = el.querySelector('svg');
+          if (!svg) return 0;
+          const box = svg.getBoundingClientRect();
+          if (box.width < 2 || box.height < 2) return 0;
+          return svg.querySelectorAll('path, rect, circle').length;
+        }),
+      {
+        timeout: CHART_READY_MS,
+        message:
+          `panel "${panel}" has a recharts surface that never drew anything — a sized SVG ` +
+          `with no marks in it. The feed is empty, or the chart module failed to load.`,
+      },
+    )
+    .toBeGreaterThan(0);
   // MUST scroll first. mouse.move() and touchscreen.tap() take VIEWPORT
   // coordinates and do not auto-scroll the way locator.hover() does, while
   // boundingBox() returns the box wherever it currently sits. Without this, any

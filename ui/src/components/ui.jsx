@@ -1,5 +1,6 @@
-import { Children, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, Children } from 'react'
 import { retryFailedFeeds, useFeedRecovery } from '../lib/api.js'
+import { markArranged } from '../lib/arrangedOnce.js'
 import { useThemeColors } from '../lib/theme.jsx'
 import { fmtShortDay, fmtValue } from '../lib/chartFormat.js'
 import { PANEL_HELP } from '../lib/panelHelp.js'
@@ -640,6 +641,12 @@ export function CardGrid({ className = '', layoutKey, children }) {
           const seq = ++saveSeqRef.current
           saveLayout(layoutKey, next)
             .then(() => {
+              // Set on the success arm and outside the sequence guard on
+              // purpose. The guard exists to stop a stale save writing a
+              // MESSAGE about the current screen; "this reader has rearranged
+              // something and it saved" is true whichever save proved it, and
+              // an older one proving it first is not a stale verdict.
+              markArranged()
               if (seq !== saveSeqRef.current) return
               sayVerdict('Layout saved')
               showSavePill(SAVE_PILL_OK_TEXT, 'ok')
@@ -2480,24 +2487,52 @@ function HiddenPanelsRow({ groupKey, label, n }) {
   )
 }
 
-// One-line "what this tab does" line under a tab title, with a link to the
+// One-line "what this tab does" line under a tab title, with a way into the
 // matching section of docs/TABS.md. Always-visible text rather than a hover
 // tooltip: the nav collapses tabs into a ⋯ menu at narrow widths and hover
 // does not exist on touch, so a tooltip is the one place this can't be read.
-const DOCS_URL = 'https://github.com/holland-built/bloxsmith/blob/master/docs/TABS.md'
+//
+// "Docs" USED TO LEAVE THE APP. It was an <a> to the file on GitHub, which
+// meant the answer to "what is this tab" was a new browser tab, a page load,
+// and a scroll to an anchor — and it was unreadable on a machine that cannot
+// reach github.com, which is a normal condition for the networks this tool is
+// pointed at. It is now a button that opens the same words in a panel beside
+// the page they describe. The document itself still lives on GitHub and is
+// still the single source: the panel renders `docs/TABS.md` imported at build
+// time, so there is no second copy to drift.
+const DocsPanel = lazy(() => import('./DocsPanel.jsx'))
 
 export function TabIntro({ anchor, children }) {
+  const [open, setOpen] = useState(false)
+  // Focus goes back to the control that opened the panel, which the panel
+  // cannot do itself — it is unmounted by the time the focus has to land. Same
+  // division of labour as App.jsx and HeaderHelp.
+  const btnRef = useRef(null)
+  const close = () => {
+    setOpen(false)
+    btnRef.current?.focus()
+  }
   return (
     <p className="text-xs text-muted mb-3 max-w-[80ch]">
       {children}{' '}
-      <a
-        href={anchor ? `${DOCS_URL}#${anchor}` : DOCS_URL}
-        target="_blank"
-        rel="noreferrer"
-        className="text-accent underline underline-offset-2 whitespace-nowrap"
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="text-accent underline underline-offset-2 whitespace-nowrap cursor-pointer bg-transparent border-0 p-0 text-xs"
       >
         Docs →
-      </a>
+      </button>
+      {open && (
+        // No fallback element: the panel is the only thing on screen that would
+        // change, and a skeleton the size of a full-height sheet flashing in
+        // and out is more movement than the wait it covers. The chunk is ~14 KB.
+        <Suspense fallback={null}>
+          <DocsPanel anchor={anchor} onClose={close} />
+        </Suspense>
+      )}
     </p>
   )
 }
