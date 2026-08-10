@@ -313,8 +313,6 @@ func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map
 	if filters != nil {
 		listOpts["filters"] = filters
 	}
-	listRows := s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, listOpts)
-
 	// The total is a SEPARATE measures-only query, not a number derived from
 	// the page. A page can only ever tell you about its own 50 rows; the
 	// header says "N assets", which is a claim about the whole filtered set.
@@ -322,7 +320,30 @@ func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map
 	if filters != nil {
 		countOpts["filters"] = filters
 	}
-	countRows := s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, countOpts)
+
+	// SIDE BY SIDE, BECAUSE THE SECOND QUERY NEVER NEEDED THE FIRST'S ANSWER.
+	// These two reads share no data — one asks for a page of rows, the other for
+	// a count — and running them in sequence simply added their latencies. That
+	// was not free: measured cold against a real tenant on 2026-08-10, this
+	// endpoint took 11.2s (and 18.5s on a second sample) while the UI gives up
+	// at 12s (ui/src/lib/api.js COLD_TIMEOUT_MS). The Assets tab was therefore a
+	// coin flip on first load — the panel showed "Asset inventory unavailable"
+	// for data that was still on its way, and the server went on to finish the
+	// query and cache it, so the retry then succeeded instantly and the failure
+	// looked random.
+	//
+	// mcp.Client is safe to call concurrently: its mutex covers only sessionID
+	// and nextID (mcp.go:101,145,182,285), never the HTTP round trip, so two
+	// calls overlap on the wire rather than queueing behind each other.
+	//
+	// fanOut is this package's existing helper (dashboard.go:193) and its
+	// WaitGroup establishes happens-before, so the reads below need no locking.
+	// Each task writes only its own variable.
+	var listRows, countRows []map[string]any
+	fanOut(2,
+		func() { listRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, listOpts) },
+		func() { countRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, countOpts) },
+	)
 
 	return assembleAssetInventory(aq, listRows, countRows)
 }
@@ -502,12 +523,21 @@ func (s *Service) assetFiltersUncached(ctx context.Context) map[string]any {
 	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
 		return assetFiltersUnavailable("the MCP session to Infoblox could not be opened")
 	}
-	typeRows := s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, map[string]any{
-		"dimensions": []string{assetsCube + ".taxonomy_type_label"},
-		"order":      map[string]any{assetsMeasure: "desc"},
-		"limit":      assetTypeLimit,
-	})
-	countRows := s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, map[string]any{})
+	// Same independence, same fix as assetInventoryUncached — see the note
+	// there. This endpoint measured 9.4s cold, and the Assets tab fires both it
+	// and the inventory read at once, so the two together are what actually
+	// pushed first load past the browser's 12s budget.
+	var typeRows, countRows []map[string]any
+	fanOut(2,
+		func() {
+			typeRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, map[string]any{
+				"dimensions": []string{assetsCube + ".taxonomy_type_label"},
+				"order":      map[string]any{assetsMeasure: "desc"},
+				"limit":      assetTypeLimit,
+			})
+		},
+		func() { countRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, map[string]any{}) },
+	)
 	return assembleAssetFilters(typeRows, countRows)
 }
 

@@ -369,9 +369,67 @@ export function DataTable({
       if (excess > 0.5) shrinkToward(tier2, cur, excess)
     }
 
-    for (const c of cols) {
-      if (c.width) continue
-      widths[c.key] = Math.max(1, Math.round(cur[c.key]))
+    // ROUNDING IS SHARED, NOT PER-COLUMN, AND THAT IS THE WHOLE POINT.
+    //
+    // `cur` holds fractional widths that add up to `budget` exactly. Rounding
+    // each column on its own — which this did until 2026-08-10 — throws that
+    // away: five independent Math.rounds can each gain up to half a pixel, so
+    // the total lands anywhere within ±n/2 of the budget. When it lands high
+    // the table is wider than the wrapper, and because the wrapper is
+    // `overflow-x-hidden` the surplus is not a scrollbar the reader can use, it
+    // is a silently clipped column edge.
+    //
+    // Measured on the Assets tab (50 stub rows, 5 columns), sweeping every
+    // viewport width from 760 to 1600: seven widths overflowed by exactly 1px —
+    // 767, 806, 926, 931, 960, 990, 1000. At 806 the columns came out
+    // 187+144+128+115+147 = 721 against a 720px budget. At the 834 widths that
+    // did not overflow the same arithmetic simply happened to round down.
+    //
+    // The fix is the largest-remainder method: floor every column, then hand
+    // the leftover pixels back one each to the columns with the biggest
+    // fractional parts. The sum is then the budget by construction rather than
+    // by luck, which is what the `table-fixed` comment above already claimed.
+    const flexible = cols.filter((c) => !c.width)
+    // Never ask for more than the budget. In the doesn't-fit branch above,
+    // `cur` can still total MORE than the budget when every column has hit its
+    // shrink floor — a card genuinely too narrow for its content. Clamping here
+    // keeps that case exactly as it was (the floors win, the table overflows
+    // because there is no other honest answer) instead of letting this rounding
+    // pass quietly widen it further.
+    const curTotal = flexible.reduce((a, c) => a + cur[c.key], 0)
+    const target = Math.min(budget, Math.round(curTotal))
+
+    let floorSum = 0
+    for (const c of flexible) {
+      widths[c.key] = Math.max(1, Math.floor(cur[c.key]))
+      floorSum += widths[c.key]
+    }
+
+    // Biggest fractional part gets the first spare pixel — the column that was
+    // closest to deserving it. Ties break on the declared column order, which
+    // is stable across re-measures, so a resize does not shuffle which column
+    // carries the odd pixel.
+    let spare = target - floorSum
+    if (spare > 0) {
+      const byRemainder = flexible
+        .map((c, i) => ({ c, i, frac: cur[c.key] - Math.floor(cur[c.key]) }))
+        .sort((a, b) => b.frac - a.frac || a.i - b.i)
+      for (let n = 0; spare > 0 && n < byRemainder.length; n++, spare--) {
+        widths[byRemainder[n].c.key] += 1
+      }
+    } else if (spare < 0) {
+      // Only reachable when Math.max(1, …) above floored a column up to 1px.
+      // Take the debt off the widest columns, never below 1px.
+      const byWidth = flexible
+        .map((c, i) => ({ c, i }))
+        .sort((a, b) => widths[b.c.key] - widths[a.c.key] || a.i - b.i)
+      for (let n = 0; spare < 0 && n < byWidth.length; n++) {
+        const k = byWidth[n].c.key
+        if (widths[k] > 1) { widths[k] -= 1; spare++ }
+      }
+    }
+
+    for (const c of flexible) {
       // maxCh/render are always marked (their own ceiling, or opaque markup
       // that may self-clip regardless of width); tier 2 columns are marked
       // only when they actually had to give up width below their natural

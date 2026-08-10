@@ -1,9 +1,6 @@
-import { useMemo, useState } from 'react'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 
@@ -58,6 +55,9 @@ function SeverityPill({ severity }) {
 const ackKey = (s) => `${s.category}|${s.entity_id}|${Math.floor(Number(s.detected_at) || 0)}`
 
 // ---------- main ----------
+
+// Only the IQ action trend needs recharts, so only it waits for it.
+const CategoryBars = lazy(() => import('../charts/CategoryBars.jsx'))
 
 export default function Incidents() {
   const incApi = useApi('/api/incidents', { poll: 20000 })
@@ -556,15 +556,19 @@ function ActionTrendStrip({ rows, loading, error, unavailable, panelId }) {
         <Empty>no IQ actions to trend</Empty>
       ) : (
         <>
-          <ResponsiveContainer width="100%" height={150}>
-            <BarChart data={byDay} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="date" tickFormatter={fmtShortDay} tick={{ fill: 'var(--color-tick)', fontSize: 10 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={20} />
-              <YAxis hide />
-              <Tooltip content={<ChartTip name="actions" />} />
-              <Bar dataKey="count" fill={COLORS.accent} radius={[3, 3, 0, 0]} isAnimationActive={false} />
-            </BarChart>
-          </ResponsiveContainer>
+          <Suspense fallback={<Skeleton h={150} />}>
+            <CategoryBars
+              data={byDay}
+              unit="actions"
+              height={150}
+              xKey="date"
+              yKey="count"
+              tickFormat={fmtShortDay}
+              fill={COLORS.accent}
+              tickSize={10}
+              minTickGap={20}
+            />
+          </Suspense>
           <div className="flex items-center justify-between mt-2 text-xs">
             <span style={{ color: COLORS.sevHigh }}>High {byPriority.high}</span>
             <span style={{ color: COLORS.warn }}>Medium {byPriority.medium}</span>

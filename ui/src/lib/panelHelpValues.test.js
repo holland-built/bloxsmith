@@ -275,6 +275,10 @@ const INFRA = 'ui/src/tabs/Infra.jsx'
 const ASSETS = 'ui/src/tabs/Assets.jsx'
 const INCIDENTS = 'ui/src/tabs/Incidents.jsx'
 const AUDIT = 'ui/src/tabs/Audit.jsx'
+// Chart bodies live outside the tabs since 2026-08-10, so recharts can be
+// loaded lazily. A sentence about what a chart LOOKS like is now proven partly
+// at the call site (which colour) and partly here (which order, which cap).
+const CHART_STACKED = 'ui/src/charts/StackedDayBars.jsx'
 const CHANGES_TAB = 'ui/src/tabs/Changes.jsx'
 const PROVISION = 'ui/src/tabs/Provision.jsx'
 const SELFSERVICE = 'ui/src/tabs/SelfService.jsx'
@@ -622,8 +626,25 @@ const CLAIMS = [
     says: /the red part was blocked, the blue cap on top was let through/,
     file: SECURITY,
     proofs: [
-      { re: /dataKey="blocked" stackId="day" fill=\{COLORS\.crit\}/, expect: 'the blocked series is COLORS.crit (red)' },
-      { re: /dataKey="allowed" stackId="day" radius=\{\[3, 3, 0, 0\]\} fill=\{COLORS\.accent\}/, expect: 'the allowed series is COLORS.accent (blue), capping the stack' },
+      // RE-POINTED 2026-08-10, and the copy is unchanged because the colours
+      // are unchanged. The chart body moved to ui/src/charts/StackedDayBars.jsx
+      // so recharts could be loaded lazily; the two series now take their fill
+      // from props, and it is Security.jsx that still decides WHICH colour each
+      // one gets. That decision is what this sentence is about, so this is
+      // where the proof belongs. Which series sits on TOP — the other half of
+      // "the blue cap on top" — is proven in the entry immediately below, in
+      // the module that now owns the stacking.
+      { re: /blockedColor=\{COLORS\.crit\}/, expect: 'the blocked series is COLORS.crit (red)' },
+      { re: /allowedColor=\{COLORS\.accent\}/, expect: 'the allowed series is COLORS.accent (blue)' },
+    ],
+  },
+  {
+    panel: 'security-threat-feed-activity',
+    says: /the red part was blocked, the blue cap on top was let through/,
+    file: CHART_STACKED,
+    proofs: [
+      { re: /dataKey="blocked" stackId="day" fill=\{blockedColor\}/, expect: 'blocked is the lower half of the stack' },
+      { re: /dataKey="allowed" stackId="day" radius=\{\[3, 3, 0, 0\]\} fill=\{allowedColor\}/, expect: 'allowed sits on top and carries the rounded cap' },
     ],
   },
   {

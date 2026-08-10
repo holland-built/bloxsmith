@@ -1,10 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import {
-  AreaChart, Area, BarChart, Bar, Cell, PieChart, Pie,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts'
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { ChartTip, useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, TabIntro, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, TabIntro, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
 import { useThemeColors } from '../lib/theme.jsx'
@@ -85,6 +81,11 @@ function useTapThenDrill() {
 }
 
 // ---------- main ----------
+
+// Three chart shapes on this tab; only the panels drawing them wait for recharts.
+const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
+const SubnetUsageBars = lazy(() => import('../charts/SubnetUsageBars.jsx'))
+const StatusDonut = lazy(() => import('../charts/StatusDonut.jsx'))
 
 export default function Overview() {
   const dns = useApi('/api/csp/dns-qps', { poll: 30000 })
@@ -317,24 +318,19 @@ function DnsHero({ dns, panelId }) {
               </span>
             )}
           </div>
-          <ResponsiveContainer width="100%" height={230}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="dnsFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={COLORS.accent} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={COLORS.accent} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke={theme.grid} strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: theme.tick, fontSize: 11 }} axisLine={{ stroke: theme.grid }} tickLine={false} minTickGap={40} />
-              <YAxis hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
-              {/* The headline above this chart already rounds the same series to
-                  one decimal; the tooltip used to answer `value : 346.1144444444444`
-                  for the very same point. One decimal, and the unit spelled out. */}
-              <Tooltip content={<ChartTip name="queries per second" />} />
-              <Area type="monotone" dataKey="value" stroke={COLORS.accent} strokeWidth={1.8} fill="url(#dnsFill)" isAnimationActive={false} />
-            </AreaChart>
-          </ResponsiveContainer>
+          {/* The headline above this chart already rounds the same series to
+              one decimal; the tooltip used to answer `value : 346.1144444444444`
+              for the very same point. One decimal, and the unit spelled out. */}
+          <Suspense fallback={<Skeleton h={230} />}>
+            <GradientArea
+              data={chartData}
+              color={COLORS.accent}
+              gradientId="dnsFill"
+              unit="queries per second"
+              height={230}
+              yDomain={['dataMin - 0.5', 'dataMax + 0.5']}
+            />
+          </Suspense>
         </>
       )}
     </Card>
@@ -449,42 +445,18 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
         )
       ) : (
         <div onPointerDownCapture={tap.onPointerDownCapture}>
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={top} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <XAxis dataKey="addr" tick={false} axisLine={{ stroke: theme.grid }} tickLine={false} />
-            <YAxis hide />
-            {/* This panel's sentence was already the one the other ten charts are
-                being moved towards ("10.61.30.0 / 177 used (69%)"), so the words
-                are carried over verbatim — only the renderer changes, so that
-                every tooltip in the app is now the same component. */}
-            <Tooltip
-              content={
-                <ChartTip
-                  labelFormat={(_l, p) => p?.[0]?.payload?.addr ?? p?.[0]?.payload?.cidr ?? ''}
-                  valueFormat={(v, p) => {
-                    const util = p?.payload?.util
-                    return `${fmtValue(v)} used (${util === null || util === undefined ? '?' : fmtValue(util)}%)`
-                  }}
-                />
-              }
-            />
-            <Bar
-              dataKey="used"
-              radius={[3, 3, 0, 0]}
-              isAnimationActive={false}
-              cursor="pointer"
-              onClick={(payload) => {
-                const addr = payload?.addr
-                if (!addr || !tap.drills(addr)) return
-                location.hash = 'network?subnet=' + encodeURIComponent(addr)
-              }}
-            >
-              {top.map((s, i) => (
-                <Cell key={i} fill={COLORS.purple} fillOpacity={1 - (i / top.length) * 0.6} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <Suspense fallback={<Skeleton h={180} />}>
+          <SubnetUsageBars
+            data={top}
+            color={COLORS.purple}
+            height={180}
+            onBarClick={(payload) => {
+              const addr = payload?.addr
+              if (!addr || !tap.drills(addr)) return
+              location.hash = 'network?subnet=' + encodeURIComponent(addr)
+            }}
+          />
+        </Suspense>
         </div>
       )}
     </Card>
@@ -670,44 +642,16 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
       ) : (
         <div className="flex items-center gap-4">
           <div className="relative w-[130px] h-[130px] shrink-0" onPointerDownCapture={tap.onPointerDownCapture}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  innerRadius={44}
-                  outerRadius={62}
-                  startAngle={90}
-                  endAngle={-270}
-                  stroke="none"
-                  isAnimationActive={false}
-                  cursor="pointer"
-                  onClick={(d) => {
-                    if (!d?.name || !tap.drills(d.name)) return
-                    location.hash = 'infra?status=' + d.name.toLowerCase()
-                  }}
-                >
-                  {pieData.map((d) => (
-                    <Cell key={d.name} fill={d.color} />
-                  ))}
-                </Pie>
-                {/* A slice's own bucket is its label, so the count reads
-                    "Offline / 12 hosts" instead of the default `value : 12`.
-                    position/allowEscapeViewBox are carried through unchanged —
-                    they are an earlier fix for this 130px donut clipping its own
-                    tooltip, and have nothing to do with the copy. */}
-                <Tooltip
-                  content={
-                    <ChartTip
-                      labelFormat={(_l, p) => p?.[0]?.name ?? ''}
-                      valueFormat={(v) => `${fmtValue(v)} ${Number(v) === 1 ? 'host' : 'hosts'}`}
-                    />
-                  }
-                  position={{ y: 100 }}
-                  allowEscapeViewBox={{ x: false, y: true }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<div className="w-full h-full" />}>
+              <StatusDonut
+                data={pieData}
+                valueFormat={(v) => `${fmtValue(v)} ${Number(v) === 1 ? 'host' : 'hosts'}`}
+                onSliceClick={(d) => {
+                  if (!d?.name || !tap.drills(d.name)) return
+                  location.hash = 'infra?status=' + d.name.toLowerCase()
+                }}
+              />
+            </Suspense>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-lg font-semibold">{total.toLocaleString()}</span>
               <span className="text-dim text-[11px]">{hasHostTotal ? 'hosts' : 'hosts (loaded)'}</span>

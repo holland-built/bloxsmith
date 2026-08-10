@@ -40,9 +40,24 @@ export const COLD_TIMEOUT_MS = 12000
 // the original 12s hang guard stays exactly as it was for every later request.
 export const WARM_TIMEOUT_MS = 12000
 
-/** Budget for a request: the cold one only until this hook has loaded once. */
-export function budgetMs(warm) {
-  return warm ? WARM_TIMEOUT_MS : COLD_TIMEOUT_MS
+// A cold budget for the endpoints that are genuinely, measurably slower than
+// the sample the 12s above was drawn from — not an escape hatch to be sprinkled
+// around. There is exactly one caller (Assets.jsx) and it carries the numbers.
+//
+// WHY AN OVERRIDE RATHER THAN A BIGGER GLOBAL. Raising COLD_TIMEOUT_MS would
+// make every genuinely dead feed in the app take this long to say so, which is
+// the regression the 12s figure was chosen to avoid. The slow endpoints are
+// known and few, so they name themselves instead.
+export const SLOW_COLD_TIMEOUT_MS = 30000
+
+/**
+ * Budget for a request: the cold one only until this hook has loaded once.
+ * `coldMs` overrides the cold budget for one call site; the warm guard is
+ * deliberately NOT overridable, because a warm read comes out of the server's
+ * cache in ~0.02s and anything else is a hang whatever the endpoint.
+ */
+export function budgetMs(warm, coldMs) {
+  return warm ? WARM_TIMEOUT_MS : (coldMs ?? COLD_TIMEOUT_MS)
 }
 
 /**
@@ -165,7 +180,7 @@ export function retryFailedFeeds() {
  * Fetch a URL, optionally polling on an interval.
  * Returns { data, error, loading, retrying, refetch }.
  */
-export function useApi(url, { poll } = {}) {
+export function useApi(url, { poll, coldMs } = {}) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -182,7 +197,7 @@ export function useApi(url, { poll } = {}) {
   const load = useCallback(function run() {
     if (!url) return
     // Cold budget until this url has answered once, then the original hang guard.
-    const { signal, cancel } = abortAfter(budgetMs(warmRef.current))
+    const { signal, cancel } = abortAfter(budgetMs(warmRef.current, coldMs))
     fetch(url, { cache: 'no-store', signal })
       .then(async (res) => {
         if (res.status === 503) {
