@@ -1,20 +1,33 @@
-import { useEffect, useRef, useState } from 'react'
-import Overview from './tabs/Overview.jsx'
-import Daily from './tabs/Daily.jsx'
-import Network from './tabs/Network.jsx'
-import Dns from './tabs/Dns.jsx'
-import Security from './tabs/Security.jsx'
-import Infra from './tabs/Infra.jsx'
-import Assets from './tabs/Assets.jsx'
-import Incidents from './tabs/Incidents.jsx'
-import Audit from './tabs/Audit.jsx'
-import Changes from './tabs/Changes.jsx'
-import Provision from './tabs/Provision.jsx'
-import Editor from './tabs/Editor.jsx'
-import Drift from './tabs/Drift.jsx'
-import SelfService from './tabs/SelfService.jsx'
-import Ai from './tabs/Ai.jsx'
-import DossierPage from './components/DossierPage.jsx'
+import { Component, Suspense, lazy, useEffect, useRef, useState } from 'react'
+// Every tab is fetched on demand. Before this, all 15 were static imports and
+// the app shipped as one ~903 KB file, so opening #provision — a tab with no
+// charts on it at all — still downloaded recharts and the other 14 tabs.
+//
+// Overview is lazy too, deliberately. It is the default tab, so it is tempting
+// to import it eagerly "because it is always needed": it is not. The landing
+// tab comes from the URL hash, and someone who opens #security or clicks the
+// header's "+ Provision" never renders Overview at all — an eager Overview is
+// pure dead weight on every one of those loads, and it carries recharts with it.
+//
+// The TABS entries below keep exactly the shape they had (`{ id, label, el }`),
+// so the DEV completeness check and the Palette are untouched by this.
+const Overview = lazy(() => import('./tabs/Overview.jsx'))
+const Daily = lazy(() => import('./tabs/Daily.jsx'))
+const Network = lazy(() => import('./tabs/Network.jsx'))
+const Dns = lazy(() => import('./tabs/Dns.jsx'))
+const Security = lazy(() => import('./tabs/Security.jsx'))
+const Infra = lazy(() => import('./tabs/Infra.jsx'))
+const Assets = lazy(() => import('./tabs/Assets.jsx'))
+const Incidents = lazy(() => import('./tabs/Incidents.jsx'))
+const Audit = lazy(() => import('./tabs/Audit.jsx'))
+const Changes = lazy(() => import('./tabs/Changes.jsx'))
+const Provision = lazy(() => import('./tabs/Provision.jsx'))
+const Editor = lazy(() => import('./tabs/Editor.jsx'))
+const Drift = lazy(() => import('./tabs/Drift.jsx'))
+const SelfService = lazy(() => import('./tabs/SelfService.jsx'))
+const Ai = lazy(() => import('./tabs/Ai.jsx'))
+const DossierPage = lazy(() => import('./components/DossierPage.jsx'))
+import { Skeleton } from './components/ui.jsx'
 import Palette from './components/Palette.jsx'
 import UpdateButton from './components/UpdateButton.jsx'
 import ConnStatus from './components/ConnStatus.jsx'
@@ -109,6 +122,70 @@ if (import.meta.env?.DEV) {
 
 const groupOf = (tabId) => GROUPS.find((g) => g.tabIds.includes(tabId))?.id ?? null
 
+// What fills <main> on a COLD first load, while the landing tab's chunk is
+// still downloading. It is not reachable on a tab switch: React keeps the
+// outgoing tab on screen until the next chunk resolves (measured — see the
+// hash-change handler), so this is the app's first paint and nothing else.
+//
+// It is the grid's own shape rather than a spinner, and it reserves height, so
+// the header does not sit alone on a tall empty page and the content does not
+// jump downward when the real tab lands underneath it. Skeleton is the existing
+// component from components/ui.jsx, which is what the tabs themselves use while
+// their data loads — one loading vocabulary, not two.
+const TabLoading = () => (
+  <div className="p-5 min-h-[70vh]" aria-hidden="true">
+    <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+      <Skeleton h={150} />
+      <Skeleton h={150} />
+      <Skeleton h={150} />
+      <Skeleton h={220} />
+      <Skeleton h={220} />
+      <Skeleton h={220} />
+    </div>
+  </div>
+)
+
+// A chunk fetch can fail — a flaky connection, or a stale tab open across a
+// deploy that replaced the hashed filenames. React's answer to a rejected lazy
+// import is to unmount the whole tree, so WITHOUT this the reader gets a white
+// page and a console error nobody sees. Reset on tab change: a different tab is
+// a different chunk, and the one that failed should not poison the ones that
+// would load fine.
+//
+// The wording is aimed at whoever is actually looking at it, who is an operator
+// and not an engineer: it says what happened and the one thing that fixes it.
+// No error code, no stack, no "unexpected error occurred".
+class TabErrorBoundary extends Component {
+  state = { failed: false, tab: null }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  // Reset by deriving from props rather than by setState in componentDidUpdate:
+  // the latter renders the failed state once and then immediately renders
+  // again, so the reader gets a frame of the error message on a tab that is
+  // loading perfectly well. Deriving clears it in the same render.
+  //
+  // Ordering note, since the two statics look like they could fight: after a
+  // throw, getDerivedStateFromError sets failed, then this runs with the tab
+  // unchanged and returns null, so the error survives its own re-render.
+  static getDerivedStateFromProps(props, state) {
+    return props.tab === state.tab ? null : { failed: false, tab: props.tab }
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <div className="p-5">
+        <div role="alert" className="border border-border bg-card p-4 text-sm text-txt">
+          This tab could not load. Reload the page.
+        </div>
+      </div>
+    )
+  }
+}
+
 const Caret = ({ open }) => (
   <span aria-hidden="true" className={'text-[9px] ' + (open ? 'text-field-txt' : 'text-dim')}>
     {open ? '▴' : '▾'}
@@ -198,6 +275,30 @@ export default function App() {
       .catch(() => {})
   }, [])
 
+  // A PLAIN setState, AND THAT IS A DELIBERATE REVERSAL — this was written with
+  // startTransition around it first, on the theory that a lazy tab switch would
+  // otherwise flash the Suspense fallback. Both halves of that theory were
+  // measured on 2026-08-10 and both came out against it:
+  //
+  //   - It prevents no flash, because there is none to prevent. Built without
+  //     the wrapper and with the chunk fetch held for 2.5s, the outgoing tab
+  //     stayed fully on screen for all 304 sampled frames and the fallback
+  //     never painted. React 19 already keeps committed content visible when an
+  //     update suspends; it does not need to be told.
+  //   - It costs something real. Deferring this setState defers EVERYTHING it
+  //     feeds, including which nav group carries aria-current — so the header
+  //     went on pointing at the tab you just left until the chunk landed.
+  //     tests/nav-groups.spec.ts caught it: on #ai the marked group was still
+  //     `risk`. That marker is the only non-colour signal of where you are, so
+  //     lagging it is a straight accessibility regression.
+  //
+  // Paying an a11y regression for a flash that does not happen is a bad trade,
+  // so the transition is gone. The chunk it waits for is 6–20 kB, and the
+  // outgoing tab stays put meanwhile, so there is nothing left to smooth over.
+  //
+  // What WOULD flash, if anyone is tempted: keying the Suspense boundary below
+  // by tab. That destroys the old tab immediately and the heading vanishes for
+  // 37 of 97 frames — tests/tab-switch-no-flash.spec.ts is what caught that.
   useEffect(() => {
     const on = () => setTab(hashTab())
     window.addEventListener('hashchange', on)
@@ -605,7 +706,11 @@ export default function App() {
               lands here is told which tab it landed on. tabIndex -1 makes it a
               focus target without putting it in the Tab order. */}
           <main ref={mainRef} tabIndex={-1} aria-label={`${activeLabel} tab`} className="outline-none">
-            <Active />
+            <TabErrorBoundary tab={tab}>
+              <Suspense fallback={<TabLoading />}>
+                <Active />
+              </Suspense>
+            </TabErrorBoundary>
           </main>
           <Palette tabs={TABS} onPick={(id) => { location.hash = id }} />
         </div>
