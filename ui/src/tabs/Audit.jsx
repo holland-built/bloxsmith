@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
-import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
+
+// Only this panel needs recharts, so only this panel waits for it.
+const CategoryBars = lazy(() => import('../charts/CategoryBars.jsx'))
 
 function actionColor(a, COLORS) {
   return { CREATE: COLORS.ok, DELETE: COLORS.crit, UPDATE: COLORS.accent }[a] || COLORS.other
@@ -71,7 +73,8 @@ function ActivitySummary({ logs, loading, auditLogsStatus, panelId }) {
     else if (!r || /^unknown$/i.test(r)) unknown++
     else ok++
   }
-  const chartData = Object.entries(counts).map(([name, value]) => ({ name, value }))
+  // Colours resolved here, carried as data — see charts/CategoryBars.jsx.
+  const chartData = Object.entries(counts).map(([name, value]) => ({ name, value, color: actionColor(name, COLORS) }))
   const total = logs.length
 
   return (
@@ -98,21 +101,11 @@ function ActivitySummary({ logs, loading, auditLogsStatus, panelId }) {
               </div>
             )}
           </div>
-          <ResponsiveContainer width="100%" height={140}>
-            <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} />
-              <YAxis hide />
-              {/* The bar's own kind (CREATE / UPDATE / DELETE) is the hover's
-                  first line, so the number underneath only needs its unit. */}
-              <Tooltip content={<ChartTip name="events" />} />
-              <Bar dataKey="value" radius={[3, 3, 0, 0]} isAnimationActive={false}>
-                {chartData.map((d) => (
-                  <Cell key={d.name} fill={actionColor(d.name, COLORS)} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {/* Sized like the chart it stands in for, so the card does not
+              resize when recharts lands. */}
+          <Suspense fallback={<Skeleton h={140} />}>
+            <CategoryBars data={chartData} unit="events" height={140} />
+          </Suspense>
         </>
       )}
     </Card>

@@ -1,10 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  BarChart, Bar, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, hiddenPanelGroup, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, hiddenPanelGroup, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable, sortRows } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useThemeColors } from '../lib/theme.jsx'
@@ -47,6 +43,9 @@ function ipCompare(a, b) {
 }
 
 // ---------- main ----------
+
+// Only the utilisation panel needs recharts, so only it waits for it.
+const CategoryBars = lazy(() => import('../charts/CategoryBars.jsx'))
 
 export default function Network() {
   const data = useApi('/api/data', { poll: 30000 })
@@ -158,22 +157,11 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
           <Empty />
         )
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={counts} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: tick, fontSize: 11 }} axisLine={{ stroke: grid }} tickLine={false} />
-            <YAxis tick={{ fill: tick, fontSize: 11 }} axisLine={{ stroke: grid }} tickLine={false} allowDecimals={false} />
-            {/* Already said "<70% · 486 subnets" before ChartTip existed; the
-                move is for one shared tooltip, and it also puts a separator in
-                a four-figure count that the old formatter printed raw. */}
-            <Tooltip content={<ChartTip name="subnets" />} />
-            <Bar dataKey="value" radius={[3, 3, 0, 0]} isAnimationActive={false}>
-              {counts.map((c) => (
-                <Cell key={c.label} fill={c.color} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        /* Already said "<70% · 486 subnets" before ChartTip existed; that
+           tooltip now lives in charts/CategoryBars.jsx along with the bars. */
+        <Suspense fallback={<Skeleton h={220} />}>
+          <CategoryBars data={counts} unit="subnets" height={220} xKey="label" showY />
+        </Suspense>
       )}
     </Card>
   )

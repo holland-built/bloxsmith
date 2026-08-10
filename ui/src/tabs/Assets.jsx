@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useApi } from '../lib/api.js'
+import { SLOW_COLD_TIMEOUT_MS, useApi } from '../lib/api.js'
 import { mergeStateKey, nextMergeState } from '../lib/assetColumns.js'
 import { Card, CardGrid, Empty, FeedUnavailable, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
@@ -68,8 +68,31 @@ export default function Assets() {
     () => buildUrl({ q, type, sort: sort.key, dir: sort.dir, page }),
     [q, type, sort, page],
   )
-  const list = useApi(url)
-  const filters = useApi('/api/csp/asset-filters')
+  // THE TWO SLOWEST READS IN THE APP, AND WHY THEY GET A LONGER LEASH.
+  //
+  // Both are backed by Cube.js queries against the tenant's asset store, and
+  // both are cached server-side for 5 minutes (cache.TTL) with nothing keeping
+  // them warm — the dashboard stays hot because ConnStatus polls it from every
+  // open tab, and this tab deliberately does not poll (see FetchAssetInventory's
+  // comment in go/internal/dashboard/assets.go). So any visit more than five
+  // minutes after the last one pays the full cold price.
+  //
+  // Measured cold against the live tenant on 2026-08-10, seconds:
+  //   /api/csp/assets          11.2  11.0  18.5
+  //   /api/csp/asset-filters    9.4   6.9
+  // against a 12s default budget. That is why the tab so often showed "Asset
+  // inventory unavailable": the read had not failed, it had not finished, and
+  // the browser threw away an answer the server then went on to cache — which
+  // is also why hitting Refresh straight afterwards always worked and made the
+  // failure look random.
+  //
+  // The server side of this was fixed too (the paired cube queries now run
+  // concurrently rather than end to end, which took the filters read from 9.4s
+  // to 6.9s), but the inventory read is one dominant query and cannot be
+  // parallelised below its own latency. The remaining gap is a wait, not a
+  // fault, and a wait should be waited for rather than reported as a failure.
+  const list = useApi(url, { coldMs: SLOW_COLD_TIMEOUT_MS })
+  const filters = useApi('/api/csp/asset-filters', { coldMs: SLOW_COLD_TIMEOUT_MS })
 
   // Any change to what is being asked for puts you back on page 1. Without
   // this, narrowing a 2,620-asset list to 12 while sitting on page 4 leaves

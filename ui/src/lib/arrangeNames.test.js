@@ -444,7 +444,7 @@ test('the delegating shell is the one it is documented to be, and no more', () =
   const delegating = SITES.filter((s) => s.delegated).map((s) => `${s.rel}:${s.line} <${s.name}`)
   assert.deepEqual(
     delegating,
-    ['ui/src/components/DataTable.jsx:631 <Card'],
+    ['ui/src/components/DataTable.jsx:689 <Card'],
     'the set of call sites that forward `title={title}` has changed. Exempting one is only safe ' +
       'because its own wrapper is scanned too (see TAGS); a new one means the rule below is now ' +
       `blind to whoever calls it. Found: ${delegating.join(', ')}`,

@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { authFetch } from '../lib/authFetch.js'
-import { useChartTheme, ChartTip, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedUnavailable } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedUnavailable } from '../components/ui.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { DataTable } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
@@ -27,6 +24,10 @@ function ackKey(e) {
 }
 
 // ---------- main ----------
+
+// Two chart shapes on this tab; only the panels drawing them wait for recharts.
+const CategoryBars = lazy(() => import('../charts/CategoryBars.jsx'))
+const StackedDayBars = lazy(() => import('../charts/StackedDayBars.jsx'))
 
 export default function Security() {
   const hub = useApi('/api/hub/security')
@@ -132,18 +133,20 @@ function SeverityHero({ panelId, hub, events }) {
           {hourly.length === 0 ? (
             <Empty>events lack timestamps</Empty>
           ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={hourly} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="hour" tick={{ fill: tick, fontSize: 10 }} axisLine={{ stroke: grid }} tickLine={false} minTickGap={30} />
-                <YAxis hide />
-                {/* The bar is a count of flagged lookups in that hour of the
-                    day, so the unit IS "events" — the same word the panel's own
-                    right-hand count uses. Recharts' default said `value : 0`. */}
-                <Tooltip content={<ChartTip name="events" />} />
-                <Bar dataKey="value" radius={[3, 3, 0, 0]} fill={COLORS.accent} isAnimationActive={false} />
-              </BarChart>
-            </ResponsiveContainer>
+            /* The bar is a count of flagged lookups in that hour of the
+               day, so the unit IS "events" — the same word the panel's own
+               right-hand count uses. Recharts' default said `value : 0`. */
+            <Suspense fallback={<Skeleton h={180} />}>
+              <CategoryBars
+                data={hourly}
+                unit="events"
+                height={180}
+                xKey="hour"
+                fill={COLORS.accent}
+                tickSize={10}
+                minTickGap={30}
+              />
+            </Suspense>
           )}
         </>
       )}
@@ -526,21 +529,15 @@ function ThreatFeed({ panelId, threats }) {
             <div><span className="text-xl font-semibold" style={{ color: COLORS.crit }}>{totals.block.toLocaleString()}</span><div className="text-[11px] text-muted">Blocked</div></div>
             <div><span className="text-xl font-semibold">{totals.allow.toLocaleString()}</span><div className="text-[11px] text-muted">Allowed</div></div>
           </div>
-          <ResponsiveContainer width="100%" height={150}>
-            <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <XAxis dataKey="day" tickFormatter={fmtShortDay} tick={{ fill: tick, fontSize: 10 }} axisLine={{ stroke: grid }} tickLine={false} minTickGap={30} />
-              <YAxis hide />
-              {/* Both outcomes for the day in one hover: "Jul 31 / Blocked
-                  438,914 / Allowed 21,420". The colours come from the bars, so
-                  the tooltip and the totals above it read the same. */}
-              <Tooltip content={<ChartTip names={{ blocked: 'Blocked', allowed: 'Allowed' }} />} cursor={{ fill: grid, fillOpacity: 0.35 }} />
-              {/* Stacked, so the column height is the day's whole matched
-                  volume and the split is visible inside it. Allowed sits on
-                  top and carries the rounded cap. */}
-              <Bar dataKey="blocked" stackId="day" fill={COLORS.crit} isAnimationActive={false} />
-              <Bar dataKey="allowed" stackId="day" radius={[3, 3, 0, 0]} fill={COLORS.accent} isAnimationActive={false} />
-            </BarChart>
-          </ResponsiveContainer>
+          <Suspense fallback={<Skeleton h={150} />}>
+            <StackedDayBars
+              data={chartData}
+              blockedColor={COLORS.crit}
+              allowedColor={COLORS.accent}
+              tickFormat={fmtShortDay}
+              height={150}
+            />
+          </Suspense>
         </>
       )}
     </Card>

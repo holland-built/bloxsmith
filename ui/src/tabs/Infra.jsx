@@ -1,8 +1,7 @@
-import { useMemo, useState } from 'react'
-import { Cell, PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
-import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
@@ -144,6 +143,11 @@ export default function Infra() {
 
 // ---------- host status ----------
 
+// The donut is the only thing on this tab that needs recharts, so it is the only
+// thing that waits for it. See charts/StatusDonut.jsx for the measurement
+// this is based on.
+const StatusDonut = lazy(() => import('../charts/StatusDonut.jsx'))
+
 function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
   const { COLORS } = useChartTheme()
   // Buckets come from the same statusBucket() the table sorts and filters by,
@@ -184,27 +188,13 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
       ) : (
         <div className="flex items-center gap-4">
           <div className="relative w-[130px] h-[130px] shrink-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={pieData} dataKey="value" innerRadius={44} outerRadius={62} startAngle={90} endAngle={-270} stroke="none" isAnimationActive={false}>
-                  {pieData.map((d) => (
-                    <Cell key={d.name} fill={d.color} />
-                  ))}
-                </Pie>
-                {/* A pie has no category axis, so recharts hands the tooltip no
-                    usable `label` — the slice's name lives on the payload row.
-                    Reading it there keeps the first line ("Offline") that the
-                    default renderer used to print, with the count underneath as
-                    "4 hosts" instead of "Offline : 4".
-                    position / allowEscapeViewBox are an earlier fix for the
-                    tooltip being clipped by this 130px donut; carried through. */}
-                <Tooltip
-                  content={<ChartTip name="hosts" labelFormat={(_l, p) => p?.[0]?.name ?? ''} />}
-                  position={{ y: 100 }}
-                  allowEscapeViewBox={{ x: false, y: true }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {/* No skeleton in the fallback: the ring sits under an absolutely
+                positioned count that is already legible on its own, so a grey
+                bar flashing behind it would be more movement than the empty
+                space it replaces. The box keeps its 130px either way. */}
+            <Suspense fallback={<div className="w-full h-full" />}>
+              <StatusDonut data={pieData} unit="hosts" />
+            </Suspense>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-lg font-semibold">{total.toLocaleString()}</span>
               <span className="text-dim text-[11px]">{totalHosts == null ? 'hosts (loaded)' : 'hosts'}</span>

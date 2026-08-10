@@ -1,10 +1,7 @@
-import { useMemo, useState } from 'react'
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useData } from '../lib/data.js'
-import { useChartTheme, Card, CardGrid, ChartTip, Empty, FeedUnavailable, hiddenPanelGroup, Skeleton, utilStatus } from '../components/ui.jsx'
+import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, hiddenPanelGroup, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { dnssecPanelLabel, fmtShortDay } from '../lib/chartFormat.js'
 import { useHashParams } from '../lib/hash.js'
@@ -19,6 +16,9 @@ import { useThemeColors } from '../lib/theme.jsx'
 // broken. (zones pulls dnsViews server-side to resolve view names; that is the
 // server's dependency closure, not something this tab reads.)
 const SLICES = ['zones']
+
+// Both charts on this tab share one shape; only they wait for recharts.
+const GradientArea = lazy(() => import('../charts/GradientArea.jsx'))
 
 export default function Dns() {
   const qps = useApi('/api/csp/dns-qps', { poll: 30000 })
@@ -119,26 +119,21 @@ function QpsHero({ panelId, qps }) {
               </span>
             )}
           </div>
-          <ResponsiveContainer width="100%" height={230}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="qpsFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={COLORS.accent} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={COLORS.accent} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={40} />
-              <YAxis hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
-              {/* The big number above this chart already rounds to one decimal;
-                  the hover used to disagree with it by ten digits (`value :
-                  274.715`). Same series, same rounding, and the unit said out
-                  loud — the point labels are already clock times ("03:00 PM"),
-                  which fmtShortDay hands back untouched. */}
-              <Tooltip content={<ChartTip name="queries per second" />} />
-              <Area type="monotone" dataKey="value" stroke={COLORS.accent} strokeWidth={1.8} fill="url(#qpsFill)" isAnimationActive={false} />
-            </AreaChart>
-          </ResponsiveContainer>
+          {/* The big number above this chart already rounds to one decimal;
+              the hover used to disagree with it by ten digits (`value :
+              274.715`). Same series, same rounding, and the unit said out
+              loud — the point labels are already clock times ("03:00 PM"),
+              which fmtShortDay hands back untouched. */}
+          <Suspense fallback={<Skeleton h={230} />}>
+            <GradientArea
+              data={chartData}
+              color={COLORS.accent}
+              gradientId="qpsFill"
+              unit="queries per second"
+              height={230}
+              yDomain={['dataMin - 0.5', 'dataMax + 0.5']}
+            />
+          </Suspense>
         </>
       )}
     </Card>
@@ -304,24 +299,19 @@ function QueryVolume7d({ panelId, analytics }) {
       ) : broken ? (
         <Empty>no data</Empty>
       ) : (
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="volFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={COLORS.purple} stopOpacity={0.35} />
-                <stop offset="100%" stopColor={COLORS.purple} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="var(--color-grid)" strokeDasharray="3 3" vertical={false} />
-            {/* The label is now the day itself, so both the axis and the hover
-                have to spell it — an ISO timestamp on the axis would just be a
-                different kind of unreadable than the index it replaced. */}
-            <XAxis dataKey="label" tickFormatter={fmtShortDay} tick={{ fill: 'var(--color-tick)', fontSize: 11 }} axisLine={{ stroke: 'var(--color-grid)' }} tickLine={false} minTickGap={40} />
-            <YAxis hide />
-            <Tooltip content={<ChartTip name="queries" />} />
-            <Area type="monotone" dataKey="value" stroke={COLORS.purple} strokeWidth={1.8} fill="url(#volFill)" isAnimationActive={false} />
-          </AreaChart>
-        </ResponsiveContainer>
+        /* The label is now the day itself, so both the axis and the hover
+           have to spell it — an ISO timestamp on the axis would just be a
+           different kind of unreadable than the index it replaced. */
+        <Suspense fallback={<Skeleton h={200} />}>
+          <GradientArea
+            data={chartData}
+            color={COLORS.purple}
+            gradientId="volFill"
+            unit="queries"
+            height={200}
+            tickFormat={fmtShortDay}
+          />
+        </Suspense>
       )}
     </Card>
   )
