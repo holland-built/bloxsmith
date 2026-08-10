@@ -45,6 +45,20 @@ Destructive actions carry extra gates on top of this flow: teardown needs an adm
 | [Drift](#drift) | no | Template vs. reality |
 | [AI](#ai) | one action | Ask questions, look up threats |
 
+## Rearranging panels
+
+Every tab rearranges, and each one remembers its own arrangement — moving a panel on Network changes nothing on DNS. Provision keeps three separate arrangements, one each for Subnet, Full site and Seed demo, because those are three different pages behind one tab.
+
+- **Move** — drag the ⠿ handle in a panel's header. Without a mouse: Tab to the handle, press Enter, move with ← and →, then Enter to keep the new position or Escape to put it back.
+- **Resize** — drag a panel's right edge. In keyboard move mode, ↑ and ↓ do the same thing.
+- **Take a panel off the page** — the ✕ in a panel's header. Nothing is deleted and no data is lost; that tab simply stops drawing the panel until you put it back.
+- **Arrange panels** — a button above the panels opens a window called "Arrange this page". It lists what is on the page, in the order the page is actually in, and separately anything that is off it. Drag a row up or down, or use its **Move up** and **Move down** buttons, to reorder. **Take off the page** and **Put back on the page** do the hiding and the undoing. A panel you put back lands at the *end* of the page rather than where it used to be, and the window says so. This window is also where the whole feature is explained in words, for anyone who has not met a ⠿ grip before.
+- **Saving** — there is no Save button, and nothing to remember to press. Every move, every resize and every hide is written as soon as you let go, the page confirms that it saved rather than leaving you to guess, and the arrangement comes back on your next visit and after a server restart.
+
+Two tabs are quieter than the rest, and deliberately so. **Editor** draws a single panel and always will. **Drift** draws one until you run a check, and a second one appears with the result. A lone panel has nowhere to move to, so on those tabs there is no ⠿ handle and no **Arrange panels** button until a second panel is actually there — an affordance for a gesture that cannot do anything is a lie. Resize and ✕ still work on a single panel, and if you do take that one panel off the page, the **Arrange panels** button appears so you can bring it straight back.
+
+Panels cannot be created or deleted: the set on each tab is fixed and ships with the app, and ✕ only takes one off the page. A panel that is missing without you having hidden it is missing because the service behind it was not detected on this tenant, and when that happens the tab says so in a row that offers to show it anyway.
+
 ---
 
 ## Overview
@@ -60,16 +74,6 @@ Estate at a glance. Refreshes every 30 seconds.
 - **License Inventory** — SKU, state, expiry, and time remaining. Under 30 days is red, under 90 amber.
 
 Where a count could not be fetched for the whole estate, the panel says "loaded rows" instead of implying it covered everything.
-
-### Rearranging panels
-
-Overview is the only tab whose panels move. The other tabs render a fixed grid — no handles, no resize edge, nothing saved.
-
-- **Move** — drag the ⠿ handle in a panel's header. Without a mouse: Tab to the handle, press Enter, move with ← and →, then Enter to keep the new position or Escape to put it back.
-- **Resize** — drag a panel's right edge. In keyboard move mode, ↑ and ↓ do the same thing.
-- **Saving** — there is no Save button, and nothing to remember to press. Every move and every resize is written as soon as you let go, and the arrangement comes back on your next visit and after a server restart.
-
-Panels cannot be added or deleted. A panel is only ever absent because the service behind it was not detected on this tenant, and when that happens the tab says so in a row that offers to show it anyway.
 
 ## Daily
 

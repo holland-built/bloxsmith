@@ -610,6 +610,10 @@ test('every tab grows exactly the layout chrome its panels entitle it to', async
       // Exactly ONE per managed grid, and never inside it — see the comment at
       // its render site. Two would mean two grids announcing over each other.
       live: document.querySelectorAll('[data-layout-live]').length,
+      // Its visible twin, on the same rule and for the same reason: one per
+      // managed grid. Two would put two "Saved" pills in the same corner of
+      // the screen, on top of each other.
+      toasts: document.querySelectorAll('[data-layout-toast]').length,
       grids: document.querySelectorAll('[data-card-grid]').length,
       // The "Arrange panels" strip. Standing chrome now, not a thing that only
       // appears once a panel has already vanished — see the expected object
@@ -650,6 +654,7 @@ test('every tab grows exactly the layout chrome its panels entitle it to', async
       hotspots: panels,
       hides: panels,
       live: 1,
+      toasts: 1,
       grids: 1,
       strips: expectedStrips,
       arrange: expectedStrips,

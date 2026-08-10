@@ -87,6 +87,7 @@ const GATED = {
   'data-layout-resize=': 'managed', // the right-edge resize hotspot
   'data-layout-hide': 'managed', // the per-panel hide button
   'data-layout-live': 'layoutKey', // the one announcement region per grid
+  'data-layout-toast': 'layoutKey', // the visible "Saved" pill, sibling of the region
   'data-testid="hidden-tiles"': 'layoutKey', // the bring-a-tile-back strip
 }
 

@@ -121,7 +121,7 @@ func exportRouteServer(t *testing.T) (http.Handler, *Deps, string, func() []stri
 		Rest:    rest.New(upstream.URL, auth),
 		Guard:   &httpx.Guard{Port: "8080", MutatingPaths: httpx.DefaultMutatingPaths()},
 		Cache:   cache,
-		Account: account.New(csp.URL, "abc123def456", auth, cache),
+		Account: account.New(csp.URL, auth, cache),
 		Audit: audit.New(filepath.Join(stateDir, "audit_log.jsonl"), "app-v-test", "test-instance",
 			audit.Options{TrustDir: t.TempDir()}),
 		Provision: provision.New(rest.New(upstream.URL, auth), filepath.Join(dir, "templates")),

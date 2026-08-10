@@ -349,7 +349,7 @@ test('a load that throws is "no saved layout" too, never an unhandled rejection'
 test('saveLayout POSTs the validated body to /api/views', async () => {
   let call = null
   const fetchImpl = async (url, opts) => { call = { url, opts }; return { ok: true, status: 200 } }
-  assert.equal(await saveLayout('overview', { order: ['a'], spans: { a: 2 } }, fetchImpl), true)
+  await saveLayout('overview', { order: ['a'], spans: { a: 2 } }, fetchImpl)
   assert.equal(call.url, '/api/views')
   assert.equal(call.opts.method, 'POST')
   assert.deepEqual(JSON.parse(call.opts.body), {
@@ -374,6 +374,28 @@ test('saveLayout refuses to POST a blob the validator rejects — item 7s guard 
     /span for "a" must be 1-6/,
   )
   assert.equal(called, false, 'an invalid layout must never reach the network')
+})
+
+test('saveLayout REJECTS when the server refuses it — a save that failed must not resolve', async () => {
+  // THE BUG THIS PINS. saveLayout used to end `return res.ok`, so a 500 came
+  // back as a promise that RESOLVED false. CardGrid's ctx.apply attached a
+  // `.catch` and nothing else, so that false was dropped on the floor: the
+  // panel moved on screen, the server kept the old layout, and the operator
+  // was told nothing at all. Every other failure here throws, so this one has
+  // to as well or the caller needs two different ways to notice one outcome.
+  const fetchImpl = async () => ({ ok: false, status: 500 })
+  await assert.rejects(
+    () => saveLayout('overview', { order: ['a'], spans: { a: 2 } }, fetchImpl),
+    /HTTP 500/,
+  )
+})
+
+test('a rejected save names the status it got, so the console line is diagnosable', async () => {
+  const fetchImpl = async () => ({ ok: false, status: 403 })
+  await assert.rejects(
+    () => saveLayout('overview', { order: ['a'], spans: { a: 2 } }, fetchImpl),
+    /HTTP 403/,
+  )
 })
 
 // ---------------------------------------------------------------------------

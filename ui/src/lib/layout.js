@@ -409,6 +409,15 @@ export async function loadLayout(tabId, fetchImpl = fetch) {
 // Validated before it is sent, not after. This is item 7's guard standing
 // between the drag UI of item 8 and the disk: a pixel offset stashed "just
 // temporarily" in the blob throws here and never reaches the network.
+//
+// A REJECTED SAVE THROWS. It used to `return res.ok`, and that one word is why
+// a 500 from the server was completely silent for as long as this file has
+// existed: the only caller (CardGrid's ctx.apply) had a `.catch` and no
+// `.then`, so a promise that RESOLVED false went nowhere. Every other way this
+// function can fail — an invalid blob, a dropped connection — already threw, so
+// the boolean was the one failure mode that did not, and it was the common one.
+// Throwing makes all three arrive at the same place, and nothing in the app
+// read the return value.
 export async function saveLayout(tabId, { order, spans, hidden }, fetchImpl = fetch) {
   const blob = buildSaveBlob(tabId, order, spans, hidden)
   const verdict = validateSave(blob)
@@ -418,5 +427,5 @@ export async function saveLayout(tabId, { order, spans, hidden }, fetchImpl = fe
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(blob),
   })
-  return res.ok
+  if (!res.ok) throw new Error(`the server refused the layout: HTTP ${res.status}`)
 }

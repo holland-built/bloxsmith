@@ -39,3 +39,48 @@ func TestAuthOverrideOrder(t *testing.T) {
 		t.Fatalf("override over empty active: got %q, want Bearer x", got)
 	}
 }
+
+// TestIdentityValueNeverReturnsOverride pins the resolver used by CSP identity
+// calls (account.Manager.cspJSON). It must answer "who is this user", so it
+// resolves fallback -> active tenant key and NEVER the account-switch override.
+//
+// The override case is the load-bearing one: returning to Auth.Value() here
+// would reintroduce the bug this method exists to prevent — an identity call
+// signed with a switched-in account's short-lived JWT, which narrows the account
+// list to that account and locks the user out of switching back once it expires.
+func TestIdentityValueNeverReturnsOverride(t *testing.T) {
+	// Env-key mode: the fallback identifies the person, and wins over active().
+	env := NewAuth("env-key", func() string { return "vault-active" })
+	if got := env.IdentityValue(); got != "env-key" {
+		t.Fatalf("env mode: got %q, want env-key", got)
+	}
+
+	// Vault mode: no env key at all, so identity is the active tenant's key.
+	// This is the case that used to send an EMPTY Authorization header and 401.
+	v := NewAuth("", func() string { return "VAULTKEY" })
+	if got := v.IdentityValue(); got != "VAULTKEY" {
+		t.Fatalf("vault mode: got %q, want VAULTKEY", got)
+	}
+	if got := v.IdentityValue(); got == "" {
+		t.Fatal("vault mode resolved an empty identity credential — this is the 401 bug")
+	}
+
+	// An account switch is in force. Value() must follow it; IdentityValue()
+	// must ignore it, in BOTH modes.
+	v.SetOverride("Bearer SWITCHED-JWT")
+	env.SetOverride("Bearer SWITCHED-JWT")
+	if got := v.Value(); got != "Bearer SWITCHED-JWT" {
+		t.Fatalf("Value must still follow the switch: %q", got)
+	}
+	if got := v.IdentityValue(); got != "VAULTKEY" {
+		t.Fatalf("vault mode leaked the switched-account JWT into an identity call: %q", got)
+	}
+	if got := env.IdentityValue(); got != "env-key" {
+		t.Fatalf("env mode leaked the switched-account JWT into an identity call: %q", got)
+	}
+
+	// Nothing configured at all resolves to empty rather than panicking.
+	if got := NewAuth("", nil).IdentityValue(); got != "" {
+		t.Fatalf("no fallback and no active resolver: got %q, want empty", got)
+	}
+}
