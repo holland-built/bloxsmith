@@ -79,8 +79,21 @@ test.describe('a service the tenant does not own', () => {
     await expect(page.getByText('Triage Inbox')).toHaveCount(0);
 
     // Unmapped Security panels are not part of the group and must not move.
+    //
+    // CTEM is matched by its HEADING, not by its text. getByText is a
+    // case-insensitive substring match, so `getByText('CTEM Exposure')` also
+    // matches this panel's own error state, "CTEM exposure feed unavailable" —
+    // two elements, and a strict-mode violation — on any day the CTEM feed is
+    // down. What this line is actually asserting is that the panel is still on
+    // the tab, which is true whether its feed is up or not, so the feed state
+    // has no business deciding whether it passes.
+    //
+    // Found on 2026-08-10, when the code split changed the mount timing enough
+    // that the panel had already resolved to its error state by the time this
+    // ran, instead of still showing a skeleton. The ambiguity was always there;
+    // the timing is only what made it show up.
     await expect(page.getByText('Lookalike Domains')).toBeVisible();
-    await expect(page.getByText('CTEM Exposure')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'CTEM Exposure' })).toBeVisible();
 
     await showAnyway(page).click();
     await expect(page.getByText('Threat Events — by Severity')).toBeVisible();
