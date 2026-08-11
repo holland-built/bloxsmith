@@ -247,7 +247,7 @@ socket so the in-app self-update works.
 
 ```bash
 git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
-cp .env.example .env        # fill in INFOBLOX_API_KEY; WATCHTOWER_TOKEN is pre-set
+cp .env.example .env        # fill in INFOBLOX_API_KEY
 docker compose up -d                       # dashboard (loopback)
 BIND=0.0.0.0 docker compose up -d          # expose on the LAN
 docker compose --profile secure up -d      # + Caddy reverse proxy (TLS + basic-auth)
@@ -331,9 +331,8 @@ script above. There is no separate image-rollback path: to go back to a
 known-good version, pin its tag or digest in `docker-compose.yml` and run
 `docker compose up -d`.
 
-(No Watchtower sidecar ships in `docker-compose.yml` today — `WATCHTOWER_TOKEN`
-in `.env.example` is unused wiring for a possible future `--profile autoupdate`
-addition, not a shipped feature. Nothing in the Go code reads it.)
+(No Watchtower sidecar ships in `docker-compose.yml` — auto-update via a
+sidecar was considered and never built.)
 
 There is **no unattended auto-update and no polling updater** — the daily check
 only surfaces availability. Applying an update is always a user action, whether
@@ -556,7 +555,6 @@ known follow-up. Until then, provisioning that relies on bundled templates needs
 | `ALLOWED_HOSTS`    |          | _(loopback + `HOST`)_    | Comma-separated extra `Host` header values this deployment answers to (DNS-rebinding gate). `localhost`/`127.0.0.1`/`[::1]`/`HOST` are always allowed; anything else gets `421`. A wildcard bind (`HOST=0.0.0.0`, the Docker default) can't know its own names, so the gate is **off** there until you set this |
 | `TRUSTED_PROXIES`  |          | _(empty — nothing trusted)_ | Comma-separated IPs and/or CIDR ranges of reverse proxies in front of the app. `X-Forwarded-For` is read **only** from these peers, and only to identify the client for the unlock rate limit. Set it when you run a proxy — see [Behind a reverse proxy](#behind-a-reverse-proxy). Leave it empty when the app is reached directly |
 | `DISABLE_UPDATE_CHECK` |      | _(unset)_                | Set to `1` (any non-empty value) to stop `GET /api/update/check` contacting GitHub Releases. It then reports `checkDisabled: true` and no `latest` — not "up to date". `bloxsmith update` and `POST /api/update/apply` still reach GitHub when run explicitly |
-| `WATCHTOWER_TOKEN` |          | _(generated/default)_    | Shared secret for the optional Watchtower sidecar's HTTP API (alternate update trigger) |
 | `AUDIT_TRUST_DIR`  |          | _(per-user config dir)_  | Where the audit chain's HMAC key and sealed head record live. Must **not** be the directory holding `audit_log.jsonl` — a key an attacker can rewrite beside the log it signs protects nothing. The app warns at startup if you point it there |
 | `AUDIT_KEY`        |          | _(generated locally)_    | Audit HMAC key, hex, ≥64 characters. Set this from an injected secret and the trust root no longer lives on the machine that writes the log |
 | `AUDIT_KEY_FILE`   |          | —                        | Path to a file holding the same hex key; preferred over `AUDIT_KEY` (kept out of `docker inspect` / process env) |
@@ -986,7 +984,9 @@ into an admin bypass or into a forged name in a tamper-evident log.
 ## Security notes
 
 - **Never commit `.env`** (gitignored). Use `.env.example` as the template.
-- The image ships no secrets — `.dockerignore` excludes `.env`, `.mcp.json`, and local state.
+- The image ships no secrets — nothing secret is in the build context. The local
+  build runs from `go/`; the release image is built by goreleaser from its `dist/`
+  tree plus `extra_files: [templates]`. Secrets arrive at run time via the environment.
 - The app has **no client auth** on its read/query/account endpoints (only
   `block`/`unblock` writes are gated by `DASHBOARD_TOKEN`). CORS is restricted to the
   loopback origin, but that only restrains browsers — anyone who can reach the port

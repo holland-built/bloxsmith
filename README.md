@@ -22,7 +22,7 @@
 | **Encrypted vault** | tenant keys AES-encrypted at rest — protects a stolen disk, [not a live machine](docs/DEPLOYMENT.md#what-aes-encrypted-vault-is-worth-exactly) |
 | **Optional AI query box** | natural-language over your data |
 
-**[What each tab does →](docs/TABS.md)** — all 14 tabs, which ones write to Infoblox, and how the dry-run/apply flow works.
+**[What each tab does →](docs/TABS.md)** — all 15 tabs, which ones write to Infoblox, and how the dry-run/apply flow works.
 
 ## Install
 
