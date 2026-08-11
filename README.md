@@ -26,11 +26,82 @@
 
 ## Install
 
-Pick your platform, copy the whole block, paste it into a terminal. No block needs
-you to run its lines one at a time. The script installers ask one yes/no question
-at the end (whether to start Bloxsmith at login) — answer it and you're done.
+Four steps, about five minutes. You do not need to be a developer, and you do not
+need to know anything about how Bloxsmith is built.
 
-### Docker — any OS
+### 1. Get Docker Desktop
+
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) — free,
+and available for Windows, macOS and Linux. Open it once after installing and leave
+it running. **This is the only thing Bloxsmith needs.**
+
+### 2. Make a folder and download two small files
+
+Copy the whole block for your computer and paste it into a terminal — that's
+**Terminal** on macOS and Linux, or **Command Prompt** on Windows (press
+<kbd>Win</kbd>, type `cmd`, hit Enter). Paste it all at once; you do not need to
+run the lines one at a time.
+
+**macOS**
+
+```bash
+mkdir -p ~/Bloxsmith && cd ~/Bloxsmith
+curl -fsSLO https://raw.githubusercontent.com/holland-built/bloxsmith/master/docker-compose.yml
+curl -fsSLO https://raw.githubusercontent.com/holland-built/bloxsmith/master/update.command
+chmod +x update.command
+```
+
+**Windows**
+
+```bat
+mkdir "%USERPROFILE%\Bloxsmith" 2>nul
+cd /d "%USERPROFILE%\Bloxsmith"
+curl.exe -fsSLO https://raw.githubusercontent.com/holland-built/bloxsmith/master/docker-compose.yml
+curl.exe -fsSLO https://raw.githubusercontent.com/holland-built/bloxsmith/master/update.bat
+```
+
+**Linux**
+
+```bash
+mkdir -p ~/Bloxsmith && cd ~/Bloxsmith
+curl -fsSLO https://raw.githubusercontent.com/holland-built/bloxsmith/master/docker-compose.yml
+curl -fsSLO https://raw.githubusercontent.com/holland-built/bloxsmith/master/update.sh
+chmod +x update.sh
+```
+
+The first file tells Docker how to run Bloxsmith. The second is the button you
+press later to get a newer version — keep both together in that folder.
+
+### 3. Start it
+
+In that same terminal window:
+
+```bash
+docker compose up -d
+```
+
+The first run downloads Bloxsmith and takes a minute or two; after that it starts
+in seconds. It keeps running on its own, and starts again by itself when you
+restart your computer.
+
+### 4. Open it and add your key
+
+Go to **<http://localhost:8080>**. Bloxsmith asks you to pick a passphrase, then to
+paste an [Infoblox API key](#get-your-infoblox-api-key) — see the next section for
+where to find one. Your keys are scrambled before they're saved, and they survive
+restarts and updates, so this is a one-time step.
+
+Something already using port 8080? Open `docker-compose.yml` in any text editor and
+change `PORT` — full options are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+<details>
+<summary><b>Other ways to install</b> (Homebrew, one-line installer, plain Docker)</summary>
+
+These skip Docker Compose. They work, but the update scripts above do not apply to
+them — each has its own update method, listed under [Keeping it up to
+date](#keeping-it-up-to-date).
+
+**Docker without Compose — any OS**
 
 ```bash
 docker run -d --name bloxsmith \
@@ -39,18 +110,14 @@ docker run -d --name bloxsmith \
   ghcr.io/holland-built/bloxsmith:latest
 ```
 
-### macOS
+**macOS — Homebrew**
 
 ```bash
 brew install holland-built/tap/bloxsmith
 bloxsmith
 ```
 
-No Homebrew? Use the **macOS / Linux script** below instead.
-
-### Windows
-
-Open **Command Prompt** (press <kbd>Win</kbd>, type `cmd`, hit Enter), then paste:
+**Windows — installer script.** Open **Command Prompt**, then paste:
 
 ```bat
 powershell -Command "iwr -UseBasicParsing -OutFile install.ps1 https://github.com/holland-built/bloxsmith/releases/latest/download/install.ps1"
@@ -60,27 +127,24 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 The same two lines also work in PowerShell. `powershell -Command` is what makes
 `iwr` run from `cmd.exe`.
 
-### macOS / Linux script
+**macOS / Linux — installer script**
 
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSLo install.sh https://github.com/holland-built/bloxsmith/releases/latest/download/install.sh
 sh install.sh
 ```
 
-**Then open <http://localhost:8080>.** Pick a passphrase, paste your
-[Infoblox API key](#get-your-infoblox-api-key). Keys are encrypted at rest and
-survive restarts and updates.
+The script installers ask one yes/no question at the end (whether to start
+Bloxsmith at login) — answer it and you're done. Either way, open
+<http://localhost:8080> next.
 
-Docker keeps running on its own. The macOS/Linux `bloxsmith` command holds the
-terminal open — close it with <kbd>Ctrl</kbd>+<kbd>C</kbd>, or run
-`bloxsmith service install` once to start it automatically at login instead.
+The `bloxsmith` command holds the terminal open — close it with
+<kbd>Ctrl</kbd>+<kbd>C</kbd>, or run `bloxsmith service install` once to start it
+automatically at login instead.
 
-<details>
-<summary><b>Read the installer before running it · Docker Compose</b></summary>
-
-**Inspect first.** The installers check a SHA-256 checksum and an Ed25519 signature
-and refuse to install if either fails — but you should still read what you run. Paste
-the *first* line of the block above on its own, then:
+**Read the installer before running it.** The installers check a SHA-256 checksum
+and an Ed25519 signature and refuse to install if either fails — but you should
+still read what you run. Paste the *first* line of a block above on its own, then:
 
 ```bash
 less install.sh        # macOS / Linux — press q to quit
@@ -91,22 +155,7 @@ notepad install.ps1
 
 …and paste the second line once you're happy.
 
-**Docker Compose** — gives you the in-app update banner and an easy tag to pin:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/holland-built/bloxsmith/master/docker-compose.yml -o docker-compose.yml
-docker compose up -d
-```
-
-Full options and deployment guidance are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-
 </details>
-
-## Get your Infoblox API key
-
-1. Sign in to <https://csp.infoblox.com>.
-2. Top-right user menu → **User API Keys** → **Create**.
-3. Copy the token, paste it into the dashboard setup.
 
 <details>
 <summary><b>How the installers verify downloads &amp; where they land</b></summary>
@@ -129,6 +178,36 @@ Port 8080 is the default for every install method. If it's already taken (the Do
 
 </details>
 
+## Get your Infoblox API key
+
+1. Sign in to <https://csp.infoblox.com>.
+2. Top-right user menu → **User API Keys** → **Create**.
+3. Copy the token, paste it into the dashboard setup.
+
+## Keeping it up to date
+
+Nothing updates on its own. Bloxsmith checks once a day and shows a small banner
+when a newer version is out; you decide when to take it.
+
+If you installed with the four steps above, open the **Bloxsmith** folder you made
+in step 2 and:
+
+| Your computer | What to do |
+|---|---|
+| **macOS** | Double-click **update.command** |
+| **Windows** | Double-click **update.bat** |
+| **Linux** | Run `./update.sh` |
+
+Each one fetches the newer version and restarts Bloxsmith. Your passphrase, keys
+and saved views are kept. It takes about a minute, and the dashboard is briefly
+unavailable while it swaps over.
+
+Prefer to type it yourself? `docker compose pull && docker compose up -d` in that
+folder does exactly the same thing. If you used one of the other install methods,
+use the version badge → **Update now** in the dashboard, or run `bloxsmith update`.
+
+Full update modes → [docs/DEPLOYMENT.md#updating](docs/DEPLOYMENT.md#updating).
+
 <details>
 <summary><b>Run as an always-on server (LAN, compose, secure proxy)</b></summary>
 
@@ -138,15 +217,6 @@ Port 8080 is the default for every install method. If it's already taken (the Do
 Binding `0.0.0.0` (Docker) or `BIND=0.0.0.0` (compose) instead of `127.0.0.1` exposes the dashboard on the LAN with no auth in front of it. Pinning an exact version instead of `:latest` freezes the deploy — and opts you out of updates, including the **Update now** button ([how to pin](docs/DEPLOYMENT.md#pinning-a-version)). Tenant keys live AES-encrypted in the `noc-vault` volume and survive updates, restarts, and container recreation. With auto-unlock enabled the passphrase necessarily lives on the same machine, so that encryption protects a stolen disk or backup — not a host someone already has a process on. [What it is worth, exactly](docs/DEPLOYMENT.md#what-aes-encrypted-vault-is-worth-exactly).
 
 Full compose / secure-proxy / Customer-install steps → [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-
-</details>
-
-<details>
-<summary><b>Updating</b></summary>
-
-Bloxsmith checks GitHub daily; nothing updates without your click. Standalone: version badge → **Update now**, or `bloxsmith update`. Docker: **Update now** button, or `docker compose pull && docker compose up -d`.
-
-Full update modes → [docs/DEPLOYMENT.md#updating](docs/DEPLOYMENT.md#updating).
 
 </details>
 
@@ -161,6 +231,13 @@ Full update modes → [docs/DEPLOYMENT.md#updating](docs/DEPLOYMENT.md#updating)
 <summary><b>Uninstalling</b></summary>
 
 Each install method removes cleanly. Config + the encrypted vault are **kept by default** so a reinstall keeps your tenants — add the purge flag to delete them too.
+
+**Docker Compose** (the four-step install above) — from your Bloxsmith folder:
+
+```bash
+docker compose down                                    # stop it, keep your keys
+docker compose down -v && docker volume rm noc-vault   # also delete the vault
+```
 
 **macOS / Linux** (same script, `--uninstall`):
 
@@ -184,13 +261,47 @@ brew uninstall bloxsmith
 rm -rf ~/Library/Application\ Support/bloxsmith   # optional: config + vault (macOS)
 ```
 
-**Docker:**
+**Docker without Compose:**
 
 ```bash
 docker rm -f bloxsmith && docker volume rm noc-vault   # volume rm also drops the vault
 ```
 
 </details>
+
+<details>
+<summary><b>AI query box</b> (optional)</summary>
+
+The natural-language query box needs an LLM with tool-calling; everything else works without it. Default is **Groq** (free tier — fast, free models, good for demos): get a key at <https://console.groq.com> and set it in the dashboard (sidebar → **⚙ AI provider**) or via `GROQ_API_KEY`. Any OpenAI-compatible provider works — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider).
+</details>
+
+## Code signing policy
+
+Bloxsmith releases are built and published from GitHub Actions.
+
+**OS trust.** The Windows and macOS binaries are **not code-signed** (no Apple notarization, no Windows Authenticode), so a first run trips OS gatekeeping: macOS Gatekeeper — right-click → **Open**, or `xattr -dr com.apple.quarantine` the binary; Windows SmartScreen — **More info → Run anyway**. This applies to the Homebrew and installer-script methods only; the Docker install never puts a binary on your machine.
+
+**Supply-chain provenance.** Two independent signatures, because they answer different questions.
+
+*Ed25519, checked automatically.* `checksums.txt` is signed with an Ed25519 key held only in this repository's GitHub Actions secrets, in two formats: a raw signature the compiled-in verifier reads with no dependencies, and an SSH-format one (`checksums.txt.sshsig`) that `ssh-keygen` verifies — chosen because OpenSSH is present by default on macOS, Linux and Windows while OpenSSL 3.x is not (macOS ships LibreSSL, which cannot verify raw Ed25519 at all). The public half is compiled into every binary (`go/signing.go`) and pinned in `install.sh`. **Both the installer and the updater refuse when the signature is missing** — treating an absent signature as "checksum only" would let an attacker turn the control off by deleting one file. **The in-app updater refuses to apply a release whose signature is missing or does not verify** — before it looks at the checksum at all, because a checksum fetched from the same release as the archive proves the download is intact, never that this project published it. CI refuses to publish an unsigned release, so a missing signature is not a degraded release; it is a tampered one.
+
+What this does *not* cover: anyone who can push a tag, or who steals the Actions secret, can still produce a signature that verifies. It stops an attacker who can write release assets, not one who owns CI. Rotating the key means shipping a new binary — the price of an anchor that does not live in the release.
+
+*Cosign, checked by hand.* `checksums.txt` is additionally **keyless-signed** in CI using the workflow's GitHub OIDC identity — the same mechanism that signs the ghcr container images. This proves which workflow run built the artifacts and is verifiable by a third party with no prior knowledge of this project. Neither signature is OS trust, and neither removes the warnings above. Verify:
+
+```bash
+cosign verify-blob \
+  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+```
+
+Report signing issues at the GitHub issue tracker.
+
+---
+
+**Everything below is for developers working on Bloxsmith.**
 
 <details>
 <summary><b>How it works</b></summary>
@@ -228,40 +339,8 @@ scripts/dev-serve.sh [port]                     # LIVE dev (default :8090): edit
 Full steps, the deploy matrix, auto-unlock, and pinning → **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 </details>
 
-<details>
-<summary><b>AI query box</b> (optional)</summary>
-
-The natural-language query box needs an LLM with tool-calling; everything else works without it. Default is **Groq** (free tier — fast, free models, good for demos): get a key at <https://console.groq.com> and set it in the dashboard (sidebar → **⚙ AI provider**) or via `GROQ_API_KEY`. Any OpenAI-compatible provider works — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#using-a-different-llm-provider).
-</details>
-
-## Code signing policy
-
-Bloxsmith releases are built and published from GitHub Actions.
-
-**OS trust.** The Windows and macOS binaries are **not code-signed** (no Apple notarization, no Windows Authenticode), so a first run trips OS gatekeeping: macOS Gatekeeper — right-click → **Open**, or `xattr -dr com.apple.quarantine` the binary; Windows SmartScreen — **More info → Run anyway**.
-
-**Supply-chain provenance.** Two independent signatures, because they answer different questions.
-
-*Ed25519, checked automatically.* `checksums.txt` is signed with an Ed25519 key held only in this repository's GitHub Actions secrets, in two formats: a raw signature the compiled-in verifier reads with no dependencies, and an SSH-format one (`checksums.txt.sshsig`) that `ssh-keygen` verifies — chosen because OpenSSH is present by default on macOS, Linux and Windows while OpenSSL 3.x is not (macOS ships LibreSSL, which cannot verify raw Ed25519 at all). The public half is compiled into every binary (`go/signing.go`) and pinned in `install.sh`. **Both the installer and the updater refuse when the signature is missing** — treating an absent signature as "checksum only" would let an attacker turn the control off by deleting one file. **The in-app updater refuses to apply a release whose signature is missing or does not verify** — before it looks at the checksum at all, because a checksum fetched from the same release as the archive proves the download is intact, never that this project published it. CI refuses to publish an unsigned release, so a missing signature is not a degraded release; it is a tampered one.
-
-What this does *not* cover: anyone who can push a tag, or who steals the Actions secret, can still produce a signature that verifies. It stops an attacker who can write release assets, not one who owns CI. Rotating the key means shipping a new binary — the price of an anchor that does not live in the release.
-
-*Cosign, checked by hand.* `checksums.txt` is additionally **keyless-signed** in CI using the workflow's GitHub OIDC identity — the same mechanism that signs the ghcr container images. This proves which workflow run built the artifacts and is verifiable by a third party with no prior knowledge of this project. Neither signature is OS trust, and neither removes the warnings above. Verify:
-
-```bash
-cosign verify-blob \
-  --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity-regexp '^https://github\.com/holland-built/bloxsmith/\.github/workflows/release\.yml@refs/tags/' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  checksums.txt
-```
-
-Report signing issues at the GitHub issue tracker.
-
 ---
 
 - **Full deployment & env reference →** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - **Security policy →** [SECURITY.md](.github/SECURITY.md) · **Contributing →** [CONTRIBUTING.md](.github/CONTRIBUTING.md)
 - Released under the [MIT License](LICENSE).
-</content>
-</invoke>
