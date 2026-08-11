@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
-import { COLORS, Card, CardGrid, Empty, Skeleton, TabIntro } from '../components/ui.jsx'
+// FetchError is the same shared component SelfService.jsx uses — /api/templates
+// answers 500 and /api/ipam/spaces answers 502 on an upstream failure, and both
+// collapse into the same empty list a tenant that owns nothing produces.
+import { COLORS, Card, CardGrid, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
-// Same component SelfService.jsx already uses — /api/templates answers 500 and
-// /api/ipam/spaces answers 502 on an upstream failure, and both collapse into
-// the same empty list a tenant that owns nothing produces.
-import { FetchError } from './SelfService.jsx'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
 

@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { COLORS, Card, CardGrid, Empty, PreviewApply, TabIntro } from '../components/ui.jsx'
+// FetchError is the same shared component SelfService.jsx uses. /api/ipam/spaces
+// and /api/ipam/blocks answer 502 on an upstream failure and /api/templates
+// answers 500 — and `data?.spaces ?? []` collapses every one of those into the
+// empty array a tenant that genuinely owns nothing produces. Unread, the select
+// falls back to its placeholder and Apply sits disabled with no reason given.
+import { COLORS, Card, CardGrid, Empty, FetchError, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { withToken } from '../lib/authFetch.js'
-// Same component SelfService.jsx already uses. /api/ipam/spaces and
-// /api/ipam/blocks answer 502 on an upstream failure and /api/templates answers
-// 500 — and `data?.spaces ?? []` collapses every one of those into the empty
-// array a tenant that genuinely owns nothing produces. Unread, the select falls
-// back to its placeholder and Apply sits disabled with no reason given.
-import { FetchError } from './SelfService.jsx'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
 
