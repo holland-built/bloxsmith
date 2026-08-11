@@ -725,7 +725,17 @@ func (s *Service) CSPCtemAssets() map[string]any {
 // page size masquerading as a total, third instance of this family).
 func (s *Service) CSPExposures() map[string]any {
 	const offset = 0
-	body, st, err := s.Rest.Write("POST", "/api/attack-surface/v1/exposures", map[string]any{"limit": 200}, nil)
+	const path = "/api/attack-surface/v1/exposures"
+	if s.entitlementDenied(path) {
+		return exposureFeedUnavailable(entitlementReason)
+	}
+	body, st, err := s.Rest.Write("POST", path, map[string]any{"limit": 200}, nil)
+	if st == 403 {
+		if s.entitlementMark403(path) {
+			log.Printf("csp: exposures fetch failed: status=403 (account not entitled — believed for %v, re-probed after)", entitlementRetry)
+		}
+		return exposureFeedUnavailable(entitlementReason)
+	}
 	if errored(st, err) {
 		log.Printf("csp: exposures fetch failed: status=%d err=%v body=%v", st, err, body)
 		return exposureFeedUnavailable("upstream exposures fetch failed")
@@ -750,7 +760,17 @@ func (s *Service) CSPAssetRisk() map[string]any {
 // there is no client-side paging escape here; do not add retry-with-smaller-
 // limit logic, it will hit the identical 429 every time.
 func (s *Service) CSPExposedHostnames() map[string]any {
-	body, st, err := s.Rest.GetEx("/api/attack-surface/v1/exposures/hostnames", nil)
+	const path = "/api/attack-surface/v1/exposures/hostnames"
+	if s.entitlementDenied(path) {
+		return exposureFeedUnavailable(entitlementReason)
+	}
+	body, st, err := s.Rest.GetEx(path, nil)
+	if st == 403 {
+		if s.entitlementMark403(path) {
+			log.Printf("csp: exposed-hostnames fetch failed: status=403 (account not entitled — believed for %v, re-probed after)", entitlementRetry)
+		}
+		return exposureFeedUnavailable(entitlementReason)
+	}
 	if errored(st, err) {
 		// GetEx discards the parsed error body on a 4xx/5xx (rest.go:127-129),
 		// so the raw "grpc: trying to send message larger than max ..." text
@@ -768,7 +788,17 @@ func (s *Service) CSPExposedHostnames() map[string]any {
 // cap as CSPExposedHostnames applies (today at ~1 MB, so headroom, not
 // immunity) — same no-client-paging caveat.
 func (s *Service) CSPExposedIPs() map[string]any {
-	body, st, err := s.Rest.GetEx("/api/attack-surface/v1/exposures/ip-addresses", nil)
+	const path = "/api/attack-surface/v1/exposures/ip-addresses"
+	if s.entitlementDenied(path) {
+		return exposureFeedUnavailable(entitlementReason)
+	}
+	body, st, err := s.Rest.GetEx(path, nil)
+	if st == 403 {
+		if s.entitlementMark403(path) {
+			log.Printf("csp: exposed-ips fetch failed: status=403 (account not entitled — believed for %v, re-probed after)", entitlementRetry)
+		}
+		return exposureFeedUnavailable(entitlementReason)
+	}
 	if errored(st, err) {
 		// Same GetEx caveat as CSPExposedHostnames: the error body isn't
 		// available here to log, only status/err.

@@ -21,16 +21,22 @@ type Service struct {
 	Rest  *rest.Client
 	Cache *cache.Cache
 	Mcp   *mcp.Client
+	// ent is the shared 403 entitlement backoff (entitlement.go). A pointer so
+	// With's shallow copy keeps one process-wide memory; nil (bare Service
+	// literals in tests) disables the backoff rather than panicking.
+	ent *entitlement
 }
 
 // New builds the dashboard service.
-func New(r *rest.Client, c *cache.Cache) *Service { return &Service{Rest: r, Cache: c} }
+func New(r *rest.Client, c *cache.Cache) *Service {
+	return &Service{Rest: r, Cache: c, ent: &entitlement{}}
+}
 
 // With returns a copy of the service bound to a different rest.Client — in
 // practice the request-scoped pinned one (see rest.Client.Pin). The copy is
-// shallow on purpose: Cache and Mcp are shared process-wide and must stay
-// shared; only the outbound credential changes. Service holds no lock, so
-// copying it is safe.
+// shallow on purpose: Cache, Mcp and ent are shared process-wide and must stay
+// shared; only the outbound credential changes. Service holds no lock directly
+// (ent carries its own), so copying it is safe.
 func (s *Service) With(r *rest.Client) *Service {
 	cp := *s
 	cp.Rest = r
