@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { Card, CardGrid, COLORS, Empty, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
+import { Card, CardGrid, COLORS, Empty, FetchError, PreviewApply, PreviewBox, TabIntro, deletedMsg } from '../components/ui.jsx'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none'
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
@@ -242,35 +242,6 @@ function DnsPanel({ panelId }) {
 }
 
 // ---------- manage records ----------
-
-// Exported because Provision.jsx and Drift.jsx have the identical problem —
-// a picker whose useApi failed renders byte-identically to a tenant that owns
-// nothing — and the answer must be the identical component, not a second one
-// that drifts away from this wording.
-export function FetchError({ error, stale }) {
-  if (!error) return null
-  return (
-    <div className="text-xs mb-2" style={{ color: COLORS.crit }}>
-      Could not load current data: {String(error?.message || error)}
-      {stale && ' — the list below may be out of date.'}
-    </div>
-  )
-}
-
-// A DELETE that upstream answered 404 for is still a success, but it is NOT the
-// same success as one this system carried out: the object was already gone, so
-// nothing here removed anything, and telling the operator "deleted." claims an
-// act that never happened. go/internal/edit/resources.go sets already_gone
-// explicitly on BOTH arms precisely so the two are distinguishable.
-//
-// The field's ABSENCE is UNKNOWN, not false — an older server never sent it —
-// so it gets its own honest wording rather than being folded into either
-// confident answer.
-export function deletedMsg(j, label) {
-  if (j?.already_gone === true) return `${label} was already gone — nothing was deleted.`
-  if (j?.already_gone === false) return `${label} deleted.`
-  return `${label} delete accepted — the server did not report whether it still existed.`
-}
 
 function truncNote(data, rows) {
   if (data == null) return null

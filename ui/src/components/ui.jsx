@@ -2653,6 +2653,36 @@ export function PreviewBox({ data, note = 'preview — nothing applied yet' }) {
   )
 }
 
+// Lives here because SelfService.jsx, Provision.jsx and Drift.jsx all have the
+// identical problem — a picker whose useApi failed renders byte-identically to a
+// tenant that owns nothing — and the answer must be the identical component in
+// one shared place, not three that drift away from this wording.
+// A DELETE that upstream answered 404 for is still a success, but it is NOT the
+// same success as one this system carried out: the object was already gone, so
+// nothing here removed anything, and telling the operator "deleted." claims an
+// act that never happened. go/internal/edit/resources.go sets already_gone
+// explicitly on BOTH arms precisely so the two are distinguishable.
+//
+// The field's ABSENCE is UNKNOWN, not false — an older server never sent it —
+// so it gets its own honest wording rather than being folded into either
+// confident answer. Shared by SelfService.jsx and Editor.jsx for the same
+// reason FetchError above is: one wording, one place, no drift.
+export function deletedMsg(j, label) {
+  if (j?.already_gone === true) return `${label} was already gone — nothing was deleted.`
+  if (j?.already_gone === false) return `${label} deleted.`
+  return `${label} delete accepted — the server did not report whether it still existed.`
+}
+
+export function FetchError({ error, stale }) {
+  if (!error) return null
+  return (
+    <div className="text-xs mb-2" style={{ color: COLORS.crit }}>
+      Could not load current data: {String(error?.message || error)}
+      {stale && ' — the list below may be out of date.'}
+    </div>
+  )
+}
+
 export function Empty({ children = 'no data' }) {
   return <div className="h-full min-h-[100px] flex items-center justify-center text-muted text-sm">{children}</div>
 }
