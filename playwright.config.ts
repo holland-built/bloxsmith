@@ -1,16 +1,48 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Default target is the disposable e2e harness (scripts/e2e.sh), which builds
-// and runs the CURRENT working tree on its own container/port — never the live
-// :8080 stack (the published ghcr image). Override with NOC_BASE to point
-// elsewhere deliberately (e.g. NOC_BASE=http://localhost:8080 to spot-check the
-// deployed image by hand). The 18 specs that set their own
-// `process.env.NOC_BASE || 'http://localhost:8091'` default line up with this
-// one automatically whenever NOC_BASE is exported by the harness.
+// The disposable e2e harness scripts/e2e.sh now EXISTS (it did not when this
+// comment was first written, which is why nothing had ever run this suite
+// unattended). It builds and runs the CURRENT working tree on its own port —
+// 8091 by default, E2E_PORT to move it — with throwaway state, and exports
+// NOC_BASE to match. So under the harness the constant below is never used.
+//
+// It is the fallback for a BARE `npx playwright test`, and it names :8090 —
+// scripts/dev-serve.sh — because running the suite by hand against a dev server
+// someone already had up is how it was used before the harness existed.
+// Override NOC_BASE to point elsewhere deliberately (e.g.
+// NOC_BASE=http://localhost:8080 to spot-check the deployed ghcr image).
+//
+// The sentence that used to close this comment — "the 18 specs that set their
+// own `process.env.NOC_BASE || 'http://localhost:8091'` default line up with
+// this one automatically" — described specs that do not exist. Checked
+// 2026-08-11: `grep -rn 8091 tests/` matches NOTHING, and `grep -rn NOC_BASE
+// tests/` matches only three diagnostic strings (tests/global-setup.ts:32,
+// tests/fixtures.ts:39 and :208) that name the variable for a human reading a
+// failure message. No spec sets its own base URL; every one of them inherits
+// `use.baseURL` from this file.
 const DEFAULT_BASE_URL = 'http://localhost:8090';
+
+// These specs assert on data only a live Infoblox tenant serves — measured
+// 2026-08-11 by a credential-free full-suite run through scripts/e2e.sh: every
+// failure fell in these seven files (tabs-smoke is 10/15 green without a
+// tenant; excluded whole because Playwright ignores at file granularity).
+// E2E_SKIP_LIVE=1 (set by CI's e2e job, where no tenant key exists) skips
+// them; locally, with real credentials in .env, run the bare suite to get
+// all ~422. layout-persist.spec.ts is NOT here — it self-skips off
+// scripts/dev-serve.sh's absence, which is CI's situation.
+const LIVE_TENANT_SPECS = [
+  '**/chart-tooltips.spec.ts',
+  '**/table-sizing.spec.ts',
+  '**/density.spec.ts',
+  '**/tabs-smoke.spec.ts',
+  '**/hub-security-availability.spec.ts',
+  '**/tab-switch-no-flash.spec.ts',
+  '**/dossier-page.spec.ts',
+];
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: process.env.E2E_SKIP_LIVE ? LIVE_TENANT_SPECS : [],
   // Explicit, because the default did NOT land in this repo. Playwright's
   // computed default here resolved to /Users/sholland/test-results — outside
   // the project, outside .gitignore, and nowhere anyone would look — so every
