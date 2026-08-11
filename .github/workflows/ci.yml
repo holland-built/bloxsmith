@@ -681,51 +681,88 @@ jobs:
             echo "::error::the refusal did not say the signature was missing"; cat "$W/nosig.log"; exit 1; }
           echo "unsigned release refused, and nothing was installed"
 
-      # THE ED25519 FALLBACK, which nothing had ever executed.
+      # THE ED25519 FALLBACK, which nothing else executes.
       #
-      # install.sh prefers checksums.txt.sshsig and falls back to the older raw
-      # checksums.txt.ed25519. Every step above installs `latest`, which carries
-      # BOTH — so the preferred path ran every time and the fallback ran never.
+      # install.sh prefers checksums.txt.sshsig (ssh-keygen -Y verify) and falls
+      # back to the raw checksums.txt.ed25519 (openssl pkeyutl -rawin). Every
+      # other step installs `latest`, which carries BOTH — so the preferred path
+      # runs every time and the fallback runs never.
       #
-      # That matters because the fallback is the ONLY thing that can verify a
-      # pre-sshsig release, and `install.sh --version vX.Y.Z` is the documented
-      # rollback path. v3.23.2 published without its sshsig (deliberately left that
-      # way — see the changelog), so it is verifiable only through this branch. A
-      # broken fallback would mean the rollback path refuses every older release,
-      # and nobody would find out until they needed it.
+      # The fallback is a LIVE path for current releases, not a legacy one: it is
+      # what verifies the signature on a host with no usable ssh-keygen (slim
+      # containers, busybox images) or when the sshsig asset cannot be fetched.
+      # It used to be the only way to verify a pre-sshsig release too, and this
+      # step used to install one (v3.23.2) to reach it — but that release has
+      # been pruned and every surviving release carries both assets, so there is
+      # no longer any release that takes this branch on its own.
       #
-      # --version is also otherwise untested, and it is the flag a rollback uses.
-      - name: install.sh verifies a pre-sshsig release via the ed25519 fallback
+      # So the branch is FORCED instead of found: the real release assets are
+      # mirrored to disk, the sshsig copy is deleted, and a curl shim on PATH
+      # serves that directory, returning 22 (what a real 404 returns) for the
+      # asset that is gone. Everything else is the genuine published release, so
+      # what gets checked is a real signature against the key pinned in the
+      # script — not a fixture. The shim is the same technique as the two steps
+      # above, in its own workdir so they cannot collide.
+      #
+      # It is also the ONLY test of --version, the documented rollback flag, and
+      # it points that flag at the OLDEST release still on GitHub — resolved from
+      # the API at run time, never pinned, because releases past the newest ten
+      # get pruned and a pinned tag here is exactly what broke this step before.
+      - name: install.sh verifies the ed25519 fallback, and --version rollback
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
-          out="$(bash scripts/install.sh --version v3.23.2 --prefix "$RUNNER_TEMP/old" --no-service 2>&1)"
+          W="$RUNNER_TEMP/ed25519"; mkdir -p "$W/bin" "$W/rel"
+          TAG="$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
+                   "https://api.github.com/repos/holland-built/bloxsmith/releases?per_page=100" \
+                 | jq -r '.[] | select(.draft == false and .prerelease == false) | .tag_name' \
+                 | sort -V | head -1)"
+          [ -n "$TAG" ] || { echo "::error::could not resolve the oldest surviving release"; exit 1; }
+          NUM="${TAG#v}"
+          echo "oldest release still published: $TAG"
+          BASE="https://github.com/holland-built/bloxsmith/releases/download/$TAG"
+          for f in checksums.txt checksums.txt.sshsig checksums.txt.ed25519 \
+                   "bloxsmith_${NUM}_linux_amd64.tar.gz"; do
+            curl -fsSLo "$W/rel/$f" "$BASE/$f" || {
+              echo "::error::could not mirror $f from $TAG"; exit 1; }
+          done
+          # Fetched, then deleted: if $TAG ever stops publishing an sshsig the
+          # fetch above fails loudly, rather than this step quietly "forcing" a
+          # fallback that was already the only path.
+          rm -f "$W/rel/checksums.txt.sshsig"
+          printf '%s\n' '#!/bin/sh' 'out=""; url=""' \
+            'while [ $# -gt 0 ]; do case "$1" in -*o) out="$2"; shift 2;; -*) case "$1" in *o) out="$2"; shift 2;; *) shift;; esac;; *) url="$1"; shift;; esac; done' \
+            'f="$(basename "$url")"; [ -f "$REL/$f" ] || exit 22; cp "$REL/$f" "$out"' > "$W/bin/curl"
+          chmod +x "$W/bin/curl"
+
+          out="$(PATH="$W/bin:$PATH" REL="$W/rel" \
+                 bash scripts/install.sh --version "$TAG" --prefix "$W/out" --no-service 2>&1)"
           code=$?
           echo "$out"
           if [ "$code" -ne 0 ]; then
-            echo "::error::install.sh could not install v3.23.2 — the rollback path is broken"; exit 1
+            echo "::error::install.sh could not install $TAG — the rollback path is broken"; exit 1
           fi
           # It must have verified, and specifically via the ed25519 branch. A
-          # "signature: ok (ssh-ed25519...)" here would mean the test is not
-          # exercising the fallback at all and proves nothing about it.
+          # "signature: ok (ssh-ed25519...)" here would mean the sshsig was served
+          # after all, so the step is not exercising the fallback and proves
+          # nothing about it.
           case "$out" in
-            *"signature: ok (ed25519,"*) echo "the ed25519 fallback verified a pre-sshsig release" ;;
+            *"signature: ok (ed25519,"*) echo "the ed25519 fallback verified $TAG" ;;
             *"signature: ok (ssh-ed25519"*)
-              echo "::error::this release now has an sshsig, so this step no longer exercises the fallback"
+              echo "::error::the sshsig path ran — the fallback was not exercised"
               exit 1 ;;
-            *)  echo "::error::v3.23.2 installed WITHOUT a verified signature"; exit 1 ;;
+            *)  echo "::error::$TAG installed WITHOUT a verified signature"; exit 1 ;;
           esac
           grep -q "checksum : ok" <<<"$out" || { echo "::error::checksum was not verified"; exit 1; }
-          # 2>&1 because v3.23.2 predates the fix that moved --version to stdout:
-          # it uses Go's builtin println, which writes to STDERR, so capturing
-          # stdout alone gets an empty string. That is what this step found on its
-          # first run, and it is a real defect in every release up to v3.30.1 —
-          # `V=$(bloxsmith --version)` returned nothing. Fixed going forward and
-          # pinned by go/versionstream_test.go; merged here because this step
-          # installs an OLD binary that will always have the old behaviour.
-          v="$("$RUNNER_TEMP/old/bloxsmith" --version 2>&1)"
+          # Plain stdout: every surviving release postdates v3.30.1, which moved
+          # --version off Go's builtin println (STDERR) onto stdout. Reading
+          # stdout alone therefore also pins that fix for the oldest release we
+          # still ship, alongside go/versionstream_test.go at the unit level.
+          v="$("$W/out/bloxsmith" --version)"
           case "$v" in
-            "bloxsmith 3.23.2") echo "and the pinned version is the one installed: $v" ;;
-            *) echo "::error::--version v3.23.2 installed '$v'"; exit 1 ;;
+            "bloxsmith $NUM") echo "and the pinned version is the one installed: $v" ;;
+            *) echo "::error::--version $TAG installed '$v'"; exit 1 ;;
           esac
 
       # `bloxsmith update --check` had no test that ran the COMMAND. checkUpdate is
@@ -985,3 +1022,48 @@ jobs:
             exit 1
           }
           Write-Host "uninstall removed bloxsmith.exe and the PATH entry"
+
+  # The Playwright suite, which nothing had ever run in CI. 48 spec files,
+  # ~422 assertions; scripts/e2e.sh builds THIS tree and serves it on its own
+  # port with throwaway state and blanked credentials. E2E_SKIP_LIVE=1 skips
+  # the seven spec files that assert on data only a live Infoblox tenant
+  # serves (list and measurement: playwright.config.ts) — ~390 assertions
+  # still run. Local, with real credentials: `bash scripts/e2e.sh` runs all of
+  # them. workers:1 is load-bearing (see playwright.config.ts), so this job is
+  # long; measured 75 min for the full suite on a dev laptop, so the timeout
+  # is generous rather than tight.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: go/go.sum
+
+      - name: Install Playwright runner
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run the e2e suite against a fresh build of this tree
+        run: E2E_SKIP_LIVE=1 bash scripts/e2e.sh
+
+      - name: Upload traces and report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-failure
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

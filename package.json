@@ -1,0 +1,11 @@
+{
+  "name": "bloxsmith-e2e",
+  "private": true,
+  "description": "Root workspace exists ONLY to own the Playwright runner. The 49 specs in tests/ and playwright.config.ts were committed with no package.json anywhere declaring @playwright/test, so `npx playwright test` resolved to nothing and the suite had never been executed by CI. The app itself is go/ + ui/ — nothing here is shipped.",
+  "scripts": {
+    "test:e2e": "bash scripts/e2e.sh"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  }
+}
