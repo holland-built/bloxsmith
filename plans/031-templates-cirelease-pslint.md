@@ -1,3 +1,8 @@
+*Historical record — the frontend described below (`src/*.jsx` compiled by
+`scripts/build_ui.js`) was retired in the v3 rewrite and both are deleted. The
+current frontend is `ui/` (Vite), built into `go/web` per step 1 of the repo-root
+`SHIP.md`. The body is left as written.*
+
 # Plan 031 — Bundle provisioning templates, CI-driven signed releases, PS1 lint
 
 Repo: `/Users/sholland/AI/Infoblox MCP` (github.com/holland-built/bloxsmith), branch `master`.

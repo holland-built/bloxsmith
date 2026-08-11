@@ -19,8 +19,11 @@ CSP / Infoblox Portal platform itself (report those to Infoblox) and third-party
 
 ## Token handling — read this
 
-- **Never commit `.env` or a real Infoblox token.** `.env` is gitignored; the Docker
-  image ships no secrets (`.dockerignore` excludes `.env`, `.mcp.json`, and local state).
+- **Never commit `.env` or a real Infoblox token.** `.env` is gitignored, and the
+  Docker image ships no secrets because nothing secret is in the build context:
+  the local build runs from `go/`, and the release image is built by goreleaser
+  from its `dist/` tree plus `extra_files: [templates]`. Secrets reach the
+  container at run time, from the environment.
 - **If a token is ever exposed, rotate it in the CSP portal**
   (<https://csp.infoblox.com> → User API Keys). Scrubbing the token from files or git
   history does **not** revoke it — only rotation in the portal does.

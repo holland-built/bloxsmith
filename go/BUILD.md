@@ -85,9 +85,9 @@ The Python image and its scripts are gone; the Go binary is the whole product.
 
 ## Secrets/tokens needed at real-release time (not for `--snapshot`)
 
-- `GITHUB_TOKEN` — GitHub Release upload **and** the cross-repo push to
-  `homebrew-tap` (needs `contents:write` + repo scope on that repo; a classic PAT
-  if the default Actions token can't reach it).
+- `GITHUB_TOKEN` — creating the GitHub Release and uploading its archives,
+  checksums and `release.extra_files` (needs `contents:write` on **this** repo).
+  It does *not* cover the homebrew-tap push — see `HOMEBREW_TAP_TOKEN` below.
 - Registry auth for ghcr push (`docker login ghcr.io`, `write:packages`) — the
   release workflow uses the built-in `GITHUB_TOKEN`.
 - `HOMEBREW_TAP_TOKEN` (CI, optional) — PAT with repo scope on `homebrew-tap` to
