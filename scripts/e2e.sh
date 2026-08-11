@@ -52,8 +52,9 @@
 # Measured 2026-08-11: a full-suite run through this harness changed the pid
 # listening on :8090. Nothing here can prevent that without editing the spec —
 # run the full suite with dev-serve.sh stopped, or expect it to be restarted
-# under you. On a CI runner there is no such process and the spec bails out with
-# its own message ("not pointed at scripts/dev-serve.sh").
+# under you. On a CI runner there is no such process and the spec FAILS with
+# "P8 cannot be proven" — a refusal, not a skip (measured, run 31499474048),
+# which is why playwright.config.ts excludes it under E2E_SKIP_LIVE.
 #
 # ENV LEAKAGE, which is the non-obvious hazard here. go/main.go:387 loads
 # /Users/sholland/AI/Infoblox MCP/.env by ABSOLUTE PATH, and LoadServiceEnv()
