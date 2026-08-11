@@ -16,7 +16,11 @@ existed at all.
 
 ## Steps
 1. Ensure UI is current: `cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/` (commit go/web if changed). Legacy no-build JSX pipeline retired at v3.0.0 — the old app was deleted; it lives on only in git history.
-2. Commit all with feat/fix message
+2. Commit all with a feat/fix message. The first line states WHAT changed, in
+   ≤60 characters — GitHub shows it, truncated, as the label next to every file
+   and folder the commit touched, so a story-shaped subject reads as gibberish
+   there (measured 2026-08-11 on the repo front page). The story and reasoning
+   belong in the body, where `git show` keeps them in full.
 3. Push master
 4. **Tag and push the tag — this is not optional.** `git tag vX.Y.Z && git push origin vX.Y.Z`, where X.Y.Z is one above `git tag --sort=-v:refname | head -1`: minor for a feature, patch for a fix. Never ask whether to tag.
 
