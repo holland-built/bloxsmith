@@ -1,5 +1,12 @@
 # Secrets / local state — never publish
+# Both SHIP.md files name .env.* and secrets/ as guarded. Until 2026-08-11 only
+# `.env` was, so a `.env.local` or `secrets/infoblox.json` was committable while
+# the playbook said otherwise. The negation must follow the glob: .env.example is
+# the tracked template and .env.* would otherwise swallow it.
 .env
+.env.*
+!.env.example
+secrets/
 .vault-passphrase
 dns_clients_cache.json
 ruvector.db

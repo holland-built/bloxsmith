@@ -1,5 +1,14 @@
 # SHIP.md — release playbook for bloxsmith
 
+Repo: `github.com/holland-built/bloxsmith`. This is the file `/release` reads and
+runs — it resolves `$REPO_ROOT/SHIP.md` and nothing else, so a step that is not
+here does not happen.
+
+**This file is the steps. `docs/SHIP.md` is the detail** — goreleaser internals,
+cosign signing, the Homebrew tap, digest pinning and rollback. Neither is a copy of
+the other; they were allowed to drift once and disagreed about whether Step 1 below
+existed at all.
+
 ## Environments
 | Env  | Branch | Default | Notes |
 |------|--------|---------|-------|
@@ -14,9 +23,20 @@
    WHY THIS IS A STEP AND NOT A `## Release` EXTRA. It used to live under `## Release`, which `/release` reads as "publish only if the user asked for it" — so a normal run pushed `master`, cut no release, and :8080 correctly reported it was already up to date while the new code sat on GitHub unreleased. That is not a second decision anybody makes here: this repo has exactly one environment, there is no dev or staging branch, so pushing master IS releasing. Splitting the two only produced a silent gap between "shipped" and "shipped".
 
 ## Guards
-- .env
-- ~/Library/LaunchAgents/*.plist   (machine-local, never in repo)
-- /tmp/bloxsmith-dev
+
+Kept identical to `docs/SHIP.md`'s copy. Both lists previously named different
+things and neither contained the other.
+
+Never committed — enforced by `.gitignore`, not by remembering. Check any one of
+them with `git check-ignore -v <path>`:
+- `.env`, and `.env.*` — except `.env.example`, the tracked template
+- `secrets/`
+- `vault.json` — the encrypted tenant key store
+- `.vault-passphrase`
+
+Never touched by a release, and outside the repo, so git cannot see them anyway:
+- `~/Library/LaunchAgents/*.plist` — the machine-local service definition
+- `/tmp/bloxsmith-dev` — the dev binary `scripts/dev-serve.sh` builds and owns
 
 ## Release
 Post-push verification only — Step 4 already published.

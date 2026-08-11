@@ -2,21 +2,57 @@
 
 Repo: `github.com/holland-built/bloxsmith`. Run `/release` from anywhere in the repo.
 
+**This file is the detail. The repo-root `SHIP.md` is the steps** — and it is the
+only one `/release` executes (it resolves `$REPO_ROOT/SHIP.md`). Read that one to
+ship; read this one to understand what shipping does.
+
 ## Environments
 | Env | Branch | Default | Notes |
 |-----|--------|---------|-------|
 | prod | master | * | single-branch repo; push straight to master |
 
 ## Steps
-1. Commit + push code to `master`. This is a single-branch repo: the Go
-   single-binary app (plan 030) lives on `master` and releases are cut from
-   `master` via goreleaser. The retired Python/Docker path has been removed.
+
+Summarised from the root `SHIP.md`, which is authoritative. Do not follow this
+section instead of that one — this copy exists so the reference below has
+something to attach to.
+
+1. **Rebuild the UI into `go/web` before anything else.**
+   `cd ui && npm run build && rm -rf ../go/web/* && cp -R dist/* ../go/web/`, then
+   commit `go/web` if it changed. The Go binary embeds `go/web` (`go:embed all:web`
+   in `go/embed.go`), so a release built without this step ships the *previous*
+   UI while every local check passes. `ci.yml`'s first job diffs `ui/dist` against
+   `go/web` and fails the build if they differ — its error message is this exact
+   command. This step was missing from this file entirely until 2026-08-11.
+2. Commit + push to `master`. Single-branch repo: the Go single-binary app
+   (plan 030) lives on `master` and releases are cut from it via goreleaser.
+3. Tag and push the tag — `git tag vX.Y.Z && git push origin vX.Y.Z`. Pushing
+   `master` alone publishes nothing; the tag is what fires `release.yml`.
+
+**On "the Python/Docker path was removed".** What went away is the *Python* app and
+its container — there is no `requirements.txt`, no FastAPI image, and the only
+Dockerfile left is `go/Dockerfile.goreleaser`. Docker itself is very much alive:
+`docker-compose.yml` runs `ghcr.io/holland-built/bloxsmith:latest`, and the whole
+image, signing and rollback story below is current. An earlier wording of this line
+read as though all Docker had been retired, which contradicted the rest of the file.
 
 ## Guards
-- .env
-- .env.*
-- secrets/
-- config with real API keys, tokens, or Infoblox credentials
+
+Kept identical to the root `SHIP.md`'s copy. Both lists previously named different
+things and neither contained the other; worse, this one named `.env.*` and
+`secrets/` as guarded when `.gitignore` covered only `.env` — a promise the repo
+did not keep until 2026-08-11.
+
+Never committed — enforced by `.gitignore`, not by remembering. Check any one of
+them with `git check-ignore -v <path>`:
+- `.env`, and `.env.*` — except `.env.example`, the tracked template
+- `secrets/`
+- `vault.json` — the encrypted tenant key store
+- `.vault-passphrase`
+
+Never touched by a release, and outside the repo, so git cannot see them anyway:
+- `~/Library/LaunchAgents/*.plist` — the machine-local service definition
+- `/tmp/bloxsmith-dev` — the dev binary `scripts/dev-serve.sh` builds and owns
 
 ## Release
 The app is a self-updating Go binary (embedded UI, `bloxsmith update` / in-app
