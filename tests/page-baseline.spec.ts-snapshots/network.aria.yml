@@ -1,0 +1,33 @@
+- main "Network tab":
+  - heading "Network" [level=1]
+  - button "Arrange panels"
+  - heading "Utilization Distribution" [level=2]
+  - text: — loaded (count unavailable)
+  - 'button "About: Utilization Distribution"': "About: ⓘ"
+  - button "Hide Utilization Distribution": Hide ✕
+  - button "Move Utilization Distribution": Move ⠿
+  - text: Subnets feed unavailable
+  - heading "IPAM Spaces — Top Used" [level=2]
+  - text: addresses used
+  - 'button "About: IPAM Spaces — Top Used"': "About: ⓘ"
+  - button "Hide IPAM Spaces — Top Used": Hide ✕
+  - button "Move IPAM Spaces — Top Used": Move ⠿
+  - text: IPAM feed unavailable
+  - heading "DHCP Leases" [level=2]
+  - text: 0 of 0
+  - textbox "Search address, hostname, MAC…"
+  - combobox:
+    - option "All states" [selected]
+  - 'button "About: DHCP Leases"': "About: ⓘ"
+  - button "Hide DHCP Leases": Hide ✕
+  - button "Move DHCP Leases": Move ⠿
+  - text: DHCP leases feed unavailable
+  - heading "Which Subnets Run Out First?" [level=2]
+  - text: /excl\. \/\d+–\/\d+ infra links/
+  - textbox "Filter…"
+  - combobox:
+    - option "All sites" [selected]
+  - 'button "About: Which Subnets Run Out First?"': "About: ⓘ"
+  - button "Hide Which Subnets Run Out First?": Hide ✕
+  - button "Move Which Subnets Run Out First?": Move ⠿
+  - text: Subnets feed unavailable

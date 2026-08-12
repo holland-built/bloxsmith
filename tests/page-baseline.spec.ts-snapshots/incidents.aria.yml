@@ -1,0 +1,33 @@
+- main "Incidents tab":
+  - heading "Incidents" [level=1]
+  - button "Arrange panels"
+  - heading "Categories" [level=2]
+  - text: click to filter Triage
+  - 'button "About: Categories"': "About: ⓘ"
+  - button "Hide Categories": Hide ✕
+  - button "Move Categories": Move ⠿
+  - text: "Category check incomplete feeds unavailable: leases, subnets, zones"
+  - button "About incidents-severity": ⓘ
+  - button "Hide Severity Counts": ✕
+  - button "Move Severity Counts": ⠿
+  - text: Critical 0 High 0 Medium 0 Low 0
+  - heading "Triage" [level=2]
+  - textbox "Filter…"
+  - button "Clear acks"
+  - text: "0"
+  - 'button "About: Triage"': "About: ⓘ"
+  - button "Hide Triage": Hide ✕
+  - button "Move Triage": Move ⠿
+  - text: "Check could not be completed feeds unavailable: leases, subnets, zones"
+  - heading "SOC Queue" [level=2]
+  - text: IQ Actions
+  - 'button "About: SOC Queue"': "About: ⓘ"
+  - button "Hide SOC Queue": Hide ✕
+  - button "Move SOC Queue": Move ⠿
+  - text: IQ Actions feed unavailable
+  - heading "Action Volume" [level=2]
+  - text: by day
+  - 'button "About: Action Volume"': "About: ⓘ"
+  - button "Hide Action Volume": Hide ✕
+  - button "Move Action Volume": Move ⠿
+  - text: IQ Actions feed unavailable

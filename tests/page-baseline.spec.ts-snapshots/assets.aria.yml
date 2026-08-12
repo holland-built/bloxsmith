@@ -1,0 +1,21 @@
+- main "Assets tab":
+  - heading "Assets" [level=1]
+  - paragraph:
+    - text: Every asset discovery found, searchable by name and filterable by type. Click a row for the fields too sparse to keep in the table.
+    - button "Docs →"
+  - button "Arrange panels"
+  - heading "Asset Inventory" [level=2]
+  - text: CSP discovery
+  - textbox "Search assets by name":
+    - /placeholder: Search by name…
+  - button "Search"
+  - button "Refresh"
+  - 'button "About: Asset Inventory"': "About: ⓘ"
+  - button "Hide Asset Inventory": Hide ✕
+  - button "Move Asset Inventory": Move ⠿
+  - text: Asset filter feed unavailable the MCP session to Infoblox could not be opened
+  - heading "Assets" [level=2]
+  - 'button "About: Assets"': "About: ⓘ"
+  - button "Hide Assets": Hide ✕
+  - button "Move Assets": Move ⠿
+  - text: Asset inventory unavailable the MCP session to Infoblox could not be opened

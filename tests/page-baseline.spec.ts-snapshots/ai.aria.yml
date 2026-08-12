@@ -1,0 +1,27 @@
+- main "AI tab":
+  - heading "AI Assistant" [level=1]
+  - paragraph:
+    - text: Ask questions about your own network in plain language — answers show the tools used, so you can check where a number came from. Threat lookup takes a domain, IP, or host and returns intel plus a dossier. Chat needs an LLM key; Block domain needs a dashboard token.
+    - button "Docs →"
+  - text: Asking a question sends live data from this tenant — hostnames, IP addresses, DNS names, audit entries — to api.groq.com. Nothing is sent until you ask.
+  - button "Arrange panels"
+  - heading "Ask AI" [level=2]
+  - 'button "About: Ask AI"': "About: ⓘ"
+  - button "Hide Ask AI": Hide ✕
+  - button "Move Ask AI": Move ⠿
+  - log: Ask a question or pick a suggestion below
+  - button "Which subnets are nearly full?"
+  - button "Which domains are on threat feeds?"
+  - button "Any lookalike domains of my brand?"
+  - button "Are any of my DNS zones misconfigured?"
+  - button "Which hosts are offline?"
+  - button /What changed in the last \d+ hours\?/
+  - textbox "Ask about your network…"
+  - button "Ask" [disabled]
+  - heading "Threat lookup" [level=2]
+  - 'button "About: Threat lookup"': "About: ⓘ"
+  - button "Hide Threat lookup": Hide ✕
+  - button "Move Threat lookup": Move ⠿
+  - textbox "domain, IP, or host…"
+  - button "Lookup" [disabled]
+  - text: Look up a domain, IP, or host
