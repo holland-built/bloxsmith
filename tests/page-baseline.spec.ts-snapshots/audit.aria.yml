@@ -1,0 +1,31 @@
+- main "Audit tab":
+  - heading "Audit" [level=1]
+  - button "Arrange panels"
+  - heading "Activity Summary" [level=2]
+  - text: last 0 events
+  - 'button "About: Activity Summary"': "About: ⓘ"
+  - button "Hide Activity Summary": Hide ✕
+  - button "Move Activity Summary": Move ⠿
+  - text: Audit log feed unavailable
+  - heading "Audit Log" [level=2]
+  - text: Bloxsmith actions
+  - textbox "Filter…"
+  - combobox:
+    - option "All actions" [selected]
+    - option "Create"
+    - option "Update"
+    - option "Delete"
+  - 'button "About: Audit Log"': "About: ⓘ"
+  - button "Hide Audit Log": Hide ✕
+  - button "Move Audit Log": Move ⠿
+  - text: chain intact — signature and entry count verified · check it yourself with
+  - code: bloxsmith audit verify
+  - text: Audit log feed unavailable
+  - heading "CSP Portal Audit" [level=2]
+  - text: external — Infoblox portal activity
+  - textbox "Search user or resource…"
+  - button "Search"
+  - 'button "About: CSP Portal Audit"': "About: ⓘ"
+  - button "Hide CSP Portal Audit": Hide ✕
+  - button "Move CSP Portal Audit": Move ⠿
+  - text: CSP audit feed unavailable

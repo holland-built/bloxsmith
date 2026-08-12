@@ -1,0 +1,46 @@
+- main "Infra tab":
+  - heading "Infrastructure" [level=1]
+  - button "Arrange panels"
+  - heading "Host Status" [level=2]
+  - 'button "About: Host Status"': "About: ⓘ"
+  - button "Hide Host Status": Hide ✕
+  - button "Move Host Status": Move ⠿
+  - text: Hosts feed unavailable
+  - heading "Host Health" [level=2]
+  - text: CSP
+  - 'button "About: Host Health"': "About: ⓘ"
+  - button "Hide Host Health": Hide ✕
+  - button "Move Host Health": Move ⠿
+  - text: feed unavailable
+  - heading "On-Prem Hosts" [level=2]
+  - text: CSP
+  - 'button "About: On-Prem Hosts"': "About: ⓘ"
+  - button "Hide On-Prem Hosts": Hide ✕
+  - button "Move On-Prem Hosts": Move ⠿
+  - text: feed unavailable
+  - heading "Asset Discovery" [level=2]
+  - 'button "About: Asset Discovery"': "About: ⓘ"
+  - button "Hide Asset Discovery": Hide ✕
+  - button "Move Asset Discovery": Move ⠿
+  - text: Asset discovery unavailable
+  - heading "Host Inventory" [level=2]
+  - text: — hosts
+  - textbox "Search name, IP…"
+  - combobox:
+    - option "All types" [selected]
+  - 'button "About: Host Inventory"': "About: ⓘ"
+  - button "Hide Host Inventory": Hide ✕
+  - button "Move Host Inventory": Move ⠿
+  - text: Hosts feed unavailable
+  - heading "Jobs" [level=2]
+  - text: recent
+  - 'button "About: Jobs"': "About: ⓘ"
+  - button "Hide Jobs": Hide ✕
+  - button "Move Jobs": Move ⠿
+  - text: feed unavailable
+  - heading "DFP Services" [level=2]
+  - text: CSP
+  - 'button "About: DFP Services"': "About: ⓘ"
+  - button "Hide DFP Services": Hide ✕
+  - button "Move DFP Services": Move ⠿
+  - text: feed unavailable

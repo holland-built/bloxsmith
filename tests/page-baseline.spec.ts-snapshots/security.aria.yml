@@ -1,0 +1,69 @@
+- main "Security tab":
+  - heading "Security" [level=1]
+  - button "Arrange panels"
+  - heading "Threat Events — by Severity" [level=2]
+  - 'button "About: Threat Events — by Severity"': "About: ⓘ"
+  - button "Hide Threat Events — by Severity": Hide ✕
+  - button "Move Threat Events — by Severity": Move ⠿
+  - text: Threat feed unavailable threat-event feed unavailable
+  - heading "Response Summary" [level=2]
+  - 'button "About: Response Summary"': "About: ⓘ"
+  - button "Hide Response Summary": Hide ✕
+  - button "Move Response Summary": Move ⠿
+  - text: Threat feed unavailable threat-event feed unavailable
+  - heading "Triage Inbox" [level=2]
+  - button "all"
+  - button "critical"
+  - button "high"
+  - button "medium"
+  - button "low"
+  - 'button "About: Triage Inbox"': "About: ⓘ"
+  - button "Hide Triage Inbox": Hide ✕
+  - button "Move Triage Inbox": Move ⠿
+  - text: Threat feed unavailable threat-event feed unavailable
+  - heading "Lookalike Domains" [level=2]
+  - text: — detected
+  - 'button "About: Lookalike Domains"': "About: ⓘ"
+  - button "Hide Lookalike Domains": Hide ✕
+  - button "Move Lookalike Domains": Move ⠿
+  - text: Lookalike Domains service unavailable
+  - heading "CTEM Exposure" [level=2]
+  - 'button "About: CTEM Exposure"': "About: ⓘ"
+  - button "Hide CTEM Exposure": Hide ✕
+  - button "Move CTEM Exposure": Move ⠿
+  - text: CTEM exposure feed unavailable
+  - heading "Asset Insights" [level=2]
+  - 'button "About: Asset Insights"': "About: ⓘ"
+  - button "Hide Asset Insights": Hide ✕
+  - button "Move Asset Insights": Move ⠿
+  - text: Asset insights unavailable
+  - heading "Exposures" [level=2]
+  - 'button "About: Exposures"': "About: ⓘ"
+  - button "Hide Exposures": Hide ✕
+  - button "Move Exposures": Move ⠿
+  - text: Exposures feed unavailable upstream exposures fetch failed
+  - heading "Asset Risk" [level=2]
+  - 'button "About: Asset Risk"': "About: ⓘ"
+  - button "Hide Asset Risk": Hide ✕
+  - button "Move Asset Risk": Move ⠿
+  - text: Asset risk feed unavailable
+  - heading "Exposed Surface" [level=2]
+  - 'button "About: Exposed Surface"': "About: ⓘ"
+  - button "Hide Exposed Surface": Hide ✕
+  - button "Move Exposed Surface": Move ⠿
+  - text: Exposed surface feeds unavailable upstream response too large
+  - heading "CTEM Assets" [level=2]
+  - 'button "About: CTEM Assets"': "About: ⓘ"
+  - button "Hide CTEM Assets": Hide ✕
+  - button "Move CTEM Assets": Move ⠿
+  - text: CTEM assets feed unavailable
+  - heading "Threat Feed Activity" [level=2]
+  - 'button "About: Threat Feed Activity"': "About: ⓘ"
+  - button "Hide Threat Feed Activity": Hide ✕
+  - button "Move Threat Feed Activity": Move ⠿
+  - text: Threat feed activity unavailable
+  - heading "SOC Insights" [level=2]
+  - 'button "About: SOC Insights"': "About: ⓘ"
+  - button "Hide SOC Insights": Hide ✕
+  - button "Move SOC Insights": Move ⠿
+  - text: SOC insights unavailable SOC Insights (security actions) unavailable (upstream error).

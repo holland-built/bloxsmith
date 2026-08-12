@@ -1,0 +1,53 @@
+- main "Overview tab":
+  - heading "Overview" [level=1]
+  - paragraph:
+    - text: Your estate at a glance — DNS load, address use, subnet fullness and host health. On this tab you can drag a panel’s ⠿ handle to rearrange it, or drag its right edge to resize, and your arrangement saves automatically.
+    - button "Docs →"
+  - text: some estate-wide counts could not be fetched this cycle — figures below marked as provisional
+  - button "Arrange panels"
+  - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]:
+    - button /DNS Query Rate — \d+[hmsp]+/
+  - text: avg qps
+  - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
+  - button /Hide DNS Query Rate — \d+[hmsp]+/: Hide ✕
+  - button /Move DNS Query Rate — \d+[hmsp]+/: Move ⠿
+  - text: DNS query rate feed unavailable
+  - button "About kpi-stack": ⓘ
+  - button "Hide Leases & Subnets": ✕
+  - button "Move Leases & Subnets": ⠿
+  - button "Active Leases unavailable"
+  - button "Subnets (loaded rows) unavailable"
+  - button /Subnets ≥\d+% \(loaded rows\) unavailable/
+  - heading "Top Consumers" [level=2]
+  - text: /addresses used · top \d+ · estate total unknown/
+  - 'button "About: Top Consumers"': "About: ⓘ"
+  - button "Hide Top Consumers": Hide ✕
+  - button "Move Top Consumers": Move ⠿
+  - text: Subnets feed unavailable
+  - heading "Subnet Heatmap" [level=2]
+  - text: util by subnet — 0 loaded
+  - 'button "About: Subnet Heatmap"': "About: ⓘ"
+  - button "Hide Subnet Heatmap": Hide ✕
+  - button "Move Subnet Heatmap": Move ⠿
+  - text: Subnets feed unavailable
+  - heading "Host Status" [level=2]
+  - 'button "About: Host Status"': "About: ⓘ"
+  - button "Hide Host Status": Hide ✕
+  - button "Move Host Status": Move ⠿
+  - text: Hosts feed unavailable
+  - heading "Top Subnets by Utilization" [level=2]
+  - text: /excl\. \/\d+–\/\d+ infra links — loaded/
+  - textbox "Filter subnets":
+    - /placeholder: Filter…
+  - combobox:
+    - option "All sites" [selected]
+  - button "Export CSV"
+  - 'button "About: Top Subnets by Utilization"': "About: ⓘ"
+  - button "Hide Top Subnets by Utilization": Hide ✕
+  - button "Move Top Subnets by Utilization": Move ⠿
+  - text: Subnets feed unavailable
+  - heading "License Inventory" [level=2]
+  - 'button "About: License Inventory"': "About: ⓘ"
+  - button "Hide License Inventory": Hide ✕
+  - button "Move License Inventory": Move ⠿
+  - text: License feed unavailable

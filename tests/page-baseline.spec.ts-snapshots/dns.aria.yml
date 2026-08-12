@@ -1,0 +1,47 @@
+- main "DNS tab":
+  - heading "DNS" [level=1]
+  - button "Arrange panels"
+  - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]
+  - text: avg qps
+  - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
+  - button /Hide DNS Query Rate — \d+[hmsp]+/: Hide ✕
+  - button /Move DNS Query Rate — \d+[hmsp]+/: Move ⠿
+  - text: DNS query rate feed unavailable
+  - button "About dns-zone-kpis": ⓘ
+  - button "Hide Zone Counts": ✕
+  - button "Move Zone Counts": ⠿
+  - text: DNS zones feed unavailable
+  - heading "DNS Services" [level=2]
+  - 'button "About: DNS Services"': "About: ⓘ"
+  - button "Hide DNS Services": Hide ✕
+  - button "Move DNS Services": Move ⠿
+  - text: DNS services feed unavailable
+  - heading "Query Volume — 7d" [level=2]
+  - text: feed unavailable
+  - 'button "About: Query Volume — 7d"': "About: ⓘ"
+  - button "Hide Query Volume — 7d": Hide ✕
+  - button "Move Query Volume — 7d": Move ⠿
+  - text: no data
+  - heading "DNS Zones" [level=2]
+  - text: 0 zones
+  - textbox "Filter zones":
+    - /placeholder: Filter…
+  - 'button "About: DNS Zones"': "About: ⓘ"
+  - button "Hide DNS Zones": Hide ✕
+  - button "Move DNS Zones": Move ⠿
+  - text: DNS zones feed unavailable
+  - heading "DNSSEC Health" [level=2]
+  - 'button "About: DNSSEC Health"': "About: ⓘ"
+  - button "Hide DNSSEC Health": Hide ✕
+  - button "Move DNSSEC Health": Move ⠿
+  - text: DNSSEC feed unavailable
+  - heading "RPZ Policy Zones" [level=2]
+  - 'button "About: RPZ Policy Zones"': "About: ⓘ"
+  - button "Hide RPZ Policy Zones": Hide ✕
+  - button "Move RPZ Policy Zones": Move ⠿
+  - text: RPZ feed unavailable
+  - heading "DTC Load-Balanced Names" [level=2]
+  - 'button "About: DTC Load-Balanced Names"': "About: ⓘ"
+  - button "Hide DTC Load-Balanced Names": Hide ✕
+  - button "Move DTC Load-Balanced Names": Move ⠿
+  - text: DTC LBDN feed unavailable
