@@ -3,8 +3,16 @@ import { useApi } from '../lib/api.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, hiddenPanelGroup, Skeleton, utilStatus } from '../components/ui.jsx'
 import { DataTable, sortRows } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
-import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams, setHashParams } from '../lib/hash.js'
+
+// A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
+// `?? []` builds a NEW array on every render, so any useMemo depending on that
+// value recomputed every render and memoized nothing — oxlint reports it as
+// "depends on `rows`, which changes every render". One stable reference makes
+// the dependency honest instead of suppressing the warning. When data IS
+// present the reference is the fetch hook's own array, which is already stable
+// between renders, so the memo now works in both states.
+const NO_ROWS = Object.freeze([])
 
 // A number the backend actually measured, or null when it did not.
 //
@@ -119,7 +127,6 @@ export default function Network() {
 
 function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
   const { COLORS } = useChartTheme()
-  const { grid, tick } = useThemeColors()
   const BANDS = [
     { key: '0-70', label: '<70%', test: (u) => u < 70, color: COLORS.accent },
     { key: '70-85', label: '70–85%', test: (u) => u >= 70 && u <= 85, color: COLORS.warn },
@@ -170,7 +177,7 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
 // ---------- IPAM spaces ----------
 
 function IpamSpaces({ panelId, ipam }) {
-  const rows = (ipam.data?.rows ?? [])
+  const rows = (ipam.data?.rows ?? NO_ROWS)
     .filter((r) => (Number(r.total) || 0) > 0)
     .map((r) => ({ ...r, used: Number(r.used) || 0, total: Number(r.total) || 0, pct: ((Number(r.used) || 0) / (Number(r.total) || 1)) * 100 }))
     .sort((a, b) => b.used - a.used)
@@ -211,7 +218,7 @@ function IpamSpaces({ panelId, ipam }) {
 
 function DhcpLeases({ panelId, dhcp, innerRef }) {
   const hp = useHashParams()
-  const rows = dhcp.data?.rows ?? []
+  const rows = dhcp.data?.rows ?? NO_ROWS
   // CSPDHCPLeases returns status:"error" at HTTP 200 on an upstream failure —
   // the fetch itself never errors, so `dhcp.error` alone never catches this.
   const status = dhcp.data?.status

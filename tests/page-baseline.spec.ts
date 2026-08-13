@@ -114,10 +114,21 @@ test.beforeEach(async ({ page }) => {
  * none — this asserts that rather than trusting it.
  */
 async function readyMain(page: import('@playwright/test').Page, layoutKey: string) {
+  // DELETE first, then assert it is gone — stronger than asserting absence, and
+  // changed after a measured failure. Under the plan-036 probe, with
+  // layout-drag.spec.ts and layout-persist.spec.ts no longer excluded, this
+  // assertion fired on Linux: those specs own `__layout_overview`, and
+  // layout-persist SIGTERMs the server mid-test, so a failed run can leave its
+  // saved view behind. Asserting absence made a real leftover break an unrelated
+  // baseline; deleting guarantees the known-good starting state instead of
+  // failing on someone else's mess. The guard is not weakened — capturing a
+  // baseline with a saved layout is still impossible, it is now impossible by
+  // construction rather than by complaint.
+  await page.request.delete(`/api/views/__layout_${layoutKey}`).catch(() => {});
   const saved = await page.request.get(`/api/views/__layout_${layoutKey}`);
   expect(
     saved.status(),
-    `a saved layout exists for "${layoutKey}" — it would reorder the panels and poison this baseline`,
+    `a saved layout for "${layoutKey}" survived deletion — it would reorder the panels and poison this baseline`,
   ).not.toBe(200);
 
   // The page rendered something of its own. TabLoading is aria-hidden, so a

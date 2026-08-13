@@ -5,7 +5,15 @@ import { useChartTheme, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedU
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { DataTable } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
-import { useThemeColors } from '../lib/theme.jsx'
+
+// A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
+// `?? []` builds a NEW array on every render, so any useMemo depending on that
+// value recomputed every render and memoized nothing — oxlint reports it as
+// "depends on `rows`, which changes every render". One stable reference makes
+// the dependency honest instead of suppressing the warning. When data IS
+// present the reference is the fetch hook's own array, which is already stable
+// between renders, so the memo now works in both states.
+const NO_ROWS = Object.freeze([])
 
 const SEV_RANK = ['critical', 'high', 'medium', 'low', 'info']
 function sevRank(s) {
@@ -90,7 +98,6 @@ export default function Security() {
 
 function SeverityHero({ panelId, hub, events }) {
   const { COLORS } = useChartTheme()
-  const { grid, tick } = useThemeColors()
   const SEV_COLOR = sevColorMap(COLORS)
   const counts = hub.data?.counts ?? {}
   // hub.error covers the transport path (any non-2xx, or the 12s abort in
@@ -510,8 +517,7 @@ function pivotByDay(rows) {
 
 function ThreatFeed({ panelId, threats }) {
   const { COLORS } = useChartTheme()
-  const { grid, tick } = useThemeColors()
-  const rows = threats.data?.rows ?? []
+  const rows = threats.data?.rows ?? NO_ROWS
   const status = threats.data?.status
   const chartData = useMemo(() => pivotByDay(rows), [rows])
   const totals = chartData.reduce(
@@ -552,7 +558,7 @@ function InsightsPanel({ panelId, insights }) {
   // on a dead upstream — reading only d.data (or d directly) can't distinguish
   // that from a genuine empty result, both render as "no data".
   const unavailable = !!insights.error || (d && !Array.isArray(d) && d.availability === 'error')
-  const rows = Array.isArray(d) ? d : Array.isArray(d?.results) ? d.results : Array.isArray(d?.data) ? d.data : []
+  const rows = Array.isArray(d) ? d : Array.isArray(d?.results) ? d.results : Array.isArray(d?.data) ? d.data : NO_ROWS
 
   // Columns are named explicitly. They used to be Object.keys(rows[0]).slice(0, 4)
   // — an alphabetical slice of whatever the payload happened to contain, which
@@ -643,7 +649,7 @@ function fmtDate(v) {
 function ExposuresPanel({ panelId, exposures }) {
   const payload = exposures.data ?? {}
   const availability = payload.availability
-  const rows = payload.data?.rows ?? []
+  const rows = payload.data?.rows ?? NO_ROWS
   const count = payload.data?.count ?? rows.length
   const total = payload.data?.total_available
 
@@ -690,7 +696,7 @@ function ExposuresPanel({ panelId, exposures }) {
 // ---------- asset risk ----------
 
 function AssetRiskPanel({ panelId, assetRisk }) {
-  const raw = assetRisk.data?.data?.rows ?? []
+  const raw = assetRisk.data?.data?.rows ?? NO_ROWS
   const count = assetRisk.data?.data?.count ?? raw.length
   // CSPAssetRisk returns status:"error" at HTTP 200 on an upstream failure —
   // the fetch itself never errors, so `assetRisk.error` alone never catches this.
