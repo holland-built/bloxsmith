@@ -5,7 +5,30 @@
 #
 # Same runtime env contract as the retired python Dockerfile, so the existing
 # docker-compose.yml + `noc-vault` volume keep working with zero changes.
-FROM gcr.io/distroless/static:latest
+# PINNED BY DIGEST, was `:latest` until 2026-08-13. A mutable tag means the base
+# can change with no commit in this repo, so two builds of identical source can
+# ship different bytes and neither the SBOM attestation nor the release scan
+# would have a commit to point at.
+#
+# This is the multi-arch INDEX digest, not a per-platform one. dockers_v2 builds
+# linux/amd64 and linux/arm64 from this same line; a single-platform digest would
+# fail one of them outright. Verified 2026-08-13 with
+# `docker buildx imagetools inspect`: an OCI image index of 6 manifests including
+# linux/amd64 and linux/arm64/v8.
+#
+# THE HONEST RISK, and why this is safe HERE and not everywhere. Pinning freezes
+# the base, which also freezes any security fix the base would otherwise have
+# picked up silently — a stale pin is a real exposure, and it is the reason
+# pinning is sometimes worse than not pinning. It is safe in this repo only
+# because release.yml scans the published image with trivy on every release and
+# fails on fixable HIGH/CRITICAL. So a base that goes stale becomes a RED RELEASE
+# rather than a quiet one. The pin and that scan are one control; neither is
+# complete on its own. Do not remove the scan and keep the pin.
+#
+# To refresh (do this when the scan goes red, or on a routine sweep):
+#   docker buildx imagetools inspect gcr.io/distroless/static:latest | head -3
+# and replace the digest below with the `Digest:` line it prints.
+FROM gcr.io/distroless/static@sha256:9197324ba51d9cd071af8505989365c006adf9d6d2067eada25aef00abbb5278
 
 ARG TARGETPLATFORM
 WORKDIR /app
