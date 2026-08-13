@@ -22,23 +22,26 @@ import { defineConfig, devices } from '@playwright/test';
 // `use.baseURL` from this file.
 const DEFAULT_BASE_URL = 'http://localhost:8090';
 
-// These specs assert on data only a live Infoblox tenant serves — measured
-// 2026-08-11 by a credential-free full-suite run through scripts/e2e.sh: every
-// failure fell in these seven files (tabs-smoke is 10/15 green without a
-// tenant; excluded whole because Playwright ignores at file granularity).
-// E2E_SKIP_LIVE=1 (set by CI's e2e job, where no tenant key exists) skips
-// them; locally, with real credentials in .env, run the bare suite to get
-// all ~422. layout-persist.spec.ts is NOT here — it self-skips off
-// scripts/dev-serve.sh's absence, which is CI's situation.
-const LIVE_TENANT_SPECS = [
-  '**/chart-tooltips.spec.ts',
-  '**/table-sizing.spec.ts',
-  '**/density.spec.ts',
-  '**/tabs-smoke.spec.ts',
-  '**/hub-security-availability.spec.ts',
-  '**/tab-switch-no-flash.spec.ts',
-  '**/dossier-page.spec.ts',
-];
+// EMPTY since 2026-08-13, and kept as a list rather than deleted so the next
+// spec that genuinely needs a tenant has somewhere to go.
+//
+// It used to hold seven files — chart-tooltips, table-sizing, density,
+// tabs-smoke, hub-security-availability, tab-switch-no-flash, dossier-page —
+// because they assert on data only a live Infoblox tenant serves, so CI (which
+// has no tenant key) could not run them. That was 96 tests, better than a fifth
+// of the suite, proven only on whichever laptop last ran them by hand.
+//
+// tests/page-fixtures.ts removed the reason. It fakes every /api/ response with
+// fixed synthetic data, so the tenant those specs needed now exists on every
+// machine, identically. Each of the seven installs it in a beforeEach.
+//
+// THE EXCLUSION WAS PER FILE, WHICH IS WHY IT COST SO MUCH. Playwright's
+// testIgnore works at file granularity, so three tests in dossier-page.spec.ts
+// that deliberately hit the real endpoints — the block literally named "live
+// tenant", which exists to prove those endpoints answer — kept the other 25 out
+// of CI with them. Those three now skip themselves on E2E_SKIP_LIVE and undo the
+// fixtures locally, so the cost is three tests instead of twenty-eight.
+const LIVE_TENANT_SPECS: string[] = [];
 
 // These fail on ubuntu runners while passing on macOS — measured on the first
 // CI run ever to execute this suite (run 31499474048, 2026-08-11: 300 passed,

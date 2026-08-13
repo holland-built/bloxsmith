@@ -259,11 +259,21 @@ const DNSSEC = {
 };
 const DTC_LBDN = { status: 'ok', count: 1, rows: [{ comment: 'baseline', disabled: false, dtc_policy: 'baseline-policy', name: 'baseline-lbdn', precedence: 10, ttl: 300, view: 'baseline-view' }] };
 const RPZ = { status: 'ok', count: 1, rows: [{ comment: 'baseline', disabled: false, fqdn: 'rpz.baseline.example.', policy_override: 'NONE', priority: '1', severity: 'HIGH', type: 'local' }] };
-// The live server answers this with an EMPTY BODY (measured 2026-08-13), so the
-// UI already handles "nothing came back". An empty object is the closest honest
-// fake — inventing a payload shape nothing produces would test a state the
-// product cannot reach.
-const DNS_ANALYTICS = {};
+// Drives Query Volume — 7d. The live server answered this with an EMPTY BODY
+// when it was sampled on 2026-08-13, so an empty object looked like the honest
+// fake — but it left the panel in its no-data state and two chart-tooltips tests
+// with nothing to hover. The row shape is recorded in ui/src/tabs/Dns.jsx:283
+// against the live feed on 2026-08-07: {timestamp, "timestamp.day",
+// total_query_count}, with no `hour` field despite the code still accepting one.
+// Seven days, because the panel is named for seven days and a shorter series
+// would not exercise its axis.
+const DNS_ANALYTICS = {
+  availability: 'ok',
+  volume: Array.from({ length: 7 }, (_, i) => {
+    const day = agoIso((6 - i) * 24 * HOUR).slice(0, 10);
+    return { timestamp: day, 'timestamp.day': day, total_query_count: 1000 + i * 250 };
+  }),
+};
 
 // --- security ---------------------------------------------------------------
 const ASSET_INSIGHTS = { status: 'ok', total: 42, breakdown_available: false, note: 'baseline' };
@@ -480,8 +490,58 @@ export type FixtureSession = {
  * because a panel was deleted — the snapshot might still look plausible, so
  * every required handler must also actually be hit.
  */
+/**
+ * Every page's handlers merged into one set, for specs that move BETWEEN tabs in
+ * a single test — tests/tabs-smoke.spec.ts hops from each tab to the next, so
+ * fixtures for one page alone would leave the next tab's calls unmatched and
+ * aborted, which shows up as exactly the console errors that spec is watching for.
+ *
+ * Several endpoints appear under more than one page (`/api/csp-audit` under both
+ * changes and audit, `/api/csp/assets` under assets and dossier, and so on). That
+ * is fine ONLY while the bodies are identical, so this refuses to merge two
+ * different bodies for the same method+path rather than silently letting one page
+ * win and giving the other a body it never asked for.
+ */
+function mergedHandlers(): Handler[] {
+  const byKey = new Map<string, Handler>();
+  for (const [pageId, list] of Object.entries(PER_PAGE)) {
+    for (const h of list) {
+      const key = `${h.method} ${h.path}`;
+      const seen = byKey.get(key);
+      if (seen && JSON.stringify(seen.body) !== JSON.stringify(h.body)) {
+        throw new Error(
+          `page-fixtures: "${key}" is defined with two different bodies (last seen before "${pageId}"). ` +
+            `Merge them into one shared constant, or the merged fixture set silently serves one page the other's data.`,
+        );
+      }
+      if (!seen) byKey.set(key, h);
+    }
+  }
+  return [...byKey.values()];
+}
+
+/** Pass this instead of a page id to serve every page's fixtures at once. */
+export const ALL_PAGES = '*';
+
+/**
+ * Frozen clock plus every page's fixtures — the whole app, deterministic, with
+ * no upstream. This is what took 7 spec files off playwright.config.ts's
+ * LIVE_TENANT_SPECS list: they were excluded from CI because they assert on data
+ * only a real tenant serves, and this IS a tenant, the same one on every machine.
+ *
+ * Install it in a `beforeEach`. A spec that needs one endpoint to behave
+ * differently — tests/hub-security-availability.spec.ts fakes a DEAD feed on
+ * purpose — just calls page.route for that path inside the test body; Playwright
+ * matches handlers newest-first, so the specific one wins over this catch-all.
+ */
+export async function installBaselineWorld(page: Page): Promise<FixtureSession> {
+  await page.clock.setFixedTime(FIXED_NOW);
+  return installFixtures(page, ALL_PAGES);
+}
+
 export async function installFixtures(page: Page, pageId: string): Promise<FixtureSession> {
-  const handlers = [...SHELL, ...(PER_PAGE[pageId] ?? [])];
+  const handlers =
+    pageId === ALL_PAGES ? [...SHELL, ...mergedHandlers()] : [...SHELL, ...(PER_PAGE[pageId] ?? [])];
   const unmatched: string[] = [];
   const hit = new Set<string>();
 
@@ -501,9 +561,16 @@ export async function installFixtures(page: Page, pageId: string): Promise<Fixtu
   const exempt = new Set(SHELL_EXEMPT[pageId] ?? []);
   return {
     unmatched: () => [...new Set(unmatched)].sort(),
+    // Meaningless in merged mode and deliberately switched off there: a test that
+    // visits two tabs cannot be expected to call all sixteen pages' endpoints, so
+    // the check would fail every time and teach whoever hit it to ignore this
+    // file. `unmatched` still applies in both modes and is the half that catches
+    // a page asking for something new.
     neverCalled: () =>
-      handlers
-        .filter((h) => h.required && !hit.has(`${h.method} ${h.path}`) && !exempt.has(`${h.method} ${h.path}`))
-        .map((h) => `${h.method} ${h.path}`),
+      pageId === ALL_PAGES
+        ? []
+        : handlers
+            .filter((h) => h.required && !hit.has(`${h.method} ${h.path}`) && !exempt.has(`${h.method} ${h.path}`))
+            .map((h) => `${h.method} ${h.path}`),
   };
 }

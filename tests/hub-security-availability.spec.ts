@@ -1,4 +1,15 @@
 import { test, expect } from './fixtures';
+import { installBaselineWorld } from './page-fixtures';
+
+// Every /api/ response is faked from tests/page-fixtures.ts, which is what
+// took this file off playwright.config.ts's LIVE_TENANT_SPECS list on
+// 2026-08-13. It was excluded from CI because it asserts on data only a live
+// Infoblox tenant serves; the fixtures are that data, identical on every
+// machine, so it now runs on the ubuntu runner too.
+test.beforeEach(async ({ page }) => {
+  await installBaselineWorld(page);
+});
+
 
 // Backend contract (go/internal/dashboard/hub.go): /api/hub/security's
 // dns_event read now goes through rest.GetStrict and publishes an explicit
