@@ -1,6 +1,12 @@
 import { test, expect } from './fixtures';
 import { execSync } from 'node:child_process';
 
+// Ten of this suite's 52 previously-excluded tests fail on the ubuntu runner and
+// skip there; the other 42 run. Measured by the plan-036 probe, run 31693088697,
+// with retries:0 so nothing hid behind a second attempt. Per test, not per file:
+// the whole-file exclusion was costing 42 passing tests to protect these few.
+const UNPROVEN_ON_LINUX = process.platform === 'linux'
+
 // P8 (item 6) and the live half of P9a (item 7).
 //
 // The point of this file is that "the layout persisted" is proven against a
@@ -178,6 +184,7 @@ test('a real round-trip through the live endpoint drops nothing and rejects noth
 });
 
 test('P8: the layout survives killing and restarting the Go binary', async ({ page, request }) => {
+  test.skip(UNPROVEN_ON_LINUX, 'SIGTERMs /tmp/bloxsmith-dev by hardcoded path — scripts/dev-serve.sh\'s binary, which no CI runner has. A refusal by design; the other 4 tests in this file pass on the runner')
   test.setTimeout(180_000);
 
   // Saved by hand — the drag UI does not exist until item 8.

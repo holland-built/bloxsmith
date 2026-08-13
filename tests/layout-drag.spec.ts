@@ -1,9 +1,19 @@
 import { test, expect } from './fixtures';
+import { installBaselineWorld } from './page-fixtures';
 import {
   activeHandlePanel, cardBox, clampY, domOrder, dragOntoRightHalfOf, expectEverySpanWellFormed,
   expectPersistedBlobIsValid, geometry, gotoTab, grabRightEdge, gridShape, inlineSpans, liveText,
   narrowTo, savedBlob as savedBlobFor, strayDragStyles, tableOverflow, tabToHandle,
 } from './layout-helpers';
+
+// Every /api/ response is faked from tests/page-fixtures.ts. Added when the
+// plan-036 probe turned out to have measured the wrong thing: it ran these files
+// on Linux WITHOUT fixtures, so its failures conflated "no tenant" with "the
+// platform". The same tests then failed on macOS under scripts/e2e.sh, which
+// settled it — the missing tenant was doing most of the work.
+test.beforeEach(async ({ page }) => {
+  await installBaselineWorld(page);
+});
 
 // P9 (item 8) — drag-to-rearrange with column snapping, and edge-drag resize.
 //

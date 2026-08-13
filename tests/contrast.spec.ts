@@ -1,5 +1,15 @@
 import { test, expect } from './fixtures';
+import { installBaselineWorld } from './page-fixtures';
 import type { Page } from '@playwright/test';
+
+// Every /api/ response is faked from tests/page-fixtures.ts. Added when the
+// plan-036 probe turned out to have measured the wrong thing: it ran these files
+// on Linux WITHOUT fixtures, so its failures conflated "no tenant" with "the
+// platform". The same tests then failed on macOS under scripts/e2e.sh, which
+// settled it — the missing tenant was doing most of the work.
+test.beforeEach(async ({ page }) => {
+  await installBaselineWorld(page);
+});
 
 // WCAG 2.1 AA, success criterion 1.4.3: normal-size text needs 4.5:1 against its
 // background. Every colour in here is read back from getComputedStyle on a real

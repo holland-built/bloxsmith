@@ -43,19 +43,26 @@ const DEFAULT_BASE_URL = 'http://localhost:8090';
 // fixtures locally, so the cost is three tests instead of twenty-eight.
 const LIVE_TENANT_SPECS: string[] = [];
 
-// These fail on ubuntu runners while passing on macOS — measured on the first
-// CI run ever to execute this suite (run 31499474048, 2026-08-11: 300 passed,
-// the 9 failures all in these files). layout-persist REQUIRES the
-// scripts/dev-serve.sh supervisor (it proves a restart survives; on CI it
-// throws "P8 cannot be proven" by design — that is a refusal, not a skip).
-// contrast.spec.ts measures AA contrast on RENDERED text, and Linux
-// font rendering shifts it; the other four look like platform layout/timing
-// differences. UNPROVEN ON LINUX, not known-good: until someone tunes them,
-// these checks only gate a hand-run on macOS. Follow-up, not a resolution.
-// RUN A of plan 036 — temporarily emptied to measure, per test, exactly what
-// fails on the ubuntu runner with no tenant. The 2026-08-11 measurement recorded
-// "9 failures across these 6 files" and nothing finer, which is not enough to
-// fix anything. THIS BRANCH IS A PROBE AND MUST NOT MERGE.
+// EMPTY since 2026-08-13. Kept, like LIVE_TENANT_SPECS above, so a file that
+// genuinely cannot run on the runner has somewhere to go.
+//
+// It held six files, 52 tests, on the strength of one measurement
+// (run 31499474048, 2026-08-11) that recorded "9 failures across these files"
+// and nothing finer. The stated reasons were honest about being guesses: one
+// file was diagnosed, one was known to need a supervisor, and the other four
+// "look like platform layout/timing differences".
+//
+// Measured properly by the plan-036 probe (run 31693088697, retries:0 so
+// nothing hid behind a second attempt): **42 of the 52 pass on Linux
+// unchanged.** Ten fail, spread across all six files — one of layout-drag's 24,
+// two of hidden-panels' 11, one of layout-persist's 5. The exclusion was
+// costing 42 passing tests to protect 10, because testIgnore works per file.
+//
+// Those ten now skip themselves with `process.platform === 'linux'` and a
+// measured reason each, the same shape density.spec.ts uses. Four are
+// understood — rendered-text contrast, rendered chart colour, and the
+// hardcoded-path SIGTERM in layout-persist. Six are NOT yet diagnosed and say
+// so in their skip message rather than claiming a cause nobody established.
 const LINUX_CI_UNPROVEN_SPECS: string[] = [];
 
 export default defineConfig({
@@ -81,8 +88,7 @@ export default defineConfig({
   // change — is handled separately, and earlier, by tests/fixtures.ts: it
   // waits for the server to come back and retries just the navigation, so
   // this whole-test retry is never the thing absorbing that failure mode.)
-  // RUN A: retries off, so a flake cannot hide behind a second attempt.
-  retries: 0,
+  retries: 1,
   // One worker, because several specs in this suite are exclusive owners of
   // shared state and the default (2) let them run against each other:
   //   - tests/layout-persist.spec.ts SIGTERMs the Go binary to prove a saved

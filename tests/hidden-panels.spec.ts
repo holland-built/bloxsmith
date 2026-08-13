@@ -1,4 +1,14 @@
 import { test, expect } from './fixtures';
+import { installBaselineWorld } from './page-fixtures';
+
+// Every /api/ response is faked from tests/page-fixtures.ts. Added when the
+// plan-036 probe turned out to have measured the wrong thing: it ran these files
+// on Linux WITHOUT fixtures, so its failures conflated "no tenant" with "the
+// platform". The same tests then failed on macOS under scripts/e2e.sh, which
+// settled it — the missing tenant was doing most of the work.
+test.beforeEach(async ({ page }) => {
+  await installBaselineWorld(page);
+});
 
 // P7 — auto-hide panels for services this tenant does not own.
 //
