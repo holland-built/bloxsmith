@@ -1,4 +1,15 @@
 import { test, expect } from './fixtures';
+import { installBaselineWorld } from './page-fixtures';
+
+// Every /api/ response is faked from tests/page-fixtures.ts, which is what
+// took this file off playwright.config.ts's LIVE_TENANT_SPECS list on
+// 2026-08-13. It was excluded from CI because it asserts on data only a live
+// Infoblox tenant serves; the fixtures are that data, identical on every
+// machine, so it now runs on the ubuntu runner too.
+test.beforeEach(async ({ page }) => {
+  await installBaselineWorld(page);
+});
+
 
 // Predicate P2a for item 1 (unified search -> expanded dossier page).
 //
@@ -631,6 +642,23 @@ test.describe('network discipline', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('live tenant', () => {
+  // The file-level beforeEach fakes every /api/ response, which is right for the
+  // eight blocks above and WRONG here — this block exists to prove the real
+  // endpoints answer, so serving it fixtures would leave it green while proving
+  // nothing. So it undoes them, and skips itself outright where there is no
+  // tenant to reach.
+  //
+  // This is what let the rest of the file leave LIVE_TENANT_SPECS. The exclusion
+  // was per FILE, so 25 tests that need no tenant at all sat out of CI to
+  // accommodate these three. Now the skip is per test and CI runs the other 25.
+  test.beforeEach(async ({ page }) => {
+    test.skip(
+      !!process.env.E2E_SKIP_LIVE,
+      'proves the real Infoblox endpoints answer — there is no tenant on CI, and fixtures would defeat the purpose',
+    );
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
+
   // A COLD /api/dossier is the slow one here: it fans out to real threat
   // sources and only the warm path is milliseconds. Measured warm on
   // 2026-08-06 the five are 1.5ms / 1.4s / 2.8s / 0.13s / 0.16s, but a cold

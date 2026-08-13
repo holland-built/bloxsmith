@@ -1,5 +1,16 @@
 import { test, expect } from './fixtures';
+import { installBaselineWorld } from './page-fixtures';
 import { gridShape, narrowTo } from './layout-helpers';
+
+// Every /api/ response is faked from tests/page-fixtures.ts, which is what
+// took this file off playwright.config.ts's LIVE_TENANT_SPECS list on
+// 2026-08-13. It was excluded from CI because it asserts on data only a live
+// Infoblox tenant serves; the fixtures are that data, identical on every
+// machine, so it now runs on the ubuntu runner too.
+test.beforeEach(async ({ page }) => {
+  await installBaselineWorld(page);
+});
+
 
 // Locks in the panel-sizing model: DataTable.jsx's measured column widths plus
 // ui.jsx's content-driven grid span. Three invariants, checked for every <table>

@@ -1,4 +1,15 @@
 import { test, expect } from './fixtures';
+import { installBaselineWorld } from './page-fixtures';
+
+// Every /api/ response is faked from tests/page-fixtures.ts, which is what
+// took this file off playwright.config.ts's LIVE_TENANT_SPECS list on
+// 2026-08-13. It was excluded from CI because it asserts on data only a live
+// Infoblox tenant serves; the fixtures are that data, identical on every
+// machine, so it now runs on the ubuntu runner too.
+test.beforeEach(async ({ page }) => {
+  await installBaselineWorld(page);
+});
+
 
 // Switching tabs must never blank the page, now that every tab is a lazily
 // fetched chunk.

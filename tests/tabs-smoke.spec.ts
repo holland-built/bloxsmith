@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { installFixtures, ALL_PAGES, FIXED_NOW } from './page-fixtures';
 
 // One h1 per tab (verified against ui/src/tabs/*.jsx). Hopping tab-to-tab
 // after each visit exercises unmount/setState-after-unmount console warnings,
@@ -31,6 +32,19 @@ for (let i = 0; i < TABS.length; i++) {
   const next = TABS[(i + 1) % TABS.length];
 
   test(`tab "${id}" renders with no console errors`, async ({ page }) => {
+    // Fixtures for EVERY page, not just this one: the hop below moves to the
+    // next tab in the same test, and an unmatched request there would be
+    // aborted — surfacing as exactly the console error this spec is watching
+    // for, from a cause that has nothing to do with the product.
+    //
+    // This is what took the spec off playwright.config.ts's LIVE_TENANT_SPECS
+    // list on 2026-08-13. It had been excluded from CI since the list was
+    // written because it was 10/15 green without a tenant: five tabs' upstream
+    // calls died on `dial tcp: lookup csp.invalid: no such host`. With every
+    // response faked there is no upstream to fail, so all 15 run on the runner.
+    await page.clock.setFixedTime(FIXED_NOW);
+    await installFixtures(page, ALL_PAGES);
+
     const errors: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error' && !isNoise(msg.text())) errors.push(msg.text());
