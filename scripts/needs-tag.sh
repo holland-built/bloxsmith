@@ -117,6 +117,17 @@ fi
 git rev-parse --verify --quiet "$SINCE" >/dev/null \
   || { echo "needs-tag: '$SINCE' is not a ref in this repo" >&2; exit 2; }
 
+# This reads COMMITTED history only. In SHIP.md's order that is always right —
+# step 2 commits and step 3 pushes, so by the time step 4 runs, HEAD is the
+# thing being released. Run by hand before committing, though, it silently
+# answers about the wrong tree: staged workflow changes gave `skip` during this
+# script's own development, which is the exact wrong answer delivered
+# confidently. Warned, not failed, because the verdict for HEAD is still a real
+# verdict — it is just not a verdict about the work in progress.
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+  echo "needs-tag: WARNING — uncommitted changes present; this verdict covers HEAD only, not your working tree" >&2
+fi
+
 CHANGED="$(git diff --name-only "$SINCE"..HEAD)"
 
 # No diff at all is not "nothing shipped" — it is a question this script has no

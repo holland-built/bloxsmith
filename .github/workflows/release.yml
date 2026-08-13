@@ -381,3 +381,61 @@ jobs:
               echo "::error::$PLATFORM has no bloxsmith-ui-npm attestation ($TOTAL back) — the UI npm tree is not attached to the image"; exit 1; }
             echo "$PLATFORM: $TOTAL attestations verified against the workflow's OIDC identity ($IMG image, $UI ui-npm)"
           done 3< /tmp/children
+
+      # The image was never scanned for known vulnerabilities. ci.yml has run
+      # govulncheck over the Go module since 2026-08-03 and `npm audit` over the
+      # UI, so the two source trees were covered — but the artifact README's
+      # first install path hands people, `docker run ghcr.io/...`, is a Go binary
+      # PLUS a distroless base carrying its own Debian packages, and nothing had
+      # ever looked at that base. The SBOM step above lists those packages; it
+      # does not check any of them against an advisory database.
+      #
+      # WHY HERE AND NOT IN ci.yml. A ci.yml job could only scan an image built
+      # from some earlier commit, because the image for THIS commit does not
+      # exist until goreleaser has run a few steps above. That would report on an
+      # artifact the pull request did not produce, which gates nothing. Scanning
+      # right after publish is the only point where the bytes being scanned are
+      # the bytes customers will pull. A failure here means a release that has to
+      # be pulled — the correct severity for having shipped a known-vulnerable
+      # image, and a much louder signal than a warning nobody reads.
+      #
+      # POLICY, deliberately narrower than govulncheck's. That one fails on ANY
+      # reachable finding because it is call-graph aware and has no severity
+      # field. Trivy is a version-range matcher over OS packages, so the same
+      # rule would go red on unfixable transitive advisories and be switched off
+      # within a week. This fails on HIGH/CRITICAL that HAVE A FIX
+      # (--ignore-unfixed); anything else is reported in the log and does not
+      # fail. If a finding is high, critical and fixable, the fix is a base image
+      # or dependency bump — an action that exists, which is the test for whether
+      # a gate deserves to block.
+      #
+      # A SCAN THAT COULD NOT RUN IS NOT A PASS. `exit-code: 1` covers findings;
+      # a DB download failure, a rate limit or an unreadable image makes trivy
+      # itself exit nonzero and fails this step too. Both outcomes are red on
+      # purpose — a green tick for a scan that never happened is the worst
+      # result available here.
+      #
+      # BOTH versions are pinned and they are two different things: the action
+      # (v0.36.0) and the trivy binary it installs (v0.73.0). Pinning only one
+      # leaves the other floating, which defeats the point. Both were queried
+      # from the GitHub releases API on 2026-08-12 rather than remembered, and
+      # every input below was checked against v0.36.0's action.yaml. Same
+      # reasoning as the govulncheck pin in ci.yml: with a floating scanner, a
+      # red build cannot be attributed to a new advisory rather than a new tool.
+      #
+      # The vulnerability DATABASE is not pinned and must not be — a frozen
+      # advisory list would make this theatre. Only the tooling is fixed.
+      #
+      # State when added, measured against the then-published image with this
+      # exact trivy version and flags: 0 HIGH/CRITICAL in the debian 13.6 base
+      # (5 packages) and 0 in the Go binary.
+      - name: Scan the published image for known vulnerabilities (trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/holland-built/bloxsmith:${{ github.ref_name }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+          version: v0.73.0
