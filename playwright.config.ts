@@ -52,14 +52,11 @@ const LIVE_TENANT_SPECS: string[] = [];
 // font rendering shifts it; the other four look like platform layout/timing
 // differences. UNPROVEN ON LINUX, not known-good: until someone tunes them,
 // these checks only gate a hand-run on macOS. Follow-up, not a resolution.
-const LINUX_CI_UNPROVEN_SPECS = [
-  '**/layout-persist.spec.ts',
-  '**/contrast.spec.ts',
-  '**/drilldown.spec.ts',
-  '**/hidden-panels.spec.ts',
-  '**/layout-drag.spec.ts',
-  '**/theme.spec.ts',
-];
+// RUN A of plan 036 — temporarily emptied to measure, per test, exactly what
+// fails on the ubuntu runner with no tenant. The 2026-08-11 measurement recorded
+// "9 failures across these 6 files" and nothing finer, which is not enough to
+// fix anything. THIS BRANCH IS A PROBE AND MUST NOT MERGE.
+const LINUX_CI_UNPROVEN_SPECS: string[] = [];
 
 export default defineConfig({
   testDir: './tests',
@@ -84,7 +81,8 @@ export default defineConfig({
   // change — is handled separately, and earlier, by tests/fixtures.ts: it
   // waits for the server to come back and retries just the navigation, so
   // this whole-test retry is never the thing absorbing that failure mode.)
-  retries: 1,
+  // RUN A: retries off, so a flake cannot hide behind a second attempt.
+  retries: 0,
   // One worker, because several specs in this suite are exclusive owners of
   // shared state and the default (2) let them run against each other:
   //   - tests/layout-persist.spec.ts SIGTERMs the Go binary to prove a saved
