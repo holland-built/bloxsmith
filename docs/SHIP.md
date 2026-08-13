@@ -26,8 +26,15 @@ something to attach to.
    command. This step was missing from this file entirely until 2026-08-11.
 2. Commit + push to `master`. Single-branch repo: the Go single-binary app
    (plan 030) lives on `master` and releases are cut from it via goreleaser.
-3. Tag and push the tag — `git tag vX.Y.Z && git push origin vX.Y.Z`. Pushing
-   `master` alone publishes nothing; the tag is what fires `release.yml`.
+3. Ask `bash scripts/needs-tag.sh` whether this push is a release, and do what it
+   says. `tag` → `git tag vX.Y.Z && git push origin vX.Y.Z`; `skip` → the push is
+   the whole thing, stop. Pushing `master` alone publishes nothing; the tag is what
+   fires `release.yml` — which is the point, because a change that ships nothing to
+   a customer should not fire it. The rule is a path list rather than a judgment
+   call, it lives in the script, and `--selftest` pins it. Root `SHIP.md` step 4
+   carries the full reasoning and the two releases that prompted it (`v3.65.3`, a
+   README edit, and `6bc5ee3`, test files) — do not restate it here and let the two
+   drift again.
 
 **On "the Python/Docker path was removed".** What went away is the *Python* app and
 its container — there is no `requirements.txt`, no FastAPI image, and the only
