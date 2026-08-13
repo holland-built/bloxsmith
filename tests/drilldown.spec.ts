@@ -1,4 +1,17 @@
 import { test, expect } from './fixtures';
+import { installBaselineWorld } from './page-fixtures';
+
+// Every /api/ response is faked from tests/page-fixtures.ts.
+//
+// This file sat in playwright.config.ts's LINUX_CI_UNPROVEN_SPECS, described as
+// failing on ubuntu for "platform layout/timing" reasons. That description was
+// never measured — the one run behind it (31499474048) had NO TENANT as well as
+// a different OS, so it could not tell the two apart. Running these same tests
+// on macOS through scripts/e2e.sh, which also has no tenant, reproduced most of
+// the failures: the missing data was doing the work, not the platform.
+test.beforeEach(async ({ page }) => {
+  await installBaselineWorld(page);
+});
 
 // Overview → deeper-tab drill-downs: the click must land on the SAME data, filtered.
 

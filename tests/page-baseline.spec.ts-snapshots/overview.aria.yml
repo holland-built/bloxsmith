@@ -45,8 +45,9 @@
   - button "Hide Host Status": Hide ✕
   - button "Move Host Status": Move ⠿
   - application
-  - text: 2 hosts
+  - text: 3 hosts
   - button /Degraded \d+%/
+  - button /Offline \d+%/
   - button /Other \d+%/
   - heading "Top Subnets by Utilization" [level=2]
   - text: /excl\. \/\d+–\/\d+ infra links showing 3 of 3/
