@@ -360,8 +360,8 @@ const IQ_ACTIONS = {
   total_count: 2,
   pagination: { has_more: false, limit: 50, offset: 0 },
   actions: [
-    { affected: 'baseline.example', created_by_name: 'baseline-analyst', id: 'action/baseline-1', last_activity: agoIso(5 * HOUR), priority: 'high', status: 'active', title: 'Baseline suspicious domain', type: 'investigation' },
-    { affected: 'other.example', created_by_name: 'baseline-analyst', id: 'action/baseline-2', last_activity: agoIso(29 * HOUR), priority: 'low', status: 'resolved', title: 'Baseline resolved lookup', type: 'investigation' },
+    { affected: 'baseline.example', created_by_name: 'baseline-analyst', id: 'baseline-action-1', last_activity: agoIso(5 * HOUR), priority: 'high', status: 'active', title: 'Baseline suspicious domain', type: 'investigation' },
+    { affected: 'other.example', created_by_name: 'baseline-analyst', id: 'baseline-action-2', last_activity: agoIso(29 * HOUR), priority: 'low', status: 'resolved', title: 'Baseline resolved lookup', type: 'investigation' },
   ],
 };
 
@@ -444,6 +444,19 @@ const PER_PAGE: Record<string, Handler[]> = {
   incidents: [
     { method: 'GET', path: '/api/actions', body: IQ_ACTIONS, required: true },
     { method: 'GET', path: '/api/incidents', body: INCIDENTS, required: true },
+    // The detail drawer, fetched only when a row in the SOC Queue is clicked —
+    // so it is NOT required: a page-load baseline never opens it. The response
+    // is the single action wrapped in {action}, which is the shape
+    // ActionDetailDrawer reads (`detail.data?.action || detail.data`).
+    //
+    // The ids carry NO SLASH, unlike the ipam/dns ids elsewhere in this file,
+    // and that is deliberate. Incidents.jsx builds `/api/actions/${id}/status`,
+    // so an id like `action/baseline-1` silently becomes a two-segment path —
+    // which is legal, matches no `*` glob, and cost a confusing test failure
+    // before it was noticed. Real ids are opaque strings; keeping them flat
+    // keeps the URL one segment.
+    { method: 'GET', path: '/api/actions/baseline-action-1', body: { action: IQ_ACTIONS.actions[0] } },
+    { method: 'GET', path: '/api/actions/baseline-action-2', body: { action: IQ_ACTIONS.actions[1] } },
   ],
   audit: [
     { method: 'GET', path: '/api/audit/log', body: AUDIT_LOG, required: true },
