@@ -415,13 +415,10 @@ jobs:
       # purpose — a green tick for a scan that never happened is the worst
       # result available here.
       #
-      # BOTH versions are pinned and they are two different things: the action
-      # (v0.36.0) and the trivy binary it installs (v0.73.0). Pinning only one
-      # leaves the other floating, which defeats the point. Both were queried
-      # from the GitHub releases API on 2026-08-12 rather than remembered, and
-      # every input below was checked against v0.36.0's action.yaml. Same
-      # reasoning as the govulncheck pin in ci.yml: with a floating scanner, a
-      # red build cannot be attributed to a new advisory rather than a new tool.
+      # Trivy is pinned to 0.73.0, current stable, queried from the GitHub
+      # releases API on 2026-08-12 rather than remembered. Same reasoning as the
+      # govulncheck pin in ci.yml: with a floating scanner, a red build cannot be
+      # attributed to a new advisory rather than a new tool.
       #
       # The vulnerability DATABASE is not pinned and must not be — a frozen
       # advisory list would make this theatre. Only the tooling is fixed.
@@ -429,13 +426,34 @@ jobs:
       # State when added, measured against the then-published image with this
       # exact trivy version and flags: 0 HIGH/CRITICAL in the debian 13.6 base
       # (5 packages) and 0 in the Go binary.
+      # Run as a plain container rather than through aquasecurity/trivy-action.
+      # The action passes severity, exit-code and ignore-unfixed as TRIVY_* env
+      # vars written to a temp file, so its log line reads `Running Trivy with
+      # options: trivy image <ref>` and the policy is invisible — there is no way
+      # to confirm from a green run that the gate was actually applied. Spelled
+      # out as flags, the log shows exactly what was enforced.
+      #
+      # THE TAG IS `${GITHUB_REF_NAME#v}`, NOT `${GITHUB_REF_NAME}`. goreleaser's
+      # dockers_v2 tags with `{{ .Version }}`, which has no leading v, so the
+      # image for tag v3.65.4 is `...:3.65.4`. The first version of this step got
+      # that wrong and failed on v3.65.4 with `MANIFEST_UNKNOWN` — while the
+      # identical `V="${GITHUB_REF_NAME#v}"` idiom sat 160 lines above it in the
+      # SBOM step. Worth stating plainly: the failure was the step being wrong,
+      # not the image being missing.
       - name: Scan the published image for known vulnerabilities (trivy)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ghcr.io/holland-built/bloxsmith:${{ github.ref_name }}
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
-          format: table
-          version: v0.73.0
+        env:
+          TRIVY_VERSION: 0.73.0
+        run: |
+          set -euo pipefail
+          V="${GITHUB_REF_NAME#v}"
+          IMAGE="ghcr.io/holland-built/bloxsmith:$V"
+          echo "scanning $IMAGE"
+          docker run --rm \
+            -v /tmp/trivy-cache:/root/.cache/ \
+            "aquasec/trivy:${TRIVY_VERSION}" image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 1 \
+              --format table \
+              "$IMAGE"
