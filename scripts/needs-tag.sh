@@ -43,6 +43,12 @@ exempt() {
     .github/ISSUE_TEMPLATE/*)               return 0 ;;
     .github/PULL_REQUEST_TEMPLATE*)         return 0 ;;
     scripts/e2e.sh|scripts/needs-tag.sh)    return 0 ;;
+    # Test-runner configuration. Same category as tests/ and scripts/e2e.sh: it
+    # decides how the suite runs and reaches no customer. Found the same way
+    # .gitignore was — by running this script on a real change (7468e9e, which
+    # touched only tests/ and this file) and getting `tag` for something that
+    # ships nothing.
+    playwright.config.ts)                    return 0 ;;
     # Repo hygiene that cannot reach a customer. .gitignore governs what git
     # tracks; goreleaser builds from tracked files, so a file it hides was never
     # going to be in the artifact. Found by running this script against
@@ -79,6 +85,7 @@ skip .github/ISSUE_TEMPLATE/bug.yml
 skip scripts/e2e.sh
 skip scripts/needs-tag.sh
 skip .gitignore
+skip playwright.config.ts
 tag .dockerignore
 tag .env.example
 tag .github/workflows/release.yml
