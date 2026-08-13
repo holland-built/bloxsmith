@@ -3,7 +3,6 @@
   - paragraph:
     - text: Your estate at a glance — DNS load, address use, subnet fullness and host health. On this tab you can drag a panel’s ⠿ handle to rearrange it, or drag its right edge to resize, and your arrangement saves automatically.
     - button "Docs →"
-  - text: some estate-wide counts could not be fetched this cycle — figures below marked as provisional
   - button "Arrange panels"
   - heading /DNS Query Rate — \d+[hmsp]+/ [level=2]:
     - button /DNS Query Rate — \d+[hmsp]+/
@@ -11,32 +10,33 @@
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
   - button /Hide DNS Query Rate — \d+[hmsp]+/: Hide ✕
   - button /Move DNS Query Rate — \d+[hmsp]+/: Move ⠿
-  - text: DNS query rate feed unavailable
+  - text: /\d+ ▲ \d+\.\d+% vs first hour/
+  - application: /\d+:\d+ AM \d+:\d+ AM/
   - button "About kpi-stack": ⓘ
   - button "Hide Leases & Subnets": ✕
   - button "Move Leases & Subnets": ⠿
-  - button "Active Leases unavailable"
-  - button "Subnets (loaded rows) unavailable"
-  - button /Subnets ≥\d+% \(loaded rows\) unavailable/
+  - button "Active Leases 0"
+  - button "Subnets (loaded rows) 0"
+  - button /Subnets ≥\d+% \(loaded rows\) 0/
   - heading "Top Consumers" [level=2]
   - text: /addresses used · top \d+ · estate total unknown/
   - 'button "About: Top Consumers"': "About: ⓘ"
   - button "Hide Top Consumers": Hide ✕
   - button "Move Top Consumers": Move ⠿
-  - text: Subnets feed unavailable
+  - text: no data
   - heading "Subnet Heatmap" [level=2]
   - text: util by subnet — 0 loaded
   - 'button "About: Subnet Heatmap"': "About: ⓘ"
   - button "Hide Subnet Heatmap": Hide ✕
   - button "Move Subnet Heatmap": Move ⠿
-  - text: Subnets feed unavailable
+  - text: no data
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
   - button "Hide Host Status": Hide ✕
   - button "Move Host Status": Move ⠿
-  - text: Hosts feed unavailable
+  - text: no data
   - heading "Top Subnets by Utilization" [level=2]
-  - text: /excl\. \/\d+–\/\d+ infra links — loaded/
+  - text: /excl\. \/\d+–\/\d+ infra links 0 loaded/
   - textbox "Filter subnets":
     - /placeholder: Filter…
   - combobox:
@@ -45,9 +45,10 @@
   - 'button "About: Top Subnets by Utilization"': "About: ⓘ"
   - button "Hide Top Subnets by Utilization": Hide ✕
   - button "Move Top Subnets by Utilization": Move ⠿
-  - text: Subnets feed unavailable
+  - text: no data
   - heading "License Inventory" [level=2]
+  - text: 0 licenses
   - 'button "About: License Inventory"': "About: ⓘ"
   - button "Hide License Inventory": Hide ✕
   - button "Move License Inventory": Move ⠿
-  - text: License feed unavailable
+  - text: no license data available
