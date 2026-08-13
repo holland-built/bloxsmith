@@ -1,0 +1,77 @@
+- main "Self-Service tab":
+  - heading "Self-Service" [level=1]
+  - paragraph:
+    - text: "The two everyday asks, without the full Editor: take the next free address out of a subnet, or add a record to an existing DNS zone. Preview checks the request against the server; Apply commits it."
+    - button "Docs →"
+  - button "Arrange panels"
+  - heading "Allocate Address" [level=2]
+  - text: pick space → block → subnet
+  - 'button "About: Allocate Address"': "About: ⓘ"
+  - button "Hide Allocate Address": Hide ✕
+  - button "Move Allocate Address": Move ⠿
+  - text: IP Space
+  - combobox "IP Space":
+    - option "Select space…" [selected]
+    - option "Baseline Space"
+  - text: Block
+  - combobox "Block" [disabled]:
+    - option "Any block" [selected]
+  - text: Subnet
+  - combobox "Subnet" [disabled]:
+    - option "Select subnet…" [selected]
+  - text: Count
+  - spinbutton "Count": "1"
+  - text: Name (optional)
+  - textbox "Name (optional)":
+    - /placeholder: host-01
+  - button "Preview" [disabled]
+  - heading "Create DNS Record" [level=2]
+  - text: preview is validated by the server
+  - 'button "About: Create DNS Record"': "About: ⓘ"
+  - button "Hide Create DNS Record": Hide ✕
+  - button "Move Create DNS Record": Move ⠿
+  - text: Zone
+  - combobox "Zone":
+    - option "Select zone…" [selected]
+    - option "baseline.example."
+  - text: Type
+  - combobox "Type":
+    - option "A" [selected]
+    - option "AAAA"
+    - option "CNAME"
+    - option "MX"
+    - option "TXT"
+    - option "SRV"
+    - option "PTR"
+    - option "NS"
+    - option "CAA"
+  - text: Name
+  - textbox "Name":
+    - /placeholder: host or @
+  - text: TTL (optional)
+  - spinbutton "TTL (optional)"
+  - text: Value
+  - textbox "Value":
+    - /placeholder: 192.0.2.10
+  - button "Preview" [disabled]
+  - heading "Manage Records" [level=2]
+  - text: edit or delete existing DNS records
+  - 'button "About: Manage Records"': "About: ⓘ"
+  - button "Hide Manage Records": Hide ✕
+  - button "Move Manage Records": Move ⠿
+  - text: Zone
+  - combobox "Zone":
+    - option "Select zone…" [selected]
+    - option "baseline.example."
+  - heading "Manage Addresses" [level=2]
+  - text: release an allocated address
+  - 'button "About: Manage Addresses"': "About: ⓘ"
+  - button "Hide Manage Addresses": Hide ✕
+  - button "Move Manage Addresses": Move ⠿
+  - text: IP Space
+  - combobox "IP Space":
+    - option "Select space…" [selected]
+    - option "Baseline Space"
+  - text: Subnet
+  - combobox "Subnet" [disabled]:
+    - option "Select subnet…" [selected]

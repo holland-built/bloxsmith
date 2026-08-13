@@ -1,0 +1,99 @@
+- main "Changes tab":
+  - heading /What changed — last \d+ hours/ [level=1]
+  - paragraph: "/Infoblox portal activity, the \\d+ most recent events in the last \\d+ hours, newest first\\. This is a window on the audit route, not a change log: it cannot show more than \\d+ events, and it holds no history from before the window\\./"
+  - button "Arrange panels"
+  - heading "Notability" [level=2]
+  - text: four questions asked of this window, each answered or explicitly not answered
+  - 'button "About: Notability"': "About: ⓘ"
+  - button "Hide Notability": Hide ✕
+  - button "Move Notability": Move ⠿
+  - text: 1 Deletions Del
+  - paragraph: Pulled out because a delete is the only operation with no later state left to inspect.
+  - text: 1 Failed changes Fail
+  - paragraph: Anything whose result is not "success" — including a result the feed left blank, which is unread rather than fine.
+  - text: /2 Out of hours \d+:\d+–\d+:\d+/
+  - paragraph: /Out of hours means at or after \d+:\d+, or before \d+:\d+, on your own local clock — your browser's time zone, not the tenant's\./
+  - text: 1 New actors this window New
+  - paragraph: "This window is split down the middle: an actor counts as new only if it acted in the recent half and never in the earlier half. There is no history before this window, so nothing older can be checked."
+  - paragraph: actor-gamma
+  - status
+  - heading "Changed objects" [level=2]
+  - text: grouped by what was touched, newest group first 5 rows · 4 groups
+  - 'button "About: Changed objects"': "About: ⓘ"
+  - button "Hide Changed objects": Hide ✕
+  - button "Move Changed objects": Move ⠿
+  - text: /rows listed here 5 groups 4 earliest \d+:\d+:\d+ latest \d+:\d+:\d+ span \d+:\d+:\d+ \( \d+:\d+:\d+ − \d+:\d+:\d+ \)/
+  - table "Changed objects, grouped by resource":
+    - row "Severity Local time Op Result Actor Kind Flags":
+      - columnheader "Severity"
+      - columnheader "Local time"
+      - columnheader "Op"
+      - columnheader "Result"
+      - columnheader "Actor"
+      - columnheader "Kind"
+      - columnheader "Flags"
+    - rowgroup "addressservice — 2 rows · 1 success · 1 not successful":
+      - row "addressservice 2 rows · 1 success · 1 not successful":
+        - cell
+        - rowheader "addressservice":
+          - heading "addressservice" [level=3]
+        - cell "2 rows · 1 success · 1 not successful"
+      - 'row /Critical \d+-\d+-\d+:\d+:\d+ UPDATE failed: denied actor-gamma service Fail/':
+        - cell "Critical"
+        - cell /\d+-\d+-\d+:\d+:\d+/
+        - cell "UPDATE"
+        - 'cell "failed: denied"'
+        - cell "actor-gamma"
+        - cell "service"
+        - cell "Fail"
+      - row /Out of hours \d+-\d+-\d+:\d+:\d+ UPDATE success actor-beta service OOH/:
+        - cell "Out of hours"
+        - cell /\d+-\d+-\d+:\d+:\d+/
+        - cell "UPDATE"
+        - cell "success"
+        - cell "actor-beta"
+        - cell "service"
+        - cell "OOH"
+    - rowgroup "subnetservice — 1 row · 1 success":
+      - row "subnetservice 1 row · 1 success":
+        - cell
+        - rowheader "subnetservice":
+          - heading "subnetservice" [level=3]
+        - cell "1 row · 1 success"
+      - row /Routine \d+-\d+-\d+:\d+:\d+ UPDATE success actor-beta service/:
+        - cell "Routine"
+        - cell /\d+-\d+-\d+:\d+:\d+/
+        - cell "UPDATE"
+        - cell "success"
+        - cell "actor-beta"
+        - cell "service"
+        - cell
+    - rowgroup "dnsrecord — 1 row · 1 success · 1 deleted":
+      - row "dnsrecord 1 row · 1 success · 1 deleted":
+        - cell
+        - rowheader "dnsrecord":
+          - heading "dnsrecord" [level=3]
+        - cell "1 row · 1 success · 1 deleted"
+      - row /Critical \d+-\d+-\d+:\d+:\d+ DELETE success actor-alpha service Del/:
+        - cell "Critical"
+        - cell /\d+-\d+-\d+:\d+:\d+/
+        - cell "DELETE"
+        - cell "success"
+        - cell "actor-alpha"
+        - cell "service"
+        - cell "Del"
+    - rowgroup "auth_zone — 1 row · 1 success":
+      - row "auth_zone 1 row · 1 success":
+        - cell
+        - rowheader "auth_zone":
+          - heading "auth_zone" [level=3]
+        - cell "1 row · 1 success"
+      - row /Out of hours \d+-\d+-\d+:\d+:\d+ UPDATE success actor-alpha service OOH/:
+        - cell "Out of hours"
+        - cell /\d+-\d+-\d+:\d+:\d+/
+        - cell "UPDATE"
+        - cell "success"
+        - cell "actor-alpha"
+        - cell "service"
+        - cell "OOH"
+  - text: /DEL deletion FAIL result was not "success" OOH outside \d+:\d+–\d+:\d+ on your local clock Group counts describe the rows listed here, not the whole window Band counts describe the \d+-hour window, so they will not add up to these rows/

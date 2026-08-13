@@ -1,0 +1,37 @@
+- main "Provision tab":
+  - heading "Provision" [level=1]
+  - text: ADMIN
+  - paragraph:
+    - text: Creates real objects in Infoblox — one subnet, a whole site from a template, or a multi-region demo estate. Preview streams the full plan without writing anything; Apply then runs it. Teardown is permanent and needs admin.
+    - button "Docs →"
+  - button "Subnet"
+  - button "Full site"
+  - button "Seed demo"
+  - button "Arrange panels"
+  - heading "Request" [level=2]
+  - 'button "About: Request"': "About: ⓘ"
+  - button "Hide Request": Hide ✕
+  - button "Move Request": Move ⠿
+  - text: Space
+  - combobox "Space":
+    - option "Select a space" [selected]
+    - option "Baseline Space"
+  - text: Block
+  - combobox "Block" [disabled]:
+    - option "Loading blocks…" [selected]
+  - text: CIDR prefix
+  - spinbutton "CIDR prefix": /\d+/
+  - text: Name
+  - textbox "Name":
+    - /placeholder: subnet name
+  - text: Comment
+  - textbox "Comment":
+    - /placeholder: optional
+  - checkbox "Create matching DNS zone"
+  - text: Create matching DNS zone
+  - button "Preview" [disabled]
+  - heading "Live log" [level=2]
+  - 'button "About: Live log"': "About: ⓘ"
+  - button "Hide Live log": Hide ✕
+  - button "Move Live log": Move ⠿
+  - text: Output appears here when you preview or apply.

@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { installFixtures, HAS_FIXTURES, FIXED_NOW } from './page-fixtures';
 
 // WHAT THIS FILE IS, AND WHAT IT IS NOT.
 //
@@ -77,12 +78,15 @@ const UNPROVEN = ['changes', 'provision', 'selfservice', 'editor', 'drift'];
 // and any rendered date would differ between the two.
 test.use({ timezoneId: 'UTC', locale: 'en-US' });
 
-// A fixed instant. Pinning the zone alone does NOT stabilise anything derived
-// from Date.now() — a "2 minutes ago" label crosses a threshold between two
-// captures taken a minute apart and the baseline flaps for no reason.
-// setFixedTime, not clock.install: install() also fakes timers, which stalls
-// the polling this app does on several tabs.
-const FIXED_NOW = new Date('2026-01-01T12:00:00Z');
+// FIXED_NOW is imported from page-fixtures.ts rather than declared here, and
+// that is load-bearing: the fixtures' timestamps are computed from it, so if the
+// browser clock and the fixture clock were two different constants every faked
+// row would be hours adrift from "now" and the 24-hour windows would be empty.
+// Pinning the zone alone does NOT stabilise anything derived from Date.now() —
+// a "2 minutes ago" label crosses a threshold between two captures taken a
+// minute apart and the baseline flaps for no reason. setFixedTime, not
+// clock.install: install() also fakes timers, which stalls the polling this app
+// does on several tabs.
 
 test.beforeEach(async ({ page }) => {
   // This file may only run against the disposable harness. scripts/e2e.sh
@@ -144,9 +148,51 @@ async function readyMain(page: import('@playwright/test').Page, layoutKey: strin
 }
 
 for (const id of COVERED) {
+  if (HAS_FIXTURES.includes(id)) continue; // covered by the tier-2 block below
   test(`page "${id}" body matches its baseline`, async ({ page }) => {
     await page.goto(`/#${id}`);
     const main = await readyMain(page, id);
+    await expect(main).toMatchAriaSnapshot({ name: `${id}.aria.yml` });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// TIER 2 — pages driven to a healthy state with fake API responses.
+//
+// These prove strictly more than the tier-1 block above: every feed reports
+// `ok`, so the page renders as it does for a working tenant rather than as a
+// wall of "feed unavailable". That is the only way the five write-capable tabs
+// get a baseline at all — with no backend they do not merely look empty, they
+// log real console errors.
+//
+// A page moves from the tier-1 list to here by gaining an entry in
+// tests/page-fixtures.ts. The tier-1 baseline is DELETED in the same commit:
+// two baselines for one page means the weaker one silently becomes the one
+// nobody updates.
+// ---------------------------------------------------------------------------
+for (const id of HAS_FIXTURES) {
+  test(`page "${id}" body matches its baseline (healthy, faked backend)`, async ({ page }) => {
+    const fx = await installFixtures(page, id);
+    await page.goto(id === 'dossier' ? `/#${DOSSIER_QUERY}` : `/#${id}`);
+    const main = await readyMain(page, id);
+
+    // Every /api/ call the page made was one this fixture set knows about. An
+    // unmatched request means the page asked for something new — a real change
+    // worth failing on, and one a snapshot alone would not necessarily show.
+    expect(fx.unmatched(), 'unmatched /api/ requests — add them to tests/page-fixtures.ts').toEqual([]);
+    // And the reverse: a panel that was deleted stops calling its endpoint. The
+    // snapshot would change too, but this names the cause instead of leaving
+    // someone to diff YAML and guess.
+    expect(fx.neverCalled(), 'fixtures that were never requested — did a panel disappear?').toEqual([]);
+
+    // With every feed reporting ok, the failure copy that tier-1 baselines are
+    // full of must be absent. This is the guard tier 1 could not have: it is
+    // what stops a broken page being recorded as normal.
+    await expect(
+      main.getByText(/feed unavailable|unavailable\b/i),
+      'a feed is reporting unavailable despite every fixture returning ok',
+    ).toHaveCount(0);
+
     await expect(main).toMatchAriaSnapshot({ name: `${id}.aria.yml` });
   });
 }
@@ -159,11 +205,13 @@ test('page "dossier" body matches its baseline', async ({ page }) => {
   await expect(main).toMatchAriaSnapshot({ name: 'dossier.aria.yml' });
 });
 
-for (const id of UNPROVEN) {
+// Whatever is left in UNPROVEN once the fixture list is subtracted. This loop
+// is deliberately kept even when it produces nothing: the next page that turns
+// out to be unrecordable gets declared here rather than quietly dropped.
+for (const id of UNPROVEN.filter((x) => !HAS_FIXTURES.includes(x))) {
   // eslint-disable-next-line no-empty-function
   test.fixme(`page "${id}" has NO baseline — upstream failure makes it unrecordable without fixtures`, async () => {
     // Deliberately empty. The title is the deliverable: it prints on every run
-    // so the five uncovered pages stay visible. Promote these first when the
-    // tier-2 fixtures land (plans/033-page-baselines.md).
+    // so an uncovered page stays visible.
   });
 }

@@ -1,0 +1,30 @@
+- main "Editor tab":
+  - heading "Editor" [level=1]
+  - paragraph:
+    - text: Direct create, update, and delete on individual DNS/DHCP objects. Blank Object ID creates; pasting an ID switches the form to update and reveals Delete. Preview first, then Apply. Editor-created subnets and address blocks are ad-hoc — no site template tracks them, so Drift reports them as extra.
+    - button "Docs →"
+  - button "DNS Zone"
+  - button "Subnet"
+  - button "Address Block"
+  - button "DHCP Range"
+  - button "Host"
+  - button "Tags"
+  - heading "DNS Zone — Create" [level=2]
+  - 'button "About: DNS Zone — Create"': "About: ⓘ"
+  - button "Hide DNS Zone — Create": Hide ✕
+  - text: Object ID (leave blank to create new)
+  - textbox "Object ID (leave blank to create new)":
+    - /placeholder: existing object id — enables update/delete
+  - text: FQDN *
+  - textbox "FQDN *":
+    - /placeholder: zone.example.com.
+  - text: View ID *
+  - textbox "View ID *":
+    - /placeholder: view id
+  - text: Comment
+  - textbox "Comment":
+    - /placeholder: ""
+  - text: Tags (key=value, key2=value2)
+  - textbox "Tags (key=value, key2=value2)":
+    - /placeholder: env=prod,team=noc
+  - button "Preview"
