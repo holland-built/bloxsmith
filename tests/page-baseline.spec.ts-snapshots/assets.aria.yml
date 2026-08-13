@@ -13,9 +13,34 @@
   - 'button "About: Asset Inventory"': "About: ⓘ"
   - button "Hide Asset Inventory": Hide ✕
   - button "Move Asset Inventory": Move ⠿
-  - text: Asset filter feed unavailable the MCP session to Infoblox could not be opened
+  - text: 2assets discovered
+  - button "Server1"
+  - button "Router1"
   - heading "Assets" [level=2]
+  - text: 1–1 of 1
   - 'button "About: Assets"': "About: ⓘ"
   - button "Hide Assets": Hide ✕
   - button "Move Assets": Move ⠿
-  - text: Asset inventory unavailable the MCP session to Infoblox could not be opened
+  - table:
+    - rowgroup:
+      - row "Name Type Provider Vendor Last seen":
+        - columnheader "Name":
+          - button "Name"
+        - columnheader "Type":
+          - button "Type"
+        - columnheader "Provider":
+          - button "Provider"
+        - columnheader "Vendor":
+          - button "Vendor"
+        - columnheader "Last seen":
+          - button "Last seen"
+    - rowgroup:
+      - button "View details for baseline-asset-a":
+        - cell "baseline-asset-a"
+        - cell "Server"
+        - cell "baseline-provider"
+        - cell "baseline-vendor"
+        - cell /1\/1\/\d+, 7:\d+:\d+ AM/
+  - text: Page 1 of 1
+  - button "← Prev" [disabled]
+  - button "Next →" [disabled]

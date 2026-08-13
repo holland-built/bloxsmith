@@ -2,11 +2,12 @@
   - heading "Audit" [level=1]
   - button "Arrange panels"
   - heading "Activity Summary" [level=2]
-  - text: last 0 events
+  - text: last 5 events
   - 'button "About: Activity Summary"': "About: ⓘ"
   - button "Hide Activity Summary": Hide ✕
   - button "Move Activity Summary": Move ⠿
-  - text: Audit log feed unavailable
+  - text: 4 success 1 failed
+  - application: CREATE UPDATE DELETE
   - heading "Audit Log" [level=2]
   - text: Bloxsmith actions
   - textbox "Filter…"
@@ -15,17 +16,100 @@
     - option "Create"
     - option "Update"
     - option "Delete"
+  - text: "5"
   - 'button "About: Audit Log"': "About: ⓘ"
   - button "Hide Audit Log": Hide ✕
   - button "Move Audit Log": Move ⠿
   - text: chain intact — signature and entry count verified · check it yourself with
   - code: bloxsmith audit verify
-  - text: Audit log feed unavailable
+  - table:
+    - rowgroup:
+      - row "Time User Action Resource Result":
+        - columnheader "Time":
+          - button "Time"
+        - columnheader "User":
+          - button "User"
+        - columnheader "Action":
+          - button "Action"
+        - columnheader "Resource":
+          - button "Resource"
+        - columnheader "Result":
+          - button "Result"
+    - rowgroup:
+      - 'row /1\/1\/\d+, \d+:\d+:\d+ AM actor-gamma UPDATE addressservice failed: denied/':
+        - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
+        - cell "actor-gamma"
+        - cell "UPDATE"
+        - cell "addressservice"
+        - 'cell "failed: denied"'
+      - row /1\/1\/\d+, \d+:\d+:\d+ AM actor-beta UPDATE subnetservice success/:
+        - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
+        - cell "actor-beta"
+        - cell "UPDATE"
+        - cell "subnetservice"
+        - cell "success"
+      - row /1\/1\/\d+, 8:\d+:\d+ AM actor-alpha DELETE dnsrecord success/:
+        - cell /1\/1\/\d+, 8:\d+:\d+ AM/
+        - cell "actor-alpha"
+        - cell "DELETE"
+        - cell "dnsrecord"
+        - cell "success"
+      - row /1\/1\/\d+, 7:\d+:\d+ AM actor-beta UPDATE addressservice success/:
+        - cell /1\/1\/\d+, 7:\d+:\d+ AM/
+        - cell "actor-beta"
+        - cell "UPDATE"
+        - cell "addressservice"
+        - cell "success"
+      - row /1\/1\/\d+, 6:\d+:\d+ AM actor-alpha UPDATE auth_zone success/:
+        - cell /1\/1\/\d+, 6:\d+:\d+ AM/
+        - cell "actor-alpha"
+        - cell "UPDATE"
+        - cell "auth_zone"
+        - cell "success"
   - heading "CSP Portal Audit" [level=2]
   - text: external — Infoblox portal activity
   - textbox "Search user or resource…"
   - button "Search"
+  - text: "5"
   - 'button "About: CSP Portal Audit"': "About: ⓘ"
   - button "Hide CSP Portal Audit": Hide ✕
   - button "Move CSP Portal Audit": Move ⠿
-  - text: CSP audit feed unavailable
+  - table:
+    - rowgroup:
+      - row "Time Who Action Resource Result":
+        - columnheader "Time"
+        - columnheader "Who"
+        - columnheader "Action"
+        - columnheader "Resource"
+        - columnheader "Result"
+    - rowgroup:
+      - row /1\/1\/\d+, 6:\d+:\d+ AM actor-alpha \(service\) UPDATE auth_zone success/:
+        - cell /1\/1\/\d+, 6:\d+:\d+ AM/
+        - cell "actor-alpha (service)"
+        - cell "UPDATE"
+        - cell "auth_zone"
+        - cell "success"
+      - row /1\/1\/\d+, 7:\d+:\d+ AM actor-beta \(service\) UPDATE addressservice success/:
+        - cell /1\/1\/\d+, 7:\d+:\d+ AM/
+        - cell "actor-beta (service)"
+        - cell "UPDATE"
+        - cell "addressservice"
+        - cell "success"
+      - row /1\/1\/\d+, 8:\d+:\d+ AM actor-alpha \(service\) DELETE dnsrecord success/:
+        - cell /1\/1\/\d+, 8:\d+:\d+ AM/
+        - cell "actor-alpha (service)"
+        - cell "DELETE"
+        - cell "dnsrecord"
+        - cell "success"
+      - row /1\/1\/\d+, \d+:\d+:\d+ AM actor-beta \(service\) UPDATE subnetservice success/:
+        - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
+        - cell "actor-beta (service)"
+        - cell "UPDATE"
+        - cell "subnetservice"
+        - cell "success"
+      - 'row /1\/1\/\d+, \d+:\d+:\d+ AM actor-gamma \(service\) UPDATE addressservice failed: denied/':
+        - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
+        - cell "actor-gamma (service)"
+        - cell "UPDATE"
+        - cell "addressservice"
+        - 'cell "failed: denied"'

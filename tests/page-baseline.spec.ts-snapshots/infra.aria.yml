@@ -1,46 +1,110 @@
 - main "Infra tab":
   - heading "Infrastructure" [level=1]
+  - text: Operational
   - button "Arrange panels"
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
   - button "Hide Host Status": Hide ✕
   - button "Move Host Status": Move ⠿
-  - text: Hosts feed unavailable
+  - application
+  - text: /2 hosts Degraded \d+% Other \d+%/
   - heading "Host Health" [level=2]
-  - text: CSP
+  - text: CSP 1
   - 'button "About: Host Health"': "About: ⓘ"
   - button "Hide Host Health": Hide ✕
   - button "Move Host Health": Move ⠿
-  - text: feed unavailable
+  - table:
+    - rowgroup:
+      - row "Name Status Version":
+        - columnheader "Name"
+        - columnheader "Status"
+        - columnheader "Version"
+    - rowgroup:
+      - row "baseline-host-a ok 0.0.0-baseline":
+        - cell "baseline-host-a"
+        - cell "ok"
+        - cell "0.0.0-baseline"
   - heading "On-Prem Hosts" [level=2]
   - text: CSP
   - 'button "About: On-Prem Hosts"': "About: ⓘ"
   - button "Hide On-Prem Hosts": Hide ✕
   - button "Move On-Prem Hosts": Move ⠿
-  - text: feed unavailable
+  - table:
+    - rowgroup:
+      - row "Name OPH ID Apps":
+        - columnheader "Name"
+        - columnheader "OPH ID"
+        - columnheader "Apps"
+    - rowgroup:
+      - row "baseline-onprem-a ophid-baseline-1 2":
+        - cell "baseline-onprem-a"
+        - cell "ophid-baseline-1"
+        - cell "2"
   - heading "Asset Discovery" [level=2]
+  - text: CSP baseline
   - 'button "About: Asset Discovery"': "About: ⓘ"
   - button "Hide Asset Discovery": Hide ✕
   - button "Move Asset Discovery": Move ⠿
-  - text: Asset discovery unavailable
+  - text: 7assets with discovery status tracked
   - heading "Host Inventory" [level=2]
-  - text: — hosts
+  - text: 2 hosts
   - textbox "Search name, IP…"
   - combobox:
     - option "All types" [selected]
+    - option "onprem"
   - 'button "About: Host Inventory"': "About: ⓘ"
   - button "Hide Host Inventory": Hide ✕
   - button "Move Host Inventory": Move ⠿
-  - text: Hosts feed unavailable
+  - table:
+    - rowgroup:
+      - row "Name IP Status Type":
+        - columnheader "Name":
+          - button "Name"
+        - columnheader "IP":
+          - button "IP"
+        - columnheader "Status":
+          - button "Status"
+        - columnheader "Type"
+    - rowgroup:
+      - row /baseline-host-a \d+\.\d+\.0\.2 ok onprem/:
+        - cell "baseline-host-a"
+        - cell /\d+\.\d+\.0\.2/
+        - cell "ok"
+        - cell "onprem"
+      - row /baseline-host-b \d+\.\d+\.0\.2 degraded onprem/:
+        - cell "baseline-host-b"
+        - cell /\d+\.\d+\.0\.2/
+        - cell "degraded"
+        - cell "onprem"
   - heading "Jobs" [level=2]
-  - text: recent
+  - text: recent 1
   - 'button "About: Jobs"': "About: ⓘ"
   - button "Hide Jobs": Hide ✕
   - button "Move Jobs": Move ⠿
-  - text: feed unavailable
+  - table:
+    - rowgroup:
+      - row "Created Type Status User":
+        - columnheader "Created"
+        - columnheader "Type"
+        - columnheader "Status"
+        - columnheader "User"
+    - rowgroup:
+      - row /1\/1\/\d+, 9:\d+:\d+ AM discovery completed baseline-operator/:
+        - cell /1\/1\/\d+, 9:\d+:\d+ AM/
+        - cell "discovery"
+        - cell "completed"
+        - cell "baseline-operator"
   - heading "DFP Services" [level=2]
-  - text: CSP
+  - text: CSP 1
   - 'button "About: DFP Services"': "About: ⓘ"
   - button "Hide DFP Services": Hide ✕
   - button "Move DFP Services": Move ⠿
-  - text: feed unavailable
+  - table:
+    - rowgroup:
+      - row "Name Status":
+        - columnheader "Name"
+        - columnheader "Status"
+    - rowgroup:
+      - row "baseline-dfp ok":
+        - cell "baseline-dfp"
+        - cell "ok"

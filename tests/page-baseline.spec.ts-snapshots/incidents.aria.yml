@@ -6,28 +6,77 @@
   - 'button "About: Categories"': "About: ⓘ"
   - button "Hide Categories": Hide ✕
   - button "Move Categories": Move ⠿
-  - text: "Category check incomplete feeds unavailable: leases, subnets, zones"
+  - button "High High severity 2 capacity"
   - button "About incidents-severity": ⓘ
   - button "Hide Severity Counts": ✕
   - button "Move Severity Counts": ⠿
-  - text: Critical 0 High 0 Medium 0 Low 0
+  - text: Critical 1 High 0 Medium 1 Low 0
   - heading "Triage" [level=2]
   - textbox "Filter…"
   - button "Clear acks"
-  - text: "0"
+  - text: "2"
   - 'button "About: Triage"': "About: ⓘ"
   - button "Hide Triage": Hide ✕
   - button "Move Triage": Move ⠿
-  - text: "Check could not be completed feeds unavailable: leases, subnets, zones"
+  - table:
+    - rowgroup:
+      - row "Ack Category Entity Severity Message Age":
+        - columnheader "Ack"
+        - columnheader "Category":
+          - button "Category"
+        - columnheader "Entity":
+          - button "Entity"
+        - columnheader "Severity":
+          - button "Severity"
+        - columnheader "Message"
+        - columnheader "Age":
+          - button "Age"
+    - rowgroup:
+      - row /Acknowledge signal dns dns\/auth_zone\/baseline-2 Medium other\.example is unsigned \d+[hmsp]+/:
+        - cell "Acknowledge signal":
+          - checkbox "Acknowledge signal"
+        - cell "dns"
+        - cell "dns/auth_zone/baseline-2"
+        - cell "Medium"
+        - cell "other.example is unsigned"
+        - cell /\d+[hmsp]+/
+      - row /Acknowledge signal capacity ipam\/subnet\/baseline-3 Critical baseline-net-c is \d+% used \d+[hmsp]+/:
+        - cell "Acknowledge signal":
+          - checkbox "Acknowledge signal"
+        - cell "capacity"
+        - cell "ipam/subnet/baseline-3"
+        - cell "Critical"
+        - cell /baseline-net-c is \d+% used/
+        - cell /\d+[hmsp]+/
   - heading "SOC Queue" [level=2]
-  - text: IQ Actions
+  - text: IQ Actions 2
   - 'button "About: SOC Queue"': "About: ⓘ"
   - button "Hide SOC Queue": Hide ✕
   - button "Move SOC Queue": Move ⠿
-  - text: IQ Actions feed unavailable
+  - table:
+    - rowgroup:
+      - row "Sev Action Status":
+        - columnheader "Sev":
+          - button "Sev"
+        - columnheader "Action"
+        - columnheader "Status"
+    - rowgroup:
+      - row "High Baseline suspicious domain Resolve":
+        - cell "High"
+        - cell "Baseline suspicious domain":
+          - button "Baseline suspicious domain"
+        - cell "Resolve":
+          - button "Resolve"
+      - row "Low Baseline resolved lookup Reopen":
+        - cell "Low"
+        - cell "Baseline resolved lookup":
+          - button "Baseline resolved lookup"
+        - cell "Reopen":
+          - button "Reopen"
   - heading "Action Volume" [level=2]
   - text: by day
   - 'button "About: Action Volume"': "About: ⓘ"
   - button "Hide Action Volume": Hide ✕
   - button "Move Action Volume": Move ⠿
-  - text: IQ Actions feed unavailable
+  - application: /Dec \d+ Jan 1/
+  - text: High 1 Medium 0 Low 1
