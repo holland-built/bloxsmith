@@ -1,34 +1,36 @@
 - main "Search result tab":
   - heading "Search result — everything about baseline.example" [level=1]
-  - status: "Assets: could not be read. DNS records: could not be read. IP address management: not applicable. Threat intel: could not be read. Recent changes: not applicable. All sources have answered."
+  - status: "Assets: loaded. DNS records: loaded. IP address management: not applicable. Threat intel: loaded. Recent changes: not applicable. All sources have answered."
   - text: QUERY Search the estate
   - textbox "Search the estate": baseline.example
   - text: Recognised as Hostname
-  - img "Unavailable"
-  - text: Assets Unavailable
-  - img "Unavailable"
-  - text: DNS Unavailable
+  - img "Loaded"
+  - text: Assets Loaded
+  - img "Loaded"
+  - text: DNS Loaded
   - img "Not applicable"
   - text: IPAM N/A
-  - img "Unavailable"
-  - text: Threat Unavailable
+  - img "Loaded"
+  - text: Threat Loaded
   - img "Not applicable"
   - text: Changes N/A Each source is asked on its own — a slow one holds nothing else up. Source State Identity Fields returned by this source
-  - img "Unavailable"
-  - text: "Assets Unavailable This source could not be read. Not this Nothing found — we asked a source and it told us baseline.example has none. This The source did not answer. Nothing was read, so for baseline.example, whether any asset carries it is unknown, not clean. Reported reason: the MCP session to Infoblox could not be opened"
-  - link "Open Assets tab":
-    - /url: "#assets"
-  - img "Unavailable"
-  - text: "DNS records Unavailable This source could not be read. Not this Nothing found — we asked a source and it told us baseline.example has none. This The source did not answer. Nothing was read, so for baseline.example, which DNS records name it or point at it is unknown, not clean. Reported reason: Could not reach the upstream server."
-  - link "Open DNS tab":
-    - /url: "#dns"
+  - img "Loaded"
+  - text: /Assets Loaded baseline-asset-a Type Server Provider baseline-provider Last seen 1\/1\/\d+, 7:\d+:\d+ AM/
+  - img "Loaded"
+  - text: DNS records Loaded — Record A TTL — Zone —
   - img "Not applicable"
   - text: IP address management N/A IPAM is searched by IP address, and this query is not one — so there was nothing to ask it.
-  - img "Unavailable"
-  - text: "Threat intel Unavailable This source could not be read. Not this Nothing found — we asked a source and it told us baseline.example has none. This The source did not answer. Nothing was read, so for baseline.example, whether any threat source knows it is unknown, not clean. Reported reason: Dossier lookup failed"
-  - link "Open AI tab":
-    - /url: "#ai"
+  - img "Loaded"
+  - text: Threat intel Loaded baseline.example Verdict Clean Sources examined 2 Threat level 0
   - img "Not applicable"
   - text: Recent changes N/A The audit log is searched by who made a change and what kind of object it was — never by the name or address of the thing that changed — so there was nothing to ask it. The Audit tab searches it by user and by object kind.
   - heading "Threat intel — full detail" [level=2]
-  - text: Dossier unavailable Dossier lookup failed
+  - heading "External intel (Dossier)" [level=3]
+  - text: CLEAN threat 0 host
+  - term: Country
+  - definition: ZZ
+  - term: Registrar
+  - definition: baseline-registrar
+  - term: Actor
+  - definition: baseline-actor
+  - group: raw sources (2)

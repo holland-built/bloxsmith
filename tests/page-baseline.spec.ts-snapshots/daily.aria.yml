@@ -5,30 +5,73 @@
   - 'button "About: Open Issues"': "About: ⓘ"
   - button "Hide Open Issues": Hide ✕
   - button "Move Open Issues": Move ⠿
-  - button /Subnets ≥\d+% Util unavailable/
-  - button "Hosts Not Online unavailable"
-  - button "DNS Zones w/ Issues unavailable"
+  - button /Subnets ≥\d+% Util 2/
+  - button "Hosts Not Online 2"
+  - button "DNS Zones w/ Issues 1"
   - heading "Security Today" [level=2]
-  - text: — events
+  - text: 2 events
   - 'button "About: Security Today"': "About: ⓘ"
   - button "Hide Security Today": Hide ✕
   - button "Move Security Today": Move ⠿
-  - text: Threat feed unavailable threat-event feed unavailable
+  - text: /1 critical 2 high 3 medium \d+ blocked/
   - heading "Top Capacity Risks" [level=2]
   - text: /least free space, excl\. infra links top \d+/
   - 'button "About: Top Capacity Risks"': "About: ⓘ"
   - button "Hide Top Capacity Risks": Hide ✕
   - button "Move Top Capacity Risks": Move ⠿
-  - text: Subnets feed unavailable
+  - table:
+    - rowgroup:
+      - row "Network Site Util Free":
+        - columnheader "Network"
+        - columnheader "Site"
+        - columnheader "Util"
+        - columnheader "Free"
+    - rowgroup:
+      - button "View details for baseline-net-c":
+        - cell /\d+\.\d+\.0\.0/
+        - cell "other-site"
+        - cell /\d+%/
+        - cell "5"
+      - button "View details for baseline-net-b":
+        - cell /\d+\.\d+\.0\.0/
+        - cell "baseline-site"
+        - cell /\d+%/
+        - cell /\d+/
+      - button "View details for baseline-net-a":
+        - cell /\d+\.\d+\.0\.0/
+        - cell "baseline-site"
+        - cell /\d+%/
+        - cell /\d+/
   - heading "Hosts Needing Attention" [level=2]
-  - text: — shown
+  - text: 2 shown
   - 'button "About: Hosts Needing Attention"': "About: ⓘ"
   - button "Hide Hosts Needing Attention": Hide ✕
   - button "Move Hosts Needing Attention": Move ⠿
-  - text: Hosts feed unavailable
+  - table:
+    - rowgroup:
+      - row "Hostname Status":
+        - columnheader "Hostname"
+        - columnheader "Status"
+    - rowgroup:
+      - button "View details for baseline-host-a":
+        - cell "baseline-host-a"
+        - cell "ok"
+      - button "View details for baseline-host-b":
+        - cell "baseline-host-b"
+        - cell "degraded"
   - heading "DNS Zone Issues" [level=2]
-  - text: — zones
+  - text: 1 zones
   - 'button "About: DNS Zone Issues"': "About: ⓘ"
   - button "Hide DNS Zone Issues": Hide ✕
   - button "Move DNS Zone Issues": Move ⠿
-  - text: DNS zones feed unavailable
+  - table:
+    - rowgroup:
+      - row "Zone Issues":
+        - columnheader
+        - columnheader "Zone"
+        - columnheader "Issues"
+    - rowgroup:
+      - button "View details for dns/auth_zone/baseline-2":
+        - cell "1"
+        - cell "other.example."
+        - cell "low ttl"

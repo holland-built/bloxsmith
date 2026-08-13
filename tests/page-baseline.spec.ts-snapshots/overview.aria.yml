@@ -15,37 +15,82 @@
   - button "About kpi-stack": ⓘ
   - button "Hide Leases & Subnets": ✕
   - button "Move Leases & Subnets": ⠿
-  - button "Active Leases 0"
-  - button "Subnets (loaded rows) 0"
-  - button /Subnets ≥\d+% \(loaded rows\) 0/
+  - button "Active Leases 1 util of loaded rows (sorted), not history or estate":
+    - text: ""
+    - img
+    - text: ""
+  - button "Subnets 3 util of loaded rows (sorted), not history or estate":
+    - text: ""
+    - img
+    - text: ""
+  - button /Subnets ≥\d+% 1 util of loaded rows \(sorted\), not history or estate/:
+    - text: ""
+    - img
+    - text: ""
   - heading "Top Consumers" [level=2]
-  - text: /addresses used · top \d+ · estate total unknown/
+  - text: /addresses used · top \d+ of 3 subnets/
   - 'button "About: Top Consumers"': "About: ⓘ"
   - button "Hide Top Consumers": Hide ✕
   - button "Move Top Consumers": Move ⠿
-  - text: no data
+  - application
   - heading "Subnet Heatmap" [level=2]
-  - text: util by subnet — 0 loaded
+  - text: util by subnet — 3 loaded of 3
   - 'button "About: Subnet Heatmap"': "About: ⓘ"
   - button "Hide Subnet Heatmap": Hide ✕
   - button "Move Subnet Heatmap": Move ⠿
-  - text: no data
+  - img
+  - text: /ok >\d+% >\d+%/
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
   - button "Hide Host Status": Hide ✕
   - button "Move Host Status": Move ⠿
-  - text: no data
+  - application
+  - text: 2 hosts
+  - button /Degraded \d+%/
+  - button /Other \d+%/
   - heading "Top Subnets by Utilization" [level=2]
-  - text: /excl\. \/\d+–\/\d+ infra links 0 loaded/
+  - text: /excl\. \/\d+–\/\d+ infra links showing 3 of 3/
   - textbox "Filter subnets":
     - /placeholder: Filter…
   - combobox:
     - option "All sites" [selected]
+    - option "baseline-site"
+    - option "other-site"
   - button "Export CSV"
   - 'button "About: Top Subnets by Utilization"': "About: ⓘ"
   - button "Hide Top Subnets by Utilization": Hide ✕
   - button "Move Top Subnets by Utilization": Move ⠿
-  - text: no data
+  - table:
+    - rowgroup:
+      - row "Network Site Utilization Status Free":
+        - columnheader "Network":
+          - button "Network"
+        - columnheader "Site":
+          - button "Site"
+        - columnheader "Utilization":
+          - button "Utilization"
+        - columnheader "Status"
+        - columnheader "Free":
+          - button "Free"
+    - rowgroup:
+      - button "View details for row":
+        - cell /\d+\.\d+\.0\.0/
+        - cell "other-site"
+        - cell /\d+%/
+        - cell "Critical"
+        - cell "5 free"
+      - button "View details for row":
+        - cell /\d+\.\d+\.0\.0/
+        - cell "baseline-site"
+        - cell /\d+%/
+        - cell "Warning"
+        - cell /\d+ free/
+      - button "View details for row":
+        - cell /\d+\.\d+\.0\.0/
+        - cell "baseline-site"
+        - cell /\d+%/
+        - cell "Healthy"
+        - cell /\d+ free/
   - heading "License Inventory" [level=2]
   - text: 0 licenses
   - 'button "About: License Inventory"': "About: ⓘ"

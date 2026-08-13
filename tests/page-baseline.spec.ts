@@ -52,27 +52,21 @@ import { installFixtures, HAS_FIXTURES, FIXED_NOW } from './page-fixtures';
 // turns this file into a rubber stamp, which is the failure mode it is most
 // exposed to.
 
-// The 10 tab ids that render cleanly with no tenant, plus the hidden dossier
-// page. Measured 2026-08-12 by `bash scripts/e2e.sh tests/tabs-smoke.spec.ts`
-// with no credentials: 10 passed, 5 failed.
-const COVERED = [
-  'overview', 'daily', 'network', 'dns', 'security',
-  'infra', 'assets', 'incidents', 'audit', 'ai',
-];
-
 // #dossier is routable but not in the nav (HIDDEN_PAGES, ui/src/App.jsx) and it
 // is a view OF a search, so it needs a query to have anything to be. The literal
 // is fixed and meaningless on purpose — it must never resolve to real tenant data.
 const DOSSIER_QUERY = 'dossier?q=baseline.example';
 
-// The five tabs with NO baseline, and why. These are declared as skipped tests
-// rather than omitted, so `no baseline` appears in the run output every time
-// and the hole cannot be forgotten. All five fail tabs-smoke credential-free
-// for the same measured reason: their upstream calls die on
-// `dial tcp: lookup csp.invalid: no such host` and the resulting console errors
-// are real errors, not empty states. They are the tier-2 fixture work, and they
-// are FIRST in that queue because they are the write-capable tabs.
-const UNPROVEN = ['changes', 'provision', 'selfservice', 'editor', 'drift'];
+// Pages with NO baseline, and why. Declared as skipped tests rather than omitted,
+// so the hole prints on every run and cannot be forgotten.
+//
+// EMPTY as of 2026-08-13, and kept anyway. It held five tabs — changes,
+// provision, selfservice, editor, drift — which had no baseline at all because
+// their upstream calls died on `dial tcp: lookup csp.invalid: no such host`.
+// Fixtures closed all five. The list stays so the next page that turns out to be
+// unrecordable gets DECLARED here with its measured reason instead of quietly
+// never being added.
+const UNPROVEN: string[] = [];
 
 // Pinned, because the ubuntu CI runner does not share a laptop's locale or zone
 // and any rendered date would differ between the two.
@@ -147,28 +141,14 @@ async function readyMain(page: import('@playwright/test').Page, layoutKey: strin
   return page.getByRole('main');
 }
 
-for (const id of COVERED) {
-  if (HAS_FIXTURES.includes(id)) continue; // covered by the tier-2 block below
-  test(`page "${id}" body matches its baseline`, async ({ page }) => {
-    await page.goto(`/#${id}`);
-    const main = await readyMain(page, id);
-    await expect(main).toMatchAriaSnapshot({ name: `${id}.aria.yml` });
-  });
-}
-
 // ---------------------------------------------------------------------------
-// TIER 2 — pages driven to a healthy state with fake API responses.
+// Every routable page, driven to a healthy state with fake API responses.
 //
-// These prove strictly more than the tier-1 block above: every feed reports
-// `ok`, so the page renders as it does for a working tenant rather than as a
-// wall of "feed unavailable". That is the only way the five write-capable tabs
-// get a baseline at all — with no backend they do not merely look empty, they
-// log real console errors.
-//
-// A page moves from the tier-1 list to here by gaining an entry in
-// tests/page-fixtures.ts. The tier-1 baseline is DELETED in the same commit:
-// two baselines for one page means the weaker one silently becomes the one
-// nobody updates.
+// There used to be a second, weaker loop above this one for pages captured with
+// no backend at all. It is gone: every page has fixtures now, so keeping a
+// no-backend path would only leave a way for a new page to get the weak
+// treatment by default. A page with no fixtures belongs in UNPROVEN, declared
+// and visible, not silently baselined against a wall of "feed unavailable".
 // ---------------------------------------------------------------------------
 for (const id of HAS_FIXTURES) {
   test(`page "${id}" body matches its baseline (healthy, faked backend)`, async ({ page }) => {
@@ -197,17 +177,6 @@ for (const id of HAS_FIXTURES) {
   });
 }
 
-test('page "dossier" body matches its baseline', async ({ page }) => {
-  await page.goto(`/#${DOSSIER_QUERY}`);
-  // dossier is not a tab and owns no layout key; pass its id so the assertion
-  // still proves no stray view exists under that name.
-  const main = await readyMain(page, 'dossier');
-  await expect(main).toMatchAriaSnapshot({ name: 'dossier.aria.yml' });
-});
-
-// Whatever is left in UNPROVEN once the fixture list is subtracted. This loop
-// is deliberately kept even when it produces nothing: the next page that turns
-// out to be unrecordable gets declared here rather than quietly dropped.
 for (const id of UNPROVEN.filter((x) => !HAS_FIXTURES.includes(x))) {
   // eslint-disable-next-line no-empty-function
   test.fixme(`page "${id}" has NO baseline — upstream failure makes it unrecordable without fixtures`, async () => {

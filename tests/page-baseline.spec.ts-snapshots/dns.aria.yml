@@ -6,42 +6,114 @@
   - 'button /About: DNS Query Rate — \d+[hmsp]+/': "About: ⓘ"
   - button /Hide DNS Query Rate — \d+[hmsp]+/: Hide ✕
   - button /Move DNS Query Rate — \d+[hmsp]+/: Move ⠿
-  - text: DNS query rate feed unavailable
+  - text: /\d+ ▲ \d+\.\d+% vs first hour/
+  - application: /\d+:\d+ AM \d+:\d+ AM/
   - button "About dns-zone-kpis": ⓘ
   - button "Hide Zone Counts": ✕
   - button "Move Zone Counts": ⠿
-  - text: DNS zones feed unavailable
+  - text: Zones 2 Zones w/ issues 1 Anomalies 1
   - heading "DNS Services" [level=2]
+  - text: 1 services
   - 'button "About: DNS Services"': "About: ⓘ"
   - button "Hide DNS Services": Hide ✕
   - button "Move DNS Services": Move ⠿
-  - text: DNS services feed unavailable
+  - table:
+    - rowgroup:
+      - row "Name Comment Pool ID":
+        - columnheader "Name"
+        - columnheader "Comment"
+        - columnheader "Pool ID"
+    - rowgroup:
+      - row "baseline-dns-service baseline pool/baseline-1":
+        - cell "baseline-dns-service"
+        - cell "baseline"
+        - cell "pool/baseline-1"
   - heading "Query Volume — 7d" [level=2]
-  - text: feed unavailable
   - 'button "About: Query Volume — 7d"': "About: ⓘ"
   - button "Hide Query Volume — 7d": Hide ✕
   - button "Move Query Volume — 7d": Move ⠿
-  - text: no data
+  - application
   - heading "DNS Zones" [level=2]
-  - text: 0 zones
+  - text: 2 zones
   - textbox "Filter zones":
     - /placeholder: Filter…
   - 'button "About: DNS Zones"': "About: ⓘ"
   - button "Hide DNS Zones": Hide ✕
   - button "Move DNS Zones": Move ⠿
-  - text: DNS zones feed unavailable
+  - table:
+    - rowgroup:
+      - row "Zone View Records TTL":
+        - columnheader "Zone":
+          - button "Zone"
+        - columnheader "View":
+          - button "View"
+        - columnheader "Records":
+          - button "Records"
+        - columnheader "TTL":
+          - button "TTL"
+    - rowgroup:
+      - row /baseline\.example\. baseline-view \d+ \d+/:
+        - cell "baseline.example."
+        - cell "baseline-view"
+        - cell /\d+/
+        - cell /\d+/
+      - row /other\.example\. baseline-view 3 \d+/:
+        - cell "other.example."
+        - cell "baseline-view"
+        - cell "3"
+        - cell /\d+/
   - heading "DNSSEC Health" [level=2]
+  - text: 1 unsigned
   - 'button "About: DNSSEC Health"': "About: ⓘ"
   - button "Hide DNSSEC Health": Hide ✕
   - button "Move DNSSEC Health": Move ⠿
-  - text: DNSSEC feed unavailable
+  - text: /1 signed 1 unsigned \d+\.\d+% signed share \(of 2\)/
+  - table:
+    - rowgroup:
+      - row "Zone View":
+        - columnheader "Zone"
+        - columnheader "View"
+    - rowgroup:
+      - row "other.example. baseline-view":
+        - cell "other.example."
+        - cell "baseline-view"
   - heading "RPZ Policy Zones" [level=2]
+  - text: 1 zones
   - 'button "About: RPZ Policy Zones"': "About: ⓘ"
   - button "Hide RPZ Policy Zones": Hide ✕
   - button "Move RPZ Policy Zones": Move ⠿
-  - text: RPZ feed unavailable
+  - table:
+    - rowgroup:
+      - row "Zone Severity Policy Override Type Status":
+        - columnheader "Zone"
+        - columnheader "Severity"
+        - columnheader "Policy Override"
+        - columnheader "Type"
+        - columnheader "Status"
+    - rowgroup:
+      - row "rpz.baseline.example. HIGH NONE local Enabled":
+        - cell "rpz.baseline.example."
+        - cell "HIGH"
+        - cell "NONE"
+        - cell "local"
+        - cell "Enabled"
   - heading "DTC Load-Balanced Names" [level=2]
+  - text: 1 names
   - 'button "About: DTC Load-Balanced Names"': "About: ⓘ"
   - button "Hide DTC Load-Balanced Names": Hide ✕
   - button "Move DTC Load-Balanced Names": Move ⠿
-  - text: DTC LBDN feed unavailable
+  - table:
+    - rowgroup:
+      - row "Name Policy Precedence TTL Status":
+        - columnheader "Name"
+        - columnheader "Policy"
+        - columnheader "Precedence"
+        - columnheader "TTL"
+        - columnheader "Status"
+    - rowgroup:
+      - row /baseline-lbdn baseline-policy \d+ \d+ Enabled/:
+        - cell "baseline-lbdn"
+        - cell "baseline-policy"
+        - cell /\d+/
+        - cell /\d+/
+        - cell "Enabled"

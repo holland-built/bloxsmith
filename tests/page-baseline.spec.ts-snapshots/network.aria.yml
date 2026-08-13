@@ -2,32 +2,96 @@
   - heading "Network" [level=1]
   - button "Arrange panels"
   - heading "Utilization Distribution" [level=2]
-  - text: — loaded (count unavailable)
+  - text: 3 loaded of 3 total
   - 'button "About: Utilization Distribution"': "About: ⓘ"
   - button "Hide Utilization Distribution": Hide ✕
   - button "Move Utilization Distribution": Move ⠿
-  - text: Subnets feed unavailable
+  - application: /<\d+% \d+–\d+% >\d+% 0 1 2 3 4/
   - heading "IPAM Spaces — Top Used" [level=2]
   - text: addresses used
   - 'button "About: IPAM Spaces — Top Used"': "About: ⓘ"
   - button "Hide IPAM Spaces — Top Used": Hide ✕
   - button "Move IPAM Spaces — Top Used": Move ⠿
-  - text: IPAM feed unavailable
+  - text: /Baseline Space \d+ Other Space \d+/
   - heading "DHCP Leases" [level=2]
-  - text: 0 of 0
+  - text: 2 of 2
   - textbox "Search address, hostname, MAC…"
   - combobox:
     - option "All states" [selected]
+    - option "active"
+    - option "expired"
   - 'button "About: DHCP Leases"': "About: ⓘ"
   - button "Hide DHCP Leases": Hide ✕
   - button "Move DHCP Leases": Move ⠿
-  - text: DHCP leases feed unavailable
+  - table:
+    - rowgroup:
+      - row "Address Hostname Ends Hardware State":
+        - columnheader "Address":
+          - button "Address"
+        - columnheader "Hostname":
+          - button "Hostname"
+        - columnheader "Ends":
+          - button "Ends"
+        - columnheader "Hardware":
+          - button "Hardware"
+        - columnheader "State":
+          - button "State"
+    - rowgroup:
+      - row /\d+\.\d+\.0\.5 baseline-host-a 1\/1\/\d+, 6:\d+:\d+ PM \d+:\d+:5e:\d+:\d+:\d+ active/:
+        - cell /\d+\.\d+\.0\.5/
+        - cell "baseline-host-a"
+        - cell /1\/1\/\d+, 6:\d+:\d+ PM/
+        - cell /\d+:\d+:5e:\d+:\d+:\d+/
+        - cell "active"
+      - row /\d+\.\d+\.0\.9 baseline-host-b 1\/1\/\d+, \d+:\d+:\d+ AM \d+:\d+:5e:\d+:\d+:\d+ expired/:
+        - cell /\d+\.\d+\.0\.9/
+        - cell "baseline-host-b"
+        - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
+        - cell /\d+:\d+:5e:\d+:\d+:\d+/
+        - cell "expired"
   - heading "Which Subnets Run Out First?" [level=2]
   - text: /excl\. \/\d+–\/\d+ infra links/
   - textbox "Filter…"
   - combobox:
     - option "All sites" [selected]
+    - option "baseline-site"
+    - option "other-site"
   - 'button "About: Which Subnets Run Out First?"': "About: ⓘ"
   - button "Hide Which Subnets Run Out First?": Hide ✕
   - button "Move Which Subnets Run Out First?": Move ⠿
-  - text: Subnets feed unavailable
+  - table:
+    - rowgroup:
+      - row "Network Site Utilization Status Used Free":
+        - columnheader "Network":
+          - button "Network"
+        - columnheader "Site":
+          - button "Site"
+        - columnheader "Utilization":
+          - button "Utilization"
+        - columnheader "Status"
+        - columnheader "Used":
+          - button "Used"
+        - columnheader "Free":
+          - button "Free"
+    - rowgroup:
+      - row /\d+\.\d+\.0\.0 other-site \d+% Critical \d+ 5 free/:
+        - cell /\d+\.\d+\.0\.0/
+        - cell "other-site"
+        - cell /\d+%/
+        - cell "Critical"
+        - cell /\d+/
+        - cell "5 free"
+      - row /\d+\.\d+\.0\.0 baseline-site \d+% Warning \d+ \d+ free/:
+        - cell /\d+\.\d+\.0\.0/
+        - cell "baseline-site"
+        - cell /\d+%/
+        - cell "Warning"
+        - cell /\d+/
+        - cell /\d+ free/
+      - row /\d+\.\d+\.0\.0 baseline-site \d+% Healthy \d+ \d+ free/:
+        - cell /\d+\.\d+\.0\.0/
+        - cell "baseline-site"
+        - cell /\d+%/
+        - cell "Healthy"
+        - cell /\d+/
+        - cell /\d+ free/

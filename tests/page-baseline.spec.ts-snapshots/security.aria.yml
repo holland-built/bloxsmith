@@ -2,68 +2,137 @@
   - heading "Security" [level=1]
   - button "Arrange panels"
   - heading "Threat Events — by Severity" [level=2]
+  - text: 2 events
   - 'button "About: Threat Events — by Severity"': "About: ⓘ"
   - button "Hide Threat Events — by Severity": Hide ✕
   - button "Move Threat Events — by Severity": Move ⠿
-  - text: Threat feed unavailable threat-event feed unavailable
+  - text: critical 1 high 2 medium 3 low 4
+  - application: /1:\d+ 3:\d+ 5:\d+ 7:\d+ 9:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+ \d+:\d+/
   - heading "Response Summary" [level=2]
   - 'button "About: Response Summary"': "About: ⓘ"
   - button "Hide Response Summary": Hide ✕
   - button "Move Response Summary": Move ⠿
-  - text: Threat feed unavailable threat-event feed unavailable
+  - text: /Unacked Critical 0 Blocked \d+ Logged 8 Total Events \d+/
   - heading "Triage Inbox" [level=2]
   - button "all"
   - button "critical"
   - button "high"
   - button "medium"
   - button "low"
+  - text: "2"
   - 'button "About: Triage Inbox"': "About: ⓘ"
   - button "Hide Triage Inbox": Hide ✕
   - button "Move Triage Inbox": Move ⠿
-  - text: Threat feed unavailable threat-event feed unavailable
+  - table:
+    - rowgroup:
+      - row "Ack Block Severity Query Action Time":
+        - columnheader "Ack"
+        - columnheader "Block"
+        - columnheader "Severity":
+          - button "Severity"
+        - columnheader "Query":
+          - button "Query"
+        - columnheader "Action":
+          - button "Action"
+        - columnheader "Time":
+          - button "Time"
+    - rowgroup:
+      - row /Block HIGH bad\.baseline\.example BLOCK 1\/1\/\d+, \d+:\d+:\d+ AM/:
+        - cell:
+          - checkbox
+        - cell "Block":
+          - button "Block"
+        - cell "HIGH"
+        - cell "bad.baseline.example"
+        - cell "BLOCK"
+        - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
+      - row /Block MEDIUM watch\.baseline\.example LOG 1\/1\/\d+, 8:\d+:\d+ AM/:
+        - cell:
+          - checkbox
+        - cell "Block":
+          - button "Block"
+        - cell "MEDIUM"
+        - cell "watch.baseline.example"
+        - cell "LOG"
+        - cell /1\/1\/\d+, 8:\d+:\d+ AM/
   - heading "Lookalike Domains" [level=2]
-  - text: — detected
+  - text: 1 detected
   - 'button "About: Lookalike Domains"': "About: ⓘ"
   - button "Hide Lookalike Domains": Hide ✕
   - button "Move Lookalike Domains": Move ⠿
-  - text: Lookalike Domains service unavailable
+  - table:
+    - rowgroup:
+      - row "Lookalike Target Suspicious":
+        - columnheader "Lookalike":
+          - button "Lookalike"
+        - columnheader "Target":
+          - button "Target"
+        - columnheader "Suspicious":
+          - button "Suspicious"
+    - rowgroup:
+      - row "baselíne.example baseline.example yes":
+        - cell "baselíne.example"
+        - cell "baseline.example"
+        - cell "yes"
   - heading "CTEM Exposure" [level=2]
   - 'button "About: CTEM Exposure"': "About: ⓘ"
   - button "Hide CTEM Exposure": Hide ✕
   - button "Move CTEM Exposure": Move ⠿
-  - text: CTEM exposure feed unavailable
+  - text: no data
   - heading "Asset Insights" [level=2]
   - 'button "About: Asset Insights"': "About: ⓘ"
   - button "Hide Asset Insights": Hide ✕
   - button "Move Asset Insights": Move ⠿
-  - text: Asset insights unavailable
+  - text: /Total Findings \d+ baseline/
   - heading "Exposures" [level=2]
   - 'button "About: Exposures"': "About: ⓘ"
   - button "Hide Exposures": Hide ✕
   - button "Move Exposures": Move ⠿
-  - text: Exposures feed unavailable upstream exposures fetch failed
+  - text: no exposures reported
   - heading "Asset Risk" [level=2]
   - 'button "About: Asset Risk"': "About: ⓘ"
   - button "Hide Asset Risk": Hide ✕
   - button "Move Asset Risk": Move ⠿
-  - text: Asset risk feed unavailable
+  - text: no asset risk data
   - heading "Exposed Surface" [level=2]
+  - text: 0 hostnames · 0 IPs
   - 'button "About: Exposed Surface"': "About: ⓘ"
   - button "Hide Exposed Surface": Hide ✕
   - button "Move Exposed Surface": Move ⠿
-  - text: Exposed surface feeds unavailable upstream response too large
+  - text: Showing 0 of 0 no hostnames reported Showing 0 of 0 no IPs reported
   - heading "CTEM Assets" [level=2]
   - 'button "About: CTEM Assets"': "About: ⓘ"
   - button "Hide CTEM Assets": Hide ✕
   - button "Move CTEM Assets": Move ⠿
-  - text: CTEM assets feed unavailable
+  - text: no CTEM asset data
   - heading "Threat Feed Activity" [level=2]
   - 'button "About: Threat Feed Activity"': "About: ⓘ"
   - button "Hide Threat Feed Activity": Hide ✕
   - button "Move Threat Feed Activity": Move ⠿
-  - text: Threat feed activity unavailable
+  - text: /\d+ Blocked 0 Allowed/
+  - application: /Dec \d+ Dec \d+/
   - heading "SOC Insights" [level=2]
+  - text: "1"
   - 'button "About: SOC Insights"': "About: ⓘ"
   - button "Hide SOC Insights": Hide ✕
   - button "Move SOC Insights": Move ⠿
-  - text: SOC insights unavailable SOC Insights (security actions) unavailable (upstream error).
+  - table:
+    - rowgroup:
+      - row "Threat Severity Status Events Last Seen":
+        - columnheader "Threat":
+          - button "Threat"
+        - columnheader "Severity":
+          - button "Severity"
+        - columnheader "Status":
+          - button "Status"
+        - columnheader "Events":
+          - button "Events"
+        - columnheader "Last Seen":
+          - button "Last Seen"
+    - rowgroup:
+      - row /Baseline Insight HIGH Active 9 1\/1\/\d+/:
+        - cell "Baseline Insight"
+        - cell "HIGH"
+        - cell "Active"
+        - cell "9"
+        - cell /1\/1\/\d+/
