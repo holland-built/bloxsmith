@@ -52,13 +52,22 @@ const LIVE_TENANT_SPECS: string[] = [];
 // font rendering shifts it; the other four look like platform layout/timing
 // differences. UNPROVEN ON LINUX, not known-good: until someone tunes them,
 // these checks only gate a hand-run on macOS. Follow-up, not a resolution.
+// Five of the six came off this list on 2026-08-13 once tests/page-fixtures.ts
+// gave them a tenant. The original entry said the other four "look like platform
+// layout/timing differences" — honest about being a guess, and wrong: the single
+// run behind it (31499474048) had no tenant AND a different OS, so it could not
+// separate the two. The same tests then failed on macOS under scripts/e2e.sh,
+// which settled which variable mattered.
+//
+// layout-persist STAYS, and it is the one entry with a real diagnosis. It saves a
+// layout, SIGTERMs the server and reads the layout back; the round trip has to
+// reach real storage, so the fixture set — which answers GET /api/views with
+// {views: []} — would make it save nothing and read back nothing. It would either
+// fail for a reason unrelated to the platform or, worse, pass while proving
+// nothing. Giving it fixtures requires passing /api/views through to the server,
+// which is a separate piece of work.
 const LINUX_CI_UNPROVEN_SPECS = [
   '**/layout-persist.spec.ts',
-  '**/contrast.spec.ts',
-  '**/drilldown.spec.ts',
-  '**/hidden-panels.spec.ts',
-  '**/layout-drag.spec.ts',
-  '**/theme.spec.ts',
 ];
 
 export default defineConfig({

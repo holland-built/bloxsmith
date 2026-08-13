@@ -112,9 +112,16 @@ const LEASES = [
   { addr: '10.10.0.5', host: 'baseline-host-a', state: 'active', subnet: '10.10.0.0/24', subnet_id: 'ipam/subnet/baseline-1' },
   { addr: '10.20.0.9', host: 'baseline-host-b', state: 'expired', subnet: '10.20.0.0/24', subnet_id: 'ipam/subnet/baseline-2' },
 ];
+// THREE statuses, not two. The host-status legend renders one entry per status
+// present, and tests/drilldown.spec.ts clicks the "Offline" entry to prove it
+// drills through to Infra with the status carried across. With only ok and
+// degraded there is no Offline entry to click and that spec fails on a fixture
+// gap that looks exactly like a platform difference — which is how it spent
+// months mis-diagnosed in LINUX_CI_UNPROVEN_SPECS.
 const HOSTS = [
   { id: 'infra/host/baseline-1', ip: '10.10.0.2', name: 'baseline-host-a', status: 'ok', type: 'onprem' },
   { id: 'infra/host/baseline-2', ip: '10.20.0.2', name: 'baseline-host-b', status: 'degraded', type: 'onprem' },
+  { id: 'infra/host/baseline-3', ip: '10.30.0.2', name: 'baseline-host-c', status: 'offline', type: 'onprem' },
 ];
 const ZONES = [
   { id: 'dns/auth_zone/baseline-1', fqdn: 'baseline.example.', view: 'baseline-view', records: 12, ttl: 3600, neg_ttl: 900, dnssec_status: 'SIGNED', anomaly: false, issues: [] },
@@ -562,6 +569,21 @@ export async function installFixtures(page: Page, pageId: string): Promise<Fixtu
     const req = route.request();
     const pathname = new URL(req.url()).pathname;
     const key = `${req.method()} ${pathname}`;
+
+    // Saved-view storage is REAL STATE and is passed through to the server, not
+    // faked. tests/layout-drag.spec.ts and tests/layout-persist.spec.ts save a
+    // layout and read it back — a round trip that only means something if it
+    // reaches storage. Faking it made the save vanish and the read-back 404,
+    // which is what kept layout-drag looking like a platform failure. Safe to
+    // pass through: scripts/e2e.sh points VAULT_DIR at a temp dir, so the
+    // server starts with no saved views and the operator's real ones are never
+    // touched. The GET handler below still exists for pages that only READ the
+    // list — it is simply never reached now, and is kept as documentation of
+    // the shape.
+    if (pathname === '/api/views' || pathname.startsWith('/api/views/')) {
+      hit.add('GET /api/views');
+      return route.fallback();
+    }
     const h = handlers.find((x) => x.method === req.method() && x.path === pathname);
     if (!h) {
       unmatched.push(key);
