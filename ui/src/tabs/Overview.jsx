@@ -4,7 +4,6 @@ import { useHasArranged } from '../lib/arrangedOnce.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, TabIntro, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
-import { useThemeColors } from '../lib/theme.jsx'
 
 // A number the backend actually measured, or null when it did not.
 //
@@ -296,7 +295,6 @@ function LicenseInventory({ licenses, panelId }) {
 
 function DnsHero({ dns, panelId }) {
   const { COLORS } = useChartTheme()
-  const theme = useThemeColors()
   const rows = dns.data?.rows ?? []
   const status = dns.data?.status
   const chartData = rows.map((r) => {
@@ -436,7 +434,6 @@ function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus, panelI
 
 function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
   const { COLORS } = useChartTheme()
-  const theme = useThemeColors()
   const tap = useTapThenDrill()
   // Rank by addresses USED, not util% — util ranking is a wall of 100% /32 infra links
   // (learned in old app: commits 7789ae8 / 46e591c)

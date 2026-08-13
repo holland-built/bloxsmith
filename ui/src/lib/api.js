@@ -256,7 +256,12 @@ export function useApi(url, { poll, coldMs } = {}) {
         }, delay)
       })
       .finally(cancel)
-  }, [url, poll])
+    // coldMs is read inside (budgetMs above) and was missing from this list, so
+    // a call site that changed it would have kept fetching on the old budget.
+    // Safe to add: every caller passes a module constant
+    // (tabs/Assets.jsx: SLOW_COLD_TIMEOUT_MS), so `load` does not churn identity
+    // and the effect at the bottom of this hook does not refire.
+  }, [url, poll, coldMs])
 
   /** Start over: full attempt budget, optionally after a spreading delay. */
   const retry = useCallback(

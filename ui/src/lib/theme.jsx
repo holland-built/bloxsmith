@@ -5,7 +5,7 @@ const ThemeContext = createContext(null)
 function readStoredMode() {
   try {
     return localStorage.getItem('theme') || 'dark'
-  } catch (e) {
+  } catch {
     return 'dark'
   }
 }
@@ -27,7 +27,7 @@ export function ThemeProvider({ children }) {
     setModeState(next)
     try {
       localStorage.setItem('theme', next)
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, [])
@@ -89,5 +89,12 @@ export function useThemeColors() {
     pillOkFg: cssVar('--pill-ok-fg'),
     pillNeutralBg: cssVar('--pill-neutral-bg'),
     pillNeutralFg: cssVar('--pill-neutral-fg'),
+    // `effective` is not READ inside this callback, which is why oxlint calls it
+    // unnecessary — and it is exactly the dependency this memo needs. Every value
+    // above comes from cssVar(), i.e. from the DOM, and the DOM changes when the
+    // theme does. `effective` is the only signal that it changed. Remove it and
+    // every colour in the app freezes at whichever theme happened to be active on
+    // first render. Kept deliberately; the rule cannot see through the DOM read.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }), [effective])
 }
