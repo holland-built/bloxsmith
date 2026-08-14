@@ -345,9 +345,14 @@
       {
         "name": "NstarDnsActivity",
         "title": "Nstar DNS Activity",
-        "description": "Raw DNS query activity from on-premises N-Star DNS appliances, with one row per individual DNS query event. Use for questions about DNS query volumes, lookup patterns, response codes, and client device identification. Supports filtering by query name, query type, response code, client device (IP, hostname, MAC, device name), DNS view, site, IP space, user/device groups, and time range.",
+        "description": "Deprecated \u2014 migrate to OnPremDnsActivityV1. Retained for backward compatibility only; removed on 2027-07-16. Raw DNS query activity from on-premises N-Star DNS appliances, with one row per individual DNS query event.",
         "type": "cube",
         "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "OnPremDnsActivityV1",
+          "sunsetDate": "2027-07-16",
+          "version": "1.0.0",
           "supportedOperators": [
             "equals",
             "notEquals",
@@ -360,9 +365,14 @@
       {
         "name": "NstarLeaseActivity",
         "title": "Nstar Lease Activity",
-        "description": "DHCP lease activity data from BloxOne DDI with one row per lease event. Use for questions about DHCP lease trends, top client requests, lease utilization, and lease lifecycle operations (create, update, delete, abandon). Supports filtering by client hostname, MAC address, lease IP, protocol (DHCPv4/DHCPv6), lease state, IP space, and subnet range.",
+        "description": "Deprecated \u2014 migrate to OnPremDhcpLeaseActivityV1. Retained for backward compatibility only; removed on 2027-07-16. DHCP lease activity from on-premises DNS/DHCP appliances with one row per lease event.",
         "type": "cube",
         "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "OnPremDhcpLeaseActivityV1",
+          "sunsetDate": "2027-07-16",
+          "version": "1.0.0",
           "ai_context": "\u26a0\ufe0f NIOS DHCP lease logs are not queryable via this cube. This is a known limitation. Instead of telling the user that there are no lease records for a NIOS DHCP server, you should make clear that this is a known limitation.",
           "supportedOperators": [
             "equals",
@@ -430,16 +440,28 @@
       {
         "name": "HostMetrics",
         "title": "Host Metrics",
-        "description": "Infrastructure health metrics for on-premises hosts running DNS, DHCP, and NTP services, with one row per metric data point per host. Use for questions about host CPU usage, memory utilization, disk space, service status, and capacity monitoring. Supports filtering by service type, host, metric name, country, region, and cloud type. Joins to Hosts for host details.\n\nIMPORTANT: These are internal metric identifiers for querying only.\nWhen presenting results to users, describe what you found without\nmentioning the specific metric names (e.g., say 'DNS queries per second'\ninstead of 'dns_qps_iq_5m').\n\nAvailable Host Metrics:\n\nDNS Query Metrics:\n- dns_qps_iq_5m: DNS queries per second\n- dns_nxrrset_count_iq_5m: Count of DNS queries returning no resource records\n- dns_recursion_count_iq_5m: Count of recursive DNS queries\n- dns_nxdomain_count_iq_5m: Count of DNS queries returning NXDOMAIN\n- dns_servfail_count_iq_5m: Count of DNS queries returning SERVFAIL\n- dns_referral_count_iq_5m: Count of DNS referral responses\n- dns_timeout_rate_iq_5m: Count of DNS timeout responses\n- ddns_ups_iq_5m: Dynamic DNS updates per second\n- cache_hit_ratio_iq_5m: Cache hit ratio for DNS queries\n- object_count_dns_iq_5m: DNS object count (number of records, zones, etc.)\n- dns_refused_count_iq_5m: Count of DNS queries returning REFUSED\n- total_query_count_iq_5m: Total number of DNS queries received\n\nDNS Performance Metrics:\n- dns_success_percent_iq_5m: Percentage of successful DNS queries\n- dns_refused_percent_iq_5m: Percentage of DNS queries returning REFUSED\n- dns_nxdomain_percent_iq_5m: Percentage of DNS queries returning NXDOMAIN\n- dns_servfail_percent_iq_5m: Percentage of DNS queries returning SERVFAIL\n\nDNS Latency Metrics:\n- dns_latency_all_iq_5m: Overall DNS query latency\n- dns_latency_auth_iq_5m: Authoritative DNS server response latency\n- dns_latency_upstream_iq_5m: Upstream DNS server response latency\n\nHost System Metrics:\n- host_cpu_iq_5m: Host CPU utilization\n- host_memory_iq_5m: Host memory utilization\n\nService Status Metrics:\n- dns_status_iq_5m: DNS service health status\n- anycast_status_iq_5m: Anycast service health status\n\nDHCP Metrics:\n- object_count_dhcp_iq_5m: DHCP object count (number of DHCP-related objects)\n- dhcp_discover_iq_5m: Count of DHCPv4 DISCOVER packets received\n- dhcp6_solicit_iq_5m: Count of DHCPv6 SOLICIT packets received\n- dhcp_cumulative_assigned_addresses_iq_5m: Count of newly assigned DHCPv4 addresses\n- dhcp6_cumulative_assigned_nas_iq_5m: Count of newly assigned DHCPv6 non-temporary addresses (NA)\n- dhcp6_cumulative_assigned_pds_iq_5m: Count of newly assigned DHCPv6 prefix delegations (PD)\n- dhcp_declined_addresses_iq_5m: Count of DHCPv4 declined addresses\n- dhcp6_declined_addresses_iq_5m: Count of DHCPv6 declined addresses\n- dhcp_demand_gap_iq_5m: Difference between DHCPv4 demand (DISCOVER) and assigned addresses\n- dhcp6_demand_gap_iq_5m: Difference between DHCPv6 demand (SOLICIT) and assigned NAs/PDs\n- dhcp_lease_reuses_iq_5m: Count of DHCPv4 lease reuses\n",
+        "description": "Deprecated \u2014 migrate to HostMetricsV1. Retained for backward compatibility only; removed on 2027-07-01. Infrastructure health metrics for on-premises hosts running DNS, DHCP, and NTP services, with one row per metric data point per host.\n\nIMPORTANT: These are internal metric identifiers for querying only.\nWhen presenting results to users, describe what you found without\nmentioning the specific metric names (e.g., say 'DNS queries per second'\ninstead of 'dns_qps_iq_5m').\n\nAvailable Host Metrics:\n\nDNS Query Metrics:\n- dns_qps_iq_5m: DNS queries per second\n- dns_nxrrset_count_iq_5m: Count of DNS queries returning no resource records\n- dns_recursion_count_iq_5m: Count of recursive DNS queries\n- dns_nxdomain_count_iq_5m: Count of DNS queries returning NXDOMAIN\n- dns_servfail_count_iq_5m: Count of DNS queries returning SERVFAIL\n- dns_referral_count_iq_5m: Count of DNS referral responses\n- dns_timeout_rate_iq_5m: Count of DNS timeout responses\n- ddns_ups_iq_5m: Dynamic DNS updates per second\n- cache_hit_ratio_iq_5m: Cache hit ratio for DNS queries\n- object_count_dns_iq_5m: DNS object count (number of records, zones, etc.)\n- dns_refused_count_iq_5m: Count of DNS queries returning REFUSED\n- total_query_count_iq_5m: Total number of DNS queries received\n\nDNS Performance Metrics:\n- dns_success_percent_iq_5m: Percentage of successful DNS queries\n- dns_refused_percent_iq_5m: Percentage of DNS queries returning REFUSED\n- dns_nxdomain_percent_iq_5m: Percentage of DNS queries returning NXDOMAIN\n- dns_servfail_percent_iq_5m: Percentage of DNS queries returning SERVFAIL\n\nDNS Latency Metrics:\n- dns_latency_all_iq_5m: Overall DNS query latency\n- dns_latency_auth_iq_5m: Authoritative DNS server response latency\n- dns_latency_upstream_iq_5m: Upstream DNS server response latency\n\nHost System Metrics:\n- host_cpu_iq_5m: Host CPU utilization\n- host_memory_iq_5m: Host memory utilization\n\nService Status Metrics:\n- dns_status_iq_5m: DNS service health status\n- anycast_status_iq_5m: Anycast service health status\n\nDHCP Metrics:\n- object_count_dhcp_iq_5m: DHCP object count (number of DHCP-related objects)\n- dhcp_discover_iq_5m: Count of DHCPv4 DISCOVER packets received\n- dhcp6_solicit_iq_5m: Count of DHCPv6 SOLICIT packets received\n- dhcp_cumulative_assigned_addresses_iq_5m: Count of newly assigned DHCPv4 addresses\n- dhcp6_cumulative_assigned_nas_iq_5m: Count of newly assigned DHCPv6 non-temporary addresses (NA)\n- dhcp6_cumulative_assigned_pds_iq_5m: Count of newly assigned DHCPv6 prefix delegations (PD)\n- dhcp_declined_addresses_iq_5m: Count of DHCPv4 declined addresses\n- dhcp6_declined_addresses_iq_5m: Count of DHCPv6 declined addresses\n- dhcp_demand_gap_iq_5m: Difference between DHCPv4 demand (DISCOVER) and assigned addresses\n- dhcp6_demand_gap_iq_5m: Difference between DHCPv6 demand (SOLICIT) and assigned NAs/PDs\n- dhcp_lease_reuses_iq_5m: Count of DHCPv4 lease reuses\n",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "HostMetricsV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "HostServiceMetrics",
         "title": "Host Service Metrics",
         "description": "Metrics data for hosts and services with managed/unmanaged filtering, including performance, status, and location information. Preferable to HostMetrics for user-facing tasks that require a display name\n\nIMPORTANT: These are internal metric identifiers for querying only.\nWhen presenting results to users, describe what you found without\nmentioning the specific metric names (e.g., say 'DNS queries per second'\ninstead of 'dns_qps_iq_5m').\n\nAvailable Host Metrics:\n\nDNS Query Metrics:\n- dns_qps_iq_5m: DNS queries per second\n- dns_nxrrset_count_iq_5m: Count of DNS queries returning no resource records\n- dns_recursion_count_iq_5m: Count of recursive DNS queries\n- dns_nxdomain_count_iq_5m: Count of DNS queries returning NXDOMAIN\n- dns_servfail_count_iq_5m: Count of DNS queries returning SERVFAIL\n- dns_referral_count_iq_5m: Count of DNS referral responses\n- dns_timeout_rate_iq_5m: Count of DNS timeout responses\n- ddns_ups_iq_5m: Dynamic DNS updates per second\n- cache_hit_ratio_iq_5m: Cache hit ratio for DNS queries\n- object_count_dns_iq_5m: DNS object count (number of records, zones, etc.)\n- dns_refused_count_iq_5m: Count of DNS queries returning REFUSED\n- total_query_count_iq_5m: Total number of DNS queries received\n\nDNS Performance Metrics:\n- dns_success_percent_iq_5m: Percentage of successful DNS queries\n- dns_refused_percent_iq_5m: Percentage of DNS queries returning REFUSED\n- dns_nxdomain_percent_iq_5m: Percentage of DNS queries returning NXDOMAIN\n- dns_servfail_percent_iq_5m: Percentage of DNS queries returning SERVFAIL\n\nDNS Latency Metrics:\n- dns_latency_all_iq_5m: Overall DNS query latency\n- dns_latency_auth_iq_5m: Authoritative DNS server response latency\n- dns_latency_upstream_iq_5m: Upstream DNS server response latency\n\nHost System Metrics:\n- host_cpu_iq_5m: Host CPU utilization\n- host_memory_iq_5m: Host memory utilization\n\nService Status Metrics:\n- dns_status_iq_5m: DNS service health status\n- anycast_status_iq_5m: Anycast service health status\n\nDHCP Metrics:\n- object_count_dhcp_iq_5m: DHCP object count (number of DHCP-related objects)\n- dhcp_discover_iq_5m: Count of DHCPv4 DISCOVER packets received\n- dhcp6_solicit_iq_5m: Count of DHCPv6 SOLICIT packets received\n- dhcp_cumulative_assigned_addresses_iq_5m: Count of newly assigned DHCPv4 addresses\n- dhcp6_cumulative_assigned_nas_iq_5m: Count of newly assigned DHCPv6 non-temporary addresses (NA)\n- dhcp6_cumulative_assigned_pds_iq_5m: Count of newly assigned DHCPv6 prefix delegations (PD)\n- dhcp_declined_addresses_iq_5m: Count of DHCPv4 declined addresses\n- dhcp6_declined_addresses_iq_5m: Count of DHCPv6 declined addresses\n- dhcp_demand_gap_iq_5m: Difference between DHCPv4 demand (DISCOVER) and assigned addresses\n- dhcp6_demand_gap_iq_5m: Difference between DHCPv6 demand (SOLICIT) and assigned NAs/PDs\n- dhcp_lease_reuses_iq_5m: Count of DHCPv4 lease reuses\n",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "HostServiceMetricsV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "ip_history",
@@ -453,9 +475,14 @@
       {
         "name": "IqActions",
         "title": "IQ Actions",
-        "description": "Actions generated by Infoblox IQ, tracking alerts and insights across DNS and infrastructure services",
+        "description": "Deprecated \u2014 migrate to ActionsV1. Retained for backward compatibility only; removed on 2027-07-01. AI-driven recommended actions tracking alerts and insights across DNS and infrastructure services.",
         "type": "cube",
         "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "ActionsV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0",
           "portal_path": [
             "/ai/ddi-actions"
           ]
@@ -464,86 +491,158 @@
       {
         "name": "MSPUtilizationDaily",
         "title": "Msp Utilization Daily",
-        "description": "Daily security service usage metrics across managed tenant accounts for consumption tracking and billing.",
+        "description": "Deprecated \u2014 migrate to MSPUtilizationDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Daily security service usage metrics across managed tenant accounts for consumption tracking and billing.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "MSPUtilizationDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilManagement",
         "title": "Token Util Management",
-        "description": "Token consumption for Universal DDI management objects, with one row per account per object type showing the latest available data. Use for questions about token usage by management object type, current token counts, and data freshness. Supports filtering by object type and account.",
+        "description": "Deprecated \u2014 migrate to TokenUtilManagementV1. Retained for backward compatibility only; removed on 2027-07-01. Token consumption for Universal DDI management objects, with one row per account per object type showing the latest available data. Use for questions about token usage by management object type, current token counts, and data freshness. Supports filtering by object type and account.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilManagementV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilProtoSrvAAS",
         "title": "Token Util Proto Srv Aas",
-        "description": "Hourly token utilization for protocol servers delivered as a service, at the grain of one row per account, instance type, and hour. Use for questions about token consumption volume, server instance counts, and usage trends over time. Supports filtering by instance type and time range. For daily or monthly trend analysis, use TokenUtilProtoSrvAASDaily or TokenUtilProtoSrvAASMonthly. For daily over-limit checks, use TokenUtilProtoSrvAASIsOver.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvAASV1. Retained for backward compatibility only; removed on 2027-07-01. Hourly token utilization for protocol servers delivered as a service, at the grain of one row per account, instance type, and hour. Use for questions about token consumption volume, server instance counts, and usage trends over time. Supports filtering by instance type and time range. For daily or monthly trend analysis, use TokenUtilProtoSrvAASDaily or TokenUtilProtoSrvAASMonthly. For daily over-limit checks, use TokenUtilProtoSrvAASIsOver.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvAASV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilProtoSrvAASIsOver",
         "title": "Token Util Proto Srv Aas Is over",
-        "description": "Daily threshold breach tracking for protocol servers delivered as a service. One row per protocol server instance per day. Use for questions about which as-a-service protocol servers are exceeding token utilization limits, over-limit counts, and threshold breach trends. Supports filtering by instance type, service connection, universal service, and time period.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvAASIsOverV1. Retained for backward compatibility only; removed on 2027-07-01. Daily threshold breach tracking for protocol servers delivered as a service. One row per protocol server instance per day. Use for questions about which as-a-service protocol servers are exceeding token utilization limits, over-limit counts, and threshold breach trends. Supports filtering by instance type, service connection, universal service, and time period.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvAASIsOverV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilProtoSrvSM",
         "title": "Token Util Proto Srv Sm",
-        "description": "Tracks hourly license token utilization for self-managed (on-premises) protocol servers, with one row per account, instance type, and hour. Use for questions about token consumption, server instance counts, and utilization trends over time. Supports filtering by server size tier and time range. For daily per-host detail with over-utilization flags, use TokenUtilProtoSrvSMIsOver. For daily or monthly trend aggregations, use TokenUtilProtoSrvSMDaily or TokenUtilProtoSrvSMMonthly.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvSMV1. Retained for backward compatibility only; removed on 2027-07-01. Tracks hourly license token utilization for self-managed (on-premises) protocol servers, with one row per account, instance type, and hour. Use for questions about token consumption, server instance counts, and utilization trends over time. Supports filtering by server size tier and time range. For daily per-host detail with over-utilization flags, use TokenUtilProtoSrvSMIsOver. For daily or monthly trend aggregations, use TokenUtilProtoSrvSMDaily or TokenUtilProtoSrvSMMonthly.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvSMV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilProtoSrvSMIsOver",
         "title": "Token Util Proto Srv Sm Is over",
-        "description": "Daily per-host utilization for self-managed protocol servers, one row per server per day. Identifies servers exceeding capacity thresholds for QPS, LPS, and managed objects via the is_over flag. Use for questions about which servers are over-utilized, capacity breach counts, and per-host workload metrics. Supports filtering by instance type, host type, and host name. For aggregate token consumption without per-host detail, use TokenUtilProtoSrvSM or TokenUtilProtoSrvSMDaily instead.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvSMIsOverV1. Retained for backward compatibility only; removed on 2027-07-01. Daily per-host utilization for self-managed protocol servers, one row per server per day. Identifies servers exceeding capacity thresholds for QPS, LPS, and managed objects via the is_over flag. Use for questions about which servers are over-utilized, capacity breach counts, and per-host workload metrics. Supports filtering by instance type, host type, and host name. For aggregate token consumption without per-host detail, use TokenUtilProtoSrvSM or TokenUtilProtoSrvSMDaily instead.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvSMIsOverV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilReporting",
         "title": "Token Util Reporting",
-        "description": "Daily token utilization reporting for license entitlements. One row per account per category per day. Use for questions about token consumption, utilization event counts, and usage trends over time. Supports filtering by category and time period. For each account, data reflects the latest non-extrapolated snapshot.",
+        "description": "Deprecated \u2014 migrate to TokenUtilReportingV1. Retained for backward compatibility only; removed on 2027-07-01. Daily token utilization reporting for license entitlements. One row per account per category per day. Use for questions about token consumption, utilization event counts, and usage trends over time. Supports filtering by category and time period. For each account, data reflects the latest non-extrapolated snapshot.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilReportingV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilManagementDaily",
         "title": "Token Util Management Daily",
-        "description": "Daily peak token consumption trends for Universal DDI management objects, with one row per account per object type per day. Use for questions about historical token usage patterns, daily consumption trends, and peak utilization over time. Supports filtering by object type, account, and date range.",
+        "description": "Deprecated \u2014 migrate to TokenUtilManagementDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Daily peak token consumption trends for Universal DDI management objects, with one row per account per object type per day. Use for questions about historical token usage patterns, daily consumption trends, and peak utilization over time. Supports filtering by object type, account, and date range.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilManagementDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilManagementObjectsDaily",
         "title": "Token Util Management Objects Daily",
-        "description": "Daily trend of management object counts at peak utilization hour for Universal DDI license entitlements, with one row per day per object sub-type per deployment category. Use for questions about day-over-day changes in DDI resource counts (DNS zones, IP spaces, DHCP ranges, etc.). Unlike TokenUtilManagementObjects, which shows a latest snapshot, this cube provides historical daily trends. Supports filtering by object type, sub-type, and category.",
+        "description": "Deprecated \u2014 migrate to TokenUtilManagementObjectsDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Daily trend of management object counts and token consumption at peak utilization hour for Universal DDI license entitlements, with one row per day per object sub-type per deployment category. Use for questions about day-over-day changes in DDI resource counts (DNS zones, IP spaces, DHCP ranges, etc.) and their token usage. Unlike TokenUtilManagementObjects, which shows a latest snapshot, this cube provides historical daily trends. Supports filtering by object type, sub-type, and category.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilManagementObjectsDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilProtoSrvAASDaily",
         "title": "Token Util Proto Srv Aas Daily",
-        "description": "Tracks daily token utilization trends for protocol servers delivered as a service, with one row per account, instance type, and day based on peak-hour consumption. Use for questions about daily token usage patterns, consumption trends over time, and server instance counts. For hourly granularity, use TokenUtilProtoSrvAAS. For monthly trends, use TokenUtilProtoSrvAASMonthly. Supports filtering by instance type and date range.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvAASDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Tracks daily token utilization trends for protocol servers delivered as a service, with one row per account, instance type, and day based on peak-hour consumption. Use for questions about daily token usage patterns, consumption trends over time, and server instance counts. For hourly granularity, use TokenUtilProtoSrvAAS. For monthly trends, use TokenUtilProtoSrvAASMonthly. Supports filtering by instance type and date range.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvAASDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilProtoSrvSMDaily",
         "title": "Token Util Proto Srv Sm Daily",
-        "description": "Daily token utilization trends for self-managed protocol servers (NIOS-X on-premises). One row per account per instance type per day, representing the peak-hour snapshot of token consumption. Use for questions about daily token usage trends, server counts by size tier, and day-over-day utilization comparisons. Supports filtering by instance type and date. For hourly granularity, use TokenUtilProtoSrvSM. For monthly trends, use TokenUtilProtoSrvSMMonthly.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvSMDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Daily token utilization trends for self-managed protocol servers (NIOS-X on-premises). One row per account per instance type per day, representing the peak-hour snapshot of token consumption. Use for questions about daily token usage trends, server counts by size tier, and day-over-day utilization comparisons. Supports filtering by instance type and date. For hourly granularity, use TokenUtilProtoSrvSM. For monthly trends, use TokenUtilProtoSrvSMMonthly.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvSMDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       },
       {
         "name": "TokenUtilReportingDaily",
         "title": "Token Util Reporting Daily",
-        "description": "Provides daily historical trend data for token utilization across reporting service categories. One row per account, category, and day, representing the daily high-water-mark of token consumption. Use for questions about token usage trends over time, month-over-month comparisons, and daily consumption patterns. Unlike TokenUtilReporting which shows only the latest snapshot, this cube provides time-series history. Supports filtering by category and time period.",
+        "description": "Deprecated \u2014 migrate to TokenUtilReportingDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Provides daily historical trend data for token utilization across reporting service categories. One row per account, category, and day, representing the daily high-water-mark of token consumption. Use for questions about token usage trends over time, month-over-month comparisons, and daily consumption patterns. Unlike TokenUtilReporting which shows only the latest snapshot, this cube provides time-series history. Supports filtering by category and time period.",
         "type": "cube",
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilReportingDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     ],
     "cube_count": 54,
@@ -49450,7 +49549,7 @@
         "name": "NstarDnsActivity",
         "title": "Nstar DNS Activity",
         "type": "cube",
-        "description": "Raw DNS query activity from on-premises N-Star DNS appliances, with one row per individual DNS query event. Use for questions about DNS query volumes, lookup patterns, response codes, and client device identification. Supports filtering by query name, query type, response code, client device (IP, hostname, MAC, device name), DNS view, site, IP space, user/device groups, and time range.",
+        "description": "Deprecated \u2014 migrate to OnPremDnsActivityV1. Retained for backward compatibility only; removed on 2027-07-16. Raw DNS query activity from on-premises N-Star DNS appliances, with one row per individual DNS query event.",
         "dimensions": [
           {
             "name": "NstarDnsActivity.client_hostname",
@@ -49600,6 +49699,11 @@
         "measure_count": 1,
         "segment_count": 0,
         "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "OnPremDnsActivityV1",
+          "sunsetDate": "2027-07-16",
+          "version": "1.0.0",
           "supportedOperators": [
             "equals",
             "notEquals",
@@ -49729,13 +49833,13 @@
         "name": "NstarLeaseActivity",
         "title": "Nstar Lease Activity",
         "type": "cube",
-        "description": "DHCP lease activity data from BloxOne DDI with one row per lease event. Use for questions about DHCP lease trends, top client requests, lease utilization, and lease lifecycle operations (create, update, delete, abandon). Supports filtering by client hostname, MAC address, lease IP, protocol (DHCPv4/DHCPv6), lease state, IP space, and subnet range.",
+        "description": "Deprecated \u2014 migrate to OnPremDhcpLeaseActivityV1. Retained for backward compatibility only; removed on 2027-07-16. DHCP lease activity from on-premises DNS/DHCP appliances with one row per lease event.",
         "dimensions": [
           {
             "name": "NstarLeaseActivity.client_hostname",
             "title": "Nstar Lease Activity Client Hostname",
             "type": "string",
-            "description": "Hostname of the DHCP client device that requested the lease, as reported by the client. Use when asking about client names, device hostnames, or top client requests. For hardware-level client identification, use mac_address; for OS/device-type classification, use dhcp_fingerprint.",
+            "description": "Hostname of the DHCP client device that requested the lease, as reported by the client. Use when asking about client names, device hostnames, or top client requests. For hardware-level identification, use mac_address; for OS/device-type classification, use dhcp_fingerprint.",
             "primary_key": false,
             "meta": {}
           },
@@ -49751,7 +49855,7 @@
             "name": "NstarLeaseActivity.expiration",
             "title": "Nstar Lease Activity Expiration",
             "type": "time",
-            "description": "Timestamp when the lease record expires from the system, representing data retention rather than DHCP protocol lease duration. Use when asking about record expiration or data currency. Not related to lease_end, which tracks DHCP lease protocol expiration, or timestamp, which tracks when the lease event occurred.",
+            "description": "Timestamp when the lease record expires from the system, representing data retention rather than DHCP protocol lease duration. Use when asking about record expiration or data currency. Not related to lease_end, which tracks DHCP protocol expiration, or timestamp, which tracks when the lease event occurred.",
             "primary_key": false,
             "meta": {}
           },
@@ -49759,7 +49863,7 @@
             "name": "NstarLeaseActivity.fingerprint_status",
             "title": "Nstar Lease Activity Fingerprint Status",
             "type": "string",
-            "description": "Status of the fingerprint-lease matching process for this lease (for example, \"Processed\", \"Early_event_match\", \"Late_event_match\", \"Replace_unmatched\"). Use when asking about fingerprint match results or processing status.",
+            "description": "Status of the fingerprint-lease matching process for this lease (for example, Processed, Early_event_match, Late_event_match, Replace_unmatched). Use when asking about fingerprint match results or processing status.",
             "primary_key": false,
             "meta": {}
           },
@@ -49809,7 +49913,7 @@
             "name": "NstarLeaseActivity.lease_uuid",
             "title": "Nstar Lease Activity Lease UUID",
             "type": "string",
-            "description": "Unique identifier for this DHCP lease instance, used as the primary key for row-level deduplication and record lookup. Use when correlating specific lease events or looking up individual lease records.",
+            "description": "Unique identifier for this DHCP lease instance, used as the primary key for row-level de-duplication and record lookup. Use when correlating specific lease events or looking up individual lease records.",
             "primary_key": true,
             "meta": {}
           },
@@ -49825,7 +49929,7 @@
             "name": "NstarLeaseActivity.protocol",
             "title": "Nstar Lease Activity Protocol",
             "type": "string",
-            "description": "Protocol or lease type, indicating whether this is DHCPv4 or a specific DHCPv6 lease type (NA, TA, PD, etc.). Use when filtering or grouping leases by IP protocol version.",
+            "description": "Protocol or lease type, indicating whether this is DHCPv4 or a specific DHCPv6 lease type (NA, TA, PD). Use when filtering or grouping leases by IP protocol version.",
             "primary_key": false,
             "meta": {}
           },
@@ -49849,7 +49953,7 @@
             "name": "NstarLeaseActivity.state",
             "title": "Nstar Lease Activity State",
             "type": "string",
-            "description": "Current state of the lease (for example, \"Issued\", \"Freed\", \"Used\"), derived from the lease operation type. Use when asking about lease status, filtering by state category, or analyzing lease lifecycle distribution. For the raw operation value, use lease_op instead.",
+            "description": "Current state of the lease (for example, Issued, Freed, Used), derived from the lease operation type. Use when asking about lease status, filtering by state category, or analyzing lease lifecycle distribution. For the raw operation value, use lease_op instead.",
             "primary_key": false,
             "meta": {}
           },
@@ -49894,6 +49998,11 @@
         "segment_count": 0,
         "ai_context": "\u26a0\ufe0f NIOS DHCP lease logs are not queryable via this cube. This is a known limitation. Instead of telling the user that there are no lease records for a NIOS DHCP server, you should make clear that this is a known limitation.",
         "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "OnPremDhcpLeaseActivityV1",
+          "sunsetDate": "2027-07-16",
+          "version": "1.0.0",
           "ai_context": "\u26a0\ufe0f NIOS DHCP lease logs are not queryable via this cube. This is a known limitation. Instead of telling the user that there are no lease records for a NIOS DHCP server, you should make clear that this is a known limitation.",
           "supportedOperators": [
             "equals",
@@ -52163,7 +52272,7 @@
         "name": "HostMetrics",
         "title": "Host Metrics",
         "type": "cube",
-        "description": "Infrastructure health metrics for on-premises hosts running DNS, DHCP, and NTP services, with one row per metric data point per host. Use for questions about host CPU usage, memory utilization, disk space, service status, and capacity monitoring. Supports filtering by service type, host, metric name, country, region, and cloud type. Joins to Hosts for host details.\n\nIMPORTANT: These are internal metric identifiers for querying only.\nWhen presenting results to users, describe what you found without\nmentioning the specific metric names (e.g., say 'DNS queries per second'\ninstead of 'dns_qps_iq_5m').\n\nAvailable Host Metrics:\n\nDNS Query Metrics:\n- dns_qps_iq_5m: DNS queries per second\n- dns_nxrrset_count_iq_5m: Count of DNS queries returning no resource records\n- dns_recursion_count_iq_5m: Count of recursive DNS queries\n- dns_nxdomain_count_iq_5m: Count of DNS queries returning NXDOMAIN\n- dns_servfail_count_iq_5m: Count of DNS queries returning SERVFAIL\n- dns_referral_count_iq_5m: Count of DNS referral responses\n- dns_timeout_rate_iq_5m: Count of DNS timeout responses\n- ddns_ups_iq_5m: Dynamic DNS updates per second\n- cache_hit_ratio_iq_5m: Cache hit ratio for DNS queries\n- object_count_dns_iq_5m: DNS object count (number of records, zones, etc.)\n- dns_refused_count_iq_5m: Count of DNS queries returning REFUSED\n- total_query_count_iq_5m: Total number of DNS queries received\n\nDNS Performance Metrics:\n- dns_success_percent_iq_5m: Percentage of successful DNS queries\n- dns_refused_percent_iq_5m: Percentage of DNS queries returning REFUSED\n- dns_nxdomain_percent_iq_5m: Percentage of DNS queries returning NXDOMAIN\n- dns_servfail_percent_iq_5m: Percentage of DNS queries returning SERVFAIL\n\nDNS Latency Metrics:\n- dns_latency_all_iq_5m: Overall DNS query latency\n- dns_latency_auth_iq_5m: Authoritative DNS server response latency\n- dns_latency_upstream_iq_5m: Upstream DNS server response latency\n\nHost System Metrics:\n- host_cpu_iq_5m: Host CPU utilization\n- host_memory_iq_5m: Host memory utilization\n\nService Status Metrics:\n- dns_status_iq_5m: DNS service health status\n- anycast_status_iq_5m: Anycast service health status\n\nDHCP Metrics:\n- object_count_dhcp_iq_5m: DHCP object count (number of DHCP-related objects)\n- dhcp_discover_iq_5m: Count of DHCPv4 DISCOVER packets received\n- dhcp6_solicit_iq_5m: Count of DHCPv6 SOLICIT packets received\n- dhcp_cumulative_assigned_addresses_iq_5m: Count of newly assigned DHCPv4 addresses\n- dhcp6_cumulative_assigned_nas_iq_5m: Count of newly assigned DHCPv6 non-temporary addresses (NA)\n- dhcp6_cumulative_assigned_pds_iq_5m: Count of newly assigned DHCPv6 prefix delegations (PD)\n- dhcp_declined_addresses_iq_5m: Count of DHCPv4 declined addresses\n- dhcp6_declined_addresses_iq_5m: Count of DHCPv6 declined addresses\n- dhcp_demand_gap_iq_5m: Difference between DHCPv4 demand (DISCOVER) and assigned addresses\n- dhcp6_demand_gap_iq_5m: Difference between DHCPv6 demand (SOLICIT) and assigned NAs/PDs\n- dhcp_lease_reuses_iq_5m: Count of DHCPv4 lease reuses\n",
+        "description": "Deprecated \u2014 migrate to HostMetricsV1. Retained for backward compatibility only; removed on 2027-07-01. Infrastructure health metrics for on-premises hosts running DNS, DHCP, and NTP services, with one row per metric data point per host.\n\nIMPORTANT: These are internal metric identifiers for querying only.\nWhen presenting results to users, describe what you found without\nmentioning the specific metric names (e.g., say 'DNS queries per second'\ninstead of 'dns_qps_iq_5m').\n\nAvailable Host Metrics:\n\nDNS Query Metrics:\n- dns_qps_iq_5m: DNS queries per second\n- dns_nxrrset_count_iq_5m: Count of DNS queries returning no resource records\n- dns_recursion_count_iq_5m: Count of recursive DNS queries\n- dns_nxdomain_count_iq_5m: Count of DNS queries returning NXDOMAIN\n- dns_servfail_count_iq_5m: Count of DNS queries returning SERVFAIL\n- dns_referral_count_iq_5m: Count of DNS referral responses\n- dns_timeout_rate_iq_5m: Count of DNS timeout responses\n- ddns_ups_iq_5m: Dynamic DNS updates per second\n- cache_hit_ratio_iq_5m: Cache hit ratio for DNS queries\n- object_count_dns_iq_5m: DNS object count (number of records, zones, etc.)\n- dns_refused_count_iq_5m: Count of DNS queries returning REFUSED\n- total_query_count_iq_5m: Total number of DNS queries received\n\nDNS Performance Metrics:\n- dns_success_percent_iq_5m: Percentage of successful DNS queries\n- dns_refused_percent_iq_5m: Percentage of DNS queries returning REFUSED\n- dns_nxdomain_percent_iq_5m: Percentage of DNS queries returning NXDOMAIN\n- dns_servfail_percent_iq_5m: Percentage of DNS queries returning SERVFAIL\n\nDNS Latency Metrics:\n- dns_latency_all_iq_5m: Overall DNS query latency\n- dns_latency_auth_iq_5m: Authoritative DNS server response latency\n- dns_latency_upstream_iq_5m: Upstream DNS server response latency\n\nHost System Metrics:\n- host_cpu_iq_5m: Host CPU utilization\n- host_memory_iq_5m: Host memory utilization\n\nService Status Metrics:\n- dns_status_iq_5m: DNS service health status\n- anycast_status_iq_5m: Anycast service health status\n\nDHCP Metrics:\n- object_count_dhcp_iq_5m: DHCP object count (number of DHCP-related objects)\n- dhcp_discover_iq_5m: Count of DHCPv4 DISCOVER packets received\n- dhcp6_solicit_iq_5m: Count of DHCPv6 SOLICIT packets received\n- dhcp_cumulative_assigned_addresses_iq_5m: Count of newly assigned DHCPv4 addresses\n- dhcp6_cumulative_assigned_nas_iq_5m: Count of newly assigned DHCPv6 non-temporary addresses (NA)\n- dhcp6_cumulative_assigned_pds_iq_5m: Count of newly assigned DHCPv6 prefix delegations (PD)\n- dhcp_declined_addresses_iq_5m: Count of DHCPv4 declined addresses\n- dhcp6_declined_addresses_iq_5m: Count of DHCPv6 declined addresses\n- dhcp_demand_gap_iq_5m: Difference between DHCPv4 demand (DISCOVER) and assigned addresses\n- dhcp6_demand_gap_iq_5m: Difference between DHCPv6 demand (SOLICIT) and assigned NAs/PDs\n- dhcp_lease_reuses_iq_5m: Count of DHCPv4 lease reuses\n",
         "dimensions": [
           {
             "name": "HostMetrics.tenant_id",
@@ -52358,7 +52467,13 @@
         "dimension_count": 17,
         "measure_count": 6,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "HostMetricsV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "HostServiceMetrics": {
@@ -52707,7 +52822,13 @@
         "dimension_count": 17,
         "measure_count": 7,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "HostServiceMetricsV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "IqActions": {
@@ -52818,7 +52939,7 @@
         "name": "IqActions",
         "title": "IQ Actions",
         "type": "cube",
-        "description": "Actions generated by Infoblox IQ, tracking alerts and insights across DNS and infrastructure services",
+        "description": "Deprecated \u2014 migrate to ActionsV1. Retained for backward compatibility only; removed on 2027-07-01. AI-driven recommended actions tracking alerts and insights across DNS and infrastructure services.",
         "dimensions": [
           {
             "name": "IqActions.display_id",
@@ -52964,6 +53085,11 @@
         "measure_count": 1,
         "segment_count": 0,
         "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "ActionsV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0",
           "portal_path": [
             "/ai/ddi-actions"
           ]
@@ -53018,7 +53144,7 @@
         "name": "TokenUtilManagement",
         "title": "Token Util Management",
         "type": "cube",
-        "description": "Token consumption for Universal DDI management objects, with one row per account per object type showing the latest available data. Use for questions about token usage by management object type, current token counts, and data freshness. Supports filtering by object type and account.",
+        "description": "Deprecated \u2014 migrate to TokenUtilManagementV1. Retained for backward compatibility only; removed on 2027-07-01. Token consumption for Universal DDI management objects, with one row per account per object type showing the latest available data. Use for questions about token usage by management object type, current token counts, and data freshness. Supports filtering by object type and account.",
         "dimensions": [
           {
             "name": "TokenUtilManagement.object_type",
@@ -53067,7 +53193,13 @@
         "dimension_count": 3,
         "measure_count": 2,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilManagementV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "TokenUtilProtoSrvAAS": {
@@ -53123,7 +53255,7 @@
         "name": "TokenUtilProtoSrvAAS",
         "title": "Token Util Proto Srv Aas",
         "type": "cube",
-        "description": "Hourly token utilization for protocol servers delivered as a service, at the grain of one row per account, instance type, and hour. Use for questions about token consumption volume, server instance counts, and usage trends over time. Supports filtering by instance type and time range. For daily or monthly trend analysis, use TokenUtilProtoSrvAASDaily or TokenUtilProtoSrvAASMonthly. For daily over-limit checks, use TokenUtilProtoSrvAASIsOver.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvAASV1. Retained for backward compatibility only; removed on 2027-07-01. Hourly token utilization for protocol servers delivered as a service, at the grain of one row per account, instance type, and hour. Use for questions about token consumption volume, server instance counts, and usage trends over time. Supports filtering by instance type and time range. For daily or monthly trend analysis, use TokenUtilProtoSrvAASDaily or TokenUtilProtoSrvAASMonthly. For daily over-limit checks, use TokenUtilProtoSrvAASIsOver.",
         "dimensions": [
           {
             "name": "TokenUtilProtoSrvAAS.instance_type",
@@ -53180,7 +53312,13 @@
         "dimension_count": 3,
         "measure_count": 3,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvAASV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "TokenUtilProtoSrvAASIsOver": {
@@ -53286,7 +53424,7 @@
         "name": "TokenUtilProtoSrvAASIsOver",
         "title": "Token Util Proto Srv Aas Is over",
         "type": "cube",
-        "description": "Daily threshold breach tracking for protocol servers delivered as a service. One row per protocol server instance per day. Use for questions about which as-a-service protocol servers are exceeding token utilization limits, over-limit counts, and threshold breach trends. Supports filtering by instance type, service connection, universal service, and time period.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvAASIsOverV1. Retained for backward compatibility only; removed on 2027-07-01. Daily threshold breach tracking for protocol servers delivered as a service. One row per protocol server instance per day. Use for questions about which as-a-service protocol servers are exceeding token utilization limits, over-limit counts, and threshold breach trends. Supports filtering by instance type, service connection, universal service, and time period.",
         "dimensions": [
           {
             "name": "TokenUtilProtoSrvAASIsOver.instance_type",
@@ -53423,7 +53561,13 @@
         "dimension_count": 14,
         "measure_count": 2,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvAASIsOverV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "TokenUtilProtoSrvSM": {
@@ -53479,7 +53623,7 @@
         "name": "TokenUtilProtoSrvSM",
         "title": "Token Util Proto Srv Sm",
         "type": "cube",
-        "description": "Tracks hourly license token utilization for self-managed (on-premises) protocol servers, with one row per account, instance type, and hour. Use for questions about token consumption, server instance counts, and utilization trends over time. Supports filtering by server size tier and time range. For daily per-host detail with over-utilization flags, use TokenUtilProtoSrvSMIsOver. For daily or monthly trend aggregations, use TokenUtilProtoSrvSMDaily or TokenUtilProtoSrvSMMonthly.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvSMV1. Retained for backward compatibility only; removed on 2027-07-01. Tracks hourly license token utilization for self-managed (on-premises) protocol servers, with one row per account, instance type, and hour. Use for questions about token consumption, server instance counts, and utilization trends over time. Supports filtering by server size tier and time range. For daily per-host detail with over-utilization flags, use TokenUtilProtoSrvSMIsOver. For daily or monthly trend aggregations, use TokenUtilProtoSrvSMDaily or TokenUtilProtoSrvSMMonthly.",
         "dimensions": [
           {
             "name": "TokenUtilProtoSrvSM.instance_type",
@@ -53536,7 +53680,13 @@
         "dimension_count": 3,
         "measure_count": 3,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvSMV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "TokenUtilProtoSrvSMIsOver": {
@@ -53632,7 +53782,7 @@
         "name": "TokenUtilProtoSrvSMIsOver",
         "title": "Token Util Proto Srv Sm Is over",
         "type": "cube",
-        "description": "Daily per-host utilization for self-managed protocol servers, one row per server per day. Identifies servers exceeding capacity thresholds for QPS, LPS, and managed objects via the is_over flag. Use for questions about which servers are over-utilized, capacity breach counts, and per-host workload metrics. Supports filtering by instance type, host type, and host name. For aggregate token consumption without per-host detail, use TokenUtilProtoSrvSM or TokenUtilProtoSrvSMDaily instead.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvSMIsOverV1. Retained for backward compatibility only; removed on 2027-07-01. Daily per-host utilization for self-managed protocol servers, one row per server per day. Identifies servers exceeding capacity thresholds for QPS, LPS, and managed objects via the is_over flag. Use for questions about which servers are over-utilized, capacity breach counts, and per-host workload metrics. Supports filtering by instance type, host type, and host name. For aggregate token consumption without per-host detail, use TokenUtilProtoSrvSM or TokenUtilProtoSrvSMDaily instead.",
         "dimensions": [
           {
             "name": "TokenUtilProtoSrvSMIsOver.instance_type",
@@ -53753,7 +53903,13 @@
         "dimension_count": 12,
         "measure_count": 2,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvSMIsOverV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "TokenUtilReporting": {
@@ -53809,7 +53965,7 @@
         "name": "TokenUtilReporting",
         "title": "Token Util Reporting",
         "type": "cube",
-        "description": "Daily token utilization reporting for license entitlements. One row per account per category per day. Use for questions about token consumption, utilization event counts, and usage trends over time. Supports filtering by category and time period. For each account, data reflects the latest non-extrapolated snapshot.",
+        "description": "Deprecated \u2014 migrate to TokenUtilReportingV1. Retained for backward compatibility only; removed on 2027-07-01. Daily token utilization reporting for license entitlements. One row per account per category per day. Use for questions about token consumption, utilization event counts, and usage trends over time. Supports filtering by category and time period. For each account, data reflects the latest non-extrapolated snapshot.",
         "dimensions": [
           {
             "name": "TokenUtilReporting.account_id",
@@ -53866,7 +54022,13 @@
         "dimension_count": 3,
         "measure_count": 3,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilReportingV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "TokenUtilManagementDaily": {
@@ -53917,7 +54079,7 @@
         "name": "TokenUtilManagementDaily",
         "title": "Token Util Management Daily",
         "type": "cube",
-        "description": "Daily peak token consumption trends for Universal DDI management objects, with one row per account per object type per day. Use for questions about historical token usage patterns, daily consumption trends, and peak utilization over time. Supports filtering by object type, account, and date range.",
+        "description": "Deprecated \u2014 migrate to TokenUtilManagementDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Daily peak token consumption trends for Universal DDI management objects, with one row per account per object type per day. Use for questions about historical token usage patterns, daily consumption trends, and peak utilization over time. Supports filtering by object type, account, and date range.",
         "dimensions": [
           {
             "name": "TokenUtilManagementDaily.object_type",
@@ -53966,7 +54128,13 @@
         "dimension_count": 3,
         "measure_count": 2,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilManagementDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "TokenUtilManagementObjectsDaily": {
@@ -53988,6 +54156,11 @@
           "name": "TokenUtilManagementObjectsDaily.count",
           "type": "number",
           "title": "Token Util Management Objects Daily Count"
+        },
+        {
+          "name": "TokenUtilManagementObjectsDaily.tokens",
+          "type": "number",
+          "title": "Token Util Management Objects Daily Tokens"
         },
         {
           "name": "TokenUtilManagementObjectsDaily.last_updated",
@@ -54027,7 +54200,7 @@
         "name": "TokenUtilManagementObjectsDaily",
         "title": "Token Util Management Objects Daily",
         "type": "cube",
-        "description": "Daily trend of management object counts at peak utilization hour for Universal DDI license entitlements, with one row per day per object sub-type per deployment category. Use for questions about day-over-day changes in DDI resource counts (DNS zones, IP spaces, DHCP ranges, etc.). Unlike TokenUtilManagementObjects, which shows a latest snapshot, this cube provides historical daily trends. Supports filtering by object type, sub-type, and category.",
+        "description": "Deprecated \u2014 migrate to TokenUtilManagementObjectsDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Daily trend of management object counts and token consumption at peak utilization hour for Universal DDI license entitlements, with one row per day per object sub-type per deployment category. Use for questions about day-over-day changes in DDI resource counts (DNS zones, IP spaces, DHCP ranges, etc.) and their token usage. Unlike TokenUtilManagementObjects, which shows a latest snapshot, this cube provides historical daily trends. Supports filtering by object type, sub-type, and category.",
         "dimensions": [
           {
             "name": "TokenUtilManagementObjectsDaily.object_type",
@@ -54080,6 +54253,14 @@
             "meta": {}
           },
           {
+            "name": "TokenUtilManagementObjectsDaily.tokens",
+            "title": "Token Util Management Objects Daily Tokens",
+            "type": "number",
+            "agg_type": "sum",
+            "description": "Total number of tokens consumed by the management objects recorded at the daily peak hour for the selected object type, sub-type, and category. Use when asking 'how many tokens do DNS zones consume per day' or analyzing daily token usage trends by sub-type and category. For raw object counts rather than token values, use the count measure instead.",
+            "meta": {}
+          },
+          {
             "name": "TokenUtilManagementObjectsDaily.last_updated",
             "title": "Token Util Management Objects Daily Last Updated",
             "type": "number",
@@ -54090,9 +54271,15 @@
         ],
         "segments": [],
         "dimension_count": 5,
-        "measure_count": 2,
+        "measure_count": 3,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilManagementObjectsDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "TokenUtilProtoSrvAASDaily": {
@@ -54148,7 +54335,7 @@
         "name": "TokenUtilProtoSrvAASDaily",
         "title": "Token Util Proto Srv Aas Daily",
         "type": "cube",
-        "description": "Tracks daily token utilization trends for protocol servers delivered as a service, with one row per account, instance type, and day based on peak-hour consumption. Use for questions about daily token usage patterns, consumption trends over time, and server instance counts. For hourly granularity, use TokenUtilProtoSrvAAS. For monthly trends, use TokenUtilProtoSrvAASMonthly. Supports filtering by instance type and date range.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvAASDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Tracks daily token utilization trends for protocol servers delivered as a service, with one row per account, instance type, and day based on peak-hour consumption. Use for questions about daily token usage patterns, consumption trends over time, and server instance counts. For hourly granularity, use TokenUtilProtoSrvAAS. For monthly trends, use TokenUtilProtoSrvAASMonthly. Supports filtering by instance type and date range.",
         "dimensions": [
           {
             "name": "TokenUtilProtoSrvAASDaily.instance_type",
@@ -54205,7 +54392,13 @@
         "dimension_count": 3,
         "measure_count": 3,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvAASDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "TokenUtilProtoSrvSMDaily": {
@@ -54261,7 +54454,7 @@
         "name": "TokenUtilProtoSrvSMDaily",
         "title": "Token Util Proto Srv Sm Daily",
         "type": "cube",
-        "description": "Daily token utilization trends for self-managed protocol servers (NIOS-X on-premises). One row per account per instance type per day, representing the peak-hour snapshot of token consumption. Use for questions about daily token usage trends, server counts by size tier, and day-over-day utilization comparisons. Supports filtering by instance type and date. For hourly granularity, use TokenUtilProtoSrvSM. For monthly trends, use TokenUtilProtoSrvSMMonthly.",
+        "description": "Deprecated \u2014 migrate to TokenUtilProtoSrvSMDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Daily token utilization trends for self-managed protocol servers (NIOS-X on-premises). One row per account per instance type per day, representing the peak-hour snapshot of token consumption. Use for questions about daily token usage trends, server counts by size tier, and day-over-day utilization comparisons. Supports filtering by instance type and date. For hourly granularity, use TokenUtilProtoSrvSM. For monthly trends, use TokenUtilProtoSrvSMMonthly.",
         "dimensions": [
           {
             "name": "TokenUtilProtoSrvSMDaily.instance_type",
@@ -54318,7 +54511,13 @@
         "dimension_count": 3,
         "measure_count": 3,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilProtoSrvSMDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     },
     "TokenUtilReportingDaily": {
@@ -54374,7 +54573,7 @@
         "name": "TokenUtilReportingDaily",
         "title": "Token Util Reporting Daily",
         "type": "cube",
-        "description": "Provides daily historical trend data for token utilization across reporting service categories. One row per account, category, and day, representing the daily high-water-mark of token consumption. Use for questions about token usage trends over time, month-over-month comparisons, and daily consumption patterns. Unlike TokenUtilReporting which shows only the latest snapshot, this cube provides time-series history. Supports filtering by category and time period.",
+        "description": "Deprecated \u2014 migrate to TokenUtilReportingDailyV1. Retained for backward compatibility only; removed on 2027-07-01. Provides daily historical trend data for token utilization across reporting service categories. One row per account, category, and day, representing the daily high-water-mark of token consumption. Use for questions about token usage trends over time, month-over-month comparisons, and daily consumption patterns. Unlike TokenUtilReporting which shows only the latest snapshot, this cube provides time-series history. Supports filtering by category and time period.",
         "dimensions": [
           {
             "name": "TokenUtilReportingDaily.account_id",
@@ -54431,7 +54630,13 @@
         "dimension_count": 3,
         "measure_count": 3,
         "segment_count": 0,
-        "meta": {}
+        "meta": {
+          "deprecated": true,
+          "lifecycleStage": "deprecated",
+          "successor": "TokenUtilReportingDailyV1",
+          "sunsetDate": "2027-07-01",
+          "version": "1.0.0"
+        }
       }
     }
   }
