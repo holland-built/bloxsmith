@@ -206,8 +206,17 @@ def _fmt(items):
 
 
 def render(t, s, c):
-    out = ["The live Infoblox CSP `/mcp` surface no longer matches the committed "
-           "baselines.", ""]
+    # The opening line has to tell the truth in BOTH directions. It used to say
+    # "no longer matches" unconditionally, which meant a clean run printed a
+    # drift headline into the log and then quietly set changed=false — the report
+    # contradicting its own verdict. Anyone reading the log would believe the
+    # wrong thing, which is how the name-only blind spot survived so long.
+    if any_change(t, s, c):
+        out = ["The live Infoblox CSP `/mcp` surface no longer matches the committed "
+               "baselines.", ""]
+    else:
+        out = ["The live Infoblox CSP `/mcp` surface matches the committed baselines. "
+               "Nothing to do.", ""]
 
     # Deprecation first and on its own. It is the only class of change here with
     # a DEADLINE attached, and it is the one the name-only check used to miss
