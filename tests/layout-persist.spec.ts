@@ -177,7 +177,21 @@ test('a real round-trip through the live endpoint drops nothing and rejects noth
   expect(Object.keys(got).sort()).toEqual(['folder', 'layout', 'name', 'order', 'saved_at', 'widgets']);
 });
 
+// ONLY THIS TEST needs process control. The other four in this file assert
+// endpoint behaviour, rendering and clamping, and were excluded with it purely
+// because playwright.config.ts's testIgnore works per FILE — the same per-file
+// mistake that cost this repo 96 tests in LIVE_TENANT_SPECS and another 42 in
+// LINUX_CI_UNPROVEN_SPECS. Gating this one returns the other four to CI.
+//
+// It finds the server with `pgrep -f "^/tmp/bloxsmith-dev$"` — scripts/dev-serve.sh's
+// binary, by hardcoded path — SIGTERMs it and asserts the saved layout survives
+// the restart. CI has no such process, so it throws "P8 cannot be proven", which
+// is a refusal by design rather than a skip. Making it work on CI needs the
+// HARNESS to own the restart: scripts/e2e.sh's cleanup trap tracks $SRV, so a
+// spec that kills and replaces the process orphans the replacement and loses the
+// original environment and log redirection. That is real work and is not done.
 test('P8: the layout survives killing and restarting the Go binary', async ({ page, request }) => {
+  test.skip(!!process.env.E2E_SKIP_LIVE, 'kills and restarts the server by a hardcoded /tmp/bloxsmith-dev path that no CI runner has — a refusal by design, see the note above');
   test.setTimeout(180_000);
 
   // Saved by hand — the drag UI does not exist until item 8.
