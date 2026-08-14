@@ -119,6 +119,11 @@ go/dist/
 # Installers staged into go/ for goreleaser release.extra_files (see release.yml)
 go/install.sh
 go/install.ps1
+# LICENSE + NOTICE.md staged into go/ the same way, so the archive and the image
+# carry the BSD-2-Clause notice the vendored/derived work requires. The real
+# copies live at the repo root — these are build-time duplicates, never tracked.
+go/LICENSE
+go/NOTICE.md
 # Static version file written by goreleaser's before-hook (.goreleaser.yaml)
 go/version.json
 go/web/app.bundle.js

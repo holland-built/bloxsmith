@@ -37,6 +37,20 @@ COPY $TARGETPLATFORM/bloxsmith /app/bloxsmith
 # dockers_v2[].extra_files. Matches ENV TEMPLATES_DIR=/templates below.
 COPY templates /templates
 
+# The licence notice, and not optional. The binary above contains a derivative
+# work of Chris Marrison's BSD-2-Clause uddi_automation_toolkit, and the
+# templates just copied follow its schema. Clause 2 of that licence requires a
+# binary redistribution to reproduce the copyright notice; every image published
+# before this line did not. Staged into the build context by
+# dockers_v2[].extra_files, which is only half the job — without this COPY the
+# files sit in the context and never reach the image.
+#
+# /app, beside the binary, rather than /usr/share/doc: this is a distroless
+# image with no shell, so the only way anyone reads these is `docker cp` or an
+# image inspection tool, and both are easier when it is next to the thing it
+# describes.
+COPY LICENSE NOTICE.md /app/
+
 ENV HOST=0.0.0.0 \
     PORT=8080 \
     VAULT_DIR=/vault \

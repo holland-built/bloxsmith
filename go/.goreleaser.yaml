@@ -90,8 +90,22 @@ archives:
     # Bundle the fetched third-party templates next to the binary: the binary's
     # default TemplatesDir is <binary-dir>/templates, so extracting the archive
     # yields a working template/seed provisioning setup with zero extra steps.
+    #
+    # LICENSE and NOTICE.md are here because of that word "third-party". Those
+    # templates follow the schema of Chris Marrison's BSD-2-Clause
+    # uddi_automation_toolkit, and the binary beside them contains a derivative
+    # work of it (go/internal/provision — see its package comment). Clause 2 of
+    # that licence requires a binary redistribution to reproduce the copyright
+    # notice, and every archive before this one shipped without one.
+    #
+    # Both are staged INTO go/ before the build (CI: the cp step in release.yml;
+    # local: do the same by hand), because this list is resolved against
+    # goreleaser's cwd and a `../` prefix is rejected by its zglob at publish
+    # time — the same reason the installers are staged rather than referenced.
     files:
       - src: templates/**/*
+      - src: LICENSE
+      - src: NOTICE.md
     format_overrides:
       # Windows ships a zip (install.ps1 / direct download consume it).
       - goos: windows
@@ -345,8 +359,13 @@ dockers_v2:
       - linux/amd64
       - linux/arm64
     dockerfile: Dockerfile.goreleaser
+    # extra_files only puts these in the BUILD CONTEXT. The COPY lines in
+    # Dockerfile.goreleaser are what put them in the image — both halves are
+    # required, and having only one is a silent no-op.
     extra_files:
       - templates
+      - LICENSE
+      - NOTICE.md
     labels:
       "org.opencontainers.image.version": "{{ .Version }}"
       "org.opencontainers.image.source": "https://github.com/holland-built/bloxsmith"
