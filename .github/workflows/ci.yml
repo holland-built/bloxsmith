@@ -58,6 +58,17 @@ jobs:
       # above all — stops the build the day it is written, instead of never.
       # Clearing the 36 and then adding `--deny-warnings` is follow-up work.
       # Gating on them now would have meant not landing the gate at all.
+      # ui/.oxlintrc.json scopes react/only-export-components OFF for
+      # components/ui.jsx, components/DataTable.jsx and lib/theme.jsx. The reason
+      # cannot live in that file — oxlint rejects unknown keys, so it takes no
+      # comments — so it lives here. That rule is a Vite fast-refresh hint: a
+      # module exporting both components and non-components loses hot reload for
+      # that file. Those three deliberately export constants and hooks alongside
+      # components (ui.jsx exports useChartTheme and useThemeColors; theme.jsx
+      # exports the provider AND the hooks that read it). Splitting them is a real
+      # refactor for a developer-experience benefit only, so the rule is scoped
+      # off rather than left as 11 standing warnings that hide the next real one.
+      # Turn it back on for any of the three that is ever split.
       - name: UI lint (oxlint)
         working-directory: ui
         run: npm run lint

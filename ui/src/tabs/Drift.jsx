@@ -65,7 +65,7 @@ export default function Drift() {
   }, [groups])
 
   function toggleCat(cat) {
-    setOpenCats((s) => { const n = new Set(s); n.has(cat) ? n.delete(cat) : n.add(cat); return n })
+    setOpenCats((s) => { const n = new Set(s); if (n.has(cat)) n.delete(cat); else n.add(cat); return n })
   }
 
   return (

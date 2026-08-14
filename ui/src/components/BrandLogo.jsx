@@ -28,7 +28,7 @@ export function BrandLogoImg({ domain, className, style, onClick, title, onSrcCh
   // than one captured on first render.
   const onSrcChangeRef = useRef(onSrcChange)
   useEffect(() => { onSrcChangeRef.current = onSrcChange })
-  useEffect(() => { onSrcChangeRef.current && onSrcChangeRef.current(src) }, [src])
+  useEffect(() => { onSrcChangeRef.current?.(src) }, [src])
   return (
     <img
       className={className}
@@ -128,7 +128,7 @@ export function BrandEdit({ onClose, onSaved }) {
       localStorage.setItem('orgDomain', dm)
       localStorage.setItem('orgName', name)
       setBusy(false)
-      onSaved && onSaved()
+      onSaved?.()
       onClose()
     } catch {
       setErr('Network error — could not save.')
