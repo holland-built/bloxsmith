@@ -178,26 +178,65 @@ jobs:
       # again, wearing a different hat. On a schedule run `inputs.refresh_baselines`
       # is null, `null != true` is true, and the nightly path is untouched.
       - name: Open or update the drift issue
-        if: steps.gate.outputs.run == 'true' && steps.diff.outputs.changed == 'true' && inputs.refresh_baselines != true
+        # `|| deadline_alert` is the load-bearing half. A sunset date breaks things
+        # on a calendar day whether or not anything drifted, so gating this step on
+        # `changed` alone means the countdown can only speak on a day something
+        # else happened to move — which for NstarDnsActivity and HostMetrics would
+        # be eleven months of silence followed by two dead dashboard panels.
+        if: >-
+          steps.gate.outputs.run == 'true'
+          && (steps.diff.outputs.changed == 'true' || steps.diff.outputs.deadline_alert == 'true')
+          && inputs.refresh_baselines != true
         env:
           GH_TOKEN: ${{ github.token }}
+        env:
+          CHANGED: ${{ steps.diff.outputs.changed }}
+          BANDS: ${{ steps.diff.outputs.deadline_bands }}
+          BODY: ${{ steps.diff.outputs.body }}
         run: |
           DATE=$(date -u +%Y-%m-%d)
           TITLE="MCP drift detected — baselines need review"
           RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          MARKER="<!-- deadline_bands: $BANDS -->"
           EXISTING=$(gh issue list --repo "${{ github.repository }}" \
             --state open --search "$TITLE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
 
+          # DO NOT COMMENT NIGHTLY ABOUT A DEADLINE THAT HAS NOT MOVED.
+          #
+          # When real drift exists, every night is worth saying — the baselines are
+          # out of date until someone refreshes them. But a sunset date sitting at
+          # "soon" for 120 days is ONE fact, and commenting it 120 times is exactly
+          # the cry-wolf failure this workflow already had to be rescued from once
+          # (five duplicate issues, 2026-07-24 onward), which is why the two-night
+          # outage went unnoticed.
+          #
+          # So when the deadline is the ONLY reason we are speaking, the band set is
+          # stamped into the text as an HTML marker, and a run whose marker is
+          # already present says nothing. Crossing watch->soon->urgent->passed
+          # changes the marker, and that speaks.
+          if [ "$CHANGED" != "true" ] && [ -n "$EXISTING" ]; then
+            if gh issue view "$EXISTING" --repo "${{ github.repository }}" \
+                 --json body,comments --jq '.body, (.comments[].body)' 2>/dev/null \
+                 | grep -qF "$MARKER"; then
+              echo "::notice::No drift, and the deadline bands ($BANDS) are already recorded on issue #$EXISTING. Saying nothing."
+              exit 0
+            fi
+          fi
+
           if [ -n "$EXISTING" ]; then
             {
-              printf 'Still drifting as of %s ([run](%s)).\n\n' "$DATE" "$RUN"
-              printf '%s\n' "${{ steps.diff.outputs.body }}"
+              if [ "$CHANGED" = "true" ]; then
+                printf 'Still drifting as of %s ([run](%s)).\n\n' "$DATE" "$RUN"
+              else
+                printf 'No drift as of %s, but a removal deadline moved ([run](%s)).\n\n' "$DATE" "$RUN"
+              fi
+              printf '%s\n\n%s\n' "$BODY" "$MARKER"
             } | gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body-file -
           else
-            printf '%s\n' "${{ steps.diff.outputs.body }}" | \
+            printf '%s\n\n%s\n' "$BODY" "$MARKER" | \
               gh issue create --repo "${{ github.repository }}" \
                 --title "$TITLE" --label "mcp-drift" --body-file - || \
-            printf '%s\n' "${{ steps.diff.outputs.body }}" | \
+            printf '%s\n\n%s\n' "$BODY" "$MARKER" | \
               gh issue create --repo "${{ github.repository }}" \
                 --title "$TITLE" --body-file -
           fi
