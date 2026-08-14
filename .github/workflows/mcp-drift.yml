@@ -189,7 +189,6 @@ jobs:
           && inputs.refresh_baselines != true
         env:
           GH_TOKEN: ${{ github.token }}
-        env:
           CHANGED: ${{ steps.diff.outputs.changed }}
           BANDS: ${{ steps.diff.outputs.deadline_bands }}
           BODY: ${{ steps.diff.outputs.body }}
