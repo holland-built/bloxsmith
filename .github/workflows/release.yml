@@ -40,7 +40,16 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26.x'
+          # PINNED EXACTLY, not '1.26.x'. b14fe2b raised go.mod to 1.26.6 for four
+          # reachable CVEs and asserted the workflows needed no change because
+          # '1.26.x' resolves to the newest patch. That was WRONG and the next run
+          # proved it: setup-go's version manifest lagged and installed 1.26.5,
+          # and with GOTOOLCHAIN=local the job cannot fetch the newer toolchain
+          # itself, so every Go job failed with "go.mod requires go >= 1.26.6
+          # (running go 1.26.5)". The floating range and the local-toolchain
+          # setting only work together while the manifest is current. Bump this
+          # alongside go.mod.
+          go-version: '1.26.6'
           cache-dependency-path: go/go.sum
 
       # Don't publish a tag that never passed tests: a tag can point at any
