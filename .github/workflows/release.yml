@@ -92,8 +92,18 @@ jobs:
       # Stage the installers into go/ so goreleaser's release.extra_files can
       # glob them without a `../` prefix (which its zglob rejects at publish
       # time). Kept out of git via .gitignore.
-      - name: Stage installers for goreleaser extra_files
-        run: cp scripts/install.sh scripts/install.ps1 go/
+      #
+      # LICENSE and NOTICE.md ride along for the same reason, and are not
+      # optional. Bloxsmith's provisioning engine is a derivative work of Chris
+      # Marrison's BSD-2-Clause uddi_automation_toolkit, and the templates this
+      # release bundles follow its schema — go/.goreleaser.yaml's own archive
+      # comment calls them "the fetched third-party templates". BSD-2-Clause
+      # clause 2 requires a binary redistribution to reproduce the copyright
+      # notice, and until this line existed every archive and every image
+      # shipped that derived work with no notice in it at all. NOTICE.md living
+      # in the repo does not discharge that; it has to be in the artifact.
+      - name: Stage installers and the licence notice for goreleaser
+        run: cp scripts/install.sh scripts/install.ps1 LICENSE NOTICE.md go/
 
       - name: Set up goreleaser
         uses: goreleaser/goreleaser-action@v7
