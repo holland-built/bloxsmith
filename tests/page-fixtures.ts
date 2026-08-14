@@ -198,8 +198,13 @@ const SPACES = { spaces: [{ id: 'ipam/ip_space/baseline-1', name: 'Baseline Spac
 const DNS_ZONES_PICKER = { zones: [{ id: 'dns/auth_zone/baseline-1', fqdn: 'baseline.example.', name: 'baseline.example.' }] };
 
 // Shape from the live server: a bare array of template objects.
+// TWO types, not one. Provision's Full-site mode is gated on `!siteTemplate`
+// (ui/src/tabs/Provision.jsx:394) and filters this list by type, so a
+// subnet-only fixture leaves its Preview button permanently disabled — a fixture
+// gap that reads on screen as a broken page.
 const TEMPLATES = [
   { name: 'baseline-subnet', type: 'subnet', site: 'baseline-site', region: 'baseline-region', environment: 'test', valid: true },
+  { name: 'baseline-site', type: 'site', site: 'baseline-site', region: 'baseline-region', environment: 'test', valid: true },
 ];
 
 const WHOAMI = { actor: 'baseline-operator', role: 'admin', tenant: 'baseline-tenant', token_auth: false };
@@ -399,6 +404,9 @@ const PER_PAGE: Record<string, Handler[]> = {
   ],
   provision: [
     { method: 'GET', path: '/api/ipam/spaces', body: SPACES, required: true },
+    // Fetched only once a space is chosen, so not required on page load. Shape
+    // read from the live server: { blocks: [...] }.
+    { method: 'GET', path: '/api/ipam/blocks', body: { blocks: [{ id: 'ipam/address_block/baseline-1', address: '10.10.0.0', cidr: 16, name: 'baseline-block' }] } },
     { method: 'GET', path: '/api/whoami', body: WHOAMI, required: true },
     { method: 'GET', path: '/api/templates', body: TEMPLATES },
   ],

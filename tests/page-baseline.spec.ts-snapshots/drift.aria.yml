@@ -10,9 +10,9 @@
   - text: Template
   - combobox "Template":
     - option "Select a template" [selected]
+    - option "baseline-site — baseline-region/test"
   - text: IP space (override)
   - combobox "IP space (override)":
     - option "— template default —" [selected]
     - option "Baseline Space"
-  - text: no templates
   - button "Check drift" [disabled]
