@@ -14,7 +14,15 @@ import {
 // a different OS, so it could not tell the two apart. Running these same tests
 // on macOS through scripts/e2e.sh, which also has no tenant, reproduced most of
 // the failures: the missing data was doing the work, not the platform.
-test.beforeEach(async ({ page }) => {
+// The three geometry tests get NEITHER fixtures nor the frozen clock. Undoing
+// the install inside the test was not enough — page.unrouteAll clears the routes
+// but leaves clock.setFixedTime in place, and the #network case then failed on a
+// 2026-01-01 clock against live data. Skipping the install outright is the only
+// clean way, and naming them here keeps the exception in one visible place.
+const NEEDS_REAL_TENANT = [/^Escape restores/, /^P9c:/, /keyboard-only move reaches/];
+
+test.beforeEach(async ({ page }, testInfo) => {
+  if (NEEDS_REAL_TENANT.some((re) => re.test(testInfo.title))) return;
   await installBaselineWorld(page);
 });
 
@@ -262,18 +270,30 @@ test('two drags in a row keep DOM order and visual order in step', async ({ page
 // ---------------------------------------------------------------------------
 
 // activeHandlePanel, liveText and tabToHandle are in ./layout-helpers.ts.
-
-  // KNOWN BROKEN under the fixture harness, and marked rather than hidden.
-  // Measured 2026-08-13 on macOS through scripts/e2e.sh: the live region reports
-  // "Width 3 of 6 columns" but the panel's inline grid-column is empty, so the
-  // span change is announced and not applied. It appeared the moment
-  // tests/page-fixtures.ts began passing /api/views through to the server
-  // instead of faking it — before that no test in this file could really save,
-  // so this path was never exercised here. That makes it a REAL defect or a REAL
-  // isolation bug between the tests in this file, and either way not something a
-  // platform skip should paper over. The other 22 tests in this file now run on
-  // CI; these two are declared so the hole stays visible.
-test.fixme('P9c: a keyboard-only run moves a card two positions, changes its span, and both persist', async ({ page, request }) => {
+test('P9c: a keyboard-only run moves a card two positions, changes its span, and both persist', async ({ page, request }) => {
+    // NEEDS A REAL TENANT, and this replaces a WRONG diagnosis. These were
+    // marked test.fixme on 2026-08-13 and described in a commit as a real
+    // accessibility defect — "the keyboard span change is announced but no
+    // inline grid-column is written". That was not true and the claim is
+    // withdrawn here.
+    //
+    // Measured: with NO_FIXTURES=1 against the dev server on :8090, all three
+    // PASS. The product is fine. What breaks them is the fixture data. They
+    // assert on RENDERED GEOMETRY — the inline grid-column applyLayout writes
+    // (ui/src/components/ui.jsx:321) after resolving a fit map from measured
+    // panel sizes — and two or three synthetic rows do not produce the panel
+    // heights hundreds of real rows do.
+    //
+    // A deterministic fixture was TRIED before falling back to this: 40 bulk
+    // rows per feed made two of the three pass and left the third failing and
+    // the others flaky across retries. Volume matters, but a volume fixture is
+    // not deterministic and would bloat every page baseline past the point a
+    // human reads them. So they are gated instead of faked.
+    //
+    // Gated, not fixme'd: fixme runs nowhere, this runs locally against a real
+    // tenant, which is where it has always passed. The other 21 tests in this
+    // file run on CI because they assert order and announcements, not width.
+    test.skip(!!process.env.E2E_SKIP_LIVE, 'asserts rendered grid geometry, which synthetic fixture data does not reproduce — passes against a real tenant');
   test.setTimeout(180_000);
   await gotoOverview(page);
   expect(await domOrder(page)).toEqual(DECLARED_ORDER);
@@ -343,18 +363,30 @@ test.fixme('P9c: a keyboard-only run moves a card two positions, changes its spa
   expect(await strayDragStyles(page)).toEqual([]);
   expect(await tableOverflow(page)).toEqual([]);
 });
-
-  // KNOWN BROKEN under the fixture harness, and marked rather than hidden.
-  // Measured 2026-08-13 on macOS through scripts/e2e.sh: the live region reports
-  // "Width 3 of 6 columns" but the panel's inline grid-column is empty, so the
-  // span change is announced and not applied. It appeared the moment
-  // tests/page-fixtures.ts began passing /api/views through to the server
-  // instead of faking it — before that no test in this file could really save,
-  // so this path was never exercised here. That makes it a REAL defect or a REAL
-  // isolation bug between the tests in this file, and either way not something a
-  // platform skip should paper over. The other 22 tests in this file now run on
-  // CI; these two are declared so the hole stays visible.
-test.fixme('Escape restores both the pre-move order and the pre-move span, and saves nothing', async ({ page, request }) => {
+test('Escape restores both the pre-move order and the pre-move span, and saves nothing', async ({ page, request }) => {
+    // NEEDS A REAL TENANT, and this replaces a WRONG diagnosis. These were
+    // marked test.fixme on 2026-08-13 and described in a commit as a real
+    // accessibility defect — "the keyboard span change is announced but no
+    // inline grid-column is written". That was not true and the claim is
+    // withdrawn here.
+    //
+    // Measured: with NO_FIXTURES=1 against the dev server on :8090, all three
+    // PASS. The product is fine. What breaks them is the fixture data. They
+    // assert on RENDERED GEOMETRY — the inline grid-column applyLayout writes
+    // (ui/src/components/ui.jsx:321) after resolving a fit map from measured
+    // panel sizes — and two or three synthetic rows do not produce the panel
+    // heights hundreds of real rows do.
+    //
+    // A deterministic fixture was TRIED before falling back to this: 40 bulk
+    // rows per feed made two of the three pass and left the third failing and
+    // the others flaky across retries. Volume matters, but a volume fixture is
+    // not deterministic and would bloat every page baseline past the point a
+    // human reads them. So they are gated instead of faked.
+    //
+    // Gated, not fixme'd: fixme runs nowhere, this runs locally against a real
+    // tenant, which is where it has always passed. The other 21 tests in this
+    // file run on CI because they assert order and announcements, not width.
+    test.skip(!!process.env.E2E_SKIP_LIVE, 'asserts rendered grid geometry, which synthetic fixture data does not reproduce — passes against a real tenant');
   test.setTimeout(180_000);
   await gotoOverview(page);
 
@@ -935,12 +967,30 @@ for (const tab of TAB_CASES) {
       expect(await tableOverflow(page)).toEqual([]);
       expect(await domOrder(page)).toEqual(swapped); // the round trip moved nothing
     });
-
-    // Third instance of the same defect the two fixme'd tests above describe:
-    // the keyboard span change is ANNOUNCED ("Width N of 6 columns") but no
-    // inline grid-column is written. One bug class, three tests, all of them
-    // only reachable now that /api/views round-trips to real storage.
-    test.fixme(`a keyboard-only move reaches the same saved layout`, async ({ page, request }) => {
+    test(`a keyboard-only move reaches the same saved layout`, async ({ page, request }) => {
+    // NEEDS A REAL TENANT, and this replaces a WRONG diagnosis. These were
+    // marked test.fixme on 2026-08-13 and described in a commit as a real
+    // accessibility defect — "the keyboard span change is announced but no
+    // inline grid-column is written". That was not true and the claim is
+    // withdrawn here.
+    //
+    // Measured: with NO_FIXTURES=1 against the dev server on :8090, all three
+    // PASS. The product is fine. What breaks them is the fixture data. They
+    // assert on RENDERED GEOMETRY — the inline grid-column applyLayout writes
+    // (ui/src/components/ui.jsx:321) after resolving a fit map from measured
+    // panel sizes — and two or three synthetic rows do not produce the panel
+    // heights hundreds of real rows do.
+    //
+    // A deterministic fixture was TRIED before falling back to this: 40 bulk
+    // rows per feed made two of the three pass and left the third failing and
+    // the others flaky across retries. Volume matters, but a volume fixture is
+    // not deterministic and would bloat every page baseline past the point a
+    // human reads them. So they are gated instead of faked.
+    //
+    // Gated, not fixme'd: fixme runs nowhere, this runs locally against a real
+    // tenant, which is where it has always passed. The other 21 tests in this
+    // file run on CI because they assert order and announcements, not width.
+    test.skip(!!process.env.E2E_SKIP_LIVE, 'asserts rendered grid geometry, which synthetic fixture data does not reproduce — passes against a real tenant');
       test.setTimeout(180_000);
       await gotoTab(page, tab.id, tab.declared.length);
       expect(await domOrder(page)).toEqual(tab.declared);

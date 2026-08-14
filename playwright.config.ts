@@ -66,9 +66,16 @@ const LIVE_TENANT_SPECS: string[] = [];
 // fail for a reason unrelated to the platform or, worse, pass while proving
 // nothing. Giving it fixtures requires passing /api/views through to the server,
 // which is a separate piece of work.
-const LINUX_CI_UNPROVEN_SPECS = [
-  '**/layout-persist.spec.ts',
-];
+// EMPTY since 2026-08-13. Kept as a list so a file that genuinely cannot run on
+// the runner has somewhere to go.
+//
+// layout-persist.spec.ts was the last entry and it is gone for the same reason
+// everything else left: the exclusion was per FILE while the problem was one
+// TEST. Only "P8: the layout survives killing and restarting the Go binary"
+// needs process control; the other four assert endpoint behaviour, rendering and
+// clamping and run fine on CI. P8 now skips itself under E2E_SKIP_LIVE with its
+// reason written next to it.
+const LINUX_CI_UNPROVEN_SPECS: string[] = [];
 
 export default defineConfig({
   testDir: './tests',
