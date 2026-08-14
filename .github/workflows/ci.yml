@@ -52,12 +52,26 @@ jobs:
       # react/only-export-components, 6 react-hooks/exhaustive-deps, 3
       # no-unused-expressions.
       #
-      # Those 36 are non-blocking today, deliberately: oxlint's exit code
+      # Those 36 were non-blocking at first, deliberately: oxlint's exit code
       # counts errors only, so warnings do not fail the build. Landing the
-      # step at that setting means a NEW error — a rules-of-hooks violation
-      # above all — stops the build the day it is written, instead of never.
-      # Clearing the 36 and then adding `--deny-warnings` is follow-up work.
-      # Gating on them now would have meant not landing the gate at all.
+      # step at that setting meant a NEW error — a rules-of-hooks violation
+      # above all — stopped the build the day it was written, instead of never.
+      # Gating on the 36 up front would have meant not landing the gate at all.
+      #
+      # THAT FOLLOW-UP IS DONE (2026-08-14). The 36 reached zero in eeeb696, and
+      # `npm run lint` is now `oxlint --deny-warnings`, so a warning fails CI.
+      #
+      # Measured before landing it, because a guard nobody has watched refuse is
+      # a belief, not a guard. A probe file with one unused variable and one
+      # `debugger` statement was linted both ways:
+      #
+      #   bare `oxlint`              -> 2 warnings printed, exit 0  (CI stays green)
+      #   `oxlint --deny-warnings`   -> same 2 warnings,    exit 1  (CI goes red)
+      #
+      # The probe was deleted; the tree is clean at exit 0. That exit-0-with-
+      # warnings line is the whole reason for the flag: without it this step
+      # printed problems into a log and passed anyway, which is how the 36
+      # accumulated unseen in the first place.
       # ui/.oxlintrc.json scopes react/only-export-components OFF for
       # components/ui.jsx, components/DataTable.jsx and lib/theme.jsx. The reason
       # cannot live in that file — oxlint rejects unknown keys, so it takes no
