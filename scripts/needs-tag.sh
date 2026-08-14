@@ -57,6 +57,19 @@ exempt() {
     # written for. NOT the same as .dockerignore, which decides what enters the
     # image build context and therefore TAGS; the two look alike and are not.
     .gitignore|.gitattributes|.editorconfig) return 0 ;;
+    # Vendored upstream source, kept for attribution (see NOTICE.md). Exempt
+    # because it reaches no artifact, and that was VERIFIED rather than assumed
+    # when it landed on 2026-08-14: `go list ./...` shows no third_party
+    # packages (go/ is a separate module), oxlint runs with cwd ui/, Playwright's
+    # testDir is ./tests, and goreleaser's archive `files:` and dockers_v2
+    # `extra_files:` are allowlists resolved against go/ — so nothing here can
+    # ride along by default.
+    #
+    # This is the ONE exemption that is a whole top-level directory, which the
+    # rule above says must fail toward releasing. It is safe only for as long as
+    # that stays a pure archive nothing builds. If anything in third_party/ ever
+    # becomes a build input, delete this arm — do not add an exception to it.
+    third_party/*)                           return 0 ;;
     *)                                      return 1 ;;
   esac
 }
@@ -86,6 +99,8 @@ skip scripts/e2e.sh
 skip scripts/needs-tag.sh
 skip .gitignore
 skip playwright.config.ts
+skip third_party/uddi_self_service_example/web_portal.py
+skip third_party/uddi_automation_toolkit/SOURCE.md
 tag .dockerignore
 tag .env.example
 tag .github/workflows/release.yml
