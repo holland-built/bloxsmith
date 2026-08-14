@@ -16,9 +16,14 @@ name: MCP drift check
 #
 # It also has a second, manual-only mode: `refresh_baselines`. Once drift has been
 # reviewed and found harmless, the snapshots have to be regenerated — and that needs
-# INFOBLOX_API_KEY, which exists ONLY as a repo secret, never on a maintainer's
-# machine. So the refresh runs here, reusing this same catalog, and opens a PR with
-# the diff for a human to read. See the `refresh` job at the bottom.
+# INFOBLOX_API_KEY, which exists ONLY as a repo secret. So the refresh runs here,
+# reusing this same catalog, commits the new snapshots to a branch and pushes it,
+# then prints the URL that opens the PR. It does NOT open the PR itself — see the
+# `refresh` job's permissions block for why. A human still reviews the same diff.
+#
+# The comparison itself lives in scripts/mcp_diff.py, not in this file, so it can be
+# tested. It was inline once and compared names only, which is how 17 cube
+# deprecations passed it unseen on 2026-08-14.
 
 on:
   schedule:
@@ -29,7 +34,7 @@ on:
       # the nightly cron and an ordinary manual run behave exactly as they always
       # have: catalog, diff, report drift, write nothing.
       refresh_baselines:
-        description: "Regenerate the committed snapshots and open a PR with the diff (this run will NOT report drift)"
+        description: "Regenerate the committed snapshots, push them to a branch, and print the PR link (this run will NOT report drift)"
         type: boolean
         default: false
 
@@ -116,96 +121,41 @@ jobs:
         env:
           INFOBLOX_API_KEY: ${{ secrets.INFOBLOX_API_KEY }}
           INFOBLOX_URL: https://csp.infoblox.com
+        # Into /tmp/live/ rather than /tmp/, so the same directory is what the
+        # differ reads (--live-dir), what gets staged as the artifact, and what
+        # the refresh job downloads. Three names for one set of files is how a
+        # path drifts out of sync with the step that consumes it.
         run: |
-          python scripts/catalog_tools.py > /tmp/live_tools.json
-          python scripts/catalog_services.py > /tmp/live_services.json
-          python scripts/catalog_cubes.py > /tmp/live_cubes.json
+          mkdir -p /tmp/live
+          python scripts/catalog_tools.py > /tmp/live/live_tools.json
+          python scripts/catalog_services.py > /tmp/live/live_services.json
+          python scripts/catalog_cubes.py > /tmp/live/live_cubes.json
+
+      # THE COMPARISON LIVES IN scripts/mcp_diff.py, NOT HERE.
+      #
+      # It used to be a heredoc in this file that compared NAMES ONLY. On
+      # 2026-08-14 Infoblox marked 17 of 54 cubes deprecated — each gaining a
+      # successor, a sunset date and a rewritten description, two of them cubes
+      # Bloxsmith queries — and this step reported "Cubes: 0 added, 0 removed"
+      # and opened nothing. It was not broken; it was answering a narrower
+      # question than anyone believed it was asking.
+      #
+      # A detector that only runs inside CI cannot be tested, and an untested
+      # detector is a belief. As a file it has a known-answer selftest, run below
+      # BEFORE the real comparison, so this class of blind spot fails loudly here
+      # instead of silently in production.
+      - name: Prove the differ still detects what it claims to
+        if: steps.gate.outputs.run == 'true'
+        run: python scripts/mcp_diff.py --selftest
 
       - name: Diff vs committed snapshots
         if: steps.gate.outputs.run == 'true'
         id: diff
         run: |
-          python - <<'PY'
-          import json, os
-
-          def tool_names(p):
-              return sorted(t["name"] for t in json.load(open(p)))
-
-          def service_map(p):
-              data = json.load(open(p))
-              svc_list = data.get("all_services", {}).get("services", [])
-              return {s.get("service_name"): s for s in svc_list if isinstance(s, dict)}
-
-          def find_cube_list(obj):
-              """Defensive walker: first dict value that is a list under key 'cubes'."""
-              if isinstance(obj, dict):
-                  if "cubes" in obj and isinstance(obj["cubes"], list):
-                      return obj["cubes"]
-                  for v in obj.values():
-                      found = find_cube_list(v)
-                      if found is not None:
-                          return found
-              return None
-
-          def cube_names(p):
-              data = json.load(open(p))
-              lst = find_cube_list(data) or []
-              return sorted(c.get("name") for c in lst if isinstance(c, dict) and c.get("name"))
-
-          # tools: added/removed by name
-          t_live = tool_names("/tmp/live_tools.json")
-          t_snap = tool_names("scripts/out_tools.json")
-          t_added = [n for n in t_live if n not in t_snap]
-          t_removed = [n for n in t_snap if n not in t_live]
-
-          # services: added/removed by service_name, plus changed paths_count/version
-          s_live = service_map("/tmp/live_services.json")
-          s_snap = service_map("scripts/out_services.json")
-          s_added = sorted(n for n in s_live if n not in s_snap)
-          s_removed = sorted(n for n in s_snap if n not in s_live)
-          s_changed = []
-          for n in sorted(set(s_live) & set(s_snap)):
-              l, s = s_live[n], s_snap[n]
-              if l.get("paths_count") != s.get("paths_count") or l.get("version") != s.get("version"):
-                  bits = []
-                  if l.get("paths_count") != s.get("paths_count"):
-                      bits.append(f"paths {s.get('paths_count')} -> {l.get('paths_count')}")
-                  if l.get("version") != s.get("version"):
-                      bits.append(f"version {s.get('version')} -> {l.get('version')}")
-                  s_changed.append(f"{n}: {', '.join(bits)}")
-
-          # cubes: added/removed by name
-          c_live = cube_names("/tmp/live_cubes.json")
-          c_snap = cube_names("scripts/out_cubes.json")
-          c_added = [n for n in c_live if n not in c_snap]
-          c_removed = [n for n in c_snap if n not in c_live]
-
-          changed = bool(t_added or t_removed or s_added or s_removed or s_changed or c_added or c_removed)
-
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"changed={'true' if changed else 'false'}\n")
-              f.write("body<<BODYEOF\n")
-              f.write("The live Infoblox CSP `/mcp` surface no longer matches the committed baselines.\n\n")
-
-              f.write("## Tools\n\n")
-              f.write(f"**Added ({len(t_added)}):** {', '.join(t_added) or '_none_'}\n\n")
-              f.write(f"**Removed ({len(t_removed)}):** {', '.join(t_removed) or '_none_'}\n\n")
-              f.write("Refresh: `python scripts/catalog_tools.py > scripts/out_tools.json`\n\n")
-
-              f.write("## Services\n\n")
-              f.write(f"**Added ({len(s_added)}):** {', '.join(s_added) or '_none_'}\n\n")
-              f.write(f"**Removed ({len(s_removed)}):** {', '.join(s_removed) or '_none_'}\n\n")
-              f.write(f"**Changed ({len(s_changed)}):** {'; '.join(s_changed) or '_none_'}\n\n")
-              f.write("Refresh: `python scripts/catalog_services.py > scripts/out_services.json`\n\n")
-
-              f.write("## Cubes\n\n")
-              f.write(f"**Added ({len(c_added)}):** {', '.join(c_added) or '_none_'}\n\n")
-              f.write(f"**Removed ({len(c_removed)}):** {', '.join(c_removed) or '_none_'}\n\n")
-              f.write("Refresh: `python scripts/catalog_cubes.py > scripts/out_cubes.json`\n\n")
-
-              f.write("Check nothing broke before committing the refreshed baseline(s).\n")
-              f.write("BODYEOF\n")
-          PY
+          python scripts/mcp_diff.py \
+            --snap-dir scripts \
+            --live-dir /tmp/live \
+            --github-output "$GITHUB_OUTPUT"
 
       # ONE THREAD, NOT ONE ISSUE A NIGHT.
       #
@@ -272,7 +222,7 @@ jobs:
         if: steps.gate.outputs.run == 'true' && inputs.refresh_baselines == true
         run: |
           mkdir -p live-catalog
-          cp /tmp/live_tools.json /tmp/live_services.json /tmp/live_cubes.json live-catalog/
+          cp /tmp/live/live_tools.json /tmp/live/live_services.json /tmp/live/live_cubes.json live-catalog/
 
       # v7, was v4. Nothing this step passes moved: `name`, `path`,
       # `if-no-files-found` and `retention-days` are identical in v4's and v7's
@@ -343,8 +293,8 @@ jobs:
 
   # REFRESH THE COMMITTED BASELINES — manual only, never scheduled.
   #
-  # Why a second job at all: opening a PR needs `contents: write` (to push the branch)
-  # and `pull-requests: write`. The drift job needs neither, and it is the job that
+  # Why a second job at all: pushing the refresh branch needs `contents: write`.
+  # The drift job needs no write scope at all, and it is the job that
   # installs a third-party pip package and speaks to a live tenant every single night —
   # mcp 2.0.0 already broke it once from a version bump alone. Permanently widening
   # THAT job's token, for a button pressed a handful of times a year, is the wrong
@@ -364,7 +314,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # push the refresh branch
-      pull-requests: write # open the PR against the default branch
+      # issues: write, NOT pull-requests: write. This job used to open a PR with
+      # peter-evans/create-pull-request, and the first time it was ever exercised
+      # (2026-08-14, run 31794493703) it failed:
+      #
+      #   GitHub Actions is not permitted to create or approve pull requests
+      #
+      # That is a repo setting, off by default. Turning it on would grant EVERY
+      # workflow here the right to create PRs and to approve reviews — the approve
+      # half can bypass a review requirement — in exchange for a button pressed a
+      # few times a year. So the need was removed instead: this job pushes a branch
+      # and prints the compare URL, and a human clicks it. Same review step, no new
+      # permissions.
+      #
+      # Dropping PR creation frees exactly the scope the failure reporter at the
+      # bottom needs. Net permissions are unchanged, not widened.
+      issues: write # open/comment the "refresh failed" issue
     steps:
       # A refresh that was asked for and not performed must be a red run, not a green
       # skip. The drift job warns and skips when there is no INFOBLOX_API_KEY, which is
@@ -510,39 +475,117 @@ jobs:
           print("\n".join(lines))
           PY
 
-      # peter-evans/create-pull-request — the de facto standard for this, and the only
-      # new action dependency added here. add-paths pins the commit to exactly the three
-      # snapshots: whatever else a catalog run might have left in the workspace, it
-      # cannot ride along into the branch.
+      # PUSH A BRANCH, DO NOT OPEN A PR. This was peter-evans/create-pull-request,
+      # which failed the first and only time it ever ran (2026-08-14, run
+      # 31794493703) with "GitHub Actions is not permitted to create or approve
+      # pull requests" — a repo setting that is off by default. The fix is not to
+      # turn that setting on: it would let every workflow here create PRs and
+      # approve reviews, repo-wide, for a button pressed a few times a year.
       #
-      # If the baselines were already current the action commits nothing and opens no
-      # PR. That is the honest outcome, and the step below reports it.
+      # So the job commits the three snapshots to a branch, pushes it, and prints
+      # the URL that opens the PR. A human still reviews the same diff. No action
+      # dependency, no new scope.
       #
-      # v8, was v7. This one is a Node 20 -> 24 runtime bump and nothing else —
-      # the v7 and v8 action.yml differ by exactly one line, `using:`. Every
-      # input below survives, both outputs the next step reads
-      # (`pull-request-number`, `pull-request-url`) survive, and the required
-      # scopes are unchanged: `contents: write` and `pull-requests: write`,
-      # already declared on this job above.
-      - name: Open a PR with the refreshed baselines
-        id: pr
-        uses: peter-evans/create-pull-request@v8
-        with:
-          branch: mcp-baseline-refresh
-          delete-branch: true
-          add-paths: |
-            scripts/out_tools.json
-            scripts/out_services.json
-            scripts/out_cubes.json
-          commit-message: "chore: refresh MCP baseline snapshots from the live CSP surface"
-          title: "chore: refresh MCP baseline snapshots"
-          body: ${{ steps.refresh.outputs.body }}
-          labels: mcp-drift
-
-      - name: Say what happened
+      # Per-run branch name. The old code targeted a fixed `mcp-baseline-refresh`,
+      # and a stale branch of exactly that name already exists on this remote from
+      # an old point in history — it would have been reset or collided with.
+      #
+      # `git add` names the three files explicitly, so whatever else a catalog run
+      # left in the workspace cannot ride along.
+      - name: Commit the refreshed snapshots to a branch and push it
+        id: push
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          if [ -n "${{ steps.pr.outputs.pull-request-number }}" ]; then
-            echo "PR #${{ steps.pr.outputs.pull-request-number }}: ${{ steps.pr.outputs.pull-request-url }}"
+          set -euo pipefail
+          BRANCH="mcp-baseline-refresh/${{ github.run_id }}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add scripts/out_tools.json scripts/out_services.json scripts/out_cubes.json
+
+          # NOTHING TO REFRESH IS A SUCCESS, NOT A FAILURE. `git commit` exits 1 on
+          # an empty index, which would turn "the baselines were already current"
+          # into a red run and eventually into an ignored one.
+          if git diff --cached --quiet; then
+            echo "::notice::The live catalog matched the committed baselines exactly. Nothing to refresh, so no branch was pushed."
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -m "chore: refresh MCP baseline snapshots from the live CSP surface"
+          git push origin "$BRANCH"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Say what happened, and how to open the PR
+        if: steps.push.outputs.pushed == 'true'
+        env:
+          BRANCH: ${{ steps.push.outputs.branch }}
+          BODY: ${{ steps.refresh.outputs.body }}
+        run: |
+          {
+            echo "## Refreshed baselines pushed"
+            echo
+            echo "Branch \`$BRANCH\`. **Open the PR:**"
+            echo
+            echo "${{ github.server_url }}/${{ github.repository }}/compare/${{ github.event.repository.default_branch }}...$BRANCH?expand=1"
+            echo
+            echo "$BODY"
+            echo
+            echo "Once merged, delete the branch:"
+            echo
+            echo '```'
+            echo "git push origin --delete $BRANCH"
+            echo '```'
+            echo
+            echo "_Not deleted automatically: a branch may hold the only copy of a"
+            echo "diff somebody is still reading._"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A REFRESH FAILURE IS NOT A DRIFT-CHECK FAILURE, and must not claim to be.
+      #
+      # The drift job's failure arm says "the surface is not being watched". Reusing
+      # that text here would be a lie: the catalog and the diff both succeeded, and
+      # only the write failed. Same one-thread discipline, different title, and it
+      # names the stage that broke.
+      #
+      # This arm is why the job holds `issues: write` — a reporter without the scope
+      # to report is the exact dead-detector shape the rest of this file exists to
+      # prevent.
+      - name: Report that the refresh could not be written
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="MCP baseline refresh FAILED to write — the snapshots are unchanged"
+          RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --search "$TITLE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+
+          BODY=$(cat <<EOF
+          A baseline refresh was requested and **did not complete**. The committed
+          snapshots in \`scripts/\` are untouched, so nothing was corrupted — but the
+          refresh you asked for did not happen.
+
+          This is NOT a report that drift detection is broken. The nightly drift check
+          runs in a separate job and is unaffected; it will keep reporting the same
+          drift every night until a refresh succeeds.
+
+          Which stage failed is in the run log — the candidates are catalog validation
+          (refuses an empty or partial catalog), the commit, or the push.
+
+          Failed run: $RUN
+          EOF
+          )
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" \
+              --body "Still failing as of $(date -u +%Y-%m-%d). Run: $RUN"
           else
-            echo "::notice::The live catalog matched the committed baselines exactly. Nothing to refresh, so no PR was opened."
+            gh issue create --repo "${{ github.repository }}" \
+              --title "$TITLE" --label "mcp-drift" --body "$BODY" || \
+            gh issue create --repo "${{ github.repository }}" \
+              --title "$TITLE" --body "$BODY"
           fi
