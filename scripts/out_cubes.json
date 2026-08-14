@@ -408,7 +408,7 @@
       {
         "name": "SecurityActionSummaryView",
         "title": "Security Action Summary View",
-        "description": "Top-level security action inventory \u2014 one row per security action. Terminology: \"insight\" is the user-facing name for a security action in the IQ Threat Defense UI \u2014 treat \"insight\" and \"security action\" as synonyms, so questions like \"how many insights\" or \"total number of insights\" map to this cube's count measure. Scope: rows where visible=true and insight_created_at is within the last 30 days. Use for listing and filtering security actions, ranking by severity or time-saved, and reporting totals. Key fields: name, description, severity (Low/Medium/High/Critical), currentStatus (Needs Review, In Progress, Resolved, Closed, Expired, Reopened, Accepted Risk, False Positive), impact counts (totalEvents, totalIndicators, totalVerifiedAssets, totalUnverifiedAssets, totalUsers), effort metrics in seconds (manualTime, agentTime, timeSaved), threat context (tproperties, tclasses, threatActors), evaluation window (evaluationStartDate, evaluationEndDate), and derived expiringInDays (-1 expired, -2 not in warning window, 1-7 days remaining). Example questions: \"list High severity security actions\", \"security actions currently In Progress\", \"security actions expiring in the next 7 days\", \"total time saved by automation\". For per-security-action drill-downs use SecurityActionAssets / SecurityActionIndicators / SecurityActionRecommendations, joined on SecurityActionSummaryView.displayID \u2194 SecurityActionAssets.securityActionDisplayId / SecurityActionIndicators.securityActionDisplayId / SecurityActionRecommendations.securityActionDisplayId.",
+        "description": "Security action inventory \u2014 one row per visible security action (canonical leads and similar/non-canonical group members). Terminology: \"insight\" is the user-facing name for a security action in the IQ Threat Defense UI \u2014 treat \"insight\" and \"security action\" as synonyms. Scope: rows where visible=true and insight_created_at is within the last 30 days. ALWAYS filter isCanonical = true for the primary inventory and for questions like \"how many insights\" \u2014 otherwise similar members are mixed in and counts double. For similar insights linked to a lead, filter isCanonical = false AND groupId equals the canonical securityActionID. Key fields: name, description, severity (Low/Medium/High/Critical), currentStatus, impact counts, effort metrics, threat context, evaluation window, isCanonical, groupId, and derived expiringInDays. For per-security-action drill-downs use SecurityActionAssets / SecurityActionIndicators / SecurityActionRecommendations (those stay scoped to canonical parents).",
         "type": "cube",
         "meta": {
           "portal_path": [
@@ -51198,6 +51198,16 @@
           "title": "Security Action Summary View Display ID"
         },
         {
+          "name": "SecurityActionSummaryView.isCanonical",
+          "type": "boolean",
+          "title": "Security Action Summary View Is Canonical"
+        },
+        {
+          "name": "SecurityActionSummaryView.groupId",
+          "type": "string",
+          "title": "Security Action Summary View Group ID"
+        },
+        {
           "name": "SecurityActionSummaryView.name",
           "type": "string",
           "title": "Security Action Summary View Security Action Name"
@@ -51428,7 +51438,7 @@
         "name": "SecurityActionSummaryView",
         "title": "Security Action Summary View",
         "type": "cube",
-        "description": "Top-level security action inventory \u2014 one row per security action. Terminology: \"insight\" is the user-facing name for a security action in the IQ Threat Defense UI \u2014 treat \"insight\" and \"security action\" as synonyms, so questions like \"how many insights\" or \"total number of insights\" map to this cube's count measure. Scope: rows where visible=true and insight_created_at is within the last 30 days. Use for listing and filtering security actions, ranking by severity or time-saved, and reporting totals. Key fields: name, description, severity (Low/Medium/High/Critical), currentStatus (Needs Review, In Progress, Resolved, Closed, Expired, Reopened, Accepted Risk, False Positive), impact counts (totalEvents, totalIndicators, totalVerifiedAssets, totalUnverifiedAssets, totalUsers), effort metrics in seconds (manualTime, agentTime, timeSaved), threat context (tproperties, tclasses, threatActors), evaluation window (evaluationStartDate, evaluationEndDate), and derived expiringInDays (-1 expired, -2 not in warning window, 1-7 days remaining). Example questions: \"list High severity security actions\", \"security actions currently In Progress\", \"security actions expiring in the next 7 days\", \"total time saved by automation\". For per-security-action drill-downs use SecurityActionAssets / SecurityActionIndicators / SecurityActionRecommendations, joined on SecurityActionSummaryView.displayID \u2194 SecurityActionAssets.securityActionDisplayId / SecurityActionIndicators.securityActionDisplayId / SecurityActionRecommendations.securityActionDisplayId.",
+        "description": "Security action inventory \u2014 one row per visible security action (canonical leads and similar/non-canonical group members). Terminology: \"insight\" is the user-facing name for a security action in the IQ Threat Defense UI \u2014 treat \"insight\" and \"security action\" as synonyms. Scope: rows where visible=true and insight_created_at is within the last 30 days. ALWAYS filter isCanonical = true for the primary inventory and for questions like \"how many insights\" \u2014 otherwise similar members are mixed in and counts double. For similar insights linked to a lead, filter isCanonical = false AND groupId equals the canonical securityActionID. Key fields: name, description, severity (Low/Medium/High/Critical), currentStatus, impact counts, effort metrics, threat context, evaluation window, isCanonical, groupId, and derived expiringInDays. For per-security-action drill-downs use SecurityActionAssets / SecurityActionIndicators / SecurityActionRecommendations (those stay scoped to canonical parents).",
         "dimensions": [
           {
             "name": "SecurityActionSummaryView.securityActionID",
@@ -51443,6 +51453,22 @@
             "title": "Security Action Summary View Display ID",
             "type": "string",
             "description": "Short human-friendly identifier for a security action. Use when matching what users see in lists, URLs, tickets, and exports. For unique record linking and joins, use securityActionID. Useful for searching or filtering by a compact identifier rather than the full underlying ID.",
+            "primary_key": false,
+            "meta": {}
+          },
+          {
+            "name": "SecurityActionSummaryView.isCanonical",
+            "title": "Security Action Summary View Is Canonical",
+            "type": "boolean",
+            "description": "True for inventory leads (singleton or group anchor). False for similar/non-canonical group members. Filter isCanonical = true for the primary list; isCanonical = false with groupId for similar insights of a lead.",
+            "primary_key": false,
+            "meta": {}
+          },
+          {
+            "name": "SecurityActionSummaryView.groupId",
+            "title": "Security Action Summary View Group ID",
+            "type": "string",
+            "description": "Similarity group key. Null for singletons; equals the canonical security action's id for members (and often for the anchor when stamped). Filter groupId equals a canonical securityActionID with isCanonical = false to load similar insights for that lead.",
             "primary_key": false,
             "meta": {}
           },
@@ -51813,7 +51839,7 @@
             "title": "Security Action Summary View Security Actions Count",
             "type": "number",
             "agg_type": "count",
-            "description": "Total number of security actions in the inventory. Use when asking 'how many security actions', 'how many insights', or 'total number of insights' (\"insight\" is the user-facing alias for \"security action\"), or when charting security action volume by time, status, or severity. For impacted-asset scope, use totalAssets.",
+            "description": "Total number of security actions matching the current filters. For the primary inventory count (\"how many insights\"), filter isCanonical = true \u2014 otherwise similar members inflate the total. For impacted-asset scope, use totalAssets.",
             "meta": {}
           },
           {
@@ -51850,7 +51876,7 @@
           }
         ],
         "segments": [],
-        "dimension_count": 47,
+        "dimension_count": 49,
         "measure_count": 5,
         "segment_count": 0,
         "meta": {
