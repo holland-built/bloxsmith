@@ -30,6 +30,26 @@ set -uo pipefail
 # including any path this list does not recognise — a new top-level directory
 # that turns out to ship must fail toward releasing, never toward silence.
 #
+# THE TEST FOR ADDING A PATH HERE. Until 2026-08-14 this was a list with no stated
+# principle, and it took three patches in a single day (third_party/,
+# scripts/out_*.json, and a fourth that was proposed and rejected) before anyone
+# wrote down what the list is FOR. It is this:
+#
+#   A path is exempt when changing it cannot alter any published artifact — the
+#   binary, the archive, the image, the installers — AND cannot alter anything a
+#   customer executes, AND cannot mutate this repository.
+#
+# That third clause is not padding. `.github/workflows/mcp-drift.yml` was proposed
+# for exemption as "maintainer-only, it just opens issues". It holds
+# `contents: write` and runs `git push`: it commits to this repo, so it can change
+# what the next build is made of. Being maintainer-FACING is not the same as being
+# unable to affect what ships, and a workflow almost never passes this test.
+#
+# The asymmetry that settles every borderline case: a needless release is visible,
+# bounded and recoverable — an operator sees an update banner once. A missed release
+# is none of those, and neither is a workflow that quietly gains the ability to
+# publish while sitting on this list. When unsure, leave it off.
+#
 # Two entries are named individually instead of by a `scripts/` wildcard, and
 # the reason matters: `scripts/install.sh` IS what a customer runs to install,
 # so a blanket scripts/ exemption would let the installer change with no release
@@ -121,6 +141,8 @@ tag .dockerignore
 tag .env.example
 tag .github/workflows/release.yml
 tag .github/workflows/ci.yml
+tag .github/workflows/mcp-drift.yml
+tag .github/workflows/some-new-thing.yml
 tag scripts/install.sh
 tag scripts/install.command
 tag scripts/dev-serve.sh
