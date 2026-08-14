@@ -43,6 +43,18 @@ exempt() {
     .github/ISSUE_TEMPLATE/*)               return 0 ;;
     .github/PULL_REQUEST_TEMPLATE*)         return 0 ;;
     scripts/e2e.sh|scripts/needs-tag.sh)    return 0 ;;
+    # Committed baselines for the nightly MCP drift check, plus the differ that
+    # reads them. Maintainer-facing: nothing bundles them, no customer runs them,
+    # and a refresh changes no shipped byte. They were forcing a release every
+    # time Infoblox reshuffled its API — v3.66.5 was tagged partly for this.
+    #
+    # A NARROW glob on purpose. `scripts/*` would swallow install.sh, which IS
+    # what a customer runs, and that trap is the reason the two safe scripts
+    # above are enumerated one by one rather than wildcarded.
+    #
+    # Worst case if this is wrong: a snapshot-only change skips a release — and a
+    # snapshot-only change is by definition invisible to customers.
+    scripts/out_*.json|scripts/mcp_diff.py) return 0 ;;
     # Test-runner configuration. Same category as tests/ and scripts/e2e.sh: it
     # decides how the suite runs and reaches no customer. Found the same way
     # .gitignore was — by running this script on a real change (7468e9e, which
@@ -101,6 +113,10 @@ skip .gitignore
 skip playwright.config.ts
 skip third_party/uddi_self_service_example/web_portal.py
 skip third_party/uddi_automation_toolkit/SOURCE.md
+skip scripts/out_cubes.json
+skip scripts/out_tools.json
+skip scripts/mcp_diff.py
+tag scripts/install.command
 tag .dockerignore
 tag .env.example
 tag .github/workflows/release.yml

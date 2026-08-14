@@ -26,8 +26,10 @@ Exit code is 0 whether or not drift was found — drift is a finding, not an
 error. Nonzero means the comparison itself could not run.
 """
 import argparse
+import datetime
 import json
 import os
+import re
 import sys
 
 # Cube metadata worth watching. Everything here has bitten or could bite:
@@ -199,13 +201,134 @@ def diff_cubes(snap_path, live_path):
             "meta_changed": meta_changed, "desc_changed": desc_changed}
 
 
+# --- sunset deadlines ---------------------------------------------------------
+#
+# A DEADLINE NOTHING WATCHES IS A DEADLINE THAT PASSES.
+#
+# Everything above answers "what changed since last night". A sunset date answers
+# "what breaks on a date whether or not anything changes", and the two are not the
+# same question. On 2026-08-14 Infoblox marked NstarDnsActivity and HostMetrics —
+# both queried by this repo — for removal on 2027-07-16 and 2027-07-01. Nothing
+# will change between now and then. A change-detector is silent for eleven months
+# and then two dashboard panels return nothing.
+#
+# So this section fires on the calendar, not on a diff, and its verdict is a
+# SEPARATE output (`deadline_alert`) from `changed`. A countdown that can only
+# speak on a day something else happened to drift is not a countdown.
+
+BAND_SOON, BAND_URGENT, BAND_PASSED = 180, 60, 0
+
+# Directories worth grepping, and what to leave out. Test files mention these cube
+# names far more often than production code does; counting them would overstate the
+# blast radius and, worse, would keep alerting after a real migration because a
+# fixture still named the old cube.
+SRC_ROOTS = ("go", "ui/src")
+SRC_EXTS = (".go", ".jsx", ".js")
+SRC_SKIP_DIRS = ("go/web", "node_modules", "third_party")
+
+
+def used_cubes(names, root="."):
+    """{cube_name: [files]} for cubes referenced by PRODUCTION source.
+
+    Matches `CubeName.` — cube fields are always addressed as `Cube.field` in a
+    query body, so the trailing dot is what distinguishes a real reference from a
+    substring of a longer identifier.
+    """
+    hits = {}
+    pats = {n: re.compile(re.escape(n) + r"\.") for n in names}
+    for base in SRC_ROOTS:
+        top = os.path.join(root, base)
+        for dirpath, dirnames, filenames in os.walk(top):
+            rel_dir = os.path.relpath(dirpath, root)
+            if any(rel_dir == s or rel_dir.startswith(s + os.sep) for s in SRC_SKIP_DIRS):
+                dirnames[:] = []
+                continue
+            for fn in filenames:
+                if not fn.endswith(SRC_EXTS) or fn.endswith("_test.go"):
+                    continue
+                path = os.path.join(dirpath, fn)
+                try:
+                    text = open(path, encoding="utf-8", errors="ignore").read()
+                except OSError:
+                    continue
+                for n, pat in pats.items():
+                    if pat.search(text):
+                        hits.setdefault(n, []).append(os.path.relpath(path, root))
+    return {n: sorted(f) for n, f in hits.items()}
+
+
+def _band(days):
+    if days is None:
+        return "unknown"
+    if days <= BAND_PASSED:
+        return "passed"
+    if days <= BAND_URGENT:
+        return "urgent"
+    if days <= BAND_SOON:
+        return "soon"
+    return "watch"
+
+
+def deadlines(live_cube_map, root=".", today=None):
+    """Deprecated cubes THIS REPO USES, with days remaining and a severity band."""
+    today = today or datetime.date.today()
+    deprecated = {n: c for n, c in live_cube_map.items() if c["meta"]["deprecated"]}
+    used = used_cubes(deprecated.keys(), root)
+    rows = []
+    for n in sorted(used):
+        meta = deprecated[n]["meta"]
+        raw = meta["sunsetDate"]
+        days = None
+        if raw:
+            try:
+                days = (datetime.date.fromisoformat(str(raw)[:10]) - today).days
+            except ValueError:
+                days = None  # malformed — treated as unknown, which still alerts
+        successor = meta["successor"]
+        rows.append({
+            "name": n, "sunset": raw or "(no date given)", "days": days,
+            "band": _band(days), "successor": successor or "(none named)",
+            # A successor that is not published yet cannot be migrated to. That is
+            # the difference between "plan this" and "do this", so it is stated.
+            "successor_available": bool(successor) and successor in live_cube_map,
+            "files": used[n],
+        })
+    # `watch` is informational. Anything nearer than that, or any deadline we could
+    # not read, opens an issue on its own.
+    alert = any(r["band"] in ("soon", "urgent", "passed", "unknown") for r in rows)
+    return {"rows": rows, "alert": alert}
+
+
+def render_deadlines(d):
+    if not d["rows"]:
+        return []
+    label = {"passed": "🔴 SUNSET PASSED", "urgent": "🔴 URGENT", "soon": "🟠 SOON",
+             "watch": "🟡 watch", "unknown": "🔴 NO READABLE DATE"}
+    out = ["## Deprecated cubes this repo actually queries", "",
+           "| cube | days left | sunset | successor | available yet? |",
+           "| --- | ---: | --- | --- | --- |"]
+    for r in d["rows"]:
+        days = "?" if r["days"] is None else str(r["days"])
+        out.append(f"| `{r['name']}` {label[r['band']]} | {days} | {r['sunset']} | "
+                   f"`{r['successor']}` | {'yes' if r['successor_available'] else '**NOT PUBLISHED**'} |")
+    out.append("")
+    for r in d["rows"]:
+        out.append(f"- `{r['name']}` is used in: {', '.join(f'`{f}`' for f in r['files'])}")
+    out += ["",
+            "A successor marked **NOT PUBLISHED** cannot be migrated to — the cube "
+            "does not exist on the live surface. When it appears, the Cubes section "
+            "above will report it as added, and that is the signal to scope the "
+            "migration.", ""]
+    return out
+
+
 # --- report -------------------------------------------------------------------
 
 def _fmt(items):
     return ", ".join(items) if items else "_none_"
 
 
-def render(t, s, c):
+def render(t, s, c, d=None):
     # The opening line has to tell the truth in BOTH directions. It used to say
     # "no longer matches" unconditionally, which meant a clean run printed a
     # drift headline into the log and then quietly set changed=false — the report
@@ -214,9 +337,17 @@ def render(t, s, c):
     if any_change(t, s, c):
         out = ["The live Infoblox CSP `/mcp` surface no longer matches the committed "
                "baselines.", ""]
+    elif d and d["alert"]:
+        out = ["The live Infoblox CSP `/mcp` surface matches the committed baselines — "
+               "**nothing has drifted**. This is a DEADLINE notice: a cube this repo "
+               "queries is scheduled for removal.", ""]
     else:
         out = ["The live Infoblox CSP `/mcp` surface matches the committed baselines. "
                "Nothing to do.", ""]
+
+    # Deadlines first when they are the reason the job is speaking.
+    if d and d["alert"]:
+        out += render_deadlines(d)
 
     # Deprecation first and on its own. It is the only class of change here with
     # a DEADLINE attached, and it is the one the name-only check used to miss
@@ -256,8 +387,14 @@ def render(t, s, c):
             f"{'; '.join(c['meta_changed']) if c['meta_changed'] else '_none_'}", "",
             f"**Description changed ({len(c['desc_changed'])}):** "
             f"{_fmt(c['desc_changed'])}", "",
-            "Refresh: `python scripts/catalog_cubes.py > scripts/out_cubes.json`", "",
-            "Check nothing broke before committing the refreshed baseline(s)."]
+            "Refresh: `python scripts/catalog_cubes.py > scripts/out_cubes.json`", ""]
+    # When drift is the headline, deadlines go at the end as context rather than
+    # competing with it.
+    if d and d["rows"] and not d["alert"]:
+        out += render_deadlines(d)
+    elif d and d["rows"] and any_change(t, s, c):
+        out += render_deadlines(d)
+    out.append("Check nothing broke before committing the refreshed baseline(s).")
     return "\n".join(out)
 
 
@@ -277,6 +414,7 @@ def _selftest():
     normalisation cases that would make the new check cry wolf.
     """
     import tempfile
+    j = os.path.join
 
     def w(d, name, obj):
         p = os.path.join(d, name)
@@ -344,6 +482,71 @@ def _selftest():
     s_empty = {"added": [], "removed": [], "changed": []}
     check("no false drift on identical input", any_change(t_same, s_empty, c_same), False)
 
+    # --- deadlines ------------------------------------------------------------
+    # Every boundary, both sides. A band rule with no test rots the first time
+    # someone edits a threshold, and this one is the difference between eleven
+    # months of warning and none.
+    for days, want in [(181, "watch"), (180, "soon"), (61, "soon"), (60, "urgent"),
+                       (1, "urgent"), (0, "passed"), (-5, "passed"), (None, "unknown")]:
+        check(f"band at {days} days", _band(days), want)
+
+    # A fake repo tree, so usage detection is exercised rather than assumed.
+    repo = tempfile.mkdtemp()
+    os.makedirs(j(repo, "go", "internal", "dashboard"))
+    os.makedirs(j(repo, "go", "web"))
+    with open(j(repo, "go", "internal", "dashboard", "analytics.go"), "w") as fh:
+        fh.write('x := "UsedCube.total_count"\n')
+    # Test files and the built UI bundle must NOT count as usage — otherwise a
+    # stale fixture keeps the alarm ringing after a real migration.
+    with open(j(repo, "go", "internal", "dashboard", "analytics_test.go"), "w") as fh:
+        fh.write('x := "TestOnlyCube.total_count"\n')
+    with open(j(repo, "go", "web", "bundle.js"), "w") as fh:
+        fh.write('"BundleOnlyCube.x"\n')
+
+    today = datetime.date(2026, 8, 14)
+
+    def cube(name, deprecated=False, sunset=None, successor=None):
+        return {name: {"meta": {"deprecated": deprecated, "lifecycleStage": None,
+                                "successor": successor, "sunsetDate": sunset,
+                                "version": None}, "description": ""}}
+
+    m = {}
+    m.update(cube("UsedCube", True, "2027-07-01", "UsedCubeV1"))   # used + deprecated
+    m.update(cube("TestOnlyCube", True, "2027-07-01", "X"))        # only in a _test.go
+    m.update(cube("BundleOnlyCube", True, "2027-07-01", "X"))      # only in go/web
+    m.update(cube("UnusedCube", True, "2026-09-01", "Y"))          # deprecated, unused
+    d = deadlines(m, root=repo, today=today)
+    check("only production usage counts", [r["name"] for r in d["rows"]], ["UsedCube"])
+    check("321 days out is watch", d["rows"][0]["band"], "watch")
+    check("watch alone does not alert", d["alert"], False)
+    check("absent successor flagged", d["rows"][0]["successor_available"], False)
+
+    # Same cube, successor now published -> migration is actually possible.
+    m2 = dict(m)
+    m2.update(cube("UsedCubeV1"))
+    d2 = deadlines(m2, root=repo, today=today)
+    check("published successor detected", d2["rows"][0]["successor_available"], True)
+
+    # Inside 180 days: must alert with ZERO drift. This is the whole point.
+    d3 = deadlines(m, root=repo, today=datetime.date(2027, 3, 1))
+    check("122 days out is soon", d3["rows"][0]["band"], "soon")
+    check("soon alerts", d3["alert"], True)
+
+    # Malformed and missing dates alert rather than passing silently — an
+    # unreadable deadline on a cube we query is itself the problem.
+    d4 = deadlines(cube("UsedCube", True, "not-a-date", "Z"), root=repo, today=today)
+    check("malformed date is unknown", d4["rows"][0]["band"], "unknown")
+    check("malformed date alerts", d4["alert"], True)
+    d5 = deadlines(cube("UsedCube", True, None, "Z"), root=repo, today=today)
+    check("missing date alerts", d5["alert"], True)
+
+    # A cube we use that is NOT deprecated must be invisible here.
+    check("healthy cube is silent", deadlines(cube("UsedCube"), root=repo, today=today)["rows"], [])
+
+    # THE CENTRAL CLAIM: no drift at all, and the job still speaks.
+    check("zero drift + live deadline still alerts",
+          (any_change(t_same, s_empty, c_same), d3["alert"]), (False, True))
+
     if fails:
         for f in fails:
             print(f"selftest FAIL: {f}", file=sys.stderr)
@@ -359,6 +562,9 @@ def main():
     ap.add_argument("--snap-dir", default="scripts",
                     help="directory holding out_{tools,services,cubes}.json")
     ap.add_argument("--github-output", help="path to write changed= and body<<BODYEOF")
+    ap.add_argument("--repo-root", default=".",
+                    help="repo root to grep for cube usage (default: cwd)")
+    ap.add_argument("--today", help="ISO date to evaluate deadlines against (testing)")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
 
@@ -371,13 +577,22 @@ def main():
     t = diff_tools(j(a.snap_dir, "out_tools.json"), j(a.live_dir, "live_tools.json"))
     s = diff_services(j(a.snap_dir, "out_services.json"), j(a.live_dir, "live_services.json"))
     c = diff_cubes(j(a.snap_dir, "out_cubes.json"), j(a.live_dir, "live_cubes.json"))
+    d = deadlines(_cube_map(j(a.live_dir, "live_cubes.json")), root=a.repo_root,
+                  today=datetime.date.fromisoformat(a.today) if a.today else None)
 
-    body = render(t, s, c)
+    body = render(t, s, c, d)
     changed = any_change(t, s, c)
     print(body)
     if a.github_output:
         with open(a.github_output, "a", encoding="utf-8") as fh:
             fh.write(f"changed={'true' if changed else 'false'}\n")
+            # SEPARATE from `changed` on purpose — the workflow fires the issue
+            # step on either, so a deadline can speak on a day nothing drifted.
+            fh.write(f"deadline_alert={'true' if d['alert'] else 'false'}\n")
+            # The band set, so the workflow can comment ONLY when a cube crosses
+            # into a new band instead of every single night for months.
+            fh.write("deadline_bands=" +
+                     ",".join(f"{r['name']}:{r['band']}" for r in d["rows"]) + "\n")
             fh.write("body<<BODYEOF\n" + body + "\nBODYEOF\n")
     return 0
 
