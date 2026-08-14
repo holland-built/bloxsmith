@@ -1,8 +1,14 @@
 type: address-block
 name: regional_address_blocks
 
-# Bloxsmith seed template — original content, no third-party source.
-# Fictional RFC1918 address plan: one supernet per region, split for HQ + lab.
+# Bloxsmith seed template. The VALUES are original — a fictional RFC1918 address
+# plan, one supernet per region, split for HQ + lab. The SCHEMA is not: `type`,
+# `name`, `address_blocks` with region/environment/children, and this file's place
+# in the templates/ tree, all follow Chris Marrison's BSD-2-Clause
+# uddi_automation_toolkit. See NOTICE.md.
+#
+# This comment used to read "original content, no third-party source", which was
+# true of the addresses and wrong about everything around them.
 address_blocks:
   - address: 10.0.0.0
     cidr: 12

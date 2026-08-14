@@ -1,0 +1,26 @@
+[project]
+name = "uddi-automation-toolkit"
+version = "2.0.0"
+description = "Tag-driven site, address-block, and DNS provisioning, decommissioning, querying, and template authoring for Infoblox Universal DDI"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Chris Marrison", email = "chris@infoblox.com" }]
+license = { text = "BSD-2-Clause" }
+dependencies = [
+  "requests>=2.28",
+  "PyYAML>=6.0",
+  "flask>=3.0",
+]
+
+[project.scripts]
+uddi = "uddi_toolkit.cli:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"uddi_toolkit.web" = ["static/*", "static/**/*", "site_template_builder.html"]

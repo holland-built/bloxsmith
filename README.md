@@ -343,4 +343,5 @@ Full steps, the deploy matrix, auto-unlock, and pinning → **[docs/DEPLOYMENT.m
 
 - **Full deployment & env reference →** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - **Security policy →** [SECURITY.md](.github/SECURITY.md) · **Contributing →** [CONTRIBUTING.md](.github/CONTRIBUTING.md)
+- **Built on the work of [Chris Marrison](https://github.com/ccmarris)** — Bloxsmith's provisioning engine and self-service tab are derived from his BSD-2-Clause [uddi_automation_toolkit](https://github.com/ccmarris/uddi_automation_toolkit) and [uddi_self_service_example](https://github.com/ccmarris/uddi_self_service_example). Details and the upstream licence → [NOTICE.md](NOTICE.md).
 - Released under the [MIT License](LICENSE).

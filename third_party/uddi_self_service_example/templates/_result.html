@@ -1,0 +1,52 @@
+{% if error %}
+<div class="mt-2 d-flex align-items-start gap-2 px-3 py-2 rounded-3 small"
+     style="background:var(--ib-error-bg);border:1px solid #FEB2B2;color:var(--ib-error);">
+  <i class="bi bi-exclamation-circle-fill mt-1 flex-shrink-0"></i>
+  <span><strong>Error:</strong> {{ error }}</span>
+</div>
+{% elif result is not none %}
+<div class="mt-2">
+  {% set is_dry   = result.data.get('dry_run') %}
+  {% set is_error = has_error %}
+  {% if is_dry %}
+    {% set bdr = '#ECC94B' %}{% set bg = '#FFFFF0' %}{% set icon = 'bi-info-circle-fill' %}{% set icon_col = '#B7791F' %}
+  {% elif is_error %}
+    {% set bdr = '#FC8181' %}{% set bg = '#FFF5F5' %}{% set icon = 'bi-x-circle-fill'    %}{% set icon_col = '#C53030' %}
+  {% else %}
+    {% set bdr = '#68D391' %}{% set bg = '#F0FFF4' %}{% set icon = 'bi-check-circle-fill' %}{% set icon_col = '#276749' %}
+  {% endif %}
+  <div class="card" style="border-color:{{ bdr }};">
+    <div class="card-header d-flex justify-content-between align-items-center"
+         style="background:{{ bg }};border-bottom-color:{{ bdr }};padding:.5rem .85rem;">
+      <span style="font-size:.78rem;font-weight:600;color:#2D3748;">
+        <i class="bi {{ icon }} me-1" style="color:{{ icon_col }};"></i>Result
+      </span>
+      {% if is_dry %}
+        <span class="badge badge-dry" style="background:#ECC94B;color:#744210;">
+          <i class="bi bi-eye me-1"></i>DRY RUN — no changes made
+        </span>
+      {% elif is_error %}
+        <span class="badge bg-danger badge-dry"><i class="bi bi-x me-1"></i>Error</span>
+      {% else %}
+        <span class="badge badge-dry" style="background:var(--ib-teal);color:#fff;">
+          <i class="bi bi-check me-1"></i>OK
+        </span>
+      {% endif %}
+    </div>
+    <div class="card-body" style="padding:.65rem .85rem;">
+      <pre class="result-pre">{{ result | join('\n') }}</pre>
+    </div>
+    {% if result.data %}
+    <div class="card-footer" style="background:#FAFBFD;border-top:1px solid {{ bdr }};">
+      <details>
+        <summary style="cursor:pointer;user-select:none;font-size:.72rem;color:var(--ib-text-muted);list-style:none;">
+          <i class="bi bi-braces me-1"></i>JSON data
+        </summary>
+        <pre class="result-pre mt-2 p-2 rounded-2"
+             style="background:#1A202C;color:#A0AEC0;border:none;font-size:.75rem;">{{ result.data | tojson(indent=2) }}</pre>
+      </details>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

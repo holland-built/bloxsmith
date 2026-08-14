@@ -1,3 +1,13 @@
+// This tab's feature set — next-available-subnet allocation from a tagged address
+// block, subnet plus forward/reverse DNS zones in one action, record editing, and
+// IP allocate/release — is derived from Chris Marrison's BSD-2-Clause
+// uddi_self_service_example. See NOTICE.md at the repo root for the attribution
+// and the upstream copyright notice.
+//
+// This comment is a signpost for whoever is reading the source. It is NOT the
+// attribution itself: this file is minified into go/web/, so nothing here reaches
+// a user. NOTICE.md ships inside the release archive and the container image, and
+// that is what carries the notice.
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { Card, CardGrid, COLORS, Empty, FetchError, PreviewApply, PreviewBox, TabIntro, deletedMsg } from '../components/ui.jsx'

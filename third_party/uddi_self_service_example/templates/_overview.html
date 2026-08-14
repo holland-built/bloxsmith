@@ -1,0 +1,115 @@
+{% if error %}
+<div class="d-flex align-items-start gap-2 px-3 py-2 rounded-3 mb-3"
+     style="background:var(--ib-error-bg);border:1px solid #FEB2B2;color:var(--ib-error);">
+  <i class="bi bi-exclamation-circle-fill mt-1 flex-shrink-0"></i>
+  <div>
+    <strong style="font-size:.82rem;">Connection failed</strong><br>
+    <span style="font-size:.78rem;">{{ error }}</span>
+  </div>
+</div>
+
+{% else %}
+{# ── Connected status bar ─────────────────────────────────────────── #}
+<div class="d-flex align-items-center gap-2 px-3 py-2 rounded-3 mb-3"
+     style="background:var(--ib-success-bg);border:1px solid #9AE6B4;">
+  <i class="bi bi-check-circle-fill flex-shrink-0" style="color:var(--ib-success);"></i>
+  <span style="font-size:.82rem;font-weight:600;color:var(--ib-success);">Connected</span>
+  <span style="font-size:.75rem;color:var(--ib-text-muted);margin-left:.25rem;">
+    &nbsp;·&nbsp; {{ spaces | length }} IP space{{ 's' if spaces | length != 1 else '' }}
+    &nbsp;·&nbsp; {{ views | length }} DNS view{{ 's' if views | length != 1 else '' }}
+  </span>
+</div>
+
+{# ── IP Spaces + DNS Views ────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+
+  {# IP Spaces #}
+  <div class="col-md-6">
+    <div class="card h-100" style="border-color:var(--ib-border);">
+      <div class="card-header d-flex justify-content-between align-items-center"
+           style="background:var(--ib-teal-light);border-bottom-color:#B2F5EA;">
+        <span style="font-size:.75rem;font-weight:700;color:#1D4044;">
+          <i class="bi bi-cloud-fill me-1" style="color:var(--ib-teal);"></i>IP Spaces
+        </span>
+        <span class="badge" style="background:var(--ib-teal);color:#fff;font-size:.7rem;">
+          {{ spaces | length }}
+        </span>
+      </div>
+      {% if spaces %}
+      <ul class="list-group list-group-flush" style="max-height:220px;overflow-y:auto;">
+        {% for s in spaces %}
+        <li class="list-group-item py-0 px-0" style="border-color:#EDF2F7;">
+          <form hx-post="/api/drilldown/space"
+                hx-include="#settings-panel"
+                hx-target="#drilldown-content"
+                hx-swap="innerHTML show:#drilldown-content:top"
+                class="d-flex justify-content-between align-items-center px-3 py-2">
+            <input type="hidden" name="space_id"   value="{{ s.id }}">
+            <input type="hidden" name="space_name" value="{{ s.name | e }}">
+            <button type="submit" class="dd-link"
+                    style="background:none;border:none;padding:0;text-align:left;cursor:pointer;font-size:.8rem;color:var(--ib-navy);font-weight:600;">
+              <i class="bi bi-hdd-network me-1" style="color:var(--ib-teal);font-size:.78rem;"></i>
+              {{ s.name or '(unnamed)' }}
+              {% if s.comment %}<span class="text-muted fw-normal ms-1" style="font-size:.72rem;">— {{ s.comment }}</span>{% endif %}
+              <i class="bi bi-chevron-right ms-1" style="font-size:.65rem;color:var(--ib-teal);"></i>
+              <span class="htmx-indicator spinner-border spinner-border-sm ms-1" style="width:.8rem;height:.8rem;border-width:2px;"></span>
+            </button>
+            <code style="font-size:.68rem;color:var(--ib-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">{{ s.id }}</code>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="card-body py-3 text-center">
+        <span class="text-muted small">No IP spaces found</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# DNS Views #}
+  <div class="col-md-6">
+    <div class="card h-100" style="border-color:var(--ib-border);">
+      <div class="card-header d-flex justify-content-between align-items-center"
+           style="background:var(--ib-navy-light);border-bottom-color:#C3CCE8;">
+        <span style="font-size:.75rem;font-weight:700;color:var(--ib-navy);">
+          <i class="bi bi-eye me-1" style="color:var(--ib-navy-mid);"></i>DNS Views
+        </span>
+        <span class="badge" style="background:var(--ib-navy);color:#fff;font-size:.7rem;">
+          {{ views | length }}
+        </span>
+      </div>
+      {% if views %}
+      <ul class="list-group list-group-flush" style="max-height:220px;overflow-y:auto;">
+        {% for v in views %}
+        <li class="list-group-item py-0 px-0" style="border-color:#EDF2F7;">
+          <form hx-post="/api/drilldown/view"
+                hx-include="#settings-panel"
+                hx-target="#drilldown-content"
+                hx-swap="innerHTML show:#drilldown-content:top"
+                class="d-flex justify-content-between align-items-center px-3 py-2">
+            <input type="hidden" name="view_id"   value="{{ v.id }}">
+            <input type="hidden" name="view_name" value="{{ v.name | e }}">
+            <button type="submit" class="dd-link"
+                    style="background:none;border:none;padding:0;text-align:left;cursor:pointer;font-size:.8rem;color:var(--ib-navy);font-weight:600;">
+              <i class="bi bi-globe me-1" style="color:var(--ib-navy-mid);font-size:.78rem;"></i>
+              {{ v.name or '(unnamed)' }}
+              {% if v.comment %}<span class="text-muted fw-normal ms-1" style="font-size:.72rem;">— {{ v.comment }}</span>{% endif %}
+              <i class="bi bi-chevron-right ms-1" style="font-size:.65rem;color:var(--ib-navy-mid);"></i>
+              <span class="htmx-indicator spinner-border spinner-border-sm ms-1" style="width:.8rem;height:.8rem;border-width:2px;"></span>
+            </button>
+            <code style="font-size:.68rem;color:var(--ib-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">{{ v.id }}</code>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="card-body py-3 text-center">
+        <span class="text-muted small">No DNS views found</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endif %}

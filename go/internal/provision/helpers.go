@@ -6,6 +6,12 @@
 // every fail-forward teardown ordering is preserved verbatim; Python is the
 // reference and its quirks are matched, not "improved".
 //
+// That toolkit is BSD-2-Clause and this package is a derivative work of it.
+// Attribution and the upstream copyright notice live in NOTICE.md at the repo
+// root, which ships inside the release archive and the container image — this
+// comment is a signpost for whoever is reading the code, not the notice itself.
+// The pinned upstream source is vendored at third_party/uddi_automation_toolkit.
+//
 // Go has no exceptions, so Python's ProvisionError-vs-Exception control flow
 // becomes error returns: any non-nil error out of a create step triggers the
 // same rollback the Python except-block runs (unless dry-run). Emit-based SSE

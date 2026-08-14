@@ -11,8 +11,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Hardcoded fallbacks (server.py:1020) substituting for the toolkit's uddi.ini
-// [DEFAULTS] tier, which this port drops.
+// Hardcoded fallbacks (server.py:1020) substituting for the uddi.ini [DEFAULTS]
+// tier in Chris Marrison's uddi_automation_toolkit, which this port drops.
+// See NOTICE.md.
 const (
 	defaultIPSpace   = "default"
 	defaultDNSParent = "internal.example.com"

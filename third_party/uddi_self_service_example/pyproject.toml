@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uddi-self-service-example"
+version = "0.2.0"
+description = "Self-service portal for Universal DDI: subnets, DNS zones, records, and IP allocation"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Chris Marrison", email = "chris@infoblox.com" }]
+license = { text = "BSD-2-Clause" }
+dependencies = [
+  "universal-ddi-python-client>=0.1.0",
+  "PyYAML>=6.0",
+  "flask>=3.0",
+]
+
+[project.scripts]
+uddi-self-service = "uddi_self_service_example.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-mock>=3.12",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

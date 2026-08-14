@@ -1,0 +1,4 @@
+[UDDI]
+api_key  = your-api-key-here
+# base_url = https://csp.infoblox.com   # only needed for non-CSP deployments
+# valid_cert = true                     # set to false to disable SSL verification

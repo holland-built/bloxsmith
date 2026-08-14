@@ -1,0 +1,108 @@
+{# ── Drilldown: Subnet IP addresses ───────────────────────────────── #}
+<div class="card mt-1" style="border-color:var(--ib-teal);border-top-width:2px;">
+
+  {# Breadcrumb header #}
+  <div class="card-header d-flex align-items-center justify-content-between py-2"
+       style="background:var(--ib-teal-light);border-bottom-color:#B2F5EA;">
+    <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:.78rem;">
+      <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none"
+              style="font-size:.78rem;color:var(--ib-teal-dark);"
+              onclick="document.getElementById('drilldown-content').innerHTML=''">
+        <i class="bi bi-arrow-left me-1"></i>Overview
+      </button>
+      <span style="color:#94A3B8;">/</span>
+      <form hx-post="/api/drilldown/space"
+            hx-include="#settings-panel"
+            hx-target="#drilldown-content"
+            hx-swap="innerHTML show:#drilldown-content:top"
+            class="d-inline">
+        <input type="hidden" name="space_id"   value="{{ space_id }}">
+        <input type="hidden" name="space_name" value="{{ space_name | e }}">
+        <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none"
+                style="font-size:.78rem;color:var(--ib-teal-dark);">
+          <i class="bi bi-cloud-fill me-1" style="font-size:.72rem;"></i>{{ space_name }}
+        </button>
+      </form>
+      <span style="color:#94A3B8;">/</span>
+      <i class="bi bi-diagram-3" style="color:var(--ib-teal);"></i>
+      <strong style="color:var(--ib-navy);">{{ subnet_label }}</strong>
+    </div>
+    <div style="font-size:.72rem;color:var(--ib-text-muted);">
+      {{ addresses | length }} address{{ 'es' if addresses | length != 1 else '' }}
+    </div>
+  </div>
+
+  <div class="card-body p-0">
+
+    {# Action error banner #}
+    {% if action_error %}
+    <div class="mx-3 mt-2 alert alert-danger py-2 small d-flex align-items-center gap-2">
+      <i class="bi bi-exclamation-circle-fill flex-shrink-0"></i>{{ action_error }}
+    </div>
+    {% endif %}
+
+    {% if addresses %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0" style="font-size:.8rem;">
+        <thead>
+          <tr style="background:#F8FAFF;">
+            <th class="dd-th">IP Address</th>
+            <th class="dd-th">Name</th>
+            <th class="dd-th">MAC / HW</th>
+            <th class="dd-th">State</th>
+            <th class="dd-th">Comment</th>
+            <th class="dd-th" style="width:80px;text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in addresses %}
+          {% set st = (a.state or '') | lower %}
+          <tr id="addr-row-{{ loop.index }}">
+            <td class="dd-td" style="font-family:monospace;font-weight:600;color:var(--ib-navy);">
+              {{ a.address or '—' }}
+            </td>
+            <td class="dd-td">{{ a.names[0].name if a.names is defined and a.names else (a.name or '—') }}</td>
+            <td class="dd-td" style="font-family:monospace;font-size:.75rem;color:var(--ib-text-muted);">{{ a.hwaddr or '—' }}</td>
+            <td class="dd-td">
+              {% if st in ('used', 'allocated') %}
+                <span class="dd-badge-ok">{{ a.state }}</span>
+              {% elif st in ('free', 'available') %}
+                <span style="font-size:.68rem;padding:.1rem .35rem;border-radius:4px;background:#EBF8FF;color:#2B6CB0;border:1px solid #BEE3F8;font-weight:600;">{{ a.state }}</span>
+              {% elif st %}
+                <span style="font-size:.68rem;padding:.1rem .35rem;border-radius:4px;background:var(--ib-navy-light);color:var(--ib-navy);font-weight:600;">{{ a.state }}</span>
+              {% else %}
+                <span style="color:var(--ib-text-muted);">—</span>
+              {% endif %}
+            </td>
+            <td class="dd-td" style="color:var(--ib-text-muted);">{{ a.comment or '—' }}</td>
+            <td class="dd-td" style="text-align:right;">
+              {# Release (only show for used/allocated addresses) #}
+              {% if st in ('used', 'allocated') %}
+              <form hx-post="/api/inline/release-address" hx-include="#settings-panel"
+                    hx-target="#drilldown-content" hx-swap="innerHTML show:#drilldown-content:top"
+                    hx-confirm="Release {{ a.address }}? This frees the address back to the pool.">
+                <input type="hidden" name="address_id"    value="{{ a.id }}">
+                <input type="hidden" name="subnet_id"     value="{{ subnet_id }}">
+                <input type="hidden" name="subnet_label"  value="{{ subnet_label | e }}">
+                <input type="hidden" name="space_id"      value="{{ space_id }}">
+                <input type="hidden" name="space_name"    value="{{ space_name | e }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2"
+                        title="Release" style="font-size:.72rem;">
+                  <i class="bi bi-x-circle"></i>
+                  <span class="htmx-indicator spinner-border spinner-border-sm" style="width:.65rem;height:.65rem;border-width:2px;"></span>
+                </button>
+              </form>
+              {% else %}
+              <span style="color:var(--ib-text-muted);font-size:.72rem;">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-4 text-center text-muted small">No allocated IP addresses found in this subnet.</div>
+    {% endif %}
+  </div>
+</div>
