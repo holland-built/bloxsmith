@@ -187,29 +187,6 @@
     ]
   },
   {
-    "name": "infoblox-portal_generate_chart",
-    "description": "Generate a formatted A2UI chart component from a stored Parquet table.\n\nThe chart is registered in the ChartRegistry under a human-readable ID\n(HRID) and can be rendered via 'ui://charts/{hrid}'.  Rehydration steps\n(the upstream query pipeline that produced the table) are derived\nautomatically from audit artifacts \u2014 no manual specification required.\nWhen the resource is accessed, any duckdb_query steps are re-run so the\nchart always reflects the latest Parquet data.\n\nWhen the source table has one row per entity rather than one row per\ncategory, supply group_by_column, aggregation, and aggregation_alias to\npre-aggregate the data before charting.",
-    "params": [
-      "task_description*:string",
-      "table_hrid*:string",
-      "title*:string",
-      "chart_type*:string",
-      "x_axis_column*:string",
-      "series_columns*:array",
-      "group_by_column:[{'type': 'string'}, {'type': 'null'}]",
-      "aggregation:[{'type': 'string'}, {'type': 'null'}]",
-      "aggregation_alias:[{'type': 'string'}, {'type': 'null'}]"
-    ],
-    "required": [
-      "chart_type",
-      "series_columns",
-      "table_hrid",
-      "task_description",
-      "title",
-      "x_axis_column"
-    ]
-  },
-  {
     "name": "infoblox-portal_user_action",
     "description": "Handle A2UI user-action events.\n\nThe A2UI client calls this tool when a user interacts with an\naction-bearing component (e.g. a form submit button).  Routing\nis based on the ``name`` argument.",
     "params": [
