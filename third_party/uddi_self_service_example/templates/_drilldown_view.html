@@ -1,0 +1,145 @@
+{# ── Drilldown: DNS View contents (zones) ─────────────────────────── #}
+<div class="card mt-1" style="border-color:var(--ib-navy);border-top-width:2px;">
+
+  {# Breadcrumb header #}
+  <div class="card-header d-flex align-items-center justify-content-between py-2"
+       style="background:var(--ib-navy-light);border-bottom-color:#C3CCE8;">
+    <div class="d-flex align-items-center gap-2" style="font-size:.78rem;">
+      <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none"
+              style="font-size:.78rem;color:var(--ib-navy);"
+              onclick="document.getElementById('drilldown-content').innerHTML=''">
+        <i class="bi bi-arrow-left me-1"></i>Overview
+      </button>
+      <span style="color:#94A3B8;">/</span>
+      <i class="bi bi-eye" style="color:var(--ib-navy-mid);"></i>
+      <strong style="color:var(--ib-navy);">{{ view_name }}</strong>
+    </div>
+    <div style="font-size:.72rem;color:var(--ib-text-muted);">
+      {{ zones|length }} zone{{ 's' if zones|length != 1 else '' }}
+    </div>
+  </div>
+
+  <div class="card-body p-0">
+
+    {# Action error banner #}
+    {% if action_error %}
+    <div class="mx-3 mt-2 alert alert-danger py-2 small d-flex align-items-center gap-2">
+      <i class="bi bi-exclamation-circle-fill flex-shrink-0"></i>{{ action_error }}
+    </div>
+    {% endif %}
+
+    {% if zones %}
+    <table class="table table-sm table-hover mb-0" style="font-size:.8rem;">
+      <thead>
+        <tr style="background:#F8FAFF;">
+          <th class="dd-th">FQDN</th>
+          <th class="dd-th">Type</th>
+          <th class="dd-th">Status</th>
+          <th class="dd-th">Comment</th>
+          <th class="dd-th" style="width:110px;text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for z in zones %}
+        {% set disabled = z.disabled if z.disabled is defined else false %}
+        <tr id="zn-row-{{ loop.index }}" style="{{ 'opacity:.55;' if disabled else '' }}">
+          <td class="dd-td" style="font-family:monospace;font-weight:600;color:var(--ib-navy);">{{ z.fqdn }}</td>
+          <td class="dd-td">
+            <span style="font-size:.7rem;padding:.1rem .35rem;border-radius:4px;background:var(--ib-navy-light);color:var(--ib-navy);font-weight:600;">
+              {{ z.primary_type or '—' }}
+            </span>
+          </td>
+          <td class="dd-td">
+            {% if disabled %}
+              <span class="dd-badge-danger">Disabled</span>
+            {% else %}
+              <span class="dd-badge-ok">Active</span>
+            {% endif %}
+          </td>
+          <td class="dd-td" style="color:var(--ib-text-muted);">{{ z.comment or '—' }}</td>
+          <td class="dd-td" style="text-align:right;">
+            <div class="d-flex gap-1 justify-content-end">
+              {# View Records #}
+              <form hx-post="/api/drilldown/zone" hx-include="#settings-panel"
+                    hx-target="#drilldown-content" hx-swap="innerHTML show:#drilldown-content:top">
+                <input type="hidden" name="zone_id"   value="{{ z.id }}">
+                <input type="hidden" name="zone_fqdn" value="{{ z.fqdn | e }}">
+                <input type="hidden" name="view_id"   value="{{ view_id }}">
+                <input type="hidden" name="view_name" value="{{ view_name | e }}">
+                <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2"
+                        title="View Records" style="font-size:.72rem;">
+                  <i class="bi bi-list-ul"></i>
+                  <span class="htmx-indicator spinner-border spinner-border-sm" style="width:.65rem;height:.65rem;border-width:2px;"></span>
+                </button>
+              </form>
+              {# Edit #}
+              <button type="button" class="btn btn-outline-warning btn-sm py-0 px-2"
+                      title="Edit" onclick="toggleRow('zn-edit-{{ loop.index }}')"
+                      style="font-size:.72rem;">
+                <i class="bi bi-pencil"></i>
+              </button>
+              {# Delete #}
+              <form hx-post="/api/inline/delete-zone" hx-include="#settings-panel"
+                    hx-target="#drilldown-content" hx-swap="innerHTML show:#drilldown-content:top"
+                    hx-confirm="Delete zone {{ z.fqdn }}? This removes the zone and all its records.">
+                <input type="hidden" name="zone_id"   value="{{ z.id }}">
+                <input type="hidden" name="view_id"   value="{{ view_id }}">
+                <input type="hidden" name="view_name" value="{{ view_name | e }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2"
+                        title="Delete" style="font-size:.72rem;">
+                  <i class="bi bi-trash"></i>
+                  <span class="htmx-indicator spinner-border spinner-border-sm" style="width:.65rem;height:.65rem;border-width:2px;"></span>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {# Inline edit form row #}
+        <tr id="zn-edit-{{ loop.index }}" hidden>
+          <td colspan="5" style="background:#FAFBFD;padding:.75rem 1rem;border-top:none;">
+            <form hx-post="/api/inline/modify-zone" hx-include="#settings-panel"
+                  hx-target="#drilldown-content" hx-swap="innerHTML show:#drilldown-content:top">
+              <input type="hidden" name="zone_id"   value="{{ z.id }}">
+              <input type="hidden" name="view_id"   value="{{ view_id }}">
+              <input type="hidden" name="view_name" value="{{ view_name | e }}">
+              <div class="row g-2 align-items-end">
+                <div class="col-sm-3">
+                  <label class="form-label">Comment</label>
+                  <input type="text" name="comment" class="form-control form-control-sm"
+                         value="{{ z.comment or '' }}" placeholder="leave blank to keep">
+                </div>
+                <div class="col-sm-3">
+                  <label class="form-label">Tags</label>
+                  <input type="text" name="tags" class="form-control form-control-sm"
+                         placeholder="key=val, … (replaces all)">
+                </div>
+                <div class="col-sm-2">
+                  <label class="form-label">State</label>
+                  <select name="disabled" class="form-select form-select-sm">
+                    <option value="">— keep —</option>
+                    <option value="false" {{ 'selected' if disabled == false else '' }}>Enabled</option>
+                    <option value="true"  {{ 'selected' if disabled == true  else '' }}>Disabled</option>
+                  </select>
+                </div>
+                <div class="col-sm-4 d-flex gap-1 align-items-end">
+                  <button type="submit" class="btn btn-warning btn-sm">
+                    <i class="bi bi-check-lg"></i> Save
+                    <span class="htmx-indicator spinner-border spinner-border-sm" style="width:.72rem;height:.72rem;border-width:2px;"></span>
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm"
+                          onclick="toggleRow('zn-edit-{{ loop.index }}')">
+                    <i class="bi bi-x-lg"></i> Cancel
+                  </button>
+                </div>
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="p-4 text-center text-muted small">No zones found in this view.</div>
+    {% endif %}
+  </div>
+</div>

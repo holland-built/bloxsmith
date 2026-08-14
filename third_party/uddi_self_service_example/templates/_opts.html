@@ -1,0 +1,5 @@
+{% if error %}<option value="">⚠ {{ error }}</option>
+{% elif not items %}<option value="">{{ empty_msg }}</option>
+{% else %}<option value="">— select —</option>
+{% for item in items %}<option value="{{ item.id }}">{{ item.label }}</option>
+{% endfor %}{% endif %}

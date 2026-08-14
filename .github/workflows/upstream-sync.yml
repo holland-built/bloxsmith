@@ -1,0 +1,280 @@
+name: Upstream sync check
+
+# Bloxsmith's provisioning engine and self-service tab are derived from two
+# BSD-2-Clause projects by Chris Marrison, vendored under third_party/ at pinned
+# commits (see NOTICE.md). A copy that nobody watches silently becomes a fork:
+# upstream fixes a bug, we never hear about it, and the pin quietly turns into an
+# archive of a stale version we can no longer honestly call "the upstream".
+#
+# This job reports the delta and NOTHING ELSE. It never ports a change, never bumps
+# a pin, and never opens a PR. Bloxsmith is a Go reimplementation of Python — it does
+# not track those projects commit for commit, and most upstream commits will not
+# matter here. A human reads the changed-file list and decides.
+#
+# Weekly, not nightly. Upstream moved twice in roughly three months (2026-05-28 and
+# 2026-06-25); a nightly cron on that cadence is a notification nobody reads by the
+# third week, which is the failure mode mcp-drift.yml already had to be rescued from.
+#
+# No secrets: both upstreams are public. This means it also runs on forks.
+
+on:
+  schedule:
+    - cron: "23 7 * * 1" # Mondays ~07:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # FAIL CLOSED. Every field this job depends on is validated before a single
+      # network call. A SOURCE.md whose front matter got reworded, or whose SHA was
+      # shortened to the 7-char form by a well-meaning edit, must stop the run — not
+      # silently check nothing and report "in sync". That is the same dead-detector
+      # shape as the ImportError that left mcp-drift.yml passing green for two nights
+      # while watching nothing.
+      #
+      # Stdlib only, no pyyaml: the front matter is flat `key: value` lines, and a
+      # dependency here is one more thing that can break the detector.
+      - name: Read and validate the pinned sources
+        id: read
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, glob
+
+          sources, fatal = [], []
+          paths = sorted(glob.glob("third_party/*/SOURCE.md"))
+          if not paths:
+              print("::error::No third_party/*/SOURCE.md found. Either the vendored "
+                    "sources were removed and this workflow should go with them, or "
+                    "something moved them. Not checking anything is not an option.")
+              sys.exit(1)
+
+          for path in paths:
+              name = os.path.basename(os.path.dirname(path))
+              text = open(path, encoding="utf-8").read()
+              m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+              if not m:
+                  fatal.append(f"{path}: no YAML front matter block at the top of the file")
+                  continue
+              meta = {}
+              for line in m.group(1).splitlines():
+                  if ":" in line and not line.lstrip().startswith("#"):
+                      k, _, v = line.partition(":")
+                      meta[k.strip()] = v.strip()
+
+              upstream = meta.get("upstream", "")
+              ref = meta.get("ref", "")
+              sha = meta.get("pinned_sha", "")
+
+              if not re.match(r"^https://github\.com/[\w.-]+/[\w.-]+$", upstream):
+                  fatal.append(f"{path}: 'upstream' is missing or is not a plain "
+                               f"https://github.com/owner/repo URL (got {upstream!r})")
+              if not re.match(r"^refs/heads/[\w./-]+$", ref):
+                  fatal.append(f"{path}: 'ref' is missing or is not a refs/heads/... "
+                               f"ref (got {ref!r})")
+              if not re.match(r"^[0-9a-f]{40}$", sha):
+                  fatal.append(f"{path}: 'pinned_sha' must be a full 40-character hex "
+                               f"commit id, not a short form or a tag (got {sha!r})")
+
+              sources.append({"name": name, "path": path, "upstream": upstream,
+                              "ref": ref, "sha": sha})
+
+          if fatal:
+              for msg in fatal:
+                  print(f"::error::{msg}")
+              print("Nothing was checked. Fix the front matter — the format is "
+                    "documented in each SOURCE.md.")
+              sys.exit(1)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"sources={json.dumps(sources)}\n")
+          for s in sources:
+              print(f"{s['name']}: {s['upstream']} {s['ref']} @ {s['sha'][:12]}")
+          PY
+
+      # THE CLASSIFIER. Comparing a pinned SHA to `git ls-remote` only answers "are
+      # these two strings different". It cannot tell a normal advance from a rewritten
+      # history, cannot see a force-push, and cannot name a single changed file. So
+      # this actually fetches and asks git.
+      #
+      # Five outcomes, all named. An unhandled case would fall through as "in sync",
+      # which is the one wrong answer this job must never give.
+      - name: Compare each pin against its upstream
+        id: compare
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, sys, tempfile
+
+          sources = json.loads(os.environ["SOURCES"])
+          rows, alert = [], False
+
+          def git(*args, cwd, check=True):
+              return subprocess.run(("git",) + args, cwd=cwd, check=check,
+                                    capture_output=True, text=True)
+
+          for s in sources:
+              work = tempfile.mkdtemp()
+              git("init", "-q", cwd=work)
+              git("remote", "add", "origin", s["upstream"], cwd=work)
+              # Full history for the branch: ancestry tests need it, and these repos
+              # are a few hundred KB.
+              git("fetch", "-q", "--tags", "origin", s["ref"], cwd=work)
+              remote = git("rev-parse", "FETCH_HEAD", cwd=work).stdout.strip()
+              pinned = s["sha"]
+
+              # Is the pinned commit reachable at all? If the branch was rewritten it
+              # may not be in what we just fetched; ask for it directly before
+              # concluding it is gone.
+              have = git("cat-file", "-e", pinned + "^{commit}", cwd=work,
+                         check=False).returncode == 0
+              if not have:
+                  have = git("fetch", "-q", "origin", pinned, cwd=work,
+                             check=False).returncode == 0
+
+              def ancestor(a, b):
+                  return git("merge-base", "--is-ancestor", a, b, cwd=work,
+                             check=False).returncode == 0
+
+              files, count = [], 0
+              if not have:
+                  state = "GONE"
+                  detail = ("the pinned commit no longer exists upstream — history was "
+                            "rewritten or the branch was deleted")
+              elif pinned == remote:
+                  state = "IN SYNC"
+                  detail = "nothing to do"
+              elif ancestor(pinned, remote):
+                  state = "AHEAD"
+                  count = int(git("rev-list", "--count", f"{pinned}..{remote}",
+                                  cwd=work).stdout.strip())
+                  detail = f"upstream has {count} new commit(s)"
+                  files = git("diff", "--name-only", f"{pinned}..{remote}",
+                              cwd=work).stdout.split()
+              elif ancestor(remote, pinned):
+                  state = "REWOUND"
+                  detail = ("upstream is BEHIND our pin — the branch was rolled back, "
+                            "or `ref` now points somewhere else")
+              else:
+                  state = "DIVERGED"
+                  detail = "force-push or rewritten history — the two share no direct line"
+
+              if state != "IN SYNC":
+                  alert = True
+              rows.append({"name": s["name"], "path": s["path"], "state": state,
+                           "detail": detail, "pinned": pinned, "remote": remote,
+                           "count": count, "files": files,
+                           "upstream": s["upstream"]})
+              print(f"{s['name']}: {state} — {detail}")
+
+          lines = ["The vendored copies under `third_party/` no longer match their "
+                   "upstreams. This is a report, not a request to port anything — "
+                   "see `NOTICE.md`.", ""]
+          for r in rows:
+              if r["state"] == "IN SYNC":
+                  continue
+              lines += [f"## {r['name']} — **{r['state']}**", "",
+                        f"{r['detail']}.", "",
+                        f"| | |", "| --- | --- |",
+                        f"| pinned | `{r['pinned'][:12]}` (`{r['path']}`) |",
+                        f"| upstream | `{r['remote'][:12]}` |",
+                        f"| compare | {r['upstream']}/compare/{r['pinned']}...{r['remote']} |", ""]
+              if r["files"]:
+                  shown = r["files"][:40]
+                  lines += ["Changed files:", "", "```"] + shown + ["```"]
+                  if len(r["files"]) > len(shown):
+                      lines.append(f"_...and {len(r['files']) - len(shown)} more._")
+                  lines.append("")
+              if r["state"] in ("GONE", "REWOUND", "DIVERGED"):
+                  lines += ["> This is not an ordinary advance. Our vendored copy may "
+                            "now be the only surviving record of that commit — which is "
+                            "exactly why it is a copy and not a submodule. Do not "
+                            "overwrite it before working out what happened upstream.", ""]
+          lines += ["To bump a pin: re-run the `git archive` import in that directory's "
+                    "`SOURCE.md` with the new SHA, update its front matter, and check "
+                    "whether anything in `go/internal/provision/` or "
+                    "`ui/src/tabs/SelfService.jsx` actually cared."]
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"alert={'true' if alert else 'false'}\n")
+              fh.write("body<<BODYEOF\n" + "\n".join(lines) + "\nBODYEOF\n")
+          PY
+        env:
+          SOURCES: ${{ steps.read.outputs.sources }}
+
+      # ONE THREAD, NOT ONE ISSUE A WEEK — the lesson mcp-drift.yml learned the hard
+      # way, applied here from the start rather than after five duplicate issues piled
+      # up. A new issue appears only once the previous one has been dealt with and
+      # closed, which is what makes a new issue mean something.
+      - name: Open or update the sync issue
+        if: steps.compare.outputs.alert == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="Upstream (ccmarris) has moved ahead of our pin"
+          RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --search "$TITLE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+
+          if [ -n "$EXISTING" ]; then
+            {
+              printf 'Still out of sync as of %s ([run](%s)).\n\n' "$(date -u +%Y-%m-%d)" "$RUN"
+              printf '%s\n' "${{ steps.compare.outputs.body }}"
+            } | gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body-file -
+          else
+            printf '%s\n' "${{ steps.compare.outputs.body }}" | \
+              gh issue create --repo "${{ github.repository }}" \
+                --title "$TITLE" --label "upstream-sync" --body-file - || \
+            printf '%s\n' "${{ steps.compare.outputs.body }}" | \
+              gh issue create --repo "${{ github.repository }}" \
+                --title "$TITLE" --body-file -
+          fi
+
+      # A DETECTOR THAT CANNOT REPORT ITS OWN FAILURE IS NOT A DETECTOR.
+      #
+      # Silence from this job must mean "checked, still in sync" and nothing else. A
+      # run that never got as far as looking — malformed front matter, upstream
+      # unreachable, a GitHub outage — would otherwise look exactly like a good week.
+      #
+      # Honest limit: `if: failure()` covers failed STEPS. It cannot report a failure
+      # that stops the workflow from starting at all — an invalid workflow file, a
+      # disabled Actions runner, a repo-level outage. For those, GitHub's own
+      # "workflow run failed" notification is the backstop, and there is no way to
+      # self-host that guarantee inside the thing being guarded.
+      - name: Report that the sync check could not run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="Upstream sync check is FAILING — it is not watching third_party/"
+          RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --search "$TITLE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+
+          BODY=$(cat <<EOF
+          The weekly upstream sync check failed, so **the vendored copies under
+          \`third_party/\` are not being compared against their upstreams** until this is
+          fixed. This is not a sync report — it is a report that no sync report can be
+          trusted right now.
+
+          Failed run: $RUN
+
+          Silence from this workflow normally means "checked, still in sync". While this
+          issue is open it means nothing at all.
+          EOF
+          )
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" \
+              --body "Still failing as of $(date -u +%Y-%m-%d). Run: $RUN"
+          else
+            gh issue create --repo "${{ github.repository }}" \
+              --title "$TITLE" --label "upstream-sync" --body "$BODY" || \
+            gh issue create --repo "${{ github.repository }}" \
+              --title "$TITLE" --body "$BODY"
+          fi

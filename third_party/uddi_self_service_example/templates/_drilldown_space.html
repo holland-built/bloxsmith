@@ -1,0 +1,168 @@
+{# ── Drilldown: IP Space contents ──────────────────────────────────── #}
+{% set dd_target = 'hx-target="#drilldown-content" hx-swap="innerHTML show:#drilldown-content:top"' %}
+
+<div class="card mt-1" style="border-color:var(--ib-teal);border-top-width:2px;">
+
+  {# Breadcrumb header #}
+  <div class="card-header d-flex align-items-center justify-content-between py-2"
+       style="background:var(--ib-teal-light);border-bottom-color:#B2F5EA;">
+    <div class="d-flex align-items-center gap-2" style="font-size:.78rem;">
+      <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none"
+              style="font-size:.78rem;color:var(--ib-teal-dark);"
+              onclick="document.getElementById('drilldown-content').innerHTML=''">
+        <i class="bi bi-arrow-left me-1"></i>Overview
+      </button>
+      <span style="color:#94A3B8;">/</span>
+      <i class="bi bi-cloud-fill" style="color:var(--ib-teal);"></i>
+      <strong style="color:var(--ib-navy);">{{ space_name }}</strong>
+    </div>
+    <div style="font-size:.72rem;color:var(--ib-text-muted);">
+      {{ blocks|length }} block{{ 's' if blocks|length != 1 else '' }}
+      &nbsp;·&nbsp;
+      {{ subnets|length }} subnet{{ 's' if subnets|length != 1 else '' }}
+    </div>
+  </div>
+
+  <div class="card-body p-0">
+
+    {# Action error banner #}
+    {% if action_error %}
+    <div class="mx-3 mt-2 alert alert-danger py-2 small d-flex align-items-center gap-2">
+      <i class="bi bi-exclamation-circle-fill flex-shrink-0"></i>{{ action_error }}
+    </div>
+    {% endif %}
+
+    {# ── Address Blocks ─────────────────────────────────────────────── #}
+    {% if blocks %}
+    <div class="px-3 pt-2 pb-1"
+         style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ib-navy);opacity:.6;">
+      Address Blocks
+    </div>
+    <table class="table table-sm mb-0" style="font-size:.8rem;">
+      <thead>
+        <tr style="background:#F8FAFF;">
+          <th class="dd-th">Network</th>
+          <th class="dd-th">Name</th>
+          <th class="dd-th">Comment</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in blocks %}
+        <tr>
+          <td class="dd-td" style="font-family:monospace;font-weight:600;color:var(--ib-navy);">{{ b.address }}/{{ b.cidr }}</td>
+          <td class="dd-td">{{ b.name or '—' }}</td>
+          <td class="dd-td" style="color:var(--ib-text-muted);">{{ b.comment or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {# ── Subnets ────────────────────────────────────────────────────── #}
+    {% if subnets %}
+    <div class="px-3 pt-3 pb-1"
+         style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ib-navy);opacity:.6;">
+      Subnets
+    </div>
+    <table class="table table-sm table-hover mb-0" style="font-size:.8rem;">
+      <thead>
+        <tr style="background:#F8FAFF;">
+          <th class="dd-th">Subnet</th>
+          <th class="dd-th">Name</th>
+          <th class="dd-th">Comment</th>
+          <th class="dd-th" style="width:110px;text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in subnets %}
+        <tr id="sn-row-{{ loop.index }}">
+          <td class="dd-td" style="font-family:monospace;font-weight:600;color:var(--ib-navy);">{{ s.address }}/{{ s.cidr }}</td>
+          <td class="dd-td">{{ s.name or '—' }}</td>
+          <td class="dd-td" style="color:var(--ib-text-muted);">{{ s.comment or '—' }}</td>
+          <td class="dd-td" style="text-align:right;">
+            <div class="d-flex gap-1 justify-content-end">
+              {# View IPs #}
+              <form hx-post="/api/drilldown/subnet" hx-include="#settings-panel"
+                    hx-target="#drilldown-content" hx-swap="innerHTML show:#drilldown-content:top">
+                <input type="hidden" name="subnet_id"    value="{{ s.id }}">
+                <input type="hidden" name="subnet_label" value="{{ s.address }}/{{ s.cidr }}">
+                <input type="hidden" name="space_id"     value="{{ space_id }}">
+                <input type="hidden" name="space_name"   value="{{ space_name | e }}">
+                <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2" title="View IPs"
+                        style="font-size:.72rem;">
+                  <i class="bi bi-list-ul"></i>
+                  <span class="htmx-indicator spinner-border spinner-border-sm" style="width:.65rem;height:.65rem;border-width:2px;"></span>
+                </button>
+              </form>
+              {# Edit #}
+              <button type="button" class="btn btn-outline-warning btn-sm py-0 px-2"
+                      title="Edit" onclick="toggleRow('sn-edit-{{ loop.index }}')"
+                      style="font-size:.72rem;">
+                <i class="bi bi-pencil"></i>
+              </button>
+              {# Delete #}
+              <form hx-post="/api/inline/delete-subnet" hx-include="#settings-panel"
+                    hx-target="#drilldown-content" hx-swap="innerHTML show:#drilldown-content:top"
+                    hx-confirm="Delete subnet {{ s.address }}/{{ s.cidr }}? This cannot be undone.">
+                <input type="hidden" name="subnet_id"  value="{{ s.id }}">
+                <input type="hidden" name="space_id"   value="{{ space_id }}">
+                <input type="hidden" name="space_name" value="{{ space_name | e }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2"
+                        title="Delete" style="font-size:.72rem;">
+                  <i class="bi bi-trash"></i>
+                  <span class="htmx-indicator spinner-border spinner-border-sm" style="width:.65rem;height:.65rem;border-width:2px;"></span>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {# Inline edit form row #}
+        <tr id="sn-edit-{{ loop.index }}" hidden>
+          <td colspan="4" style="background:#FAFBFD;padding:.75rem 1rem;border-top:none;">
+            <form hx-post="/api/inline/modify-subnet" hx-include="#settings-panel"
+                  hx-target="#drilldown-content" hx-swap="innerHTML show:#drilldown-content:top">
+              <input type="hidden" name="subnet_id"  value="{{ s.id }}">
+              <input type="hidden" name="space_id"   value="{{ space_id }}">
+              <input type="hidden" name="space_name" value="{{ space_name | e }}">
+              <div class="row g-2 align-items-end">
+                <div class="col-sm-3">
+                  <label class="form-label">Name</label>
+                  <input type="text" name="name" class="form-control form-control-sm"
+                         value="{{ s.name or '' }}" placeholder="leave blank to keep">
+                </div>
+                <div class="col-sm-4">
+                  <label class="form-label">Comment</label>
+                  <input type="text" name="comment" class="form-control form-control-sm"
+                         value="{{ s.comment or '' }}" placeholder="leave blank to keep">
+                </div>
+                <div class="col-sm-3">
+                  <label class="form-label">Tags</label>
+                  <input type="text" name="tags" class="form-control form-control-sm"
+                         placeholder="key=val, … (replaces all)">
+                </div>
+                <div class="col-sm-2 d-flex gap-1">
+                  <button type="submit" class="btn btn-warning btn-sm flex-grow-1">
+                    <i class="bi bi-check-lg"></i>
+                    <span class="htmx-indicator spinner-border spinner-border-sm" style="width:.72rem;height:.72rem;border-width:2px;"></span>
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm"
+                          onclick="toggleRow('sn-edit-{{ loop.index }}')">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% elif not blocks %}
+    <div class="p-4 text-center text-muted small">No address blocks or subnets found in this space.</div>
+    {% else %}
+    <div class="px-3 pb-3 text-muted small">No subnets found in this space.</div>
+    {% endif %}
+
+  </div>
+</div>

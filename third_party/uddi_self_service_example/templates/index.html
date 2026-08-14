@@ -1,0 +1,1406 @@
+{% extends 'base.html' %}
+{% block content %}
+
+{# ------------------------------------------------------------------ #}
+{# Macro: select + refresh button                                       #}
+{# ------------------------------------------------------------------ #}
+{% macro sel_load(name, id, endpoint, label='— click ↻ to load —', extra_attrs='', include='#settings-panel') %}
+<div class="input-group input-group-sm">
+  <select name="{{ name }}" id="{{ id }}" class="form-select form-select-sm" {{ extra_attrs | safe }}>
+    <option value="">{{ label }}</option>
+  </select>
+  <button type="button" class="btn btn-outline-secondary px-2"
+          hx-post="{{ endpoint }}"
+          hx-target="#{{ id }}"
+          hx-include="{{ include }}"
+          hx-swap="innerHTML"
+          title="Load options">↻</button>
+</div>
+{% endmacro %}
+
+<style>
+  .ib-settings-header {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .ib-settings-header .bi-chevron-down { transition: transform .2s; }
+  .ib-settings-header.collapsed .bi-chevron-down { transform: rotate(-90deg); }
+
+  /* ── Sidebar layout ──────────────────────────────────────────────── */
+  .ib-layout {
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-start;
+  }
+  .ib-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--ib-navy);
+    border-radius: 10px;
+    overflow: hidden;
+    position: sticky;
+    top: 1rem;
+    box-shadow: 0 4px 16px rgba(18,30,80,.25);
+  }
+  .ib-main-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ── Sidebar nav ─────────────────────────────────────────────────── */
+  .sidebar-group-header {
+    padding: .5rem .9rem;
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    color: rgba(255,255,255,.45);
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    border-top: 1px solid rgba(255,255,255,.07);
+  }
+  .sidebar-group:first-child .sidebar-group-header { border-top: none; }
+  .sidebar-group-header > i.toggle { margin-left: auto; transition: transform .2s; font-size: .72rem; }
+  .sidebar-group.collapsed > .sidebar-group-header > i.toggle { transform: rotate(-90deg); }
+  .sidebar-group.collapsed > .sidebar-group-items { display: none; }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .42rem .9rem .42rem 1.1rem;
+    font-size: .79rem;
+    color: rgba(255,255,255,.68);
+    cursor: pointer;
+    transition: background .12s, color .12s;
+    border-left: 3px solid transparent;
+    text-decoration: none;
+  }
+  .sidebar-item i { font-size: .8rem; flex-shrink: 0; }
+  .sidebar-item:hover { background: rgba(255,255,255,.08); color: #fff; }
+  .sidebar-item.active {
+    background: rgba(0,196,179,.15);
+    color: var(--ib-teal);
+    border-left-color: var(--ib-teal);
+    font-weight: 600;
+  }
+  .sidebar-item.danger:hover { background: rgba(252,129,129,.12); color: #FC8181; }
+  .sidebar-item.danger.active { background: rgba(252,129,129,.15); color: #FC8181; border-left-color: #FC8181; }
+
+  /* ── Panel ───────────────────────────────────────────────────────── */
+  .ib-panel { }
+  .panel-title {
+    font-size: .95rem;
+    font-weight: 700;
+    color: var(--ib-navy);
+    margin: 0 0 1rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding-bottom: .6rem;
+    border-bottom: 2px solid var(--ib-border);
+  }
+  .panel-title i { color: var(--ib-teal); }
+  .panel-title.danger i { color: #E53E3E; }
+
+  /* ── Home tiles ──────────────────────────────────────────────────── */
+  .home-group { margin-bottom: 1.5rem; }
+  .home-group-title {
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    color: var(--ib-navy);
+    opacity: .6;
+    margin-bottom: .6rem;
+  }
+  .home-tiles { display: flex; flex-wrap: wrap; gap: .6rem; }
+  .home-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .2rem;
+    padding: .65rem .9rem;
+    background: var(--ib-surface);
+    border: 1px solid var(--ib-border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s, background .15s;
+    min-width: 140px;
+    flex: 1;
+  }
+  .home-tile:hover {
+    border-color: var(--ib-teal);
+    box-shadow: 0 2px 10px rgba(0,196,179,.18);
+    background: var(--ib-teal-light);
+  }
+  .home-tile.danger:hover {
+    border-color: #FC8181;
+    box-shadow: 0 2px 10px rgba(197,48,48,.12);
+    background: #FFF5F5;
+  }
+  .home-tile i { font-size: 1.1rem; color: var(--ib-teal); }
+  .home-tile.danger i { color: #E53E3E; }
+  .home-tile-label { font-size: .8rem; font-weight: 600; color: var(--ib-text); }
+  .home-tile-desc  { font-size: .72rem; color: var(--ib-text-muted); }
+</style>
+
+{# ------------------------------------------------------------------ #}
+{# Connection settings — collapsible; expanded when no creds found     #}
+{# ------------------------------------------------------------------ #}
+<div id="settings-panel" class="card settings-panel mb-3 shadow-sm">
+  <div class="card-header py-2 ib-settings-header {{ 'collapsed' if has_credentials else '' }}"
+       data-bs-toggle="collapse" data-bs-target="#settings-body"
+       aria-expanded="{{ 'false' if has_credentials else 'true' }}">
+    <span><i class="bi bi-gear me-1"></i>Connection Settings</span>
+    <i class="bi bi-chevron-down" style="font-size:.75rem;"></i>
+  </div>
+  <div class="collapse {{ '' if has_credentials else 'show' }}" id="settings-body">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">API Key</label>
+          <input type="password" name="api_key" class="form-control form-control-sm"
+                 placeholder="Leave blank to use ini file or INFOBLOX_PORTAL_KEY env var"
+                 autocomplete="off">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">INI File</label>
+          <input type="text" name="ini_file" class="form-control form-control-sm"
+                 value="{{ default_ini }}">
+        </div>
+        <div class="col-md-2 d-flex flex-column justify-content-end">
+          <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" name="no_verify_ssl" id="no-verify-ssl">
+            <label class="form-check-label small" for="no-verify-ssl">Skip SSL verify</label>
+          </div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end gap-2 pb-1">
+          <button type="button" class="btn btn-success btn-sm px-3"
+                  hx-post="/api/overview"
+                  hx-target="#overview-content"
+                  hx-include="#settings-panel"
+                  hx-swap="innerHTML"
+                  onclick="showPanel('home', null)">
+            <i class="bi bi-plug-fill me-1"></i>Connect
+            <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+          </button>
+          <p class="small text-muted mb-0" style="font-size:.7rem;line-height:1.3;">
+            Key: field › env › ini<br>URL: env › ini
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Sidebar + main layout                                                #}
+{# ------------------------------------------------------------------ #}
+<div class="ib-layout">
+
+  {# ── Sidebar nav ──────────────────────────────────────────────────── #}
+  <nav class="ib-sidebar">
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-header" onclick="toggleGroup(this)">
+        <i class="bi bi-search"></i>View
+        <i class="bi bi-chevron-down toggle"></i>
+      </div>
+      <div class="sidebar-group-items">
+        <a class="sidebar-item" onclick="showPanel('list-spaces',this)">
+          <i class="bi bi-cloud-fill"></i>IP Spaces
+        </a>
+        <a class="sidebar-item" onclick="showPanel('list-views',this)">
+          <i class="bi bi-eye"></i>DNS Views
+        </a>
+        <a class="sidebar-item" onclick="showPanel('list-blocks',this)">
+          <i class="bi bi-diagram-3"></i>Address Blocks
+        </a>
+        <a class="sidebar-item" onclick="showPanel('find-networks',this)">
+          <i class="bi bi-tag"></i>Find by Tag
+        </a>
+        <a class="sidebar-item" onclick="showPanel('zone-records',this)">
+          <i class="bi bi-list-ul"></i>Zone Records
+        </a>
+      </div>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-header" onclick="toggleGroup(this)">
+        <i class="bi bi-hdd-network"></i>IPAM
+        <i class="bi bi-chevron-down toggle"></i>
+      </div>
+      <div class="sidebar-group-items">
+        <a class="sidebar-item" onclick="showPanel('create-subnet',this)">
+          <i class="bi bi-plus-circle"></i>Create Subnet
+        </a>
+        <a class="sidebar-item" onclick="showPanel('allocate-ip',this)">
+          <i class="bi bi-plus-square"></i>Allocate IP
+        </a>
+        <a class="sidebar-item" onclick="showPanel('modify-subnet',this)">
+          <i class="bi bi-pencil"></i>Modify Subnet
+        </a>
+        <a class="sidebar-item danger" onclick="showPanel('delete-subnet',this)">
+          <i class="bi bi-trash"></i>Delete Subnet
+        </a>
+        <a class="sidebar-item danger" onclick="showPanel('release-ip',this)">
+          <i class="bi bi-x-circle"></i>Release IP
+        </a>
+      </div>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-header" onclick="toggleGroup(this)">
+        <i class="bi bi-globe"></i>DNS
+        <i class="bi bi-chevron-down toggle"></i>
+      </div>
+      <div class="sidebar-group-items">
+        <a class="sidebar-item" onclick="showPanel('create-zone',this)">
+          <i class="bi bi-plus-circle"></i>Create Zone
+        </a>
+        <a class="sidebar-item" onclick="showPanel('create-record',this)">
+          <i class="bi bi-plus-square"></i>Create Record
+        </a>
+        <a class="sidebar-item" onclick="showPanel('modify-zone',this)">
+          <i class="bi bi-pencil"></i>Modify Zone
+        </a>
+        <a class="sidebar-item" onclick="showPanel('modify-record',this)">
+          <i class="bi bi-pencil-square"></i>Modify Record
+        </a>
+        <a class="sidebar-item danger" onclick="showPanel('delete-zone',this)">
+          <i class="bi bi-trash"></i>Delete Zone
+        </a>
+        <a class="sidebar-item danger" onclick="showPanel('delete-record',this)">
+          <i class="bi bi-trash3"></i>Delete Record
+        </a>
+      </div>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-header" onclick="toggleGroup(this)">
+        <i class="bi bi-lightning"></i>Provision
+        <i class="bi bi-chevron-down toggle"></i>
+      </div>
+      <div class="sidebar-group-items">
+        <a class="sidebar-item" onclick="showPanel('provision',this)">
+          <i class="bi bi-layers"></i>Subnet + DNS Zones
+        </a>
+      </div>
+    </div>
+
+  </nav>{# /sidebar #}
+
+  {# ── Main content ──────────────────────────────────────────────────── #}
+  <div class="ib-main-content">
+
+    {# ============================================================== #}
+    {# HOME — default panel                                            #}
+    {# ============================================================== #}
+    <div id="panel-home" class="ib-panel">
+
+      {# ── Connected resources overview ────────────────────────────── #}
+      <div id="overview-content"
+           {% if has_credentials %}
+           hx-post="/api/overview"
+           hx-trigger="load"
+           hx-include="#settings-panel"
+           hx-swap="innerHTML"
+           {% endif %}>
+        {% if not has_credentials %}
+        {# No credentials detected — show setup prompt #}
+        <div class="d-flex align-items-start gap-3 px-4 py-3 rounded-3 mb-4"
+             style="background:var(--ib-orange-light);border:1px solid #F6C369;">
+          <i class="bi bi-plug fs-4 flex-shrink-0 mt-1" style="color:var(--ib-orange);"></i>
+          <div>
+            <p class="mb-1" style="font-size:.88rem;font-weight:600;color:#7D4E00;">Not connected</p>
+            <p class="mb-1" style="font-size:.8rem;color:#7D4E00;">
+              Enter your API key or INI file path in <strong>Connection Settings</strong> above,
+              then click <strong>Connect</strong> to load your IP spaces and DNS views.
+            </p>
+            <p class="mb-0" style="font-size:.75rem;color:#92622A;">
+              The API key is resolved from: form field › <code>INFOBLOX_PORTAL_KEY</code> env var › ini file.
+            </p>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      {# ── Drilldown (populated when overview items are clicked) ────── #}
+      <div id="drilldown-content"></div>
+
+      {# ── Action tiles ────────────────────────────────────────────── #}
+      <h5 class="panel-title" style="margin-top:.25rem;"><i class="bi bi-grid-1x2"></i>Actions</h5>
+
+      <div class="home-group">
+        <div class="home-group-title"><i class="bi bi-search me-1"></i>View</div>
+        <div class="home-tiles">
+          <div class="home-tile" onclick="showPanel('list-spaces', sidebarItem('list-spaces'))">
+            <i class="bi bi-cloud-fill"></i>
+            <span class="home-tile-label">List IP Spaces</span>
+            <span class="home-tile-desc">Browse all IP spaces</span>
+          </div>
+          <div class="home-tile" onclick="showPanel('list-views', sidebarItem('list-views'))">
+            <i class="bi bi-eye"></i>
+            <span class="home-tile-label">List DNS Views</span>
+            <span class="home-tile-desc">Browse all DNS views</span>
+          </div>
+          <div class="home-tile" onclick="showPanel('list-blocks', sidebarItem('list-blocks'))">
+            <i class="bi bi-diagram-3"></i>
+            <span class="home-tile-label">Address Blocks</span>
+            <span class="home-tile-desc">List address blocks</span>
+          </div>
+          <div class="home-tile" onclick="showPanel('find-networks', sidebarItem('find-networks'))">
+            <i class="bi bi-tag"></i>
+            <span class="home-tile-label">Find by Tag</span>
+            <span class="home-tile-desc">Search networks by tag</span>
+          </div>
+          <div class="home-tile" onclick="showPanel('zone-records', sidebarItem('zone-records'))">
+            <i class="bi bi-list-ul"></i>
+            <span class="home-tile-label">Zone Records</span>
+            <span class="home-tile-desc">View all records in a zone</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-group">
+        <div class="home-group-title"><i class="bi bi-hdd-network me-1"></i>IPAM</div>
+        <div class="home-tiles">
+          <div class="home-tile" onclick="showPanel('create-subnet', sidebarItem('create-subnet'))">
+            <i class="bi bi-plus-circle"></i>
+            <span class="home-tile-label">Create Subnet</span>
+            <span class="home-tile-desc">Next available subnet</span>
+          </div>
+          <div class="home-tile" onclick="showPanel('allocate-ip', sidebarItem('allocate-ip'))">
+            <i class="bi bi-plus-square"></i>
+            <span class="home-tile-label">Allocate IP</span>
+            <span class="home-tile-desc">Next available address</span>
+          </div>
+          <div class="home-tile" onclick="showPanel('modify-subnet', sidebarItem('modify-subnet'))">
+            <i class="bi bi-pencil"></i>
+            <span class="home-tile-label">Modify Subnet</span>
+            <span class="home-tile-desc">Update name / tags</span>
+          </div>
+          <div class="home-tile danger" onclick="showPanel('delete-subnet', sidebarItem('delete-subnet'))">
+            <i class="bi bi-trash"></i>
+            <span class="home-tile-label">Delete Subnet</span>
+            <span class="home-tile-desc">Remove a subnet</span>
+          </div>
+          <div class="home-tile danger" onclick="showPanel('release-ip', sidebarItem('release-ip'))">
+            <i class="bi bi-x-circle"></i>
+            <span class="home-tile-label">Release IP</span>
+            <span class="home-tile-desc">Free an allocated address</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-group">
+        <div class="home-group-title"><i class="bi bi-globe me-1"></i>DNS</div>
+        <div class="home-tiles">
+          <div class="home-tile" onclick="showPanel('create-zone', sidebarItem('create-zone'))">
+            <i class="bi bi-plus-circle"></i>
+            <span class="home-tile-label">Create Zone</span>
+            <span class="home-tile-desc">New authoritative zone</span>
+          </div>
+          <div class="home-tile" onclick="showPanel('create-record', sidebarItem('create-record'))">
+            <i class="bi bi-plus-square"></i>
+            <span class="home-tile-label">Create Record</span>
+            <span class="home-tile-desc">A, AAAA, CNAME, MX …</span>
+          </div>
+          <div class="home-tile" onclick="showPanel('modify-zone', sidebarItem('modify-zone'))">
+            <i class="bi bi-pencil"></i>
+            <span class="home-tile-label">Modify Zone</span>
+            <span class="home-tile-desc">Update comment / tags</span>
+          </div>
+          <div class="home-tile" onclick="showPanel('modify-record', sidebarItem('modify-record'))">
+            <i class="bi bi-pencil-square"></i>
+            <span class="home-tile-label">Modify Record</span>
+            <span class="home-tile-desc">Update rdata / TTL</span>
+          </div>
+          <div class="home-tile danger" onclick="showPanel('delete-zone', sidebarItem('delete-zone'))">
+            <i class="bi bi-trash"></i>
+            <span class="home-tile-label">Delete Zone</span>
+            <span class="home-tile-desc">Remove a DNS zone</span>
+          </div>
+          <div class="home-tile danger" onclick="showPanel('delete-record', sidebarItem('delete-record'))">
+            <i class="bi bi-trash3"></i>
+            <span class="home-tile-label">Delete Record</span>
+            <span class="home-tile-desc">Remove a DNS record</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-group">
+        <div class="home-group-title"><i class="bi bi-lightning me-1"></i>Provision</div>
+        <div class="home-tiles">
+          <div class="home-tile" onclick="showPanel('provision', sidebarItem('provision'))">
+            <i class="bi bi-layers"></i>
+            <span class="home-tile-label">Subnet + DNS Zones</span>
+            <span class="home-tile-desc">One-shot provisioning</span>
+          </div>
+        </div>
+      </div>
+    </div>{# /home #}
+
+    {# ============================================================== #}
+    {# LIST IP SPACES                                                   #}
+    {# ============================================================== #}
+    <div id="panel-list-spaces" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-cloud-fill"></i>List IP Spaces</h5>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/list-spaces" hx-target="#res-list-spaces"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="row g-2">
+              <div class="col-sm-4">
+                <label class="form-label">Name filter</label>
+                <input type="text" name="name_filter" class="form-control form-control-sm" placeholder="optional">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Tag key</label>
+                <input type="text" name="tag_key" class="form-control form-control-sm">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Tag value</label>
+                <input type="text" name="tag_value" class="form-control form-control-sm">
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm mt-2">
+              List <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+            </button>
+          </form>
+          <div id="res-list-spaces"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# LIST DNS VIEWS                                                   #}
+    {# ============================================================== #}
+    <div id="panel-list-views" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-eye"></i>List DNS Views</h5>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/list-views" hx-target="#res-list-views"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="row g-2">
+              <div class="col-sm-4">
+                <label class="form-label">Name filter</label>
+                <input type="text" name="name_filter" class="form-control form-control-sm" placeholder="optional">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Tag key</label>
+                <input type="text" name="tag_key" class="form-control form-control-sm">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Tag value</label>
+                <input type="text" name="tag_value" class="form-control form-control-sm">
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm mt-2">
+              List <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+            </button>
+          </form>
+          <div id="res-list-views"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# LIST ADDRESS BLOCKS                                              #}
+    {# ============================================================== #}
+    <div id="panel-list-blocks" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-diagram-3"></i>List Address Blocks</h5>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/list-blocks" hx-target="#res-list-blocks"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="row g-2">
+              <div class="col-sm-3">
+                <label class="form-label">Name filter</label>
+                <input type="text" name="name_filter" class="form-control form-control-sm" placeholder="optional">
+              </div>
+              <div class="col-sm-3">
+                <label class="form-label">Tag key</label>
+                <input type="text" name="tag_key" class="form-control form-control-sm">
+              </div>
+              <div class="col-sm-3">
+                <label class="form-label">Tag value</label>
+                <input type="text" name="tag_value" class="form-control form-control-sm">
+              </div>
+              <div class="col-sm-3">
+                <label class="form-label">IP Space ID</label>
+                <input type="text" name="space" class="form-control form-control-sm" placeholder="optional">
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm mt-2">
+              List <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+            </button>
+          </form>
+          <div id="res-list-blocks"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# FIND NETWORKS BY TAG                                             #}
+    {# ============================================================== #}
+    <div id="panel-find-networks" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-tag"></i>Find Networks by Tag</h5>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/find-networks" hx-target="#res-find-networks"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="row g-2">
+              <div class="col-sm-3">
+                <label class="form-label">Tag key <span class="required-star">*</span></label>
+                <input type="text" name="tag_key" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-sm-3">
+                <label class="form-label">Tag value <span class="required-star">*</span></label>
+                <input type="text" name="tag_value" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-sm-3">
+                <label class="form-label">Type</label>
+                <select name="network_type" class="form-select form-select-sm">
+                  <option value="subnet">Subnet</option>
+                  <option value="address_block">Address Block</option>
+                </select>
+              </div>
+              <div class="col-sm-3">
+                <label class="form-label">IP Space ID</label>
+                <input type="text" name="space" class="form-control form-control-sm" placeholder="optional">
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm mt-2">
+              Find <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+            </button>
+          </form>
+          <div id="res-find-networks"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# ZONE RECORDS                                                     #}
+    {# ============================================================== #}
+    <div id="panel-zone-records" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-list-ul"></i>Zone Records</h5>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/list-zone-records" hx-target="#res-zone-records"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="row g-2 align-items-end">
+              <div class="col-sm-4">
+                <label class="form-label">DNS View <small class="text-muted">(optional filter)</small></label>
+                {{ sel_load('view_id', 'view-f-zr', '/api/opts/views',
+                            label='— all views —',
+                            extra_attrs='hx-post="/api/opts/zones" hx-target="#zone-zr" hx-trigger="change" hx-include="#settings-panel, #view-f-zr" hx-swap="innerHTML"') }}
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Zone <span class="required-star">*</span></label>
+                {{ sel_load('zone_id', 'zone-zr', '/api/opts/zones',
+                            label='— select view or load all —',
+                            include='#settings-panel, #view-f-zr') }}
+              </div>
+              <div class="col-sm-2">
+                <label class="form-label">Type filter</label>
+                <select name="rtype_filter" class="form-select form-select-sm">
+                  <option value="">All types</option>
+                  <option>A</option><option>AAAA</option><option>CNAME</option>
+                  <option>MX</option><option>TXT</option><option>PTR</option>
+                  <option>NS</option><option>SRV</option><option>CAA</option>
+                </select>
+              </div>
+              <div class="col-sm-2">
+                <label class="form-label">Name filter</label>
+                <input type="text" name="name_filter" class="form-control form-control-sm"
+                       placeholder="e.g. www">
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm mt-2">
+              List Records <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+            </button>
+          </form>
+          <div id="res-zone-records"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# CREATE SUBNET                                                    #}
+    {# ============================================================== #}
+    <div id="panel-create-subnet" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-plus-circle"></i>Create Next Available Subnet</h5>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/create-subnet" hx-target="#res-create-subnet"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="mb-2">
+              <label class="form-label">IP Space <small class="text-muted">(optional — filters blocks below)</small></label>
+              {{ sel_load('space', 'space-cs', '/api/opts/ip-spaces',
+                          label='— all spaces —',
+                          extra_attrs='hx-post="/api/opts/address-blocks" hx-target="#block-cs" hx-trigger="change" hx-include="#settings-panel, #space-cs" hx-swap="innerHTML"') }}
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Address Block <span class="required-star">*</span></label>
+              {{ sel_load('block_id', 'block-cs', '/api/opts/address-blocks',
+                          include='#settings-panel, #space-cs') }}
+            </div>
+            <div class="d-flex align-items-center my-2">
+              <hr class="flex-grow-1 me-2"><span class="or-divider">or find by tag</span><hr class="flex-grow-1 ms-2">
+            </div>
+            <div class="row g-2">
+              <div class="col-sm-6">
+                <label class="form-label">Tag key</label>
+                <input type="text" name="tag_key" class="form-control form-control-sm">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Tag value</label>
+                <input type="text" name="tag_value" class="form-control form-control-sm">
+              </div>
+            </div>
+            <hr class="my-2">
+            <div class="row g-2">
+              <div class="col-sm-4">
+                <label class="form-label">CIDR prefix <span class="required-star">*</span></label>
+                <input type="number" name="cidr" class="form-control form-control-sm"
+                       min="1" max="32" value="24" required>
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Name</label>
+                <input type="text" name="name" class="form-control form-control-sm" placeholder="optional">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Comment</label>
+                <input type="text" name="comment" class="form-control form-control-sm" placeholder="optional">
+              </div>
+            </div>
+            <div class="mt-2 d-flex align-items-center gap-3">
+              <button class="btn btn-success btn-sm">
+                Create <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-create-subnet">
+                <label class="form-check-label small" for="dr-create-subnet">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-create-subnet"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# ALLOCATE IP                                                      #}
+    {# ============================================================== #}
+    <div id="panel-allocate-ip" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-plus-square"></i>Allocate Next Available IP</h5>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/allocate-ip" hx-target="#res-allocate-ip"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="mb-2">
+              <label class="form-label">IP Space <small class="text-muted">(optional — filters subnets below)</small></label>
+              {{ sel_load('space', 'space-ai', '/api/opts/ip-spaces',
+                          label='— all spaces —',
+                          extra_attrs='hx-post="/api/opts/subnets" hx-target="#subnet-ai" hx-trigger="change" hx-include="#settings-panel, #space-ai" hx-swap="innerHTML"') }}
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Subnet <small class="text-muted">(address/prefix)</small></label>
+              {{ sel_load('subnet_id_direct', 'subnet-ai', '/api/opts/subnets',
+                          include='#settings-panel, #space-ai') }}
+            </div>
+            <div class="d-flex align-items-center my-2">
+              <hr class="flex-grow-1 me-2"><span class="or-divider">or find by tag</span><hr class="flex-grow-1 ms-2">
+            </div>
+            <div class="row g-2">
+              <div class="col-sm-6">
+                <label class="form-label">Tag key</label>
+                <input type="text" name="tag_key" class="form-control form-control-sm">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Tag value</label>
+                <input type="text" name="tag_value" class="form-control form-control-sm">
+              </div>
+            </div>
+            <hr class="my-2">
+            <div class="row g-2">
+              <div class="col-sm-4">
+                <label class="form-label">Count</label>
+                <input type="number" name="count" class="form-control form-control-sm" min="1" value="1">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Name</label>
+                <input type="text" name="name" class="form-control form-control-sm" placeholder="optional">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Comment</label>
+                <input type="text" name="comment" class="form-control form-control-sm" placeholder="optional">
+              </div>
+            </div>
+            <div class="mt-2 d-flex align-items-center gap-3">
+              <button class="btn btn-success btn-sm">
+                Allocate <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-allocate-ip">
+                <label class="form-check-label small" for="dr-allocate-ip">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-allocate-ip"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# MODIFY SUBNET                                                    #}
+    {# ============================================================== #}
+    <div id="panel-modify-subnet" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-pencil"></i>Modify Subnet</h5>
+      <p class="text-muted small mb-2">Leave optional fields blank to leave them unchanged. Tags replace the <em>entire</em> tag set when supplied.</p>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/modify-subnet" hx-target="#res-modify-subnet"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="mb-2">
+              <label class="form-label">IP Space <small class="text-muted">(optional filter)</small></label>
+              {{ sel_load('space', 'space-ms', '/api/opts/ip-spaces',
+                          label='— all spaces —',
+                          extra_attrs='hx-post="/api/opts/subnets" hx-target="#subnet-ms" hx-trigger="change" hx-include="#settings-panel, #space-ms" hx-swap="innerHTML"') }}
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Subnet <span class="required-star">*</span> <small class="text-muted">(address/prefix)</small></label>
+              {{ sel_load('subnet_id', 'subnet-ms', '/api/opts/subnets',
+                          include='#settings-panel, #space-ms') }}
+            </div>
+            <div class="row g-2">
+              <div class="col-sm-6">
+                <label class="form-label">New name</label>
+                <input type="text" name="name" class="form-control form-control-sm" placeholder="leave blank to keep">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">New comment</label>
+                <input type="text" name="comment" class="form-control form-control-sm" placeholder="leave blank to keep">
+              </div>
+              <div class="col-12">
+                <label class="form-label">Tags</label>
+                <input type="text" name="tags" class="form-control form-control-sm"
+                       placeholder="key=val, key2=val2 (replaces all)">
+              </div>
+            </div>
+            <div class="mt-2 d-flex align-items-center gap-3">
+              <button class="btn btn-warning btn-sm">
+                Modify <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-modify-subnet">
+                <label class="form-check-label small" for="dr-modify-subnet">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-modify-subnet"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# DELETE SUBNET                                                    #}
+    {# ============================================================== #}
+    <div id="panel-delete-subnet" class="ib-panel" hidden>
+      <h5 class="panel-title danger"><i class="bi bi-trash"></i>Delete Subnet</h5>
+      <div class="alert alert-warning py-2 small mb-2">
+        <strong>Caution:</strong> Deletions are permanent. Use <em>Dry run</em> to preview first.
+      </div>
+      <div class="card op-card border-danger">
+        <div class="card-body">
+          <form hx-post="/ops/delete-subnet" hx-target="#res-delete-subnet"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="mb-2">
+              <label class="form-label">IP Space <small class="text-muted">(optional filter)</small></label>
+              {{ sel_load('space', 'space-ds', '/api/opts/ip-spaces',
+                          label='— all spaces —',
+                          extra_attrs='hx-post="/api/opts/subnets" hx-target="#subnet-ds" hx-trigger="change" hx-include="#settings-panel, #space-ds" hx-swap="innerHTML"') }}
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Subnet <span class="required-star">*</span> <small class="text-muted">(address/prefix)</small></label>
+              {{ sel_load('subnet_id', 'subnet-ds', '/api/opts/subnets',
+                          include='#settings-panel, #space-ds') }}
+            </div>
+            <div class="d-flex align-items-center gap-3">
+              <button class="btn btn-danger btn-sm">
+                Delete <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-delete-subnet">
+                <label class="form-check-label small" for="dr-delete-subnet">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-delete-subnet"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# RELEASE IP                                                       #}
+    {# ============================================================== #}
+    <div id="panel-release-ip" class="ib-panel" hidden>
+      <h5 class="panel-title danger"><i class="bi bi-x-circle"></i>Release IP Address</h5>
+      <div class="alert alert-warning py-2 small mb-2">
+        <strong>Caution:</strong> Releasing an address is permanent. Use <em>Dry run</em> to preview first.
+      </div>
+      <div class="card op-card border-danger">
+        <div class="card-body">
+          <form hx-post="/ops/release-ip" hx-target="#res-release-ip"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="mb-2">
+              <label class="form-label">Address resource ID <span class="required-star">*</span></label>
+              <input type="text" name="address_id" class="form-control form-control-sm"
+                     placeholder="ipam/address/..." required>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+              <button class="btn btn-danger btn-sm">
+                Release <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-release-ip">
+                <label class="form-check-label small" for="dr-release-ip">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-release-ip"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# CREATE DNS ZONE                                                  #}
+    {# ============================================================== #}
+    <div id="panel-create-zone" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-plus-circle"></i>Create DNS Zone</h5>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/create-zone" hx-target="#res-create-zone"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="row g-2">
+              <div class="col-sm-6">
+                <label class="form-label">FQDN <span class="required-star">*</span></label>
+                <input type="text" name="fqdn" class="form-control form-control-sm"
+                       placeholder="e.g. example.com" required>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">DNS View <span class="required-star">*</span></label>
+                {{ sel_load('view', 'view-cz', '/api/opts/views', '— click ↻ to load views —') }}
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Primary type</label>
+                <select name="primary_type" class="form-select form-select-sm">
+                  <option value="cloud">cloud</option>
+                  <option value="external">external</option>
+                </select>
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Comment</label>
+                <input type="text" name="comment" class="form-control form-control-sm" placeholder="optional">
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Tags</label>
+                <input type="text" name="tags" class="form-control form-control-sm"
+                       placeholder="key=val, key2=val2">
+              </div>
+            </div>
+            <div class="mt-2 d-flex align-items-center gap-3">
+              <button class="btn btn-success btn-sm">
+                Create <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-create-zone">
+                <label class="form-check-label small" for="dr-create-zone">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-create-zone"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# CREATE DNS RECORD                                                #}
+    {# ============================================================== #}
+    <div id="panel-create-record" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-plus-square"></i>Create DNS Record</h5>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/create-record" hx-target="#res-create-record"
+                hx-include="#settings-panel" hx-swap="innerHTML" hx-validate="true">
+            <div class="row g-2">
+              <div class="col-sm-6">
+                <label class="form-label">DNS View <span class="required-star">*</span></label>
+                {{ sel_load('view', 'view-cr', '/api/opts/views', '— click ↻ to load views —',
+                            extra_attrs='hx-post="/api/opts/zones" hx-target="#zone-cr" hx-trigger="change" hx-include="#settings-panel, #view-cr" hx-swap="innerHTML"') }}
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Zone <span class="required-star">*</span> <small class="text-muted">(filtered by view)</small></label>
+                {{ sel_load('zone', 'zone-cr', '/api/opts/zones', '— select view first —',
+                            extra_attrs='required',
+                            include='#settings-panel, #view-cr') }}
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Name in zone <span class="required-star">*</span></label>
+                <input type="text" name="name" class="form-control form-control-sm"
+                       placeholder="e.g. www or @ for apex" required>
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Type <span class="required-star">*</span></label>
+                <select name="rtype" id="rtype-cr" class="form-select form-select-sm"
+                        onchange="rdataHint(this.value,'rdata-hint-cr','rdata-cr')">
+                  <option>A</option><option>AAAA</option><option>CNAME</option>
+                  <option>PTR</option><option>MX</option><option>TXT</option>
+                  <option>SRV</option><option>NS</option><option>CAA</option>
+                </select>
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">TTL (s)</label>
+                <input type="number" name="ttl" class="form-control form-control-sm"
+                       min="0" placeholder="optional">
+              </div>
+              <div class="col-12">
+                <label class="form-label">rdata <span class="required-star">*</span></label>
+                <input type="text" name="rdata" id="rdata-cr" class="form-control form-control-sm"
+                       placeholder="e.g. 192.0.2.1" required>
+                <div id="rdata-hint-cr" class="form-text">IPv4 address — e.g. 192.0.2.1</div>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Comment</label>
+                <input type="text" name="comment" class="form-control form-control-sm" placeholder="optional">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Tags</label>
+                <input type="text" name="tags" class="form-control form-control-sm"
+                       placeholder="key=val, key2=val2">
+              </div>
+            </div>
+            <div class="mt-2 d-flex align-items-center gap-3">
+              <button class="btn btn-success btn-sm">
+                Create <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-create-record">
+                <label class="form-check-label small" for="dr-create-record">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-create-record"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# MODIFY DNS ZONE                                                  #}
+    {# ============================================================== #}
+    <div id="panel-modify-zone" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-pencil"></i>Modify DNS Zone</h5>
+      <p class="text-muted small mb-2">Leave optional fields blank to leave them unchanged. Tags replace the <em>entire</em> tag set when supplied.</p>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/modify-zone" hx-target="#res-modify-zone"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="mb-2">
+              <label class="form-label">DNS View <small class="text-muted">(optional filter)</small></label>
+              {{ sel_load('view_id', 'view-f-mz', '/api/opts/views',
+                          label='— all views —',
+                          extra_attrs='hx-post="/api/opts/zones" hx-target="#zone-mz" hx-trigger="change" hx-include="#settings-panel, #view-f-mz" hx-swap="innerHTML"') }}
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Zone <span class="required-star">*</span> <small class="text-muted">(FQDN)</small></label>
+              {{ sel_load('zone_id', 'zone-mz', '/api/opts/zones',
+                          include='#settings-panel, #view-f-mz') }}
+            </div>
+            <div class="row g-2">
+              <div class="col-sm-6">
+                <label class="form-label">New comment</label>
+                <input type="text" name="comment" class="form-control form-control-sm" placeholder="leave blank to keep">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Tags</label>
+                <input type="text" name="tags" class="form-control form-control-sm"
+                       placeholder="key=val, key2=val2 (replaces all)">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Disabled state</label>
+                <select name="disabled" class="form-select form-select-sm">
+                  <option value="">— leave unchanged —</option>
+                  <option value="true">Disable zone</option>
+                  <option value="false">Enable zone</option>
+                </select>
+              </div>
+            </div>
+            <div class="mt-2 d-flex align-items-center gap-3">
+              <button class="btn btn-warning btn-sm">
+                Modify <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-modify-zone">
+                <label class="form-check-label small" for="dr-modify-zone">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-modify-zone"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# MODIFY DNS RECORD                                                #}
+    {# ============================================================== #}
+    <div id="panel-modify-record" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-pencil-square"></i>Modify DNS Record</h5>
+      <p class="text-muted small mb-2">Leave optional fields blank to leave them unchanged. Tags replace the <em>entire</em> tag set when supplied.</p>
+      <div class="card op-card">
+        <div class="card-body">
+          <form hx-post="/ops/modify-record" hx-target="#res-modify-record"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="mb-2">
+              <label class="form-label">DNS View <small class="text-muted">(optional filter)</small></label>
+              {{ sel_load('view_id', 'view-f-mr', '/api/opts/views',
+                          label='— all views —',
+                          extra_attrs='hx-post="/api/opts/zones" hx-target="#zone-lkp-mr" hx-trigger="change" hx-include="#settings-panel, #view-f-mr" hx-swap="innerHTML"') }}
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Zone <small class="text-muted">(load to browse records)</small></label>
+              <div class="input-group input-group-sm">
+                <select name="zone_lookup" id="zone-lkp-mr" class="form-select form-select-sm"
+                        hx-post="/api/opts/records"
+                        hx-target="#record-mr"
+                        hx-include="#settings-panel"
+                        hx-trigger="change"
+                        hx-swap="innerHTML">
+                  <option value="">— click ↻ to load zones —</option>
+                </select>
+                <button type="button" class="btn btn-outline-secondary px-2"
+                        hx-post="/api/opts/zones"
+                        hx-target="#zone-lkp-mr"
+                        hx-include="#settings-panel, #view-f-mr"
+                        hx-swap="innerHTML" title="Load zones">↻</button>
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Record <span class="required-star">*</span> <small class="text-muted">(name type → rdata)</small></label>
+              <select name="record_id" id="record-mr" class="form-select form-select-sm">
+                <option value="">— select zone first —</option>
+              </select>
+            </div>
+            <div class="row g-2">
+              <div class="col-sm-6">
+                <label class="form-label">New rdata</label>
+                <input type="text" name="rdata" class="form-control form-control-sm" placeholder="leave blank to keep">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">New TTL (s)</label>
+                <input type="number" name="ttl" class="form-control form-control-sm"
+                       min="0" placeholder="leave blank to keep">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">New comment</label>
+                <input type="text" name="comment" class="form-control form-control-sm" placeholder="leave blank to keep">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Tags</label>
+                <input type="text" name="tags" class="form-control form-control-sm"
+                       placeholder="key=val, key2=val2 (replaces all)">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Disabled state</label>
+                <select name="disabled" class="form-select form-select-sm">
+                  <option value="">— leave unchanged —</option>
+                  <option value="true">Disable record</option>
+                  <option value="false">Enable record</option>
+                </select>
+              </div>
+            </div>
+            <div class="mt-2 d-flex align-items-center gap-3">
+              <button class="btn btn-warning btn-sm">
+                Modify <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-modify-record">
+                <label class="form-check-label small" for="dr-modify-record">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-modify-record"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# DELETE DNS ZONE                                                  #}
+    {# ============================================================== #}
+    <div id="panel-delete-zone" class="ib-panel" hidden>
+      <h5 class="panel-title danger"><i class="bi bi-trash"></i>Delete DNS Zone</h5>
+      <div class="alert alert-warning py-2 small mb-2">
+        <strong>Caution:</strong> Deletions are permanent. Use <em>Dry run</em> to preview first.
+      </div>
+      <div class="card op-card border-danger">
+        <div class="card-body">
+          <form hx-post="/ops/delete-zone" hx-target="#res-delete-zone"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="mb-2">
+              <label class="form-label">DNS View <small class="text-muted">(optional filter)</small></label>
+              {{ sel_load('view_id', 'view-f-dz', '/api/opts/views',
+                          label='— all views —',
+                          extra_attrs='hx-post="/api/opts/zones" hx-target="#zone-dz" hx-trigger="change" hx-include="#settings-panel, #view-f-dz" hx-swap="innerHTML"') }}
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Zone <span class="required-star">*</span> <small class="text-muted">(FQDN)</small></label>
+              {{ sel_load('zone_id', 'zone-dz', '/api/opts/zones',
+                          include='#settings-panel, #view-f-dz') }}
+            </div>
+            <div class="d-flex align-items-center gap-3">
+              <button class="btn btn-danger btn-sm">
+                Delete <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-delete-zone">
+                <label class="form-check-label small" for="dr-delete-zone">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-delete-zone"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# DELETE DNS RECORD                                                #}
+    {# ============================================================== #}
+    <div id="panel-delete-record" class="ib-panel" hidden>
+      <h5 class="panel-title danger"><i class="bi bi-trash3"></i>Delete DNS Record</h5>
+      <div class="alert alert-warning py-2 small mb-2">
+        <strong>Caution:</strong> Deletions are permanent. Use <em>Dry run</em> to preview first.
+      </div>
+      <div class="card op-card border-danger">
+        <div class="card-body">
+          <form hx-post="/ops/delete-record" hx-target="#res-delete-record"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+            <div class="mb-2">
+              <label class="form-label">DNS View <small class="text-muted">(optional filter)</small></label>
+              {{ sel_load('view_id', 'view-f-dr', '/api/opts/views',
+                          label='— all views —',
+                          extra_attrs='hx-post="/api/opts/zones" hx-target="#zone-lkp-dr" hx-trigger="change" hx-include="#settings-panel, #view-f-dr" hx-swap="innerHTML"') }}
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Zone <small class="text-muted">(load to browse records)</small></label>
+              <div class="input-group input-group-sm">
+                <select name="zone_lookup" id="zone-lkp-dr" class="form-select form-select-sm"
+                        hx-post="/api/opts/records"
+                        hx-target="#record-dr"
+                        hx-include="#settings-panel"
+                        hx-trigger="change"
+                        hx-swap="innerHTML">
+                  <option value="">— click ↻ to load zones —</option>
+                </select>
+                <button type="button" class="btn btn-outline-secondary px-2"
+                        hx-post="/api/opts/zones"
+                        hx-target="#zone-lkp-dr"
+                        hx-include="#settings-panel, #view-f-dr"
+                        hx-swap="innerHTML" title="Load zones">↻</button>
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Record <span class="required-star">*</span> <small class="text-muted">(name type → rdata)</small></label>
+              <select name="record_id" id="record-dr" class="form-select form-select-sm">
+                <option value="">— select zone first —</option>
+              </select>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+              <button class="btn btn-danger btn-sm">
+                Delete <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-delete-record">
+                <label class="form-check-label small" for="dr-delete-record">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-delete-record"></div>
+        </div>
+      </div>
+    </div>
+
+    {# ============================================================== #}
+    {# PROVISION                                                        #}
+    {# ============================================================== #}
+    <div id="panel-provision" class="ib-panel" hidden>
+      <h5 class="panel-title"><i class="bi bi-layers"></i>Provision: Subnet + DNS Zones</h5>
+      <div class="card op-card">
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            Finds an address block by tag, allocates the next available subnet, and optionally
+            creates a forward and/or reverse DNS zone in one operation.
+          </p>
+          <form hx-post="/ops/provision" hx-target="#res-provision"
+                hx-include="#settings-panel" hx-swap="innerHTML">
+
+            <h6 class="section-heading">Address Block</h6>
+            <div class="row g-2 mb-3">
+              <div class="col-sm-4">
+                <label class="form-label">Tag key <span class="required-star">*</span></label>
+                <input type="text" name="tag_key" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">Tag value <span class="required-star">*</span></label>
+                <input type="text" name="tag_value" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label">CIDR prefix <span class="required-star">*</span></label>
+                <input type="number" name="cidr" class="form-control form-control-sm"
+                       min="1" max="32" value="24" required>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Subnet name</label>
+                <input type="text" name="name" class="form-control form-control-sm" placeholder="optional">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">IP Space ID</label>
+                <input type="text" name="space" class="form-control form-control-sm" placeholder="optional">
+              </div>
+            </div>
+
+            <h6 class="section-heading">DNS (optional)</h6>
+            <div class="row g-2 mb-3">
+              <div class="col-sm-6">
+                <label class="form-label">Forward zone FQDN</label>
+                <input type="text" name="forward_zone_fqdn" class="form-control form-control-sm"
+                       placeholder="e.g. prod.example.com">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">DNS View <small class="text-muted">(required if creating zones)</small></label>
+                {{ sel_load('view_id', 'view-prov', '/api/opts/views', '— click ↻ to load views —') }}
+              </div>
+              <div class="col-12">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="reverse_zone" id="prov-reverse">
+                  <label class="form-check-label small" for="prov-reverse">
+                    Auto-create reverse (in-addr.arpa) zone
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <h6 class="section-heading">Common</h6>
+            <div class="row g-2 mb-3">
+              <div class="col-sm-6">
+                <label class="form-label">Comment</label>
+                <input type="text" name="comment" class="form-control form-control-sm" placeholder="applied to all objects">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Tags</label>
+                <input type="text" name="tags" class="form-control form-control-sm"
+                       placeholder="key=val, key2=val2 (applied to all objects)">
+              </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-3">
+              <button class="btn btn-primary btn-sm">
+                Provision <span class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+              </button>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="dry_run" id="dr-provision">
+                <label class="form-check-label small" for="dr-provision">Dry run</label>
+              </div>
+            </div>
+          </form>
+          <div id="res-provision"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /main-content #}
+</div>{# /layout #}
+
+<script>
+const _RDATA_HINTS = {
+  'A':    ['IPv4 address', 'e.g. 192.0.2.1'],
+  'AAAA': ['IPv6 address', 'e.g. 2001:db8::1'],
+  'CNAME':['FQDN of canonical name', 'e.g. host.example.com.'],
+  'PTR':  ['FQDN of target host', 'e.g. host.example.com.'],
+  'MX':   ['preference exchange', 'e.g. 10 mail.example.com.'],
+  'TXT':  ['text string', 'e.g. v=spf1 include:example.com ~all'],
+  'SRV':  ['priority weight port target', 'e.g. 10 0 443 host.example.com.'],
+  'CAA':  ['flags tag value', 'e.g. 0 issue letsencrypt.org'],
+  'NS':   ['name server FQDN', 'e.g. ns1.example.com.'],
+};
+
+function rdataHint(rtype, hintId, inputId) {
+  const h = _RDATA_HINTS[rtype];
+  const hint = document.getElementById(hintId);
+  const inp  = document.getElementById(inputId);
+  if (h) {
+    if (hint) hint.textContent = h[0] + ' — ' + h[1];
+    if (inp)  inp.placeholder  = h[1];
+  } else {
+    if (hint) hint.textContent = '';
+  }
+}
+
+function toggleRow(id) {
+  const row = document.getElementById(id);
+  if (row) row.hidden = !row.hidden;
+}
+
+function toggleGroup(header) {
+  header.closest('.sidebar-group').classList.toggle('collapsed');
+}
+
+/* Map panel id → sidebar item onclick text for home tile clicks */
+function sidebarItem(panelId) {
+  return document.querySelector(`.sidebar-item[onclick*="'${panelId}'"]`);
+}
+
+function showPanel(panelId, itemEl) {
+  document.querySelectorAll('.ib-panel').forEach(p => { p.hidden = true; });
+  const panel = document.getElementById('panel-' + panelId);
+  if (panel) panel.hidden = false;
+
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  if (itemEl) itemEl.classList.add('active');
+
+  /* Sync settings-header chevron state */
+  const hdr = document.querySelector('.ib-settings-header');
+  if (hdr) {
+    const body = document.getElementById('settings-body');
+    const chevron = hdr.querySelector('.bi-chevron-down');
+    if (body && chevron) {
+      const expanded = body.classList.contains('show');
+      hdr.classList.toggle('collapsed', !expanded);
+    }
+  }
+}
+
+/* Keep settings chevron in sync with Bootstrap collapse */
+document.addEventListener('DOMContentLoaded', () => {
+  const body = document.getElementById('settings-body');
+  const hdr  = document.querySelector('.ib-settings-header');
+  if (body && hdr) {
+    body.addEventListener('hide.bs.collapse', () => hdr.classList.add('collapsed'));
+    body.addEventListener('show.bs.collapse', () => hdr.classList.remove('collapsed'));
+  }
+
+  /* After HTMX loads the overview, re-init any HTMX on injected elements */
+  document.body.addEventListener('htmx:afterSwap', (e) => {
+    if (e.detail.target && e.detail.target.id === 'overview-content') {
+      htmx.process(e.detail.target);
+    }
+  });
+});
+</script>
+{% endblock %}

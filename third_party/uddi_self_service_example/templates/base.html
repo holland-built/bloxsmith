@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Universal DDI Self-Service Portal</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+  <style>
+    /* ── Infoblox brand tokens ─────────────────────────────────────── */
+    :root {
+      --ib-navy:        #1B2A6B;
+      --ib-navy-dark:   #121E50;
+      --ib-navy-mid:    #2D3F8A;
+      --ib-navy-light:  #EEF0F8;
+      --ib-teal:        #00C4B3;
+      --ib-teal-dark:   #00A89A;
+      --ib-teal-light:  #E6F9F7;
+      --ib-orange:      #F7941D;
+      --ib-orange-dark: #E0861A;
+      --ib-orange-light:#FEF3E2;
+      --ib-bg:          #F4F6FB;
+      --ib-surface:     #FFFFFF;
+      --ib-border:      #D1D9E6;
+      --ib-text:        #1A202C;
+      --ib-text-muted:  #64748B;
+      --ib-success:     #38A169;
+      --ib-success-bg:  #F0FFF4;
+      --ib-error:       #C53030;
+      --ib-error-bg:    #FFF5F5;
+      --ib-warn:        #B7791F;
+      --ib-warn-bg:     #FFFFF0;
+    }
+
+    /* ── Base ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      background: var(--ib-bg);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: .875rem;
+      color: var(--ib-text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header / navbar ───────────────────────────────────────────── */
+    .ib-topbar {
+      background: linear-gradient(135deg, var(--ib-navy-dark) 0%, var(--ib-navy-mid) 100%);
+      padding: .75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 2px 12px rgba(18,30,80,.4);
+    }
+    .ib-logo-mark {
+      width: 38px; height: 38px; flex-shrink: 0;
+      background: var(--ib-teal);
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 14px; color: #fff;
+      letter-spacing: -.5px;
+      box-shadow: 0 2px 6px rgba(0,196,179,.35);
+    }
+    .ib-brand-name {
+      font-size: 1rem; font-weight: 700; color: #fff;
+      line-height: 1.2; letter-spacing: -.015em;
+    }
+    .ib-brand-sub {
+      font-size: .7rem; color: rgba(255,255,255,.55); font-weight: 400;
+    }
+    .ib-rainbow-bar {
+      height: 3px;
+      background: linear-gradient(90deg,
+        var(--ib-teal) 0%, var(--ib-teal) 40%,
+        var(--ib-orange) 70%, #FAB44B 100%);
+    }
+
+    /* ── Page layout ───────────────────────────────────────────────── */
+    .ib-page { padding: 1.25rem 1.5rem 2rem; }
+
+    /* ── Settings panel ────────────────────────────────────────────── */
+    .settings-panel {
+      background: var(--ib-orange-light);
+      border: 1px solid #F6C369 !important;
+      border-radius: 10px !important;
+      box-shadow: 0 1px 6px rgba(247,148,29,.12);
+    }
+    .settings-panel > .card-header {
+      background: linear-gradient(90deg, var(--ib-orange), #F9A94A);
+      color: #fff !important;
+      border-bottom: none;
+      border-radius: 9px 9px 0 0 !important;
+      font-weight: 600; font-size: .75rem;
+      text-transform: uppercase; letter-spacing: .06em;
+      padding: .55rem 1rem;
+    }
+    .settings-panel .form-control:focus,
+    .settings-panel .form-select:focus {
+      border-color: var(--ib-orange);
+      box-shadow: 0 0 0 3px rgba(247,148,29,.18);
+    }
+
+    /* ── Tabs ──────────────────────────────────────────────────────── */
+    .ib-tabs {
+      border-bottom: 2px solid var(--ib-border);
+      gap: .2rem;
+      flex-wrap: nowrap;
+    }
+    .ib-tabs .nav-link {
+      font-size: .82rem; font-weight: 500;
+      color: var(--ib-text-muted);
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      padding: .55rem 1rem;
+      transition: color .15s, background .15s;
+      white-space: nowrap;
+    }
+    .ib-tabs .nav-link i { font-size: .85rem; }
+    .ib-tabs .nav-link:hover {
+      color: var(--ib-navy);
+      background: var(--ib-navy-light);
+    }
+    .ib-tabs .nav-link.active {
+      color: var(--ib-navy);
+      font-weight: 600;
+      background: var(--ib-surface);
+      border-color: var(--ib-border) var(--ib-border) var(--ib-surface);
+      border-bottom: 3px solid var(--ib-teal);
+      margin-bottom: -2px;
+    }
+
+    .ib-tab-content {
+      background: var(--ib-surface);
+      border: 1px solid var(--ib-border);
+      border-top: none;
+      border-radius: 0 0 12px 12px;
+      box-shadow: 0 4px 16px rgba(27,42,107,.07);
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* ── Cards ─────────────────────────────────────────────────────── */
+    .card {
+      border: 1px solid var(--ib-border);
+      border-radius: 10px;
+      box-shadow: 0 1px 5px rgba(27,42,107,.06);
+      overflow: hidden;
+    }
+    .card-header {
+      font-size: .72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em;
+      color: var(--ib-navy);
+      background: var(--ib-navy-light);
+      border-bottom: 1px solid var(--ib-border);
+      padding: .55rem 1rem;
+    }
+    .op-card > .card-header {
+      background: #F8FAFF;
+      border-bottom-color: #DDE5F4;
+    }
+    .border-danger > .card-header {
+      background: #FFF5F5; color: var(--ib-error);
+      border-bottom-color: #FEB2B2;
+    }
+    .card-body { padding: .9rem 1rem; }
+    .card-footer {
+      background: #FAFBFD;
+      border-top: 1px solid var(--ib-border);
+      padding: .5rem 1rem;
+      border-radius: 0 0 10px 10px;
+    }
+
+    /* ── Form elements ─────────────────────────────────────────────── */
+    label.form-label {
+      font-size: .76rem; font-weight: 600;
+      color: #475569; margin-bottom: .2rem;
+    }
+    .form-control, .form-select {
+      font-size: .83rem;
+      border-color: #CBD5E0;
+      border-radius: 6px;
+      color: var(--ib-text);
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .form-control::placeholder { color: #A0AEC0; }
+    .form-control:focus, .form-select:focus {
+      border-color: var(--ib-teal);
+      box-shadow: 0 0 0 3px rgba(0,196,179,.18);
+      outline: none;
+    }
+    .form-control-sm, .form-select-sm { font-size: .8rem; }
+    .form-text { font-size: .72rem; color: var(--ib-text-muted); margin-top: .2rem; }
+    .required-star { color: #E53E3E; }
+
+    /* ── Buttons ───────────────────────────────────────────────────── */
+    .btn { border-radius: 6px; font-size: .8rem; font-weight: 500;
+           padding: .35rem .85rem; transition: all .15s; }
+    .btn-sm { padding: .28rem .7rem; font-size: .78rem; }
+
+    .btn-primary {
+      background: var(--ib-navy); border-color: var(--ib-navy); color: #fff;
+    }
+    .btn-primary:hover, .btn-primary:focus {
+      background: var(--ib-navy-mid); border-color: var(--ib-navy-mid); color: #fff;
+      box-shadow: 0 2px 8px rgba(27,42,107,.3);
+    }
+
+    .btn-success {
+      background: var(--ib-teal); border-color: var(--ib-teal); color: #fff;
+    }
+    .btn-success:hover, .btn-success:focus {
+      background: var(--ib-teal-dark); border-color: var(--ib-teal-dark); color: #fff;
+      box-shadow: 0 2px 8px rgba(0,196,179,.3);
+    }
+
+    .btn-warning {
+      background: var(--ib-orange); border-color: var(--ib-orange); color: #fff;
+    }
+    .btn-warning:hover, .btn-warning:focus {
+      background: var(--ib-orange-dark); border-color: var(--ib-orange-dark); color: #fff;
+      box-shadow: 0 2px 8px rgba(247,148,29,.3);
+    }
+
+    .btn-danger { font-size: .8rem; font-weight: 500; border-radius: 6px; }
+    .btn-danger:hover { box-shadow: 0 2px 8px rgba(197,48,48,.25); }
+
+    .btn-outline-secondary {
+      font-size: .78rem; border-color: #CBD5E0; color: #64748B;
+      border-radius: 0 6px 6px 0;
+    }
+    .btn-outline-secondary:hover {
+      background: var(--ib-navy-light); border-color: var(--ib-navy); color: var(--ib-navy);
+    }
+
+    .input-group .btn-outline-secondary { border-left: none; }
+
+    /* ── HTMX / spinners ───────────────────────────────────────────── */
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline-block; }
+
+    /* ── Result output ─────────────────────────────────────────────── */
+    pre.result-pre {
+      white-space: pre-wrap; word-break: break-all;
+      font-size: .78rem; max-height: 320px; overflow-y: auto;
+      margin-bottom: 0;
+      font-family: 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
+      line-height: 1.55;
+    }
+
+    /* ── Dividers / misc ───────────────────────────────────────────── */
+    .or-divider { color: #94A3B8; font-size: .72rem; }
+    .badge-dry  { font-size: .68rem; }
+    .section-heading {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--ib-navy); opacity: .75;
+      margin-bottom: .5rem;
+    }
+
+    /* ── Alerts ────────────────────────────────────────────────────── */
+    .alert-warning {
+      background: var(--ib-orange-light);
+      border-color: #F6C369; color: #7D4E00;
+    }
+    .alert-danger { background: var(--ib-error-bg); }
+
+    /* ── Scrollbar (webkit) ────────────────────────────────────────── */
+    pre.result-pre::-webkit-scrollbar { width: 5px; height: 5px; }
+    pre.result-pre::-webkit-scrollbar-track { background: #F1F5F9; }
+    pre.result-pre::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 4px; }
+    pre.result-pre::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+    /* ── Drilldown table utility classes ─────────────────────────── */
+    .dd-th {
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      padding: .35rem .75rem;
+      border-bottom: 1px solid var(--ib-border);
+    }
+    .dd-td {
+      padding: .35rem .75rem;
+      vertical-align: middle;
+      border-bottom: 1px solid var(--ib-border);
+    }
+    .dd-badge-ok {
+      font-size: .68rem;
+      padding: .1rem .35rem;
+      border-radius: 4px;
+      background: var(--ib-success-bg);
+      color: var(--ib-success);
+      border: 1px solid #9AE6B4;
+      font-weight: 600;
+    }
+    .dd-badge-danger {
+      font-size: .68rem;
+      padding: .1rem .35rem;
+      border-radius: 4px;
+      background: #FFF5F5;
+      color: #C53030;
+      border: 1px solid #FEB2B2;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────────────── -->
+  <div class="ib-topbar">
+    <div class="ib-logo-mark">IB</div>
+    <div>
+      <div class="ib-brand-name">Universal DDI Self-Service Portal</div>
+      <div class="ib-brand-sub">Infoblox BloxOne DDI &nbsp;·&nbsp; Automated Network Management</div>
+    </div>
+  </div>
+  <div class="ib-rainbow-bar"></div>
+
+  <!-- ── Page ───────────────────────────────────────────────────────── -->
+  <div class="ib-page">
+    {% block content %}{% endblock %}
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
