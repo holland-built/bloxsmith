@@ -1,6 +1,13 @@
 module bloxsmith
 
-go 1.26.3
+// Raised from 1.26.3 to 1.26.6 on 2026-08-14. Not housekeeping: govulncheck
+// went red on master with four REACHABLE standard-library advisories —
+// GO-2026-6218 (net/url), GO-2026-6090 (crypto/tls), GO-2026-6089 (net/http)
+// and GO-2026-5972 — every one of them "Fixed in ...@go1.26.6". `go-version:
+// '1.26.x'` in both workflows resolves to the newest patch, but the jobs run
+// with GOTOOLCHAIN=local, so the version named HERE is the one that decides.
+// Leaving this at 1.26.3 meant the toolchain fix could never arrive.
+go 1.26.6
 
 require (
 	github.com/fernet/fernet-go v0.0.0-20240119011108-303da6aec611
