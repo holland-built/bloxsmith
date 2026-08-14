@@ -315,6 +315,19 @@ jobs:
       - name: Install syft (goreleaser shells out to it for SBOMs)
         uses: anchore/sbom-action/download-syft@v0
 
+      # `archives.files` in go/.goreleaser.yaml now lists LICENSE and NOTICE.md
+      # (the BSD-2-Clause notice for the derived provisioning engine, which every
+      # archive shipped without until 2026-08-14). That list is resolved against
+      # goreleaser's cwd, `go/`, so the two files have to be staged in — exactly
+      # as release.yml stages the installers, and for the same zglob reason.
+      #
+      # This step exists because the release-side change alone broke THIS
+      # workflow: `release --snapshot` below builds real archives, so a file it
+      # cannot find is a hard failure here even though nothing is published. The
+      # snapshot build is only a rehearsal if it rehearses the same inputs.
+      - name: Stage the licence notice for goreleaser
+        run: cp LICENSE NOTICE.md go/
+
       - name: goreleaser build (snapshot, no publish)
         working-directory: go
         run: goreleaser build --snapshot --clean
