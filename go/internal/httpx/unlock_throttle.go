@@ -148,6 +148,16 @@ type UnlockThrottle struct {
 	forget     time.Duration
 	maxTracked int
 	now        func() time.Time
+
+	// afterPreCheck is nil in production and fires between the two lockout
+	// checks in Do — after the pre-check has passed, before the slot is
+	// contended for. That is the only place a test can prove a caller reached
+	// the queue while another caller still held the slot and had not yet
+	// recorded its failure, which is the exact interleaving this throttle got
+	// wrong. It must NOT be moved below acquireSlot: a caller waiting on the
+	// slot cannot signal anything until the holder releases it, so the test it
+	// exists for would deadlock instead of run.
+	afterPreCheck func()
 }
 
 // NewUnlockThrottle builds a throttle with the production settings.
@@ -167,12 +177,26 @@ func NewUnlockThrottle() *UnlockThrottle {
 // succeeded; it is called at most once, and only while this request holds the
 // single derive slot.
 //
-// THE ORDER OF THE TWO CHECKS IS THE POINT. The per-client lockout is consulted
-// BEFORE the semaphore, so a blocked client never queues for the slot and never
-// reaches derive. If it were the other way round, an attacker in permanent
-// lockout would still occupy the one derive slot for up to the acquire timeout
-// on every request and could starve the operator's real unlock — the counter
-// would be limiting guesses while handing over a queueing DoS instead.
+// THE LOCKOUT IS CONSULTED TWICE, AND THE TWO CHECKS DO DIFFERENT JOBS.
+//
+//   - BEFORE the semaphore: queue protection. A blocked client never queues for
+//     the slot and never reaches derive. Without it, an attacker in permanent
+//     lockout would still occupy the one derive slot for up to the acquire
+//     timeout on every request and could starve the operator's real unlock —
+//     the counter would be limiting guesses while handing over a queueing DoS
+//     instead.
+//
+//   - AFTER the semaphore: the enforcement. This is the one that actually stops
+//     a burst, and it was missing. The pre-check alone is check-then-act: the
+//     failure counter is not written until after derive, so requests arriving
+//     together ALL read n == 0 and ALL pass, and the semaphore then serialises
+//     them one guess at a time rather than refusing them. Measured on the code
+//     before this check existed: 50 concurrent wrong guesses from one address
+//     produced 50 derives and 0 blocks, and with a realistic 160ms derive the
+//     bound was the 3s acquire timeout (19 guesses), not the lockout at all.
+//     By the time this check runs the semaphore has serialised us behind the
+//     previous holder, whose record() has already run, so the failure it wrote
+//     is visible here. See issue #52.
 //
 // Do is a single entry point rather than exported Check/Acquire/Record calls
 // for the same reason: a caller cannot get that ordering wrong, forget to
@@ -191,12 +215,39 @@ func (t *UnlockThrottle) Do(r *http.Request, derive func() bool) (UnlockVerdict,
 	if wait := t.blockedFor(key); wait > 0 {
 		return UnlockBlocked, wait
 	}
+	if t.afterPreCheck != nil {
+		t.afterPreCheck()
+	}
 	if !t.acquireSlot(ctx) {
 		return UnlockBusy, 0
 	}
+	// Registered FIRST, so it runs LAST — see the record defer below.
 	defer func() { <-t.sem }()
 
-	t.record(key, derive())
+	if wait := t.blockedFor(key); wait > 0 {
+		return UnlockBlocked, wait
+	}
+
+	// The outcome is recorded through a defer, not inline, for two reasons that
+	// both have to hold or the check above is worth nothing.
+	//
+	// PANIC. A derive that panics used to record nothing at all while the
+	// semaphore's own defer still released the slot — so a crash in the derive
+	// path was a free guess that never counted, and anything that could reach
+	// one would be an unlimited guessing oracle. ok stays false through a panic,
+	// so the attempt counts as a failure. That is the conservative direction: the
+	// alternative charges nothing for an attempt that was made.
+	//
+	// ORDER. Deferred calls run last-in-first-out, and this one is registered
+	// AFTER the slot release above, so it runs BEFORE it. The failure is
+	// therefore always visible to the next waiter's post-acquire check. Swapping
+	// these two lines would reopen the burst by one guess per waiter.
+	//
+	// Nothing is recorded on either blocked path: those returns happen before
+	// this line, and a refused request tested no passphrase.
+	ok := false
+	defer func() { t.record(key, ok) }()
+	ok = derive()
 	return UnlockRan, 0
 }
 
