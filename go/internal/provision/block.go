@@ -474,14 +474,24 @@ func (d *BlockDecommissioner) findBlocks() ([]any, error) {
 	return results, nil
 }
 
-func (d *BlockDecommissioner) deleteBlocks(blocks []any) ([]any, error) {
+// deleteBlocks returns the blocks it DELETEd so far even when it fails, plus how
+// many deletes it attempted. Block teardown is fail-forward — there is no
+// rollback — so a refusal on block 41 of 60 leaves 40 blocks genuinely gone from
+// the tenant. Returning nil there discarded the only list of them: the caller's
+// error names the block that SURVIVED, and nothing anywhere named the ones that
+// did not. The site teardown's exec* helpers have always returned their partial
+// list for this reason (decommission.go); this is the block counterpart.
+//
+// attempted is counted rather than derived from len(deleted)+1, so it stays true
+// if the loop ever gains a skip.
+func (d *BlockDecommissioner) deleteBlocks(blocks []any) (deleted []any, attempted int, err error) {
 	ordered := append([]any{}, blocks...)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		ci, _ := intCoerce(asMap(ordered[i])["cidr"])
 		cj, _ := intCoerce(asMap(ordered[j])["cidr"])
 		return ci > cj // highest cidr first (reverse)
 	})
-	deleted := []any{}
+	deleted = []any{}
 	mode := dryPrefix(d.dryRun)
 	for _, b := range ordered {
 		block := asMap(b)
@@ -490,17 +500,29 @@ func (d *BlockDecommissioner) deleteBlocks(blocks []any) ([]any, error) {
 		status := pyStr(getMap(block, "tags")["Status"])
 		d.emit(M{"step": fmt.Sprintf("%sDeleting block: %s  status=%s  id=%s", mode, addr, status, blockID)})
 		if !d.dryRun {
+			attempted++
 			_, httpStatus, _ := d.e.Rest.Write("DELETE", "/api/ddi/v1/"+blockID, nil, nil)
 			if !(httpStatus >= 200 && httpStatus < 300) {
-				return nil, perr("Failed to delete block %s: status %d", addr, httpStatus)
+				return deleted, attempted, perr("Failed to delete block %s: status %d", addr, httpStatus)
 			}
 		}
 		deleted = append(deleted, M{"address": addr, "id": blockID, "status": status})
 	}
-	return deleted, nil
+	return deleted, attempted, nil
 }
 
 // Decommission is BlockDecommissioner.decommission (server.py:2097).
+//
+// On success it returns the full result map and a nil error, unchanged.
+//
+// On a MID-DELETE FAILURE it returns (M{"incomplete": report}, err) — both
+// non-nil, and the map carries the report and nothing else, exactly as
+// BlockProvisioner.Provision does with M{"rollback": report}. Teardown is
+// fail-forward, so that arm is reached with real address blocks already deleted
+// from the tenant; the report is the only inventory of them. The failures ABOVE
+// the delete loop (IP-space lookup, findBlocks, recordPlan) still return
+// (nil, err) deliberately: they happen before the first DELETE, so nothing is
+// gone and there is no inventory to carry.
 func (d *BlockDecommissioner) Decommission() (M, error) {
 	space, err := cspq(d.ipSpace)
 	if err != nil {
@@ -529,9 +551,39 @@ func (d *BlockDecommissioner) Decommission() (M, error) {
 		return nil, err
 	}
 
-	deleted, err := d.deleteBlocks(blocks)
+	deleted, attempted, err := d.deleteBlocks(blocks)
 	if err != nil {
-		return nil, err
+		// ONE canonical report object, returned verbatim to the caller AND
+		// embedded verbatim in the emitted event, so the HTTP layer, the audit
+		// log and the operator's stream can never disagree about what went.
+		//
+		// planned vs attempted vs deleted are three different numbers and all
+		// three are needed: 60 blocks planned, 41 DELETEs issued, 40 succeeded
+		// says the 41st is the one that refused and 19 were never touched.
+		report := M{
+			"outcome":        "incomplete",
+			"failed_step":    "delete address blocks",
+			"planned":        len(blocks),
+			"attempted":      attempted,
+			"deleted":        len(deleted),
+			"blocks_deleted": deleted,
+			"export_path":    exportPath,
+		}
+		// Emitted for the SSE route (server/provision.go's seed-demo teardown),
+		// which only ever sees the stream. Same grammar as the site teardown's
+		// emitIncomplete — top-level incomplete/failed_step/error — so one SSE
+		// consumer handles both teardowns.
+		d.emit(M{
+			"operation": "decommission-block", "template": d.name, "ip_space": d.ipSpace,
+			"incomplete": true, "failed_step": "delete address blocks",
+			"error": err.Error(), "report": report,
+		})
+		// Returned NON-NIL alongside the error, carrying the failure report and
+		// nothing else — the same contract BlockProvisioner.Provision uses for
+		// M{"rollback": report}. /api/teardown/block passes a no-op emitter, so
+		// the returned map is the ONLY way that route can learn which blocks are
+		// already gone.
+		return M{"incomplete": report}, err
 	}
 	return M{"name": d.name, "ip_space": d.ipSpace, "blocks_deleted": deleted, "dry_run": d.dryRun,
 		"export_path": exportPath, "export_written": !d.dryRun}, nil
