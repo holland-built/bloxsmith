@@ -52,8 +52,16 @@ func (e *Engine) QuerySiteLive(site, ipSpace, dnsView, dnsZone string) (M, error
 	found := len(subnetsRaw) > 0
 	var allHosts []any
 	if found {
-		allHosts, err = e.Rest.GetStrict("/api/ddi/v1/ipam/host", map[string]string{"_limit": "1000"})
+		// Paged, and refusing rather than truncating — same read as the teardown
+		// uses (readAllHosts, hosts.go). A truncated page here does not just
+		// under-report: it makes DetectDrift say "Expected host 'gw01' not found"
+		// about a host that is present, which sends an operator to re-create
+		// something that already exists.
+		allHosts, err = e.readAllHosts()
 		if err != nil {
+			if IsError(err) {
+				return nil, err
+			}
 			return nil, perrWrap(err, "reading hosts: %s", upstreamPublic(err))
 		}
 	}
