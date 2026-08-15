@@ -45,8 +45,15 @@ type Log struct {
 	path        string
 	imageDigest string // server.py:80 _IMAGE_DIGEST ("app-v"+APP_VERSION)
 	instanceID  string // server.py:72 _INSTANCE_ID (per-process id)
-	mu          sync.Mutex
-	now         func() float64 // injectable for tests; wall clock in prod
+
+	// mu is an RWMutex rather than a Mutex so that reading the chain excludes a
+	// concurrent Append without verifiers excluding each other. Append and Adopt
+	// take the write lock; Verify and AppendHealth take the read lock. What this
+	// buys is that a verifier cannot observe a half-flushed final line and report
+	// "audit log incomplete" about a log that is perfectly fine. What it does NOT
+	// buy is anything across processes — see Verify.
+	mu  sync.RWMutex
+	now func() float64 // injectable for tests; wall clock in prod
 
 	trustDir string // holds audit.key + audit.head; never the log's own directory
 	key      *Key   // nil when no key could be established
@@ -98,8 +105,8 @@ func (l *Log) recordAppendFailure(event, actor string, err error) error {
 // healthy log and a log that dropped an entry at time zero render identically
 // in any consumer that only checks whether the key exists.
 func (l *Log) AppendHealth() map[string]any {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	h := map[string]any{"append_failures": l.appendFailures}
 	if l.lastFailure != nil {
 		h["last_append_failure"] = map[string]any{
@@ -458,6 +465,13 @@ func cannotVerify(reason string) map[string]any {
 	return map[string]any{"valid": false, "broken_index": nil, "verify_error": reason}
 }
 
+// readSkewHook is nil in production and exists so the ordering guarantee in
+// Verify can be tested deterministically rather than by racing the scheduler.
+// It is unexported and package-scoped, so nothing outside this package can set
+// it and no build of the binary can reach it. A stochastic-only test for this
+// defect would be a guard that passes for the wrong reason on a quiet machine.
+var readSkewHook func()
+
 // Verify walks the chain and returns a tri-state verdict, never a bool
 // masquerading as one:
 //
@@ -481,7 +495,39 @@ func cannotVerify(reason string) map[string]any {
 // could-not-verify, NOT tampering. Reporting "someone forged your audit log"
 // because a config directory was wiped would be exactly the kind of invented
 // certainty this codebase spent the week removing.
+//
+// READ ORDER IS LOAD-BEARING. The sealed head is read BEFORE the entries, and
+// that is not a tidiness preference — it is the fix for a real defect. The
+// other order let a concurrent Append (which writes the entry and THEN reseals
+// the head) be observed as entries=N against a head recording N+1, and step 4
+// below turned that into "N were removed from the end" — the tampered verdict,
+// on a chain nobody touched. Reading the head first makes it the OLDER of the
+// two snapshots, so an append in flight can only leave the log longer than the
+// seal records, which is the stale-seal case Append already declares legitimate
+// and step 4's final loop already handles. See issue #49.
+//
+// This ordering is what covers the offline verifier too, where no mutex can:
+// `bloxsmith audit verify` opens a running server's log from another process.
+// The one window ordering does NOT close is a partial final line written by
+// another process, which still reads as could-not-verify rather than intact —
+// wrong, but on the safe side of the tri-state, and never a tamper accusation.
 func (l *Log) Verify() map[string]any {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	// Snapshot the head first, but hold its error and its verdicts until step 4:
+	// an unreadable head must not mask a tampered ENTRY that steps 1-3 would
+	// have caught, and moving the read forward must not move the verdict with it.
+	h, headErr := l.readHead()
+
+	// Test seam. Nil in production; the deterministic ordering test sets it to
+	// append through a SECOND Log so the interleaving happens on every run
+	// instead of when the scheduler obliges. It runs between the two reads
+	// because that gap is the entire defect.
+	if readSkewHook != nil {
+		readSkewHook()
+	}
+
 	entries, skipped, err := l.Read()
 	if err != nil {
 		return cannotVerify(fmt.Sprintf("audit log could not be read: %v", err))
@@ -545,10 +591,12 @@ func (l *Log) Verify() map[string]any {
 			foreignKey, l.key.id))
 	}
 
-	// 4. The sealed head: how many entries there are supposed to be.
-	h, err := l.readHead()
-	if err != nil {
-		return cannotVerify(fmt.Sprintf("the sealed head record could not be read: %v", err))
+	// 4. The sealed head: how many entries there are supposed to be. Read at the
+	//    top of this function; its error is adjudicated here, after the entry
+	//    checks above, so the precedence between "an entry is forged" and "the
+	//    head is unreadable" is exactly what it was before the read moved.
+	if headErr != nil {
+		return cannotVerify(fmt.Sprintf("the sealed head record could not be read: %v", headErr))
 	}
 	if h == nil {
 		if len(entries) == 0 {
