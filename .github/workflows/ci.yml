@@ -931,15 +931,58 @@ jobs:
   # without a manual Windows run. Error severity only; warnings don't fail CI.
   lint-ps1:
     runs-on: windows-latest
+    env:
+      # The module the setup step installs, as a variable and not a literal for
+      # one reason: it is what lets a fault-injection run point the SAME retry
+      # algorithm at a module PSGallery does not have, so the guard can be
+      # watched failing without editing the logic being guarded. See #90.
+      PSSA_MODULE: PSScriptAnalyzer
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Setting the linter up and RUNNING it are two steps, not one, because
+      # they are two different answers. When they shared a step, a PSGallery
+      # lookup that returned nothing produced the identical red X as a real
+      # finding in install.ps1 — PR #72 went red with install.ps1 untouched, and
+      # re-running the same commit unchanged passed. A check that cannot tell
+      # "I could not look" from "I looked and found a problem" is the exact
+      # defect this repo has filed five times in its own code.
+      - name: Set up PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # -ErrorAction Stop on BOTH calls is load-bearing: Install-Module can
+          # report a non-terminating error, and without it the catch never
+          # fires, the loop "succeeds", and the retry is decorative.
+          # Import is inside the attempt, not after the loop: a download that
+          # cannot be loaded is a failed setup, and it deserves a retry too.
+          $delays = @(5, 10)
+          for ($i = 1; $i -le 3; $i++) {
+            try {
+              Install-Module $env:PSSA_MODULE -Force -Scope CurrentUser -Repository PSGallery -ErrorAction Stop
+              Import-Module $env:PSSA_MODULE -ErrorAction Stop
+              Write-Host "$env:PSSA_MODULE installed and imported on attempt $i of 3"
+              exit 0
+            } catch {
+              Write-Host "::warning::attempt $i of 3 to set up $env:PSSA_MODULE failed: $($_.Exception.GetType().Name): $($_.Exception.Message)"
+              if ($i -lt 3) { Start-Sleep -Seconds $delays[$i - 1] }
+            }
+          }
+          # Deliberately NOT worded as "PSGallery is down". A runner policy, a
+          # TLS fault, disk, or PowerShellGet itself produce the same symptom,
+          # and naming a cause nobody measured is the thing this repo keeps
+          # filing bugs about. The warnings above carry the real exception.
+          Write-Host "::error::DEPENDENCY SETUP FAILED after 3 attempts — could not install and import $env:PSSA_MODULE. scripts/install.ps1 was NOT analysed, so this job proves nothing about it either way. This is not a finding about the script; see the warnings above for the underlying error."
+          exit 1
+
       - name: PSScriptAnalyzer (Error severity gate)
         shell: pwsh
         run: |
-          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          $findings = Invoke-ScriptAnalyzer -Path scripts/install.ps1 -Severity Error
+          $ErrorActionPreference = 'Stop'
+          # -ErrorAction Stop here too: an analysis that itself errored must not
+          # fall through to the "no findings" line below with an empty result.
+          $findings = Invoke-ScriptAnalyzer -Path scripts/install.ps1 -Severity Error -ErrorAction Stop
           if ($findings) {
             $findings | Format-Table RuleName, Line, Message -AutoSize | Out-String | Write-Host
             exit 1
