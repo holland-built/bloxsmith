@@ -581,14 +581,26 @@ func (s *Service) CSPDtcLbdn() map[string]any {
 	return rowsResp(normDtcLbdn(rest.Unwrap(body)))
 }
 
+// CSPHostHealth lists the host estate with its composite status. The count it
+// reports used to be the _limit it happened to ask for: at 500 rows on a
+// measured 532-host tenant the card read "500" with status "ok" and nothing in
+// the payload said otherwise (#85). It now asks for the authoritative total and
+// says when the list it is showing is not the whole estate.
 func (s *Service) CSPHostHealth() map[string]any {
-	body, st, err := s.Rest.GetEx("/api/infra/v1/detail_hosts", map[string]string{
-		"_limit":  "500",
-		"_fields": "display_name,composite_status,host_version,ip_address,nat_ip,location"})
-	if errored(st, err) {
+	rows, total, totalOK, err := s.fetchHosts("display_name,composite_status,host_version,ip_address,nat_ip,location")
+	if err != nil {
 		return errRows()
 	}
-	return rowsResp(normHostHealth(rest.Unwrap(body)))
+	resp := rowsResp(normHostHealth(rows))
+	if hostsTruncated(rows, total, totalOK) {
+		// status stays "ok": the rows are real and the tile must keep drawing
+		// them. What changes is that "count" stops being readable as the size
+		// of the estate.
+		resp["total_available"] = total
+		resp["truncated"] = true
+		resp["reason"] = hostsReason
+	}
+	return resp
 }
 
 func (s *Service) CSPOnpremHosts() map[string]any {
