@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -100,6 +101,100 @@ func TestTeardownBlock_PartialDeleteWritesErrorAuditEntry(t *testing.T) {
 	// And the success entry must NOT be there: this teardown did not complete.
 	if got := auditEntries(t, logPath, "teardown-block"); len(got) != 0 {
 		t.Fatalf("teardown-block (success) entries = %d, want 0 on a failed teardown; entries=%v", len(got), got)
+	}
+}
+
+// --- the inventory of what is already gone, in the 400 body AND the audit row -
+//
+// The entry above proves a row is written. It does not prove the row, or the
+// caller, is told WHICH address blocks were destroyed. This route passes
+// noopEmit, so the emit stream reaches nobody here: the report on
+// Decommission's returned map is the only channel, and if the handler drops it
+// the operator's only lead is the block that SURVIVED.
+func TestTeardownBlock_PartialDeleteNamesTheBlocksAlreadyGone(t *testing.T) {
+	d, logPath := newResidualDeps(t, partialBlockTeardownUpstream())
+	d.StateDir = t.TempDir()
+
+	r := httptest.NewRequest("POST", "/api/teardown/block", nil)
+	r.RemoteAddr = "127.0.0.1:12345"
+	rr := httptest.NewRecorder()
+	d.teardownBlock(rr, r, map[string]any{
+		"template": blocksTeardownTemplate, "dry": "0", "confirm": blocksTeardownTemplate})
+
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response body is not JSON: %v (%s)", err, rr.Body.String())
+	}
+	inc, ok := body["incomplete"].(map[string]any)
+	if !ok {
+		t.Fatalf("400 body carries no \"incomplete\" report: %s — one address block is already gone "+
+			"from the tenant and the caller is told only about the one that refused", rr.Body.String())
+	}
+	if inc["outcome"] != "incomplete" {
+		t.Fatalf("outcome = %v, want \"incomplete\"", inc["outcome"])
+	}
+	gone, _ := inc["blocks_deleted"].([]any)
+	if len(gone) != 1 {
+		t.Fatalf("blocks_deleted = %v, want the one block that was really deleted", inc["blocks_deleted"])
+	}
+	// The /20 is deleted first (highest cidr first), so it is the one that went.
+	first, _ := gone[0].(map[string]any)
+	if first["address"] != "10.2.0.0/20" {
+		t.Fatalf("blocks_deleted[0].address = %v, want 10.2.0.0/20", first["address"])
+	}
+
+	// The same object has to reach the signed audit log, not just the response —
+	// the response is gone the moment the operator closes the tab.
+	entries := auditEntries(t, logPath, "teardown-block-error")
+	if len(entries) != 1 {
+		t.Fatalf("teardown-block-error entries = %d, want 1", len(entries))
+	}
+	detail := residualAuditDetail(t, entries[0])
+	auditInc, ok := detail["incomplete"].(map[string]any)
+	if !ok {
+		t.Fatalf("audit detail carries no \"incomplete\" report: %v", detail)
+	}
+	auditGone, _ := auditInc["blocks_deleted"].([]any)
+	if len(auditGone) != 1 {
+		t.Fatalf("audit blocks_deleted = %v, want the one deleted block", auditInc["blocks_deleted"])
+	}
+}
+
+// A failure BEFORE the first delete destroys nothing, so there is no inventory
+// and the report must be absent — not present-and-empty, which would read as
+// "the delete loop ran and deleted none of them".
+func TestTeardownBlock_FailureBeforeAnyDeleteCarriesNoReport(t *testing.T) {
+	d, logPath := newResidualDeps(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/ipam/ip_space") {
+			io.WriteString(w, `{"results":[]}`) // IP space not found, before any DELETE
+			return
+		}
+		w.WriteHeader(500)
+		fmt.Fprintf(w, `{"error":"unexpected upstream call %s %s"}`, r.Method, r.URL.Path)
+	})
+	d.StateDir = t.TempDir()
+
+	r := httptest.NewRequest("POST", "/api/teardown/block", nil)
+	r.RemoteAddr = "127.0.0.1:12345"
+	rr := httptest.NewRecorder()
+	d.teardownBlock(rr, r, map[string]any{
+		"template": blocksTeardownTemplate, "dry": "0", "confirm": blocksTeardownTemplate})
+
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response body is not JSON: %v (%s)", err, rr.Body.String())
+	}
+	if _, present := body["incomplete"]; present {
+		t.Fatalf("body claims a partial teardown when nothing was deleted: %s", rr.Body.String())
+	}
+	entries := auditEntries(t, logPath, "teardown-block-error")
+	if len(entries) != 1 {
+		t.Fatalf("teardown-block-error entries = %d, want 1", len(entries))
+	}
+	if _, present := residualAuditDetail(t, entries[0])["incomplete"]; present {
+		t.Fatalf("audit row claims a partial teardown when nothing was deleted: %v",
+			residualAuditDetail(t, entries[0]))
 	}
 }
 

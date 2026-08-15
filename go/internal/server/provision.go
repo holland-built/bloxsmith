@@ -695,11 +695,34 @@ func (d *Deps) teardownBlock(w http.ResponseWriter, r *http.Request, b map[strin
 		// no error sibling, making a partial destructive teardown the one outcome
 		// the log never mentioned. teardownSiteStream already writes exactly this
 		// entry on exactly this path (teardown-site-error); this is its match.
-		if !dry {
-			d.auditAppend("teardown-block-error", httpx.Actor(r),
-				map[string]any{"template": name, "error": err.Error()})
+		//
+		// provErr's IsError split is INLINED for this route, the same way and for
+		// the same reason as provisionBlock: provErr writes the 400 body itself,
+		// and this body must gain the incomplete report. This route passes
+		// noopEmit, so the returned map is the ONLY channel by which the operator
+		// can learn which blocks are already gone — an emit-only fix would reach
+		// nobody here.
+		//
+		// Report copied as-is and selected by PRESENCE, never length: an empty
+		// blocks_deleted is a load-bearing record ("the very first delete was
+		// refused, nothing went"), and `result["incomplete"]` is absent — not
+		// empty — on the failure paths above the delete loop, where nothing was
+		// deleted at all.
+		detail := map[string]any{"template": name, "error": err.Error()}
+		body := map[string]any{"error": err.Error()}
+		if inc, ok := result["incomplete"]; ok {
+			detail["incomplete"] = inc
+			body["incomplete"] = inc
 		}
-		d.provErr(w, r, "/api/teardown/block", err)
+		if !dry {
+			d.auditAppend("teardown-block-error", httpx.Actor(r), detail)
+		}
+		if provision.IsError(err) {
+			d.json(w, r, 400, body)
+			return
+		}
+		d.logExc("/api/teardown/block", err)
+		d.json(w, r, 500, map[string]any{"error": "internal error"})
 		return
 	}
 	d.json(w, r, 200, map[string]any{"result": result})
