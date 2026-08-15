@@ -3,19 +3,15 @@ package server
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"bloxsmith/internal/edit"
 	"bloxsmith/internal/rest"
 )
-
-// subnetIDRe restricts the ?subnet path segment to an opaque CSP object id
-// ([A-Za-z0-9_.-], e.g. a UUID) so it cannot break out of the upstream path
-// (../ traversal, ?/# query/fragment injection) into other CSP APIs.
-var subnetIDRe = regexp.MustCompile(`^[A-Za-z0-9_.\-]+$`)
 
 // registerIPAMReadRoutes wires the IPAM/DNS read helpers the resource editor +
 // self-service wizard use (server.py 5296-5430): ipam/spaces, ipam/blocks,
@@ -491,6 +487,50 @@ func (d *Deps) ipamAddressesGet(w http.ResponseWriter, r *http.Request) {
 	d.json(w, r, 200, resp)
 }
 
+// utilInt coerces one CSP utilization value to an address COUNT. It is stricter
+// than this file's numFromAny on purpose, because its output is subtracted:
+// a value that is not a whole, non-negative number is not a count, and guessing
+// one produces a number the operator has no way to tell from a measurement.
+//
+// The string case is not defensive padding. CSP returns numerics as JSON strings
+// elsewhere in this very file — findTotal's doc records page.total_size arriving
+// as "a STRING" — and the old code accepted a string `total` through firstTruthy
+// and then silently read it as 0 one line later.
+func utilInt(v any) (int, bool) {
+	switch t := v.(type) {
+	case int:
+		return t, t >= 0
+	case float64:
+		if math.IsNaN(t) || math.IsInf(t, 0) || t != math.Trunc(t) || t < 0 || t > math.MaxInt32 {
+			return 0, false
+		}
+		return int(t), true
+	case json.Number:
+		n, err := strconv.Atoi(strings.TrimSpace(t.String()))
+		return n, err == nil && n >= 0
+	case string:
+		n, err := strconv.Atoi(strings.TrimSpace(t))
+		return n, err == nil && n >= 0
+	}
+	return 0, false
+}
+
+// firstReported returns the first of keys whose value is PRESENT and non-nil.
+//
+// Not firstTruthy, which is what this handler used: truthiness discards a
+// REPORTED capacity of zero and moves on to the next field, turning a real
+// measurement into a different subnet's number. internal/dashboard/norm.go
+// records this exact trap for this exact data and fixed it the same way —
+// "key PRESENCE is the test, not truthiness".
+func firstReported(m map[string]any, keys ...string) any {
+	for _, k := range keys {
+		if v, ok := m[k]; ok && v != nil {
+			return v
+		}
+	}
+	return nil
+}
+
 func (d *Deps) ipamAvailability(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/ipam/availability")
 	subnet := strings.TrimSpace(r.URL.Query().Get("subnet"))
@@ -498,17 +538,38 @@ func (d *Deps) ipamAvailability(w http.ResponseWriter, r *http.Request) {
 		d.json(w, r, 400, map[string]any{"error": "subnet is required"})
 		return
 	}
-	if !subnetIDRe.MatchString(subnet) {
+	// This used to be a bare-id regex plus a hardcoded "ipam/subnet/" prefix,
+	// so it refused the FULL-FORM id every list endpoint hands out (400 on the
+	// only id a caller could realistically hold) and doubled the prefix on the
+	// bare one. ObjectPath is the validator the rest of the codebase uses: it
+	// takes both shapes, refuses traversal, and builds the path once.
+	objPath, err := edit.ObjectPath("ipam/subnet", subnet)
+	if err != nil {
 		d.json(w, r, 400, map[string]any{"error": "invalid subnet id"})
 		return
 	}
-	body, status, _ := d.restFor(r).GetEx("/api/ddi/v1/ipam/subnet/"+url.PathEscape(subnet),
+	body, status, getErr := d.restFor(r).GetEx(objPath,
 		map[string]string{"_fields": "id,address,cidr,utilization"})
 	m, ok := body.(map[string]any)
 	if status != 200 || !ok {
+		// A 200 whose body is not an object used to be answered with HTTP 200
+		// and an error message inside it — a reply that contradicts itself, the
+		// same shape removed from the update builders. Any outcome that is not a
+		// readable 200 object is now a 502.
+		//
+		// API BEHAVIOUR CHANGE, stated rather than slipped in: a caller that saw
+		// 200-with-an-error now sees 502. Nothing in this repo calls this route,
+		// but an outside consumer could.
+		//
+		// The GetEx error is LOGGED, never returned: this file's error path is an
+		// allowlist boundary (see extractUpstreamMessage) and a raw Go error can
+		// carry the upstream URL and decoder internals.
 		st := status
-		if st == 0 {
+		if st == 0 || st == 200 {
 			st = 502
+		}
+		if getErr != nil {
+			log.Printf("[upstream] path=%s status=%d category=availability err=%v", objPath, status, getErr)
 		}
 		d.json(w, r, st, map[string]any{"error": "subnet lookup failed (status " + itoaStatus(status) + ")"})
 		return
@@ -519,15 +580,26 @@ func (d *Deps) ipamAvailability(w http.ResponseWriter, r *http.Request) {
 	}
 	util := getMap(s["utilization"])
 	used := util["used"]
-	total := firstTruthy(util["total"], util["dhcp_total"], util["static_total"])
-	free := util["free"]
-	if free == nil && used != nil && total != nil {
-		free = toIntAny(total) - toIntAny(used)
+	total := firstReported(util, "total", "dhcp_total", "static_total")
+	utilization := map[string]any{"used": used, "total": total,
+		"pct": firstReported(util, "utilization", "percent", "pct")}
+
+	// free is REPORTED, or DERIVED from two values that both parse, or ABSENT.
+	// It is never 0 by accident: the old arithmetic read a string "254" as 0 and
+	// answered free:0 for a subnet with 244 addresses left, which reads exactly
+	// like a measured full subnet. An over-subscribed range (used > total) is
+	// also left absent rather than reported as a negative count.
+	if free, reported := util["free"]; reported && free != nil {
+		utilization["free"] = free
+	} else if u, uOK := utilInt(used); uOK {
+		if t, tOK := utilInt(total); tOK && u <= t {
+			utilization["free"] = t - u
+		}
 	}
-	pct := firstTruthy(util["utilization"], util["percent"], util["pct"])
+
 	d.json(w, r, 200, map[string]any{
 		"id": s["id"], "address": s["address"], "cidr": s["cidr"],
-		"utilization": map[string]any{"used": used, "total": total, "free": free, "pct": pct},
+		"utilization": utilization,
 	})
 }
 
@@ -564,40 +636,3 @@ func (d *Deps) ipamSubnets(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// firstTruthy is Python's `a or b or c`: the first non-empty value, else the last.
-func firstTruthy(vals ...any) any {
-	for _, v := range vals {
-		switch t := v.(type) {
-		case nil:
-		case string:
-			if t != "" {
-				return v
-			}
-		case float64:
-			if t != 0 {
-				return v
-			}
-		case bool:
-			if t {
-				return v
-			}
-		default:
-			return v
-		}
-	}
-	if len(vals) > 0 {
-		return vals[len(vals)-1]
-	}
-	return nil
-}
-
-// toIntAny is Python int(x) for the free = total - used fallback.
-func toIntAny(v any) int {
-	switch t := v.(type) {
-	case float64:
-		return int(t)
-	case int:
-		return t
-	}
-	return 0
-}
