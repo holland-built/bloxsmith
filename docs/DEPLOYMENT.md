@@ -555,7 +555,7 @@ known follow-up. Until then, provisioning that relies on bundled templates needs
 | `ALLOWED_HOSTS`    |          | _(loopback + `HOST`)_    | Comma-separated extra `Host` header values this deployment answers to (DNS-rebinding gate). `localhost`/`127.0.0.1`/`[::1]`/`HOST` are always allowed; anything else gets `421`. A wildcard bind (`HOST=0.0.0.0`, the Docker default) can't know its own names, so the gate is **off** there until you set this |
 | `TRUSTED_PROXIES`  |          | _(empty — nothing trusted)_ | Comma-separated IPs and/or CIDR ranges of reverse proxies in front of the app. `X-Forwarded-For` is read **only** from these peers, and only to identify the client for the unlock rate limit. Set it when you run a proxy — see [Behind a reverse proxy](#behind-a-reverse-proxy). Leave it empty when the app is reached directly |
 | `DISABLE_UPDATE_CHECK` |      | _(unset)_                | Set to `1` (any non-empty value) to stop `GET /api/update/check` contacting GitHub Releases. It then reports `checkDisabled: true` and no `latest` — not "up to date". `bloxsmith update` and `POST /api/update/apply` still reach GitHub when run explicitly |
-| `AUDIT_TRUST_DIR`  |          | _(per-user config dir)_  | Where the audit chain's HMAC key and sealed head record live. Must **not** be the directory holding `audit_log.jsonl` — a key an attacker can rewrite beside the log it signs protects nothing. The app warns at startup if you point it there |
+| `AUDIT_TRUST_DIR`  |          | _(per-user config dir; `/audit-trust` in the image)_ | Where the audit chain's HMAC key and sealed head record live. Must **not** be the directory holding `audit_log.jsonl`, or a subdirectory of the same volume — a key an attacker can rewrite beside the log it signs protects nothing. The app warns at startup only for the exact same directory, so the volume-level separation is enforced by `go/audit_trust_container_test.go` instead |
 | `AUDIT_KEY`        |          | _(generated locally)_    | Audit HMAC key, hex, ≥64 characters. Set this from an injected secret and the trust root no longer lives on the machine that writes the log |
 | `AUDIT_KEY_FILE`   |          | —                        | Path to a file holding the same hex key; preferred over `AUDIT_KEY` (kept out of `docker inspect` / process env) |
 
@@ -586,6 +586,34 @@ there for those entries. It never becomes *tampered*: accusing an operator of
 forgery because their config directory was deleted would be a fabricated claim.
 Mount the trust directory, or set `AUDIT_KEY`, if you need the verdict to
 survive a rebuild.
+
+**In Docker, the image mounts it for you — but only if you name the volume.**
+`AUDIT_TRUST_DIR=/audit-trust` is set in the image and `/audit-trust` is declared
+as a volume, separate from `/vault`. `docker-compose.yml` names it
+`noc-audit-trust`; the `docker run` line in README carries the matching
+`-v noc-audit-trust:/audit-trust`. Leave that flag off and Docker hands the
+container an **anonymous** volume, the next `docker run` gets a fresh empty one,
+and the key is lost on every replacement — which is the state every image before
+this one shipped in, with the key sitting in `/root/.config/bloxsmith-audit`
+inside the container layer. `go/audit_trust_container_test.go` fails the build if
+either half of that arrangement is removed, or if the trust dir is ever moved
+inside `/vault`.
+
+It is a **separate volume from `noc-vault`, not a subdirectory of it**, and that
+is the point rather than tidiness: `audit_log.jsonl` lives in the vault
+directory, so one volume holding both would mean a single backup, copied volume
+or path-traversal bug hands over the log and the key that signs it together.
+Back the two up separately, or not at all — see the backup table below.
+
+Upgrading from an earlier image is a one-way step through *could not verify*:
+the old key is already gone (it was never persisted), so entries written before
+the upgrade can no longer be attested, and the new key seals the chain from that
+point on. Nothing is lost and nothing is reported as tampering.
+
+The stronger option is still `AUDIT_KEY_FILE` from an injected secret, where the
+key never touches the host at all. The volume is the default because it works
+with no configuration; the secret is what to use when the audit trail has to
+hold up against someone with access to the machine.
 
 **Upgrading an existing log.** A chain written before the keyed rewrite has no
 signatures and no seal, so it reports *could not verify* until the app seals it,
@@ -742,7 +770,7 @@ you are about to destroy the original.
 
 | Not included | Why | What to do |
 |---|---|---|
-| The audit trust directory (`AUDIT_TRUST_DIR`, default `<config dir>/bloxsmith-audit`) | It holds the audit chain's HMAC signing key, and it lives outside the state dir on purpose — a key stored beside the log it signs is not a key. Sweeping it in here would let anyone holding the backup re-sign a doctored log | Back it up separately. Without it, a restored install's `bloxsmith audit verify` reports **could-not-verify** forever — the entries are intact, the machine just has no key to check them with |
+| The audit trust directory (`AUDIT_TRUST_DIR`, default `<config dir>/bloxsmith-audit`; in Docker the `noc-audit-trust` volume at `/audit-trust`) | It holds the audit chain's HMAC signing key, and it lives outside the state dir on purpose — a key stored beside the log it signs is not a key. Sweeping it in here would let anyone holding the backup re-sign a doctored log | Back it up separately, and to somewhere the vault backup does not go. Without it, a restored install's `bloxsmith audit verify` reports **could-not-verify** forever — the entries are intact, the machine just has no key to check them with |
 | `.env` | On the default install it holds the auto-unlock passphrase. Putting it in the same tarball as the vault it opens is the "travels with a backup" exposure that [`vault-passphrase set`](#bloxsmith-vault-passphrase-macos-only) exists to close — one plaintext entry would make encrypting the other one decorative | Copy it separately and deliberately, if you need it at all |
 
 Both are printed on every run, so nobody discovers the gap at restore time.

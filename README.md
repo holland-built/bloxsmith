@@ -105,10 +105,18 @@ date](#keeping-it-up-to-date).
 
 ```bash
 docker run -d --name bloxsmith \
-  -p 127.0.0.1:8080:8080 -v noc-vault:/vault \
+  -p 127.0.0.1:8080:8080 \
+  -v noc-vault:/vault -v noc-audit-trust:/audit-trust \
   --restart unless-stopped \
   ghcr.io/holland-built/bloxsmith:latest
 ```
+
+Both `-v` flags are named on purpose. `noc-vault` holds your encrypted keys;
+`noc-audit-trust` holds the key that signs the audit log, and it is a separate
+volume so that a copy of one is not a copy of both. Drop the second flag and the
+audit log still records everything — but it reports *could not verify* instead of
+*intact* the first time you replace the container, because its signing key went
+with the old one.
 
 **macOS — Homebrew**
 

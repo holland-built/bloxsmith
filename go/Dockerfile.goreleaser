@@ -51,14 +51,44 @@ COPY templates /templates
 # describes.
 COPY LICENSE NOTICE.md /app/
 
+# AUDIT_TRUST_DIR IS A SEPARATE PATH FROM VAULT_DIR, AND THAT IS THE WHOLE POINT.
+#
+# Without it, audit.DefaultTrustDir() resolves to the per-user config directory —
+# which in this image is /root/.config/bloxsmith-audit, i.e. the container's
+# WRITABLE LAYER. Measured against the published 3.66.6 image: four containers
+# started against one persistent /vault volume produced four different key ids.
+# The log persists and its signing key does not, so from the first `docker
+# compose pull && up -d` onward the chain reports could-not-verify forever — the
+# entries carry a key_id no later process holds. The tamper-evidence feature was
+# off, by default, on the install path README offers first. See issue #58.
+#
+# WHY NOT /vault/audit-trust, which would have been one word shorter.
+# internal/audit/key.go requires the trust root to be somewhere the log's writer
+# cannot reach. A subdirectory of the same mounted volume is not that: one
+# backup, one copied volume, one path-traversal bug carries the log AND the key
+# that signs it, and an attacker holding both can rewrite the log and re-seal it.
+# It would also be SILENT — audit.New only warns when the trust dir IS the log's
+# directory, and /vault/audit-trust is not, so it would create exactly the state
+# that warning exists to catch without printing it.
+#
+# WHAT THIS DOES NOT DO. `VOLUME` alone gives an ANONYMOUS volume to anyone who
+# does not name one, and a later `docker run` gets a fresh anonymous volume — so
+# the key is still lost. docker-compose.yml names it (noc-audit-trust) and
+# README's `docker run` line carries the matching -v. The strongest option
+# remains AUDIT_KEY from an injected secret, where the key never touches the
+# host at all; docs/DEPLOYMENT.md documents both.
 ENV HOST=0.0.0.0 \
     PORT=8080 \
     VAULT_DIR=/vault \
+    AUDIT_TRUST_DIR=/audit-trust \
     TEMPLATES_DIR=/templates \
     BLOXSMITH_IN_CONTAINER=1
 
 # Encrypted vault volume — carries over from the python image unchanged.
 VOLUME /vault
+# The audit chain's signing key and sealed head. Separate volume, never a
+# subdirectory of /vault — see the ENV comment above.
+VOLUME /audit-trust
 EXPOSE 8080
 
 ENTRYPOINT ["/app/bloxsmith"]
