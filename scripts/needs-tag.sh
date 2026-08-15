@@ -117,11 +117,22 @@ selftest() {
       echo "selftest FAIL: $path -> $got, expected $want" >&2
       fails=$((fails + 1))
     fi
+  # TWO OF THESE ROWS ARE NOT .md ON PURPOSE, and they are load-bearing.
+  # Every docs/ and plans/ case here used to end in .md, and `*.md)` is its own
+  # rule in exempt() — so those rows passed whether or not `docs/*` and `plans/*`
+  # existed. Measured by deleting each prefix in turn: dropping docs/* left this
+  # table green, dropping plans/* left it green, dropping tests/* failed it with 2
+  # errors, because the tests/ rows are .spec.ts and .yml. docs/logo.svg and
+  # plans/screens/before.png are the only rows that exercise those two prefixes,
+  # and docs/logo.svg is a real tracked file — so is docs/dashboard.png, which is
+  # exempt today by nothing else.
   done <<'TABLE'
 skip README.md
 skip docs/SHIP.md
 skip SHIP.md
 skip docs/context/notes.md
+skip docs/logo.svg
+skip plans/screens/before.png
 skip tests/page-baseline.spec.ts
 skip tests/page-baseline.spec.ts-snapshots/overview.aria.yml
 skip plans/034-close-the-open-three.md
