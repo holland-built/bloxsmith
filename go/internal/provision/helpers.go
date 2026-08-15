@@ -232,7 +232,28 @@ func truthy(v any, def bool) bool {
 }
 
 // TruthyDry is _truthy_dry (server.py:1355): preview unless explicitly disabled.
-func TruthyDry(v any) bool { return truthy(v, true) }
+//
+// AN EMPTY VALUE IS NOT A DECISION, and that is the whole of this function's
+// difference from truthy(v, true). The safe default lives in truthy's `v == nil`
+// branch, but queryM (server/provision.go) sets a key only when it is PRESENT —
+// so `?dry=` arrives as a present, empty string, misses the nil branch, and
+// lands in `case "0", "false", "no", "":`. It used to return false there: a live
+// teardown of a customer's DNS zones, subnets, ranges and hosts, from a
+// parameter that switched nothing off.
+//
+// "0", "false" and "no" all say turn the preview off. `dry=` says nothing, and
+// nothing means the default everywhere else here. The asymmetry this removes is
+// the dangerous one: a typo in the truthy direction (`dry=ture`) already failed
+// safe to a preview, while the empty value failed towards deletion. See #59.
+//
+// Deliberately NOT fixed in truthy() itself: empty-is-falsy is correct for an
+// ordinary boolean, and resolveBool and the other callers rely on it.
+func TruthyDry(v any) bool {
+	if s, ok := v.(string); ok && strings.TrimSpace(s) == "" {
+		return true
+	}
+	return truthy(v, true)
+}
 
 // resolveBool is _resolve_bool (server.py:1361): param (CLI-flag stand-in) wins
 // over the YAML value; a real bool()/truthy() on the param, else bool(yaml).
