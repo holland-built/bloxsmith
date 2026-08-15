@@ -500,23 +500,46 @@ func (p *SiteProvisioner) createSubnets(block, result M) (map[string]M, error) {
 				return nil, err
 			}
 		}
-		if p.cfg.CreateReverseZone && pyStr(subnet["address"]) != "" {
-			scidr := p.cfg.SubnetSize
-			if c, ok := intCoerce(subnet["cidr"]); ok {
-				scidr = c
+		if p.cfg.CreateReverseZone {
+			// address_preview is set by createSubnet's dry-run branch, and ONLY
+			// when it has no usable address to offer: "none-available" (the block
+			// is full, address is "") or "unavailable" (the preview lookup
+			// failed, address is the placeholder "(unavailable)"). Neither can be
+			// turned into a reverse-zone FQDN, and neither is a reason to kill a
+			// preview — createSubnet's own comment says a failed preview "must
+			// still never abort the dry run", and feeding "(unavailable)" to
+			// CidrToReverseZone did exactly that, killing the whole dry run over
+			// one transient 500. createDHCPRange one branch up has always
+			// emitted-and-continued on the same unusable address.
+			//
+			// The gate is the MARKER, not a parse of the address: an address that
+			// is merely unparseable, with no marker on it, means upstream returned
+			// something that is not an address on a lookup that SUCCEEDED. That is
+			// an upstream contract violation and still aborts, in both modes.
+			if prev := pyStr(subnet["address_preview"]); prev != "" {
+				why := pyStr(subnet["reason"])
+				if why == "" {
+					why = prev
+				}
+				p.emit(M{"step": fmt.Sprintf("  Cannot preview the reverse zone for %s: %s", sdef.Name, why)})
+			} else if pyStr(subnet["address"]) != "" {
+				scidr := p.cfg.SubnetSize
+				if c, ok := intCoerce(subnet["cidr"]); ok {
+					scidr = c
+				}
+				zone, zoneCreated, err := p.createReverseZone(pyStr(subnet["address"]), scidr)
+				if err != nil {
+					return nil, err
+				}
+				id := pyStr(zone["id"])
+				if id == "" {
+					id = "(dry-run)"
+				}
+				// "created" travels with the entry because rollback works off this
+				// list and nothing else. An entry without it is UNKNOWN, and
+				// rollback treats unknown as "not ours".
+				appendTo(result, "reverse_zones", M{"id": id, "fqdn": pyStr(zone["fqdn"]), "created": zoneCreated})
 			}
-			zone, zoneCreated, err := p.createReverseZone(pyStr(subnet["address"]), scidr)
-			if err != nil {
-				return nil, err
-			}
-			id := pyStr(zone["id"])
-			if id == "" {
-				id = "(dry-run)"
-			}
-			// "created" travels with the entry because rollback works off this
-			// list and nothing else. An entry without it is UNKNOWN, and
-			// rollback treats unknown as "not ours".
-			appendTo(result, "reverse_zones", M{"id": id, "fqdn": pyStr(zone["fqdn"]), "created": zoneCreated})
 		}
 		created[sdef.Name] = subnet
 	}
