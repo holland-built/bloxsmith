@@ -1,12 +1,35 @@
-# Nothing in this repo has ever told anyone that a dependency moved.
+# Nothing in this repo told anyone that a dependency moved, until this file.
 #
-# CI now refuses a KNOWN-BAD dependency — govulncheck on the Go module,
-# `npm audit` on ui/ — but both only fire once an advisory has been published
-# against a version already committed here. Neither says a word about a
-# release that simply exists and is newer. So the only way a bump has ever
-# happened is a human noticing, and the state of the tree shows how well that
-# works: aead.dev/minisign has sat on v0.2.0 with v0.3.0 out, on the code path
-# that verifies release signatures for `bloxsmith update`.
+# CI refuses a KNOWN-BAD dependency — govulncheck on the Go module, `npm audit`
+# on ui/ — but both only fire once an advisory has been published against a
+# version already committed here. Neither says a word about a release that
+# simply exists and is newer. (Nor did either fire on a schedule until
+# security-scan.yml; ci.yml's triggers are push and pull_request only.)
+#
+# The worked example this file was written around: aead.dev/minisign had sat on
+# v0.2.0 with v0.3.0 out, on the code path that verifies release signatures for
+# `bloxsmith update`. That specific drift is CLOSED — go.mod is on v0.3.0. It is
+# left here rather than deleted because how it closed is the point:
+#
+#   - not by Dependabot. It was bumped by hand in 8784ece, the 2026-08-06
+#     security audit, along with nine other things a human had to go looking for.
+#   - minisign is now `// indirect` and reaches this tree through
+#     github.com/minio/selfupdate, so it is Dependabot's default policy NOT to
+#     bump it directly. The signature-verification claim above still holds; the
+#     route to it changed.
+#
+# A stale example in the file that argues for dependency hygiene is that argument
+# failing in miniature, which is why this is written out rather than quietly
+# updated to a fresher version number.
+#
+# AND THE ARGUMENT IS NOT YET WON FOR THE GO HALF. As of 2026-08-15 the `gomod`
+# block below has never opened a single pull request, while npm and
+# github-actions have opened thirteen between them. golang.org/x/crypto is a
+# DIRECT requirement, v0.55.0 was published 2026-08-11, Dependabot ran on
+# 2026-08-12 and opened two npm PRs in that run, and nothing for Go. Symptom
+# recorded, cause not diagnosed — reading Dependabot's own job logs needs
+# repository permissions. Tracked as issue #40. Do not read the presence of this
+# block as proof that the Go side is being watched.
 #
 # Weekly, not daily: this is a small tree with three ecosystems, and daily
 # turns a maintenance signal into background noise that gets filtered.
