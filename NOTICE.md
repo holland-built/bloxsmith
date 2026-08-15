@@ -52,7 +52,8 @@ Bloxsmith is a derivative work and this notice is an obligation rather than a co
 
 ### Upstream copyright notice, reproduced
 
-Both projects carry this line. It is reproduced here verbatim:
+25 of the 33 vendored `.py` files carry this line — 16 of 22 in the toolkit, 9 of 11
+in the self-service example — and it is reproduced here verbatim:
 
 ```
 Copyright (c) 2026 Chris Marrison / Infoblox
@@ -63,11 +64,27 @@ two differ:
 
 | Project | Declared in `pyproject.toml` | In source files | `LICENSE` file |
 |---|---|---|---|
-| `uddi_automation_toolkit` | `BSD-2-Clause` | 15 of 22 `.py` files carry the full clause text below; none use SPDX | none |
-| `uddi_self_service_example` | `BSD-2-Clause` | 9 of 11 `.py` files carry the copyright line plus `SPDX-License-Identifier: BSD-2-Clause`; none carry the full text | none |
+| `uddi_automation_toolkit` | `BSD-2-Clause` | 15 of 22 `.py` files carry the full clause text below; none use SPDX | none at the pinned commit; added upstream since |
+| `uddi_self_service_example` | `BSD-2-Clause` | 9 of 11 `.py` files carry the copyright line plus `SPDX-License-Identifier: BSD-2-Clause`; none carry the full text | none at the pinned commit; added upstream since |
 
-Neither repository ships a `LICENSE` file, so the full text below is transcribed from
-the per-file headers in `uddi_automation_toolkit`.
+Neither repository shipped a `LICENSE` file at the commits pinned in
+`third_party/*/SOURCE.md`, so the full text below is transcribed from the per-file
+headers in `uddi_automation_toolkit`.
+
+**Both now ship one.** Chris said he would add them in his reply on
+[ccmarris/uddi_automation_toolkit#7](https://github.com/ccmarris/uddi_automation_toolkit/issues/7)
+and has since done so. The two files are byte-identical to each other, and their text
+matches the transcription below word for word — with one exception, recorded here
+rather than tidied away, because picking a side would mean guessing:
+
+> The per-file headers say `Copyright (c) 2026`. The new `LICENSE` files say
+> `Copyright 2020`, with no `(c)`. Upstream now states two different years in two
+> places, and nothing here can settle which one Chris means.
+
+The transcription below is left as the headers have it, because that is what the code
+vendored in this repository actually carries. When the pins are next bumped the
+`LICENSE` files come with them, at which point this section should quote those instead
+and the discrepancy becomes upstream's to resolve.
 
 ### BSD 2-Clause License
 
