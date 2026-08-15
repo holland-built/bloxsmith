@@ -158,3 +158,39 @@ func TestNormInsights_ReportedFieldsPassThrough(t *testing.T) {
 		})
 	}
 }
+
+// TestNormInsights_SeverityIsNeverInvented is the fifth instance of this
+// package's oldest defect class and the last one in it: an unreported value
+// arriving at the operator as a confident, specific claim. Severity is the
+// field a security decision actually turns on, and an insight nobody graded
+// used to arrive graded "medium".
+//
+// Both directions are pinned. An absence must never become a grade, and a
+// grade must never become an absence — including a word this code has never
+// heard of, which is upstream's measurement and not this code's to overwrite.
+func TestNormInsights_SeverityIsNeverInvented(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  map[string]any
+		want string
+	}{
+		{"the key is absent entirely", map[string]any{"insightId": "i-1"}, "unknown"},
+		{"the key is present with JSON null", map[string]any{"insightId": "i-2", "priorityText": nil}, "unknown"},
+		{"the key is present but empty", map[string]any{"insightId": "i-3", "priorityText": ""}, "unknown"},
+		{"the key is present but only whitespace", map[string]any{"insightId": "i-4", "priorityText": "   "}, "unknown"},
+		{"the key is present but not a string", map[string]any{"insightId": "i-5", "priorityText": float64(3)}, "unknown"},
+		{"a reported grade is lower-cased and kept", map[string]any{"insightId": "i-6", "priorityText": "HIGH"}, "high"},
+		{"a reported grade is trimmed and kept", map[string]any{"insightId": "i-7", "priorityText": "  Critical  "}, "critical"},
+		{"a reported grade outside our vocabulary is upstream's measurement, not ours to overwrite",
+			map[string]any{"insightId": "i-8", "priorityText": "SEVERE"}, "severe"},
+		{"info is a real grade the UI ranks and must survive",
+			map[string]any{"insightId": "i-9", "priorityText": "Info"}, "info"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := insightRow(t, tc.raw)["severity"]; got != tc.want {
+				t.Errorf("severity = %#v, want %q", got, tc.want)
+			}
+		})
+	}
+}
