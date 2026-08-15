@@ -35,6 +35,13 @@ services:
       - "${BIND:-127.0.0.1}:${PORT:-8080}:8080"
     volumes:
       - noc-vault:/vault
+      # The audit chain's signing key and sealed head. A SEPARATE volume from
+      # noc-vault on purpose: a key stored with the log it signs is not a key,
+      # and anyone holding a copy of one volume must not hold both. Named rather
+      # than left anonymous because the image's VOLUME line alone would hand a
+      # fresh empty volume to the next container, which is the bug this fixes
+      # (#58) rather than the fix.
+      - noc-audit-trust:/audit-trust
     environment:
       INFOBLOX_URL: ${INFOBLOX_URL:-https://csp.infoblox.com}
       # single-key mode (optional) — leave unset to use the in-app encrypted vault
@@ -112,6 +119,8 @@ services:
 volumes:
   noc-vault:
     name: noc-vault      # fixed volume name; the vault survives docker run ↔ compose switches
+  noc-audit-trust:
+    name: noc-audit-trust  # same reason, and it must NOT be backed up together with noc-vault
   caddy-data:
 
 networks:
