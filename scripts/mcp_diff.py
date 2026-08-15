@@ -482,6 +482,31 @@ def _selftest():
     s_empty = {"added": [], "removed": [], "changed": []}
     check("no false drift on identical input", any_change(t_same, s_empty, c_same), False)
 
+    # ...AND IT MUST ALSO BE ABLE TO SAY YES. Until now every assertion about
+    # any_change() expected False, so `def any_change(...): return False` passed
+    # this whole selftest — measured, by doing exactly that. main() sets
+    # `changed = any_change(t, s, c)` and mcp-drift.yml gates its issue on that
+    # output, so a version that can only stay quiet is the same dead detector as
+    # the ImportError that left this workflow green for two nights.
+    #
+    # One case PER FIELD, not one case in total. any_change is an any([...]) over
+    # thirteen fields; a single positive case would pass while twelve of them were
+    # deleted. This way, dropping a category from that list fails by its own name.
+    # c["newly_deprecated"] is in here for a reason: it is the field that exists
+    # because the name-only check missed 17 cube deprecations.
+    _empty_t = {"added": [], "removed": [], "changed": [], "desc_changed": []}
+    _empty_s = {"added": [], "removed": [], "changed": []}
+    _empty_c = {"added": [], "removed": [], "newly_deprecated": [],
+                "undeprecated": [], "meta_changed": [], "desc_changed": []}
+    for which, field in ([("tools", f) for f in _empty_t]
+                         + [("services", f) for f in _empty_s]
+                         + [("cubes", f) for f in _empty_c]):
+        one_t, one_s, one_c = dict(_empty_t), dict(_empty_s), dict(_empty_c)
+        {"tools": one_t, "services": one_s, "cubes": one_c}[which][field] = ["something"]
+        check(f"any_change reports {which}.{field}", any_change(one_t, one_s, one_c), True)
+    check("no drift when every field is empty",
+          any_change(dict(_empty_t), dict(_empty_s), dict(_empty_c)), False)
+
     # --- deadlines ------------------------------------------------------------
     # Every boundary, both sides. A band rule with no test rots the first time
     # someone edits a threshold, and this one is the difference between eleven
