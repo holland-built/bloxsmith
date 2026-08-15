@@ -30,6 +30,15 @@ var (
 	hubSeverityLabel = map[string]string{"ok": "healthy", "warn": "degraded", "crit": "critical"}
 )
 
+// The rollup's "status" field is a SEVERITY, and it spends two words that are
+// not severities. "error" (the dead-feed branch below) has always been one.
+// "unknown" is the second: a bucket whose service types may have been
+// truncated away has no measured severity at all, and every value
+// hubSeverityLabel can produce — "healthy" most of all — would assert one.
+// Neither word is a fourth entry in the ok/empty/error AVAILABILITY vocabulary
+// documented at the top of dashboard.go; they live in a different field.
+const hubStatusUnknown = "unknown"
+
 // FetchHubHealth is fetch_hub_health (server.py:3648).
 func (s *Service) FetchHubHealth() []map[string]any {
 	ck := cache.Key("hub_health", "", nil, false)
@@ -37,7 +46,7 @@ func (s *Service) FetchHubHealth() []map[string]any {
 		return v.([]map[string]any)
 	}
 	g := s.Cache.Gen()
-	services, err := s.Rest.GetStrict("/api/infra/v1/detail_services", map[string]string{"_limit": "500"})
+	services, body, err := s.Rest.GetPageStrict("/api/infra/v1/detail_services", serviceInventoryParams())
 	if err != nil {
 		// A dead detail_services feed must never masquerade as "0 deployed,
 		// all healthy" — that is the exact failure-reads-as-safety bug this
@@ -55,6 +64,13 @@ func (s *Service) FetchHubHealth() []map[string]any {
 		s.Cache.SetGen(ck, rollup, g)
 		return rollup
 	}
+	// The SAME truncation test FetchServiceInventory applies to the SAME feed at
+	// the SAME limit. Without it this function reads a list it knows may be
+	// incomplete and calls every unseen bucket healthy — the "failure reads as
+	// safety" bug the comment in the error branch above exists to prevent,
+	// arriving through the success path instead.
+	truncated, truncReason := serviceInventoryTruncated(services, body)
+
 	rollup := make([]map[string]any, 0, len(hubBuckets))
 	for _, b := range hubBuckets {
 		var members []map[string]any
@@ -65,6 +81,16 @@ func (s *Service) FetchHubHealth() []map[string]any {
 			}
 		}
 		if len(members) == 0 {
+			if truncated {
+				// Not "0 deployed". Nobody counted to zero — the count stopped
+				// at the row cap, and this bucket's services may sit past it.
+				rollup = append(rollup, map[string]any{
+					"name": b.name, "status": hubStatusUnknown,
+					"statusLabel": "not listed", "meta": "beyond the row cap",
+					"availability": "partial", "reason": truncReason,
+				})
+				continue
+			}
 			rollup = append(rollup, map[string]any{
 				"name": b.name, "status": "ok",
 				"statusLabel": "no services", "meta": "0 deployed",
@@ -102,13 +128,23 @@ func (s *Service) FetchHubHealth() []map[string]any {
 		default:
 			meta = fmt.Sprintf("%d/%d online", online, len(members))
 		}
-		rollup = append(rollup, map[string]any{
+		row := map[string]any{
 			"name":         b.name,
 			"status":       severity,
 			"statusLabel":  hubSeverityLabel[severity],
 			"meta":         meta,
 			"availability": "ok",
-		})
+		}
+		// A bucket with members is marked partial too. The severity and the
+		// counts describe the members actually seen and stay exactly as
+		// measured — but three members online says nothing about six more past
+		// the cap, any of which could be stopped or in error, so the rollup is
+		// not an authoritative statement about the bucket.
+		if truncated {
+			row["availability"] = "partial"
+			row["reason"] = truncReason
+		}
+		rollup = append(rollup, row)
 	}
 	s.Cache.SetGen(ck, rollup, g)
 	return rollup
@@ -118,8 +154,51 @@ func (s *Service) FetchHubHealth() []map[string]any {
 
 // serviceInventoryLimit is the _limit sent to detail_services, and therefore
 // also the row count at which the answer stops being trustworthy — see the
-// "partial" state below. Same value FetchHubHealth sends (hub.go:40).
+// "partial" state below. FetchHubHealth reads the same feed and now sends the
+// same params through serviceInventoryParams, so the two cannot drift: the
+// comment used to say they agreed, and only one of them acted on it (#81).
 const serviceInventoryLimit = 500
+
+// serviceInventoryParams is the one detail_services request both readers send.
+// _is_total_size_needed asks CSP for page.total_size, the authoritative row
+// count — the same param fetchCount and fetchAtRiskSubnets already use
+// (dashboard.go:281, 236).
+func serviceInventoryParams() map[string]string {
+	return map[string]string{
+		"_limit":                fmt.Sprint(serviceInventoryLimit),
+		"_is_total_size_needed": "true",
+	}
+}
+
+// serviceInventoryTruncated answers "could this list be missing rows?" for both
+// readers, and returns the operator-facing reason to attach when it can.
+//
+// Trust order matters. page.total_size is upstream's own count of the whole
+// collection, so when it is readable it settles the question outright — and a
+// tenant with exactly serviceInventoryLimit services is then correctly reported
+// as complete rather than assumed truncated. A total that DISAGREES with the
+// rows in hand (smaller than what arrived) is not a pass: the response is
+// internally inconsistent, which is a reason to distrust it, not to trust it —
+// the same rule totalConsistencyCheck applies in csp.go:145.
+//
+// Only when no total is readable does the row count decide, and there
+// len(rows) >= limit is the best available signal: a full page is
+// indistinguishable from a truncated one.
+func serviceInventoryTruncated(rows []any, body map[string]any) (bool, string) {
+	reason := fmt.Sprintf(
+		"service inventory truncated at the %d-row limit — a service type absent here may exist but not be listed",
+		serviceInventoryLimit)
+	if total := pageTotalSize(body, -1); total >= 0 {
+		if total == len(rows) {
+			return false, ""
+		}
+		return true, reason
+	}
+	if len(rows) >= serviceInventoryLimit {
+		return true, reason
+	}
+	return false, ""
+}
 
 // FetchServiceInventory is the raw owned-service-type set behind
 // FetchHubHealth's three-bucket rollup. Same feed, same limit; what differs is
@@ -145,8 +224,7 @@ func (s *Service) FetchServiceInventory() map[string]any {
 		return v.(map[string]any)
 	}
 	g := s.Cache.Gen()
-	services, err := s.Rest.GetStrict("/api/infra/v1/detail_services",
-		map[string]string{"_limit": fmt.Sprint(serviceInventoryLimit)})
+	services, body, err := s.Rest.GetPageStrict("/api/infra/v1/detail_services", serviceInventoryParams())
 	if err != nil {
 		log.Printf("service inventory: detail_services fetch failed: %v", err)
 		result := map[string]any{
@@ -174,11 +252,9 @@ func (s *Service) FetchServiceInventory() map[string]any {
 		"service_types": types,
 		"availability":  "ok",
 	}
-	if len(services) >= serviceInventoryLimit {
+	if truncated, reason := serviceInventoryTruncated(services, body); truncated {
 		result["availability"] = "partial"
-		result["reason"] = fmt.Sprintf(
-			"inventory truncated at the %d-row limit — an absent service type may exist but not be listed",
-			serviceInventoryLimit)
+		result["reason"] = reason
 	}
 	s.Cache.SetGen(ck, result, g)
 	return result
