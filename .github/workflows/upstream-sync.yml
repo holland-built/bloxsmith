@@ -211,10 +211,23 @@ jobs:
       # way, applied here from the start rather than after five duplicate issues piled
       # up. A new issue appears only once the previous one has been dealt with and
       # closed, which is what makes a new issue mean something.
+      # THE BODY GOES THROUGH env, NEVER THROUGH ${{ }}. Pasting it inline puts it
+      # inside a double-quoted shell string, where a backtick means "run this" — and
+      # this body is full of them: `third_party/`, `git archive`, `NOTICE.md`, and the
+      # fenced changed-file list. Run 31878122661, the first this job ever did, proved
+      # it: the issue it opened had every backticked word deleted and no file list at
+      # all, because bash had executed them instead (`SOURCE.md: command not found`,
+      # `go/internal/provision/: Is a directory`). The step still reported success.
+      #
+      # It was also a way in. That file list comes from `git diff` against someone
+      # else's repo, so an upstream file renamed to contain a backtick would have run
+      # as a command inside this workflow. An env var is handed to the process by the
+      # runner and never parsed by the shell, which closes both at once.
       - name: Open or update the sync issue
         if: steps.compare.outputs.alert == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          BODY: ${{ steps.compare.outputs.body }}
         run: |
           TITLE="Upstream (ccmarris) has moved ahead of our pin"
           RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -224,13 +237,13 @@ jobs:
           if [ -n "$EXISTING" ]; then
             {
               printf 'Still out of sync as of %s ([run](%s)).\n\n' "$(date -u +%Y-%m-%d)" "$RUN"
-              printf '%s\n' "${{ steps.compare.outputs.body }}"
+              printf '%s\n' "$BODY"
             } | gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body-file -
           else
-            printf '%s\n' "${{ steps.compare.outputs.body }}" | \
+            printf '%s\n' "$BODY" | \
               gh issue create --repo "${{ github.repository }}" \
                 --title "$TITLE" --label "upstream-sync" --body-file - || \
-            printf '%s\n' "${{ steps.compare.outputs.body }}" | \
+            printf '%s\n' "$BODY" | \
               gh issue create --repo "${{ github.repository }}" \
                 --title "$TITLE" --body-file -
           fi
