@@ -1,0 +1,395 @@
+name: Scheduled vulnerability scan
+
+# WHY THIS EXISTS, separately from ci.yml.
+#
+# ci.yml already runs both of these scans, and it runs them well. What it does
+# not have is a clock: its triggers are `push` and `pull_request` and nothing
+# else. An advisory published today against a dependency committed here last
+# month is invisible until somebody happens to push. Nothing about a quiet
+# fortnight distinguishes "no vulnerabilities" from "nobody looked".
+#
+# The other half of that gap is Dependabot ALERTS, which are disabled at the
+# repository level (the API answers 404 on /vulnerability-alerts and 403 on
+# /dependabot/alerts). Dependabot VERSION updates do work — they have opened
+# PRs #14-#26 — but a version bump only appears when a NEWER release exists,
+# which is a different question from "is what we have now known-bad". Enabling
+# alerts is a repository setting and cannot be done by a workflow; it is issue
+# #33. This file covers the half that can be automated, and does not pretend to
+# cover the other.
+#
+# ci.yml keeps its two scan steps. That is deliberate: there it is a GATE that
+# reddens a build before a bad dependency lands. Here it is a WATCHER that
+# reports one that landed while nobody was looking. Same commands, different
+# jobs, and the "Scan settings still agree with ci.yml" step below stops the
+# two from drifting apart.
+#
+# Weekly, not daily. Three ecosystems on a small tree, and a daily advisory
+# mail is the notification that gets filtered by week three — the failure mode
+# mcp-drift.yml had to be rescued from. Dependabot is already weekly here.
+#
+# THE LIMIT THIS CANNOT COVER, stated rather than papered over: GitHub disables
+# scheduled workflows in a repository after 60 days with no activity, and it
+# does so WITHOUT running them, so no step fails, no arm fires, and no issue
+# opens. Silence would then mean "switched off" while reading as "clean". That
+# is not fixable from inside the thing being guarded. The tolerance a human
+# checks against is a successful run at least every 14 days; two consecutive
+# missed weeks is the alarm, and NOTHING AUTOMATED WILL RAISE IT.
+#
+# Scheduled runs only ever use the workflow file on the default branch, so this
+# cannot be exercised from a pull request. That is what workflow_dispatch is
+# for, and this file is not to be trusted until it has been dispatched once on
+# master — an unexercised detector is the thing this repository keeps finding.
+
+on:
+  schedule:
+    - cron: "41 6 * * 2" # Tuesdays ~06:41 UTC. Off the hour on purpose: GitHub
+                         # delays cron most at the top of the hour.
+  workflow_dispatch:
+
+# Least privilege, and unlike mcp-drift.yml this one genuinely earns
+# `contents: read` — it never pushes a branch and never commits.
+permissions:
+  contents: read
+  issues: write
+
+# A manual dispatch racing the weekly cron would otherwise both ask "is there an
+# open issue?", both get "no", and both open one. NOT cancel-in-progress:
+# cancelling a half-finished scan to start another is how a detector ends up
+# reporting nothing at all.
+concurrency:
+  group: security-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # DRIFT GUARD. The scan settings now live in two files. Cross-referencing
+      # comments enforce nothing — they are a promise, and promises are what
+      # let the `npm audit` comment in ci.yml claim for months that a step ran
+      # which had never existed. So this asserts it instead.
+      #
+      # It compares SETTINGS, not command text: the commands here differ from
+      # ci.yml's on purpose (this one needs --json to classify). What must not
+      # drift is the pinned govulncheck version and the severity floor.
+      #
+      # Deliberately dependency-free — grep and sed, no PyYAML. A drift guard
+      # that needs a package installed is one more thing that can take the
+      # detector down with it.
+      - name: Scan settings still agree with ci.yml
+        run: |
+          set -euo pipefail
+          CI=.github/workflows/ci.yml
+
+          CI_GOVULN=$(grep -o 'golang.org/x/vuln/cmd/govulncheck@v[0-9.]*' "$CI" | sort -u)
+          [ "$(printf '%s\n' "$CI_GOVULN" | wc -l)" -eq 1 ] || {
+            echo "::error::ci.yml pins more than one govulncheck version: $CI_GOVULN"
+            exit 1
+          }
+          [ "$CI_GOVULN" = "$GOVULNCHECK" ] || {
+            echo "::error::govulncheck pin drifted. ci.yml has '$CI_GOVULN', this workflow has '$GOVULNCHECK'. Update whichever is behind."
+            exit 1
+          }
+
+          CI_LEVEL=$(grep -o 'npm audit --audit-level=[a-z]*' "$CI" | sed 's/.*=//' | sort -u)
+          [ "$CI_LEVEL" = "$SEVERITY_FLOOR" ] || {
+            echo "::error::npm severity floor drifted. ci.yml audits at '$CI_LEVEL', this workflow reports at '$SEVERITY_FLOOR'. Update whichever is behind."
+            exit 1
+          }
+
+          echo "in step with ci.yml: govulncheck $CI_GOVULN, npm floor $CI_LEVEL"
+        env:
+          GOVULNCHECK: golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          SEVERITY_FLOOR: moderate
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Install UI dependencies
+        working-directory: ui
+        run: npm ci
+
+      # THE EXIT CODE IS NOT THE ANSWER. `npm audit` exits non-zero when it
+      # FINDS something, which is a working scanner, and also when it breaks,
+      # which is not. A step that simply fails cannot tell those apart, and an
+      # `if: failure()` arm reading "the detector is broken" would fire every
+      # time the detector did its job.
+      #
+      # So the exit code is captured, never acted on, and the classification is
+      # made from the JSON: `npm audit --json` always emits
+      # metadata.vulnerabilities with a count per severity. If that object is
+      # there, the scan ran. If it is not, the scan broke. The counts then say
+      # whether anything was found. Verified against npm on this tree: a clean
+      # run emits `{"info":0,...,"total":0}` and exits 0.
+      #
+      # No --audit-level here on purpose. The floor is applied when counting, so
+      # this workflow decides what it reports rather than inheriting npm's
+      # all-or-nothing exit semantics — and the drift guard above pins that floor
+      # to the one ci.yml gates on.
+      - name: npm audit (ui/)
+        id: npm
+        working-directory: ui
+        run: |
+          set +e
+          npm audit --json > "$RUNNER_TEMP/npm-audit.json" 2> "$RUNNER_TEMP/npm-audit.err"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          # PINNED EXACTLY, matching ci.yml, and for the reason ci.yml records:
+          # a floating '1.26.x' resolved to 1.26.5 against a go.mod requiring
+          # 1.26.6, and with GOTOOLCHAIN=local the job cannot fetch its way out.
+          go-version: '1.26.6'
+
+      # TEXT MODE, NOT --json, AND THAT IS THE WHOLE POINT.
+      #
+      # `govulncheck -json` exits 0 whether or not it found anything, and its
+      # stream carries a `finding` object for every advisory in the dependency
+      # graph INCLUDING ones nothing calls. Measured on this tree today: the
+      # JSON run exits 0 and contains one finding, GO-2026-5932 in
+      # golang.org/x/crypto, at module level, uncalled. Classifying "any finding
+      # object" as actionable would have opened an issue about it every Tuesday
+      # forever.
+      #
+      # Text mode already does the reachability judgement, and does it better
+      # than anything written here would: exit 3 means a vulnerability your code
+      # actually calls, exit 0 means clean. On the same tree, text mode prints
+      # "No vulnerabilities found" and exits 0 while reporting the x/crypto one
+      # as required-but-uncalled. So the exit code IS the answer here — but only
+      # because the tool, not this workflow, decided what counts.
+      #
+      # Any other non-zero code is govulncheck failing to run, which is a broken
+      # detector and is reported as one.
+      - name: govulncheck (go/)
+        id: govuln
+        working-directory: go
+        run: |
+          set +e
+          go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./... \
+            > "$RUNNER_TEMP/govulncheck.txt" 2>&1
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+        env:
+          GOTOOLCHAIN: local
+
+      # always(): a scan that never ran is the outcome this job exists to
+      # report, so classification must survive a failed checkout, npm ci, or Go
+      # setup. Without it the interesting failures are exactly the silent ones.
+      - name: Classify the result
+        id: verdict
+        if: always()
+        env:
+          NPM_CODE: ${{ steps.npm.outputs.code }}
+          GOVULN_CODE: ${{ steps.govuln.outputs.code }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+
+          tmp = os.environ["RUNNER_TEMP"]
+          floor = ("moderate", "high", "critical")   # pinned to ci.yml by the drift guard
+          npm_code = os.environ.get("NPM_CODE", "")
+          go_code = os.environ.get("GOVULN_CODE", "")
+
+          npm_sec, go_sec = [], []
+          findings = broken = False
+
+          # ---- npm: the JSON decides, never the exit code -------------------
+          if npm_code == "":
+              broken = True
+              npm_sec = ["`npm audit` never ran — a step before it failed. "
+                         "Nothing is known about the UI dependency tree."]
+          else:
+              try:
+                  data = json.load(open(f"{tmp}/npm-audit.json"))
+                  counts = data["metadata"]["vulnerabilities"]
+              except Exception as exc:
+                  broken = True
+                  err = ""
+                  try:
+                      err = open(f"{tmp}/npm-audit.err").read().strip()[:800]
+                  except OSError:
+                      pass
+                  npm_sec = [f"`npm audit` exited {npm_code} and produced nothing this "
+                             f"could read (`{type(exc).__name__}: {exc}`), so it broke "
+                             "rather than found something.", ""]
+                  if err:
+                      npm_sec += ["```", err, "```"]
+              else:
+                  hits = {k: counts.get(k, 0) for k in floor}
+                  total = sum(hits.values())
+                  if total:
+                      findings = True
+                      npm_sec = [f"**{total}** advisory/advisories at moderate or above "
+                                 f"({', '.join(f'{v} {k}' for k, v in hits.items() if v)}).", ""]
+                      for name, v in sorted(data.get("vulnerabilities", {}).items()):
+                          if v.get("severity") in floor:
+                              via = v.get("via", [])
+                              ids = [x.get("url", x.get("title", "")) for x in via
+                                     if isinstance(x, dict)]
+                              npm_sec.append(f"- `{name}` — {v.get('severity')}"
+                                             + (f" — {ids[0]}" if ids else ""))
+                      npm_sec += ["", "Fix attempt: `cd ui && npm audit fix`. If the bundle "
+                                  "changes, rebuild `go/web` or ci.yml's dist-freshness "
+                                  "step will redden."]
+                  else:
+                      npm_sec = ["Clean — nothing at moderate or above."]
+
+          # ---- Go: the exit code decides, because govulncheck judged --------
+          # 0 clean · 3 a vulnerability your code actually calls · anything
+          # else, the tool failed. Uncalled advisories are 0 by design.
+          if go_code == "":
+              broken = True
+              go_sec = ["`govulncheck` never ran — a step before it failed. "
+                        "Nothing is known about the Go module."]
+          elif go_code == "0":
+              go_sec = ["Clean — no vulnerability that this code calls."]
+          elif go_code == "3":
+              findings = True
+              try:
+                  out = open(f"{tmp}/govulncheck.txt").read().strip()
+              except OSError:
+                  out = "(output missing)"
+              go_sec = ["`govulncheck` exit 3 — a vulnerability on a code path this "
+                        "module actually calls.", "", "```", out[:6000], "```"]
+          else:
+              broken = True
+              try:
+                  out = open(f"{tmp}/govulncheck.txt").read().strip()
+              except OSError:
+                  out = "(output missing)"
+              go_sec = [f"`govulncheck` exited {go_code}, which is neither 0 (clean) nor "
+                        "3 (found something). It failed to run.", "",
+                        "```", out[:3000], "```"]
+
+          state = "broken" if broken else ("findings" if findings else "clean")
+          run_url = os.environ["RUN_URL"]
+
+          if broken:
+              lead = ("**This is not a scan result. It is a report that no scan result "
+                      "exists.** While this issue is open, silence from this workflow "
+                      "means nothing at all.")
+          elif findings:
+              lead = ("A scheduled scan found something. This is what a push would have "
+                      "caught, on a week when nobody pushed.")
+          else:
+              lead = ""
+
+          body = [lead, "", f"Run: {run_url}", "",
+                  "## npm (`ui/`)", ""] + npm_sec + ["", "## Go (`go/`)", ""] + go_sec
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"state={state}\n")
+              fh.write("body<<BODYEOF\n" + "\n".join(body) + "\nBODYEOF\n")
+          print(f"verdict: {state}")
+          PY
+
+      # THE BODY GOES THROUGH env, NEVER THROUGH ${{ }}. Advisory titles and
+      # package names in it come from the npm registry — third-party text this
+      # repository does not control. Pasted inline they land in a double-quoted
+      # shell string where a backtick runs a command. Commit 086421a is the
+      # worked example: upstream-sync.yml's first ever run had its whole report
+      # eaten that way, and the step still reported success.
+      #
+      # ONE THREAD, NOT ONE ISSUE A WEEK. A new issue appears only after the
+      # previous one is closed, which is what makes a new one mean something.
+      #
+      # The `state != ''` half is not belt-and-braces. If the classifier itself
+      # crashes it sets no output, and an unguarded `!= 'clean'` is TRUE for the
+      # empty string — this step would then open an issue with an empty body.
+      # That case is the narrow `failure()` arm's job, further down.
+      - name: Open or update the security issue
+        if: always() && steps.verdict.outputs.state != '' && steps.verdict.outputs.state != 'clean'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: ${{ steps.verdict.outputs.body }}
+          STATE: ${{ steps.verdict.outputs.state }}
+        run: |
+          if [ "$STATE" = "broken" ]; then
+            TITLE="Scheduled vulnerability scan is FAILING — nothing is being scanned"
+          else
+            TITLE="Scheduled scan found a vulnerability"
+          fi
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --search "$TITLE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+
+          if [ -n "$EXISTING" ]; then
+            {
+              printf 'Still the case as of %s.\n\n' "$(date -u +%Y-%m-%d)"
+              printf '%s\n' "$BODY"
+            } | gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body-file -
+          else
+            printf '%s\n' "$BODY" | \
+              gh issue create --repo "${{ github.repository }}" \
+                --title "$TITLE" --label "security-scan" --body-file - || \
+            printf '%s\n' "$BODY" | \
+              gh issue create --repo "${{ github.repository }}" \
+                --title "$TITLE" --body-file -
+          fi
+
+      # A CLEAN SCAN MUST CLOSE THE THREAD IT OPENED. Otherwise the issue list
+      # keeps saying "vulnerable" long after a Dependabot merge fixed it, and an
+      # issue nobody can trust is one nobody reads — which also breaks the
+      # one-thread rule above, because a genuinely new finding would arrive as a
+      # comment on a stale thread instead of as a new issue.
+      - name: Close the thread when the scan comes back clean
+        if: always() && steps.verdict.outputs.state == 'clean'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for TITLE in "Scheduled scan found a vulnerability" \
+                       "Scheduled vulnerability scan is FAILING — nothing is being scanned"; do
+            N=$(gh issue list --repo "${{ github.repository }}" \
+              --state open --search "$TITLE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+            [ -n "$N" ] || continue
+            gh issue close "$N" --repo "${{ github.repository }}" \
+              --comment "Clean as of $(date -u +%Y-%m-%d): npm audit reports nothing at moderate or above, and govulncheck reports no vulnerability this code calls. Run: $RUN_URL"
+          done
+
+      # The last arm, and the narrowest one. Everything above is written so that
+      # a scanner failing is classified and reported as a finding of its own, so
+      # this only catches what happens BEFORE classification can: checkout, the
+      # drift guard, npm ci, or the Go setup dying. Without it those are the
+      # silent failures — the run goes red and no issue says why.
+      - name: Report that the scan could not start
+        if: failure() && steps.verdict.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="Scheduled vulnerability scan is FAILING — nothing is being scanned"
+          RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+            --state open --search "$TITLE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          BODY="This workflow died before it could scan anything — checkout, the ci.yml
+          drift guard, \`npm ci\`, or the Go setup. No advisory scan happened, and the
+          per-scanner sections that would normally say so were never written.
+
+          Failed run: $RUN
+
+          Silence from this workflow normally means checked-and-clean. While this issue
+          is open it means nothing at all."
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" \
+              --body "Still failing as of $(date -u +%Y-%m-%d). Run: $RUN"
+          else
+            gh issue create --repo "${{ github.repository }}" \
+              --title "$TITLE" --label "security-scan" --body "$BODY" || \
+            gh issue create --repo "${{ github.repository }}" \
+              --title "$TITLE" --body "$BODY"
+          fi
+
+      # Red build LAST, so a red run always has an issue explaining it. Failing
+      # earlier would skip the reporting steps and leave the two disagreeing.
+      - name: Fail the run if anything was found or broke
+        if: always() && steps.verdict.outputs.state != '' && steps.verdict.outputs.state != 'clean'
+        run: |
+          echo "::error::scan verdict: ${{ steps.verdict.outputs.state }} — see the open issue"
+          exit 1
