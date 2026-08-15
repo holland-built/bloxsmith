@@ -635,4 +635,3 @@ func (d *Deps) ipamSubnets(w http.ResponseWriter, r *http.Request) {
 		"subnets": pick(subnets, "id", "address", "cidr", "name", "utilization"),
 	})
 }
-
