@@ -13,7 +13,9 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -21,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ToolRunner executes one AI tool call and returns its JSON/sentinel string.
@@ -298,12 +301,12 @@ func rateLimitDetail(msg string) string {
 		return "the AI provider hit its " + kind + " limit for this key. Wait a moment and ask again."
 	case wait != "":
 		return "the AI provider rate-limited this request and says to try again in " + wait +
-			". Which limit was hit is in the server log."
+			". Which limit was hit is in the server log, as far as its reply could be read."
 	default:
 		// The body said 429 and nothing we could read. Do not guess which limit or
 		// how long — say what is known and point at the log.
 		return "the AI provider rate-limited this request. Which limit was hit, and for how long, " +
-			"could not be read from its reply — the full text is in the server log."
+			"could not be read from its reply — as much of its reply as could be read is in the server log."
 	}
 }
 
@@ -345,28 +348,113 @@ func dailyTokenLimit(msg string) (limit int, ok bool) {
 	return n, true
 }
 
+// aiBodyCap bounds how much of a failed provider response is kept. It is
+// enforced at read time via io.LimitReader, never by slicing a fully-read body,
+// so an oversized error page cannot blow up memory before it is discarded —
+// same construction as rest.snippetCap (rest/rest.go:283).
+//
+// 2KiB, not rest's 8KiB, and the difference is deliberate. This string ends up
+// in the server log on every provider failure, and a 400 from an
+// OpenAI-compatible endpoint can echo part of the REQUEST — which for this
+// service is the system prompt plus tool output built from tenant data. 2KiB is
+// ~6x the longest real body seen (Groq's TPD message measures 311 bytes) with
+// room to spare, while keeping a prompt echo from being written to disk whole.
+const aiBodyCap = 2 << 10
+
+// cleanProviderBody bounds and de-fangs a provider error body for an error
+// string that is going to be logged.
+//
+//   - Truncation backs up to a UTF-8 boundary, so the log never gets a split
+//     code point, and it is MARKED: a silently short body reads as the whole
+//     thing, which is the bug this is all fixing.
+//   - Newlines and carriage returns become spaces. This string is formatted into
+//     a log line, and a body containing "\n2026-01-01 something plausible" would
+//     otherwise forge one.
+func cleanProviderBody(raw []byte) string {
+	if len(raw) > aiBodyCap {
+		cut := aiBodyCap
+		for cut > 0 && !utf8.Valid(raw[:cut]) {
+			cut--
+		}
+		return strings.TrimSpace(sanitizeLogLine(string(raw[:cut]))) + "…[truncated]"
+	}
+	return strings.TrimSpace(sanitizeLogLine(string(raw)))
+}
+
+func sanitizeLogLine(s string) string {
+	return strings.NewReplacer("\n", " ", "\r", " ").Replace(s)
+}
+
+// providerError is a failed chat-completions call. The STATUS is carried
+// structurally rather than being recovered by searching the message: the body is
+// now included in full (bounded), and a 400 whose body happens to contain the
+// characters "http 429" must not be routed to the rate-limit advice. Error()
+// keeps the exact string shape the log and the existing tests use.
+type providerError struct {
+	Status int
+	Body   string
+}
+
+func (e *providerError) Error() string {
+	return fmt.Sprintf("chat/completions: http %d: %s", e.Status, e.Body)
+}
+
 // providerFailure turns the chat error into one plain sentence an operator can
 // act on, without echoing the provider's body.
+//
+// The status is taken from *providerError when there is one. The substring
+// switch below is the fallback for a transport-level error (no status at all)
+// and for the tests that construct a bare error string.
 func providerFailure(err error) string {
+	var pe *providerError
+	if errors.As(err, &pe) {
+		switch {
+		case pe.Status == 429:
+			return rateLimitDetail(pe.Body)
+		case pe.Status == 400:
+			return providerFailure400
+		case pe.Status == 401, pe.Status == 403:
+			return providerFailureAuth
+		case pe.Status == 404:
+			return providerFailure404
+		case pe.Status >= 500:
+			return providerFailure5xx
+		default:
+			return providerFailureOther
+		}
+	}
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "http 429"):
 		return rateLimitDetail(msg)
 	case strings.Contains(msg, "http 400"):
-		return "the AI provider rejected the request (400). This is usually a tool-calling " +
-			"hiccup on the free tier — asking again normally works. The full reason is in the server log."
+		return providerFailure400
 	case strings.Contains(msg, "http 401"), strings.Contains(msg, "http 403"):
-		return "the AI provider refused the key (auth failed). Check the LLM key in Settings."
+		return providerFailureAuth
 	case strings.Contains(msg, "http 404"):
-		return "the AI provider does not recognise the configured model. Check LLM_MODEL."
+		return providerFailure404
 	case strings.Contains(msg, "http 5"):
-		return "the AI provider had a server error. Try again shortly."
+		return providerFailure5xx
 	case strings.Contains(msg, "chat/completions: http"):
-		return "the AI provider returned an error. The status is in the server log."
+		return providerFailureOther
 	default:
 		return "could not reach the AI provider. Check connectivity and the configured base URL."
 	}
 }
+
+// The sentences, named so the typed and the fallback branch above cannot drift
+// apart. "as much of its reply as could be read" is the honest form: the body is
+// bounded at aiBodyCap and may itself be truncated, so promising "the full
+// reason" is a claim this code cannot always keep.
+const (
+	providerFailure400 = "the AI provider rejected the request (400). This is usually a tool-calling " +
+		"hiccup on the free tier — asking again normally works. As much of its reply as could be " +
+		"read is in the server log."
+	providerFailureAuth  = "the AI provider refused the key (auth failed). Check the LLM key in Settings."
+	providerFailure404   = "the AI provider does not recognise the configured model. Check LLM_MODEL."
+	providerFailure5xx   = "the AI provider had a server error. Try again shortly."
+	providerFailureOther = "the AI provider returned an error. The status is in the server log."
+)
 
 // chatURL mirrors the groq SDK URL join: base_url (default https://api.groq.com)
 // joined with the absolute path "/openai/v1/chat/completions" — an absolute path
@@ -432,11 +520,27 @@ func (s *Service) chat(ctx context.Context, key, base, model string, messages []
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		// Include the provider's error body (truncated) — "http 400" alone cost a
+		// Include the provider's error body (bounded) — "http 400" alone cost a
 		// debugging session when Groq decommissioned the default model.
-		b := make([]byte, 300)
-		n, _ := resp.Body.Read(b)
-		return nil, fmt.Errorf("chat/completions: http %d: %s", resp.StatusCode, strings.TrimSpace(string(b[:n])))
+		//
+		// READ, NOT Read. This used to be one `resp.Body.Read(b)` into a 300-byte
+		// buffer, and Read is not ReadFull: it returns what has arrived, so a body
+		// delivered in two TCP reads was cut at the first. Measured on a 311-byte
+		// Groq 429 split in two: 148 bytes captured, `Limit 100000` and
+		// `try again in 9m48.384s` both gone, and RecordLimit — the only way this
+		// server can ever learn the account's daily cap (see runLoop) — never
+		// called. LimitReader bounds it at read time, the way rest.getStrict
+		// already does with snippetCap.
+		raw, rerr := io.ReadAll(io.LimitReader(resp.Body, aiBodyCap+1))
+		body := cleanProviderBody(raw)
+		if rerr != nil {
+			// The prefix that DID arrive is kept: it often already carries the
+			// status vocabulary the parsers need. The failure is stated rather
+			// than dropped — the old `n, _ :=` made a failed read look identical
+			// to an empty body.
+			body = strings.TrimSpace(body + " [its reply could not be fully read: " + rerr.Error() + "]")
+		}
+		return nil, &providerError{Status: resp.StatusCode, Body: body}
 	}
 	var out chatResp
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
