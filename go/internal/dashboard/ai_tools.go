@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"bloxsmith/internal/ai"
 	"bloxsmith/internal/rest"
 )
 
@@ -194,10 +195,7 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		return jstr(cappedPayload(data, aiSampleCap, "threat feeds"))
 
 	case "get_audit_logs":
-		limit := 20
-		if n, ok := aiInt(args["limit"]); ok {
-			limit = n
-		}
+		limit := aiClampInt(args["limit"], ai.AuditLogLimitDefault, ai.AuditLogLimitMin, ai.AuditLogLimitMax)
 		rows, err := s.Rest.GetStrict("/api/auditlog/v1/logs",
 			map[string]string{"_limit": strconv.Itoa(limit), "_order_by": "created_at desc"})
 		if err != nil {
@@ -210,14 +208,8 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		return jstr(cappedPayload(data, aiSampleCap, "audit log entries"))
 
 	case "get_dns_analytics":
-		days := 7
-		if n, ok := aiInt(args["days"]); ok {
-			days = n
-		}
-		limit := 10
-		if n, ok := aiInt(args["limit"]); ok {
-			limit = n
-		}
+		days := aiClampInt(args["days"], ai.AnalyticsDaysDefault, ai.AnalyticsDaysMin, ai.AnalyticsDaysMax)
+		limit := aiClampInt(args["limit"], ai.AnalyticsLimitDefault, ai.AnalyticsLimitMin, ai.AnalyticsLimitMax)
 		q, _ := json.Marshal(map[string]any{
 			"measures":   []string{"NstarDnsActivity.total_query_count"},
 			"dimensions": []string{"NstarDnsActivity.device_name", "NstarDnsActivity.device_ip"},
@@ -236,9 +228,36 @@ func (s *Service) RunAITool(ctx context.Context, name string, args map[string]an
 		if len(rows) == 0 {
 			return "No DNS analytics data."
 		}
-		return jstr(rows)
+		// The window the query ACTUALLY used, stated in the result. Without it a
+		// clamped request is invisible: the model asks for 99999 days, gets 30,
+		// and reports on "the last 99999 days". The other clamped values do not
+		// need this — a fetch limit does not change what the numbers mean, and
+		// the model already only sees aiSampleCap rows — but a time range does.
+		return jstr(map[string]any{
+			"window_days": days,
+			"note": fmt.Sprintf("These figures cover the last %d day(s). If a longer range was asked "+
+				"for, this is the range that was actually queried — say so.", days),
+			"rows": rows,
+		})
 	}
 	return "Unknown tool: " + name
+}
+
+// aiClampInt bounds a value the MODEL chose, falling back to def when the
+// argument is absent or not a number.
+//
+// Clamped, not rejected. A refusal sentence would be one more string the model
+// relays to a human, and it would simply retry with a different number; the
+// caller's real intent ("a lot", "a few") survives a clamp intact. The bounds
+// live in package ai next to the schema that advertises them — see the block
+// comment there for why they are what they are, and why the schema alone is not
+// enough.
+func aiClampInt(v any, def, lo, hi int) int {
+	n, ok := aiInt(v)
+	if !ok {
+		return def
+	}
+	return min(max(n, lo), hi)
 }
 
 // aiAddrRE is the IP/CIDR-ish filter guard (server.py:3972) applied to a
