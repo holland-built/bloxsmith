@@ -519,7 +519,7 @@ func TestPatchThenPut_DoesNotRetryOnNon405(t *testing.T) {
 func TestSubnetCreate_LiveCreateThenTagsForTeardown(t *testing.T) {
 	f := builderFakeServer(t, func(r builderReq) (int, string) {
 		switch {
-		case r.Method == http.MethodPost && r.Path == "/api/ddi/v1/block-1/nextavailablesubnet":
+		case r.Method == http.MethodPost && r.Path == "/api/ddi/v1/ipam/address_block/block-1/nextavailablesubnet":
 			return 201, `{"results":[{"id":"ipam/subnet/s1","address":"10.0.5.0"}]}`
 		case r.Method == http.MethodPatch && r.Path == "/api/ddi/v1/ipam/subnet/s1":
 			return 200, `{"result":{"id":"ipam/subnet/s1","address":"10.0.5.0","tags":{"Name":"test-subnet","Env":"prod"}}}`
@@ -528,7 +528,7 @@ func TestSubnetCreate_LiveCreateThenTagsForTeardown(t *testing.T) {
 	})
 
 	res, status := f.client().SubnetCreate(M{
-		"block_id": "block-1", "cidr": float64(24),
+		"block_id": "ipam/address_block/block-1", "cidr": float64(24),
 		"name": "test-subnet", "comment": "noc subnet",
 		"tags": M{"Env": "prod"}, "dry": false,
 	})
@@ -542,7 +542,7 @@ func TestSubnetCreate_LiveCreateThenTagsForTeardown(t *testing.T) {
 	}
 
 	// 1. the allocation POST — no body, cidr/count in the query string.
-	builderWantMethodPath(t, calls[0], http.MethodPost, "/api/ddi/v1/block-1/nextavailablesubnet")
+	builderWantMethodPath(t, calls[0], http.MethodPost, "/api/ddi/v1/ipam/address_block/block-1/nextavailablesubnet")
 	if calls[0].Raw != "" {
 		t.Fatalf("allocation POST body = %q, want none", calls[0].Raw)
 	}
@@ -575,7 +575,7 @@ func TestSubnetCreate_CallerTagsWinOverNameDefault(t *testing.T) {
 		return 200, `{"result":{"id":"ipam/subnet/s1"}}`
 	})
 	_, status := f.client().SubnetCreate(M{
-		"block_id": "block-1", "cidr": float64(24), "name": "arg-name",
+		"block_id": "ipam/address_block/block-1", "cidr": float64(24), "name": "arg-name",
 		"tags": M{"Name": "explicit-name"}, "dry": false,
 	})
 	if status != 200 {
@@ -609,7 +609,7 @@ func TestSubnetCreate_TagPatchIsRetriedExactlyOnce(t *testing.T) {
 	})
 
 	res, status := f.client().SubnetCreate(M{
-		"block_id": "block-1", "cidr": float64(24), "name": "n",
+		"block_id": "ipam/address_block/block-1", "cidr": float64(24), "name": "n",
 		"tags": M{"Site": "hq"}, "dry": false,
 	})
 	if res["ok"] != true || status != 200 {
@@ -620,7 +620,7 @@ func TestSubnetCreate_TagPatchIsRetriedExactlyOnce(t *testing.T) {
 	if len(calls) != 3 {
 		t.Fatalf("%d upstream requests, want 3 (allocate, tag, one retry): %+v", len(calls), calls)
 	}
-	builderWantMethodPath(t, calls[0], http.MethodPost, "/api/ddi/v1/block-1/nextavailablesubnet")
+	builderWantMethodPath(t, calls[0], http.MethodPost, "/api/ddi/v1/ipam/address_block/block-1/nextavailablesubnet")
 	for i := 1; i < 3; i++ {
 		builderWantMethodPath(t, calls[i], http.MethodPatch, "/api/ddi/v1/ipam/subnet/s1")
 		builderWantField(t, calls[i], "tags", map[string]any{"Site": "hq", "Name": "n"})
@@ -651,7 +651,7 @@ func TestSubnetCreate_TaggingFailureNamesTheId(t *testing.T) {
 		return 500, `{"error":"tag write rejected"}`
 	})
 
-	res, status := f.client().SubnetCreate(M{"block_id": "block-1", "cidr": float64(24), "name": "n", "dry": false})
+	res, status := f.client().SubnetCreate(M{"block_id": "ipam/address_block/block-1", "cidr": float64(24), "name": "n", "dry": false})
 	if res["ok"] != false || status != 500 {
 		t.Fatalf("= (%v, %d), want ok:false 500", res, status)
 	}
@@ -683,7 +683,7 @@ func TestSubnetCreate_NoFreeSubnetIsNotSuccess(t *testing.T) {
 	f := builderFakeServer(t, func(builderReq) (int, string) {
 		return 201, `{"results":[]}`
 	})
-	res, status := f.client().SubnetCreate(M{"block_id": "block-1", "cidr": float64(24), "dry": false})
+	res, status := f.client().SubnetCreate(M{"block_id": "ipam/address_block/block-1", "cidr": float64(24), "dry": false})
 	if res["ok"] != false || status != 502 {
 		t.Fatalf("= (%v, %d), want ok:false 502", res, status)
 	}
@@ -699,7 +699,7 @@ func TestSubnetCreate_UpstreamFailureIsNotSuccess(t *testing.T) {
 	f := builderFakeServer(t, func(builderReq) (int, string) {
 		return 503, `{"error":"upstream down"}`
 	})
-	res, status := f.client().SubnetCreate(M{"block_id": "block-1", "cidr": float64(24), "dry": false})
+	res, status := f.client().SubnetCreate(M{"block_id": "ipam/address_block/block-1", "cidr": float64(24), "dry": false})
 	if res["ok"] != false || status != 503 {
 		t.Fatalf("= (%v, %d), want ok:false 503", res, status)
 	}
@@ -715,8 +715,8 @@ func TestSubnetCreate_ValidationRefusedBeforeWire(t *testing.T) {
 		want string
 	}{
 		{"no block_id", M{"cidr": float64(24), "dry": false}, "block_id is required"},
-		{"no cidr", M{"block_id": "block-1", "dry": false}, "cidr is required"},
-		{"bad cidr", M{"block_id": "block-1", "cidr": "twenty-four", "dry": false}, "cidr must be an integer"},
+		{"no cidr", M{"block_id": "ipam/address_block/block-1", "dry": false}, "cidr is required"},
+		{"bad cidr", M{"block_id": "ipam/address_block/block-1", "cidr": "twenty-four", "dry": false}, "cidr must be an integer"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

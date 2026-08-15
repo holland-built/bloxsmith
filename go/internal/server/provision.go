@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"bloxsmith/internal/edit"
 	"bloxsmith/internal/httpx"
 	"bloxsmith/internal/provision"
 	"bloxsmith/internal/rest"
@@ -109,6 +110,21 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			emit(map[string]any{"error": "block is required"})
 			return nil
 		}
+		// `block` is a query-string parameter and used to be concatenated
+		// straight into the outgoing allocation path below. Go's transport does
+		// not clean ".." out of a request path, so a crafted block reached an
+		// arbitrary CSP path under the server's own tenant key — the same escape
+		// already closed for the DELETE routes (see editDelete). The UI's Block
+		// select sends a full-form id from GET /api/ipam/blocks, which
+		// ObjectPath maps to a byte-identical path, so nothing legitimate moves.
+		//
+		// Refused before the dry branch, so a preview cannot claim it would
+		// create something in a "block" the live run will reject.
+		blockPath, perr := edit.ObjectPath("ipam/address_block", block)
+		if perr != nil {
+			emit(map[string]any{"error": "invalid block id"})
+			return nil
+		}
 		emit(map[string]any{"step": fmt.Sprintf("Resolving block %s…", block)})
 		if dry {
 			emit(map[string]any{"step": fmt.Sprintf("[DRY-RUN] Would create /%s in block %s", cidr, block)})
@@ -130,7 +146,7 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			}
 			body = bm
 		}
-		result, status, _ := d.restFor(r).Write("POST", "/api/ddi/v1/"+block+"/nextavailablesubnet",
+		result, status, _ := d.restFor(r).Write("POST", blockPath+"/nextavailablesubnet",
 			body, map[string]string{"cidr": strconv.Itoa(cidrN)})
 		emit(map[string]any{"step": "Subnet allocation result", "status": status, "result": result})
 		subnet := firstRowLocal(result)
