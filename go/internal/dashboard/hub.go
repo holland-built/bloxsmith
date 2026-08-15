@@ -408,7 +408,7 @@ func (s *Service) FetchHubDomains() map[string]any {
 	roaming, errRoaming := s.Rest.GetStrict("/api/atcep/v1/roaming_devices", map[string]string{"_limit": "200"})
 	anycast, errAnycast := s.Rest.GetStrict("/api/anycast/v1/accm/ac_runtime_statuses", map[string]string{"_limit": "100"})
 	dfp, errDfp := s.Rest.GetStrict("/api/atcdfp/v1/dfp_services", map[string]string{"_limit": "100"})
-	hosts, errHosts := s.Rest.GetStrict("/api/infra/v1/detail_hosts", map[string]string{"_limit": "200"})
+	hosts, hostsTotal, hostsTotalOK, errHosts := s.fetchHosts("")
 
 	// availability is one section-name -> "ok"/"error" entry per
 	// independent feed this endpoint combines. Unlike the single-feed
@@ -570,10 +570,29 @@ func (s *Service) FetchHubDomains() map[string]any {
 			"qps":     qpsNum(h),
 		})
 	}
+	// "total" used to be len(hosts), i.e. the rows in this page — a meaning the
+	// key name flatly denies. At the old _limit=200 it read 200 for a measured
+	// 532-host tenant (#85). It is now the AUTHORITATIVE tenant total when
+	// upstream reports one, and "returned" carries the row count that
+	// by_status and hosts were actually computed from. Nothing in go/ or ui/
+	// reads host_inventory today (grepped), so redefining the key fixes the
+	// name rather than breaking a reader.
 	hostInventory := map[string]any{
-		"total":     len(hosts),
+		"returned":  len(hosts),
 		"by_status": hostStatus.dict(),
 		"hosts":     hostRows,
+	}
+	if hostsTotalOK {
+		hostInventory["total"] = hostsTotal
+	}
+	if hostsTruncated(hosts, hostsTotal, hostsTotalOK) {
+		// by_status and hosts describe the rows in hand, not the estate. The
+		// section is marked partial so no consumer can read those aggregates as
+		// tenant-wide — reporting an authoritative total beside subset-derived
+		// counts with no such marker would be a new inconsistency, not a fix.
+		hostInventory["truncated"] = true
+		hostInventory["reason"] = hostsReason
+		availability["host_inventory"] = "partial"
 	}
 
 	result := map[string]any{

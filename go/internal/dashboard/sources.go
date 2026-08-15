@@ -266,77 +266,85 @@ func (s *Service) SourcesMeta() map[string]any {
 // an empty slice: a nil error with nil/empty rows means the source is
 // genuinely empty, while a non-nil error means the read itself failed and the
 // caller must not treat that as "no data".
-func (s *Service) sourceFetch(ctx context.Context, sid string, p map[string]string) ([]any, error) {
+func (s *Service) sourceFetch(ctx context.Context, sid string, p map[string]string) ([]any, map[string]any, error) {
 	switch sid {
 	case "subnets":
 		raw, err := s.Rest.GetStrict("/api/ddi/v1/ipam/subnet",
 			map[string]string{"_fields": "id,name,address,cidr,utilization,tags", "_limit": "5000"})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return toAnyN(normSubnets(raw)), nil
+		return toAnyN(normSubnets(raw)), nil, nil
 	case "leases":
 		raw, err := s.Rest.GetStrict("/api/ddi/v1/dhcp/lease",
 			map[string]string{"_fields": "address,hostname,state,client_id", "_limit": "5000"})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return toAnyN(normLeases(raw)), nil
+		return toAnyN(normLeases(raw)), nil, nil
 	case "dns_zones":
 		raw, err := s.Rest.GetStrict("/api/ddi/v1/dns/auth_zone",
 			map[string]string{"_fields": "id,fqdn,view,zone_authority,primary_type", "_limit": "5000"})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return toAnyN(normZones(raw, nil)), nil
+		return toAnyN(normZones(raw, nil)), nil, nil
 	case "dns_records":
 		raw, err := s.Rest.GetStrict("/api/ddi/v1/dns/record", map[string]string{"_limit": "2000"})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return normRecords(raw), nil
+		return normRecords(raw), nil, nil
 	case "hosts":
-		raw, err := s.Rest.GetStrict("/api/infra/v1/detail_hosts", map[string]string{"_limit": "500"})
+		// #85: this used to send _limit=500 against an endpoint the repo has
+		// measured at 532 and 548 rows, and return count:500 with nothing
+		// saying the estate was larger. It now shares fetchHosts and reports
+		// the truncation it cannot remove.
+		raw, total, totalOK, err := s.fetchHosts("")
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return toAnyN(normHosts(raw)), nil
+		var meta map[string]any
+		if hostsTruncated(raw, total, totalOK) {
+			meta = map[string]any{"total_available": total, "truncated": true, "reason": hostsReason}
+		}
+		return toAnyN(normHosts(raw)), meta, nil
 	case "threat_feeds":
 		raw, err := s.Rest.GetStrict("/api/atcfw/v1/threat_feeds", map[string]string{"_limit": "200"})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return normThreatFeeds(raw), nil
+		return normThreatFeeds(raw), nil, nil
 	case "named_lists":
 		raw, err := s.Rest.GetStrict("/api/atcfw/v1/named_lists", map[string]string{"_limit": "200"})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return normNamedLists(raw), nil
+		return normNamedLists(raw), nil, nil
 	case "security_policies":
 		raw, err := s.Rest.GetStrict("/api/atcfw/v1/security_policies", map[string]string{"_limit": "200"})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return toAnyN(normPolicies(raw)), nil
+		return toAnyN(normPolicies(raw)), nil, nil
 	case "dfp":
 		raw, err := s.Rest.GetStrict("/api/atcdfp/v1/dfp_services", map[string]string{"_limit": "200"})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return normSourceDFP(raw), nil
+		return normSourceDFP(raw), nil, nil
 	case "anycast":
 		raw, err := s.Rest.GetStrict("/api/anycast/v1/accm/ac_runtime_statuses", map[string]string{"_limit": "200"})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return normAnycast(raw), nil
+		return normAnycast(raw), nil, nil
 	case "roaming":
 		raw, err := s.Rest.GetStrict("/api/atcep/v1/roaming_devices", map[string]string{"_limit": "2000"})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return normRoaming(raw), nil
+		return normRoaming(raw), nil, nil
 	case "incidents":
 		// FetchActions already knows when the upstream read failed: it marks
 		// availability:"error" (upstream error) vs "ok" (genuine
@@ -344,28 +352,28 @@ func (s *Service) sourceFetch(ctx context.Context, sid string, p map[string]stri
 		// normIncidents a failure disguised as an empty actions list.
 		data := s.FetchActions(ctx)
 		if data["availability"] == "error" {
-			return nil, fmt.Errorf("%s", getStr(data["unavailable"]))
+			return nil, nil, fmt.Errorf("%s", getStr(data["unavailable"]))
 		}
-		return normIncidents(data), nil
+		return normIncidents(data), nil, nil
 	case "anomaly_events":
 		// FetchHubSecurity reports the same availability/reason shape as
 		// FetchDNSAnalytics/FetchHostMetrics for a dead threat-event feed.
 		data := s.FetchHubSecurity(3600, 200)
 		if data["availability"] == "error" {
-			return nil, fmt.Errorf("%s", getStr(data["reason"]))
+			return nil, nil, fmt.Errorf("%s", getStr(data["reason"]))
 		}
-		return toAnyN(anyToMaps(data["events"])), nil
+		return toAnyN(anyToMaps(data["events"])), nil, nil
 	case "entity_search":
 		if p["q"] == "" {
-			return []any{}, nil
+			return []any{}, nil, nil
 		}
 		result := s.ThreatLookup(ctx, p["q"])
 		if result["availability"] == "error" {
-			return nil, fmt.Errorf("%s", getStr(result["reason"]))
+			return nil, nil, fmt.Errorf("%s", getStr(result["reason"]))
 		}
-		return asSlice(result["entities"]), nil
+		return asSlice(result["entities"]), nil, nil
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 // upstreamErrorRows is the shared failed-read shape, matching the existing
@@ -426,7 +434,7 @@ func (s *Service) SourceRows(ctx context.Context, sid string, params map[string]
 		limit = 5000
 	}
 
-	rows, err := s.sourceFetch(ctx, sid, params)
+	rows, meta, err := s.sourceFetch(ctx, sid, params)
 	if err != nil {
 		return upstreamErrorRows(fmt.Sprintf("source %q", sid), err)
 	}
@@ -481,7 +489,17 @@ func (s *Service) SourceRows(ctx context.Context, sid string, params map[string]
 	if len(rows) > limit {
 		rows = rows[:limit]
 	}
-	return map[string]any{"rows": rows, "count": len(rows), "fields": toAnyN(def.Fields)}
+	out := map[string]any{"rows": rows, "count": len(rows), "fields": toAnyN(def.Fields)}
+	// A source that knows its upstream read was incomplete says so. The keys go
+	// on the payload verbatim rather than being folded into "count": count has
+	// always meant "rows in this response" AFTER the local filter and limit
+	// above, and total_available means "rows upstream holds" BEFORE either.
+	// Collapsing two different questions into one number is the bug this whole
+	// change is about.
+	for k, v := range meta {
+		out[k] = v
+	}
+	return out
 }
 
 // --- helpers -----------------------------------------------------------------

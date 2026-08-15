@@ -382,8 +382,7 @@ func (s *Service) FetchDNSAnalytics(ctx context.Context) map[string]any {
 // /api/infra/v1/detail_hosts, the same endpoint CSPHostHealth already reads.
 // Never fabricates a name: a host with no match keeps its raw id upstream.
 func (s *Service) hostDisplayNames() map[string]string {
-	rows, err := s.Rest.GetStrict("/api/infra/v1/detail_hosts",
-		map[string]string{"_limit": "500", "_fields": "id,ophid,display_name"})
+	rows, total, totalOK, err := s.fetchHosts("id,ophid,display_name")
 	if err != nil {
 		// Not surfaced to the caller: this feeds a uuid/ophid -> display_name
 		// lookup map for FetchHostMetrics, which has no error return of its
@@ -393,6 +392,16 @@ func (s *Service) hostDisplayNames() map[string]string {
 		// comes back empty.
 		log.Printf("dashboard: detail_hosts fetch failed: %v", err)
 		return map[string]string{}
+	}
+	if hostsTruncated(rows, total, totalOK) {
+		// This reader has no caller-facing shape to carry a truncation flag —
+		// it is a lookup map, and FetchHostMetrics already documents a missing
+		// name degrading to the raw id. So the fact is logged rather than
+		// invented into a status field nobody can read. The wording is
+		// deliberate: these rows were never FETCHED at all, which is not the
+		// same as a host whose name failed to resolve.
+		log.Printf("dashboard: host name lookup saw %d of %d inventory rows — %s",
+			len(rows), total, hostsReason)
 	}
 	out := make(map[string]string, len(rows))
 	for _, item := range rows {

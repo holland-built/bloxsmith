@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useThemeColors } from '../lib/theme.jsx'
 import { Card, Empty, Skeleton, usePanelFit, utilStatus } from './ui.jsx'
+import { feedCountLabel, feedCountTitle } from '../lib/feedCount.js'
 
 // ---------- extracted shared helpers ----------
 
@@ -683,7 +684,13 @@ export function DataTable({
 export function FeedCard({ span, panelId, title, note, feed, columns, limit, viewAllHref, count }) {
   const rows = feed.data?.rows ?? []
   const bad = feed.error || feed.data?.status === 'error'
-  const right = count && rows.length > 0 ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : undefined
+  // "500" and "500 of 532" are different claims. feedCountLabel only makes the
+  // second one when the server said the list was truncated AND handed over a
+  // total that is actually larger — see ui/src/lib/feedCount.js.
+  const countLabel = count ? feedCountLabel(feed.data, rows.length) : null
+  const right = countLabel ? (
+    <span className="text-[11px] text-muted" title={feedCountTitle(feed.data, rows.length)}>{countLabel}</span>
+  ) : undefined
 
   return (
     <Card span={span} panelId={panelId} title={title} note={note} right={right}>

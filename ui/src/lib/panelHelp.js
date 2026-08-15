@@ -203,7 +203,7 @@ export const PANEL_HELP = {
   },
   'infra-host-health': {
     what: 'Each machine Infoblox reports on directly, the state it is in, and the software version it is running.',
-    look: 'The number by the title counts the machines that came back; it reads at most 500. "feed unavailable" means the read failed, not that you have none.',
+    look: 'The number by the title counts the machines that came back — at most 1,000, shown against the real total if your estate is bigger. "feed unavailable" means the read failed, not that you have none.',
   },
   'infra-onprem-hosts': {
     what: 'The Infoblox boxes installed on your own sites, and how many Infoblox applications each one is running.',
