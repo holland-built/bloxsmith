@@ -30,6 +30,13 @@ func TestFetchDossier_NoUsableSource_NoVerdict(t *testing.T) {
 		results     string
 		wantVerdict bool
 		wantSources []string
+		// #89: a payload is not a verdict. A source can be USABLE (it carried a
+		// data object, so it survives into `sources`) and still have graded
+		// nothing — geo and whois are exactly that. wantAssessed is the field
+		// that keeps "we emitted a dossier" and "something judged this
+		// indicator" from collapsing into each other the way max_threat_level:0
+		// used to.
+		wantAssessed bool
 	}{
 		{
 			// TIDE answered 200 with an empty results list.
@@ -50,9 +57,11 @@ func TestFetchDossier_NoUsableSource_NoVerdict(t *testing.T) {
 		},
 		{
 			// The control: three unusable records plus ONE usable geo
-			// source. A real verdict must still be emitted, with that
-			// source present — the fix must not hide real results.
-			name:  "one usable source among unusable ones",
+			// source. A dossier must still be emitted, with that source
+			// present — the fix must not hide real results. But geo reports a
+			// country, not a judgement, so the dossier it produces is
+			// UNASSESSED: no level, and the UI must not print "Clean".
+			name:  "one usable source among unusable ones, and geo grades nothing",
 			query: "mixed.example.com",
 			results: `{"results":[
 				{"params":{"source":"gsb"}},
@@ -60,8 +69,9 @@ func TestFetchDossier_NoUsableSource_NoVerdict(t *testing.T) {
 				{"params":{"source":"geo"},"data":{"country_name":"United States","country":"US"}},
 				{"params":{"source":"whois"},"data":"not-an-object"}
 			]}`,
-			wantVerdict: true,
-			wantSources: []string{"geo"},
+			wantVerdict:  true,
+			wantSources:  []string{"geo"},
+			wantAssessed: false,
 		},
 	}
 
@@ -116,8 +126,22 @@ func TestFetchDossier_NoUsableSource_NoVerdict(t *testing.T) {
 			if summary["malicious"] != false {
 				t.Fatalf("summary[malicious] = %v, want false for an examined-but-clean indicator", summary["malicious"])
 			}
-			if summary["max_threat_level"] != float64(0) {
-				t.Fatalf("summary[max_threat_level] = %v, want 0", summary["max_threat_level"])
+			// #89: "a dossier was emitted" and "something graded this
+			// indicator" are different facts, and max_threat_level:0 used to
+			// answer both. A source that graded nothing reports assessed false
+			// and NO level at all.
+			if summary["assessed"] != tc.wantAssessed {
+				t.Fatalf("summary[assessed] = %v, want %v", summary["assessed"], tc.wantAssessed)
+			}
+			if tc.wantAssessed {
+				if summary["max_threat_level"] != float64(0) {
+					t.Fatalf("summary[max_threat_level] = %v, want 0", summary["max_threat_level"])
+				}
+			} else if lvl := summary["max_threat_level"]; lvl != nil {
+				t.Fatalf("summary[max_threat_level] = %v on an UNASSESSED dossier; 0 there is the fabrication #89 is about", lvl)
+			}
+			if summary["malicious"] != false {
+				t.Fatalf("summary[malicious] = %v, want false", summary["malicious"])
 			}
 			var gotNames []string
 			for _, si := range sources {

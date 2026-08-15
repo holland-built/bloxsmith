@@ -66,13 +66,18 @@ func TestFetchDossier_ResultsFetchFailure_NoCleanVerdictCached(t *testing.T) {
 // TestFetchDossier_ResultsFetchSuccess_CleanVerdictEmitted proves the fix
 // didn't break the legitimate path: a real 200 whose sources WERE examined
 // and found nothing malicious must still emit a genuine clean verdict
-// (malicious:false, max_threat_level:0), not an unavailable marker.
+// (assessed:true, malicious:false, max_threat_level:0), not an unavailable
+// marker.
 //
-// The fixture used to be `{"results":[]}`. That was never a clean lookup —
-// it is a lookup that examined nothing, and asserting CLEAN for it pinned
-// the very defect normDossier's len(sources) == 0 check now closes (see
-// dossier_nosource_test.go). It is now one genuinely usable source with no
-// threat records, which is what "genuinely clean" actually looks like.
+// The fixture has been corrected TWICE, each time because "genuinely clean"
+// turned out to mean less than it looked. It began as `{"results":[]}` — a
+// lookup that examined nothing — which pinned the defect normDossier's
+// len(sources) == 0 check closed (dossier_nosource_test.go). It then became
+// one usable source with `records: []`, which is a source that reported no
+// judgement: also not clean, just unmeasured, and #89 is the issue where that
+// stopped rendering as CLEAN. It is now a source carrying a record GRADED
+// ZERO, which is the only shape that means "somebody looked and found
+// nothing".
 func TestFetchDossier_ResultsFetchSuccess_CleanVerdictEmitted(t *testing.T) {
 	s := newDashboardTestService(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -80,7 +85,7 @@ func TestFetchDossier_ResultsFetchSuccess_CleanVerdictEmitted(t *testing.T) {
 		case strings.Contains(r.URL.Path, "/lookup/indicator/"):
 			_, _ = w.Write([]byte(`{"job_id":"job-2"}`))
 		case strings.Contains(r.URL.Path, "/results"):
-			_, _ = w.Write([]byte(`{"results":[{"params":{"source":"atp"},"data":{"records":[]}}]}`))
+			_, _ = w.Write([]byte(`{"results":[{"params":{"source":"atp"},"data":{"records":[{"class":"Policy","threat_level":0}]}}]}`))
 		default:
 			_, _ = w.Write([]byte(`{}`))
 		}
@@ -100,6 +105,12 @@ func TestFetchDossier_ResultsFetchSuccess_CleanVerdictEmitted(t *testing.T) {
 	}
 	if summary["max_threat_level"] != float64(0) {
 		t.Fatalf("summary[max_threat_level] = %v, want 0", summary["max_threat_level"])
+	}
+	// #89: a clean verdict is only meaningful if something actually graded the
+	// indicator. Without this the assertion above passes for a lookup that
+	// measured nothing.
+	if summary["assessed"] != true {
+		t.Fatalf("summary[assessed] = %v, want true — a CLEAN verdict requires an assessment", summary["assessed"])
 	}
 }
 

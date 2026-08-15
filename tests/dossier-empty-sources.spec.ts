@@ -19,9 +19,12 @@ function fulfillJson(route: import('@playwright/test').Route, body: unknown) {
   return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
+// The pre-#89 shape: max_threat_level 0 standing in for "nobody graded it",
+// and no `assessed` field at all. The server no longer sends this; the fixtures
+// below that still use it are the ones asserting it must NOT read as CLEAN.
 const EMPTY_SUMMARY = {
   malicious: false, max_threat_level: 0, threat_classes: [], properties: [],
-  country: '', registrar: '', actor: '',
+  country: '', registrar: '', actor: '', assessed: false,
 };
 
 // The pre-fix server shape: a verdict-looking body with zero examined sources.
@@ -40,10 +43,17 @@ const SERVER_DEGRADED = {
 
 // The control: one source genuinely examined, nothing malicious found. This
 // is what "clean" actually looks like, and it must still say CLEAN.
+//
+// CORRECTED for #89. It used to be a GEO source — a country, and no threat
+// judgement of any kind — which is exactly the payload that issue is about: a
+// dossier that examined a source without anything grading the indicator. geo
+// reports where a thing is, never whether it is dangerous. A real clean verdict
+// needs a source that GRADED it, so this is now an atp record graded zero, and
+// the summary carries assessed: true because the server now says so.
 const ONE_SOURCE_EXAMINED = {
   query: 'benign.example.com', type: 'host',
-  summary: { ...EMPTY_SUMMARY, country: 'United States' },
-  sources: [{ source: 'geo', geo: { country: 'US', country_name: 'United States' } }],
+  summary: { ...EMPTY_SUMMARY, assessed: true, country: 'United States' },
+  sources: [{ source: 'atp', records: [{ class: 'Policy', property: 'Policy_NoContent', threat_level: 0 }] }],
   unavailable: null,
 };
 
