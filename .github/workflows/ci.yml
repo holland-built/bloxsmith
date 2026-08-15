@@ -17,6 +17,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # needs-tag.sh decides whether a push gets released (SHIP.md step 4), and
+      # it is wrong in both directions at once: too exempt and a real fix never
+      # reaches a customer, not exempt enough and :8080 hands every operator an
+      # update banner for a README edit — which SHIP.md:29 records happening
+      # twice in two days. Its `--selftest` pins the path rules against a table,
+      # and until now NOTHING ran it: the only references were prose in SHIP.md
+      # and in the script's own header, both addressed to someone who has to
+      # remember. #45 found it had silently stopped covering docs/ and plans/,
+      # which is what an unrun guard does.
+      #
+      # FIRST, before setup-node and setup-go, on purpose. It is a pure table
+      # test — it returns before its own `git rev-parse` guard, so it needs no
+      # tags, no history, no network and no toolchain — and a matcher regression
+      # should cost seconds, not the several minutes of Node, race-detector and
+      # vulnerability steps below it.
+      - name: needs-tag.sh path rules still match their table
+        run: bash scripts/needs-tag.sh --selftest
+
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
