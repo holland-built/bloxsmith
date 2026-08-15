@@ -112,6 +112,28 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 	}
 	comment := strOr(body, "comment")
 
+	// block_id is the one id in this package a human types by hand: the Editor
+	// tab renders it as a free-text field (ui/src/tabs/Editor.jsx, "Address
+	// Block ID"), and whatever is typed went straight into the outgoing path.
+	// Go's transport does not clean ".." out of a request path, so an id like
+	// "../../../atlas/v1/<something>" left this process intact and reached an
+	// arbitrary CSP path under the server's own tenant key — the same escape
+	// already closed for the DELETE routes (server/edit.go's editDelete).
+	//
+	// ObjectPath is the existing validator for exactly this and accepts both id
+	// shapes, so a full-form "ipam/address_block/<uuid>" produces a
+	// byte-identical path to before. A BARE id changes: it used to build
+	// /api/ddi/v1/<uuid>/nextavailablesubnet, which names no CSP object, and now
+	// gets its kind prefix like every other id in this package.
+	//
+	// Validated once, ahead of the dry branch, so the preview and the live
+	// create agree about which requests are acceptable and neither can be aimed
+	// somewhere else.
+	blockPath, err := ObjectPath("ipam/address_block", blockID)
+	if err != nil {
+		return M{"ok": false, "error": "invalid block id"}, 400
+	}
+
 	if truthyDry(body["dry"]) {
 		// GetStrict so a failed preview is DETECTABLE — but it must still
 		// never abort the dry run: the real creation path below uses
@@ -120,7 +142,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		// reported as "unavailable" (with an operator-safe reason) instead of
 		// leaving subnetAddr blank, which used to be indistinguishable from a
 		// genuine "no address available in this block" result.
-		preview, err := c.Rest.GetStrict("/api/ddi/v1/"+blockID+"/nextavailablesubnet",
+		preview, err := c.Rest.GetStrict(blockPath+"/nextavailablesubnet",
 			map[string]string{"cidr": strconv.Itoa(cidr), "count": "1"})
 		subnetAddr := ""
 		would := M{"cidr": cidr, "name": name, "comment": comment, "tags": tags}
@@ -148,7 +170,7 @@ func (c *Client) SubnetCreate(body M) (M, int) {
 		return M{"ok": true, "dry_run": true, "would_create": would}, 200
 	}
 
-	resp, status, _ := c.Rest.Write("POST", "/api/ddi/v1/"+blockID+"/nextavailablesubnet",
+	resp, status, _ := c.Rest.Write("POST", blockPath+"/nextavailablesubnet",
 		nil, map[string]string{"cidr": strconv.Itoa(cidr), "count": "1"})
 	if writeUnreadable(resp, status) {
 		// nextavailablesubnet carved a subnet out of the block and we cannot
