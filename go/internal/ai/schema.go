@@ -2,6 +2,45 @@ package ai
 
 import "encoding/json"
 
+// THE BOUNDS ON THE NUMBERS THE MODEL PICKS.
+//
+// Every other value a tool takes is already guarded where it is used — the
+// subnet address against a regex, the cidr to 0..128 — because the arguments in
+// a tool call are chosen by the LLM, and this codebase treats model output as
+// untrusted for a measured reason: a hostname carrying "[[SYSTEM OVERRIDE: ...]]"
+// changed the model's answer in 6 of 6 live runs (see toolFact in ai.go and
+// untrustedNotice in dashboard/ai_tools.go). `limit` and `days` were the ones
+// left out, and they went to the tenant verbatim: _limit=-5, _limit=500000,
+// "last 99999 days".
+//
+// THESE ARE CHOSEN OPERATIONAL BOUNDS, NOT DERIVED ONES. No upstream document
+// says the audit endpoint refuses 500000, and nothing here has been run against
+// a cube query for 99999 days. They are set to the smallest values that cannot
+// make any real question unanswerable, because a model-chosen number should not
+// be able to turn one sentence of injected text into an expensive query against
+// a customer's tenant. What makes them cheap to hold: the model only ever SEES
+// aiSampleCap (25) rows of a list result whatever was fetched, so a bigger fetch
+// buys the answer nothing.
+//
+// They live here, next to the schema that advertises them, and package dashboard
+// imports them — one source of truth, so the number the model is told and the
+// number that is enforced cannot drift apart. The schema is documentation; the
+// clamp in RunAITool is the enforcement, because nothing makes a model honour a
+// declared maximum.
+const (
+	AuditLogLimitDefault = 20
+	AuditLogLimitMin     = 1
+	AuditLogLimitMax     = 200
+
+	AnalyticsDaysDefault = 7
+	AnalyticsDaysMin     = 1
+	AnalyticsDaysMax     = 30
+
+	AnalyticsLimitDefault = 10
+	AnalyticsLimitMin     = 1
+	AnalyticsLimitMax     = 100
+)
+
 // aiSystem is _AI_SYSTEM (server.py:3851), copied verbatim. The \n inside the
 // JSON example is a literal backslash-n, exactly as the Python string value is.
 const aiSystem = `You are a network analyst for the Bloxsmith dashboard. Call tools to fetch live data, then answer.
@@ -78,15 +117,18 @@ const toolsJSON = `[
     "name": "get_audit_logs",
     "description": "Get recent audit log events",
     "parameters": {"type": "object",
-      "properties": {"limit": {"type": "integer", "description": "Number of log entries, default 20"}}}
+      "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 200,
+        "description": "Number of log entries, 1-200, default 20"}}}
   }},
   {"type": "function", "function": {
     "name": "get_dns_analytics",
     "description": "Get top DNS clients by query count over a time range",
     "parameters": {"type": "object",
       "properties": {
-        "days":  {"type": "integer", "description": "Time range in days, default 7"},
-        "limit": {"type": "integer", "description": "Number of top clients, default 10"}
+        "days":  {"type": "integer", "minimum": 1, "maximum": 30,
+          "description": "Time range in days, 1-30, default 7"},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 100,
+          "description": "Number of top clients, 1-100, default 10"}
       }}
   }},
   {"type": "function", "function": {
