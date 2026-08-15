@@ -381,10 +381,26 @@ func isAddrInUse(err error) bool {
 }
 
 // loadForegroundEnv loads the .env files that only make sense with a real cwd
-// and a real user session: the developer's source repo, the current directory,
-// and finally the shared config dir the service also reads.
+// and a real user session: the current directory, and then the shared config
+// dir the service also reads. First-wins, and the real environment is always
+// ahead of both (config.LoadDotEnv is setdefault).
+//
+// There used to be a third entry, FIRST in the list, hardcoding one developer's
+// absolute home path (#95). It shipped: `-trimpath` scrubs the 896 build-machine
+// paths the compiler embeds and cannot touch a string the source declares, so
+// every release carried exactly that one. It was also redundant — what actually
+// loads the repo's .env while you are working in the repo is the cwd entry
+// below, since `go run` builds into a temp directory and an installed binary
+// lives somewhere else entirely.
+//
+// DELIBERATELY NOT REPLACED with the exe-dir entry the four CLI commands use
+// (auditcli.go, passcli.go, restorecli_apply.go, vaultbackupcli.go). Those
+// resolve a directory at runtime and have always done so; adding one here would
+// be a NEW precedence — a .env sitting beside the binary would start outranking
+// the one in the directory the operator is standing in — and that is a
+// behaviour change, not the removal of a leak. Deleting the line restores the
+// foreground path to exactly what it does today minus the hardcoded entry.
 func loadForegroundEnv() {
-	config.LoadDotEnv("/Users/sholland/AI/Infoblox MCP/.env")
 	config.LoadDotEnv(".env")
 	config.LoadServiceEnv()
 }
