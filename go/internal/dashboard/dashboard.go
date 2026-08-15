@@ -15,14 +15,23 @@ package dashboard
 //     from a failed read just because the failure path also produces zero
 //     rows.
 //
-// The one exception is the attack-surface "availability" tri-state
-// (CSPExposures/CSPExposedHostnames/CSPExposedIPs in csp.go), which adds a
-// fourth, feed-specific value: "metadata-degraded" — rows fetched fine (the
-// feed itself is healthy) but the upstream total is missing or internally
-// inconsistent, so no total is emitted. That is a real third meaning, not a
-// synonym for "error": the rows are trustworthy, only the total isn't. It
-// does not apply outside the exposure feeds; do not spread it to _meta or
-// tile status.
+// There are exactly two exceptions, both feed-specific, both on
+// "availability" and never on _meta or tile status.
+//
+// The first is the attack-surface tri-state
+// (CSPExposures/CSPExposedHostnames/CSPExposedIPs in csp.go), which adds
+// "metadata-degraded" — rows fetched fine (the feed itself is healthy) but the
+// upstream total is missing or internally inconsistent, so no total is emitted.
+// That is a real third meaning, not a synonym for "error": the rows are
+// trustworthy, only the total isn't.
+//
+// The second is the detail_services readers (FetchHubHealth and
+// FetchServiceInventory in hub.go), which add "partial" — the read succeeded
+// but came back at or over its row limit, so the SET is not authoritative even
+// though every row in it is real. "empty" would be a lie there and "error"
+// would throw away rows that are fine, which is why it earns its own word. The
+// two readers share one truncation test (serviceInventoryTruncated) precisely
+// so they cannot disagree about it again; they did, and that was #81.
 import (
 	"errors"
 	"log"
