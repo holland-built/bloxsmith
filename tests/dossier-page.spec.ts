@@ -97,7 +97,9 @@ const FAKE = {
   threat: {
     query: '172.16.128.1',
     type: 'ip',
-    summary: { actor: '', country: 'US', malicious: false, max_threat_level: 0, properties: [], registrar: '', threat_classes: [] },
+    // assessed: true — #89 made a clean verdict opt-in, so a fixture that means
+    // "somebody graded this and found nothing" has to say so.
+    summary: { actor: '', assessed: true, country: 'US', malicious: false, max_threat_level: 0, properties: [], registrar: '', threat_classes: [] },
     sources: [{ source: 'whois', whois: '{}' }, { source: 'geo', geo: {} }],
   },
 };
@@ -420,7 +422,7 @@ test.describe('availability states', () => {
     // Mirrors DossierPanel.jsx:282-293. sources: [] is an array, and a summary
     // is present — the exact body that once painted a false CLEAN.
     await routeAll(page, {
-      bodies: { threat: { query: '172.16.128.1', summary: { malicious: false }, sources: [] } },
+      bodies: { threat: { query: '172.16.128.1', summary: { malicious: false, assessed: true }, sources: [] } },
     });
     await page.goto('/#dossier?q=172.16.128.1');
     const threat = row(page, 'threat');

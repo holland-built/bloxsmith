@@ -337,7 +337,10 @@ const DOSSIER = {
   query: 'baseline.example',
   type: 'host',
   unavailable: null,
-  summary: { actor: 'baseline-actor', country: 'ZZ', malicious: false, max_threat_level: 0, properties: [], registrar: 'baseline-registrar', threat_classes: [] },
+  // assessed: true — #89 made a clean verdict opt-in, and this fixture drives
+  // the dossier page's healthy baseline, so it has to describe a lookup that
+  // something actually graded rather than one nobody did.
+  summary: { actor: 'baseline-actor', assessed: true, country: 'ZZ', malicious: false, max_threat_level: 0, properties: [], registrar: 'baseline-registrar', threat_classes: [] },
   sources: [
     { source: 'baseline-source-a', detail: '{"note":"baseline"}' },
     { source: 'baseline-source-b', detail: '{"note":"baseline"}' },

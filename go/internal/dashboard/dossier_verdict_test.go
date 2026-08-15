@@ -39,22 +39,24 @@ func TestNormDossier_VerdictNeedsAThreatLevelAboveZero(t *testing.T) {
 		name          string
 		levels        []any
 		wantMalicious bool
-		wantMax       float64
+		// any, not float64: #89 made "nobody reported a level" nil rather than
+		// a fabricated 0, and these rows are exactly where the two differ.
+		wantMax any
 	}{
 		{"a record graded zero is a clean measurement, not an accusation",
-			[]any{float64(0)}, false, 0},
+			[]any{float64(0)}, false, float64(0)},
 		{"the smallest positive grade is still a grade",
-			[]any{float64(1)}, true, 1},
+			[]any{float64(1)}, true, float64(1)},
 		{"a real threat is unchanged",
-			[]any{float64(100)}, true, 100},
-		{"a record with no level at all decides nothing",
-			[]any{nil}, false, 0},
+			[]any{float64(100)}, true, float64(100)},
+		{"a record with no level at all decides nothing, and reports no level",
+			[]any{nil}, false, nil},
 		{"one clean record does not cancel one dirty one",
-			[]any{float64(0), float64(50)}, true, 50},
+			[]any{float64(0), float64(50)}, true, float64(50)},
 		{"two clean records stay clean",
-			[]any{float64(0), float64(0)}, false, 0},
-		{"a negative level is nonsense, and nonsense accuses nobody",
-			[]any{float64(-1)}, false, 0},
+			[]any{float64(0), float64(0)}, false, float64(0)},
+		{"a negative level is nonsense: it accuses nobody AND clears nobody",
+			[]any{float64(-1)}, false, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -67,7 +69,7 @@ func TestNormDossier_VerdictNeedsAThreatLevelAboveZero(t *testing.T) {
 				t.Errorf("malicious = %v, want %v", summary["malicious"], tc.wantMalicious)
 			}
 			if summary["max_threat_level"] != tc.wantMax {
-				t.Errorf("max_threat_level = %v, want %v", summary["max_threat_level"], tc.wantMax)
+				t.Errorf("max_threat_level = %v (%T), want %v", summary["max_threat_level"], summary["max_threat_level"], tc.wantMax)
 			}
 			// The contradiction that made this visible: these two fields must
 			// never disagree about whether anything was found.

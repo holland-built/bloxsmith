@@ -19,9 +19,13 @@ test.describe('AI → Threat lookup dossier (DossierPanel + Ai.jsx fetch)', () =
   // nothing at all — asserting CLEAN for it pinned the defect that
   // normDossier's len(sources) == 0 check and DossierPanel's hasVerdictShape
   // now close together. See tests/dossier-empty-sources.spec.ts for that case.
+  // CORRECTED AGAIN for #89. `detail: 'no records'` is a source that reported
+  // no judgement — usable, and unassessed. Clean is now opt-in: the summary has
+  // to say something graded the indicator, which is what assessed: true means
+  // and what a threat_level of 0 on a real record looks like.
   const GENUINE_CLEAN = {
-    summary: { malicious: false, max_threat_level: 0 },
-    sources: [{ source: 'atp', detail: 'no records' }],
+    summary: { malicious: false, max_threat_level: 0, assessed: true },
+    sources: [{ source: 'atp', records: [{ class: 'Policy', threat_level: 0 }] }],
     query: 'benign.example.com',
     type: 'domain',
   };
