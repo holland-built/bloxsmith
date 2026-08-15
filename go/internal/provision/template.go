@@ -207,6 +207,43 @@ type validator struct{ errors, warnings []M }
 func (v *validator) err(f, m string)  { v.errors = append(v.errors, M{"field": f, "message": m}) }
 func (v *validator) warn(f, m string) { v.warnings = append(v.warnings, M{"field": f, "message": m}) }
 
+// listField answers the question getList cannot. asList returns nil for any
+// non-list, and a nil list iterates zero times, so `subnets: web` and no
+// `subnets` key at all produced byte-identical validation output: clean, with
+// no error and no warning. Only one of those is a template bug, and it was the
+// invisible one — TemplateToSiteConfig (site.go:56) reads the same key through
+// the same helper, so a mis-typed subnets provisioned a site with zero subnets
+// and nothing anywhere said so (#92).
+//
+// An explicit YAML null is ABSENT, not wrong-shaped. `subnets:` with nothing
+// after it is how a person leaves a key out while keeping it visible; calling
+// that a type error would start rejecting templates that are fine today.
+func listField(t M, key string) (items []any, wrongShape bool) {
+	raw, present := t[key]
+	if !present || raw == nil {
+		return nil, false
+	}
+	if l := asList(raw); l != nil {
+		return l, false
+	}
+	return nil, true
+}
+
+// listOrErr is the shared reporting half: it records "Must be a list" and tells
+// the caller to stop looking at that field. Callers must treat wrong-shape and
+// empty-or-absent as MUTUALLY EXCLUSIVE — a string `zones` is one error about
+// its type, never that plus "Required and must be a non-empty list", which
+// would tell an operator to add entries to a key whose problem is that it is
+// not a list.
+func (v *validator) listOrErr(t M, key, field string) ([]any, bool) {
+	items, wrong := listField(t, key)
+	if wrong {
+		v.err(field, "Must be a list")
+		return nil, false
+	}
+	return items, true
+}
+
 // ValidateTemplate is validate_template (server.py:1292): structural validation
 // dispatched by type. Never contacts the API.
 func ValidateTemplate(t M, name string) M {
@@ -261,7 +298,8 @@ func validateSite(t M, v *validator) {
 	}
 
 	subnetNames := map[string]bool{}
-	for i, s := range getList(net, "subnets") {
+	subnetDefs, subnetsOK := v.listOrErr(net, "subnets", "network.subnets")
+	for i, s := range subnetDefs {
 		pfx := fmt.Sprintf("network.subnets[%d]", i)
 		sm := asMap(s)
 		if sm == nil {
@@ -316,7 +354,8 @@ func validateSite(t M, v *validator) {
 		}
 	}
 
-	for i, h := range getList(t, "hosts") {
+	hostDefs, _ := v.listOrErr(t, "hosts", "hosts")
+	for i, h := range hostDefs {
 		pfx := fmt.Sprintf("hosts[%d]", i)
 		hm := asMap(h)
 		if hm == nil {
@@ -327,7 +366,11 @@ func validateSite(t M, v *validator) {
 			v.err(pfx+".hostname", "hostname is required")
 		}
 		ref := strings.TrimSpace(pyStr(hm["subnet"]))
-		if ref != "" && len(subnetNames) > 0 && !subnetNames[ref] {
+		// subnetsOK guards this: when network.subnets was the wrong shape,
+		// subnetNames is empty for a reason that has nothing to do with the
+		// host, and accusing every host of referencing an unknown subnet would
+		// bury the one error that matters under N derived ones.
+		if ref != "" && subnetsOK && len(subnetNames) > 0 && !subnetNames[ref] {
 			v.err(pfx+".subnet", fmt.Sprintf("References unknown subnet '%s'; defined: %s", ref, sortedNames(subnetNames)))
 		}
 	}
@@ -349,17 +392,11 @@ func validateBlock(t M, v *validator) {
 	if strings.TrimSpace(pyStr(t["name"])) == "" {
 		v.warn("name", "No template name — used to tag and later find created blocks")
 	}
-	blocks := getList(t, "address_blocks")
-	if len(blocks) == 0 {
-		if t["address_blocks"] != nil {
-			if asList(t["address_blocks"]) == nil {
-				v.err("address_blocks", "Must be a list")
-			} else {
-				v.err("address_blocks", "Required and must be a non-empty list")
-			}
-		} else {
-			v.err("address_blocks", "Required and must be a non-empty list")
-		}
+	// Wrong shape and empty are mutually exclusive: a string address_blocks is
+	// one error about its type, never that plus "add some entries".
+	blocks, ok := v.listOrErr(t, "address_blocks", "address_blocks")
+	if ok && len(blocks) == 0 {
+		v.err("address_blocks", "Required and must be a non-empty list")
 	}
 	var check func(block any, pfx string, parent *net.IPNet)
 	check = func(block any, pfx string, parent *net.IPNet) {
@@ -399,7 +436,8 @@ func validateBlock(t M, v *validator) {
 				v.warn(pfx+".environment", "No environment — site discovery filters on Environment")
 			}
 		}
-		for j, child := range getList(bm, "children") {
+		children, _ := v.listOrErr(bm, "children", pfx+".children")
+		for j, child := range children {
 			check(child, fmt.Sprintf("%s.children[%d]", pfx, j), nn)
 		}
 	}
@@ -410,8 +448,11 @@ func validateBlock(t M, v *validator) {
 
 // validateDNS is _validate_dns (server.py:1260).
 func validateDNS(t M, v *validator) {
-	zones := getList(t, "zones")
-	if len(zones) == 0 {
+	// "Required and must be a non-empty list" was the message a STRING zones got
+	// too, which tells an operator to add entries to a key whose actual problem
+	// is that it is not a list. The two are separate answers now.
+	zones, ok := v.listOrErr(t, "zones", "zones")
+	if ok && len(zones) == 0 {
 		v.err("zones", "Required and must be a non-empty list")
 	}
 	for i, z := range zones {
@@ -428,7 +469,8 @@ func validateDNS(t M, v *validator) {
 		if kind != "forward" && kind != "reverse" {
 			v.err(pfx+".kind", fmt.Sprintf("Must be 'forward' or 'reverse', got '%s'", kind))
 		}
-		for j, rec := range getList(zm, "records") {
+		records, _ := v.listOrErr(zm, "records", pfx+".records")
+		for j, rec := range records {
 			rpfx := fmt.Sprintf("%s.records[%d]", pfx, j)
 			rm := asMap(rec)
 			if rm == nil {
