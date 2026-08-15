@@ -252,7 +252,9 @@ func (s *Service) FetchInsights() map[string]any {
 // PRESENCE, not truthiness, is the test — firstPresent, never orAny: a row
 // that genuinely reports 0 verified assets is a real measurement and must
 // survive as 0, and orAny (Python's `a or b`) would silently downgrade it to
-// unknown, which is the opposite lie.
+// unknown, which is the opposite lie. severity is now on the same rule; see
+// the comment at the assignment for why its unreported case reads "unknown"
+// rather than a grade nobody gave it.
 //
 // count (always 1) and totalTimeSaved (always 0) are gone rather than nulled:
 // both are cube AGGREGATE measures — "how many security actions", "seconds
@@ -265,12 +267,30 @@ func normInsights(raw []any) []any {
 	out := []any{}
 	for _, ri := range raw {
 		r := asMap(ri)
-		severity := ""
-		if pt := getStr(r["priorityText"]); pt != "" {
-			severity = strings.ToLower(pt)
-		}
-		if severity == "" {
-			severity = "medium"
+		// An insight upstream never graded used to arrive graded "medium" — a
+		// specific, actionable claim manufactured out of an absence, on the one
+		// field a security decision turns on, and sortable as if it had been
+		// measured. It is the same fabrication normFeeds made with an
+		// unreported confidence (norm.go:294-315), normPolicies with an
+		// unreported action, normAudit with an absent http_code and normHosts
+		// with an unknown status; this one was missed when those were fixed.
+		//
+		// A REPORTED value survives whatever it says. The only transformation
+		// is trim + lower-case, which is normalisation, not rewriting: unlike
+		// normFeeds — where an unrecognised word would be fed through a levels
+		// map and DERIVE a second confident grading — nothing here is derived
+		// from this word, so replacing an upstream "SEVERE" with "unknown"
+		// would discard a real measurement, which is the opposite lie.
+		//
+		// Absence has four shapes and all four are "unknown": the key missing,
+		// the key present with JSON null (firstPresent's rule), an empty
+		// string, and a whitespace-only string. getStr does not trim, so the
+		// trim happens before the emptiness test.
+		severity := "unknown"
+		if raw, ok := firstPresent(r, "priorityText"); ok {
+			if pt := strings.ToLower(strings.TrimSpace(getStr(raw))); pt != "" {
+				severity = pt
+			}
 		}
 		verifiedAssets, _ := firstPresent(r, "totalVerifiedAssets")
 		timeSaved, _ := firstPresent(r, "timeSaved")
