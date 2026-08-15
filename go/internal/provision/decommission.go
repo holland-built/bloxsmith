@@ -224,13 +224,20 @@ func (d *SiteDecommissioner) planReverseZones(subnets []any) ([]reverseZonePlan,
 	return planned, nil
 }
 
-// planHosts is the read half of the host step: read every host (bounded to
-// 1000, matching Python) and filter locally to the ones this site owns. The
-// filter is pure computation over an already-fetched list, not a delete, so
-// it belongs in the PLAN phase.
+// planHosts is the read half of the host step: read EVERY host and filter
+// locally to the ones this site owns. The filter is pure computation over an
+// already-fetched list, not a delete, so it belongs in the PLAN phase.
+//
+// It used to read one page of 1000 and stop, which on a larger tenant left this
+// site's hosts past row 1000 undeleted while the teardown reported success. See
+// readAllHosts (hosts.go), which pages and refuses rather than truncating —
+// including the refusal, this whole function still runs before the first delete.
 func (d *SiteDecommissioner) planHosts() ([]any, error) {
-	allHosts, err := d.e.Rest.GetStrict("/api/ddi/v1/ipam/host", map[string]string{"_limit": "1000"})
+	allHosts, err := d.e.readAllHosts()
 	if err != nil {
+		if IsError(err) {
+			return nil, err // already an operator-facing refusal, do not re-wrap
+		}
 		return nil, perrWrap(err, "failed to read hosts: %s", upstreamPublic(err))
 	}
 	suffix := "." + d.cfg.DNSZone()
