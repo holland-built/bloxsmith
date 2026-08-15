@@ -1,4 +1,5 @@
 import { useChartTheme, FeedUnavailable } from './ui.jsx'
+import { dossierVerdict, dossierVerdictTone } from '../lib/dossierVerdict.js'
 
 // ---------- parsing helpers ----------
 
@@ -301,7 +302,13 @@ export default function DossierPanel({ data }) {
   const markUsed = (key) => usedSources.add(key)
 
   // Verdict
+  // #89: three states, not two. `mal` still drives the threat-class pill tone
+  // (a class list only exists when something graded the indicator), but the
+  // headline word and its colour come from the shared helper so this component
+  // and DossierPage cannot disagree about what a dossier says.
   const mal = !!sum.malicious
+  const verdictWord = dossierVerdict(sum)
+  const verdictTone = dossierVerdictTone(sum)
   const classes = Array.isArray(sum.threat_classes) ? sum.threat_classes : []
   const properties = Array.isArray(sum.properties) ? sum.properties : []
   const verdictMeta = [
@@ -423,9 +430,9 @@ export default function DossierPanel({ data }) {
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <span
           className="font-mono text-[12px] font-semibold px-2.5 py-1 rounded-lg"
-          style={{ background: mal ? 'var(--pill-crit-bg)' : 'var(--pill-ok-bg)', color: mal ? 'var(--pill-crit-fg)' : 'var(--pill-ok-fg)' }}
+          style={{ background: `var(--pill-${verdictTone}-bg)`, color: `var(--pill-${verdictTone}-fg)` }}
         >
-          {mal ? 'MALICIOUS' : 'CLEAN'}
+          {verdictWord.toUpperCase()}
         </span>
         {sum.max_threat_level != null && <span className="font-mono text-[11px] text-muted">threat {String(sum.max_threat_level)}</span>}
         {data.type && <span className="font-mono text-[11px] text-dim">{String(data.type)}</span>}

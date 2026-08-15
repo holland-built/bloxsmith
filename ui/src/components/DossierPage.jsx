@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { dossierVerdict } from '../lib/dossierVerdict.js'
 import DossierPanel from './DossierPanel.jsx'
 import { Empty, Skeleton } from './ui.jsx'
 import { abortAfter } from '../lib/api.js'
@@ -210,9 +211,12 @@ const SOURCES = [
           id: 'threat',
           identity: fmt(body?.query),
           fields: [
-            ['Verdict', sum.malicious ? 'Malicious' : 'Clean'],
+            ['Verdict', dossierVerdict(sum)],
             ['Sources examined', String(sources.length)],
-            ['Threat level', fmt(sum.max_threat_level) ?? '0'],
+            // No `?? '0'` fallback. An unreported level is an em-dash like
+            // every other unknown on this page; printing 0 there was the
+            // render-layer half of #89.
+            ['Threat level', fmt(sum.max_threat_level)],
           ],
         },
       ]

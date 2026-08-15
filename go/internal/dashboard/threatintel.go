@@ -177,10 +177,19 @@ func normDossier(query, itype string, results []any) map[string]any {
 	threatClasses := map[string]bool{}
 	properties := map[string]bool{}
 	summary := map[string]any{
-		"malicious": false, "max_threat_level": float64(0), "threat_classes": []any{},
+		"malicious": false, "max_threat_level": nil, "threat_classes": []any{},
 		"properties": []any{}, "country": "", "registrar": "", "actor": "",
+		"assessed": false,
 	}
+	// maxTL and assessed move together on purpose. "assessed" is set by the
+	// SAME evidence that can move the level or the verdict, never by the mere
+	// presence of a container: an empty records list, a record that is not a
+	// mapping, a non-numeric level and a geo/whois/actor source all contribute
+	// context and no judgement. Without this, a dossier carrying only a
+	// registrar and a country rendered "Verdict: Clean" — a claim, made on the
+	// strength of a WHOIS record (#89).
 	maxTL := float64(0)
+	haveTL := false
 	for _, ri := range results {
 		r, ok := ri.(map[string]any)
 		if !ok {
@@ -226,9 +235,15 @@ func normDossier(query, itype string, results []any) map[string]any {
 				// verdict. A negative level is not evidence either, and maxTL
 				// starts at 0 so it can never go below zero; nonsense data
 				// accuses nobody.
-				if tl, ok := x["threat_level"].(float64); ok {
-					if tl > maxTL {
+				// A negative level counts as NOTHING — not a max, not a verdict,
+				// and not an assessment either. #87 established that nonsense
+				// accuses nobody; letting it establish assessment would let the
+				// same nonsense buy a "Clean" instead.
+				if tl, ok := x["threat_level"].(float64); ok && tl >= 0 {
+					summary["assessed"] = true
+					if !haveTL || tl > maxTL {
 						maxTL = tl
+						haveTL = true
 					}
 					if tl > 0 {
 						summary["malicious"] = true
@@ -265,8 +280,27 @@ func normDossier(query, itype string, results []any) map[string]any {
 				if attrs, ok := inner["attributes"].(map[string]any); ok {
 					entry["malware"] = map[string]any{"reputation": attrs["reputation"],
 						"last_analysis_stats": attrs["last_analysis_stats"], "categories": attrs["categories"]}
-					if stats, ok := attrs["last_analysis_stats"].(map[string]any); ok && truthy(stats["malicious"]) {
-						summary["malicious"] = true
+					// The malware arm reports an engine COUNT, not a level, and a
+					// count of 0 is a real measurement — engines looked and
+					// flagged nothing — so it establishes assessment while
+					// leaving the verdict clean. A stats object that is absent,
+					// not a map, or carries no numeric "malicious" establishes
+					// nothing.
+					//
+					// KNOWN LIMIT, stated rather than papered over: an all-zero
+					// stats object cannot be told apart from one where no engine
+					// actually ran. Nothing in the payload distinguishes them and
+					// no live response was available to check, so this reads it
+					// as "0 engines flagged it", which is what the field name
+					// says. If that turns out to be wrong it is a separate,
+					// measurable question.
+					if stats, ok := attrs["last_analysis_stats"].(map[string]any); ok {
+						if n, isNum := stats["malicious"].(float64); isNum {
+							summary["assessed"] = true
+							if n > 0 {
+								summary["malicious"] = true
+							}
+						}
 					}
 				}
 			}
@@ -292,7 +326,13 @@ func normDossier(query, itype string, results []any) map[string]any {
 	if len(sources) == 0 {
 		return dossierUnavail(query, itype, "Dossier lookup returned no usable sources")
 	}
-	summary["max_threat_level"] = maxTL
+	// nil, not 0, when nothing reported a level: 0 is a measurement ("graded
+	// zero") and must not double as "nobody graded it" — the unknown-vs-zero
+	// collapse normSubnets (norm.go) forbids, and the last place in this
+	// package still doing it.
+	if haveTL {
+		summary["max_threat_level"] = maxTL
+	}
 	summary["threat_classes"] = sortedCap(threatClasses, 15)
 	summary["properties"] = sortedCap(properties, 15)
 	return map[string]any{"query": query, "type": itype, "summary": summary,
