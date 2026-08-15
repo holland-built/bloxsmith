@@ -212,11 +212,27 @@ func normDossier(query, itype string, results []any) map[string]any {
 				if p := getStr(x["property"]); p != "" {
 					properties[p] = true
 				}
+				// The verdict used to turn on the PRESENCE of this field, so a
+				// record TIDE graded 0 — checked, and found not to be a threat
+				// — accused the indicator anyway, and the panel printed
+				// "Verdict: Malicious" directly above "Threat level: 0" (#87).
+				//
+				// This is deliberately NOT a severity threshold, and no such
+				// threshold is invented here: the upstream threat-level domain
+				// is documented nowhere in this repo and no live TIDE response
+				// was available to read. The claim is narrower and needs no
+				// domain — a level of exactly 0 is not evidence of
+				// maliciousness, so it cannot be the thing that flips the
+				// verdict. A negative level is not evidence either, and maxTL
+				// starts at 0 so it can never go below zero; nonsense data
+				// accuses nobody.
 				if tl, ok := x["threat_level"].(float64); ok {
 					if tl > maxTL {
 						maxTL = tl
 					}
-					summary["malicious"] = true
+					if tl > 0 {
+						summary["malicious"] = true
+					}
 				}
 			}
 			entry["records"] = shaped
