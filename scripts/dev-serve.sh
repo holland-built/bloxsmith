@@ -27,7 +27,10 @@
 # Ctrl-C (SIGINT) or `kill -TERM <pid>`.
 set -uo pipefail
 
+# --selftest is handled below, once the signature functions exist; it must not
+# be read as a port number on the way there.
 PORT="${1:-8090}"
+[ "$PORT" = "--selftest" ] && PORT=8090
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 BIN="/tmp/bloxsmith-dev"
@@ -45,15 +48,76 @@ rebuild_web(){ ( cd ui && npm run build >/dev/null 2>&1 ) && rm -rf go/web/* && 
 
 # Deterministic, order-independent, rename-sensitive signatures: sorted
 # NUL-delimited filename list, each file hashed, then hash-of-hashes.
+#
+# ui_inputs is separate from sig_ui so --selftest can assert WHAT is watched
+# rather than only that hashing works. The list was wrong once — ui/public was
+# missing, so editing the icon sprite rebuilt nothing and :8090 served the old
+# one with no message, on the surface UI changes are supposed to be checked on
+# (:8080 serves the //go:embed copy). A list with no test rots the first time
+# someone adds a config file. See issue #54.
+#
+# ui/public is a Vite build input: its contents are copied verbatim into dist/
+# and from there into go/web. package.json and package-lock.json are named
+# explicitly, exactly as sig_go names go.mod and go.sum, because they are files
+# rather than trees to walk.
+ui_inputs(){
+  { find ui/src ui/public ui/index.html ui/vite.config.js -type f -print0 2>/dev/null; \
+    printf '%s\0' ui/package.json ui/package-lock.json; }
+}
 sig_ui(){
-  find ui/src ui/index.html ui/vite.config.js -type f -print0 2>/dev/null \
-    | sort -z | xargs -0 shasum 2>/dev/null | shasum | cut -d' ' -f1
+  ui_inputs | sort -z | xargs -0 shasum 2>/dev/null | shasum | cut -d' ' -f1
 }
 sig_go(){
   { find go -type f -name '*.go' -not -path 'go/web/*' -print0 2>/dev/null; \
     printf '%s\0' go/go.mod go/go.sum; } \
     | sort -z | xargs -0 shasum 2>/dev/null | shasum | cut -d' ' -f1
 }
+
+# selftest proves the watch list still covers every UI build input, without
+# starting a server and without leaving anything behind.
+#
+# It asserts the LIST, not just the hashing, because the defect was in the list:
+# hashing worked perfectly and hashed the wrong set of files. A test that only
+# edited ui/src and watched the signature move would have passed on the broken
+# version, which is the kind of green that costs an afternoon.
+#
+# The probe at the end is the other half — it proves a NEW file appearing under
+# a watched directory moves the signature, so the list being right and the
+# pipeline being right are checked separately.
+selftest(){
+  local fail=0 want list probe before after
+  list="$(ui_inputs | tr '\0' '\n')"
+  for want in ui/src/main.jsx ui/public/icons.svg ui/public/favicon.svg \
+              ui/index.html ui/vite.config.js ui/package.json ui/package-lock.json; do
+    if [ ! -e "$want" ]; then
+      echo "dev-serve selftest: FAIL $want no longer exists — this list is out of date" >&2
+      fail=1
+      continue
+    fi
+    printf '%s\n' "$list" | grep -qxF "$want" || {
+      echo "dev-serve selftest: FAIL $want is a UI build input but sig_ui does not watch it" >&2
+      fail=1
+    }
+  done
+
+  probe="ui/public/.sigprobe.$$"
+  before="$(sig_ui)"
+  : > "$probe"
+  after="$(sig_ui)"
+  rm -f "$probe"
+  [ "$before" != "$after" ] || {
+    echo "dev-serve selftest: FAIL a new file under ui/public did not move sig_ui" >&2
+    fail=1
+  }
+
+  [ "$fail" = 0 ] && echo "dev-serve selftest: ok — sig_ui watches every UI build input"
+  return "$fail"
+}
+
+if [ "${1:-}" = "--selftest" ]; then
+  selftest
+  exit $?
+fi
 
 health_check(){
   local tries=0
