@@ -289,6 +289,7 @@ const GO_DATA = 'go/internal/server/data.go'
 const GO_PROVISION = 'go/internal/server/provision.go'
 const GO_CSP = 'go/internal/dashboard/csp.go'
 const GO_ANALYTICS = 'go/internal/dashboard/analytics.go'
+const GO_HOSTS = 'go/internal/dashboard/hosts.go'
 
 // `utilStatus` is one function shared by three panels whose copy repeats the
 // same two thresholds. Written once so a flip there reds all three rows.
@@ -548,10 +549,13 @@ const CLAIMS = [
     proofs: [{ re: /func \(s \*Service\) CSPJobs\(\)[\s\S]{0,200}?"_limit": "50"/, expect: 'CSPJobs asks for _limit 50' }],
   },
   {
+    // The limit moved out of csp.go when four readers were made to share one
+    // (#85), so the proof follows it to the constant rather than to a literal
+    // that no longer exists at the call site.
     panel: 'infra-host-health',
-    says: /it reads at most 500/,
-    file: GO_CSP,
-    proofs: [{ re: /func \(s \*Service\) CSPHostHealth\(\)[\s\S]{0,200}?"_limit":\s+"500"/, expect: 'CSPHostHealth asks for _limit 500' }],
+    says: /at most 1,000/,
+    file: GO_HOSTS,
+    proofs: [{ re: /hostsListLimit = 1000/, expect: 'hostsListLimit, the limit every host reader sends, is 1000' }],
   },
   {
     panel: 'dns-query-volume-7d',
