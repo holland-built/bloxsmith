@@ -47,12 +47,21 @@ const FAILED_RUN = sse(
   { error: 'run aborted', rollback: { status: 'complete', residual: [] } },
 );
 
-/** Record every stream request so the URL, not just the outcome, is asserted. */
-async function stubStream(page: import('@playwright/test').Page, path: string, body: string) {
+/**
+ * Record every stream request so the URL, not just the outcome, is asserted.
+ *
+ * `body` may be one body for every call, or an array answered in order with the
+ * last entry repeating. The teardown test needs the second form: its preview has
+ * to succeed before the apply button is rendered at all, so a stub that returned
+ * the failure frame to both calls could never reach the destructive path.
+ */
+async function stubStream(page: import('@playwright/test').Page, path: string, body: string | string[]) {
   const seen: string[] = [];
+  const bodies = Array.isArray(body) ? body : [body];
   await page.route(`**${path}*`, (route) => {
+    const next = bodies[Math.min(seen.length, bodies.length - 1)];
     seen.push(route.request().url());
-    return route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+    return route.fulfill({ status: 200, contentType: 'text/event-stream', body: next });
   });
   return seen;
 }
@@ -72,8 +81,17 @@ async function openMode(page: import('@playwright/test').Page, label: string) {
   // Full site is gated on a TEMPLATE, not a space (`disabled={!siteTemplate}`,
   // ui/src/tabs/Provision.jsx:394) — a different gate from Subnet mode, which is
   // why one openMode could not serve both.
+  //
+  // BY VALUE, NOT BY LABEL, and that one word is what kept both site tests
+  // switched off. The option's value is the bare template name, but what it
+  // RENDERS is `{name} — {region}/{environment}` (Provision.jsx:377-379), so
+  // for this fixture the visible label is `baseline-site — baseline-region/test`.
+  // `selectOption({ label: 'baseline-site' })` matches a label exactly, never as
+  // a substring, so it matched nothing and timed out at the picker — which is why
+  // the stream stubs were never hit and the failure looked like it was upstream
+  // of the endpoints these tests exist to check.
   const templatePicker = page.getByRole('combobox').filter({ hasText: /baseline-site/ }).first();
-  await templatePicker.selectOption({ label: 'baseline-site' });
+  await templatePicker.selectOption('baseline-site');
 }
 
 test('Subnet mode previews and applies against /api/provision/stream', async ({ page }) => {
@@ -92,17 +110,7 @@ test('Subnet mode previews and applies against /api/provision/stream', async ({ 
   expect(seen[1], 'apply must run with dry=0').toContain('dry=0');
 });
 
-// NOT WORKING YET, and declared rather than deleted so the gap stays visible.
-// Subnet mode (above) is covered and green. Full-site and site-teardown are
-// gated on selecting a site TEMPLATE (`disabled={!siteTemplate}`,
-// ui/src/tabs/Provision.jsx:394) rather than a space, and driving that picker
-// from the test has not been worked out — the combobox lookup times out even
-// with a type:'site' template in the fixture set, so something else about how
-// SiteMode renders its picker is still unaccounted for. Measured, not guessed:
-// the stream stubs are never hit, so the failure is upstream of the endpoints
-// these tests exist to check. Finishing them is a UI-navigation problem, not a
-// fixture one.
-test.fixme('Full site mode uses /api/provision/site/stream, not the subnet one', async ({ page }) => {
+test('Full site mode uses /api/provision/site/stream, not the subnet one', async ({ page }) => {
   const site = await stubStream(page, '/api/provision/site/stream', OK_RUN);
   const subnet = await stubStream(page, '/api/provision/stream', OK_RUN);
   await openMode(page, 'Full site');
@@ -115,27 +123,52 @@ test.fixme('Full site mode uses /api/provision/site/stream, not the subnet one',
   expect(subnet, 'Full site must not call the subnet stream').toEqual([]);
 });
 
-// NOT WORKING YET, and declared rather than deleted so the gap stays visible.
-// Subnet mode (above) is covered and green. Full-site and site-teardown are
-// gated on selecting a site TEMPLATE (`disabled={!siteTemplate}`,
-// ui/src/tabs/Provision.jsx:394) rather than a space, and driving that picker
-// from the test has not been worked out — the combobox lookup times out even
-// with a type:'site' template in the fixture set, so something else about how
-// SiteMode renders its picker is still unaccounted for. Measured, not guessed:
-// the stream stubs are never hit, so the failure is upstream of the endpoints
-// these tests exist to check. Finishing them is a UI-navigation problem, not a
-// fixture one.
-test.fixme('site teardown uses /api/teardown/site/stream and surfaces a failure', async ({ page }) => {
-  const teardown = await stubStream(page, '/api/teardown/site/stream', FAILED_RUN);
+// THE APPLY BUTTON DOES NOT EXIST UNTIL A PREVIEW HAS SUCCEEDED. PreviewApply
+// renders it only when `status === 'previewed' && !stale && !busy`
+// (ui/src/components/ui.jsx:2583), so "click the destructive button" is a
+// three-step sequence here, not one click: preview, type the site name to
+// confirm, then apply. The earlier version of this test clicked the first thing
+// matching /Tear down this site/i, which is the CARD HEADER — that is why it
+// found a control, clicked it, and never opened a stream.
+//
+// So the stub has to answer differently per call: the preview must SUCCEED or
+// the apply button is never rendered and the destructive path cannot be reached
+// at all, and only then does the failure frame have somewhere to land. That is
+// what `sequence` is for, and it is also a stronger assertion than the original
+// — it pins dry=1 on preview and dry=0 on apply, the same pair the Subnet test
+// above proves for its own endpoint.
+test('site teardown uses /api/teardown/site/stream and surfaces a failure', async ({ page }) => {
+  const teardown = await stubStream(page, '/api/teardown/site/stream', [OK_RUN, FAILED_RUN]);
   await openMode(page, 'Full site');
 
-  const tearDown = page.getByRole('button', { name: /Tear down this site/i });
-  if ((await tearDown.count()) === 0) {
-    test.skip(true, 'teardown control is admin-only and the fixture whoami is not an admin on this build');
-  }
-  await tearDown.first().click();
+  const card = page.locator('[data-panel-id="provision-site-teardown"]');
 
-  await expect.poll(() => teardown.length, { message: 'teardown never opened its stream' }).toBeGreaterThan(0);
+  // Not a test.skip. The baseline whoami is `role: 'admin'`
+  // (tests/page-fixtures.ts:210), so this control MUST render — the previous
+  // version skipped itself when it could not find the button, which would have
+  // hidden a regression that removed the teardown control entirely.
+  const confirm = card.getByLabel(/Type the site name to confirm/i);
+  await expect(confirm).toBeVisible();
+
+  // CONFIRM FIRST, THEN PREVIEW, and that order is a property of the UI rather
+  // than a preference. The confirm field calls `teardown.markStale()` on every
+  // keystroke (ui/src/tabs/Provision.jsx:438), and PreviewApply hides Apply while
+  // `stale` is set — so typing the site name AFTER previewing retracts the
+  // preview and the destructive button vanishes again. Which is correct
+  // behaviour: changing what you are about to delete should invalidate the
+  // preview of deleting it.
+  await confirm.fill('baseline-site');
+
+  await card.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect.poll(() => teardown.length, { message: 'teardown preview never opened its stream' }).toBeGreaterThan(0);
+  expect(teardown[0], 'teardown preview must run with dry=1').toContain('dry=1');
+
+  const tearDown = card.getByRole('button', { name: 'Tear down this site', exact: true });
+  await expect(tearDown, 'apply appears only after a clean preview').toBeVisible();
+  await tearDown.click();
+
+  await expect.poll(() => teardown.length, { message: 'teardown apply never opened its stream' }).toBeGreaterThan(1);
+  expect(teardown[1], 'teardown apply must run with dry=0').toContain('dry=0');
   // The failure frame carries a rollback report, and the operator has to be told
   // the run aborted rather than left on a spinner.
   await expect(page.getByText(/run aborted/i).first()).toBeVisible();
