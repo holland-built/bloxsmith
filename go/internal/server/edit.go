@@ -74,6 +74,39 @@ func createdUnreadable(res map[string]any) bool {
 	return b
 }
 
+// updatedUnreadable is createdUnreadable's sibling for the five update builders.
+// Upstream ACCEPTED the PATCH — the object on the customer's tenant carries the
+// new values — and the response could not be read back as that object, so the
+// change cannot be confirmed here.
+//
+// It has to be recorded for the same reason the create version does, and one
+// more: the clean row below is gated on resultOK, and this result carries no
+// "ok" key at all (edit.UpdatedUnreadableKey's doc explains why neither true nor
+// false is honest), so without this arm a live change to a customer's DNS record
+// was written with nothing anywhere saying who asked for it.
+//
+// It cannot over-fire into "audit every failure": a non-2xx never reaches this
+// state — upstream answered and refused, nothing changed, and those paths still
+// write nothing.
+func updatedUnreadable(res map[string]any) bool {
+	b, _ := res[edit.UpdatedUnreadableKey].(bool)
+	return b
+}
+
+// unreadableUpdateDetail builds the audit detail for an accepted-but-unconfirmed
+// update. Unlike the create side this row CAN name the object — the id is the
+// caller's own input — and it carries the method and the upstream status so the
+// row says how far the request got. Fields the builder did not state are omitted
+// rather than filled in.
+func unreadableUpdateDetail(res map[string]any, id any, extra map[string]any) map[string]any {
+	detail := map[string]any{"id": id, "updated_unreadable": true,
+		"resource": res["resource"], "method": res["method"], "status": res["status"]}
+	for k, v := range extra {
+		detail[k] = v
+	}
+	return detail
+}
+
 // unreadableDetail builds the audit detail for a created-but-unreadable object:
 // the resource name, the marker, and the request fields that identify what was
 // asked for. There is deliberately NO id key — an absent id says "unknown",
@@ -209,18 +242,26 @@ func (d *Deps) dnsRecordUpdate(w http.ResponseWriter, r *http.Request, b map[str
 	defer d.recoverEdit(w, r, "/api/dns/records PATCH")
 	res, status := d.editFor(r).DNSRecordUpdate(b)
 	d.json(w, r, status, res)
-	if resultOK(res) && !isDry(res) {
-		fields := []string{}
-		for _, k := range []string{"value", "ttl", "comment", "disabled"} {
-			if v, ok := b[k]; ok && v != nil {
-				fields = append(fields, k)
-			}
+	fields := []string{}
+	for _, k := range []string{"value", "ttl", "comment", "disabled"} {
+		if v, ok := b[k]; ok && v != nil {
+			fields = append(fields, k)
 		}
+	}
+	switch {
+	case resultOK(res) && !isDry(res):
 		// fields is a []string, which canonicalJSON rejects and auditAppend only
 		// logs — that cost this entry every single time until audit.Append began
 		// widening every detail value first (audit/widen.go). No local conversion.
 		d.auditAppend("dns-record-update", httpx.Actor(r),
 			map[string]any{"id": b["id"], "fields": fields})
+	case updatedUnreadable(res):
+		// The record is answering DNS queries with its NEW values and the
+		// operator was told the update failed. Same identifying fields as the
+		// clean row plus the upstream status, under an event name that cannot be
+		// miscounted as a confirmed update.
+		d.auditAppend("dns-record-update-unreadable", httpx.Actor(r),
+			unreadableUpdateDetail(res, b["id"], map[string]any{"fields": fields}))
 	}
 }
 
@@ -362,9 +403,16 @@ func (d *Deps) editUpdate(w http.ResponseWriter, r *http.Request, b map[string]a
 	b["id"] = objID // path id always wins over any id in the body
 	result, status := res.Update(b)
 	d.json(w, r, status, result)
-	if resultOK(result) && !isDry(result) {
+	switch {
+	case resultOK(result) && !isDry(result):
 		d.auditAppend("edit-"+resource+"-update", httpx.Actor(r),
 			map[string]any{"id": objID})
+	case updatedUnreadable(result):
+		// Same hole as the create side's -create-unreadable row: the object on
+		// the tenant carries the new values and this result claims neither
+		// success nor failure, so the ok-gated row above skips it.
+		d.auditAppend("edit-"+resource+"-update-unreadable", httpx.Actor(r),
+			unreadableUpdateDetail(result, objID, nil))
 	}
 }
 

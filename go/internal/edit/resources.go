@@ -83,8 +83,11 @@ func (c *Client) ZoneUpdate(body M) (M, int) {
 		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
 	}
 	resp, status, method := c.patchThenPut(objPath, up)
-	if (status != 200 && status != 201) || resp == nil {
+	if updateFailed(status) {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
+	}
+	if updateUnreadable(resp, status) {
+		return updatedUnreadable("DNS zone", id, method, status), bodyStatus(status)
 	}
 	return M{"ok": true, "method": method, "zone": resultOrSelf(resp)}, 200
 }
@@ -270,8 +273,11 @@ func (c *Client) SubnetUpdate(body M) (M, int) {
 		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
 	}
 	resp, status, method := c.patchThenPut(objPath, up)
-	if (status != 200 && status != 201) || resp == nil {
+	if updateFailed(status) {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
+	}
+	if updateUnreadable(resp, status) {
+		return updatedUnreadable("subnet", id, method, status), bodyStatus(status)
 	}
 	return M{"ok": true, "method": method, "subnet": resultOrSelf(resp)}, 200
 }
@@ -371,8 +377,11 @@ func (c *Client) RangeUpdate(body M) (M, int) {
 		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
 	}
 	resp, status, method := c.patchThenPut(objPath, up)
-	if (status != 200 && status != 201) || resp == nil {
+	if updateFailed(status) {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
+	}
+	if updateUnreadable(resp, status) {
+		return updatedUnreadable("DHCP range", id, method, status), bodyStatus(status)
 	}
 	return M{"ok": true, "method": method, "range": resultOrSelf(resp)}, 200
 }
@@ -442,8 +451,11 @@ func (c *Client) HostUpdate(body M) (M, int) {
 		return M{"ok": true, "dry_run": true, "id": id, "would_update": up}, 200
 	}
 	resp, status, method := c.patchThenPut(objPath, up)
-	if (status != 200 && status != 201) || resp == nil {
+	if updateFailed(status) {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
+	}
+	if updateUnreadable(resp, status) {
+		return updatedUnreadable("host", id, method, status), bodyStatus(status)
 	}
 	return M{"ok": true, "method": method, "host": resultOrSelf(resp)}, 200
 }

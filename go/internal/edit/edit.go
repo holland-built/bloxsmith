@@ -334,6 +334,83 @@ func createdUnreadable(what string, status int, alsoUnknown string) M {
 	}
 }
 
+// --- the third UPDATE outcome ------------------------------------------------
+
+// UpdatedUnreadableKey is CreatedUnreadableKey's sibling for the five update
+// builders, and closes the identical hole one verb over: upstream ACCEPTED the
+// PATCH, the customer's object IS changed, and what came back cannot be read as
+// the updated object.
+//
+// WHY IT HAS TO EXIST. Every update builder ended with
+// `(status != 200 && status != 201) || resp == nil`, so three ordinary upstream
+// answers landed in the failure arm: a 204 No Content, an empty 200, and a
+// non-JSON 200 (rest.Client.Write nils all three — and a truncated read too,
+// since it discards both the io.ReadAll error and the decode error). The
+// operator was told "update failed (status 200)" — a sentence that refutes
+// itself — while the change was live on the tenant, and because
+// server/edit.go gates its audit row on ok:true, NOTHING was written down. The
+// same class as the create side, with one extra edge: a JSON ARRAY body was not
+// nil, so it sailed through as a clean success and put an array where the
+// updated object should be.
+//
+// THE THREE ARMS, as a partition rather than a status list. Not-2xx is a
+// failure, and nothing else is. A 200 or 201 carrying a JSON object is a clean
+// update. Everything else in the 2xx family — 204, 202, and any 200/201 whose
+// body is not an object — is this outcome: upstream took the change and we
+// cannot show it.
+//
+// WHAT IT PROMISES. There is no "ok" key: ok:true would claim an updated object
+// nobody can produce, ok:false is the lie that loses the change. Unlike the
+// create version it CAN name the object — the id is the caller's own input — so
+// the operator has something to re-read. The "error" key carries the message on
+// purpose: both UI tabs branch on `j.error` (ui/src/tabs/Editor.jsx:171/213,
+// SelfService.jsx), so its presence is what keeps the screen from painting an
+// unconfirmed change green.
+const UpdatedUnreadableKey = "updated_unreadable"
+
+// updateUnreadable reports the third arm above. It deliberately covers the whole
+// 2xx family minus the clean-update shape: 202 Accepted and 204 No Content both
+// mean upstream took the change, and neither can be shown as a completed update.
+func updateUnreadable(resp any, status int) bool {
+	if status < 200 || status > 299 {
+		return false
+	}
+	if status == 200 || status == 201 {
+		return asMap(resp) == nil
+	}
+	return true
+}
+
+// updateFailed is the failure arm's test, stated once so all five builders
+// agree: anything outside 2xx, and nothing else.
+func updateFailed(status int) bool { return status < 200 || status > 299 }
+
+// updatedUnreadable builds the result. `what` names the resource in operator
+// words ("DNS record"); `id` is the object the caller asked to change.
+func updatedUnreadable(what, id, method string, status int) M {
+	return M{
+		UpdatedUnreadableKey: true,
+		"resource":           what,
+		"id":                 id,
+		"method":             method,
+		"status":             status,
+		"error": fmt.Sprintf("the tenant ACCEPTED this %s update (%s) but returned no readable object: "+
+			"the change is LIVE and cannot be confirmed here. Re-read %s from the tenant to see its "+
+			"current values — do not assume the update was lost", what, statusPhrase(status), id),
+	}
+}
+
+// bodyStatus is the status THIS server answers with for a result that carries a
+// body. 204 means "no content", so replying 204 with a JSON body is malformed —
+// and the route handlers pass a builder's status straight to d.json. The real
+// upstream status is never lost: it stays in the result's "status" field.
+func bodyStatus(status int) int {
+	if status == 204 {
+		return 200
+	}
+	return status
+}
+
 // --- _dns_rdata (server.py:417) ----------------------------------------------
 
 // Rdata is _dns_rdata: presentation-format value -> API rdata dict, covering
@@ -586,8 +663,13 @@ func (c *Client) DNSRecordUpdate(body M) (M, int) {
 	}
 
 	resp, status, method := c.patchThenPut(objPath, updateBody)
-	if (status != 200 && status != 201) || resp == nil {
+	if updateFailed(status) {
 		return M{"ok": false, "error": fmt.Sprintf("update failed (%s)", statusPhrase(status)), "detail": resp, "method": method}, statusOr(status, 502)
+	}
+	if updateUnreadable(resp, status) {
+		// The record is LIVE with its new values in the customer's DNS. The old
+		// arm called this "update failed (status 200)" and wrote no audit row.
+		return updatedUnreadable("DNS record", recordID, method, status), bodyStatus(status)
 	}
 	return M{"ok": true, "method": method, "record": resultOrSelf(resp)}, 200
 }
