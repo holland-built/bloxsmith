@@ -663,6 +663,32 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 		subnetID = pyStr(asMap(subnets[0])["id"])
 	}
 
+	// The reservation path used to be built by pasting subnetID behind a
+	// hardcoded "ipam/subnet/" prefix. Both of the ways subnetID can arrive give
+	// a FULL-FORM CSP id ("ipam/subnet/<uuid>"): the UI's Subnet select posts
+	// e.id straight from GET /api/ipam/subnets (a pick() passthrough of CSP's own
+	// id), and the tag lookup above reads it off a CSP list endpoint. So the
+	// prefix was being added to an id that already carried it, and the request
+	// went to /api/ddi/v1/ipam/subnet/ipam/subnet/<uuid>/nextavailableip — the
+	// doubled path ObjectPath's doc records CSP answering 501. No live
+	// allocation could succeed. It is the same defect already fixed one arm
+	// below, in this builder's own compensating release.
+	//
+	// ObjectPath also stops the id escaping the path it was meant to name: it
+	// rejects "..", encoded and literal slashes, control characters and any id
+	// whose kind is not ipam/subnet. Nothing is guessed or repaired — an id that
+	// does not name a subnet is refused.
+	//
+	// Placed BEFORE the dry branch, matching every other builder in this package
+	// that validates an id (DNSRecordUpdate, ZoneUpdate, SubnetUpdate,
+	// RangeUpdate, HostUpdate all ObjectPath-then-400 ahead of their preview).
+	// A preview that reports "would allocate" for a request the live path will
+	// refuse is the preview/live divergence this package keeps closing.
+	objPath, err := ObjectPath("ipam/subnet", subnetID)
+	if err != nil {
+		return M{"ok": false, "error": "invalid subnet id"}, 400
+	}
+
 	if dry {
 		result := M{"ok": true, "dry_run": true, "subnet_id": subnetID, "would_allocate": count, "addresses": []any{}}
 		if name != "" {
@@ -694,8 +720,7 @@ func (c *Client) SelfserviceAllocate(body M) (M, int) {
 	if name != "" {
 		bodyExtra = M{"name": name}
 	}
-	resp, status, _ := c.Rest.Write("POST",
-		"/api/ddi/v1/ipam/subnet/"+subnetID+"/nextavailableip",
+	resp, status, _ := c.Rest.Write("POST", objPath+"/nextavailableip",
 		bodyExtra, map[string]string{"count": strconv.Itoa(count)})
 	if (status != 200 && status != 201) || resp == nil {
 		return M{"ok": false, "error": fmt.Sprintf("allocation failed (%s)", statusPhrase(status)), "detail": resp}, statusOr(status, 502)
