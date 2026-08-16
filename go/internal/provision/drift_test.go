@@ -451,17 +451,33 @@ func TestDetectDrift_SubnetMissingIsErrorExtraIsWarning_SortedFields(t *testing.
 
 func TestDetectDrift_Zone(t *testing.T) {
 	cases := []struct {
-		name           string
-		createZone     any
-		liveZoneFound  bool
-		wantSeverity   string // "" means no dns drift at all
-		wantMsgContain string
+		name          string
+		createZone    any
+		liveZoneFound bool
+		wantSeverity  string // "" means no dns drift at all
+		// Every substring the message must carry. A list rather than one
+		// string because the "present but unwanted" wording has to satisfy two
+		// separate readers at once: the UI classifier keys on one phrase, and
+		// the operator needs the other to know what to change. A single
+		// substring assertion let the second one be deleted silently.
+		wantMsgContain []string
 	}{
 		{name: "wanted and present", createZone: true, liveZoneFound: true},
 		{name: "wanted but missing", createZone: true, liveZoneFound: false,
-			wantSeverity: "error", wantMsgContain: "no DNS zone was found"},
+			wantSeverity: "error", wantMsgContain: []string{"no DNS zone was found"}},
+		// The phrase asserted here is the one ui/src/lib/driftStatus.js matches
+		// to choose the "extra" pill (driftStatus.test.js holds the other end).
+		// A zone that exists is the same finding as a subnet that exists, and
+		// wording it differently put the two on opposite sides of that
+		// classifier.
 		{name: "present but unwanted", createZone: false, liveZoneFound: true,
-			wantSeverity: "warning", wantMsgContain: "exists in API but template does not specify"},
+			wantSeverity: "warning", wantMsgContain: []string{
+				// The phrase ui/src/lib/driftStatus.js matches to choose the
+				// "extra" pill (driftStatus.test.js holds the other end).
+				"exists in API but is not in the template",
+				// And the thing to change. A pill is not a fix instruction.
+				"dns.create_zone",
+			}},
 		{name: "not wanted and absent", createZone: false, liveZoneFound: false},
 		{name: "create_zone absent behaves as not wanted", createZone: nil, liveZoneFound: false},
 	}
@@ -499,8 +515,10 @@ func TestDetectDrift_Zone(t *testing.T) {
 			if entries[0].field != "dns.create_zone" {
 				t.Fatalf("field = %q, want dns.create_zone", entries[0].field)
 			}
-			if !strings.Contains(entries[0].message, tc.wantMsgContain) {
-				t.Fatalf("message = %q, want it to contain %q", entries[0].message, tc.wantMsgContain)
+			for _, want := range tc.wantMsgContain {
+				if !strings.Contains(entries[0].message, want) {
+					t.Fatalf("message = %q, want it to contain %q", entries[0].message, want)
+				}
 			}
 		})
 	}

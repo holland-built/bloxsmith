@@ -23,27 +23,26 @@ test('a subnet the template does not declare reads as extra', () => {
   )
 })
 
-// drift.go: "DNS zone '%s' exists in API but template does not specify create_zone: true"
+// drift.go: "DNS zone '%s' exists in API but is not in the template (no dns.create_zone: true)"
 //
-// PINS A KNOWN WRONG ANSWER, deliberately, so it is written down rather than
-// discovered again. This zone EXISTS and is unaccounted for — the same finding
-// as the subnet above — but it words that as "template does not specify
-// create_zone" instead of "is not in the template", so it misses the first
-// regex and falls through to "missing". The pill therefore reads "missing"
-// beside a sentence saying the zone exists.
-//
-// Not fixed here: this is behaviour that predates the change this file arrived
-// with, and correcting it means either widening the pattern or changing the Go
-// sentence, each of which is its own decision. Filed separately. If that fix
-// lands, this expectation flips to 'extra' and the comment goes.
-test('an undeclared DNS zone reads as missing today, which is wrong', () => {
+// A zone that exists and is unaccounted for is the same finding as a subnet
+// that does, and it used to say so in different words — so it missed the first
+// pattern and the row showed the "missing" pill beside a sentence stating the
+// zone exists. The Go sentence now matches its sibling; this is the end of that
+// contract which notices if it stops.
+test('an undeclared DNS zone reads as extra, like the subnet it mirrors', () => {
   assert.equal(
     driftItemKind({
-      message: "DNS zone 'site-a.example.com.' exists in API but template does not specify create_zone: true",
+      message: "DNS zone 'site-a.example.com.' exists in API but is not in the template (no dns.create_zone: true)",
     }),
-    'missing',
+    'extra',
   )
 })
+
+// The create_zone hint's survival is asserted in Go, not here. A version of it
+// lived in this file and was worthless: it matched a string typed into the test
+// rather than one DetectDrift produced, so deleting the hint from drift.go left
+// it green. TestDetectDrift_Zone's wantMsgContain list is where it belongs.
 
 // drift.go: "Tag '%s' on subnet '%s': expected '%s', live value is '%s'"
 test('a tag holding the wrong value reads as changed', () => {
