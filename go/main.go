@@ -135,18 +135,18 @@ func main() {
 			return
 		case "update":
 			// Headless self-update for servers with no button: download the
-			// newest release archive, verify its checksum, swap this binary and
-			// re-exec. `--check` reports availability without applying. `--help`
-			// prints usage.
+			// newest release archive, verify its checksum and swap this binary.
+			// It does NOT restart anything — this process is not a server, so
+			// there is nothing in it to hand a port over to (apply.go,
+			// completeApply). `--check` reports availability without applying.
+			// `--help` prints usage.
 			checkOnly := false
 			for _, a := range os.Args[2:] {
 				switch a {
 				case "--check":
 					checkOnly = true
 				case "--help", "-h":
-					fmt.Println("usage: bloxsmith update [--check]")
-					fmt.Println("  downloads the latest GitHub release, verifies its checksum,")
-					fmt.Println("  swaps this binary in place and restarts. --check only reports.")
+					updateUsage()
 					return
 				}
 			}
@@ -236,12 +236,28 @@ func main() {
 	}
 }
 
+// updateUsage prints `bloxsmith update --help`. A function, like every other
+// command's usage in this package, so a test can read what it actually says —
+// inline in the dispatch switch it was unreachable, and it spent several
+// releases promising a restart this path has never performed (#99).
+func updateUsage() {
+	fmt.Println("usage: bloxsmith update [--check]")
+	fmt.Println("  downloads the latest GitHub release, verifies its signature and")
+	fmt.Println("  checksum, and swaps this binary in place. --check only reports.")
+	fmt.Println()
+	fmt.Println("  It does NOT restart anything. A server already running — as a")
+	fmt.Println("  service or in another terminal — keeps the OLD binary until you")
+	fmt.Println("  restart it yourself (`bloxsmith service restart`, or stop and start")
+	fmt.Println("  it). The in-app Update now button DOES hand over, because that is")
+	fmt.Println("  the running server updating itself.")
+}
+
 // printUsage prints the top-level command summary for `bloxsmith --help`.
 func printUsage() {
 	fmt.Println("usage: bloxsmith [command]")
 	fmt.Println("  (no command)              start the server (foreground) on http://localhost:$PORT")
 	fmt.Println("  --port N, -p N            start on port N instead of 8080 (overrides $PORT)")
-	fmt.Println("  update [--check]          download+verify+swap the latest release, then restart")
+	fmt.Println("  update [--check]          download+verify+swap the latest release (restart it yourself)")
 	fmt.Println("  service <cmd>             install|uninstall|start|stop|restart|status  (run at login)")
 	fmt.Println("  audit verify             check the audit chain offline (0 intact, 1 tampered, 2 unchecked)")
 	fmt.Println("  restore-plan FILE        read a teardown export and print what to re-create, in order")
