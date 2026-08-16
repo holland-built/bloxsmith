@@ -76,7 +76,14 @@ func rotateVault(vaultPath, curPass, newPass string, verify func(path, pass stri
 	// second rotate attempt on the same day must not clobber the one safety net a
 	// first, failed attempt left behind.
 	backupPath := vaultPath + ".bak-before-rotate-" + time.Now().UTC().Format("20060102T150405Z")
-	if _, err := os.Stat(backupPath); err == nil {
+	bakAbsent, bakErr := pathAbsent(backupPath)
+	if bakErr != nil {
+		// A stat that failed is not "no backup there" — see pathAbsent. Writing
+		// anyway would overwrite the one safety net this guard exists to keep.
+		return rotateOutcome{msg: "refusing to rotate: could not check whether a backup already exists at " +
+			backupPath + " (" + bakErr.Error() + "), so writing one could destroy it."}
+	}
+	if !bakAbsent {
 		return rotateOutcome{msg: "refusing to rotate: a backup already exists at " + backupPath +
 			" — move it aside first, or a real failure could be mistaken for this one's leftovers."}
 	}
