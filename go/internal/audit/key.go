@@ -90,14 +90,15 @@ func (k *Key) ID() string {
 	return k.id
 }
 
-// Source describes where the key came from, for the startup log line. It names
-// the env var or file path — never the key material.
-func (k *Key) Source() string {
-	if k == nil {
-		return "none"
-	}
-	return k.source
-}
+// NO Source ACCESSOR, THOUGH THE FIELD IS REAL. Key.source is read directly by
+// the two seal log lines in audit.go, which name where the key came from — that
+// is the whole point of recording it. What was removed is the pair of
+// accessors over it, Key.Source and the Log.KeySource wrapper around that:
+// both were written for a startup log line that was never added, and neither
+// was reachable from main. Read the field; do not reintroduce a getter until
+// something outside this package needs one. The old rule still binds whatever
+// prints it — it may name the env var or the file path, and NEVER the key
+// material.
 
 func newKey(secret []byte, source string) *Key {
 	h := sha256.New()

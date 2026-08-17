@@ -40,7 +40,7 @@ func newResidualDeps(t *testing.T, upstream http.HandlerFunc) (*Deps, string) {
 	t.Cleanup(closeSrv)
 	d.Guard = &httpx.Guard{Port: "8080"}
 	d.Provision = provision.New(d.Rest, "../../templates")
-	if !d.Provision.TemplatesInstalled() {
+	if state, _ := d.Provision.TemplatesDirState(); state != provision.DirPresent {
 		t.Fatalf("templates not found at ../../templates — check the relative path from go/internal/server")
 	}
 	logPath := filepath.Join(t.TempDir(), "audit_log.jsonl")

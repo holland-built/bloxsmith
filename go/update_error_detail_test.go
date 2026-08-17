@@ -22,7 +22,7 @@ func TestCheckUpdate_RateLimitWithReset(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded for 1.2.3.4. (But here's the good news: Authenticated requests get a higher rate limit.)"}`))
 	}, "3.13.0")
 
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -51,7 +51,7 @@ func TestCheckUpdate_RateLimitNoResetHeader(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded for 1.2.3.4."}`))
 	}, "3.13.0")
 
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -76,7 +76,7 @@ func TestCheckUpdate_RateLimitUnparseableResetHeader(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"rate limit hit"}`))
 	}, "3.13.0")
 
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -98,7 +98,7 @@ func TestCheckUpdate_403WithoutRateLimitEvidence(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"Bad credentials"}`))
 	}, "3.13.0")
 
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -120,7 +120,7 @@ func TestCheckUpdate_404NamesRepo(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"Not Found"}`))
 	}, "3.13.0")
 
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -139,7 +139,7 @@ func TestCheckUpdate_500IsServerErrorSentence(t *testing.T) {
 		_, _ = w.Write([]byte(`Internal Server Error`))
 	}, "3.13.0")
 
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}

@@ -141,7 +141,7 @@ func TestProvisionSiteStreamRefusesInvalidTemplateOnDryRun(t *testing.T) {
 // files, not a new obstacle in front of the good ones.
 func TestProvisionSiteStreamAcceptsBundledTemplates(t *testing.T) {
 	e := provision.New(nil, "../../templates")
-	if !e.TemplatesInstalled() {
+	if state, _ := e.TemplatesDirState(); state != provision.DirPresent {
 		t.Fatalf("templates not found at ../../templates")
 	}
 	rels, unreadable := e.SiteTemplateRelPaths([]string{"amer", "emea", "apac"})

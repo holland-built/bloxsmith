@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -102,7 +103,7 @@ func (m *Manager) cspJSON(path string, body any) (map[string]any, int, error) {
 // can branch on 403 (not entitled) vs other CSP errors.
 type HTTPError struct{ Code int }
 
-func (e *HTTPError) Error() string { return "CSP HTTP " + itoa(e.Code) }
+func (e *HTTPError) Error() string { return "CSP HTTP " + strconv.Itoa(e.Code) }
 
 // ListAccounts is list_accounts (server.py:295): the active accounts the key's
 // user belongs to, sorted by name, plus the resolved active id.
@@ -275,30 +276,8 @@ func str(v any) string {
 		return ""
 	case float64:
 		if t == float64(int64(t)) {
-			return itoa(int(int64(t)))
+			return strconv.Itoa(int(int64(t)))
 		}
 	}
 	return ""
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		b[i] = '-'
-	}
-	return string(b[i:])
 }
