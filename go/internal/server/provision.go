@@ -105,6 +105,14 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 	}
 	defer d.recoverStream(&emit, r)
 
+	// Extra detail merged into the provision-subnet-error row by the tail below.
+	// It carries the PHASE the run died in, because the two phases leave the
+	// tenant in opposite states: an "allocate" failure created nothing, while a
+	// "reverse-zone" failure leaves a real subnet behind (and is accompanied by
+	// its own provision-subnet success row naming it). Without this field the two
+	// are one indistinguishable event name in a log nobody can amend.
+	var errDetail map[string]any
+
 	err := func() error {
 		if block == "" {
 			emit(map[string]any{"error": "block is required"})
@@ -146,23 +154,86 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 			}
 			body = bm
 		}
-		result, status, _ := d.restFor(r).Write("POST", blockPath+"/nextavailablesubnet",
+		result, status, werr := d.restFor(r).Write("POST", blockPath+"/nextavailablesubnet",
 			body, map[string]string{"cidr": strconv.Itoa(cidrN)})
 		emit(map[string]any{"step": "Subnet allocation result", "status": status, "result": result})
 		subnet := firstRowLocal(result)
-		if makeZone && provision.PyStr(subnet["address"]) != "" {
+
+		// ALL THREE of these used to be discarded (`result, status, _`), and the
+		// handler went straight on to emit done:true and audit a success. rest.Write
+		// returns a nil error for an upstream 4xx/5xx — it hands back the parsed
+		// error body and the status instead (rest.go:429-437) — so a refused
+		// allocation reached the operator as "Provisioned — subnet " with an empty
+		// address, and reached the tamper-evident log as provision-subnet with
+		// subnet:<nil>. The frame above was the only trace, and the UI renders that
+		// frame's `step` and never its `status` (ui/src/tabs/Provision.jsx:186).
+		//
+		// The address, not the id, is what makes an allocation usable: it is the
+		// audit row's reconcilable field, the Result panel's text, and the input to
+		// CidrToReverseZone. A 2xx carrying no address is as empty as a 400.
+		// Read as a STRING rather than through PyStr, so a number or a nested object
+		// under "address" cannot coerce itself into a plausible-looking success.
+		//
+		// The 2xx upper bound is defence, not a live control: Go's client follows
+		// redirects, so a 3xx does not realistically arrive here. It is a range
+		// anyway because `>= 400` alone would accept one silently. status == 0 needs
+		// no arm of its own — Write returns 0 only together with a non-nil error
+		// (rest.go:419-427), so the werr test fires first.
+		addr, _ := subnet["address"].(string)
+		addr = strings.TrimSpace(addr)
+		switch {
+		case werr != nil:
+			errDetail = map[string]any{"phase": "allocate"}
+			return fmt.Errorf("the subnet allocation could not be sent: %v", werr)
+		case status < 200 || status > 299:
+			errDetail = map[string]any{"phase": "allocate"}
+			return fmt.Errorf("the subnet allocation was refused%s — nothing was created",
+				upstreamDetail(status, result))
+		case addr == "":
+			errDetail = map[string]any{"phase": "allocate"}
+			return fmt.Errorf("the subnet allocation returned HTTP %d but no subnet address, "+
+				"so nothing usable was created", status)
+		}
+
+		if makeZone {
+			// Everything from here on happens with a REAL subnet already carved out
+			// of the customer's address block, so every failure below records the
+			// provision-subnet success row FIRST — the log has to name what exists —
+			// and only then returns, letting the tail write the single
+			// provision-subnet-error row. Writing an error row here as well would
+			// double-count one failure.
+			//
+			// The message names the subnet because the UI closes an error frame at
+			// status "idle" and never renders the Result panel
+			// (ui/src/tabs/Provision.jsx:110-118, 307): if the address is not in this
+			// sentence, the operator has no way to find what was just created.
+			zoneFailed := func(reason string) error {
+				d.auditAppend("provision-subnet", httpx.Actor(r), map[string]any{
+					"block": block, "cidr": cidr, "subnet": addr})
+				errDetail = map[string]any{"phase": "reverse-zone", "subnet": addr}
+				return fmt.Errorf("subnet %s was created, but its reverse DNS zone was not: %s", addr, reason)
+			}
 			emit(map[string]any{"step": "Creating DNS zone…"})
 			zc := cidrN
 			if c, ok := parseIntStr(provision.PyStr(subnet["cidr"])); ok {
 				zc = c
 			}
-			fqdn, ferr := provision.CidrToReverseZone(provision.PyStr(subnet["address"]), zc)
+			fqdn, ferr := provision.CidrToReverseZone(addr, zc)
 			if ferr != nil {
-				return ferr
+				// Previously a bare `return ferr`, which took the tail's error path
+				// with no provision-subnet row at all — the subnet existed and the log
+				// said nothing about it.
+				return zoneFailed(ferr.Error())
 			}
-			zresult, zstatus, _ := d.restFor(r).Write("POST", "/api/ddi/v1/dns/auth_zone",
+			zresult, zstatus, zerr := d.restFor(r).Write("POST", "/api/ddi/v1/dns/auth_zone",
 				map[string]any{"fqdn": fqdn}, nil)
 			emit(map[string]any{"step": "Zone creation result", "status": zstatus, "result": zresult})
+			switch {
+			case zerr != nil:
+				return zoneFailed(fmt.Sprintf("the request could not be sent: %v", zerr))
+			case zstatus < 200 || zstatus > 299:
+				return zoneFailed(fmt.Sprintf("it was refused%s", upstreamDetail(zstatus, zresult)))
+			}
 		}
 		emit(map[string]any{"done": true, "subnet": map[string]any{
 			"id": subnet["id"], "address": subnet["address"], "cidr": subnet["cidr"]}})
@@ -177,10 +248,58 @@ func (d *Deps) provisionSubnetStream(w http.ResponseWriter, r *http.Request) {
 		// produce an error (the cidr parse), so `dry` is always false here. The
 		// gate that used to sit here read as an active control over a preview and
 		// was not one — no test could make it fire, in either direction.
-		d.auditAppend("provision-subnet-error", httpx.Actor(r),
-			map[string]any{"block": block, "error": err.Error()})
+		detail := map[string]any{"block": block, "error": err.Error()}
+		for k, v := range errDetail {
+			detail[k] = v
+		}
+		d.auditAppend("provision-subnet-error", httpx.Actor(r), detail)
 		emit(map[string]any{"error": err.Error()})
 	}
+}
+
+// upstreamDetail turns a rest.Write failure into the tail of one sentence:
+// " (HTTP 400): no available subnet of that size in this block", or just
+// " (HTTP 502)" when the body carries nothing sayable.
+//
+// It exists so no code path formats a raw upstream body with %v. That body is a
+// decoded any — a map printed with %v lands in the operator's error banner AND in
+// the signed audit log as Go map syntax, which is neither readable nor stable.
+// Only the shapes actually seen from this API are unwrapped; anything else is
+// dropped rather than guessed at, because a wrong guess would put the wrong
+// sentence in a record that cannot be amended.
+func upstreamDetail(status int, body any) string {
+	head := fmt.Sprintf(" (HTTP %d)", status)
+	if msg := upstreamMessage(body); msg != "" {
+		return head + ": " + msg
+	}
+	return head
+}
+
+func upstreamMessage(body any) string {
+	switch b := body.(type) {
+	case string:
+		return strings.TrimSpace(b)
+	case map[string]any:
+		switch e := b["error"].(type) {
+		case string:
+			return strings.TrimSpace(e)
+		case []any:
+			// {"error":[{"message":"..."}]} — the BloxOne CSP shape.
+			var msgs []string
+			for _, item := range e {
+				if m, ok := item.(map[string]any); ok {
+					if s := strings.TrimSpace(provision.PyStr(m["message"])); s != "" {
+						msgs = append(msgs, s)
+					}
+				}
+			}
+			return strings.Join(msgs, "; ")
+		}
+		if s, ok := b["message"].(string); ok {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
 }
 
 // --- GET /api/provision/site/stream (server.py:5503) -------------------------
