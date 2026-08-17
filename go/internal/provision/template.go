@@ -19,12 +19,73 @@ const (
 	defaultDNSParent = "internal.example.com"
 )
 
-// TemplatesInstalled reports whether the templates directory exists on disk.
-// Templates ship with bloxsmith (committed in go/templates, bundled by
-// goreleaser); a bare `go build` dev tree legitimately lacks them.
-func (e *Engine) TemplatesInstalled() bool {
+// DirState is the three answers a "is the templates directory there?" question
+// really has. It used to have two, and the missing one was the expensive one:
+// `err == nil && info.IsDir()` folded "I could not read it" into "it is not
+// there", so a permission bit on the parent told the operator to re-download the
+// release archive — a remedy that cannot fix a permission bit. #134.
+//
+// Same shape as pathAbsent/dirEntries in go/path_absence.go, which cannot be
+// used here because they live in package main.
+type DirState int
+
+const (
+	DirPresent DirState = iota
+	DirAbsent
+	DirUnreadable
+)
+
+// TemplatesDirState answers which of the three the templates directory is, and
+// why when the answer is Unreadable.
+//
+// A path that exists but is NOT a directory is Unreadable, not Absent: something
+// is there, we cannot use it, and telling the operator nothing is installed
+// would send them to create what already exists.
+func (e *Engine) TemplatesDirState() (DirState, error) {
 	info, err := os.Stat(e.TemplatesDir)
-	return err == nil && info.IsDir()
+	switch {
+	case err == nil && info.IsDir():
+		return DirPresent, nil
+	case err == nil:
+		return DirUnreadable, fmt.Errorf("%s is not a directory", e.TemplatesDir)
+	case os.IsNotExist(err):
+		return DirAbsent, err
+	default:
+		return DirUnreadable, err
+	}
+}
+
+// TemplatesInstalled reports whether the templates directory is present AND
+// usable. Templates ship with bloxsmith (committed in go/templates, bundled by
+// goreleaser); a bare `go build` dev tree legitimately lacks them.
+//
+// Callers that show the operator a REASON must use TemplatesDirState instead —
+// a bool cannot tell absent from unreadable, and those need opposite advice.
+func (e *Engine) TemplatesInstalled() bool {
+	state, _ := e.TemplatesDirState()
+	return state == DirPresent
+}
+
+// templatesMissingMsg is the advice for a directory that genuinely is not there:
+// get the build that bundles them.
+const templatesMissingMsg = "templates not installed — use the release archive or container image (which bundle them), or add YAML templates to the templates directory"
+
+// TemplatesUnavailable returns the operator-facing sentence for a templates
+// directory that cannot be used, or "" when it can.
+//
+// The two branches deliberately give OPPOSITE advice. Re-pulling the image fixes
+// an absent directory and does nothing at all for an unreadable one, so the
+// unreadable branch must not mention it.
+func (e *Engine) TemplatesUnavailable() string {
+	switch state, err := e.TemplatesDirState(); state {
+	case DirPresent:
+		return ""
+	case DirAbsent:
+		return templatesMissingMsg
+	default:
+		return fmt.Sprintf("the templates directory at %s exists but could not be read: %s — this is a permission or mount problem on this host, not a missing install",
+			e.TemplatesDir, err)
+	}
 }
 
 // LoadTemplate is load_template (server.py:1024): YAML load by path relative to
@@ -37,8 +98,8 @@ func (e *Engine) LoadTemplate(name string) (M, error) {
 	// When the whole templates dir is absent, EvalSymlinks below zeroes `base`
 	// and every name trips the path-escape guard ("invalid template name") —
 	// misleading. Report the real cause up front.
-	if !e.TemplatesInstalled() {
-		return nil, perr("templates not installed — use the release archive or container image (which bundle them), or add YAML templates to the templates directory")
+	if unavailable := e.TemplatesUnavailable(); unavailable != "" {
+		return nil, perr("%s", unavailable)
 	}
 	base, err := filepath.Abs(e.TemplatesDir)
 	if err != nil {
@@ -54,8 +115,15 @@ func (e *Engine) LoadTemplate(name string) (M, error) {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		if !e.TemplatesInstalled() {
-			return nil, perr("templates not installed — use the release archive or container image (which bundle them), or add YAML templates to the templates directory")
+		if unavailable := e.TemplatesUnavailable(); unavailable != "" {
+			return nil, perr("%s", unavailable)
+		}
+		// NOT FOUND IS ONE REASON A READ FAILS, NOT ALL OF THEM. Every failure
+		// here used to be reported as "template not found", so a template the
+		// operator can see in the directory listing was described as absent and
+		// they had nowhere to go. Only os.IsNotExist earns that sentence. #134
+		if !os.IsNotExist(err) {
+			return nil, perr("template %s exists but could not be read: %s", name, err.Error())
 		}
 		return nil, perr("template not found: %s", name)
 	}
@@ -615,14 +683,57 @@ func validateDNS(t M, v *validator) {
 
 // ListTemplates is list_templates (server.py:1931): recursively scan
 // TemplatesDir for YAML templates and summarize each, skipping scaffolding.
+// A TEMPLATE THAT CANNOT BE READ IS AN INVALID TEMPLATE, NOT AN ABSENT ONE.
+//
+// Every failure below used to `continue`: a file with a typo in its YAML, a file
+// the process cannot open, a file that parses into something other than a
+// mapping, and any directory the walk could not descend into. All four
+// disappeared from the list with no error and no trace, so an operator saw a
+// shorter list and had nothing to act on. Meanwhile a template that PARSES and
+// then fails schema validation was listed with valid:false — the two failures
+// got opposite treatment, and the hidden one is the one that needs a person.
+//
+// The row shape is the fix. GET /api/templates returns this slice DIRECTLY as a
+// JSON array (server/provision.go), and the UI reads it as
+// `Array.isArray(data) ? data : []`, so turning the response into an object to
+// carry a warnings field would break that contract. A scan failure is reported
+// as an ordinary row with valid:false instead — which the site dropdown already
+// renders disabled — plus a `kind` discriminator so a consumer can tell a broken
+// template from a template that is merely invalid, and an `error` saying which.
+//
+// Returning an error instead was rejected: one unreadable subdirectory would
+// then hide every good template behind it. #134
+func scanErrorRow(name, why string) M {
+	return M{
+		"name": name, "kind": "scan-error", "type": "unknown",
+		"site": "", "region": "", "environment": "",
+		"valid": false, "error": why,
+	}
+}
+
+// ListTemplates is list_templates (server.py:1931): recursively scan
+// TemplatesDir for YAML templates and summarize each, skipping scaffolding.
+// Anything it cannot read becomes a scan-error row rather than a silence.
 func (e *Engine) ListTemplates() ([]M, error) {
 	base, err := filepath.Abs(e.TemplatesDir)
 	if err != nil {
 		return nil, err
 	}
 	var paths []string
-	_ = filepath.Walk(base, func(p string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+	var scanErrs []M
+	if walkErr := filepath.Walk(base, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			// The walk could not descend here. Name it and keep going: the rest
+			// of the tree is still worth listing, and the operator needs to know
+			// this part was not searched.
+			rel, relErr := filepath.Rel(base, p)
+			if relErr != nil {
+				rel = p
+			}
+			scanErrs = append(scanErrs, scanErrorRow(rel, "could not be searched: "+err.Error()))
+			return nil
+		}
+		if info.IsDir() {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(p))
@@ -630,7 +741,9 @@ func (e *Engine) ListTemplates() ([]M, error) {
 			paths = append(paths, p)
 		}
 		return nil
-	})
+	}); walkErr != nil {
+		scanErrs = append(scanErrs, scanErrorRow(".", "could not be searched: "+walkErr.Error()))
+	}
 	sort.Strings(paths)
 	out := []M{}
 	for _, p := range paths {
@@ -641,14 +754,17 @@ func (e *Engine) ListTemplates() ([]M, error) {
 		}
 		raw, err := os.ReadFile(p)
 		if err != nil {
+			out = append(out, scanErrorRow(rel, "could not be read: "+err.Error()))
 			continue
 		}
 		var data any
 		if err := yaml.Unmarshal(raw, &data); err != nil {
+			out = append(out, scanErrorRow(rel, "is not valid YAML: "+err.Error()))
 			continue
 		}
 		dm := asMap(normalizeYAML(data))
 		if dm == nil {
+			out = append(out, scanErrorRow(rel, "is valid YAML but not a mapping at the top level, so it cannot be a template"))
 			continue
 		}
 		siteSec := getMap(dm, "site")
@@ -661,32 +777,80 @@ func (e *Engine) ListTemplates() ([]M, error) {
 			"valid":       validation["valid"],
 		})
 	}
-	return out, nil
+	return append(out, scanErrs...), nil
 }
 
 // SiteTemplateRelPaths is the seed-demo template discovery (server.py:5587 /
-// 5700): for each region, glob TemplatesDir/<region>/*/site-*.yaml, sorted, and
+// 5700): for each region, find TemplatesDir/<region>/*/site-*.yaml, sorted, and
 // return each path relative to TemplatesDir (the form LoadTemplate accepts).
-func (e *Engine) SiteTemplateRelPaths(regions []string) []string {
+//
+// It also returns the regions it could NOT read, which is the whole point of
+// the second return value. It had none: seed-demo walked the regions the
+// operator ticked, silently found no templates in one, provisioned zero sites
+// for it, and streamed a summary saying every template it tried had succeeded.
+// An operator got two regions instead of three with no failure to explain it.
+//
+// WHY os.ReadDir AND NOT os.Stat + filepath.Glob, which is what this used to do
+// and what the obvious fix would keep. Measured on this repo's own platform
+// against a 0000 directory:
+//
+//	os.Stat(0000 dir): err=<nil> isDir=true
+//	filepath.Glob:     matches=[] err=<nil>
+//	os.ReadDir:        err=open ...: permission denied
+//
+// os.Stat succeeds because it only needs the PARENT traversable, and Glob
+// documents that it "ignores file system errors such as I/O errors reading
+// directories". A guard built on those two would have reported a clean read of
+// a directory it could not open — a guard that never fires. os.ReadDir is the
+// only one of the three that tells the truth.
+//
+// A region that is ABSENT, or present and readable but holding no matching
+// templates, is NOT unreadable. Those are real answers; this reports the case
+// where there is no answer. #134
+func (e *Engine) SiteTemplateRelPaths(regions []string) (paths []string, unreadable []string) {
 	base, err := filepath.Abs(e.TemplatesDir)
 	if err != nil {
-		return nil
+		return nil, regions
 	}
-	var out []string
 	for _, region := range regions {
 		regionDir := filepath.Join(base, region)
-		if info, err := os.Stat(regionDir); err != nil || !info.IsDir() {
+		subdirs, err := os.ReadDir(regionDir)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				unreadable = append(unreadable, region)
+			}
 			continue
 		}
-		matches, _ := filepath.Glob(filepath.Join(regionDir, "*", "site-*.yaml"))
+		var matches []string
+		for _, sd := range subdirs {
+			if !sd.IsDir() {
+				continue
+			}
+			inner := filepath.Join(regionDir, sd.Name())
+			files, err := os.ReadDir(inner)
+			if err != nil {
+				// One unreadable sub-directory makes the region's answer
+				// incomplete, and an incomplete answer is not a shorter one.
+				unreadable = append(unreadable, region)
+				break
+			}
+			for _, f := range files {
+				if f.IsDir() {
+					continue
+				}
+				if strings.HasPrefix(f.Name(), "site-") && strings.HasSuffix(f.Name(), ".yaml") {
+					matches = append(matches, filepath.Join(inner, f.Name()))
+				}
+			}
+		}
 		sort.Strings(matches)
 		for _, m := range matches {
 			if rel, err := filepath.Rel(base, m); err == nil {
-				out = append(out, rel)
+				paths = append(paths, rel)
 			}
 		}
 	}
-	return out
+	return paths, unreadable
 }
 
 // --- small formatting helpers mirroring Python repr/str in messages ----------
