@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -172,12 +174,24 @@ func seedConfig() (copied bool, err error) {
 		return false, err
 	}
 	dst := config.EnvFile()
-	if _, err := os.Stat(dst); err == nil {
+	dstAbsent, dstErr := pathAbsent(dst)
+	if dstErr != nil {
+		// A stat that failed is not "nothing configured yet" — see pathAbsent.
+		// Falling through wrote over a config file this process could not even
+		// look at.
+		return false, fmt.Errorf("could not check whether %s already exists: %w", dst, dstErr)
+	}
+	if !dstAbsent {
 		return false, nil // already configured — leave it alone
 	}
 	src, err := os.ReadFile(".env")
-	if err != nil {
+	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil // nothing to seed from; not an error
+	}
+	if err != nil {
+		// There IS something here and it could not be read. "nothing to seed from"
+		// would be a claim about a file nobody managed to open.
+		return false, fmt.Errorf("could not read .env to seed %s: %w", dst, err)
 	}
 	// 0600: this file holds INFOBLOX_API_KEY.
 	if err := os.WriteFile(dst, src, 0o600); err != nil {
