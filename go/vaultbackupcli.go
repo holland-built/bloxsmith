@@ -224,7 +224,17 @@ func runVaultBackupCLI(args []string) int {
 	// accident this stops: backing up, wiping the state dir, then re-running the
 	// same command out of habit and overwriting the only good copy with a backup
 	// of the emptied directory.
-	if _, err := os.Stat(dest); err == nil && !force {
+	destAbsent, destErr := pathAbsent(dest)
+	if destErr != nil {
+		// Not "there is no archive there" — see pathAbsent. --force does not cover
+		// this: it authorises replacing a file, and nothing here knows whether
+		// there is one.
+		fmt.Fprintf(os.Stderr, "vault-backup: could not check whether %s already exists: %v\n", dest, destErr)
+		fmt.Fprintln(os.Stderr, "  Refusing rather than risk overwriting an archive. Fix the path or its")
+		fmt.Fprintln(os.Stderr, "  permissions, or choose another one. --force does not override this.")
+		return 1
+	}
+	if !destAbsent && !force {
 		fmt.Fprintf(os.Stderr, "vault-backup: %s already exists — refusing to overwrite it.\n", dest)
 		fmt.Fprintln(os.Stderr, "  Choose another path, or pass --force if you are certain.")
 		return 1
@@ -482,7 +492,20 @@ func runVaultRestoreCLI(args []string) int {
 	// install is a legitimate thing to want (that is what a restore IS), but it
 	// is never a thing to do by accident, and the common mistake is pointing a
 	// restore at the wrong machine's state dir.
-	if entries, err := os.ReadDir(stateDir); err == nil && len(entries) > 0 && !force {
+	entries, dirAbsent, dirErr := dirEntries(stateDir)
+	if dirErr != nil {
+		// A directory that cannot be LISTED was counted as empty here, and mode
+		// 0300 is enough to restore into while refusing to be listed — so this
+		// guard was skipped over a live install with nothing said (#129). --force
+		// cannot override it: its promise below is about which files are replaced,
+		// and that promise is unmakeable about contents nobody can read.
+		fmt.Fprintf(os.Stderr, "vault-restore: could not list %s: %v\n", stateDir, dirErr)
+		fmt.Fprintln(os.Stderr, "  Refusing: an existing install could be sitting in there. Fix the")
+		fmt.Fprintln(os.Stderr, "  directory's permissions, or restore into another one with --state-dir.")
+		fmt.Fprintln(os.Stderr, "  --force does not override this.")
+		return 1
+	}
+	if len(entries) > 0 && !force {
 		fmt.Fprintf(os.Stderr, "vault-restore: %s is not empty (%d %s) — refusing.\n",
 			stateDir, len(entries), plural(len(entries), "entry", "entries"))
 		fmt.Fprintln(os.Stderr, "  Restore into an empty directory with --state-dir, or pass --force to")
@@ -491,8 +514,10 @@ func runVaultRestoreCLI(args []string) int {
 		return 1
 	}
 
-	_, statErr := os.Stat(stateDir)
-	dirIsOurs := statErr != nil // it did not exist until the MkdirAll below
+	// dirAbsent, not "stat returned an error". undoMkdir below removes stateDir
+	// when this is true, and while os.Remove only succeeds on an empty directory,
+	// an EMPTY state dir an operator made by hand is still theirs to keep.
+	dirIsOurs := dirAbsent
 
 	// 0700, matching what the docs promise of a state dir (docs/DEPLOYMENT.md):
 	// the files inside are 0600 and a world-readable parent would make the
@@ -573,7 +598,18 @@ func runVaultRestoreCLI(args []string) int {
 	// tenant key must not come back group- or world-readable because of how it
 	// was packed.
 	vaultFile := filepath.Join(stateDir, "vault.json")
-	if _, err := os.Stat(vaultFile); err == nil {
+	vaultAbsent, vaultStatErr := pathAbsent(vaultFile)
+	if vaultStatErr != nil {
+		// NOT the "no vault.json in this archive" line below. That sentence tells
+		// the operator where their tenant keys are, and a stat that failed knows
+		// nothing about it — the file may be sitting there at whatever mode the
+		// archive carried.
+		fmt.Fprintf(os.Stderr, "vault-restore: restored, but could not check %s: %v\n", vaultFile, vaultStatErr)
+		fmt.Fprintln(os.Stderr, "  Whether it is there, and whether it is 0600, is unknown. Check both by")
+		fmt.Fprintln(os.Stderr, "  hand before starting the server.")
+		return 1
+	}
+	if !vaultAbsent {
 		if err := os.Chmod(vaultFile, 0o600); err != nil {
 			fmt.Fprintf(os.Stderr, "vault-restore: restored, but could not set 0600 on %s: %v\n", vaultFile, err)
 			fmt.Fprintln(os.Stderr, "  Fix the permissions by hand before starting the server.")

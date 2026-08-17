@@ -312,6 +312,126 @@ func (v *validator) listOrErr(t M, key, field string) ([]any, bool) {
 	return items, true
 }
 
+// The DHCP offset defaults createDHCPRange (site.go) falls back to when a subnet
+// leaves dhcp_start / dhcp_end unset. Named here because validation has to apply
+// the SAME values: an omitted offset is not an unchecked offset — it is 10 or
+// 250, and on a small subnet 250 is the one that does the damage.
+const (
+	dhcpStartDefault = 10
+	dhcpEndDefault   = 250
+)
+
+// maxHostOffset is the largest host offset a /cidr can hold: 2^(32-cidr) - 2,
+// excluding the network address at offset 0 and the broadcast address at the
+// top. For a /24 that is 254, which is exactly where validation's old hardcoded
+// 1-254 came from — the constant was the /24 special case of this rule, applied
+// to every subnet size.
+//
+// Returns false outside 8-30, the range validated elsewhere, so a cidr already
+// reported as bad does not also produce a derived offset error on top of it.
+func maxHostOffset(cidr int) (int, bool) {
+	if cidr < 8 || cidr > 30 {
+		return 0, false
+	}
+	return 1<<(32-cidr) - 2, true
+}
+
+// effectiveSubnetSize resolves the subnet size a template implies when a subnet
+// carries no cidr of its own: network.subnet_size, else 24. Mirrors
+// TemplateToSiteConfig's `resolve(params, netSec["subnet_size"], "24")` and
+// createDHCPRange's `scidr := p.cfg.SubnetSize` fallback.
+func effectiveSubnetSize(net M) (int, bool) {
+	if net["subnet_size"] == nil {
+		return 24, true
+	}
+	return intCoerce(net["subnet_size"])
+}
+
+// subnetCidr is the size THIS subnet will be provisioned at: its own cidr, else
+// the template's default. Returns false when neither resolves to an integer —
+// the caller then checks nothing, because a cidr that is not a number already
+// has its own error.
+func subnetCidr(sm, net M) func() (int, bool) {
+	return func() (int, bool) {
+		if sm["cidr"] != nil {
+			return intCoerce(sm["cidr"])
+		}
+		return effectiveSubnetSize(net)
+	}
+}
+
+// dhcpOffsets checks dhcp_start / dhcp_end against the subnet that will actually
+// hold them, rather than against a constant.
+//
+// ERROR vs WARNING is decided by WHO chose the value. An offset the operator
+// wrote and that cannot be honoured is an error — refusing before the first
+// write costs nothing and the fix is one line. An offset that is only our
+// default is a warning, because failing someone's whole template (and blocking
+// its subnets, zone and hosts along with it) over a number we picked is
+// disproportionate; createDHCPRange skips and reports that case at runtime.
+func (v *validator) dhcpOffsets(sm M, pfx string, cidrOf func() (int, bool)) {
+	// Ordering is checked on the RESOLVED pair, so an explicit start above a
+	// defaulted end is caught too. Both endpoints can be legal addresses inside
+	// the subnet and still describe a backwards range (#132).
+	start, startExplicit, startOK := resolvedOffset(sm, "dhcp_start", dhcpStartDefault)
+	end, endExplicit, endOK := resolvedOffset(sm, "dhcp_end", dhcpEndDefault)
+	for _, k := range []string{"dhcp_start", "dhcp_end"} {
+		if sm[k] != nil {
+			if _, ok := intCoerce(sm[k]); !ok {
+				v.err(pfx+"."+k, fmt.Sprintf("Must be an integer, got %s", pyRepr(sm[k])))
+			}
+		}
+	}
+	if !startOK || !endOK {
+		return // already reported as a bad type; do not stack a derived error
+	}
+	if start > end {
+		report := v.err
+		if !startExplicit && !endExplicit {
+			report = v.warn
+		}
+		report(pfx+".dhcp_start", fmt.Sprintf(
+			"Start offset %d is above end offset %d, which describes a backwards range", start, end))
+	}
+	cidr, cidrOK := cidrOf()
+	if !cidrOK {
+		return
+	}
+	max, ok := maxHostOffset(cidr)
+	if !ok {
+		return // cidr out of range; its own error already says so
+	}
+	for _, o := range []struct {
+		key      string
+		val      int
+		explicit bool
+	}{{"dhcp_start", start, startExplicit}, {"dhcp_end", end, endExplicit}} {
+		if o.val >= 1 && o.val <= max {
+			continue
+		}
+		msg := fmt.Sprintf("Host offset %d is outside 1-%d for a /%d subnet", o.val, max, cidr)
+		if o.explicit {
+			v.err(pfx+"."+o.key, msg)
+			continue
+		}
+		v.warn(pfx+"."+o.key, msg+
+			" — it is the default, so no DHCP range will be created; set it explicitly or use a larger subnet")
+	}
+}
+
+// resolvedOffset returns the offset provisioning will actually use, whether the
+// operator wrote it, and whether it resolved at all.
+func resolvedOffset(sm M, key string, def int) (val int, explicit, ok bool) {
+	if sm[key] == nil {
+		return def, false, true
+	}
+	n, parsed := intCoerce(sm[key])
+	if !parsed {
+		return 0, true, false
+	}
+	return n, true, true
+}
+
 // ValidateTemplate is validate_template (server.py:1292): structural validation
 // dispatched by type. Never contacts the API.
 func ValidateTemplate(t M, name string) M {
@@ -396,16 +516,25 @@ func validateSite(t M, v *validator) {
 			}
 		}
 		if !isFalsy(sm["dhcp"]) {
-			for _, offKey := range []string{"dhcp_start", "dhcp_end"} {
-				if sm[offKey] != nil {
-					if val, ok := intCoerce(sm[offKey]); ok {
-						if val < 1 || val > 254 {
-							v.err(pfx+"."+offKey, fmt.Sprintf("Host offset %d outside 1-254", val))
-						}
-					} else {
-						v.err(pfx+"."+offKey, fmt.Sprintf("Must be an integer, got %s", pyRepr(sm[offKey])))
-					}
-				}
+			v.dhcpOffsets(sm, pfx, subnetCidr(sm, net))
+		}
+	}
+	// The SYNTHESIZED default subnet plan is checked too. With no network.subnets
+	// key, TemplateToSiteConfig (site.go:100-108) substitutes three subnets, one
+	// of them dhcp:true with no offsets — so the loop above runs zero times while
+	// provisioning still creates a DHCP range at offsets 10-250. That is the
+	// commonest way into #131 and it used to validate spotlessly.
+	//
+	// A warning, not an error: 10 and 250 are OUR defaults, not something the
+	// operator wrote. valid:false greys the template out of the site dropdown
+	// entirely (Provision.jsx), which would block its block, subnets, zone and
+	// hosts over a DHCP range that createDHCPRange now skips and reports.
+	if subnetsOK && len(subnetDefs) == 0 {
+		if cidr, ok := effectiveSubnetSize(net); ok {
+			if max, ok := maxHostOffset(cidr); ok && dhcpEndDefault > max {
+				v.warn("network.subnet_size", fmt.Sprintf(
+					"A /%d subnet cannot hold the default DHCP range (offsets %d-%d), so no DHCP range will be created; define network.subnets with explicit dhcp_start/dhcp_end, or use a larger subnet_size",
+					cidr, dhcpStartDefault, dhcpEndDefault))
 			}
 		}
 	}

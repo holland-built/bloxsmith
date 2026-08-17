@@ -101,7 +101,8 @@ nowhere in sight.
 #### The dashboard UI's npm dependencies
 
 The archive SBOMs above are read out of the **compiled binary**, and the web UI
-inside it (`go/web/app.bundle.js`) is a minified blob embedded with `go:embed`.
+inside it (`go/web/`, an `index.html` plus hashed `assets/*.js`) is the built UI,
+embedded with `go:embed`.
 Nothing in a Go module list can see React, recharts or tailwind, so a fifth
 document is published alongside them:
 
@@ -119,7 +120,7 @@ One thing that looks wrong and is not: `vite` and its `@rolldown/*` bindings
 *are* listed even though `vite` sits in `devDependencies`. `@tailwindcss/vite` is
 a production dependency and peer-depends on vite, so npm does not mark vite
 dev-only and it is genuinely part of the production closure. The set is therefore
-a **superset** of what literally ends up in `app.bundle.js` — it also carries
+a **superset** of what literally ends up in `go/web/assets/` — it also carries
 build-time tools reachable from a production dependency, such as tailwind itself.
 That is the deliberate direction to err in: it over-reports rather than hiding
 something that shipped.
@@ -168,7 +169,7 @@ index, so both are covered by the same per-architecture attestations.
 > check elsewhere:
 >
 > The **UI SBOM is derived from the lockfile, not from the shipped bundle.** It
-> says what the bundle was built from; it does not prove `app.bundle.js` was built
+> says what the bundle was built from; it does not prove `go/web/assets/` was built
 > from exactly that. The check that ties the two together is a different one — the
 > "UI dist up to date" step in [ci.yml](../.github/workflows/ci.yml) rebuilds the
 > bundle from `ui/` and fails if `go/web/` differs.
@@ -282,6 +283,10 @@ step to re-enter the passphrase), see `VAULT_PASSPHRASE_FILE` in
 
 **Standalone binary:** `bloxsmith update` (or the in-app **Update now** button) —
 downloads the release tarball, verifies its checksum, and swaps the binary in place.
+The CLI restarts nothing: a server already running (a service, or one you started
+in a terminal) keeps the OLD binary until you restart it — `bloxsmith service
+restart`, or stop and start it. The in-app button hands over by itself, because
+there it is the running server updating.
 
 **SE demo (Docker):** `docker pull ghcr.io/holland-built/bloxsmith:latest && docker
 restart bloxsmith`, or use the in-app **Update now** button.
@@ -319,11 +324,20 @@ switches off the automatic/browser-driven check only. Explicitly running
 `bloxsmith update`, or `POST /api/update/apply`, still contacts GitHub — those
 are direct operator requests to update, not background polling.
 
-There is no automatic image rollback. `docker-compose.yml` defines no healthcheck
-and does not mount `/var/run/docker.sock` — the in-app updater never touches the
-Docker socket, image, or container. It only downloads its own release tarball,
+There is no automatic image rollback. `docker-compose.yml` **does** define a
+healthcheck (`CMD /app/bloxsmith healthcheck`), but nothing acts on it:
+`restart: unless-stopped` fires on exit, not on health, so an unhealthy container
+is reported and left running. What the probe buys is the truth being visible —
+`docker compose ps` and `docker inspect` show unhealthy with the probe's stderr
+attached, a `health_status: unhealthy` event is emitted for anything watching the
+Docker event stream, and `depends_on: {condition: service_healthy}` becomes
+usable. Turning that into an automatic restart needs a supervisor on top.
+The compose file does not mount `/var/run/docker.sock` — the in-app updater never
+touches the Docker socket, image, or container. It only downloads its own release tarball,
 verifies the checksum, and swaps its own binary in place (see
-[go/apply.go](../go/apply.go)), then re-execs. Run inside a container, that
+[go/apply.go](../go/apply.go)), then re-execs — the in-app button only; the
+`bloxsmith update` CLI swaps and stops, and you restart the server yourself. Run
+inside a container, that
 patches the process only — it does not change the image, so the next `docker
 compose pull && docker compose up -d` (or any container recreate) reverts it.
 For Docker installs, apply updates with the pull/up command or the update
@@ -396,14 +410,21 @@ This manual `docker run` is the always-works fallback behind both the
 ## Build from source (dev)
 
 Use this if you're developing or want to build the binary locally instead of pulling
-the image. Requires **Go 1.26+** and **Node** (to rebuild the embedded UI).
+the image. Requires **Go 1.26+** and **Node 24** (the version CI builds the UI with,
+`.github/workflows/ci.yml`).
 
 ```bash
 git clone https://github.com/holland-built/bloxsmith && cd bloxsmith
-node scripts/build_ui.js              # compile src/*.jsx → go/web/app.bundle.js (embedded)
-cd go && go build -o bloxsmith .      # single self-contained binary with the UI baked in
-./bloxsmith                           # → http://localhost:8080
+cd ui && npm ci && npm run build && cd ..   # vite → ui/dist
+rm -rf go/web/* && cp -R ui/dist/* go/web/  # go/embed.go embeds this tree
+cd go && go build -o bloxsmith .            # single self-contained binary with the UI baked in
+./bloxsmith                                 # → http://localhost:8080
 ```
+
+The copy step is not optional and its absence is silent. `go/web` is committed, so
+`go build` succeeds whether or not you rebuilt the UI — it just bakes in whatever was
+already there. CI runs the same two commands and then `diff -r ui/dist go/web`, which
+is what catches a bundle that was never refreshed.
 
 Keys are read from the environment or the in-app vault at runtime — nothing is baked
 into the binary. Point at a `.env` by exporting the vars (`set -a; . ../.env; set +a`)
