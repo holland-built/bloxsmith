@@ -335,6 +335,29 @@ func (p *SiteProvisioner) createSubnet(blockID string, sdef SubnetDef, result M)
 	return subnet, nil
 }
 
+// rangeSkipped records a DHCP range that was NOT created, and returns nil so the
+// rest of the site keeps provisioning.
+//
+// It writes to result["dhcp_ranges_skipped"], never to result["dhcp_ranges"].
+// That list is what rollback deletes from, by id, and it already carries four
+// distinct id states — "" (reused / pre-existing), "(dry-run)" (a preview),
+// "(exists)" (upstream answered 409) and idUnknown (created but unnameable). A
+// range that was never created is none of those four and must not be smuggled
+// into any of them: rollback would either skip a real object or chase one that
+// does not exist. Same shape as result["unknown_ids"] (#121).
+//
+// start and end are "" when there was no address to compute; the reason carries
+// the explanation in that case. subnet is a plain label rather than a *net.IPNet
+// so the unparseable-address path — which has no network to name — can report
+// through here too instead of returning nil into silence.
+func (p *SiteProvisioner) rangeSkipped(result M, sdef SubnetDef, subnet, start, end, reason string) error {
+	p.emit(M{"step": fmt.Sprintf("  No DHCP range for %s — %s; skipping", sdef.Name, reason)})
+	appendTo(result, "dhcp_ranges_skipped", M{
+		"name": sdef.Name + "-dhcp", "subnet": subnet,
+		"start": start, "end": end, "reason": reason})
+	return nil
+}
+
 // createDHCPRange is create_dhcp_range (server.py:1732).
 func (p *SiteProvisioner) createDHCPRange(subnet M, sdef SubnetDef, result M) error {
 	startOff := 10
@@ -355,12 +378,49 @@ func (p *SiteProvisioner) createDHCPRange(subnet M, sdef SubnetDef, result M) er
 	}
 	n, err := ipNet(pyStr(subnet["address"]), scidr)
 	if err != nil {
-		p.emit(M{"step": fmt.Sprintf("  Cannot compute DHCP range for %s: %s", sdef.Name, err.Error())})
-		return nil
+		// Recorded rather than merely emitted: this path also ends with no DHCP
+		// range and used to leave nothing behind in the result to say so.
+		return p.rangeSkipped(result, sdef, fmt.Sprintf("%s/%d", pyStr(subnet["address"]), scidr), "", "",
+			fmt.Sprintf("the subnet's address could not be parsed: %s", err.Error()))
 	}
-	startIP, _ := addOffset(n, startOff)
-	endIP, _ := addOffset(n, endOff)
+	// A RANGE THAT DOES NOT FIT ITS SUBNET IS NOT WRITTEN.
+	//
+	// Both offsets used to be applied blind. On any subnet smaller than a /24 the
+	// default end offset of 250 lands past the end — and three of the five shipped
+	// templates set network.subnet_size: 25 — so a POST went out describing
+	// addresses in the NEIGHBOURING subnet, or (measured on a /26 at .64) in a
+	// different /24 altogether. Upstream then either rejects it, aborting a site
+	// run that validated clean, or accepts it and DHCP leases addresses belonging
+	// to someone else's subnet, tagged as if they were this site's. #131.
+	//
+	// provisionHosts below has always asked this question for host addresses
+	// (addOffset's ok, then ipInNet, then skip); this is the same question, and
+	// the same answer. It SKIPS rather than aborting, for the same reason it does
+	// there: the block, subnets and zone are already live on the customer's
+	// network, and tearing a working site down over a DHCP range would destroy
+	// more than it repairs. Skipping silently is the other failure though, so the
+	// skip is recorded — see rangeSkipped.
+	startIP, okStart := addOffset(n, startOff)
+	endIP, okEnd := addOffset(n, endOff)
+	if !okStart || !okEnd {
+		// addOffset only fails on a non-IPv4 network, where there is no address
+		// to report. Recording startIP.String() here would write the literal
+		// "<nil>", which is the fabrication this guard exists to remove.
+		return p.rangeSkipped(result, sdef, cidrStr(n), "", "",
+			fmt.Sprintf("subnet %s is not IPv4, so an IPv4 DHCP range cannot be placed in it", cidrStr(n)))
+	}
 	start, end := startIP.String(), endIP.String()
+	// Ordering is a separate failure from containment: both endpoints can be
+	// legal addresses inside the subnet and still describe a backwards range,
+	// which was POSTed verbatim. #132.
+	if startOff > endOff {
+		return p.rangeSkipped(result, sdef, cidrStr(n), start, end,
+			fmt.Sprintf("dhcp_start offset %d is above dhcp_end offset %d, which describes a backwards range", startOff, endOff))
+	}
+	if !ipInNet(startIP, n) || !ipInNet(endIP, n) {
+		return p.rangeSkipped(result, sdef, cidrStr(n), start, end,
+			fmt.Sprintf("offsets %d-%d fall outside subnet %s", startOff, endOff, cidrStr(n)))
+	}
 	mode := dryPrefix(p.cfg.DryRun)
 	p.emit(M{"step": fmt.Sprintf("%sCreating DHCP range %s-%s  subnet=%s", mode, start, end, sdef.Name)})
 	if p.cfg.DryRun {
