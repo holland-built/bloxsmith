@@ -282,6 +282,10 @@ step to re-enter the passphrase), see `VAULT_PASSPHRASE_FILE` in
 
 **Standalone binary:** `bloxsmith update` (or the in-app **Update now** button) —
 downloads the release tarball, verifies its checksum, and swaps the binary in place.
+The CLI restarts nothing: a server already running (a service, or one you started
+in a terminal) keeps the OLD binary until you restart it — `bloxsmith service
+restart`, or stop and start it. The in-app button hands over by itself, because
+there it is the running server updating.
 
 **SE demo (Docker):** `docker pull ghcr.io/holland-built/bloxsmith:latest && docker
 restart bloxsmith`, or use the in-app **Update now** button.
@@ -323,7 +327,9 @@ There is no automatic image rollback. `docker-compose.yml` defines no healthchec
 and does not mount `/var/run/docker.sock` — the in-app updater never touches the
 Docker socket, image, or container. It only downloads its own release tarball,
 verifies the checksum, and swaps its own binary in place (see
-[go/apply.go](../go/apply.go)), then re-execs. Run inside a container, that
+[go/apply.go](../go/apply.go)), then re-execs — the in-app button only; the
+`bloxsmith update` CLI swaps and stops, and you restart the server yourself. Run
+inside a container, that
 patches the process only — it does not change the image, so the next `docker
 compose pull && docker compose up -d` (or any container recreate) reverts it.
 For Docker installs, apply updates with the pull/up command or the update
