@@ -418,3 +418,162 @@ func TestAssetDimensionSetsRespectTheGuardrail(t *testing.T) {
 		}
 	}
 }
+
+// --- issue #138: rows that identify no asset ---------------------------------
+//
+// The third state. assembleAssetInventory used to split only on listRows ==
+// nil — the query failed, or it ran and returned rows — and #138 is neither:
+// rows came back and not one of them carries an asset. Measured live twice, on
+// two different builds, as a single row of six empty strings under a header
+// claiming 2,355 assets, with has_more false hiding the other ~2,300 and
+// availability "ok", so the bad answer was CACHED and served again.
+//
+// WHY THE ASSERTIONS BELOW CHECK total AND has_more AND NOT JUST availability.
+// The harm in #138 was not that a blank row rendered, it was that the payload
+// around it stayed CONFIDENT: a total of 2,355 over one blank line reads as
+// real data, and has_more false is what hid the rest. A fix that flipped
+// availability to "error" while still reporting 2,355 would pass a naive test
+// and leave the operator with the same lie.
+//
+// THE CACHING HALF IS NOT RETESTED HERE and that is deliberate. It is not a
+// decision this package makes: cache.Do stores only when the fetch returned a
+// nil error (cache.go:204), FetchAssetInventory converts availability "error"
+// into errAssetFeedDegraded (assets.go), and cache's own
+// TestDoFailureIsNotSharedAsSuccess already pins the contract. Restating it
+// here would need a wire fake for the concrete *mcp.Client and would prove
+// nothing new.
+
+// noCqidRow is the shape measured live: the row that arrived carried the count
+// aggregate and NOTHING the list query asked for, so cqid is absent as a key
+// rather than present and blank.
+func noCqidRow() map[string]any {
+	return map[string]any{assetsCube + ".assetsCount": "2355"}
+}
+
+func TestAssembleAssetInventory_RowWithNoCqidIsNotAnAsset(t *testing.T) {
+	// The byte-for-byte offline reproduction from issue #138: the same
+	// count-only reply arrives as BOTH the list and the count answer.
+	countOnly := []map[string]any{noCqidRow()}
+	got := assembleAssetInventory(defaultQuery(), countOnly, countOnly)
+
+	if got["availability"] != "error" {
+		t.Errorf("availability = %v, want error — a row identifying no asset must not render as one", got["availability"])
+	}
+	if rows := got["rows"].([]any); len(rows) != 0 {
+		t.Errorf("rows = %v, want none", rows)
+	}
+	// The header number is the actual harm. 2,355 over a blank line reads as
+	// real data; nil is the only honest answer once the page is not trusted.
+	if got["total"] != nil {
+		t.Errorf("total = %v, want nil — a page nobody can identify must claim no count", got["total"])
+	}
+	if got["has_more"] != false {
+		t.Errorf("has_more = %v, want false", got["has_more"])
+	}
+	if got["reason"] == nil || got["reason"] == "" {
+		t.Error("reason is empty — the panel has nothing to tell the operator")
+	}
+}
+
+func TestAssembleAssetInventory_BlankAndWhitespaceCqidAreAlsoRejected(t *testing.T) {
+	// A cqid of "" or of spaces fails every use the real one has: it collides
+	// as a React row key and round-trips to an asset-detail query matching
+	// nothing. Absent and blank must get the same answer.
+	for _, cqid := range []string{"", " ", "\t", "   \n "} {
+		rows := []map[string]any{listRow(cqid, "laptop-7", "Laptop", "Jamf", "Apple", "2026-08-05")}
+		got := assembleAssetInventory(defaultQuery(), rows, countRows("2355"))
+		if got["availability"] != "error" {
+			t.Errorf("cqid %q: availability = %v, want error", cqid, got["availability"])
+		}
+		if got["total"] != nil {
+			t.Errorf("cqid %q: total = %v, want nil", cqid, got["total"])
+		}
+	}
+}
+
+// A page that mixes real assets with a phantom row is not the page that was
+// asked for, so the WHOLE page degrades rather than the bad row being dropped.
+// Dropping it would force a choice between lying in has_more — 49 of 50 rows
+// hides every later page, the exact harm #138 is about — and inventing a
+// partial-trust state the wire contract cannot express.
+//
+// The position is varied because an implementation that returned early on the
+// first row, or only checked the last, would pass a single-position test.
+func TestAssembleAssetInventory_OneBadRowFailsTheWholePage(t *testing.T) {
+	for _, pos := range []int{0, 1, 25, assetsPageSize - 2, assetsPageSize - 1} {
+		full := make([]map[string]any, assetsPageSize)
+		for i := range full {
+			full[i] = listRow("c"+string(rune('a'+i%26))+string(rune('a'+i/26)),
+				"n", "Laptop", "Jamf", "Apple", "2026-08-05")
+		}
+		full[pos] = noCqidRow()
+
+		got := assembleAssetInventory(defaultQuery(), full, countRows("2355"))
+		if got["availability"] != "error" {
+			t.Errorf("bad row at %d: availability = %v, want error", pos, got["availability"])
+		}
+		if rows := got["rows"].([]any); len(rows) != 0 {
+			t.Errorf("bad row at %d: served %d rows, want none — a partial page is not what was asked for", pos, len(rows))
+		}
+		if got["has_more"] != false {
+			t.Errorf("bad row at %d: has_more = %v, want false", pos, got["has_more"])
+		}
+	}
+}
+
+// The other direction, and the one that would break real tenants if the
+// predicate were widened past cqid. name is 84.4% filled and vendor 81.1%, so
+// a device carrying nothing but a cqid is an ordinary asset, not a phantom.
+func TestAssembleAssetInventory_CqidOnlyRowIsAnAssetAndStillRenders(t *testing.T) {
+	rows := []map[string]any{assetCubeRow(map[string]any{"cqid": "c9"})}
+	got := assembleAssetInventory(defaultQuery(), rows, countRows("1"))
+	if got["availability"] != "ok" {
+		t.Fatalf("availability = %v, want ok — a sparse asset is still an asset", got["availability"])
+	}
+	if n := len(got["rows"].([]any)); n != 1 {
+		t.Errorf("rows = %d, want 1", n)
+	}
+	if got["total"] != 1 {
+		t.Errorf("total = %v, want 1", got["total"])
+	}
+}
+
+// The empty tenant must not be caught by any of this: no rows at all is
+// "looked and found nothing", which is a good answer and stays cacheable.
+func TestAssembleAssetInventory_EmptyTenantIsStillOkAfterTheCheck(t *testing.T) {
+	got := assembleAssetInventory(defaultQuery(), []map[string]any{}, countRows("0"))
+	if got["availability"] != "ok" {
+		t.Errorf("availability = %v, want ok", got["availability"])
+	}
+	if got["total"] != 0 {
+		t.Errorf("total = %v, want 0", got["total"])
+	}
+}
+
+// unusableAssetRow's reason text is the only evidence the log carries, and
+// #138's upstream cause is still a hypothesis — which of the two shapes
+// arrives is what would tell the candidates apart, so they must not collapse
+// into one string.
+func TestUnusableAssetRow_ReportsWhichRowAndWhy(t *testing.T) {
+	good := listRow("c1", "n", "Laptop", "Jamf", "Apple", "2026-08-05")
+
+	if _, _, found := unusableAssetRow([]map[string]any{good, good}); found {
+		t.Error("flagged a page of real assets")
+	}
+	if _, _, found := unusableAssetRow(nil); found {
+		t.Error("flagged an empty page")
+	}
+
+	i, why, found := unusableAssetRow([]map[string]any{good, noCqidRow()})
+	if !found || i != 1 {
+		t.Fatalf("index = %d found = %v, want 1 true", i, found)
+	}
+	if why != "no cqid field at all" {
+		t.Errorf("why = %q, want the absent-key wording", why)
+	}
+
+	blank := listRow("", "n", "Laptop", "Jamf", "Apple", "2026-08-05")
+	if _, why, _ := unusableAssetRow([]map[string]any{blank}); why != "an empty cqid" {
+		t.Errorf("why = %q, want the empty-value wording — absent and blank are different evidence", why)
+	}
+}

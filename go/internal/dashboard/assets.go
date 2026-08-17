@@ -60,6 +60,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 
@@ -345,6 +346,25 @@ func (s *Service) assetInventoryUncached(ctx context.Context, aq AssetQuery) map
 		func() { countRows = s.Mcp.QueryCube(ctx, assetsCube, []string{assetsMeasure}, countOpts) },
 	)
 
+	// WHY THE LOG LINE IS HERE AND NOT IN THE ASSEMBLER. assembleAssetInventory
+	// is pure on purpose — no network, no clock, no service state — and that is
+	// what makes its rules unit-testable, so it cannot log. This is the impure
+	// half, and it can. Issue #138 stayed undiagnosed precisely because this
+	// path emitted nothing at all: nothing FAILS here, the call succeeds and
+	// returns a row, so the #136/#137 failure logging never fires and the trail
+	// goes cold at the one place it is needed.
+	//
+	// The pure predicate is deliberately asked TWICE — once here to say why,
+	// once inside the assembler to decide — rather than threading a diagnostic
+	// out of the assembler. It is a scan of at most assetsPageSize rows on an
+	// uncached read only, and paying for it twice keeps assembleAssetInventory's
+	// signature stable and free of an out-parameter that nothing but the logger
+	// would ever read.
+	if i, why, found := unusableAssetRow(listRows); found {
+		log.Printf("dashboard: asset inventory rejected: row %d of %d has %s (page=%d sort=%s dir=%s q=%q type=%q) — not rendered, not cached",
+			i, len(listRows), why, aq.Page, aq.Sort, aq.Dir, aq.Q, aq.Type)
+	}
+
 	return assembleAssetInventory(aq, listRows, countRows)
 }
 
@@ -380,6 +400,31 @@ func assembleAssetInventory(aq AssetQuery, listRows, countRows []map[string]any)
 	if listRows == nil {
 		return assetsUnavailable(aq, "the asset inventory query failed upstream")
 	}
+	// RULE 3, AND IT IS A THIRD STATE, NOT A SUBCASE OF THE OTHER TWO. The two
+	// rules above both hang off listRows == nil: the query failed, or it ran
+	// and returned rows. Issue #138 is neither — rows came back and not one of
+	// them carries an asset, so the nil check cannot see it and normAssetRows
+	// turns each one into an asset with no identity. Measured live twice, on
+	// two different builds: a single row of six empty strings under a header
+	// claiming 2,355 assets, has_more false hiding the other ~2,300, and
+	// availability ok, so the answer was CACHED and served again until it
+	// expired. That is strictly worse than the unavailable panel this file
+	// spends so much effort avoiding — a red panel tells the operator not to
+	// trust it, and this reads as real data.
+	//
+	// ANY unusable row degrades the WHOLE page, rather than being dropped
+	// while the rest of the page is served. A page mixing real assets with a
+	// row that identifies nothing is not the page that was asked for, and this
+	// file already answers "I do not understand this reply" by degrading
+	// rather than by guessing (assetTotal, below). Dropping the bad row
+	// instead would force a choice between two worse options: lie in has_more,
+	// because len(rows) then falls short of assetsPageSize and hides every
+	// later page — the exact harm this issue is about — or invent a
+	// partial-trust state that the wire contract and the UI have no way to
+	// express.
+	if _, _, found := unusableAssetRow(listRows); found {
+		return assetsUnavailable(aq, "the asset inventory returned rows that identify no asset")
+	}
 	rows := normAssetRows(listRows)
 	out := map[string]any{
 		"rows":         rows,
@@ -392,6 +437,45 @@ func assembleAssetInventory(aq AssetQuery, listRows, countRows []map[string]any)
 		"availability": "ok",
 	}
 	return out
+}
+
+// unusableAssetRow reports the FIRST row that cannot be an asset, its index,
+// and why. It is pure, so both the assembler and the logging half can ask it.
+//
+// WHY cqid, AND WHY NOTHING ELSE. cqid is the GRAIN of this cube — see
+// assetListDims above, and the file doc: AssetDetails_ch_agg is one row per
+// asset (CQID). Every real row has one. The UI is built directly on that: it
+// is the React row key (ui/src/tabs/Assets.jsx:387) and it is the only handle
+// the detail read has (/api/csp/asset-detail?cqid=..., Assets.jsx:438). A row
+// without it cannot be keyed, cannot be opened, and names nothing.
+//
+// The other five dimensions are DELIBERATELY sparse — name is 84.4% filled,
+// vendor 81.1%, last_seen 99.3%, all measured against the real tenant — so a
+// predicate that asked "are all six empty?" would be both too weak and too
+// strong. Too weak because a row carrying a stray value in one sparse column
+// and no cqid still identifies nothing; too strong because it invites the
+// obvious "widen it" edit, and a nameless, vendorless device WITH a cqid is a
+// real asset this tenant owns and must still render.
+//
+// The absent/empty distinction in the returned reason is for the LOG ONLY and
+// does not change the decision. It is kept because issue #138's upstream cause
+// is still a hypothesis rather than a measurement, and which of the two shapes
+// arrives is the evidence that would tell the candidates apart.
+func unusableAssetRow(rows []map[string]any) (int, string, bool) {
+	for i, raw := range rows {
+		r := flattenCubeRow(raw)
+		v, reported := firstPresent(r, "cqid")
+		if !reported {
+			return i, "no cqid field at all", true
+		}
+		// Trimmed, because a cqid of spaces fails every use the real one has:
+		// it collides as a React key and it round-trips to an asset-detail
+		// query that can match nothing.
+		if strings.TrimSpace(getStr(v)) == "" {
+			return i, "an empty cqid", true
+		}
+	}
+	return 0, "", false
 }
 
 // assetTotal reads the scalar out of a measures-only count response, or nil
