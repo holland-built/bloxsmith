@@ -418,8 +418,11 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	}
 	summary := map[string]any{"succeeded": []any{}, "failed": []any{}, "skipped": []any{}}
 
-	if !d.prov(r).TemplatesInstalled() {
-		emit(map[string]any{"error": "templates not installed — use the release archive or container image (which bundle them), or add YAML templates to the templates directory"})
+	// Not TemplatesInstalled(): a bool folds "cannot be read" into "not there",
+	// and those two need opposite advice — re-pulling the image fixes an absent
+	// directory and does nothing for a permission bit. #134
+	if unavailable := d.prov(r).TemplatesUnavailable(); unavailable != "" {
+		emit(map[string]any{"error": unavailable})
 		emit(terminalFrame(summary))
 		return
 	}
@@ -445,7 +448,16 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 			"step": fmt.Sprintf("[%s] succeeded", blocksTemplate)})
 	}
 
-	for _, rel := range d.prov(r).SiteTemplateRelPaths(regions) {
+	sitePaths, unreadable := d.prov(r).SiteTemplateRelPaths(regions)
+	// A REGION NOBODY COULD READ IS A FAILURE, NOT AN EMPTY REGION. This used
+	// to be discarded, so a seed run over an unreadable region provisioned zero
+	// sites for it and still streamed a summary saying everything succeeded. #134
+	for _, region := range unreadable {
+		summaryAppend(summary, "failed", region)
+		emit(map[string]any{"template": region,
+			"error": fmt.Sprintf("region %s could not be read, so its site templates were never found — no sites were created for it", region)})
+	}
+	for _, rel := range sitePaths {
 		rel := rel
 		func() {
 			template, err := d.prov(r).LoadTemplate(rel)
@@ -611,7 +623,16 @@ func (d *Deps) teardownSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	}
 	summary := map[string]any{"succeeded": []any{}, "failed": []any{}, "skipped": []any{}}
 
-	for _, rel := range d.prov(r).SiteTemplateRelPaths(regions) {
+	sitePaths, unreadable := d.prov(r).SiteTemplateRelPaths(regions)
+	// A REGION NOBODY COULD READ IS A FAILURE, NOT AN EMPTY REGION. This used
+	// to be discarded, so a seed run over an unreadable region provisioned zero
+	// sites for it and still streamed a summary saying everything succeeded. #134
+	for _, region := range unreadable {
+		summaryAppend(summary, "failed", region)
+		emit(map[string]any{"template": region,
+			"error": fmt.Sprintf("region %s could not be read, so its site templates were never found — no sites were created for it", region)})
+	}
+	for _, rel := range sitePaths {
 		rel := rel
 		func() {
 			template, err := d.prov(r).LoadTemplate(rel)

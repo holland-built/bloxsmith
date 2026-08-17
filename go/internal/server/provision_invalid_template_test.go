@@ -144,7 +144,14 @@ func TestProvisionSiteStreamAcceptsBundledTemplates(t *testing.T) {
 	if !e.TemplatesInstalled() {
 		t.Fatalf("templates not found at ../../templates")
 	}
-	for _, rel := range e.SiteTemplateRelPaths([]string{"amer", "emea", "apac"}) {
+	rels, unreadable := e.SiteTemplateRelPaths([]string{"amer", "emea", "apac"})
+	if len(unreadable) > 0 {
+		t.Fatalf("bundled regions could not be read: %v", unreadable)
+	}
+	if len(rels) == 0 {
+		t.Fatalf("no bundled site templates found — this test would otherwise pass by looking at nothing")
+	}
+	for _, rel := range rels {
 		tpl, err := e.LoadTemplate(rel)
 		if err != nil {
 			t.Fatalf("LoadTemplate(%s): %v", rel, err)

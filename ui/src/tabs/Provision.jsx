@@ -8,6 +8,7 @@ import { COLORS, Card, CardGrid, Empty, FetchError, PreviewApply, TabIntro } fro
 import { useApi } from '../lib/api.js'
 import { dhcpSkips } from '../lib/dhcpSkips.js'
 import { withToken } from '../lib/authFetch.js'
+import { templateScanErrors } from '../lib/templateScanErrors.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
 
@@ -382,6 +383,21 @@ function SiteMode({ isAdmin }) {
               ))}
             </select>
           </Field>
+
+          {/* "(invalid)" in the dropdown cannot tell a typo in the YAML from a
+              permission bit, and those need completely different fixes. These
+              entries used to be dropped by the server entirely, so the list was
+              just shorter than the directory and there was nothing to act on. */}
+          {templateScanErrors(templates).length > 0 && (
+            <div className="flex flex-col gap-0.5">
+              <div className="text-[12px] text-muted">Could not be read:</div>
+              {templateScanErrors(templates).map((s) => (
+                <div key={s.key} className="font-mono text-[12px]" style={{ color: COLORS.crit }}>
+                  ✕ {s.name} — {s.reason}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div>
             <FetchError error={spacesApi.error} stale={spaces.length > 0} />
