@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: '24'
 
-      # UI freshness: fail if go/web/app.bundle.js is stale vs src/*.jsx.
+      # UI freshness: rebuild ui/dist and fail if go/web does not match it.
       - name: UI dist up to date (vite build --check)
         run: |
           cd ui && npm ci && npm run build && cd ..
@@ -477,10 +477,10 @@ jobs:
           [ "$(jq -r '.name' "$uif")" = "bloxsmith-ui-npm" ] || {
             echo "::error::$uif does not call itself bloxsmith-ui-npm — --source-name was dropped, and the image attestation in release.yml keys off that name"; exit 1; }
 
-          # It must name what actually ends up in go/web/app.bundle.js. These
-          # three are the reason this SBOM exists at all: they are compiled into
-          # the bundle, the bundle is //go:embed'd, and none of them appear in
-          # any archive SBOM above.
+          # It must name what actually ends up in go/web/assets/. These three
+          # are the reason this SBOM exists at all: they are compiled into the
+          # bundle, go/web is //go:embed'd, and none of them appear in any
+          # archive SBOM above.
           for p in react react-dom recharts; do
             jq -e --arg p "$p" '.packages[] | select(.name == $p)' "$uif" >/dev/null || {
               echo "::error::$uif does not list $p — it catalogued something, but not this project's UI dependencies"; exit 1; }

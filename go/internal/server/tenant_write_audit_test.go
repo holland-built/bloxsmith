@@ -98,14 +98,16 @@ var tenantWriteAuditEvents = map[string][]string{
 	"DELETE /api/ipam/addresses/":    {"ipam-address-delete", "ipam-address-delete-error"},
 	"POST /api/edit/":                {"edit-*-create", "edit-*-create-unreadable"},
 	"PATCH /api/edit/":               {"edit-*-update", "edit-*-update-unreadable"},
-	"DELETE /api/edit/":              {"edit-*-delete"},
+	"DELETE /api/edit/":              {"edit-*-delete", "edit-*-delete-error"},
 
 	// --- security policy -----------------------------------------------------
 	"POST /api/block-domain":   {"block-domain"},
 	"POST /api/unblock-domain": {"unblock-domain"},
 
 	// --- IQ Actions ----------------------------------------------------------
-	"POST /api/actions/{id}/status": {"iq-action-resolve", "iq-action-resolve-failed"},
+	// Three, not two: "failed" is reserved for a write that never left this
+	// process, and a dispatched write whose fate is unknown gets its own name.
+	"POST /api/actions/{id}/status": {"iq-action-resolve", "iq-action-resolve-failed", "iq-action-resolve-unknown"},
 }
 
 // tenantWriteAuditAllowlist is for a route that changes the customer's tenant
