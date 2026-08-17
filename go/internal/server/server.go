@@ -76,35 +76,7 @@ func New(d *Deps) http.Handler {
 		d.UnlockThrottle = httpx.NewUnlockThrottle()
 	}
 
-	mux.HandleFunc("GET /api/vault/status", d.vaultStatus)
-	if d.UpdateCheck != nil {
-		mux.HandleFunc("GET /api/update/check", d.UpdateCheck)
-	}
-	// Phase 3 self-update: apply is admin-gated + audited here; status is a
-	// read-only progress poll. Only wired for the binary (main passes non-nil).
-	if d.UpdateApply != nil {
-		mux.HandleFunc("POST /api/update/apply", d.updateApply)
-		mux.HandleFunc("GET /api/update/status", d.UpdateProgress)
-	}
-	d.registerVaultRoutes(mux)
-	d.registerWriteLockRoutes(mux)
-	d.registerStateRoutes(mux)
-	d.registerDataRoutes(mux)
-	d.registerCSPRoutes(mux)
-	d.registerEditRoutes(mux)
-	d.registerProvisionRoutes(mux)
-	d.registerAIRoutes(mux)
-	d.registerAccountRoutes(mux)
-	d.registerThreatIntelRoutes(mux)
-	d.registerIPAMReadRoutes(mux)
-	d.registerSearchRoutes(mux)
-	d.registerNOCRoutes(mux)
-	d.registerBrandRoutes(mux)
-	d.registerSecurityWriteRoutes(mux)
-	// The container's own health probe. Registered last of the named routes and
-	// deliberately NOT under /api/, so no gate in this file — the vault lock, the
-	// write guard, the write lock — has any opinion about it. See healthz.
-	mux.HandleFunc("GET /healthz", d.healthz)
+	d.registerAll(mux)
 	mux.Handle("/", d.Static)
 
 	// VAULT_MODE lock (server.py 5065/6071): a chassis-level gate that 503s every
@@ -141,6 +113,57 @@ func New(d *Deps) http.Handler {
 		}
 		pinned.ServeHTTP(w, r)
 	}))
+}
+
+// registerAll declares every named route this server serves.
+//
+// It exists as its own function, taking the `router` interface rather than
+// *http.ServeMux, so that the route-coverage guard can hand it a recorder and
+// enumerate what production ACTUALLY registers. These registrations used to sit
+// inline in New, where nothing could read them back: writelock_routes_test.go
+// enumerates routes by calling the register*Routes functions, so the five routes
+// New declared itself — including the state-changing POST /api/update/apply —
+// were invisible to the test whose stated job is to fail the build when a write
+// route goes unclassified. A route added inline there escaped the per-tenant
+// write lock silently, and the guard stayed green.
+//
+// So: nothing may register a route in New. TestNewRegistersOnlyThroughRegisterAll
+// enforces that over server.go's syntax tree, because a convention nobody checks
+// is how this hole opened in the first place.
+func (d *Deps) registerAll(mux router) {
+	mux.HandleFunc("GET /api/vault/status", d.vaultStatus)
+	if d.UpdateCheck != nil {
+		mux.HandleFunc("GET /api/update/check", d.UpdateCheck)
+	}
+	// Phase 3 self-update: apply is admin-gated + audited here; status is a
+	// read-only progress poll. Only wired for the binary (main passes non-nil).
+	if d.UpdateApply != nil {
+		mux.HandleFunc("POST /api/update/apply", d.updateApply)
+		mux.HandleFunc("GET /api/update/status", d.UpdateProgress)
+	}
+	d.registerVaultRoutes(mux)
+	d.registerWriteLockRoutes(mux)
+	d.registerStateRoutes(mux)
+	d.registerDataRoutes(mux)
+	d.registerCSPRoutes(mux)
+	d.registerEditRoutes(mux)
+	d.registerProvisionRoutes(mux)
+	d.registerAIRoutes(mux)
+	d.registerAccountRoutes(mux)
+	d.registerThreatIntelRoutes(mux)
+	d.registerIPAMReadRoutes(mux)
+	d.registerSearchRoutes(mux)
+	d.registerNOCRoutes(mux)
+	d.registerBrandRoutes(mux)
+	d.registerSecurityWriteRoutes(mux)
+	// The container's own health probe. Registered last of the named routes and
+	// deliberately NOT under /api/, so no gate in this file — the vault lock, the
+	// write guard, the write lock — has any opinion about it. See healthz.
+	//
+	// "Last" is about reading order, not about precedence: ServeMux matches by
+	// pattern specificity, so /healthz wins over the "/" catch-all New registers
+	// after this returns whichever order they were declared in.
+	mux.HandleFunc("GET /healthz", d.healthz)
 }
 
 func (d *Deps) json(w http.ResponseWriter, r *http.Request, status int, data any) {

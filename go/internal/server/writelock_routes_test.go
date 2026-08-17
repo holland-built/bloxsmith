@@ -1,10 +1,13 @@
 package server
 
 import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"regexp"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -32,33 +35,32 @@ func (r *recordingRouter) HandleFunc(pattern string, _ func(http.ResponseWriter,
 	r.patterns = append(r.patterns, pattern)
 }
 
-// allRoutes runs every registration function against the recorder. A Deps with
-// nil dependencies is fine: registration only stores closures, it never calls
-// them.
+// allRoutesDeps is the Deps allRoutes enumerates against. Registration only
+// stores closures, so almost every field can stay nil — but the OPTIONAL HANDLER
+// FIELDS cannot. registerAll declares three routes behind `!= nil` checks
+// (/api/update/check, /api/update/apply, /api/update/status), and a nil field
+// there does not fail anything: it silently registers nothing, which is exactly
+// how a route becomes invisible to this file. They are stubbed here, and
+// TestRegisterAllNilChecksAreSatisfied re-derives the list of fields that need to
+// be from registerAll's own syntax tree, so a FOURTH optional dependency cannot
+// reopen the hole quietly.
+func allRoutesDeps() *Deps {
+	stub := func(w http.ResponseWriter, r *http.Request) {}
+	return &Deps{UpdateCheck: stub, UpdateApply: stub, UpdateProgress: stub}
+}
+
+// allRoutes records every route production declares, by handing the recorder to
+// the SAME function server.New hands the real mux.
 //
-// If a new register*Routes function is added to server.New and NOT added here,
-// this test cannot see its routes. That is the one gap this test has, and it is
-// covered by asserting the count of registration calls in New against the count
-// here — see TestRegistrationFunctionsAllEnumerated.
+// It used to call the fifteen register*Routes functions itself, which meant the
+// five routes New registered inline — including the state-changing
+// POST /api/update/apply — were invisible to every test in this file. Proven:
+// a `mux.HandleFunc("POST /api/proof-unclassified-tenant-write", …)` added to New
+// left the whole package green while being ungated by the write lock.
 func allRoutes(t *testing.T) []string {
 	t.Helper()
-	d := &Deps{}
 	rr := &recordingRouter{}
-	d.registerVaultRoutes(rr)
-	d.registerWriteLockRoutes(rr)
-	d.registerStateRoutes(rr)
-	d.registerDataRoutes(rr)
-	d.registerCSPRoutes(rr)
-	d.registerEditRoutes(rr)
-	d.registerProvisionRoutes(rr)
-	d.registerAIRoutes(rr)
-	d.registerAccountRoutes(rr)
-	d.registerThreatIntelRoutes(rr)
-	d.registerIPAMReadRoutes(rr)
-	d.registerSearchRoutes(rr)
-	d.registerNOCRoutes(rr)
-	d.registerBrandRoutes(rr)
-	d.registerSecurityWriteRoutes(rr)
+	allRoutesDeps().registerAll(rr)
 	if len(rr.patterns) == 0 {
 		t.Fatal("no routes recorded — the recorder is not being handed the real registrations, so this whole file proves nothing")
 	}
@@ -315,50 +317,252 @@ func TestKnownDestructiveRoutesAreGated(t *testing.T) {
 	}
 }
 
-// TestRegistrationFunctionsAllEnumerated closes the one gap in allRoutes(): if a
-// future register*Routes is wired into server.New but not listed there, its
-// routes are invisible to the gate above and nothing complains.
+// --- the mux may only be touched through registerAll -------------------------
 //
-// It counts `d.register...(mux)` calls in server.go's New against the calls in
-// allRoutes. Counting source lines is a blunt instrument, and it is used here
-// precisely because the alternative — trusting two hand-kept lists to match — is
-// the failure mode this file exists to prevent.
-func TestRegistrationFunctionsAllEnumerated(t *testing.T) {
-	inNew := registerCallsIn(t, "server.go")
-	inTest := registerCallsIn(t, "writelock_routes_test.go")
+// This section replaces TestRegistrationFunctionsAllEnumerated, which compared
+// the register*Routes NAMES called in New against those called in allRoutes. That
+// closed a real gap — a register*Routes function wired into New and forgotten
+// here — but it had nothing to say about the gap that actually existed: a bare
+// mux.HandleFunc written straight into New. Five routes were registered that way,
+// and an unclassified sixth passed the whole package.
+//
+// allRoutes now calls the same registerAll production calls, so the name
+// comparison is vacuous by construction. What still needs guarding is the
+// CONVENTION that makes it true: New must route every registration through
+// registerAll and must not touch the mux itself. That is what these tests hold.
 
-	// registerWriteLockRoutes is called from New and from allRoutes, so both
-	// sides see it; every other name must appear on both sides too.
-	missing := []string{}
-	for name := range inNew {
-		if !inTest[name] {
+// funcDeclIn parses a source file in this package and returns one top-level
+// function's declaration. Parsing rather than pattern-matching the text is the
+// point: brace counting over Go source is defeated by nested blocks, function
+// literals, comments and braces inside string literals, and the guards below are
+// worth nothing if their idea of "inside New" is approximate.
+func funcDeclIn(t *testing.T, file, name string) (*ast.FuncDecl, *token.FileSet) {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, file, nil, parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatalf("parse %s: %v", file, err)
+	}
+	for _, decl := range f.Decls {
+		if fd, ok := decl.(*ast.FuncDecl); ok && fd.Name.Name == name {
+			return fd, fset
+		}
+	}
+	t.Fatalf("no func %s in %s — this guard is looking at the wrong thing and proves nothing", name, file)
+	return nil, nil
+}
+
+// muxUse is one place New mentions the mux, with the source line, so a failure
+// says where to look.
+type muxUse struct {
+	desc string
+	line int
+}
+
+// TestNewRegistersOnlyThroughRegisterAll is the guard for the defect this file
+// missed. Inside server.New, the mux may be:
+//
+//   - created exactly once (mux := http.NewServeMux()),
+//   - handed to registerAll exactly once,
+//   - given the "/" catch-all exactly once,
+//   - passed to the middleware chain.
+//
+// Any other mention — a mux.HandleFunc, a second mux.Handle, a helper taking the
+// mux — fails. The receiver is examined as well as the arguments, because
+// `mux.HandleFunc(...)` mentions the mux as the RECEIVER of the call and a guard
+// that only walked argument lists would miss the exact mutation it exists to
+// catch.
+func TestNewRegistersOnlyThroughRegisterAll(t *testing.T) {
+	fd, fset := funcDeclIn(t, "server.go", "New")
+
+	const muxName = "mux"
+	var creations, registerAllCalls, catchAlls, bad []muxUse
+	line := func(p token.Pos) int { return fset.Position(p).Line }
+
+	// Every assignment that binds the name `mux`. More than one means a nested
+	// scope could shadow the production mux, leaving the real one empty while
+	// every check below still passes against the impostor.
+	ast.Inspect(fd.Body, func(n ast.Node) bool {
+		as, ok := n.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		for _, lhs := range as.Lhs {
+			if id, ok := lhs.(*ast.Ident); ok && id.Name == muxName {
+				creations = append(creations, muxUse{"binding of " + muxName, line(as.Pos())})
+			}
+		}
+		return true
+	})
+
+	// Every call that mentions the mux, as receiver or as argument.
+	ast.Inspect(fd.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, isSel := call.Fun.(*ast.SelectorExpr)
+		recvIsMux := false
+		if isSel {
+			if id, ok := sel.X.(*ast.Ident); ok && id.Name == muxName {
+				recvIsMux = true
+			}
+		}
+		argIsMux := false
+		for _, a := range call.Args {
+			if id, ok := a.(*ast.Ident); ok && id.Name == muxName {
+				argIsMux = true
+			}
+		}
+		if !recvIsMux && !argIsMux {
+			return true
+		}
+		at := line(call.Pos())
+		switch {
+		case recvIsMux && sel.Sel.Name == "Handle" && len(call.Args) > 0 && isStringLit(call.Args[0], `"/"`):
+			catchAlls = append(catchAlls, muxUse{`mux.Handle("/", …)`, at})
+		case recvIsMux:
+			bad = append(bad, muxUse{"mux." + sel.Sel.Name + "(…)", at})
+		case isSel && sel.Sel.Name == "registerAll":
+			registerAllCalls = append(registerAllCalls, muxUse{"registerAll(mux)", at})
+		default:
+			// The middleware chain takes the mux as an http.Handler
+			// (d.Guard.VaultGate(...)(mux)). That is not a registration and is
+			// allowed; it is listed here rather than silently skipped so the
+			// reasoning is visible.
+		}
+		return true
+	})
+
+	if len(bad) > 0 {
+		t.Errorf("server.New registers routes on the mux directly:\n%s\n"+
+			"Move them into registerAll. Routes declared in New are invisible to allRoutes() and "+
+			"therefore to TestEveryWriteRouteIsClassified, so a tenant-changing route added here "+
+			"escapes the per-tenant write lock with nothing failing.", useList(bad))
+	}
+	if len(registerAllCalls) != 1 {
+		t.Errorf("server.New calls registerAll %d time(s), want exactly 1 — %s. Without that call the "+
+			"server registers no named routes at all, and every route test in this file still passes "+
+			"because they enumerate registerAll rather than New.", len(registerAllCalls), useList(registerAllCalls))
+	}
+	if len(catchAlls) != 1 {
+		t.Errorf("server.New registers the \"/\" catch-all %d time(s), want exactly 1 — %s. Two "+
+			"identical patterns make http.ServeMux panic at startup.", len(catchAlls), useList(catchAlls))
+	}
+	if len(creations) != 1 {
+		t.Errorf("the name %q is bound %d time(s) in server.New, want exactly 1 — %s. A second binding "+
+			"can shadow the production mux, so the checks above would pass against a different one.",
+			muxName, len(creations), useList(creations))
+	}
+}
+
+func isStringLit(e ast.Expr, want string) bool {
+	lit, ok := e.(*ast.BasicLit)
+	return ok && lit.Kind == token.STRING && lit.Value == want
+}
+
+func useList(uses []muxUse) string {
+	if len(uses) == 0 {
+		return "(none found)"
+	}
+	var out []string
+	for _, u := range uses {
+		out = append(out, fmt.Sprintf("server.go:%d %s", u.line, u.desc))
+	}
+	return "  " + strings.Join(out, "\n  ")
+}
+
+// TestConditionalRoutesAreRecorded pins the three routes registerAll declares
+// behind a nil check. A dropped stub in allRoutesDeps does not fail anything on
+// its own — the route simply is not registered, and everything downstream keeps
+// passing while checking one route fewer.
+func TestConditionalRoutesAreRecorded(t *testing.T) {
+	got := map[string]bool{}
+	for _, p := range allRoutes(t) {
+		got[p] = true
+	}
+	for _, want := range []string{
+		"GET /api/update/check",
+		"POST /api/update/apply",
+		"GET /api/update/status",
+	} {
+		if !got[want] {
+			t.Errorf("%q was not recorded — it is registered behind a nil check in registerAll, so "+
+				"allRoutesDeps must supply that dependency or the route is never classified", want)
+		}
+	}
+}
+
+// TestRegisterAllNilChecksAreSatisfied derives the requirement instead of
+// restating it: it reads registerAll's syntax tree, collects every Deps field
+// named in an `if` condition, and requires allRoutesDeps to leave none of them
+// nil. A fourth optional dependency added tomorrow therefore fails HERE, with the
+// field name, rather than quietly hiding its routes from the classifier.
+//
+// The check is on the CONSTRUCTED Deps by reflection, not on the source of the
+// composite literal: a field written as `UpdateApply: nil` mentions the name and
+// would satisfy any syntactic test while registering nothing.
+func TestRegisterAllNilChecksAreSatisfied(t *testing.T) {
+	fd, _ := funcDeclIn(t, "server.go", "registerAll")
+	recv := "d"
+	if len(fd.Recv.List) > 0 && len(fd.Recv.List[0].Names) > 0 {
+		recv = fd.Recv.List[0].Names[0].Name
+	}
+
+	fields := map[string]bool{}
+	ast.Inspect(fd.Body, func(n ast.Node) bool {
+		is, ok := n.(*ast.IfStmt)
+		if !ok || is.Cond == nil {
+			return true
+		}
+		// Every d.<Field> anywhere in the condition, so `a != nil && b != nil`
+		// yields both rather than being missed by a single-shape match.
+		ast.Inspect(is.Cond, func(c ast.Node) bool {
+			sel, ok := c.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if id, ok := sel.X.(*ast.Ident); ok && id.Name == recv {
+				fields[sel.Sel.Name] = true
+			}
+			return true
+		})
+		return true
+	})
+
+	if len(fields) == 0 {
+		t.Fatal("no conditional dependencies found in registerAll — either the nil checks were removed " +
+			"(in which case delete this test) or the scan is broken, and a broken scan proves nothing")
+	}
+
+	d := reflect.ValueOf(allRoutesDeps()).Elem()
+	var missing []string
+	for name := range fields {
+		f := d.FieldByName(name)
+		if !f.IsValid() {
+			t.Fatalf("registerAll branches on Deps.%s but that field does not exist — the scan is wrong", name)
+		}
+		if f.IsZero() {
 			missing = append(missing, name)
 		}
 	}
 	sort.Strings(missing)
 	if len(missing) > 0 {
-		t.Errorf("server.New registers these route groups but allRoutes() in this file does not, "+
-			"so their routes are NOT checked by TestEveryWriteRouteIsClassified:\n  %s",
-			strings.Join(missing, "\n  "))
-	}
-	if len(inNew) == 0 {
-		t.Fatal("found no register*Routes calls in server.go — the scan is broken, so this test proves nothing")
+		t.Errorf("registerAll registers routes only when these Deps fields are set, and allRoutesDeps "+
+			"leaves them nil:\n  %s\nTheir routes are therefore never seen by "+
+			"TestEveryWriteRouteIsClassified. Give each one a stub.", strings.Join(missing, "\n  "))
 	}
 }
 
-// registerCallsIn returns the set of register*Routes names called in a source
-// file in this package. Reading the source is deliberate: it is the only way to
-// notice a registration that exists in New and nowhere else.
-func registerCallsIn(t *testing.T, file string) map[string]bool {
-	t.Helper()
-	src, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatalf("read %s: %v", file, err)
-	}
-	re := regexp.MustCompile(`d\.(register\w*Routes)\(`)
-	out := map[string]bool{}
-	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
-		out[m[1]] = true
-	}
-	return out
+// TestRegisterAllOnRealServeMux runs the registrations against the type
+// production uses. The recorder only appends to a slice, so it cannot see the one
+// error a real *http.ServeMux does: a duplicate or conflicting pattern, which
+// panics — at startup, in front of a user, not in CI.
+func TestRegisterAllOnRealServeMux(t *testing.T) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			t.Fatalf("registerAll panicked on a real http.ServeMux: %v", rec)
+		}
+	}()
+	allRoutesDeps().registerAll(http.NewServeMux())
 }
