@@ -142,12 +142,40 @@ func (s *Service) GetAction(ctx context.Context, id string) map[string]any {
 	return m
 }
 
+// ActionOutcomeApplied and ActionOutcomeUnknown are the only two words this
+// function is entitled to say about a dispatched write, and the caller keys its
+// audit row on them (server/noc.go actionStatus).
+//
+// There are TWO and not three because only two are provable. "applied" is
+// grounded: mcp.SuccessFieldTrue recognises {"success":true,...}, the shape
+// observed live from this tool. There is deliberately no "refused" word to go
+// with it — mcp.ErrRejected does NOT mean the write missed. Its own doc says so
+// (mcp.go: "The call reached the tool; the write may or may not have landed
+// upstream"), and CallToolChecked returns it for an empty payload, an
+// unparseable payload, and any payload the predicate does not affirmatively
+// recognise. A {"success":false} reply has never been observed from
+// iq-actions_update_action, so calling one "refused" would assert something
+// about the customer's tenant on the strength of a shape nobody has seen —
+// the same class of false claim this pair exists to remove.
+const (
+	ActionOutcomeApplied = "applied"
+	ActionOutcomeUnknown = "unknown"
+)
+
 // UpdateAction is the first IQ Actions write path: resolve/reopen one action
 // via iq-actions_update_action. status must be exactly "active" or
 // "resolved" — the upstream tool has no version/etag precondition, so this is
 // the only guard against bad input. The current status is read first (via
 // iq-actions_get_action) so the caller can audit old->new; if that read
 // fails, the write still proceeds with old status "unknown".
+//
+// THE ERROR RETURN MEANS "NOTHING WAS SENT". Every non-nil error below is
+// returned before CallToolChecked is reached, so a caller may record it as a
+// definite non-event. Once the call is dispatched the error return is never
+// used again: the outcome is reported through the map's "outcome" field, which
+// is at best "applied" and otherwise UNKNOWN. TestUpdateActionErrorsOnlyBefore
+// Dispatch (analytics_action_outcome_test.go) holds that split over the syntax
+// tree, because it is a claim another package's audit log depends on.
 func (s *Service) UpdateAction(ctx context.Context, id, status string) (map[string]any, error) {
 	if strings.TrimSpace(id) == "" {
 		return nil, fmt.Errorf("id is required")
@@ -175,11 +203,15 @@ func (s *Service) UpdateAction(ctx context.Context, id, status string) (map[stri
 		"id": id, "status": status, "format": "json",
 	}, mcp.SuccessFieldTrue)
 	if err != nil {
-		// Upstream rejected the write (or the payload wasn't a recognised
-		// success shape): report ok:false with the upstream detail, never
-		// ok:true for an unconfirmed write.
+		// The request left this process and its fate is UNKNOWN. That covers a
+		// transport error (the 12s call timeout can expire after the tool ran, a
+		// gateway 5xx can arrive once it may already have run) and equally the
+		// fail-closed branch, which fires on any reply SuccessFieldTrue does not
+		// recognise — including a success it does not know how to read. err's
+		// text is kept as diagnostic context and is never a verdict.
 		return map[string]any{
-			"ok": false, "id": id, "old_status": oldStatus, "new_status": status,
+			"ok": false, "outcome": ActionOutcomeUnknown,
+			"id": id, "old_status": oldStatus, "new_status": status,
 			"error":      err.Error(),
 			"result_raw": trunc(text, 200),
 		}, nil
@@ -188,7 +220,8 @@ func (s *Service) UpdateAction(ctx context.Context, id, status string) (map[stri
 	var v any
 	_ = json.Unmarshal([]byte(text), &v)
 	return map[string]any{
-		"ok": true, "id": id, "old_status": oldStatus, "new_status": status,
+		"ok": true, "outcome": ActionOutcomeApplied,
+		"id": id, "old_status": oldStatus, "new_status": status,
 		"result": v,
 	}, nil
 }

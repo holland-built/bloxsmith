@@ -79,7 +79,7 @@ func uaNone(t *testing.T, logPath, event, why string) {
 }
 
 // =============================================================================
-// iq-action-resolve / iq-action-resolve-failed  (noc.go actionStatus)
+// iq-action-resolve / -failed / -unknown  (noc.go actionStatus)
 // =============================================================================
 
 // uaMCP is a fake MCP streamable-HTTP endpoint answering the two tools
@@ -198,16 +198,24 @@ func TestActionStatus_ResolveWritesAuditEntry(t *testing.T) {
 		t.Fatalf("audit old_status/new_status = %v/%v, want active/resolved — the transition is the "+
 			"fact the row exists to preserve", detail["old_status"], detail["new_status"])
 	}
-	// The negative half of iq-action-resolve-failed: a write that succeeded must
-	// not also leave a failure row against the tenant.
+	// The negative half of the two non-success rows: a write that succeeded must
+	// not also leave a failure or an unknown row against the tenant.
 	uaNone(t, logPath, "iq-action-resolve-failed", "the update was confirmed by upstream")
+	uaNone(t, logPath, "iq-action-resolve-unknown", "the update was confirmed by upstream")
 }
 
 // The failure twin. Upstream answered with a payload SuccessFieldTrue does not
 // recognise, so the write is UNCONFIRMED — it may have landed. That is exactly
 // the outcome that has to be recorded, and the route returns 502, so no
 // status-code assertion anywhere would have caught the row going missing.
-func TestActionStatus_UnconfirmedWriteWritesFailedAuditEntry(t *testing.T) {
+//
+// This test used to assert iq-action-resolve-failed here, and its own sentence
+// above is why that was wrong: a write that "may have landed" is not a failure.
+// The fixture below is unchanged — {"status_code":500,...} carries no success
+// field — so what changed is only the name this file now expects for it. The
+// definite-failure row moved to the case that earns it, in
+// action_status_outcome_test.go.
+func TestActionStatus_UnconfirmedWriteWritesUnknownAuditEntry(t *testing.T) {
 	f := &uaMCP{
 		getBody:    map[string]any{"action": map[string]any{"id": "act-2", "status": "active"}},
 		updateBody: map[string]any{"status_code": 500, "message": "upstream refused"},
@@ -220,7 +228,7 @@ func TestActionStatus_UnconfirmedWriteWritesFailedAuditEntry(t *testing.T) {
 	if rr.Code != 502 {
 		t.Fatalf("status = %d, want 502 on an unconfirmed write; body=%s", rr.Code, rr.Body.String())
 	}
-	detail := uaOnly(t, logPath, "iq-action-resolve-failed",
+	detail := uaOnly(t, logPath, "iq-action-resolve-unknown",
 		"the write reached upstream and was never confirmed, so the action may have moved with nothing recording it")
 	if detail["id"] != "act-2" {
 		t.Fatalf("audit id = %v, want act-2", detail["id"])
