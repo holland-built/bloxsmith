@@ -54,24 +54,9 @@ func (d *Deps) logo(w http.ResponseWriter, r *http.Request) {
 		"https://logo.clearbit.com/" + domain,
 	}
 	for _, logoURL := range tried {
-		req, err := http.NewRequestWithContext(r.Context(), "GET", logoURL, nil)
-		if err != nil {
+		data, ct, ok := fetchLogo(r.Context(), logoURL)
+		if !ok {
 			continue
-		}
-		req.Header.Set("User-Agent", "Mozilla/5.0")
-		req.Header.Set("Accept", "image/*")
-		resp, err := brandHTTP.Do(req)
-		if err != nil {
-			continue
-		}
-		data, _ := io.ReadAll(resp.Body)
-		ct := resp.Header.Get("Content-Type")
-		resp.Body.Close()
-		if len(data) < 50 {
-			continue
-		}
-		if ct == "" {
-			ct = "image/png"
 		}
 		w.Header().Set("Content-Type", ct)
 		w.Header().Set("Cache-Control", "public, max-age=86400")
@@ -81,6 +66,63 @@ func (d *Deps) logo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(404)
+}
+
+// maxLogoBytes caps what this server will read from a third-party CDN. A
+// 128x128 logo is a few kilobytes; 2 MiB is generous and finite, which an
+// unbounded io.ReadAll from someone else's server is not. The client's 8s
+// timeout is NOT a size bound — a fast host can deliver any amount inside it.
+const maxLogoBytes = 2 << 20
+
+// fetchLogo makes ONE attempt at one CDN and reports whether the bytes are
+// actually a logo. Every reason to fall through to the next CDN returns
+// ok == false, which is what makes the second CDN reachable at all.
+//
+// THE DEFECT this replaces: the loop above used to check nothing but
+// `len(data) < 50`. The status code was never read, so a 404 HTML error page came
+// back to the browser as HTTP 200 carrying the CDN's own `text/html` type, cached
+// for a day, served from this server's origin — and because a >50-byte error page
+// is not a `continue`, the second CDN was never asked. cacheLogo, forty lines
+// below, already required a 2xx and a clean read; the same omission survived here.
+//
+// THE TYPE IS SNIFFED, NOT TRUSTED. The CDN's Content-Type header is ignored
+// entirely and http.DetectContentType decides. A header can lie in both
+// directions — HTML labelled image/png, a real PNG with no header at all — and it
+// is the BYTES that a browser ends up rendering. Sniffing also excludes SVG for
+// free: an SVG can carry script, so serving one from this origin would be a
+// same-origin script execution, and DetectContentType never reports image/svg+xml
+// (SVG sniffs as text). Everything DetectContentType calls image/* is raster.
+func fetchLogo(ctx context.Context, url string) ([]byte, string, bool) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, "", false
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Accept", "image/*")
+	resp, err := brandHTTP.Do(req)
+	if err != nil {
+		return nil, "", false
+	}
+	// Deferred, so the body is closed on every one of the returns below. It used
+	// to be closed on the single path that reached it.
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", false
+	}
+	// +1 so an over-size body is detectable rather than silently truncated into a
+	// corrupt image.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxLogoBytes+1))
+	if err != nil || len(data) > maxLogoBytes {
+		return nil, "", false
+	}
+	if len(data) < 50 {
+		return nil, "", false
+	}
+	ct := http.DetectContentType(data)
+	if !strings.HasPrefix(ct, "image/") {
+		return nil, "", false
+	}
+	return data, ct, true
 }
 
 // brandGet is GET /api/brand (server.py:5045): the saved brand.json, else {}.
@@ -162,9 +204,16 @@ func cacheLogo(ctx context.Context, url, dest string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
+	// Same cap as fetchLogo, for the same reason and against the same third
+	// parties: this read was unbounded, and the client's 8s timeout bounds how
+	// LONG a body may take, never how large it may be. Over-size is an error
+	// rather than a truncation, so a half-written image never reaches dest.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxLogoBytes+1))
 	if err != nil {
 		return err
+	}
+	if len(data) > maxLogoBytes {
+		return fmt.Errorf("logo fetch %s: body exceeds %d bytes", url, maxLogoBytes)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("logo fetch %s: unexpected status %d", url, resp.StatusCode)
