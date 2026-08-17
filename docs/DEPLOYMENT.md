@@ -323,9 +323,16 @@ switches off the automatic/browser-driven check only. Explicitly running
 `bloxsmith update`, or `POST /api/update/apply`, still contacts GitHub — those
 are direct operator requests to update, not background polling.
 
-There is no automatic image rollback. `docker-compose.yml` defines no healthcheck
-and does not mount `/var/run/docker.sock` — the in-app updater never touches the
-Docker socket, image, or container. It only downloads its own release tarball,
+There is no automatic image rollback. `docker-compose.yml` **does** define a
+healthcheck (`CMD /app/bloxsmith healthcheck`), but nothing acts on it:
+`restart: unless-stopped` fires on exit, not on health, so an unhealthy container
+is reported and left running. What the probe buys is the truth being visible —
+`docker compose ps` and `docker inspect` show unhealthy with the probe's stderr
+attached, a `health_status: unhealthy` event is emitted for anything watching the
+Docker event stream, and `depends_on: {condition: service_healthy}` becomes
+usable. Turning that into an automatic restart needs a supervisor on top.
+The compose file does not mount `/var/run/docker.sock` — the in-app updater never
+touches the Docker socket, image, or container. It only downloads its own release tarball,
 verifies the checksum, and swaps its own binary in place (see
 [go/apply.go](../go/apply.go)), then re-execs — the in-app button only; the
 `bloxsmith update` CLI swaps and stops, and you restart the server yourself. Run
