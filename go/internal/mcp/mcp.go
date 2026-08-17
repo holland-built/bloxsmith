@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"regexp"
 	"strings"
@@ -122,7 +123,37 @@ type Client struct {
 
 	initMu      sync.Mutex
 	initialized bool
+	// lastInitErr is the last handshake failure already written to the log,
+	// so a sustained outage does not repeat it on every call. See Initialize.
+	lastInitErr string
 }
+
+// WHY THIS FILE LOGS ITS FAILURES, AND WHAT IT WILL NOT PUT IN THE LOG.
+//
+// Get, QueryCube and Search all report failure the same way: a NIL slice. Every
+// dashboard assembler is built on that (see assembleAssetInventory,
+// assembleAssetsResult, scalarCubeTotal), and it is the right contract — but a
+// nil carries no reason, so the panel says "the query failed upstream" and the
+// server used to record nothing at all. An intermittent failure that discards
+// its own reason cannot be reproduced, which is exactly where issue #136
+// started. Every failure path below therefore writes one line before returning
+// nil, in the shape `mcp: <Func> <subject>: <reason>`.
+//
+// The rule about WHAT goes in that line:
+//
+//   - An upstream JSON-RPC error message IS logged, verbatim. "cube quota
+//     exceeded", "session expired", "the tenant is not entitled to X" — that is
+//     the diagnosis, and sanitising it would leave the log saying only that
+//     something failed, which is the bug.
+//
+//   - A data-bearing RESPONSE BODY is NEVER logged, not in part and not in
+//     summary. On a real tenant it carries device names, IP and MAC addresses.
+//     So storedMeta returns a FIXED CLASSIFICATION for an unusable payload and
+//     no caller interpolates any substring of the reply — not even the rejected
+//     table_name, which is upstream-controlled.
+//
+// TestFailureLogsNeverEchoAResponseBody and TestTransportFailuresLogTheUpstream
+// Reason are the two halves of that rule, and they must both keep passing.
 
 // callTimeout bounds any call whose incoming ctx carries no deadline (e.g. a
 // request context that never cancels). Package var so tests can shrink it.
@@ -316,10 +347,38 @@ func (c *Client) Initialize(ctx context.Context) error {
 		// Session expired/rejected (e.g. http 404) or any other handshake
 		// failure: leave initialized=false so the next call retries.
 		c.initialized = false
+		// LOGGED HERE RATHER THAN LEFT TO THE CALLERS, because ten of the
+		// eleven throw the error away — security.go:215,249,
+		// threatintel.go:467, assets.go:302,523,623, assetcounts.go:75 and
+		// analytics.go:72,125,186,527 are all spelled
+		// `s.Mcp.Initialize(ctx) != nil` and turn it into an "unavailable"
+		// panel with no reason attached. Only ai_tools.go:52 reads it.
+		//
+		// SUPPRESSED WHEN IT REPEATS. A failed handshake is deliberately not
+		// cached (see the doc comment above), and those four files call
+		// Initialize on every dashboard request, so an outage would otherwise
+		// write the same line thousands of times and bury everything else.
+		// Only a CHANGE is news: a different failure logs, and a success
+		// clears the memo so the next failure is heard again. This runs under
+		// initMu, already held for the whole function, so it needs no lock of
+		// its own.
+		if msg := err.Error(); msg != c.lastInitErr {
+			c.lastInitErr = msg
+			log.Printf("mcp: Initialize: %v", err)
+		}
 		return err
 	}
-	_, _ = c.post(ctx, "notifications/initialized", map[string]any{}, true)
+	// A refused notifications/initialized does NOT fail the handshake: the
+	// session was established by the initialize response that just succeeded,
+	// and this is a notification with no reply expected, so failing closed here
+	// could wedge a client that is actually fine. It is still worth a line —
+	// it was `_, _ =` before, which meant a half-completed handshake looked
+	// identical to a clean one.
+	if _, nerr := c.post(ctx, "notifications/initialized", map[string]any{}, true); nerr != nil {
+		log.Printf("mcp: Initialize: notifications/initialized failed, session continues: %v", nerr)
+	}
 	c.initialized = true
+	c.lastInitErr = ""
 	return nil
 }
 
@@ -628,13 +687,15 @@ func (c *Client) Get(ctx context.Context, service, endpoint string, params map[s
 	}
 	text, err := c.CallTool(ctx, "infoblox-portal_make_get_request", args)
 	if err != nil {
+		log.Printf("mcp: Get %s/%s: %v", service, endpoint, err)
 		return nil
 	}
 	if rows, ok := parseInline(text); ok {
 		return rows
 	}
-	table, rowCount, ok := storedMeta(text)
-	if !ok {
+	table, rowCount, why := storedMeta(text)
+	if why != "" {
+		log.Printf("mcp: Get %s/%s: unusable stored result: %s", service, endpoint, why)
 		return nil
 	}
 	rows, err := c.queryAllRows(ctx, table, rowCount, service+"/"+endpoint)
@@ -647,20 +708,53 @@ func (c *Client) Get(ctx context.Context, service, endpoint string, params map[s
 
 // storedMeta validates a make_get_request / query_cube response and returns its
 // (table_name, row_count) when usable (server.py:3134-3136,3173-3175).
-func storedMeta(text string) (string, int, bool) {
+//
+// The third return value is the REASON the payload was unusable; empty means
+// usable. It is always one of the fixed strings below and never quotes any part
+// of text — text is a tenant data payload (see the file-level note above), and
+// a rejected table_name is upstream-controlled too. The reasons are distinct so
+// an operator reading the log can tell a refused query from a malformed one
+// without ever seeing the reply.
+//
+// Two of them are new, and each closed a way to fail silently:
+//
+//   - A NEGATIVE row_count used to pass, because the guard rejected only 0.
+//     queryAllRows would then run `for offset := 0; offset < rowCount` zero
+//     times and return (nil, nil) — a failure wearing the shape of no data.
+//   - A FRACTIONAL row_count truncates through int(f) and silently under-reads,
+//     so 10.5 rows becomes a confident claim of 10.
+//
+// row_count == 0 remains unusable, exactly as before. It is tempting to read it
+// as a legitimate empty result and return an empty slice, but nothing verifies
+// that is the upstream's zero-row shape, and guessing wrong turns a real failure
+// into "this tenant has nothing" — the precise mistake assembleAssetInventory
+// exists to prevent. It gets its own reason string instead, so if it ever shows
+// up in a log the question can be settled with evidence.
+func storedMeta(text string) (string, int, string) {
 	var meta map[string]any
 	if err := json.Unmarshal([]byte(text), &meta); err != nil {
-		return "", 0, false
+		return "", 0, "response is not JSON"
 	}
 	table, _ := meta["table_name"].(string)
-	rc := 0
-	if f, ok := meta["row_count"].(float64); ok {
-		rc = int(f)
+	if table == "" {
+		return "", 0, "no table_name in response"
 	}
-	if table == "" || !tableRE.MatchString(table) || rc == 0 {
-		return "", 0, false
+	if !tableRE.MatchString(table) {
+		return "", 0, "table_name failed validation"
 	}
-	return table, rc, true
+	f, ok := meta["row_count"].(float64)
+	if !ok {
+		return "", 0, "no row_count in response"
+	}
+	switch {
+	case f < 0:
+		return "", 0, "row_count is negative"
+	case f != math.Trunc(f):
+		return "", 0, "row_count is not a whole number"
+	case f == 0:
+		return "", 0, "row_count is 0"
+	}
+	return table, int(f), ""
 }
 
 // queryAllRows is _query_all_rows (server.py:3085): page the stored parquet.
@@ -690,6 +784,13 @@ func (c *Client) queryAllRows(ctx context.Context, table string, rowCount int, l
 		})
 		if err != nil {
 			if offset == 0 {
+				// The (nil, nil) return below is the contract, unchanged and
+				// locked in by TestQueryAllRowsPage0FailureReturnsEmptyNoError.
+				// That is precisely why this line has to be here: to both
+				// callers the result is byte-identical to "the tenant has no
+				// rows", so the log is the ONLY thing that can tell a dead read
+				// from an empty one. Load-bearing, not decorative.
+				log.Printf("mcp: queryAllRows %s: first page failed, reporting no data: %v", label, err)
 				break
 			}
 			return rows, fmt.Errorf("%w: %s: got %d of %d rows before offset %d failed: %v", ErrIncompleteRows, label, len(rows), rowCount, offset, err)
@@ -697,6 +798,9 @@ func (c *Client) queryAllRows(ctx context.Context, table string, rowCount int, l
 		var raw map[string]any
 		if err := json.Unmarshal([]byte(text), &raw); err != nil {
 			if offset == 0 {
+				// Same as above, and no part of the undecodable reply goes in
+				// the line — it is a data payload.
+				log.Printf("mcp: queryAllRows %s: first page did not decode, reporting no data", label)
 				break
 			}
 			return rows, fmt.Errorf("%w: %s: got %d of %d rows before offset %d failed to decode: %v", ErrIncompleteRows, label, len(rows), rowCount, offset, err)
@@ -723,14 +827,16 @@ func (c *Client) QueryCube(ctx context.Context, cube string, measures []string, 
 	}
 	text, err := c.CallTool(ctx, "infoblox-portal_query_cube", args)
 	if err != nil {
+		log.Printf("mcp: QueryCube %s: %v", cube, err)
 		return nil
 	}
 	var rows []map[string]any
 	if inline, ok := parseInline(text); ok {
 		rows = inline
 	} else {
-		table, rowCount, ok := storedMeta(text)
-		if !ok {
+		table, rowCount, why := storedMeta(text)
+		if why != "" {
+			log.Printf("mcp: QueryCube %s: unusable stored result: %s", cube, why)
 			return nil
 		}
 		var qerr error
@@ -759,10 +865,12 @@ func (c *Client) Search(ctx context.Context, query string) []any {
 	}
 	text, err := c.CallTool(ctx, "infoblox-portal_network_entity_search", map[string]any{"query": query})
 	if err != nil {
+		log.Printf("mcp: Search: %v", err)
 		return nil
 	}
 	var data any
 	if err := json.Unmarshal([]byte(text), &data); err != nil {
+		log.Printf("mcp: Search: response is not JSON")
 		return nil
 	}
 	if lst, ok := data.([]any); ok {
@@ -775,5 +883,11 @@ func (c *Client) Search(ctx context.Context, query string) []any {
 			}
 		}
 	}
+	// Every nil out of this function means the search DIED, and ai_tools.go:55
+	// documents at length why that must never be collapsed into "No entities
+	// found." A shape carrying none of the keys above is that case: the reply
+	// arrived and nothing in it could be read as results. It gets a line like
+	// the other two, with no part of the reply in it.
+	log.Printf("mcp: Search: response shape not recognised")
 	return nil
 }
