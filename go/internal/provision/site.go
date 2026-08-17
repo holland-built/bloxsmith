@@ -145,6 +145,30 @@ func TemplateToSiteConfig(template, params M) (*SiteConfig, error) {
 	}, nil
 }
 
+// idUnknown is the id recorded for an object THIS RUN CREATED UPSTREAM whose
+// create response carried no id.
+//
+// It exists because the three states below were being collapsed into one
+// string, and one of them is the dangerous one:
+//
+//	""            a reused or pre-existing object whose row carried no id, and
+//	              legacy entries. Not ours; rollback leaves it alone.
+//	"(dry-run)"   a preview. NOTHING was created upstream.
+//	"(exists)"    upstream answered 409: the customer already had it.
+//	idUnknown     we created it, it is live, and we cannot name it.
+//
+// Writing "(dry-run)" for the last case told rollback — whose del() documents
+// that value as "a preview placeholder" — to skip an object that really exists,
+// with no residual entry, so nobody was ever told. It also put "(dry-run)" in
+// the same result map as "dry_run": false, which is a false claim about a
+// customer's tenant in an operator-facing summary.
+//
+// A parenthesised token cannot be mistaken for a CSP id: those are
+// "ipam/subnet/<uuid>"-shaped paths, and del() sends the id straight into a
+// DELETE path, so a marker that never leaves this package is required to be
+// unmistakable rather than merely unlikely.
+const idUnknown = "(unknown-id)"
+
 // SiteProvisioner is server.py's SiteProvisioner (1633).
 type SiteProvisioner struct {
 	e           *Engine
@@ -158,6 +182,24 @@ type SiteProvisioner struct {
 
 func (e *Engine) NewSiteProvisioner(cfg *SiteConfig, emit Emitter) *SiteProvisioner {
 	return &SiteProvisioner{e: e, cfg: cfg, emit: emit}
+}
+
+// noteUnknownID says out loud that an object was created and cannot be named.
+//
+// Two channels, because they reach different people at different times. The
+// emitted step is what the operator watching the run sees, in the same stream
+// and the same "  Warning:" shape as every other mid-run problem in this file.
+// result["unknown_ids"] is the machine-readable half, and it is what makes a
+// SUCCESSFUL run report this at all: a run that succeeds never calls rollback,
+// so there is no residual list to carry the fact.
+//
+// Called exactly once per object. For hosts that means from Provision's copy
+// loop and not from provisionHosts, which has no result map — appending in both
+// would list the same host twice.
+func (p *SiteProvisioner) noteUnknownID(result M, kind, label string) {
+	p.emit(M{"step": fmt.Sprintf("  Warning: %s %s was created upstream but the response carried no id — "+
+		"it cannot be rolled back automatically or found again by id", kind, label)})
+	appendTo(result, "unknown_ids", M{"kind": kind, "label": label})
 }
 
 func (p *SiteProvisioner) resolveIPSpace() error {
@@ -378,7 +420,15 @@ func (p *SiteProvisioner) createDHCPRange(subnet M, sdef SubnetDef, result M) er
 		return perr("Failed to create DHCP range for %s: status %d %v", sdef.Name, status, resp)
 	}
 	rng := asMap(asMap(resp)["result"])
-	appendTo(result, "dhcp_ranges", M{"id": pyStr(rng["id"]), "start": start, "end": end, "name": sdef.Name + "-dhcp"})
+	rid := pyStr(rng["id"])
+	if rid == "" {
+		// The range exists upstream — status was 200/201 — so an empty id here is
+		// "created, unnameable", not "not created". Left as "" it fell into the
+		// same silent skip in rollback's del() that the zone and host cases did.
+		rid = idUnknown
+		p.noteUnknownID(result, "dhcp_range", start+"-"+end)
+	}
+	appendTo(result, "dhcp_ranges", M{"id": rid, "start": start, "end": end, "name": sdef.Name + "-dhcp"})
 	return nil
 }
 
@@ -532,8 +582,16 @@ func (p *SiteProvisioner) createSubnets(block, result M) (map[string]M, error) {
 					return nil, err
 				}
 				id := pyStr(zone["id"])
-				if id == "" {
-					id = "(dry-run)"
+				if id == "" && zoneCreated {
+					// Gated on zoneCreated, not on the blank id alone.
+					// createReverseZone's REUSE path returns the customer's
+					// existing zone straight off the lookup row, so a blank id
+					// there means "theirs, unnameable" — calling that idUnknown
+					// would claim this run created a zone it did not, and
+					// idUnknown is the one value rollback acts on. A reused
+					// blank stays "", which rollback leaves alone.
+					id = idUnknown
+					p.noteUnknownID(result, "reverse_zone", pyStr(zone["fqdn"]))
 				}
 				// "created" travels with the entry because rollback works off this
 				// list and nothing else. An entry without it is UNKNOWN, and
@@ -625,7 +683,12 @@ func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 		p.emit(M{"step": fmt.Sprintf("  Created host id=%s", pyStr(host["id"]))})
 		hid := pyStr(host["id"])
 		if hid == "" {
-			hid = "(dry-run)"
+			// Upstream answered 200/201, so this host is on the customer's
+			// network. "(dry-run)" said the opposite and rollback believed it.
+			// The matching noteUnknownID call is in Provision's copy loop, the
+			// one place here that holds the result map — see noteUnknownID for
+			// why it must not be called from both.
+			hid = idUnknown
 		}
 		results = append(results, M{"fqdn": fqdn, "ip": hostIP, "hostname": hdef.Hostname, "id": hid})
 	}
@@ -642,15 +705,36 @@ func (p *SiteProvisioner) provisionHosts(subnets map[string]M) ([]M, error) {
 //
 // It still writes partial["rollback_residual"] as before; that write is the
 // in-place side effect existing callers and tests read.
+//
+// A residual row has TWO shapes now, and they are told apart by `status`:
+//
+//	status >= 400  a DELETE was sent and upstream refused it. `id` names the
+//	               object, and a retry is a sensible next step.
+//	status == 0    no DELETE was sent, because there is no id to send one to —
+//	               the object was created and the response carried no id (see
+//	               idUnknown). `id` is "", `label` is all there is to go on, and
+//	               `reason` says so in words. Only a human can clear this one.
 func (p *SiteProvisioner) rollback(partial M) M {
 	p.emit(M{"step": "Rolling back partial site provisioning…"})
 	residual := []any{}
 	attempted, deleted := 0, 0
 
 	del := func(objID, kind, label string) {
-		// None of these three are ids. "" is a create whose response carried no
-		// id, "(dry-run)" is a preview placeholder, and "(exists)" is what
-		// provisionHosts records when upstream answered 409 — a host the
+		// idUnknown is not an id either, but it is the one non-id that must NOT
+		// be skipped in silence: the object is LIVE on the customer's network and
+		// this run put it there. There is nothing to DELETE, so the honest action
+		// is to report it. Without this it left no trace anywhere — no delete, no
+		// residual entry, and an "outcome":"complete" over the top of it.
+		if objID == idUnknown {
+			p.emit(M{"step": fmt.Sprintf("  Rollback: cannot delete %s %s — it was created but the "+
+				"response carried no id. It is still there; remove it by hand.", kind, label)})
+			residual = append(residual, M{"kind": kind, "id": "", "label": label, "status": 0,
+				"reason": "created upstream but the create response carried no id, so rollback could not delete it"})
+			return
+		}
+		// None of these three are ids. "" is a REUSED or legacy entry whose row
+		// carried no id, "(dry-run)" is a preview placeholder, and "(exists)" is
+		// what provisionHosts records when upstream answered 409 — a host the
 		// customer ALREADY had, which this run did not create. Sending any of
 		// them upstream produces a DELETE on a nonsense path like
 		// /api/ddi/v1/(exists) that is certain to fail, and the failure then
@@ -705,7 +789,12 @@ func (p *SiteProvisioner) rollback(partial M) M {
 	}
 	ranges := getList(partial, "dhcp_ranges")
 	for i := len(ranges) - 1; i >= 0; i-- {
-		del(pyStr(asMap(ranges[i])["id"]), "dhcp_range", "")
+		rm := asMap(ranges[i])
+		// The label was "" until an unnameable range could reach the residual
+		// list. A residual row that names neither an id nor an address is not
+		// something an operator can act on, and start-end is what createDHCPRange
+		// records on every entry in both modes.
+		del(pyStr(rm["id"]), "dhcp_range", pyStr(rm["start"])+"-"+pyStr(rm["end"]))
 	}
 	subnets := getList(partial, "subnets")
 	for i := len(subnets) - 1; i >= 0; i-- {
@@ -729,8 +818,21 @@ func (p *SiteProvisioner) rollback(partial M) M {
 	// empty residual list for that case, indistinguishable from a rollback that
 	// deleted everything successfully — and wrote it into an append-only, signed
 	// audit log that can never be amended.
+	// A non-empty residual is checked FIRST and outranks the counters.
+	//
+	// An undeletable object bumps neither `attempted` nor `deleted` — no DELETE
+	// was sent for it — so the counters cannot tell "deleted everything I
+	// attempted" apart from "deleted everything I attempted AND left something I
+	// could not attempt". MEASURED: with this case removed,
+	// TestSiteRollback_UnnameableForwardZoneBecomesResidual reports
+	// `outcome: "complete"` over a residual row naming a zone that is still up.
+	// `not_needed` is the other word the counters can produce here, when nothing
+	// else was recorded at all. Both are success words, and this goes into an
+	// append-only signed log that cannot be amended later.
 	outcome := "not_needed"
 	switch {
+	case len(residual) > 0:
+		outcome = "incomplete"
 	case attempted == 0:
 		outcome = "not_needed"
 	case deleted == attempted:
@@ -744,6 +846,14 @@ func (p *SiteProvisioner) rollback(partial M) M {
 // Provision is SiteProvisioner.provision (server.py:1894).
 //
 // On success it returns the full result map and a nil error, unchanged.
+//
+// On success the map's `unknown_ids` list is the only place an orphan can be
+// reported, because a successful run never calls rollback and so has no residual
+// list. It names every object this run created upstream and cannot identify —
+// {kind, label} — and each one was also emitted as a "  Warning:" step while the
+// run was on screen. It is always present, empty meaning "everything created has
+// an id". The successful-site audit entry records {template, site} and has never
+// carried the result map; this change does not alter that.
 //
 // On FAILURE it returns (M{"rollback": report}, err) — both non-nil, and the map
 // carries the rollback report and NOTHING else. The internal `result` map is
@@ -760,9 +870,14 @@ func (p *SiteProvisioner) rollback(partial M) M {
 // distinguishable. On a dry-run failure the outcome is "skipped_dry_run":
 // rollback deliberately does not run, because a preview created nothing.
 func (p *SiteProvisioner) Provision() (M, error) {
+	// unknown_ids is initialised here alongside every other list so its ABSENCE
+	// never has to be interpreted. An empty list is "every object this run created
+	// can be named"; a missing key would be a legacy record, and the two must not
+	// look the same.
 	result := M{"block_id": "", "block_address": "", "subnets": []any{}, "dhcp_ranges": []any{},
 		"dns_zone_id": "", "dns_zone_fqdn": "", "reverse_zones": []any{}, "hosts": []any{},
-		"dry_run": p.cfg.DryRun, "skipped": false, "skip_reason": ""}
+		"unknown_ids": []any{},
+		"dry_run":     p.cfg.DryRun, "skipped": false, "skip_reason": ""}
 
 	runErr := func() error {
 		if err := p.resolveIPSpace(); err != nil {
@@ -804,7 +919,8 @@ func (p *SiteProvisioner) Provision() (M, error) {
 		}
 		zid := pyStr(zone["id"])
 		if zid == "" {
-			zid = "(dry-run)"
+			zid = idUnknown
+			p.noteUnknownID(result, "dns_zone", p.cfg.DNSZone())
 		}
 		result["dns_zone_id"] = zid
 		zfqdn := pyStr(zone["fqdn"])
@@ -812,17 +928,47 @@ func (p *SiteProvisioner) Provision() (M, error) {
 			zfqdn = p.cfg.DNSZone()
 		}
 		result["dns_zone_fqdn"] = zfqdn
+		// Recorded FIRST — id AND fqdn — then refused. A response with no `result`
+		// object carries no fqdn either, and rollback labels its residual row from
+		// result["dns_zone_fqdn"], so refusing before this assignment produced a
+		// residual row naming neither an id nor a zone: an operator told to go and
+		// delete something by hand, and not told what.
+		//
+		// p.zoneID is "" in this case and
+		// provisionHosts binds every host's host_names[].zone to it, so carrying on
+		// writes hosts against an empty zone reference — a wrong write, not a
+		// missing one. Stopping is only safe because result already names the zone,
+		// so rollback below can report the one object it cannot delete. This is the
+		// only unknown id that aborts the run: a host or a reverse zone with no id
+		// is a bookkeeping gap, and tearing down a working site to compensate for
+		// it would destroy live infrastructure to tidy a record.
+		if zid == idUnknown {
+			return perr("DNS zone %s was created but the response carried no id; "+
+				"every host would be bound to an empty zone reference, so nothing further was created",
+				p.cfg.DNSZone())
+		}
 		hosts, err := p.provisionHosts(subnets)
 		// Recorded BEFORE the error check, deliberately. provisionHosts returns
 		// what it managed to create even when it fails, and rollback deletes
 		// nothing it cannot find in result["hosts"] — so returning early here is
 		// what left already-created hosts alive upstream after a mid-list
 		// failure.
+		//
+		// This loop is also the single place hosts with an unknown id are NOTED:
+		// provisionHosts has no result map, and appending in both would list the
+		// same host twice. Only the marker travels out of provisionHosts.
 		outHosts := []any{}
 		for _, h := range hosts {
 			hid := pyStr(h["id"])
 			if hid == "" {
-				hid = "(dry-run)"
+				// Defence in depth. provisionHosts leaves no host entry with an
+				// empty id — every branch writes a real id, "(exists)", "(dry-run)"
+				// or idUnknown — so this is unreachable today; if it ever fires,
+				// falling back to idUnknown is the direction that gets reported.
+				hid = idUnknown
+			}
+			if hid == idUnknown {
+				p.noteUnknownID(result, "host", pyStr(h["fqdn"]))
 			}
 			outHosts = append(outHosts, M{"fqdn": pyStr(h["fqdn"]), "ip": pyStr(h["ip"]),
 				"hostname": pyStr(h["hostname"]), "id": hid})
