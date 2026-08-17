@@ -4,14 +4,20 @@ import { useMemo, useState } from 'react'
 // collapse into the same empty list a tenant that owns nothing produces.
 import { COLORS, Card, CardGrid, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
+// The classifier reads a sentence written in Go (drift.go's DetectDrift). It
+// lives in lib/ so npm test can reach it — inside this file it was a
+// cross-language prose contract nothing checked. See driftStatus.test.js.
+import { driftItemKind } from '../lib/driftStatus.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
 
-function itemStatus(d) {
-  const m = String(d?.message || '')
-  if (/is not in the template/.test(m)) return { label: 'extra', color: COLORS.crit, bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' }
-  if (/live value is/.test(m)) return { label: 'changed', color: COLORS.warn, bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)' }
-  return { label: 'missing', color: COLORS.crit, bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' }
+// Colours stay here, with the component that paints them. Keeping them next to
+// the classifier is what put the classifier inside a .jsx file and out of reach
+// of the tests.
+const PILL = {
+  extra: { label: 'extra', bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' },
+  changed: { label: 'changed', bg: 'var(--pill-warn-bg)', fg: 'var(--pill-warn-fg)' },
+  missing: { label: 'missing', bg: 'var(--pill-crit-bg)', fg: 'var(--pill-crit-fg)' },
 }
 
 export default function Drift() {
@@ -178,7 +184,7 @@ export default function Drift() {
                           <div className="text-[10.5px] font-medium text-dim uppercase tracking-wide mb-1.5">{cat}</div>
                           <div className="flex flex-col gap-1.5">
                             {shown.map((d, i) => {
-                              const st = itemStatus(d)
+                              const st = PILL[driftItemKind(d)]
                               return (
                                 <div key={i} className="flex items-start gap-2 text-sm">
                                   <span

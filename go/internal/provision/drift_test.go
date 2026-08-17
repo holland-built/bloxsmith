@@ -520,10 +520,10 @@ func TestDetectDrift_TagMissingVsMismatch_DistinctMessages(t *testing.T) {
 
 	entries := driftByCategory(driftEntries(t, DetectDrift(template, live, "site-a")), "tags")
 	want := []driftEntry{
-		{category: "tags", severity: "warning", field: "tags.Env",
-			message: "Tag 'Env': expected 'prod', live value is 'dev'"},
-		{category: "tags", severity: "warning", field: "tags.Owner",
-			message: "Tag 'Owner' missing from subnet tags (expected 'net-team')"},
+		{category: "tags", severity: "warning", field: "subnet:data.tags.Env",
+			message: "Tag 'Env' on subnet 'data': expected 'prod', live value is 'dev'"},
+		{category: "tags", severity: "warning", field: "subnet:data.tags.Owner",
+			message: "Tag 'Owner' missing from subnet 'data' tags (expected 'net-team')"},
 	}
 	if !reflect.DeepEqual(entries, want) {
 		t.Fatalf("tag drifts =\n%+v\nwant\n%+v", entries, want)
@@ -683,4 +683,176 @@ func TestStringSet_ReturnsEmptyIndependentWritableSet(t *testing.T) {
 	if other := stringSet(); len(other) != 0 {
 		t.Fatalf("a second stringSet() = %v, want empty — sets must not be shared", other)
 	}
+}
+
+// --- tags across EVERY live subnet, in an order upstream does not choose -----
+//
+// Tags used to be compared against liveSubnets[0] alone while names and hosts
+// were compared as sets. A site whose SECOND subnet had lost a tag reported
+// "in sync" — a clean bill of health about an estate that had drifted — and
+// swapping the two rows flipped the verdict. Nothing orders that list:
+// QuerySiteLive keeps whatever CSP returned.
+//
+// Every case below therefore runs BOTH permutations and requires an identical
+// report. Asserting one order proves nothing about a defect whose whole shape
+// is order-dependence.
+
+// driftTagsBothOrders runs DetectDrift over rows and over reverse(rows),
+// returning the tag entries and failing if the two disagree.
+func driftTagsBothOrders(t *testing.T, template M, rows []any) []driftEntry {
+	t.Helper()
+	live := func(in []any) M {
+		return M{"site": "site-a", "found": true, "subnets": in,
+			"dns_zone_found": true, "dns_zone_fqdn": "site-a.example.com."}
+	}
+	rev := make([]any, len(rows))
+	for i, r := range rows {
+		rev[len(rows)-1-i] = r
+	}
+	forward := driftByCategory(driftEntries(t, DetectDrift(template, live(rows), "site-a")), "tags")
+	backward := driftByCategory(driftEntries(t, DetectDrift(template, live(rev), "site-a")), "tags")
+	if !reflect.DeepEqual(forward, backward) {
+		t.Fatalf("the report changed with upstream row order.\n forward =\n%+v\nbackward =\n%+v\n"+
+			"the same estate cannot have two answers — that is the whole defect", forward, backward)
+	}
+	return forward
+}
+
+// driftTagsTemplate expects one tag on subnets named data and voice.
+func driftTagsTemplate() M {
+	return M{
+		"network": M{"subnets": []any{M{"name": "data"}, M{"name": "voice"}}},
+		"dns":     M{"create_zone": true},
+		"tags":    M{"Owner": "net-team"},
+	}
+}
+
+func TestDetectDrift_TagsCheckedOnEverySubnet(t *testing.T) {
+	tagged := M{"name": "data", "tags": M{"Owner": "net-team", "Site": "site-a"}}
+	untagged := M{"name": "voice", "tags": M{"Site": "site-a"}}
+
+	got := driftTagsBothOrders(t, driftTagsTemplate(), []any{tagged, untagged})
+	want := []driftEntry{{category: "tags", severity: "warning", field: "subnet:voice.tags.Owner",
+		message: "Tag 'Owner' missing from subnet 'voice' tags (expected 'net-team')"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("tag drifts =\n%+v\nwant\n%+v\n— the untagged subnet must be reported whichever "+
+			"row upstream listed first; teardown selects subnets by tag, so an unreported one is "+
+			"invisible to it", got, want)
+	}
+}
+
+// The positive control. Without it every assertion above is satisfied by a
+// function that reports tag drift for everything.
+func TestDetectDrift_AllSubnetsTaggedIsClean(t *testing.T) {
+	got := driftTagsBothOrders(t, driftTagsTemplate(), []any{
+		M{"name": "data", "tags": M{"Owner": "net-team"}},
+		M{"name": "voice", "tags": M{"Owner": "net-team"}},
+	})
+	if len(got) != 0 {
+		t.Fatalf("tag drifts = %+v, want none — both subnets carry the expected tag", got)
+	}
+}
+
+// Two subnets, two different faults. Both must be reported, and each row must
+// name the subnet it is about — the old message said "missing from subnet
+// tags", singular and unattributed, so the output never revealed that one
+// subnet had been checked.
+func TestDetectDrift_EachSubnetReportedSeparately(t *testing.T) {
+	got := driftTagsBothOrders(t, driftTagsTemplate(), []any{
+		M{"name": "data", "tags": M{"Owner": "someone-else"}},
+		M{"name": "voice", "tags": M{"Site": "site-a"}},
+	})
+	want := []driftEntry{
+		{category: "tags", severity: "warning", field: "subnet:data.tags.Owner",
+			message: "Tag 'Owner' on subnet 'data': expected 'net-team', live value is 'someone-else'"},
+		{category: "tags", severity: "warning", field: "subnet:voice.tags.Owner",
+			message: "Tag 'Owner' missing from subnet 'voice' tags (expected 'net-team')"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("tag drifts =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+// The identity fallbacks, each under both orders. A label built from the row's
+// POSITION would satisfy every test above and reintroduce the defect, so these
+// pin that the name comes from the row's own content.
+func TestDetectDrift_SubnetIdentityFallbacks(t *testing.T) {
+	tmpl := M{"dns": M{"create_zone": true}, "tags": M{"Owner": "net-team"}}
+
+	t.Run("no name falls back to the id", func(t *testing.T) {
+		got := driftTagsBothOrders(t, tmpl, []any{
+			M{"id": "ipam/subnet/aaa", "tags": M{"Owner": "net-team"}},
+			M{"id": "ipam/subnet/bbb", "tags": M{}},
+		})
+		want := []driftEntry{{category: "tags", severity: "warning",
+			field:   "subnet:ipam/subnet/bbb.tags.Owner",
+			message: "Tag 'Owner' missing from subnet 'ipam/subnet/bbb' tags (expected 'net-team')"}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("tag drifts =\n%+v\nwant\n%+v", got, want)
+		}
+	})
+
+	t.Run("no name and no id falls back to address/cidr", func(t *testing.T) {
+		got := driftTagsBothOrders(t, tmpl, []any{
+			M{"address": "10.1.0.0", "cidr": 24, "tags": M{"Owner": "net-team"}},
+			M{"address": "10.2.0.0", "cidr": 24, "tags": M{}},
+		})
+		want := []driftEntry{{category: "tags", severity: "warning",
+			field:   "subnet:10.2.0.0/24.tags.Owner",
+			message: "Tag 'Owner' missing from subnet '10.2.0.0/24' tags (expected 'net-team')"}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("tag drifts =\n%+v\nwant\n%+v", got, want)
+		}
+	})
+
+	// The template forbids duplicate subnet names; upstream does not. Two rows
+	// sharing a name must not produce two rows a reader cannot tell apart.
+	t.Run("a duplicated name is disambiguated by id", func(t *testing.T) {
+		got := driftTagsBothOrders(t, tmpl, []any{
+			M{"name": "data", "id": "ipam/subnet/aaa", "tags": M{}},
+			M{"name": "data", "id": "ipam/subnet/bbb", "tags": M{}},
+		})
+		want := []driftEntry{
+			{category: "tags", severity: "warning", field: "subnet:data (ipam/subnet/aaa).tags.Owner",
+				message: "Tag 'Owner' missing from subnet 'data (ipam/subnet/aaa)' tags (expected 'net-team')"},
+			{category: "tags", severity: "warning", field: "subnet:data (ipam/subnet/bbb).tags.Owner",
+				message: "Tag 'Owner' missing from subnet 'data (ipam/subnet/bbb)' tags (expected 'net-team')"},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("tag drifts =\n%+v\nwant\n%+v\n— two subnets with one name and two ids are two "+
+				"objects an operator has to fix separately", got, want)
+		}
+	})
+
+	// Same name, no id to tell them apart, DIFFERENT tags. The rows cannot be
+	// labelled distinctly from the data, so the two findings are reported under
+	// the same label — but the ORDER still must not depend on upstream's.
+	t.Run("a duplicated name with no id still reports in a fixed order", func(t *testing.T) {
+		got := driftTagsBothOrders(t, tmpl, []any{
+			M{"name": "data", "tags": M{"Owner": "wrong-a"}},
+			M{"name": "data", "tags": M{"Owner": "wrong-b"}},
+		})
+		want := []driftEntry{
+			{category: "tags", severity: "warning", field: "subnet:data.tags.Owner",
+				message: "Tag 'Owner' on subnet 'data': expected 'net-team', live value is 'wrong-a'"},
+			{category: "tags", severity: "warning", field: "subnet:data.tags.Owner",
+				message: "Tag 'Owner' on subnet 'data': expected 'net-team', live value is 'wrong-b'"},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("tag drifts =\n%+v\nwant\n%+v\n— indistinguishable labels are acceptable; a "+
+				"report whose ROW ORDER follows the API's is not", got, want)
+		}
+	})
+
+	// Nothing to name it by at all. One row, so there is nothing to order, and
+	// the label must still not be blank.
+	t.Run("nothing to name it by", func(t *testing.T) {
+		got := driftTagsBothOrders(t, tmpl, []any{M{"tags": M{}}})
+		want := []driftEntry{{category: "tags", severity: "warning",
+			field:   "subnet:(unnamed).tags.Owner",
+			message: "Tag 'Owner' missing from subnet '(unnamed)' tags (expected 'net-team')"}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("tag drifts =\n%+v\nwant\n%+v", got, want)
+		}
+	})
 }

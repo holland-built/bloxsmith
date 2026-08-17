@@ -148,10 +148,7 @@ func DetectDrift(template, live M, siteName string) M {
 	net := getMap(template, "network")
 	dns := getMap(template, "dns")
 	tagsTmpl := getMap(template, "tags")
-	liveTags := M{}
-	if len(liveSubnets) > 0 {
-		liveTags = getMap(asMap(liveSubnets[0]), "tags")
-	}
+	labelled := labelSubnets(liveSubnets)
 
 	expectedSubnetNames := stringSet()
 	for _, s := range getList(net, "subnets") {
@@ -186,13 +183,24 @@ func DetectDrift(template, live M, siteName string) M {
 		tagKeys = append(tagKeys, k)
 	}
 	sort.Strings(tagKeys)
-	for _, key := range tagKeys {
-		expectedVal := pyStr(tagsTmpl[key])
-		if liveTags[key] == nil {
-			drift("tags", "warning", "tags."+key, fmt.Sprintf("Tag '%s' missing from subnet tags (expected '%s')", key, expectedVal))
-		} else if pyStr(liveTags[key]) != expectedVal {
-			drift("tags", "warning", "tags."+key,
-				fmt.Sprintf("Tag '%s': expected '%s', live value is '%s'", key, expectedVal, pyStr(liveTags[key])))
+	// EVERY live subnet, not just the first one. Tags used to be read off
+	// liveSubnets[0] while names and hosts above were compared as sets, so a
+	// site whose second subnet had lost a tag reported "in sync" or "drifted"
+	// depending only on which row the API listed first — the same estate, two
+	// opposite verdicts. Tags are what teardown SELECTS subnets by, so the
+	// clean answer was the damaging one.
+	for _, ls := range labelled {
+		liveTags := getMap(ls.row, "tags")
+		for _, key := range tagKeys {
+			expectedVal := pyStr(tagsTmpl[key])
+			if liveTags[key] == nil {
+				drift("tags", "warning", "subnet:"+ls.label+".tags."+key,
+					fmt.Sprintf("Tag '%s' missing from subnet '%s' tags (expected '%s')", key, ls.label, expectedVal))
+			} else if pyStr(liveTags[key]) != expectedVal {
+				drift("tags", "warning", "subnet:"+ls.label+".tags."+key,
+					fmt.Sprintf("Tag '%s' on subnet '%s': expected '%s', live value is '%s'",
+						key, ls.label, expectedVal, pyStr(liveTags[key])))
+			}
 		}
 	}
 
@@ -234,6 +242,93 @@ func DetectDrift(template, live M, siteName string) M {
 	}
 	return M{"site": resolvedSite, "found": true, "drifted": len(drifts) > 0, "subnet_count": len(liveSubnets),
 		"drifts": drifts, "summary": M{"total": len(drifts), "errors": errors, "warnings": warnings}}
+}
+
+// labelledSubnet pairs a live subnet row with the name the drift report calls
+// it by.
+type labelledSubnet struct {
+	label string
+	row   M
+}
+
+// rawSubnetLabel names a live subnet from its OWN content, never from where it
+// sat in the list. An index would have been the obvious fallback and is the one
+// thing that cannot be used here: the whole defect being fixed is a report that
+// changes with row order, so a label derived from row order would carry it
+// straight back in.
+func rawSubnetLabel(m M) string {
+	if s := strings.TrimSpace(pyStr(m["name"])); s != "" {
+		return s
+	}
+	if s := strings.TrimSpace(pyStr(m["id"])); s != "" {
+		return s
+	}
+	addr := strings.TrimSpace(pyStr(m["address"]))
+	cidr := strings.TrimSpace(pyStr(m["cidr"]))
+	if addr != "" && cidr != "" {
+		return addr + "/" + cidr
+	}
+	if addr != "" {
+		return addr
+	}
+	return "(unnamed)"
+}
+
+// subnetSortKey is what orders the report. It has to separate rows that a
+// reader can tell apart, so it carries the identifying fields AND the tags
+// being compared: two subnets both called "data" with different tags are
+// different findings, and leaving them on an equal key would let their two
+// drift rows swap places with the upstream row order.
+//
+// Rows whose key is identical are identical in everything this function reads,
+// so they produce the same drift rows in either order and their relative
+// position genuinely does not matter.
+func subnetSortKey(m M) string {
+	tags := getMap(m, "tags")
+	keys := make([]string, 0, len(tags))
+	for k := range tags {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString(rawSubnetLabel(m))
+	b.WriteByte(0)
+	b.WriteString(pyStr(m["id"]))
+	b.WriteByte(0)
+	b.WriteString(pyStr(m["address"]) + "/" + pyStr(m["cidr"]))
+	for _, k := range keys {
+		b.WriteByte(0)
+		b.WriteString(k + "=" + pyStr(tags[k]))
+	}
+	return b.String()
+}
+
+// labelSubnets orders the live subnets deterministically and gives each one a
+// label that is unique whenever the data allows it: a repeated label gains its
+// row's id, so two subnets sharing a name do not produce two rows a reader
+// cannot tell apart. When there is no id either, the rows are indistinguishable
+// in the source data and identical output is the honest result.
+func labelSubnets(rows []any) []labelledSubnet {
+	out := make([]labelledSubnet, 0, len(rows))
+	counts := map[string]int{}
+	for _, r := range rows {
+		m := asMap(r)
+		counts[rawSubnetLabel(m)]++
+		out = append(out, labelledSubnet{row: m})
+	}
+	for i := range out {
+		label := rawSubnetLabel(out[i].row)
+		if counts[label] > 1 {
+			if id := strings.TrimSpace(pyStr(out[i].row["id"])); id != "" {
+				label += " (" + id + ")"
+			}
+		}
+		out[i].label = label
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return subnetSortKey(out[i].row) < subnetSortKey(out[j].row)
+	})
+	return out
 }
 
 func stringSet() map[string]bool { return map[string]bool{} }
