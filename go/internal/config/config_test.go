@@ -362,7 +362,7 @@ func TestGetDefault_ExplicitEmptyIsPreservedNotDefaulted(t *testing.T) {
 // loadRelevantKeys lists every env var Load(dir) reads, per config.go.
 var loadRelevantKeys = []string{
 	"INFOBLOX_API_KEY", "INFOBLOX_URL", "PORT", "HOST", "ALLOWED_HOSTS", "TRUSTED_PROXIES",
-	"APP_REPO", "DISABLE_UPDATE_CHECK", "DASHBOARD_TOKEN", "BLOCK_LIST_ID",
+	"DISABLE_UPDATE_CHECK", "DASHBOARD_TOKEN", "BLOCK_LIST_ID",
 	"GROQ_API_KEY", "LLM_API_KEY", "LLM_MODEL", "LLM_BASE_URL",
 	"VAULT_DIR", "VAULT_PASSPHRASE", "VAULT_PASSPHRASE_FILE", "TEMPLATES_DIR",
 	"AUDIT_TRUST_DIR", "AUDIT_KEY", "AUDIT_KEY_FILE",

@@ -55,16 +55,12 @@ func (e *Engine) TemplatesDirState() (DirState, error) {
 	}
 }
 
-// TemplatesInstalled reports whether the templates directory is present AND
-// usable. Templates ship with bloxsmith (committed in go/templates, bundled by
-// goreleaser); a bare `go build` dev tree legitimately lacks them.
-//
-// Callers that show the operator a REASON must use TemplatesDirState instead —
-// a bool cannot tell absent from unreadable, and those need opposite advice.
-func (e *Engine) TemplatesInstalled() bool {
-	state, _ := e.TemplatesDirState()
-	return state == DirPresent
-}
+// NO TemplatesInstalled. It returned a bool for "the templates directory is
+// present AND usable", and its own comment already sent anyone who needs to
+// show the operator a REASON to TemplatesDirState — because a bool cannot tell
+// absent from unreadable, and those two need opposite advice. After #134 every
+// caller needed the reason, so nothing but its own tests still called it. Use
+// TemplatesDirState and compare against DirPresent.
 
 // templatesMissingMsg is the advice for a directory that genuinely is not there:
 // get the build that bundles them.

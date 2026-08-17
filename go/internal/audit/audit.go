@@ -184,9 +184,6 @@ func New(path, imageDigest, instanceID string, opt Options) *Log {
 // KeyID is the short identifier of the key in use, or "" when there is none.
 func (l *Log) KeyID() string { return l.key.ID() }
 
-// KeySource names where the key came from, for the startup log line.
-func (l *Log) KeySource() string { return l.key.Source() }
-
 // KeyError is the reason no key could be established, or nil.
 func (l *Log) KeyError() error { return l.keyErr }
 

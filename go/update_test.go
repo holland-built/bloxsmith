@@ -41,7 +41,7 @@ func TestCheckUpdate_NewerTagAvailable(t *testing.T) {
 		_, _ = w.Write([]byte(`{"tag_name":"v3.14.0","html_url":"https://example.com/v3.14.0"}`))
 	}, "3.13.0")
 
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestCheckUpdate_SameTagIsGenuinelyUpToDate(t *testing.T) {
 		_, _ = w.Write([]byte(`{"tag_name":"v3.13.0","html_url":"https://example.com/v3.13.0"}`))
 	}, "3.13.0")
 
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err != nil {
 		t.Fatalf("unexpected error on a genuine up-to-date check: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestCheckUpdate_RateLimitedIsAnErrorNotUpToDate(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded for 1.2.3.4."}`))
 	}, "3.13.0")
 
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err == nil {
 		t.Fatal("expected an error for a 403 rate-limit response, got nil")
 	}
@@ -113,7 +113,7 @@ func TestCheckUpdate_MissingTagNameIsAnError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"Not Found"}`))
 	}, "3.13.0")
 
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err == nil {
 		t.Fatal("expected an error for a 200 body with no tag_name, got nil")
 	}

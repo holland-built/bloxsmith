@@ -137,22 +137,11 @@ func TestResolvePassphrase_UnreadableFileWarningSurvivesTheEnvWarning(t *testing
 	}
 }
 
-// PassphraseFromEnv and ResolvePassphrase must agree about an empty file, because
-// PassphraseFromEnv is exported. It is not called anywhere in this repo today, so a
-// divergence would sit unnoticed until something new used it.
-func TestPassphraseFromEnv_AgreesWithResolveOnAnEmptyFile(t *testing.T) {
-	dir := t.TempDir()
-	empty := writeFile(t, dir, "vault_pass", "")
-	missing := filepath.Join(dir, "nope")
-
-	if got := PassphraseFromEnv("from-env", empty); got != "from-env" {
-		t.Errorf("PassphraseFromEnv with an empty file = %q, want %q", got, "from-env")
-	}
-	if got := PassphraseFromEnv("from-env", missing); got != "from-env" {
-		t.Errorf("PassphraseFromEnv with a missing file = %q, want %q", got, "from-env")
-	}
-	good := writeFile(t, dir, "good", " from-file ")
-	if got := PassphraseFromEnv("from-env", good); got != "from-file" {
-		t.Errorf("PassphraseFromEnv with a good file = %q, want %q", got, "from-file")
-	}
-}
+// NO PassphraseFromEnv TEST. There was one, asserting that PassphraseFromEnv
+// and ResolvePassphrase agreed about an empty file — and its own comment
+// admitted PassphraseFromEnv "is not called anywhere in this repo today". Both
+// the helper and the test are gone. Nothing was lost: the three things it
+// checked are each already pinned above against the function that IS reachable
+// — empty file falls back to the env var (EmptyFileFallsBackAndSaysSo), a
+// missing one does too (UnreadableFileWarningSurvivesTheEnvWarning), and a
+// readable file wins and is trimmed (ReadableFileWinsWithNoFileWarning).

@@ -168,9 +168,11 @@ func labelFreshness(st updateStatus, cached bool, checkedAt time.Time) updateSta
 	return st
 }
 
-// checkUpdate returns the latest-release answer, serving the remembered one
-// while it is still fresh and otherwise contacting GitHub. See the cache
-// comment above for why this exists.
+// checkUpdateForce returns the latest-release answer, serving the remembered
+// one while it is still fresh and otherwise contacting GitHub. See the cache
+// comment above for why the cache exists. force=false is the ordinary call;
+// there was a no-argument checkUpdate() wrapper for it, but every production
+// caller passes a force value and only tests used the wrapper, so it is gone.
 //
 // The lock is held across the network call on purpose: concurrent page loads
 // queue behind one in-flight request and read its result, instead of each
@@ -180,10 +182,9 @@ func labelFreshness(st updateStatus, cached bool, checkedAt time.Time) updateSta
 // latestRelease (apply.go) directly and always fetches fresh. Downloading and
 // installing a binary chosen from a half-hour-old answer is not acceptable;
 // one request per apply is.
-func checkUpdate() (updateStatus, error) { return checkUpdateForce(false) }
-
-// checkUpdateForce is checkUpdate with the escape hatch for a DELIBERATE user
-// action (the ?force= parameter on /api/update/check).
+//
+// force=true is the escape hatch for a DELIBERATE user action (the ?force=
+// parameter on /api/update/check).
 //
 // WHY THIS EXISTS: the cache above was written to stop the BACKGROUND poll
 // spending the shared 60/hour allowance, and it did — but it also answered the

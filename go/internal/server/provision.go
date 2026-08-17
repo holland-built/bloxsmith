@@ -418,7 +418,7 @@ func (d *Deps) provisionSeedDemoStream(w http.ResponseWriter, r *http.Request) {
 	}
 	summary := map[string]any{"succeeded": []any{}, "failed": []any{}, "skipped": []any{}}
 
-	// Not TemplatesInstalled(): a bool folds "cannot be read" into "not there",
+	// A bool would fold "cannot be read" into "not there",
 	// and those two need opposite advice — re-pulling the image fixes an absent
 	// directory and does nothing for a permission bit. #134
 	if unavailable := d.prov(r).TemplatesUnavailable(); unavailable != "" {
