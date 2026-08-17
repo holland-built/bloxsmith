@@ -105,7 +105,9 @@ var tenantWriteAuditEvents = map[string][]string{
 	"POST /api/unblock-domain": {"unblock-domain"},
 
 	// --- IQ Actions ----------------------------------------------------------
-	"POST /api/actions/{id}/status": {"iq-action-resolve", "iq-action-resolve-failed"},
+	// Three, not two: "failed" is reserved for a write that never left this
+	// process, and a dispatched write whose fate is unknown gets its own name.
+	"POST /api/actions/{id}/status": {"iq-action-resolve", "iq-action-resolve-failed", "iq-action-resolve-unknown"},
 }
 
 // tenantWriteAuditAllowlist is for a route that changes the customer's tenant

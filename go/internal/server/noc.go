@@ -42,8 +42,46 @@ func (d *Deps) actionDetail(w http.ResponseWriter, r *http.Request) {
 	d.json(w, r, 200, d.dash(r).GetAction(r.Context(), id))
 }
 
+// actionApplied reports whether a DISPATCHED write is confirmed. It recognises
+// exactly one thing — an ok:true result carrying dashboard.ActionOutcomeApplied
+// — and answers false to everything else, including a result whose outcome word
+// it has never heard of.
+//
+// The default falls toward "not confirmed" on purpose. Saying the resolve did
+// not happen is a statement about the customer's tenant; saying we do not know
+// is a statement about this program, and only the second is safe to make by
+// accident. So a future classification bug degrades to the unknown row rather
+// than quietly re-inventing the false failure row this pair was written to
+// delete.
+//
+// It returns a bool rather than the event name so the two auditAppend calls
+// below keep STRING LITERALS. tenant_write_audit_test.go enumerates the events
+// a handler can emit by walking the syntax tree, and an event name arriving
+// through a function call reads as "unknown" there — which would have widened
+// the very guard this route is supposed to be covered by.
+func actionApplied(res map[string]any) bool {
+	ok, _ := res["ok"].(bool)
+	outcome, _ := res["outcome"].(string)
+	return ok && outcome == dashboard.ActionOutcomeApplied
+}
+
 // actionStatus is POST /api/actions/{id}/status: the first IQ Actions write
-// path (resolve/reopen). Gated to operator+; audits both outcomes.
+// path (resolve/reopen). Gated to operator+; audits every outcome.
+//
+// THREE ROWS, AND THE DIFFERENCE BETWEEN THEM IS WHAT THIS ROUTE PROVES:
+//
+//	iq-action-resolve          the tool answered {"success":true,...}
+//	iq-action-resolve-failed   nothing was ever sent (UpdateAction's error
+//	                           return is only reachable before dispatch)
+//	iq-action-resolve-unknown  the request left this process and its fate is
+//	                           not known — it may be applied on the tenant now
+//
+// The third one used to be spelled the same as the second. That told an
+// operator asking "was action X resolved?" a definite NO for a case whose
+// honest answer is "nobody can say", with nothing on the row to tell them
+// apart. It is the same rule server/security.go's auditOutcome states for
+// block-domain: a transport failure names this program's ignorance, not the
+// tenant's answer.
 func (d *Deps) actionStatus(w http.ResponseWriter, r *http.Request, b map[string]any) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
@@ -58,23 +96,30 @@ func (d *Deps) actionStatus(w http.ResponseWriter, r *http.Request, b map[string
 	status, _ := b["status"].(string)
 	res, err := d.dash(r).UpdateAction(r.Context(), id, status)
 	if err != nil {
-		d.json(w, r, 400, map[string]any{"ok": false, "error": err.Error()})
+		// Nothing left this process: every non-nil error UpdateAction returns is
+		// produced before CallToolChecked is reached (an empty id, a status that
+		// is neither "active" nor "resolved", an MCP client that will not
+		// initialise). "failed" is a true word here and only here, and the
+		// outcome is spelled on the row so it reads that way on disk too.
+		d.json(w, r, 400, map[string]any{"ok": false, "outcome": "not-sent", "error": err.Error()})
 		d.auditAppend("iq-action-resolve-failed", httpx.Actor(r), map[string]any{
-			"id": id, "old_status": "unknown", "new_status": status, "error": err.Error()})
+			"id": id, "old_status": "unknown", "new_status": status,
+			"outcome": "not-sent", "error": err.Error()})
 		return
 	}
-	if ok, _ := res["ok"].(bool); !ok {
-		// UpdateAction returned a non-error but unconfirmed outcome (e.g. an
-		// unparseable upstream response) — surface it as a failure, not a 200.
+	if !actionApplied(res) {
+		// Dispatched, unconfirmed. Surfaced as 502 rather than 200, and recorded
+		// as unknown rather than failed — see actionApplied.
 		d.json(w, r, 502, res)
-		d.auditAppend("iq-action-resolve-failed", httpx.Actor(r), map[string]any{
+		d.auditAppend("iq-action-resolve-unknown", httpx.Actor(r), map[string]any{
 			"id": id, "old_status": res["old_status"], "new_status": res["new_status"],
-			"error": res["error"]})
+			"outcome": res["outcome"], "error": res["error"]})
 		return
 	}
 	d.json(w, r, 200, res)
 	d.auditAppend("iq-action-resolve", httpx.Actor(r), map[string]any{
-		"id": id, "old_status": res["old_status"], "new_status": res["new_status"]})
+		"id": id, "old_status": res["old_status"], "new_status": res["new_status"],
+		"outcome": res["outcome"]})
 }
 
 // incidents is GET /api/incidents (server.py:5103): build signals, stamp ages,
