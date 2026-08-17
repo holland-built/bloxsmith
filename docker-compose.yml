@@ -54,6 +54,16 @@ services:
       # vault auto-unlock (optional) — skips passphrase prompt after restarts/updates
       VAULT_PASSPHRASE: ${VAULT_PASSPHRASE:-}
       VAULT_PASSPHRASE_FILE: ${VAULT_PASSPHRASE_FILE:-}
+      # Reverse proxy in front of this container? Name it, or the vault unlock
+      # rate limit counts every client behind the proxy as ONE. Compose reads
+      # .env only to SUBSTITUTE into this file, so a variable that is documented
+      # in .env.example and absent from here reaches nothing — and an unforwarded
+      # variable is indistinguishable from an unset one, so the app cannot warn.
+      # That is why this line exists; see .env.example for the value to use.
+      # VAULT_DIR is deliberately NOT forwarded: the vault volume mounts at a
+      # fixed /vault, and pointing the app somewhere else would put vault.json
+      # outside the persisted volume and lose it on the next container replace.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     networks: [noc-net]
     # ── Health probe ───────────────────────────────────────────────────
     # Before this existed, the only thing Docker knew about this container was
