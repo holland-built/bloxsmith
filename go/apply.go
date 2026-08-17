@@ -33,8 +33,15 @@ import (
 // Flow: latest GitHub release -> pick the goreleaser archive asset for THIS
 // GOOS/GOARCH -> verify its sha256 against the release checksums.txt -> extract
 // the binary from the archive -> minio/selfupdate.Apply (atomic swap, Windows
-// rename-dance handled by the library) -> graceful re-exec so the new binary
-// runs. On any failure the old binary is left in place (selfupdate rolls back).
+// rename-dance handled by the library). On any failure the old binary is left in
+// place (selfupdate rolls back).
+//
+// THE LAST STEP DEPENDS ON WHO ASKED, and only one of the two callers re-execs.
+// A running server (the in-app "Update now" button) has a port to hand over, so
+// it spawns the swapped binary and releases the listener. `bloxsmith update` is
+// a one-shot process with no server in it: there is nothing to hand over, and
+// the successor would be another `bloxsmith update`. It swaps and stops. See
+// completeApply.
 
 // startTime + applyCooldown port _APPLY_COOLDOWN (server.py:73): apply is
 // refused for the first 60s after startup so a crash-loop can't self-update.
@@ -535,12 +542,11 @@ func applyLatest() error {
 	}
 	_ = extractTemplates(archBytes, runtime.GOOS == "windows", filepath.Dir(exe))
 
-	progress.set("restarting", 95)
 	// Graceful hand-off: spawn the freshly-swapped binary, and only once it has
 	// actually launched do we release our listen socket and exit so it can take
 	// over the port. Deferred slightly so the /api/update/apply response and a
 	// final /status poll can complete first.
-	go func() {
+	completeApply(shutdownServer != nil, func() {
 		// A panic in the hand-off (before restart() reports its own spawn errors)
 		// would strand progress at 'restarting'; surface it so the modal resolves.
 		defer func() {
@@ -550,8 +556,38 @@ func applyLatest() error {
 		}()
 		time.Sleep(750 * time.Millisecond)
 		restart()
-	}()
+	})
 	return nil
+}
+
+// completeApply publishes the terminal phase once the binary has been swapped,
+// and schedules the hand-off only when there is something to hand off TO. It
+// reports whether it did.
+//
+// WHY THIS IS A DECISION AND NOT A LINE OF applyLatest. The hand-off used to be
+// unconditional, and on the `bloxsmith update` CLI path it did nothing at all
+// while announcing that it had: phase went to "restarting", the CLI printed
+// "— restarting", and then main.go's os.Exit tore the process down without ever
+// waiting the 750ms (#99). Had the goroutine ever won that race it would have
+// been wrong in the other direction — handleRestart re-execs with os.Args[1:],
+// which in that process is ["update"], so the "successor" would have been
+// another update run rather than a server.
+//
+// hasServer is passed in rather than read from shutdownServer here so this can
+// be exercised both ways without a live release download, a binary swap or a
+// real successor process — and because shutdownServer is the CURRENT signal for
+// "this process is serving", not a definition of it: buildServer assigns it just
+// before the listener binds.
+func completeApply(hasServer bool, handoff func()) bool {
+	if !hasServer {
+		// Swapped, and that IS the whole job here. The operator restarts whatever
+		// was already running; runUpdateCLI says so in words.
+		progress.set("done", 100)
+		return false
+	}
+	progress.set("restarting", 95)
+	go handoff()
+	return true
 }
 
 // shutdownServer gracefully stops the running HTTP server so the successor can
@@ -696,7 +732,16 @@ func runUpdateCLI(checkOnly bool) int {
 		return 1
 	}
 	close(done)
-	fmt.Println("updated to", st.Latest, "— restarting")
+	// NOT "restarting". Nothing in this process is serving, so nothing here can
+	// restart, and whatever IS serving on this machine is a different process
+	// still running the old binary — which is the fact the operator has to act
+	// on. The service line is qualified because a machine can carry more than
+	// one install and this command cannot tell which binary the service manager
+	// registered.
+	fmt.Println("updated to", st.Latest, "— the new binary is in place.")
+	fmt.Println("Anything already running is STILL on the old binary until it is restarted:")
+	fmt.Println("  installed as a service (this binary)  bloxsmith service restart")
+	fmt.Println("  started in a terminal                 stop it and start it again")
 	return 0
 }
 
