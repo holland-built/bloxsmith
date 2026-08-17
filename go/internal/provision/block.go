@@ -206,8 +206,20 @@ func (p *BlockProvisioner) createBlock(bdef M, parent *ipNetT, result M) error {
 				block = M{}
 			}
 			p.emit(M{"step": fmt.Sprintf("  Created block id=%s", pyStr(block["id"]))})
+			bid := pyStr(block["id"])
+			if bid == "" {
+				// Status was 200/201, so this block IS on the customer's network.
+				// Recorded as "" it fell into rollback's skip below and vanished:
+				// no delete, no residual row, and an "outcome":"not_needed" report
+				// saying there had been nothing to undo. See idUnknown in site.go
+				// for why the marker has to be its own value rather than a blank.
+				bid = idUnknown
+				p.emit(M{"step": fmt.Sprintf("  Warning: address block %s was created upstream but the "+
+					"response carried no id — it cannot be rolled back automatically or found again by id",
+					cidrStr(n))})
+			}
 			appendTo(result, "blocks_created", M{"address": networkAddr(n), "cidr": cidr,
-				"id": pyStr(block["id"]), "status": pyStr(bdef["status"])})
+				"id": bid, "status": pyStr(bdef["status"])})
 		}
 	}
 
@@ -249,6 +261,22 @@ func (p *BlockProvisioner) rollback(result M) M {
 	for i := len(created) - 1; i >= 0; i-- {
 		block := asMap(created[i])
 		blockID := pyStr(block["id"])
+		label := fmt.Sprintf("%s/%s", pyStr(block["address"]), pyStr(block["cidr"]))
+		// idUnknown is the one non-id that must not be skipped in silence: the
+		// block is LIVE and this run put it there. There is no id to DELETE, so
+		// reporting it is the only honest action left.
+		if blockID == idUnknown {
+			p.emit(M{"step": fmt.Sprintf("  Rollback: cannot delete block %s — it was created but the "+
+				"response carried no id. It is still there; remove it by hand.", label)})
+			residual = append(residual, M{
+				"kind":   "address_block",
+				"id":     "",
+				"label":  label,
+				"status": 0,
+				"reason": "created upstream but the create response carried no id, so rollback could not delete it",
+			})
+			continue
+		}
 		if blockID == "" || blockID == "(dry-run)" {
 			continue
 		}
@@ -259,7 +287,7 @@ func (p *BlockProvisioner) rollback(result M) M {
 			residual = append(residual, M{
 				"kind":   "address_block",
 				"id":     blockID,
-				"label":  fmt.Sprintf("%s/%s", pyStr(block["address"]), pyStr(block["cidr"])),
+				"label":  label,
 				"status": status,
 			})
 			continue
@@ -277,8 +305,16 @@ func (p *BlockProvisioner) rollback(result M) M {
 	// existed and was skipped). The old design recorded nothing at all for that
 	// case, which is indistinguishable from a rollback that deleted everything
 	// successfully.
+	// A non-empty residual outranks the counters, and is checked FIRST. An
+	// unnameable block sends no DELETE, so it moves neither counter — and both
+	// words the counters can produce on their own, "not_needed" and "complete",
+	// read as success over a list of blocks that are still up. MEASURED before
+	// this case existed: two live /16s and `outcome: "not_needed"`. Same rule and
+	// same reasoning as SiteProvisioner.rollback.
 	outcome := "not_needed"
 	switch {
+	case len(residual) > 0:
+		outcome = "incomplete"
 	case attempted == 0:
 		outcome = "not_needed"
 	case deleted == attempted:
