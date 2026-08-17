@@ -472,6 +472,21 @@ func (d *Deps) editDelete(w http.ResponseWriter, r *http.Request) {
 			detail["already_gone"] = gone
 		}
 		d.auditAppend("edit-"+resource+"-delete", httpx.Actor(r), detail)
+	} else if deleteOutcomeUnknown(status) {
+		// The same unknown-outcome hole dnsRecordDelete and ipamAddressDelete each
+		// closed, left open on the route with the widest blast radius: this one
+		// dispatches to all five editor resources, so the DELETE that went on the
+		// wire and was never answered could have removed a whole DNS zone or an
+		// address block. Both siblings recorded it; this wrote nothing at all.
+		//
+		// A distinct event name for the same reason they use one: filing it as
+		// "edit-<resource>-delete" would count an unknown outcome as a deletion.
+		// It claims nothing — outcome is "unknown" and the builder's own error text
+		// travels with it. A definite upstream refusal (400/403/404/409/500) is
+		// still not recorded; see deleteOutcomeUnknown for why that is not
+		// "audit every failure".
+		d.auditAppend("edit-"+resource+"-delete-error", httpx.Actor(r),
+			map[string]any{"id": objID, "outcome": "unknown", "error": res["error"]})
 	}
 }
 
