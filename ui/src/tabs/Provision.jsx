@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 // falls back to its placeholder and Apply sits disabled with no reason given.
 import { COLORS, Card, CardGrid, Empty, FetchError, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
+import { dhcpSkips } from '../lib/dhcpSkips.js'
 import { withToken } from '../lib/authFetch.js'
 
 const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
@@ -412,6 +413,21 @@ function SiteMode({ isAdmin }) {
       <Card key="provision-site-log" title="Live log" panelId="provision-site-log" span={6}>
         <LogView log={build.log} doneLabel={build.status === 'previewed' ? 'plan complete — nothing written' : 'done'} />
       </Card>
+
+      {/* Its own card, and NOT gated on 'applied': the Result card below only
+          renders once the site has been written, and a preview is the run where
+          learning a DHCP range cannot be placed still costs nothing. */}
+      {dhcpSkips(built).length > 0 && (
+        <Card key="provision-site-dhcp-skips" title="DHCP ranges not created" panelId="provision-site-dhcp-skips" span={6}>
+          <div className="flex flex-col gap-0.5">
+            {dhcpSkips(built).map((s) => (
+              <div key={s.key} className="font-mono text-[12px]" style={{ color: COLORS.crit }}>
+                ✕ {s.name}{s.subnet ? ` on ${s.subnet}` : ''}{s.range ? ` (${s.range})` : ''} — {s.reason}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {build.status === 'applied' && built && (
         <Card key="provision-site-result" title="Result" panelId="provision-site-result" span={6}>

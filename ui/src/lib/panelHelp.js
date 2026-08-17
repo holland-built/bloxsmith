@@ -305,9 +305,13 @@ export const PANEL_HELP = {
     what: 'The server’s running commentary on the site build — one line per thing it creates, or would create on a preview.',
     look: 'Red is a failure, green is the finish. Only the newest run is kept; starting another clears it.',
   },
+  'provision-site-dhcp-skips': {
+    what: 'DHCP ranges the build refused to create, and why — usually because the range the template asks for does not fit inside its own subnet.',
+    look: 'It appears only when something was skipped, on previews too, so you can fix the template before anything is written. The rest of the build still went ahead — only these ranges are missing.',
+  },
   'provision-site-result': {
     what: 'What the build produced: the address block it used, the DNS zone, and how many subnets, DHCP ranges and hosts it made.',
-    look: 'If that site already existed it says Skipped instead, and nothing was changed.',
+    look: 'If that site already existed it says Skipped instead, and nothing was changed. The DHCP range count leaves out any range that was skipped — those get their own panel.',
   },
   'provision-site-teardown': {
     what: 'Removes the objects created by the template chosen in the panel above — there is no separate picker here.',
