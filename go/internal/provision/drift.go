@@ -174,8 +174,17 @@ func DetectDrift(template, live M, siteName string) M {
 	if wantsZone && !zoneFound {
 		drift("dns", "error", "dns.create_zone", "Template specifies create_zone: true but no DNS zone was found")
 	} else if !wantsZone && zoneFound {
+		// "is not in the template" is load-bearing prose, not a rewrite for
+		// style. This is the same finding as the extra-subnet drift above — an
+		// object that exists upstream and the template does not account for —
+		// and it used to say so in different words, which put the two on
+		// opposite sides of the UI's classifier: ui/src/lib/driftStatus.js
+		// matches that phrase to pick the pill, so the zone got the "missing"
+		// pill printed beside a sentence saying it exists. The create_zone
+		// hint stays, because it is the thing to change.
 		drift("dns", "warning", "dns.create_zone",
-			fmt.Sprintf("DNS zone '%s' exists in API but template does not specify create_zone: true", pyStr(live["dns_zone_fqdn"])))
+			fmt.Sprintf("DNS zone '%s' exists in API but is not in the template (no dns.create_zone: true)",
+				pyStr(live["dns_zone_fqdn"])))
 	}
 
 	tagKeys := make([]string, 0, len(tagsTmpl))
