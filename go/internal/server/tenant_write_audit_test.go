@@ -98,7 +98,7 @@ var tenantWriteAuditEvents = map[string][]string{
 	"DELETE /api/ipam/addresses/":    {"ipam-address-delete", "ipam-address-delete-error"},
 	"POST /api/edit/":                {"edit-*-create", "edit-*-create-unreadable"},
 	"PATCH /api/edit/":               {"edit-*-update", "edit-*-update-unreadable"},
-	"DELETE /api/edit/":              {"edit-*-delete"},
+	"DELETE /api/edit/":              {"edit-*-delete", "edit-*-delete-error"},
 
 	// --- security policy -----------------------------------------------------
 	"POST /api/block-domain":   {"block-domain"},
