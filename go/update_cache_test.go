@@ -49,12 +49,12 @@ func TestCheckUpdate_TwoChecksInsideWindowCostOneRequest(t *testing.T) {
 	withGithubStub(t, countingStub(&hits, okRelease("v3.14.0")), "3.13.0")
 	advance := fakeClock(t, time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC))
 
-	first, err := checkUpdate()
+	first, err := checkUpdateForce(false)
 	if err != nil {
 		t.Fatalf("first check: unexpected error: %v", err)
 	}
 	advance(29 * time.Minute)
-	second, err := checkUpdate()
+	second, err := checkUpdateForce(false)
 	if err != nil {
 		t.Fatalf("second check: unexpected error: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestCheckUpdate_CachedAnswerSaysItIsCached(t *testing.T) {
 	start := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
 	advance := fakeClock(t, start)
 
-	first, _ := checkUpdate()
+	first, _ := checkUpdateForce(false)
 	if first.Cached {
 		t.Fatal("first check reported Cached = true, want false — it really did contact GitHub")
 	}
@@ -88,7 +88,7 @@ func TestCheckUpdate_CachedAnswerSaysItIsCached(t *testing.T) {
 	}
 
 	advance(10 * time.Minute)
-	second, _ := checkUpdate()
+	second, _ := checkUpdateForce(false)
 	if !second.Cached {
 		t.Fatal("cached check reported Cached = false — a remembered answer must not present itself as fresh")
 	}
@@ -119,12 +119,12 @@ func TestCheckUpdate_ExpiredCacheRefetches(t *testing.T) {
 	}), "3.13.0")
 	advance := fakeClock(t, time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC))
 
-	if _, err := checkUpdate(); err != nil {
+	if _, err := checkUpdateForce(false); err != nil {
 		t.Fatalf("first check: %v", err)
 	}
 	advance(updateCheckTTL + time.Minute)
 	tag = "v3.15.0"
-	second, err := checkUpdate()
+	second, err := checkUpdateForce(false)
 	if err != nil {
 		t.Fatalf("second check: %v", err)
 	}
@@ -152,11 +152,11 @@ func TestCheckUpdate_JitterShiftsExpiry(t *testing.T) {
 	// without it at 30m.
 	updateCheckJitter = func() time.Duration { return -10 * time.Minute }
 
-	if _, err := checkUpdate(); err != nil {
+	if _, err := checkUpdateForce(false); err != nil {
 		t.Fatalf("first check: %v", err)
 	}
 	advance(21 * time.Minute)
-	if _, err := checkUpdate(); err != nil {
+	if _, err := checkUpdateForce(false); err != nil {
 		t.Fatalf("second check: %v", err)
 	}
 
@@ -195,14 +195,14 @@ func TestCheckUpdate_FailureIsNotMaskedByRememberedSuccess(t *testing.T) {
 	}), "3.13.0")
 	advance := fakeClock(t, time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC))
 
-	good, err := checkUpdate()
+	good, err := checkUpdateForce(false)
 	if err != nil || !good.Available {
 		t.Fatalf("setup: first check should have found v3.14.0 available (err=%v, st=%+v)", err, good)
 	}
 
 	advance(updateCheckTTL + time.Minute)
 	fail = true
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 
 	if err == nil {
 		t.Fatal("failed check returned nil error — the failure was swallowed")
@@ -227,11 +227,11 @@ func TestCheckUpdate_FailureRememberedBriefly(t *testing.T) {
 	}), "3.13.0")
 	advance := fakeClock(t, time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC))
 
-	if _, err := checkUpdate(); err == nil {
+	if _, err := checkUpdateForce(false); err == nil {
 		t.Fatal("setup: expected the first check to fail")
 	}
 	advance(time.Minute)
-	st, err := checkUpdate()
+	st, err := checkUpdateForce(false)
 	if err == nil || st.Error == "" {
 		t.Fatal("a remembered failure must still be reported as a failure")
 	}
@@ -244,7 +244,7 @@ func TestCheckUpdate_FailureRememberedBriefly(t *testing.T) {
 
 	// ...but it must clear far sooner than a success, so recovery is quick.
 	advance(updateCheckErrTTL + time.Minute)
-	if _, err := checkUpdate(); err == nil {
+	if _, err := checkUpdateForce(false); err == nil {
 		t.Fatal("expected the retried check to fail too")
 	}
 	if got := hits.Load(); got != 2 {
@@ -259,7 +259,7 @@ func TestApplyPath_NeverServedFromCache(t *testing.T) {
 	withGithubStub(t, countingStub(&hits, okRelease("v3.14.0")), "3.13.0")
 	fakeClock(t, time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC))
 
-	if _, err := checkUpdate(); err != nil {
+	if _, err := checkUpdateForce(false); err != nil {
 		t.Fatalf("check: %v", err)
 	}
 	if _, err := latestRelease(); err != nil {
@@ -291,7 +291,7 @@ func TestCheckUpdate_ForcedCheckBypassesFreshCache(t *testing.T) {
 	}), "3.55.0")
 	advance := fakeClock(t, time.Date(2026, 8, 7, 12, 21, 47, 0, time.UTC))
 
-	if _, err := checkUpdate(); err != nil {
+	if _, err := checkUpdateForce(false); err != nil {
 		t.Fatalf("first check: %v", err)
 	}
 
@@ -299,7 +299,7 @@ func TestCheckUpdate_ForcedCheckBypassesFreshCache(t *testing.T) {
 	advance(19 * time.Minute)
 	tag = "v3.56.0"
 
-	background, err := checkUpdate()
+	background, err := checkUpdateForce(false)
 	if err != nil {
 		t.Fatalf("background poll: %v", err)
 	}
@@ -342,7 +342,7 @@ func TestCheckUpdate_ForcedResultReplacesTheCacheEntry(t *testing.T) {
 	}), "3.55.0")
 	advance := fakeClock(t, time.Date(2026, 8, 7, 12, 21, 47, 0, time.UTC))
 
-	if _, err := checkUpdate(); err != nil {
+	if _, err := checkUpdateForce(false); err != nil {
 		t.Fatalf("first check: %v", err)
 	}
 	advance(19 * time.Minute)
@@ -355,7 +355,7 @@ func TestCheckUpdate_ForcedResultReplacesTheCacheEntry(t *testing.T) {
 	// The very next background poll reads the forced answer, not the old one,
 	// and does not spend a request doing it.
 	advance(time.Minute)
-	after, err := checkUpdate()
+	after, err := checkUpdateForce(false)
 	if err != nil {
 		t.Fatalf("poll after force: %v", err)
 	}
@@ -560,7 +560,7 @@ func TestUpdateCLICheckBypassesWarmCache(t *testing.T) {
 	advance := fakeClock(t, time.Date(2026, 8, 7, 12, 21, 47, 0, time.UTC))
 
 	// Warm the cache the way a background poll would.
-	if _, err := checkUpdate(); err != nil {
+	if _, err := checkUpdateForce(false); err != nil {
 		t.Fatalf("priming check: %v", err)
 	}
 	if got := hits.Load(); got != 1 {

@@ -211,8 +211,8 @@ func TestTemplatesDirState_ThreeAnswers(t *testing.T) {
 	if state, _ := e.TemplatesDirState(); state != DirPresent {
 		t.Fatalf("state = %v, want DirPresent", state)
 	}
-	if !e.TemplatesInstalled() || e.TemplatesUnavailable() != "" {
-		t.Fatalf("a real directory must read as installed")
+	if e.TemplatesUnavailable() != "" {
+		t.Fatalf("a real directory must read as usable, got %q", e.TemplatesUnavailable())
 	}
 
 	absent := New(nil, filepath.Join(dir, "nope"))

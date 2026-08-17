@@ -140,13 +140,17 @@ type Config struct {
 	// proxied deployment to a single shared rate-limit bucket.
 	TrustedProxies []string
 
-	AppRepo             string // APP_REPO (server.py:68)
-	UpdateCheckDisabled bool   // DISABLE_UPDATE_CHECK (server.py:69)
+	// NO AppRepo FIELD. server.py:68 read APP_REPO, but the Go updater targets
+	// a compile-time const (update.go's appRepo) because the release assets,
+	// the signing identity and the version-file URL are all built for one
+	// repo. A field here read APP_REPO and nothing ever consulted it, which is
+	// worse than not offering it: an operator could set it and watch the
+	// updater keep checking somewhere else.
+	UpdateCheckDisabled bool // DISABLE_UPDATE_CHECK (server.py:69)
 
 	DashboardToken string // DASHBOARD_TOKEN (server.py:141)
 	BlockListID    string // BLOCK_LIST_ID (server.py:153)
 
-	GroqAPIKey string // GROQ_API_KEY (server.py:154)
 	LLMAPIKey  string // LLM_API_KEY or GROQ_API_KEY (server.py:157)
 	LLMModel   string // LLM_MODEL or "llama-3.3-70b-versatile" (qwen3-32b decommissioned by Groq 2026-07)
 	LLMBaseURL string // LLM_BASE_URL (server.py:159)
@@ -214,16 +218,16 @@ func Load(dir string) *Config {
 	c.AllowedHosts = splitList(os.Getenv("ALLOWED_HOSTS"))
 	c.TrustedProxies = splitList(os.Getenv("TRUSTED_PROXIES"))
 
-	c.AppRepo = or("APP_REPO", "holland-built/bloxsmith")
 	c.UpdateCheckDisabled = os.Getenv("DISABLE_UPDATE_CHECK") != ""
 
 	c.DashboardToken = os.Getenv("DASHBOARD_TOKEN")
 	c.BlockListID = os.Getenv("BLOCK_LIST_ID")
 
-	c.GroqAPIKey = os.Getenv("GROQ_API_KEY")
 	// LLM_API_KEY falls back to GROQ_API_KEY (server.py:157) — `or`, not default:
-	// an empty env var must still fall back.
-	c.LLMAPIKey = c.GroqAPIKey
+	// an empty env var must still fall back. GROQ_API_KEY is a local, not a
+	// field: this is the only place it is consulted, and a second copy on the
+	// struct is one more thing that can drift out of step with LLMAPIKey.
+	c.LLMAPIKey = os.Getenv("GROQ_API_KEY")
 	if v := os.Getenv("LLM_API_KEY"); v != "" {
 		c.LLMAPIKey = v
 	}

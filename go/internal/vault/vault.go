@@ -611,10 +611,12 @@ func (v *Vault) ActiveLabel() string {
 // readPassphraseFile reads a VAULT_PASSPHRASE_FILE, returning ("", nil) when no
 // path is configured and ("", err) when a configured path could not be read.
 //
-// It exists so the read happens ONCE and its error survives. Both callers below
-// used to do their own os.ReadFile and discard the error — PassphraseFromEnv to
-// get the value, ResolvePassphrase again to decide the source label — which is how
-// a path that could not be read became indistinguishable from no path at all.
+// It exists so the read happens ONCE and its error survives. There used to be
+// two readers, each doing its own os.ReadFile and discarding the error — one to
+// get the value, ResolvePassphrase again to decide the source label — which is
+// how a path that could not be read became indistinguishable from no path at
+// all. ResolvePassphrase is now the only caller; the other reader was
+// PassphraseFromEnv, which has since been removed.
 func readPassphraseFile(passphraseFile string) (string, error) {
 	p := strings.TrimSpace(passphraseFile)
 	if p == "" {
@@ -627,18 +629,14 @@ func readPassphraseFile(passphraseFile string) (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
-// PassphraseFromEnv ports _vault_passphrase_from_env (server.py:2756): prefer a
-// mounted VAULT_PASSPHRASE_FILE, else the VAULT_PASSPHRASE env var.
-//
-// It still swallows the read error, deliberately: it is a value-only helper and
-// its Python original has this shape. ResolvePassphrase is the function that
-// REPORTS, and it no longer goes through here — see readPassphraseFile.
-func PassphraseFromEnv(passphrase, passphraseFile string) string {
-	if v, err := readPassphraseFile(passphraseFile); err == nil && v != "" {
-		return v
-	}
-	return passphrase
-}
+// NO PassphraseFromEnv. It ported _vault_passphrase_from_env (server.py:2756)
+// and swallowed the read error, which is the shape the Python original had.
+// ResolvePassphrase is the function that REPORTS, and once it stopped going
+// through here (see readPassphraseFile) nothing called this at all — it sat
+// exported, unreachable, with a test whose own comment said it was not called
+// anywhere in this repo. An exported helper that silently discards the reason a
+// passphrase file could not be read is a trap for whoever calls it next; use
+// ResolvePassphrase.
 
 // PassphraseSource says where an auto-unlock passphrase came from. It exists so
 // the startup log can name it: "unlocked" alone tells an operator nothing about
