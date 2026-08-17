@@ -608,13 +608,34 @@ func (v *Vault) ActiveLabel() string {
 	return ""
 }
 
+// readPassphraseFile reads a VAULT_PASSPHRASE_FILE, returning ("", nil) when no
+// path is configured and ("", err) when a configured path could not be read.
+//
+// It exists so the read happens ONCE and its error survives. Both callers below
+// used to do their own os.ReadFile and discard the error — PassphraseFromEnv to
+// get the value, ResolvePassphrase again to decide the source label — which is how
+// a path that could not be read became indistinguishable from no path at all.
+func readPassphraseFile(passphraseFile string) (string, error) {
+	p := strings.TrimSpace(passphraseFile)
+	if p == "" {
+		return "", nil
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
 // PassphraseFromEnv ports _vault_passphrase_from_env (server.py:2756): prefer a
 // mounted VAULT_PASSPHRASE_FILE, else the VAULT_PASSPHRASE env var.
+//
+// It still swallows the read error, deliberately: it is a value-only helper and
+// its Python original has this shape. ResolvePassphrase is the function that
+// REPORTS, and it no longer goes through here — see readPassphraseFile.
 func PassphraseFromEnv(passphrase, passphraseFile string) string {
-	if p := strings.TrimSpace(passphraseFile); p != "" {
-		if b, err := os.ReadFile(p); err == nil {
-			return strings.TrimSpace(string(b))
-		}
+	if v, err := readPassphraseFile(passphraseFile); err == nil && v != "" {
+		return v
 	}
 	return passphrase
 }
@@ -646,12 +667,41 @@ const (
 // that it is gone. So when BOTH exist, this says so, names the file that is still
 // being used, and says the keychain entry is being ignored.
 func ResolvePassphrase(vaultPath, passphrase, passphraseFile string) (pass string, src PassphraseSource, warn string) {
-	env := PassphraseFromEnv(passphrase, passphraseFile)
-	envSrc := FromEnv
-	if strings.TrimSpace(passphraseFile) != "" {
-		if _, err := os.ReadFile(passphraseFile); err == nil {
-			envSrc = FromFile
-		}
+	fileVal, fileErr := readPassphraseFile(passphraseFile)
+
+	// A CONFIGURED PATH THAT COULD NOT BE READ IS NOT AN ABSENCE.
+	//
+	// .env.example tells the operator to PREFER this form ("prefer the *_FILE form
+	// (Docker/K8s secret) over the raw env var"), and the stock docker-compose file
+	// mounts nothing at the /run/secrets path it suggests. Before this warning, that
+	// produced pass="", src="none", warn="" — byte-identical to setting nothing at
+	// all — so a vault that never auto-unlocked gave no reason anywhere: not in the
+	// startup log, not in `vault-passphrase status`.
+	//
+	// It is a WARNING and not a refusal. A missing auto-unlock file is not a reason
+	// to refuse to boot; the browser unlock still works, and failing to start would
+	// turn a convenience gap into an outage.
+	fileWarn := ""
+	switch {
+	case fileErr != nil:
+		fileWarn = "VAULT_PASSPHRASE_FILE is set to " + strings.TrimSpace(passphraseFile) +
+			" but that file could not be read (" + fileErr.Error() + "), so it supplied no passphrase. " +
+			"On a docker-compose deploy, check that something actually mounts it into the container."
+	case strings.TrimSpace(passphraseFile) != "" && fileVal == "":
+		// Readable and empty. Same class, different cause — a secret mounted before
+		// it was populated, or a truncated write. It used to SHADOW
+		// VAULT_PASSPHRASE silently (the old code took the empty read as the
+		// answer), which is the worse of the two possible behaviours: the operator
+		// had a working passphrase set and it stopped being used with nothing said.
+		// It now falls through to VAULT_PASSPHRASE and says why.
+		fileWarn = "VAULT_PASSPHRASE_FILE is set to " + strings.TrimSpace(passphraseFile) +
+			" but that file is empty, so it supplied no passphrase."
+	}
+
+	env := fileVal
+	envSrc := FromFile
+	if env == "" {
+		env, envSrc = passphrase, FromEnv
 	}
 
 	kc := ""
@@ -660,30 +710,43 @@ func ResolvePassphrase(vaultPath, passphrase, passphraseFile string) (pass strin
 		kc, kcErr = GetKeychainPassphrase(vaultPath)
 	}
 
+	// join puts the unreadable-file warning FIRST when there is one. It is the thing
+	// the operator got wrong; the rest is advice about the source that won instead.
+	join := func(rest string) string {
+		switch {
+		case fileWarn == "":
+			return rest
+		case rest == "":
+			return fileWarn
+		default:
+			return fileWarn + " " + rest
+		}
+	}
+
 	switch {
 	case env != "" && kc != "":
-		return env, envSrc, "a vault passphrase is stored in the macOS keychain AND supplied via " +
+		return env, envSrc, join("a vault passphrase is stored in the macOS keychain AND supplied via " +
 			string(envSrc) + ". The " + string(envSrc) + " value is the one being used and the keychain entry is " +
-			"being ignored. Remove the " + string(envSrc) + " value to actually get the passphrase off disk."
+			"being ignored. Remove the " + string(envSrc) + " value to actually get the passphrase off disk.")
 	case env != "":
 		if KeychainSupported() {
-			return env, envSrc, "the vault passphrase is coming from " + string(envSrc) + ", which means it is " +
+			return env, envSrc, join("the vault passphrase is coming from " + string(envSrc) + ", which means it is " +
 				"stored in plaintext on this machine. `bloxsmith vault-passphrase set` moves it into the macOS " +
-				"keychain so it no longer travels with a disk image or a backup."
+				"keychain so it no longer travels with a disk image or a backup.")
 		}
-		return env, envSrc, ""
+		return env, envSrc, join("")
 	case kc != "":
-		return kc, FromKeychain, ""
+		return kc, FromKeychain, join("")
 	default:
 		// No passphrase at all is the normal no-auto-unlock case, not a fault. But a
 		// keychain lookup that FAILED (as opposed to finding nothing) must be said
 		// out loud, or a vault that could have unlocked stays locked with no reason
 		// given.
 		if kcErr != nil && !errors.Is(kcErr, ErrNoKeychainEntry) && !errors.Is(kcErr, ErrUnsupported) {
-			return "", FromNowhere, "the macOS keychain could not be read, so a stored vault passphrase " +
-				"(if any) could not be used: " + kcErr.Error()
+			return "", FromNowhere, join("the macOS keychain could not be read, so a stored vault passphrase " +
+				"(if any) could not be used: " + kcErr.Error())
 		}
-		return "", FromNowhere, ""
+		return "", FromNowhere, join("")
 	}
 }
 
