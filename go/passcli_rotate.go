@@ -66,6 +66,37 @@ func rotateVault(vaultPath, curPass, newPass string, verify func(path, pass stri
 	defer v.Lock()
 	beforeCount := v.TenantCount()
 
+	// THE NEW PASSPHRASE MUST ACTUALLY BE A NEW ONE.
+	//
+	// Without this, re-entering the current passphrase runs the whole rotation
+	// honestly — Unlock succeeds, Rotate re-derives against a fresh salt and
+	// writes, the fresh-instance verification opens the result and counts the same
+	// tenants — and then reports "the vault now opens ONLY with the new
+	// passphrase". Every word of that is false, and the operator's next act, on
+	// this command's own advice, is to delete the backup and consider an exposed
+	// passphrase invalidated. A new salt is not a rotation.
+	//
+	// It is the LIKELY mistake, not a far-fetched one: until this change the
+	// prompt asked "Vault passphrase:" — the same words `set` uses — one line
+	// after printing where the CURRENT passphrase came from.
+	//
+	// Placed BEFORE the length floor below: a passphrase that is both unchanged
+	// and short would otherwise be answered with "must be at least 8 characters",
+	// sending the operator to fix the wrong thing.
+	//
+	// The message does NOT claim the file is byte-identical, because for a legacy
+	// v1 vault it may not be: the Unlock above migrates it to the current scrypt
+	// parameters in place (vault.go, migrateLocked). That migration is a
+	// fix-forward under the same passphrase and is not this rotation; what the
+	// message claims — the rotation did not run, no backup was written — is true
+	// either way.
+	if newPass == curPass {
+		return rotateOutcome{msg: "the new passphrase is the same as the current one — the rotation did " +
+			"NOT run and no backup was written. A rotation exists to make the old passphrase stop working; " +
+			"re-sealing under the same one leaves it opening this vault exactly as before. Run it again with " +
+			"a passphrase you have not used for this vault."}
+	}
+
 	// Minimum length matches Init's rule exactly — a rotate must not be able to
 	// downgrade a vault to a weaker passphrase than a fresh one would ever accept.
 	if len(newPass) < 8 {
@@ -182,7 +213,10 @@ func passRotate(vaultPath, envPass, envPassFile string) int {
 	// source they expect, not find out after the fact.
 	fmt.Print(currentPassphraseSourceLine(src))
 
-	newPass, err := readPassphrase()
+	// Asked for with a label that says NEW. The old wording ("Vault passphrase:",
+	// the same words `set` uses) sat one line under "the current passphrase came
+	// from: ...", which reads as a request to confirm the current one.
+	newPass, err := readPassphrase(promptNewPassphrase)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1

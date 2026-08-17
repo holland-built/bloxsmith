@@ -277,7 +277,7 @@ func passSet(vaultPath string) int {
 		return 1
 	}
 
-	pass, err := readPassphrase()
+	pass, err := readPassphrase(promptSetPassphrase)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
@@ -312,14 +312,31 @@ func passSet(vaultPath string) int {
 	return 0
 }
 
+// The two things this program can ask for, in the operator's words. They are
+// named constants rather than literals at the call sites because `set` and
+// `rotate` want DIFFERENT answers to the same-shaped question, and for as long
+// as they shared one wording an operator could reasonably type the current
+// passphrase into rotate's prompt (#97) — which used to be accepted, reported as
+// a successful rotation, and leave an exposed passphrase working.
+const (
+	promptSetPassphrase = "Vault passphrase"
+	promptNewPassphrase = "New vault passphrase"
+)
+
 // readPassphrase prompts twice with echo off. It reads from the terminal rather
 // than taking a flag so the passphrase does not land in shell history — the one
 // exposure this side of it can actually avoid.
 //
 // A non-terminal stdin (a pipe, a script) is read as a single line, so
 // `printf '%s' "$p" | bloxsmith vault-passphrase set` works for an automated
-// install without a second confirmation it could never answer.
-func readPassphrase() (string, error) {
+// install without a second confirmation it could never answer. That branch
+// prints no prompt at all, so the label is a terminal-only concern.
+//
+// A var rather than a plain func so a test can substitute one and assert which
+// LABEL a subcommand asked with. Pinning the two constants is not the same
+// check: it would still pass with the call sites swapped, which is exactly the
+// mistake worth catching.
+var readPassphrase = func(label string) (string, error) {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
 		line = strings.TrimRight(line, "\r\n")
@@ -329,7 +346,7 @@ func readPassphrase() (string, error) {
 		return line, nil
 	}
 
-	fmt.Print("Vault passphrase: ")
+	fmt.Printf("%s: ", label)
 	first, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Println()
 	if err != nil {
