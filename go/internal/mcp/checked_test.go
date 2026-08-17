@@ -216,3 +216,53 @@ func TestCallToolUnchangedByErrorPayload(t *testing.T) {
 		t.Fatalf("expected raw text unchanged, got: %q", got)
 	}
 }
+
+// TestErrTransportCanFollowAToolThatRan is the counter-example to the sentence
+// ErrTransport's doc used to carry: "the call never reached the tool at all —
+// the write was never sent, so it is always safe to retry."
+//
+// The server below EXECUTES the tools/call and only then fails the HTTP
+// response, which is what a call timeout, a gateway 5xx and a body-read failure
+// all look like from here. The tool ran; the caller gets ErrTransport. A caller
+// that read the old sentence and retried a non-idempotent write would apply the
+// customer's change twice.
+//
+// This is a behaviour test and not a check on the words. Prose can be reworded
+// and a regex over it would fail on a legitimate edit; what has to stay true is
+// the fact underneath, so the fact is what is pinned. TestCallToolChecked
+// SentinelErrors above proves ErrTransport is REACHED on a transport failure —
+// this one proves what it does NOT license you to conclude.
+func TestErrTransportCanFollowAToolThatRan(t *testing.T) {
+	ran := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Method string `json:"method"`
+		}
+		body, _ := decodeBody(r)
+		_ = json.Unmarshal(body, &req)
+		if req.Method != "tools/call" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+			return
+		}
+		ran = true                           // the tool EXECUTED — a real write would be on the tenant now
+		w.WriteHeader(http.StatusBadGateway) // ...and the gateway ate the reply
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, func() string { return "Bearer test" })
+	_, err := c.CallToolChecked(context.Background(), "some_write_tool",
+		map[string]any{"id": "x"}, SuccessFieldTrue)
+
+	if !ran {
+		t.Fatal("the stub never received the tools/call, so nothing here is about a tool that ran")
+	}
+	if !errors.Is(err, ErrTransport) {
+		t.Fatalf("errors.Is(err, ErrTransport) = false, got %v — this test only says something "+
+			"if the failure it builds is classified as a transport error", err)
+	}
+	if errors.Is(err, ErrRejected) {
+		t.Fatalf("the same error also matched ErrRejected, so the two sentinels no longer "+
+			"partition the failure space: %v", err)
+	}
+}

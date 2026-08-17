@@ -79,10 +79,28 @@ var ErrTooManyRows = errors.New("mcp: row_count exceeds maxRows cap")
 var ErrIncompleteRows = errors.New("mcp: pagination aborted before all rows were read")
 
 // ErrTransport is wrapped into CallToolChecked's returned error whenever the
-// call never reached the tool at all (network/HTTP/JSON-RPC failure) — the
-// write was never sent, so it is always safe to retry. Callers should match
-// it with errors.Is rather than inspecting the error's message text, which is
-// free to change without notice.
+// call failed at the transport layer (network, HTTP status, response body or
+// JSON-RPC framing) rather than being answered by the tool.
+//
+// IT DOES NOT MEAN THE WRITE WAS NEVER SENT, AND IT IS NOT ALWAYS SAFE TO
+// RETRY. It used to say both, and both were wrong. CallToolChecked wraps EVERY
+// error out of CallTool as this sentinel, which covers the call timeout
+// expiring after the tool already ran, a gateway status >= 400 raised once it
+// may already have run, and a body-read or decode failure after it ran. At this
+// layer "never sent" and "sent, outcome unknown" are indistinguishable, so a
+// match here means UNKNOWN. TestErrTransportCanFollowAToolThatRan proves it
+// with a server that executes the call and then fails the reply.
+//
+// So: retry only a write you know to be idempotent, and never report a match
+// here as "nothing was applied" — see internal/dashboard/security.go's
+// isMcpTransportError for the same rule stated where it is acted on.
+//
+// ErrRejected below is the other half and has always been right: the call
+// reached the tool, and the write may or may not have landed. Neither sentinel
+// can tell a caller the tenant is unchanged.
+//
+// Callers should match with errors.Is rather than inspecting the error's
+// message text, which is free to change without notice.
 var ErrTransport = errors.New("mcp: transport error")
 
 // ErrRejected is wrapped into CallToolChecked's returned error whenever the
