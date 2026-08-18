@@ -22,14 +22,38 @@
 # failing in miniature, which is why this is written out rather than quietly
 # updated to a fresher version number.
 #
-# AND THE ARGUMENT IS NOT YET WON FOR THE GO HALF. As of 2026-08-15 the `gomod`
-# block below has never opened a single pull request, while npm and
-# github-actions have opened thirteen between them. golang.org/x/crypto is a
-# DIRECT requirement, v0.55.0 was published 2026-08-11, Dependabot ran on
-# 2026-08-12 and opened two npm PRs in that run, and nothing for Go. Symptom
-# recorded, cause not diagnosed — reading Dependabot's own job logs needs
-# repository permissions. Tracked as issue #40. Do not read the presence of this
-# block as proof that the Go side is being watched.
+# THE GO HALF LOOKED BROKEN AND IS NOT. Through 2026-08-15 the `gomod` block
+# below had opened zero pull requests while npm and github-actions had opened
+# thirteen between them, and this file recorded that as an undiagnosed symptom
+# under issue #40. It was diagnosed on 2026-08-18 from the ecosystem's own job
+# history, and #40 is closed as not a bug:
+#
+#   - the jobs are not failing. The five most recent gomod runs all completed
+#     green, each reporting "No PRs affected".
+#   - every Go module still behind is `// indirect`, and the gomod updater does
+#     not open PRs for indirect dependencies by default. Documented behaviour,
+#     not a misconfiguration here.
+#   - golang.org/x/crypto, the direct dependency #40 was opened about, reached
+#     v0.55.0 on 2026-08-15 in cc298c8 (#62) — by hand, four days before the
+#     weekly slot could have found it. A release that lands between two runs and
+#     is fixed by a human in between leaves Dependabot nothing to propose. That
+#     is the whole of the zero: a cadence that never had a direct bump waiting
+#     for it. Note it is the SECOND bump in this file made by a human rather
+#     than by this config, after minisign above.
+#
+# A theory checked and REJECTED, written out so nobody re-derives it: go/go.mod
+# declares `go 1.26.6` while Dependabot's go_modules image is built on
+# golang:1.26.5, and locally that pair refuses the module under GOTOOLCHAIN=local
+# — the same lag that broke every Go job in ci.yml:119-127. It explains the
+# symptom cleanly and it is still wrong, because the jobs succeed. Do NOT lower
+# the `go` directive on the strength of it; it was raised deliberately for four
+# reachable stdlib advisories.
+#
+# So the count of PRs from this block is not the measure. What it covers is
+# DIRECT dependencies only. Watching the indirect ones as well is a deliberate
+# config change with a real cost — PRs for packages nothing in this tree calls,
+# two of them test-only leftovers last tagged in 2016 and 2018 — and would be
+# worth doing on purpose, never to make a counter go up.
 #
 # Weekly, not daily: this is a small tree with three ecosystems, and daily
 # turns a maintenance signal into background noise that gets filtered.
