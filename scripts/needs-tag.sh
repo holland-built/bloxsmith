@@ -102,6 +102,49 @@ exempt() {
     # that stays a pure archive nothing builds. If anything in third_party/ ever
     # becomes a build input, delete this arm — do not add an exception to it.
     third_party/*)                           return 0 ;;
+    # Go test files. `go build` does not compile a *_test.go at all — the file
+    # is invisible to every non-test build — so one cannot alter the binary, the
+    # archive, the image or the installers, and there is nothing in it a
+    # customer executes. Same category as tests/ and playwright.config.ts, and
+    # found the same way both of those were: by running this script on a real
+    # change and getting `tag` for something that ships nothing. Measured on
+    # v3.67.0..v3.67.1 — 16 paths printed, 14 of them _test.go, and only
+    # go/internal/mcp/mcp.go and go/templates/dns/corp.yaml real. The two
+    # changes that mattered were outnumbered seven to one by files that could
+    # not reach anybody, which is how this list stops being read.
+    #
+    # REPLAYED AGAINST REAL HISTORY, both directions, because the noise argument
+    # alone would not justify an arm on this list. Across the last eleven
+    # release ranges (v3.65.3..v3.67.1) this arm flips NO verdict — every one of
+    # those releases shipped real code and still says `tag`, so it cannot cost a
+    # release that was correctly cut. It flips exactly one commit in that span:
+    # ea1da6a (#144), "Make the last five MCP test fakes answer the id they were
+    # asked", which touched nothing but *_test.go and which the old matcher
+    # called `tag`. That commit is the case this arm is for, and it is the same
+    # shape as 6bc5ee3 in SHIP.md:34 — a commit of test files that would have
+    # put an update banner in front of every operator for nothing.
+    #
+    # THIS IS NOT THE "WHEN UNSURE, LEAVE IT OFF" CASE, and that distinction is
+    # the only reason this arm is allowed to exist. That posture is for paths
+    # whose reach nobody has established — a new workflow, a new top-level
+    # directory, third_party/ on the day it might become a build input. Here the
+    # reach is a property of the Go toolchain rather than a claim about how this
+    # repo happens to be wired, so there is nothing left to be unsure about.
+    # Every other entry on this list would have to be re-verified if the build
+    # changed; this one would not. Do not delete it as an unsafe exemption.
+    #
+    # It is a SUFFIX rule and not a directory rule. The selftest pins that with
+    # a go/internal/dashboard/tiles.go row that must keep tagging, because
+    # widening this to go/internal/* would exempt the server.
+    #
+    # THE FIRST ARM IS WHERE THE GUARANTEE STOPS. The archive `files:` list in
+    # go/.goreleaser.yaml bundles `templates/**/*` by GLOB, so a _test.go under
+    # go/templates would be copied into every release archive as a data file
+    # without the compiler ever looking at it — exempt by suffix, shipped by
+    # glob. No such file exists today. The arm is here so that the day somebody
+    # adds one, this script says `tag` instead of quietly agreeing with itself.
+    go/templates/*_test.go)                  return 1 ;;
+    *_test.go)                               return 0 ;;
     *)                                      return 1 ;;
   esac
 }
@@ -126,6 +169,15 @@ selftest() {
   # plans/screens/before.png are the only rows that exercise those two prefixes,
   # and docs/logo.svg is a real tracked file — so is docs/dashboard.png, which is
   # exempt today by nothing else.
+  #
+  # THE THREE _test.go ROWS ARE A SET AND MUST STAY ONE. tiles_test.go proves the
+  # suffix is exempt; tiles.go — same directory, one word shorter — proves the arm
+  # is about the suffix and not about go/internal/, which is the only way it could
+  # be widened into exempting the server; go/templates/foo_test.go proves the
+  # guard arm still fires, i.e. that a file the release archive picks up by glob
+  # tags even though its name says test. Delete any one of the three and the other
+  # two stop proving anything. foo_test.go is deliberately a path that does not
+  # exist — it is the case this table is defending against, not a file to create.
   done <<'TABLE'
 skip README.md
 skip docs/SHIP.md
@@ -147,6 +199,7 @@ skip third_party/uddi_automation_toolkit/SOURCE.md
 skip scripts/out_cubes.json
 skip scripts/out_tools.json
 skip scripts/mcp_diff.py
+skip go/internal/dashboard/tiles_test.go
 tag scripts/install.command
 tag .dockerignore
 tag .env.example
@@ -159,6 +212,8 @@ tag scripts/install.command
 tag scripts/dev-serve.sh
 tag go/main.go
 tag go/Dockerfile.goreleaser
+tag go/internal/dashboard/tiles.go
+tag go/templates/foo_test.go
 tag go/templates/subnet.json
 tag ui/src/App.jsx
 tag ui/package.json
