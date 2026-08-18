@@ -60,6 +60,10 @@ func newSecurityAuditDeps(t *testing.T, blockListID string, mcpStatus int, mcpTe
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		defer r.Body.Close()
+		// Answer the question that was actually asked. internal/mcp rejects a reply
+		// carrying a different JSON-RPC id (#143), and a fake that always says
+		// "id":1 mis-addresses every call after the first on a client.
+		w = echoRPCID(w, raw)
 		var req struct {
 			Method string `json:"method"`
 		}

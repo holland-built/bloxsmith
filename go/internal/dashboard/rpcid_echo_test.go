@@ -3,8 +3,11 @@ package dashboard
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strconv"
+	"strings"
+	"testing"
 )
 
 // This file exists because of issue #138. internal/mcp's client now refuses a
@@ -44,4 +47,31 @@ func (w rpcIDEcho) Write(p []byte) (int, error) {
 	// Report the caller's length: the rewritten body can differ in size, and an
 	// encoder that sees a short write treats it as a failure.
 	return len(p), nil
+}
+
+// TestEchoRPCIDAnswersTheIDItWasAsked proves the wrapper actually rewrites the
+// id, rather than being a no-op nobody notices. Every fake MCP endpoint in this
+// package depends on it, and none of them would fail today if it silently did
+// nothing — they each make a single call, where the old hardcoded "id":1 is
+// accidentally correct. This is the guard for the day one of them makes two.
+//
+// Mutation that must turn this RED: make rpcIDEcho.Write pass p through
+// unchanged.
+func TestEchoRPCIDAnswersTheIDItWasAsked(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := echoRPCID(rec, []byte(`{"jsonrpc":"2.0","id":7,"method":"tools/call"}`))
+
+	canned := []byte(`{"jsonrpc":"2.0","id":1,"result":{}}`)
+	n, err := w.Write(canned)
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	// The rewritten body can differ in length; reporting anything but the
+	// caller's own length makes an encoder treat this as a short write.
+	if n != len(canned) {
+		t.Fatalf("Write reported %d bytes, caller wrote %d", n, len(canned))
+	}
+	if got := rec.Body.String(); !strings.Contains(got, `"id":7`) {
+		t.Fatalf("reply was not re-addressed to the request: %s", got)
+	}
 }

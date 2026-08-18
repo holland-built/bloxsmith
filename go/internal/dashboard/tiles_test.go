@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -100,7 +101,12 @@ func scalarCubeServer(t *testing.T, queryText string, queryOK bool) *mcp.Client 
 				Name string `json:"name"`
 			} `json:"params"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &req)
+		// Answer the question that was actually asked. internal/mcp rejects a reply
+		// carrying a different JSON-RPC id (#143), and a fake that always says
+		// "id":1 mis-addresses every call after the first on a client.
+		w = echoRPCID(w, raw)
 
 		switch req.Method {
 		case "initialize":
