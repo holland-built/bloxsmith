@@ -23,6 +23,7 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -110,6 +111,22 @@ var ErrTransport = errors.New("mcp: transport error")
 // reached the tool; the write may or may not have landed upstream.
 var ErrRejected = errors.New("mcp: rejected")
 
+// ErrIDMismatch is returned by post when a reply carries a JSON-RPC id that is
+// not the id we asked with — i.e. the answer belongs to a different question.
+//
+// It is deliberately NOT an ErrTransport. ErrTransport promises the caller
+// nothing was applied, and that promise is false here: the request was written
+// to the wire and the server answered something, so a mutation may well have
+// landed. CallToolChecked therefore maps this to ErrRejected instead.
+//
+// Filed against issue #138, where the Assets tab rendered one identity-less
+// asset over a header claiming 2,355. The list read had come back holding the
+// COUNT read's single aggregate row. Whether that was a mis-addressed reply has
+// never been established, because nothing in this client compared the two ids —
+// so the one thing that could tell "wrong answer delivered" apart from "server
+// answered this question wrongly" was not being looked at.
+var ErrIDMismatch = errors.New("mcp: response id did not match the request")
+
 // Client is a streamable-HTTP MCP session. Auth mirrors MCP_HEADERS: a func so
 // the active tenant key (post account-switch) is always read live.
 type Client struct {
@@ -120,6 +137,13 @@ type Client struct {
 	mu        sync.Mutex
 	sessionID string // Mcp-Session-Id issued by initialize
 	nextID    int
+
+	// uncorrelatedWarn fires at most one log line per client for a server that
+	// answers without echoing an id at all. That is a correlation blind spot
+	// worth knowing about — it means the ErrIDMismatch check below can never
+	// fire — but it is not itself a failure, and repeating it on every call
+	// would bury the log.
+	uncorrelatedWarn sync.Once
 
 	initMu      sync.Mutex
 	initialized bool
@@ -173,11 +197,48 @@ type rpcReq struct {
 }
 
 type rpcResp struct {
+	// ID is held as RawMessage, not *int, for two reasons. JSON-RPC 2.0 allows
+	// a string or a number id, so *int silently drops a conforming string id on
+	// the floor and reads as "absent". And *int cannot tell an absent id from an
+	// explicit JSON null, which are different things: absent means the server
+	// never echoes ids, null means it could not attribute this reply to any
+	// request. Only the first is worth a warning.
+	ID     json.RawMessage `json:"id"`
 	Result json.RawMessage `json:"result"`
 	Error  *struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+// idMatchesRequest compares a reply's JSON-RPC id against the int id this
+// client sent. comparable is false when the reply carries no usable id at all
+// (absent, or an explicit null) — that is a blind spot, not a mismatch, and the
+// caller must not fail the call over it.
+//
+// Both the number form (`"id":7`) and the string form (`"id":"7"`) count as a
+// match, because a server is free to echo either and rejecting a conforming
+// reply would be a worse bug than the one this guards.
+func idMatchesRequest(want int, got json.RawMessage) (match, comparable bool) {
+	raw := bytes.TrimSpace(got)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return false, false
+	}
+	wantStr := strconv.Itoa(want)
+	if string(raw) == wantStr {
+		return true, true
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s == wantStr, true
+	}
+	var n json.Number
+	if json.Unmarshal(raw, &n) == nil {
+		return n.String() == wantStr, true
+	}
+	// Some other JSON shape entirely (object, array, bool). Not our id, but we
+	// can see that it is not, so it counts as comparable and mismatched.
+	return false, true
 }
 
 // post sends one JSON-RPC message and returns the decoded response. Handles
@@ -244,12 +305,39 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 		return nil, err
 	}
 	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
-		payload = extractSSEData(payload)
+		payload = extractSSEData(payload, id)
 	}
 	var out rpcResp
 	if err := json.Unmarshal(payload, &out); err != nil {
 		return nil, err
 	}
+
+	// CORRELATE THE ANSWER WITH THE QUESTION. Every request above is stamped
+	// with a unique id and, until issue #138, nothing ever looked at the id that
+	// came back — rpcResp did not even parse the field. A reply belonging to a
+	// different request would have been accepted as this one's answer in
+	// silence, which is precisely the failure mode that leaves no trace in a
+	// log: nothing errors, a well-formed result is returned, and the caller
+	// renders it. This check runs BEFORE the Error branch on purpose — an error
+	// addressed to someone else's request is not this call's failure to report.
+	//
+	// Deliberately fail-closed with no retry. post also carries the mutating
+	// CallToolChecked calls, and re-sending a request whose outcome is unknown
+	// could apply it twice; any retry policy belongs in an idempotent read
+	// caller that can reason about it, not here.
+	if match, comparable := idMatchesRequest(id, out.ID); comparable && !match {
+		// The received id is NOT interpolated. It is upstream-controlled, and
+		// this file's standing rule is that no substring of a reply reaches the
+		// log (see the block comment above callTimeout). Our own id is enough:
+		// the fact of a mismatch is the whole diagnosis.
+		log.Printf("mcp: %s: reply carries a JSON-RPC id that is not the one this request asked with (id %d) — answer discarded, not rendered", method, id)
+		return nil, fmt.Errorf("mcp %s: %w (asked id %d)", method, ErrIDMismatch, id)
+	} else if !comparable {
+		c.uncorrelatedWarn.Do(func() {
+			log.Printf("mcp: %s: reply carries no JSON-RPC id, so replies cannot be matched to requests on this endpoint — a mis-addressed answer would go undetected", method)
+		})
+	}
+
 	if out.Error != nil {
 		return nil, fmt.Errorf("mcp %s: %s", method, out.Error.Message)
 	}
@@ -267,11 +355,24 @@ func (c *Client) post(ctx context.Context, method string, params any, notify boo
 // behind dns-analytics/host-metrics/get_subnets all coming back empty.
 //
 // Events are split on blank lines; within one event, `data:` lines are
-// joined with "\n" (SSE spec). The last event that decodes as a JSON-RPC
-// response (has "id" and "result" or "error" — not a bare notification) is
-// returned. If none qualifies, falls back to the old join-everything
-// behavior so nothing regresses on a single-event stream.
-func extractSSEData(raw []byte) []byte {
+// joined with "\n" (SSE spec). If none qualifies, falls back to the old
+// join-everything behavior so nothing regresses on a single-event stream.
+//
+// WHICH response event is returned, and why that changed. This used to take
+// the LAST event decoding as a JSON-RPC response. That is the wrong rule the
+// moment a stream carries more than one response, because "last" is a position
+// and what the caller needs is a match: if the reply to request 7 arrives ahead
+// of some other response on the same stream, position picks the wrong one while
+// the id picks the right one. wantID > 0 therefore selects the event whose id
+// is wantID, and only falls back to last-response-event when no event matches
+// (which keeps post's own id check as the thing that decides, rather than
+// silently returning an unrelated answer here). wantID <= 0 means "no
+// preference" — ids issued by this client start at 1.
+//
+// Whether the CSP endpoint can in fact put a sibling request's response on this
+// POST's stream is NOT established; MCP streamable HTTP says it should not.
+// This is the cheap correct rule either way, and it costs one id comparison.
+func extractSSEData(raw []byte, wantID int) []byte {
 	var events [][]byte
 	var cur []string
 	flush := func() {
@@ -292,9 +393,10 @@ func extractSSEData(raw []byte) []byte {
 	}
 	flush()
 
+	lastResponse := -1
 	for i := len(events) - 1; i >= 0; i-- {
 		var probe struct {
-			ID     *int            `json:"id"`
+			ID     json.RawMessage `json:"id"`
 			Result json.RawMessage `json:"result"`
 			Error  json.RawMessage `json:"error"`
 			Method string          `json:"method"`
@@ -302,9 +404,27 @@ func extractSSEData(raw []byte) []byte {
 		if err := json.Unmarshal(events[i], &probe); err != nil {
 			continue
 		}
-		if probe.ID != nil && (probe.Result != nil || probe.Error != nil) {
-			return events[i]
+		// A bare notification has no id and is never a response. An explicit
+		// null id is not one either — it is what a server sends when it could
+		// not attribute the reply to any request, and the old *int probe
+		// already excluded it by decoding null as a nil pointer.
+		if len(bytes.TrimSpace(probe.ID)) == 0 || bytes.Equal(bytes.TrimSpace(probe.ID), []byte("null")) {
+			continue
 		}
+		if probe.Result == nil && probe.Error == nil {
+			continue
+		}
+		if wantID > 0 {
+			if match, _ := idMatchesRequest(wantID, probe.ID); match {
+				return events[i]
+			}
+		}
+		if lastResponse < 0 {
+			lastResponse = i
+		}
+	}
+	if lastResponse >= 0 {
+		return events[lastResponse]
 	}
 
 	// Fallback: no response event found (e.g. malformed/empty stream) —
@@ -455,6 +575,15 @@ func SuccessFieldTrue(text string, payload map[string]any) bool {
 func (c *Client) CallToolChecked(ctx context.Context, name string, args map[string]any, ok SuccessPredicate) (string, error) {
 	text, err := c.CallTool(ctx, name, args)
 	if err != nil {
+		// An id mismatch is NOT a transport error. ErrTransport tells the caller
+		// nothing was applied — the wire never carried the call — and here the
+		// wire did carry it and the server did answer something. Reporting a
+		// possibly-applied mutation as "nothing happened" is the false-success
+		// this function exists to prevent, so it degrades to ErrRejected: the
+		// call reached the tool, and the write may or may not have landed.
+		if errors.Is(err, ErrIDMismatch) {
+			return text, fmt.Errorf("mcp %s: %w: %w", name, ErrRejected, err)
+		}
 		return text, fmt.Errorf("mcp %s: transport error: %w: %w", name, ErrTransport, err)
 	}
 

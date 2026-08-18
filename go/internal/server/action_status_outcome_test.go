@@ -45,6 +45,10 @@ func asoDeps(t *testing.T, up *asoUpstream) (*Deps, string) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		defer r.Body.Close()
+		// Answer the question that was actually asked — internal/mcp now rejects a
+		// reply carrying a different JSON-RPC id (issue #138), and a fake that
+		// always says "id":1 is mis-addressing every call after the first.
+		w = echoRPCID(w, raw)
 		var req struct {
 			Method string `json:"method"`
 			Params struct {

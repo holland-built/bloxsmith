@@ -49,11 +49,11 @@ func pagingServer(t *testing.T, respond func(callNum int32, w http.ResponseWrite
 
 		if req.Method == "tools/call" && req.Params.Name == "infoblox-portal_query_stored_data" {
 			n := atomic.AddInt32(&calls, 1)
-			respond(n, w)
+			respond(n, idEchoWriter{w, requestID(body)})
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+		_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{}}`, body)))
 	}))
 	t.Cleanup(srv.Close)
 	return srv, &calls

@@ -45,11 +45,11 @@ func replyServer(t *testing.T, respond func(tool string, w http.ResponseWriter))
 		_ = json.Unmarshal(body, &req)
 
 		if req.Method == "tools/call" {
-			respond(req.Params.Name, w)
+			respond(req.Params.Name, idEchoWriter{w, requestID(body)})
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+		_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{}}`, body)))
 	}))
 	t.Cleanup(srv.Close)
 	return srv
@@ -285,7 +285,7 @@ func TestInitializeLogsAFailedInitializedNotification(t *testing.T) {
 		}
 		w.Header().Set("Mcp-Session-Id", "sid-1")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+		_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{}}`, body)))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -304,10 +304,11 @@ func TestInitializeSuppressesRepeatedIdenticalFailures(t *testing.T) {
 	logs := captureLog(t)
 	status := http.StatusUnauthorized
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := decodeBody(r)
 		if status == http.StatusOK {
 			w.Header().Set("Mcp-Session-Id", "sid-1")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+			_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{}}`, body)))
 			return
 		}
 		w.WriteHeader(status)
