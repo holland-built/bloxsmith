@@ -1172,9 +1172,51 @@ jobs:
   # them. workers:1 is load-bearing (see playwright.config.ts), so this job is
   # long; measured 75 min for the full suite on a dev laptop, so the timeout
   # is generous rather than tight.
+  #
+  # SHARDED ACROSS FOUR RUNNERS, and the reason is that this was the only job
+  # holding merges up. Measured over four consecutive runs it took 14–15
+  # minutes while every other job here finished under 8. From run 32154248257:
+  # npm ci + UI build + Go build is 10 SECONDS, checkout and toolchains and the
+  # Playwright browser install are ~50s, and the suite itself — reported by
+  # Playwright as `457 tests using 1 worker` — is ~831s. Build overhead is
+  # nothing, so the work divides close to linearly and the ~60s of setup is the
+  # floor. Past about six shards that floor dominates and there is no point.
+  #
+  # THIS DOES NOT TOUCH workers:1, WHICH IS THE POINT. That setting is the
+  # record of a real debugging session (playwright.config.ts, the comment above
+  # it) — several specs are exclusive owners of one `__layout_<key>` record per
+  # tenant, and under two workers a drag assertion read back the persistence
+  # spec's fixture. Sharding sidesteps that argument entirely instead of
+  # reopening it: scripts/e2e.sh builds its own binary into a fresh mktemp -d,
+  # serves it on its own port, and refuses to start if that port is taken, so
+  # each shard is a whole separate machine with separate state and the
+  # cross-file interference cannot happen BETWEEN shards. Inside a shard it is
+  # still one worker, exactly as before.
+  #
+  # Sharding is applied AFTER the E2E_SKIP_LIVE exclusion, not before, so the
+  # live-only specs do not silently eat one shard's budget. Verified rather
+  # than assumed: `npx playwright test --list --shard=N/4` under E2E_SKIP_LIVE=1
+  # reports 117 / 120 / 110 / 110, which sums to 457 — the same total the
+  # unsharded run discovers. That is a count, though, not a clock. fullyParallel
+  # is not set, so whole spec files stay together and Playwright balances shards
+  # by test count across 53 files of unequal size; if one shard turns out to be
+  # much slower than the others, the answer is the two-project split the
+  # workers:1 comment parks, or a manual split — NOT more shards.
+  #
+  # fail-fast is off deliberately. The Actions default is true, which would
+  # cancel the other three shards the moment one failed and destroy exactly the
+  # evidence needed to tell a real regression from shard skew.
+  #
+  # timeout-minutes is now PER SHARD rather than for the whole suite, so 90 is
+  # even more generous than it was. Left alone: it is there to catch a hang,
+  # and a hang is not cheaper to notice because the suite got faster.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -1204,14 +1246,20 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
+      # scripts/e2e.sh passes its arguments straight through to
+      # `npx playwright test`, so --shard needs no change to the script.
       - name: Run the e2e suite against a fresh build of this tree
-        run: E2E_SKIP_LIVE=1 bash scripts/e2e.sh
+        run: E2E_SKIP_LIVE=1 bash scripts/e2e.sh --shard=${{ matrix.shard }}/4
 
+      # The shard number is in the artifact name because upload-artifact
+      # refuses to write a name that already exists — four shards uploading
+      # `playwright-failure` would collide, and the failure that mattered is
+      # the one whose upload lost the race.
       - name: Upload traces and report on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-failure
+          name: playwright-failure-shard-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
