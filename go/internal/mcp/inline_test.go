@@ -29,13 +29,13 @@ func TestQueryCubeInlineScalar(t *testing.T) {
 		case req.Method == "tools/call" && req.Params.Name == "infoblox-portal_query_stored_data":
 			atomic.AddInt32(&storedCalls, 1)
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"text":"{}"}]}}`))
+			_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"text":"{}"}]}}`, body)))
 		case req.Method == "tools/call" && req.Params.Name == "infoblox-portal_query_cube":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			text := `{"table_name":"cube_assetdiscoverystatus.parquet","resource_id":"elaborated-certification-admire-successfully","row_count":1,"column_count":1,"columns":["count"],"message":"Query Result: [{'AssetDiscoveryStatus.count': '319397'}]. If necessary, use query_stored_data tool for further analysis."}`
 			resp := map[string]any{
-				"jsonrpc": "2.0", "id": 1,
+				"jsonrpc": "2.0", "id": requestID(body),
 				"result": map[string]any{
 					"content": []map[string]any{{"text": text}},
 				},
@@ -43,7 +43,7 @@ func TestQueryCubeInlineScalar(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(resp)
 		default:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+			_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{}}`, body)))
 		}
 	}))
 	defer srv.Close()
@@ -82,11 +82,11 @@ func TestQueryCubeOverCapSkipsPaging(t *testing.T) {
 		case req.Method == "tools/call" && req.Params.Name == "infoblox-portal_query_stored_data":
 			atomic.AddInt32(&storedCalls, 1)
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"text":"{}"}]}}`))
+			_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"text":"{}"}]}}`, body)))
 		case req.Method == "tools/call" && req.Params.Name == "infoblox-portal_query_cube":
 			text := `{"table_name":"cube_huge.parquet","row_count":999999,"message":"stored, no inline data here"}`
 			resp := map[string]any{
-				"jsonrpc": "2.0", "id": 1,
+				"jsonrpc": "2.0", "id": requestID(body),
 				"result": map[string]any{
 					"content": []map[string]any{{"text": text}},
 				},
@@ -96,7 +96,7 @@ func TestQueryCubeOverCapSkipsPaging(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(resp)
 		default:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+			_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{}}`, body)))
 		}
 	}))
 	defer srv.Close()
@@ -138,7 +138,7 @@ func TestQueryCubeStoredUnderCapStillPages(t *testing.T) {
 				text = `{"columns":["a"],"data":[]}`
 			}
 			resp := map[string]any{
-				"jsonrpc": "2.0", "id": 1,
+				"jsonrpc": "2.0", "id": requestID(body),
 				"result": map[string]any{
 					"content": []map[string]any{{"text": text}},
 				},
@@ -149,7 +149,7 @@ func TestQueryCubeStoredUnderCapStillPages(t *testing.T) {
 		case req.Method == "tools/call" && req.Params.Name == "infoblox-portal_query_cube":
 			text := `{"table_name":"cube_small.parquet","row_count":2,"message":"stored, no inline data here"}`
 			resp := map[string]any{
-				"jsonrpc": "2.0", "id": 1,
+				"jsonrpc": "2.0", "id": requestID(body),
 				"result": map[string]any{
 					"content": []map[string]any{{"text": text}},
 				},
@@ -159,7 +159,7 @@ func TestQueryCubeStoredUnderCapStillPages(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(resp)
 		default:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+			_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{}}`, body)))
 		}
 	}))
 	defer srv.Close()
@@ -196,11 +196,11 @@ func TestQueryCubeSSETwoEventsUsesResult(t *testing.T) {
 		if req.Method == "tools/call" {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(rawSSE))
+			_, _ = w.Write([]byte(reID(rawSSE, body)))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+		_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{}}`, body)))
 	}))
 	defer srv.Close()
 
@@ -220,7 +220,7 @@ func TestQueryCubeSSETwoEventsUsesResult(t *testing.T) {
 // matching pre-fix behavior.
 func TestExtractSSEDataSingleEvent(t *testing.T) {
 	raw := []byte("data: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"content\":[]}}\n")
-	got := extractSSEData(raw)
+	got := extractSSEData(raw, 0)
 	var out rpcResp
 	if err := json.Unmarshal(got, &out); err != nil {
 		t.Fatalf("expected valid JSON, got error: %v (data=%s)", err, got)
@@ -234,7 +234,7 @@ func TestExtractSSEDataSingleEvent(t *testing.T) {
 func TestExtractSSEDataMultiLineEvent(t *testing.T) {
 	raw := []byte("data: {\"jsonrpc\":\"2.0\",\"id\":1,\n" +
 		"data: \"result\":{\"content\":[]}}\n")
-	got := extractSSEData(raw)
+	got := extractSSEData(raw, 0)
 	var out rpcResp
 	if err := json.Unmarshal(got, &out); err != nil {
 		t.Fatalf("expected multi-line data: lines to join into valid JSON, got error: %v (data=%s)", err, got)
@@ -246,7 +246,7 @@ func TestExtractSSEDataMultiLineEvent(t *testing.T) {
 // to the join-everything behavior instead of returning nothing.
 func TestExtractSSEDataNotificationOnlyFallsBack(t *testing.T) {
 	raw := []byte(`data: {"jsonrpc":"2.0","method":"notifications/message","params":{"level":"info","data":{"msg":"hi"}}}` + "\n")
-	got := extractSSEData(raw)
+	got := extractSSEData(raw, 0)
 	var probe struct {
 		Method string `json:"method"`
 	}

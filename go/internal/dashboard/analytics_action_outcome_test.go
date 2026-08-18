@@ -38,6 +38,12 @@ func aoServer(t *testing.T, updateHandler func(w http.ResponseWriter) bool) *Ser
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		defer r.Body.Close()
+		// Answer the question that was actually asked. internal/mcp now rejects a
+		// reply carrying a different JSON-RPC id (issue #138), and this fake used
+		// to stamp every reply "id":1 — correct for the first call on a client and
+		// wrong for every one after it, which is exactly the mis-addressing the
+		// client learned to catch.
+		w = echoRPCID(w, raw)
 		var req struct {
 			Method string `json:"method"`
 			Params struct {
