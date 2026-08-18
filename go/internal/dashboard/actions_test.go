@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -159,10 +160,14 @@ func (f *fakeMCP) handler(t *testing.T) http.HandlerFunc {
 		}
 		body, _ := json.Marshal(nil)
 		_ = body
-		dec := json.NewDecoder(r.Body)
-		if err := dec.Decode(&req); err != nil {
+		raw, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(raw, &req); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
+		// Answer the question that was actually asked. internal/mcp rejects a reply
+		// carrying a different JSON-RPC id (#143), and a fake that always says
+		// "id":1 mis-addresses every call after the first on a client.
+		w = echoRPCID(w, raw)
 		w.Header().Set("Mcp-Session-Id", "test-session")
 		w.Header().Set("Content-Type", "application/json")
 

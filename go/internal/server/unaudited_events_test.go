@@ -105,10 +105,15 @@ func (f *uaMCP) handler(t *testing.T) http.HandlerFunc {
 				Arguments map[string]any `json:"arguments"`
 			} `json:"params"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		raw, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(raw, &req); err != nil {
 			t.Errorf("decode MCP request: %v", err)
 			return
 		}
+		// Answer the question that was actually asked. internal/mcp rejects a reply
+		// carrying a different JSON-RPC id (#143), and a fake that always says
+		// "id":1 mis-addresses every call after the first on a client.
+		w = echoRPCID(w, raw)
 		w.Header().Set("Mcp-Session-Id", "test-session")
 		w.Header().Set("Content-Type", "application/json")
 		switch req.Method {
