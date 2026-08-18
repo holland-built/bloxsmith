@@ -22,13 +22,13 @@ func toolServer(t *testing.T, text string) *httptest.Server {
 		_ = json.Unmarshal(body, &req)
 		if req.Method != "tools/call" {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+			_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{}}`, body)))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		resp := map[string]any{
-			"jsonrpc": "2.0", "id": 1,
+			"jsonrpc": "2.0", "id": requestID(body),
 			"result": map[string]any{
 				"content": []map[string]any{{"text": text}},
 			},
@@ -242,7 +242,7 @@ func TestErrTransportCanFollowAToolThatRan(t *testing.T) {
 		_ = json.Unmarshal(body, &req)
 		if req.Method != "tools/call" {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+			_, _ = w.Write([]byte(reID(`{"jsonrpc":"2.0","id":1,"result":{}}`, body)))
 			return
 		}
 		ran = true                           // the tool EXECUTED — a real write would be on the tenant now
