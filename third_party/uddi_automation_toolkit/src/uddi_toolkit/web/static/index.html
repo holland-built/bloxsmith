@@ -684,6 +684,23 @@ input[type="text"]::placeholder { color: #b0b8c0; }
       <!-- Left: form -->
       <div class="builder-form-col">
 
+        <!-- Template type selector -->
+        <div class="section-card">
+          <div class="section-card-body">
+            <div class="field">
+              <label>Template type<span class="hint">what to build</span></label>
+              <select id="builder-type" onchange="changeBuilderType(this.value)">
+                <option value="site">Site</option>
+                <option value="address-block">Address block</option>
+                <option value="dns">DNS</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================== SITE ===================== -->
+        <div id="builder-site">
+
         <!-- Site -->
         <div class="section-card">
           <div class="section-card-header"><h2>Site</h2><span class="section-tag">site:</span></div>
@@ -781,7 +798,55 @@ input[type="text"]::placeholder { color: #b0b8c0; }
           </div>
         </div>
 
-        <!-- Tags -->
+        </div><!-- /builder-site -->
+
+        <!-- ===================== ADDRESS BLOCK ===================== -->
+        <div id="builder-block" style="display:none">
+          <div class="section-card">
+            <div class="section-card-header"><h2>Address-block pool</h2><span class="section-tag">address-block</span></div>
+            <div class="section-card-body">
+              <div class="field-row">
+                <div class="field">
+                  <label>Name<span class="hint">tags blocks Template=&lt;name&gt;</span></label>
+                  <input type="text" id="block-name" placeholder="regional-pool" oninput="builderUpdate()">
+                </div>
+                <div class="field">
+                  <label>IP Space<span class="hint">overrides INI</span></label>
+                  <input type="text" id="block-ip-space" placeholder="my-ip-space" oninput="builderUpdate()">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-header"><h2>Address Blocks</h2><span class="section-tag">address_blocks:</span></div>
+            <div class="section-card-body">
+              <div id="blocks-list"></div>
+              <button class="btn-add" onclick="addBlock()">+ Add Block</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================== DNS ===================== -->
+        <div id="builder-dns" style="display:none">
+          <div class="section-card">
+            <div class="section-card-header"><h2>DNS</h2><span class="section-tag">dns</span></div>
+            <div class="section-card-body">
+              <div class="field">
+                <label>DNS View<span class="hint">overrides INI</span></label>
+                <input type="text" id="dns-builder-view" placeholder="default" oninput="builderUpdate()">
+              </div>
+            </div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-header"><h2>Zones</h2><span class="section-tag">zones:</span></div>
+            <div class="section-card-body">
+              <div id="zones-list"></div>
+              <button class="btn-add" onclick="addZone()">+ Add Zone</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tags (shared across all template types) -->
         <div class="section-card">
           <div class="section-card-header"><h2>Extra Tags</h2><span class="section-tag">tags:</span></div>
           <div class="section-card-body">

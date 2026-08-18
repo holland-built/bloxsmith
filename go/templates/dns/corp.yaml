@@ -1,7 +1,17 @@
 type: dns
 
-# Bloxsmith seed template — original content, no third-party source.
-# Fictional corporate zone with a handful of example records.
+# Bloxsmith seed template. The VALUES are mostly original — a fictional corporate
+# zone on different addresses to upstream's, plus a reverse zone its example does
+# not have. The SCHEMA is not: `type`, `zones` with fqdn/kind/records, records as
+# type/name/rdata/ttl, and MX rdata as a preference/exchange mapping all follow
+# Chris Marrison's BSD-2-Clause uddi_automation_toolkit — as does this file's name
+# and its place in the templates/ tree, which match that project's
+# templates/dns/corp.yaml exactly. The TXT record at the end is upstream's, word
+# for word. See NOTICE.md.
+#
+# This comment used to read "original content, no third-party source" — the same
+# claim already corrected in blocks/regional_address_blocks.yaml, and wrong here
+# for the same reason: true of the addresses, wrong about everything around them.
 zones:
   - fqdn: corp.example.com
     kind: forward

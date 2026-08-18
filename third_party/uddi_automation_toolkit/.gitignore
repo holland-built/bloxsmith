@@ -18,6 +18,13 @@ build/
 .eggs/
 *.egg
 
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
 # Virtual environments
 venv/
 .venv/
@@ -29,6 +36,9 @@ env/
 .vscode/
 *.swp
 *.swo
+
+# Local editor / preview config (machine-specific — e.g. venv path)
+.claude/
 
 # Logs
 *.log
