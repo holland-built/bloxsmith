@@ -110,7 +110,7 @@ export const PANEL_HELP = {
     look: 'Search by address, name or MAC, or narrow to one lease state; the leases ending furthest away come first. Hidden when no DHCP service is detected.',
   },
   'network-exhaustion': {
-    what: 'The twenty subnets closest to running out of addresses, with how full each one is and how many addresses are still free.',
+    what: 'The subnets closest to running out of addresses, with how full each one is and how many are still free. It draws 150 at most and says how many matched.',
     look: 'Amber past 75% full, red past 92%. A subnet nobody measured gets a grey Unknown badge, no bar and dashes, and sorts to the bottom whichever way you sort.',
   },
 

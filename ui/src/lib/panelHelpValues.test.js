@@ -349,13 +349,19 @@ const CLAIMS = [
     panel: 'network-ipam-spaces',
     says: /The twelve address spaces handing out the most addresses/,
     file: NETWORK,
-    proofs: [{ re: /\.sort\(\(a, b\) => b\.used - a\.used\)\n\s*\.slice\(0, 12\)/, expect: 'top 12 spaces by addresses used' }],
+    proofs: [
+      { re: /const IPAM_SPACES_CAP = 12/, expect: 'IPAM_SPACES_CAP = 12' },
+      { re: /\.sort\(\(a, b\) => b\.used - a\.used\)\n\s*const rows = eligible\.slice\(0, IPAM_SPACES_CAP\)/, expect: 'top 12 spaces by addresses used' },
+    ],
   },
   {
     panel: 'network-exhaustion',
-    says: /The twenty subnets closest to running out of addresses/,
+    says: /It draws 150 at most and says how many matched/,
     file: NETWORK,
-    proofs: [{ re: /const top20 = sorted\.slice\(0, 20\)/, expect: 'top 20 after sorting' }],
+    proofs: [
+      { re: /const EXHAUSTION_CAP = 150/, expect: 'EXHAUSTION_CAP = 150' },
+      { re: /rowCap=\{EXHAUSTION_CAP\}/, expect: 'the cap is applied by DataTable, which is what prints the "showing N of M" line' },
+    ],
   },
   {
     panel: 'dns-dnssec-health',

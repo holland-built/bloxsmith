@@ -176,18 +176,29 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
 
 // ---------- IPAM spaces ----------
 
+const IPAM_SPACES_CAP = 12
+
 function IpamSpaces({ panelId, ipam }) {
-  const rows = (ipam.data?.rows ?? NO_ROWS)
+  // A space whose feed reports no total has no capacity to be "top used" against,
+  // so it is not ranked. Those are dropped by the filter; everything that
+  // survives it is what the cap below is measured against, so the label states a
+  // denominator that was actually counted rather than the raw feed length.
+  const eligible = (ipam.data?.rows ?? NO_ROWS)
     .filter((r) => (Number(r.total) || 0) > 0)
     .map((r) => ({ ...r, used: Number(r.used) || 0, total: Number(r.total) || 0, pct: ((Number(r.used) || 0) / (Number(r.total) || 1)) * 100 }))
     .sort((a, b) => b.used - a.used)
-    .slice(0, 12)
+  const rows = eligible.slice(0, IPAM_SPACES_CAP)
+  // The cap was silent until 2026-08-19: against the live tenant this ranked 31
+  // spaces and drew 12, and the panel said only "addresses used" — so 19 spaces
+  // were missing with nothing on screen admitting it. Same wording as Overview's
+  // "top 12 of N subnets", which is this repo's standard for a capped ranking.
+  const capLabel = eligible.length > rows.length ? `top ${rows.length} of ${eligible.length.toLocaleString()}` : null
   // CSPIpamUtil returns status:"error" at HTTP 200 on an upstream failure —
   // the fetch itself never errors, so `ipam.error` alone never catches this.
   const status = ipam.data?.status
 
   return (
-    <Card panelId={panelId} span={3} title="IPAM Spaces — Top Used" right={<span className="text-[11px] text-muted">addresses used</span>}>
+    <Card panelId={panelId} span={3} title="IPAM Spaces — Top Used" right={<span className="text-[11px] text-muted">addresses used{capLabel ? ` · ${capLabel}` : ''}</span>}>
       {ipam.loading ? (
         <Skeleton h={220} />
       ) : ipam.error || status === 'error' ? (
@@ -342,6 +353,13 @@ function exhaustionSort(dir) {
   }
 }
 
+// The cap this table is actually drawn at, named so panelHelpValues.test.js can
+// bind the help sentence to it — the same arrangement as DNSSEC_CAP in Dns.jsx.
+// It is handed to DataTable rather than applied here on purpose: DataTable can
+// only print "showing N of M" over the rows it is given, so a slice upstream of
+// it is a cap nothing can label.
+const EXHAUSTION_CAP = 150
+
 function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
   const [filter, setFilter] = useState(hp.subnet || '')
   const [site, setSite] = useState('')
@@ -375,25 +393,35 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
 
   const sorted = useMemo(() => sortRows(filtered, sort, exhaustionSort(sort.dir)), [filtered, sort])
 
-  const top20 = sorted.slice(0, 20)
+  // NO cap is applied here, deliberately. This used to be `sorted.slice(0, 20)`,
+  // and the 20 was invisible: DataTable only prints its "showing N of M" footer
+  // over the rows it is HANDED, so slicing upstream meant it was handed 20,
+  // 20 < its rowCap of 150, and it correctly reported no truncation. Against the
+  // live tenant that hid 467 of the 487 loaded subnets behind a panel whose whole
+  // job is to say which ones run out first, with the filter and site controls
+  // right there implying the rest could be reached. Measured 2026-08-19.
+  //
+  // The full sorted set goes to DataTable instead, which caps at rowCap={150}
+  // below and labels that cap itself — the same arrangement the leases table
+  // twenty lines up already uses, and the repo's standard everywhere else.
 
   // Normalize numerics + derive network/free so column keys match sort keys.
   // util/used/free stay null when unmeasured — every cell below renders that
   // as —, and utilStatus() is never asked to grade it.
   const tableRows = useMemo(
     () =>
-      top20.map((s) => ({
+      sorted.map((s) => ({
         ...s,
         util: num(s.util),
         used: num(s.used),
         free: freeOf(s),
         network: s.addr || s.cidr || '—',
       })),
-    [top20],
+    [sorted],
   )
 
   // Controlled sort: DataTable renders header arrows + reports clicks; the
-  // component still owns sorting (sort full set -> slice top20).
+  // component still owns sorting.
   function onSort(next) {
     setSort((s) => (s.key === next.key ? { key: next.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: next.key, dir: 'desc' }))
   }
@@ -491,11 +519,11 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
     >
       {base.length === 0 ? (
         subnetsStatus === 'error' ? <FeedUnavailable label="Subnets feed unavailable" /> : <Empty />
-      ) : top20.length === 0 ? (
+      ) : tableRows.length === 0 ? (
         <Empty>no subnets match</Empty>
       ) : (
         <div className="mt-2.5">
-          <DataTable rows={tableRows} columns={columns} sort={sort} onSort={onSort} maxHeight={420} rowCap={150} />
+          <DataTable rows={tableRows} columns={columns} sort={sort} onSort={onSort} maxHeight={420} rowCap={EXHAUSTION_CAP} />
         </div>
       )}
     </Card>
