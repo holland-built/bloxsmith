@@ -1207,12 +1207,32 @@ jobs:
   # cancel the other three shards the moment one failed and destroy exactly the
   # evidence needed to tell a real regression from shard skew.
   #
-  # timeout-minutes is now PER SHARD rather than for the whole suite, so 90 is
-  # even more generous than it was. Left alone: it is there to catch a hang,
-  # and a hang is not cheaper to notice because the suite got faster.
+  # timeout-minutes is PER SHARD, and 25 rather than the 90 this job carried
+  # when it was one unsharded run. 90 was written for a job whose comment
+  # measured 75 minutes for the full suite on a dev laptop; a shard is a
+  # quarter of the suite on a warm runner, and the slowest one measured so far
+  # is 9m25s (run 32211999478), so 25 is still about 2.5x headroom.
+  #
+  # It was lowered because 90 was watched costing something. On run 32211999478
+  # — a COMMENT-ONLY change, nothing executable in the diff — shard 4 stalled in
+  # "Install Playwright runner" and sat there until the 90-minute cap while the
+  # other three shards finished in under ten. An earlier draft of this comment
+  # argued the opposite, that "a hang is not cheaper to notice because the suite
+  # got faster". That was wrong, and sharding is what made it wrong: before,
+  # a hang was one job hung out of one. Now it is one shard hung while three
+  # sit finished, so the wait buys nothing at all.
+  #
+  # AND A TIMED-OUT JOB IS `cancelled`, NOT `failure`. That is a GitHub
+  # behaviour worth knowing before the next person waits an hour for a report
+  # that was never coming: when the cap fires, every remaining step is SKIPPED,
+  # including "Upload traces and report on failure", because `if: failure()` is
+  # false on a cancellation. The step-level timeout below exists for exactly
+  # that reason — it fails the install STEP, which makes the JOB a failure, so
+  # the upload runs and the run reads as broken rather than as something a
+  # human cancelled.
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -1241,7 +1261,15 @@ jobs:
           go-version: '1.26.6'
           cache-dependency-path: go/go.sum
 
+      # 10 minutes because this step is a registry fetch and a browser
+      # download, and it took 30-40 SECONDS on every shard that worked. It is
+      # capped at all because it is the step that hung on run 32211999478 — the
+      # suite never started, so no test was at fault and no trace existed to
+      # read. A step-level cap turns that into a failed step in 10 minutes
+      # instead of a cancelled job in 90, and a failed step is what lets the
+      # upload below fire at all.
       - name: Install Playwright runner
+        timeout-minutes: 10
         run: |
           npm ci
           npx playwright install --with-deps chromium
