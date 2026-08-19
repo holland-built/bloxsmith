@@ -50,6 +50,44 @@ set -uo pipefail
 # is none of those, and neither is a workflow that quietly gains the ability to
 # publish while sitting on this list. When unsure, leave it off.
 #
+# `.github/workflows/ci.yml` WAS PROPOSED FOR EXEMPTION AND REJECTED, on 2026-08-18,
+# and the reasoning is here so the next person does not spend an afternoon
+# re-deriving it. The case for it looked strong. ci.yml declares no `permissions:`
+# block at all, this repo's default_workflow_permissions is `read`
+# (`gh api repos/holland-built/bloxsmith/actions/permissions/workflow`), it runs no
+# `git push` and no `git commit`, and it is a gate rather than a builder —
+# release.yml is what publishes. On paper it passes all three clauses above, unlike
+# mcp-drift.yml.
+#
+# Two things killed it, and the measurement is the more important one.
+#
+# WHAT IT WOULD ACTUALLY SAVE: one release. Replaying every tag range in this
+# repo's history and asking "was this `tag` caused by workflow files alone", four
+# come back yes — v3.65.3..v3.65.4 and v3.65.4..v3.65.5 (release.yml, which really
+# does publish), v3.66.5..v3.66.6 (mcp-drift.yml, which really can push), and
+# v3.67.1..v3.67.2, the CI-sharding change that raised the question. Only the last
+# would have been avoided. An earlier draft of this argument claimed "twelve
+# workflow-only commits in sixty days, one avoidable release every five days"; that
+# counted COMMITS and not release ranges, and most of those commits landed in the
+# same range as real code that tagged anyway. The true cost of this rule, over the
+# whole life of the repo, is a single needless banner.
+#
+# WHY IT CANNOT BE GUARDED: the exemption is only safe while ci.yml stays read-only,
+# and nothing here can enforce that. The repo-wide permissions default is a toggle
+# in the GitHub web UI, so ci.yml could gain `contents: write` with no commit at
+# all — declaring `permissions: contents: read` in ci.yml closes that, but not the
+# second hole: under a by-name exemption, the very commit that adds
+# `contents: write` to ci.yml is a change to ci.yml, so it would exempt itself. A
+# CI check would go red only AFTER the push (master has no branch protection and
+# SHIP.md pushes straight to it), and the same commit can edit the check. Nor is
+# grepping for `git push` a capability model — `gh`, `curl` against the API, and any
+# third-party action can write when the token allows it.
+#
+# So: one avoidable banner, versus a path that can silently stop being safe. That is
+# the asymmetry in the paragraph above, pointing the same way it always does. The
+# `tag .github/workflows/ci.yml` row in the selftest is what pins this decision;
+# deleting it is how the decision would get reversed by accident.
+#
 # Two entries are named individually instead of by a `scripts/` wildcard, and
 # the reason matters: `scripts/install.sh` IS what a customer runs to install,
 # so a blanket scripts/ exemption would let the installer change with no release
