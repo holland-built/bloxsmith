@@ -190,7 +190,14 @@ const SHELL: Handler[] = [
 // Per-page additions.
 // ---------------------------------------------------------------------------
 
-const CSP_AUDIT = { status: 'ok', truncated: false, count: CSP_AUDIT_ROWS.length, rows: CSP_AUDIT_ROWS };
+// `truncated: true` DELIBERATELY, and it is not a lie about these five rows: the
+// flag is the server's statement that more entries exist upstream, which is what
+// CSPAudit sends whenever its `_limit` was reached (measured on the live tenant
+// 2026-08-20: count 500, truncated true). It was `false` here, so the branch that
+// had the defect — the count chip printing a request cap as though it were the
+// number of matching entries — was the one branch no baseline ever rendered.
+// A fixture that only exercises the healthy path cannot catch the sick one.
+const CSP_AUDIT = { status: 'ok', truncated: true, count: CSP_AUDIT_ROWS.length, rows: CSP_AUDIT_ROWS };
 
 const SPACES = { spaces: [{ id: 'ipam/ip_space/baseline-1', name: 'Baseline Space' }] };
 // The picker's zone shape, which is NOT /api/data's zone shape — that one carries
@@ -441,6 +448,21 @@ const IQ_ACTIONS = {
 };
 
 // --- audit ------------------------------------------------------------------
+//
+// These entries ARE the Audit tab's main table now. They used to feed only the
+// chain-integrity line above it while the table below rendered `auditLogs` — the
+// Infoblox portal feed — under the note "Bloxsmith actions" (issue #168).
+//
+// Event names are hyphenated, not dotted, because that is what the log actually
+// writes: `write-authorized`, `write-refused-read-only`, `update-apply`,
+// `provision-subnet`, `rbac_denied`, `*-error` (measured on the live tenant
+// 2026-08-20 across 837 entries). The old `update.apply` / `tenant.write` were
+// invented and matched nothing the server has ever produced.
+//
+// Five kinds, chosen so the three colour branches in Audit.jsx's eventColor all
+// render in the baseline: a refusal (amber), an error (red), and the rest
+// (green). `ts` is float epoch SECONDS, which is the shape that made the naive
+// `new Date(ts)` render 1970.
 const AUDIT_LOG = {
   chain_valid: true,
   chain_state: 'ok',
@@ -450,8 +472,11 @@ const AUDIT_LOG = {
   broken_reason: null,
   append_failures: 0,
   entries: [
-    { actor: 'baseline-operator', detail: { from: 'v0.0.0-baseline' }, event: 'update.apply', hash: 'baselinehash1', prev_hash: '', ts: epochSec(6 * HOUR) },
-    { actor: 'baseline-operator', detail: { from: 'v0.0.0-baseline' }, event: 'tenant.write', hash: 'baselinehash2', prev_hash: 'baselinehash1', ts: epochSec(2 * HOUR) },
+    { actor: 'baseline-operator', detail: { from: 'v0.0.0-baseline', image_digest: 'app-v0.0.0-baseline', instance_id: 'baseline' }, event: 'update-apply', hash: 'baselinehash1', prev_hash: '', seq: 0, ts: epochSec(6 * HOUR) },
+    { actor: 'baseline-operator', detail: { method: 'POST', path: '/api/provision/subnet' }, event: 'write-authorized', hash: 'baselinehash2', prev_hash: 'baselinehash1', seq: 1, ts: epochSec(5 * HOUR) },
+    { actor: 'baseline-operator', detail: { block: 'ipam/address_block/baseline-1', cidr: '24', subnet: '10.10.0.0' }, event: 'provision-subnet', hash: 'baselinehash3', prev_hash: 'baselinehash2', seq: 2, ts: epochSec(4 * HOUR) },
+    { actor: 'baseline-operator', detail: { method: 'POST', path: '/api/edit/dnsrecord', reason: 'tenant-read-only', tenant: 'baseline/-' }, event: 'write-refused-read-only', hash: 'baselinehash4', prev_hash: 'baselinehash3', seq: 3, ts: epochSec(2 * HOUR) },
+    { actor: 'baseline-operator', detail: { error: 'upstream refused', id: 'dns/record/baseline-1' }, event: 'dns-record-delete-error', hash: 'baselinehash5', prev_hash: 'baselinehash4', seq: 4, ts: epochSec(1 * HOUR) },
   ],
 };
 

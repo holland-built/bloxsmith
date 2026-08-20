@@ -57,8 +57,22 @@ func (d *Deps) registerStateRoutes(mux router) {
 // "broken at entry #7" alone does not tell an operator whether they are looking
 // at a forged entry or a truncated tail. Consumers that read only broken_index
 // are unaffected. There are still exactly three states.
+//
+// read_error and skipped_lines are the READ's own honesty, and they are a
+// different fact again from both of the two above. Log.Read returns three
+// values and this handler discarded two of them, so a log that could not be
+// opened returned 200 with `entries: []`, and a log with unparseable lines
+// returned 200 with a SHORTER list — in both cases indistinguishable from a
+// quiet day. Nothing downstream could tell the difference, because nothing
+// downstream was told. The chain verdict does not cover this: Verify answers
+// "is what is on disk still what was written", and a file the reader could not
+// open has no bearing on that question.
+//
+// Both are omitted when there is nothing to report, for the same reason
+// last_append_failure is: a `"read_error": null` on every healthy response
+// trains a reader to skip the field on the one response that sets it.
 func (d *Deps) auditLog(w http.ResponseWriter, r *http.Request) {
-	entries, _, _ := d.Audit.Read()
+	entries, skipped, readErr := d.Audit.Read()
 	chain := d.Audit.Verify()
 	state, detail := audit.Classify(chain)
 	out := map[string]any{
@@ -75,6 +89,12 @@ func (d *Deps) auditLog(w http.ResponseWriter, r *http.Request) {
 		// with what `bloxsmith audit verify` prints for the same log.
 		"chain_state":  string(state),
 		"chain_detail": detail,
+	}
+	if readErr != nil {
+		out["read_error"] = readErr.Error()
+	}
+	if skipped > 0 {
+		out["skipped_lines"] = skipped
 	}
 	mergeAppendHealth(out, d.Audit.AppendHealth())
 	d.json(w, r, 200, out)

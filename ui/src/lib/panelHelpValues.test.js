@@ -667,12 +667,12 @@ const CLAIMS = [
   // ---- colours ----
   {
     panel: 'audit-activity-summary',
-    says: /green created, blue updated, red deleted/,
+    says: /A refusal is amber, a failure red, everything else green/,
     file: AUDIT,
     proofs: [
-      { re: /CREATE: COLORS\.ok/, expect: 'CREATE painted COLORS.ok (green)' },
-      { re: /UPDATE: COLORS\.accent/, expect: 'UPDATE painted COLORS.accent (blue)' },
-      { re: /DELETE: COLORS\.crit/, expect: 'DELETE painted COLORS.crit (red)' },
+      { re: /refused\|denied\|rbac\/\.test\(event\)\) return COLORS\.warn/, expect: 'a refusal is COLORS.warn (amber)' },
+      { re: /error\|unreadable\|failed\|orphaned\/\.test\(event\)\) return COLORS\.crit/, expect: 'a failure is COLORS.crit (red)' },
+      { re: /return COLORS\.ok\n\}/, expect: 'everything else falls through to COLORS.ok (green)' },
     ],
   },
   {
@@ -950,11 +950,42 @@ const CLAIMS = [
   },
   {
     panel: 'audit-activity-summary',
-    says: /The "unknown" figure only appears when at least one action reported nothing back\./,
+    says: /largest kind first\./,
     file: AUDIT,
     proofs: [
-      { re: /else if \(!r \|\| \/\^unknown\$\/i\.test\(r\)\) unknown\+\+/, expect: 'an action with no result, or a literal "unknown" one, is what the counter counts' },
-      { re: /\{unknown > 0 && \(/, expect: 'the figure is rendered only when that counter is above zero' },
+      { re: /eventTally\(chain\.data\?\.entries\)/, expect: 'the rows come from eventTally, which sorts largest-first' },
+    ],
+  },
+  {
+    panel: 'audit-activity-summary',
+    says: /Past the five largest kinds the rest fold into one row/,
+    file: AUDIT,
+    proofs: [
+      { re: /const KINDS_SHOWN = 5/, expect: 'the number of kinds listed individually is one named constant, and it is five' },
+      { re: /tally\.slice\(KINDS_SHOWN\)/, expect: 'everything past that constant is the remainder' },
+      { re: /count: rest\.reduce\(\(n, t\) => n \+ t\.count, 0\)/, expect: 'the remainder is summed into the single extra row' },
+    ],
+  },
+  {
+    panel: 'audit-activity-summary',
+    says: /Bars scale to the largest kind, not the total\./,
+    file: AUDIT,
+    proofs: [
+      { re: /const biggest = rows\.length \? Math\.max\(\.\.\.rows\.map\(\(r\) => r\.count\)\) : 0/, expect: 'the denominator is the largest row' },
+      { re: /width: `\$\{biggest \? Math\.max\(\(r\.count \/ biggest\) \* 100, 1\) : 0\}%`/, expect: 'and each bar is that row over it, never over the total' },
+    ],
+  },
+  {
+    // The v3.67.5 shape on the panel that sweep did not reach: 500 is the
+    // `_limit` CSPAudit sends, and the chip printed it as a count.
+    panel: 'audit-csp-portal',
+    says: /The search is capped, and the count says so\./,
+    file: AUDIT,
+    proofs: [
+      {
+        re: /sampleCountLabel\(\{ returned: rows\.length, truncated: result\?\.truncated \}, 'entries'\)/,
+        expect: "the chip is sampleCount's wording, fed the server's own truncated flag",
+      },
     ],
   },
   {
