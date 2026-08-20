@@ -2,6 +2,7 @@ import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, utilSt
 import { DataTable } from '../components/DataTable.jsx'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
+import { sampleCountLabel, sampleScopeNote } from '../lib/sampleCount.js'
 
 // Per-slice status for a RAW useApi('/api/data') read.
 //
@@ -124,7 +125,11 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
 function SecurityToday({ sec, panelId }) {
   const { COLORS } = useChartTheme()
   const counts = sec.data?.counts ?? {}
-  const events = sec.data?.events ?? []
+  // No `events` binding any more. This panel only ever read its LENGTH, to print
+  // it as the hour's event count, and that is the number issue #157 was about:
+  // the server's `returned` and `truncated` are what the heading is built from
+  // now, so counting the rows here would just be the old answer arrived at a
+  // second way.
   const chips = [
     { label: 'critical', value: Number(counts.critical) || 0, color: COLORS.crit },
     { label: 'high', value: Number(counts.high) || 0, color: COLORS.warn },
@@ -137,23 +142,38 @@ function SecurityToday({ sec, panelId }) {
   // availability:"error" — never four zeros and "0 events".
   const secDead = !sec.loading && (!!sec.error || !sec.data || sec.data.availability === 'error')
 
+  // The four chips are counted from the rows the server had in hand, and until
+  // 2026-08-20 nothing said so: the feed is fetched with a row limit, and on a
+  // busy hour "blocked 50" meant "all 50 rows I looked at were blocked", not
+  // "50 threats blocked this hour". Measured live that day, the cap was being
+  // hit. The heading now names the sample and this line names its scope.
+  const scopeNote = sampleScopeNote(sec.data, 'events')
+
   return (
-    <Card span={4} panelId={panelId} title="Security Today" right={<span className="text-[11px] text-muted">{secDead ? '—' : events.length.toLocaleString()} events</span>}>
+    <Card
+      span={4}
+      panelId={panelId}
+      title="Security Today"
+      right={<span className="text-[11px] text-muted">{secDead ? '— events' : sampleCountLabel(sec.data, 'events')}</span>}
+    >
       {sec.loading ? (
         <Skeleton h={160} />
       ) : secDead ? (
         <FeedUnavailable reason={sec.data?.reason} label="Threat feed unavailable" />
       ) : (
-        <div className="grid grid-cols-4 gap-3 mt-1">
-          {chips.map((c) => (
-            <div key={c.label} className="text-center py-4 rounded-lg bg-line/40">
-              <div className="text-2xl font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
-                {c.value.toLocaleString()}
+        <>
+          <div className="grid grid-cols-4 gap-3 mt-1">
+            {chips.map((c) => (
+              <div key={c.label} className="text-center py-4 rounded-lg bg-line/40">
+                <div className="text-2xl font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
+                  {c.value.toLocaleString()}
+                </div>
+                <div className="text-[11px] text-muted mt-1 capitalize">{c.label}</div>
               </div>
-              <div className="text-[11px] text-muted mt-1 capitalize">{c.label}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          {scopeNote && <div className="text-[11px] text-dim mt-2">{scopeNote}</div>}
+        </>
       )}
     </Card>
   )
