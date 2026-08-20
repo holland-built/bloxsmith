@@ -636,8 +636,11 @@ const TAB_PANEL_COUNTS: Record<string, number> = {
   daily: 5,
   network: 4,
   dns: 8,
-  security: 12,
-  infra: 7,
+  // security and infra each gained one on 2026-08-20 (#152): "Security
+  // Inventory" from /api/hub/domains and "Service Health" from /api/hub/health,
+  // two endpoints that had been registered and called by nothing.
+  security: 13,
+  infra: 8,
   assets: 2,
   incidents: 5,
   audit: 3,
@@ -800,6 +803,7 @@ const TAB_CASES: TabCase[] = [
       'security-threat-events',
       'security-response-summary',
       'security-triage-inbox',
+      'security-inventory',
       'security-lookalike-domains',
       'security-ctem-exposure',
       'security-asset-insights',

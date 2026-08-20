@@ -222,6 +222,66 @@ const DNS_QPS = {
 const LICENSE_ALERTS = { status: 'ok', licenses: [] };
 
 // --- daily / security -------------------------------------------------------
+// /api/hub/health — the three-bucket service rollup (#152).
+//
+// Deliberately NOT three healthy rows. A fixture where every state is the same
+// state proves only that one branch renders, and the panel's whole job is
+// telling four different states apart, so one of each is baselined: a healthy
+// bucket, a degraded one, and one the service inventory could not account for
+// because it hit its row cap. That last is the case that must NOT read as
+// "0 deployed" — nobody counted to zero.
+const HUB_HEALTH = [
+  { name: 'DNS', status: 'ok', statusLabel: 'healthy', meta: '2/2 online', availability: 'ok' },
+  { name: 'DHCP', status: 'warn', statusLabel: 'degraded', meta: '1 stopped · 1/2 up', availability: 'ok' },
+  {
+    name: 'Security',
+    status: 'unknown',
+    statusLabel: 'not listed',
+    meta: 'beyond the row cap',
+    availability: 'partial',
+    reason: 'service inventory truncated at the 500-row limit — a service type absent here may exist but not be listed',
+  },
+];
+
+// /api/hub/domains — the security inventory sections (#152).
+//
+// Every rendering rule the panel has, in one payload: ordinary counts, a
+// roaming section that is an OBJECT with its own total rather than an array,
+// a by_status where every endpoint is unknown, an empty-but-ok section that
+// must read "none configured" rather than "unavailable", and one section whose
+// own availability is error while its neighbours stay real.
+//
+// dfp_services and host_inventory are present because the endpoint returns them
+// and the fixture mirrors the endpoint; the panel deliberately does not draw
+// them, because Infra already does.
+//
+// EVERY SECTION HERE IS availability:"ok", and that is a constraint of this
+// suite rather than a choice. These baselines are the HEALTHY page: the harness
+// asserts up front that nothing on screen reads "unavailable", so a fixture
+// failing one section makes the whole case abort with "a feed is reporting
+// unavailable despite every fixture returning ok". Tried it, watched it fail,
+// moved the case. The per-section failure path is covered instead by
+// ui/src/lib/securityInventory.test.js, which asserts a dead section renders as
+// unavailable while its neighbours stay real.
+const HUB_DOMAINS = {
+  security_policies: [{ name: 'baseline-policy-a' }, { name: 'baseline-policy-b' }],
+  threat_feeds: [{ name: 'baseline-feed-a' }, { name: 'baseline-feed-b' }, { name: 'baseline-feed-c' }, { name: 'baseline-feed-d' }],
+  named_lists: [{ name: 'baseline-list-a' }, { name: 'baseline-list-b' }, { name: 'baseline-list-c' }],
+  roaming_endpoints: { total: 9, by_status: { unknown: 9 }, top_countries: [['baseline-country', 9]] },
+  anycast_ha: [],
+  dfp_services: [{ name: 'baseline-dfp' }],
+  host_inventory: { returned: 0, by_status: {}, hosts: [] },
+  availability: {
+    security_policies: 'ok',
+    threat_feeds: 'ok',
+    named_lists: 'ok',
+    roaming_endpoints: 'ok',
+    anycast_ha: 'ok',
+    dfp_services: 'ok',
+    host_inventory: 'ok',
+  },
+};
+
 const HUB_SECURITY = {
   availability: 'ok',
   blocked: 12,
@@ -442,6 +502,7 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/csp/exposed-ips', body: EMPTY_EXPOSURE_OK, required: true },
     { method: 'GET', path: '/api/csp/exposures', body: EMPTY_EXPOSURE_OK, required: true },
     { method: 'GET', path: '/api/csp/threats', body: THREATS, required: true },
+    { method: 'GET', path: '/api/hub/domains', body: HUB_DOMAINS, required: true },
     { method: 'GET', path: '/api/hub/security', body: HUB_SECURITY, required: true },
     { method: 'GET', path: '/api/insights', body: INSIGHTS, required: true },
     { method: 'GET', path: '/api/lookalikes', body: LOOKALIKES, required: true },
@@ -449,6 +510,7 @@ const PER_PAGE: Record<string, Handler[]> = {
   ],
   infra: [
     { method: 'GET', path: '/api/csp/dfp', body: DFP, required: true },
+    { method: 'GET', path: '/api/hub/health', body: HUB_HEALTH, required: true },
     { method: 'GET', path: '/api/csp/discovery-status', body: DISCOVERY_STATUS, required: true },
     { method: 'GET', path: '/api/csp/host-health', body: HOST_HEALTH, required: true },
     { method: 'GET', path: '/api/csp/jobs', body: JOBS, required: true },

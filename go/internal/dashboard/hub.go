@@ -417,6 +417,13 @@ func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
 
 // --- hub/domains -------------------------------------------------------------
 
+// hubDomainsFanOut bounds the seven concurrent section reads below. Seven, i.e.
+// all of them at once: they are seven different upstream collections and this
+// endpoint's whole latency is one round trip once they overlap. dashboardFanOut
+// is smaller because buildAggregate's tasks include multi-page pagers that would
+// otherwise open many connections each; nothing here pages.
+const hubDomainsFanOut = 7
+
 // counter preserves first-seen order so ties break the way collections.Counter
 // does (most_common is stable on insertion order).
 type counter struct {
@@ -486,13 +493,46 @@ func (s *Service) FetchHubDomains() map[string]any {
 	}
 	g := s.Cache.Gen()
 
-	policies, errPolicies := s.Rest.GetStrict("/api/atcfw/v1/security_policies", map[string]string{"_limit": "100"})
-	feeds, errFeeds := s.Rest.GetStrict("/api/atcfw/v1/threat_feeds", map[string]string{"_limit": "100"})
-	named, errNamed := s.Rest.GetStrict("/api/atcfw/v1/named_lists", map[string]string{"_limit": "100"})
-	roaming, errRoaming := s.Rest.GetStrict("/api/atcep/v1/roaming_devices", map[string]string{"_limit": "200"})
-	anycast, errAnycast := s.Rest.GetStrict("/api/anycast/v1/accm/ac_runtime_statuses", map[string]string{"_limit": "100"})
-	dfp, errDfp := s.Rest.GetStrict("/api/atcdfp/v1/dfp_services", map[string]string{"_limit": "100"})
-	hosts, hostsTotal, hostsTotalOK, errHosts := s.fetchHosts("")
+	// SEVEN INDEPENDENT UPSTREAM READS, CONCURRENTLY. They used to run one after
+	// another, which is the whole reason nothing could afford to call this
+	// endpoint: the sections do not depend on each other, so the wait was the
+	// sum of seven round trips instead of the slowest one, and the tab that
+	// would show this already fetches eleven feeds of its own. buildAggregate
+	// solved the same shape with fanOut (dashboard.go:202) and this reuses it
+	// rather than growing a second mechanism.
+	//
+	// Each task writes only its own two variables and nothing reads them until
+	// fanOut has returned, so there is nothing to synchronise beyond the
+	// WaitGroup. `go test -race ./internal/dashboard/` covers this — the CI job
+	// runs the whole suite with the detector on.
+	var (
+		policies, feeds, named, roaming, anycast, dfp, hosts []any
+		errPolicies, errFeeds, errNamed, errRoaming          error
+		errAnycast, errDfp, errHosts                         error
+		hostsTotal                                           int
+		hostsTotalOK                                         bool
+	)
+	fanOut(hubDomainsFanOut,
+		func() {
+			policies, errPolicies = s.Rest.GetStrict("/api/atcfw/v1/security_policies", map[string]string{"_limit": "100"})
+		},
+		func() {
+			feeds, errFeeds = s.Rest.GetStrict("/api/atcfw/v1/threat_feeds", map[string]string{"_limit": "100"})
+		},
+		func() {
+			named, errNamed = s.Rest.GetStrict("/api/atcfw/v1/named_lists", map[string]string{"_limit": "100"})
+		},
+		func() {
+			roaming, errRoaming = s.Rest.GetStrict("/api/atcep/v1/roaming_devices", map[string]string{"_limit": "200"})
+		},
+		func() {
+			anycast, errAnycast = s.Rest.GetStrict("/api/anycast/v1/accm/ac_runtime_statuses", map[string]string{"_limit": "100"})
+		},
+		func() {
+			dfp, errDfp = s.Rest.GetStrict("/api/atcdfp/v1/dfp_services", map[string]string{"_limit": "100"})
+		},
+		func() { hosts, hostsTotal, hostsTotalOK, errHosts = s.fetchHosts("") },
+	)
 
 	// availability is one section-name -> "ok"/"error" entry per
 	// independent feed this endpoint combines. Unlike the single-feed

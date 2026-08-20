@@ -159,6 +159,10 @@ export const PANEL_HELP = {
     what: 'One row per flagged lookup, worst first: the name that was asked for, what the system did about it, and when.',
     look: 'The buttons filter to one severity; ticking a row fades it. Block says "blocked" only after re-reading the list to confirm; "unconfirmed" means it may or may not have applied.',
   },
+  'security-inventory': {
+    what: 'How many security policies, threat feeds, named lists, roaming endpoints and Anycast members are configured on this tenant.',
+    look: 'A count of what is set up, not a measure of what is protected. A row reads "unavailable" when that one feed failed, and "none configured" when it really is empty.',
+  },
   'security-lookalike-domains': {
     what: 'Domains somebody else registered that are spelled to look like yours, and which of your real domains each one imitates.',
     look: 'A red "yes" means it was judged suspicious. A dash instead of a count means the feed could not be reached, so nothing was checked; 0 means checked and none found.',
@@ -197,6 +201,10 @@ export const PANEL_HELP = {
   },
 
   // ---- Infra ----
+  'infra-service-health': {
+    what: 'Whether the DNS, DHCP and Security services you have deployed are running, and how many of each are up.',
+    look: 'Green is healthy, amber degraded, red critical. A grey badge means that service was not listed because the inventory hit its row cap, so it is unknown rather than absent.',
+  },
   'infra-host-status': {
     what: 'Your Infoblox machines grouped by state. "Unknown" is its own group: nothing reported a state for those, which is not the same as offline.',
     look: 'The percentages are shares of the machines that loaded, not of the whole estate. When those two numbers differ, a line under the list says so.',

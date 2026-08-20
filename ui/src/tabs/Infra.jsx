@@ -45,6 +45,12 @@ export default function Infra() {
   const dfp = useApi('/api/csp/dfp', { poll: 30000 })
   const maint = useApi('/api/csp/maintenance', { poll: 60000 })
   const discovery = useApi('/api/csp/discovery-status', { poll: 60000 })
+  // The DNS/DHCP/Security service rollup. Registered since the Go rewrite and
+  // called by nothing until #152: no panel anywhere showed it, and
+  // /api/service-inventory — the same underlying detail_services read — was used
+  // only to decide which panels to HIDE, never to say whether those services are
+  // actually up.
+  const svcHealth = useApi('/api/hub/health', { poll: 30000 })
 
   const theme = useThemeColors()
   const hp = useHashParams()
@@ -76,6 +82,7 @@ export default function Infra() {
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
       <CardGrid layoutKey="infra">
+        <ServiceHealth panelId="infra-service-health" feed={svcHealth} />
         <HostStatus panelId="infra-host-status" hosts={hosts} totalHosts={totalHosts} hostsStatus={hostsStatus} loading={dataLoading} />
         <FeedCard
           span={2}
@@ -426,6 +433,67 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
             stickyHeader
             rowKey={(h, i) => `${h.name}|${h.ip}|${i}`}
           />
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ---------- service health (hub/health) ----------
+
+// Three buckets — DNS, DHCP, Security — rolled up from the deployed services.
+// go/internal/dashboard/hub.go builds them and distinguishes four states, and
+// all four have to survive the trip to the screen or the panel is worse than
+// nothing:
+//
+//   ok/warn/crit  a measured severity, from the worst member's composite_status
+//   unknown       the service list was truncated at its row cap, so this
+//                 bucket's services MAY exist past the cap. Not "0 deployed" —
+//                 nobody counted to zero.
+//   availability  "error" on the whole list means the feed is dead, which must
+//                 never render as three healthy buckets
+//
+// The Go side already refuses to fabricate a healthy rollup; this is the half
+// that refuses to draw one.
+function ServiceHealth({ panelId, feed }) {
+  const theme = useThemeColors()
+  const rows = Array.isArray(feed.data) ? feed.data : []
+  // Every bucket carries its own availability, and the whole feed is dead only
+  // when all of them say so — which is exactly how the Go side marks a failed
+  // detail_services read. A transport failure has no body at all.
+  const dead = !feed.loading && (!!feed.error || (rows.length > 0 && rows.every((b) => b.availability === 'error')))
+
+  const pill = (status) => {
+    if (status === 'ok') return { background: theme.pillOkBg, color: theme.pillOkFg }
+    if (status === 'warn') return { background: theme.pillWarnBg, color: theme.pillWarnFg }
+    if (status === 'crit' || status === 'error') return { background: theme.pillCritBg, color: theme.pillCritFg }
+    // "unknown" and anything a future Go change adds. A neutral badge is the
+    // only honest rendering of a state this file does not recognise; colouring
+    // it green by falling through would be the bug this panel exists to avoid.
+    return { background: theme.pillNeutralBg, color: theme.pillNeutralFg }
+  }
+
+  return (
+    <Card panelId={panelId} span={2} title="Service Health" note="deployed services">
+      {feed.loading ? (
+        <Skeleton h={160} />
+      ) : dead ? (
+        <FeedUnavailable label="Service inventory unavailable" />
+      ) : rows.length === 0 ? (
+        <Empty />
+      ) : (
+        <div className="flex flex-col gap-2 mt-1">
+          {rows.map((b) => (
+            <div key={b.name} className="flex items-center justify-between gap-2 py-1.5">
+              <span className="text-sm font-medium text-txt">{b.name}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] text-muted truncate" title={b.reason || undefined}>{b.meta}</span>
+                <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap" style={pill(b.status)}>
+                  {b.statusLabel}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </Card>

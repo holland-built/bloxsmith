@@ -55,6 +55,12 @@
         - cell "watch.baseline.example"
         - cell "LOG"
         - cell /1\/1\/\d+, 8:\d+:\d+ AM/
+  - heading "Security Inventory" [level=2]
+  - text: what is configured
+  - 'button "About: Security Inventory"': "About: ⓘ"
+  - button "Hide Security Inventory": Hide ✕
+  - button "Move Security Inventory": Move ⠿
+  - text: Security policies 2 Threat feeds 4 Named lists 3 Roaming endpoints status unknown 9 Anycast HA members none configured 0
   - heading "Lookalike Domains" [level=2]
   - text: 1 detected
   - 'button "About: Lookalike Domains"': "About: ⓘ"

@@ -33,6 +33,7 @@ const DECLARED = [
   'security-threat-events',
   'security-response-summary',
   'security-triage-inbox',
+  'security-inventory',
   'security-lookalike-domains',
   'security-ctem-exposure',
   'security-asset-insights',
@@ -168,12 +169,12 @@ test('the keyboard path claims nothing until the server has answered', async ({ 
   await page.keyboard.press('Enter');
   await page.waitForTimeout(1000);
 
-  // Enter used to announce "…placed at position 2 of 12. Layout saved."
+  // Enter used to announce "…placed at position 2 of N. Layout saved."
   // synchronously, before the POST had left. It still says where the panel
   // landed — that part was always true — and now says nothing about saving
   // until there is something true to say.
   const live = await liveText(page);
-  expect(live).toContain('placed at position 2 of 12');
+  expect(live).toContain('placed at position 2 of 13');
   expect(live, 'Enter is still claiming a save it has not got').not.toContain('Layout saved');
   expect(live).toContain('Layout could not be saved');
   expect((await request.get(`/api/views/${VIEW}`)).status()).toBe(404);
