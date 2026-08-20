@@ -178,7 +178,13 @@ export default function TenantManager({ onClose, onOpenHelp }) {
     // with multi-account access" — so the common case was the silent one, and
     // it reads exactly like the dashboard being frozen on stale numbers. The
     // server already puts a plain-English reason in `error`; this shows it.
-    setAcctSwitchErr(d.error || `Could not switch account (HTTP ${r.status}).`)
+    // Name the account that was attempted. The select is controlled on the
+    // ACTIVE id, so a refusal leaves it showing where you already were — and a
+    // bare "could not switch" under a control that looks untouched reads as a
+    // click that never registered.
+    const attempted = accounts.find((a) => a.id === id)?.name
+    const why = d.error || `Could not switch account (HTTP ${r.status}).`
+    setAcctSwitchErr(attempted ? `${attempted}: ${why}` : why)
   }
 
   const remove = async (id) => {
@@ -536,13 +542,20 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                   {accounts.map((a) => {
                     const keyed = accountHasKey(a, keyedNames)
                     return (
-                      // A row with no stored key is dimmed and SAYS SO, rather
-                      // than being disabled. The link between an account and a
-                      // key is a name match and nothing stronger (see
-                      // lib/accountKeys.js), so this is a warning, not a verdict
-                      // — blocking on a guess would lock somebody out of an
-                      // account they can reach.
-                      <option key={a.id} value={a.id} style={keyed ? undefined : { color: 'var(--color-dim)' }}>
+                      // NOT DIMMED, and that is a correction. These rows carried
+                      // `color: var(--color-dim)` and were reported as
+                      // unclickable — they never were: disabled=false,
+                      // pointerEvents=auto, and selecting one really does fire
+                      // the switch. But a native <select> renders a greyed
+                      // option exactly like a disabled one, and because the
+                      // select is controlled on the ACTIVE id it snaps straight
+                      // back when the switch is refused. Looking disabled and
+                      // behaving like a bounce is the same thing as being
+                      // disabled, to the person clicking it.
+                      //
+                      // The words stay because they are true and useful; the
+                      // styling goes because it made a note look like a wall.
+                      <option key={a.id} value={a.id}>
                         {a.name}{keyed ? '' : ' — no key saved'}
                       </option>
                     )
