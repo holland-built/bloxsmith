@@ -3,6 +3,9 @@ import { useApi } from '../lib/api.js'
 
 export default function ConnStatus() {
   const [locked, setLocked] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [switching, setSwitching] = useState(false)
+  const [switchErr, setSwitchErr] = useState('')
   const lastFetchRef = useRef(null)
   const [, forceTick] = useState(0)
 
@@ -75,20 +78,103 @@ export default function ConnStatus() {
     : null
   const title = `${tenantName} · last data fetch ${secsAgo === null ? 'never' : `${secsAgo}s ago`}`
 
-  const version = status?.version ? String(status.version).replace(/^v/, '') : null
+  // The build version used to be spelled out here as `· v{version}`, which on a
+  // dev build renders "· vdev-4244bde" — a git sha, next to a tenant name, in
+  // the one badge that is supposed to say who you are connected as. It reads
+  // like part of the account. It is still in the "…" Settings sheet, which is
+  // where a build number belongs.
+
+  const tenants = status?.tenants ?? []
+  const activeTenant = status?.active ?? null
+  // Only worth opening for a choice. One tenant is not a choice, and a locked
+  // vault has nothing to switch between.
+  const canSwitch = !isLocked && tenants.length > 1
+
+  const switchTenant = async (id) => {
+    if (id === activeTenant || switching) return
+    setSwitching(true)
+    const r = await fetch('/api/vault/active', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    const d = await r.json().catch(() => ({}))
+    if (d.ok) {
+      // RELOAD, deliberately. The server rotates its cache on a tenant switch
+      // (main.go's authReset), so nothing stale is served — but every panel in
+      // the browser keeps the PREVIOUS tenant's rows on screen until its own
+      // poll comes round, which is 15s on some tabs and 60s on others. The
+      // settings sheet's own tenant switch has always had this gap. A reader
+      // watching numbers that belong to the account they just left cannot tell
+      // that from a broken dashboard.
+      window.location.reload()
+      return
+    }
+    setSwitching(false)
+    setSwitchErr(d.error || 'Could not switch tenant.')
+  }
+
+  if (!canSwitch) {
+    return (
+      <span className="text-[11px] text-muted flex items-center gap-1.5" title={title}>
+        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+        {/* Below `lg` only the dot survives on the bar (the v11 A3 fold). The
+            words it stands for are not lost: the same tenant is spelled out in
+            the "…" Settings sheet, which is reachable at every width. The dot
+            keeps its colour, so a locked vault or a dead feed is still visible
+            on a phone. */}
+        <span className="hidden lg:flex items-center gap-1.5">{label}</span>
+      </span>
+    )
+  }
 
   return (
-    <span className="text-[11px] text-muted flex items-center gap-1.5" title={title}>
-      <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-      {/* Below `lg` only the dot survives on the bar (the v11 A3 fold). The
-          words it stands for are not lost: the same tenant and version are
-          spelled out in the "…" Settings sheet, which is reachable at every
-          width. The dot keeps its colour, so a locked vault or a dead feed is
-          still visible on a phone. */}
-      <span className="hidden lg:flex items-center gap-1.5">
-        {label}
-        {version && <span className="text-dim">· v{version}</span>}
-      </span>
+    <span className="relative text-[11px] text-muted flex items-center">
+      <button
+        type="button"
+        className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-line/60 cursor-pointer"
+        title={`${title} — click to switch tenant`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => { setSwitchErr(''); setOpen((o) => !o) }}
+      >
+        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+        <span className="hidden lg:flex items-center gap-1.5">{label}</span>
+      </button>
+      {open && (
+        <>
+          {/* Click-away, behind the menu. A menu that only closes by reselecting
+              is a trap on a narrow screen. */}
+          <button type="button" aria-label="Close tenant menu" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
+          <div role="listbox" className="absolute right-0 top-full mt-1.5 z-50 min-w-[190px] rounded-lg border border-border bg-card shadow-lg py-1">
+            {tenants.map((t) => {
+              const isActive = t.id === activeTenant
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  disabled={switching}
+                  className={
+                    'w-full text-left px-2.5 py-1.5 flex items-center gap-2 disabled:opacity-60 ' +
+                    (isActive ? 'text-accent font-medium bg-line/50' : 'text-field-txt hover:bg-line/40')
+                  }
+                  onClick={() => switchTenant(t.id)}
+                >
+                  {/* The mark, not just the colour: the current row has to be
+                      identifiable without relying on seeing a hue. */}
+                  <span className="w-2.5 text-center">{isActive ? '✓' : ''}</span>
+                  <span className="truncate">{t.label}</span>
+                </button>
+              )
+            })}
+            {switchErr && (
+              <div className="px-2.5 py-1.5 text-[11px]" style={{ color: 'var(--color-crit)' }}>{switchErr}</div>
+            )}
+          </div>
+        </>
+      )}
     </span>
   )
 }
