@@ -2,6 +2,12 @@
   - heading "Infrastructure" [level=1]
   - text: Operational
   - button "Arrange panels"
+  - heading "Service Health" [level=2]
+  - text: deployed services
+  - 'button "About: Service Health"': "About: ⓘ"
+  - button "Hide Service Health": Hide ✕
+  - button "Move Service Health": Move ⠿
+  - text: DNS 2/2 online healthy DHCP 1 stopped · 1/2 up degraded Security beyond the row cap not listed
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
   - button "Hide Host Status": Hide ✕

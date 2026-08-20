@@ -567,6 +567,28 @@ const CLAIMS = [
     ],
   },
   {
+    panel: 'infra-service-health',
+    says: /Green is healthy, amber degraded, red critical/,
+    file: INFRA,
+    proofs: [
+      { re: /if \(status === 'ok'\) return \{ background: theme\.pillOkBg, color: theme\.pillOkFg \}/, expect: "'ok' is the green pill" },
+      { re: /if \(status === 'warn'\) return \{ background: theme\.pillWarnBg, color: theme\.pillWarnFg \}/, expect: "'warn' is the amber pill" },
+      { re: /if \(status === 'crit' \|\| status === 'error'\) return \{ background: theme\.pillCritBg, color: theme\.pillCritFg \}/, expect: "'crit' is the red pill" },
+    ],
+  },
+  {
+    // The claim is that grey means UNKNOWN rather than absent, so the proof is
+    // the fall-through: anything this file does not recognise, "unknown"
+    // included, takes the neutral pill instead of dropping into a coloured one.
+    panel: 'infra-service-health',
+    says: /A grey badge means that service was not listed because the inventory hit its row cap, so it is unknown rather than absent/,
+    file: INFRA,
+    proofs: [
+      { re: /return \{ background: theme\.pillNeutralBg, color: theme\.pillNeutralFg \}/, expect: 'an unrecognised status falls through to the neutral pill' },
+      { re: /title=\{b\.reason \|\| undefined\}/, expect: "and the server's reason for it is reachable on the row" },
+    ],
+  },
+  {
     // The tile that used to read "Total Events" over a page size.
     panel: 'security-response-summary',
     says: /The last tile says Total Events only when the true count is known; otherwise it says Events Shown/,
