@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { accountHasKey, keyedAccountNames } from '../lib/accountKeys.js'
 import { FeedUnavailable } from './ui.jsx'
 import ThemeSwitch from './ThemeSwitch.jsx'
 import DensitySwitch from './DensitySwitch.jsx'
@@ -26,6 +27,10 @@ export default function TenantManager({ onClose, onOpenHelp }) {
   const [statusError, setStatusError] = useState(false)
   const [accounts, setAccounts] = useState([])
   const [accountsError, setAccountsError] = useState(null)
+  // /api/accounts returns {accounts, active} and the active id was being
+  // dropped, which is why the picker could not show which one you were on.
+  const [activeAccount, setActiveAccount] = useState('')
+  const [acctSwitchErr, setAcctSwitchErr] = useState('')
   const [dashToken, setDashToken] = useState(() => localStorage.getItem('dashToken') || '')
   const [confirmRm, setConfirmRm] = useState(null)
   const [locking, setLocking] = useState(false)
@@ -65,7 +70,11 @@ export default function TenantManager({ onClose, onOpenHelp }) {
     // other accounts".
     fetch('/api/accounts', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((d) => { setAccounts(d.accounts || []); setAccountsError(d && d.error ? d.error : null) })
+      .then((d) => {
+        setAccounts(d.accounts || [])
+        setActiveAccount(d.active || '')
+        setAccountsError(d && d.error ? d.error : null)
+      })
       .catch(() => setAccountsError('network error'))
   }
 
@@ -117,6 +126,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
 
   const tenants = (status && status.tenants) || []
   const activeId = status && status.active
+  const keyedNames = keyedAccountNames(status?.tenants)
   // "Is the connection I am ON right now actually working?" — a different
   // question from the per-key Test buttons below, which judge a key the operator
   // has just typed into the add/edit form. /api/vault/conn-test runs TestKey
@@ -135,18 +145,40 @@ export default function TenantManager({ onClose, onOpenHelp }) {
     if (id === activeId) return
     setSwitchingAcct(true)
     const { ok, data } = await vpost('/api/vault/active', { id })
+    if (ok && data.ok) {
+      // RELOAD, not load(). load() refreshes this sheet's own state and nothing
+      // else, so every panel behind it kept the PREVIOUS tenant's rows until its
+      // own poll came round — 15s on some tabs, 60s on others. The server side
+      // was never the problem: main.go's authReset rotates the cache, so the
+      // next fetch is correct. It is the browser that goes on drawing the
+      // account you just left, which is indistinguishable from a frozen
+      // dashboard. Same reason ConnStatus reloads.
+      window.location.reload()
+      return
+    }
     setSwitchingAcct(false)
-    if (ok && data.ok) load()
   }
 
   const switchCspAccount = async (id) => {
+    setAcctSwitchErr('')
     const r = await fetch('/api/switch-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
     const d = await r.json().catch(() => ({}))
-    if (d.ok) window.location.reload()
+    if (d.ok) {
+      window.location.reload()
+      return
+    }
+    // It used to be `if (d.ok) reload()` and nothing else, so a refusal did
+    // NOTHING AT ALL: no reload, no message, the dropdown snapping back to
+    // where it was. Measured against the live tenant on 2026-08-20, CSP answers
+    // this key with 403 "Account switching requires an interactive User API key
+    // with multi-account access" — so the common case was the silent one, and
+    // it reads exactly like the dashboard being frozen on stale numbers. The
+    // server already puts a plain-English reason in `error`; this shows it.
+    setAcctSwitchErr(d.error || `Could not switch account (HTTP ${r.status}).`)
   }
 
   const remove = async (id) => {
@@ -491,16 +523,35 @@ export default function TenantManager({ onClose, onOpenHelp }) {
             ) : accounts.length > 0 && (
               <>
                 <div className="text-[10px] uppercase tracking-wide text-dim mb-2">CSP account</div>
+                {/* CONTROLLED, on the active id. It was `defaultValue=""` over a
+                    disabled "Switch active account…" placeholder, so the list
+                    never showed which account you were actually on — the one
+                    thing a picker has to say. */}
                 <select
-                  className={inCls + ' mb-4'}
-                  defaultValue=""
-                  onChange={(e) => e.target.value && switchCspAccount(e.target.value)}
+                  className={inCls}
+                  value={activeAccount}
+                  onChange={(e) => e.target.value && e.target.value !== activeAccount && switchCspAccount(e.target.value)}
                 >
-                  <option value="" disabled>Switch active account…</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
+                  {!activeAccount && <option value="" disabled>Switch active account…</option>}
+                  {accounts.map((a) => {
+                    const keyed = accountHasKey(a, keyedNames)
+                    return (
+                      // A row with no stored key is dimmed and SAYS SO, rather
+                      // than being disabled. The link between an account and a
+                      // key is a name match and nothing stronger (see
+                      // lib/accountKeys.js), so this is a warning, not a verdict
+                      // — blocking on a guess would lock somebody out of an
+                      // account they can reach.
+                      <option key={a.id} value={a.id} style={keyed ? undefined : { color: 'var(--color-dim)' }}>
+                        {a.name}{keyed ? '' : ' — no key saved'}
+                      </option>
+                    )
+                  })}
                 </select>
+                {acctSwitchErr && (
+                  <div className="text-[11px] mt-1.5 mb-3" style={{ color: 'var(--color-crit)' }}>{acctSwitchErr}</div>
+                )}
+                {!acctSwitchErr && <div className="mb-4" />}
               </>
             )}
 
