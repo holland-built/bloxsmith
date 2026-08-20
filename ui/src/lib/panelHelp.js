@@ -81,7 +81,7 @@ export const PANEL_HELP = {
   },
   'daily-security-today': {
     what: 'Threat events seen in the last hour, counted by how serious each one was, and how many were stopped rather than only written down.',
-    look: 'The count by the title is 50 events at most, so a busy hour is a sample, not a total. A dash there means the threat feed could not be read.',
+    look: 'When the hour holds more events than were fetched, the title says so and a line under the figures says the figures were counted from that sample. A dash means the feed could not be read.',
   },
   'daily-top-capacity-risks': {
     what: 'A big network with only 40 addresses spare is a worse problem than a tiny one sitting at 99% full, so this ranks by addresses left, not by fullness.',
@@ -149,11 +149,11 @@ export const PANEL_HELP = {
   // ---- Security ----
   'security-threat-events': {
     what: 'DNS lookups from your own network that an outside threat feed flagged in the last hour, counted by the hour of day they happened.',
-    look: 'The four figures on top are red for critical, pink for high, amber for medium, blue for low. If the feed cannot be reached the panel says so rather than showing zero.',
+    look: 'The four figures on top are red for critical, pink for high, amber for medium, blue for low. They and the bars count the events fetched; a line underneath says when that is only part of the hour.',
   },
   'security-response-summary': {
-    what: 'What happened to the flagged lookups: how many were stopped, how many were only written down, and the total.',
-    look: 'The red figure counts critical events nobody has ticked off yet — it falls as you tick rows in the list below.',
+    what: 'What happened to the flagged lookups: how many were stopped, how many were only written down, and how many there were.',
+    look: 'The red figure counts critical events nobody has ticked off yet, and falls as you tick rows below. The last tile says Total Events only when the true count is known; otherwise it says Events Shown.',
   },
   'security-triage-inbox': {
     what: 'One row per flagged lookup, worst first: the name that was asked for, what the system did about it, and when.',

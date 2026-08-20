@@ -272,8 +272,45 @@ func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
 	g := s.Cache.Gen()
 	t1 := time.Now().Unix()
 	t0 := t1 - int64(windowSecs)
-	rows, err := s.Rest.GetStrict("/api/dnsdata/v2/dns_event", map[string]string{
-		"t0": fmt.Sprint(t0), "t1": fmt.Sprint(t1), "_limit": fmt.Sprint(limit),
+	// _limit+1, and deliberately NOT _is_total_size_needed. Read the second half
+	// of this comment before adding it.
+	//
+	// Every number this function returns — counts, blocked, logged — is derived
+	// by looping the rows it got back. Before 2026-08-20 it asked for exactly
+	// `limit` rows and then reported `"total": len(rows)`, so on a busy hour the
+	// four panels downstream showed a count OF THE SAMPLE under labels that read
+	// as the hour. Measured on the live tenant that day: 50 rows returned
+	// against a limit of 50, `total: 50`, `blocked: 50` — the cap was being hit,
+	// and "Total Events 50" was on screen for an hour whose real count nobody
+	// knew.
+	//
+	// The +1 is what fixes that. Without it, "I asked for 50 and got 50" cannot
+	// be told apart from "there are exactly 50", and calling the second one
+	// truncated is its own false claim in the other direction. Asking for one
+	// more row than we intend to keep makes the distinction free: 51 back means
+	// there is a 51st. Same technique, same reason, as server/search.go's
+	// searchFetch. Confirmed live on 2026-08-20: this tenant answers 51, so
+	// `truncated` is true and the panels stopped printing a bare 50.
+	//
+	// WHY THERE IS NO _is_total_size_needed HERE, WHEN EVERY OTHER COUNT IN THIS
+	// PACKAGE USES IT. It was written that way first and the endpoint refused
+	// it: /api/dnsdata/v2/dns_event answered HTTP 400 and FetchHubSecurity fell
+	// into its dead-feed branch, so the whole Security tab read "threat feed
+	// unavailable". Measured by sending it, watching the 400, removing only that
+	// parameter, and watching the same request succeed. dnsdata/v2 is the DNS
+	// Data reporting API, not DDI, and it does not take DDI's paging parameters
+	// — fetchCount, fetchAtRiskSubnets and serviceInventoryParams all talk to
+	// ddi/v1 or infra/v1, which do. The similarity of the URLs is not a
+	// similarity of the APIs.
+	//
+	// So there is no authoritative total available for this feed at all, and the
+	// panels say "total unknown" rather than inventing one. The body is still
+	// read for a total below, because if this endpoint ever starts volunteering
+	// page.total_size unasked it costs nothing to believe it; what cannot be
+	// done is ASK.
+	fetched, body, err := s.Rest.GetPageStrict("/api/dnsdata/v2/dns_event", map[string]string{
+		"t0": fmt.Sprint(t0), "t1": fmt.Sprint(t1),
+		"_limit": fmt.Sprint(limit + 1),
 	})
 	if err != nil {
 		// This is the highest-consequence instance of the empty-vs-error bug:
@@ -282,17 +319,49 @@ func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
 		// silently emitting zero events/counts.
 		log.Printf("hub: dns_event fetch failed: %v", err)
 		result := map[string]any{
-			"events":       []map[string]any{},
-			"counts":       map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0},
-			"blocked":      0,
-			"logged":       0,
-			"total":        0,
+			"events":  []map[string]any{},
+			"counts":  map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0},
+			"blocked": 0,
+			"logged":  0,
+			// No "total" key at all. A dead feed knows no counts, and 0 is a
+			// number; the consumers render availability:"error" as "feed
+			// unavailable" and never reach these, but a zero left sitting in the
+			// payload is the next reader's bug.
+			"returned":     0,
+			"truncated":    false,
 			"availability": "error",
 			"reason":       "threat-event feed unavailable",
 		}
 		s.Cache.SetGen(ck, result, g)
 		return result
 	}
+	// The 51st row, if it came, is proof and not content: it is dropped before
+	// anything is counted, so the sample stays exactly the size the caller asked
+	// for and `truncated` does not depend on having kept an extra row around.
+	rows := fetched
+	pageTruncated := len(fetched) > limit
+	if pageTruncated {
+		rows = fetched[:limit]
+	}
+
+	// An authoritative total, but only when it is coherent with what arrived.
+	// pageTotalSize returns the fallback for a missing or unparseable
+	// page.total_size; an envelope claiming FEWER than it just handed over is
+	// not a total either, and is dropped rather than displayed. Same shape of
+	// check as feedCountLabel in ui/src/lib/feedCount.js: the flag is upstream's
+	// claim, the comparison is whether the claim holds.
+	total := pageTotalSize(body, -1)
+	totalOK := total >= len(rows)
+
+	// With a real total, truncation is a fact about the estate. Without one, the
+	// 51st row is the only evidence there is. Deliberately NOT len(rows) >=
+	// limit, which calls an hour holding exactly 50 events truncated and is a
+	// false claim in the other direction.
+	truncated := pageTruncated
+	if totalOK {
+		truncated = total > len(rows)
+	}
+
 	counts := map[string]int{"critical": 0, "high": 0, "medium": 0, "low": 0}
 	blocked, logged := 0, 0
 	events := make([]map[string]any, 0, len(rows))
@@ -319,13 +388,28 @@ func (s *Service) FetchHubSecurity(windowSecs, limit int) map[string]any {
 			"network":          orAny(e["network"], ""),
 		})
 	}
+	// "returned" is the row count and says so. It replaces a key called "total"
+	// that held exactly this number, which is the mislabel 28d55e2 ("Stop
+	// reporting the row limit as the size of the estate") removed elsewhere and
+	// which survived here. "total" now means the estate figure and is ABSENT
+	// when there isn't one — never a stand-in, because a consumer reading
+	// `total ?? rows.length` is back to printing the sample under the old label.
+	//
+	// counts/blocked/logged still describe `rows`, and that is unavoidable at
+	// this layer: severity is a property of each event, so a tenant-wide
+	// breakdown would need a counting query per severity. `truncated` is what
+	// tells the three panels to say whose numbers these are.
 	result := map[string]any{
 		"events":       events,
 		"counts":       counts,
 		"blocked":      blocked,
 		"logged":       logged,
-		"total":        len(rows),
+		"returned":     len(rows),
+		"truncated":    truncated,
 		"availability": "ok",
+	}
+	if totalOK {
+		result["total"] = total
 	}
 	s.Cache.SetGen(ck, result, g)
 	return result
