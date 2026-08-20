@@ -271,15 +271,15 @@ export const PANEL_HELP = {
 
   // ---- Audit ----
   'audit-activity-summary': {
-    what: 'A tally of the recorded actions below: how many worked, how many failed, and how many came back with no result at all.',
-    look: 'One bar per kind of change: green created, blue updated, red deleted. The "unknown" figure only appears when at least one action reported nothing back.',
+    what: 'A tally of the entries below, grouped by the kind of event each one records, largest kind first.',
+    look: 'A refusal is amber, a failure red, everything else green. Past the five largest kinds the rest fold into one row, so the rows still add up. Bars scale to the largest kind, not the total.',
   },
   'audit-log': {
-    what: 'Every change made through this app — who made it, what it touched, whether it worked. Readable and searchable here, but not downloadable.',
+    what: 'Every change made through this app: who, what event, and the detail it was recorded with. Readable and searchable here, but not downloadable.',
     look: 'The line above the table says whether the record has been tampered with. "Could not be verified" is not the same as intact, and the command shown checks it independently.',
   },
   'audit-csp-portal': {
-    what: 'Actions taken in the Infoblox portal itself, by people and by machine accounts, rather than through this app.',
+    what: 'Actions taken in the Infoblox portal itself, by people and by machine accounts, rather than through this app. The search is capped, and the count says so.',
     look: 'Recent activity loads by itself; typing a user or resource and pressing Search narrows that same list. Failed results are red, successful ones green. Nothing here downloads.',
   },
 

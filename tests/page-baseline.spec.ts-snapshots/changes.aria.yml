@@ -13,10 +13,9 @@
   - paragraph: Anything whose result is not "success" — including a result the feed left blank, which is unread rather than fine.
   - text: /2 Out of hours \d+:\d+–\d+:\d+/
   - paragraph: /Out of hours means at or after \d+:\d+, or before \d+:\d+, on your own local clock — your browser's time zone, not the tenant's\./
-  - text: 1 New actors this window New
-  - paragraph: "This window is split down the middle: an actor counts as new only if it acted in the recent half and never in the earlier half. There is no history before this window, so nothing older can be checked."
-  - paragraph: actor-gamma
-  - status
+  - text: Not answered New actors this window Unknown
+  - paragraph: "/Not enough history in this window — the \\d+-row cap was hit, so the oldest events in this window are missing and the earlier half is not represented\\. This window is split down the middle: an actor counts as new only if it acted in the recent half and never in the earlier half\\. There is no history before this window, so nothing older can be checked\\./"
+  - status: /Capped Capped at \d+ rows\. Showing the \d+ most recent events in the last \d+ hours, newest first\. Older events inside this \d+-hour window exist and are not on this screen\./
   - heading "Changed objects" [level=2]
   - text: grouped by what was touched, newest group first 5 rows · 4 groups
   - 'button "About: Changed objects"': "About: ⓘ"

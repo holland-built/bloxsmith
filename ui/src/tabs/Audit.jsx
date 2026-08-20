@@ -1,14 +1,18 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { useData } from '../lib/data.js'
+import { chainRows, eventTally, readShortfall } from '../lib/auditChain.js'
+import { sampleCountLabel } from '../lib/sampleCount.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 
-// Only this panel needs recharts, so only this panel waits for it.
-const CategoryBars = lazy(() => import('../charts/CategoryBars.jsx'))
-
-function actionColor(a, COLORS) {
-  return { CREATE: COLORS.ok, DELETE: COLORS.crit, UPDATE: COLORS.accent }[a] || COLORS.other
+// A refusal and an error are the two event kinds an operator scans for, so they
+// are the two that get a colour. Everything else is one neutral tone rather than
+// a palette: there are six event kinds on this tenant today and no fixed set, so
+// colour-per-kind would mean a legend that changes shape with the data.
+function eventColor(event, COLORS) {
+  if (/refused|denied|rbac/.test(event)) return COLORS.warn
+  if (/error|unreadable|failed|orphaned/.test(event)) return COLORS.crit
+  return COLORS.ok
 }
 
 function fmtTs(ts) {
@@ -26,22 +30,34 @@ function monoTs(v) {
   )
 }
 
+// The chain's `ts` is float epoch SECONDS and the portal feed's is an ISO
+// string; lib/auditChain.js resolves both to `_ms` so the cell and the sort
+// comparator can no longer disagree. A row with no usable time renders a dash
+// rather than a date nobody can defend. See that file's header for the 1970 bug.
+function chainTs(_v, row) {
+  return row._ms == null ? <span className="text-dim">—</span> : monoTs(row._ms)
+}
+
 // ---------- main ----------
 
-// This tab reads ONE slice of /api/data. Fetching the whole aggregate made it
-// wait for eleven upstream calls it never looks at — measured ~9s cold for a
-// slice worth ~0.3s. Declaring the slice list is also what makes the honesty
-// rule enforceable: the accessors below refuse to answer for anything not
-// listed here, so a slice this tab never asked for cannot reach a panel and be
-// drawn as "you have none" or "it broke".
-const SLICES = ['auditLogs']
-
+// ONE fetch of /api/audit/log, owned here and handed to both panels that read
+// it, so the summary and the table can never describe different reads of the
+// same log. It used to be fetched inside AuditTable for the chain verdict alone.
+//
+// THIS TAB NO LONGER READS /api/data (issue #168). It asked for the `auditLogs`
+// slice, which is the INFOBLOX PORTAL audit feed at `_limit: 100`
+// (go/internal/dashboard/dashboard.go:625, whose own comment says so) — and the
+// summary and the "Bloxsmith actions" table both rendered it, under a
+// chain-integrity verdict belonging to a log that was never on screen. The
+// portal feed is still on this tab, once, in the panel that says it is external
+// and fetches it at five times the limit with a search box.
+//
+// The slice itself is left alone: it is still served, still declared in
+// lib/data.js, and no tab consumes it now. Wiring it up somewhere useful, or
+// retiring it, is its own decision and not this fix's to take.
 export default function Audit() {
-  const data = useData(SLICES, { poll: 30000 })
-  const logs = data.rows('auditLogs')
-  // 'ok' | 'empty' | 'error' — and 'error' too when the payload came back
-  // without the slice at all, because that read did not deliver.
-  const auditLogsStatus = data.status('auditLogs')
+  const chain = useApi('/api/audit/log', { poll: 30000 })
+  const entries = useMemo(() => chainRows(chain.data?.entries), [chain.data])
 
   return (
     <div className="w-full px-6 py-5">
@@ -51,8 +67,8 @@ export default function Audit() {
           saved order, and a wrapper that keeps the id inside is invisible to
           that read. Each wrapper forwards it to its Card unchanged. */}
       <CardGrid layoutKey="audit">
-        <ActivitySummary panelId="audit-activity-summary" logs={logs} loading={data.loading} auditLogsStatus={auditLogsStatus} />
-        <AuditTable panelId="audit-log" logs={logs} loading={data.loading} error={data.error} auditLogsStatus={auditLogsStatus} />
+        <ActivitySummary panelId="audit-activity-summary" entries={entries} chain={chain} />
+        <AuditTable panelId="audit-log" entries={entries} chain={chain} />
         <CspAuditTable panelId="audit-csp-portal" />
       </CardGrid>
     </div>
@@ -61,52 +77,105 @@ export default function Audit() {
 
 // ---------- activity summary ----------
 
-function ActivitySummary({ logs, loading, auditLogsStatus, panelId }) {
+// Every panel below distinguishes four states, and they are four because
+// collapsing any pair of them is how a fault reads as a fact:
+//
+//   loading            — a skeleton, never an empty list
+//   chain.error        — the feed is unavailable; NOT "nothing happened"
+//   readShortfall(...) — the feed answered and the list under it is short
+//   entries.length 0   — a log that was read and is genuinely empty
+//
+// The third is the one that did not exist before: /api/audit/log returned 200
+// with a shortened or empty `entries` when the file could not be read or held
+// lines that would not decode, and only the chain-integrity line mentioned it.
+// See go/internal/server/state.go and lib/auditChain.js:readShortfall.
+function ShortRead({ chain }) {
   const { COLORS } = useChartTheme()
-  const counts = { CREATE: 0, UPDATE: 0, DELETE: 0 }
-  let ok = 0, fail = 0, unknown = 0
-  for (const l of logs) {
-    const a = String(l.action || '').toUpperCase()
-    if (counts[a] != null) counts[a]++
-    const r = l.result || ''
-    if (/fail|error/i.test(r)) fail++
-    else if (!r || /^unknown$/i.test(r)) unknown++
-    else ok++
-  }
-  // Colours resolved here, carried as data — see charts/CategoryBars.jsx.
-  const chartData = Object.entries(counts).map(([name, value]) => ({ name, value, color: actionColor(name, COLORS) }))
-  const total = logs.length
+  const note = readShortfall(chain.data)
+  if (!note) return null
+  return (
+    <div className="text-[12px] font-medium mb-2" style={{ color: COLORS.warn }}>
+      this list is incomplete — {note}
+    </div>
+  )
+}
+
+// A ROW PER KIND, NOT A BAR CHART, and the swap was forced by looking at it.
+//
+// This panel drew a CategoryBars of the tally. Rendered against the live log it
+// was worse than useless: event names run to 23 characters
+// ("write-refused-read-only"), recharts drops X-axis ticks that would collide,
+// and what survived was three labels spread under six bars — so the 382-tall
+// bar for `write-authorized` sat above the words "write-refused-read-only".
+// A label under the wrong bar is the same defect this whole panel was fixed
+// for, arrived at from the other direction.
+//
+// The old chart worked because its categories were CREATE / UPDATE / DELETE:
+// three, short, and fixed. Event kinds are none of those. A ranked list keeps
+// every name beside its own number at any length, and it drops recharts from
+// this tab's critical path entirely.
+const KINDS_SHOWN = 5
+
+function ActivitySummary({ entries, chain, panelId }) {
+  const { COLORS } = useChartTheme()
+  const tally = useMemo(() => eventTally(chain.data?.entries), [chain.data])
+
+  // The kinds past the cut are summed into one row rather than dropped, so the
+  // rows still add up to the count in the header. A list that silently stops at
+  // five describes a subset of the number printed beside it.
+  const rows = useMemo(() => {
+    const shown = tally.slice(0, KINDS_SHOWN).map((t) => ({ ...t, color: eventColor(t.event, COLORS) }))
+    const rest = tally.slice(KINDS_SHOWN)
+    if (rest.length) {
+      shown.push({
+        event: `${rest.length} other kind${rest.length === 1 ? '' : 's'}`,
+        count: rest.reduce((n, t) => n + t.count, 0),
+        color: COLORS.other,
+      })
+    }
+    return shown
+  }, [tally, COLORS])
+
+  const total = entries.length
+  const biggest = rows.length ? Math.max(...rows.map((r) => r.count)) : 0
 
   return (
-    <Card panelId={panelId} span={2} title="Activity Summary" right={<span className="text-[11px] text-muted">last {total} events</span>}>
-      {loading ? (
+    <Card
+      panelId={panelId}
+      span={2}
+      title="Activity Summary"
+      right={<span className="text-[11px] text-muted">{total.toLocaleString()} recorded {total === 1 ? 'event' : 'events'}</span>}
+    >
+      <ShortRead chain={chain} />
+      {chain.loading ? (
         <Skeleton h={200} />
+      ) : chain.error ? (
+        <FeedUnavailable label="Audit log unavailable" />
       ) : total === 0 ? (
-        auditLogsStatus === 'error' ? <FeedUnavailable label="Audit log feed unavailable" /> : <Empty />
+        <Empty />
       ) : (
-        <>
-          <div className="flex gap-4 mb-2">
-            <div>
-              <div className="text-[22px] font-semibold" style={{ color: COLORS.ok }}>{ok}</div>
-              <div className="text-[11px] text-dim">success</div>
-            </div>
-            <div>
-              <div className="text-[22px] font-semibold" style={{ color: COLORS.crit }}>{fail}</div>
-              <div className="text-[11px] text-dim">failed</div>
-            </div>
-            {unknown > 0 && (
-              <div>
-                <div className="text-[22px] font-semibold text-dim">{unknown}</div>
-                <div className="text-[11px] text-dim">unknown</div>
+        <div className="flex flex-col gap-2">
+          {rows.map((r) => (
+            <div key={r.event}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-[12px] truncate" title={r.event}>{r.event}</span>
+                <span className="text-[13px] font-semibold tabular-nums" style={{ color: r.color }}>
+                  {r.count.toLocaleString()}
+                </span>
               </div>
-            )}
-          </div>
-          {/* Sized like the chart it stands in for, so the card does not
-              resize when recharts lands. */}
-          <Suspense fallback={<Skeleton h={140} />}>
-            <CategoryBars data={chartData} unit="events" height={140} />
-          </Suspense>
-        </>
+              {/* Proportion of the largest row, so the shape of the log is
+                  readable at a glance. It is scaled to the biggest kind rather
+                  than to the total: with one kind at 382 and four at 1, bars
+                  scaled to 837 would all render as the same invisible sliver. */}
+              <div className="h-1.5 rounded-full bg-field overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${biggest ? Math.max((r.count / biggest) * 100, 1) : 0}%`, background: r.color }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </Card>
   )
@@ -114,13 +183,12 @@ function ActivitySummary({ logs, loading, auditLogsStatus, panelId }) {
 
 // ---------- local audit log table ----------
 
-function ActionPill({ action }) {
+function EventPill({ event }) {
   const { COLORS } = useChartTheme()
-  const a = String(action || '').toUpperCase()
-  const color = actionColor(a, COLORS)
+  const color = eventColor(event || '', COLORS)
   return (
     <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: `${color}22`, color }}>
-      {a || '—'}
+      {event || '—'}
     </span>
   )
 }
@@ -227,46 +295,60 @@ function AppendFailures({ result }) {
   )
 }
 
-function AuditTable({ logs, loading, error, auditLogsStatus, panelId }) {
+function AuditTable({ entries, chain, panelId }) {
   const [filter, setFilter] = useState('')
-  const [action, setAction] = useState('')
+  const [event, setEvent] = useState('')
   const [sort, setSort] = useState({ key: 'ts', dir: 'desc' })
-  const verdict = useApi('/api/audit/log', { poll: 30000 })
+
+  // The kinds actually present, so the selector cannot offer a filter that
+  // matches nothing. The old one listed CREATE/UPDATE/DELETE, which are portal
+  // vocabulary and appear in no entry this log has ever written.
+  const kinds = useMemo(() => eventTally(chain.data?.entries).map((t) => t.event), [chain.data])
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    return logs.filter((l) => {
-      if (action && String(l.action || '').toUpperCase() !== action) return false
-      if (!q) return true
-      return [l.user, l.action, l.resource, l.result].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+    return entries.filter((r) => {
+      if (event && r.event !== event) return false
+      return !q || r._search.includes(q)
     })
-  }, [logs, filter, action])
+  }, [entries, filter, event])
 
   const sorted = useMemo(() => {
     const arr = [...filtered]
     const { key, dir } = sort
     arr.sort((a, b) => {
-      let av = a[key] ?? '', bv = b[key] ?? ''
-      if (key === 'ts') { av = new Date(a.ts).getTime() || 0; bv = new Date(b.ts).getTime() || 0 }
-      if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-      return dir === 'asc' ? av - bv : bv - av
+      if (key === 'ts') {
+        // Nulls last in both directions: a row with no usable time is not older
+        // than everything, it is unknown, and burying it at one end under a
+        // sort the reader chose would hide it.
+        if (a._ms == null || b._ms == null) return a._ms == null ? (b._ms == null ? 0 : 1) : -1
+        return dir === 'asc' ? a._ms - b._ms : b._ms - a._ms
+      }
+      const av = String(a[key] ?? ''), bv = String(b[key] ?? '')
+      return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
     })
     return arr
   }, [filtered, sort])
 
   const columns = [
-    { key: 'ts', label: 'Time', sortable: true, render: monoTs },
+    { key: 'ts', label: 'Time', sortable: true, render: chainTs },
     {
-      key: 'user',
-      label: 'User',
+      key: 'actor',
+      label: 'Actor',
       sortable: true,
       render: (v) => (
         <span className="block truncate max-w-[140px]" title={v}>{v || '—'}</span>
       ),
     },
-    { key: 'action', label: 'Action', sortable: true, render: (v) => <ActionPill action={v} /> },
-    { key: 'resource', label: 'Resource', sortable: true },
-    { key: 'result', label: 'Result', sortable: true },
+    { key: 'event', label: 'Event', sortable: true, render: (v) => <EventPill event={v} /> },
+    {
+      key: 'detail',
+      label: 'Detail',
+      sortable: true,
+      render: (v) => (
+        <span className="block truncate font-mono text-[11px]" title={v}>{v || '—'}</span>
+      ),
+    },
   ]
 
   return (
@@ -284,31 +366,43 @@ function AuditTable({ logs, loading, error, auditLogsStatus, panelId }) {
             className="w-[150px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           />
           <select
-            value={action}
-            onChange={(e) => setAction(e.target.value)}
+            value={event}
+            onChange={(e) => setEvent(e.target.value)}
             className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
           >
-            <option value="">All actions</option>
-            <option value="CREATE">Create</option>
-            <option value="UPDATE">Update</option>
-            <option value="DELETE">Delete</option>
+            <option value="">All events</option>
+            {kinds.map((k) => (
+              <option key={k} value={k}>{k}</option>
+            ))}
           </select>
-          {sorted.length > 0 && <span className="text-[11px] text-muted">{sorted.length}</span>}
+          {/* The filtered count, and the set it was filtered FROM when they
+              differ. A bare "37" beside a filter box reads as the size of the
+              log rather than as the size of what the filter left. */}
+          {sorted.length > 0 && (
+            <span className="text-[11px] text-muted">
+              {sorted.length.toLocaleString()}
+              {sorted.length !== entries.length ? ` of ${entries.length.toLocaleString()}` : ''}
+            </span>
+          )}
         </div>
       }
     >
-      <ChainVerdict result={verdict.data} error={verdict.error} loading={verdict.loading} />
-      <AppendFailures result={verdict.data} />
-      {loading ? (
+      <ChainVerdict result={chain.data} error={chain.error} loading={chain.loading} />
+      <AppendFailures result={chain.data} />
+      <ShortRead chain={chain} />
+      {chain.loading ? (
         <Skeleton h={250} />
-      ) : error || logs.length === 0 ? (
-        error || auditLogsStatus === 'error' ? <FeedUnavailable label="Audit log feed unavailable" /> : <Empty />
+      ) : chain.error ? (
+        <FeedUnavailable label="Audit log unavailable" />
+      ) : entries.length === 0 ? (
+        <Empty />
       ) : sorted.length === 0 ? (
         <Empty>no entries match</Empty>
       ) : (
         <DataTable
           rows={sorted}
           columns={columns}
+          rowKey={(r) => r._key}
           rowCap={50}
           maxHeight={420}
           stickyHeader
@@ -405,7 +499,22 @@ function CspAuditTable({ panelId }) {
           <button onClick={() => runSearch(q)} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
             {loading ? 'Searching…' : 'Search'}
           </button>
-          {rows.length > 0 && <span className="text-[11px] text-muted">{rows.length}</span>}
+          {/* `500` here is the `_limit` CSPAudit sends upstream, not a fact
+              about the tenant (go/internal/dashboard/csp.go). The server has
+              always returned `truncated` alongside the rows and this chip threw
+              it away, printing the request cap as though it were the number of
+              matching entries — the v3.67.5 defect, on a panel the sweep that
+              found it had not reached.
+
+              sampleCount.js reads `returned`, which this payload calls `count`;
+              rows.length is that same number and is additionally what is on
+              screen, so it is the one passed. There is no `total` to pass: the
+              upstream tells us there are more and not how many. */}
+          {rows.length > 0 && (
+            <span className="text-[11px] text-muted">
+              {sampleCountLabel({ returned: rows.length, truncated: result?.truncated }, 'entries')}
+            </span>
+          )}
         </div>
       }
     >

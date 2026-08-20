@@ -2,20 +2,21 @@
   - heading "Audit" [level=1]
   - button "Arrange panels"
   - heading "Activity Summary" [level=2]
-  - text: last 5 events
+  - text: 5 recorded events
   - 'button "About: Activity Summary"': "About: ⓘ"
   - button "Hide Activity Summary": Hide ✕
   - button "Move Activity Summary": Move ⠿
-  - text: 4 success 1 failed
-  - application: CREATE UPDATE DELETE
+  - text: dns-record-delete-error 1 provision-subnet 1 update-apply 1 write-authorized 1 write-refused-read-only 1
   - heading "Audit Log" [level=2]
   - text: Bloxsmith actions
   - textbox "Filter…"
   - combobox:
-    - option "All actions" [selected]
-    - option "Create"
-    - option "Update"
-    - option "Delete"
+    - option "All events" [selected]
+    - option "dns-record-delete-error"
+    - option "provision-subnet"
+    - option "update-apply"
+    - option "write-authorized"
+    - option "write-refused-read-only"
   - text: "5"
   - 'button "About: Audit Log"': "About: ⓘ"
   - button "Hide Audit Log": Hide ✕
@@ -24,53 +25,46 @@
   - code: bloxsmith audit verify
   - table:
     - rowgroup:
-      - row "Time User Action Resource Result":
+      - row "Time Actor Event Detail":
         - columnheader "Time":
           - button "Time"
-        - columnheader "User":
-          - button "User"
-        - columnheader "Action":
-          - button "Action"
-        - columnheader "Resource":
-          - button "Resource"
-        - columnheader "Result":
-          - button "Result"
+        - columnheader "Actor":
+          - button "Actor"
+        - columnheader "Event":
+          - button "Event"
+        - columnheader "Detail":
+          - button "Detail"
     - rowgroup:
-      - 'row /1\/1\/\d+, \d+:\d+:\d+ AM actor-gamma UPDATE addressservice failed: denied/':
+      - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator dns-record-delete-error error=upstream refused · id=dns\/record\/baseline-1/:
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
-        - cell "actor-gamma"
-        - cell "UPDATE"
-        - cell "addressservice"
-        - 'cell "failed: denied"'
-      - row /1\/1\/\d+, \d+:\d+:\d+ AM actor-beta UPDATE subnetservice success/:
+        - cell "baseline-operator"
+        - cell "dns-record-delete-error"
+        - cell "error=upstream refused · id=dns/record/baseline-1"
+      - row /1\/1\/\d+, \d+:\d+:\d+ AM baseline-operator write-refused-read-only method=POST · path=\/api\/edit\/dnsrecord · reason=tenant-read-only · tenant=baseline\/-/:
         - cell /1\/1\/\d+, \d+:\d+:\d+ AM/
-        - cell "actor-beta"
-        - cell "UPDATE"
-        - cell "subnetservice"
-        - cell "success"
-      - row /1\/1\/\d+, 8:\d+:\d+ AM actor-alpha DELETE dnsrecord success/:
+        - cell "baseline-operator"
+        - cell "write-refused-read-only"
+        - cell "method=POST · path=/api/edit/dnsrecord · reason=tenant-read-only · tenant=baseline/-"
+      - row /1\/1\/\d+, 8:\d+:\d+ AM baseline-operator provision-subnet block=ipam\/address_block\/baseline-1 · cidr=\d+ · subnet=\d+\.\d+\.0\.0/:
         - cell /1\/1\/\d+, 8:\d+:\d+ AM/
-        - cell "actor-alpha"
-        - cell "DELETE"
-        - cell "dnsrecord"
-        - cell "success"
-      - row /1\/1\/\d+, 7:\d+:\d+ AM actor-beta UPDATE addressservice success/:
+        - cell "baseline-operator"
+        - cell "provision-subnet"
+        - cell /block=ipam\/address_block\/baseline-1 · cidr=\d+ · subnet=\d+\.\d+\.0\.0/
+      - row /1\/1\/\d+, 7:\d+:\d+ AM baseline-operator write-authorized method=POST · path=\/api\/provision\/subnet/:
         - cell /1\/1\/\d+, 7:\d+:\d+ AM/
-        - cell "actor-beta"
-        - cell "UPDATE"
-        - cell "addressservice"
-        - cell "success"
-      - row /1\/1\/\d+, 6:\d+:\d+ AM actor-alpha UPDATE auth_zone success/:
+        - cell "baseline-operator"
+        - cell "write-authorized"
+        - cell "method=POST · path=/api/provision/subnet"
+      - row /1\/1\/\d+, 6:\d+:\d+ AM baseline-operator update-apply from=v0\.0\.0-baseline/:
         - cell /1\/1\/\d+, 6:\d+:\d+ AM/
-        - cell "actor-alpha"
-        - cell "UPDATE"
-        - cell "auth_zone"
-        - cell "success"
+        - cell "baseline-operator"
+        - cell "update-apply"
+        - cell "from=v0.0.0-baseline"
   - heading "CSP Portal Audit" [level=2]
   - text: external — Infoblox portal activity
   - textbox "Search user or resource…"
   - button "Search"
-  - text: "5"
+  - text: 5 entries shown, total unknown
   - 'button "About: CSP Portal Audit"': "About: ⓘ"
   - button "Hide CSP Portal Audit": Hide ✕
   - button "Move CSP Portal Audit": Move ⠿
