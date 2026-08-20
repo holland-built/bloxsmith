@@ -6,6 +6,7 @@ import { abortAfter } from '../lib/api.js'
 import { useHashParams } from '../lib/hash.js'
 import { dossierMoreLine } from '../lib/dossierMore.js'
 import { announceResolved, canAuditAnswer, classifyIndicator, isIPQuery } from '../lib/indicator.js'
+import { DASH } from '../lib/measured.js'
 
 // Everything about one thing — the page a palette search lands on.
 //
@@ -60,7 +61,6 @@ import { announceResolved, canAuditAnswer, classifyIndicator, isIPQuery } from '
 // small formatting helpers
 // ---------------------------------------------------------------------------
 
-const DASH = '—'
 
 function fmt(v) {
   if (v == null || v === '') return null
