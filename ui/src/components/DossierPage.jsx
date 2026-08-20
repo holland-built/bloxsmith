@@ -4,6 +4,7 @@ import DossierPanel from './DossierPanel.jsx'
 import { Empty, Skeleton } from './ui.jsx'
 import { abortAfter } from '../lib/api.js'
 import { useHashParams } from '../lib/hash.js'
+import { dossierMoreLine } from '../lib/dossierMore.js'
 import { announceResolved, canAuditAnswer, classifyIndicator, isIPQuery } from '../lib/indicator.js'
 import { DASH } from '../lib/measured.js'
 
@@ -565,7 +566,11 @@ function SourceSection({ src, q, onResult }) {
   }, [onResult, src.key, res])
 
   const shown = rows.slice(0, MAX_ROWS)
-  const hidden = rows.length - shown.length
+  // NOT `rows.length - shown.length`. That arithmetic is only right while the
+  // server handed over everything it found, and search.go caps at its own
+  // searchLimit and says so in the payload (#153). The rows in hand are not the
+  // rows that matched, so the count of one is not the count of the other.
+  const moreLine = dossierMoreLine(res.body, rows.length, shown.length)
 
   return (
     <div data-dossier-section={src.key}>
@@ -616,11 +621,11 @@ function SourceSection({ src, q, onResult }) {
           </div>
         ))}
 
-      {state === 'ok' && hidden > 0 && (
+      {state === 'ok' && moreLine && (
         <div className={LANES + ' border-b border-line bg-card'}>
           <div className="border-r border-line" />
           <div className={CELL + ' min-[561px]:col-span-6 min-[561px]:border-r-0 text-[12px] text-muted'}>
-            {hidden} more {hidden === 1 ? 'result' : 'results'} not shown here — this ledger shows one line per result.
+            {moreLine}
           </div>
         </div>
       )}
