@@ -4,42 +4,8 @@ import { useHasArranged } from '../lib/arrangedOnce.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, TabIntro, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
+import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
 
-// A number the backend actually measured, or null when it did not.
-//
-// go/internal/dashboard/norm.go emits JSON null — not 0 — for util/total/used
-// on a subnet whose upstream row reports no total. `Number(x) || 0` turns that
-// null into a healthy-looking 0%, i.e. "this subnet is empty", which is
-// precisely the claim we cannot make. Everything downstream carries the null
-// instead and renders it as —. Checked against the live tenant: every subnet
-// there currently reports a total, so this is a guard, not a live symptom —
-// the 295 rows sitting at 0% do report total=0 and are a real measurement.
-function num(v) {
-  if (v === null || v === undefined || v === '') return null
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
-}
-
-// total - used, or null when either side is unknown: an unknown minus a known
-// is not a number of free addresses.
-function freeOf(s) {
-  const total = num(s.total)
-  const used = num(s.used)
-  return total === null || used === null ? null : total - used
-}
-
-// A count we could not fetch is not a count of zero.
-const DASH = '—'
-
-// Compare two possibly-null numbers, unknown always LAST in the direction on
-// screen: 0 would rank an unmeasured subnet as the emptiest one, and the top
-// of a worst-first sort would rank it as the most exhausted. Neither is known.
-function cmpMaybe(av, bv, dir) {
-  if (av === null && bv === null) return 0
-  if (av === null) return 1
-  if (bv === null) return -1
-  return dir === 'asc' ? av - bv : bv - av
-}
 
 // Tap once to read it, tap again to follow it.
 //

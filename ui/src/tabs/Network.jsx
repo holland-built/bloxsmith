@@ -4,6 +4,7 @@ import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, hiddenPanelGroup
 import { DataTable, sortRows } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useHashParams, setHashParams } from '../lib/hash.js'
+import { DASH, freeOf, num } from '../lib/measured.js'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -14,31 +15,6 @@ import { useHashParams, setHashParams } from '../lib/hash.js'
 // between renders, so the memo now works in both states.
 const NO_ROWS = Object.freeze([])
 
-// A number the backend actually measured, or null when it did not.
-//
-// go/internal/dashboard/norm.go emits JSON null — not 0 — for util/total/used
-// on a subnet whose upstream row reports no total. `Number(x) || 0` turns that
-// null into a healthy-looking 0%, i.e. "this subnet is empty", which is
-// precisely the claim we cannot make. Everything downstream carries the null
-// instead and renders it as —. Checked against the live tenant: every subnet
-// there currently reports a total, so this is a guard, not a live symptom —
-// the 295 rows sitting at 0% do report total=0 and are a real measurement.
-function num(v) {
-  if (v === null || v === undefined || v === '') return null
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
-}
-
-// total - used, or null when either side is unknown: an unknown minus a known
-// is not a number of free addresses.
-function freeOf(s) {
-  const total = num(s.total)
-  const used = num(s.used)
-  return total === null || used === null ? null : total - used
-}
-
-// A count we could not fetch is not a count of zero.
-const DASH = '—'
 
 // IP address octet-order comparator (ascending); DataTable applies direction.
 function ipCompare(a, b) {
