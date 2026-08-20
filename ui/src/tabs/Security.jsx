@@ -5,6 +5,7 @@ import { useChartTheme, Card, CardGrid, Empty, hiddenPanelGroup, Skeleton, FeedU
 import { fmtShortDay } from '../lib/chartFormat.js'
 import { DataTable } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
+import { sampleCountLabel, sampleScopeNote, totalEventsTile } from '../lib/sampleCount.js'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -117,9 +118,10 @@ function SeverityHero({ panelId, hub, events }) {
     }
     return any ? buckets.map((v, h) => ({ hour: `${h}:00`, value: v })) : []
   }, [events])
+  const scopeNote = sampleScopeNote(hub.data, 'events')
 
   return (
-    <Card panelId={panelId} span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-[11px] text-muted">{events.length.toLocaleString()} events</span>}>
+    <Card panelId={panelId} span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-[11px] text-muted">{sampleCountLabel(hub.data, 'events')}</span>}>
       {hub.loading ? (
         <Skeleton h={230} />
       ) : unavailable ? (
@@ -155,6 +157,11 @@ function SeverityHero({ panelId, hub, events }) {
               />
             </Suspense>
           )}
+          {/* The severity legend above and the bars are both counted from
+              `events`, which is one capped page — so on a busy window they
+              describe the sample, not the window. The heading names the sample;
+              this names its scope, once, rather than four times in the legend. */}
+          {scopeNote && <div className="text-[11px] text-dim mt-2">{scopeNote}</div>}
         </>
       )}
     </Card>
@@ -168,11 +175,23 @@ function KpiStack({ panelId, hub, events, acks }) {
   const d = hub.data ?? {}
   const unackedCrit = events.filter((e) => !acks[ackKey(e)] && String(e.severity).toLowerCase() === 'critical').length
 
+  // The fourth tile was `{ label: 'Total Events', value: d.total ?? events.length }`
+  // and `d.total` was the server's row count, so on a capped window it printed
+  // the page size under the word "Total". Measured live on 2026-08-20: the cap
+  // was being hit and this tile read "Total Events 50" for an hour whose real
+  // count had never been asked for.
+  //
+  // The `?? events.length` fallback is gone with it. That is the shape that let
+  // the bug survive a rename: a consumer that substitutes the rows in hand for a
+  // missing total is printing the sample under the total's label again.
+  const totalCell = totalEventsTile(d, 'Total Events', 'Events Shown')
+  const scopeNote = sampleScopeNote(d, 'events')
+
   const cells = [
     { label: 'Unacked Critical', value: unackedCrit, color: COLORS.crit },
     { label: 'Blocked', value: d.blocked ?? 0, color: COLORS.accent },
     { label: 'Logged', value: d.logged ?? 0, color: COLORS.other },
-    { label: 'Total Events', value: d.total ?? events.length, color: COLORS.purple },
+    { label: totalCell.label, value: totalCell.value, color: COLORS.purple },
   ]
 
   return (
@@ -180,14 +199,22 @@ function KpiStack({ panelId, hub, events, acks }) {
       {hub.loading ? <Skeleton h={200} /> : hub.data?.availability === 'error' || hub.error ? (
         <FeedUnavailable reason={hub.data?.reason} label="Threat feed unavailable" />
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          {cells.map((c) => (
-            <div key={c.label}>
-              <div className="text-muted text-[11px]">{c.label}</div>
-              <div className="text-xl font-semibold tracking-tight my-1" style={{ color: c.color }}>{Number(c.value).toLocaleString()}</div>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            {cells.map((c) => (
+              <div key={c.label}>
+                <div className="text-muted text-[11px]">{c.label}</div>
+                <div className="text-xl font-semibold tracking-tight my-1" style={{ color: c.color }}>{Number(c.value).toLocaleString()}</div>
+              </div>
+            ))}
+          </div>
+          {/* Unacked Critical, Blocked and Logged stay sample-derived even when
+              the tile beside them carries an authoritative total, so the note
+              is not conditional on that: it says which numbers were counted
+              from what, and a panel mixing scopes without saying so is the
+              defect wearing a smaller hat. */}
+          {scopeNote && <div className="text-[11px] text-dim mt-3">{scopeNote}</div>}
+        </>
       )}
     </Card>
   )
@@ -283,6 +310,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
   const { COLORS } = useChartTheme()
   const SEV_COLOR = sevColorMap(COLORS)
   const [sevFilter, setSevFilter] = useState('all')
+  const scopeNote = sampleScopeNote(hub.data, 'events')
 
   function toggleAck(e) {
     const k = ackKey(e)
@@ -384,14 +412,21 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
       ) : rows.length === 0 ? (
         <Empty>no events match</Empty>
       ) : (
-        <DataTable
-          rows={rows}
-          columns={columns}
-          maxHeight={420}
-          rowCap={150}
-          rowKey={(r, i) => ackKey(r) + i}
-          rowStyle={(r) => ({ opacity: acks[ackKey(r)] ? 0.45 : 1 })}
-        />
+        <>
+          <DataTable
+            rows={rows}
+            columns={columns}
+            maxHeight={420}
+            rowCap={150}
+            rowKey={(r, i) => ackKey(r) + i}
+            rowStyle={(r) => ({ opacity: acks[ackKey(r)] ? 0.45 : 1 })}
+          />
+          {/* The figure beside the severity buttons counts the rows matching the
+              filter, and those rows come from the same capped page as every
+              other number on this tab. Without this line an inbox holding the
+              first 50 of a bad hour reads as an inbox with 50 things in it. */}
+          {scopeNote && <div className="text-[11px] text-dim mt-2">{scopeNote}</div>}
+        </>
       )}
     </Card>
   )

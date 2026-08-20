@@ -531,16 +531,50 @@ const CLAIMS = [
 
   // ---- time windows (Go) ----
   {
+    // Was: "The count by the title is 50 events at most", proved by the literal
+    // 50 in data.go. That sentence stopped being the whole truth on 2026-08-20
+    // (issue #157): the 50 was never the point, the fact that everything on the
+    // panel was counted FROM those 50 was. The claim is now about the disclosure
+    // rather than the number, so it binds to the code that renders it.
     panel: 'daily-security-today',
-    says: /The count by the title is 50 events at most/,
-    file: GO_DATA,
-    proofs: [{ re: /FetchHubSecurity\(3600, 50\)/, expect: '/api/hub/security asks for 50 events' }],
+    says: /the title says so and a line under the figures says the figures were counted from that sample/,
+    file: DAILY,
+    proofs: [
+      { re: /const scopeNote = sampleScopeNote\(sec\.data, 'events'\)/, expect: 'the panel computes a scope note from the payload' },
+      { re: /\{secDead \? '— events' : sampleCountLabel\(sec\.data, 'events'\)\}/, expect: 'the title count is the sample-aware label, not rows.length' },
+      { re: /\{scopeNote && <div className="text-\[11px\] text-dim mt-2">\{scopeNote\}<\/div>\}/, expect: 'and the note is actually rendered under the figures' },
+    ],
+  },
+  {
+    panel: 'daily-security-today',
+    says: /A dash means the feed could not be read/,
+    file: DAILY,
+    proofs: [{ re: /\{secDead \? '— events'/, expect: 'a dead feed renders a dash rather than a count' }],
   },
   {
     panel: 'daily-security-today',
     says: /Threat events seen in the last hour/,
     file: GO_DATA,
     proofs: [{ re: /FetchHubSecurity\(3600, 50\)/, expect: '/api/hub/security asks for a 3600-second window' }],
+  },
+  {
+    panel: 'security-threat-events',
+    says: /They and the bars count the events fetched; a line underneath says when that is only part of the hour/,
+    file: SECURITY,
+    proofs: [
+      { re: /const scopeNote = sampleScopeNote\(hub\.data, 'events'\)/, expect: 'the severity panel computes a scope note' },
+      { re: /right=\{unavailable \? null : <span className="text-\[11px\] text-muted">\{sampleCountLabel\(hub\.data, 'events'\)\}<\/span>\}/, expect: 'its heading count is sample-aware' },
+    ],
+  },
+  {
+    // The tile that used to read "Total Events" over a page size.
+    panel: 'security-response-summary',
+    says: /The last tile says Total Events only when the true count is known; otherwise it says Events Shown/,
+    file: SECURITY,
+    proofs: [
+      { re: /const totalCell = totalEventsTile\(d, 'Total Events', 'Events Shown'\)/, expect: 'the tile label is chosen by totalEventsTile, not hardcoded' },
+      { re: /\{ label: totalCell\.label, value: totalCell\.value, color: COLORS\.purple \}/, expect: 'and both its label and value come from that decision' },
+    ],
   },
   {
     panel: 'security-threat-events',
