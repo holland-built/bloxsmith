@@ -183,6 +183,30 @@ exempt() {
     # adds one, this script says `tag` instead of quietly agreeing with itself.
     go/templates/*_test.go)                  return 1 ;;
     *_test.go)                               return 0 ;;
+    # UI unit tests. #147 exempted the Go half of this and stopped there, so a
+    # commit touching only ui/src/**/*.test.js still said `tag` -- measured on
+    # 2026-08-19, when ui/src/lib/capLabels.test.js printed "ships something a
+    # customer runs".
+    #
+    # THE GUARANTEE HERE IS WEAKER THAN THE GO ONE, and that difference is the
+    # whole reason this arm took a second look. `go build` cannot compile a
+    # *_test.go at all, so that exemption rests on the toolchain. Here it rests
+    # on nothing importing these files: vite builds from ui/index.html and
+    # tree-shakes whatever the entry graph does not reach, so a .test.js is
+    # dropped because it is unreachable, not because it is named test. Import
+    # one from app code and it would ship.
+    #
+    # So the claim is ENFORCED rather than assumed. ui/src/lib/noTestImports.test.js
+    # fails the build if any non-test module under ui/src imports a .test.js,
+    # which is the only way one could reach go/web. Without that test this arm
+    # would be the "when unsure, leave it off" case the header describes, and
+    # would not belong on this list.
+    #
+    # Replayed against history before landing: across the last 100 commits, not
+    # one touched only UI test files, so this arm flips no verdict that has
+    # already been cut. It is here for the next ea1da6a -- the *_test.go-only
+    # commit #147 was written for -- arriving on the UI side instead.
+    ui/src/*.test.js|ui/src/*.test.jsx)      return 0 ;;
     *)                                      return 1 ;;
   esac
 }
@@ -216,6 +240,15 @@ selftest() {
   # tags even though its name says test. Delete any one of the three and the other
   # two stop proving anything. foo_test.go is deliberately a path that does not
   # exist — it is the case this table is defending against, not a file to create.
+  #
+  # THE UI ROWS ARE THE SAME KIND OF SET. capLabels.test.js and api.test.js are
+  # real tracked files; Thing.test.jsx does not exist and is there because the
+  # arm matches two suffixes and only one of them was otherwise exercised. The
+  # `tag` side carries ui/src/lib/api.js — same directory, same stem, minus the
+  # .test — and ui/src/lib/testing.js, which does not exist either and is the
+  # case being defended against: a shipped module with the word "test" in its
+  # name. Without that row the arm could be loosened to a substring match and
+  # this table would stay green.
   done <<'TABLE'
 skip README.md
 skip docs/SHIP.md
@@ -238,6 +271,9 @@ skip scripts/out_cubes.json
 skip scripts/out_tools.json
 skip scripts/mcp_diff.py
 skip go/internal/dashboard/tiles_test.go
+skip ui/src/lib/capLabels.test.js
+skip ui/src/lib/api.test.js
+skip ui/src/components/Thing.test.jsx
 tag scripts/install.command
 tag .dockerignore
 tag .env.example
@@ -254,6 +290,8 @@ tag go/internal/dashboard/tiles.go
 tag go/templates/foo_test.go
 tag go/templates/subnet.json
 tag ui/src/App.jsx
+tag ui/src/lib/api.js
+tag ui/src/lib/testing.js
 tag ui/package.json
 tag docker-compose.yml
 tag .goreleaser.yaml
