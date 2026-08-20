@@ -117,6 +117,13 @@ export default function TenantManager({ onClose, onOpenHelp }) {
 
   const tenants = (status && status.tenants) || []
   const activeId = status && status.active
+  // "Is the connection I am ON right now actually working?" — a different
+  // question from the per-key Test buttons below, which judge a key the operator
+  // has just typed into the add/edit form. /api/vault/conn-test runs TestKey
+  // against the ACTIVE stored key, and until #152 nothing in the UI asked it, so
+  // an operator staring at a wall of "feed unavailable" panels had no way to
+  // tell a broken tenant from a broken upstream.
+  const [connTest, setConnTest] = useState({ busy: false, result: '' })
 
   const saveToken = (v) => {
     setDashToken(v)
@@ -173,6 +180,29 @@ export default function TenantManager({ onClose, onOpenHelp }) {
           ? 'Unverified: could not verify — check connectivity and try again'
           : 'Invalid: ' + (data.error || 'rejected')
     setAdd((a) => ({ ...a, test }))
+  }
+
+  const testConnection = async () => {
+    // Guarded rather than merely disabled: a double-press or an Enter on a
+    // focused button can fire twice before React re-renders.
+    if (connTest.busy) return
+    setConnTest({ busy: true, result: '' })
+    const { ok, data } = await vpost('/api/vault/conn-test', {})
+    // The same three-way reading the per-key tests use, and for the same
+    // reason. `unverified` means the request never reached CSP, so the
+    // connection was never judged — reporting that as "rejected" would send
+    // somebody to replace a key that is fine.
+    //
+    // No key material is sent or shown: the request body is empty, the server
+    // reads the active key itself, and only its verdict and the tenant NAME
+    // come back.
+    const result =
+      ok && data.ok
+        ? 'Connected' + (data.name ? ' — ' + data.name : '')
+        : data.unverified
+          ? 'Unverified: could not reach the service — check connectivity and try again'
+          : 'Not connected: ' + (data.error || 'rejected')
+    setConnTest({ busy: false, result })
   }
 
   const openEdit = (t) => setEdit({ id: t.id, label: t.label, key: '', err: '', busy: false, test: '' })
@@ -361,6 +391,18 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               ))}
               {tenants.length === 0 && <div className="text-[11px] text-dim px-1">No tenants saved.</div>}
             </div>
+            )}
+            {activeId && (
+              <div className="mb-3">
+                <button
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover disabled:opacity-60"
+                  disabled={connTest.busy}
+                  onClick={testConnection}
+                >
+                  {connTest.busy ? 'Testing connection…' : 'Test active connection'}
+                </button>
+                {connTest.result && <div className="text-[11px] text-muted px-1 pt-1.5">{connTest.result}</div>}
+              </div>
             )}
             <button className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
               + Add connection

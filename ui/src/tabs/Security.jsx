@@ -6,6 +6,8 @@ import { fmtShortDay } from '../lib/chartFormat.js'
 import { DataTable } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { sampleCountLabel, sampleScopeNote, totalEventsTile } from '../lib/sampleCount.js'
+import { DASH } from '../lib/measured.js'
+import { inventoryRow } from '../lib/securityInventory.js'
 
 // A single frozen empty array, shared by every `?? NO_ROWS` fallback below.
 // `?? []` builds a NEW array on every render, so any useMemo depending on that
@@ -50,6 +52,11 @@ export default function Security() {
   const exposedHostnames = useApi('/api/csp/exposed-hostnames', { poll: 30000 })
   const exposedIps = useApi('/api/csp/exposed-ips', { poll: 30000 })
   const ctemAssets = useApi('/api/csp/ctem-assets', { poll: 30000 })
+  // The seven-section security rollup. Registered since the Go rewrite and
+  // called by nothing until #152. One request, not seven: the Go side fans its
+  // upstream reads out concurrently (measured 1.57s -> 0.54s cold), which is
+  // what made it affordable on a tab that already holds eleven feeds.
+  const hubDomains = useApi('/api/hub/domains', { poll: 60000 })
   const [acks, setAcks] = useState({})
   // One shared read of /api/service-inventory per page load — deliberately not
   // useApi(), which would join the 30s poll above for an answer that cannot
@@ -81,6 +88,7 @@ export default function Security() {
             <TriageInbox key="security-triage-inbox" panelId="security-triage-inbox" hub={hub} events={events} acks={acks} setAcks={setAcks} />,
           ],
         })}
+        <SecurityInventory panelId="security-inventory" hub={hubDomains} />
         <LookalikeTable panelId="security-lookalike-domains" lookalikes={lookalikes} />
         <CtemPanel panelId="security-ctem-exposure" ctem={ctem} />
         <AssetInsights panelId="security-asset-insights" assetInsights={assetInsights} />
@@ -897,6 +905,66 @@ function CtemAssetsPanel({ panelId, ctemAssets }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ---------- security inventory (hub/domains) ----------
+
+// WHAT THIS IS AND IS NOT. It is a count of what is CONFIGURED — policies,
+// feeds, lists, roaming endpoints, anycast members. It is deliberately not
+// called "coverage": a count of named lists says nothing about whether anything
+// is protected, and a panel whose title claims more than its numbers support is
+// the failure mode this repo keeps fixing.
+//
+// TWO SECTIONS OF /api/hub/domains ARE LEFT OUT ON PURPOSE. dfp_services is
+// already the "DFP Services" panel on Infra and host_inventory is already
+// Infra's "Host Inventory"; drawing either here would put the same number on
+// two tabs under two names, and the first time they disagreed nobody would know
+// which was right.
+//
+// Every section carries its own availability, so one dead feed shows as
+// unavailable in its own row while the rest stay real — the payload is built
+// that way precisely so a single failure cannot blank the panel or, worse,
+// render as a row of zeros.
+const INVENTORY_SECTIONS = [
+  { key: 'security_policies', label: 'Security policies' },
+  { key: 'threat_feeds', label: 'Threat feeds' },
+  { key: 'named_lists', label: 'Named lists' },
+  { key: 'roaming_endpoints', label: 'Roaming endpoints' },
+  { key: 'anycast_ha', label: 'Anycast HA members' },
+]
+
+function SecurityInventory({ panelId, hub }) {
+  const body = hub.data ?? null
+  // Whole-request failure. Per-section failures are handled per row, which is
+  // the point of the availability map.
+  const dead = !hub.loading && (!!hub.error || body === null)
+
+  return (
+    <Card panelId={panelId} span={2} title="Security Inventory" note="what is configured">
+      {hub.loading ? (
+        <Skeleton h={200} />
+      ) : dead ? (
+        <FeedUnavailable label="Security inventory unavailable" />
+      ) : (
+        <div className="flex flex-col gap-2 mt-1">
+          {INVENTORY_SECTIONS.map((s) => {
+            const { value, note } = inventoryRow(s.key, body)
+            return (
+              <div key={s.key} className="flex items-center justify-between gap-2 py-1">
+                <span className="text-[13px] text-muted">{s.label}</span>
+                <div className="flex items-center gap-2">
+                  {note && <span className="text-[11px] text-dim">{note}</span>}
+                  <span className="text-[15px] font-semibold tabular-nums text-txt w-10 text-right">
+                    {value === null ? DASH : value.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </Card>
