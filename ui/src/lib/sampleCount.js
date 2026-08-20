@@ -32,6 +32,27 @@ export function isSample(data) {
   return data?.truncated === true
 }
 
+/**
+ * How many rows this payload was counted from.
+ *
+ * FALLS BACK TO THE EVENTS ARRAY, and that is not belt-and-braces. The first
+ * version of this file read `data.returned` alone, and the page-baseline suite
+ * caught it immediately: a payload from before `returned` existed rendered
+ * "0 events" on a page showing two of them. A browser tab left open across a
+ * deploy holds exactly that payload, and so does any cached response — so the
+ * new code would have replaced one wrong number with a worse one, on a security
+ * panel, for anyone who had not reloaded.
+ *
+ * Counting the rows is only dangerous when the count gets LABELLED as a total.
+ * That decision belongs to `truncated`, which an old payload also lacks, so an
+ * old payload takes the unqualified branch below and reads exactly as it did
+ * before any of this changed.
+ */
+function returnedOf(data) {
+  if (Number.isFinite(data?.returned)) return data.returned
+  return Array.isArray(data?.events) ? data.events.length : 0
+}
+
 /** The authoritative estate figure, or null when nobody published one. */
 export function knownTotal(data) {
   const total = data?.total
@@ -46,7 +67,7 @@ export function knownTotal(data) {
  * @returns {string} heading text; callers handle the feed-dead case themselves
  */
 export function sampleCountLabel(data, noun) {
-  const returned = Number.isFinite(data?.returned) ? data.returned : 0
+  const returned = returnedOf(data)
   if (!isSample(data)) return `${returned.toLocaleString()} ${noun}`
 
   const total = knownTotal(data)
@@ -71,7 +92,7 @@ export function sampleCountLabel(data, noun) {
  */
 export function sampleScopeNote(data, noun) {
   if (!isSample(data)) return null
-  const returned = Number.isFinite(data?.returned) ? data.returned : 0
+  const returned = returnedOf(data)
   const total = knownTotal(data)
   const of = total !== null ? ` of ${total.toLocaleString()}` : ''
   return `Counted from the ${returned.toLocaleString()}${of} ${noun} shown, not the whole window.`
@@ -89,7 +110,7 @@ export function sampleScopeNote(data, noun) {
  * @returns {{label: string, value: number}}
  */
 export function totalEventsTile(data, totalLabel, sampleLabel) {
-  const returned = Number.isFinite(data?.returned) ? data.returned : 0
+  const returned = returnedOf(data)
   const total = knownTotal(data)
   if (total !== null) return { label: totalLabel, value: total }
   // Not truncated and no total means the rows in hand ARE everything in the

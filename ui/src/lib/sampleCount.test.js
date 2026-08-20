@@ -63,6 +63,26 @@ test('the total tile stops calling itself a total when it does not have one', ()
   })
 })
 
+// THE REGRESSION THE page-baseline SUITE CAUGHT. The first version of
+// sampleCount.js read `data.returned` and nothing else, so a payload predating
+// that field rendered "0 events" on a page showing two. That payload is not
+// hypothetical: a browser tab open across a deploy holds it, and so does a
+// cached response. Replacing a wrong number on a security panel with a worse
+// one, for everybody who had not reloaded, is a strictly worse bug than the one
+// being fixed.
+test('a payload from before `returned` existed still counts its rows', () => {
+  const OLD_SHAPE = { events: [{ severity: 'high' }, { severity: 'low' }], counts: {}, blocked: 1 }
+  assert.equal(sampleCountLabel(OLD_SHAPE, 'events'), '2 events')
+  // No `truncated` either, so it takes the unqualified branch and reads exactly
+  // as it did before any of this changed. That is the point: the row count is
+  // only dangerous when something LABELS it a total.
+  assert.equal(sampleScopeNote(OLD_SHAPE, 'events'), null)
+  assert.deepEqual(totalEventsTile(OLD_SHAPE, 'Total Events', 'Events Shown'), {
+    label: 'Total Events',
+    value: 2,
+  })
+})
+
 test('a missing or half-built payload counts nothing rather than guessing', () => {
   assert.equal(sampleCountLabel(undefined, 'events'), '0 events')
   assert.equal(sampleCountLabel({}, 'events'), '0 events')
