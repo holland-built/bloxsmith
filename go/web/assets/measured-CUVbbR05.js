@@ -1,0 +1,1 @@
+function e(e){if(e==null||e===``)return null;let t=Number(e);return Number.isFinite(t)?t:null}function t(t){let n=e(t.total),r=e(t.used);return n===null||r===null?null:n-r}function n(e,t,n){return e===null&&t===null?0:e===null?1:t===null?-1:n===`asc`?e-t:t-e}export{t as n,e as r,n as t};
