@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { accountHasKey, keyedAccountNames } from '../lib/accountKeys.js'
 import { FeedUnavailable } from './ui.jsx'
 import ThemeSwitch from './ThemeSwitch.jsx'
 import DensitySwitch from './DensitySwitch.jsx'
@@ -126,7 +125,6 @@ export default function TenantManager({ onClose, onOpenHelp }) {
 
   const tenants = (status && status.tenants) || []
   const activeId = status && status.active
-  const keyedNames = keyedAccountNames(status?.tenants)
   // "Is the connection I am ON right now actually working?" — a different
   // question from the per-key Test buttons below, which judge a key the operator
   // has just typed into the add/edit form. /api/vault/conn-test runs TestKey
@@ -539,28 +537,38 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                   onChange={(e) => e.target.value && e.target.value !== activeAccount && switchCspAccount(e.target.value)}
                 >
                   {!activeAccount && <option value="" disabled>Switch active account…</option>}
-                  {accounts.map((a) => {
-                    const keyed = accountHasKey(a, keyedNames)
-                    return (
-                      // NOT DIMMED, and that is a correction. These rows carried
-                      // `color: var(--color-dim)` and were reported as
-                      // unclickable — they never were: disabled=false,
-                      // pointerEvents=auto, and selecting one really does fire
-                      // the switch. But a native <select> renders a greyed
-                      // option exactly like a disabled one, and because the
-                      // select is controlled on the ACTIVE id it snaps straight
-                      // back when the switch is refused. Looking disabled and
-                      // behaving like a bounce is the same thing as being
-                      // disabled, to the person clicking it.
-                      //
-                      // The words stay because they are true and useful; the
-                      // styling goes because it made a note look like a wall.
-                      <option key={a.id} value={a.id}>
-                        {a.name}{keyed ? '' : ' — no key saved'}
-                      </option>
-                    )
-                  })}
+                  {/* PLAIN NAMES. These rows are not dimmed, which was one
+                      correction, and they no longer carry " — no key saved",
+                      which is the other.
+
+                      That label was true and answered the wrong question. It
+                      said whether the vault holds a key labelled like this
+                      account; what stops a switch here is the CURRENT key
+                      lacking multi-account access, which CSP refuses with a 403
+                      regardless of what is saved — measured 2026-08-20 against
+                      both a keyed and an unkeyed account. So the picker was
+                      accurate about keys and silent about the blocker, and the
+                      one true-looking note on screen pointed away from the
+                      cause.
+
+                      It was also a guess: nothing links the two lists, so it
+                      matched CSP account names against vault labels. */}
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
                 </select>
+                {/* WHAT THIS SAYS AND WHAT IT REFUSES TO SAY. It states the
+                    requirement, which is always true, and it does NOT say this
+                    key fails it — that is not knowable here. /api/accounts
+                    returns `{id, name}` and no capability field, and listing
+                    accounts works on a key that cannot switch between them, so
+                    a standing "your key cannot do this" would be exactly the
+                    unmeasured claim this panel was fixed for. The measured
+                    version appears below, from CSP, once an attempt is made. */}
+                <div className="text-[11px] text-dim mt-1.5">
+                  Switching needs a User API key with multi-account access. Without it CSP refuses
+                  the change and the list stays where it was.
+                </div>
                 {acctSwitchErr && (
                   <div className="text-[11px] mt-1.5 mb-3" style={{ color: 'var(--color-crit)' }}>{acctSwitchErr}</div>
                 )}
