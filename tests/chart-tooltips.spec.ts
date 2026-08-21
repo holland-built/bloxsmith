@@ -47,10 +47,18 @@ const CHART_READY_MS = 15_000;
 
 type Chart = { tab: string; panel: string; what: string };
 
-// All 11 recharts charts in the app, by the `panelId` their Card carries.
-// Verified against the 11 `<Tooltip>` call sites: Overview.jsx:286/401/571,
+// All 10 recharts charts in the app, by the `panelId` their Card carries.
+// Verified against the 10 `<Tooltip>` call sites: Overview.jsx:286/401/571,
 // Dns.jsx:122/287, Security.jsx:129/489, Infra.jsx:190, Incidents.jsx:555,
-// Audit.jsx:102, Network.jsx:148. If a 12th chart appears, it belongs here.
+// Network.jsx:148. If an 11th chart appears, it belongs here.
+//
+// `audit-activity-summary` was the 11th and is deliberately gone (issue #168).
+// It drew a CategoryBars of the audit tally, and against the real log that was
+// unreadable: event names run to 23 characters, recharts drops X-axis ticks
+// that would collide, and the surviving labels sat under the wrong bars. It is
+// now a ranked list of rows, with every name beside its own number — no SVG, no
+// tooltip, nothing for this file to sweep. Removed rather than left failing,
+// because a panel with no recharts surface cannot be made to answer a hover.
 const CHARTS: Chart[] = [
   { tab: 'overview', panel: 'dns-hero', what: 'DNS Query Rate — 24h area' },
   { tab: 'overview', panel: 'top-consumers', what: 'Top Consumers bars' },
@@ -62,7 +70,6 @@ const CHARTS: Chart[] = [
   { tab: 'security', panel: 'security-threat-feed-activity', what: 'Threat Feed Activity bars' },
   { tab: 'infra', panel: 'infra-host-status', what: 'Host Status donut' },
   { tab: 'incidents', panel: 'incidents-action-volume', what: 'Action Volume bars' },
-  { tab: 'audit', panel: 'audit-activity-summary', what: 'Activity Summary bars' },
 ];
 
 const HEATMAP = { tab: 'overview', panel: 'subnet-heatmap' };
