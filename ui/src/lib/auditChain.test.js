@@ -9,7 +9,7 @@
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { chainRows, detailText, entryTimeMs, eventTally, readShortfall } from './auditChain.js'
+import { chainRows, detailText, entryTimeMs, eventTally, readShortfall, truncationNote } from './auditChain.js'
 
 const REAL_ENTRY = {
   actor: 'loopback',
@@ -171,4 +171,73 @@ test('both failures at once are both said — they are different failures', () =
   const s = readShortfall({ read_error: 'boom', skipped_lines: 3 })
   assert.match(s, /could not be read/)
   assert.match(s, /3 lines/)
+})
+
+// --- the list saying it is only the newest page ------------------------------
+
+test('a complete response says nothing about truncation', () => {
+  assert.equal(truncationNote({ entries: [], returned: 12, total: 12, truncated: false }), null)
+})
+
+test('a payload from before these fields existed renders exactly as it did', () => {
+  // A tab left open across a deploy holds this shape. Nothing may be inferred
+  // from returned-versus-total here, so the older payload gets no banner at all.
+  assert.equal(truncationNote({ entries: [], chain_valid: true }), null)
+  assert.equal(truncationNote({ returned: 200, total: 837 }), null)
+})
+
+test('no data at all is null, never a throw', () => {
+  assert.equal(truncationNote(undefined), null)
+  assert.equal(truncationNote(null), null)
+})
+
+test('a capped page names the newest N, the real total, and the filter it limits', () => {
+  const s = truncationNote({ returned: 200, total: 837, truncated: true })
+  assert.match(s, /newest 200/)
+  assert.match(s, /837/, 'the authoritative total must be on screen')
+  assert.match(s, /filter/, 'the browser-side filter only covers what was sent, and must say so')
+  assert.match(s, /not the rest of the log/)
+})
+
+test('the sentence says where the rest of the log is, because this screen cannot fetch it', () => {
+  // The cap was justified by /api/audit/export staying the complete record, and
+  // `grep -rn "audit/export" ui/src tests docs README.md` returns nothing: there
+  // is no Export control in the app. Without this clause the note names a
+  // shortfall and offers no way to act on it. panelHelp.js documents the log as
+  // "not downloadable" on purpose, so the way out is the log on disk, named the
+  // way Audit.jsx's OfflineCheckHint names `bloxsmith audit verify`.
+  const s = truncationNote({ returned: 200, total: 837, truncated: true })
+  assert.match(s, /audit_log\.jsonl/, 'the rest of the log is a file, and the reader is told which')
+  assert.match(s, /bloxsmith audit verify/, 'the command that locates it, per OfflineCheckHint')
+  // Two overclaims this must never make.
+  assert.doesNotMatch(s, /api\/audit\/export/, 'an API route is not an instruction a reader can follow')
+  assert.doesNotMatch(s, /download/i, 'panelHelp.js documents the log as not downloadable from here')
+})
+
+test('both figures are locale-formatted, so 12,500 does not render as 12500', () => {
+  const s = truncationNote({ returned: 1000, total: 12500, truncated: true })
+  assert.match(s, /1,000/)
+  assert.match(s, /12,500/)
+})
+
+test('a truncated payload with no total never dresses the page size up as one', () => {
+  // The malformed case. `total ?? returned` here would print "200 of 200
+  // entries" and re-ship the bug sampleCount.js was written for.
+  const s = truncationNote({ returned: 200, truncated: true })
+  assert.doesNotMatch(s, /of 200/, '200 is the page size, never the figure after "of"')
+  assert.doesNotMatch(s, /200\+/, '"200+ entries" reads as a measured lower bound, not a page size')
+  assert.match(s, /not known from this response/)
+  assert.match(s, /longer log/)
+  assert.match(s, /filter/)
+  // The pointer is part of the shared clause, so a degraded payload still says
+  // where the entries it cannot count are.
+  assert.match(s, /audit_log\.jsonl/)
+})
+
+test('a truncated payload with neither figure still refuses to invent one', () => {
+  const s = truncationNote({ truncated: true })
+  assert.doesNotMatch(s, /\d/, 'no number is knowable from this payload, so none may appear')
+  assert.match(s, /only the newest entries/)
+  // The filename carries no digit, so naming it cannot smuggle a figure in.
+  assert.match(s, /audit_log\.jsonl/)
 })

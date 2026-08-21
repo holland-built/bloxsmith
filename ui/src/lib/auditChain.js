@@ -25,6 +25,30 @@
  * once here rather than at each of the several places Audit.jsx touched a row,
  * because the previous arrangement is what let one shape be swapped for another
  * without anything noticing.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY `truncationNote` LIVES HERE AND NOT IN ./sampleCount.js (issue #169).
+ *
+ * sampleCount.js already solves the general problem: a payload that is a page
+ * of something larger, and the words that stop a page size being read as a
+ * total. Two things kept this out of it.
+ *
+ *   1. Blast radius. That file is consumed by the Security panels and is on
+ *      this plan's do-not-touch list, so it is read from, never edited. A new
+ *      export there would put the audit tab's wording in the same file three
+ *      security panels depend on.
+ *   2. It would count zero. Its `returnedOf` falls back to `data.events` when
+ *      `returned` is absent, and `/api/audit/log` calls its array `entries`.
+ *      A cached audit payload run through it would report 0 rows on a screen
+ *      showing rows, which is the exact regression its own header records
+ *      catching once already.
+ *
+ * What IS taken from sampleCount.js is the discipline, applied to this
+ * payload's own field names: the server's `truncated` flag is the only thing
+ * that may declare a page a page (never a `returned < total` comparison), a
+ * missing `total` is "unknown" and is said out loud, `total ?? returned` is
+ * never written, and the "N+ entries" form is rejected because it reads as a
+ * measured lower bound rather than as a page size.
  */
 
 /**
@@ -148,4 +172,69 @@ export function readShortfall(data) {
     parts.push(`${skipped.toLocaleString()} line${skipped === 1 ? '' : 's'} on disk could not be decoded and are missing below`)
   }
   return parts.length ? parts.join('; ') : null
+}
+
+/**
+ * The line that says the table is only the newest page, or null when it is not.
+ *
+ * WHY THE FILTER IS NAMED IN THE SENTENCE. The Audit tab filters and sorts in
+ * the BROWSER, over the rows it happens to hold. Once the server caps what it
+ * sends, typing a filter that matches nothing in the newest page renders "no
+ * entries match" while matches sit further back in the log. That empty state is
+ * a lie about the log rather than about the page, and no count in a heading
+ * fixes it: the reader has to be told that the box they are typing into reaches
+ * only what is on screen.
+ *
+ * `truncated` is the SERVER'S CLAIM and the only trigger. Nothing here infers a
+ * page from `returned < total`, per isSample in ./sampleCount.js. A payload
+ * from before those fields existed (a tab left open across a deploy, or any
+ * cached response) lacks the field entirely, takes the null branch, and renders
+ * exactly as it does today.
+ *
+ * WHY THE SENTENCE ALSO SAYS WHERE THE REST OF THE LOG IS. The cap was justified
+ * on the grounds that /api/audit/export stays the complete record
+ * (go/internal/server/state.go). A security audit checked whether a reader of
+ * this screen can actually reach that mitigation, and found they cannot:
+ *
+ *     grep -rn "audit/export" ui/src tests docs README.md   ->  no matches
+ *
+ * There is no Export control anywhere in the app, so the first version of this
+ * sentence told a reader what they could not see and then offered them nowhere
+ * to go. Adding a download button was REJECTED rather than overlooked:
+ * ./panelHelp.js's `audit-log` entry states the log is "Readable and searchable
+ * here, but not downloadable", and panelHelpValues.test.js carries that phrase
+ * as a deliberate negated claim, so not-downloadable is documented intent and
+ * changing it is not a wording fix's call to make.
+ *
+ * What is left is to name the log itself, following OfflineCheckHint in
+ * ../tabs/Audit.jsx, which points at `bloxsmith audit verify` for exactly this
+ * reason: an operator who cannot do a thing in the browser still needs to know
+ * the option exists at all.
+ *
+ * Two things the clause is careful NOT to say. It does not claim the command
+ * prints entries, because it does not: `bloxsmith audit` has one subcommand,
+ * `verify` (go/auditcli.go:81), which reports a verdict, an entry count and the
+ * log's path. And it does not name /api/audit/export, because an API route is
+ * not an instruction a reader can follow.
+ */
+export function truncationNote(data) {
+  if (data?.truncated !== true) return null
+
+  const returned = data?.returned
+  const total = data?.total
+  const scope =
+    'the filter and search below cover only what is shown here, not the rest of the log, ' +
+    'which stays on the server in audit_log.jsonl (bloxsmith audit verify prints its path)'
+
+  if (Number.isFinite(returned) && Number.isFinite(total)) {
+    return `Showing the newest ${returned.toLocaleString()} of ${total.toLocaleString()} entries; ${scope}.`
+  }
+
+  // Malformed payload: the server always sends `total` alongside `truncated`,
+  // but a helper that filled the gap with `total ?? returned` would print the
+  // page size under the word "of" and be back to the bug sampleCount.js exists
+  // for. Unknown is unknown, so the sentence keeps the newest-N framing and
+  // drops the figure it does not have.
+  const newest = Number.isFinite(returned) ? `the newest ${returned.toLocaleString()} entries` : 'only the newest entries'
+  return `Showing ${newest} of a longer log; the full count is not known from this response, and ${scope}.`
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -142,6 +143,7 @@ func (r *callRecorder) onlyCallTo(t *testing.T, name string) mcpCall {
 type fakeMCP struct {
 	callRecorder
 	listPages     map[float64]map[string]any // offset -> response body
+	listFailAt    map[float64]bool           // offset -> answer HTTP 500 instead of a body
 	getBody       map[string]any
 	updateBody    map[string]any
 	updateRawText string // when set, overrides updateBody with this literal (possibly-invalid) text
@@ -197,6 +199,14 @@ func (f *fakeMCP) handler(t *testing.T) http.HandlerFunc {
 			}
 		case "iq-actions_list_actions":
 			offset, _ := req.Params.Arguments["offset"].(float64)
+			// A real transport failure at a chosen page, not a hand-faked error
+			// value: internal/mcp turns any status >= 400 into an error out of
+			// CallTool (mcp.go:297), which is precisely the mid-page `err != nil`
+			// exit actionsAsync has to report as truncated.
+			if f.listFailAt[offset] {
+				w.WriteHeader(500)
+				return
+			}
 			text, _ = json.Marshal(f.listPages[offset])
 		case "infoblox-portal_network_entity_search":
 			text = []byte(f.searchRawText)
@@ -290,8 +300,37 @@ func TestUpdateActionDegradesOldStatusOnGetFailure(t *testing.T) {
 	assertUpdateWire(t, f, "missing", "active")
 }
 
+// pageScopedActionKeys are the three keys actionsAsync must NOT hand back.
+// Each described the LAST page the paging loop happened to fetch, while the
+// "actions" it sits beside is the MERGED set — measured live on 2026-08-20,
+// /api/actions served 78 merged rows (78 distinct ids) under
+// total_count:28, message:"Found 28 actions" and
+// pagination:{has_more:false,limit:50,offset:50}. A reader has no way to
+// know which of the two numbers is the real one, and the smaller one looks
+// authoritative because it is named "total".
+var pageScopedActionKeys = []string{"total_count", "message", "pagination"}
+
+// assertNoPageScopedKeys is the guard: none of the three may survive into the
+// merged map. It is deliberately a PRESENCE test, not a value test — a
+// recomputed total_count would satisfy any value check while re-introducing a
+// second, separately-derivable count next to len(actions).
+func assertNoPageScopedKeys(t *testing.T, m map[string]any) {
+	t.Helper()
+	for _, k := range pageScopedActionKeys {
+		if v, present := m[k]; present {
+			t.Fatalf("merged actions map still carries %q = %v — it describes only the final page, "+
+				"not the merged set (merged len = %d)", k, v, len(asSlice(m["actions"])))
+		}
+	}
+}
+
 // TestActionsAsyncPagesUntilHasMoreFalse locks the truncation fix: two pages
 // of 50 must merge into 100, stopping once pagination.has_more is false.
+//
+// It also holds the page-scoped-key deletion for the MULTI-PAGE case, which is
+// where the contradiction is visible: the fixture's pages report
+// total_count 70 with a final page of 20, so a surviving total_count would be
+// the last page's figure sitting beside 70 merged rows.
 func TestActionsAsyncPagesUntilHasMoreFalse(t *testing.T) {
 	page1 := make([]any, actionsPageSize)
 	for i := range page1 {
@@ -301,11 +340,21 @@ func TestActionsAsyncPagesUntilHasMoreFalse(t *testing.T) {
 	for i := range page2 {
 		page2[i] = map[string]any{"id": float64(actionsPageSize + i)}
 	}
+	// total_count/message are PER-PAGE upstream, not per-tenant: the live
+	// 2026-08-20 payload reported total_count 28 / "Found 28 actions" on a
+	// response whose merged body was 78 rows, i.e. the figure described the
+	// page in hand. The fixture reproduces that (50 then 20), so a surviving
+	// total_count is visibly the wrong number rather than a coincidentally
+	// right one. All three keys are supplied on every page on purpose — a
+	// fixture that stopped sending them would make the assertions below pass
+	// without the code doing anything.
 	f := &fakeMCP{
 		listPages: map[float64]map[string]any{
-			0: {"success": true, "actions": page1, "total_count": float64(70),
+			0: {"success": true, "actions": page1, "total_count": float64(50),
+				"message":    "Found 50 actions",
 				"pagination": map[string]any{"limit": float64(actionsPageSize), "offset": float64(0), "has_more": true}},
-			float64(actionsPageSize): {"success": true, "actions": page2, "total_count": float64(70),
+			float64(actionsPageSize): {"success": true, "actions": page2, "total_count": float64(20),
+				"message":    "Found 20 actions",
 				"pagination": map[string]any{"limit": float64(actionsPageSize), "offset": float64(actionsPageSize), "has_more": false}},
 		},
 	}
@@ -321,6 +370,175 @@ func TestActionsAsyncPagesUntilHasMoreFalse(t *testing.T) {
 	actions, _ := m["actions"].([]any)
 	if len(actions) != 70 {
 		t.Fatalf("merged actions: got %d want 70", len(actions))
+	}
+	assertNoPageScopedKeys(t, m)
+}
+
+// TestActionsAsyncSinglePageDropsPageScopedKeys covers the path the multi-page
+// test cannot reach: ONE page, has_more false, so `last` IS the only page and
+// its total_count/message/pagination are not even wrong. They still go, which
+// is why the deletes in actionsAsync are unconditional rather than guarded on
+// "more than one page was fetched".
+//
+// Keeping them on this path only would be worse than keeping them everywhere:
+// the response shape would then depend on how many pages the tenant happened
+// to need, so a consumer that read total_count would work until the tenant
+// crossed 50 actions and then silently start reading a per-page figure.
+func TestActionsAsyncSinglePageDropsPageScopedKeys(t *testing.T) {
+	page := make([]any, 3)
+	for i := range page {
+		page[i] = map[string]any{"id": float64(i)}
+	}
+	f := &fakeMCP{
+		listPages: map[float64]map[string]any{
+			0: {"success": true, "actions": page, "total_count": float64(3),
+				"message":    "Found 3 actions",
+				"pagination": map[string]any{"limit": float64(actionsPageSize), "offset": float64(0), "has_more": false}},
+		},
+	}
+	s := newTestService(t, f)
+	raw, ok := s.actionsAsync(context.Background())
+	if !ok {
+		t.Fatalf("expected ok=true")
+	}
+	m, isMap := raw.(map[string]any)
+	if !isMap {
+		t.Fatalf("expected map result, got %T", raw)
+	}
+	if actions, _ := m["actions"].([]any); len(actions) != 3 {
+		t.Fatalf("merged actions: got %d want 3", len(actions))
+	}
+	// The single page here reports a total_count that is CORRECT (3 rows, 3
+	// claimed). It is deleted anyway: len(actions) already says 3, and a
+	// second field saying the same thing is one that can later disagree.
+	assertNoPageScopedKeys(t, m)
+}
+
+// --- actions_truncated: the merge's own "this is not all of it" -------------
+//
+// Deleting `pagination` (above) removed the LAST field on this payload that
+// could say the merge stopped early. actionsAsync's loop has five exits and
+// four of them leave the merge INCOMPLETE while the page in hand still said
+// has_more:true — the actionsMaxFetch cap, a mid-page CallTool error, a
+// mid-page JSON decode failure, and a mid-page non-map response. Without an
+// explicit flag, a capped 500-row merge is byte-identical to a complete one,
+// which is the exact defect class the rest of this file exists to remove.
+//
+// actions_truncated is therefore ALWAYS present, like `truncated` on
+// /api/audit/log: a flag that only appears when it fires is one a consumer
+// learns to skip on the response that sets it.
+
+// actionsTruncatedOf reads the flag, failing when it is absent or not a bool.
+// Absence is a failure on purpose — "the key was missing so I assumed false" is
+// how a truncation signal turns back into silence.
+func actionsTruncatedOf(t *testing.T, m map[string]any) bool {
+	t.Helper()
+	v, present := m["actions_truncated"]
+	if !present {
+		t.Fatalf("actions_truncated missing from the merged map %v — a merge that stopped early "+
+			"is indistinguishable from a complete one without it", keysOf(m))
+	}
+	b, isBool := v.(bool)
+	if !isBool {
+		t.Fatalf("actions_truncated = %v (%T), want a bool", v, v)
+	}
+	return b
+}
+
+// keysOf lists a map's keys for failure messages (values here are 500-row
+// slices, which are unreadable in a t.Fatalf).
+func keysOf(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// mergedActions runs actionsAsync and returns the merged map, failing on any
+// shape the three tests below are not about.
+func mergedActions(t *testing.T, f *fakeMCP) map[string]any {
+	t.Helper()
+	raw, ok := newTestService(t, f).actionsAsync(context.Background())
+	if !ok {
+		t.Fatalf("expected ok=true")
+	}
+	m, isMap := raw.(map[string]any)
+	if !isMap {
+		t.Fatalf("expected map result, got %T", raw)
+	}
+	return m
+}
+
+// listPage builds one upstream page of n rows whose ids continue from offset.
+func listPage(offset, n int, hasMore bool) map[string]any {
+	rows := make([]any, n)
+	for i := range rows {
+		rows[i] = map[string]any{"id": float64(offset + i)}
+	}
+	return map[string]any{"success": true, "actions": rows,
+		"pagination": map[string]any{
+			"limit": float64(actionsPageSize), "offset": float64(offset), "has_more": hasMore}}
+}
+
+// EXIT 5 (the only complete one): upstream itself said there is nothing more.
+func TestActionsAsyncNotTruncatedWhenUpstreamSaysHasMoreFalse(t *testing.T) {
+	f := &fakeMCP{listPages: map[float64]map[string]any{
+		0:                        listPage(0, actionsPageSize, true),
+		float64(actionsPageSize): listPage(actionsPageSize, 20, false),
+	}}
+	m := mergedActions(t, f)
+
+	if got := len(asSlice(m["actions"])); got != actionsPageSize+20 {
+		t.Fatalf("merged actions: got %d want %d", got, actionsPageSize+20)
+	}
+	if actionsTruncatedOf(t, m) {
+		t.Fatalf("actions_truncated = true on a merge upstream declared finished — this is the one "+
+			"exit that means the set is COMPLETE, and flagging it would make the flag meaningless (%v)", keysOf(m))
+	}
+}
+
+// EXIT 1: the actionsMaxFetch cap. Every page says has_more:true and there are
+// exactly enough of them to reach 500, so the loop stops on the cap with
+// upstream still insisting there is more. This is the case a silent payload
+// renders as a complete 500-row answer.
+func TestActionsAsyncTruncatedAtMaxFetchCap(t *testing.T) {
+	pages := map[float64]map[string]any{}
+	for off := 0; off < actionsMaxFetch+actionsPageSize; off += actionsPageSize {
+		pages[float64(off)] = listPage(off, actionsPageSize, true)
+	}
+	m := mergedActions(t, &fakeMCP{listPages: pages})
+
+	if got := len(asSlice(m["actions"])); got != actionsMaxFetch {
+		t.Fatalf("merged actions: got %d want %d (the cap) — this test proves nothing unless the "+
+			"cap is what stopped the loop", got, actionsMaxFetch)
+	}
+	if !actionsTruncatedOf(t, m) {
+		t.Fatalf("actions_truncated = false after the merge stopped at actionsMaxFetch with the last "+
+			"page still reporting has_more:true — %d rows would be served as if they were all of them",
+			actionsMaxFetch)
+	}
+}
+
+// EXIT 2: a mid-page transport error. The first page merged, the second call
+// came back HTTP 500, so the loop breaks holding a page-1 that said has_more:
+// true. The route still answers 200 with 50 rows, and only this flag can say
+// those 50 are a fragment.
+func TestActionsAsyncTruncatedOnMidPageError(t *testing.T) {
+	f := &fakeMCP{
+		listPages:  map[float64]map[string]any{0: listPage(0, actionsPageSize, true)},
+		listFailAt: map[float64]bool{float64(actionsPageSize): true},
+	}
+	m := mergedActions(t, f)
+
+	if got := len(asSlice(m["actions"])); got != actionsPageSize {
+		t.Fatalf("merged actions: got %d want %d — the first page must have merged, or the failure "+
+			"under test is the offset==0 degrade instead of the mid-page break", got, actionsPageSize)
+	}
+	if !actionsTruncatedOf(t, m) {
+		t.Fatalf("actions_truncated = false after page 2 failed mid-merge — the caller is handed a " +
+			"partial list with nothing saying a page was lost")
 	}
 }
 
