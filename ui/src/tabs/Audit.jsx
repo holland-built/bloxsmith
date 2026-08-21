@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { chainRows, eventTally, readShortfall } from '../lib/auditChain.js'
+import { chainRows, eventTally, readShortfall, truncationNote } from '../lib/auditChain.js'
 import { sampleCountLabel } from '../lib/sampleCount.js'
 import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
@@ -100,6 +100,41 @@ function ShortRead({ chain }) {
   )
 }
 
+// THE TRAP THIS LINE EXISTS FOR (issue #169). Both panels on this tab compute
+// over the entries they were handed, in the BROWSER: AuditTable's `filtered`
+// and `sorted` useMemos, and ActivitySummary's `eventTally`. The server now caps
+// what it sends to the newest `auditLogReturnCap` entries
+// (go/internal/server/state.go:86, currently 2000). The moment that cap bites,
+// every one of those computations silently becomes page-scoped while still
+// being presented as the log — and a filter matching nothing in the newest page
+// renders "no entries match" with the matches sitting further back on disk.
+//
+// MEASURED 2026-08-21 against the live dev server: 838 entries, 380,936 bytes.
+// 838 is under 2000, so `truncated` is false and NOTHING BELOW RENDERS TODAY.
+// This text first appears on the day the log grows past the cap. That is also
+// why the gate is absolute: tests/page-baseline.spec.ts-snapshots/audit.aria.yml
+// is a committed accessibility snapshot of this page, and any string that
+// renders in the un-truncated state breaks it.
+//
+// Styled and placed as a sibling of ShortRead above because it is the same kind
+// of fact — "what you are reading is not the whole thing" — and belongs with
+// that panel's other honesty lines rather than in a page-level banner this tab
+// has no pattern for, or in help copy nobody reads mid-filter.
+//
+// The gate is `truncated === true`, checked inside truncationNote. A payload
+// cached before those fields existed (a tab held open across a deploy) has no
+// `truncated` key, takes the null branch, and renders byte-identically to today.
+function TruncationNote({ chain }) {
+  const { COLORS } = useChartTheme()
+  const note = truncationNote(chain.data)
+  if (!note) return null
+  return (
+    <div className="text-[12px] font-medium mb-2" style={{ color: COLORS.warn }}>
+      {note}
+    </div>
+  )
+}
+
 // A ROW PER KIND, NOT A BAR CHART, and the swap was forced by looking at it.
 //
 // This panel drew a CategoryBars of the tally. Rendered against the live log it
@@ -144,9 +179,23 @@ function ActivitySummary({ entries, chain, panelId }) {
       panelId={panelId}
       span={2}
       title="Activity Summary"
+      // `total` here is entries.length, the rows ON SCREEN, and it stays that way
+      // deliberately. The comment above `rows` documents an invariant: the
+      // per-kind rows are summed, including the "N other kinds" remainder, so
+      // that they add up to exactly this number. Pointing this chip at
+      // `data.total` while the rows keep summing to `returned` would break that
+      // invariant on the very day the server's cap bites, which is the honesty
+      // this panel was rewritten for, inverted.
+      //
+      // So when `truncated` is true this chip is the PAGE and not the log, and
+      // the TruncationNote rendered below is what supplies the log-level figure,
+      // in words. The cap is `auditLogReturnCap`, go/internal/server/state.go:86
+      // (2000); measured live 2026-08-21 the log holds 838 entries, so today
+      // this chip and the log are the same number and no note renders.
       right={<span className="text-[11px] text-muted">{total.toLocaleString()} recorded {total === 1 ? 'event' : 'events'}</span>}
     >
       <ShortRead chain={chain} />
+      <TruncationNote chain={chain} />
       {chain.loading ? (
         <Skeleton h={200} />
       ) : chain.error ? (
@@ -295,6 +344,32 @@ function AppendFailures({ result }) {
   )
 }
 
+// THE LOCATED LIE. When the filter box leaves nothing, this panel said "no
+// entries match" — a statement about the LOG, made by a filter that only ever
+// ran over the newest page the server sent. On a truncated payload that
+// sentence is false whenever the match is older than the cap, and it is false
+// silently: nothing else on screen tells the reader the search had a horizon.
+//
+// The un-truncated string is returned byte for byte unchanged, and that is
+// load-bearing, not tidiness: tests/page-baseline.spec.ts-snapshots/audit.aria.yml
+// is a committed accessibility snapshot that must keep passing WITHOUT being
+// regenerated, and a payload cached from before these fields existed has no
+// `truncated` key at all and must render exactly as it does today.
+//
+// N comes from the server's own `returned` when it is there, falling back to
+// the rows actually held. `total` is deliberately NOT used: the claim being
+// made is about the reach of the filter, and the filter reached `returned`
+// rows, not `total` of them. The log-level figure is the TruncationNote's job.
+//
+// Cap: `auditLogReturnCap`, go/internal/server/state.go:86, 2000 today.
+// Measured live 2026-08-21: 838 entries, so `truncated` is false and the second
+// branch renders nowhere until the log grows past the cap.
+function noMatchText(data, held) {
+  if (data?.truncated !== true) return 'no entries match'
+  const n = Number.isFinite(data?.returned) ? data.returned : held
+  return `no entries match. The filter searched only the newest ${n.toLocaleString()} entries shown here, and older entries were not searched.`
+}
+
 function AuditTable({ entries, chain, panelId }) {
   const [filter, setFilter] = useState('')
   const [event, setEvent] = useState('')
@@ -377,7 +452,19 @@ function AuditTable({ entries, chain, panelId }) {
           </select>
           {/* The filtered count, and the set it was filtered FROM when they
               differ. A bare "37" beside a filter box reads as the size of the
-              log rather than as the size of what the filter left. */}
+              log rather than as the size of what the filter left.
+
+              BOTH numbers are page-scoped once the server's cap bites. `sorted`
+              is filtered in the browser out of `entries`, and `entries` is only
+              what /api/audit/log chose to send: the newest `auditLogReturnCap`
+              (go/internal/server/state.go:86, 2000 today). So on a truncated
+              payload "37 of 2,000" means 37 of the page, not 37 of the log.
+              This is left computed from entries.length on purpose — it must
+              agree with the rows the reader can actually scroll — and the
+              TruncationNote below is what states the log-level figure. Swapping
+              this to `data.total` would print a denominator the table cannot
+              show. Measured live 2026-08-21: 838 entries, under the cap, so
+              `truncated` is false and the two are currently the same set. */}
           {sorted.length > 0 && (
             <span className="text-[11px] text-muted">
               {sorted.length.toLocaleString()}
@@ -390,6 +477,7 @@ function AuditTable({ entries, chain, panelId }) {
       <ChainVerdict result={chain.data} error={chain.error} loading={chain.loading} />
       <AppendFailures result={chain.data} />
       <ShortRead chain={chain} />
+      <TruncationNote chain={chain} />
       {chain.loading ? (
         <Skeleton h={250} />
       ) : chain.error ? (
@@ -397,7 +485,7 @@ function AuditTable({ entries, chain, panelId }) {
       ) : entries.length === 0 ? (
         <Empty />
       ) : sorted.length === 0 ? (
-        <Empty>no entries match</Empty>
+        <Empty>{noMatchText(chain.data, entries.length)}</Empty>
       ) : (
         <DataTable
           rows={sorted}

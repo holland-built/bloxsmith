@@ -67,13 +67,21 @@ const actionsPageSize = 50
 // transport/init error it reports gotResponse=false (the outer upstream-error
 // degrade); a JSON decode failure returns a {"actions":[],"_raw":...} map, true.
 // It pages through iq-actions_list_actions via limit/offset, merging results
-// until pagination.has_more is false or actionsMaxFetch is reached.
+// until pagination.has_more is false or actionsMaxFetch is reached, and always
+// publishes actions_truncated saying which of those it was — see the block at
+// the end of this function for the five exits and why the flag is unconditional.
 func (s *Service) actionsAsync(ctx context.Context) (any, bool) {
 	if s.Mcp == nil || s.Mcp.Initialize(ctx) != nil {
 		return nil, false
 	}
 	merged := []any{}
 	var last map[string]any
+	// TRUNCATED UNTIL PROVEN OTHERWISE. The loop below has five exits and only
+	// ONE of them means "this is the whole set": upstream answering
+	// has_more:false. The default is therefore true, and exactly one branch
+	// clears it, so a new break added later is incomplete by default rather than
+	// silently complete. See the actions_truncated block after the loop.
+	truncated := true
 	offset := 0
 	for {
 		text, err := s.Mcp.CallTool(ctx, "iq-actions_list_actions", map[string]any{
@@ -107,7 +115,14 @@ func (s *Service) actionsAsync(ctx context.Context) (any, bool) {
 		if pg, ok := page["pagination"].(map[string]any); ok {
 			hasMore = truthy(pg["has_more"])
 		}
-		if !hasMore || len(merged) >= actionsMaxFetch {
+		// Tested BEFORE the cap, and the order matters: a final page that both
+		// says has_more:false and lands exactly on actionsMaxFetch is a COMPLETE
+		// merge, and checking the cap first would label it truncated.
+		if !hasMore {
+			truncated = false
+			break
+		}
+		if len(merged) >= actionsMaxFetch {
 			break
 		}
 		offset += actionsPageSize
@@ -116,6 +131,87 @@ func (s *Service) actionsAsync(ctx context.Context) (any, bool) {
 		last = map[string]any{}
 	}
 	last["actions"] = merged
+
+	// `last` is the FINAL PAGE's map with the merged list swapped in, so every
+	// other key it carries still describes that one page. Measured live on
+	// 2026-08-20: /api/actions served 78 merged rows (78 distinct ids, zero
+	// duplicates) under total_count:28, message:"Found 28 actions" and
+	// pagination:{has_more:false,limit:50,offset:50}. Three fields describing a
+	// page of 28 sat next to a body of 78, and "total" is the word an operator
+	// trusts, so the payload's own summary contradicted its own contents.
+	//
+	// DELETED, not recomputed, one reason each:
+	//   - total_count: len(actions) already states the count, and it cannot
+	//     drift from the list it is measured on. A recomputed total_count is a
+	//     second derivation of the same fact, which is a field that can later
+	//     disagree with the rows beside it for no gain.
+	//   - message: upstream prose about ONE page ("Found 28 actions"). Nothing
+	//     here knows what sentence would be true of the merged set, and writing
+	//     one would be inventing upstream's voice.
+	//   - pagination: limit/offset described the last request this loop happened
+	//     to make, which is an artefact of paging, not a property of the result.
+	//     Its has_more was the only surviving signal that the merge stopped
+	//     early, and it is replaced by actions_truncated below rather than simply
+	//     dropped — see that block for why re-emitting has_more would have been
+	//     the wrong shape.
+	//
+	// The deletes are UNCONDITIONAL, and must stay that way: on the single-page
+	// path `last` IS the only page and still carries all three. Dropping them
+	// only when several pages were fetched would make the response shape depend
+	// on how many actions the tenant happens to have, so a consumer would read
+	// total_count successfully until the tenant crossed actionsPageSize and then
+	// silently start reading a per-page figure. delete() on an absent key is a
+	// no-op, so this costs nothing when upstream sends none of them.
+	//
+	// The two early returns above are exempt BY CONSTRUCTION, checked rather
+	// than assumed: the offset==0 decode failure returns a hand-built
+	// {"actions":[], "_raw":...} that never had these keys, and the offset==0
+	// non-map return hands back raw `v`, which FetchActions' isMap check turns
+	// into the "returned unexpected data" error shape without ever reading a
+	// field. Neither can reach this point, and neither can carry a page total.
+	for _, k := range []string{"total_count", "message", "pagination"} {
+		delete(last, k)
+	}
+
+	// actions_truncated: THE INCOMPLETENESS SIGNAL `pagination` USED TO CARRY.
+	//
+	// Deleting pagination was right — limit/offset describe one request, not the
+	// merged result — but pagination.has_more was the only field on this payload
+	// that could say the merge stopped before upstream ran out. Removing it with
+	// nothing in its place would make a merge that was cut short byte-identical
+	// to a complete one, which is the same class of silent lie the deletes above
+	// exist to remove, re-introduced on the same endpoint.
+	//
+	// FIVE EXITS FROM THE LOOP, and four of them leave the set INCOMPLETE with
+	// the last page still reporting has_more:true. Naming all of them, because a
+	// comment that said "the only other exit is the actionsMaxFetch cap" was
+	// wrong here until 2026-08-21 and undercounted the risk by three:
+	//   1. the actionsMaxFetch (500) cap        -> truncated
+	//   2. a mid-page CallTool error            -> truncated
+	//   3. a mid-page JSON decode failure       -> truncated
+	//   4. a mid-page non-map response          -> truncated
+	//   5. upstream reporting has_more:false    -> COMPLETE, the only one
+	// Exits 2-4 have offset==0 twins that return early (an outright degrade, or
+	// the raw body) and never reach this line; only their mid-merge forms break
+	// out of the loop holding a partial `merged`.
+	//
+	// A BOOLEAN, NOT A RE-EMITTED has_more, and not a "fetched N of M": there is
+	// no trustworthy M. total_count was per-page (see above), so the honest claim
+	// is the narrow one — this list may not be all of them — and inventing a
+	// denominator would be the fabrication that started this whole change.
+	//
+	// ALWAYS PRESENT, false included, matching `truncated` on /api/audit/log
+	// (server/state.go). A flag that appears only when it fires is a flag a
+	// consumer never learns to read, so the one response that sets it looks like
+	// every other response with a missing key. Consumers must never have to infer
+	// incompleteness from an absent field again — that inference is exactly what
+	// pagination.has_more used to require.
+	//
+	// MEASURED on the live tenant, 2026-08-21: /api/actions merged 79 rows, well
+	// under the 500 cap, exit 5. So today this field is false in production and
+	// changes nothing an operator sees; it exists for the day the tenant grows
+	// past 500 actions or a page fails, when nothing else would say so.
+	last["actions_truncated"] = truncated
 	return last, true
 }
 

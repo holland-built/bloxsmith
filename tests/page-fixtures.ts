@@ -435,12 +435,23 @@ const INCIDENTS = {
 };
 // Infoblox IQ Actions — the SOC Queue and Action Volume panels. Priority is
 // low/medium/high, which the tab maps onto its own severity vocabulary.
+//
+// NO `message`, `total_count` OR `pagination` HERE, and their absence is the
+// fixture's whole point (issue #171). /api/actions pages upstream and merges
+// every page into `actions`, but those three keys described only the FINAL
+// upstream page, so they travelled beside a set they did not count. Measured
+// live 2026-08-21: 78 merged rows under `total_count: 28`, with
+// `pagination.offset: 50` naming a page nobody was looking at. The server now
+// strips all three (go/internal/dashboard/actions.go, asserted by
+// pageScopedActionKeys in actions_test.go).
+//
+// A fixture that kept sending them would green-light a UI that started reading
+// a key the server no longer sends: every baseline run would pass on a
+// `total_count` that only this file still produces, and the panel would print
+// 28 over 78 rows the first time it met the real endpoint.
 const IQ_ACTIONS = {
   success: true,
   availability: 'ok',
-  message: '',
-  total_count: 2,
-  pagination: { has_more: false, limit: 50, offset: 0 },
   actions: [
     { affected: 'baseline.example', created_by_name: 'baseline-analyst', id: 'baseline-action-1', last_activity: agoIso(5 * HOUR), priority: 'high', status: 'active', title: 'Baseline suspicious domain', type: 'investigation' },
     { affected: 'other.example', created_by_name: 'baseline-analyst', id: 'baseline-action-2', last_activity: agoIso(29 * HOUR), priority: 'low', status: 'resolved', title: 'Baseline resolved lookup', type: 'investigation' },
@@ -463,6 +474,13 @@ const IQ_ACTIONS = {
 // render in the baseline: a refusal (amber), an error (red), and the rest
 // (green). `ts` is float epoch SECONDS, which is the shape that made the naive
 // `new Date(ts)` render 1970.
+const AUDIT_ENTRIES = [
+  { actor: 'baseline-operator', detail: { from: 'v0.0.0-baseline', image_digest: 'app-v0.0.0-baseline', instance_id: 'baseline' }, event: 'update-apply', hash: 'baselinehash1', prev_hash: '', seq: 0, ts: epochSec(6 * HOUR) },
+  { actor: 'baseline-operator', detail: { method: 'POST', path: '/api/provision/subnet' }, event: 'write-authorized', hash: 'baselinehash2', prev_hash: 'baselinehash1', seq: 1, ts: epochSec(5 * HOUR) },
+  { actor: 'baseline-operator', detail: { block: 'ipam/address_block/baseline-1', cidr: '24', subnet: '10.10.0.0' }, event: 'provision-subnet', hash: 'baselinehash3', prev_hash: 'baselinehash2', seq: 2, ts: epochSec(4 * HOUR) },
+  { actor: 'baseline-operator', detail: { method: 'POST', path: '/api/edit/dnsrecord', reason: 'tenant-read-only', tenant: 'baseline/-' }, event: 'write-refused-read-only', hash: 'baselinehash4', prev_hash: 'baselinehash3', seq: 3, ts: epochSec(2 * HOUR) },
+  { actor: 'baseline-operator', detail: { error: 'upstream refused', id: 'dns/record/baseline-1' }, event: 'dns-record-delete-error', hash: 'baselinehash5', prev_hash: 'baselinehash4', seq: 4, ts: epochSec(1 * HOUR) },
+];
 const AUDIT_LOG = {
   chain_valid: true,
   chain_state: 'ok',
@@ -471,13 +489,26 @@ const AUDIT_LOG = {
   broken_index: null,
   broken_reason: null,
   append_failures: 0,
-  entries: [
-    { actor: 'baseline-operator', detail: { from: 'v0.0.0-baseline', image_digest: 'app-v0.0.0-baseline', instance_id: 'baseline' }, event: 'update-apply', hash: 'baselinehash1', prev_hash: '', seq: 0, ts: epochSec(6 * HOUR) },
-    { actor: 'baseline-operator', detail: { method: 'POST', path: '/api/provision/subnet' }, event: 'write-authorized', hash: 'baselinehash2', prev_hash: 'baselinehash1', seq: 1, ts: epochSec(5 * HOUR) },
-    { actor: 'baseline-operator', detail: { block: 'ipam/address_block/baseline-1', cidr: '24', subnet: '10.10.0.0' }, event: 'provision-subnet', hash: 'baselinehash3', prev_hash: 'baselinehash2', seq: 2, ts: epochSec(4 * HOUR) },
-    { actor: 'baseline-operator', detail: { method: 'POST', path: '/api/edit/dnsrecord', reason: 'tenant-read-only', tenant: 'baseline/-' }, event: 'write-refused-read-only', hash: 'baselinehash4', prev_hash: 'baselinehash3', seq: 3, ts: epochSec(2 * HOUR) },
-    { actor: 'baseline-operator', detail: { error: 'upstream refused', id: 'dns/record/baseline-1' }, event: 'dns-record-delete-error', hash: 'baselinehash5', prev_hash: 'baselinehash4', seq: 4, ts: epochSec(1 * HOUR) },
-  ],
+  entries: AUDIT_ENTRIES,
+  // The newest-N cap's three fields (go/internal/server/state.go:145-154). The
+  // server sends them on every response now, so a fixture without them models a
+  // payload nothing produces.
+  //
+  // Both counts are DERIVED from the array rather than written as literals: a
+  // later edit that adds or drops an entry would otherwise leave a stale figure
+  // here, and a fixture whose `returned` disagrees with its own `entries` is the
+  // exact disagreement issue #169 is about.
+  //
+  // `truncated: false` IS LOAD-BEARING, not a shape-filling default.
+  // tests/page-baseline.spec.ts-snapshots/audit.aria.yml is a committed
+  // accessibility snapshot of this page, and the truncation warning (Audit.jsx's
+  // TruncationNote, plus noMatchText's longer empty state) renders ONLY when
+  // `truncated` is true. Flipping this to true adds a warning sentence to both
+  // audit cards and changes that baseline. If the snapshot ever needs
+  // regenerating because of this line, the gating broke, not the snapshot.
+  returned: AUDIT_ENTRIES.length,
+  total: AUDIT_ENTRIES.length,
+  truncated: false,
 };
 
 const PER_PAGE: Record<string, Handler[]> = {
