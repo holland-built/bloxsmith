@@ -30,7 +30,9 @@ __pycache__/
 .mcp.json
 
 # Internal AI training / planning docs (not for end users)
-CLAUDE.md
+# CLAUDE.md was unignored on 2026-08-22: it carries the two measuring traps (:8080 serves the
+# embedded build, dev-serve watches go/**/*.go) that cost real hours when only one machine
+# knew them. It ships to anyone who clones bloxsmith.
 AGENTS.md
 DESIGN.md
 COLOR_CONTRACT.md
