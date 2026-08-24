@@ -44,6 +44,9 @@ export default function Security() {
   const hub = useApi('/api/hub/security')
   const threats = useApi('/api/csp/threats', { poll: 30000 })
   const lookalikes = useApi('/api/lookalikes')
+  // Axur is a separate vendor, deliberately polled far slower than the CSP
+  // feeds beside it: the counts cover a 30-day window and move in hours.
+  const axur = useApi('/api/axur', { poll: 300000 })
   const insights = useApi('/api/insights')
   const ctem = useApi('/api/csp/ctem-exposure', { poll: 30000 })
   const assetInsights = useApi('/api/csp/asset-insights', { poll: 30000 })
@@ -90,6 +93,7 @@ export default function Security() {
         })}
         <SecurityInventory panelId="security-inventory" hub={hubDomains} />
         <LookalikeTable panelId="security-lookalike-domains" lookalikes={lookalikes} />
+        <AxurPanel panelId="security-axur-incidents" axur={axur} />
         <CtemPanel panelId="security-ctem-exposure" ctem={ctem} />
         <AssetInsights panelId="security-asset-insights" assetInsights={assetInsights} />
         <ExposuresPanel panelId="security-exposures" exposures={exposures} />
@@ -473,6 +477,70 @@ function LookalikeTable({ panelId, lookalikes }) {
         <FeedUnavailable reason={lookalikes.error.message || undefined} label="Lookalike domain feed unavailable" />
       ) : d.unavailable || rows.length === 0 ? (
         <Empty>{d.unavailable ? (d.not_entitled ? `not entitled — ${d.unavailable}` : d.unavailable) : 'no data'}</Empty>
+      ) : (
+        <DataTable rows={rows} columns={columns} maxHeight={320} rowCap={150} />
+      )}
+    </Card>
+  )
+}
+
+// ---------- Axur brand-protection incidents ----------
+
+// Axur is the brand-protection vendor the Infoblox portal links out to. This
+// panel is the whole integration on the read side: one call, counts of open
+// incidents by kind over the last 30 days.
+//
+// It carries the same three-state discipline as its neighbours — a failed feed
+// never renders as a clean zero — plus a fourth state they do not have: Axur is
+// optional, so "no credential configured" exists and is NOT a fault. It says so
+// in words rather than vanishing.
+//
+// WHY IT DOES NOT VANISH, having briefly done so. The first version dropped the
+// panel from the grid when the server reported configured:false, so a
+// deployment without Axur never saw it. Two things were wrong with that. It can
+// only decide AFTER the first /api/axur answers, so a fetch that fails — the
+// browser aborting it on navigation is enough — leaves the panel wedged in an
+// error state that the 5-minute poll will not revisit; tests/layout-drag.spec.ts
+// caught exactly that, as a Security tab with 14 panels instead of 13. And
+// silently hiding it makes a deployment that MEANT to configure Axur
+// indistinguishable from one that did not, which is the harder failure to
+// diagnose of the two. Standing chrome, like every other panel on the tab: a
+// reader who does not want it takes it off the page with the ✕, and the grid
+// remembers that.
+function AxurPanel({ panelId, axur }) {
+  const { COLORS } = useChartTheme()
+  const d = axur.data ?? {}
+  const rows = Array.isArray(d.types) ? d.types : []
+  const days = d.window_days ?? 30
+
+  const columns = [
+    { key: 'type', label: 'Incident type', grow: true, sortable: true },
+    {
+      key: 'count',
+      label: `Last ${days}d`,
+      keep: true,
+      sortable: true,
+      render: (v) => <span style={{ color: v > 0 ? COLORS.warn : COLORS.other }}>{v}</span>,
+    },
+  ]
+
+  // Same rule as LookalikeTable: a total is a measurement, and nothing was
+  // measured when the fetch failed or upstream declared itself unavailable.
+  const counted = !axur.error && !d.unavailable && d.configured !== false
+
+  return (
+    <Card
+      panelId={panelId}
+      span={3}
+      title="Axur Brand Incidents"
+      right={<span className="text-[11px] text-muted">{counted ? d.total ?? 0 : '—'} in {days}d</span>}
+    >
+      {axur.loading ? <Skeleton h={220} /> : axur.error ? (
+        <FeedUnavailable reason={axur.error.message || undefined} label="Axur feed unavailable" />
+      ) : d.configured === false ? (
+        <Empty>Axur not configured — set AXUR_API_KEY to enable</Empty>
+      ) : d.unavailable || rows.length === 0 ? (
+        <Empty>{d.unavailable ? (d.not_entitled ? `not entitled — ${d.unavailable}` : d.unavailable) : 'no incidents'}</Empty>
       ) : (
         <DataTable rows={rows} columns={columns} maxHeight={320} rowCap={150} />
       )}

@@ -35,6 +35,7 @@ const DECLARED = [
   'security-triage-inbox',
   'security-inventory',
   'security-lookalike-domains',
+  'security-axur-incidents',
   'security-ctem-exposure',
   'security-asset-insights',
   'security-exposures',
@@ -174,7 +175,9 @@ test('the keyboard path claims nothing until the server has answered', async ({ 
   // landed — that part was always true — and now says nothing about saving
   // until there is something true to say.
   const live = await liveText(page);
-  expect(live).toContain('placed at position 2 of 13');
+  // Off DECLARED rather than a literal: the count is the length of that list,
+  // and writing it twice is how it went stale when the tab gained a panel.
+  expect(live).toContain(`placed at position 2 of ${DECLARED.length}`);
   expect(live, 'Enter is still claiming a save it has not got').not.toContain('Layout saved');
   expect(live).toContain('Layout could not be saved');
   expect((await request.get(`/api/views/${VIEW}`)).status()).toBe(404);

@@ -167,6 +167,10 @@ export const PANEL_HELP = {
     what: 'Domains somebody else registered that are spelled to look like yours, and which of your real domains each one imitates.',
     look: 'A red "yes" means it was judged suspicious. A dash instead of a count means the feed could not be reached, so nothing was checked; 0 means checked and none found.',
   },
+  'security-axur-incidents': {
+    what: 'Brand-abuse cases Axur opened over the last 30 days — fake sites, lookalike domains, misuse of your name — counted by kind. Axur is a separate service.',
+    look: 'Busiest kind first; kinds with none are left out. A dash instead of a total means Axur could not be reached and nothing was counted, while "no incidents" means it answered and had none.',
+  },
   'security-ctem-exposure': {
     what: 'Weaknesses found on your internet-facing assets, grouped by how serious they are and how urgent the source rates fixing them.',
     look: 'Severity is red for critical, pink for high, amber for medium, blue for low. Click a heading to re-sort. If the outside feed cannot be read the panel says so.',

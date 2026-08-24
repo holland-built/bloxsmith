@@ -475,6 +475,21 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	})
 
 	dash := dashboard.New(restClient, sharedCache)
+	// Axur is a separate vendor on a separate credential, so it gets its own
+	// rest.Auth with a nil active-key resolver: no vault tenant key and no
+	// portal account-switch override can reach it. The Auth is built here and
+	// never handed to account.Manager or vault.SetAuthReset, which is what
+	// keeps that true — nothing holds a reference that could call SetOverride.
+	//
+	// Unset AXUR_API_KEY leaves dash.Axur nil, and the panel is absent. Logged,
+	// because an operator who MEANT to configure it needs to see why the panel
+	// is missing rather than hunt for a broken feed.
+	if cfg.AxurAPIKey != "" {
+		dash.Axur = rest.New(cfg.AxurBaseURL, rest.NewAuth(cfg.AxurAPIKey, nil))
+		log.Printf("axur: brand-protection panel enabled (%s)", cfg.AxurBaseURL)
+	} else {
+		log.Printf("axur: AXUR_API_KEY unset — brand-protection panel disabled")
+	}
 	// The MCP client backs the Phase 1h AI tool loop (dashboard.RunAITool);
 	// /api/data itself uses REST (the parquet path is broken).
 	dash.Mcp = mcp.New(cfg.MCPURL, auth.Value)
