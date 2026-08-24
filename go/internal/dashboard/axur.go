@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log"
 	"sort"
 	"time"
@@ -11,9 +13,17 @@ import (
 
 // This file holds Bloxsmith's one read from Axur, the brand-protection service
 // the Infoblox portal links out to. Axur is a SEPARATE vendor with a separate
-// credential: nothing here goes through the Infoblox REST proxy, the vault, or
-// the account switcher, and Service.Axur is a distinct *rest.Client for exactly
-// that reason (see helpers.go).
+// credential: nothing here goes through the Infoblox REST proxy or the account
+// switcher, and Service.Axur is a distinct *rest.Client for exactly that reason
+// (see helpers.go).
+//
+// The credential comes from one of two places, resolved live on every call by
+// the rest.Auth main.go builds: the vault's stored Axur key first, then
+// AXUR_API_KEY from the environment. Vault-over-environment matches what
+// LLMCreds already does for the AI key, and having one precedence rule in the
+// app beats having two. The vault is a per-deployment store here, NOT a
+// per-tenant one — an Axur key belongs to the installation, and an Infoblox
+// account switch must never change which one is sent.
 //
 // The shape it returns matches the other threat-intel fetchers — a rows key
 // plus "unavailable" / "not_entitled" on failure — so the Security tab renders
@@ -45,21 +55,55 @@ func axurWindow(now time.Time) (from, to string) {
 // FetchAxurTickets reads Axur's incident count by ticket type for the last
 // axurWindowDays.
 //
-// Three outcomes, deliberately distinguishable by the caller:
+// FOUR outcomes, deliberately distinguishable by the caller. The first two look
+// alike from a distance and must never be collapsed, because they send an
+// operator to opposite places:
 //
-//   - not configured — AXUR_API_KEY unset, so Service.Axur is nil. Returns
-//     configured:false and no error wording. The panel is absent, not broken.
-//   - failed — any transport, status or decode failure. Returns "unavailable"
-//     (plus not_entitled on a 403), and NEVER an empty types list that a reader
-//     could mistake for a clean zero.
+//   - not configured — no credential from either source. configured:false and
+//     no error wording; the panel says so and nothing is wrong.
+//   - vault locked — a credential may well be stored, but the vault holding it
+//     is shut, so this process cannot read it. Says "vault locked", NOT "not
+//     configured", which would be a claim we have no basis for.
+//   - failed — any transport, status or decode failure. "unavailable", plus
+//     not_entitled on a 403, and NEVER an empty types list that a reader could
+//     mistake for a clean zero.
 //   - loaded — types is the per-type counts, possibly genuinely empty.
 func (s *Service) FetchAxurTickets() map[string]any {
+	base := map[string]any{"types": []any{}, "window_days": axurWindowDays}
 	if s.Axur == nil {
-		return map[string]any{"configured": false, "types": []any{}, "window_days": axurWindowDays}
+		base["configured"] = false
+		return base
 	}
+	// ONE resolution, used for both the decision and the request. Asking "is a
+	// key configured?" and then letting the request resolve the slot a second
+	// time is a race: a vault lock landing between the two sends an empty
+	// Authorization upstream and turns "you have no key" into a 401 that reads
+	// as "your key is wrong". See rest.Client.PinResolved.
+	client, cred := s.Axur.PinResolved()
+	if cred == "" {
+		// Nothing resolved. Which of the two reasons it is decides what the
+		// operator is told, and only the vault can say.
+		if s.AxurLocked != nil && s.AxurLocked() {
+			base["configured"] = true
+			base["locked"] = true
+			base["unavailable"] = "Vault locked — unlock to read Axur"
+			base["not_entitled"] = false
+			return base
+		}
+		base["configured"] = false
+		return base
+	}
+
 	from, to := axurWindow(time.Now())
+	// The credential's FINGERPRINT is part of the cache key, not just the date
+	// window. A cached response was fetched with whatever key was live at the
+	// time; after a key change, a date-only key would keep serving it — which
+	// for a multi-tenant vendor API means showing one Axur tenant's incident
+	// counts under another tenant's credential. Changing the key now misses the
+	// cache, and leaving it alone still hits. The fingerprint is a truncated
+	// SHA-256 and never the secret itself: cache keys are logged.
 	ck := cache.Key("axur_ticket_types", axurTicketTypesPath,
-		map[string]string{"from": from, "to": to}, false)
+		map[string]string{"from": from, "to": to, "cred": axurCredFingerprint(cred)}, false)
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
 	}
@@ -69,21 +113,37 @@ func (s *Service) FetchAxurTickets() map[string]any {
 	// could not use, which arrives here as zero ticket types and renders as a
 	// calm "no incidents". That exact conflation was DEFECT 3 in the lookalikes
 	// feed (threatintel.go). Every failure below is a failure.
-	_, body, err := s.Axur.GetPageStrict(axurTicketTypesPath,
+	_, body, err := client.GetPageStrict(axurTicketTypesPath,
 		map[string]string{"from": from, "to": to})
-	var result map[string]any
 	if err != nil {
 		log.Printf("axur: ticket-type counts fetch failed: %v", err)
-		result = axurUnavailable(err)
-	} else {
-		result = normAxurTickets(body)
+		result := axurUnavailable(err)
+		result["configured"] = true
+		result["window_days"] = axurWindowDays
+		result["from"] = from
+		result["to"] = to
+		// NOT cached. A failure is usually the thing an operator is actively
+		// fixing — a wrong key, a lapsed entitlement, an outage — and caching it
+		// means their correction appears not to work until the TTL expires. A
+		// success is worth holding; a failure is worth retrying.
+		return result
 	}
+	result := normAxurTickets(body)
 	result["configured"] = true
 	result["window_days"] = axurWindowDays
 	result["from"] = from
 	result["to"] = to
 	s.Cache.SetGen(ck, result, g)
 	return result
+}
+
+// axurCredFingerprint reduces a credential to a short, non-reversible tag for
+// the cache key. Truncated to 12 hex characters: long enough that two live keys
+// colliding is not a thing that happens, short enough to keep the key readable,
+// and it is a one-way hash so a logged cache key never carries the secret.
+func axurCredFingerprint(cred string) string {
+	sum := sha256.Sum256([]byte(cred))
+	return hex.EncodeToString(sum[:])[:12]
 }
 
 // axurUnavailable is the degrade shape, mirroring lookalikeUnavailable: a 403

@@ -28,6 +28,14 @@ type Service struct {
 	// unset — that is what switches the Security tab's Axur panel off, and
 	// FetchAxurTickets is the only reader. See axur.go.
 	Axur *rest.Client
+	// AxurLocked reports whether the vault is shut, and exists only so
+	// FetchAxurTickets can tell "no Axur key was ever configured" apart from "a
+	// key may be stored but the vault holding it is locked". Those are different
+	// sentences to an operator and the second one must never be reported as the
+	// first. Nil in tests and when there is no vault, which reads as "not
+	// locked" — correct, because without a vault the only source is the
+	// environment, and an environment variable is never locked.
+	AxurLocked func() bool
 	// ent is the shared 403 entitlement backoff (entitlement.go). A pointer so
 	// With's shallow copy keeps one process-wide memory; nil (bare Service
 	// literals in tests) disables the backoff rather than panicking.
