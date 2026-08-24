@@ -406,6 +406,51 @@ func (v *Vault) SetLLM(key string, baseURL, model *string) map[string]any {
 	return ok()
 }
 
+// SetAxur stores (or, with an empty key, clears) the Axur credential.
+//
+// CLEARING IS NOT DISABLING, and the difference is the one thing a caller has
+// to understand here. An empty key removes the vault's entry; it does not
+// switch Axur off. If AXUR_API_KEY is set in the environment, that value takes
+// over again the moment this one is gone, because the vault is an override on
+// top of the environment and not a replacement for it (main.go builds the
+// resolver in that order, matching LLMCreds). The returned map therefore says
+// which source is in effect afterwards, so a caller that meant "turn it off"
+// can see that it did not.
+//
+// Snapshot/restore around save() for the reason SetLLM records: without it a
+// failed write leaves the new credential live in memory while vault.json still
+// holds the old one, and the next successful save of any other mutation
+// persists it silently.
+//
+// IT DELIBERATELY DOES NOT CALL rotateAuth, and the reason is worth recording
+// because the opposite looks correct. A cached Axur response was fetched with
+// the PREVIOUS credential, so serving it after a key change would show one
+// Axur tenant's incident counts under another's key. rotateAuth would drop
+// those rows — but it is the tenant-switch reset, so it ALSO clears the portal
+// account-switch override and the account manager's active state. Saving a
+// third party's API key would then silently throw the operator out of the
+// Infoblox account they had switched into. The staleness is fixed where it
+// belongs instead: dashboard.FetchAxurTickets folds a fingerprint of the
+// resolved credential into its cache key, so a changed key misses the cache
+// and an unchanged one still hits it, with nothing else disturbed.
+func (v *Vault) SetAxur(key string) map[string]any {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if !v.unlocked {
+		return fail("locked")
+	}
+	snap := v.snapshot()
+	v.axur = strings.TrimSpace(key)
+	stored := v.axur != ""
+	if err := v.save(); err != nil {
+		v.restore(snap)
+		return fail(err.Error())
+	}
+	r := ok()
+	r["stored"] = stored
+	return r
+}
+
 // TestKey is vault_test_key (server.py:2982): verify a key reaches CSP and
 // return the resolved account name.
 func (v *Vault) TestKey(key string) map[string]any {
@@ -687,6 +732,13 @@ func (v *Vault) Status(version string, vaultMode bool, update any) map[string]an
 		// that will 403 — see writelock.go.
 		"writeAllowed": append([]string{}, v.writeAllowed...),
 		"hasGroq":      v.groq != "",
+		// Whether an Axur key is stored, never the key. Same shape and same
+		// reason as hasGroq: Settings needs to offer "Remove" only when there is
+		// something to remove, and that is the entire fact it needs. A locked
+		// vault reports false here because v.axur is cleared on lock — the UI
+		// must not read this as "no key exists", which is why the Settings
+		// section is only reachable with the vault open.
+		"hasAxur":      v.axur != "",
 		"llm": map[string]any{
 			"hasKey":   v.groq != "",
 			"base_url": v.llmBase,

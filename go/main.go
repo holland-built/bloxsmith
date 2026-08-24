@@ -476,19 +476,43 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 
 	dash := dashboard.New(restClient, sharedCache)
 	// Axur is a separate vendor on a separate credential, so it gets its own
-	// rest.Auth with a nil active-key resolver: no vault tenant key and no
-	// portal account-switch override can reach it. The Auth is built here and
-	// never handed to account.Manager or vault.SetAuthReset, which is what
-	// keeps that true — nothing holds a reference that could call SetOverride.
+	// rest.Auth. Its two sources are the vault's stored Axur key (the "active"
+	// resolver) and AXUR_API_KEY (the fallback), which makes the precedence
+	// vault-over-environment — the same order LLMCreds already uses for the AI
+	// key. One rule in the app beats two.
 	//
-	// Unset AXUR_API_KEY leaves dash.Axur nil, and the panel is absent. Logged,
-	// because an operator who MEANT to configure it needs to see why the panel
-	// is missing rather than hunt for a broken feed.
+	// The account-switch override slot on THIS Auth is never written, because
+	// this Auth is never handed to account.Manager or vault.SetAuthReset. That
+	// is what keeps an Infoblox account switch from changing which Axur
+	// credential goes out: nothing holds a reference that could call SetOverride
+	// on it. An Axur key belongs to the deployment, not to a tenant.
+	//
+	// config.AxurAuth normalizes BOTH sources through one rule, so a bare token
+	// typed into Settings behaves exactly like a bare token in the environment.
+	// Doing it here rather than inside rest.Auth is deliberate: rest.Auth is
+	// shared with the Infoblox proxy, and a normalization living there would
+	// quietly rewrite that credential too.
+	//
+	// The client is built unconditionally now. It used to be nil whenever no env
+	// key was set, which cannot work once a key can also arrive from a vault
+	// unlock minutes later — the process would need a restart to notice. "Is
+	// anything configured?" is answered per request instead, by
+	// dashboard.FetchAxurTickets, which resolves the slot exactly once.
+	dash.Axur = rest.New(cfg.AxurBaseURL, rest.NewAuth(cfg.AxurAPIKey, func() string {
+		return config.AxurAuth(v.AxurKey())
+	}))
+	// So a shut vault reads as "vault locked" and never as "not configured".
+	//
+	// Exists() first, and it is not belt-and-braces. IsUnlocked() is false for a
+	// vault that has never been created, so !IsUnlocked() alone told a brand-new
+	// install with no Axur key "Vault locked — unlock to read Axur": there was no
+	// vault, nothing was locked, and the honest answer was "not configured".
+	// Measured against a running server, not reasoned about.
+	dash.AxurLocked = func() bool { return v.Exists() && !v.IsUnlocked() }
 	if cfg.AxurAPIKey != "" {
-		dash.Axur = rest.New(cfg.AxurBaseURL, rest.NewAuth(cfg.AxurAPIKey, nil))
-		log.Printf("axur: brand-protection panel enabled (%s)", cfg.AxurBaseURL)
+		log.Printf("axur: credential from AXUR_API_KEY (%s); a key saved in the vault overrides it", cfg.AxurBaseURL)
 	} else {
-		log.Printf("axur: AXUR_API_KEY unset — brand-protection panel disabled")
+		log.Printf("axur: no AXUR_API_KEY — the panel uses the vault's Axur key, set under Settings (%s)", cfg.AxurBaseURL)
 	}
 	// The MCP client backs the Phase 1h AI tool loop (dashboard.RunAITool);
 	// /api/data itself uses REST (the parquet path is broken).

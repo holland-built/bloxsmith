@@ -212,6 +212,28 @@ func (c *Client) Pin() *Client {
 // Pinned reports whether this Client is request-scoped.
 func (c *Client) Pinned() bool { return c.pinned != "" }
 
+// PinResolved is Pin plus the value it froze.
+//
+// It exists because "is a credential configured?" and "send the request" must
+// not be two separate reads of the same mutable slot. A caller that asks
+// Value(), concludes the integration is configured, and then lets the request
+// resolve the slot again can send a DIFFERENT credential than the one it
+// checked — or an empty one, if a vault lock landed between the two. Handing
+// back the frozen client together with the exact string it will send makes that
+// gap impossible to open.
+//
+// An empty value means nothing is configured, and a caller that receives one
+// should not make the request at all. An Authorization header of "" reaches
+// upstream as an anonymous call and returns 401, which reads to an operator as
+// "your key is wrong" when the truth is "you have no key".
+// dashboard.FetchAxurTickets checks for exactly that before it fetches.
+func (c *Client) PinResolved() (*Client, string) {
+	v := c.authValue()
+	cp := *c
+	cp.pinned = v
+	return &cp, v
+}
+
 // authValue is the single place an outbound call resolves its Authorization:
 // the pinned value when this Client belongs to a request, else the live slot.
 func (c *Client) authValue() string {
