@@ -169,7 +169,7 @@ type Config struct {
 	AxurBaseURL string // AXUR_BASE_URL
 
 	LLMAPIKey  string // LLM_API_KEY or GROQ_API_KEY (server.py:157)
-	LLMModel   string // LLM_MODEL or "openai/gpt-oss-120b" (see the decommission note at the default)
+	LLMModel   string // LLM_MODEL or "qwen/qwen3.6-27b" (see the decommission note at the default)
 	LLMBaseURL string // LLM_BASE_URL (server.py:159)
 
 	VaultDir            string // VAULT_DIR, default "/vault" (server.py:2405)
@@ -287,13 +287,24 @@ func Load(dir string) *Config {
 	// Groq's deprecation page with a shutdown date of 2026-08-16, and
 	// openai/gpt-oss-120b is the replacement that page names.
 	//
-	// Read before changing: Groq's own two pages disagreed on 2026-08-24. The
-	// deprecation page gave that shutdown date while the models page still
-	// listed the model as served, and the authoritative answer is
-	// GET /openai/v1/models with this deployment's key. That call was not made
-	// here, so this default is chosen from the deprecation page, which is the
-	// page that has been right twice.
-	c.LLMModel = or("LLM_MODEL", "openai/gpt-oss-120b")
+	// MEASURED, not read off a page. GET /openai/v1/models on 2026-08-24 returns
+	// 13 ids and llama-3.3-70b-versatile is not among them, while Groq's own
+	// models page still listed it that day. The docs are not the check.
+	//
+	// Groq names two replacements. openai/gpt-oss-120b was tried first and
+	// FAILS AGAINST THIS CODE: asked for the JSON contract in aiSystem, it
+	// emits a tool call named "json", and Groq rejects the request 400
+	// tool_use_failed, "attempted to call tool 'json' which was not in
+	// request.tools". The model answers correctly inside that rejected payload,
+	// so the fault is the shape, not the reasoning. Supporting it means
+	// declaring a json tool in schema.go and treating a call to it as the final
+	// answer.
+	//
+	// qwen/qwen3.6-27b was then run against the live server on the same
+	// question and returned {"answer":"4"} with three suggestions and no error,
+	// which is the contract this code already expects. It is the default for
+	// that reason and no other.
+	c.LLMModel = or("LLM_MODEL", "qwen/qwen3.6-27b")
 	c.LLMBaseURL = os.Getenv("LLM_BASE_URL")
 
 	c.VaultDir = getDefault("VAULT_DIR", "/vault")
