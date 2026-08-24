@@ -122,6 +122,57 @@ func (s *Service) budgetField() map[string]any {
 
 const timeoutJSON = `{"answer": "AI query timed out — the request took too long. Try a narrower question.", "suggestions": ["show network summary", "show offline hosts", "list threat feeds", "show audit logs"]}`
 
+// answerTokens is the per-call answer budget. On a reasoning model the chain of
+// thought is spent out of this same allowance, which is why runLoop can raise
+// it once — see the comment there.
+const answerTokens = 1024
+
+// emptyAnswerJSON explains a reply that carried no answer, instead of the bare
+// "No content." that stood here before.
+//
+// THE REASON IS THE WHOLE POINT. "No content." is true and useless: it does not
+// say whether the model ran out of room, refused, returned nothing at all, or
+// spent its budget thinking. Each of those has a different next move, and the
+// reader was given none of them. The finish reason is named verbatim so the
+// next screenshot of this state diagnoses itself.
+//
+// The suggestions are never empty. This path is a dead end in the panel — no
+// answer, nothing to act on — and the follow-up chips are the only way out of
+// it that does not involve retyping.
+func emptyAnswerJSON(finishReason string, hadReasoning bool) string {
+	var answer string
+	switch finishReason {
+	case "length":
+		answer = "The model ran out of room before it wrote an answer, twice, even with a larger budget. Try a narrower question, or a model that spends fewer tokens thinking."
+	case "content_filter":
+		answer = "The provider's content filter stopped the reply, so there is no answer to show."
+	case "":
+		answer = "The AI provider returned a reply with no answer and no reason given."
+	default:
+		answer = "The AI provider returned no answer (it stopped with finish reason " + strconv.Quote(finishReason) + ")."
+	}
+	if hadReasoning {
+		// Worth saying, and worth saying only as a hint: the reasoning text is
+		// unbounded and is not an answer, so it is never shown.
+		answer += " It produced reasoning but no answer text, which usually means the answer budget ran out."
+	}
+	b, err := json.Marshal(map[string]any{
+		"answer": answer,
+		"suggestions": []string{
+			"try a narrower question",
+			"show network summary",
+			"show offline hosts",
+			"what changed in the last 24 hours",
+		},
+	})
+	if err != nil {
+		// Unreachable for a map of plain strings, and if it ever were reachable
+		// the caller still needs parseable JSON rather than an empty string.
+		return `{"answer": "The AI provider returned no answer.", "suggestions": ["try a narrower question"]}`
+	}
+	return string(b)
+}
+
 // providerErrJSON says WHICH way the provider call failed. "AI error: request
 // failed" was all an operator ever saw, and during the injection audit this path
 // fired on 8 of 36 live queries — every one of them actually
@@ -180,8 +231,25 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 
 	lastContent := ""
 	sawChoice := false
+	// The per-call answer budget, and the one retry allowed to raise it.
+	//
+	// WHY IT IS NOT A FLAT CONSTANT ANY MORE. max_tokens was 1024 for every
+	// call, and on a reasoning model — the qwen default since 71014cf — the
+	// chain of thought is spent out of that same allowance before a single
+	// answer token is emitted. When it runs out first, the provider returns
+	// finish_reason "length" with content "", which this loop reported as the
+	// bare "No content.": a reader saw the tool run, saw its fact line, and was
+	// told nothing about why no answer followed. Caught in a screenshot on
+	// 2026-08-24.
+	//
+	// More room is the only thing that rescues that specific failure, so it is
+	// tried once. Once, not repeatedly: if triple the budget still yields
+	// nothing, the budget was not the fault, and a loop that keeps buying bigger
+	// calls spends real money learning that.
+	maxTokens := answerTokens
+	retriedForLength := false
 	for i := 0; i < 6; i++ {
-		resp, err := s.chat(ctx, key, base, model, messages)
+		resp, err := s.chat(ctx, key, base, model, messages, maxTokens)
 		if err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				return timeoutJSON
@@ -205,7 +273,19 @@ func (s *Service) runLoop(question, contextStr string, trace *[]map[string]any) 
 		lastContent = ch.content
 		if ch.FinishReason != "tool_calls" {
 			if ch.content == "" {
-				return `{"answer": "No content.", "suggestions": []}`
+				// Ran out of room before saying anything. Buy more room, once.
+				// The messages are unchanged, so this is the same turn asked
+				// again with a budget that can hold an answer.
+				if ch.FinishReason == "length" && !retriedForLength {
+					retriedForLength = true
+					maxTokens = answerTokens * 3
+					log.Printf("_generate_ai_answer: empty answer truncated at %d tokens, retrying with %d",
+						answerTokens, maxTokens)
+					continue
+				}
+				log.Printf("_generate_ai_answer: empty content, finish_reason=%q reasoning=%d bytes",
+					ch.FinishReason, len(ch.reasoning))
+				return emptyAnswerJSON(ch.FinishReason, ch.reasoning != "")
 			}
 			return ch.content
 		}
@@ -477,6 +557,7 @@ type chatResp struct {
 		// decoded lazily below
 		content   string
 		toolCalls []toolCall
+		reasoning string
 	} `json:"choices"`
 	// Usage is Groq's top-level accounting object. TotalTokens is the whole
 	// budget-tracking feature's only real signal — everything else here is
@@ -496,10 +577,10 @@ type toolCall struct {
 
 // chat is client.chat.completions.create (server.py:4061): one POST to the
 // OpenAI-compatible endpoint with the tool schema and tool_choice=auto.
-func (s *Service) chat(ctx context.Context, key, base, model string, messages []any) (*chatResp, error) {
+func (s *Service) chat(ctx context.Context, key, base, model string, messages []any, maxTokens int) (*chatResp, error) {
 	reqBody := map[string]any{
 		"model":       model,
-		"max_tokens":  1024,
+		"max_tokens":  maxTokens,
 		"messages":    messages,
 		"tools":       aiTools,
 		"tool_choice": "auto",
@@ -550,10 +631,17 @@ func (s *Service) chat(ctx context.Context, key, base, model string, messages []
 		var m struct {
 			Content   string     `json:"content"`
 			ToolCalls []toolCall `json:"tool_calls"`
+			// Reasoning models (the qwen default among them) put their chain of
+			// thought here and the answer in Content. It is decoded ONLY to tell
+			// "it thought and said nothing" apart from "it returned nothing at
+			// all" in the message the reader gets. It is never shown: it is
+			// unbounded, and it is not an answer.
+			Reasoning string `json:"reasoning"`
 		}
 		_ = json.Unmarshal(out.Choices[i].Message, &m)
 		out.Choices[i].content = m.Content
 		out.Choices[i].toolCalls = m.ToolCalls
+		out.Choices[i].reasoning = m.Reasoning
 	}
 	return &out, nil
 }

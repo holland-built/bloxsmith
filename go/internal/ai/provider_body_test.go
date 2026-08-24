@@ -68,7 +68,7 @@ func (f *fakeTransport) RoundTrip(*http.Request) (*http.Response, error) {
 func chatAgainst(status int, body io.ReadCloser) error {
 	s := New(nil, nil, nil)
 	s.http = &http.Client{Transport: &fakeTransport{status: status, body: body}}
-	_, err := s.chat(context.Background(), "k", "https://provider.example", "m", nil)
+	_, err := s.chat(context.Background(), "k", "https://provider.example", "m", nil, answerTokens)
 	return err
 }
 
