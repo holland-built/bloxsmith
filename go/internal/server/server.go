@@ -359,6 +359,22 @@ func (d *Deps) registerVaultRoutes(mux router) {
 	mux.HandleFunc("POST /api/vault/llm", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
 		d.json(w, r, 200, d.Vault.SetLLM(str(b, "key"), optStr(b, "base_url"), optStr(b, "model")))
 	}))
+	// 8a. axur — set, or with an empty key clear, the Axur credential.
+	//
+	// Its own route rather than a field on /api/vault/tenant, where the Groq key
+	// is set. The Axur credential belongs to the DEPLOYMENT, not to any one
+	// Infoblox tenant, so hanging it off "add a connection" would tie it to
+	// whichever tenant happened to be added first and imply it switches with
+	// them. It does not.
+	//
+	// The response carries `stored`, so a caller that sent "" can tell whether
+	// Axur is now off or has merely fallen back to AXUR_API_KEY — clearing and
+	// disabling are not the same thing when the environment also holds a key.
+	// vault.SetAxur's doc comment has the full rule.
+	mux.HandleFunc("POST /api/vault/axur", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
+		res := d.Vault.SetAxur(str(b, "key"))
+		d.json(w, r, code(res, 400), res)
+	}))
 	// 9. test-key
 	mux.HandleFunc("POST /api/vault/test-key", d.body(func(w http.ResponseWriter, r *http.Request, b map[string]any) {
 		d.json(w, r, 200, d.Vault.TestKey(str(b, "key")))

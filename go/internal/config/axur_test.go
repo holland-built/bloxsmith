@@ -18,8 +18,8 @@ func TestAxurAuth(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := axurAuth(tc.in); got != tc.want {
-				t.Errorf("axurAuth(%q) = %q, want %q", tc.in, got, tc.want)
+			if got := AxurAuth(tc.in); got != tc.want {
+				t.Errorf("AxurAuth(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}

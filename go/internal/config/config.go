@@ -198,7 +198,12 @@ type Config struct {
 // so the gateway prefix belongs in the base and never in the request path.
 const AxurDefaultBaseURL = "https://api.axur.com/gateway/1.0/api"
 
-// axurAuth normalizes AXUR_API_KEY into a complete Authorization header value.
+// AxurAuth normalizes an Axur credential into a complete Authorization header
+// value. Exported because it has TWO callers now — this package for
+// AXUR_API_KEY, and main.go for the copy stored in the vault — and the whole
+// point is that both sources obey one rule. A second, hand-copied rule beside
+// this one is how "it works from the environment but not from Settings" gets
+// built.
 //
 // An empty or blank value stays empty, which is what switches the integration
 // off. A value that already carries a scheme word ("Bearer x", and any other
@@ -210,7 +215,7 @@ const AxurDefaultBaseURL = "https://api.axur.com/gateway/1.0/api"
 // This deliberately does NOT verify that the scheme is Bearer specifically;
 // rejecting an unexpected scheme here would turn a working credential into a
 // silently disabled panel.
-func axurAuth(v string) string {
+func AxurAuth(v string) string {
 	v = strings.TrimSpace(v)
 	if v == "" {
 		return ""
@@ -269,7 +274,7 @@ func Load(dir string) *Config {
 	c.DashboardToken = os.Getenv("DASHBOARD_TOKEN")
 	c.BlockListID = os.Getenv("BLOCK_LIST_ID")
 
-	c.AxurAPIKey = axurAuth(os.Getenv("AXUR_API_KEY"))
+	c.AxurAPIKey = AxurAuth(os.Getenv("AXUR_API_KEY"))
 	c.AxurBaseURL = or("AXUR_BASE_URL", AxurDefaultBaseURL)
 
 	// LLM_API_KEY falls back to GROQ_API_KEY (server.py:157) — `or`, not default:

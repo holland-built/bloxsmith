@@ -42,6 +42,11 @@ export default function TenantManager({ onClose, onOpenHelp }) {
 
   const [add, setAdd] = useState({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })
   const [edit, setEdit] = useState(null) // { id, label, key, err, busy, test }
+  // `key` is the typed secret and never anything the server sent — there is no
+  // route that returns it. `stored` tracks only WHETHER one is saved, which is
+  // all the UI needs to choose between "paste token" and "type to replace it",
+  // and it is the one fact about the key that is safe to hold in React state.
+  const [axur, setAxur] = useState({ key: '', stored: false, busy: false, err: '', msg: '' })
 
   const authHeaders = () => {
     const t = localStorage.getItem('dashToken')
@@ -53,7 +58,14 @@ export default function TenantManager({ onClose, onOpenHelp }) {
     // real answer ("you have zero"), this is "we don't know".
     fetch('/api/vault/status', { cache: 'no-store' })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then((d) => { setStatus(d); setStatusError(false) })
+      .then((d) => {
+        setStatus(d)
+        setStatusError(false)
+        // Only WHETHER a key is stored — the server has no route that returns
+        // the key itself. Merged rather than assigned so a reload cannot wipe a
+        // secret the operator is part-way through typing.
+        setAxur((a) => ({ ...a, stored: !!d.hasAxur }))
+      })
       .catch(() => setStatusError(true))
     // Which tenant a write would land in, and whether it has been opted in.
     // Three outcomes, kept distinct: writable, read-only, and "we could not
@@ -202,6 +214,33 @@ export default function TenantManager({ onClose, onOpenHelp }) {
       setAdd((a) => ({ ...a, busy: false, err: data.error || 'Could not add connection.' }))
     }
   }
+
+  // saveAxur and clearAxur share one route; an empty key is how the server is
+  // told to clear. They are two buttons rather than one, because "Save" with an
+  // empty box is not a gesture anyone reads as "delete my key".
+  const putAxur = async (key, doneMsg) => {
+    setAxur((a) => ({ ...a, busy: true, err: '', msg: '' }))
+    const { ok, data } = await vpost('/api/vault/axur', { key })
+    if (ok && data.ok) {
+      // The typed secret is dropped on success and never held for a retry: a
+      // saved key has no reason to stay in memory, and the box going empty is
+      // also the clearest signal that the save landed.
+      setAxur({ key: '', stored: !!data.stored, busy: false, err: '', msg: doneMsg })
+      return
+    }
+    const err =
+      data.error === 'locked'
+        ? 'The vault is locked — unlock it first, then save the key.'
+        : data.error || 'Could not save the Axur key.'
+    setAxur((a) => ({ ...a, busy: false, err }))
+  }
+
+  const saveAxur = () => putAxur(axur.key, 'Axur key saved.')
+  // The wording is exact about what removal does. If AXUR_API_KEY is set in the
+  // environment, clearing the vault entry falls back to it rather than turning
+  // Axur off, and `stored` coming back false is the only way to see which
+  // happened. Promising "Axur disabled" here would be a guess.
+  const clearAxur = () => putAxur('', 'Axur key removed from the vault.')
 
   const testAddKey = async () => {
     if (!add.key) return
@@ -443,6 +482,52 @@ export default function TenantManager({ onClose, onOpenHelp }) {
             <button className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
               + Add connection
             </button>
+
+            {/* Axur, the brand-protection vendor. Its own section, deliberately
+                NOT a field on "Add connection" where the Groq key lives: this
+                credential belongs to the deployment, not to any one Infoblox
+                tenant, and it does not change when you switch tenants. */}
+            <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Axur (brand protection)</div>
+            <div className="mb-4 rounded-lg border border-border bg-field p-3">
+              <label htmlFor="tm-axur-key" className="block text-[11px] text-dim mb-1">Axur API key</label>
+              {/* NEVER prefilled from the server, and no route would return it.
+                  A password field that arrives populated invites a reader to
+                  believe they can read it back, and puts a live secret in the
+                  DOM for anything on the page to find. */}
+              <input
+                id="tm-axur-key"
+                className={inCls}
+                type="password"
+                autoComplete="off"
+                value={axur.key}
+                onChange={(e) => setAxur((a) => ({ ...a, key: e.target.value, msg: '', err: '' }))}
+                placeholder={axur.stored ? 'a key is saved — type to replace it' : 'paste token'}
+              />
+              <div className="text-[11px] text-dim mt-1.5">
+                Encrypted in the vault, the way your Infoblox keys are. Paste the token on its own;
+                the &ldquo;Bearer&rdquo; word is added for you.
+              </div>
+              {axur.err && <div className="mt-2 text-[11px] text-crit">{axur.err}</div>}
+              {axur.msg && <div className="mt-2 text-[11px] text-ok">{axur.msg}</div>}
+              <div className="flex gap-2 mt-2">
+                <button
+                  className="flex-1 px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm disabled:opacity-50"
+                  onClick={saveAxur}
+                  disabled={axur.busy || !axur.key}
+                >
+                  {axur.busy ? 'Saving…' : 'Save Axur key'}
+                </button>
+                {axur.stored && (
+                  <button
+                    className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt disabled:opacity-50"
+                    onClick={clearAxur}
+                    disabled={axur.busy}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
 
             {/* Per-tenant write lock. Tenants are read-only until opted in, so
                 this is the only place the dangerous routes can be turned on.

@@ -538,7 +538,9 @@ function AxurPanel({ panelId, axur }) {
       {axur.loading ? <Skeleton h={220} /> : axur.error ? (
         <FeedUnavailable reason={axur.error.message || undefined} label="Axur feed unavailable" />
       ) : d.configured === false ? (
-        <Empty>Axur not configured — set AXUR_API_KEY to enable</Empty>
+        // Names both places a key can go, Settings first: that is a box on this
+        // screen, where AXUR_API_KEY needs a file edit and a restart.
+        <Empty>Axur not configured — add a key under ⋯ Settings, or set AXUR_API_KEY</Empty>
       ) : d.unavailable || rows.length === 0 ? (
         <Empty>{d.unavailable ? (d.not_entitled ? `not entitled — ${d.unavailable}` : d.unavailable) : 'no incidents'}</Empty>
       ) : (

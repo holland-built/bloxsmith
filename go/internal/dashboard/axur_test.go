@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"net/http"
+	"strings"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -229,5 +230,167 @@ func TestAxurClientIgnoresAccountSwitch(t *testing.T) {
 		if got != "Bearer axur-key" {
 			t.Errorf("call %d Authorization = %q, want the Axur key unchanged by the switch", i, got)
 		}
+	}
+}
+
+// --- vault-backed credential -------------------------------------------------
+
+// TestAxurLockedIsNotUnconfigured is the distinction Codex finding 3 named and
+// the one an operator most needs: a shut vault must not be reported as "you
+// never set a key". Those two sentences send someone to opposite places.
+func TestAxurLockedIsNotUnconfigured(t *testing.T) {
+	s := &Service{
+		Cache:      cache.New(),
+		Axur:       rest.New("http://127.0.0.1:1", rest.NewAuth("", func() string { return "" })),
+		AxurLocked: func() bool { return true },
+	}
+	got := s.FetchAxurTickets()
+	if got["configured"] != true {
+		t.Errorf("configured = %v, want true — a key may well be stored, we just cannot read it", got["configured"])
+	}
+	if got["locked"] != true {
+		t.Errorf("locked = %v, want true", got["locked"])
+	}
+	if got["unavailable"] != "Vault locked — unlock to read Axur" {
+		t.Errorf("unavailable = %v, want the locked wording", got["unavailable"])
+	}
+}
+
+// The same empty credential with the vault OPEN really does mean unconfigured.
+func TestAxurUnlockedAndEmptyIsUnconfigured(t *testing.T) {
+	s := &Service{
+		Cache:      cache.New(),
+		Axur:       rest.New("http://127.0.0.1:1", rest.NewAuth("", func() string { return "" })),
+		AxurLocked: func() bool { return false },
+	}
+	got := s.FetchAxurTickets()
+	if got["configured"] != false {
+		t.Errorf("configured = %v, want false", got["configured"])
+	}
+	if _, ok := got["unavailable"]; ok {
+		t.Errorf("unconfigured must not claim an outage: %v", got["unavailable"])
+	}
+}
+
+// TestAxurVaultKeyBeatsEnv pins the precedence main.go builds: the vault's key
+// is the 'active' resolver and the env key is the fallback, so a stored key
+// wins. Matches LLMCreds, deliberately.
+func TestAxurVaultKeyBeatsEnv(t *testing.T) {
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte(`{"totalByTicketType":[]}`))
+	}))
+	defer srv.Close()
+
+	vaultKey := "Bearer from-vault"
+	s := &Service{
+		Cache: cache.New(),
+		Axur:  rest.New(srv.URL, rest.NewAuth("Bearer from-env", func() string { return vaultKey })),
+	}
+	s.FetchAxurTickets()
+	if len(seen) != 1 || seen[0] != "Bearer from-vault" {
+		t.Fatalf("sent %v, want the vault key to win", seen)
+	}
+
+	// Clearing the vault entry falls back to the environment — it does NOT turn
+	// Axur off. That is the ambiguity SetAxur's doc comment resolves, pinned here.
+	vaultKey = ""
+	s.Cache = cache.New()
+	s.FetchAxurTickets()
+	if len(seen) != 2 || seen[1] != "Bearer from-env" {
+		t.Fatalf("sent %v, want the env key after the vault entry was cleared", seen)
+	}
+}
+
+// TestAxurCacheKeyedOnCredential is Codex finding 1. A response fetched under
+// one key must never be served under another — for a multi-tenant vendor API
+// that is one customer's incident counts shown under another's credential.
+func TestAxurCacheKeyedOnCredential(t *testing.T) {
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, _ = w.Write([]byte(`{"totalByTicketType":[{"type":"phishing","totalOnPeriod":1}]}`))
+	}))
+	defer srv.Close()
+
+	key := "Bearer tenant-a"
+	s := &Service{
+		Cache: cache.New(),
+		Axur:  rest.New(srv.URL, rest.NewAuth("", func() string { return key })),
+	}
+	s.FetchAxurTickets()
+	s.FetchAxurTickets()
+	if hits != 1 {
+		t.Fatalf("hits = %d after two calls on ONE key, want 1 — the cache is not working", hits)
+	}
+
+	key = "Bearer tenant-b"
+	s.FetchAxurTickets()
+	if hits != 2 {
+		t.Fatalf("hits = %d after the key changed, want 2 — a cached response outlived its credential", hits)
+	}
+}
+
+// TestAxurFailuresAreNotCached: an operator fixing a wrong key must see the fix
+// take effect on the next poll, not after the TTL expires.
+func TestAxurFailuresAreNotCached(t *testing.T) {
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	s := &Service{
+		Cache: cache.New(),
+		Axur:  rest.New(srv.URL, rest.NewAuth("Bearer k", nil)),
+	}
+	s.FetchAxurTickets()
+	s.FetchAxurTickets()
+	if hits != 2 {
+		t.Errorf("hits = %d, want 2 — a failure was cached and the retry never left", hits)
+	}
+}
+
+// TestAxurFingerprintIsNotTheSecret: cache keys get logged, so the tag in them
+// must not be reversible to the credential.
+func TestAxurFingerprintIsNotTheSecret(t *testing.T) {
+	const secret = "Bearer super-secret-token-value"
+	fp := axurCredFingerprint(secret)
+	if fp == "" || len(fp) != 12 {
+		t.Fatalf("fingerprint = %q, want 12 hex characters", fp)
+	}
+	if strings.Contains(secret, fp) || strings.Contains(fp, "secret") {
+		t.Errorf("fingerprint %q carries the secret", fp)
+	}
+	if axurCredFingerprint("Bearer another-key") == fp {
+		t.Error("two different credentials produced the same fingerprint")
+	}
+}
+
+// TestAxurNoVaultIsNotLocked is a regression, found by running the server and
+// not by reading the code. AxurLocked was wired as !vault.IsUnlocked(), and a
+// vault that has never been created also reports "not unlocked" — so a brand
+// new install with no Axur key was told "Vault locked — unlock to read Axur"
+// about a vault it did not have. main.go now asks Exists() first; this pins the
+// behaviour that fix produces.
+func TestAxurNoVaultIsNotLocked(t *testing.T) {
+	// The resolver main.go builds when no vault file exists: nothing stored,
+	// and "locked" answers false because there is nothing to be locked.
+	s := &Service{
+		Cache:      cache.New(),
+		Axur:       rest.New("http://127.0.0.1:1", rest.NewAuth("", func() string { return "" })),
+		AxurLocked: func() bool { return false },
+	}
+	got := s.FetchAxurTickets()
+	if got["configured"] != false {
+		t.Errorf("configured = %v, want false", got["configured"])
+	}
+	if _, ok := got["locked"]; ok {
+		t.Errorf("a install with no vault reported a lock state: %v", got)
+	}
+	if _, ok := got["unavailable"]; ok {
+		t.Errorf("nothing failed, so nothing may be reported unavailable: %v", got["unavailable"])
 	}
 }

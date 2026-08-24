@@ -72,6 +72,12 @@ type payload struct {
 	Tenants      []Tenant `json:"tenants"`
 	Active       *string  `json:"active"`
 	Groq         string   `json:"groq"`
+	// Axur is the brand-protection vendor's API credential, held whole the way
+	// Groq is. Absent in every vault written before the Axur integration, which
+	// decodes to "" — no Axur key stored, fall back to AXUR_API_KEY. That is the
+	// right answer for an older file, not a migration gap, exactly as the
+	// WriteAllowed comment above records for its own field.
+	Axur         string   `json:"axur"`
 	LLMBase      string   `json:"llm_base"`
 	LLMModel     string   `json:"llm_model"`
 	WriteAllowed []string `json:"write_allowed,omitempty"`
@@ -104,6 +110,7 @@ type Vault struct {
 	tenants  []Tenant
 	active   *string
 	groq     string
+	axur     string
 	llmBase  string
 	llmModel string
 	key      *fernet.Key // derived Fernet key
@@ -147,6 +154,7 @@ type vaultSnap struct {
 	tenants      []Tenant
 	active       *string
 	groq         string
+	axur         string
 	llmBase      string
 	llmModel     string
 	writeAllowed []string
@@ -163,7 +171,7 @@ func (v *Vault) snapshot() vaultSnap {
 	}
 	w := make([]string, len(v.writeAllowed))
 	copy(w, v.writeAllowed)
-	return vaultSnap{tenants: t, active: a, groq: v.groq, llmBase: v.llmBase, llmModel: v.llmModel, writeAllowed: w}
+	return vaultSnap{tenants: t, active: a, groq: v.groq, axur: v.axur, llmBase: v.llmBase, llmModel: v.llmModel, writeAllowed: w}
 }
 
 // restore rolls the mutable state back to a snapshot (caller holds v.mu).
@@ -171,6 +179,7 @@ func (v *Vault) restore(s vaultSnap) {
 	v.tenants = s.tenants
 	v.active = s.active
 	v.groq = s.groq
+	v.axur = s.axur
 	v.llmBase = s.llmBase
 	v.llmModel = s.llmModel
 	v.writeAllowed = s.writeAllowed
@@ -184,6 +193,22 @@ func (v *Vault) LLMCreds() (groq, base, model string) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	return v.groq, v.llmBase, v.llmModel
+}
+
+// AxurKey returns the stored Axur credential, lock-guarded for the same reason
+// LLMCreds is. Empty means one of two different things and the caller MUST NOT
+// collapse them: either no key was ever stored, or the vault is locked and this
+// one is out of memory. Ask IsUnlocked to tell them apart —
+// dashboard.FetchAxurTickets does, and says "vault locked" rather than the
+// flatly untrue "not configured".
+//
+// The value comes back exactly as stored. Turning it into an Authorization
+// header is config.AxurAuth's job, done at the point of use, so this path and
+// the AXUR_API_KEY path cannot drift into two different rules.
+func (v *Vault) AxurKey() string {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.axur
 }
 
 // IsUnlocked reports whether the vault is currently unlocked (lock-guarded).
@@ -297,7 +322,7 @@ func (v *Vault) Init(passphrase string) error {
 	v.unlocked = true
 	v.tenants = nil
 	v.active = nil
-	v.groq, v.llmBase, v.llmModel = "", "", ""
+	v.groq, v.axur, v.llmBase, v.llmModel = "", "", "", ""
 	v.key, v.ver = key, currentVaultVersion
 	v.salt = base64.StdEncoding.EncodeToString(salt)
 	return v.save()
@@ -364,6 +389,7 @@ func (v *Vault) Unlock(passphrase string) error {
 	v.tenants = p.Tenants
 	v.active = p.Active
 	v.groq = p.Groq
+	v.axur = p.Axur
 	v.llmBase = p.LLMBase
 	v.llmModel = p.LLMModel
 	v.writeAllowed = p.WriteAllowed
@@ -436,6 +462,7 @@ func (v *Vault) save() error {
 		Tenants:      v.tenants,
 		Active:       v.active,
 		Groq:         v.groq,
+		Axur:         v.axur,
 		LLMBase:      v.llmBase,
 		LLMModel:     v.llmModel,
 		WriteAllowed: v.writeAllowed,
@@ -534,6 +561,12 @@ func (v *Vault) lockLocked() {
 	v.tenants = nil
 	v.active = nil
 	v.groq = ""
+	// A stored secret like groq above, so it is cleared for the same reason: a
+	// locked vault must not keep answering with a credential out of memory.
+	// dashboard.FetchAxurTickets tells this state apart from "no key configured"
+	// by asking the vault whether it is unlocked, so a lock reads as "locked",
+	// never as "you never set one".
+	v.axur = ""
 	// Cleared with the rest of the decrypted state: a locked vault must not be
 	// able to answer "is this tenant writable" from memory. WriteAllowed()
 	// therefore says no while locked, which is the right answer — nothing is
