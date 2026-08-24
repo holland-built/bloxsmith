@@ -152,7 +152,7 @@ type Config struct {
 	BlockListID    string // BLOCK_LIST_ID (server.py:153)
 
 	LLMAPIKey  string // LLM_API_KEY or GROQ_API_KEY (server.py:157)
-	LLMModel   string // LLM_MODEL or "llama-3.3-70b-versatile" (qwen3-32b decommissioned by Groq 2026-07)
+	LLMModel   string // LLM_MODEL or "openai/gpt-oss-120b" (see the decommission note at the default)
 	LLMBaseURL string // LLM_BASE_URL (server.py:159)
 
 	VaultDir            string // VAULT_DIR, default "/vault" (server.py:2405)
@@ -231,9 +231,20 @@ func Load(dir string) *Config {
 	if v := os.Getenv("LLM_API_KEY"); v != "" {
 		c.LLMAPIKey = v
 	}
-	// Default was qwen/qwen3-32b until Groq decommissioned it (404 model_not_found,
-	// 2026-07) — every /api/query returned "AI error: request failed".
-	c.LLMModel = or("LLM_MODEL", "llama-3.3-70b-versatile")
+	// THE DEFAULT HAS NOW OUTLIVED TWO GROQ DECOMMISSIONS, so it is worth saying
+	// what keeps happening. qwen/qwen3-32b went first (404 model_not_found,
+	// 2026-07) and every /api/query returned "AI error: request failed" until
+	// the default moved. Its replacement, llama-3.3-70b-versatile, is listed on
+	// Groq's deprecation page with a shutdown date of 2026-08-16, and
+	// openai/gpt-oss-120b is the replacement that page names.
+	//
+	// Read before changing: Groq's own two pages disagreed on 2026-08-24. The
+	// deprecation page gave that shutdown date while the models page still
+	// listed the model as served, and the authoritative answer is
+	// GET /openai/v1/models with this deployment's key. That call was not made
+	// here, so this default is chosen from the deprecation page, which is the
+	// page that has been right twice.
+	c.LLMModel = or("LLM_MODEL", "openai/gpt-oss-120b")
 	c.LLMBaseURL = os.Getenv("LLM_BASE_URL")
 
 	c.VaultDir = getDefault("VAULT_DIR", "/vault")

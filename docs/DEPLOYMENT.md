@@ -565,7 +565,7 @@ known follow-up. Until then, provisioning that relies on bundled templates needs
 | `INFOBLOX_URL`     |          | `https://csp.infoblox.com` | Portal base URL                            |
 | `GROQ_API_KEY`     |          | _(empty)_                | Enables the AI query box (Groq)              |
 | `LLM_API_KEY`      |          | `GROQ_API_KEY`           | Overrides for any OpenAI-compatible provider |
-| `LLM_MODEL`        |          | `llama-3.3-70b-versatile` | Model name. The old `qwen/qwen3-32b` default was decommissioned by Groq in July 2026 and 404s |
+| `LLM_MODEL`        |          | `openai/gpt-oss-120b` | Model name. Two defaults before it were decommissioned by Groq: `qwen/qwen3-32b` in July 2026, then `llama-3.3-70b-versatile`, whose shutdown date on Groq's deprecation page is 2026-08-16. Check `GET /openai/v1/models` before trusting any id here |
 | `LLM_BASE_URL`     |          | _(blank = Groq)_         | OpenAI-compatible endpoint                   |
 | `VAULT_DIR`        |          | `/vault`                 | Where `vault.json` is stored (mount a volume here) |
 | `VAULT_PASSPHRASE` |          | —                        | Vault-mode auto-unlock at boot (see below)   |
