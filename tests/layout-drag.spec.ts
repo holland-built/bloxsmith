@@ -639,7 +639,11 @@ const TAB_PANEL_COUNTS: Record<string, number> = {
   // security and infra each gained one on 2026-08-20 (#152): "Security
   // Inventory" from /api/hub/domains and "Service Health" from /api/hub/health,
   // two endpoints that had been registered and called by nothing.
-  security: 13,
+  // Security gained a 14th on 2026-08-24: "Axur Brand Incidents". It is
+  // standing chrome on every deployment, configured or not — see the comment on
+  // AxurPanel in ui/src/tabs/Security.jsx for why it does not hide itself when
+  // AXUR_API_KEY is unset.
+  security: 14,
   infra: 8,
   assets: 2,
   incidents: 5,
@@ -805,6 +809,7 @@ const TAB_CASES: TabCase[] = [
       'security-triage-inbox',
       'security-inventory',
       'security-lookalike-domains',
+      'security-axur-incidents',
       'security-ctem-exposure',
       'security-asset-insights',
       'security-exposures',

@@ -151,6 +151,23 @@ type Config struct {
 	DashboardToken string // DASHBOARD_TOKEN (server.py:141)
 	BlockListID    string // BLOCK_LIST_ID (server.py:153)
 
+	// AxurAPIKey is AXUR_API_KEY: the Authorization header value for Axur's
+	// Platform API, held whole, the same way APIKey holds "Token x" rather than
+	// a bare token. Empty means the integration is not configured, and the Axur
+	// panel is absent rather than broken.
+	//
+	// Unlike INFOBLOX_API_KEY this value is normalized by axurAuth below: a
+	// value with no scheme word gets "Bearer " prepended. Axur's own material
+	// presents the credential as a bare token in some places and as a whole
+	// header in others, so a paste of either shape has to work. Without that,
+	// the wrong one produces a 401 that reads as "your key is invalid" when the
+	// key is fine and only the header was malformed.
+	AxurAPIKey string // AXUR_API_KEY
+	// AxurBaseURL is AXUR_BASE_URL, defaulting to the production gateway. It
+	// exists so a test double, a regional endpoint, or an outbound proxy can be
+	// pointed at without a rebuild — the same reason INFOBLOX_URL exists.
+	AxurBaseURL string // AXUR_BASE_URL
+
 	LLMAPIKey  string // LLM_API_KEY or GROQ_API_KEY (server.py:157)
 	LLMModel   string // LLM_MODEL or "openai/gpt-oss-120b" (see the decommission note at the default)
 	LLMBaseURL string // LLM_BASE_URL (server.py:159)
@@ -173,6 +190,35 @@ type Config struct {
 	// Dir is the binary's own directory (analogue of server.py DIR at 160),
 	// used as the vault fallback location when VAULT_DIR is not writable.
 	Dir string
+}
+
+// AxurDefaultBaseURL is the production Axur Platform API gateway, from the
+// `servers` block of Axur's OpenAPI document (openapi-axur.yaml v1.0.81). Every
+// documented path — /tickets-api/..., /assets-api/... — is appended to it whole,
+// so the gateway prefix belongs in the base and never in the request path.
+const AxurDefaultBaseURL = "https://api.axur.com/gateway/1.0/api"
+
+// axurAuth normalizes AXUR_API_KEY into a complete Authorization header value.
+//
+// An empty or blank value stays empty, which is what switches the integration
+// off. A value that already carries a scheme word ("Bearer x", and any other
+// scheme, so a future token type is not silently rewritten) is passed through
+// untouched. A bare token — no whitespace — gets "Bearer " prepended.
+//
+// The whitespace test is the whole rule: an Authorization header is
+// "<scheme> <credentials>", so a value with no space cannot already be one.
+// This deliberately does NOT verify that the scheme is Bearer specifically;
+// rejecting an unexpected scheme here would turn a working credential into a
+// silently disabled panel.
+func axurAuth(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+	if strings.ContainsAny(v, " \t") {
+		return v
+	}
+	return "Bearer " + v
 }
 
 // or returns v when non-empty, else def — matches Python's `x or default`,
@@ -222,6 +268,9 @@ func Load(dir string) *Config {
 
 	c.DashboardToken = os.Getenv("DASHBOARD_TOKEN")
 	c.BlockListID = os.Getenv("BLOCK_LIST_ID")
+
+	c.AxurAPIKey = axurAuth(os.Getenv("AXUR_API_KEY"))
+	c.AxurBaseURL = or("AXUR_BASE_URL", AxurDefaultBaseURL)
 
 	// LLM_API_KEY falls back to GROQ_API_KEY (server.py:157) — `or`, not default:
 	// an empty env var must still fall back. GROQ_API_KEY is a local, not a

@@ -21,6 +21,13 @@ type Service struct {
 	Rest  *rest.Client
 	Cache *cache.Cache
 	Mcp   *mcp.Client
+	// Axur is the brand-protection vendor's API, on its own credential and its
+	// own base URL. It is a SEPARATE field rather than a base-URL swap on Rest,
+	// and With() deliberately leaves it alone: Rest follows the Infoblox account
+	// switch, and a call to a third party must not. Nil when AXUR_API_KEY is
+	// unset — that is what switches the Security tab's Axur panel off, and
+	// FetchAxurTickets is the only reader. See axur.go.
+	Axur *rest.Client
 	// ent is the shared 403 entitlement backoff (entitlement.go). A pointer so
 	// With's shallow copy keeps one process-wide memory; nil (bare Service
 	// literals in tests) disables the backoff rather than panicking.
@@ -37,6 +44,11 @@ func New(r *rest.Client, c *cache.Cache) *Service {
 // shallow on purpose: Cache, Mcp and ent are shared process-wide and must stay
 // shared; only the outbound credential changes. Service holds no lock directly
 // (ent carries its own), so copying it is safe.
+//
+// Axur is shared by the same shallow copy, which is the correct semantics and
+// not an oversight: the Axur credential belongs to this deployment, not to the
+// Infoblox tenant the request is pinned to, so it must survive an account
+// switch unchanged. TestAxurClientIgnoresAccountSwitch pins that down.
 func (s *Service) With(r *rest.Client) *Service {
 	cp := *s
 	cp.Rest = r

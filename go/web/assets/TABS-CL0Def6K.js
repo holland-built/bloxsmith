@@ -113,6 +113,7 @@ Threat and exposure posture. Pulls from several CSP feeds, so panels can load at
 - **Threat Events — by Severity** and **Threat Feed Activity**.
 - **Triage Inbox** — events waiting on you.
 - **Lookalike Domains** — domains impersonating your brand. Set your brand domain from the header.
+- **Axur Brand Incidents**: brand-abuse cases Axur opened over the last 30 days, counted by kind. Fake sites, lookalike domains, misuse of your name. This is the one panel on the tab that is not Infoblox data. Axur is a separate vendor with its own subscription and its own key, so the panel is absent entirely unless \`AXUR_API_KEY\` is set. Kinds with a count of zero are left out, so every row is something that happened. A dash where the total goes means Axur could not be reached and nothing was counted; "no incidents" means it answered and there were none.
 - **CTEM Exposure**, **Exposures**, **Exposed Surface**, **CTEM Assets** — external attack surface.
 - **Asset Insights** and **Asset Risk**.
 - **SOC Insights**.

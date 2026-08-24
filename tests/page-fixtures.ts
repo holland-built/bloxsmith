@@ -380,8 +380,26 @@ const LOOKALIKES = {
   ],
 };
 
+// The healthy Axur shape. `configured` has to be true: a baseline captured with
+// it false would record the "Axur not configured" empty state as this page's
+// normal, which is the opposite of what this tier exists to prove. Fixed dates
+// rather than agoIso() because the panel prints neither — the window it shows
+// comes from window_days — and a moving value in a snapshot is a flake waiting.
+const AXUR = {
+  configured: true,
+  window_days: 30,
+  from: '2026-01-01',
+  to: '2026-01-31',
+  total: 9,
+  not_entitled: false,
+  types: [
+    { type: 'similar-domain-name', count: 6 },
+    { type: 'phishing', count: 3 },
+  ],
+};
+
 // --- infra ------------------------------------------------------------------
-const DFP = { status: 'ok', count: 1, rows: [{ id: 1, name: 'baseline-dfp', status: 'ok' }] };
+const DFP ={ status: 'ok', count: 1, rows: [{ id: 1, name: 'baseline-dfp', status: 'ok' }] };
 const DISCOVERY_STATUS = { status: 'ok', total: 7, breakdown_available: false, note: 'baseline' };
 const HOST_HEALTH = { status: 'ok', count: 1, rows: [{ ip: '10.10.0.2', location: 'baseline-site', name: 'baseline-host-a', nat_ip: '', status: 'ok', version: '0.0.0-baseline' }] };
 const JOBS = { status: 'ok', count: 1, rows: [{ created_at: agoIso(3 * HOUR), id: 'job/baseline-1', status: 'completed', type: 'discovery', user: 'baseline-operator' }] };
@@ -561,6 +579,7 @@ const PER_PAGE: Record<string, Handler[]> = {
     { method: 'GET', path: '/api/hub/domains', body: HUB_DOMAINS, required: true },
     { method: 'GET', path: '/api/hub/security', body: HUB_SECURITY, required: true },
     { method: 'GET', path: '/api/insights', body: INSIGHTS, required: true },
+    { method: 'GET', path: '/api/axur', body: AXUR, required: true },
     { method: 'GET', path: '/api/lookalikes', body: LOOKALIKES, required: true },
     { method: 'GET', path: '/api/service-inventory', body: SERVICE_INVENTORY, required: true },
   ],

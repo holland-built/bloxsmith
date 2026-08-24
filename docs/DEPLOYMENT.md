@@ -563,6 +563,8 @@ known follow-up. Until then, provisioning that relies on bundled templates needs
 |--------------------|----------|--------------------------|----------------------------------------------|
 | `INFOBLOX_API_KEY` |          | —                        | `Token <key>`, sent as `Authorization`. Optional — blank uses the in-app vault |
 | `INFOBLOX_URL`     |          | `https://csp.infoblox.com` | Portal base URL                            |
+| `AXUR_API_KEY`     |          | _(empty)_                | Enables the Security tab's **Axur Brand Incidents** panel. Axur is a separate vendor from Infoblox, with its own subscription and its own key. Either a bare token or a whole `Bearer <token>` header works: a value with no space in it gets `Bearer ` prepended. Blank leaves the panel off the tab entirely, and says so in the startup log |
+| `AXUR_BASE_URL`    |          | `https://api.axur.com/gateway/1.0/api` | Axur API gateway. Change it for a regional endpoint or an outbound proxy. The `/gateway/1.0/api` prefix is part of this value, not added by the app |
 | `GROQ_API_KEY`     |          | _(empty)_                | Enables the AI query box (Groq)              |
 | `LLM_API_KEY`      |          | `GROQ_API_KEY`           | Overrides for any OpenAI-compatible provider |
 | `LLM_MODEL`        |          | `openai/gpt-oss-120b` | Model name. Two defaults before it were decommissioned by Groq: `qwen/qwen3-32b` in July 2026, then `llama-3.3-70b-versatile`, whose shutdown date on Groq's deprecation page is 2026-08-16. Check `GET /openai/v1/models` before trusting any id here |

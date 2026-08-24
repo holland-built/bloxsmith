@@ -902,6 +902,30 @@ const CLAIMS = [
     ],
   },
   {
+    panel: 'security-axur-incidents',
+    says: /counted by kind/,
+    file: SECURITY,
+    proofs: [
+      {
+        re: /const days = d\.window_days \?\? 30/,
+        expect: "the 30-day window is the server's own axurWindowDays, with 30 as the fallback the sentence quotes",
+      },
+      { re: /label: `Last \$\{days\}d`/, expect: 'the column header prints that same window rather than a second hard-coded one' },
+    ],
+  },
+  {
+    panel: 'security-axur-incidents',
+    says: /A dash instead of a total means Axur could not be reached and nothing was counted/,
+    file: SECURITY,
+    proofs: [
+      {
+        re: /const counted = !axur\.error && !d\.unavailable && d\.configured !== false/,
+        expect: 'a total is only claimed when the fetch worked, upstream did not declare itself unavailable, and a key is configured',
+      },
+      { re: /\{counted \? d\.total \?\? 0 : '—'\} in \{days\}d/, expect: 'otherwise the header prints an em dash rather than 0' },
+    ],
+  },
+  {
     panel: 'security-lookalike-domains',
     says: /A dash instead of a count means the feed could not be reached, so nothing was checked; 0 means checked and none found\./,
     file: SECURITY,
