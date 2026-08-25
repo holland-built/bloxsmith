@@ -168,8 +168,8 @@ export const PANEL_HELP = {
     look: 'A red "yes" means it was judged suspicious. A dash instead of a count means the feed could not be reached, so nothing was checked; 0 means checked and none found.',
   },
   'security-axur-incidents': {
-    what: 'Security problems Axur found in the suppliers you depend on — leaked staff logins, exposed services, dark-web mentions. Axur is a separate service.',
-    look: 'Worst supplier first. "Findings" counts the kinds of problem found, not how many of each. A dash instead of a total means nothing was counted, and the panel says why.',
+    what: 'Security problems Axur found in the suppliers you depend on — exposed logins, dark-web mentions, weak certificates. Axur is a separate service.',
+    look: 'Ordered by exposed credentials, the one figure comparable between suppliers. "Types affected" counts categories, not incidents. A dash instead of a total means nothing was counted.',
   },
   'security-ctem-exposure': {
     what: 'Weaknesses found on your internet-facing assets, grouped by how serious they are and how urgent the source rates fixing them.',

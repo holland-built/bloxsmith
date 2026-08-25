@@ -49,41 +49,53 @@ func indicatorsFor(vendors string) http.HandlerFunc {
 
 func TestAxurVendorsShapeAndOrder(t *testing.T) {
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets": jsonHandler(oneAsset),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[{"customerKey":{"value":"ACME"}}],"pagination":{"page":1}}`),
+		"/assets-api/assets":                      jsonHandler(oneAsset),
 		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[
-			{"assetKey":"A1","name":"Okta","indicators":[
-				{"type":"EXPIRED_CERTIFICATES","primary":{"value":0}},
-				{"type":"LEAKED_CREDENTIALS","primary":{"value":4}}]},
-			{"assetKey":"A2","name":"SAP","indicators":[
-				{"type":"DARK_WEB","primary":{"value":9}},
-				{"type":"OPEN_PORTS","primary":{"value":2}},
-				{"type":"EXPIRED_CERTIFICATES","primary":{"value":1}}]},
-			{"assetKey":"A3","name":"ADP","indicators":[
+			{"assetKey":"A1","name":"BroadButSmall","indicators":[
+				{"type":"CUSTOMER_CREDENTIALS","primary":{"value":10}},
+				{"type":"DW_MENTIONS","primary":{"value":900}},
+				{"type":"OPEN_PORTS","primary":{"value":5}},
+				{"type":"EXPIRED_CERTIFICATES","primary":{"value":2}}]},
+			{"assetKey":"A2","name":"NarrowButHuge","indicators":[
+				{"type":"CUSTOMER_CREDENTIALS","primary":{"value":400000}},
+				{"type":"CORPORATE_CREDENTIALS","primary":{"value":27}}]},
+			{"assetKey":"A3","name":"Clean","indicators":[
 				{"type":"OPEN_PORTS","primary":{"value":0}}]}]`),
 	})
 	got := s.FetchAxurVendors()
-	if got["configured"] != true {
-		t.Fatalf("configured = %v", got["configured"])
-	}
 	if got["customer"] != "ACME" {
-		t.Errorf("customer = %v, want the discovered ACME", got["customer"])
+		t.Errorf("customer = %v, want ACME", got["customer"])
 	}
 	vendors := got["vendors"].([]any)
 	var names []string
 	for _, v := range vendors {
 		names = append(names, asMap(v)["name"].(string))
 	}
-	// SAP has 3 findings, Okta 1, ADP 0 — worst first.
-	want := []string{"SAP", "Okta", "ADP"}
+	// THE POINT OF THIS TEST. BroadButSmall has more affected types (4 vs 2)
+	// and a bigger single number (900 dark-web mentions vs 27 corporate
+	// credentials on its second row), and it still ranks BELOW NarrowButHuge,
+	// which holds 400,027 exposed credentials. Breadth is not severity, and a
+	// mention is not a credential.
+	want := []string{"NarrowButHuge", "BroadButSmall", "Clean"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Errorf("order = %v, want %v", names, want)
 	}
-	sap := asMap(vendors[0])
-	if sap["findings"] != 3 || sap["top_type"] != "DARK_WEB" || sap["top_value"] != 9 {
-		t.Errorf("SAP = %v, want 3 findings topping out at DARK_WEB 9", sap)
+	huge := asMap(vendors[0])
+	if huge["credentials"] != 400027 {
+		t.Errorf("credentials = %v, want both credential types summed (400027)", huge["credentials"])
 	}
-	if got["total_findings"] != 4 {
-		t.Errorf("total_findings = %v, want 4", got["total_findings"])
+	if huge["types_affected"] != 2 {
+		t.Errorf("types_affected = %v, want 2", huge["types_affected"])
+	}
+	// Dark-web mentions and open ports are NOT credentials and must not be
+	// added to a credential count.
+	broad := asMap(vendors[1])
+	if broad["credentials"] != 10 {
+		t.Errorf("credentials = %v, want only the credential types counted (10)", broad["credentials"])
+	}
+	if got["total_credentials"] != 400037 {
+		t.Errorf("total_credentials = %v, want 400037", got["total_credentials"])
 	}
 }
 
@@ -100,8 +112,11 @@ func TestAxurZeroIndicatorsStillListsTheVendor(t *testing.T) {
 	if len(vendors) != 1 {
 		t.Fatalf("vendors = %d, want the vendor listed with zero findings", len(vendors))
 	}
-	if asMap(vendors[0])["findings"] != 0 {
-		t.Errorf("findings = %v, want 0", asMap(vendors[0])["findings"])
+	if asMap(vendors[0])["types_affected"] != 0 {
+		t.Errorf("types_affected = %v, want 0", asMap(vendors[0])["types_affected"])
+	}
+	if asMap(vendors[0])["credentials"] != 0 {
+		t.Errorf("credentials = %v, want 0", asMap(vendors[0])["credentials"])
 	}
 }
 
@@ -109,18 +124,24 @@ func TestAxurZeroIndicatorsStillListsTheVendor(t *testing.T) {
 // polls, so the tie is broken by name.
 func TestAxurTieBreak(t *testing.T) {
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets": jsonHandler(oneAsset),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[{"customerKey":{"value":"ACME"}}],"pagination":{"page":1}}`),
+		"/assets-api/assets":                      jsonHandler(oneAsset),
 		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[
-			{"assetKey":"A1","name":"Zeta","indicators":[{"type":"B_TYPE","primary":{"value":5}},{"type":"A_TYPE","primary":{"value":5}}]},
-			{"assetKey":"A2","name":"Alpha","indicators":[{"type":"B_TYPE","primary":{"value":5}},{"type":"A_TYPE","primary":{"value":5}}]}]`),
+			{"assetKey":"A1","name":"Zeta","indicators":[{"type":"CUSTOMER_CREDENTIALS","primary":{"value":5}},{"type":"OPEN_PORTS","primary":{"value":1}}]},
+			{"assetKey":"A2","name":"Alpha","indicators":[{"type":"CUSTOMER_CREDENTIALS","primary":{"value":5}},{"type":"OPEN_PORTS","primary":{"value":1}}]},
+			{"assetKey":"A3","name":"Broader","indicators":[{"type":"CUSTOMER_CREDENTIALS","primary":{"value":5}},{"type":"OPEN_PORTS","primary":{"value":1}},{"type":"DW_MENTIONS","primary":{"value":1}}]}]`),
 	})
-	got := s.FetchAxurVendors()
-	vendors := got["vendors"].([]any)
-	if asMap(vendors[0])["name"] != "Alpha" {
-		t.Errorf("tie broken to %v, want Alpha (name ascending)", asMap(vendors[0])["name"])
+	vendors := s.FetchAxurVendors()["vendors"].([]any)
+	var names []string
+	for _, v := range vendors {
+		names = append(names, asMap(v)["name"].(string))
 	}
-	if asMap(vendors[0])["top_type"] != "A_TYPE" {
-		t.Errorf("top_type = %v, want A_TYPE (equal values, name ascending)", asMap(vendors[0])["top_type"])
+	// Equal credentials, so breadth breaks the tie; equal on both, so the name
+	// does. Stable in every direction, which is what stops rows swapping
+	// places between polls.
+	want := []string{"Broader", "Alpha", "Zeta"}
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		t.Errorf("order = %v, want %v", names, want)
 	}
 }
 
@@ -138,13 +159,13 @@ func TestAxurWalksEveryPage(t *testing.T) {
 				var rows []string
 				for i := 0; i < 20; i++ {
 					rows = append(rows, fmt.Sprintf(
-						`{"assetKey":"P%02d","name":"vendor-%02d","indicators":[{"type":"X","primary":{"value":1}}]}`, i, i))
+						`{"assetKey":"P%02d","name":"vendor-%02d","indicators":[{"type":"CUSTOMER_CREDENTIALS","primary":{"value":1}}]}`, i, i))
 				}
 				_, _ = w.Write([]byte(`{"data":[` + strings.Join(rows, ",") + `]}`))
 				return
 			}
 			_, _ = w.Write([]byte(`{"data":[{"assetKey":"WORST","name":"worst-vendor","indicators":[
-				{"type":"A","primary":{"value":9}},{"type":"B","primary":{"value":9}}]}]}`))
+				{"type":"CUSTOMER_CREDENTIALS","primary":{"value":9999}}]}]}`))
 		},
 	})
 	got := s.FetchAxurVendors()
@@ -452,14 +473,14 @@ func TestAxurResultIsJSONSerialisable(t *testing.T) {
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
 		"/assets-api/assets": jsonHandler(oneAsset),
 		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(
-			`[{"assetKey":"A1","name":"Okta","indicators":[{"type":"X","primary":{"value":3}}]}]`),
+			`[{"assetKey":"A1","name":"Okta","indicators":[{"type":"CUSTOMER_CREDENTIALS","primary":{"value":3}}]}]`),
 	})
 	b, err := json.Marshal(s.FetchAxurVendors())
 	if err != nil {
 		t.Fatalf("result does not marshal: %v", err)
 	}
-	if !strings.Contains(string(b), `"findings":1`) {
-		t.Errorf("marshalled shape lost findings: %s", b)
+	if !strings.Contains(string(b), `"credentials":3`) {
+		t.Errorf("marshalled shape lost the credential count: %s", b)
 	}
 }
 
