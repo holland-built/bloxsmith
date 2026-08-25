@@ -507,11 +507,18 @@ func axurUnavailable(err error) map[string]any {
 			// owns. WHY IT IS NOT JUST "unavailable": that is what this said
 			// first, and when the live account hit this path on 2026-08-25 the
 			// panel gave a reader — and the person who wrote it — no way to tell
-			// a 404 from a 500 from an unreachable host. The log line carries
-			// the path; this carries the status, which is the half a user can
-			// act on. Public() deliberately omits path and body, so nothing
-			// about the request leaks onto the screen.
+			// a 404 from a 500 from an unreachable host. Public() deliberately
+			// omits path and body, so nothing about the request leaks.
 			reason = "Axur service unavailable — " + ue.Public()
+			// Plus Axur's OWN wording, when it is one of the recognised message
+			// fields. This is the allowlist internal/server has always used for
+			// the same job: recognised keys only, 200 characters, and no
+			// fallback to the raw body when nothing matches. Without it the
+			// status alone left a 400 undiagnosable — a status says the request
+			// was refused, not which part of it was wrong.
+			if msg, found := rest.UpstreamMessage(ue.Snippet); found {
+				reason += " Axur said: " + msg
+			}
 		}
 	}
 	return map[string]any{"vendors": []any{}, "unavailable": reason, "not_entitled": notEntitled}
