@@ -223,7 +223,8 @@ func TestAxurDiscoveryFailureStaysAFailure(t *testing.T) {
 	}{
 		{"403", 403, "Axur supplier monitoring not entitled for this key", true},
 		{"401", 401, "Axur rejected the credential — check the key under Settings", false},
-		{"500", 500, "Axur service unavailable", false},
+		{"500", 500, "Axur service unavailable — The upstream server returned an error (status 500).", false},
+		{"404", 404, "Axur service unavailable — The upstream server returned an error (status 404).", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -236,8 +237,18 @@ func TestAxurDiscoveryFailureStaysAFailure(t *testing.T) {
 			if got["needs_key"] == true {
 				t.Fatalf("an upstream %d was reported as a missing setting: %v", tc.status, got)
 			}
-			if got["unavailable"] != tc.wantReason {
-				t.Errorf("unavailable = %v, want %q", got["unavailable"], tc.wantReason)
+			reason, _ := got["unavailable"].(string)
+			if !strings.Contains(reason, tc.wantReason) {
+				t.Errorf("unavailable = %q, want it to contain %q", reason, tc.wantReason)
+			}
+			// A discovery failure has to say it was the account LOOKUP that
+			// failed, and name the way past it. Without that, a 404 on the
+			// lookup and a 404 on the supplier read read identically.
+			if !strings.Contains(reason, "account code") {
+				t.Errorf("unavailable = %q, want it to name the account lookup as the failing stage", reason)
+			}
+			if !strings.Contains(reason, "AXUR_CUSTOMER_KEY") {
+				t.Errorf("unavailable = %q, want it to name the override", reason)
 			}
 			if got["not_entitled"] != tc.notEntitled {
 				t.Errorf("not_entitled = %v, want %v", got["not_entitled"], tc.notEntitled)
