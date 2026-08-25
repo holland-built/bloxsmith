@@ -40,6 +40,14 @@ const (
 	// The two ways to discover that customer key, in the order they are tried.
 	axurAssetsPath    = "/assets-api/assets"
 	axurCustomersPath = "/customers-api/customers"
+	// axurHistoryPath is the one discovery route designed for an ORDINARY
+	// requester: "history entries visible to the authenticated requester", no
+	// account code in the path and no manager permission. Every entry carries a
+	// required customerKey. It is tried first because the other two cannot
+	// bootstrap themselves on this kind of account — /assets-api/assets answers
+	// 400 "Invalid request parameter" without a customerKey it is supposed to
+	// discover, and /customers-api/customers wants MSSP Partner Manager.
+	axurHistoryPath = "/vendor-monitor/history/customer-vendor"
 
 	// axurPageSize is the documented maximum ("It supports sizes up to 20").
 	axurPageSize = 20
@@ -317,6 +325,10 @@ func (s *Service) axurDiscoverCustomer(client *rest.Client) (string, map[string]
 		params map[string]string
 		walk   bool
 	}{
+		// No parameters at all. Every one this endpoint takes is optional, and
+		// each one sent is another chance at the "Invalid request parameter"
+		// that made the assets probe useless here.
+		{axurHistoryPath, "customerKey", nil, false},
 		// Assets pages, so a multi-account credential cannot be mistaken for a
 		// single-account one by a first page that happens to be uniform.
 		// perPage 20, not 100. Axur answered 100 with a 400 and "Invalid request
@@ -451,8 +463,16 @@ func collectField(v any, field string) []string {
 			out = append(out, collectField(row, field)...)
 		}
 	case map[string]any:
+		// Two shapes, because Axur uses both. The asset and customer endpoints
+		// carry the code as a bare string; the vendor-monitor history endpoint
+		// wraps it as {"customerKey":{"value":"TAGG"}}. Reading only the first
+		// shape made the history probe look like a response with no code in it.
 		if s := getStr(t[field]); s != "" {
 			out = append(out, s)
+		} else if wrapped, ok := t[field].(map[string]any); ok {
+			if s := getStr(wrapped["value"]); s != "" {
+				out = append(out, s)
+			}
 		}
 		for _, envelope := range []string{"results", "items", "data", "assets", "customers"} {
 			if nested, ok := t[envelope]; ok {
