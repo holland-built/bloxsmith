@@ -38,7 +38,10 @@
   - 'button "About: Subnet Heatmap"': "About: ⓘ"
   - button "Hide Subnet Heatmap": Hide ✕
   - button "Move Subnet Heatmap": Move ⠿
-  - img
+  - group "Subnet utilisation heatmap. Arrow keys move between subnets, Enter opens one.":
+    - button /[\d.]+ — \d+% used/
+    - button /[\d.]+ — \d+% used/
+    - button /[\d.]+ — \d+% used/
   - text: /ok >\d+% >\d+%/
   - heading "Host Status" [level=2]
   - 'button "About: Host Status"': "About: ⓘ"
