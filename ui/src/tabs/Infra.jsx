@@ -64,10 +64,10 @@ export default function Infra() {
   return (
     <div className="w-full px-6 py-5">
       <div className="flex items-center gap-2 mb-3">
-        <h1 className="text-title font-semibold tracking-tight">Infrastructure</h1>
+        <h1 className="text-copy font-semibold tracking-tight">Infrastructure</h1>
         {maintOk && (
           <span
-            className="text-caption font-medium px-2 py-0.5 rounded-full"
+            className="text-note font-medium px-2 py-0.5 rounded-full"
             style={{
               background: maintEnabled ? theme.pillWarnBg : theme.pillOkBg,
               color: maintEnabled ? theme.pillWarnFg : theme.pillOkFg,
@@ -203,20 +203,20 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
               <StatusDonut data={pieData} unit="hosts" />
             </Suspense>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-title font-semibold">{total.toLocaleString()}</span>
-              <span className="text-dim text-caption">{totalHosts == null ? 'hosts (loaded)' : 'hosts'}</span>
+              <span className="text-copy font-semibold">{total.toLocaleString()}</span>
+              <span className="text-dim text-note">{totalHosts == null ? 'hosts (loaded)' : 'hosts'}</span>
             </div>
           </div>
           <div className="flex-1 flex flex-col gap-2">
             {pieData.map((d) => (
-              <div key={d.name} className="flex items-center gap-1.5 text-dense">
+              <div key={d.name} className="flex items-center gap-1.5 text-note">
                 <i className="w-2 h-2 rounded-mark inline-block" style={{ background: d.color }} />
                 <span className="text-muted flex-1">{d.name}</span>
                 <b>{((d.value / loaded) * 100).toFixed(0)}%</b>
               </div>
             ))}
             {partial && (
-              <div className="text-dim text-[10px] leading-tight">
+              <div className="text-dim text-note leading-tight">
                 breakdown of {loaded.toLocaleString()} loaded of {total.toLocaleString()} total
               </div>
             )}
@@ -251,7 +251,7 @@ function DiscoveryStatus({ feed, panelId }) {
       title="Asset Discovery"
       note={ok ? 'CSP' : undefined}
       right={ok && !data.breakdown_available && data.note ? (
-        <span className="text-caption text-dim">{data.note}</span>
+        <span className="text-note text-dim">{data.note}</span>
       ) : undefined}
     >
       {pending ? (
@@ -262,8 +262,8 @@ function DiscoveryStatus({ feed, panelId }) {
         <Empty>no discovery data for this tenant</Empty>
       ) : (
         <div>
-          <span className="text-title font-semibold" style={{ color: COLORS.accent }}>{data.total.toLocaleString()}</span>
-          <span className="text-dim text-caption ml-1.5">assets with discovery status tracked</span>
+          <span className="text-copy font-semibold" style={{ color: COLORS.accent }}>{data.total.toLocaleString()}</span>
+          <span className="text-dim text-note ml-1.5">assets with discovery status tracked</span>
         </div>
       )}
     </Card>
@@ -304,7 +304,7 @@ function renderStatus(v) {
   if (statusBucket(v) === 'unknown') {
     return (
       <span
-        className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium italic"
+        className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium italic"
         style={{ background: 'var(--pill-neutral-bg)', color: 'var(--pill-neutral-fg)' }}
         title="upstream reported no status for this host"
       >
@@ -314,7 +314,7 @@ function renderStatus(v) {
   }
   const st = statusBadgeColor(v) || { bg: 'var(--pill-neutral-bg)', fg: 'var(--pill-neutral-fg)' }
   return (
-    <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium" style={{ background: st.bg, color: st.fg }}>
+    <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: st.bg, color: st.fg }}>
       {v || '—'}
     </span>
   )
@@ -397,7 +397,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
               // Host Inventory Clear the offline status filter". The visible
               // text is the name instead, and `title` carries the verb.
               title="Clear this filter"
-              className={`text-caption font-medium px-2 py-0.5 rounded-full cursor-pointer outline-none ${FOCUS_RING}`}
+              className={`text-note font-medium px-2 py-0.5 rounded-full cursor-pointer outline-none ${FOCUS_RING}`}
               style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
             >
               status: {statusFilter} <span aria-hidden="true">✕</span>
@@ -407,7 +407,7 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
       }
       right={
         <div className="flex items-center gap-2">
-          <span className="text-caption text-muted">{countLabel}</span>
+          <span className="text-note text-muted">{countLabel}</span>
           <input
             placeholder="Search name, IP…"
             value={filter}
@@ -497,10 +497,10 @@ function ServiceHealth({ panelId, feed }) {
         <div className="flex flex-col gap-2 mt-1">
           {rows.map((b) => (
             <div key={b.name} className="flex items-center justify-between gap-2 py-1.5">
-              <span className="text-body font-medium text-txt">{b.name}</span>
+              <span className="text-copy font-medium text-txt">{b.name}</span>
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-caption text-muted truncate" title={b.reason || undefined}>{b.meta}</span>
-                <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium whitespace-nowrap" style={pill(b.status)}>
+                <span className="text-note text-muted truncate" title={b.reason || undefined}>{b.meta}</span>
+                <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium whitespace-nowrap" style={pill(b.status)}>
                   {b.statusLabel}
                 </span>
               </div>

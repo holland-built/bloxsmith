@@ -144,15 +144,15 @@ export function BrandEdit({ onClose, onSaved }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">
-          <h2 className="text-body font-semibold">Logo &amp; company name</h2>
+          <h2 className="text-copy font-semibold">Logo &amp; company name</h2>
           <span className="flex-1" />
-          <button className="text-muted text-body" onClick={onClose} aria-label="Close">✕</button>
+          <button className="text-muted text-copy" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        <label className="block text-caption text-dim mb-1">Company domain</label>
+        <label className="block text-note text-dim mb-1">Company domain</label>
         <input className={inCls} value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="infoblox.com" autoFocus />
 
-        <label className="block text-caption text-dim mt-3 mb-1">Display name</label>
+        <label className="block text-note text-dim mt-3 mb-1">Display name</label>
         <input
           className={inCls}
           value={name}
@@ -168,27 +168,27 @@ export function BrandEdit({ onClose, onSaved }) {
             className="w-7 h-7 rounded-mark object-contain bg-field p-0.5"
             onSrcChange={setCurrentSrc}
           />
-          <span className="text-caption text-dim">{dm || 'preview'}</span>
+          <span className="text-note text-dim">{dm || 'preview'}</span>
           <span className="flex-1" />
           <button
-            className="px-2 py-1 rounded-control border border-border text-caption text-muted hover:text-txt hover:border-border-hover"
+            className="px-2 py-1 rounded-control border border-border text-note text-muted hover:text-txt hover:border-border-hover"
             onClick={() => downloadLogo(currentSrc || IB_LOGO)}
           >
             Download
           </button>
         </div>
 
-        {err && <div className="mt-2 text-dense text-crit">{err}</div>}
+        {err && <div className="mt-2 text-note text-crit">{err}</div>}
 
         <div className="flex gap-2 mt-4">
           <button
-            className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-body disabled:opacity-50"
+            className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50"
             onClick={save}
             disabled={busy}
           >
             {busy ? 'Saving…' : 'Save brand'}
           </button>
-          <button className="px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt" onClick={onClose}>
+          <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={onClose}>
             Cancel
           </button>
         </div>

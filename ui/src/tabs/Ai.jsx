@@ -20,7 +20,7 @@ function Message({ item }) {
   if (item.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] px-3 py-2 rounded-control bg-line-2 text-txt text-[13px]">{item.text}</div>
+        <div className="max-w-[80%] px-3 py-2 rounded-control bg-line-2 text-txt text-copy">{item.text}</div>
       </div>
     )
   }
@@ -28,7 +28,7 @@ function Message({ item }) {
     return (
       <div className="flex justify-start">
         <div
-          className="max-w-[85%] px-3 py-2 rounded-control border text-[13px]"
+          className="max-w-[85%] px-3 py-2 rounded-control border text-copy"
           style={{ borderColor: 'var(--color-crit)', background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}
         >
           {item.error}
@@ -38,17 +38,17 @@ function Message({ item }) {
   }
   return (
     <div className="flex justify-start">
-      <div className="max-w-[85%] px-3 py-2 rounded-control border border-border bg-field text-field-txt text-[13px] whitespace-pre-wrap">
+      <div className="max-w-[85%] px-3 py-2 rounded-control border border-border bg-field text-field-txt text-copy whitespace-pre-wrap">
         {item.text}
         {!!(item.suggestions && item.suggestions.length) && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {item.suggestions.map((sg, i) => (
-              <span key={i} className="text-caption px-2 py-0.5 rounded-full border border-border text-muted">{sg}</span>
+              <span key={i} className="text-note px-2 py-0.5 rounded-full border border-border text-muted">{sg}</span>
             ))}
           </div>
         )}
         {!!(item.trace && item.trace.length) && (
-          <div className="mt-2 pt-2 border-t border-border font-mono text-caption text-muted space-y-0.5">
+          <div className="mt-2 pt-2 border-t border-border font-mono text-note text-muted space-y-0.5">
             {item.trace.map((t, i) => (
               <div key={i}>
                 <span>{t.tool}</span> <span className="opacity-70">{JSON.stringify(t.args)}</span>
@@ -86,7 +86,7 @@ function BudgetLine({ budget }) {
   return (
     <div
       role={near ? 'status' : undefined}
-      className={`text-caption mt-1.5 ${near ? 'font-medium' : 'text-dim'}`}
+      className={`text-note mt-1.5 ${near ? 'font-medium' : 'text-dim'}`}
       style={near ? { color: 'var(--color-warn)' } : undefined}
     >
       {hasLimit
@@ -169,7 +169,7 @@ function ChatCard({ panelId }) {
         {SUGGESTIONS.map((sg, i) => (
           <button
             key={i}
-            className="text-caption px-2 py-1 rounded-full border border-border text-muted hover:text-field-txt hover:border-border-hover"
+            className="text-note px-2 py-1 rounded-full border border-border text-muted hover:text-field-txt hover:border-border-hover"
             onClick={() => ask(sg)}
           >
             {sg}
@@ -179,7 +179,7 @@ function ChatCard({ panelId }) {
       <div className="flex gap-2">
         <input
           ref={inRef}
-          className={`${inputCls} flex-1 text-[13px]`}
+          className={`${inputCls} flex-1 text-copy`}
           placeholder="Ask about your network…"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -187,7 +187,7 @@ function ChatCard({ panelId }) {
           disabled={busy}
         />
         <button
-          className="px-3 py-1.5 rounded-control text-[13px] font-medium text-on-accent disabled:opacity-40"
+          className="px-3 py-1.5 rounded-control text-copy font-medium text-on-accent disabled:opacity-40"
           style={{ background: COLORS.accent }}
           onClick={() => submit()}
           disabled={busy || !input.trim()}
@@ -210,12 +210,12 @@ function EntitiesTable({ entities, availability, reason }) {
   }
   if (entities == null) return null
   if (Array.isArray(entities)) {
-    if (!entities.length) return <div className="text-body text-muted">No matches</div>
+    if (!entities.length) return <div className="text-copy text-muted">No matches</div>
     if (typeof entities[0] === 'object' && entities[0]) {
       const cols = Object.keys(entities[0])
       return (
         <div className="overflow-x-hidden overflow-y-auto max-h-[280px]">
-          <table className="w-full text-[12px] font-mono">
+          <table className="w-full text-note font-mono">
             <thead>
               <tr className="text-muted text-left">
                 {cols.map((c) => (
@@ -245,7 +245,7 @@ function EntitiesTable({ entities, availability, reason }) {
     }
   }
   return (
-    <pre className="font-mono text-caption text-muted whitespace-pre-wrap p-2 rounded-control border border-border bg-field max-h-[300px] overflow-auto">
+    <pre className="font-mono text-note text-muted whitespace-pre-wrap p-2 rounded-control border border-border bg-field max-h-[300px] overflow-auto">
       {JSON.stringify(entities, null, 2)}
     </pre>
   )
@@ -280,19 +280,19 @@ function BlockDomainButton({ domain }) {
     }
   }
 
-  if (state === 'busy') return <span className="text-caption text-muted">…</span>
+  if (state === 'busy') return <span className="text-note text-muted">…</span>
   if (state === 'blocked') {
     return (
       <div className="flex items-center gap-1.5 mt-2">
-        <span className="text-caption" style={{ color: COLORS.ok }}>blocked ✓</span>
-        <button onClick={() => run('unblock')} className="px-2 py-1 rounded-control text-caption border border-border text-muted">Unblock</button>
+        <span className="text-note" style={{ color: COLORS.ok }}>blocked ✓</span>
+        <button onClick={() => run('unblock')} className="px-2 py-1 rounded-control text-note border border-border text-muted">Unblock</button>
       </div>
     )
   }
-  if (state === 'tokenRequired') return <div className="mt-2 text-caption" style={{ color: COLORS.warn }}>token required — set in ⋯ Settings</div>
-  if (state === 'error') return <div className="mt-2 text-caption" style={{ color: COLORS.crit }}>{msg}</div>
+  if (state === 'tokenRequired') return <div className="mt-2 text-note" style={{ color: COLORS.warn }}>token required — set in ⋯ Settings</div>
+  if (state === 'error') return <div className="mt-2 text-note" style={{ color: COLORS.crit }}>{msg}</div>
   return (
-    <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-control text-caption border border-border text-muted hover:text-field-txt">Block domain</button>
+    <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-control text-note border border-border text-muted hover:text-field-txt">Block domain</button>
   )
 }
 
@@ -338,14 +338,14 @@ function LookupCard({ panelId }) {
     <Card panelId={panelId} title="Threat lookup" span={6}>
       <div className="flex gap-2 mb-3">
         <input
-          className={`${inputCls} flex-1 text-[13px]`}
+          className={`${inputCls} flex-1 text-copy`}
           placeholder="domain, IP, or host…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') lookup() }}
         />
         <button
-          className="px-3 py-1.5 rounded-control text-[13px] font-medium text-on-accent disabled:opacity-40"
+          className="px-3 py-1.5 rounded-control text-copy font-medium text-on-accent disabled:opacity-40"
           style={{ background: COLORS.accent }}
           onClick={lookup}
           disabled={busy || !q.trim()}
@@ -353,7 +353,7 @@ function LookupCard({ panelId }) {
           {busy ? 'Looking up…' : 'Lookup'}
         </button>
       </div>
-      {err && <div className="text-[13px] mb-2" style={{ color: COLORS.sevHigh }}>{err}</div>}
+      {err && <div className="text-copy mb-2" style={{ color: COLORS.sevHigh }}>{err}</div>}
       {!err && !res && !dossier && !busy && <Empty>Look up a domain, IP, or host</Empty>}
       {res && <EntitiesTable entities={res.entities} availability={res.availability} reason={res.reason} />}
       {(res || dossier) && <BlockDomainButton domain={queryUsed} />}
@@ -364,7 +364,7 @@ function LookupCard({ panelId }) {
       {queryUsed && (
         <a
           href={`#dossier?q=${encodeURIComponent(queryUsed)}`}
-          className="inline-block mt-2 text-[12px] no-underline text-muted hover:text-field-txt"
+          className="inline-block mt-2 text-note no-underline text-muted hover:text-field-txt"
         >
           open full dossier →
         </a>
@@ -406,7 +406,7 @@ function EgressNotice() {
 
   return (
     <div
-      className="text-caption rounded-control border px-3 py-2 mb-3"
+      className="text-note rounded-control border px-3 py-2 mb-3"
       style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}
     >
       {unknown
@@ -423,7 +423,7 @@ function EgressNotice() {
 export default function Ai() {
   return (
     <div className="max-w-[860px] mx-auto p-5">
-      <h1 className="text-title font-semibold tracking-tight mb-1">AI Assistant</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-1">AI Assistant</h1>
       <TabIntro anchor="ai">
         Ask questions about your own network in plain language — answers show the tools used, so you can check
         where a number came from. Threat lookup takes a domain, IP, or host and returns intel plus a dossier.

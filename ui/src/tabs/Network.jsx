@@ -65,7 +65,7 @@ export default function Network() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-title font-semibold tracking-tight mb-3">Network</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-3">Network</h1>
       {/* Every direct child of a grid with a layoutKey carries its own panelId,
           because CardGrid reads the saved order off `props.panelId` of its own
           children while it reads the live order off the DOM. A wrapper whose id
@@ -130,7 +130,7 @@ function UtilBands({ panelId, subnets, totals, subnetsStatus }) {
       : `${subnets.length.toLocaleString()} loaded (estate total unavailable)${unmeasuredLabel}`
 
   return (
-    <Card panelId={panelId} span={3} title="Utilization Distribution" right={<span className="text-caption text-muted">{scopeLabel}</span>}>
+    <Card panelId={panelId} span={3} title="Utilization Distribution" right={<span className="text-note text-muted">{scopeLabel}</span>}>
       {!hasData ? (
         subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnets feed unavailable" />
@@ -174,7 +174,7 @@ function IpamSpaces({ panelId, ipam }) {
   const status = ipam.data?.status
 
   return (
-    <Card panelId={panelId} span={3} title="IPAM Spaces — Top Used" right={<span className="text-caption text-muted">addresses used{capLabel ? ` · ${capLabel}` : ''}</span>}>
+    <Card panelId={panelId} span={3} title="IPAM Spaces — Top Used" right={<span className="text-note text-muted">addresses used{capLabel ? ` · ${capLabel}` : ''}</span>}>
       {ipam.loading ? (
         <Skeleton h={220} />
       ) : ipam.error || status === 'error' ? (
@@ -186,7 +186,7 @@ function IpamSpaces({ panelId, ipam }) {
           {rows.map((r, i) => {
             const status = utilStatus(r.pct)
             return (
-              <div key={`${r.id ?? r.label ?? ''}|${i}`} className="flex items-center gap-2 text-dense">
+              <div key={`${r.id ?? r.label ?? ''}|${i}`} className="flex items-center gap-2 text-note">
                 <span className="w-[110px] truncate text-muted" title={r.label}>{r.label || r.id || '—'}</span>
                 <div className="h-[6px] rounded-full bg-line overflow-hidden flex-1">
                   <div className="h-full" style={{ width: `${Math.min(100, r.pct)}%`, background: status.color }} />
@@ -267,7 +267,7 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
       title="DHCP Leases"
       right={
         <div className="flex items-center gap-2">
-          <span className="text-caption text-muted">{filtered.length.toLocaleString()} of {rows.length.toLocaleString()}</span>
+          <span className="text-note text-muted">{filtered.length.toLocaleString()} of {rows.length.toLocaleString()}</span>
           <input
             placeholder="Search address, hostname, MAC…"
             value={q}
@@ -432,11 +432,11 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
         // both false) — a green badge on a subnet nobody measured. Unknown
         // gets its own neutral badge instead.
         if (r.util === null) {
-          return <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium bg-line text-muted">Unknown</span>
+          return <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium bg-line text-muted">Unknown</span>
         }
         const status = utilStatus(r.util)
         return (
-          <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium" style={{ background: status.bg, color: status.fg }}>
+          <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: status.bg, color: status.fg }}>
             {status.label}
           </span>
         )
@@ -462,7 +462,7 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
             <button
               type="button"
               aria-label="Clear filter"
-              className="ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-normal bg-field border border-border text-muted cursor-pointer"
+              className="ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-note font-normal bg-field border border-border text-muted cursor-pointer"
               onClick={() => setHashParams('network', {})}
               title="clear filter"
             >
