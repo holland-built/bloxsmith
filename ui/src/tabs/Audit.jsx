@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { chainRows, eventTally, readShortfall, truncationNote } from '../lib/auditChain.js'
 import { sampleCountLabel } from '../lib/sampleCount.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 
 // A refusal and an error are the two event kinds an operator scans for, so they
@@ -438,12 +438,12 @@ function AuditTable({ entries, chain, panelId }) {
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-[150px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={`${FIELD_CLS} w-[150px]`}
           />
           <select
             value={event}
             onChange={(e) => setEvent(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={FIELD_CLS}
           >
             <option value="">All events</option>
             {kinds.map((k) => (
@@ -582,7 +582,7 @@ function CspAuditTable({ panelId }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && runSearch(q)}
-            className="w-[220px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={`${FIELD_CLS} w-[220px]`}
           />
           <button onClick={() => runSearch(q)} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
             {loading ? 'Searching…' : 'Search'}

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { useHasArranged } from '../lib/arrangedOnce.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton, Sparkline, TabIntro, utilStatus } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, Sparkline, TabIntro, useChartTheme, utilStatus } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtValue } from '../lib/chartFormat.js'
 import { cmpMaybe, DASH, freeOf, num } from '../lib/measured.js'
@@ -454,6 +454,24 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
   // pointer is inside the grid so the chip can follow it.
   const [tip, setTip] = useState(null)
   const gridRef = useRef(null)
+  // ROVING TABINDEX, AND WHY NOT 288 TAB STOPS.
+  //
+  // Every square was a pointer-only control: onClick with no tabIndex, no role
+  // and no key handler, so the drill-down to a subnet existed for a mouse and
+  // for nothing else. Giving each square tabIndex={0} would fix that and put up
+  // to 288 stops between the heatmap and the next panel, which is its own
+  // defect. One stop enters the grid, arrows move inside it, Enter or Space
+  // drills in — the pattern the squares already imply by being a grid.
+  //
+  // THE FOCUS IS HELD BY SUBNET, NOT BY POSITION. `cells` is re-sorted by
+  // utilisation on every 30s poll, so a positional index means the ring and the
+  // tab stop can land on a different subnet than the one the operator was
+  // reading — silently, while they read it. The square that was 4th is simply
+  // not the same thing a moment later. Keying the refs the same way keeps the
+  // rect mounted across a reorder, so DOM focus survives it too.
+  const [focusKey, setFocusKey] = useState(null)
+  const [gridFocused, setGridFocused] = useState(false)
+  const cellRefs = useRef(new Map())
 
   // Every square calls this on enter AND on move, because a finger dragged
   // across the grid never fires `enter` again after the first square.
@@ -483,6 +501,32 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
   const gap = 0.6
   const cw = 100 / cols
   const ch = 100 / rows
+  const drill = (addr) => { if (addr) location.hash = 'network?subnet=' + encodeURIComponent(addr) }
+
+  // The readout follows the pointer for a mouse and the cell for a keyboard, so
+  // arrowing across the grid says the same thing hovering does.
+  const showTipAt = useCallback((i, addr, util) => {
+    const box = gridRef.current?.getBoundingClientRect()
+    if (!box) return
+    const r = Math.floor(i / cols)
+    const c = i % cols
+    setTip({
+      addr, util, w: box.width, h: box.height,
+      x: (c + 0.5) / cols * box.width,
+      y: (r + 0.5) / rows * box.height,
+    })
+  }, [cols, rows])
+
+  // A subnet's stable identity. `addr` alone is not enough: two rows can carry
+  // the same address in different IP spaces, and a duplicate React key silently
+  // drops one of them.
+  const cellKey = (s) => s.id ?? `${s.addr ?? s.cidr ?? ''}`
+  // Falls back to the first square whenever the remembered subnet has dropped
+  // out of the set. Without a fallback no square carries tabIndex 0 and the
+  // grid leaves the tab order altogether — the exact defect this change fixes.
+  const foundIdx = cells.findIndex((s) => cellKey(s) === focusKey)
+  const rovingIdx = foundIdx >= 0 ? foundIdx : 0
+
   const estateTotal = typeof totals.subnets === 'number' ? totals.subnets.toLocaleString() : null
   const heatmapLabel = cells.length < measured.length
     ? `worst ${cells.length} of ${measured.length.toLocaleString()} loaded${estateTotal ? ` (${estateTotal} in estate)` : ''}`
@@ -517,7 +561,15 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
                 delivering pointermove to these squares instead of being taken
                 over as a page scroll — the same reason the layout drag handle
                 carries `touch-none`. A tap is unaffected and still navigates. */}
-            <svg width="100%" height="110" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ touchAction: 'none' }}>
+            <svg
+              width="100%" height="110" viewBox="0 0 100 100" preserveAspectRatio="none"
+              style={{ touchAction: 'none' }}
+              role="group"
+              aria-label="Subnet utilisation heatmap. Arrow keys move between subnets, Enter opens one."
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) { setGridFocused(false); hideTip() }
+              }}
+            >
               {cells.map((s, i) => {
                 const util = num(s.util) // never null: `cells` is the measured set
                 const addr = s.addr || s.cidr
@@ -527,20 +579,60 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
                 const opacity = Math.max(0.15, Math.min(1, util / 100))
                 return (
                   <rect
-                    key={`${s.addr ?? s.cidr ?? ''}|${i}`}
+                    key={cellKey(s)}
+                    ref={(el) => {
+                      const k = cellKey(s)
+                      if (el) cellRefs.current.set(k, el)
+                      else cellRefs.current.delete(k)
+                    }}
                     x={c * cw + gap / 2}
                     y={r * ch + gap / 2}
                     width={cw - gap}
                     height={ch - gap}
                     rx={0.8}
                     fill={color}
-                    opacity={opacity}
+                    // fillOpacity, NOT opacity. `opacity` applies to the whole
+                    // element, stroke included, so the focus ring on a 10%-used
+                    // subnet was painted at 15% — the faintest ring on the least
+                    // alarming square, which is backwards. With no stroke at
+                    // rest the two properties render identically, so nothing
+                    // about the unfocused map changes.
+                    fillOpacity={opacity}
+                    role="button"
+                    tabIndex={i === rovingIdx ? 0 : -1}
                     aria-label={`${addr} — ${fmtValue(util)}% used`}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', outline: 'none' }}
+                    // The focus ring is drawn rather than left to the browser: a
+                    // UA outline on an SVG child is painted in user units and
+                    // clipped by the viewBox, so on the edge squares half of it
+                    // is not there. A stroke is inside the square by
+                    // construction. It is only painted while the grid holds
+                    // focus, so a mouse never sees it.
+                    stroke={gridFocused && i === rovingIdx ? 'var(--color-txt)' : 'none'}
+                    // 0.6 user units, which is exactly `gap`. An SVG stroke is
+                    // centred on the edge, so half of it (0.3) falls outside the
+                    // rect — and every rect is inset by gap/2 = 0.3 from its
+                    // cell boundary and from the viewBox edge. So the ring lands
+                    // in the gutter on interior squares and stops precisely at
+                    // the viewBox on perimeter ones. At 0.9 it was clipped.
+                    strokeWidth={gridFocused && i === rovingIdx ? 0.6 : 0}
+                    onFocus={() => { setGridFocused(true); setFocusKey(cellKey(s)); showTipAt(i, addr, util) }}
                     onPointerEnter={(e) => showTip(e, addr, util)}
                     onPointerMove={(e) => showTip(e, addr, util)}
-                    onClick={() => {
-                      if (addr) location.hash = 'network?subnet=' + encodeURIComponent(addr)
+                    onClick={() => drill(addr)}
+                    onKeyDown={(e) => {
+                      const moveTo = (n) => {
+                        const next = cells[Math.min(cells.length - 1, Math.max(0, n))]
+                        if (!next) return
+                        e.preventDefault()
+                        setFocusKey(cellKey(next))
+                        cellRefs.current.get(cellKey(next))?.focus()
+                      }
+                      const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key]
+                      if (step !== undefined) return moveTo(i + step)
+                      if (e.key === 'Home') return moveTo(0)
+                      if (e.key === 'End') return moveTo(cells.length - 1)
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); drill(addr) }
                     }}
                   />
                 )
@@ -812,12 +904,12 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId }) {
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={`${FIELD_CLS} w-[170px]`}
           />
           <select
             value={site}
             onChange={(e) => setSite(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={FIELD_CLS}
           >
             <option value="">All sites</option>
             {sites.map((s) => (

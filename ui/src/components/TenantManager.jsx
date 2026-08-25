@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { FeedUnavailable } from './ui.jsx'
+import { FeedUnavailable, FIELD_CLS } from './ui.jsx'
 import ThemeSwitch from './ThemeSwitch.jsx'
 import DensitySwitch from './DensitySwitch.jsx'
 import { UpdateCheck } from './UpdateButton.jsx'
@@ -10,7 +10,7 @@ const vpost = (url, body) =>
     .catch(() => ({ ok: false, data: { error: 'network error' } }))
 
 const inCls =
-  'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none focus:border-accent'
+  `${FIELD_CLS} w-full`
 const rowBtn = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm text-field-txt hover:bg-line'
 const miniBtn = 'px-2 py-1 rounded-lg border border-border text-[11px] text-muted hover:text-txt hover:border-border-hover'
 

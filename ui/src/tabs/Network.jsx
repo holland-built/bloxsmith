@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, hiddenPanelGroup, Skeleton, utilStatus } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, hiddenPanelGroup, Skeleton, useChartTheme, utilStatus } from '../components/ui.jsx'
 import { DataTable, sortRows } from '../components/DataTable.jsx'
 import { SERVICE_GROUPS, useOwnedServices } from '../lib/services.js'
 import { useHashParams, setHashParams } from '../lib/hash.js'
@@ -272,12 +272,12 @@ function DhcpLeases({ panelId, dhcp, innerRef }) {
             placeholder="Search address, hostname, MAC…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="w-[220px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={`${FIELD_CLS} w-[220px]`}
           />
           <select
             value={state}
             onChange={(e) => setState(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={FIELD_CLS}
           >
             <option value="">All states</option>
             {states.map((s) => (
@@ -478,12 +478,12 @@ function ExhaustionTable({ panelId, subnets, hp, subnetsStatus }) {
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={`${FIELD_CLS} w-[170px]`}
           />
           <select
             value={site}
             onChange={(e) => setSite(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={FIELD_CLS}
           >
             <option value="">All sites</option>
             {sites.map((s) => (
