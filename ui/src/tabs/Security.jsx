@@ -145,7 +145,7 @@ function SeverityHero({ panelId, hub, events }) {
           <div className="flex gap-4 mb-3">
             {SEV_ORDER.map((s) => (
               <div key={s} className="flex items-center gap-1.5 text-xs">
-                <i className="w-2 h-2 rounded-sm inline-block" style={{ background: SEV_COLOR[s] }} />
+                <i className="w-2 h-2 rounded-mark inline-block" style={{ background: SEV_COLOR[s] }} />
                 <span className="text-muted capitalize">{s}</span>
                 <b>{counts[s] || 0}</b>
               </div>
@@ -288,7 +288,7 @@ function BlockCell({ domain }) {
     return (
       <div className="flex items-center gap-1.5">
         <span className="text-[11px]" style={{ color: COLORS.ok }}>blocked ✓</span>
-        <button onClick={() => run('unblock')} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted">Unblock</button>
+        <button onClick={() => run('unblock')} className="px-1.5 py-0.5 rounded-control text-[10.5px] border border-border text-muted">Unblock</button>
       </div>
     )
   }
@@ -299,7 +299,7 @@ function BlockCell({ domain }) {
         <span className="text-[11px]" style={{ color: COLORS.warn }} title={msg}>
           unconfirmed — {msg}
         </span>
-        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted">Re-check</button>
+        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded-control text-[10.5px] border border-border text-muted">Re-check</button>
       </div>
     )
   }
@@ -307,12 +307,12 @@ function BlockCell({ domain }) {
     return (
       <div className="flex items-center gap-1.5">
         <span className="text-[11px]" style={{ color: COLORS.crit }} title={msg}>{msg}</span>
-        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted">Retry</button>
+        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded-control text-[10.5px] border border-border text-muted">Retry</button>
       </div>
     )
   }
   return (
-    <button onClick={() => run('block')} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted hover:text-field-txt">Block</button>
+    <button onClick={() => run('block')} className="px-1.5 py-0.5 rounded-control text-[10.5px] border border-border text-muted hover:text-field-txt">Block</button>
   )
 }
 
@@ -406,7 +406,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
             <button
               key={s}
               onClick={() => setSevFilter(s)}
-              className="px-2 py-1 rounded-md text-[11px] capitalize border"
+              className="px-2 py-1 rounded-control text-[11px] capitalize border"
               style={{
                 borderColor: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-border)',
                 color: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-muted)',
@@ -994,7 +994,7 @@ function CtemAssetsPanel({ panelId, ctemAssets }) {
               </div>
               <div className="flex flex-wrap gap-1">
                 {g.sample.map((s, i) => (
-                  <span key={i} className="px-1.5 py-0.5 rounded text-[10.5px] border border-border text-muted">{s}</span>
+                  <span key={i} className="px-1.5 py-0.5 rounded-mark text-[10.5px] border border-border text-muted">{s}</span>
                 ))}
                 {g.count > g.sample.length ? (
                   <span className="px-1.5 py-0.5 text-[10.5px] text-dim">+{(g.count - g.sample.length).toLocaleString()} more</span>

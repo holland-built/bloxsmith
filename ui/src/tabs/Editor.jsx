@@ -240,7 +240,7 @@ export default function Editor() {
           <button
             key={t.key}
             onClick={() => { setType(t.key); setEditId('') }}
-            className="px-2.5 py-1.5 rounded-lg border text-sm"
+            className="px-2.5 py-1.5 rounded-control border text-sm"
             style={type === t.key
               ? { borderColor: COLORS.accent, background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)' }
               : { borderColor: 'var(--color-border)', background: 'var(--color-field)', color: 'var(--color-field-txt)' }}
@@ -288,9 +288,9 @@ export default function Editor() {
               <button
                 onClick={del}
                 disabled={status === 'busy'}
-                className="mt-3 px-3 py-1.5 rounded-lg text-sm border ml-auto disabled:opacity-50"
+                className="mt-3 px-3 py-1.5 rounded-control text-sm border ml-auto disabled:opacity-50"
                 style={delArmed
-                  ? { borderColor: COLORS.crit, color: '#fff', background: COLORS.crit }
+                  ? { borderColor: COLORS.crit, color: COLORS.onCrit, background: COLORS.crit }
                   : { borderColor: COLORS.crit, color: COLORS.crit, background: 'transparent' }}
               >
                 {delArmed ? 'Click again to permanently delete' : `Delete ${spec.label}`}

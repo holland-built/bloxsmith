@@ -75,7 +75,7 @@ export default function Palette({ tabs, onPick }) {
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="w-[420px] rounded-xl border border-border bg-card shadow-2xl overflow-hidden"
+        className="w-[420px] rounded-surface border border-border bg-card shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <input

@@ -11,8 +11,8 @@ const vpost = (url, body) =>
 
 const inCls =
   `${FIELD_CLS} w-full`
-const rowBtn = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm text-field-txt hover:bg-line'
-const miniBtn = 'px-2 py-1 rounded-lg border border-border text-[11px] text-muted hover:text-txt hover:border-border-hover'
+const rowBtn = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-control text-left text-sm text-field-txt hover:bg-line'
+const miniBtn = 'px-2 py-1 rounded-control border border-border text-[11px] text-muted hover:text-txt hover:border-border-hover'
 
 // Everything that can hold focus inside the sheet, in document order. Read
 // fresh on every Tab because this sheet swaps whole sections in and out (add a
@@ -339,7 +339,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
         aria-modal="true"
         aria-labelledby="tm-title"
         tabIndex={-1}
-        className="w-[420px] max-w-full max-h-[80vh] overflow-y-auto bg-card border border-card-border rounded-card p-5 outline-none"
+        className="w-[420px] max-w-full max-h-[80vh] overflow-y-auto bg-card border border-card-border rounded-surface p-5 outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">
@@ -393,11 +393,11 @@ export default function TenantManager({ onClose, onOpenHelp }) {
             )}
             {add.err && <div className="mt-2 text-xs text-crit">{add.err}</div>}
             <div className="flex gap-2 mt-3">
-              <button className="flex-1 px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm disabled:opacity-50" onClick={submitAdd} disabled={add.busy || !add.key}>
+              <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-sm disabled:opacity-50" onClick={submitAdd} disabled={add.busy || !add.key}>
                 {add.busy ? 'Adding…' : 'Add'}
               </button>
-              <button className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt" onClick={testAddKey} disabled={!add.key}>Test</button>
-              <button className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt" onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
+              <button className="px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt" onClick={testAddKey} disabled={!add.key}>Test</button>
+              <button className="px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt" onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
             </div>
           </div>
         ) : edit ? (
@@ -428,11 +428,11 @@ export default function TenantManager({ onClose, onOpenHelp }) {
             )}
             {edit.err && <div className="mt-2 text-xs text-crit">{edit.err}</div>}
             <div className="flex gap-2 mt-3">
-              <button className="flex-1 px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm disabled:opacity-50" onClick={submitEdit} disabled={edit.busy || !edit.key}>
+              <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-sm disabled:opacity-50" onClick={submitEdit} disabled={edit.busy || !edit.key}>
                 {edit.busy ? 'Replacing…' : 'Replace key'}
               </button>
-              <button className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt" onClick={testEditKey} disabled={!edit.key}>Test</button>
-              <button className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt" onClick={() => setEdit(null)}>Cancel</button>
+              <button className="px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt" onClick={testEditKey} disabled={!edit.key}>Test</button>
+              <button className="px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt" onClick={() => setEdit(null)}>Cancel</button>
             </div>
           </div>
         ) : (
@@ -447,10 +447,10 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               {tenants.map((t) => (
                 <div key={t.id} className="flex items-center gap-1">
                   {confirmRm === t.id ? (
-                    <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-crit/10 border border-crit/40">
+                    <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
                       <span className="flex-1 text-[11px] text-crit">Remove {t.label}?</span>
-                      <button className="px-2 py-0.5 rounded border border-crit text-crit text-[11px]" aria-label="Confirm remove" title="Confirm remove" onClick={() => remove(t.id)}>✓</button>
-                      <button className="px-2 py-0.5 rounded border border-border text-[11px] text-field-txt" aria-label="Cancel" title="Cancel" onClick={() => setConfirmRm(null)}>✕</button>
+                      <button className="px-2 py-0.5 rounded-control border border-crit text-crit text-[11px]" aria-label="Confirm remove" title="Confirm remove" onClick={() => remove(t.id)}>✓</button>
+                      <button className="px-2 py-0.5 rounded-control border border-border text-[11px] text-field-txt" aria-label="Cancel" title="Cancel" onClick={() => setConfirmRm(null)}>✕</button>
                     </div>
                   ) : (
                     <>
@@ -470,7 +470,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
             {activeId && (
               <div className="mb-3">
                 <button
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover disabled:opacity-60"
+                  className="w-full px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt hover:border-border-hover disabled:opacity-60"
                   disabled={connTest.busy}
                   onClick={testConnection}
                 >
@@ -479,7 +479,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 {connTest.result && <div className="text-[11px] text-muted px-1 pt-1.5">{connTest.result}</div>}
               </div>
             )}
-            <button className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
+            <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
               + Add connection
             </button>
 
@@ -488,7 +488,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 credential belongs to the deployment, not to any one Infoblox
                 tenant, and it does not change when you switch tenants. */}
             <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Axur (brand protection)</div>
-            <div className="mb-4 rounded-lg border border-border bg-field p-3">
+            <div className="mb-4 rounded-control border border-border bg-field p-3">
               <label htmlFor="tm-axur-key" className="block text-[11px] text-dim mb-1">Axur API key</label>
               {/* NEVER prefilled from the server, and no route would return it.
                   A password field that arrives populated invites a reader to
@@ -511,7 +511,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               {axur.msg && <div className="mt-2 text-[11px] text-ok">{axur.msg}</div>}
               <div className="flex gap-2 mt-2">
                 <button
-                  className="flex-1 px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm disabled:opacity-50"
+                  className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-sm disabled:opacity-50"
                   onClick={saveAxur}
                   disabled={axur.busy || !axur.key}
                 >
@@ -519,7 +519,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 </button>
                 {axur.stored && (
                   <button
-                    className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt disabled:opacity-50"
+                    className="px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt disabled:opacity-50"
                     onClick={clearAxur}
                     disabled={axur.busy}
                   >
@@ -547,7 +547,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 />
               </div>
             ) : (
-              <div className="mb-4 rounded-lg border border-border bg-field p-3">
+              <div className="mb-4 rounded-control border border-border bg-field p-3">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px]" style={{ color: writeTarget.writable ? 'var(--color-warn)' : 'var(--color-ok)' }}>
                     {writeTarget.writable ? '● Changes allowed' : '● Read-only'}
@@ -565,7 +565,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 {grantErr && <div className="mt-2 text-[11px] text-crit">{grantErr}</div>}
                 {writeTarget.writable ? (
                   <button
-                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover disabled:opacity-50"
+                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt hover:border-border-hover disabled:opacity-50"
                     disabled={grantBusy}
                     onClick={() => setWritable(false)}
                   >
@@ -579,7 +579,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        className="flex-1 px-2.5 py-1.5 rounded-lg border text-sm disabled:opacity-50"
+                        className="flex-1 px-2.5 py-1.5 rounded-control border text-sm disabled:opacity-50"
                         style={{ borderColor: 'var(--color-crit)', color: 'var(--color-crit)' }}
                         disabled={grantBusy}
                         onClick={() => setWritable(true)}
@@ -587,7 +587,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                         {grantBusy ? 'Saving…' : 'Yes, allow changes'}
                       </button>
                       <button
-                        className="px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt"
+                        className="px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt"
                         onClick={() => { setConfirmGrant(false); setGrantErr('') }}
                       >
                         Cancel
@@ -596,7 +596,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                   </div>
                 ) : (
                   <button
-                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover"
+                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt hover:border-border-hover"
                     onClick={() => setConfirmGrant(true)}
                   >
                     Allow changes to this tenant…
@@ -729,7 +729,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               placeholder="X-Auth-Token for lock/admin actions"
             />
 
-            <button className="w-full px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-crit hover:text-crit disabled:opacity-50" onClick={lockNow} disabled={locking}>
+            <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt hover:border-crit hover:text-crit disabled:opacity-50" onClick={lockNow} disabled={locking}>
               {locking ? 'Locking…' : 'Lock vault now'}
             </button>
           </>

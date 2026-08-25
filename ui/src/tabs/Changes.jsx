@@ -148,7 +148,7 @@ function NotabilityBand({ band }) {
   return (
     <div
       data-changes-band=""
-      className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 rounded-lg border border-border overflow-hidden"
+      className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 rounded-control border border-border overflow-hidden"
     >
       {band.map((cell) => (
         <BandCell key={cell.key} cell={cell} />
@@ -215,7 +215,7 @@ function CapBanner({ text }) {
   return (
     <div
       data-changes-cap=""
-      className="mt-2.5 flex items-start gap-2.5 rounded-lg border border-border bg-field px-3 py-2"
+      className="mt-2.5 flex items-start gap-2.5 rounded-control border border-border bg-field px-3 py-2"
       style={{ borderColor: COLORS.warn }}
     >
       <Chip tone="warn">Capped</Chip>
@@ -387,7 +387,7 @@ function Chip({ tone = 'quiet', children }) {
   const color = tone === 'crit' ? COLORS.crit : tone === 'warn' ? COLORS.warn : COLORS.other
   return (
     <span
-      className="shrink-0 rounded-md border px-1.5 py-[1px] text-[10px] leading-[14px] whitespace-nowrap"
+      className="shrink-0 rounded-control border px-1.5 py-[1px] text-[10px] leading-[14px] whitespace-nowrap"
       style={{ color, borderColor: color }}
     >
       {children}

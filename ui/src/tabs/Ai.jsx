@@ -3,7 +3,7 @@ import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, TabIntro } from 
 import { authFetch } from '../lib/authFetch.js'
 import DossierPanel from '../components/DossierPanel.jsx'
 
-const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt'
+const inputCls = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt'
 
 const SUGGESTIONS = [
   'Which subnets are nearly full?',
@@ -20,7 +20,7 @@ function Message({ item }) {
   if (item.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] px-3 py-2 rounded-lg bg-line-2 text-txt text-[13px]">{item.text}</div>
+        <div className="max-w-[80%] px-3 py-2 rounded-control bg-line-2 text-txt text-[13px]">{item.text}</div>
       </div>
     )
   }
@@ -28,7 +28,7 @@ function Message({ item }) {
     return (
       <div className="flex justify-start">
         <div
-          className="max-w-[85%] px-3 py-2 rounded-lg border text-[13px]"
+          className="max-w-[85%] px-3 py-2 rounded-control border text-[13px]"
           style={{ borderColor: 'var(--color-crit)', background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}
         >
           {item.error}
@@ -38,7 +38,7 @@ function Message({ item }) {
   }
   return (
     <div className="flex justify-start">
-      <div className="max-w-[85%] px-3 py-2 rounded-lg border border-border bg-field text-field-txt text-[13px] whitespace-pre-wrap">
+      <div className="max-w-[85%] px-3 py-2 rounded-control border border-border bg-field text-field-txt text-[13px] whitespace-pre-wrap">
         {item.text}
         {!!(item.suggestions && item.suggestions.length) && (
           <div className="flex flex-wrap gap-1.5 mt-2">
@@ -187,7 +187,7 @@ function ChatCard({ panelId }) {
           disabled={busy}
         />
         <button
-          className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-white disabled:opacity-40"
+          className="px-3 py-1.5 rounded-control text-[13px] font-medium text-on-accent disabled:opacity-40"
           style={{ background: COLORS.accent }}
           onClick={() => submit()}
           disabled={busy || !input.trim()}
@@ -245,7 +245,7 @@ function EntitiesTable({ entities, availability, reason }) {
     }
   }
   return (
-    <pre className="font-mono text-[11px] text-muted whitespace-pre-wrap p-2 rounded-lg border border-border bg-field max-h-[300px] overflow-auto">
+    <pre className="font-mono text-[11px] text-muted whitespace-pre-wrap p-2 rounded-control border border-border bg-field max-h-[300px] overflow-auto">
       {JSON.stringify(entities, null, 2)}
     </pre>
   )
@@ -285,14 +285,14 @@ function BlockDomainButton({ domain }) {
     return (
       <div className="flex items-center gap-1.5 mt-2">
         <span className="text-[11px]" style={{ color: COLORS.ok }}>blocked ✓</span>
-        <button onClick={() => run('unblock')} className="px-2 py-1 rounded-lg text-[11px] border border-border text-muted">Unblock</button>
+        <button onClick={() => run('unblock')} className="px-2 py-1 rounded-control text-[11px] border border-border text-muted">Unblock</button>
       </div>
     )
   }
   if (state === 'tokenRequired') return <div className="mt-2 text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⋯ Settings</div>
   if (state === 'error') return <div className="mt-2 text-[11px]" style={{ color: COLORS.crit }}>{msg}</div>
   return (
-    <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-lg text-[11px] border border-border text-muted hover:text-field-txt">Block domain</button>
+    <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-control text-[11px] border border-border text-muted hover:text-field-txt">Block domain</button>
   )
 }
 
@@ -345,7 +345,7 @@ function LookupCard({ panelId }) {
           onKeyDown={(e) => { if (e.key === 'Enter') lookup() }}
         />
         <button
-          className="px-3 py-1.5 rounded-lg text-[13px] font-medium text-white disabled:opacity-40"
+          className="px-3 py-1.5 rounded-control text-[13px] font-medium text-on-accent disabled:opacity-40"
           style={{ background: COLORS.accent }}
           onClick={lookup}
           disabled={busy || !q.trim()}
@@ -406,7 +406,7 @@ function EgressNotice() {
 
   return (
     <div
-      className="text-[11px] rounded-lg border px-3 py-2 mb-3"
+      className="text-[11px] rounded-control border px-3 py-2 mb-3"
       style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}
     >
       {unknown

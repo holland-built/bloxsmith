@@ -12,7 +12,12 @@ const SPACE = { id: 'space1', name: 'Default' };
 const SUBNET = { id: 'subnet1', address: '10.0.0.0', cidr: 24, name: 'sub' };
 
 function rowLocator(page: Page, rdata: string) {
-  return page.locator('.rounded-lg.border.border-border.p-2').filter({ hasText: rdata });
+  // COUPLED TO A UTILITY CLASS, and that is a known cost. The row has no test
+  // id, so this is the only handle on it. `rounded-lg` became `rounded-control`
+  // when the radius scale moved to role names, and these two locators are the
+  // only place outside ui/src that had to move with it — ui/src/lib/
+  // radiusRoles.test.js guards the source, not this file.
+  return page.locator('.rounded-control.border.border-border.p-2').filter({ hasText: rdata });
 }
 
 async function stubZones(page: Page) {
@@ -275,7 +280,7 @@ test.describe('ManageAddressesPanel', () => {
     await selectSpaceAndSubnet(page);
 
     const card = page.locator('h2', { hasText: 'Manage Addresses' }).locator('xpath=ancestor::div[contains(@class,"bg-card")]');
-    const row = card.locator('.rounded-lg.border.border-border.p-2').filter({ hasText: addr.address });
+    const row = card.locator('.rounded-control.border.border-border.p-2').filter({ hasText: addr.address });
 
     await row.getByRole('button', { name: 'Release' }).click();
     await expect(row.getByRole('button', { name: 'Confirm release' })).toBeVisible();
