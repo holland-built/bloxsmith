@@ -33,7 +33,7 @@ function Inline({ text }) {
       {parseInline(text).map((tok, i) => {
         if (tok.type === 'strong') return <strong key={i} className="font-semibold text-field-txt">{tok.text}</strong>
         if (tok.type === 'em') return <em key={i}>{tok.text}</em>
-        if (tok.type === 'code') return <code key={i} className="font-mono text-[11px] px-1 py-0.5 rounded bg-field text-field-txt">{tok.text}</code>
+        if (tok.type === 'code') return <code key={i} className="font-mono text-[11px] px-1 py-0.5 rounded-mark bg-field text-field-txt">{tok.text}</code>
         if (tok.type === 'link') {
           // Links inside the doc point at GitHub, other docs, or Infoblox. They
           // leave the app, so they say so and open in their own tab.

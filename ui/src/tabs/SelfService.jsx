@@ -465,7 +465,7 @@ function ManageRecordsPanel({ panelId, span }) {
                 const isEditing = editingId === row.id
                 const isArmed = armedId === row.id
                 return (
-                  <div key={row.id} className="rounded-lg border border-border p-2">
+                  <div key={row.id} className="rounded-control border border-border p-2">
                     <div className="flex items-center gap-2 text-sm">
                       <span className="font-mono text-xs w-[110px] shrink-0 truncate" title={row.name_in_zone || '@'}>{row.name_in_zone || '@'}</span>
                       <span className="text-xs text-muted w-[50px] shrink-0">{row.type}</span>
@@ -476,14 +476,14 @@ function ManageRecordsPanel({ panelId, span }) {
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            className="px-2 py-1 rounded-lg text-xs border border-border"
+                            className="px-2 py-1 rounded-control text-xs border border-border"
                             onClick={() => (isEditing ? setEditingId(null) : startEdit(row))}
                           >
                             {isEditing ? 'Cancel' : 'Edit'}
                           </button>
                           <button
                             type="button"
-                            className="px-2 py-1 rounded-lg text-xs border border-border"
+                            className="px-2 py-1 rounded-control text-xs border border-border"
                             onClick={() => handleDeleteClick(row)}
                           >
                             {isArmed ? 'Confirm delete' : 'Delete'}
@@ -626,7 +626,7 @@ function ManageAddressesPanel({ panelId }) {
               {addresses.map((row) => {
                 const isArmed = armedId === row.id
                 return (
-                  <div key={row.id} className="rounded-lg border border-border p-2">
+                  <div key={row.id} className="rounded-control border border-border p-2">
                     <div className="flex items-center gap-2 text-sm">
                       <span className="font-mono text-xs w-[140px] shrink-0 truncate" title={row.address}>{row.address}</span>
                       <span className="text-xs text-muted w-[80px] shrink-0 truncate" title={row.state}>{row.state}</span>
@@ -634,7 +634,7 @@ function ManageAddressesPanel({ panelId }) {
                       <span className="text-xs text-dim flex-1 min-w-0 truncate" title={row.comment}>{row.comment}</span>
                       <button
                         type="button"
-                        className="px-2 py-1 rounded-lg text-xs border border-border"
+                        className="px-2 py-1 rounded-control text-xs border border-border"
                         onClick={() => handleRelease(row)}
                       >
                         {isArmed ? 'Confirm release' : 'Release'}

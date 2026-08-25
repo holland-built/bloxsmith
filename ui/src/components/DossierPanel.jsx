@@ -250,7 +250,7 @@ function RawSources({ items }) {
         {items.map(({ source, blob }) => (
           <div key={source}>
             <div className="text-[11px] text-dim font-mono mb-0.5">{source}</div>
-            <pre className="font-mono text-[10.5px] text-muted whitespace-pre-wrap p-2 rounded-lg border border-border bg-field max-h-[240px] overflow-auto">
+            <pre className="font-mono text-[10.5px] text-muted whitespace-pre-wrap p-2 rounded-control border border-border bg-field max-h-[240px] overflow-auto">
               {typeof blob === 'string' ? blob : JSON.stringify(blob, null, 2)}
             </pre>
           </div>
@@ -429,7 +429,7 @@ export default function DossierPanel({ data }) {
       {/* Verdict header */}
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <span
-          className="font-mono text-[12px] font-semibold px-2.5 py-1 rounded-lg"
+          className="font-mono text-[12px] font-semibold px-2.5 py-1 rounded-control"
           style={{ background: `var(--pill-${verdictTone}-bg)`, color: `var(--pill-${verdictTone}-fg)` }}
         >
           {verdictWord.toUpperCase()}
@@ -467,7 +467,7 @@ export default function DossierPanel({ data }) {
               const muted = tone === 'muted'
               const ok = tone ? tone === 'ok' : /^clear$/i.test(verdict)
               return (
-                <div key={key} className="px-2 py-1.5 rounded-lg border border-border bg-field">
+                <div key={key} className="px-2 py-1.5 rounded-control border border-border bg-field">
                   <div className="text-[10px] text-muted font-mono uppercase">{key}</div>
                   <div
                     className={`text-[11px] font-mono ${muted ? 'text-muted' : ''}`}

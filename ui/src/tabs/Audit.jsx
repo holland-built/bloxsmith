@@ -265,7 +265,7 @@ function OfflineCheckHint() {
   return (
     <span className="text-dim">
       {' · check it yourself with '}
-      <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-field">bloxsmith audit verify</code>
+      <code className="font-mono text-[10.5px] px-1 py-0.5 rounded-mark bg-field">bloxsmith audit verify</code>
     </span>
   )
 }
@@ -333,7 +333,7 @@ function AppendFailures({ result }) {
       {last?.event ? (
         <span className="font-normal text-[12px]">
           {' — last: '}
-          <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-field">{last.event}</code>
+          <code className="font-mono text-[10.5px] px-1 py-0.5 rounded-mark bg-field">{last.event}</code>
           {last.error ? <span className="text-dim"> ({last.error})</span> : null}
         </span>
       ) : null}
@@ -584,7 +584,7 @@ function CspAuditTable({ panelId }) {
             onKeyDown={(e) => e.key === 'Enter' && runSearch(q)}
             className={`${FIELD_CLS} w-[220px]`}
           />
-          <button onClick={() => runSearch(q)} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
+          <button onClick={() => runSearch(q)} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm">
             {loading ? 'Searching…' : 'Search'}
           </button>
           {/* `500` here is the `_limit` CSPAudit sends upstream, not a fact

@@ -16,6 +16,11 @@ import {
 export const COLORS = {
   accent: 'var(--color-accent)', purple: 'var(--color-purple)', warn: 'var(--color-warn)',
   crit: 'var(--color-crit)', ok: 'var(--color-ok)', other: 'var(--color-other)',
+  // Foregrounds for the three FILLED buttons. These are not decoration: white
+  // measured 3.79:1 on dark crit, 1.74:1 on dark ok and 3.30:1 on light ok, all
+  // below WCAG AA's 4.5:1, and all three were shipping as `color: '#fff'`.
+  // index.css carries the full table and the reasoning.
+  onAccent: 'var(--color-on-accent)', onCrit: 'var(--color-on-crit)', onOk: 'var(--color-on-ok)',
 }
 
 // THE ONE FOCUS RING, AND WHY IT IS A RING RATHER THAN AN OUTLINE.
@@ -37,7 +42,7 @@ export const COLORS = {
 // FIELD_CLS carries no width. Callers append their own (`w-[220px]`, `w-full`),
 // which is how the 17 sites already differed from one another.
 export const FOCUS_RING = 'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
-export const FIELD_CLS = `px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none focus-visible:border-accent ${FOCUS_RING}`
+export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm outline-none focus-visible:border-accent ${FOCUS_RING}`
 
 export function useChartTheme() {
   const colors = useThemeColors()
@@ -372,7 +377,7 @@ function applyLayout(grid, items, overrides) {
 // asked for. If a second message type ever appears, that is the moment to build
 // the system — not before.
 const SAVE_PILL_BASE =
-  'pointer-events-none fixed bottom-4 right-4 z-[150] rounded-md border px-3 py-1.5 text-[11px] font-semibold'
+  'pointer-events-none fixed bottom-4 right-4 z-[150] rounded-control border px-3 py-1.5 text-[11px] font-semibold'
 // `hidden`, not `opacity-0`: an empty bordered box is still a painted box.
 const SAVE_PILL_HIDDEN = `${SAVE_PILL_BASE} hidden`
 const SAVE_PILL_OK = `${SAVE_PILL_BASE} border-[var(--pill-ok-fg)] bg-[var(--pill-ok-bg)] text-[var(--pill-ok-fg)]`
@@ -1005,7 +1010,7 @@ export function CardGrid({ className = '', layoutKey, children }) {
             // is the tonal version of the same accent. Filled beats tinted at a
             // glance, which is the ranking a page control should have against
             // the page's primary action.
-            className="cursor-pointer rounded-md border border-accent bg-accent/15 px-2.5 py-1 text-xs font-semibold text-txt hover:bg-accent/25 hover:border-accent"
+            className="cursor-pointer rounded-control border border-accent bg-accent/15 px-2.5 py-1 text-xs font-semibold text-txt hover:bg-accent/25 hover:border-accent"
           >
             Arrange panels
           </button>
@@ -1306,7 +1311,7 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, 
   }
 
   const rowBtn =
-    'cursor-pointer rounded-md border border-border px-1.5 py-0.5 text-[11px] leading-none text-muted hover:text-field-txt hover:border-border-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted disabled:hover:border-border'
+    'cursor-pointer rounded-control border border-border px-1.5 py-0.5 text-[11px] leading-none text-muted hover:text-field-txt hover:border-border-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted disabled:hover:border-border'
 
   return (
     <div
@@ -1324,7 +1329,7 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, 
         aria-labelledby="arrange-title"
         data-arrange-dialog=""
         tabIndex={-1}
-        className="w-[460px] max-w-full max-h-[80vh] overflow-y-auto bg-card border border-card-border rounded-card p-5 outline-none"
+        className="w-[460px] max-w-full max-h-[80vh] overflow-y-auto bg-card border border-card-border rounded-surface p-5 outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">
@@ -2045,7 +2050,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       onPointerDown={onHandleDown}
       onKeyDown={onHandleKey}
       onBlur={onHandleBlur}
-      className={`shrink-0 cursor-grab touch-none select-none rounded-md border px-1.5 py-0.5 text-[11px] leading-none ${
+      className={`shrink-0 cursor-grab touch-none select-none rounded-control border px-1.5 py-0.5 text-[11px] leading-none ${
         moveActive ? 'border-accent text-accent' : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
       }`}
     >
@@ -2084,7 +2089,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       {...(title ? { 'aria-labelledby': `${hideWordId} ${titleId}` } : { 'aria-label': `Hide ${panelName || panelId}` })}
       title="Hide this panel"
       onClick={onHide}
-      className="shrink-0 cursor-pointer rounded-md border border-border px-1.5 py-0.5 text-[11px] leading-none text-dim hover:text-field-txt hover:border-border-hover"
+      className="shrink-0 cursor-pointer rounded-control border border-border px-1.5 py-0.5 text-[11px] leading-none text-dim hover:text-field-txt hover:border-border-hover"
     >
       {title && <span id={hideWordId} className="sr-only">Hide</span>}
       ✕
@@ -2231,7 +2236,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       // back after a close — blur clears it, the next focus sets it again.
       onFocus={() => setHelpFocus(true)}
       onBlur={() => setHelpFocus(false)}
-      className={`shrink-0 cursor-pointer rounded-md border px-1.5 py-0.5 text-[11px] leading-none ${
+      className={`shrink-0 cursor-pointer rounded-control border px-1.5 py-0.5 text-[11px] leading-none ${
         // Hover does not fight the pinned state: pinned always wins the accent,
         // a preview gets the plain hover treatment, and the closed state keeps
         // the CSS :hover fallback for anything the JS previews miss.
@@ -2266,7 +2271,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       // TabIntro (further down this file) keeps its 80ch cap: it is a permanent
       // line of page furniture under the tab heading, not a block the operator
       // opened on purpose, and nothing was reported about it.
-      className="mb-2 rounded-lg border border-line-2 bg-line px-2.5 py-2 text-[11px] leading-relaxed text-muted"
+      className="mb-2 rounded-control border border-line-2 bg-line px-2.5 py-2 text-[11px] leading-relaxed text-muted"
     >
       {helpOpen && (
         <>
@@ -2305,7 +2310,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       // The ring is drawn OUTSIDE the border box (ring, not an extra border),
       // so entering move mode does not change the card's content width and
       // cannot nudge a measured table by a pixel.
-      className={`relative bg-card border border-card-border rounded-card p-[var(--sp-card-pad)] ${moveActive ? 'ring-2 ring-accent' : ''} ${spanClass} ${className}`}
+      className={`relative bg-card border border-card-border rounded-surface p-[var(--sp-card-pad)] ${moveActive ? 'ring-2 ring-accent' : ''} ${spanClass} ${className}`}
     >
       {managed && (
         // An 8px strip over the card's own right padding, not over its
@@ -2316,7 +2321,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
           data-layout-resize=""
           title="Drag to resize"
           onPointerDown={onResizeDown}
-          className="absolute top-0 right-0 h-full w-2 cursor-col-resize touch-none rounded-r-card opacity-0 hover:opacity-100 focus-visible:opacity-100"
+          className="absolute top-0 right-0 h-full w-2 cursor-col-resize touch-none rounded-r-surface opacity-0 hover:opacity-100 focus-visible:opacity-100"
           style={{ background: 'linear-gradient(to right, transparent, var(--color-accent))' }}
         />
       )}
@@ -2481,7 +2486,7 @@ function HiddenPanelsRow({ groupKey, label, n }) {
     <div
       ref={rowRef}
       data-testid="hidden-panels"
-      className="col-span-2 md:col-span-4 xl:col-span-6 flex flex-wrap items-center gap-2 rounded-card border border-dashed border-card-border px-3 py-2 text-[11px] text-muted"
+      className="col-span-2 md:col-span-4 xl:col-span-6 flex flex-wrap items-center gap-2 rounded-surface border border-dashed border-card-border px-3 py-2 text-[11px] text-muted"
     >
       <span>
         {n} panel{n === 1 ? '' : 's'} hidden — no {label} service detected on this tenant
@@ -2500,7 +2505,7 @@ function HiddenPanelsRow({ groupKey, label, n }) {
         // exist this button is gone, so any id here would be a dangling
         // reference. The focus move above is what stands in for it.
         aria-expanded={false}
-        className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted cursor-pointer hover:text-field-txt"
+        className="rounded-control border border-border px-2 py-0.5 text-[11px] text-muted cursor-pointer hover:text-field-txt"
       >
         show anyway
       </button>
@@ -2580,7 +2585,7 @@ export function TabIntro({ anchor, children }) {
 // own fetch/stream logic and renders its own preview body as children, because
 // Provision streams SSE while the others are request/response.
 
-const PA_BTN = 'px-3.5 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed'
+const PA_BTN = 'px-3.5 py-1.5 rounded-control text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed'
 
 export function PreviewApply({
   status = 'idle', // 'idle' | 'busy' | 'previewed' | 'applied'
@@ -2609,7 +2614,7 @@ export function PreviewApply({
           onClick={onPreview}
           disabled={busy || disabled}
           className={PA_BTN}
-          style={{ background: COLORS.accent, color: '#fff' }}
+          style={{ background: COLORS.accent, color: COLORS.onAccent }}
         >
           {busy ? busyLabel : previewLabel}
         </button>
@@ -2619,7 +2624,7 @@ export function PreviewApply({
             onClick={onApply}
             disabled={applyDisabled}
             className={PA_BTN}
-            style={{ background: destructive ? COLORS.crit : COLORS.ok, color: '#fff' }}
+            style={{ background: destructive ? COLORS.crit : COLORS.ok, color: destructive ? COLORS.onCrit : COLORS.onOk }}
           >
             {applyLabel}
           </button>
@@ -2636,7 +2641,7 @@ export function PreviewApply({
 
       {error && (
         <div
-          className="text-sm rounded-lg px-3 py-2"
+          className="text-sm rounded-control px-3 py-2"
           style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)', border: `1px solid ${COLORS.crit}` }}
         >
           {error}
@@ -2646,7 +2651,7 @@ export function PreviewApply({
           the warning above replaces it rather than sitting next to it. */}
       {!error && message && !stale && (
         <div
-          className="text-sm rounded-lg px-3 py-2"
+          className="text-sm rounded-control px-3 py-2"
           style={{ background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)', border: `1px solid ${COLORS.ok}` }}
         >
           {message}
@@ -2665,7 +2670,7 @@ export function PreviewApply({
 export function PreviewBox({ data, note = 'preview — nothing applied yet' }) {
   if (data == null) return null
   return (
-    <div className="rounded-lg border border-border bg-field p-3">
+    <div className="rounded-control border border-border bg-field p-3">
       <div className="text-[11px] text-dim mb-1.5">{note}</div>
       <pre className="text-xs whitespace-pre-wrap max-h-[320px] overflow-auto text-muted">
         {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
@@ -2744,7 +2749,7 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
         <button
           type="button"
           onClick={onRetry || retryFailedFeeds}
-          className="mt-1 px-2.5 py-1 rounded-lg border border-border bg-field text-field-txt text-[11px]"
+          className="mt-1 px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-[11px]"
         >
           Try again
         </button>
@@ -2756,7 +2761,7 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
 }
 
 export function Skeleton({ h = 140 }) {
-  return <div className="animate-pulse bg-line rounded-lg w-full" style={{ height: h }} />
+  return <div className="animate-pulse bg-line rounded-control w-full" style={{ height: h }} />
 }
 
 export function Sparkline({ values, color, h = 30 }) {

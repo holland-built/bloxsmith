@@ -284,7 +284,7 @@ function DnsHero({ dns, panelId }) {
       // the popup and the heading on screen are the same phrase to look for.
       panelName="DNS Query Rate — 24h"
       title={<span role="button" tabIndex={0} onClick={() => { location.hash = 'dns' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'dns' } }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS Query Rate — 24h</span>}
-      right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
+      right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
     >
       {dns.loading ? (
         <Skeleton h={250} />
@@ -373,7 +373,7 @@ function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus, panelI
             tabIndex={0}
             onClick={() => { location.hash = c.hash }}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
-            className={`py-3.5 cursor-pointer hover:bg-line rounded-lg transition-colors px-1 -mx-1 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
+            className={`py-3.5 cursor-pointer hover:bg-line rounded-control transition-colors px-1 -mx-1 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
           >
             <div className="text-muted text-xs">{c.label}</div>
             {unavailable ? (
@@ -641,7 +641,7 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
             {tip && (
               <div
                 data-heatmap-readout
-                className="absolute z-10 pointer-events-none whitespace-nowrap rounded-lg border border-border bg-field px-2 py-1 text-[11px] shadow-sm"
+                className="absolute z-10 pointer-events-none whitespace-nowrap rounded-control border border-border bg-field px-2 py-1 text-[11px] shadow-sm"
                 style={{
                   // Clamped to the grid on both axes so the chip can never
                   // escape the card body — half its own width in from each edge
@@ -658,9 +658,9 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
             )}
           </div>
           <div className="flex gap-3.5 mt-2 text-[11px] text-muted">
-            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />ok</span>
-            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.warn }} />&gt;75%</span>
-            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.crit }} />&gt;92%</span>
+            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />ok</span>
+            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.warn }} />&gt;75%</span>
+            <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.crit }} />&gt;92%</span>
           </div>
         </>
       )}
@@ -740,9 +740,9 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
                 tabIndex={0}
                 onClick={() => { location.hash = 'infra?status=' + d.name.toLowerCase() }}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'infra?status=' + d.name.toLowerCase() } }}
-                className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-line rounded-lg transition-colors px-1 -mx-1"
+                className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-line rounded-control transition-colors px-1 -mx-1"
               >
-                <i className="w-2 h-2 rounded-sm inline-block" style={{ background: d.color }} />
+                <i className="w-2 h-2 rounded-mark inline-block" style={{ background: d.color }} />
                 <span className="text-muted flex-1">{d.name}</span>
                 <b>{((d.value / loaded) * 100).toFixed(0)}%</b>
               </div>
@@ -916,7 +916,7 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId }) {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <button onClick={exportCsv} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
+          <button onClick={exportCsv} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm">
             Export CSV
           </button>
         </div>

@@ -132,7 +132,7 @@ export default function ConnStatus() {
     <span className="relative text-[11px] text-muted flex items-center">
       <button
         type="button"
-        className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-line/60 cursor-pointer"
+        className="flex items-center gap-1.5 rounded-control px-1 py-0.5 hover:bg-line/60 cursor-pointer"
         title={`${title} — click to switch tenant`}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -146,7 +146,7 @@ export default function ConnStatus() {
           {/* Click-away, behind the menu. A menu that only closes by reselecting
               is a trap on a narrow screen. */}
           <button type="button" aria-label="Close tenant menu" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
-          <div role="listbox" className="absolute right-0 top-full mt-1.5 z-50 min-w-[190px] rounded-lg border border-border bg-card shadow-lg py-1">
+          <div role="listbox" className="absolute right-0 top-full mt-1.5 z-50 min-w-[190px] rounded-control border border-border bg-card shadow-lg py-1">
             {tenants.map((t) => {
               const isActive = t.id === activeTenant
               return (

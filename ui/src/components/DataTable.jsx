@@ -639,7 +639,7 @@ export function DataTable({
     footer = (
       <a
         href={viewAllHref}
-        className="block text-center text-accent text-[11.5px] font-medium py-2 px-2.5 hover:bg-line/50 rounded-lg transition-colors"
+        className="block text-center text-accent text-[11.5px] font-medium py-2 px-2.5 hover:bg-line/50 rounded-control transition-colors"
       >
         View all {rows.length} →
       </a>

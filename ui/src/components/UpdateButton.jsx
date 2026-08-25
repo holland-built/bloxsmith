@@ -162,7 +162,7 @@ export default function UpdateButton() {
           if (info.selfUpdate) runApply();
           else if (info.url) window.open(info.url, '_blank', 'noopener,noreferrer');
         }}
-        className="px-2 py-1 rounded-lg bg-accent text-white text-xs"
+        className="px-2 py-1 rounded-control bg-accent text-on-accent text-xs"
       >
         Update v{latest}
       </button>
@@ -314,7 +314,7 @@ export function UpdateCheck({ version }) {
             type="button"
             onClick={check}
             disabled={state !== 'idle'}
-            className="w-full mt-2 px-2.5 py-1.5 rounded-lg border border-border text-sm text-field-txt hover:border-border-hover disabled:opacity-50"
+            className="w-full mt-2 px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt hover:border-border-hover disabled:opacity-50"
           >
             Check for updates
           </button>

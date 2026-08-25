@@ -314,7 +314,13 @@ const APPLY_BUTTON_PROOFS = [
     expect: 'the Apply button exists only after a preview, and only while that preview has not gone stale',
   },
   {
-    re: /style=\{\{ background: destructive \? COLORS\.crit : COLORS\.ok, color: '#fff' \}\}/,
+    // The FILL is what the help copy claims ("the green Provision button", "the
+    // red button"), so the fill is what this proves. The foreground moved off a
+    // hard-coded '#fff' and onto COLORS.onCrit / COLORS.onOk, because white
+    // measured 3.79:1 on dark crit and 1.74:1 on dark ok — both below AA. That
+    // changed the line without touching the claim, so the pointer is re-aimed
+    // at the background alone rather than the whole style object.
+    re: /background: destructive \? COLORS\.crit : COLORS\.ok/,
     expect: 'Apply is COLORS.crit (red) on a panel that declares itself destructive, COLORS.ok (green) otherwise',
   },
 ]

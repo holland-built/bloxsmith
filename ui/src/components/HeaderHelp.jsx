@@ -63,7 +63,7 @@ export default function HeaderHelp({ onClose }) {
         aria-modal="true"
         aria-labelledby="hh-title"
         tabIndex={-1}
-        className="w-[420px] max-w-full max-h-[80vh] overflow-y-auto bg-card border border-card-border rounded-card p-5 outline-none"
+        className="w-[420px] max-w-full max-h-[80vh] overflow-y-auto bg-card border border-card-border rounded-surface p-5 outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">

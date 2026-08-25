@@ -39,7 +39,7 @@ export default function Provision() {
         and needs admin.
       </TabIntro>
 
-      <div className="flex gap-1 mb-4 p-1 rounded-lg bg-field border border-border w-fit">
+      <div className="flex gap-1 mb-4 p-1 rounded-control bg-field border border-border w-fit">
         {[
           ['subnet', 'Subnet'],
           ['site', 'Full site'],
@@ -48,8 +48,8 @@ export default function Provision() {
           <button
             key={key}
             onClick={() => setMode(key)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-              mode === key ? 'bg-accent text-white' : 'text-muted'
+            className={`px-3 py-1.5 rounded-control text-sm font-medium ${
+              mode === key ? 'bg-accent text-on-accent' : 'text-muted'
             }`}
           >
             {label}
@@ -157,7 +157,7 @@ function RollbackReport({ report }) {
         {residual.map((o, i) => (
           <div key={o?.id || i} className="font-mono text-[12px]" style={{ color: COLORS.crit }}>
             ✕ {o?.kind || 'object'}{' '}
-            <code className="font-mono text-[10.5px] px-1 py-0.5 rounded bg-field">{o?.label || o?.id || '—'}</code>
+            <code className="font-mono text-[10.5px] px-1 py-0.5 rounded-mark bg-field">{o?.label || o?.id || '—'}</code>
             {o?.status ? <span className="text-dim"> (HTTP {o.status})</span> : null}
           </div>
         ))}

@@ -82,7 +82,15 @@ const PROBE = `
       fg: hex(flat),
       bg: hex(bg),
       fontSizePx: parseFloat(cs.fontSize),
+      // TWO RATIOS ON PURPOSE. 'ratio' was rounded to two decimals and then
+      // compared against 4.5, so a real 4.495 read as 4.50 and passed — the
+      // rounding, not the palette, decided it. Comparisons use 'exact'; 'ratio'
+      // is the rounded one and exists only so the failure message is readable.
+      //
+      // Single quotes, not backticks: this whole block lives inside the PROBE
+      // template literal below, and a backtick here ends the string.
       ratio: Math.round(((Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)) * 100) / 100,
+      exact: (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05),
       text: (el.textContent || '').trim().slice(0, 32),
     };
   };
@@ -125,6 +133,7 @@ type Sample = {
   bg: string;
   fontSizePx: number;
   ratio: number;
+  exact: number;
   text: string;
   count?: number;
 };
@@ -293,6 +302,19 @@ const TOKEN_PAIRS: Array<[string, string]> = [
   ['--color-muted', '--color-field'],
   ['--color-tick', '--color-card'],
   ['--color-tick', '--color-bg'],
+  // THE FILLED BUTTONS, which this list did not reach until now.
+  //
+  // Every pair above is quiet text on a SURFACE. The three filled buttons —
+  // Preview/Apply in ui.jsx, Check drift, the armed Delete — put a label on a
+  // SEMANTIC fill instead, and they were all hard-coded `color: '#fff'`.
+  // Measured, which is why they are here: white was 3.79:1 on dark crit,
+  // 1.74:1 on dark ok and 3.30:1 on light ok. Three AA failures that a list of
+  // text-on-surface pairs is structurally unable to see.
+  //
+  // The labels are text-sm, i.e. normal text, so 4.5:1 is the right bar.
+  ['--color-on-accent', '--color-accent'],
+  ['--color-on-crit', '--color-crit'],
+  ['--color-on-ok', '--color-ok'],
 ];
 
 for (const theme of ['dark', 'light'] as const) {
@@ -306,7 +328,7 @@ for (const theme of ['dark', 'light'] as const) {
         [token, bgToken],
       )) as Sample | null;
       expect(s, `${token} on ${bgToken} produced no measurement`).not.toBeNull();
-      if ((s as Sample).ratio < AA_NORMAL_TEXT) {
+      if ((s as Sample).exact < AA_NORMAL_TEXT) {
         failures.push(describe(`${token} on ${bgToken}`, s as Sample));
       }
     }
@@ -403,7 +425,7 @@ for (const theme of ['dark', 'light'] as const) {
         ).toBeGreaterThan(floor);
       }
       for (const s of samples) {
-        if (s.ratio < AA_NORMAL_TEXT) failures.push(describe(`${theme} ${route}`, s));
+        if (s.exact < AA_NORMAL_TEXT) failures.push(describe(`${theme} ${route}`, s));
       }
     }
     expect(failures, `below ${AA_NORMAL_TEXT}:1:\n  ${failures.join('\n  ')}`).toEqual([]);
@@ -420,7 +442,7 @@ for (const theme of ['dark', 'light'] as const) {
 
     expect(samples.length, 'no chart axis labels rendered').toBeGreaterThan(0);
     const failures = samples
-      .filter((s) => s.ratio < AA_NORMAL_TEXT)
+      .filter((s) => s.exact < AA_NORMAL_TEXT)
       .map((s) => describe(`${theme} #overview axis tick`, s));
     expect(failures, `below ${AA_NORMAL_TEXT}:1:\n  ${failures.join('\n  ')}`).toEqual([]);
   });

@@ -199,7 +199,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
           <button
             type="button"
             onClick={onSearch}
-            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm"
+            className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm"
           >
             Search
           </button>
@@ -207,7 +207,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
             <button
               type="button"
               onClick={onClear}
-              className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-dim text-sm"
+              className="px-2.5 py-1.5 rounded-control border border-border bg-field text-dim text-sm"
             >
               Clear
             </button>
@@ -216,7 +216,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
             type="button"
             onClick={onRefresh}
             disabled={busy}
-            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm disabled:opacity-40"
+            className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm disabled:opacity-40"
           >
             {busy ? 'Loading…' : 'Refresh'}
           </button>
@@ -264,7 +264,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
                     className={
                       'px-2.5 py-1 rounded-full border text-[12px] ' +
                       (active
-                        ? 'border-accent bg-accent text-white font-medium'
+                        ? 'border-accent bg-accent text-on-accent font-medium'
                         : 'border-border bg-field text-muted hover:text-txt')
                     }
                   >
@@ -409,7 +409,7 @@ function Pager({ page, onPage, hasMore, total, loading }) {
   const knownMore = total != null && (page + 1) * PAGE_SIZE < total
   const next = hasMore || knownMore
   const pages = total != null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null
-  const btn = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm disabled:opacity-40 disabled:cursor-not-allowed'
+  const btn = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm disabled:opacity-40 disabled:cursor-not-allowed'
 
   return (
     <div className="flex items-center justify-end gap-2 pt-2">
@@ -459,7 +459,7 @@ function AssetDetail({ cqid, row, onClose, panelId }) {
       title={row.name || row.cqid}
       note="asset detail"
       right={
-        <button type="button" onClick={onClose} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
+        <button type="button" onClick={onClose} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm">
           Close
         </button>
       }

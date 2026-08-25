@@ -129,8 +129,8 @@ export default function Drift() {
             <button
               disabled={checking || !template}
               onClick={check}
-              className="px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed self-start"
-              style={{ background: COLORS.accent, color: '#fff' }}
+              className="px-3 py-2 rounded-control text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed self-start"
+              style={{ background: COLORS.accent, color: COLORS.onAccent }}
             >
               {checking ? 'Checking…' : 'Check drift'}
             </button>

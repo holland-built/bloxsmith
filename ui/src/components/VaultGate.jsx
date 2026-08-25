@@ -10,14 +10,14 @@ const vpost = (url, body) =>
 const inCls =
   `${FIELD_CLS} w-full`
 const btnCls =
-  'w-full mt-4 px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm font-medium disabled:opacity-50'
+  'w-full mt-4 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-sm font-medium disabled:opacity-50'
 const cancelCls =
-  'w-full mt-2 px-2.5 py-1.5 rounded-lg border border-border text-field-txt text-sm bg-transparent disabled:opacity-50'
+  'w-full mt-2 px-2.5 py-1.5 rounded-control border border-border text-field-txt text-sm bg-transparent disabled:opacity-50'
 
 function Screen({ children }) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-bg px-6">
-      <div className="w-[360px] max-w-full bg-card border border-card-border rounded-card p-8">{children}</div>
+      <div className="w-[360px] max-w-full bg-card border border-card-border rounded-surface p-8">{children}</div>
     </div>
   )
 }
@@ -110,14 +110,14 @@ function Unlock({ onDone }) {
         </button>
       </div>
       {confirmReset && (
-        <div className="mt-3 p-2.5 border border-crit/40 rounded-lg bg-crit/10" role="dialog" aria-label="Confirm vault reset">
+        <div className="mt-3 p-2.5 border border-crit/40 rounded-control bg-crit/10" role="dialog" aria-label="Confirm vault reset">
           <div className="text-xs font-semibold mb-1">Reset vault?</div>
           <div className="text-[11px] text-muted leading-relaxed mb-2">
             Permanently deletes the vault and all stored keys. No recovery. You will set a new passphrase.
           </div>
           <div className="flex gap-2">
             <button
-              className="px-2.5 py-1 rounded-lg border border-crit text-crit text-xs"
+              className="px-2.5 py-1 rounded-control border border-crit text-crit text-xs"
               onClick={async () => {
                 setConfirmReset(false)
                 await vpost('/api/vault/reset', {})
@@ -126,7 +126,7 @@ function Unlock({ onDone }) {
             >
               Reset vault
             </button>
-            <button className="px-2.5 py-1 rounded-lg border border-border text-field-txt text-xs" autoFocus onClick={() => setConfirmReset(false)}>
+            <button className="px-2.5 py-1 rounded-control border border-border text-field-txt text-xs" autoFocus onClick={() => setConfirmReset(false)}>
               Cancel
             </button>
           </div>

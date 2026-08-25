@@ -210,7 +210,7 @@ function HostStatus({ hosts, totalHosts, hostsStatus, loading, panelId }) {
           <div className="flex-1 flex flex-col gap-2">
             {pieData.map((d) => (
               <div key={d.name} className="flex items-center gap-1.5 text-xs">
-                <i className="w-2 h-2 rounded-sm inline-block" style={{ background: d.color }} />
+                <i className="w-2 h-2 rounded-mark inline-block" style={{ background: d.color }} />
                 <span className="text-muted flex-1">{d.name}</span>
                 <b>{((d.value / loaded) * 100).toFixed(0)}%</b>
               </div>
