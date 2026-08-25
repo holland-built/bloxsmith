@@ -167,6 +167,13 @@ type Config struct {
 	// exists so a test double, a regional endpoint, or an outbound proxy can be
 	// pointed at without a rebuild — the same reason INFOBLOX_URL exists.
 	AxurBaseURL string // AXUR_BASE_URL
+	// AxurCustomerKey is AXUR_CUSTOMER_KEY: Axur's short code for the account,
+	// which its supplier-monitoring endpoints take as a PATH segment. Normally
+	// empty — dashboard.axurDiscoverCustomer asks Axur for it. Setting it is the
+	// answer when that discovery cannot produce exactly one code, which happens
+	// on a login that can see several accounts, and it overrides discovery
+	// entirely rather than being a fallback for it.
+	AxurCustomerKey string // AXUR_CUSTOMER_KEY
 
 	LLMAPIKey  string // LLM_API_KEY or GROQ_API_KEY (server.py:157)
 	LLMModel   string // LLM_MODEL or "qwen/qwen3.6-27b" (see the decommission note at the default)
@@ -276,6 +283,7 @@ func Load(dir string) *Config {
 
 	c.AxurAPIKey = AxurAuth(os.Getenv("AXUR_API_KEY"))
 	c.AxurBaseURL = or("AXUR_BASE_URL", AxurDefaultBaseURL)
+	c.AxurCustomerKey = strings.TrimSpace(os.Getenv("AXUR_CUSTOMER_KEY"))
 
 	// LLM_API_KEY falls back to GROQ_API_KEY (server.py:157) — `or`, not default:
 	// an empty env var must still fall back. GROQ_API_KEY is a local, not a

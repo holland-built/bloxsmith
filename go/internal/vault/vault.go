@@ -69,9 +69,9 @@ type Tenant struct {
 // no such key, which decodes to nil — nothing writable. That is the correct
 // default for an existing vault, not a migration gap. See writelock.go.
 type payload struct {
-	Tenants      []Tenant `json:"tenants"`
-	Active       *string  `json:"active"`
-	Groq         string   `json:"groq"`
+	Tenants []Tenant `json:"tenants"`
+	Active  *string  `json:"active"`
+	Groq    string   `json:"groq"`
 	// Axur is the brand-protection vendor's API credential, held whole the way
 	// Groq is. Absent in every vault written before the Axur integration, which
 	// decodes to "" — no Axur key stored, fall back to AXUR_API_KEY. That is the
