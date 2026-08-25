@@ -40,7 +40,64 @@
   --color-crit: #ee4444;
   --color-other: #8a8a8a;
   --color-sev-high: #ff7b7b;
-  --radius-card: 12px;
+  /* ---------- radius: three roles, and the pill ----------
+     Seven families were in use and the one declared token was used 7 times
+     against rounded-lg's 81: rounded-card 12px, rounded-xl 12px, rounded-lg
+     8px, rounded-md 6px, rounded 4px, rounded-sm 2px, rounded-full. Nothing
+     chose between 6px and 8px on purpose; both mean "a control".
+
+     So the names say what a thing IS rather than how round it is, and a caller
+     picks a role instead of a number:
+
+       surface  cards, dialogs, drawers, the command palette
+       control  anything you click or type into
+       mark     smaller than a control: inline code, legend swatches, chips
+
+     rounded-full stays, and is the one exception: a pill is a shape, not a
+     radius on the scale.
+
+     NO --radius-card ALIAS. Keeping one would leave `rounded-card` a working
+     utility that ui/src/lib/radiusRoles.test.js rejects: a spelling the build
+     accepts and the gate refuses, which is exactly how a migrated name creeps
+     back in. The old name is gone from both.
+
+     FOUR DEAD RULES REMAIN IN THE BUILT CSS, said plainly rather than left to
+     be discovered: .rounded-lg, .rounded-md, .rounded-sm and .rounded-xl are
+     still emitted, because Tailwind scans comments and test files and those
+     names appear in this comment and in radiusRoles.test.js. They are about
+     100 bytes of CSS nothing references. Removing them would mean deleting the
+     documentation of what was migrated and why, which is a worse trade than
+     the bytes. Nothing can USE them: the guard reads ui/src source, which is
+     the only place a class name would go.
+
+     What moved, measured rather than eyeballed: rounded-md 6px -> 8px on 12
+     elements, rounded-sm 2px -> 4px on 9 legend swatches (all 8x8px), and
+     rounded-xl 12px -> 12px on the palette overlay, which is a no-op. Nothing
+     else changes value. */
+  --radius-surface: 12px;
+  --radius-control: 8px;
+  --radius-mark: 4px;
+
+  /* ---------- foregrounds for the filled buttons ----------
+     Four `color: '#fff'` literals sat on accent, crit and ok fills. Replacing
+     them with a token meant deciding WHICH token, and measuring the six
+     fill/theme pairs said white is wrong on three of them (WCAG AA 1.4.3, 4.5:1
+     for normal text):
+
+       fill                 white   #050505
+       dark  accent #0070f3  4.55     4.48   -> white
+       dark  crit  #ee4444   3.79     5.38   -> near-black  (white FAILED)
+       dark  ok    #4ade80   1.74    11.70   -> near-black  (white FAILED badly)
+       light accent #0070f3  4.55     4.48   -> white
+       light crit  #dc2626   4.83     4.22   -> white
+       light ok    #16a34a   3.30     6.18   -> near-black  (white FAILED)
+
+     So this is three contrast failures, not four missing tokens. #050505 is the
+     dark theme's own page background, reused rather than a fourth near-black
+     invented for the job. Locked down by tests/contrast.spec.ts. */
+  --color-on-accent: #ffffff;
+  --color-on-crit: #050505;
+  --color-on-ok: #050505;
   --font-sans: system-ui, -apple-system, sans-serif;
 }
 
@@ -91,6 +148,10 @@
   --color-crit: #dc2626;
   --color-other: #888888;
   --color-sev-high: #e5484d;
+
+  /* Light crit is #dc2626, dark enough for white at 4.83:1. Light ok is
+     #16a34a, which white fails at 3.30:1, so it keeps the near-black. */
+  --color-on-crit: #ffffff;
 
   --pill-crit-bg: #fde8e8;
   --pill-crit-fg: #b91c1c;

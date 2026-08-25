@@ -101,7 +101,7 @@ function QpsHero({ panelId, qps }) {
       panelId={panelId}
       span={4}
       title="DNS Query Rate — 24h"
-      right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
+      right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
     >
       {qps.loading ? (
         <Skeleton h={250} />

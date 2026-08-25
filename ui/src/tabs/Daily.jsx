@@ -164,7 +164,7 @@ function SecurityToday({ sec, panelId }) {
         <>
           <div className="grid grid-cols-4 gap-3 mt-1">
             {chips.map((c) => (
-              <div key={c.label} className="text-center py-4 rounded-lg bg-line/40">
+              <div key={c.label} className="text-center py-4 rounded-control bg-line/40">
                 <div className="text-2xl font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
                   {c.value.toLocaleString()}
                 </div>

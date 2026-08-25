@@ -198,10 +198,10 @@ function CategoryChips({ categories, loading, error, category, onCategory, degra
               <button
                 key={c.category}
                 onClick={() => onCategory(on ? '' : c.category)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs border-border bg-field"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control border text-xs border-border bg-field"
                 style={{ borderColor: on ? m.color : undefined, background: on ? `${m.color}1a` : undefined }}
               >
-                <i className="w-2 h-2 rounded-sm inline-block" style={{ background: m.color }} title={m.label} />
+                <i className="w-2 h-2 rounded-mark inline-block" style={{ background: m.color }} title={m.label} />
                 <span className="font-semibold" style={{ color: m.color }} aria-hidden="true">{m.label[0]}</span>
                 <span className="sr-only">{m.label} severity</span>
                 <span className="font-mono text-field-txt">{(Number(c.count) || 0).toLocaleString()}</span>
@@ -353,11 +353,11 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
             className={`${FIELD_CLS} w-[150px]`}
           />
           {category && (
-            <button onClick={() => onCategory('')} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
+            <button onClick={() => onCategory('')} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm">
               Clear filter
             </button>
           )}
-          <button onClick={onClearAcks} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
+          <button onClick={onClearAcks} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm">
             Clear acks
           </button>
           <span className="text-[11px] text-muted">{signalsTotal.toLocaleString()}</span>
@@ -444,7 +444,7 @@ function SocQueue({ rows, loading, error, unavailable, statusState, onSetStatus,
               type="button"
               disabled={st.pending}
               onClick={() => onSetStatus(r.id, next)}
-              className="px-2 py-1 rounded-md border border-border bg-field text-field-txt text-[11px] disabled:opacity-50"
+              className="px-2 py-1 rounded-control border border-border bg-field text-field-txt text-[11px] disabled:opacity-50"
             >
               {st.pending ? 'saving…' : label}
             </button>
@@ -497,7 +497,7 @@ function ActionDetailDrawer({ actionId, onClose }) {
       >
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold">Action detail</h2>
-          <button type="button" onClick={onClose} className="px-2 py-1 rounded-md border border-border bg-field text-field-txt text-xs" aria-label="Close">
+          <button type="button" onClick={onClose} className="px-2 py-1 rounded-control border border-border bg-field text-field-txt text-xs" aria-label="Close">
             Close
           </button>
         </div>

@@ -505,7 +505,7 @@ export default function App() {
               <BrandLogoImg
                 domain={brandDomain}
                 bust={logoBust}
-                className="h-5 w-5 rounded"
+                className="h-5 w-5 rounded-mark"
               />
             </button>
             {/* Wordmark folds below `lg` with the rest of the A3 fold (see the
@@ -678,7 +678,7 @@ export default function App() {
                 aria-label="What these controls do"
                 aria-haspopup="dialog"
                 aria-expanded={showHeaderHelp}
-                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-lg border border-border bg-field text-muted hover:text-txt hover:border-border-hover cursor-pointer"
+                className="hidden lg:flex w-8 h-8 items-center justify-center rounded-control border border-border bg-field text-muted hover:text-txt hover:border-border-hover cursor-pointer"
               >
                 ⓘ
               </button>
@@ -689,13 +689,13 @@ export default function App() {
                 aria-label="Settings"
                 aria-haspopup="dialog"
                 aria-expanded={showAccounts}
-                className="w-8 h-8 rounded-lg border border-border bg-field text-muted hover:text-txt hover:border-border-hover"
+                className="w-8 h-8 rounded-control border border-border bg-field text-muted hover:text-txt hover:border-border-hover"
               >
                 ⋯
               </button>
               <a
                 href="#provision"
-                className="px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm font-medium no-underline"
+                className="px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-sm font-medium no-underline"
               >
                 + Provision
               </a>
