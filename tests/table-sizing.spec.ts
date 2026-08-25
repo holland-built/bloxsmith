@@ -423,3 +423,91 @@ test.describe('breakpoint transitions', () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// THE PROBES AND THE CELLS THEY STAND IN FOR MUST RENDER THE SAME FONT.
+//
+// DataTable sizes its columns with canvas measureText against three hidden
+// probe spans, and each probe is only a valid stand-in while it carries the
+// same type as the element it measures: sansProbeRef against the body cells,
+// monoProbeRef against the mono ones, headProbeRef against the <th>. If a probe
+// and its element ever get different sizes, every column width is computed for
+// a table that is not on screen — and nothing throws, nothing looks obviously
+// broken, and the numbers are simply wrong.
+//
+// That is not a hypothetical. Moving 441 call sites onto the type-scale role
+// tokens had to move `text-sm` on the table, on sansProbeRef and on monoProbeRef
+// in one step, and had to leave the 10.5px header pair alone on BOTH sides.
+// This test is what makes the next such move safe: it reads the rendered font,
+// not the class string, so it holds however the classes are spelled.
+//
+// It compares the four properties canvas measureText actually reads — style,
+// weight, size, family — and deliberately not line-height; the comment in the
+// probe below records the measurement behind that.
+//
+// CELL_PAD = 20 is checked here too, for the same reason. It is a hard-coded
+// constant in DataTable.jsx standing for px-2.5 on each side of a cell, and
+// index.css's density comment says the horizontal padding is deliberately NOT
+// density-driven so the measurer cannot go stale.
+test('DataTable probes render the same font as the cells they measure', async ({ page }) => {
+  await page.goto('/#assets');
+  const table = page.locator('table').first();
+  await expect(table).toBeVisible({ timeout: 20_000 });
+
+  const r = await page.evaluate(() => {
+    // WHAT measureText ACTUALLY READS, and what it ignores.
+    //
+    // The first version of this compared the whole `font` shorthand and failed
+    // on a difference that has always been there and never mattered:
+    // headProbeRef is rendered as a SIBLING of the scroll wrapper, outside the
+    // <table>, so it inherits the page's leading while the <th> inherits the
+    // table's. Measured: 10.5px/15.75px on the probe against 10.5px/15px on the
+    // th. Canvas measureText computes glyph advances and does not read
+    // line-height at all, so that difference cannot move a column by one pixel.
+    //
+    // Size, weight, style and family are the four that DO change the advances,
+    // and those are what this compares.
+    const font = (el: Element | null) => {
+      if (!el) return null;
+      const s = getComputedStyle(el);
+      return `${s.fontStyle} ${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+    };
+    const padding = (el: Element | null) =>
+      el ? [getComputedStyle(el).paddingLeft, getComputedStyle(el).paddingRight] : null;
+
+    // The probes are the three hidden absolutely-positioned spans DataTable
+    // renders as siblings of the scroll wrapper, in source order.
+    const probes = [...document.querySelectorAll<HTMLElement>('span[style*="visibility: hidden"]')]
+      .filter((s) => s.style.position === 'absolute');
+    const table = document.querySelector('table');
+    const th = table?.querySelector('th') ?? null;
+    const td = table?.querySelector('tbody td') ?? null;
+
+    return {
+      probeCount: probes.length,
+      // sans probe: no font-mono, not the uppercase header probe
+      sansProbe: font(probes.find((p) => !p.className.includes('mono') && !p.className.includes('uppercase')) ?? null),
+      monoProbe: font(probes.find((p) => p.className.includes('mono')) ?? null),
+      headProbe: font(probes.find((p) => p.className.includes('uppercase')) ?? null),
+      tableFont: font(table),
+      thFont: font(th),
+      tdPad: padding(td),
+      thPad: padding(th),
+    };
+  });
+
+  expect(r.probeCount, 'DataTable should render its measurement probes').toBeGreaterThanOrEqual(3);
+
+  // The body probe stands in for cells that inherit the table's own font.
+  expect(r.sansProbe, 'sansProbeRef must render the same font as the table body').toBe(r.tableFont);
+  // The header probe stands in for the <th>, which carries its own size.
+  expect(r.headProbe, 'headProbeRef must render the same font as a <th>').toBe(r.thFont);
+  // The mono probe differs only in family, so its SIZE must still match.
+  const sizeOf = (f: string | null) => f?.match(/(\d+(?:\.\d+)?)px/)?.[1];
+  expect(sizeOf(r.monoProbe), 'monoProbeRef must be the body size, differing only in family').toBe(sizeOf(r.tableFont));
+  expect(r.monoProbe, 'monoProbeRef must actually be a mono family').toMatch(/mono|Menlo|Consolas|ui-monospace/i);
+
+  // CELL_PAD = 20 means 10px each side, on both th and td.
+  expect(r.tdPad, 'td horizontal padding must stay at CELL_PAD/2 each side').toEqual(['10px', '10px']);
+  expect(r.thPad, 'th horizontal padding must stay at CELL_PAD/2 each side').toEqual(['10px', '10px']);
+});

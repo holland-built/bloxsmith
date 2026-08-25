@@ -457,7 +457,7 @@ const CELL =
 function FieldCell({ k, v, title }) {
   return (
     <div className={CELL + ' gap-[9px] overflow-hidden'}>
-      <span className="text-[11px] uppercase tracking-[0.1em] text-dim font-medium whitespace-nowrap">{k}</span>
+      <span className="text-caption uppercase tracking-[0.1em] text-dim font-medium whitespace-nowrap">{k}</span>
       <span className="font-mono text-[13px] text-field-txt truncate" title={title || undefined}>
         {v ?? <span className="text-dim">{DASH}</span>}
       </span>
@@ -484,7 +484,7 @@ function LeftLanes({ state, label }) {
       <div className={CELL + ' text-[12px] font-semibold tracking-[0.05em] text-txt whitespace-nowrap overflow-hidden text-ellipsis'}>
         {label}
       </div>
-      <div className={CELL + ' font-mono text-[11px] font-bold tracking-[0.1em] uppercase whitespace-nowrap ' + (STATE_TONE[state] ?? '')}>
+      <div className={CELL + ' font-mono text-caption font-bold tracking-[0.1em] uppercase whitespace-nowrap ' + (STATE_TONE[state] ?? '')}>
         {JACK[state]?.label ?? 'Unavailable'}
       </div>
     </>
@@ -517,19 +517,19 @@ function Why({ src, q, state, reason }) {
       <div className="border-r border-line" />
       <div className="px-3 pt-[10px] pb-3 border-l-2" style={{ borderLeftColor: 'var(--color-warn)' }}>
         <div className="flex flex-col min-[561px]:flex-row gap-[10px] items-baseline text-[12px] leading-[1.5] mb-1 text-dim">
-          <span className="text-[11px] uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0">Not this</span>
+          <span className="text-caption uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0">Not this</span>
           <span>
             Nothing found — we asked a source and it told us {subject} has none.
           </span>
         </div>
         <div className="flex flex-col min-[561px]:flex-row gap-[10px] items-baseline text-[12px] leading-[1.5] text-field-txt">
-          <span className="text-[11px] uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0 text-[var(--pill-warn-fg)]">This</span>
+          <span className="text-caption uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0 text-[var(--pill-warn-fg)]">This</span>
           <span>
             {state === 'unsupported'
               ? 'We could not ask. The question never reached a source, so for '
               : 'The source did not answer. Nothing was read, so for '}
             <span className="font-mono">{subject}</span>, {src.unknownText} is <b>unknown</b>, not clean.
-            {reason ? <> Reported reason: <span className="font-mono text-[11px]">{reason}</span></> : null}
+            {reason ? <> Reported reason: <span className="font-mono text-caption">{reason}</span></> : null}
           </span>
         </div>
         <div className="mt-[9px] flex gap-[7px]">
@@ -656,16 +656,16 @@ function Ribbon({ results }) {
         <div
           key={s.key}
           data-dossier-ribbon={s.key}
-          className="flex items-center gap-2 px-3 h-[24px] min-[561px]:h-auto w-1/2 min-[561px]:w-auto border-r border-line text-[11px]"
+          className="flex items-center gap-2 px-3 h-[24px] min-[561px]:h-auto w-1/2 min-[561px]:w-auto border-r border-line text-caption"
         >
           <Jack state={ribbonState(results, s.key)} />
           <span className="uppercase tracking-[0.09em] text-muted">{s.short}</span>
-          <span className={'font-mono tracking-[0.08em] font-bold text-[11px] ' + (STATE_TONE[ribbonState(results, s.key)] ?? '')}>
+          <span className={'font-mono tracking-[0.08em] font-bold text-caption ' + (STATE_TONE[ribbonState(results, s.key)] ?? '')}>
             {JACK[ribbonState(results, s.key)]?.label ?? ''}
           </span>
         </div>
       ))}
-      <div className="flex-1 flex items-center px-3 py-[6px] min-[561px]:py-0 text-[11px] text-dim leading-[1.45]">
+      <div className="flex-1 flex items-center px-3 py-[6px] min-[561px]:py-0 text-caption text-dim leading-[1.45]">
         Each source is asked on its own — a slow one holds nothing else up.
       </div>
     </div>
@@ -800,7 +800,7 @@ export default function DossierPage() {
 
       {/* Query bar */}
       <div className="flex flex-col min-[561px]:flex-row min-[561px]:h-[40px] border-b border-border bg-field">
-        <div className="flex items-center px-3 h-[34px] min-[561px]:h-auto border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border font-mono text-[11px] tracking-[0.12em] text-dim">
+        <div className="flex items-center px-3 h-[34px] min-[561px]:h-auto border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border font-mono text-caption tracking-[0.12em] text-dim">
           QUERY
         </div>
         <label className="flex-1 flex items-center px-3 h-[34px] min-[561px]:h-auto min-w-0 border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border">
@@ -816,7 +816,7 @@ export default function DossierPage() {
           />
         </label>
         <div className="flex items-center gap-[9px] px-[13px] h-[34px] min-[561px]:h-auto">
-          <span className="text-[11px] uppercase tracking-[0.09em] text-dim">Recognised as</span>
+          <span className="text-caption uppercase tracking-[0.09em] text-dim">Recognised as</span>
           <span className="font-mono text-[12px] text-field-txt tracking-[0.06em] uppercase font-semibold">
             {kind ? kind.label : q ? 'Free text' : DASH}
           </span>
@@ -829,11 +829,11 @@ export default function DossierPage() {
       <div className={'hidden min-[561px]:grid ' + LANE_COLS + ' bg-field border-b border-border'}>
         <div />
         {['Source', 'State', 'Identity'].map((h) => (
-          <div key={h} className="h-6 flex items-center px-[11px] border-r border-line text-[11px] uppercase tracking-[0.1em] text-dim font-semibold">
+          <div key={h} className="h-6 flex items-center px-[11px] border-r border-line text-caption uppercase tracking-[0.1em] text-dim font-semibold">
             {h}
           </div>
         ))}
-        <div className="col-span-3 h-6 flex items-center px-[11px] text-[11px] uppercase tracking-[0.1em] text-dim font-semibold">
+        <div className="col-span-3 h-6 flex items-center px-[11px] text-caption uppercase tracking-[0.1em] text-dim font-semibold">
           Fields returned by this source
         </div>
       </div>
@@ -850,7 +850,7 @@ export default function DossierPage() {
           point of the ledger. */}
       {q && (
         <div data-dossier-panel className="px-[11px] py-3 border-b border-line bg-card">
-          <h2 className="text-[11px] uppercase tracking-[0.1em] text-dim font-semibold mb-2">
+          <h2 className="text-caption uppercase tracking-[0.1em] text-dim font-semibold mb-2">
             Threat intel — full detail
           </h2>
           {(results.threat?.state ?? 'loading') === 'loading'

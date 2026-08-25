@@ -45,7 +45,7 @@ function Pill({ children, tone = 'muted' }) {
       : {}
   return (
     <span
-      className={`text-[11px] px-2 py-0.5 rounded-full border ${tone === 'muted' ? 'border-border text-muted' : 'border-transparent'}`}
+      className={`text-caption px-2 py-0.5 rounded-full border ${tone === 'muted' ? 'border-border text-muted' : 'border-transparent'}`}
       style={style}
     >
       {children}
@@ -56,7 +56,7 @@ function Pill({ children, tone = 'muted' }) {
 function Section({ title, children }) {
   return (
     <div className="mb-3">
-      <h4 className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1.5">{title}</h4>
+      <h4 className="text-caption font-semibold text-muted uppercase tracking-wide mb-1.5">{title}</h4>
       {children}
     </div>
   )
@@ -66,7 +66,7 @@ function Dl({ rows }) {
   const filtered = rows.filter((r) => r[1] != null && r[1] !== '')
   if (!filtered.length) return null
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-caption">
       {filtered.map(([k, v]) => (
         <span key={k} className="contents">
           <dt className="text-muted">{k}</dt>
@@ -105,7 +105,7 @@ function ThreatIntelTable({ records }) {
   if (!records.length) return null
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[11px] font-mono">
+      <table className="w-full text-caption font-mono">
         <thead>
           <tr className="text-muted text-left">
             <th className="pr-3 pb-1 font-medium">class</th>
@@ -245,11 +245,11 @@ function RawSources({ items }) {
   if (!items.length) return null
   return (
     <details className="mt-3 pt-2 border-t border-border">
-      <summary className="text-[11px] text-muted cursor-pointer select-none">raw sources ({items.length})</summary>
+      <summary className="text-caption text-muted cursor-pointer select-none">raw sources ({items.length})</summary>
       <div className="mt-2 space-y-2">
         {items.map(({ source, blob }) => (
           <div key={source}>
-            <div className="text-[11px] text-dim font-mono mb-0.5">{source}</div>
+            <div className="text-caption text-dim font-mono mb-0.5">{source}</div>
             <pre className="font-mono text-[10.5px] text-muted whitespace-pre-wrap p-2 rounded-control border border-border bg-field max-h-[240px] overflow-auto">
               {typeof blob === 'string' ? blob : JSON.stringify(blob, null, 2)}
             </pre>
@@ -434,8 +434,8 @@ export default function DossierPanel({ data }) {
         >
           {verdictWord.toUpperCase()}
         </span>
-        {sum.max_threat_level != null && <span className="font-mono text-[11px] text-muted">threat {String(sum.max_threat_level)}</span>}
-        {data.type && <span className="font-mono text-[11px] text-dim">{String(data.type)}</span>}
+        {sum.max_threat_level != null && <span className="font-mono text-caption text-muted">threat {String(sum.max_threat_level)}</span>}
+        {data.type && <span className="font-mono text-caption text-dim">{String(data.type)}</span>}
       </div>
       {!!(classes.length || properties.length) && (
         <div className="flex gap-1 flex-wrap mb-2">
@@ -470,7 +470,7 @@ export default function DossierPanel({ data }) {
                 <div key={key} className="px-2 py-1.5 rounded-control border border-border bg-field">
                   <div className="text-[10px] text-muted font-mono uppercase">{key}</div>
                   <div
-                    className={`text-[11px] font-mono ${muted ? 'text-muted' : ''}`}
+                    className={`text-caption font-mono ${muted ? 'text-muted' : ''}`}
                     style={muted ? undefined : { color: ok ? COLORS.ok : COLORS.warn }}
                   >
                     {verdict}
@@ -487,7 +487,7 @@ export default function DossierPanel({ data }) {
         <Section title="Infrastructure">
           <Dl rows={infraRows} />
           {!!(dnsRecs && dnsRecs.length) && (
-            <div className="mt-1 font-mono text-[11px] text-field-txt space-y-0.5">
+            <div className="mt-1 font-mono text-caption text-field-txt space-y-0.5">
               {dnsRecs.map((r, i) => (
                 <div key={i}>{typeof r === 'object' ? JSON.stringify(r) : String(r)}</div>
               ))}

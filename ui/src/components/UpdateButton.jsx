@@ -127,7 +127,7 @@ export default function UpdateButton() {
 
   if (phase === 'error') {
     return (
-      <span className="flex items-center gap-2 text-[11px]">
+      <span className="flex items-center gap-2 text-caption">
         <span className="text-muted">v{current.replace(/^v/, '')}</span>
         <span className="text-crit">{error}</span>
       </span>
@@ -136,7 +136,7 @@ export default function UpdateButton() {
 
   if (phase === 'applying' || phase === 'restarting') {
     return (
-      <span className="text-[11px] text-muted">
+      <span className="text-caption text-muted">
         {phase === 'restarting' ? 'Restarting…' : 'Updating…'}
       </span>
     );
@@ -147,7 +147,7 @@ export default function UpdateButton() {
   // error (that's the apply-flow branch above) and not an alarming banner.
   if (info.error) {
     return (
-      <span className="text-[11px] text-muted" title={info.error}>
+      <span className="text-caption text-muted" title={info.error}>
         v{current.replace(/^v/, '')} · update check failed
       </span>
     );
@@ -162,7 +162,7 @@ export default function UpdateButton() {
           if (info.selfUpdate) runApply();
           else if (info.url) window.open(info.url, '_blank', 'noopener,noreferrer');
         }}
-        className="px-2 py-1 rounded-control bg-accent text-on-accent text-xs"
+        className="px-2 py-1 rounded-control bg-accent text-on-accent text-dense"
       >
         Update v{latest}
       </button>
@@ -305,7 +305,7 @@ export function UpdateCheck({ version }) {
     <>
       <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Updates</div>
       <div className="mb-4">
-        <div className="text-[11px] text-dim">
+        <div className="text-caption text-dim">
           {running ? `Bloxsmith v${running}` : 'Bloxsmith — version unknown'}
           {checkedAgo ? ` · Last checked ${checkedAgo}` : ''}
         </div>
@@ -314,7 +314,7 @@ export function UpdateCheck({ version }) {
             type="button"
             onClick={check}
             disabled={state !== 'idle'}
-            className="w-full mt-2 px-2.5 py-1.5 rounded-control border border-border text-sm text-field-txt hover:border-border-hover disabled:opacity-50"
+            className="w-full mt-2 px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt hover:border-border-hover disabled:opacity-50"
           >
             Check for updates
           </button>
@@ -322,7 +322,7 @@ export function UpdateCheck({ version }) {
         {/* In the tree from the first render, empty rather than absent: a live
             region added at the same moment as its text is not announced. Same
             pattern as DossierPage.jsx's. */}
-        <p role="status" aria-live="polite" className={`m-0 mt-1.5 text-[11px] leading-relaxed ${tone}`}>
+        <p role="status" aria-live="polite" className={`m-0 mt-1.5 text-caption leading-relaxed ${tone}`}>
           {said}
         </p>
         {/* What the header's Update pill is FOR used to be printed here as a

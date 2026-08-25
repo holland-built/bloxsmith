@@ -116,7 +116,7 @@ export default function ConnStatus() {
 
   if (!canSwitch) {
     return (
-      <span className="text-[11px] text-muted flex items-center gap-1.5" title={title}>
+      <span className="text-caption text-muted flex items-center gap-1.5" title={title}>
         <span className="w-2 h-2 rounded-full" style={{ background: color }} />
         {/* Below `lg` only the dot survives on the bar (the v11 A3 fold). The
             words it stands for are not lost: the same tenant is spelled out in
@@ -129,7 +129,7 @@ export default function ConnStatus() {
   }
 
   return (
-    <span className="relative text-[11px] text-muted flex items-center">
+    <span className="relative text-caption text-muted flex items-center">
       <button
         type="button"
         className="flex items-center gap-1.5 rounded-control px-1 py-0.5 hover:bg-line/60 cursor-pointer"
@@ -170,7 +170,7 @@ export default function ConnStatus() {
               )
             })}
             {switchErr && (
-              <div className="px-2.5 py-1.5 text-[11px]" style={{ color: 'var(--color-crit)' }}>{switchErr}</div>
+              <div className="px-2.5 py-1.5 text-caption" style={{ color: 'var(--color-crit)' }}>{switchErr}</div>
             )}
           </div>
         </>

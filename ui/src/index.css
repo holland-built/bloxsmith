@@ -99,6 +99,70 @@
   --color-on-crit: #050505;
   --color-on-ok: #050505;
   --font-sans: system-ui, -apple-system, sans-serif;
+
+  /* ---------- type: the scale, named, at the values it already renders ----------
+     18 distinct sizes were in use and this block declared no font-size token at
+     all, so every one of them was written at the call site:
+
+       234 text-[11px]   78 text-sm    61 text-xs      47 text-[12px]  22 text-[10px]
+        19 text-lg       19 text-[10.5px]  16 text-[13px]   9 text-2xl   4 text-xl
+         3 text-base      2 text-[30px]     2 text-[11.5px]  1 text-[9px] 1 text-[26px]
+         1 text-[16px]    1 text-[15px]     1 text-[13.5px]
+
+     WHAT THIS IS, AND WHAT IT DELIBERATELY IS NOT.
+
+     A token EXTRACTION: five roles declared at values the app already renders,
+     with 394 call sites moved onto them and not one pixel changed.
+     docs/SCREENS.md authorises exactly this — "extract the chosen mockup's
+     exact values into the project's own design tokens first", and "a one-off in
+     the finished diff means a token is missing: add the token".
+
+     It is NOT the normalisation to three or fewer sizes the same file asks for.
+     That means moving 30 to 26, 24 and 20 to 18, 13.5 to 18, and every one of
+     those changes how the app LOOKS. SCREENS.md gates a look change behind a
+     variant set and the owner naming one, before any production code. So the
+     sizes that would have to move are left alone and listed as exceptions in
+     ui/src/lib/typeScale.test.js, where they can be counted and decided rather
+     than scattered across 37 files where they cannot.
+
+     Two of those moves were priced before being declined:
+
+       - The Card panel h2 is 13.5px. Growing it feeds headNeed() -> publish()
+         -> spanFor() in ui.jsx, so panels claim different track spans on every
+         fitted tab, with saved user spans overriding the new measured need.
+       - The coloured KPI numbers are 24px and 20px. 18px is below WCAG's
+         18.66px bold large-text threshold, and several of those colours sit at
+         3.30:1 to 4.24:1 on a card — legal today only because the text is
+         large. Shrinking them turns a pass into a failure.
+
+     THE LINE-HEIGHTS ARE THE WHOLE DIFFICULTY, and two attempts got them wrong
+     before this one. A Tailwind size utility sets font-size AND line-height
+     together, while an arbitrary text-[11px] sets font-size only.
+
+     Attempt one declared the sizes alone. Measured across 15 tabs: 641
+     elements went 14px/20px to 14px/21px, and DataTable's rows grew from 38px
+     to 40px — which is what tests/density.spec.ts failed on.
+
+     Attempt two added the line-heights as PIXELS. That fixed the 641 and broke
+     255 others, because Tailwind's own values are UNITLESS RATIOS and a
+     unitless line-height inherits as a ratio, not as a length. A 10.5px child
+     of a text-sm parent was 15px (10.5 x 1.4286); under an absolute 20px it
+     became 20px. Hence the calc() forms below, copied from Tailwind's own
+     theme so the computed values are identical rather than merely close.
+
+     text-[12px] IS NOT PART OF text-dense FOR THE SAME REASON. text-dense
+     replaces text-xs, which carries a 16px line-height; the 47 text-[12px]
+     sites inherit theirs. They are the same size and NOT the same role, so
+     folding them together would silently relayout 47 elements. They stay an
+     exception until someone decides which line-height they should have. */
+  --text-display: 30px;
+  --text-title: 18px;
+  --text-title--line-height: calc(1.75 / 1.125);   /* Tailwind text-lg */
+  --text-body: 14px;
+  --text-body--line-height: calc(1.25 / 0.875);   /* Tailwind text-sm */
+  --text-dense: 12px;
+  --text-dense--line-height: calc(1 / 0.75);      /* Tailwind text-xs */
+  --text-caption: 11px;
 }
 
 :root {

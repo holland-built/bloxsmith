@@ -110,7 +110,7 @@ export default function Assets() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-lg font-semibold tracking-tight mb-1">Assets</h1>
+      <h1 className="text-title font-semibold tracking-tight mb-1">Assets</h1>
       <TabIntro anchor="assets">
         Every asset discovery found, searchable by name and filterable by type. Click a row for the
         fields too sparse to keep in the table.
@@ -199,7 +199,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
           <button
             type="button"
             onClick={onSearch}
-            className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm"
+            className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-body"
           >
             Search
           </button>
@@ -207,7 +207,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
             <button
               type="button"
               onClick={onClear}
-              className="px-2.5 py-1.5 rounded-control border border-border bg-field text-dim text-sm"
+              className="px-2.5 py-1.5 rounded-control border border-border bg-field text-dim text-body"
             >
               Clear
             </button>
@@ -216,7 +216,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
             type="button"
             onClick={onRefresh}
             disabled={busy}
-            className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm disabled:opacity-40"
+            className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-body disabled:opacity-40"
           >
             {busy ? 'Loading…' : 'Refresh'}
           </button>
@@ -235,19 +235,19 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
                 0 — see assets.go's assembleAssetFilters. */}
             {typeof d?.total === 'number' ? (
               <>
-                <span className="text-lg font-semibold" style={{ color: COLORS.accent }}>
+                <span className="text-title font-semibold" style={{ color: COLORS.accent }}>
                   {d.total.toLocaleString()}
                 </span>
-                <span className="text-dim text-[11px] ml-1.5">assets discovered</span>
+                <span className="text-dim text-caption ml-1.5">assets discovered</span>
               </>
             ) : (
-              <span className="text-[11px]" style={{ color: COLORS.warn }}>
+              <span className="text-caption" style={{ color: COLORS.warn }}>
                 total unavailable — the count query failed, the list below did not
               </span>
             )}
           </div>
           {types.length === 0 ? (
-            <div className="text-[11px] text-dim">no asset types recorded for this tenant</div>
+            <div className="text-caption text-dim">no asset types recorded for this tenant</div>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {types.map((t) => {
@@ -359,7 +359,7 @@ function AssetList({ list, searched, type, sort, onSort, page, onPage, selected,
       title="Assets"
       right={
         rows.length > 0 && (
-          <span className="text-[11px] text-muted">
+          <span className="text-caption text-muted">
             {from.toLocaleString()}–{to.toLocaleString()}
             {total != null ? ` of ${total.toLocaleString()}` : ''}
           </span>
@@ -409,11 +409,11 @@ function Pager({ page, onPage, hasMore, total, loading }) {
   const knownMore = total != null && (page + 1) * PAGE_SIZE < total
   const next = hasMore || knownMore
   const pages = total != null ? Math.max(1, Math.ceil(total / PAGE_SIZE)) : null
-  const btn = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm disabled:opacity-40 disabled:cursor-not-allowed'
+  const btn = 'px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-body disabled:opacity-40 disabled:cursor-not-allowed'
 
   return (
     <div className="flex items-center justify-end gap-2 pt-2">
-      <span className="text-[11px] text-dim mr-auto">
+      <span className="text-caption text-dim mr-auto">
         Page {page + 1}
         {pages != null ? ` of ${pages.toLocaleString()}` : ''}
       </span>
@@ -459,7 +459,7 @@ function AssetDetail({ cqid, row, onClose, panelId }) {
       title={row.name || row.cqid}
       note="asset detail"
       right={
-        <button type="button" onClick={onClose} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm">
+        <button type="button" onClick={onClose} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-body">
           Close
         </button>
       }
@@ -482,7 +482,7 @@ function AssetDetail({ cqid, row, onClose, panelId }) {
               {/* "not recorded", not a blank: these fields are sparse upstream
                   and the difference between "we know it has none" and "nobody
                   wrote one down" is worth the four extra words. */}
-              <dd className="text-sm break-words">{value || <span className="text-dim">not recorded</span>}</dd>
+              <dd className="text-body break-words">{value || <span className="text-dim">not recorded</span>}</dd>
             </div>
           ))}
         </dl>

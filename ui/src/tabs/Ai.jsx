@@ -43,12 +43,12 @@ function Message({ item }) {
         {!!(item.suggestions && item.suggestions.length) && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {item.suggestions.map((sg, i) => (
-              <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border border-border text-muted">{sg}</span>
+              <span key={i} className="text-caption px-2 py-0.5 rounded-full border border-border text-muted">{sg}</span>
             ))}
           </div>
         )}
         {!!(item.trace && item.trace.length) && (
-          <div className="mt-2 pt-2 border-t border-border font-mono text-[11px] text-muted space-y-0.5">
+          <div className="mt-2 pt-2 border-t border-border font-mono text-caption text-muted space-y-0.5">
             {item.trace.map((t, i) => (
               <div key={i}>
                 <span>{t.tool}</span> <span className="opacity-70">{JSON.stringify(t.args)}</span>
@@ -86,7 +86,7 @@ function BudgetLine({ budget }) {
   return (
     <div
       role={near ? 'status' : undefined}
-      className={`text-[11px] mt-1.5 ${near ? 'font-medium' : 'text-dim'}`}
+      className={`text-caption mt-1.5 ${near ? 'font-medium' : 'text-dim'}`}
       style={near ? { color: 'var(--color-warn)' } : undefined}
     >
       {hasLimit
@@ -169,7 +169,7 @@ function ChatCard({ panelId }) {
         {SUGGESTIONS.map((sg, i) => (
           <button
             key={i}
-            className="text-[11px] px-2 py-1 rounded-full border border-border text-muted hover:text-field-txt hover:border-border-hover"
+            className="text-caption px-2 py-1 rounded-full border border-border text-muted hover:text-field-txt hover:border-border-hover"
             onClick={() => ask(sg)}
           >
             {sg}
@@ -210,7 +210,7 @@ function EntitiesTable({ entities, availability, reason }) {
   }
   if (entities == null) return null
   if (Array.isArray(entities)) {
-    if (!entities.length) return <div className="text-sm text-muted">No matches</div>
+    if (!entities.length) return <div className="text-body text-muted">No matches</div>
     if (typeof entities[0] === 'object' && entities[0]) {
       const cols = Object.keys(entities[0])
       return (
@@ -245,7 +245,7 @@ function EntitiesTable({ entities, availability, reason }) {
     }
   }
   return (
-    <pre className="font-mono text-[11px] text-muted whitespace-pre-wrap p-2 rounded-control border border-border bg-field max-h-[300px] overflow-auto">
+    <pre className="font-mono text-caption text-muted whitespace-pre-wrap p-2 rounded-control border border-border bg-field max-h-[300px] overflow-auto">
       {JSON.stringify(entities, null, 2)}
     </pre>
   )
@@ -280,19 +280,19 @@ function BlockDomainButton({ domain }) {
     }
   }
 
-  if (state === 'busy') return <span className="text-[11px] text-muted">…</span>
+  if (state === 'busy') return <span className="text-caption text-muted">…</span>
   if (state === 'blocked') {
     return (
       <div className="flex items-center gap-1.5 mt-2">
-        <span className="text-[11px]" style={{ color: COLORS.ok }}>blocked ✓</span>
-        <button onClick={() => run('unblock')} className="px-2 py-1 rounded-control text-[11px] border border-border text-muted">Unblock</button>
+        <span className="text-caption" style={{ color: COLORS.ok }}>blocked ✓</span>
+        <button onClick={() => run('unblock')} className="px-2 py-1 rounded-control text-caption border border-border text-muted">Unblock</button>
       </div>
     )
   }
-  if (state === 'tokenRequired') return <div className="mt-2 text-[11px]" style={{ color: COLORS.warn }}>token required — set in ⋯ Settings</div>
-  if (state === 'error') return <div className="mt-2 text-[11px]" style={{ color: COLORS.crit }}>{msg}</div>
+  if (state === 'tokenRequired') return <div className="mt-2 text-caption" style={{ color: COLORS.warn }}>token required — set in ⋯ Settings</div>
+  if (state === 'error') return <div className="mt-2 text-caption" style={{ color: COLORS.crit }}>{msg}</div>
   return (
-    <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-control text-[11px] border border-border text-muted hover:text-field-txt">Block domain</button>
+    <button onClick={() => run('block')} className="mt-2 px-2 py-1 rounded-control text-caption border border-border text-muted hover:text-field-txt">Block domain</button>
   )
 }
 
@@ -406,7 +406,7 @@ function EgressNotice() {
 
   return (
     <div
-      className="text-[11px] rounded-control border px-3 py-2 mb-3"
+      className="text-caption rounded-control border px-3 py-2 mb-3"
       style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}
     >
       {unknown
@@ -423,7 +423,7 @@ function EgressNotice() {
 export default function Ai() {
   return (
     <div className="max-w-[860px] mx-auto p-5">
-      <h1 className="text-lg font-semibold tracking-tight mb-1">AI Assistant</h1>
+      <h1 className="text-title font-semibold tracking-tight mb-1">AI Assistant</h1>
       <TabIntro anchor="ai">
         Ask questions about your own network in plain language — answers show the tools used, so you can check
         where a number came from. Threat lookup takes a domain, IP, or host and returns intel plus a dossier.
