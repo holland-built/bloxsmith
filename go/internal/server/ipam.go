@@ -5,7 +5,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -274,30 +273,12 @@ func extractUpstreamMessage(snippet string) (string, bool) {
 	return "", false
 }
 
-// credentialRe matches the credential shapes we must never let reach the
-// server log: an Authorization header/value, a bearer or token credential, or
-// an api_key/api-key/apikey assignment. Applied to the (already bounded)
-// snippet before it is logged.
-var credentialRe = regexp.MustCompile(`(?i)(authorization\s*[:=]\s*"?[^",}\s]+"?|bearer\s+\S+|token\s+\S+|api[-_]?key["']?\s*[:=]\s*"?[^",}\s]+"?)`)
+// redactSnippet and logUpstreamError moved to internal/rest, beside the
+// UpstreamError they describe, when the dashboard needed the same safe logging
+// for its Axur probes. These stay as the names this file already uses.
+func redactSnippet(s string) string { return rest.RedactSnippet(s) }
 
-// redactSnippet replaces any credential-shaped substring with [REDACTED]
-// before a snippet is logged. This is a best-effort guard on top of the
-// snippet already being size-bounded — it is not itself the security
-// boundary (that's the allowlist in extractUpstreamMessage for what reaches
-// the client); this only keeps the server log from casually holding a token.
-func redactSnippet(s string) string {
-	return credentialRe.ReplaceAllString(s, "[REDACTED]")
-}
-
-// logUpstreamError writes one structured server-log line per upstream
-// failure: the endpoint path, upstream status, failure category, whether the
-// kept snippet was itself truncated, and the snippet with credentials
-// redacted first. The snippet is already bounded to rest.snippetCap (8KiB) by
-// GetStrict — this never logs a full unbounded body.
-func logUpstreamError(ue *rest.UpstreamError) {
-	log.Printf("[upstream] path=%s status=%d category=%s truncated=%t snippet=%s",
-		ue.Path, ue.Status, ue.Category, ue.Truncated, redactSnippet(ue.Snippet))
-}
+func logUpstreamError(ue *rest.UpstreamError) { rest.LogUpstreamError(ue) }
 
 // writeUpstreamError answers a failed upstream fetch with a 502 that carries
 // an allowlisted, size-bounded summary of WHY (never the raw body), and logs

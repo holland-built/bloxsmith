@@ -290,64 +290,138 @@ func (s *Service) axurCustomerKey(client *rest.Client, cred string) (string, map
 	return key, nil
 }
 
-// axurDiscoverCustomer runs the two probes. Split from the caching above so the
-// cache policy and the discovery policy can each be read on their own.
+// axurDiscoverCustomer runs the probes and reconciles them.
 //
-// Both probes accept an answer ONLY when every key they saw is the same single
-// value. Taking "the first one" was the original plan and it is unsafe: on an
-// MSSP account these endpoints list SEVERAL customers, and picking one
-// arbitrarily would put another company's tenant in the request path and render
-// their suppliers on this dashboard. Ambiguity is reported, never guessed away.
+// THE CONTRACT, restated because it changed. Every probe that SUCCEEDS
+// contributes the account codes it saw. A code is accepted only when every code
+// observed across every successful probe is the same single value. Taking the
+// first was the original plan and it is unsafe: on an MSSP login these
+// endpoints list several customers, and picking one arbitrarily would put
+// another company's tenant in the request path and render their suppliers on
+// this dashboard.
+//
+// MIXED OUTCOMES, which the first version got wrong. When one probe fails and
+// another succeeds but carries no code, the actionable answer is the
+// configuration one — "set AXUR_CUSTOMER_KEY" — not the earlier failure. An
+// operator can act on the first; the second only tells them something they
+// cannot reach was unhappy. The failure is still LOGGED either way, at the
+// point it is captured rather than at the point it wins, so the body that
+// explains it never depends on which outcome came out on top.
 func (s *Service) axurDiscoverCustomer(client *rest.Client) (string, map[string]any) {
 	var firstErr error
-	for _, probe := range []struct{ path, field string }{
-		{axurAssetsPath, "customerKey"},
-		{axurCustomersPath, "key"},
+	anySucceeded := false
+	var seen []string
+	for _, probe := range []struct {
+		path   string
+		field  string
+		params map[string]string
+		walk   bool
+	}{
+		// Assets pages, so a multi-account credential cannot be mistaken for a
+		// single-account one by a first page that happens to be uniform.
+		{axurAssetsPath, "customerKey", map[string]string{"perPage": "100"}, true},
+		// Customers documents NO query parameters. Sending page/perPage to an
+		// endpoint that declares none is how a 400 gets invented.
+		{axurCustomersPath, "key", nil, false},
 	} {
-		rows, body, err := client.GetPageStrict(probe.path, map[string]string{"page": "1", "perPage": "20"})
+		keys, err := s.axurProbe(client, probe.path, probe.field, probe.params, probe.walk)
 		if err != nil {
-			// Remembered, not returned yet: the second probe may still succeed,
-			// and a 403 on the MSSP-only route is an expected outcome for an
-			// ordinary account rather than an outage. If BOTH fail, the FIRST
-			// failure is the one reported, because it is the route every account
-			// is supposed to have.
+			// Logged HERE, at capture, with the provider's own bounded and
+			// redacted body. Whatever precedence wins below, the reason is on
+			// the record.
+			if ue, ok := err.(*rest.UpstreamError); ok {
+				rest.LogUpstreamError(ue)
+			} else {
+				log.Printf("axur: probe %s failed: %v", probe.path, err)
+			}
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
-		keys := uniqueStrings(collectField(rawBody(rows, body), probe.field))
-		if len(keys) == 1 {
-			return keys[0], nil
+		anySucceeded = true
+		seen = append(seen, keys...)
+	}
+	unique := uniqueStrings(seen)
+	switch {
+	case len(unique) == 1:
+		return unique[0], nil
+	case len(unique) > 1:
+		log.Printf("axur: discovery saw %d distinct customer keys; refusing to guess", len(unique))
+		return "", axurNeedsCustomerKey(fmt.Sprintf(
+			"This Axur key can see %d accounts, so Bloxsmith cannot tell which one to read.", len(unique)))
+	case anySucceeded:
+		// A clean answer that simply carried no code. Actionable, and it beats
+		// reporting a sibling probe's failure.
+		return "", axurNeedsCustomerKey("Axur did not report an account code for this key.")
+	}
+	// EVERY probe failed. An outage or an entitlement problem, not a
+	// configuration one, and it keeps its own category — telling an operator to
+	// set a variable while Axur is down sends them the wrong way.
+	degraded := axurUnavailable(firstErr)
+	if r, ok := degraded["unavailable"].(string); ok {
+		degraded["unavailable"] = "Could not look up the Axur account code. " + r +
+			" Set AXUR_CUSTOMER_KEY to skip the lookup."
+	}
+	return "", degraded
+}
+
+// axurProbe reads one discovery endpoint and returns the account codes it
+// carried.
+//
+// A 2xx whose body is not the SHAPE this probe expects is an error, not an
+// empty result. Without that check an error envelope returned at HTTP 200 —
+// which these APIs do — would count as "succeeded, carried no code" and be
+// reported to the operator as a missing setting.
+func (s *Service) axurProbe(client *rest.Client, path, field string, params map[string]string, walk bool) ([]string, error) {
+	var out []string
+	for page := 1; page <= axurMaxPages; page++ {
+		p := map[string]string{}
+		for k, v := range params {
+			p[k] = v
 		}
-		if len(keys) > 1 {
-			// A clean answer that is genuinely ambiguous. Stop here: the next
-			// probe cannot make this less ambiguous, and guessing is the one
-			// thing that must not happen.
-			log.Printf("axur: %s returned %d distinct customer keys; refusing to guess", probe.path, len(keys))
-			return "", axurNeedsCustomerKey(fmt.Sprintf(
-				"This Axur key can see %d accounts, so Bloxsmith cannot tell which one to read.", len(keys)))
+		if walk {
+			p["page"] = fmt.Sprint(page)
+		}
+		rows, body, err := client.GetPageStrict(path, p)
+		if err != nil {
+			return nil, err
+		}
+		if body == nil && rows == nil {
+			return nil, fmt.Errorf("axur %s: response was neither an object nor an array", path)
+		}
+		batch := axurRowsOf(rawBody(rows, body))
+		if batch == nil {
+			return nil, fmt.Errorf("axur %s: response carried no recognisable list", path)
+		}
+		out = append(out, collectField(rawBody(rows, body), field)...)
+		if !walk || len(batch) == 0 {
+			break
+		}
+		if page == axurMaxPages {
+			log.Printf("axur: %s discovery stopped at the %d-page cap", path, axurMaxPages)
 		}
 	}
-	if firstErr != nil {
-		// Every probe FAILED. That is an outage or an entitlement problem, not a
-		// configuration one, and it keeps its own category: telling an operator
-		// to set a variable while Axur is down sends them the wrong way.
-		log.Printf("axur: customer-key discovery failed: %v", firstErr)
-		degraded := axurUnavailable(firstErr)
-		// WHICH CALL FAILED IS HALF THE DIAGNOSIS. A failure here is the account
-		// lookup, not the supplier read, and those have different remedies: the
-		// lookup can be bypassed with AXUR_CUSTOMER_KEY, the supplier read
-		// cannot. Without this the two were the same sentence.
-		if r, ok := degraded["unavailable"].(string); ok {
-			degraded["unavailable"] = "Could not look up the Axur account code. " + r +
-				" Set AXUR_CUSTOMER_KEY to skip the lookup."
+	return out, nil
+}
+
+// axurRowsOf finds the list inside a decoded response, whichever envelope name
+// the endpoint uses. nil means "no list here", which callers treat as a shape
+// failure rather than as an empty list.
+func axurRowsOf(v any) []any {
+	switch t := v.(type) {
+	case []any:
+		return t
+	case map[string]any:
+		for _, envelope := range []string{"results", "items", "data", "assets", "customers"} {
+			if nested, ok := t[envelope]; ok {
+				if rows, ok := nested.([]any); ok {
+					return rows
+				}
+			}
 		}
-		return "", degraded
 	}
-	// The probes succeeded and simply carried no key. This is the one case the
-	// manual override is the right advice for.
-	return "", axurNeedsCustomerKey("Axur did not report an account code for this key.")
+	return nil
 }
 
 // axurNeedsCustomerKey is the configuration degrade shape. It names the
