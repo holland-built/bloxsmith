@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SLOW_COLD_TIMEOUT_MS, useApi } from '../lib/api.js'
 import { mergeStateKey, nextMergeState } from '../lib/assetColumns.js'
-import { Card, CardGrid, Empty, FeedUnavailable, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, TabIntro, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 
 // The Assets tab: a searchable, filterable, paged inventory of every asset
@@ -194,7 +194,7 @@ function FilterBar({ filters, type, onType, input, onInput, onSearch, onClear, s
             value={input}
             onChange={(e) => onInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onSearch()}
-            className="w-[220px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={`${FIELD_CLS} w-[220px]`}
           />
           <button
             type="button"

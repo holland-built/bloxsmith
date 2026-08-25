@@ -10,9 +10,9 @@
 // that is what carries the notice.
 import { useEffect, useRef, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { Card, CardGrid, COLORS, Empty, FetchError, PreviewApply, PreviewBox, TabIntro, deletedMsg } from '../components/ui.jsx'
+import { Card, CardGrid, COLORS, deletedMsg, Empty, FetchError, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 
-const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none'
+const inputCls = FIELD_CLS
 const RTYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR', 'NS', 'CAA']
 const EDITABLE_RTYPES = ['A', 'AAAA', 'CNAME', 'PTR', 'NS', 'DNAME', 'TXT', 'MX', 'SRV', 'CAA']
 

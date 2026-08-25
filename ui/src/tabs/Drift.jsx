@@ -2,14 +2,14 @@ import { useMemo, useState } from 'react'
 // FetchError is the same shared component SelfService.jsx uses — /api/templates
 // answers 500 and /api/ipam/spaces answers 502 on an upstream failure, and both
 // collapse into the same empty list a tenant that owns nothing produces.
-import { COLORS, Card, CardGrid, Empty, FetchError, Skeleton, TabIntro } from '../components/ui.jsx'
+import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, Skeleton, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 // The classifier reads a sentence written in Go (drift.go's DetectDrift). It
 // lives in lib/ so npm test can reach it — inside this file it was a
 // cross-language prose contract nothing checked. See driftStatus.test.js.
 import { driftItemKind } from '../lib/driftStatus.js'
 
-const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
+const inputCls = `${FIELD_CLS} w-full`
 
 // Colours stay here, with the component that paints them. Keeping them next to
 // the classifier is what put the classifier inside a .jsx file and out of reach

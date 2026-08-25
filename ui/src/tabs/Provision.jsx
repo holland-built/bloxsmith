@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from 'react'
 // answers 500 — and `data?.spaces ?? []` collapses every one of those into the
 // empty array a tenant that genuinely owns nothing produces. Unread, the select
 // falls back to its placeholder and Apply sits disabled with no reason given.
-import { COLORS, Card, CardGrid, Empty, FetchError, PreviewApply, TabIntro } from '../components/ui.jsx'
+import { Card, CardGrid, COLORS, Empty, FetchError, FIELD_CLS, PreviewApply, TabIntro } from '../components/ui.jsx'
 import { useApi } from '../lib/api.js'
 import { dhcpSkips } from '../lib/dhcpSkips.js'
 import { withToken } from '../lib/authFetch.js'
 import { templateScanErrors } from '../lib/templateScanErrors.js'
 
-const inputCls = 'px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none w-full'
+const inputCls = `${FIELD_CLS} w-full`
 
 export default function Provision() {
   const [mode, setMode] = useState('subnet') // 'subnet' | 'site' | 'seed'

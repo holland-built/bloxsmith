@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FeedUnavailable } from './ui.jsx'
+import { FeedUnavailable, FIELD_CLS } from './ui.jsx'
 
 // vpost — POST JSON, always resolves {ok,data}.
 const vpost = (url, body) =>
@@ -8,7 +8,7 @@ const vpost = (url, body) =>
     .catch(() => ({ ok: false, data: { error: 'network error' } }))
 
 const inCls =
-  'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none focus:border-accent'
+  `${FIELD_CLS} w-full`
 const btnCls =
   'w-full mt-4 px-2.5 py-1.5 rounded-lg bg-accent border border-accent text-white text-sm font-medium disabled:opacity-50'
 const cancelCls =

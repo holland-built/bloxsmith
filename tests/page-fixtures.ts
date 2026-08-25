@@ -136,7 +136,15 @@ const FEEDS = [
   { id: 2, name: 'baseline-feed-off', cat: 'phishing', conf: 'medium', entries: 40, level: 'medium', active: false },
 ];
 
-const dataPayload = () => ({
+// Exported so a spec can serve a VARIANT of the same payload rather than
+// route.fetch()-ing past the fixture layer to a server that has no tenant —
+// which returns an empty estate and looks like the panel simply not updating.
+// tests/keyboard-reach.spec.ts inverts the subnet utilisations with it.
+//
+// IT IS A SHALLOW COPY. The arrays inside are the module's own SUBNETS, HOSTS
+// and so on, so a caller that mutates a row rewrites the fixture for every test
+// after it in the same worker. structuredClone it first.
+export const dataPayload = () => ({
   subnets: SUBNETS,
   leases: LEASES,
   hosts: HOSTS,

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable } from '../components/DataTable.jsx'
 import { fmtShortDay } from '../lib/chartFormat.js'
 
@@ -350,7 +350,7 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
             placeholder="Filter…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-[150px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={`${FIELD_CLS} w-[150px]`}
           />
           {category && (
             <button onClick={() => onCategory('')} className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm">
@@ -487,7 +487,12 @@ function ActionDetailDrawer({ actionId, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
       <div
-        className="h-full w-full max-w-[420px] bg-panel border-l border-border p-4 overflow-y-auto"
+        // bg-panel WAS NOT A TOKEN. `@theme` in index.css declares no
+        // --color-panel, so Tailwind emitted no rule at all and this drawer
+        // painted its content straight onto the bg-black/40 scrim behind it.
+        // bg-card is the surface every other drawer and dialog uses
+        // (DocsPanel, HeaderHelp, TenantManager).
+        className="h-full w-full max-w-[420px] bg-card border-l border-card-border p-4 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">

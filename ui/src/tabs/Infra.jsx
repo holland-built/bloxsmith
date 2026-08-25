@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useApi } from '../lib/api.js'
 import { sliceState } from '../lib/data.js'
-import { useChartTheme, Card, CardGrid, Empty, FeedUnavailable, Skeleton } from '../components/ui.jsx'
+import { Card, CardGrid, Empty, FeedUnavailable, FIELD_CLS, FOCUS_RING, Skeleton, useChartTheme } from '../components/ui.jsx'
 import { DataTable, FeedCard, statusBadgeColor } from '../components/DataTable.jsx'
 import { useThemeColors } from '../lib/theme.jsx'
 import { useHashParams } from '../lib/hash.js'
@@ -383,13 +383,25 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
         statusFilter ? (
           <span className="inline-flex items-center gap-2">
             Host Inventory
-            <span
+            {/* A <span onClick> with no role, no tabIndex and no key handler:
+                the only way to clear the status filter was a mouse. A real
+                <button> is the whole fix — it brings the role, the tab stop and
+                Enter/Space with it, and the ✕ stops being the accessible name. */}
+            <button
+              type="button"
               onClick={() => { location.hash = 'infra' }}
-              className="text-[11px] font-medium px-2 py-0.5 rounded-full cursor-pointer"
+              // NOT aria-label. The panel chrome's About/Hide/Move buttons are
+              // aria-labelledby the panel TITLE, and this button is inside it,
+              // so an aria-label here is hoisted into all three of their
+              // accessible names: measured, "Hide Host Inventory" became "Hide
+              // Host Inventory Clear the offline status filter". The visible
+              // text is the name instead, and `title` carries the verb.
+              title="Clear this filter"
+              className={`text-[11px] font-medium px-2 py-0.5 rounded-full cursor-pointer outline-none ${FOCUS_RING}`}
               style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
             >
-              status: {statusFilter} ✕
-            </span>
+              status: {statusFilter} <span aria-hidden="true">✕</span>
+            </button>
           </span>
         ) : 'Host Inventory'
       }
@@ -400,12 +412,12 @@ function HostTable({ hosts, status, totalHosts, hostsStatus, loading, panelId })
             placeholder="Search name, IP…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="w-[170px] px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={`${FIELD_CLS} w-[170px]`}
           />
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none"
+            className={FIELD_CLS}
           >
             <option value="">All types</option>
             {types.map((t) => (

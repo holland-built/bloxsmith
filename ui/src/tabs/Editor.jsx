@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { COLORS, Card, CardGrid, Empty, PreviewApply, PreviewBox, TabIntro, deletedMsg } from '../components/ui.jsx'
+import { Card, CardGrid, COLORS, deletedMsg, Empty, FIELD_CLS, PreviewApply, PreviewBox, TabIntro } from '../components/ui.jsx'
 
-const inputCls = 'w-full px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none'
+const inputCls = `${FIELD_CLS} w-full`
 
 const FIELD_SPECS = {
   dns_zone: {

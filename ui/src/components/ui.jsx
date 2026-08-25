@@ -18,6 +18,27 @@ export const COLORS = {
   crit: 'var(--color-crit)', ok: 'var(--color-ok)', other: 'var(--color-other)',
 }
 
+// THE ONE FOCUS RING, AND WHY IT IS A RING RATHER THAN AN OUTLINE.
+//
+// This class string was copy-pasted into 17 filter inputs and selects across
+// eleven tabs, and every copy carried `outline-none` with nothing put back.
+// Measured before this change: `grep -rn outline-none ui/src --include=*.jsx`
+// returned 28 lines, 25 with no focus replacement on the same line, 17 of them
+// form controls. Tabbing to the Assets search box, the Audit date filters or
+// either Network select produced no visible change anywhere on the page.
+//
+// `ring-2 ring-inset` and not `outline`: a ring is a box-shadow, so it occupies
+// no layout box. DataTable measures its column widths with a canvas and adds a
+// hard-coded CELL_PAD (DataTable.jsx), and Card publishes its own width from
+// getComputedStyle (publish() below). An outline would be geometry-neutral too,
+// but ring-inset also paints INSIDE the border box, so a control sitting flush
+// against a card edge cannot bleed its focus state over the neighbour.
+//
+// FIELD_CLS carries no width. Callers append their own (`w-[220px]`, `w-full`),
+// which is how the 17 sites already differed from one another.
+export const FOCUS_RING = 'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
+export const FIELD_CLS = `px-2.5 py-1.5 rounded-lg border border-border bg-field text-field-txt text-sm outline-none focus-visible:border-accent ${FOCUS_RING}`
+
 export function useChartTheme() {
   const colors = useThemeColors()
   return {
