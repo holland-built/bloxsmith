@@ -18,7 +18,7 @@ const EDITABLE_RTYPES = ['A', 'AAAA', 'CNAME', 'PTR', 'NS', 'DNAME', 'TXT', 'MX'
 
 function Field({ label, children }) {
   return (
-    <label className="flex flex-col gap-1 text-xs text-muted">
+    <label className="flex flex-col gap-1 text-dense text-muted">
       {label}
       {children}
     </label>
@@ -454,9 +454,9 @@ function ManageRecordsPanel({ panelId, span }) {
       {zoneId && (
         <>
           <FetchError error={recordsApi.error} stale={records.length > 0} />
-          {deleteError && <div className="text-xs mb-2" style={{ color: COLORS.crit }}>{deleteError}</div>}
-          {!deleteError && panelMessage && <div className="text-xs mb-2" style={{ color: COLORS.ok }}>{panelMessage}</div>}
-          {note && <div className="text-[11px] text-dim mb-2">{note}</div>}
+          {deleteError && <div className="text-dense mb-2" style={{ color: COLORS.crit }}>{deleteError}</div>}
+          {!deleteError && panelMessage && <div className="text-dense mb-2" style={{ color: COLORS.ok }}>{panelMessage}</div>}
+          {note && <div className="text-caption text-dim mb-2">{note}</div>}
           {!recordsApi.loading && !recordsApi.error && records.length === 0 && <Empty>no records in this zone</Empty>}
           {records.length > 0 && (
             <div className="flex flex-col gap-1.5">
@@ -466,35 +466,35 @@ function ManageRecordsPanel({ panelId, span }) {
                 const isArmed = armedId === row.id
                 return (
                   <div key={row.id} className="rounded-control border border-border p-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="font-mono text-xs w-[110px] shrink-0 truncate" title={row.name_in_zone || '@'}>{row.name_in_zone || '@'}</span>
-                      <span className="text-xs text-muted w-[50px] shrink-0">{row.type}</span>
-                      <span className="text-xs text-muted w-[45px] shrink-0">{row.ttl}</span>
-                      <span className="text-xs flex-[2] min-w-0 truncate" title={row.dns_rdata}>{row.dns_rdata}</span>
-                      <span className="text-xs text-dim flex-1 min-w-0 truncate" title={row.comment}>{row.comment}</span>
+                    <div className="flex items-center gap-2 text-body">
+                      <span className="font-mono text-dense w-[110px] shrink-0 truncate" title={row.name_in_zone || '@'}>{row.name_in_zone || '@'}</span>
+                      <span className="text-dense text-muted w-[50px] shrink-0">{row.type}</span>
+                      <span className="text-dense text-muted w-[45px] shrink-0">{row.ttl}</span>
+                      <span className="text-dense flex-[2] min-w-0 truncate" title={row.dns_rdata}>{row.dns_rdata}</span>
+                      <span className="text-dense text-dim flex-1 min-w-0 truncate" title={row.comment}>{row.comment}</span>
                       {editable ? (
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            className="px-2 py-1 rounded-control text-xs border border-border"
+                            className="px-2 py-1 rounded-control text-dense border border-border"
                             onClick={() => (isEditing ? setEditingId(null) : startEdit(row))}
                           >
                             {isEditing ? 'Cancel' : 'Edit'}
                           </button>
                           <button
                             type="button"
-                            className="px-2 py-1 rounded-control text-xs border border-border"
+                            className="px-2 py-1 rounded-control text-dense border border-border"
                             onClick={() => handleDeleteClick(row)}
                           >
                             {isArmed ? 'Confirm delete' : 'Delete'}
                           </button>
                         </div>
                       ) : (
-                        <span className="text-[11px] text-dim">read-only type</span>
+                        <span className="text-caption text-dim">read-only type</span>
                       )}
                     </div>
                     {isArmed && (
-                      <div className="text-[11px] mt-1" style={{ color: 'var(--color-warn)' }}>{armLabel}</div>
+                      <div className="text-caption mt-1" style={{ color: 'var(--color-warn)' }}>{armLabel}</div>
                     )}
                     {isEditing && (
                       <div className="mt-2 flex flex-col gap-2">
@@ -618,8 +618,8 @@ function ManageAddressesPanel({ panelId }) {
       {subnetId && (
         <>
           <FetchError error={addressesApi.error} stale={addresses.length > 0} />
-          {releaseError && <div className="text-xs mb-2" style={{ color: COLORS.crit }}>{releaseError}</div>}
-          {note && <div className="text-[11px] text-dim mb-2">{note}</div>}
+          {releaseError && <div className="text-dense mb-2" style={{ color: COLORS.crit }}>{releaseError}</div>}
+          {note && <div className="text-caption text-dim mb-2">{note}</div>}
           {!addressesApi.loading && !addressesApi.error && addresses.length === 0 && <Empty>no addresses in this subnet</Empty>}
           {addresses.length > 0 && (
             <div className="flex flex-col gap-1.5">
@@ -627,21 +627,21 @@ function ManageAddressesPanel({ panelId }) {
                 const isArmed = armedId === row.id
                 return (
                   <div key={row.id} className="rounded-control border border-border p-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="font-mono text-xs w-[140px] shrink-0 truncate" title={row.address}>{row.address}</span>
-                      <span className="text-xs text-muted w-[80px] shrink-0 truncate" title={row.state}>{row.state}</span>
-                      <span className="text-xs flex-1 min-w-0 truncate" title={row.name}>{row.name}</span>
-                      <span className="text-xs text-dim flex-1 min-w-0 truncate" title={row.comment}>{row.comment}</span>
+                    <div className="flex items-center gap-2 text-body">
+                      <span className="font-mono text-dense w-[140px] shrink-0 truncate" title={row.address}>{row.address}</span>
+                      <span className="text-dense text-muted w-[80px] shrink-0 truncate" title={row.state}>{row.state}</span>
+                      <span className="text-dense flex-1 min-w-0 truncate" title={row.name}>{row.name}</span>
+                      <span className="text-dense text-dim flex-1 min-w-0 truncate" title={row.comment}>{row.comment}</span>
                       <button
                         type="button"
-                        className="px-2 py-1 rounded-control text-xs border border-border"
+                        className="px-2 py-1 rounded-control text-dense border border-border"
                         onClick={() => handleRelease(row)}
                       >
                         {isArmed ? 'Confirm release' : 'Release'}
                       </button>
                     </div>
                     {isArmed && (
-                      <div className="text-[11px] mt-1" style={{ color: 'var(--color-warn)' }}>{armLabel}</div>
+                      <div className="text-caption mt-1" style={{ color: 'var(--color-warn)' }}>{armLabel}</div>
                     )}
                   </div>
                 )
@@ -662,7 +662,7 @@ const SHOW_MANAGE_ADDRESSES = true
 export default function SelfService() {
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-lg font-semibold tracking-tight mb-1">Self-Service</h1>
+      <h1 className="text-title font-semibold tracking-tight mb-1">Self-Service</h1>
       <TabIntro anchor="self-service">
         The two everyday asks, without the full Editor: take the next free address out of a subnet, or add a
         record to an existing DNS zone. Preview checks the request against the server; Apply commits it.

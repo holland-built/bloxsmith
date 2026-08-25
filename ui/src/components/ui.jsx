@@ -42,7 +42,7 @@ export const COLORS = {
 // FIELD_CLS carries no width. Callers append their own (`w-[220px]`, `w-full`),
 // which is how the 17 sites already differed from one another.
 export const FOCUS_RING = 'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
-export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm outline-none focus-visible:border-accent ${FOCUS_RING}`
+export const FIELD_CLS = `px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-body outline-none focus-visible:border-accent ${FOCUS_RING}`
 
 export function useChartTheme() {
   const colors = useThemeColors()
@@ -377,7 +377,7 @@ function applyLayout(grid, items, overrides) {
 // asked for. If a second message type ever appears, that is the moment to build
 // the system — not before.
 const SAVE_PILL_BASE =
-  'pointer-events-none fixed bottom-4 right-4 z-[150] rounded-control border px-3 py-1.5 text-[11px] font-semibold'
+  'pointer-events-none fixed bottom-4 right-4 z-[150] rounded-control border px-3 py-1.5 text-caption font-semibold'
 // `hidden`, not `opacity-0`: an empty bordered box is still a painted box.
 const SAVE_PILL_HIDDEN = `${SAVE_PILL_BASE} hidden`
 const SAVE_PILL_OK = `${SAVE_PILL_BASE} border-[var(--pill-ok-fg)] bg-[var(--pill-ok-bg)] text-[var(--pill-ok-fg)]`
@@ -982,7 +982,7 @@ export function CardGrid({ className = '', layoutKey, children }) {
           tab's panels drops `reorderable` to false, and gating on that alone
           would take the only way back off screen at the moment it is needed. */}
       {layoutKey && (reorderable || hiddenTiles.length > 0) && (
-        <div data-testid="hidden-tiles" className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+        <div data-testid="hidden-tiles" className="mb-3 flex flex-wrap items-center gap-2 text-caption text-muted">
           {/* One plain, worded button. Not an icon: the control that undoes
               "I pressed a ✕ and my panel vanished" cannot itself be a glyph
               the same operator has to decode. */}
@@ -1010,7 +1010,7 @@ export function CardGrid({ className = '', layoutKey, children }) {
             // is the tonal version of the same accent. Filled beats tinted at a
             // glance, which is the ranking a page control should have against
             // the page's primary action.
-            className="cursor-pointer rounded-control border border-accent bg-accent/15 px-2.5 py-1 text-xs font-semibold text-txt hover:bg-accent/25 hover:border-accent"
+            className="cursor-pointer rounded-control border border-accent bg-accent/15 px-2.5 py-1 text-dense font-semibold text-txt hover:bg-accent/25 hover:border-accent"
           >
             Arrange panels
           </button>
@@ -1311,7 +1311,7 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, 
   }
 
   const rowBtn =
-    'cursor-pointer rounded-control border border-border px-1.5 py-0.5 text-[11px] leading-none text-muted hover:text-field-txt hover:border-border-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted disabled:hover:border-border'
+    'cursor-pointer rounded-control border border-border px-1.5 py-0.5 text-caption leading-none text-muted hover:text-field-txt hover:border-border-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted disabled:hover:border-border'
 
   return (
     <div
@@ -1333,14 +1333,14 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">
-          <h2 id="arrange-title" className="text-sm font-semibold">Arrange this page</h2>
+          <h2 id="arrange-title" className="text-body font-semibold">Arrange this page</h2>
           <span className="flex-1" />
-          <button type="button" className="text-muted text-sm cursor-pointer" onClick={onClose} aria-label="Close">✕</button>
+          <button type="button" className="text-muted text-body cursor-pointer" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
-        <h3 className="text-[11px] font-semibold text-field-txt mb-1.5">On this page</h3>
+        <h3 className="text-caption font-semibold text-field-txt mb-1.5">On this page</h3>
         {items.length === 0 ? (
-          <p className="m-0 mb-4 text-[11px] text-muted">Every panel is off the page right now.</p>
+          <p className="m-0 mb-4 text-caption text-muted">Every panel is off the page right now.</p>
         ) : (
           <ul className="m-0 mb-4 list-none p-0">
             {items.map((id, i) => (
@@ -1363,9 +1363,9 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, 
                     keyboard user can take, and the two Move buttons beside it
                     do. */}
                 {items.length > 1 && (
-                  <span aria-hidden="true" className="select-none text-dim text-[11px] leading-none">⠿</span>
+                  <span aria-hidden="true" className="select-none text-dim text-caption leading-none">⠿</span>
                 )}
-                <span data-arrange-name="" className="flex-1 min-w-0 truncate text-[11px] text-field-txt">{nameOf(id)}</span>
+                <span data-arrange-name="" className="flex-1 min-w-0 truncate text-caption text-field-txt">{nameOf(id)}</span>
                 {/* DISABLED, never missing. A button that vanishes at the top
                     of the list moves every other button under the pointer and
                     out from under the keyboard, and gives no answer to "why
@@ -1412,11 +1412,11 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, 
             heading on every tidy tab is a section that says nothing. */}
         {hiddenTiles.length > 0 && (
           <>
-            <h3 className="text-[11px] font-semibold text-field-txt mb-1.5">Off this page</h3>
+            <h3 className="text-caption font-semibold text-field-txt mb-1.5">Off this page</h3>
             <ul className="m-0 mb-4 list-none p-0">
               {hiddenTiles.map((tile) => (
                 <li key={tile.id} className="flex items-center gap-1.5 py-1 border-b border-line-2 last:border-b-0">
-                  <span data-arrange-name="" className="flex-1 min-w-0 truncate text-[11px] text-field-txt">{tile.name}</span>
+                  <span data-arrange-name="" className="flex-1 min-w-0 truncate text-caption text-field-txt">{tile.name}</span>
                   <button
                     type="button"
                     data-arrange={`back:${tile.id}`}
@@ -1438,7 +1438,7 @@ function ArrangeDialog({ items, hiddenTiles, nameOf, onMove, onDrop, onTakeOff, 
             (the resize hotspot is opacity-0 until hover); and says nothing
             needs saving. Generated from the same gate as the rows above, so a
             window listing one panel never promises a reorder. */}
-        <p className="m-0 text-[11px] text-muted">
+        <p className="m-0 text-caption text-muted">
           {items.length > 1 ? `${LAYOUT_HELP_MOVE} ${LAYOUT_HELP_REST}` : LAYOUT_HELP_REST}
         </p>
       </div>
@@ -2050,7 +2050,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       onPointerDown={onHandleDown}
       onKeyDown={onHandleKey}
       onBlur={onHandleBlur}
-      className={`shrink-0 cursor-grab touch-none select-none rounded-control border px-1.5 py-0.5 text-[11px] leading-none ${
+      className={`shrink-0 cursor-grab touch-none select-none rounded-control border px-1.5 py-0.5 text-caption leading-none ${
         moveActive ? 'border-accent text-accent' : 'border-border text-dim hover:text-field-txt hover:border-border-hover'
       }`}
     >
@@ -2089,7 +2089,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       {...(title ? { 'aria-labelledby': `${hideWordId} ${titleId}` } : { 'aria-label': `Hide ${panelName || panelId}` })}
       title="Hide this panel"
       onClick={onHide}
-      className="shrink-0 cursor-pointer rounded-control border border-border px-1.5 py-0.5 text-[11px] leading-none text-dim hover:text-field-txt hover:border-border-hover"
+      className="shrink-0 cursor-pointer rounded-control border border-border px-1.5 py-0.5 text-caption leading-none text-dim hover:text-field-txt hover:border-border-hover"
     >
       {title && <span id={hideWordId} className="sr-only">Hide</span>}
       ✕
@@ -2236,7 +2236,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       // back after a close — blur clears it, the next focus sets it again.
       onFocus={() => setHelpFocus(true)}
       onBlur={() => setHelpFocus(false)}
-      className={`shrink-0 cursor-pointer rounded-control border px-1.5 py-0.5 text-[11px] leading-none ${
+      className={`shrink-0 cursor-pointer rounded-control border px-1.5 py-0.5 text-caption leading-none ${
         // Hover does not fight the pinned state: pinned always wins the accent,
         // a preview gets the plain hover treatment, and the closed state keeps
         // the CSS :hover fallback for anything the JS previews miss.
@@ -2271,7 +2271,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
       // TabIntro (further down this file) keeps its 80ch cap: it is a permanent
       // line of page furniture under the tab heading, not a block the operator
       // opened on purpose, and nothing was reported about it.
-      className="mb-2 rounded-control border border-line-2 bg-line px-2.5 py-2 text-[11px] leading-relaxed text-muted"
+      className="mb-2 rounded-control border border-line-2 bg-line px-2.5 py-2 text-caption leading-relaxed text-muted"
     >
       {helpOpen && (
         <>
@@ -2348,7 +2348,7 @@ export function Card({ title, panelName, note, right, span = 2, panelId, fit: fi
         // keep a heading on one line is the wrong way round.
         <div ref={headRef} className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
           <h2 id={titleId} ref={titleRef} className="text-[13.5px] font-semibold min-w-0 break-words">{title}</h2>
-          {note && <span ref={noteRef} className="text-[11px] text-dim min-w-0 break-words">{note}</span>}
+          {note && <span ref={noteRef} className="text-caption text-dim min-w-0 break-words">{note}</span>}
           <span className="flex-1" />
           {/* The drag handle goes INSIDE the `right` slot, not beside it, and
               that placement is the whole reason headNeed keeps working: the
@@ -2486,7 +2486,7 @@ function HiddenPanelsRow({ groupKey, label, n }) {
     <div
       ref={rowRef}
       data-testid="hidden-panels"
-      className="col-span-2 md:col-span-4 xl:col-span-6 flex flex-wrap items-center gap-2 rounded-surface border border-dashed border-card-border px-3 py-2 text-[11px] text-muted"
+      className="col-span-2 md:col-span-4 xl:col-span-6 flex flex-wrap items-center gap-2 rounded-surface border border-dashed border-card-border px-3 py-2 text-caption text-muted"
     >
       <span>
         {n} panel{n === 1 ? '' : 's'} hidden — no {label} service detected on this tenant
@@ -2505,7 +2505,7 @@ function HiddenPanelsRow({ groupKey, label, n }) {
         // exist this button is gone, so any id here would be a dangling
         // reference. The focus move above is what stands in for it.
         aria-expanded={false}
-        className="rounded-control border border-border px-2 py-0.5 text-[11px] text-muted cursor-pointer hover:text-field-txt"
+        className="rounded-control border border-border px-2 py-0.5 text-caption text-muted cursor-pointer hover:text-field-txt"
       >
         show anyway
       </button>
@@ -2539,7 +2539,7 @@ export function TabIntro({ anchor, children }) {
     btnRef.current?.focus()
   }
   return (
-    <p className="text-xs text-muted mb-3 max-w-[80ch]">
+    <p className="text-dense text-muted mb-3 max-w-[80ch]">
       {children}{' '}
       <button
         ref={btnRef}
@@ -2547,7 +2547,7 @@ export function TabIntro({ anchor, children }) {
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="text-accent underline underline-offset-2 whitespace-nowrap cursor-pointer bg-transparent border-0 p-0 text-xs"
+        className="text-accent underline underline-offset-2 whitespace-nowrap cursor-pointer bg-transparent border-0 p-0 text-dense"
       >
         Docs →
       </button>
@@ -2585,7 +2585,7 @@ export function TabIntro({ anchor, children }) {
 // own fetch/stream logic and renders its own preview body as children, because
 // Provision streams SSE while the others are request/response.
 
-const PA_BTN = 'px-3.5 py-1.5 rounded-control text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed'
+const PA_BTN = 'px-3.5 py-1.5 rounded-control text-body font-medium disabled:opacity-40 disabled:cursor-not-allowed'
 
 export function PreviewApply({
   status = 'idle', // 'idle' | 'busy' | 'previewed' | 'applied'
@@ -2630,10 +2630,10 @@ export function PreviewApply({
           </button>
         )}
         {showApply && applyDisabled && applyNote && (
-          <span className="text-[11px]" style={{ color: COLORS.warn }}>{applyNote}</span>
+          <span className="text-caption" style={{ color: COLORS.warn }}>{applyNote}</span>
         )}
         {status === 'previewed' && stale && (
-          <span className="text-[11px]" style={{ color: COLORS.warn }}>
+          <span className="text-caption" style={{ color: COLORS.warn }}>
             inputs changed — preview again
           </span>
         )}
@@ -2641,7 +2641,7 @@ export function PreviewApply({
 
       {error && (
         <div
-          className="text-sm rounded-control px-3 py-2"
+          className="text-body rounded-control px-3 py-2"
           style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)', border: `1px solid ${COLORS.crit}` }}
         >
           {error}
@@ -2651,7 +2651,7 @@ export function PreviewApply({
           the warning above replaces it rather than sitting next to it. */}
       {!error && message && !stale && (
         <div
-          className="text-sm rounded-control px-3 py-2"
+          className="text-body rounded-control px-3 py-2"
           style={{ background: 'var(--pill-ok-bg)', color: 'var(--pill-ok-fg)', border: `1px solid ${COLORS.ok}` }}
         >
           {message}
@@ -2671,8 +2671,8 @@ export function PreviewBox({ data, note = 'preview — nothing applied yet' }) {
   if (data == null) return null
   return (
     <div className="rounded-control border border-border bg-field p-3">
-      <div className="text-[11px] text-dim mb-1.5">{note}</div>
-      <pre className="text-xs whitespace-pre-wrap max-h-[320px] overflow-auto text-muted">
+      <div className="text-caption text-dim mb-1.5">{note}</div>
+      <pre className="text-dense whitespace-pre-wrap max-h-[320px] overflow-auto text-muted">
         {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
       </pre>
     </div>
@@ -2702,7 +2702,7 @@ export function deletedMsg(j, label) {
 export function FetchError({ error, stale }) {
   if (!error) return null
   return (
-    <div className="text-xs mb-2" style={{ color: COLORS.crit }}>
+    <div className="text-dense mb-2" style={{ color: COLORS.crit }}>
       Could not load current data: {String(error?.message || error)}
       {stale && ' — the list below may be out of date.'}
     </div>
@@ -2710,7 +2710,7 @@ export function FetchError({ error, stale }) {
 }
 
 export function Empty({ children = 'no data' }) {
-  return <div className="h-full min-h-[100px] flex items-center justify-center text-muted text-sm">{children}</div>
+  return <div className="h-full min-h-[100px] flex items-center justify-center text-muted text-body">{children}</div>
 }
 
 // A dead upstream feed must never read as "you have none" — this is visually
@@ -2743,18 +2743,18 @@ export function FeedUnavailable({ reason, label = 'Feed unavailable', onRetry })
       data-feed-unavailable={label}
       className="h-full min-h-[100px] flex flex-col items-center justify-center gap-1 text-center px-4"
     >
-      <div className="text-sm font-semibold" style={{ color: COLORS.crit }}>{label}</div>
-      {reason ? <div className="text-[11px]" style={{ color: COLORS.warn }}>{reason}</div> : null}
+      <div className="text-body font-semibold" style={{ color: COLORS.crit }}>{label}</div>
+      {reason ? <div className="text-caption" style={{ color: COLORS.warn }}>{reason}</div> : null}
       {showButton ? (
         <button
           type="button"
           onClick={onRetry || retryFailedFeeds}
-          className="mt-1 px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-[11px]"
+          className="mt-1 px-2.5 py-1 rounded-control border border-border bg-field text-field-txt text-caption"
         >
           Try again
         </button>
       ) : retrying ? (
-        <div className="text-[11px] text-dim">{"Didn't load — trying again…"}</div>
+        <div className="text-caption text-dim">{"Didn't load — trying again…"}</div>
       ) : null}
     </div>
   )

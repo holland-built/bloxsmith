@@ -548,7 +548,10 @@ const CLAIMS = [
     proofs: [
       { re: /const scopeNote = sampleScopeNote\(sec\.data, 'events'\)/, expect: 'the panel computes a scope note from the payload' },
       { re: /\{secDead \? '— events' : sampleCountLabel\(sec\.data, 'events'\)\}/, expect: 'the title count is the sample-aware label, not rows.length' },
-      { re: /\{scopeNote && <div className="text-\[11px\] text-dim mt-2">\{scopeNote\}<\/div>\}/, expect: 'and the note is actually rendered under the figures' },
+      // The claim is that the note IS RENDERED, not what size it is. Pinning the
+      // whole className made this fail when text-[11px] became the text-caption
+      // role token, which changed no pixel and nothing the copy says.
+      { re: /\{scopeNote && <div className="text-caption text-dim mt-2">\{scopeNote\}<\/div>\}/, expect: 'and the note is actually rendered under the figures' },
     ],
   },
   {
@@ -569,7 +572,7 @@ const CLAIMS = [
     file: SECURITY,
     proofs: [
       { re: /const scopeNote = sampleScopeNote\(hub\.data, 'events'\)/, expect: 'the severity panel computes a scope note' },
-      { re: /right=\{unavailable \? null : <span className="text-\[11px\] text-muted">\{sampleCountLabel\(hub\.data, 'events'\)\}<\/span>\}/, expect: 'its heading count is sample-aware' },
+      { re: /right=\{unavailable \? null : <span className="text-caption text-muted">\{sampleCountLabel\(hub\.data, 'events'\)\}<\/span>\}/, expect: 'its heading count is sample-aware' },
     ],
   },
   {

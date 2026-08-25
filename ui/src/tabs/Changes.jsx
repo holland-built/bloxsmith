@@ -88,8 +88,8 @@ export default function Changes() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-lg font-semibold tracking-tight mb-1">What changed — last 24 hours</h1>
-      <p className="text-xs text-muted mb-3 max-w-[80ch]">
+      <h1 className="text-title font-semibold tracking-tight mb-1">What changed — last 24 hours</h1>
+      <p className="text-dense text-muted mb-3 max-w-[80ch]">
         Infoblox portal activity, {FEED_PROMISE}. This is a window on the audit route, not a change log: it
         cannot show more than {ROW_CAP} events, and it holds no history from before the window.
       </p>
@@ -119,7 +119,7 @@ export default function Changes() {
           span={6}
           title="Changed objects"
           note="grouped by what was touched, newest group first"
-          right={state === 'ok' ? <span className="text-[11px] text-muted">{summary.listed} rows · {summary.groups} groups</span> : null}
+          right={state === 'ok' ? <span className="text-caption text-muted">{summary.listed} rows · {summary.groups} groups</span> : null}
         >
           {state === 'loading' ? (
             <Skeleton h={250} />
@@ -201,7 +201,7 @@ function BandCell({ cell }) {
           {cell.caption}
         </p>
         {cell.state === 'populated' && cell.key === 'newActors' && (
-          <p className="mt-1 text-[11px] text-dim truncate" title={cell.actors.join(', ')}>
+          <p className="mt-1 text-caption text-dim truncate" title={cell.actors.join(', ')}>
             {cell.actors.join(', ')}
           </p>
         )}
@@ -317,7 +317,7 @@ function GroupHeader({ group }) {
       >
         <span role="heading" aria-level={3}>{group.resource}</span>
       </span>
-      <span role="cell" aria-colindex={COL.result} aria-colspan={4} className="col-span-4 text-[11px] text-dim truncate">
+      <span role="cell" aria-colindex={COL.result} aria-colspan={4} className="col-span-4 text-caption text-dim truncate">
         {groupCounts(group)}
       </span>
     </div>
@@ -349,7 +349,7 @@ function FeedRow({ row }) {
       >
         <span className="sr-only">{railWord}</span>
       </span>
-      <span role="cell" aria-colindex={COL.ts} className="font-mono text-[11px] whitespace-nowrap">
+      <span role="cell" aria-colindex={COL.ts} className="font-mono text-caption whitespace-nowrap">
         <span className="text-dim mr-1.5">{date}</span>
         {formatClock(row.ts)}
       </span>

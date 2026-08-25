@@ -21,9 +21,9 @@ export default function Provision() {
   return (
     <div className="max-w-[720px] mx-auto p-5">
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-lg font-semibold tracking-tight">Provision</h1>
+        <h1 className="text-title font-semibold tracking-tight">Provision</h1>
         <span
-          className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+          className="text-caption font-medium px-2 py-0.5 rounded-full"
           style={{
             background: isAdmin ? 'var(--pill-ok-bg)' : role === 'operator' ? 'var(--pill-warn-bg)' : 'var(--pill-crit-bg)',
             color: isAdmin ? 'var(--pill-ok-fg)' : role === 'operator' ? 'var(--pill-warn-fg)' : 'var(--pill-crit-fg)',
@@ -48,7 +48,7 @@ export default function Provision() {
           <button
             key={key}
             onClick={() => setMode(key)}
-            className={`px-3 py-1.5 rounded-control text-sm font-medium ${
+            className={`px-3 py-1.5 rounded-control text-body font-medium ${
               mode === key ? 'bg-accent text-on-accent' : 'text-muted'
             }`}
           >
@@ -148,7 +148,7 @@ function RollbackReport({ report }) {
   if (report.outcome === 'incomplete') {
     return (
       <div className="flex flex-col gap-0.5">
-        <div className="text-sm font-semibold" style={{ color: COLORS.crit }}>
+        <div className="text-body font-semibold" style={{ color: COLORS.crit }}>
           Cleanup could not remove {residual.length || attempted - deleted} object
           {(residual.length || attempted - deleted) === 1 ? '' : 's'} — they are still live on the customer&rsquo;s
           network
@@ -470,7 +470,7 @@ function SiteMode({ isAdmin }) {
               <input className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder={siteTemplate || 'site name'} />
             </Field>
           ) : (
-            <div className="text-[11px]" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
+            <div className="text-caption" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
           )}
 
           <PreviewApply
@@ -554,7 +554,7 @@ function SeedMode({ isAdmin }) {
     // Its own key, for the reason spelled out on the subnet grid above.
     <CardGrid layoutKey="provision-seed">
       <Card key="provision-seed-request" title="Seed multi-region demo data" panelId="provision-seed-request" span={6}>
-        <div className="text-[11px] text-dim mb-3">
+        <div className="text-caption text-dim mb-3">
           Provisions a full set of demo sites, subnets, and zones across the selected regions from the template
           library. Preview the plan before writing real objects — this creates a lot of them.
         </div>
@@ -629,7 +629,7 @@ function SeedMode({ isAdmin }) {
               <input className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder="DELETE" />
             </Field>
           ) : (
-            <div className="text-[11px]" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
+            <div className="text-caption" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
           )}
 
           <PreviewApply
@@ -694,7 +694,7 @@ function Field({ label, children }) {
 
 function CheckRow({ checked, onChange, label }) {
   return (
-    <label className="flex items-center gap-2 text-sm">
+    <label className="flex items-center gap-2 text-body">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}</span>
     </label>
