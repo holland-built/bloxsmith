@@ -1,10 +1,13 @@
 package dashboard
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -453,5 +456,190 @@ func TestAxurResultIsJSONSerialisable(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `"findings":1`) {
 		t.Errorf("marshalled shape lost findings: %s", b)
+	}
+}
+
+// --- Codex finding 1: the failure body is logged whichever outcome wins -------
+
+// TestAxurProbeFailureIsLoggedEvenWhenConfigWins: probe 1 fails, probe 2
+// succeeds-but-empty, so the CONFIG message wins. The 400's body is the only
+// thing that can explain probe 1, and it must still reach the log.
+func TestAxurProbeFailureIsLoggedEvenWhenConfigWins(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte(`{"code":"asset.badRequest","message":"perPage exceeds maximum"}`))
+		},
+		"/customers-api/customers": jsonHandler(`[]`),
+	})
+	got := s.FetchAxurVendors()
+	if got["needs_key"] != true {
+		t.Fatalf("needs_key = %v, want true — an empty success beats a sibling failure", got["needs_key"])
+	}
+	out := buf.String()
+	if !strings.Contains(out, "status=400") {
+		t.Errorf("log did not record the 400: %q", out)
+	}
+	if !strings.Contains(out, "perPage exceeds maximum") {
+		t.Errorf("log did not carry the provider's explanation: %q", out)
+	}
+}
+
+// --- Codex finding 2: the logged snippet is redacted and cannot forge a line --
+
+func TestAxurLoggedSnippetIsRedactedAndQuoted(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte("{\"authorization\":\"Bearer super-secret-value\"}\nFORGED LINE"))
+		},
+		"/customers-api/customers": jsonHandler(`[]`),
+	})
+	s.FetchAxurVendors()
+	out := buf.String()
+	if strings.Contains(out, "super-secret-value") {
+		t.Errorf("a credential reached the log: %q", out)
+	}
+	if !strings.Contains(out, "[REDACTED]") {
+		t.Errorf("nothing was redacted: %q", out)
+	}
+	// %q turns the newline into an escape, so the forged text cannot start its
+	// own log line.
+	if strings.Contains(out, "\nFORGED LINE") {
+		t.Errorf("upstream text forged a log line: %q", out)
+	}
+	if !strings.Contains(out, `\nFORGED LINE`) {
+		t.Errorf("expected the newline escaped rather than dropped: %q", out)
+	}
+}
+
+// --- Codex finding 3: a 2xx of the wrong shape is a failure, not an empty ----
+
+func TestAxurProbeWrongShapeIsAFailure(t *testing.T) {
+	// Both probes answer 200 with an error envelope carrying no list at all.
+	envelope := jsonHandler(`{"error":"something went wrong","code":"E_OOPS"}`)
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets":       envelope,
+		"/customers-api/customers": envelope,
+	})
+	got := s.FetchAxurVendors()
+	if got["needs_key"] == true {
+		t.Fatalf("an error envelope at HTTP 200 was reported as a missing setting: %v", got)
+	}
+	if _, ok := got["unavailable"]; !ok {
+		t.Fatalf("wrong-shaped 200 was not treated as a failure: %v", got)
+	}
+}
+
+// --- Codex finding 4: reconcile across pages and across probes ---------------
+
+// A second page of assets revealing a different account must be caught, even
+// though page one was uniform.
+func TestAxurMultiAccountFoundOnLaterPage(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Query().Get("page") == "1" {
+				var rows []string
+				for i := 0; i < 100; i++ {
+					rows = append(rows, `{"customerKey":"ACME"}`)
+				}
+				_, _ = w.Write([]byte(`{"assets":[` + strings.Join(rows, ",") + `]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"assets":[{"customerKey":"OTHERCO"}]}`))
+		},
+		"/customers-api/customers": jsonHandler(`[]`),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": func(w http.ResponseWriter, r *http.Request) {
+			t.Error("read a tenant's data despite a second account on a later page")
+		},
+	})
+	got := s.FetchAxurVendors()
+	if got["needs_key"] != true {
+		t.Fatalf("needs_key = %v, want true — page 2 held a second account", got["needs_key"])
+	}
+}
+
+// Two probes that each answer cleanly but disagree must not be reconciled by
+// preferring one of them.
+func TestAxurProbesDisagreeing(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets":       jsonHandler(`{"assets":[{"customerKey":"ACME"}]}`),
+		"/customers-api/customers": jsonHandler(`[{"key":"OTHERCO"}]`),
+	})
+	got := s.FetchAxurVendors()
+	if got["needs_key"] != true {
+		t.Fatalf("needs_key = %v, want true — the two probes disagreed", got["needs_key"])
+	}
+}
+
+// Both probes agreeing on the same single code is not ambiguity.
+func TestAxurProbesAgreeing(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets":       jsonHandler(`{"assets":[{"customerKey":"ACME"}]}`),
+		"/customers-api/customers": jsonHandler(`[{"key":"ACME"}]`),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[]`),
+	})
+	got := s.FetchAxurVendors()
+	if got["customer"] != "ACME" {
+		t.Errorf("customer = %v, want ACME", got["customer"])
+	}
+}
+
+// --- Codex finding 5: the exact query each probe sends -----------------------
+
+// The customers endpoint documents NO query parameters, and sending page and
+// perPage to an endpoint that declares none is one way a 400 gets invented.
+func TestAxurProbeQueryStrings(t *testing.T) {
+	var assetsQ, customersQ string
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": func(w http.ResponseWriter, r *http.Request) {
+			assetsQ = r.URL.RawQuery
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"assets":[]}`))
+		},
+		"/customers-api/customers": func(w http.ResponseWriter, r *http.Request) {
+			customersQ = r.URL.RawQuery
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		},
+	})
+	s.FetchAxurVendors()
+	if !strings.Contains(assetsQ, "page=1") || !strings.Contains(assetsQ, "perPage=100") {
+		t.Errorf("assets query = %q, want page and perPage", assetsQ)
+	}
+	if customersQ != "" {
+		t.Errorf("customers query = %q, want none — that endpoint documents no parameters", customersQ)
+	}
+}
+
+// --- Codex finding 2 again: nothing from the body reaches the panel ----------
+
+func TestAxurPanelMessageCarriesNoUpstreamBody(t *testing.T) {
+	fail := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		_, _ = w.Write([]byte(`{"secretish":"internal-detail-abc123","path":"/private/thing"}`))
+	}
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets":       fail,
+		"/customers-api/customers": fail,
+	})
+	got := s.FetchAxurVendors()
+	msg, _ := got["unavailable"].(string)
+	for _, leak := range []string{"internal-detail-abc123", "/private/thing", "secretish"} {
+		if strings.Contains(msg, leak) {
+			t.Errorf("panel message leaked %q: %s", leak, msg)
+		}
+	}
+	if !strings.Contains(msg, "400") {
+		t.Errorf("panel message = %q, want the status", msg)
 	}
 }
