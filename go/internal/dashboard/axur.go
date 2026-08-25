@@ -329,39 +329,47 @@ func (s *Service) axurCustomerKey(client *rest.Client, cred string) (string, map
 // explains it never depends on which outcome came out on top.
 func (s *Service) axurDiscoverCustomer(client *rest.Client) (string, map[string]any) {
 	var firstErr error
+	var failures []probeFailure
 	anySucceeded := false
 	var seen []string
 	for _, probe := range []struct {
 		path   string
 		field  string
 		params map[string]string
-		walk   bool
+		// pageParam is the query name this endpoint uses for the page number,
+		// or "" for an endpoint that is read once. They differ: the history
+		// route calls it pageNumber and the assets route calls it page, and
+		// sending the wrong one is how the assets probe earned its 400.
+		pageParam string
 	}{
-		// No parameters at all. Every one this endpoint takes is optional, and
-		// each one sent is another chance at the "Invalid request parameter"
-		// that made the assets probe useless here.
-		{axurHistoryPath, "customerKey", nil, false},
+		// PAGINATED, and that is a fix rather than a tidy-up. It was read once,
+		// so a second account whose entries fell beyond the first page was
+		// invisible — and this resolver exists precisely to notice a second
+		// account. Everything else it does to avoid guessing between tenants was
+		// undone by looking at one page. No other parameters: every one this
+		// endpoint takes is optional, and each one sent is another chance at the
+		// "Invalid request parameter" the assets probe returns.
+		{axurHistoryPath, "customerKey", nil, "pageNumber"},
 		// Assets pages, so a multi-account credential cannot be mistaken for a
 		// single-account one by a first page that happens to be uniform.
 		// perPage 20, not 100. Axur answered 100 with a 400 and "Invalid request
 		// parameter" — measured against the live account on 2026-08-25, not
 		// inferred: its published example uses 20, and its sibling endpoints
 		// document 20 as the maximum. The walk below covers the rest.
-		{axurAssetsPath, "customerKey", map[string]string{"perPage": "20"}, true},
+		{axurAssetsPath, "customerKey", map[string]string{"perPage": "20"}, "page"},
 		// Customers documents NO query parameters. Sending page/perPage to an
 		// endpoint that declares none is how a 400 gets invented.
-		{axurCustomersPath, "key", nil, false},
+		{axurCustomersPath, "key", nil, ""},
 	} {
-		keys, err := s.axurProbe(client, probe.path, probe.field, probe.params, probe.walk)
+		keys, err := s.axurProbe(client, probe.path, probe.field, probe.params, probe.pageParam)
 		if err != nil {
-			// Logged HERE, at capture, with the provider's own bounded and
-			// redacted body. Whatever precedence wins below, the reason is on
-			// the record.
-			if ue, ok := err.(*rest.UpstreamError); ok {
-				rest.LogUpstreamError(ue)
-			} else {
-				log.Printf("axur: probe %s failed: %v", probe.path, err)
-			}
+			// HELD, not logged yet. A probe failing is ordinary: an account
+			// without MSSP permissions is expected to fail two of these three
+			// every time, and logging each as an upstream error filled the
+			// operator's log with red for a lookup that worked. They are written
+			// below, in full when discovery FAILED and as one quiet line when it
+			// succeeded anyway.
+			failures = append(failures, probeFailure{path: probe.path, err: err})
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -371,6 +379,27 @@ func (s *Service) axurDiscoverCustomer(client *rest.Client) (string, map[string]
 		seen = append(seen, keys...)
 	}
 	unique := uniqueStrings(seen)
+	// One line naming what fell over, before any outcome is returned. A lookup
+	// that worked does not need three stack-shaped upstream errors behind it,
+	// and a lookup that failed needs every one of them.
+	if len(failures) > 0 {
+		if len(unique) > 0 {
+			var paths []string
+			for _, f := range failures {
+				paths = append(paths, f.path)
+			}
+			log.Printf("axur: account code resolved; %d of %d discovery probes were unavailable (%s) — expected on an account without MSSP permissions",
+				len(failures), len(failures)+1, strings.Join(paths, ", "))
+		} else {
+			for _, f := range failures {
+				if ue, ok := f.err.(*rest.UpstreamError); ok {
+					rest.LogUpstreamError(ue)
+				} else {
+					log.Printf("axur: probe %s failed: %v", f.path, f.err)
+				}
+			}
+		}
+	}
 	switch {
 	case len(unique) == 1:
 		return unique[0], nil
@@ -394,6 +423,13 @@ func (s *Service) axurDiscoverCustomer(client *rest.Client) (string, map[string]
 	return "", degraded
 }
 
+// probeFailure holds a failed probe until the outcome is known, so the log can
+// say "expected, and the lookup worked anyway" instead of shouting three times.
+type probeFailure struct {
+	path string
+	err  error
+}
+
 // axurProbe reads one discovery endpoint and returns the account codes it
 // carried.
 //
@@ -401,15 +437,15 @@ func (s *Service) axurDiscoverCustomer(client *rest.Client) (string, map[string]
 // empty result. Without that check an error envelope returned at HTTP 200 —
 // which these APIs do — would count as "succeeded, carried no code" and be
 // reported to the operator as a missing setting.
-func (s *Service) axurProbe(client *rest.Client, path, field string, params map[string]string, walk bool) ([]string, error) {
+func (s *Service) axurProbe(client *rest.Client, path, field string, params map[string]string, pageParam string) ([]string, error) {
 	var out []string
 	for page := 1; page <= axurMaxPages; page++ {
 		p := map[string]string{}
 		for k, v := range params {
 			p[k] = v
 		}
-		if walk {
-			p["page"] = fmt.Sprint(page)
+		if pageParam != "" {
+			p[pageParam] = fmt.Sprint(page)
 		}
 		rows, body, err := client.GetPageStrict(path, p)
 		if err != nil {
@@ -423,7 +459,15 @@ func (s *Service) axurProbe(client *rest.Client, path, field string, params map[
 			return nil, fmt.Errorf("axur %s: response carried no recognisable list", path)
 		}
 		out = append(out, collectField(rawBody(rows, body), field)...)
-		if !walk || len(batch) == 0 {
+		if pageParam == "" || len(batch) == 0 {
+			break
+		}
+		// Stop on the endpoint's OWN accounting when it gives any. Without it
+		// the only stop condition is an empty page, so a walk kept asking for
+		// page 2, 3, 4… of a list it had already read to the end — the history
+		// route sends no page-size parameter, so there is no "a short page means
+		// the last page" to lean on.
+		if total, ok := axurPaginationTotal(body); ok && len(out) >= total {
 			break
 		}
 		if page == axurMaxPages {
@@ -431,6 +475,21 @@ func (s *Service) axurProbe(client *rest.Client, path, field string, params map[
 		}
 	}
 	return out, nil
+}
+
+// axurPaginationTotal reads pagination.total, which these endpoints send as the
+// number of entries in the whole list. Absent or non-numeric means "no
+// accounting offered", and the walk falls back to stopping on an empty page.
+func axurPaginationTotal(body map[string]any) (int, bool) {
+	pg, ok := body["pagination"].(map[string]any)
+	if !ok {
+		return 0, false
+	}
+	f, ok := pg["total"].(float64)
+	if !ok {
+		return 0, false
+	}
+	return int(f), true
 }
 
 // axurRowsOf finds the list inside a decoded response, whichever envelope name

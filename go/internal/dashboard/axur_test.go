@@ -49,7 +49,7 @@ func indicatorsFor(vendors string) http.HandlerFunc {
 
 func TestAxurVendorsShapeAndOrder(t *testing.T) {
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[{"customerKey":{"value":"ACME"}}],"pagination":{"page":1}}`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[{"customerKey":{"value":"ACME"}}],"pagination":{"page":1,"total":1}}`),
 		"/assets-api/assets":                      jsonHandler(oneAsset),
 		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[
 			{"assetKey":"A1","name":"BroadButSmall","indicators":[
@@ -124,7 +124,7 @@ func TestAxurZeroIndicatorsStillListsTheVendor(t *testing.T) {
 // polls, so the tie is broken by name.
 func TestAxurTieBreak(t *testing.T) {
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[{"customerKey":{"value":"ACME"}}],"pagination":{"page":1}}`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[{"customerKey":{"value":"ACME"}}],"pagination":{"page":1,"total":1}}`),
 		"/assets-api/assets":                      jsonHandler(oneAsset),
 		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[
 			{"assetKey":"A1","name":"Zeta","indicators":[{"type":"CUSTOMER_CREDENTIALS","primary":{"value":5}},{"type":"OPEN_PORTS","primary":{"value":1}}]},
@@ -286,7 +286,7 @@ func TestAxurDiscoveryFailureStaysAFailure(t *testing.T) {
 func TestAxurNoKeyAnywhereAsksForTheOverride(t *testing.T) {
 	empty := jsonHandler(`{"assets":[]}`)
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1}}`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1,"total":0}}`),
 		"/assets-api/assets":                      empty,
 		"/customers-api/customers":                jsonHandler(`[]`),
 	})
@@ -500,7 +500,7 @@ func TestAxurProbeFailureIsLoggedEvenWhenConfigWins(t *testing.T) {
 			_, _ = w.Write([]byte(`{"code":"asset.badRequest","message":"perPage exceeds maximum"}`))
 		},
 		"/customers-api/customers":                jsonHandler(`[]`),
-		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1}}`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1,"total":0}}`),
 	})
 	got := s.FetchAxurVendors()
 	if got["needs_key"] != true {
@@ -528,7 +528,7 @@ func TestAxurLoggedSnippetIsRedactedAndQuoted(t *testing.T) {
 			_, _ = w.Write([]byte("{\"authorization\":\"Bearer super-secret-value\"}\nFORGED LINE"))
 		},
 		"/customers-api/customers":                jsonHandler(`[]`),
-		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1}}`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1,"total":0}}`),
 	})
 	s.FetchAxurVendors()
 	out := buf.String()
@@ -586,7 +586,7 @@ func TestAxurMultiAccountFoundOnLaterPage(t *testing.T) {
 			_, _ = w.Write([]byte(`{"assets":[{"customerKey":"OTHERCO"}]}`))
 		},
 		"/customers-api/customers":                jsonHandler(`[]`),
-		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1}}`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1,"total":0}}`),
 		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": func(w http.ResponseWriter, r *http.Request) {
 			t.Error("read a tenant's data despite a second account on a later page")
 		},
@@ -601,7 +601,7 @@ func TestAxurMultiAccountFoundOnLaterPage(t *testing.T) {
 // preferring one of them.
 func TestAxurProbesDisagreeing(t *testing.T) {
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1}}`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1,"total":0}}`),
 		"/assets-api/assets":                      jsonHandler(`{"assets":[{"customerKey":"ACME"}]}`),
 		"/customers-api/customers":                jsonHandler(`[{"key":"OTHERCO"}]`),
 	})
@@ -614,7 +614,7 @@ func TestAxurProbesDisagreeing(t *testing.T) {
 // Both probes agreeing on the same single code is not ambiguity.
 func TestAxurProbesAgreeing(t *testing.T) {
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/vendor-monitor/history/customer-vendor":                       jsonHandler(`{"data":[],"pagination":{"page":1}}`),
+		"/vendor-monitor/history/customer-vendor":                       jsonHandler(`{"data":[],"pagination":{"page":1,"total":0}}`),
 		"/assets-api/assets":                                            jsonHandler(`{"assets":[{"customerKey":"ACME"}]}`),
 		"/customers-api/customers":                                      jsonHandler(`[{"key":"ACME"}]`),
 		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[]`),
@@ -720,12 +720,13 @@ func TestAxurUnrecognisedBodyAddsNothing(t *testing.T) {
 	}
 }
 
-// TestAxurHistoryProbeIsFirstAndUnparameterised: the history route is the only
+// TestAxurHistoryProbeIsFirstAndPaginated: the history route is the only
 // discovery endpoint an ordinary, read-only Axur login can use — no account
-// code in its path, no manager permission. It is tried first, and it sends no
-// query parameters, because every parameter it accepts is optional and each one
-// sent is another chance at the 400 that made the assets probe useless.
-func TestAxurHistoryProbeIsFirstAndUnparameterised(t *testing.T) {
+// code in its path, no manager permission — so it is tried first. It is walked
+// rather than read once: a second account whose entries fall beyond page one
+// would otherwise be invisible to the very check that exists to notice one. Its
+// page parameter is pageNumber, not the page the assets route uses.
+func TestAxurHistoryProbeIsFirstAndPaginated(t *testing.T) {
 	var order []string
 	var historyQ string
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
@@ -733,7 +734,7 @@ func TestAxurHistoryProbeIsFirstAndUnparameterised(t *testing.T) {
 			order = append(order, "history")
 			historyQ = r.URL.RawQuery
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"data":[{"id":1,"customerKey":{"value":"ACME"},"assetKey":{"value":"A1"},"type":"bulletins"}],"pagination":{"page":1}}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":1,"customerKey":{"value":"ACME"},"assetKey":{"value":"A1"},"type":"bulletins"}],"pagination":{"page":1,"total":1}}`))
 		},
 		// Still probed, deliberately: every successful probe contributes its
 		// codes so a multi-account credential cannot slip through. It agrees
@@ -753,7 +754,107 @@ func TestAxurHistoryProbeIsFirstAndUnparameterised(t *testing.T) {
 	if len(order) == 0 || order[0] != "history" {
 		t.Errorf("probe order = %v, want history first", order)
 	}
-	if historyQ != "" {
-		t.Errorf("history query = %q, want none", historyQ)
+	if !strings.Contains(historyQ, "pageNumber=1") {
+		t.Errorf("history query = %q, want pageNumber=1", historyQ)
+	}
+	if strings.Contains(historyQ, "page=") && !strings.Contains(historyQ, "pageNumber=") {
+		t.Errorf("history query = %q, want pageNumber rather than page", historyQ)
+	}
+}
+
+// TestAxurHistorySecondAccountBeyondPageOne is the bug Codex found in shipped
+// code: the history probe read one page, so a credential that can see a second
+// account whose entries fall on page two was accepted as single-account. Every
+// other precaution in this resolver was undone by that.
+func TestAxurHistorySecondAccountBeyondPageOne(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/vendor-monitor/history/customer-vendor": func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Query().Get("pageNumber") == "1" {
+				var rows []string
+				for i := 0; i < 20; i++ {
+					rows = append(rows, `{"customerKey":{"value":"ACME"}}`)
+				}
+				_, _ = w.Write([]byte(`{"data":[` + strings.Join(rows, ",") + `],"pagination":{"page":1,"total":21}}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"data":[{"customerKey":{"value":"OTHERCO"}}],"pagination":{"page":2,"total":21}}`))
+		},
+		"/assets-api/assets":       jsonHandler(`{"assets":[]}`),
+		"/customers-api/customers": jsonHandler(`[]`),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": func(w http.ResponseWriter, r *http.Request) {
+			t.Error("read a tenant's data despite a second account on history page 2")
+		},
+	})
+	got := s.FetchAxurVendors()
+	if got["needs_key"] != true {
+		t.Fatalf("needs_key = %v, want true — page 2 held a second account", got["needs_key"])
+	}
+}
+
+// The walk stops on the endpoint's own total rather than asking for page after
+// page of a list it has already read.
+func TestAxurHistoryWalkStopsOnTotal(t *testing.T) {
+	var pages int32
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/vendor-monitor/history/customer-vendor": func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&pages, 1)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"customerKey":{"value":"ACME"}},{"customerKey":{"value":"ACME"}}],"pagination":{"page":1,"total":2}}`))
+		},
+		"/assets-api/assets":       jsonHandler(`{"assets":[]}`),
+		"/customers-api/customers": jsonHandler(`[]`),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[]`),
+	})
+	s.FetchAxurVendors()
+	if n := atomic.LoadInt32(&pages); n != 1 {
+		t.Errorf("history fetched %d pages for a 2-of-2 response, want 1", n)
+	}
+}
+
+// A lookup that SUCCEEDED despite two probes failing writes one quiet line, not
+// three upstream errors. An account without MSSP permissions fails two of these
+// every time, and a red log for a working lookup trains an operator to ignore it.
+func TestAxurExpectedProbeFailuresAreQuiet(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/vendor-monitor/history/customer-vendor": jsonHandler(
+			`{"data":[{"customerKey":{"value":"ACME"}}],"pagination":{"page":1,"total":1}}`),
+		"/assets-api/assets":       func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(400) },
+		"/customers-api/customers": func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(403) },
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[]`),
+	})
+	if got := s.FetchAxurVendors(); got["customer"] != "ACME" {
+		t.Fatalf("customer = %v, want ACME", got["customer"])
+	}
+	out := buf.String()
+	if strings.Contains(out, "[upstream]") {
+		t.Errorf("expected failures were logged as upstream errors: %q", out)
+	}
+	if !strings.Contains(out, "account code resolved") {
+		t.Errorf("no summary line for the probes that failed: %q", out)
+	}
+}
+
+// When discovery FAILS, every probe's own error is written in full — that is
+// the log that has to carry the diagnosis.
+func TestAxurFailedDiscoveryLogsEveryProbe(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	fail := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(400) }
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/vendor-monitor/history/customer-vendor": fail,
+		"/assets-api/assets":                      fail,
+		"/customers-api/customers":                fail,
+	})
+	s.FetchAxurVendors()
+	out := buf.String()
+	if strings.Count(out, "[upstream]") != 3 {
+		t.Errorf("want all three probe failures logged in full, got: %q", out)
 	}
 }
