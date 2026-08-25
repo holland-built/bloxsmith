@@ -319,7 +319,11 @@ func (s *Service) axurDiscoverCustomer(client *rest.Client) (string, map[string]
 	}{
 		// Assets pages, so a multi-account credential cannot be mistaken for a
 		// single-account one by a first page that happens to be uniform.
-		{axurAssetsPath, "customerKey", map[string]string{"perPage": "100"}, true},
+		// perPage 20, not 100. Axur answered 100 with a 400 and "Invalid request
+		// parameter" — measured against the live account on 2026-08-25, not
+		// inferred: its published example uses 20, and its sibling endpoints
+		// document 20 as the maximum. The walk below covers the rest.
+		{axurAssetsPath, "customerKey", map[string]string{"perPage": "20"}, true},
 		// Customers documents NO query parameters. Sending page/perPage to an
 		// endpoint that declares none is how a 400 gets invented.
 		{axurCustomersPath, "key", nil, false},

@@ -613,7 +613,7 @@ func TestAxurProbeQueryStrings(t *testing.T) {
 		},
 	})
 	s.FetchAxurVendors()
-	if !strings.Contains(assetsQ, "page=1") || !strings.Contains(assetsQ, "perPage=100") {
+	if !strings.Contains(assetsQ, "page=1") || !strings.Contains(assetsQ, "perPage=20") {
 		t.Errorf("assets query = %q, want page and perPage", assetsQ)
 	}
 	if customersQ != "" {
