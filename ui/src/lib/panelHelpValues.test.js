@@ -903,26 +903,14 @@ const CLAIMS = [
   },
   {
     panel: 'security-axur-incidents',
-    says: /counted by kind/,
-    file: SECURITY,
-    proofs: [
-      {
-        re: /const days = d\.window_days \?\? 30/,
-        expect: "the 30-day window is the server's own axurWindowDays, with 30 as the fallback the sentence quotes",
-      },
-      { re: /label: `Last \$\{days\}d`/, expect: 'the column header prints that same window rather than a second hard-coded one' },
-    ],
-  },
-  {
-    panel: 'security-axur-incidents',
-    says: /A dash instead of a total means Axur could not be reached and nothing was counted/,
+    says: /A dash instead of a total means nothing was counted/,
     file: SECURITY,
     proofs: [
       {
         re: /const counted = !axur\.error && !d\.unavailable && d\.configured !== false/,
         expect: 'a total is only claimed when the fetch worked, upstream did not declare itself unavailable, and a key is configured',
       },
-      { re: /\{counted \? d\.total \?\? 0 : '—'\} in \{days\}d/, expect: 'otherwise the header prints an em dash rather than 0' },
+      { re: /\{counted \? `\$\{d\.total_findings \?\? 0\} across \$\{rows\.length\}` : '—'\}/, expect: 'otherwise the header prints an em dash rather than 0' },
     ],
   },
   {
@@ -1123,6 +1111,11 @@ const CLAIMS = [
 // `phrase` must still appear verbatim in that panel's copy; see the test below.
 // ---------------------------------------------------------------------------
 const EXCLUDED = [
+  {
+    panel: 'security-axur-incidents',
+    phrase: 'Worst supplier first',
+    why: 'The ordering is computed on the SERVER, in normAxurVendors (go/internal/dashboard/axur.go), and this file only greps UI sources — there is no sort in Security.jsx to bind a regex to. It is not unverified: TestAxurVendorsShapeAndOrder and TestAxurTieBreak assert the exact order, including the tie-break, against a fake Axur.',
+  },
   {
     panel: 'subnet-heatmap',
     phrase: 'Only the fullest few hundred are drawn',

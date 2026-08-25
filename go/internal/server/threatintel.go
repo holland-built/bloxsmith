@@ -31,7 +31,7 @@ func (d *Deps) assets(w http.ResponseWriter, r *http.Request) {
 	d.json(w, r, 200, d.dash(r).FetchAssets(r.Context()))
 }
 
-// axur serves Axur's brand-protection incident counts. Unlike its three
+// axur serves Axur's per-supplier security indicators. Unlike its three
 // neighbours it may report configured:false — the integration is optional, and
 // an unset AXUR_API_KEY is a deployment choice, not a failure.
 //
@@ -40,5 +40,5 @@ func (d *Deps) assets(w http.ResponseWriter, r *http.Request) {
 // belongs to this deployment, not to the Infoblox tenant the request pinned.
 func (d *Deps) axur(w http.ResponseWriter, r *http.Request) {
 	defer d.recover500(w, r, "/api/axur")
-	d.json(w, r, 200, d.dash(r).FetchAxurTickets())
+	d.json(w, r, 200, d.dash(r).FetchAxurVendors())
 }

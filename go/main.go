@@ -509,6 +509,7 @@ func buildServer() (*http.Server, net.Listener, *config.Config, error) {
 	// vault, nothing was locked, and the honest answer was "not configured".
 	// Measured against a running server, not reasoned about.
 	dash.AxurLocked = func() bool { return v.Exists() && !v.IsUnlocked() }
+	dash.AxurCustomer = cfg.AxurCustomerKey
 	if cfg.AxurAPIKey != "" {
 		log.Printf("axur: credential from AXUR_API_KEY (%s); a key saved in the vault overrides it", cfg.AxurBaseURL)
 	} else {

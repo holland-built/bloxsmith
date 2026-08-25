@@ -36,6 +36,11 @@ type Service struct {
 	// locked" — correct, because without a vault the only source is the
 	// environment, and an environment variable is never locked.
 	AxurLocked func() bool
+	// AxurCustomer is AXUR_CUSTOMER_KEY when the operator set it, and empty
+	// otherwise. Empty means "ask Axur", which is the normal path; a value here
+	// short-circuits discovery rather than seeding it, because an explicit
+	// answer outranks anything this code could infer.
+	AxurCustomer string
 	// ent is the shared 403 entitlement backoff (entitlement.go). A pointer so
 	// With's shallow copy keeps one process-wide memory; nil (bare Service
 	// literals in tests) disables the backoff rather than panicking.

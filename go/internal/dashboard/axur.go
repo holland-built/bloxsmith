@@ -3,86 +3,85 @@ package dashboard
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log"
+	"net/url"
 	"sort"
-	"time"
+	"strings"
 
 	"bloxsmith/internal/cache"
 	"bloxsmith/internal/rest"
 )
 
-// This file holds Bloxsmith's one read from Axur, the brand-protection service
-// the Infoblox portal links out to. Axur is a SEPARATE vendor with a separate
-// credential: nothing here goes through the Infoblox REST proxy or the account
-// switcher, and Service.Axur is a distinct *rest.Client for exactly that reason
-// (see helpers.go).
+// This file holds Bloxsmith's read from Axur, the brand-protection and
+// supply-chain vendor the Infoblox portal links out to. Axur is a SEPARATE
+// vendor with a separate credential: nothing here goes through the Infoblox
+// REST proxy or the account switcher, and Service.Axur is a distinct
+// *rest.Client for exactly that reason (see helpers.go).
 //
 // The credential comes from one of two places, resolved live on every call by
 // the rest.Auth main.go builds: the vault's stored Axur key first, then
-// AXUR_API_KEY from the environment. Vault-over-environment matches what
-// LLMCreds already does for the AI key, and having one precedence rule in the
-// app beats having two. The vault is a per-deployment store here, NOT a
-// per-tenant one — an Axur key belongs to the installation, and an Infoblox
-// account switch must never change which one is sent.
+// AXUR_API_KEY from the environment. The vault is a per-deployment store here,
+// NOT a per-tenant one — an Axur key belongs to the installation, and an
+// Infoblox account switch must never change which one is sent.
 //
-// The shape it returns matches the other threat-intel fetchers — a rows key
-// plus "unavailable" / "not_entitled" on failure — so the Security tab renders
-// a dead Axur feed the way it renders a dead TDLAD one, and never as "0".
+// WHAT IT READS, AND WHY THAT CHANGED. This first shipped against Axur's
+// brand-abuse ticket counts and returned a correct, permanent zero: the account
+// monitors ten SUPPLIERS under Supply Chain Intel and has no brand assets of
+// its own beyond demo placeholders. A panel that can only ever say zero is
+// worse than no panel, because zero reads as "all clear". It now reads the
+// per-supplier security indicators, which is what this account actually
+// produces.
+const (
+	// axurIndicatorsPath is Axur's "Get Indicators" operation, per vendor. The
+	// customer key is a PATH segment, which is the whole reason
+	// axurCustomerKey below has to exist.
+	axurIndicatorsPath = "/vendor-monitor/customer-vendors-api/customer/%s/indicators"
+	// The two ways to discover that customer key, in the order they are tried.
+	axurAssetsPath    = "/assets-api/assets"
+	axurCustomersPath = "/customers-api/customers"
 
-// axurTicketTypesPath is Axur's "Ticket Incident Count by Type" operation. It
-// answers the whole panel in one request: a count per ticket type over a date
-// window. Appended whole to config.AxurBaseURL, whose gateway prefix
-// (/gateway/1.0/api) is part of the base — rest.Client.url concatenates, it
-// does not resolve a relative reference.
-const axurTicketTypesPath = "/tickets-api/stats/incident/count/ticket-types"
+	// axurPageSize is the documented maximum ("It supports sizes up to 20").
+	axurPageSize = 20
+	// axurMaxPages bounds the walk at 200 suppliers. A supplier list is tens of
+	// entries, not thousands; the bound exists so a paginating upstream that
+	// never reports a short final page cannot spin here. Hitting it is LOGGED,
+	// never silently truncated — a capped list rendered as a complete one is
+	// exactly the failure this file is careful about everywhere else.
+	axurMaxPages = 10
+)
 
-// axurWindowDays is the reporting window. Axur REQUIRES from and to, and
-// rejects a span over 90 days; 30 is the smallest window that still shows a
-// trend rather than a quiet weekend, and leaves headroom under the cap.
-const axurWindowDays = 30
-
-// axurWindow returns the [from, to] pair as Axur's documented "YYYY-MM-DD",
-// in UTC because the endpoint's timezone parameter defaults to UTC and passing
-// local dates against a UTC-interpreted window silently shifts the whole range.
+// FetchAxurVendors reads per-supplier security indicators from Axur.
 //
-// now is a parameter, not time.Now(), so a test asserts the exact query string
-// rather than approximating it.
-func axurWindow(now time.Time) (from, to string) {
-	end := now.UTC()
-	return end.AddDate(0, 0, -axurWindowDays).Format("2006-01-02"), end.Format("2006-01-02")
-}
-
-// FetchAxurTickets reads Axur's incident count by ticket type for the last
-// axurWindowDays.
+// The outcomes are deliberately distinguishable, and the first three look alike
+// from a distance while sending an operator to completely different places:
 //
-// FOUR outcomes, deliberately distinguishable by the caller. The first two look
-// alike from a distance and must never be collapsed, because they send an
-// operator to opposite places:
-//
-//   - not configured — no credential from either source. configured:false and
-//     no error wording; the panel says so and nothing is wrong.
-//   - vault locked — a credential may well be stored, but the vault holding it
-//     is shut, so this process cannot read it. Says "vault locked", NOT "not
-//     configured", which would be a claim we have no basis for.
-//   - failed — any transport, status or decode failure. "unavailable", plus
-//     not_entitled on a 403, and NEVER an empty types list that a reader could
-//     mistake for a clean zero.
-//   - loaded — types is the per-type counts, possibly genuinely empty.
-func (s *Service) FetchAxurTickets() map[string]any {
-	base := map[string]any{"types": []any{}, "window_days": axurWindowDays}
+//   - not configured — no credential from either source. configured:false, no
+//     error wording, nothing is wrong.
+//   - vault locked — a credential may well be stored, but the vault is shut so
+//     this process cannot read it. Says so; never "not configured".
+//   - account code unknown — the credential works, but neither discovery route
+//     produced exactly one customer key. Names the override. This CONFIGURATION
+//     answer is only ever given when the discovery calls actually succeeded and
+//     were unambiguous about having no single answer.
+//   - failed — any transport, status or decode failure, discovery calls
+//     included. "unavailable", plus not_entitled on a 403, and never an empty
+//     list a reader could mistake for a clean zero.
+//   - loaded — vendors, possibly genuinely empty, which the panel renders as
+//     "no suppliers monitored" rather than as a reassuring zero.
+func (s *Service) FetchAxurVendors() map[string]any {
+	base := map[string]any{"vendors": []any{}}
 	if s.Axur == nil {
 		base["configured"] = false
 		return base
 	}
-	// ONE resolution, used for both the decision and the request. Asking "is a
-	// key configured?" and then letting the request resolve the slot a second
-	// time is a race: a vault lock landing between the two sends an empty
-	// Authorization upstream and turns "you have no key" into a 401 that reads
-	// as "your key is wrong". See rest.Client.PinResolved.
+	// ONE resolution, used for the decision, the discovery calls and the fetch.
+	// Asking "is a key configured?" and then letting each request resolve the
+	// slot again is a race: a vault lock landing in between sends an empty
+	// Authorization upstream, and "you have no key" comes back as a 401 that
+	// reads as "your key is wrong". See rest.Client.PinResolved.
 	client, cred := s.Axur.PinResolved()
 	if cred == "" {
-		// Nothing resolved. Which of the two reasons it is decides what the
-		// operator is told, and only the vault can say.
 		if s.AxurLocked != nil && s.AxurLocked() {
 			base["configured"] = true
 			base["locked"] = true
@@ -93,48 +92,304 @@ func (s *Service) FetchAxurTickets() map[string]any {
 		base["configured"] = false
 		return base
 	}
+	base["configured"] = true
 
-	from, to := axurWindow(time.Now())
-	// The credential's FINGERPRINT is part of the cache key, not just the date
-	// window. A cached response was fetched with whatever key was live at the
-	// time; after a key change, a date-only key would keep serving it — which
-	// for a multi-tenant vendor API means showing one Axur tenant's incident
-	// counts under another tenant's credential. Changing the key now misses the
-	// cache, and leaving it alone still hits. The fingerprint is a truncated
-	// SHA-256 and never the secret itself: cache keys are logged.
-	ck := cache.Key("axur_ticket_types", axurTicketTypesPath,
-		map[string]string{"from": from, "to": to, "cred": axurCredFingerprint(cred)}, false)
+	customer, degraded := s.axurCustomerKey(client, cred)
+	if degraded != nil {
+		// Discovery could not answer. `degraded` already carries the RIGHT
+		// category: an outage stays an outage, a 403 stays an entitlement
+		// problem, and only a clean-but-empty answer becomes the configuration
+		// message. Collapsing them would tell someone to set a variable while
+		// Axur was simply down.
+		for k, v := range degraded {
+			base[k] = v
+		}
+		return base
+	}
+
+	ck := cache.Key("axur_vendor_indicators", customer,
+		map[string]string{"cred": axurCredFingerprint(cred)}, false)
 	if v, ok := s.Cache.Get(ck); ok {
 		return v.(map[string]any)
 	}
 	g := s.Cache.Gen()
 
-	// GetPageStrict, not GetEx: GetEx hands back (nil, 200, nil) for a body it
-	// could not use, which arrives here as zero ticket types and renders as a
-	// calm "no incidents". That exact conflation was DEFECT 3 in the lookalikes
-	// feed (threatintel.go). Every failure below is a failure.
-	_, body, err := client.GetPageStrict(axurTicketTypesPath,
-		map[string]string{"from": from, "to": to})
+	vendors, err := s.axurWalkIndicators(client, customer)
 	if err != nil {
-		log.Printf("axur: ticket-type counts fetch failed: %v", err)
+		log.Printf("axur: supplier indicators fetch failed: %v", err)
 		result := axurUnavailable(err)
 		result["configured"] = true
-		result["window_days"] = axurWindowDays
-		result["from"] = from
-		result["to"] = to
 		// NOT cached. A failure is usually the thing an operator is actively
 		// fixing — a wrong key, a lapsed entitlement, an outage — and caching it
-		// means their correction appears not to work until the TTL expires. A
-		// success is worth holding; a failure is worth retrying.
+		// makes their correction appear not to work until the TTL expires.
 		return result
 	}
-	result := normAxurTickets(body)
-	result["configured"] = true
-	result["window_days"] = axurWindowDays
-	result["from"] = from
-	result["to"] = to
+	total := 0
+	for _, v := range vendors {
+		if n, ok := asMap(v)["findings"].(int); ok {
+			total += n
+		}
+	}
+	result := map[string]any{
+		"configured":     true,
+		"customer":       customer,
+		"vendors":        vendors,
+		"total_findings": total,
+		"not_entitled":   false,
+	}
 	s.Cache.SetGen(ck, result, g)
 	return result
+}
+
+// axurWalkIndicators pages through the indicator list and shapes it.
+//
+// It WALKS rather than reading page one alone: the panel claims worst-first
+// ordering, and a worst-first ordering computed over an arbitrary first page is
+// simply wrong the moment there are more suppliers than fit on it.
+func (s *Service) axurWalkIndicators(client *rest.Client, customer string) ([]any, error) {
+	// PathEscape, because the customer key lands in a URL PATH segment and can
+	// arrive from an operator-set variable. Unescaped, a value containing a
+	// slash would silently retarget the request at a different endpoint.
+	path := fmt.Sprintf(axurIndicatorsPath, url.PathEscape(customer))
+	var rows []any
+	for page := 1; page <= axurMaxPages; page++ {
+		_, body, err := client.GetPageStrict(path, map[string]string{
+			"page": fmt.Sprint(page),
+			"size": fmt.Sprint(axurPageSize),
+		})
+		if err != nil {
+			return nil, err
+		}
+		// A response carrying no "data" key AT ALL is not an empty supplier
+		// list. It is a shape this code does not understand, and calling it zero
+		// is the exact conflation the rest of this file exists to avoid.
+		raw, present := body["data"]
+		if !present {
+			return nil, fmt.Errorf("axur indicators: response had no data field")
+		}
+		batch := asSlice(raw)
+		rows = append(rows, batch...)
+		if len(batch) < axurPageSize {
+			break
+		}
+		if page == axurMaxPages {
+			log.Printf("axur: stopped at the %d-page cap with a full final page; the supplier list may be longer than %d entries",
+				axurMaxPages, axurMaxPages*axurPageSize)
+		}
+	}
+	return normAxurVendors(rows), nil
+}
+
+// normAxurVendors shapes the indicator rows into the panel's table.
+//
+// THE SCORE, SPELLED OUT, because "non-zero indicators" and "worst" each read
+// two ways when every indicator carries both a primary and a secondary value:
+//
+//   - findings = how many indicator TYPES have a primary value above zero.
+//     Primary alone: it is the headline metric Axur puts first, and counting a
+//     type twice because its secondary is also set would inflate the number
+//     against its own label.
+//   - top = the indicator type with the highest primary value, ties broken by
+//     type name ascending so the row does not flicker between polls.
+//   - vendors sort by findings descending, then top value descending, then name
+//     ascending. Three keys, so the order is total and stable.
+func normAxurVendors(rows []any) []any {
+	out := []any{}
+	for _, r := range rows {
+		m := asMap(r)
+		name := getStr(m["name"])
+		if name == "" {
+			// A supplier with no name cannot be rendered or acted on. Skipping
+			// is safe here in a way that skipping a COUNT would not be: the row
+			// carries no finding of its own that would go missing with it.
+			continue
+		}
+		findings := 0
+		topType, topVal := "", 0
+		for _, ind := range asSlice(m["indicators"]) {
+			im := asMap(ind)
+			t := getStr(im["type"])
+			v := axurIndicatorValue(im["primary"])
+			if v <= 0 {
+				continue
+			}
+			findings++
+			if v > topVal || (v == topVal && (topType == "" || t < topType)) {
+				topType, topVal = t, v
+			}
+		}
+		out = append(out, map[string]any{
+			"name":      name,
+			"asset_key": getStr(m["assetKey"]),
+			"findings":  findings,
+			"top_type":  topType,
+			"top_value": topVal,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := asMap(out[i]), asMap(out[j])
+		af, _ := a["findings"].(int)
+		bf, _ := b["findings"].(int)
+		if af != bf {
+			return af > bf
+		}
+		av, _ := a["top_value"].(int)
+		bv, _ := b["top_value"].(int)
+		if av != bv {
+			return av > bv
+		}
+		return getStr(a["name"]) < getStr(b["name"])
+	})
+	return out
+}
+
+// axurIndicatorValue reads {"value": n}. A missing or non-numeric value is 0
+// and NOT an error: an indicator that reports nothing is a real state, unlike a
+// whole response with no data field.
+func axurIndicatorValue(v any) int {
+	if f, ok := asMap(v)["value"].(float64); ok {
+		return int(f)
+	}
+	return 0
+}
+
+// axurCustomerKey resolves the customer key for the indicators path, returning
+// (key, nil) on success or ("", degradeShape) with the reason.
+//
+// The cache holds either the resolved key or the FAILURE. Caching the failure
+// is deliberate and is not an accident of reuse: without it every dashboard
+// refresh re-runs both discovery calls, turning a permission problem into a
+// steady stream of 403s against a third party's API. The classification is
+// preserved, so the cached answer is the same answer, only cheaper.
+//
+// The cache key carries the credential fingerprint, so a key discovered under
+// one credential can never be used in the path while a different credential
+// goes in the header — the mix a process-lifetime cache would have allowed the
+// moment someone saved a new key on the Settings screen.
+func (s *Service) axurCustomerKey(client *rest.Client, cred string) (string, map[string]any) {
+	if s.AxurCustomer != "" {
+		// An explicit operator answer outranks any guess this code could make.
+		return s.AxurCustomer, nil
+	}
+	ck := cache.Key("axur_customer_key", "", map[string]string{"cred": axurCredFingerprint(cred)}, false)
+	if v, ok := s.Cache.Get(ck); ok {
+		if res, isFailure := v.(map[string]any); isFailure {
+			return "", res
+		}
+		if key, isKey := v.(string); isKey {
+			return key, nil
+		}
+	}
+	key, degraded := s.axurDiscoverCustomer(client)
+	g := s.Cache.Gen()
+	if degraded != nil {
+		s.Cache.SetGen(ck, degraded, g)
+		return "", degraded
+	}
+	s.Cache.SetGen(ck, key, g)
+	return key, nil
+}
+
+// axurDiscoverCustomer runs the two probes. Split from the caching above so the
+// cache policy and the discovery policy can each be read on their own.
+//
+// Both probes accept an answer ONLY when every key they saw is the same single
+// value. Taking "the first one" was the original plan and it is unsafe: on an
+// MSSP account these endpoints list SEVERAL customers, and picking one
+// arbitrarily would put another company's tenant in the request path and render
+// their suppliers on this dashboard. Ambiguity is reported, never guessed away.
+func (s *Service) axurDiscoverCustomer(client *rest.Client) (string, map[string]any) {
+	var firstErr error
+	for _, probe := range []struct{ path, field string }{
+		{axurAssetsPath, "customerKey"},
+		{axurCustomersPath, "key"},
+	} {
+		rows, body, err := client.GetPageStrict(probe.path, map[string]string{"page": "1", "perPage": "20"})
+		if err != nil {
+			// Remembered, not returned yet: the second probe may still succeed,
+			// and a 403 on the MSSP-only route is an expected outcome for an
+			// ordinary account rather than an outage. If BOTH fail, the FIRST
+			// failure is the one reported, because it is the route every account
+			// is supposed to have.
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		keys := uniqueStrings(collectField(rawBody(rows, body), probe.field))
+		if len(keys) == 1 {
+			return keys[0], nil
+		}
+		if len(keys) > 1 {
+			// A clean answer that is genuinely ambiguous. Stop here: the next
+			// probe cannot make this less ambiguous, and guessing is the one
+			// thing that must not happen.
+			log.Printf("axur: %s returned %d distinct customer keys; refusing to guess", probe.path, len(keys))
+			return "", axurNeedsCustomerKey(fmt.Sprintf(
+				"This Axur key can see %d accounts, so Bloxsmith cannot tell which one to read.", len(keys)))
+		}
+	}
+	if firstErr != nil {
+		// Every probe FAILED. That is an outage or an entitlement problem, not a
+		// configuration one, and it keeps its own category: telling an operator
+		// to set a variable while Axur is down sends them the wrong way.
+		log.Printf("axur: customer-key discovery failed: %v", firstErr)
+		return "", axurUnavailable(firstErr)
+	}
+	// The probes succeeded and simply carried no key. This is the one case the
+	// manual override is the right advice for.
+	return "", axurNeedsCustomerKey("Axur did not report an account code for this key.")
+}
+
+// axurNeedsCustomerKey is the configuration degrade shape. It names the
+// variable, because "could not determine the account" without the remedy leaves
+// a reader with nowhere to go.
+func axurNeedsCustomerKey(why string) map[string]any {
+	return map[string]any{
+		"vendors":      []any{},
+		"unavailable":  why + " Set AXUR_CUSTOMER_KEY to the account code to fix this.",
+		"needs_key":    true,
+		"not_entitled": false,
+	}
+}
+
+// collectField pulls every non-empty string value of `field` out of a decoded
+// response, whether the rows are the top-level array or sit under one of the
+// envelope names these APIs use.
+func collectField(v any, field string) []string {
+	var out []string
+	switch t := v.(type) {
+	case []any:
+		for _, row := range t {
+			out = append(out, collectField(row, field)...)
+		}
+	case map[string]any:
+		if s := getStr(t[field]); s != "" {
+			out = append(out, s)
+		}
+		for _, envelope := range []string{"results", "items", "data", "assets", "customers"} {
+			if nested, ok := t[envelope]; ok {
+				out = append(out, collectField(nested, field)...)
+			}
+		}
+	}
+	return out
+}
+
+// uniqueStrings de-duplicates while keeping first-seen order, so the "exactly
+// one" test above counts DISTINCT keys rather than rows.
+func uniqueStrings(in []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
 }
 
 // axurCredFingerprint reduces a credential to a short, non-reversible tag for
@@ -147,65 +402,24 @@ func axurCredFingerprint(cred string) string {
 }
 
 // axurUnavailable is the degrade shape, mirroring lookalikeUnavailable: a 403
-// is called out separately because "this tenant is not entitled to this Axur
+// is called out separately because "this account is not entitled to this Axur
 // module" is a different message to an operator than "Axur is down", and a
 // panel that says the wrong one sends someone to the wrong place.
 //
-// A 401 is folded into the generic outage wording ON PURPOSE with its own
-// sentence: on Axur a 401 means the credential, not the entitlement, and the
-// operator's next move is to check AXUR_API_KEY rather than their licence.
+// A 401 gets its own sentence: on Axur a 401 means the credential, not the
+// entitlement, and the operator's next move is to check the key rather than
+// their licence.
 func axurUnavailable(err error) map[string]any {
 	reason := "Axur service unavailable"
 	notEntitled := false
 	if ue, ok := err.(*rest.UpstreamError); ok {
 		switch ue.Status {
 		case 403:
-			reason = "Axur incident counts not entitled"
+			reason = "Axur supplier monitoring not entitled for this key"
 			notEntitled = true
 		case 401:
-			reason = "Axur rejected the credential — check AXUR_API_KEY"
+			reason = "Axur rejected the credential — check the key under Settings"
 		}
 	}
-	return map[string]any{"types": []any{}, "unavailable": reason, "not_entitled": notEntitled}
-}
-
-// normAxurTickets shapes Axur's totalByTicketType array into the rows the panel
-// renders: {type, count}, highest first, with a total.
-//
-// Axur returns every ticket type it knows about, most of them zero for any one
-// tenant. Zero rows are dropped here rather than in the UI so the panel's row
-// count means "kinds of incident you actually have".
-func normAxurTickets(body map[string]any) map[string]any {
-	types := []any{}
-	total := 0
-	for _, row := range asSlice(body["totalByTicketType"]) {
-		m := asMap(row)
-		name := getStr(m["type"])
-		if name == "" {
-			continue
-		}
-		// JSON numbers decode to float64; an int conversion is exact for the
-		// counts this endpoint returns.
-		count := 0
-		if f, ok := m["totalOnPeriod"].(float64); ok {
-			count = int(f)
-		}
-		if count == 0 {
-			continue
-		}
-		total += count
-		types = append(types, map[string]any{"type": name, "count": count})
-	}
-	// Highest count first, then by name, so the order is stable across polls
-	// for two types that happen to tie.
-	sort.SliceStable(types, func(i, j int) bool {
-		a, b := asMap(types[i]), asMap(types[j])
-		ai, _ := a["count"].(int)
-		bi, _ := b["count"].(int)
-		if ai != bi {
-			return ai > bi
-		}
-		return getStr(a["type"]) < getStr(b["type"])
-	})
-	return map[string]any{"types": types, "total": total, "not_entitled": false}
+	return map[string]any{"vendors": []any{}, "unavailable": reason, "not_entitled": notEntitled}
 }

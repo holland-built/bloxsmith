@@ -387,14 +387,12 @@ const LOOKALIKES = {
 // comes from window_days — and a moving value in a snapshot is a flake waiting.
 const AXUR = {
   configured: true,
-  window_days: 30,
-  from: '2026-01-01',
-  to: '2026-01-31',
-  total: 9,
+  customer: 'BASELINE',
+  total_findings: 4,
   not_entitled: false,
-  types: [
-    { type: 'similar-domain-name', count: 6 },
-    { type: 'phishing', count: 3 },
+  vendors: [
+    { name: 'baseline-supplier-a', asset_key: 'BSA', findings: 3, top_type: 'LEAKED_CREDENTIALS', top_value: 7 },
+    { name: 'baseline-supplier-b', asset_key: 'BSB', findings: 1, top_type: 'EXPIRED_CERTIFICATES', top_value: 2 },
   ],
 };
 

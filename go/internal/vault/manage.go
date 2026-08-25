@@ -738,7 +738,7 @@ func (v *Vault) Status(version string, vaultMode bool, update any) map[string]an
 		// vault reports false here because v.axur is cleared on lock — the UI
 		// must not read this as "no key exists", which is why the Settings
 		// section is only reachable with the vault open.
-		"hasAxur":      v.axur != "",
+		"hasAxur": v.axur != "",
 		"llm": map[string]any{
 			"hasKey":   v.groq != "",
 			"base_url": v.llmBase,
