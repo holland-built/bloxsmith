@@ -113,12 +113,21 @@ Threat and exposure posture. Pulls from several CSP feeds, so panels can load at
 - **Threat Events — by Severity** and **Threat Feed Activity**.
 - **Triage Inbox** — events waiting on you.
 - **Lookalike Domains** — domains impersonating your brand. Set your brand domain from the header.
-- **Axur Supplier Risk**: security problems Axur found in the suppliers you depend on. Exposed logins, dark-web mentions, weak certificates. This is the one panel on the tab that is not Infoblox data. Axur is a separate vendor with its own subscription and its own key, which goes in one of two places: the encrypted vault, under **⋯ Settings**, or the \`AXUR_API_KEY\` environment variable. A key in the vault wins over one in the environment, the same way the AI key behaves. The key belongs to the installation, not to a tenant, so switching Infoblox accounts does not change it. Rows are ordered by **credentials exposed**, which is the one figure comparable between suppliers: Axur's other indicators are different units, so the largest number is not the worst problem and the panel does not pretend otherwise. "Types affected" counts categories rather than incidents, and is shown beside the ranking rather than folded into it. A dash where the total goes means nothing was counted, and the panel says which reason applies: no key configured, the vault is locked, the account code could not be determined, or the read failed. An empty list reads as "no suppliers monitored in Axur", which is different news from "no problems found".
+- **Axur Supplier Risk**: problems Axur found in your suppliers, worst first. One row per supplier.
 - **CTEM Exposure**, **Exposures**, **Exposed Surface**, **CTEM Assets** — external attack surface.
 - **Asset Insights** and **Asset Risk**.
 - **SOC Insights**.
 
 A panel that shows nothing is telling you the feed returned nothing, not that you are safe. Check the panel note.
+
+### Axur, in four points
+
+Axur is a separate company from Infoblox, with its own subscription and its own key.
+
+- **Where the key goes.** Paste it under ⋯ Settings, encrypted alongside your Infoblox keys. \`AXUR_API_KEY\` also works, for deployments that never open a vault; the saved one wins when both are set. The key belongs to the installation, so switching Infoblox accounts does not change it.
+- **What the order means.** Sorted by credentials exposed, the only figure that compares fairly between suppliers. Axur's other measures count different things, so the biggest number is not the worst problem.
+- **What "Types affected" means.** How many categories of problem, not how many problems. It sits beside the ranking rather than driving it.
+- **When there is no number.** A dash means nothing was counted, and the panel says why: no key, a locked vault, an account code it could not work out, or a failed read. An empty list says "no suppliers monitored in Axur", which is not the same as "no problems found".
 
 ## Infra
 
