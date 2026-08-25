@@ -233,8 +233,9 @@ func TestAxurDiscoveryFailureStaysAFailure(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fail := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tc.status) }
 			s, _ := axurMux(t, map[string]http.HandlerFunc{
-				"/assets-api/assets":       fail,
-				"/customers-api/customers": fail,
+				"/vendor-monitor/history/customer-vendor": fail,
+				"/assets-api/assets":                      fail,
+				"/customers-api/customers":                fail,
 			})
 			got := s.FetchAxurVendors()
 			if got["needs_key"] == true {
@@ -264,8 +265,9 @@ func TestAxurDiscoveryFailureStaysAFailure(t *testing.T) {
 func TestAxurNoKeyAnywhereAsksForTheOverride(t *testing.T) {
 	empty := jsonHandler(`{"assets":[]}`)
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets":       empty,
-		"/customers-api/customers": jsonHandler(`[]`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1}}`),
+		"/assets-api/assets":                      empty,
+		"/customers-api/customers":                jsonHandler(`[]`),
 	})
 	got := s.FetchAxurVendors()
 	if got["needs_key"] != true {
@@ -276,8 +278,9 @@ func TestAxurNoKeyAnywhereAsksForTheOverride(t *testing.T) {
 // The second probe rescues the first: assets may 403 while customers answers.
 func TestAxurSecondProbeRescuesTheFirst(t *testing.T) {
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets":       func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(403) },
-		"/customers-api/customers": jsonHandler(`[{"name":"Acme","key":"ACME","active":true}]`),
+		"/vendor-monitor/history/customer-vendor":                       func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(403) },
+		"/assets-api/assets":                                            func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(403) },
+		"/customers-api/customers":                                      jsonHandler(`[{"name":"Acme","key":"ACME","active":true}]`),
 		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[]`),
 	})
 	got := s.FetchAxurVendors()
@@ -295,8 +298,9 @@ func TestAxurDiscoveryFailureIsCachedBriefly(t *testing.T) {
 		w.WriteHeader(403)
 	}
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets":       fail,
-		"/customers-api/customers": fail,
+		"/vendor-monitor/history/customer-vendor": fail,
+		"/assets-api/assets":                      fail,
+		"/customers-api/customers":                fail,
 	})
 	s.FetchAxurVendors()
 	first := atomic.LoadInt32(&hits)
@@ -474,7 +478,8 @@ func TestAxurProbeFailureIsLoggedEvenWhenConfigWins(t *testing.T) {
 			w.WriteHeader(400)
 			_, _ = w.Write([]byte(`{"code":"asset.badRequest","message":"perPage exceeds maximum"}`))
 		},
-		"/customers-api/customers": jsonHandler(`[]`),
+		"/customers-api/customers":                jsonHandler(`[]`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1}}`),
 	})
 	got := s.FetchAxurVendors()
 	if got["needs_key"] != true {
@@ -501,7 +506,8 @@ func TestAxurLoggedSnippetIsRedactedAndQuoted(t *testing.T) {
 			w.WriteHeader(400)
 			_, _ = w.Write([]byte("{\"authorization\":\"Bearer super-secret-value\"}\nFORGED LINE"))
 		},
-		"/customers-api/customers": jsonHandler(`[]`),
+		"/customers-api/customers":                jsonHandler(`[]`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1}}`),
 	})
 	s.FetchAxurVendors()
 	out := buf.String()
@@ -527,8 +533,9 @@ func TestAxurProbeWrongShapeIsAFailure(t *testing.T) {
 	// Both probes answer 200 with an error envelope carrying no list at all.
 	envelope := jsonHandler(`{"error":"something went wrong","code":"E_OOPS"}`)
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets":       envelope,
-		"/customers-api/customers": envelope,
+		"/vendor-monitor/history/customer-vendor": envelope,
+		"/assets-api/assets":                      envelope,
+		"/customers-api/customers":                envelope,
 	})
 	got := s.FetchAxurVendors()
 	if got["needs_key"] == true {
@@ -557,7 +564,8 @@ func TestAxurMultiAccountFoundOnLaterPage(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`{"assets":[{"customerKey":"OTHERCO"}]}`))
 		},
-		"/customers-api/customers": jsonHandler(`[]`),
+		"/customers-api/customers":                jsonHandler(`[]`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1}}`),
 		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": func(w http.ResponseWriter, r *http.Request) {
 			t.Error("read a tenant's data despite a second account on a later page")
 		},
@@ -572,8 +580,9 @@ func TestAxurMultiAccountFoundOnLaterPage(t *testing.T) {
 // preferring one of them.
 func TestAxurProbesDisagreeing(t *testing.T) {
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets":       jsonHandler(`{"assets":[{"customerKey":"ACME"}]}`),
-		"/customers-api/customers": jsonHandler(`[{"key":"OTHERCO"}]`),
+		"/vendor-monitor/history/customer-vendor": jsonHandler(`{"data":[],"pagination":{"page":1}}`),
+		"/assets-api/assets":                      jsonHandler(`{"assets":[{"customerKey":"ACME"}]}`),
+		"/customers-api/customers":                jsonHandler(`[{"key":"OTHERCO"}]`),
 	})
 	got := s.FetchAxurVendors()
 	if got["needs_key"] != true {
@@ -584,8 +593,9 @@ func TestAxurProbesDisagreeing(t *testing.T) {
 // Both probes agreeing on the same single code is not ambiguity.
 func TestAxurProbesAgreeing(t *testing.T) {
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets":       jsonHandler(`{"assets":[{"customerKey":"ACME"}]}`),
-		"/customers-api/customers": jsonHandler(`[{"key":"ACME"}]`),
+		"/vendor-monitor/history/customer-vendor":                       jsonHandler(`{"data":[],"pagination":{"page":1}}`),
+		"/assets-api/assets":                                            jsonHandler(`{"assets":[{"customerKey":"ACME"}]}`),
+		"/customers-api/customers":                                      jsonHandler(`[{"key":"ACME"}]`),
 		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[]`),
 	})
 	got := s.FetchAxurVendors()
@@ -629,8 +639,9 @@ func TestAxurPanelMessageCarriesNoUpstreamBody(t *testing.T) {
 		_, _ = w.Write([]byte(`{"secretish":"internal-detail-abc123","path":"/private/thing"}`))
 	}
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets":       fail,
-		"/customers-api/customers": fail,
+		"/vendor-monitor/history/customer-vendor": fail,
+		"/assets-api/assets":                      fail,
+		"/customers-api/customers":                fail,
 	})
 	got := s.FetchAxurVendors()
 	msg, _ := got["unavailable"].(string)
@@ -654,8 +665,9 @@ func TestAxurReasonCarriesAxursOwnMessage(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"perPage must be 20 or less","trace":"internal-abc"}`))
 	}
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets":       fail,
-		"/customers-api/customers": fail,
+		"/vendor-monitor/history/customer-vendor": fail,
+		"/assets-api/assets":                      fail,
+		"/customers-api/customers":                fail,
 	})
 	msg, _ := s.FetchAxurVendors()["unavailable"].(string)
 	if !strings.Contains(msg, "perPage must be 20 or less") {
@@ -674,8 +686,9 @@ func TestAxurUnrecognisedBodyAddsNothing(t *testing.T) {
 		_, _ = w.Write([]byte(`{"weird":"unrecognised-detail-xyz"}`))
 	}
 	s, _ := axurMux(t, map[string]http.HandlerFunc{
-		"/assets-api/assets":       fail,
-		"/customers-api/customers": fail,
+		"/vendor-monitor/history/customer-vendor": fail,
+		"/assets-api/assets":                      fail,
+		"/customers-api/customers":                fail,
 	})
 	msg, _ := s.FetchAxurVendors()["unavailable"].(string)
 	if strings.Contains(msg, "unrecognised-detail-xyz") {
@@ -683,5 +696,43 @@ func TestAxurUnrecognisedBodyAddsNothing(t *testing.T) {
 	}
 	if !strings.Contains(msg, "400") {
 		t.Errorf("unavailable = %q, want the status still present", msg)
+	}
+}
+
+// TestAxurHistoryProbeIsFirstAndUnparameterised: the history route is the only
+// discovery endpoint an ordinary, read-only Axur login can use — no account
+// code in its path, no manager permission. It is tried first, and it sends no
+// query parameters, because every parameter it accepts is optional and each one
+// sent is another chance at the 400 that made the assets probe useless.
+func TestAxurHistoryProbeIsFirstAndUnparameterised(t *testing.T) {
+	var order []string
+	var historyQ string
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/vendor-monitor/history/customer-vendor": func(w http.ResponseWriter, r *http.Request) {
+			order = append(order, "history")
+			historyQ = r.URL.RawQuery
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"id":1,"customerKey":{"value":"ACME"},"assetKey":{"value":"A1"},"type":"bulletins"}],"pagination":{"page":1}}`))
+		},
+		// Still probed, deliberately: every successful probe contributes its
+		// codes so a multi-account credential cannot slip through. It agrees
+		// here, so the single code stands.
+		"/assets-api/assets": func(w http.ResponseWriter, r *http.Request) {
+			order = append(order, "assets")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"assets":[{"customerKey":"ACME"}]}`))
+		},
+		"/customers-api/customers":                                      jsonHandler(`[]`),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[]`),
+	})
+	got := s.FetchAxurVendors()
+	if got["customer"] != "ACME" {
+		t.Fatalf("customer = %v, want ACME from the history probe", got["customer"])
+	}
+	if len(order) == 0 || order[0] != "history" {
+		t.Errorf("probe order = %v, want history first", order)
+	}
+	if historyQ != "" {
+		t.Errorf("history query = %q, want none", historyQ)
 	}
 }
