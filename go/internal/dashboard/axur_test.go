@@ -643,3 +643,45 @@ func TestAxurPanelMessageCarriesNoUpstreamBody(t *testing.T) {
 		t.Errorf("panel message = %q, want the status", msg)
 	}
 }
+
+// TestAxurReasonCarriesAxursOwnMessage: a status says the request was refused,
+// not which part of it was wrong. The provider's own wording is what closes
+// that gap, through the allowlist internal/rest owns — recognised keys only,
+// bounded, and no fallback to the raw body.
+func TestAxurReasonCarriesAxursOwnMessage(t *testing.T) {
+	fail := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		_, _ = w.Write([]byte(`{"message":"perPage must be 20 or less","trace":"internal-abc"}`))
+	}
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets":       fail,
+		"/customers-api/customers": fail,
+	})
+	msg, _ := s.FetchAxurVendors()["unavailable"].(string)
+	if !strings.Contains(msg, "perPage must be 20 or less") {
+		t.Errorf("unavailable = %q, want Axur's own message", msg)
+	}
+	if strings.Contains(msg, "internal-abc") {
+		t.Errorf("a non-allowlisted field reached the panel: %q", msg)
+	}
+}
+
+// An unrecognised body contributes nothing — the allowlist never falls back to
+// dumping what it does not understand.
+func TestAxurUnrecognisedBodyAddsNothing(t *testing.T) {
+	fail := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		_, _ = w.Write([]byte(`{"weird":"unrecognised-detail-xyz"}`))
+	}
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets":       fail,
+		"/customers-api/customers": fail,
+	})
+	msg, _ := s.FetchAxurVendors()["unavailable"].(string)
+	if strings.Contains(msg, "unrecognised-detail-xyz") {
+		t.Errorf("raw body leaked onto the panel: %q", msg)
+	}
+	if !strings.Contains(msg, "400") {
+		t.Errorf("unavailable = %q, want the status still present", msg)
+	}
+}
