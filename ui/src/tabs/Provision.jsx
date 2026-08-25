@@ -21,9 +21,9 @@ export default function Provision() {
   return (
     <div className="max-w-[720px] mx-auto p-5">
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-title font-semibold tracking-tight">Provision</h1>
+        <h1 className="text-copy font-semibold tracking-tight">Provision</h1>
         <span
-          className="text-caption font-medium px-2 py-0.5 rounded-full"
+          className="text-note font-medium px-2 py-0.5 rounded-full"
           style={{
             background: isAdmin ? 'var(--pill-ok-bg)' : role === 'operator' ? 'var(--pill-warn-bg)' : 'var(--pill-crit-bg)',
             color: isAdmin ? 'var(--pill-ok-fg)' : role === 'operator' ? 'var(--pill-warn-fg)' : 'var(--pill-crit-fg)',
@@ -48,7 +48,7 @@ export default function Provision() {
           <button
             key={key}
             onClick={() => setMode(key)}
-            className={`px-3 py-1.5 rounded-control text-body font-medium ${
+            className={`px-3 py-1.5 rounded-control text-copy font-medium ${
               mode === key ? 'bg-accent text-on-accent' : 'text-muted'
             }`}
           >
@@ -148,16 +148,16 @@ function RollbackReport({ report }) {
   if (report.outcome === 'incomplete') {
     return (
       <div className="flex flex-col gap-0.5">
-        <div className="text-body font-semibold" style={{ color: COLORS.crit }}>
+        <div className="text-copy font-semibold" style={{ color: COLORS.crit }}>
           Cleanup could not remove {residual.length || attempted - deleted} object
           {(residual.length || attempted - deleted) === 1 ? '' : 's'} — they are still live on the customer&rsquo;s
           network
         </div>
-        <div className="text-[12px] text-dim mb-1">{deleted} of {attempted} removed</div>
+        <div className="text-note text-dim mb-1">{deleted} of {attempted} removed</div>
         {residual.map((o, i) => (
-          <div key={o?.id || i} className="font-mono text-[12px]" style={{ color: COLORS.crit }}>
+          <div key={o?.id || i} className="font-mono text-note" style={{ color: COLORS.crit }}>
             ✕ {o?.kind || 'object'}{' '}
-            <code className="font-mono text-[10.5px] px-1 py-0.5 rounded-mark bg-field">{o?.label || o?.id || '—'}</code>
+            <code className="font-mono text-note px-1 py-0.5 rounded-mark bg-field">{o?.label || o?.id || '—'}</code>
             {o?.status ? <span className="text-dim"> (HTTP {o.status})</span> : null}
           </div>
         ))}
@@ -166,13 +166,13 @@ function RollbackReport({ report }) {
   }
   if (report.outcome === 'complete') {
     return (
-      <div className="text-[12px] text-dim">
+      <div className="text-note text-dim">
         Cleanup removed all {deleted} object{deleted === 1 ? '' : 's'} it had created — nothing was left behind.
       </div>
     )
   }
   if (report.outcome === 'not_needed') {
-    return <div className="text-[12px] text-dim">Nothing had been created, so nothing needed removing.</div>
+    return <div className="text-note text-dim">Nothing had been created, so nothing needed removing.</div>
   }
   return null
 }
@@ -182,7 +182,7 @@ function RollbackReport({ report }) {
 function LogView({ log, doneLabel }) {
   if (log.length === 0) return <Empty>Output appears here when you preview or apply.</Empty>
   return (
-    <div className="font-mono text-[12px] flex flex-col gap-0.5 max-h-[280px] overflow-auto">
+    <div className="font-mono text-note flex flex-col gap-0.5 max-h-[280px] overflow-auto">
       {log.map((l, i) => (
         <div key={i} style={{ color: l.error ? 'var(--color-crit)' : l.done ? 'var(--color-ok)' : 'var(--color-muted)' }}>
           {l.error ? `✕ ${l.error}` : l.done ? `✓ ${doneLabel || 'done'}` : l.step || JSON.stringify(l)}
@@ -200,11 +200,11 @@ function RowsRollup({ rows, failedLabel }) {
   if (total === 0) return <Empty>Per-template status appears here once the run starts.</Empty>
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="font-mono text-[12px]" style={{ color: failed ? 'var(--color-crit)' : 'var(--color-muted)' }}>
+      <div className="font-mono text-note" style={{ color: failed ? 'var(--color-crit)' : 'var(--color-muted)' }}>
         {done}/{total} done{failed ? ` · ${failed} ${failedLabel || 'failed'}` : ''}
       </div>
       {Object.entries(rows).filter(([, r]) => r?.error).map(([tpl, r]) => (
-        <div key={tpl} className="font-mono text-[12px]" style={{ color: COLORS.crit }}>
+        <div key={tpl} className="font-mono text-note" style={{ color: COLORS.crit }}>
           ✕ {tpl}: {r.error}
         </div>
       ))}
@@ -321,7 +321,7 @@ function SubnetMode() {
 
       {flow.status === 'applied' && subnet && (
         <Card key="provision-subnet-result" title="Result" panelId="provision-subnet-result" span={6}>
-          <div className="font-mono text-[12px]">
+          <div className="font-mono text-note">
             Subnet id: {subnet.id ?? '—'} · {subnet.address || ''}{subnet.cidr ? `/${subnet.cidr}` : ''}
           </div>
         </Card>
@@ -390,9 +390,9 @@ function SiteMode({ isAdmin }) {
               just shorter than the directory and there was nothing to act on. */}
           {templateScanErrors(templates).length > 0 && (
             <div className="flex flex-col gap-0.5">
-              <div className="text-[12px] text-muted">Could not be read:</div>
+              <div className="text-note text-muted">Could not be read:</div>
               {templateScanErrors(templates).map((s) => (
-                <div key={s.key} className="font-mono text-[12px]" style={{ color: COLORS.crit }}>
+                <div key={s.key} className="font-mono text-note" style={{ color: COLORS.crit }}>
                   ✕ {s.name} — {s.reason}
                 </div>
               ))}
@@ -437,7 +437,7 @@ function SiteMode({ isAdmin }) {
         <Card key="provision-site-dhcp-skips" title="DHCP ranges not created" panelId="provision-site-dhcp-skips" span={6}>
           <div className="flex flex-col gap-0.5">
             {dhcpSkips(built).map((s) => (
-              <div key={s.key} className="font-mono text-[12px]" style={{ color: COLORS.crit }}>
+              <div key={s.key} className="font-mono text-note" style={{ color: COLORS.crit }}>
                 ✕ {s.name}{s.subnet ? ` on ${s.subnet}` : ''}{s.range ? ` (${s.range})` : ''} — {s.reason}
               </div>
             ))}
@@ -448,9 +448,9 @@ function SiteMode({ isAdmin }) {
       {build.status === 'applied' && built && (
         <Card key="provision-site-result" title="Result" panelId="provision-site-result" span={6}>
           {built.skipped ? (
-            <div className="font-mono text-[12px] text-muted">Skipped — {built.skip_reason || 'already provisioned'}.</div>
+            <div className="font-mono text-note text-muted">Skipped — {built.skip_reason || 'already provisioned'}.</div>
           ) : (
-            <div className="font-mono text-[12px] flex flex-col gap-0.5">
+            <div className="font-mono text-note flex flex-col gap-0.5">
               <div><span className="text-muted">Block: </span>{built.block_address || '—'}</div>
               <div><span className="text-muted">DNS zone: </span>{built.dns_zone_fqdn || '—'}</div>
               <div>
@@ -470,7 +470,7 @@ function SiteMode({ isAdmin }) {
               <input className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder={siteTemplate || 'site name'} />
             </Field>
           ) : (
-            <div className="text-caption" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
+            <div className="text-note" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
           )}
 
           <PreviewApply
@@ -501,7 +501,7 @@ function SiteMode({ isAdmin }) {
       )}
       {teardown.result?.result && (
         <Card key="provision-site-teardown-result" title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown result'} panelId="provision-site-teardown-result" span={6}>
-          <div className="font-mono text-[12px] flex flex-col gap-0.5">
+          <div className="font-mono text-note flex flex-col gap-0.5">
             <div><span className="text-muted">Site: </span>{teardown.result.result.site || siteTemplate || '—'}</div>
             <div>
               <span className="text-muted">DNS zone: </span>{teardown.result.result.dns_zone_fqdn || '—'}{' '}
@@ -554,7 +554,7 @@ function SeedMode({ isAdmin }) {
     // Its own key, for the reason spelled out on the subnet grid above.
     <CardGrid layoutKey="provision-seed">
       <Card key="provision-seed-request" title="Seed multi-region demo data" panelId="provision-seed-request" span={6}>
-        <div className="text-caption text-dim mb-3">
+        <div className="text-note text-dim mb-3">
           Provisions a full set of demo sites, subnets, and zones across the selected regions from the template
           library. Preview the plan before writing real objects — this creates a lot of them.
         </div>
@@ -616,7 +616,7 @@ function SeedMode({ isAdmin }) {
 
       {seedOutcome && (
         <Card key="provision-seed-summary" title={seed.status === 'previewed' ? 'Planned' : 'Summary'} panelId="provision-seed-summary" span={6}>
-          <div className="font-mono text-[12px]">
+          <div className="font-mono text-note">
             Succeeded: {seedOutcome.succeeded} · Failed: {seedOutcome.failed} · Skipped: {seedOutcome.skipped}
           </div>
         </Card>
@@ -629,7 +629,7 @@ function SeedMode({ isAdmin }) {
               <input className={inputCls} value={tdConfirm} onChange={(e) => { setTdConfirm(e.target.value); teardown.markStale() }} placeholder="DELETE" />
             </Field>
           ) : (
-            <div className="text-caption" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
+            <div className="text-note" style={{ color: COLORS.warn }}>Admin (dashboard token) required for live teardown</div>
           )}
 
           <PreviewApply
@@ -672,7 +672,7 @@ function SeedMode({ isAdmin }) {
       )}
       {teardownOutcome && (
         <Card key="provision-seed-teardown-summary" title={teardown.status === 'previewed' ? 'Teardown plan' : 'Teardown summary'} panelId="provision-seed-teardown-summary" span={6}>
-          <div className="font-mono text-[12px]">
+          <div className="font-mono text-note">
             Succeeded: {teardownOutcome.succeeded} · Failed: {teardownOutcome.failed} · Skipped: {teardownOutcome.skipped}
           </div>
         </Card>
@@ -685,7 +685,7 @@ function SeedMode({ isAdmin }) {
 
 function Field({ label, children }) {
   return (
-    <label className="flex flex-col gap-1 text-[12px] text-muted">
+    <label className="flex flex-col gap-1 text-note text-muted">
       {label}
       {children}
     </label>
@@ -694,7 +694,7 @@ function Field({ label, children }) {
 
 function CheckRow({ checked, onChange, label }) {
   return (
-    <label className="flex items-center gap-2 text-body">
+    <label className="flex items-center gap-2 text-copy">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}</span>
     </label>

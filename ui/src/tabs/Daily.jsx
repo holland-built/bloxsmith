@@ -44,7 +44,7 @@ export default function Daily() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-title font-semibold tracking-tight mb-3">Daily Briefing</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-3">Daily Briefing</h1>
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
@@ -104,11 +104,11 @@ function IssueKpis({ subnets, hosts, zones, meta = {}, loading, panelId }) {
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
               className={`flex items-center justify-between py-3.5 cursor-pointer hover:bg-line ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
             >
-              <div className="text-muted text-dense">{c.label}</div>
+              <div className="text-muted text-note">{c.label}</div>
               {unavailable ? (
-                <div className="text-dense font-semibold text-right" style={{ color: COLORS.crit }}>unavailable</div>
+                <div className="text-note font-semibold text-right" style={{ color: COLORS.crit }}>unavailable</div>
               ) : (
-                <div className="text-2xl font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
+                <div className="text-figure font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
                   {c.value.toLocaleString()}
                 </div>
               )}
@@ -154,7 +154,7 @@ function SecurityToday({ sec, panelId }) {
       span={4}
       panelId={panelId}
       title="Security Today"
-      right={<span className="text-caption text-muted">{secDead ? '— events' : sampleCountLabel(sec.data, 'events')}</span>}
+      right={<span className="text-note text-muted">{secDead ? '— events' : sampleCountLabel(sec.data, 'events')}</span>}
     >
       {sec.loading ? (
         <Skeleton h={160} />
@@ -165,14 +165,14 @@ function SecurityToday({ sec, panelId }) {
           <div className="grid grid-cols-4 gap-3 mt-1">
             {chips.map((c) => (
               <div key={c.label} className="text-center py-4 rounded-control bg-line/40">
-                <div className="text-2xl font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
+                <div className="text-figure font-semibold tracking-tight" style={{ color: c.value > 0 ? c.color : undefined }}>
                   {c.value.toLocaleString()}
                 </div>
-                <div className="text-caption text-muted mt-1 capitalize">{c.label}</div>
+                <div className="text-note text-muted mt-1 capitalize">{c.label}</div>
               </div>
             ))}
           </div>
-          {scopeNote && <div className="text-caption text-dim mt-2">{scopeNote}</div>}
+          {scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
         </>
       )}
     </Card>
@@ -203,7 +203,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, panelId }) {
       render: (v) => {
         const st = utilStatus(v)
         return (
-          <span className="inline-block rounded-full px-2 py-0.5 text-caption font-medium" style={{ background: st.bg, color: st.fg }}>
+          <span className="inline-block rounded-full px-2 py-0.5 text-note font-medium" style={{ background: st.bg, color: st.fg }}>
             {v}%
           </span>
         )
@@ -213,7 +213,7 @@ function TopCapacityRisks({ subnets, loading, subnetsStatus, panelId }) {
   ]
 
   return (
-    <Card span={3} panelId={panelId} title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-caption text-muted">top 10</span>}>
+    <Card span={3} panelId={panelId} title="Top Capacity Risks" note="least free space, excl. infra links" right={<span className="text-note text-muted">top 10</span>}>
       {loading ? (
         <Skeleton h={220} />
       ) : feedDead ? (
@@ -262,7 +262,7 @@ function HostsAttention({ hosts, loading, hostsStatus, panelId }) {
       panelId={panelId}
       title="Hosts Needing Attention"
       // "0 shown" off a dead feed reads as "nothing needs attention".
-      right={<span className="text-caption text-muted">{feedDead ? '—' : rows.length} shown</span>}
+      right={<span className="text-note text-muted">{feedDead ? '—' : rows.length} shown</span>}
     >
       {loading ? (
         <Skeleton h={220} />
@@ -298,7 +298,7 @@ function DnsZoneIssues({ zones, loading, zonesStatus, panelId }) {
       keep: true,
       width: '2.5rem',
       render: (v) => (
-        <span className="inline-block rounded-full px-2 py-0.5 text-caption font-medium" style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}>
+        <span className="inline-block rounded-full px-2 py-0.5 text-note font-medium" style={{ background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }}>
           {v}
         </span>
       ),
@@ -313,7 +313,7 @@ function DnsZoneIssues({ zones, loading, zonesStatus, panelId }) {
       panelId={panelId}
       title="DNS Zone Issues"
       // "0 zones" off a dead feed reads as a clean estate.
-      right={<span className="text-caption text-muted">{feedDead ? '—' : rows.length} zones</span>}
+      right={<span className="text-note text-muted">{feedDead ? '—' : rows.length} zones</span>}
     >
       {loading ? (
         <Skeleton h={160} />

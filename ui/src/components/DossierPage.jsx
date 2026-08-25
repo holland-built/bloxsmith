@@ -457,8 +457,8 @@ const CELL =
 function FieldCell({ k, v, title }) {
   return (
     <div className={CELL + ' gap-[9px] overflow-hidden'}>
-      <span className="text-caption uppercase tracking-[0.1em] text-dim font-medium whitespace-nowrap">{k}</span>
-      <span className="font-mono text-[13px] text-field-txt truncate" title={title || undefined}>
+      <span className="text-note uppercase tracking-[0.1em] text-dim font-medium whitespace-nowrap">{k}</span>
+      <span className="font-mono text-copy text-field-txt truncate" title={title || undefined}>
         {v ?? <span className="text-dim">{DASH}</span>}
       </span>
     </div>
@@ -481,10 +481,10 @@ function LeftLanes({ state, label }) {
       <div className="row-start-1 [grid-row:1/span_6] min-[561px]:[grid-row:auto] flex justify-center items-start min-[561px]:items-center pt-[11px] min-[561px]:pt-0 border-r border-line">
         <Jack state={state} />
       </div>
-      <div className={CELL + ' text-[12px] font-semibold tracking-[0.05em] text-txt whitespace-nowrap overflow-hidden text-ellipsis'}>
+      <div className={CELL + ' text-note font-semibold tracking-[0.05em] text-txt whitespace-nowrap overflow-hidden text-ellipsis'}>
         {label}
       </div>
-      <div className={CELL + ' font-mono text-caption font-bold tracking-[0.1em] uppercase whitespace-nowrap ' + (STATE_TONE[state] ?? '')}>
+      <div className={CELL + ' font-mono text-note font-bold tracking-[0.1em] uppercase whitespace-nowrap ' + (STATE_TONE[state] ?? '')}>
         {JACK[state]?.label ?? 'Unavailable'}
       </div>
     </>
@@ -498,7 +498,7 @@ function MessageCell({ tone = 'warn', children }) {
     <div
       className={
         CELL +
-        ' min-[561px]:col-span-4 min-[561px]:border-r-0 text-[13px] ' +
+        ' min-[561px]:col-span-4 min-[561px]:border-r-0 text-copy ' +
         (tone === 'warn' ? 'text-[var(--pill-warn-fg)]' : 'text-muted')
       }
     >
@@ -516,26 +516,26 @@ function Why({ src, q, state, reason }) {
     <div className={'grid grid-cols-[30px_1fr] border-b border-line bg-card'} data-dossier-why={src.key}>
       <div className="border-r border-line" />
       <div className="px-3 pt-[10px] pb-3 border-l-2" style={{ borderLeftColor: 'var(--color-warn)' }}>
-        <div className="flex flex-col min-[561px]:flex-row gap-[10px] items-baseline text-[12px] leading-[1.5] mb-1 text-dim">
-          <span className="text-caption uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0">Not this</span>
+        <div className="flex flex-col min-[561px]:flex-row gap-[10px] items-baseline text-note leading-[1.5] mb-1 text-dim">
+          <span className="text-note uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0">Not this</span>
           <span>
             Nothing found — we asked a source and it told us {subject} has none.
           </span>
         </div>
-        <div className="flex flex-col min-[561px]:flex-row gap-[10px] items-baseline text-[12px] leading-[1.5] text-field-txt">
-          <span className="text-caption uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0 text-[var(--pill-warn-fg)]">This</span>
+        <div className="flex flex-col min-[561px]:flex-row gap-[10px] items-baseline text-note leading-[1.5] text-field-txt">
+          <span className="text-note uppercase tracking-[0.1em] font-bold w-auto min-[561px]:w-[118px] shrink-0 text-[var(--pill-warn-fg)]">This</span>
           <span>
             {state === 'unsupported'
               ? 'We could not ask. The question never reached a source, so for '
               : 'The source did not answer. Nothing was read, so for '}
             <span className="font-mono">{subject}</span>, {src.unknownText} is <b>unknown</b>, not clean.
-            {reason ? <> Reported reason: <span className="font-mono text-caption">{reason}</span></> : null}
+            {reason ? <> Reported reason: <span className="font-mono text-note">{reason}</span></> : null}
           </span>
         </div>
         <div className="mt-[9px] flex gap-[7px]">
           <a
             href={`#${src.tab}`}
-            className="inline-flex items-center h-[23px] px-[10px] text-[12px] no-underline border border-border bg-field text-field-txt hover:border-border-hover"
+            className="inline-flex items-center h-[23px] px-[10px] text-note no-underline border border-border bg-field text-field-txt hover:border-border-hover"
           >
             Open {src.tabLabel} tab
           </a>
@@ -592,7 +592,7 @@ function SourceSection({ src, q, onResult }) {
 
         {state === 'ok' && shown[0] && (
           <>
-            <div className={CELL + ' font-mono text-[13px] font-semibold text-txt truncate'}>
+            <div className={CELL + ' font-mono text-copy font-semibold text-txt truncate'}>
               {shown[0].identity ?? DASH}
             </div>
             {shown[0].fields.map(([k, v, title]) => (
@@ -614,7 +614,7 @@ function SourceSection({ src, q, onResult }) {
             <div className="row-start-1 [grid-row:1/span_6] min-[561px]:[grid-row:auto] border-r border-line" />
             <div className={CELL} />
             <div className={CELL} />
-            <div className={CELL + ' font-mono text-[13px] font-semibold text-txt truncate'}>{r.identity ?? DASH}</div>
+            <div className={CELL + ' font-mono text-copy font-semibold text-txt truncate'}>{r.identity ?? DASH}</div>
             {r.fields.map(([k, v, title]) => (
               <FieldCell key={k} k={k} v={v} title={title} />
             ))}
@@ -624,7 +624,7 @@ function SourceSection({ src, q, onResult }) {
       {state === 'ok' && moreLine && (
         <div className={LANES + ' border-b border-line bg-card'}>
           <div className="border-r border-line" />
-          <div className={CELL + ' min-[561px]:col-span-6 min-[561px]:border-r-0 text-[12px] text-muted'}>
+          <div className={CELL + ' min-[561px]:col-span-6 min-[561px]:border-r-0 text-note text-muted'}>
             {moreLine}
           </div>
         </div>
@@ -656,16 +656,16 @@ function Ribbon({ results }) {
         <div
           key={s.key}
           data-dossier-ribbon={s.key}
-          className="flex items-center gap-2 px-3 h-[24px] min-[561px]:h-auto w-1/2 min-[561px]:w-auto border-r border-line text-caption"
+          className="flex items-center gap-2 px-3 h-[24px] min-[561px]:h-auto w-1/2 min-[561px]:w-auto border-r border-line text-note"
         >
           <Jack state={ribbonState(results, s.key)} />
           <span className="uppercase tracking-[0.09em] text-muted">{s.short}</span>
-          <span className={'font-mono tracking-[0.08em] font-bold text-caption ' + (STATE_TONE[ribbonState(results, s.key)] ?? '')}>
+          <span className={'font-mono tracking-[0.08em] font-bold text-note ' + (STATE_TONE[ribbonState(results, s.key)] ?? '')}>
             {JACK[ribbonState(results, s.key)]?.label ?? ''}
           </span>
         </div>
       ))}
-      <div className="flex-1 flex items-center px-3 py-[6px] min-[561px]:py-0 text-caption text-dim leading-[1.45]">
+      <div className="flex-1 flex items-center px-3 py-[6px] min-[561px]:py-0 text-note text-dim leading-[1.45]">
         Each source is asked on its own — a slow one holds nothing else up.
       </div>
     </div>
@@ -800,7 +800,7 @@ export default function DossierPage() {
 
       {/* Query bar */}
       <div className="flex flex-col min-[561px]:flex-row min-[561px]:h-[40px] border-b border-border bg-field">
-        <div className="flex items-center px-3 h-[34px] min-[561px]:h-auto border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border font-mono text-caption tracking-[0.12em] text-dim">
+        <div className="flex items-center px-3 h-[34px] min-[561px]:h-auto border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border font-mono text-note tracking-[0.12em] text-dim">
           QUERY
         </div>
         <label className="flex-1 flex items-center px-3 h-[34px] min-[561px]:h-auto min-w-0 border-b min-[561px]:border-b-0 min-[561px]:border-r border-card-border">
@@ -812,12 +812,12 @@ export default function DossierPage() {
             onKeyDown={(e) => {
               if (e.key === 'Enter') submit()
             }}
-            className="bg-transparent outline-none border-0 font-mono text-[16px] font-semibold text-txt tracking-[0.04em] w-full min-w-0"
+            className="bg-transparent outline-none border-0 font-mono text-copy font-semibold text-txt tracking-[0.04em] w-full min-w-0"
           />
         </label>
         <div className="flex items-center gap-[9px] px-[13px] h-[34px] min-[561px]:h-auto">
-          <span className="text-caption uppercase tracking-[0.09em] text-dim">Recognised as</span>
-          <span className="font-mono text-[12px] text-field-txt tracking-[0.06em] uppercase font-semibold">
+          <span className="text-note uppercase tracking-[0.09em] text-dim">Recognised as</span>
+          <span className="font-mono text-note text-field-txt tracking-[0.06em] uppercase font-semibold">
             {kind ? kind.label : q ? 'Free text' : DASH}
           </span>
         </div>
@@ -829,11 +829,11 @@ export default function DossierPage() {
       <div className={'hidden min-[561px]:grid ' + LANE_COLS + ' bg-field border-b border-border'}>
         <div />
         {['Source', 'State', 'Identity'].map((h) => (
-          <div key={h} className="h-6 flex items-center px-[11px] border-r border-line text-caption uppercase tracking-[0.1em] text-dim font-semibold">
+          <div key={h} className="h-6 flex items-center px-[11px] border-r border-line text-note uppercase tracking-[0.1em] text-dim font-semibold">
             {h}
           </div>
         ))}
-        <div className="col-span-3 h-6 flex items-center px-[11px] text-caption uppercase tracking-[0.1em] text-dim font-semibold">
+        <div className="col-span-3 h-6 flex items-center px-[11px] text-note uppercase tracking-[0.1em] text-dim font-semibold">
           Fields returned by this source
         </div>
       </div>
@@ -850,7 +850,7 @@ export default function DossierPage() {
           point of the ledger. */}
       {q && (
         <div data-dossier-panel className="px-[11px] py-3 border-b border-line bg-card">
-          <h2 className="text-caption uppercase tracking-[0.1em] text-dim font-semibold mb-2">
+          <h2 className="text-note uppercase tracking-[0.1em] text-dim font-semibold mb-2">
             Threat intel — full detail
           </h2>
           {(results.threat?.state ?? 'loading') === 'loading'

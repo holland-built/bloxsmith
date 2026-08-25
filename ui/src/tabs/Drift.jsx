@@ -76,7 +76,7 @@ export default function Drift() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-title font-semibold tracking-tight mb-1">Drift</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-1">Drift</h1>
       <TabIntro anchor="drift">
         Compares a site template against what actually exists in Infoblox and lists what is missing, changed, or
         extra. Read-only — it reports gaps, it never closes them.
@@ -96,7 +96,7 @@ export default function Drift() {
           note="compare a site template against live Infoblox state"
         >
           <div className="flex flex-col gap-3">
-            <label className="text-dense text-muted flex flex-col gap-1">
+            <label className="text-note text-muted flex flex-col gap-1">
               Template
               {templatesApi.loading ? (
                 <Skeleton h={38} />
@@ -111,7 +111,7 @@ export default function Drift() {
                 </select>
               )}
             </label>
-            <label className="text-dense text-muted flex flex-col gap-1">
+            <label className="text-note text-muted flex flex-col gap-1">
               IP space (override)
               <select value={ipSpace} onChange={(e) => setIpSpace(e.target.value)} className={inputCls}>
                 <option value="">— template default —</option>
@@ -129,7 +129,7 @@ export default function Drift() {
             <button
               disabled={checking || !template}
               onClick={check}
-              className="px-3 py-2 rounded-control text-body font-medium disabled:opacity-40 disabled:cursor-not-allowed self-start"
+              className="px-3 py-2 rounded-control text-copy font-medium disabled:opacity-40 disabled:cursor-not-allowed self-start"
               style={{ background: COLORS.accent, color: COLORS.onAccent }}
             >
               {checking ? 'Checking…' : 'Check drift'}
@@ -139,7 +139,7 @@ export default function Drift() {
 
         {err && (
           <Card key="drift-error" panelId="drift-error" span={6} className="max-w-[720px] mx-auto" title="Error">
-            <div className="text-body" style={{ color: COLORS.crit }}>{err}</div>
+            <div className="text-copy" style={{ color: COLORS.crit }}>{err}</div>
           </Card>
         )}
 
@@ -150,9 +150,9 @@ export default function Drift() {
             ) : (
               <>
                 <div className="flex items-center gap-3 mb-3 flex-wrap">
-                  <span className="font-mono text-dense">{result.site || template}</span>
+                  <span className="font-mono text-note">{result.site || template}</span>
                   <span
-                    className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium"
+                    className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium"
                     style={
                       result.drifted
                         ? { background: 'var(--pill-crit-bg)', color: 'var(--pill-crit-fg)' }
@@ -162,11 +162,11 @@ export default function Drift() {
                     {result.drifted ? `✕ ${result.drifts?.length || 0} items` : '✓ in-sync'}
                   </span>
                   {result.subnet_count != null && (
-                    <span className="text-dense text-muted">{result.subnet_count} subnets</span>
+                    <span className="text-note text-muted">{result.subnet_count} subnets</span>
                   )}
                 </div>
                 {result.summary && (
-                  <div className="text-dense text-dim mb-3">
+                  <div className="text-note text-dim mb-3">
                     {typeof result.summary === 'string'
                       ? result.summary
                       : `${result.summary.total ?? 0} total · ${result.summary.errors ?? 0} error${result.summary.errors === 1 ? '' : 's'} · ${result.summary.warnings ?? 0} warning${result.summary.warnings === 1 ? '' : 's'}`}
@@ -181,14 +181,14 @@ export default function Drift() {
                       const shown = open ? items : items.slice(0, 6)
                       return (
                         <div key={cat}>
-                          <div className="text-[10.5px] font-medium text-dim uppercase tracking-wide mb-1.5">{cat}</div>
+                          <div className="text-note font-medium text-dim uppercase tracking-wide mb-1.5">{cat}</div>
                           <div className="flex flex-col gap-1.5">
                             {shown.map((d, i) => {
                               const st = PILL[driftItemKind(d)]
                               return (
-                                <div key={i} className="flex items-start gap-2 text-body">
+                                <div key={i} className="flex items-start gap-2 text-copy">
                                   <span
-                                    className="inline-block rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0 mt-0.5"
+                                    className="inline-block rounded-full px-2 py-0.5 text-note font-medium shrink-0 mt-0.5"
                                     style={{ background: st.bg, color: st.fg }}
                                   >
                                     {st.label}
@@ -201,7 +201,7 @@ export default function Drift() {
                           {items.length > 6 && (
                             <button
                               onClick={() => toggleCat(cat)}
-                              className="text-dense text-dim mt-1.5 underline underline-offset-2"
+                              className="text-note text-dim mt-1.5 underline underline-offset-2"
                             >
                               {open ? 'show less' : `+${items.length - 6} more`}
                             </button>

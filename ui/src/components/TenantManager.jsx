@@ -11,8 +11,8 @@ const vpost = (url, body) =>
 
 const inCls =
   `${FIELD_CLS} w-full`
-const rowBtn = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-control text-left text-body text-field-txt hover:bg-line'
-const miniBtn = 'px-2 py-1 rounded-control border border-border text-caption text-muted hover:text-txt hover:border-border-hover'
+const rowBtn = 'flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded-control text-left text-copy text-field-txt hover:bg-line'
+const miniBtn = 'px-2 py-1 rounded-control border border-border text-note text-muted hover:text-txt hover:border-border-hover'
 
 // Everything that can hold focus inside the sheet, in document order. Read
 // fresh on every Tab because this sheet swaps whole sections in and out (add a
@@ -343,9 +343,9 @@ export default function TenantManager({ onClose, onOpenHelp }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">
-          <h2 id="tm-title" className="text-body font-semibold">Settings</h2>
+          <h2 id="tm-title" className="text-copy font-semibold">Settings</h2>
           <span className="flex-1" />
-          <button className="text-muted text-body" onClick={onClose} aria-label="Close">✕</button>
+          <button className="text-muted text-copy" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
         {!add.open && !edit && (
@@ -356,8 +356,8 @@ export default function TenantManager({ onClose, onOpenHelp }) {
 
         {add.open ? (
           <div>
-            <h3 className="text-dense font-semibold mb-2">Add a connection</h3>
-            <label htmlFor="tm-add-key" className="block text-caption text-dim mb-1">Infoblox API key</label>
+            <h3 className="text-note font-semibold mb-2">Add a connection</h3>
+            <label htmlFor="tm-add-key" className="block text-note text-dim mb-1">Infoblox API key</label>
             <input
               id="tm-add-key"
               className={inCls}
@@ -367,9 +367,9 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               placeholder="paste token"
               autoFocus
             />
-            <label htmlFor="tm-add-label" className="block text-caption text-dim mt-2 mb-1">Name (optional)</label>
+            <label htmlFor="tm-add-label" className="block text-note text-dim mt-2 mb-1">Name (optional)</label>
             <input id="tm-add-label" className={inCls} value={add.label} onChange={(e) => setAdd((a) => ({ ...a, label: e.target.value }))} />
-            <label htmlFor="tm-add-groq" className="block text-caption text-dim mt-2 mb-1">Groq API key (optional)</label>
+            <label htmlFor="tm-add-groq" className="block text-note text-dim mt-2 mb-1">Groq API key (optional)</label>
             <input
               id="tm-add-groq"
               className={inCls}
@@ -380,7 +380,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
             {add.test && (
               <div
                 className={
-                  'mt-2 text-caption ' +
+                  'mt-2 text-note ' +
                   (add.test.startsWith('Key valid')
                     ? 'text-ok'
                     : add.test === 'Testing…' || add.test.startsWith('Unverified')
@@ -391,19 +391,19 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 {add.test}
               </div>
             )}
-            {add.err && <div className="mt-2 text-dense text-crit">{add.err}</div>}
+            {add.err && <div className="mt-2 text-note text-crit">{add.err}</div>}
             <div className="flex gap-2 mt-3">
-              <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-body disabled:opacity-50" onClick={submitAdd} disabled={add.busy || !add.key}>
+              <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={submitAdd} disabled={add.busy || !add.key}>
                 {add.busy ? 'Adding…' : 'Add'}
               </button>
-              <button className="px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt" onClick={testAddKey} disabled={!add.key}>Test</button>
-              <button className="px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt" onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
+              <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={testAddKey} disabled={!add.key}>Test</button>
+              <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={() => setAdd({ open: false, label: '', key: '', groq: '', err: '', busy: false, test: '' })}>Cancel</button>
             </div>
           </div>
         ) : edit ? (
           <div>
-            <h3 className="text-dense font-semibold mb-2">Replace key for {edit.label || 'connection'}</h3>
-            <label htmlFor="tm-edit-key" className="block text-caption text-dim mb-1">New Infoblox API key</label>
+            <h3 className="text-note font-semibold mb-2">Replace key for {edit.label || 'connection'}</h3>
+            <label htmlFor="tm-edit-key" className="block text-note text-dim mb-1">New Infoblox API key</label>
             <input
               id="tm-edit-key"
               className={inCls}
@@ -415,7 +415,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
             {edit.test && (
               <div
                 className={
-                  'mt-2 text-caption ' +
+                  'mt-2 text-note ' +
                   (edit.test.startsWith('Key valid')
                     ? 'text-ok'
                     : edit.test === 'Testing…' || edit.test.startsWith('Unverified')
@@ -426,18 +426,18 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 {edit.test}
               </div>
             )}
-            {edit.err && <div className="mt-2 text-dense text-crit">{edit.err}</div>}
+            {edit.err && <div className="mt-2 text-note text-crit">{edit.err}</div>}
             <div className="flex gap-2 mt-3">
-              <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-body disabled:opacity-50" onClick={submitEdit} disabled={edit.busy || !edit.key}>
+              <button className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50" onClick={submitEdit} disabled={edit.busy || !edit.key}>
                 {edit.busy ? 'Replacing…' : 'Replace key'}
               </button>
-              <button className="px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt" onClick={testEditKey} disabled={!edit.key}>Test</button>
-              <button className="px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt" onClick={() => setEdit(null)}>Cancel</button>
+              <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={testEditKey} disabled={!edit.key}>Test</button>
+              <button className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt" onClick={() => setEdit(null)}>Cancel</button>
             </div>
           </div>
         ) : (
           <>
-            <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Vault tenants</div>
+            <div className="text-note uppercase tracking-wide text-dim mb-2">Vault tenants</div>
             {statusError ? (
               <div className="mb-3">
                 <FeedUnavailable label="Tenant status unavailable" reason="Could not read saved tenants — retry." onRetry={load} />
@@ -448,9 +448,9 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 <div key={t.id} className="flex items-center gap-1">
                   {confirmRm === t.id ? (
                     <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-control bg-crit/10 border border-crit/40">
-                      <span className="flex-1 text-caption text-crit">Remove {t.label}?</span>
-                      <button className="px-2 py-0.5 rounded-control border border-crit text-crit text-caption" aria-label="Confirm remove" title="Confirm remove" onClick={() => remove(t.id)}>✓</button>
-                      <button className="px-2 py-0.5 rounded-control border border-border text-caption text-field-txt" aria-label="Cancel" title="Cancel" onClick={() => setConfirmRm(null)}>✕</button>
+                      <span className="flex-1 text-note text-crit">Remove {t.label}?</span>
+                      <button className="px-2 py-0.5 rounded-control border border-crit text-crit text-note" aria-label="Confirm remove" title="Confirm remove" onClick={() => remove(t.id)}>✓</button>
+                      <button className="px-2 py-0.5 rounded-control border border-border text-note text-field-txt" aria-label="Cancel" title="Cancel" onClick={() => setConfirmRm(null)}>✕</button>
                     </div>
                   ) : (
                     <>
@@ -464,22 +464,22 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                   )}
                 </div>
               ))}
-              {tenants.length === 0 && <div className="text-caption text-dim px-1">No tenants saved.</div>}
+              {tenants.length === 0 && <div className="text-note text-dim px-1">No tenants saved.</div>}
             </div>
             )}
             {activeId && (
               <div className="mb-3">
                 <button
-                  className="w-full px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt hover:border-border-hover disabled:opacity-60"
+                  className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover disabled:opacity-60"
                   disabled={connTest.busy}
                   onClick={testConnection}
                 >
                   {connTest.busy ? 'Testing connection…' : 'Test active connection'}
                 </button>
-                {connTest.result && <div className="text-caption text-muted px-1 pt-1.5">{connTest.result}</div>}
+                {connTest.result && <div className="text-note text-muted px-1 pt-1.5">{connTest.result}</div>}
               </div>
             )}
-            <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
+            <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover mb-4" onClick={() => setAdd((a) => ({ ...a, open: true }))}>
               + Add connection
             </button>
 
@@ -487,9 +487,9 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 NOT a field on "Add connection" where the Groq key lives: this
                 credential belongs to the deployment, not to any one Infoblox
                 tenant, and it does not change when you switch tenants. */}
-            <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Axur (brand protection)</div>
+            <div className="text-note uppercase tracking-wide text-dim mb-2">Axur (brand protection)</div>
             <div className="mb-4 rounded-control border border-border bg-field p-3">
-              <label htmlFor="tm-axur-key" className="block text-caption text-dim mb-1">Axur API key</label>
+              <label htmlFor="tm-axur-key" className="block text-note text-dim mb-1">Axur API key</label>
               {/* NEVER prefilled from the server, and no route would return it.
                   A password field that arrives populated invites a reader to
                   believe they can read it back, and puts a live secret in the
@@ -503,15 +503,15 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 onChange={(e) => setAxur((a) => ({ ...a, key: e.target.value, msg: '', err: '' }))}
                 placeholder={axur.stored ? 'a key is saved — type to replace it' : 'paste token'}
               />
-              <div className="text-caption text-dim mt-1.5">
+              <div className="text-note text-dim mt-1.5">
                 Encrypted in the vault, the way your Infoblox keys are. Paste the token on its own;
                 the &ldquo;Bearer&rdquo; word is added for you.
               </div>
-              {axur.err && <div className="mt-2 text-caption text-crit">{axur.err}</div>}
-              {axur.msg && <div className="mt-2 text-caption text-ok">{axur.msg}</div>}
+              {axur.err && <div className="mt-2 text-note text-crit">{axur.err}</div>}
+              {axur.msg && <div className="mt-2 text-note text-ok">{axur.msg}</div>}
               <div className="flex gap-2 mt-2">
                 <button
-                  className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-body disabled:opacity-50"
+                  className="flex-1 px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-copy disabled:opacity-50"
                   onClick={saveAxur}
                   disabled={axur.busy || !axur.key}
                 >
@@ -519,7 +519,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 </button>
                 {axur.stored && (
                   <button
-                    className="px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt disabled:opacity-50"
+                    className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt disabled:opacity-50"
                     onClick={clearAxur}
                     disabled={axur.busy}
                   >
@@ -532,13 +532,13 @@ export default function TenantManager({ onClose, onOpenHelp }) {
             {/* Per-tenant write lock. Tenants are read-only until opted in, so
                 this is the only place the dangerous routes can be turned on.
                 See go/internal/vault/writelock.go. */}
-            <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Changing this tenant</div>
+            <div className="text-note uppercase tracking-wide text-dim mb-2">Changing this tenant</div>
             {writeTargetError ? (
               <div className="mb-4">
                 <FeedUnavailable label="Write permission unknown" reason={writeTargetError} />
               </div>
             ) : !writeTarget ? (
-              <div className="text-caption text-dim px-1 mb-4">Checking…</div>
+              <div className="text-note text-dim px-1 mb-4">Checking…</div>
             ) : !writeTarget.known ? (
               <div className="mb-4">
                 <FeedUnavailable
@@ -549,23 +549,23 @@ export default function TenantManager({ onClose, onOpenHelp }) {
             ) : (
               <div className="mb-4 rounded-control border border-border bg-field p-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-caption" style={{ color: writeTarget.writable ? 'var(--color-warn)' : 'var(--color-ok)' }}>
+                  <span className="text-note" style={{ color: writeTarget.writable ? 'var(--color-warn)' : 'var(--color-ok)' }}>
                     {writeTarget.writable ? '● Changes allowed' : '● Read-only'}
                   </span>
                   <span className="flex-1" />
-                  <span className="text-[10px] text-dim font-mono truncate" title={writeTarget.tenant}>
+                  <span className="text-note text-dim font-mono truncate" title={writeTarget.tenant}>
                     {writeTarget.label || writeTarget.tenant}
                   </span>
                 </div>
-                <div className="text-caption text-dim mt-1.5">
+                <div className="text-note text-dim mt-1.5">
                   {writeTarget.writable
                     ? 'Provisioning, teardown and record edits will really change this tenant.'
                     : 'Provisioning, teardown and record edits are refused. Nothing here can change this tenant.'}
                 </div>
-                {grantErr && <div className="mt-2 text-caption text-crit">{grantErr}</div>}
+                {grantErr && <div className="mt-2 text-note text-crit">{grantErr}</div>}
                 {writeTarget.writable ? (
                   <button
-                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt hover:border-border-hover disabled:opacity-50"
+                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover disabled:opacity-50"
                     disabled={grantBusy}
                     onClick={() => setWritable(false)}
                   >
@@ -573,13 +573,13 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                   </button>
                 ) : confirmGrant ? (
                   <div className="mt-2.5">
-                    <div className="text-caption mb-2" style={{ color: 'var(--color-warn)' }}>
+                    <div className="text-note mb-2" style={{ color: 'var(--color-warn)' }}>
                       This lets teardown delete real DNS zones, subnets and address blocks in{' '}
                       {writeTarget.label || writeTarget.tenant}. Only do this on a tenant you own.
                     </div>
                     <div className="flex gap-2">
                       <button
-                        className="flex-1 px-2.5 py-1.5 rounded-control border text-body disabled:opacity-50"
+                        className="flex-1 px-2.5 py-1.5 rounded-control border text-copy disabled:opacity-50"
                         style={{ borderColor: 'var(--color-crit)', color: 'var(--color-crit)' }}
                         disabled={grantBusy}
                         onClick={() => setWritable(true)}
@@ -587,7 +587,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                         {grantBusy ? 'Saving…' : 'Yes, allow changes'}
                       </button>
                       <button
-                        className="px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt"
+                        className="px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt"
                         onClick={() => { setConfirmGrant(false); setGrantErr('') }}
                       >
                         Cancel
@@ -596,7 +596,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                   </div>
                 ) : (
                   <button
-                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt hover:border-border-hover"
+                    className="w-full mt-2.5 px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-border-hover"
                     onClick={() => setConfirmGrant(true)}
                   >
                     Allow changes to this tenant…
@@ -611,7 +611,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               </div>
             ) : accounts.length > 0 && (
               <>
-                <div className="text-[10px] uppercase tracking-wide text-dim mb-2">CSP account</div>
+                <div className="text-note uppercase tracking-wide text-dim mb-2">CSP account</div>
                 {/* CONTROLLED, on the active id. It was `defaultValue=""` over a
                     disabled "Switch active account…" placeholder, so the list
                     never showed which account you were actually on — the one
@@ -650,12 +650,12 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                     a standing "your key cannot do this" would be exactly the
                     unmeasured claim this panel was fixed for. The measured
                     version appears below, from CSP, once an attempt is made. */}
-                <div className="text-caption text-dim mt-1.5">
+                <div className="text-note text-dim mt-1.5">
                   Switching needs a User API key with multi-account access. Without it CSP refuses
                   the change and the list stays where it was.
                 </div>
                 {acctSwitchErr && (
-                  <div className="text-caption mt-1.5 mb-3" style={{ color: 'var(--color-crit)' }}>{acctSwitchErr}</div>
+                  <div className="text-note mt-1.5 mb-3" style={{ color: 'var(--color-crit)' }}>{acctSwitchErr}</div>
                 )}
                 {!acctSwitchErr && <div className="mb-4" />}
               </>
@@ -691,22 +691,22 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 close. One route at every width, never two and never none — if
                 either class is edited, edit both, and header-help.spec.ts
                 asserts the pairing at 1920 and at 390. */}
-            <div className="text-[10px] uppercase tracking-wide text-dim mb-2">Appearance</div>
+            <div className="text-note uppercase tracking-wide text-dim mb-2">Appearance</div>
             <button
               type="button"
               onClick={onOpenHelp}
               aria-haspopup="dialog"
-              className="block lg:hidden mb-3 text-left text-caption font-medium text-accent hover:underline underline-offset-2"
+              className="block lg:hidden mb-3 text-left text-note font-medium text-accent hover:underline underline-offset-2"
             >
               What these controls do →
             </button>
             <div className="mb-3 flex items-center gap-2">
               <ThemeSwitch />
-              <span className="text-caption text-dim">Light · System · Dark</span>
+              <span className="text-note text-dim">Light · System · Dark</span>
             </div>
             <div className="mb-4 flex items-center gap-2">
               <DensitySwitch />
-              <span className="text-caption text-dim">Comfortable · Compact</span>
+              <span className="text-note text-dim">Comfortable · Compact</span>
             </div>
 
             {/* Same shape as Appearance above — section label, then controls.
@@ -719,7 +719,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
                 with it. */}
             <UpdateCheck version={(status && status.version) || ''} />
 
-            <label htmlFor="tm-dash-token" className="block text-[10px] uppercase tracking-wide text-dim mb-2">Dashboard token</label>
+            <label htmlFor="tm-dash-token" className="block text-note uppercase tracking-wide text-dim mb-2">Dashboard token</label>
             <input
               id="tm-dash-token"
               className={inCls + ' mb-4'}
@@ -729,7 +729,7 @@ export default function TenantManager({ onClose, onOpenHelp }) {
               placeholder="X-Auth-Token for lock/admin actions"
             />
 
-            <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-body text-field-txt hover:border-crit hover:text-crit disabled:opacity-50" onClick={lockNow} disabled={locking}>
+            <button className="w-full px-2.5 py-1.5 rounded-control border border-border text-copy text-field-txt hover:border-crit hover:text-crit disabled:opacity-50" onClick={lockNow} disabled={locking}>
               {locking ? 'Locking…' : 'Lock vault now'}
             </button>
           </>

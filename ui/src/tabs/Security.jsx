@@ -70,7 +70,7 @@ export default function Security() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-title font-semibold tracking-tight mb-3">Security</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-3">Security</h1>
       {/* Every direct child of a grid with a layoutKey carries its own panelId:
           CardGrid applies the saved order to its React children by reading
           `props.panelId` off them, while it reads the live order off the DOM. A
@@ -133,7 +133,7 @@ function SeverityHero({ panelId, hub, events }) {
   const scopeNote = sampleScopeNote(hub.data, 'events')
 
   return (
-    <Card panelId={panelId} span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-caption text-muted">{sampleCountLabel(hub.data, 'events')}</span>}>
+    <Card panelId={panelId} span={4} title="Threat Events — by Severity" right={unavailable ? null : <span className="text-note text-muted">{sampleCountLabel(hub.data, 'events')}</span>}>
       {hub.loading ? (
         <Skeleton h={230} />
       ) : unavailable ? (
@@ -144,7 +144,7 @@ function SeverityHero({ panelId, hub, events }) {
         <>
           <div className="flex gap-4 mb-3">
             {SEV_ORDER.map((s) => (
-              <div key={s} className="flex items-center gap-1.5 text-dense">
+              <div key={s} className="flex items-center gap-1.5 text-note">
                 <i className="w-2 h-2 rounded-mark inline-block" style={{ background: SEV_COLOR[s] }} />
                 <span className="text-muted capitalize">{s}</span>
                 <b>{counts[s] || 0}</b>
@@ -173,7 +173,7 @@ function SeverityHero({ panelId, hub, events }) {
               `events`, which is one capped page — so on a busy window they
               describe the sample, not the window. The heading names the sample;
               this names its scope, once, rather than four times in the legend. */}
-          {scopeNote && <div className="text-caption text-dim mt-2">{scopeNote}</div>}
+          {scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
         </>
       )}
     </Card>
@@ -215,8 +215,8 @@ function KpiStack({ panelId, hub, events, acks }) {
           <div className="grid grid-cols-2 gap-3">
             {cells.map((c) => (
               <div key={c.label}>
-                <div className="text-muted text-caption">{c.label}</div>
-                <div className="text-xl font-semibold tracking-tight my-1" style={{ color: c.color }}>{Number(c.value).toLocaleString()}</div>
+                <div className="text-muted text-note">{c.label}</div>
+                <div className="text-figure font-semibold tracking-tight my-1" style={{ color: c.color }}>{Number(c.value).toLocaleString()}</div>
               </div>
             ))}
           </div>
@@ -225,7 +225,7 @@ function KpiStack({ panelId, hub, events, acks }) {
               is not conditional on that: it says which numbers were counted
               from what, and a panel mixing scopes without saying so is the
               defect wearing a smaller hat. */}
-          {scopeNote && <div className="text-caption text-dim mt-3">{scopeNote}</div>}
+          {scopeNote && <div className="text-note text-dim mt-3">{scopeNote}</div>}
         </>
       )}
     </Card>
@@ -282,37 +282,37 @@ function BlockCell({ domain }) {
     setMsg(body.error || `HTTP ${res.status}`)
   }
 
-  if (!domain) return <span className="text-dim text-caption">—</span>
-  if (state === 'busy') return <span className="text-caption text-muted">…</span>
+  if (!domain) return <span className="text-dim text-note">—</span>
+  if (state === 'busy') return <span className="text-note text-muted">…</span>
   if (state === 'verified') {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="text-caption" style={{ color: COLORS.ok }}>blocked ✓</span>
-        <button onClick={() => run('unblock')} className="px-1.5 py-0.5 rounded-control text-[10.5px] border border-border text-muted">Unblock</button>
+        <span className="text-note" style={{ color: COLORS.ok }}>blocked ✓</span>
+        <button onClick={() => run('unblock')} className="px-1.5 py-0.5 rounded-control text-note border border-border text-muted">Unblock</button>
       </div>
     )
   }
-  if (state === 'tokenRequired') return <span className="text-caption" style={{ color: COLORS.warn }}>token required — set in ⚙ Settings</span>
+  if (state === 'tokenRequired') return <span className="text-note" style={{ color: COLORS.warn }}>token required — set in ⚙ Settings</span>
   if (state === 'unverified') {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="text-caption" style={{ color: COLORS.warn }} title={msg}>
+        <span className="text-note" style={{ color: COLORS.warn }} title={msg}>
           unconfirmed — {msg}
         </span>
-        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded-control text-[10.5px] border border-border text-muted">Re-check</button>
+        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded-control text-note border border-border text-muted">Re-check</button>
       </div>
     )
   }
   if (state === 'rejected') {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="text-caption" style={{ color: COLORS.crit }} title={msg}>{msg}</span>
-        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded-control text-[10.5px] border border-border text-muted">Retry</button>
+        <span className="text-note" style={{ color: COLORS.crit }} title={msg}>{msg}</span>
+        <button onClick={() => run(lastActionRef.current)} className="px-1.5 py-0.5 rounded-control text-note border border-border text-muted">Retry</button>
       </div>
     )
   }
   return (
-    <button onClick={() => run('block')} className="px-1.5 py-0.5 rounded-control text-[10.5px] border border-border text-muted hover:text-field-txt">Block</button>
+    <button onClick={() => run('block')} className="px-1.5 py-0.5 rounded-control text-note border border-border text-muted hover:text-field-txt">Block</button>
   )
 }
 
@@ -370,7 +370,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
       render: (_v, r) => {
         const sev = String(r.severity || '').toLowerCase()
         return (
-          <span className="font-medium uppercase text-caption" style={{ color: SEV_COLOR[sev] || COLORS.other }}>
+          <span className="font-medium uppercase text-note" style={{ color: SEV_COLOR[sev] || COLORS.other }}>
             {r.severity || '—'}
           </span>
         )
@@ -385,7 +385,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
       sortable: true,
       render: (_v, r) => (
         <span
-          className="block font-mono overflow-hidden whitespace-nowrap text-ellipsis text-dim text-caption"
+          className="block font-mono overflow-hidden whitespace-nowrap text-ellipsis text-dim text-note"
           style={{ maxWidth: 180 }}
           title={r.event_time || undefined}
         >
@@ -406,7 +406,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
             <button
               key={s}
               onClick={() => setSevFilter(s)}
-              className="px-2 py-1 rounded-control text-caption capitalize border"
+              className="px-2 py-1 rounded-control text-note capitalize border"
               style={{
                 borderColor: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-border)',
                 color: sevFilter === s ? (SEV_COLOR[s] || COLORS.accent) : 'var(--color-muted)',
@@ -415,7 +415,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
               {s}
             </button>
           ))}
-          {!unavailable && <span className="text-caption text-muted ml-1">{rows.length.toLocaleString()}</span>}
+          {!unavailable && <span className="text-note text-muted ml-1">{rows.length.toLocaleString()}</span>}
         </div>
       }
     >
@@ -437,7 +437,7 @@ function TriageInbox({ panelId, hub, events, acks, setAcks }) {
               filter, and those rows come from the same capped page as every
               other number on this tab. Without this line an inbox holding the
               first 50 of a bad hour reads as an inbox with 50 things in it. */}
-          {scopeNote && <div className="text-caption text-dim mt-2">{scopeNote}</div>}
+          {scopeNote && <div className="text-note text-dim mt-2">{scopeNote}</div>}
         </>
       )}
     </Card>
@@ -470,7 +470,7 @@ function LookalikeTable({ panelId, lookalikes }) {
   const counted = !lookalikes.error && !d.unavailable
 
   return (
-    <Card panelId={panelId} span={3} title="Lookalike Domains" right={<span className="text-caption text-muted">{counted ? rows.length : '—'} detected</span>}>
+    <Card panelId={panelId} span={3} title="Lookalike Domains" right={<span className="text-note text-muted">{counted ? rows.length : '—'} detected</span>}>
       {lookalikes.loading ? <Skeleton h={220} /> : lookalikes.error ? (
         // Previously byte-identical to a genuinely empty result ("no data") —
         // a dead feed read as a clean estate.
@@ -552,7 +552,7 @@ function AxurPanel({ panelId, axur }) {
       span={3}
       title="Axur Supplier Risk"
       right={
-        <span className="text-caption text-muted">
+        <span className="text-note text-muted">
           {counted ? `${(d.total_credentials ?? 0).toLocaleString()} credentials · ${rows.length} suppliers` : '—'}
         </span>
       }
@@ -599,7 +599,7 @@ function CtemPanel({ panelId, ctem }) {
       render: (_v, r) => {
         const sev = String(r.severity || '').toLowerCase()
         return (
-          <span className="font-medium uppercase text-caption" style={{ color: SEV_COLOR[sev] || COLORS.other }}>
+          <span className="font-medium uppercase text-note" style={{ color: SEV_COLOR[sev] || COLORS.other }}>
             {r.severity || '—'}
           </span>
         )
@@ -610,7 +610,7 @@ function CtemPanel({ panelId, ctem }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="CTEM Exposure" right={d?.total_exposures ? <span className="text-caption text-muted">{d.total_exposures.toLocaleString()} total</span> : null}>
+    <Card panelId={panelId} span={3} title="CTEM Exposure" right={d?.total_exposures ? <span className="text-note text-muted">{d.total_exposures.toLocaleString()} total</span> : null}>
       {ctem.loading ? <Skeleton h={220} /> : ctem.error || status === 'error' ? (
         <FeedUnavailable label="CTEM exposure feed unavailable" />
       ) : empty ? <Empty /> : (
@@ -672,8 +672,8 @@ function ThreatFeed({ panelId, threats }) {
       ) : rows.length === 0 ? <Empty /> : (
         <>
           <div className="flex gap-5 mb-2">
-            <div><span className="text-xl font-semibold" style={{ color: COLORS.crit }}>{totals.block.toLocaleString()}</span><div className="text-caption text-muted">Blocked</div></div>
-            <div><span className="text-xl font-semibold">{totals.allow.toLocaleString()}</span><div className="text-caption text-muted">Allowed</div></div>
+            <div><span className="text-figure font-semibold" style={{ color: COLORS.crit }}>{totals.block.toLocaleString()}</span><div className="text-note text-muted">Blocked</div></div>
+            <div><span className="text-figure font-semibold">{totals.allow.toLocaleString()}</span><div className="text-note text-muted">Allowed</div></div>
           </div>
           <Suspense fallback={<Skeleton h={150} />}>
             <StackedDayBars
@@ -740,7 +740,7 @@ function InsightsPanel({ panelId, insights }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="SOC Insights" right={!unavailable && rows.length ? <span className="text-caption text-muted">{rows.length.toLocaleString()}</span> : null}>
+    <Card panelId={panelId} span={3} title="SOC Insights" right={!unavailable && rows.length ? <span className="text-note text-muted">{rows.length.toLocaleString()}</span> : null}>
       {insights.loading ? <Skeleton h={220} /> : unavailable ? (
         <FeedUnavailable reason={typeof d?.unavailable === 'string' ? d.unavailable : undefined} label="SOC insights unavailable" />
       ) : rows.length === 0 ? <Empty /> : (
@@ -766,11 +766,11 @@ function AssetInsights({ panelId, assetInsights }) {
       ) : (
         <div className="flex flex-col gap-2">
           <div>
-            <div className="text-caption text-muted">Total Findings</div>
-            <div className="text-xl font-semibold tracking-tight my-1">{d.total.toLocaleString()}</div>
+            <div className="text-note text-muted">Total Findings</div>
+            <div className="text-figure font-semibold tracking-tight my-1">{d.total.toLocaleString()}</div>
           </div>
           {d.breakdown_available === false ? (
-            <div className="text-caption text-dim">{d.note || 'severity breakdown unavailable upstream'}</div>
+            <div className="text-note text-dim">{d.note || 'severity breakdown unavailable upstream'}</div>
           ) : null}
         </div>
       )}
@@ -802,10 +802,10 @@ function ExposuresPanel({ panelId, exposures }) {
 
   const rightNode =
     availability === 'ok' && typeof total === 'number'
-      ? <span className="text-caption text-muted">{total.toLocaleString()} total</span>
+      ? <span className="text-note text-muted">{total.toLocaleString()} total</span>
       : availability === 'metadata-degraded'
-        ? <span className="text-caption text-muted">{count.toLocaleString()} rows loaded</span>
-        : count ? <span className="text-caption text-muted">{count.toLocaleString()}</span> : null
+        ? <span className="text-note text-muted">{count.toLocaleString()} rows loaded</span>
+        : count ? <span className="text-note text-muted">{count.toLocaleString()}</span> : null
 
   return (
     <Card panelId={panelId} span={4} title="Exposures" right={rightNode}>
@@ -819,7 +819,7 @@ function ExposuresPanel({ panelId, exposures }) {
         <Empty>no exposures reported</Empty>
       ) : (
         <>
-          <div className="text-caption text-muted mb-1">
+          <div className="text-note text-muted mb-1">
             {availability === 'metadata-degraded'
               ? `Total unavailable, ${count.toLocaleString()} rows loaded`
               : typeof total === 'number'
@@ -856,7 +856,7 @@ function AssetRiskPanel({ panelId, assetRisk }) {
   ]
 
   return (
-    <Card panelId={panelId} span={4} title="Asset Risk" right={count ? <span className="text-caption text-muted">{count.toLocaleString()}</span> : null}>
+    <Card panelId={panelId} span={4} title="Asset Risk" right={count ? <span className="text-note text-muted">{count.toLocaleString()}</span> : null}>
       {assetRisk.loading ? <Skeleton h={260} /> : assetRisk.error || status === 'error' ? (
         <FeedUnavailable label="Asset risk feed unavailable" />
       ) : rows.length === 0 ? (
@@ -901,7 +901,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
       title="Exposed Surface"
       right={
         loading || bothDead ? null : (
-          <span className="text-caption text-muted">
+          <span className="text-note text-muted">
             {hDead ? 'hostnames unavailable' : `${countLabel(hCount, hAvail)} hostnames`}
             {' · '}
             {iDead ? 'IPs unavailable' : `${countLabel(iCount, iAvail)} IPs`}
@@ -914,7 +914,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
       ) : (
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <div className="text-caption text-muted mb-1">
+            <div className="text-note text-muted mb-1">
               {hDead ? 'Hostnames' : `Showing ${Math.min(SAMPLE, hRows.length).toLocaleString()} of ${countLabel(hCount, hAvail)}`}
             </div>
             {hDead ? (
@@ -926,7 +926,7 @@ function ExposedSurfacePanel({ panelId, hostnames, ips }) {
             )}
           </div>
           <div>
-            <div className="text-caption text-muted mb-1">
+            <div className="text-note text-muted mb-1">
               {iDead ? 'IPs' : `Showing ${Math.min(SAMPLE, iRows.length).toLocaleString()} of ${countLabel(iCount, iAvail)}`}
             </div>
             {iDead ? (
@@ -979,7 +979,7 @@ function CtemAssetsPanel({ panelId, ctemAssets }) {
       panelId={panelId}
       span={4}
       title="CTEM Assets"
-      right={assetCount ? <span className="text-caption text-muted">{assetCount.toLocaleString()} assets</span> : null}
+      right={assetCount ? <span className="text-note text-muted">{assetCount.toLocaleString()} assets</span> : null}
     >
       {ctemAssets.loading ? <Skeleton h={260} /> : ctemAssets.error || status === 'error' ? (
         <FeedUnavailable label="CTEM assets feed unavailable" />
@@ -989,15 +989,15 @@ function CtemAssetsPanel({ panelId, ctemAssets }) {
         <div className="flex flex-col gap-3">
           {groups.map((g) => (
             <div key={g.key}>
-              <div className="text-dense text-muted capitalize mb-1">
+              <div className="text-note text-muted capitalize mb-1">
                 {g.key.replace(/_/g, ' ')} <b className="text-field-txt">{g.count.toLocaleString()}</b> distinct
               </div>
               <div className="flex flex-wrap gap-1">
                 {g.sample.map((s, i) => (
-                  <span key={i} className="px-1.5 py-0.5 rounded-mark text-[10.5px] border border-border text-muted">{s}</span>
+                  <span key={i} className="px-1.5 py-0.5 rounded-mark text-note border border-border text-muted">{s}</span>
                 ))}
                 {g.count > g.sample.length ? (
-                  <span className="px-1.5 py-0.5 text-[10.5px] text-dim">+{(g.count - g.sample.length).toLocaleString()} more</span>
+                  <span className="px-1.5 py-0.5 text-note text-dim">+{(g.count - g.sample.length).toLocaleString()} more</span>
                 ) : null}
               </div>
             </div>
@@ -1052,10 +1052,10 @@ function SecurityInventory({ panelId, hub }) {
             const { value, note } = inventoryRow(s.key, body)
             return (
               <div key={s.key} className="flex items-center justify-between gap-2 py-1">
-                <span className="text-[13px] text-muted">{s.label}</span>
+                <span className="text-copy text-muted">{s.label}</span>
                 <div className="flex items-center gap-2">
-                  {note && <span className="text-caption text-dim">{note}</span>}
-                  <span className="text-[15px] font-semibold tabular-nums text-txt w-10 text-right">
+                  {note && <span className="text-note text-dim">{note}</span>}
+                  <span className="text-copy font-semibold tabular-nums text-txt w-10 text-right">
                     {value === null ? DASH : value.toLocaleString()}
                   </span>
                 </div>

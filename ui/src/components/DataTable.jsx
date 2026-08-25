@@ -489,7 +489,7 @@ export function DataTable({
   }, [])
 
   if (rows.length === 0) {
-    return <div className="min-h-[100px] flex items-center justify-center text-muted text-body">{emptyText}</div>
+    return <div className="min-h-[100px] flex items-center justify-center text-muted text-copy">{emptyText}</div>
   }
 
   const headBg = stickyHeader ? 'sticky top-0 z-10 bg-card' : ''
@@ -513,7 +513,7 @@ export function DataTable({
   }
 
   const table = (
-    <table className={`w-full ${tableLayoutClass} border-collapse text-body`}>
+    <table className={`w-full ${tableLayoutClass} border-collapse text-copy`}>
       <thead>
         <tr>
           {cols.map((c) => {
@@ -522,7 +522,7 @@ export function DataTable({
             // py-[var(--sp-cell-y)] is density-driven; px-2.5 is NOT, and must
             // never become so — CELL_PAD above hard-codes it for the canvas
             // measurer, so a density that moved it would desync the two.
-            const base = `${headBg} text-[10.5px] font-medium text-dim uppercase tracking-wide py-[var(--sp-cell-y)] px-2.5 border-b border-line-2 overflow-hidden text-ellipsis ${alignRight ? 'text-right' : 'text-left'}${lowPri}`
+            const base = `${headBg} text-note font-medium text-dim uppercase tracking-wide py-[var(--sp-cell-y)] px-2.5 border-b border-line-2 overflow-hidden text-ellipsis ${alignRight ? 'text-right' : 'text-left'}${lowPri}`
             if (c.sortable) {
               const isActive = activeSort && activeSort.key === c.key
               const ariaSort = isActive ? (activeSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'
@@ -589,7 +589,7 @@ export function DataTable({
                 const st = statusBadgeColor(v) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
                 return (
                   <td key={c.key} className={tdBase} style={cellStyle(c)}>
-                    <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium" style={{ background: st.bg, color: st.fg }}>
+                    <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: st.bg, color: st.fg }}>
                       {v || '—'}
                     </span>
                   </td>
@@ -639,14 +639,14 @@ export function DataTable({
     footer = (
       <a
         href={viewAllHref}
-        className="block text-center text-accent text-[11.5px] font-medium py-2 px-2.5 hover:bg-line/50 rounded-control transition-colors"
+        className="block text-center text-accent text-note font-medium py-2 px-2.5 hover:bg-line/50 rounded-control transition-colors"
       >
         View all {rows.length} →
       </a>
     )
   } else if (limit == null && rows.length > rowCap) {
     footer = (
-      <div className="text-center text-dim text-caption py-2">
+      <div className="text-center text-dim text-note py-2">
         showing {rowCap} of {rows.length.toLocaleString()} — filter to narrow
       </div>
     )
@@ -663,11 +663,11 @@ export function DataTable({
           the true rendered font for canvas measureText — display:none would
           still resolve font metrics, but visibility:hidden also lets the width
           probe below report real layout widths for CSS length -> px conversion. */}
-      <span ref={sansProbeRef} className="text-body" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
-      <span ref={monoProbeRef} className="text-body font-mono" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
+      <span ref={sansProbeRef} className="text-copy" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
+      <span ref={monoProbeRef} className="text-copy font-mono" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
       <span
         ref={headProbeRef}
-        className="text-[10.5px] font-medium uppercase tracking-wide"
+        className="text-note font-medium uppercase tracking-wide"
         style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }}
       />
       <span ref={widthProbeRef} style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none' }} />
@@ -689,7 +689,7 @@ export function FeedCard({ span, panelId, title, note, feed, columns, limit, vie
   // total that is actually larger — see ui/src/lib/feedCount.js.
   const countLabel = count ? feedCountLabel(feed.data, rows.length) : null
   const right = countLabel ? (
-    <span className="text-caption text-muted" title={feedCountTitle(feed.data, rows.length)}>{countLabel}</span>
+    <span className="text-note text-muted" title={feedCountTitle(feed.data, rows.length)}>{countLabel}</span>
   ) : undefined
 
   return (

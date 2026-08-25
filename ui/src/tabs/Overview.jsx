@@ -80,7 +80,7 @@ export default function Overview() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-title font-semibold tracking-tight mb-3">Overview</h1>
+      <h1 className="text-copy font-semibold tracking-tight mb-3">Overview</h1>
       {/* The layout sentence lives HERE and on no other tab, because Overview
           is the only grid with a layoutKey — every other tab renders a plain
           grid with no handles, no resize edge and nothing to persist. Telling
@@ -115,7 +115,7 @@ export default function Overview() {
         )}
       </TabIntro>
       {totals.degraded && (
-        <div className="text-caption text-dim mb-2">
+        <div className="text-note text-dim mb-2">
           some estate-wide counts could not be fetched this cycle — figures below marked as provisional
         </div>
       )}
@@ -166,7 +166,7 @@ function LicenseInventory({ licenses, panelId }) {
         <span className="flex items-center gap-1.5">
           <span>{state || '—'}</span>
           {r._evaluation && (
-            <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-medium bg-line text-muted">Eval</span>
+            <span className="inline-block rounded-full px-2 py-0.5 text-note font-medium bg-line text-muted">Eval</span>
           )}
         </span>
       ),
@@ -236,7 +236,7 @@ function LicenseInventory({ licenses, panelId }) {
       // right. Full width removes both the clip and the dead space.
       span={6}
       title="License Inventory"
-      right={unavailable ? null : <span className="text-caption text-muted tabular-nums">{rows.length.toLocaleString()} licenses</span>}
+      right={unavailable ? null : <span className="text-note text-muted tabular-nums">{rows.length.toLocaleString()} licenses</span>}
     >
       {licenses.loading ? (
         <Skeleton h={220} />
@@ -284,7 +284,7 @@ function DnsHero({ dns, panelId }) {
       // the popup and the heading on screen are the same phrase to look for.
       panelName="DNS Query Rate — 24h"
       title={<span role="button" tabIndex={0} onClick={() => { location.hash = 'dns' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'dns' } }} className="cursor-pointer hover:opacity-80 transition-opacity">DNS Query Rate — 24h</span>}
-      right={<span className="flex items-center gap-1.5 text-caption text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
+      right={<span className="flex items-center gap-1.5 text-note text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
     >
       {dns.loading ? (
         <Skeleton h={250} />
@@ -295,9 +295,9 @@ function DnsHero({ dns, panelId }) {
       ) : (
         <>
           <div className="flex items-center gap-4 my-2">
-            <span className="text-display font-semibold tracking-tight">{current?.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+            <span className="text-figure font-semibold tracking-tight">{current?.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
             {delta != null && (
-              <span className="text-dense" style={{ color: flat ? COLORS.other : delta >= 0 ? COLORS.ok : COLORS.crit }}>
+              <span className="text-note" style={{ color: flat ? COLORS.other : delta >= 0 ? COLORS.ok : COLORS.crit }}>
                 {flat ? '— flat' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`} vs first hour
               </span>
             )}
@@ -375,16 +375,16 @@ function KpiStack({ subnets, leases, totals, leasesStatus, subnetsStatus, panelI
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = c.hash } }}
             className={`py-3.5 cursor-pointer hover:bg-line rounded-control transition-colors px-1 -mx-1 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}
           >
-            <div className="text-muted text-dense">{c.label}</div>
+            <div className="text-muted text-note">{c.label}</div>
             {unavailable ? (
-              <div className="text-body font-semibold my-1" style={{ color: COLORS.crit }}>unavailable</div>
+              <div className="text-copy font-semibold my-1" style={{ color: COLORS.crit }}>unavailable</div>
             ) : (
-              <div className="text-2xl font-semibold tracking-tight my-1">{c.value}</div>
+              <div className="text-figure font-semibold tracking-tight my-1">{c.value}</div>
             )}
             {utils.length > 1 && !unavailable ? (
               <>
                 <Sparkline values={utils} color={c.color} />
-                <div className="text-[10px] text-dim mt-0.5">util of loaded rows (sorted), not history or estate</div>
+                <div className="text-note text-dim mt-0.5">util of loaded rows (sorted), not history or estate</div>
               </>
             ) : (
               <div className="h-[30px]" />
@@ -417,7 +417,7 @@ function TopUtilization({ subnets, totals = {}, subnetsStatus, panelId }) {
   const unmeasuredLabel = unmeasured > 0 ? ` · ${unmeasured.toLocaleString()} unmeasured` : ''
 
   return (
-    <Card panelId={panelId} span={2} title="Top Consumers" right={<span className="text-caption text-muted">addresses used · {estateLabel}{unmeasuredLabel}</span>}>
+    <Card panelId={panelId} span={2} title="Top Consumers" right={<span className="text-note text-muted">addresses used · {estateLabel}{unmeasuredLabel}</span>}>
       {top.length === 0 ? (
         subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnets feed unavailable" />
@@ -534,7 +534,7 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
   const unmeasuredLabel = unmeasured > 0 ? ` · ${unmeasured.toLocaleString()} util unknown` : ''
 
   return (
-    <Card panelId={panelId} span={2} title="Subnet Heatmap" right={<span className="text-caption text-muted">{heatmapLabel}{unmeasuredLabel}</span>}>
+    <Card panelId={panelId} span={2} title="Subnet Heatmap" right={<span className="text-note text-muted">{heatmapLabel}{unmeasuredLabel}</span>}>
       {cells.length === 0 ? (
         subnetsStatus === 'error' ? (
           <FeedUnavailable label="Subnets feed unavailable" />
@@ -641,7 +641,7 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
             {tip && (
               <div
                 data-heatmap-readout
-                className="absolute z-10 pointer-events-none whitespace-nowrap rounded-control border border-border bg-field px-2 py-1 text-caption shadow-sm"
+                className="absolute z-10 pointer-events-none whitespace-nowrap rounded-control border border-border bg-field px-2 py-1 text-note shadow-sm"
                 style={{
                   // Clamped to the grid on both axes so the chip can never
                   // escape the card body — half its own width in from each edge
@@ -657,7 +657,7 @@ function SubnetHeatmap({ subnets, totals = {}, subnetsStatus, panelId }) {
               </div>
             )}
           </div>
-          <div className="flex gap-3.5 mt-2 text-caption text-muted">
+          <div className="flex gap-3.5 mt-2 text-note text-muted">
             <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />ok</span>
             <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.warn }} />&gt;75%</span>
             <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.crit }} />&gt;92%</span>
@@ -728,8 +728,8 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
               />
             </Suspense>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-title font-semibold">{total.toLocaleString()}</span>
-              <span className="text-dim text-caption">{hasHostTotal ? 'hosts' : 'hosts (loaded)'}</span>
+              <span className="text-copy font-semibold">{total.toLocaleString()}</span>
+              <span className="text-dim text-note">{hasHostTotal ? 'hosts' : 'hosts (loaded)'}</span>
             </div>
           </div>
           <div className="flex-1 flex flex-col gap-2">
@@ -740,7 +740,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
                 tabIndex={0}
                 onClick={() => { location.hash = 'infra?status=' + d.name.toLowerCase() }}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = 'infra?status=' + d.name.toLowerCase() } }}
-                className="flex items-center gap-1.5 text-dense cursor-pointer hover:bg-line rounded-control transition-colors px-1 -mx-1"
+                className="flex items-center gap-1.5 text-note cursor-pointer hover:bg-line rounded-control transition-colors px-1 -mx-1"
               >
                 <i className="w-2 h-2 rounded-mark inline-block" style={{ background: d.color }} />
                 <span className="text-muted flex-1">{d.name}</span>
@@ -751,7 +751,7 @@ function HostStatus({ hosts, totals = {}, hostsStatus, panelId }) {
         </div>
       )}
       {hasHostTotal && loaded !== total && (
-        <div className="text-[10px] text-dim mt-2">breakdown of {loaded.toLocaleString()} loaded of {total.toLocaleString()} total</div>
+        <div className="text-note text-dim mt-2">breakdown of {loaded.toLocaleString()} loaded of {total.toLocaleString()} total</div>
       )}
     </Card>
   )
@@ -866,9 +866,9 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId }) {
       label: 'Status',
       render: (_v, r) =>
         r.util === null ? (
-          <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium bg-line text-muted">Unknown</span>
+          <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium bg-line text-muted">Unknown</span>
         ) : (
-          <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium" style={{ background: r._bg, color: r._fg }}>
+          <span className="inline-block rounded-full px-2.5 py-0.5 text-note font-medium" style={{ background: r._bg, color: r._fg }}>
             {r.status}
           </span>
         ),
@@ -890,7 +890,7 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId }) {
       note="excl. /29–/32 infra links"
       right={
         <div className="flex items-center gap-2">
-          <span className="text-caption text-muted tabular-nums">
+          <span className="text-note text-muted tabular-nums">
             {/* "0 loaded" over a dead feed reads as an empty estate; the count
                 is unknown, so it prints as an em-dash. */}
             {subnetsStatus === 'error'
@@ -916,7 +916,7 @@ function SubnetTable({ subnets, totals = {}, subnetsStatus, panelId }) {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <button onClick={exportCsv} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-body">
+          <button onClick={exportCsv} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-copy">
             Export CSV
           </button>
         </div>
