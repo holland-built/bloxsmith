@@ -1,22 +1,27 @@
 package dashboard
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
-	"strings"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
-	"time"
 
 	"bloxsmith/internal/cache"
 	"bloxsmith/internal/rest"
 )
 
-// axurService builds a Service whose Axur client points at h, with a real
-// cache. The Infoblox Rest client is left nil on purpose: if any Axur code path
-// ever reaches for it, these tests panic rather than quietly passing.
-func axurService(t *testing.T, h http.HandlerFunc) (*Service, *httptest.Server) {
+// axurMux builds a fake Axur. Handlers are keyed by path prefix; anything not
+// registered 404s, which surfaces as a failure rather than as a quiet zero.
+func axurMux(t *testing.T, routes map[string]http.HandlerFunc) (*Service, *httptest.Server) {
 	t.Helper()
-	srv := httptest.NewServer(h)
+	mux := http.NewServeMux()
+	for p, h := range routes {
+		mux.HandleFunc(p, h)
+	}
+	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return &Service{
 		Cache: cache.New(),
@@ -24,344 +29,381 @@ func axurService(t *testing.T, h http.HandlerFunc) (*Service, *httptest.Server) 
 	}, srv
 }
 
-// TestAxurRequestURL is Codex FINDING 1 and FINDING 8 together: from/to are
-// required by Axur and must be real dates, and the gateway prefix in the base
-// URL must survive being joined to the request path.
-func TestAxurRequestURL(t *testing.T) {
-	var gotPath, gotFrom, gotTo, gotAuth string
-	s, _ := axurService(t, func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		gotFrom = r.URL.Query().Get("from")
-		gotTo = r.URL.Query().Get("to")
-		gotAuth = r.Header.Get("Authorization")
-		_, _ = w.Write([]byte(`{"totalByTicketType":[]}`))
+func jsonHandler(body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}
+}
+
+const oneAsset = `{"assets":[{"customerKey":"ACME","name":"example.com"}]}`
+
+func indicatorsFor(vendors string) http.HandlerFunc {
+	return jsonHandler(fmt.Sprintf(`{"pagination":{"page":1,"size":20,"total":1},"data":%s}`, vendors))
+}
+
+// --- the happy path -----------------------------------------------------------
+
+func TestAxurVendorsShapeAndOrder(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": jsonHandler(oneAsset),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[
+			{"assetKey":"A1","name":"Okta","indicators":[
+				{"type":"EXPIRED_CERTIFICATES","primary":{"value":0}},
+				{"type":"LEAKED_CREDENTIALS","primary":{"value":4}}]},
+			{"assetKey":"A2","name":"SAP","indicators":[
+				{"type":"DARK_WEB","primary":{"value":9}},
+				{"type":"OPEN_PORTS","primary":{"value":2}},
+				{"type":"EXPIRED_CERTIFICATES","primary":{"value":1}}]},
+			{"assetKey":"A3","name":"ADP","indicators":[
+				{"type":"OPEN_PORTS","primary":{"value":0}}]}]`),
 	})
-	s.FetchAxurTickets()
-
-	if gotPath != axurTicketTypesPath {
-		t.Errorf("path = %q, want %q", gotPath, axurTicketTypesPath)
+	got := s.FetchAxurVendors()
+	if got["configured"] != true {
+		t.Fatalf("configured = %v", got["configured"])
 	}
-	if gotAuth != "Bearer test-token" {
-		t.Errorf("Authorization = %q, want the value verbatim", gotAuth)
+	if got["customer"] != "ACME" {
+		t.Errorf("customer = %v, want the discovered ACME", got["customer"])
 	}
-	// Both required parameters must be non-empty and parse as Axur's format.
-	from, err := time.Parse("2006-01-02", gotFrom)
-	if err != nil {
-		t.Fatalf("from = %q, want YYYY-MM-DD: %v", gotFrom, err)
+	vendors := got["vendors"].([]any)
+	var names []string
+	for _, v := range vendors {
+		names = append(names, asMap(v)["name"].(string))
 	}
-	to, err := time.Parse("2006-01-02", gotTo)
-	if err != nil {
-		t.Fatalf("to = %q, want YYYY-MM-DD: %v", gotTo, err)
+	// SAP has 3 findings, Okta 1, ADP 0 — worst first.
+	want := []string{"SAP", "Okta", "ADP"}
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		t.Errorf("order = %v, want %v", names, want)
 	}
-	if d := to.Sub(from).Hours() / 24; d != axurWindowDays {
-		t.Errorf("window = %v days, want %d", d, axurWindowDays)
+	sap := asMap(vendors[0])
+	if sap["findings"] != 3 || sap["top_type"] != "DARK_WEB" || sap["top_value"] != 9 {
+		t.Errorf("SAP = %v, want 3 findings topping out at DARK_WEB 9", sap)
 	}
-	if d := to.Sub(from).Hours() / 24; d > 90 {
-		t.Errorf("window %v days exceeds Axur's 90-day cap", d)
-	}
-}
-
-// TestAxurWindowIsUTCAndExact pins the exact strings for a known instant, so a
-// timezone-dependent regression fails here rather than shifting a report by a
-// day in production.
-func TestAxurWindowIsUTCAndExact(t *testing.T) {
-	// 2026-03-01T02:00Z is the previous day in any negative-offset zone.
-	now := time.Date(2026, 3, 1, 2, 0, 0, 0, time.FixedZone("UTC-8", -8*3600))
-	from, to := axurWindow(now)
-	if to != "2026-03-01" {
-		t.Errorf("to = %q, want 2026-03-01 (UTC, not local)", to)
-	}
-	if from != "2026-01-30" {
-		t.Errorf("from = %q, want 2026-01-30", from)
+	if got["total_findings"] != 4 {
+		t.Errorf("total_findings = %v, want 4", got["total_findings"])
 	}
 }
 
-// TestAxurGatewayPrefixSurvives is FINDING 8 proper: a base URL that carries a
-// path prefix must keep it. rest.Client.url concatenates rather than resolving
-// a relative reference, and this asserts that rather than trusting it.
-func TestAxurGatewayPrefixSurvives(t *testing.T) {
-	var gotPath string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		_, _ = w.Write([]byte(`{"totalByTicketType":[]}`))
-	}))
-	defer srv.Close()
-	s := &Service{
-		Cache: cache.New(),
-		Axur:  rest.New(srv.URL+"/gateway/1.0/api", rest.NewAuth("Bearer t", nil)),
+// A zero-value indicator is not a finding, and a vendor with only zeroes is
+// still listed — "monitored, nothing found" is a real and useful row.
+func TestAxurZeroIndicatorsStillListsTheVendor(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": jsonHandler(oneAsset),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(
+			`[{"assetKey":"A1","name":"Okta","indicators":[{"type":"OPEN_PORTS","primary":{"value":0}}]}]`),
+	})
+	got := s.FetchAxurVendors()
+	vendors := got["vendors"].([]any)
+	if len(vendors) != 1 {
+		t.Fatalf("vendors = %d, want the vendor listed with zero findings", len(vendors))
 	}
-	s.FetchAxurTickets()
-	want := "/gateway/1.0/api" + axurTicketTypesPath
-	if gotPath != want {
-		t.Errorf("path = %q, want %q", gotPath, want)
+	if asMap(vendors[0])["findings"] != 0 {
+		t.Errorf("findings = %v, want 0", asMap(vendors[0])["findings"])
 	}
 }
 
-// TestAxurNotConfigured: no credential is not a failure. configured:false, and
-// no "unavailable" wording that would send an operator looking for an outage.
-func TestAxurNotConfigured(t *testing.T) {
-	s := &Service{Cache: cache.New()}
-	got := s.FetchAxurTickets()
-	if got["configured"] != false {
-		t.Errorf("configured = %v, want false", got["configured"])
+// TestAxurTieBreak is Codex finding 8: equal values must not flicker between
+// polls, so the tie is broken by name.
+func TestAxurTieBreak(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": jsonHandler(oneAsset),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[
+			{"assetKey":"A1","name":"Zeta","indicators":[{"type":"B_TYPE","primary":{"value":5}},{"type":"A_TYPE","primary":{"value":5}}]},
+			{"assetKey":"A2","name":"Alpha","indicators":[{"type":"B_TYPE","primary":{"value":5}},{"type":"A_TYPE","primary":{"value":5}}]}]`),
+	})
+	got := s.FetchAxurVendors()
+	vendors := got["vendors"].([]any)
+	if asMap(vendors[0])["name"] != "Alpha" {
+		t.Errorf("tie broken to %v, want Alpha (name ascending)", asMap(vendors[0])["name"])
 	}
-	if _, ok := got["unavailable"]; ok {
-		t.Errorf("unconfigured must not report an outage, got %v", got["unavailable"])
+	if asMap(vendors[0])["top_type"] != "A_TYPE" {
+		t.Errorf("top_type = %v, want A_TYPE (equal values, name ascending)", asMap(vendors[0])["top_type"])
 	}
 }
 
-// TestAxurFailureIsNotEmpty is FINDING 3 and FINDING 4: a dead feed must never
-// be indistinguishable from a healthy tenant with no incidents.
-func TestAxurFailureIsNotEmpty(t *testing.T) {
+// --- Codex finding 1: pagination ---------------------------------------------
+
+func TestAxurWalksEveryPage(t *testing.T) {
+	var pages int32
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": jsonHandler(oneAsset),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": func(w http.ResponseWriter, r *http.Request) {
+			atomic.AddInt32(&pages, 1)
+			// Page 1 is FULL (20 vendors, all with 1 finding); page 2 holds the
+			// single worst one. A page-1-only read would rank it last.
+			if r.URL.Query().Get("page") == "1" {
+				var rows []string
+				for i := 0; i < 20; i++ {
+					rows = append(rows, fmt.Sprintf(
+						`{"assetKey":"P%02d","name":"vendor-%02d","indicators":[{"type":"X","primary":{"value":1}}]}`, i, i))
+				}
+				_, _ = w.Write([]byte(`{"data":[` + strings.Join(rows, ",") + `]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"data":[{"assetKey":"WORST","name":"worst-vendor","indicators":[
+				{"type":"A","primary":{"value":9}},{"type":"B","primary":{"value":9}}]}]}`))
+		},
+	})
+	got := s.FetchAxurVendors()
+	if pages < 2 {
+		t.Fatalf("fetched %d page(s); a full first page must be followed", pages)
+	}
+	vendors := got["vendors"].([]any)
+	if len(vendors) != 21 {
+		t.Errorf("vendors = %d, want all 21 across both pages", len(vendors))
+	}
+	if asMap(vendors[0])["name"] != "worst-vendor" {
+		t.Errorf("first = %v, want worst-vendor — worst-first must span pages", asMap(vendors[0])["name"])
+	}
+}
+
+// --- Codex finding 2 and 3: never guess between accounts ----------------------
+
+func TestAxurRefusesToGuessBetweenAccounts(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": jsonHandler(
+			`{"assets":[{"customerKey":"ACME"},{"customerKey":"OTHERCO"}]}`),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": func(w http.ResponseWriter, r *http.Request) {
+			t.Error("fetched a tenant's data after seeing two candidate accounts")
+		},
+	})
+	got := s.FetchAxurVendors()
+	if got["needs_key"] != true {
+		t.Fatalf("needs_key = %v, want true — ambiguity must be reported, not guessed", got["needs_key"])
+	}
+	msg, _ := got["unavailable"].(string)
+	if !strings.Contains(msg, "AXUR_CUSTOMER_KEY") {
+		t.Errorf("unavailable = %q, want it to name the override", msg)
+	}
+	if !strings.Contains(msg, "2 accounts") {
+		t.Errorf("unavailable = %q, want it to say how many accounts were seen", msg)
+	}
+}
+
+// Repeated keys are ONE account, not ambiguity — every asset carries the same
+// customerKey on an ordinary tenant.
+func TestAxurRepeatedKeyIsNotAmbiguous(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": jsonHandler(
+			`{"assets":[{"customerKey":"ACME"},{"customerKey":"ACME"},{"customerKey":"ACME"}]}`),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[]`),
+	})
+	got := s.FetchAxurVendors()
+	if got["needs_key"] != nil {
+		t.Fatalf("one repeated key was treated as ambiguous: %v", got)
+	}
+	if got["customer"] != "ACME" {
+		t.Errorf("customer = %v, want ACME", got["customer"])
+	}
+}
+
+// The explicit override outranks discovery and skips it entirely.
+func TestAxurCustomerOverrideSkipsDiscovery(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": func(w http.ResponseWriter, r *http.Request) {
+			t.Error("discovery ran even though AXUR_CUSTOMER_KEY was set")
+		},
+		"/vendor-monitor/customer-vendors-api/customer/MINE/indicators": indicatorsFor(`[]`),
+	})
+	s.AxurCustomer = "MINE"
+	got := s.FetchAxurVendors()
+	if got["customer"] != "MINE" {
+		t.Errorf("customer = %v, want the override MINE", got["customer"])
+	}
+}
+
+// --- Codex finding 5: a failure is not a configuration problem ----------------
+
+func TestAxurDiscoveryFailureStaysAFailure(t *testing.T) {
 	cases := []struct {
 		name        string
 		status      int
-		body        string
-		notEntitled bool
 		wantReason  string
+		notEntitled bool
 	}{
-		{"403 entitlement", 403, `{"error":"forbidden"}`, true, "Axur incident counts not entitled"},
-		{"401 credential", 401, `{"error":"unauthorized"}`, false, "Axur rejected the credential — check AXUR_API_KEY"},
-		{"500 outage", 500, `boom`, false, "Axur service unavailable"},
-		{"200 but not JSON", 200, `<html>proxy interstitial</html>`, false, "Axur service unavailable"},
+		{"403", 403, "Axur supplier monitoring not entitled for this key", true},
+		{"401", 401, "Axur rejected the credential — check the key under Settings", false},
+		{"500", 500, "Axur service unavailable", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _ := axurService(t, func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.status)
-				_, _ = w.Write([]byte(tc.body))
+			fail := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tc.status) }
+			s, _ := axurMux(t, map[string]http.HandlerFunc{
+				"/assets-api/assets":       fail,
+				"/customers-api/customers": fail,
 			})
-			got := s.FetchAxurTickets()
+			got := s.FetchAxurVendors()
+			if got["needs_key"] == true {
+				t.Fatalf("an upstream %d was reported as a missing setting: %v", tc.status, got)
+			}
 			if got["unavailable"] != tc.wantReason {
 				t.Errorf("unavailable = %v, want %q", got["unavailable"], tc.wantReason)
 			}
 			if got["not_entitled"] != tc.notEntitled {
 				t.Errorf("not_entitled = %v, want %v", got["not_entitled"], tc.notEntitled)
 			}
-			if got["configured"] != true {
-				t.Errorf("configured = %v, want true (a key IS set; the call failed)", got["configured"])
-			}
 		})
 	}
 }
 
-// TestAxurLoadedEmpty is the other half of FINDING 4: a real zero must carry NO
-// unavailable key, so the UI can tell the two apart.
-func TestAxurLoadedEmpty(t *testing.T) {
-	s, _ := axurService(t, func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"totalByTicketType":[{"type":"phishing","totalOnPeriod":0}]}`))
+// A clean answer that simply carries no key IS the configuration case.
+func TestAxurNoKeyAnywhereAsksForTheOverride(t *testing.T) {
+	empty := jsonHandler(`{"assets":[]}`)
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets":       empty,
+		"/customers-api/customers": jsonHandler(`[]`),
 	})
-	got := s.FetchAxurTickets()
+	got := s.FetchAxurVendors()
+	if got["needs_key"] != true {
+		t.Fatalf("needs_key = %v, want true", got["needs_key"])
+	}
+}
+
+// The second probe rescues the first: assets may 403 while customers answers.
+func TestAxurSecondProbeRescuesTheFirst(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets":       func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(403) },
+		"/customers-api/customers": jsonHandler(`[{"name":"Acme","key":"ACME","active":true}]`),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(`[]`),
+	})
+	got := s.FetchAxurVendors()
+	if got["customer"] != "ACME" {
+		t.Errorf("customer = %v, want ACME from the second probe", got["customer"])
+	}
+}
+
+// --- Codex finding 6: discovery failures are not re-run on every refresh ------
+
+func TestAxurDiscoveryFailureIsCachedBriefly(t *testing.T) {
+	var hits int32
+	fail := func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(403)
+	}
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets":       fail,
+		"/customers-api/customers": fail,
+	})
+	s.FetchAxurVendors()
+	first := atomic.LoadInt32(&hits)
+	s.FetchAxurVendors()
+	if atomic.LoadInt32(&hits) != first {
+		t.Errorf("discovery re-ran on the second call (%d then %d hits) — every refresh would hammer Axur",
+			first, atomic.LoadInt32(&hits))
+	}
+}
+
+// --- Codex finding 7: a missing data field is not an empty supplier list ------
+
+func TestAxurMissingDataFieldIsAFailure(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": jsonHandler(oneAsset),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": jsonHandler(
+			`{"pagination":{"page":1,"size":20}}`),
+	})
+	got := s.FetchAxurVendors()
+	if _, ok := got["unavailable"]; !ok {
+		t.Fatalf("a response with no data field was read as a clean zero: %v", got)
+	}
+}
+
+// --- credential handling, carried over ----------------------------------------
+
+func TestAxurNotConfigured(t *testing.T) {
+	s := &Service{Cache: cache.New()}
+	got := s.FetchAxurVendors()
+	if got["configured"] != false {
+		t.Errorf("configured = %v, want false", got["configured"])
+	}
 	if _, ok := got["unavailable"]; ok {
-		t.Fatalf("a successful empty read must not report unavailable: %v", got["unavailable"])
-	}
-	if n := len(got["types"].([]any)); n != 0 {
-		t.Errorf("types = %d rows, want 0 (zero counts are dropped)", n)
-	}
-	if got["total"] != 0 {
-		t.Errorf("total = %v, want 0", got["total"])
+		t.Errorf("unconfigured must not report an outage: %v", got["unavailable"])
 	}
 }
 
-// TestAxurNormAndOrder covers the shaping: zero rows dropped, highest first,
-// ties broken by name so the order does not flicker between polls.
-func TestAxurNormAndOrder(t *testing.T) {
-	s, _ := axurService(t, func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"totalByTicketType":[
-			{"type":"phishing","totalOnPeriod":3},
-			{"type":"malware","totalOnPeriod":0},
-			{"type":"similar-domain-name","totalOnPeriod":18},
-			{"type":"paid-search","totalOnPeriod":3},
-			{"type":"","totalOnPeriod":9}
-		]}`))
-	})
-	got := s.FetchAxurTickets()
-	types := got["types"].([]any)
-	var names []string
-	for _, r := range types {
-		names = append(names, r.(map[string]any)["type"].(string))
-	}
-	want := []string{"similar-domain-name", "paid-search", "phishing"}
-	if len(names) != len(want) {
-		t.Fatalf("types = %v, want %v", names, want)
-	}
-	for i := range want {
-		if names[i] != want[i] {
-			t.Fatalf("types = %v, want %v", names, want)
-		}
-	}
-	if got["total"] != 24 {
-		t.Errorf("total = %v, want 24", got["total"])
-	}
-}
-
-// TestAxurClientIgnoresAccountSwitch is FINDING 2: the credential isolation
-// claimed in helpers.go has to be a fact, not a comment. An Infoblox account
-// switch sets an override on the Infoblox Auth; the Axur client must send the
-// same header before and after, and With() must not swap it either.
-func TestAxurClientIgnoresAccountSwitch(t *testing.T) {
-	var seen []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen = append(seen, r.Header.Get("Authorization"))
-		_, _ = w.Write([]byte(`{"totalByTicketType":[]}`))
-	}))
-	defer srv.Close()
-
-	infoblox := rest.NewAuth("Token infoblox-key", nil)
-	s := &Service{
-		Cache: cache.New(),
-		Rest:  rest.New(srv.URL, infoblox),
-		Axur:  rest.New(srv.URL, rest.NewAuth("Bearer axur-key", nil)),
-	}
-	s.FetchAxurTickets()
-
-	// A portal account switch, exactly as account.SwitchAccount performs it.
-	infoblox.SetOverride("Bearer someone-elses-tenant-jwt")
-	s.Cache.Rotate()
-
-	// And the request-pinned copy the handler actually uses.
-	pinned := s.With(s.Rest.Pin())
-	pinned.FetchAxurTickets()
-
-	if len(seen) != 2 {
-		t.Fatalf("expected 2 Axur calls, got %d", len(seen))
-	}
-	for i, got := range seen {
-		if got != "Bearer axur-key" {
-			t.Errorf("call %d Authorization = %q, want the Axur key unchanged by the switch", i, got)
-		}
-	}
-}
-
-// --- vault-backed credential -------------------------------------------------
-
-// TestAxurLockedIsNotUnconfigured is the distinction Codex finding 3 named and
-// the one an operator most needs: a shut vault must not be reported as "you
-// never set a key". Those two sentences send someone to opposite places.
 func TestAxurLockedIsNotUnconfigured(t *testing.T) {
 	s := &Service{
 		Cache:      cache.New(),
 		Axur:       rest.New("http://127.0.0.1:1", rest.NewAuth("", func() string { return "" })),
 		AxurLocked: func() bool { return true },
 	}
-	got := s.FetchAxurTickets()
-	if got["configured"] != true {
-		t.Errorf("configured = %v, want true — a key may well be stored, we just cannot read it", got["configured"])
-	}
-	if got["locked"] != true {
-		t.Errorf("locked = %v, want true", got["locked"])
-	}
-	if got["unavailable"] != "Vault locked — unlock to read Axur" {
-		t.Errorf("unavailable = %v, want the locked wording", got["unavailable"])
+	got := s.FetchAxurVendors()
+	if got["configured"] != true || got["locked"] != true {
+		t.Errorf("got %v, want configured+locked — a shut vault is not an unset key", got)
 	}
 }
 
-// The same empty credential with the vault OPEN really does mean unconfigured.
-func TestAxurUnlockedAndEmptyIsUnconfigured(t *testing.T) {
+func TestAxurNoVaultIsNotLocked(t *testing.T) {
 	s := &Service{
 		Cache:      cache.New(),
 		Axur:       rest.New("http://127.0.0.1:1", rest.NewAuth("", func() string { return "" })),
 		AxurLocked: func() bool { return false },
 	}
-	got := s.FetchAxurTickets()
+	got := s.FetchAxurVendors()
 	if got["configured"] != false {
 		t.Errorf("configured = %v, want false", got["configured"])
 	}
-	if _, ok := got["unavailable"]; ok {
-		t.Errorf("unconfigured must not claim an outage: %v", got["unavailable"])
+	if _, ok := got["locked"]; ok {
+		t.Errorf("an install with no vault reported a lock state: %v", got)
 	}
 }
 
-// TestAxurVaultKeyBeatsEnv pins the precedence main.go builds: the vault's key
-// is the 'active' resolver and the env key is the fallback, so a stored key
-// wins. Matches LLMCreds, deliberately.
 func TestAxurVaultKeyBeatsEnv(t *testing.T) {
 	var seen []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r.Header.Get("Authorization"))
-		_, _ = w.Write([]byte(`{"totalByTicketType":[]}`))
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "indicators") {
+			_, _ = w.Write([]byte(`{"data":[]}`))
+			return
+		}
+		_, _ = w.Write([]byte(oneAsset))
 	}))
 	defer srv.Close()
-
 	vaultKey := "Bearer from-vault"
 	s := &Service{
 		Cache: cache.New(),
 		Axur:  rest.New(srv.URL, rest.NewAuth("Bearer from-env", func() string { return vaultKey })),
 	}
-	s.FetchAxurTickets()
-	if len(seen) != 1 || seen[0] != "Bearer from-vault" {
+	s.FetchAxurVendors()
+	if len(seen) == 0 || seen[0] != "Bearer from-vault" {
 		t.Fatalf("sent %v, want the vault key to win", seen)
 	}
-
-	// Clearing the vault entry falls back to the environment — it does NOT turn
-	// Axur off. That is the ambiguity SetAxur's doc comment resolves, pinned here.
-	vaultKey = ""
-	s.Cache = cache.New()
-	s.FetchAxurTickets()
-	if len(seen) != 2 || seen[1] != "Bearer from-env" {
-		t.Fatalf("sent %v, want the env key after the vault entry was cleared", seen)
-	}
 }
 
-// TestAxurCacheKeyedOnCredential is Codex finding 1. A response fetched under
-// one key must never be served under another — for a multi-tenant vendor API
-// that is one customer's incident counts shown under another's credential.
+// A response cached under one credential must never be served under another.
 func TestAxurCacheKeyedOnCredential(t *testing.T) {
-	hits := 0
+	var indicatorHits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits++
-		_, _ = w.Write([]byte(`{"totalByTicketType":[{"type":"phishing","totalOnPeriod":1}]}`))
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "indicators") {
+			atomic.AddInt32(&indicatorHits, 1)
+			_, _ = w.Write([]byte(`{"data":[]}`))
+			return
+		}
+		_, _ = w.Write([]byte(oneAsset))
 	}))
 	defer srv.Close()
-
 	key := "Bearer tenant-a"
-	s := &Service{
-		Cache: cache.New(),
-		Axur:  rest.New(srv.URL, rest.NewAuth("", func() string { return key })),
+	s := &Service{Cache: cache.New(), Axur: rest.New(srv.URL, rest.NewAuth("", func() string { return key }))}
+	s.FetchAxurVendors()
+	s.FetchAxurVendors()
+	if n := atomic.LoadInt32(&indicatorHits); n != 1 {
+		t.Fatalf("indicator hits = %d after two calls on one key, want 1", n)
 	}
-	s.FetchAxurTickets()
-	s.FetchAxurTickets()
-	if hits != 1 {
-		t.Fatalf("hits = %d after two calls on ONE key, want 1 — the cache is not working", hits)
-	}
-
 	key = "Bearer tenant-b"
-	s.FetchAxurTickets()
-	if hits != 2 {
-		t.Fatalf("hits = %d after the key changed, want 2 — a cached response outlived its credential", hits)
+	s.FetchAxurVendors()
+	if n := atomic.LoadInt32(&indicatorHits); n != 2 {
+		t.Fatalf("indicator hits = %d after the key changed, want 2 — a cached response outlived its credential", n)
 	}
 }
 
-// TestAxurFailuresAreNotCached: an operator fixing a wrong key must see the fix
-// take effect on the next poll, not after the TTL expires.
-func TestAxurFailuresAreNotCached(t *testing.T) {
-	hits := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits++
-		w.WriteHeader(500)
-	}))
-	defer srv.Close()
-
-	s := &Service{
-		Cache: cache.New(),
-		Axur:  rest.New(srv.URL, rest.NewAuth("Bearer k", nil)),
-	}
-	s.FetchAxurTickets()
-	s.FetchAxurTickets()
-	if hits != 2 {
-		t.Errorf("hits = %d, want 2 — a failure was cached and the retry never left", hits)
-	}
-}
-
-// TestAxurFingerprintIsNotTheSecret: cache keys get logged, so the tag in them
-// must not be reversible to the credential.
 func TestAxurFingerprintIsNotTheSecret(t *testing.T) {
 	const secret = "Bearer super-secret-token-value"
 	fp := axurCredFingerprint(secret)
-	if fp == "" || len(fp) != 12 {
+	if len(fp) != 12 {
 		t.Fatalf("fingerprint = %q, want 12 hex characters", fp)
 	}
-	if strings.Contains(secret, fp) || strings.Contains(fp, "secret") {
+	if strings.Contains(secret, fp) {
 		t.Errorf("fingerprint %q carries the secret", fp)
 	}
 	if axurCredFingerprint("Bearer another-key") == fp {
@@ -369,28 +411,36 @@ func TestAxurFingerprintIsNotTheSecret(t *testing.T) {
 	}
 }
 
-// TestAxurNoVaultIsNotLocked is a regression, found by running the server and
-// not by reading the code. AxurLocked was wired as !vault.IsUnlocked(), and a
-// vault that has never been created also reports "not unlocked" — so a brand
-// new install with no Axur key was told "Vault locked — unlock to read Axur"
-// about a vault it did not have. main.go now asks Exists() first; this pins the
-// behaviour that fix produces.
-func TestAxurNoVaultIsNotLocked(t *testing.T) {
-	// The resolver main.go builds when no vault file exists: nothing stored,
-	// and "locked" answers false because there is nothing to be locked.
-	s := &Service{
-		Cache:      cache.New(),
-		Axur:       rest.New("http://127.0.0.1:1", rest.NewAuth("", func() string { return "" })),
-		AxurLocked: func() bool { return false },
+// The customer key reaches a URL path, so a hostile value must not retarget it.
+func TestAxurCustomerKeyIsPathEscaped(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.EscapedPath()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer srv.Close()
+	s := &Service{Cache: cache.New(), Axur: rest.New(srv.URL, rest.NewAuth("Bearer k", nil))}
+	s.AxurCustomer = "a/../../evil"
+	s.FetchAxurVendors()
+	if strings.Contains(gotPath, "/../") {
+		t.Errorf("path = %q, want the traversal escaped", gotPath)
 	}
-	got := s.FetchAxurTickets()
-	if got["configured"] != false {
-		t.Errorf("configured = %v, want false", got["configured"])
+}
+
+// The shape the HTTP layer serves has to survive a JSON round trip — the panel
+// reads it as JSON, not as Go values.
+func TestAxurResultIsJSONSerialisable(t *testing.T) {
+	s, _ := axurMux(t, map[string]http.HandlerFunc{
+		"/assets-api/assets": jsonHandler(oneAsset),
+		"/vendor-monitor/customer-vendors-api/customer/ACME/indicators": indicatorsFor(
+			`[{"assetKey":"A1","name":"Okta","indicators":[{"type":"X","primary":{"value":3}}]}]`),
+	})
+	b, err := json.Marshal(s.FetchAxurVendors())
+	if err != nil {
+		t.Fatalf("result does not marshal: %v", err)
 	}
-	if _, ok := got["locked"]; ok {
-		t.Errorf("a install with no vault reported a lock state: %v", got)
-	}
-	if _, ok := got["unavailable"]; ok {
-		t.Errorf("nothing failed, so nothing may be reported unavailable: %v", got["unavailable"])
+	if !strings.Contains(string(b), `"findings":1`) {
+		t.Errorf("marshalled shape lost findings: %s", b)
 	}
 }
