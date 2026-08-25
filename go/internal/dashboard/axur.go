@@ -334,7 +334,16 @@ func (s *Service) axurDiscoverCustomer(client *rest.Client) (string, map[string]
 		// configuration one, and it keeps its own category: telling an operator
 		// to set a variable while Axur is down sends them the wrong way.
 		log.Printf("axur: customer-key discovery failed: %v", firstErr)
-		return "", axurUnavailable(firstErr)
+		degraded := axurUnavailable(firstErr)
+		// WHICH CALL FAILED IS HALF THE DIAGNOSIS. A failure here is the account
+		// lookup, not the supplier read, and those have different remedies: the
+		// lookup can be bypassed with AXUR_CUSTOMER_KEY, the supplier read
+		// cannot. Without this the two were the same sentence.
+		if r, ok := degraded["unavailable"].(string); ok {
+			degraded["unavailable"] = "Could not look up the Axur account code. " + r +
+				" Set AXUR_CUSTOMER_KEY to skip the lookup."
+		}
+		return "", degraded
 	}
 	// The probes succeeded and simply carried no key. This is the one case the
 	// manual override is the right advice for.
@@ -419,6 +428,16 @@ func axurUnavailable(err error) map[string]any {
 			notEntitled = true
 		case 401:
 			reason = "Axur rejected the credential — check the key under Settings"
+		default:
+			// The status, in words, via the sanitized sentence rest already
+			// owns. WHY IT IS NOT JUST "unavailable": that is what this said
+			// first, and when the live account hit this path on 2026-08-25 the
+			// panel gave a reader — and the person who wrote it — no way to tell
+			// a 404 from a 500 from an unreachable host. The log line carries
+			// the path; this carries the status, which is the half a user can
+			// act on. Public() deliberately omits path and body, so nothing
+			// about the request leaks onto the screen.
+			reason = "Axur service unavailable — " + ue.Public()
 		}
 	}
 	return map[string]any{"vendors": []any{}, "unavailable": reason, "not_entitled": notEntitled}
