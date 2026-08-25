@@ -388,11 +388,11 @@ const LOOKALIKES = {
 const AXUR = {
   configured: true,
   customer: 'BASELINE',
-  total_findings: 4,
+  total_credentials: 9,
   not_entitled: false,
   vendors: [
-    { name: 'baseline-supplier-a', asset_key: 'BSA', findings: 3, top_type: 'LEAKED_CREDENTIALS', top_value: 7 },
-    { name: 'baseline-supplier-b', asset_key: 'BSB', findings: 1, top_type: 'EXPIRED_CERTIFICATES', top_value: 2 },
+    { name: 'baseline-supplier-a', asset_key: 'BSA', credentials: 7, types_affected: 3 },
+    { name: 'baseline-supplier-b', asset_key: 'BSB', credentials: 2, types_affected: 1 },
   ],
 };
 

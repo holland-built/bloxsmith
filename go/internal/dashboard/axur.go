@@ -134,16 +134,16 @@ func (s *Service) FetchAxurVendors() map[string]any {
 	}
 	total := 0
 	for _, v := range vendors {
-		if n, ok := asMap(v)["findings"].(int); ok {
+		if n, ok := asMap(v)["credentials"].(int); ok {
 			total += n
 		}
 	}
 	result := map[string]any{
-		"configured":     true,
-		"customer":       customer,
-		"vendors":        vendors,
-		"total_findings": total,
-		"not_entitled":   false,
+		"configured":        true,
+		"customer":          customer,
+		"vendors":           vendors,
+		"total_credentials": total,
+		"not_entitled":      false,
 	}
 	s.Cache.SetGen(ck, result, g)
 	return result
@@ -188,19 +188,34 @@ func (s *Service) axurWalkIndicators(client *rest.Client, customer string) ([]an
 	return normAxurVendors(rows), nil
 }
 
+// axurCredentialTypes are the indicator types counted in the same unit — one
+// exposed credential each — and therefore the only ones this panel adds up or
+// sorts on.
+//
+// WHY NOT "the biggest number", which is what the first version ranked on.
+// Axur's indicators are different units: 414,927 leaked customer credentials,
+// 1,047 dark-web mentions and 3 expired certificates are three incomparable
+// quantities, and picking the largest of them as "worst" silently asserts that
+// a mention and a credential weigh the same. Ranking on breadth instead — how
+// many indicator TYPES are non-zero — was no better: it put four small problems
+// above three large ones. Neither is a risk order, and this panel does not have
+// the information to compute one. It ranks on the single dimension that IS
+// comparable and says so in the column heading.
+var axurCredentialTypes = map[string]bool{
+	"CUSTOMER_CREDENTIALS":  true,
+	"CORPORATE_CREDENTIALS": true,
+}
+
 // normAxurVendors shapes the indicator rows into the panel's table.
 //
-// THE SCORE, SPELLED OUT, because "non-zero indicators" and "worst" each read
-// two ways when every indicator carries both a primary and a secondary value:
-//
-//   - findings = how many indicator TYPES have a primary value above zero.
-//     Primary alone: it is the headline metric Axur puts first, and counting a
-//     type twice because its secondary is also set would inflate the number
-//     against its own label.
-//   - top = the indicator type with the highest primary value, ties broken by
-//     type name ascending so the row does not flicker between polls.
-//   - vendors sort by findings descending, then top value descending, then name
-//     ascending. Three keys, so the order is total and stable.
+//   - credentials = exposed credentials across axurCredentialTypes. One unit,
+//     so the sum and the comparison both mean something.
+//   - types_affected = how many indicator types have a value above zero. Shown
+//     as its own column, never mixed into the ranking: it measures breadth, and
+//     breadth is not severity.
+//   - the sort is credentials descending, then types_affected descending, then
+//     name ascending. Three keys, so the order is total and stable between
+//     polls.
 func normAxurVendors(rows []any) []any {
 	out := []any{}
 	for _, r := range rows {
@@ -208,43 +223,40 @@ func normAxurVendors(rows []any) []any {
 		name := getStr(m["name"])
 		if name == "" {
 			// A supplier with no name cannot be rendered or acted on. Skipping
-			// is safe here in a way that skipping a COUNT would not be: the row
-			// carries no finding of its own that would go missing with it.
+			// is safe in a way skipping a COUNT would not be: the row carries no
+			// finding of its own that would go missing with it.
 			continue
 		}
-		findings := 0
-		topType, topVal := "", 0
+		credentials, typesAffected := 0, 0
 		for _, ind := range asSlice(m["indicators"]) {
 			im := asMap(ind)
-			t := getStr(im["type"])
 			v := axurIndicatorValue(im["primary"])
 			if v <= 0 {
 				continue
 			}
-			findings++
-			if v > topVal || (v == topVal && (topType == "" || t < topType)) {
-				topType, topVal = t, v
+			typesAffected++
+			if axurCredentialTypes[getStr(im["type"])] {
+				credentials += v
 			}
 		}
 		out = append(out, map[string]any{
-			"name":      name,
-			"asset_key": getStr(m["assetKey"]),
-			"findings":  findings,
-			"top_type":  topType,
-			"top_value": topVal,
+			"name":           name,
+			"asset_key":      getStr(m["assetKey"]),
+			"credentials":    credentials,
+			"types_affected": typesAffected,
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		a, b := asMap(out[i]), asMap(out[j])
-		af, _ := a["findings"].(int)
-		bf, _ := b["findings"].(int)
-		if af != bf {
-			return af > bf
+		ac, _ := a["credentials"].(int)
+		bc, _ := b["credentials"].(int)
+		if ac != bc {
+			return ac > bc
 		}
-		av, _ := a["top_value"].(int)
-		bv, _ := b["top_value"].(int)
-		if av != bv {
-			return av > bv
+		at, _ := a["types_affected"].(int)
+		bt, _ := b["types_affected"].(int)
+		if at != bt {
+			return at > bt
 		}
 		return getStr(a["name"]) < getStr(b["name"])
 	})
