@@ -61,7 +61,7 @@ export default function Audit() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-lg font-semibold tracking-tight mb-3">Audit</h1>
+      <h1 className="text-title font-semibold tracking-tight mb-3">Audit</h1>
       {/* The panelIds sit on the call sites, not only on the Card each wrapper
           returns: CardGrid reads panelId off its OWN direct children to apply a
           saved order, and a wrapper that keeps the id inside is invisible to
@@ -192,7 +192,7 @@ function ActivitySummary({ entries, chain, panelId }) {
       // in words. The cap is `auditLogReturnCap`, go/internal/server/state.go:86
       // (2000); measured live 2026-08-21 the log holds 838 entries, so today
       // this chip and the log are the same number and no note renders.
-      right={<span className="text-[11px] text-muted">{total.toLocaleString()} recorded {total === 1 ? 'event' : 'events'}</span>}
+      right={<span className="text-caption text-muted">{total.toLocaleString()} recorded {total === 1 ? 'event' : 'events'}</span>}
     >
       <ShortRead chain={chain} />
       <TruncationNote chain={chain} />
@@ -236,7 +236,7 @@ function EventPill({ event }) {
   const { COLORS } = useChartTheme()
   const color = eventColor(event || '', COLORS)
   return (
-    <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: `${color}22`, color }}>
+    <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium" style={{ background: `${color}22`, color }}>
       {event || '—'}
     </span>
   )
@@ -285,7 +285,7 @@ function ChainVerdict({ result, error, loading }) {
   }
   if (result.chain_valid === false) {
     return (
-      <div className="text-sm font-semibold mb-2" style={{ color: COLORS.crit }}>
+      <div className="text-body font-semibold mb-2" style={{ color: COLORS.crit }}>
         chain tampered — broken at entry #{result.broken_index}
         {result.broken_reason ? <span className="font-normal text-[12px]"> — {result.broken_reason}</span> : null}
         <span className="font-normal text-[12px]"><OfflineCheckHint /></span>
@@ -294,7 +294,7 @@ function ChainVerdict({ result, error, loading }) {
   }
   if (result.chain_valid === true) {
     return (
-      <div className="text-[11px] text-dim mb-2">
+      <div className="text-caption text-dim mb-2">
         chain intact — signature and entry count verified
         <OfflineCheckHint />
       </div>
@@ -328,7 +328,7 @@ function AppendFailures({ result }) {
   if (typeof n !== 'number' || n <= 0) return null
   const last = result.last_append_failure
   return (
-    <div className="text-sm font-semibold mb-2" style={{ color: COLORS.crit }}>
+    <div className="text-body font-semibold mb-2" style={{ color: COLORS.crit }}>
       {n} audit record{n === 1 ? '' : 's'} failed to write since the server started
       {last?.event ? (
         <span className="font-normal text-[12px]">
@@ -421,7 +421,7 @@ function AuditTable({ entries, chain, panelId }) {
       label: 'Detail',
       sortable: true,
       render: (v) => (
-        <span className="block truncate font-mono text-[11px]" title={v}>{v || '—'}</span>
+        <span className="block truncate font-mono text-caption" title={v}>{v || '—'}</span>
       ),
     },
   ]
@@ -466,7 +466,7 @@ function AuditTable({ entries, chain, panelId }) {
               show. Measured live 2026-08-21: 838 entries, under the cap, so
               `truncated` is false and the two are currently the same set. */}
           {sorted.length > 0 && (
-            <span className="text-[11px] text-muted">
+            <span className="text-caption text-muted">
               {sorted.length.toLocaleString()}
               {sorted.length !== entries.length ? ` of ${entries.length.toLocaleString()}` : ''}
             </span>
@@ -584,7 +584,7 @@ function CspAuditTable({ panelId }) {
             onKeyDown={(e) => e.key === 'Enter' && runSearch(q)}
             className={`${FIELD_CLS} w-[220px]`}
           />
-          <button onClick={() => runSearch(q)} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm">
+          <button onClick={() => runSearch(q)} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-body">
             {loading ? 'Searching…' : 'Search'}
           </button>
           {/* `500` here is the `_limit` CSPAudit sends upstream, not a fact
@@ -599,7 +599,7 @@ function CspAuditTable({ panelId }) {
               screen, so it is the one passed. There is no `total` to pass: the
               upstream tells us there are more and not how many. */}
           {rows.length > 0 && (
-            <span className="text-[11px] text-muted">
+            <span className="text-caption text-muted">
               {sampleCountLabel({ returned: rows.length, truncated: result?.truncated }, 'entries')}
             </span>
           )}

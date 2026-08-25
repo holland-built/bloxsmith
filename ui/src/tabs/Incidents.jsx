@@ -44,7 +44,7 @@ function SeverityPill({ severity }) {
   const { COLORS } = useChartTheme()
   const m = sevMeta(severity, COLORS)
   return (
-    <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: `${m.color}22`, color: m.color }}>
+    <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium" style={{ background: `${m.color}22`, color: m.color }}>
       {m.label}
     </span>
   )
@@ -127,7 +127,7 @@ export default function Incidents() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-lg font-semibold tracking-tight mb-3">Incidents</h1>
+      <h1 className="text-title font-semibold tracking-tight mb-3">Incidents</h1>
       <CardGrid layoutKey="incidents">
         <CategoryChips panelId="incidents-categories" categories={categories} loading={incApi.loading} error={incApi.error} category={category} onCategory={setCategory} degraded={signalsDegraded} meta={incidentsMeta} />
         {/* panelId sits on the wrapper, not on the Card: SeverityKpis renders a
@@ -198,7 +198,7 @@ function CategoryChips({ categories, loading, error, category, onCategory, degra
               <button
                 key={c.category}
                 onClick={() => onCategory(on ? '' : c.category)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control border text-xs border-border bg-field"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control border text-dense border-border bg-field"
                 style={{ borderColor: on ? m.color : undefined, background: on ? `${m.color}1a` : undefined }}
               >
                 <i className="w-2 h-2 rounded-mark inline-block" style={{ background: m.color }} title={m.label} />
@@ -245,7 +245,7 @@ function SeverityKpis({ signals, truncated, loading, error, panelId }) {
         <div className="flex flex-row items-stretch justify-between">
           {cells.map((c, i) => (
             <div key={c.label} className={`flex-1 py-1 px-3 ${i < cells.length - 1 ? 'border-r border-line-2' : ''}`}>
-              <div className="text-muted text-xs">{c.label}</div>
+              <div className="text-muted text-dense">{c.label}</div>
               <div className="text-2xl font-semibold tracking-tight my-1 text-muted">—</div>
             </div>
           ))}
@@ -270,7 +270,7 @@ function SeverityKpis({ signals, truncated, loading, error, panelId }) {
       ) : (
         cells.map((c, i) => (
           <div key={c.label} className={`flex-1 py-1 px-3 ${i < cells.length - 1 ? 'border-r border-line-2' : ''}`}>
-            <div className="text-muted text-xs">{c.label}</div>
+            <div className="text-muted text-dense">{c.label}</div>
             <div className="text-2xl font-semibold tracking-tight my-1" style={{ color: c.value > 0 ? c.color : undefined }}>
               {c.value.toLocaleString()}
             </div>
@@ -353,14 +353,14 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
             className={`${FIELD_CLS} w-[150px]`}
           />
           {category && (
-            <button onClick={() => onCategory('')} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm">
+            <button onClick={() => onCategory('')} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-body">
               Clear filter
             </button>
           )}
-          <button onClick={onClearAcks} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-sm">
+          <button onClick={onClearAcks} className="px-2.5 py-1.5 rounded-control border border-border bg-field text-field-txt text-body">
             Clear acks
           </button>
-          <span className="text-[11px] text-muted">{signalsTotal.toLocaleString()}</span>
+          <span className="text-caption text-muted">{signalsTotal.toLocaleString()}</span>
         </div>
       }
     >
@@ -380,12 +380,12 @@ function IncidentsTable({ signals, signalsTotal, signalsTruncated, loading, erro
       ) : (
         <>
           {degraded && (
-            <div className="text-[11px] mb-1.5" style={{ color: COLORS.warn }}>
+            <div className="text-caption mb-1.5" style={{ color: COLORS.warn }}>
               incomplete check — {failedFeeds.length ? `could not read: ${failedFeeds.join(', ')}` : 'one or more feeds failed'}, some issues may be missing
             </div>
           )}
           {signalsTruncated && (
-            <div className="text-[11px] text-muted mb-1.5">
+            <div className="text-caption text-muted mb-1.5">
               showing {signals.length.toLocaleString()} of {signalsTotal.toLocaleString()} signals — filter to narrow
             </div>
           )}
@@ -444,7 +444,7 @@ function SocQueue({ rows, loading, error, unavailable, statusState, onSetStatus,
               type="button"
               disabled={st.pending}
               onClick={() => onSetStatus(r.id, next)}
-              className="px-2 py-1 rounded-control border border-border bg-field text-field-txt text-[11px] disabled:opacity-50"
+              className="px-2 py-1 rounded-control border border-border bg-field text-field-txt text-caption disabled:opacity-50"
             >
               {st.pending ? 'saving…' : label}
             </button>
@@ -455,7 +455,7 @@ function SocQueue({ rows, loading, error, unavailable, statusState, onSetStatus,
     },
   ]
 
-  const right = rows.length > 0 ? <span className="text-[11px] text-muted">{rows.length.toLocaleString()}</span> : undefined
+  const right = rows.length > 0 ? <span className="text-caption text-muted">{rows.length.toLocaleString()}</span> : undefined
 
   return (
     <Card panelId={panelId} span={2} title="SOC Queue" note="IQ Actions" right={right}>
@@ -496,8 +496,8 @@ function ActionDetailDrawer({ actionId, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold">Action detail</h2>
-          <button type="button" onClick={onClose} className="px-2 py-1 rounded-control border border-border bg-field text-field-txt text-xs" aria-label="Close">
+          <h2 className="text-body font-semibold">Action detail</h2>
+          <button type="button" onClick={onClose} className="px-2 py-1 rounded-control border border-border bg-field text-field-txt text-dense" aria-label="Close">
             Close
           </button>
         </div>
@@ -508,10 +508,10 @@ function ActionDetailDrawer({ actionId, onClose }) {
         ) : !action ? (
           <Empty>action not found</Empty>
         ) : (
-          <dl className="text-sm space-y-2">
+          <dl className="text-body space-y-2">
             {Object.entries(action).map(([k, v]) => (
               <div key={k} className="flex flex-col border-b border-line-2 pb-1.5">
-                <dt className="text-[11px] text-muted uppercase tracking-wide">{k}</dt>
+                <dt className="text-caption text-muted uppercase tracking-wide">{k}</dt>
                 <dd className="font-mono break-words">{typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—')}</dd>
               </div>
             ))}
@@ -574,7 +574,7 @@ function ActionTrendStrip({ rows, loading, error, unavailable, panelId }) {
               minTickGap={20}
             />
           </Suspense>
-          <div className="flex items-center justify-between mt-2 text-xs">
+          <div className="flex items-center justify-between mt-2 text-dense">
             <span style={{ color: COLORS.sevHigh }}>High {byPriority.high}</span>
             <span style={{ color: COLORS.warn }}>Medium {byPriority.medium}</span>
             <span style={{ color: COLORS.accent }}>Low {byPriority.low}</span>

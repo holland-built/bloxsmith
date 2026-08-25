@@ -489,7 +489,7 @@ export function DataTable({
   }, [])
 
   if (rows.length === 0) {
-    return <div className="min-h-[100px] flex items-center justify-center text-muted text-sm">{emptyText}</div>
+    return <div className="min-h-[100px] flex items-center justify-center text-muted text-body">{emptyText}</div>
   }
 
   const headBg = stickyHeader ? 'sticky top-0 z-10 bg-card' : ''
@@ -513,7 +513,7 @@ export function DataTable({
   }
 
   const table = (
-    <table className={`w-full ${tableLayoutClass} border-collapse text-sm`}>
+    <table className={`w-full ${tableLayoutClass} border-collapse text-body`}>
       <thead>
         <tr>
           {cols.map((c) => {
@@ -589,7 +589,7 @@ export function DataTable({
                 const st = statusBadgeColor(v) || { bg: theme.pillNeutralBg, fg: theme.pillNeutralFg }
                 return (
                   <td key={c.key} className={tdBase} style={cellStyle(c)}>
-                    <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: st.bg, color: st.fg }}>
+                    <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium" style={{ background: st.bg, color: st.fg }}>
                       {v || '—'}
                     </span>
                   </td>
@@ -646,7 +646,7 @@ export function DataTable({
     )
   } else if (limit == null && rows.length > rowCap) {
     footer = (
-      <div className="text-center text-dim text-[11px] py-2">
+      <div className="text-center text-dim text-caption py-2">
         showing {rowCap} of {rows.length.toLocaleString()} — filter to narrow
       </div>
     )
@@ -663,8 +663,8 @@ export function DataTable({
           the true rendered font for canvas measureText — display:none would
           still resolve font metrics, but visibility:hidden also lets the width
           probe below report real layout widths for CSS length -> px conversion. */}
-      <span ref={sansProbeRef} className="text-sm" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
-      <span ref={monoProbeRef} className="text-sm font-mono" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
+      <span ref={sansProbeRef} className="text-body" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
+      <span ref={monoProbeRef} className="text-body font-mono" style={{ position: 'absolute', visibility: 'hidden', whiteSpace: 'pre', pointerEvents: 'none' }} />
       <span
         ref={headProbeRef}
         className="text-[10.5px] font-medium uppercase tracking-wide"
@@ -689,7 +689,7 @@ export function FeedCard({ span, panelId, title, note, feed, columns, limit, vie
   // total that is actually larger — see ui/src/lib/feedCount.js.
   const countLabel = count ? feedCountLabel(feed.data, rows.length) : null
   const right = countLabel ? (
-    <span className="text-[11px] text-muted" title={feedCountTitle(feed.data, rows.length)}>{countLabel}</span>
+    <span className="text-caption text-muted" title={feedCountTitle(feed.data, rows.length)}>{countLabel}</span>
   ) : undefined
 
   return (

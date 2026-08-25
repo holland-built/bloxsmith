@@ -178,7 +178,7 @@ class TabErrorBoundary extends Component {
     if (!this.state.failed) return this.props.children
     return (
       <div className="p-5">
-        <div role="alert" className="border border-border bg-card p-4 text-sm text-txt">
+        <div role="alert" className="border border-border bg-card p-4 text-body text-txt">
           This tab could not load. Reload the page.
         </div>
       </div>
@@ -575,7 +575,7 @@ export default function App() {
                         <span
                           aria-hidden="true"
                           className={
-                            'inline-block text-[11px] leading-none font-bold text-center min-w-[15px] px-1 pt-[2px] pb-[3px] border bg-field ' +
+                            'inline-block text-caption leading-none font-bold text-center min-w-[15px] px-1 pt-[2px] pb-[3px] border bg-field ' +
                             (open ? 'border-accent text-txt' : 'border-border text-field-txt')
                           }
                         >
@@ -695,7 +695,7 @@ export default function App() {
               </button>
               <a
                 href="#provision"
-                className="px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-sm font-medium no-underline"
+                className="px-2.5 py-1.5 rounded-control bg-accent border border-accent text-on-accent text-body font-medium no-underline"
               >
                 + Provision
               </a>

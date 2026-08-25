@@ -67,9 +67,9 @@ export default function HeaderHelp({ onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center mb-4">
-          <h2 id="hh-title" className="text-sm font-semibold">What these controls do</h2>
+          <h2 id="hh-title" className="text-body font-semibold">What these controls do</h2>
           <span className="flex-1" />
-          <button className="text-muted text-sm" onClick={onClose} aria-label="Close">✕</button>
+          <button className="text-muted text-body" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
         {/* A description list, because that is what this is: a term and what it
@@ -79,8 +79,8 @@ export default function HeaderHelp({ onClose }) {
         <dl className="m-0">
           {Object.entries(CONTROL_HELP).map(([id, { label, what }]) => (
             <div key={id} className="mb-3 last:mb-0">
-              <dt className="text-[11px] font-semibold text-field-txt">{label}</dt>
-              <dd className="m-0 mt-0.5 text-[11px] leading-relaxed text-muted">{what}</dd>
+              <dt className="text-caption font-semibold text-field-txt">{label}</dt>
+              <dd className="m-0 mt-0.5 text-caption leading-relaxed text-muted">{what}</dd>
             </div>
           ))}
         </dl>

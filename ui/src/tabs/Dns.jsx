@@ -42,7 +42,7 @@ export default function Dns() {
 
   return (
     <div className="w-full px-6 py-5">
-      <h1 className="text-lg font-semibold tracking-tight mb-3">DNS</h1>
+      <h1 className="text-title font-semibold tracking-tight mb-3">DNS</h1>
       {/* Every direct child of a grid with a layoutKey carries its own panelId:
           CardGrid applies the saved order to its React children by reading
           `props.panelId` off them, while it reads the live order off the DOM. A
@@ -101,7 +101,7 @@ function QpsHero({ panelId, qps }) {
       panelId={panelId}
       span={4}
       title="DNS Query Rate — 24h"
-      right={<span className="flex items-center gap-1.5 text-[11px] text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
+      right={<span className="flex items-center gap-1.5 text-caption text-muted"><i className="w-2 h-2 rounded-mark inline-block" style={{ background: COLORS.accent }} />avg qps</span>}
     >
       {qps.loading ? (
         <Skeleton h={250} />
@@ -112,9 +112,9 @@ function QpsHero({ panelId, qps }) {
       ) : (
         <>
           <div className="flex items-center gap-4 my-2">
-            <span className="text-[30px] font-semibold tracking-tight">{current?.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+            <span className="text-display font-semibold tracking-tight">{current?.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
             {delta != null && (
-              <span className="text-xs" style={{ color: flat ? COLORS.other : delta >= 0 ? COLORS.ok : COLORS.crit }}>
+              <span className="text-dense" style={{ color: flat ? COLORS.other : delta >= 0 ? COLORS.ok : COLORS.crit }}>
                 {flat ? '— flat' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`} vs first hour
               </span>
             )}
@@ -234,7 +234,7 @@ function ZoneKpis({ panelId, zones, zonesStatus, loading }) {
     <Card panelId={panelId} span={2} panelName="Zone Counts" className="flex flex-col justify-between">
       {cells.map((c, i) => (
         <div key={c.label} className={`py-3.5 ${i < cells.length - 1 ? 'border-b border-line-2' : ''}`}>
-          <div className="text-muted text-xs">{c.label}</div>
+          <div className="text-muted text-dense">{c.label}</div>
           <div className="text-2xl font-semibold tracking-tight my-1" style={{ color: c.color }}>{c.value}</div>
           {c.note && <div className="text-dim text-[10px] leading-tight">{c.note}</div>}
         </div>
@@ -256,7 +256,7 @@ function DnsServices({ panelId, services }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="DNS Services" right={<span className="text-[11px] text-muted">{rows.length ? `${rows.length} services` : ''}</span>}>
+    <Card panelId={panelId} span={3} title="DNS Services" right={<span className="text-caption text-muted">{rows.length ? `${rows.length} services` : ''}</span>}>
       {services.loading ? (
         <Skeleton h={180} />
       ) : services.error || status === 'error' ? (
@@ -357,13 +357,13 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
   const rows = useMemo(() => sorted.map((z) => {
     const hasIssues = Array.isArray(z.issues) && z.issues.length > 0
     const issuesCell = hasIssues ? (
-      <span className="font-mono text-[11px]" style={{ color: COLORS.crit }}>{z.issues.join(', ')}</span>
+      <span className="font-mono text-caption" style={{ color: COLORS.crit }}>{z.issues.join(', ')}</span>
     ) : z.anomaly ? (
-      <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }}>anomaly</span>
+      <span className="inline-block rounded-full px-2.5 py-0.5 text-caption font-medium" style={{ background: 'var(--pill-warn-bg)', color: 'var(--pill-warn-fg)' }}>anomaly</span>
     ) : ttlChecked(z) ? '—' : (
       // Distinct from the clean '—': this zone published no TTL, so the checks
       // never ran on it. Silence here would read as "checked, nothing wrong".
-      <span className="text-[11px] italic text-dim" title="no TTL published — TTL checks did not run for this zone">not checked</span>
+      <span className="text-caption italic text-dim" title="no TTL published — TTL checks did not run for this zone">not checked</span>
     )
     const ttl = ttlValue(z.ttl)
     return {
@@ -406,7 +406,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
               type="button"
               aria-label="Clear filter"
               onClick={() => { location.hash = 'dns' }}
-              className="text-[11px] font-medium px-2 py-0.5 rounded-full cursor-pointer"
+              className="text-caption font-medium px-2 py-0.5 rounded-full cursor-pointer"
               style={{ background: theme.pillNeutralBg, color: theme.pillNeutralFg }}
             >
               issues only ✕
@@ -416,7 +416,7 @@ function ZoneTable({ panelId, zones, issuesOnly, zonesStatus, loading }) {
       }
       right={
         <div className="flex items-center gap-2.5">
-          <span className="text-[11px] text-muted whitespace-nowrap">{sorted.length.toLocaleString()} zones</span>
+          <span className="text-caption text-muted whitespace-nowrap">{sorted.length.toLocaleString()} zones</span>
           <input
             aria-label="Filter zones"
             placeholder="Filter…"
@@ -503,7 +503,7 @@ function DnssecHealth({ panelId, dnssec }) {
       span={3}
       title="DNSSEC Health"
       right={
-        <span className="text-[11px] text-muted">{dnssecPanelLabel(unsigned.length, DNSSEC_CAP)}</span>
+        <span className="text-caption text-muted">{dnssecPanelLabel(unsigned.length, DNSSEC_CAP)}</span>
       }
     >
       {dnssec.loading ? (
@@ -517,16 +517,16 @@ function DnssecHealth({ panelId, dnssec }) {
           <div className="flex items-center gap-4 my-2">
             <div>
               <div className="text-2xl font-semibold tracking-tight" style={{ color: COLORS.ok }}>{signedCount.toLocaleString()}</div>
-              <div className="text-[11px] text-muted">signed</div>
+              <div className="text-caption text-muted">signed</div>
             </div>
             <div>
               <div className="text-2xl font-semibold tracking-tight" style={{ color: unsignedCount > 0 ? COLORS.crit : COLORS.ok }}>{unsignedCount.toLocaleString()}</div>
-              <div className="text-[11px] text-muted">unsigned</div>
+              <div className="text-caption text-muted">unsigned</div>
             </div>
             {signedShare != null && (
               <div>
                 <div className="text-2xl font-semibold tracking-tight">{signedShare.toFixed(1)}%</div>
-                <div className="text-[11px] text-muted">signed share (of {total.toLocaleString()})</div>
+                <div className="text-caption text-muted">signed share (of {total.toLocaleString()})</div>
               </div>
             )}
           </div>
@@ -567,7 +567,7 @@ function RpzPanel({ panelId, rpz }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="RPZ Policy Zones" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} zones` : ''}</span>}>
+    <Card panelId={panelId} span={3} title="RPZ Policy Zones" right={<span className="text-caption text-muted">{rows.length ? `${total.toLocaleString()} zones` : ''}</span>}>
       {rpz.loading ? (
         <Skeleton h={200} />
       ) : rpz.error || status === 'error' ? (
@@ -607,7 +607,7 @@ function DtcLbdnPanel({ panelId, dtcLbdn }) {
   ]
 
   return (
-    <Card panelId={panelId} span={3} title="DTC Load-Balanced Names" right={<span className="text-[11px] text-muted">{rows.length ? `${total.toLocaleString()} names` : ''}</span>}>
+    <Card panelId={panelId} span={3} title="DTC Load-Balanced Names" right={<span className="text-caption text-muted">{rows.length ? `${total.toLocaleString()} names` : ''}</span>}>
       {dtcLbdn.loading ? (
         <Skeleton h={200} />
       ) : dtcLbdn.error || status === 'error' ? (
